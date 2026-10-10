@@ -39,16 +39,11 @@ from maps.util.node_fingerprint import fingerprint_node
 from maps.util.xy_token import format_xy_token
 from maps.search.withhold import withheld
 
-# The ONLY geometry/analysis vocabulary the structured surface exposes — the
-# four-op retrieve->relate->filter->order surface. ``select`` is the ``act{select}``
-# terminal of the three-verb surface, not an op; programs ANALYZE only.
-# EXPLORE (the one ``find`` op) learns what exists; the ref CONSTRUCTORS
-# (the frame aspect) fixes viewer frames + arrangement structure; the SET
-# FOUR verbs, one contract: everything is a LIST OF ROWS; find makes lists,
-# compare annotates lists (per-ref relation columns + the frame aspect's
-# arrangement columns — all delegate-only over geom_compute primitives),
-# filter_items narrows lists, score_by orders lists; brackets read them
-# (rN[k] indexes, rN[a:b] windows — READ is reference grammar, not an op).
+# The op vocabulary: find retrieves; crossings/ends construct rows; compare
+# attaches relation and frame columns; filter_items cuts; score_by orders;
+# stratum views a find's match tier. Everything is a list of rows, read by
+# index (rN[k]) or window (rN[a:b]). ``select`` is the act tool's field,
+# not an op.
 OP_VOCAB = (
     "find",          # RETRIEVE: THE retrieval op (provenance selects the surface)
     "crossings",     # CONSTRUCT: the places two features meet (one row each)
@@ -59,11 +54,8 @@ OP_VOCAB = (
     "stratum",       # VIEW: a find's own match tier as a set (exact/tagged/fuzzy)
 )
 
-# Deleted op names -> the redirect the retry needs. One canonical idiom per
-# meaning: every arrangement read is a compare{frame} column; every sort is
-# score_by; every ordinal read is a column (world arrangement) or an index
-# (your own ordering). The error TEACHES the replacement so the retry is
-# mechanical, never a dead end.
+# Op names outside the vocabulary that a program may still emit -> the
+# replacement idiom the error teaches.
 _DELETED_OPS = {
     "rank_by": ("score_by{items, emphasis:[{key:<k>, w:-1|1}]} (NEGATIVE w = "
                 "lower-raw-first). score_by orders by EXACTLY the columns "
@@ -105,9 +97,7 @@ _DELETED_OPS = {
                            "columns; order/cut those."),
 }
 
-# Renamed columns -> the redirect a reader needs. Loud, never a silent
-# dead-filter. The convention is the BOTH-ENDS 1-based pair: direction lives
-# in the NAME, with no sign/base to invert.
+# Column names that are not columns -> the redirect the error teaches.
 _RENAMED_KEYS = {
     "color_score": ("the named color columns color_<word> (word on the "
                     "closed palette, e.g. color_blue); naming one anywhere "
@@ -123,12 +113,10 @@ def _reject_renamed_key(key):
 
 
 # --- the named color-column family: color_<word> ---------------------------
-# THE PARAMETER RIDES IN THE KEY NAME (the d_<ref> idiom): naming a color
-# column anywhere a column key is accepted IS the computation request — the
-# emphasis/key lazy attach resolves the word and attaches the column, no
-# op-ordering. The closed palette is G.COLOR_ENUM (exactly the vocabulary the
-# M6 extractor emits); G.normalize_color maps an open cue word onto it
-# (navy -> blue), noted factually on the result envelope.
+# The parameter rides in the key name: naming a color column anywhere a
+# column key is accepted attaches it. The closed palette is G.COLOR_ENUM;
+# G.normalize_color maps an open cue word onto it (navy -> blue), noted on
+# the result envelope.
 
 
 def _is_color_column_key(k) -> bool:
@@ -184,11 +172,9 @@ _FRAME_FORMS = (
     "(the viewer look: stand at the pool center, look at toward). "
     "as:'label' names the columns.")
 
-# Per-op signatures appended to a ProgramError so a retry knows the op's contract —
-# its arg names AND the load-bearing arg-KIND (a single POINT vs a CENTERLINE vs a
-# candidate LIST), the distinction the model conflates. Generic / abstract: op names
-# from OP_VOCAB + generic ``rN`` placeholders only, NO episode vocabulary (never
-# teach to the test). Surfaced by the resolvers + ``_Args.__missing__`` via the live op.
+# Per-op signatures appended to a ProgramError so a retry knows the op's
+# contract: arg names and arg kind (a POINT vs a CENTERLINE vs a LIST).
+# Generic placeholders only. Surfaced by the resolvers and _Args.__missing__.
 _OP_SIGNATURE = {
     "stratum": ("stratum{items, tier} -- a find's own match tier served as "
                 "a set: tier is exact (the rows that ARE the queried "
@@ -314,34 +300,13 @@ _OP_SIGNATURE = {
 FILTER_OPS = ("eq", "ne", "lt", "le", "gt", "ge", "truthy", "on_side",
               "in_or_blank")
 
-# ``on_side`` exists because VIOLATING and UNPLACEABLE are different facts and
-# every other numeric op collapses them. A signed cardinal column is positive
-# where the row IS that way, negative where it measurably is NOT, and ABSENT
-# where the geometry declines to name a side at all (the reference straddles
-# the row, or none of it lies abreast). ``gt 0`` would drop the absent rows
-# with the violating ones -- and on the live case that motivated this, all 19
-# real parking rows in the bake ABSTAINED against the school while 163
-# fuzzy-matched rows carried a measured violation. Cutting on ``gt`` would
-# have thrown away exactly the rows still in play.
-#
-# Keep a row when the column does not place it, drop it when the column
-# places it on the other side. The cut is earned: the relation is right on
-# 150 of 154 addressable corpus cues.
+# ``on_side`` keeps a row its signed cardinal column does not place (absent:
+# the reference straddles the row, or none of it lies abreast) and drops one
+# it places on the other side (negative). ``gt 0`` would drop both.
 
-# Generic color basis: _color_of extracts a color TOKEN from a class label
-# (color-qualified concepts). PARITY NOTE: the surface ``color`` field is
-# produced by _node_color, which reads PERCEIVED color off semantic_attributes
-# when present (live runtime graph + the captured-live geom_surface) and falls
-# back to _color_of(class) otherwise. So color is NOT byte-parity on the offline
-# REBUILD-from-tile path (offline tile nodes carry no semantic_attributes ->
-# color='' -> find keeps ALL such rows, colorless); only
-# the captured-live geom_surface is color-parity-safe. The LIVE eval is
-# unaffected (perception supplies color). The descriptions WALL and the name/class/tag
-# search_text parity are unaffected by this. The color_<word> columns are attached
-# as sortable per-row fields inside run_program (the find color branch + the
-# emphasis-key lazy attach; NOT at build_surface time), so the gated build_surface
-# surface is unchanged; on the offline tile-REBUILD path color='' -> the column
-# is omitted (a colorless row is never pulled by a color emphasis).
+# _color_of reads a color token from a class label; _node_color prefers the
+# perceived color on semantic_attributes and falls back to it. A row without
+# a perceived color carries no color_<word> column.
 _COLOR_WORDS = ("white", "black", "gray", "gray", "silver", "red", "blue", "green",
                 "yellow", "orange", "brown", "tan", "beige", "gold", "maroon", "purple")
 
@@ -427,15 +392,10 @@ def _node_color_flag(n):
     return None
 
 
-# The tag keys withheld from the model-facing tag surface (search blob + the
-# row's rendered tags). TWO families, both bookkeeping — never semantics:
-#  * the GT-label wall: an OSM/CityRefer ``description`` tag must never feed
-#    the agent's free-text search — it is the catalog the instruction was
-#    sampled from.
-#  * the bake's own ``source`` provenance channel (osm / cityrefer_*): the
-#    row's provenance already rides the fid + the find ``provenance`` arg; as
-#    a tag it is one fact repeated on every row.
-# Every other tag rides verbatim.
+# Tag keys withheld from the model-facing tags (search text + rendered tags):
+# the GT-label ``description`` tags (the catalog instructions are sampled
+# from) and the bake's ``source`` provenance (the fid and the find
+# ``provenance`` arg already carry it).
 _SEARCH_TAG_DENYLIST = frozenset({"description", "descriptions", "source"})
 
 
@@ -449,37 +409,21 @@ def _row_tags(n) -> dict:
             if isinstance(v, str) and str(k).lower() not in _SEARCH_TAG_DENYLIST}
 
 
-# The BAKE-PROVENANCE keys, withheld from the searchable free-text (and from
-# the free-text ONLY -- the node keeps every tag, ``_row_tags`` returns them
-# all, and the exact tag tiers and ``tag_family_keys`` read them unchanged).
-# These are not map vocabulary; they are bookkeeping the bake stamped on
-# every row, and they were the fuzzy haystack's dominant near-stopwords:
-# ``way`` is a token of every ``osm_id: way/1136853905`` (the normalizer
-# splits on '/'), so ``find("hugo way")`` covered one of two words on 4,733 of
-# 5,257 rows; ``worldkit_layer=roads`` donated ``road`` to all 810 of its
-# rows. Eleven of the top thirteen near-stopword tokens came from these four
-# keys, and ZERO of 53,711 real query uses contains a '/'.
-#
-# All four are ALREADY on ``_TAG_RENDER_DROP`` -- the tree had decided the
-# model should not READ them; they stayed in the haystack by omission. The
-# full 16-key drop set is deliberately NOT used: measured at 80.3% vs 79.8%
-# precision, which does not pay for the extra blast radius.
+# Bake-provenance keys, withheld from the searchable free text only (the row
+# keeps every tag; the exact tag tiers and ``tag_family_keys`` read them).
+# They are bookkeeping stamped on every row and act as fuzzy-match stopwords
+# (``osm_id: way/...`` donates ``way`` to every row). All four are also in
+# ``_TAG_RENDER_DROP``.
 _SEARCH_PROVENANCE_DROP = frozenset({
     "osm_id", "worldkit_layer", "worldkit_height_m", "source_tag"})
 
 
 def _anchor_search_text(n) -> str:
-    """Walled searchable free-text for a PRIOR row: name + raw OSM tag keys
-    AND values, minus the bake-provenance keys (_SEARCH_PROVENANCE_DROP).
-
-    The free-text the ``find`` op matches a cue's named landmark/type against
-    (a 'parking' query reaches amenity=parking, service=parking_aisle and
-    parking=surface rows through the keys as well as the values). Prior nodes
-    are MapObject on BOTH the live (runtime graph) and offline
-    (``_build_node`` tile) sides with identical OSM ``tags``, so this text is
-    teacher/student parity-safe. NEVER reads ``MapObject.descriptions`` (the
-    CityRefer GT-label catalog) or coordinates — that is the descriptions
-    wall; a ``description`` tag is withheld too as defense-in-depth."""
+    """Searchable free text for a PRIOR row: name + raw OSM tag keys and
+    values, minus the bake-provenance keys (_SEARCH_PROVENANCE_DROP) and the
+    denylisted tags. A 'parking' query reaches amenity=parking,
+    service=parking_aisle and parking=surface rows through keys as well as
+    values. Coordinates never enter it."""
     parts = [str(getattr(n, "name", "") or "")]
     for k, v in _row_tags(n).items():
         if str(k) in _SEARCH_PROVENANCE_DROP:
@@ -490,12 +434,8 @@ def _anchor_search_text(n) -> str:
 
 
 def _cand_search_text(n) -> str:
-    """Walled searchable free-text for a DETECTION row: class name ONLY.
-
-    A detection's runtime ``tags``/``name`` are asymmetric (live SAM
-    label/source_tier vs offline none), so only ``class_name`` — symmetric on
-    both sides — is parity-safe here. Color is matched via the first-class
-    ``color`` field (``find{color}``), not free text."""
+    """Searchable free text for a DETECTION row: class name only. Color is
+    matched through the ``color`` field, not free text."""
     return str(getattr(n, "class_name", "") or "").lower()
 
 
@@ -521,19 +461,13 @@ class _Args(dict):
 
 
 def _color_fields(n) -> dict:
-    """``{"color": ...}`` plus ``"color_conf"`` ONLY when perception populated it.
-    color_conf is OMITTED (never None/null) when absent so an offline tile-rebuild row
-    is BYTE-IDENTICAL to the pre-change shape (no spurious key) -- keeping the
-    offline-rebuild surface parity intact; present, it is a float in [0,1] the model
-    reads as the reliability of the perceived color."""
+    """``{"color": ...}`` plus ``color_conf``/``color_shade``/``color_flag``
+    only when perception set them (omitted, never None, otherwise)."""
     fields = {"color": _node_color(n)}
     conf = _node_color_conf(n)
     if conf is not None:
         fields["color_conf"] = conf
-    # M6's two extra reads — present ONLY on the live path (semantic_attributes),
-    # absent (omitted, never None) on offline tile-rebuild rows so their shape stays
-    # byte-identical. _mask_noise_color folds them into the compact ``col`` cell and
-    # strips them, so they never reach the model as raw fields.
+    # _mask_noise_color folds shade/flag into the ``col`` cell.
     shade = _node_color_shade(n)
     if shade is not None:
         fields["color_shade"] = shade
@@ -547,19 +481,10 @@ def _mask_center(mask):
     """The centre a mask may honestly claim as its position — or ``None``.
 
     ONE place has a centre; several places do not. ``center distance to
-    <ref>`` and ``bearing from <ref>`` are SERVED columns read straight off
-    this point, and it also orients ``frame{side:}``, so a centre over
-    several disjoint pieces is a confident-sounding answer at none of them —
-    the law the crossings op already states about crossing places.
-
-    A name resolves to the union of its ways (:func:`_merge_named_features`),
-    and 117 of 5,257 calcity anchor rows come back as several places under
-    one name: "98th Street" is two ways 869 m apart and its mean is on
-    neither. Those rows now serve the honest absence — the columns are simply
-    not there — while ``distance to <ref>``, which is the gap to the NEAREST
-    piece and correct however the map split the feature, keeps reading. No
-    per-piece centre either: the merge exists so that no op is ever handed a
-    piece of a named feature.
+    <ref>`` and ``bearing from <ref>`` are served off this point and it
+    orients ``frame{side:}``, so a mask of several disjoint pieces (a name
+    that resolves to ways far apart) serves no centre. ``distance to <ref>``
+    is the gap to the nearest piece and still reads.
     """
     return (G.loops_area_centroid(mask)
             if mask and G.chain_components(mask) == 1 else None)
@@ -600,48 +525,27 @@ def representative_point(chains) -> list:
     return [round(float(p[0]), 2), round(float(p[1]), 2)]
 
 
-# A surface row is a PURE FUNCTION of its node's content and the tile
-# geometry, so an unchanged node need not be rebuilt. The rebuild runs once
-# per flight over every node on the graph, and an explore pass runs it once
-# per stop: calcity::6#6 rebuilt all 6,188 Cal City rows 262 times, and its
-# graph gained NOTHING on any of those stops (`cands=0`, `evidence=0`).
-# Measured on that bake: 2.66 s to rebuild, 0.18 s to prove nothing changed.
-#
-# CONTENT, NOT IDENTITY, and not a dirty-list either. Every node the ingest
-# fold touches comes back over the wire as a fresh object, so an identity check
-# misses on exactly the nodes that matter; and a hand-maintained dirty set
-# would have to be right about every mutation path in the tree forever,
-# silently serving a stale row the first time one was forgotten. Hashing what
-# the row is built FROM cannot go stale: a node that changed anywhere in its
-# ``__dict__`` gets a different key and is rebuilt.
+# A surface row is a pure function of its node's content and the tile
+# geometry, so an unchanged node is not rebuilt. The key hashes the node's
+# content (fingerprint_node), not its identity: ingest returns fresh objects,
+# and a hand-kept dirty list could go stale.
 _ROW_CACHE: "dict[tuple, dict | None]" = {}
-# Steady state is one entry per node per tile (6,188 on Cal City). The cap is
-# a runaway backstop for churning detections, not a tuning knob; on overflow
-# the cache is dropped whole rather than evicted one at a time, because the
-# next rebuild refills exactly what it needs and a partial sweep does not.
+# Steady state is one entry per node per tile. The cap is a runaway backstop;
+# on overflow the cache is dropped whole and the next rebuild refills it.
 _ROW_CACHE_MAX = 50_000
 
-# A row's mask geometry is built once per mask list. ``G.mask_geom`` turns
-# the chains into the vectorised arrays every gap reads, and the compare op
-# rebuilt it for every item on every call: 3,692 buildings per
-# ``find("building", near=...)``, over the same lists every time. The key
-# is the mask list's identity, pinned by the entry so the id cannot be
-# reused; the row cache above shares one mask list per unchanged node across
-# rebuilds, so the memo survives a flight for every node it did not touch.
-# Dropped whole at the cap, like the row cache.
+# A row's mask geometry (G.mask_geom + centre), built once per mask list.
+# Keyed on the list's identity, pinned by the entry so the id cannot be
+# reused; the row cache shares one mask list per unchanged node. Dropped
+# whole at the cap.
 _MASK_GEOM: dict = {}
 _MASK_GEOM_MAX = 50_000
 
-# THE RETRIEVAL IS MEMOISED PER SURFACE. A find scores every row of the
-# surface against its query -- 7,405 rows, 0.3 s on the Cal City bake --
-# and a mission asks the same query again and again: ``for d in cars:
-# find("building", near=d, dwithin=40)`` scores "building" once per car.
-# The rows are a pure function of (surface, provenance, query, colour), and
-# the surface is the namespace's two row lists, replaced whole on every
-# rebuild; so the memo keys on the lists' identity, pinned by the entry,
-# and empties itself the moment either list is a different object. It
-# hands out COPIES of the scored rows: a result must never alias another
-# result's dicts.
+# The retrieval is memoised per surface: a find's scored rows are a pure
+# function of (surface, provenance, query, colour), and a program asks the
+# same query repeatedly. The memo keys on the identity of the two surface
+# lists (replaced whole on every rebuild) and empties when either changes.
+# It hands out copies: a result never aliases another result's dicts.
 _FIND_MEMO: dict = {"lists": None, "idf": {}, "scored": {}, "dead": {},
               "census": {}}
 
@@ -700,24 +604,17 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
     ``det_nodes`` / ``prior_nodes`` are iterables of ``(fid, node)``; a node exposes
     ``centroid`` (grid row,col), ``centerline`` (grid polyline or None), ``class_name``,
     ``name``. xy PREFERS the node's continuous ``world_xy`` (the tracker's
-    sub-cell position, 2dp) and falls back to the cell-CENTER of the (int)
-    centroid — ONE rule on both sides (teacher/student parity is the RULE,
-    not the precision: offline tile nodes carry no world_xy and read
-    cell-center exactly as before). The 2 m cell grid quantizes arrangement
-    structure away (a 2.4 m in-row spacing is unresolvable at 2 m; measured:
-    it erased a real lot's lattice and mega-banded the frame), so the fine
-    position is the evidence the arrangement columns stand on. Detections
-    carry NO centerline (points; the frame aspect derives a row axis from the
-    pool); priors carry their baked centerline (cell-center world, 2dp). Both
-    lists sorted by fid so pick{index} ties resolve identically.
+    sub-cell position, 2dp), then a point on the node's own geometry, then the
+    cell centre of its centroid. Detections carry NO centerline; priors carry
+    their baked centerline (cell-center world, 2dp). Both lists are sorted by
+    fid.
 
     UNIFORM FOOTPRINT: every node with a realised mask — a detected car AND a
     prebake building — gets the SAME mask-derived fields via ``_mask_fields``:
     the hidden EXACT ``mask`` loops + ``mask_centroid`` (the compare op's gap /
     center substrate — the ingested mask verbatim, every fragment and hole,
     no decimation) plus two VISIBLE opt-in shape scalars
-    (``footprint_area_m2``/``aspect_ratio``). Nodes
-    without a mask (a centroid-only detection mint) stay bare, exactly as before.
+    (``footprint_area_m2``/``aspect_ratio``). Nodes without a mask stay bare.
     """
     tx, ty = float(origin_xy[0]), float(origin_xy[1])
     cs = float(cell_m)
@@ -728,21 +625,12 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
     def _xy(n, mask=None):
         """The row's served point -- the ``act.move`` FLIGHT TARGET.
 
-        A MEASURED position wins: a detection's ``world_xy`` is where the
-        tracker put the object, sub-cell, and the arrangement columns stand
-        on that precision. Failing one, the point is REPRESENTATIVE of the
-        row's own geometry (:func:`representative_point`) and never a mean
-        over it: a mean is off a loop road, off a bent way, and off every
-        piece of a name that is several places. 130 of the 5,257 calcity
-        anchor rows served a point more than 20 m from their own geometry,
-        the worst 1,123.1 m out, and flying one of those goes where the
-        feature is not.
-
-        This is not a claim about WHICH place a several-place name means --
-        ``mask_centroid`` still refuses to serve a centre for those
-        (:func:`_mask_center`) and ``distance to`` still measures to the
-        nearest piece. It is the weaker and true statement that a flight
-        target has to be somewhere the feature is.
+        A measured position wins: a detection's ``world_xy`` is where the
+        tracker put the object, sub-cell. Otherwise the point is
+        representative of the row's own geometry
+        (:func:`representative_point`), never a mean over it: a mean is off
+        a loop road, off a bent way, and off every piece of a name that is
+        several places, and a flight target has to be where the feature is.
         """
         w = getattr(n, "world_xy", None)
         if w is not None and len(w) >= 2:
@@ -759,19 +647,10 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
     def _cells(n):
         """The node's own 2 m mesh, as a plain (row, col) int list.
 
-        THE primary geometry: every spatial op measures on this, and the mask
-        loops and the centerline are reductions of it kept for rendering and
-        for the terminus columns. A list rather than an array so a surface
-        round-trips through JSON unchanged (the offline teacher reads the same
-        bytes the live tool serves).
-
-        ``tolist`` and NOT a comprehension: this is the hottest function in
-        the whole rebuild, and the rebuild runs once per flight. The Cal City
-        graph carries 3.9 M cells over its 6,188 nodes, and converting them
-        one Python ``int()`` at a time cost 4.0 s of the 5.1 s build.
-        ``cells_of`` already returns an ``(n, 2)`` int array, so ``tolist``
-        builds the same nested list of native ints in C -- 0.45 s, and
-        byte-identical on all 6,188 rows.
+        The primary geometry: every spatial op measures on this; the mask
+        loops and the centerline are reductions of it. A list rather than an
+        array so a surface round-trips through JSON unchanged. ``tolist``
+        rather than a comprehension: this is the hottest line of the rebuild.
         """
         c = cell_mesh.cells_of(n)
         return c.tolist() if len(c) else []
@@ -793,24 +672,15 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         the whole of what the row describes, and the set a name resolves to
         carries one row -- and one contour -- per way.
 
-        THE CLIP. The bake rasterises the full OSM geometry and then clips the
-        CELLS to its grid, so a feature's cells stop at the tile edge while
-        its contour runs on — 72 of 353 named calcity features carry vertices
-        outside the tile. The node's OWN cells are therefore the record of
-        which of its geometry this tile kept, and the box they occupy is the
-        clip: for a feature wholly inside it is a no-op, and for one that
-        leaves it is the tile edge. That keeps the rule inside the module
-        that owns it (``cell_mesh``: "the cells are what a feature COVERS")
-        rather than threading tile bounds through every caller of
-        ``build_surface``.
+        The clip: the bake rasterises the full geometry and clips the CELLS
+        to its grid, so a feature's cells stop at the tile edge while its
+        contour runs on. The box the node's own cells occupy is therefore the
+        clip: a no-op for a feature wholly inside, the tile edge for one that
+        leaves.
 
-        One cell of margin, because a cell CONTAINS the chain that rasterised
-        it and its centre is half a cell inside its own edge; without the
-        margin a vertex on the far side of its own cell clips away. The
-        margin stops at the tile ORIGIN: cell index -1 is off the map, and
-        growing into it serves a point outside the declared bounds. An
-        unnamed stream crossing Cal City's south edge kept a contour vertex
-        at y -0.91 that way and became the row's representative point.
+        One cell of margin, because a cell contains the chain that rasterised
+        it and its centre is half a cell inside its own edge. The margin stops
+        at the tile origin: cell index -1 is off the map.
 
         A node with no cells is not clipped: there is nothing to say which
         ground it covers, and guessing would delete geometry on no evidence.
@@ -828,57 +698,20 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
             tx + (int(c1) + 2) * cs, ty + (int(r1) + 2) * cs))
 
     def _mask_fields(n) -> dict:
-        # UNIFORM mask-derived footprint substrate + shape descriptors, computed
-        # identically for a detected car and a prebake building from the node's
-        # ingested mask. Two kinds of field:
-        #  * ``mask`` + ``mask_centroid`` — the EXACT mask realisation (a list
-        #    of world-meter vertex chains, each stating its own closure: the
-        #    exact geometry the node was given, one chain per part — or, for a
-        #    node with none, the full multi-loop cell boundary, every fragment
-        #    and hole, lossless) and its TRUE area centroid. The compare op's
-        #    gap (d_/brg_gap_) and center (dc_/brg_) substrate. MODEL-HIDDEN
-        #    (see _MODEL_HIDDEN_ROW_FIELDS): ops resolve them server-side; the
-        #    model never pays the vertex tokens.
-        #  * ``footprint_area_m2`` / ``aspect_ratio`` —
-        #    two VISIBLE opt-in shape scalars (min-area-rect; see
-        #    G.mask_shape_features) the model MAY compare/score_by/filter on to
-        #    tell a sedan from a van from a truck. They are additive columns
-        #    like axis_length_m — never forced, never gated. No axis heading
-        #    rides here: orientation is measured against the feature a thing
-        #    faces, never read off its own bounding rectangle.
-        # A node without a mask gets NO mask fields (a centroid-only mint stays
-        # bare) -> compare falls back to centroid distance for that ref.
-        #
-        # WORLD_CONTOUR substrate: the node's exact geometry REPLACES the 2 m
-        # cell-quantized loops as the mask and backs the shape scalars
-        # REGARDLESS of cell count — the 6-cell S2 gate below guards only
-        # CELL-derived shape (2 m raster quantization garbage); a
-        # contour-backed 2-cell car gets its real
-        # footprint_area_m2/aspect_ratio. An OPEN chain
-        # encloses nothing, so it gets no shape scalars at all
-        # (G.contour_shape_features) — a road's area column was the area of
-        # the line buffer that rasterized it.
+        # The mask-derived fields, identical for a detection and a prior:
+        #  * ``mask`` + ``mask_centroid``: the exact geometry as world-meter
+        #    vertex chains (the node's contour, else its full multi-loop cell
+        #    boundary) and its area centroid -- the compare op's gap and
+        #    centre substrate, hidden from the model (_MODEL_HIDDEN_ROW_FIELDS).
+        #  * ``footprint_area_m2`` / ``aspect_ratio``: visible opt-in shape
+        #    scalars. An open chain encloses nothing and gets none.
+        # A node without a mask gets no mask fields.
         cells = getattr(n, "cells", None)
         chains = _exact_chains(n)
-        # A CHAIN OF ONE VERTEX IS NOT A SHAPE. This gate tested chains for
-        # NON-EMPTINESS, so an OSM POI node -- whose whole contour is the
-        # point it sits at -- served a one-vertex mask and stopped here.
-        # Both renderers need three vertices to draw a ring (_proj_poly),
-        # so that mask draws NOTHING: 518 of 5,257 calcity anchors carry a
-        # footprint no picture can ever show, prior_6005 "Rite Aid" among
-        # them. The cells branch below builds a real 5-vertex loop off the
-        # same node's raster, so the outline already existed -- this gate
-        # was the only thing between it and the frame.
-        #
-        # >= 2 AND NOT >= 3, deliberately. The 224 two-vertex rows are
-        # single-segment WAYS, and routing those to the raster moves one
-        # served point 1,417 m (prior_4956 "78th Street": a 259-cell
-        # multi-loop boundary puts representative_point on a different
-        # component than the way's own midpoint) and contradicts
-        # cell_mesh's stated policy that distance and intersection run on
-        # the EXACT geometry. Every row this admits is exactly ONE cell,
-        # which bounds the served-xy shift at half a cell diagonal --
-        # measured 0.80 m median, 1.38 m worst over all 518.
+        # A one-vertex chain (an OSM POI) is not a drawable shape: it falls
+        # through to the cell boundary below, which draws. Two-vertex chains
+        # (single-segment ways) stay on their exact geometry, per cell_mesh's
+        # policy that distance and intersection run on the exact chains.
         if any(len(ch) >= 2 for ch in chains):
             out = {"mask": chains}
             _c = _mask_center(chains)
@@ -897,24 +730,17 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
             _c = _mask_center(loops)
             if _c is not None:
                 out["mask_centroid"] = [round(v, 2) for v in _c]
-        # Shape scalars only when the raster can EXPRESS shape (gt_mi
-        # first-dozen audit S2): below ~6 cells the 2m grid quantizes
-        # area to {4..16} m2, aspect to {1,2} and orientation to {0,90} —
-        # fabricated axis-aligned headings that invite false inference.
-        # The mask (the gap substrate) stays; only the descriptors
-        # are withheld until a finer source (SAM pixel mask) computes them.
+        # Shape scalars only when the raster can express shape: below ~6
+        # cells the 2 m grid quantizes area to {4..16} m2 and aspect to {1,2}.
         if len(cells) >= 6:
             shape = G.mask_shape_features(cells, cs)
             if shape:
                 out.update(shape)
         return out
 
-    # ``_mask_fields`` is evaluated ONCE per node and its ``mask`` is handed
-    # to ``_xy``: the served point is representative of the very geometry
-    # this row serves, and cannot drift from it by being derived twice.
+    # ``_mask_fields`` runs once per node and its ``mask`` is handed to
+    # ``_xy``, so the served point is representative of the geometry served.
     def _cand_row(f, n):
-        # ``_mask_fields`` is evaluated ONCE per node and its ``mask`` is
-        # handed to ``_xy`` -- see the note above.
         mf = _mask_fields(n)
         xy = _xy(n, mf.get("mask"))
         if not xy:
@@ -927,18 +753,11 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
                 "search_text": _cand_search_text(n)}
 
     cands = _rows_by_content("c", det_nodes, _cand_row, (tx, ty, cs))
-    # PRIOR rows carry NO class field: a prior's semantics are its name + raw
-    # OSM tags (rendered compact k=v); only detections carry ``class`` (the
-    # detector's measurement).
-    # ONE ROW PER WAY. A named road is routinely several OSM ways (75 rows
-    # carry "California City Boulevard" on the calcity bake), and every one of
-    # them is served: the SET is what a name resolves to, and ``.exact``
-    # names it. A row is therefore always one way, so its cells, its
-    # centerline and its position all describe the same thing, and the fid a
-    # row carries resolves to that way in the runtime graph too -- which a
-    # folded row did not, because ``explore`` walks
-    # ``SearchLoop.node_coverage_stops`` off the graph node and got one
-    # member's cells for the whole street.
+    # PRIOR rows carry no class field: a prior's semantics are its name + raw
+    # OSM tags. One row per way: a named road is routinely several ways and
+    # the set is what a name resolves to, so a row's cells, centerline and
+    # position describe one way and its fid resolves to that way in the
+    # runtime graph.
     def _anchor_row(f, n):
         mf = _mask_fields(n)
         xy = _xy(n, mf.get("mask"))
@@ -955,10 +774,8 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
                 "search_text": _anchor_search_text(n)}
 
     anchors = _rows_by_content("a", prior_nodes, _anchor_row, (tx, ty, cs))
-    # A centerline row RENDERS its termini: end0_xy is the along_=0 end of
-    # every chart over it, end1_xy the far end — so a terminus/corner cue is
-    # derivable from the row itself (4/5 audited spatial failures hand-derived
-    # crossings they could not act on).
+    # A centerline row renders its termini: end0_xy is the along=0 end of
+    # every chart over it, end1_xy the far end.
     for _ar in anchors:
         _acl = _ar.get("centerline")
         if isinstance(_acl, list) and len(_acl) >= 2:
@@ -966,15 +783,9 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
                               round(float(_acl[0][1]), 2)]
             _ar["end1_xy"] = [round(float(_acl[-1][0]), 2),
                               round(float(_acl[-1][1]), 2)]
-    # Fold PURE duplicate cand rows — identical (xy, class) — keeping the
-    # best-attributed one (color present > absent, then higher color_conf,
-    # then lowest fid, NUMERICALLY: the string compare let "detected_11"
-    # beat "detected_3", evicting the fid a handle already held).
-    # Duplicate coincident rows inflate ordinal/row counts (verified in 3
-    # of the 8 lost ordinal episodes). Distinct classes at one xy (the
-    # deliberate class-gated color layers) are NOT folded. The set-look
-    # note still states an eviction by name — an evicted row and a row
-    # too far to frame are two different facts and only one is true.
+    # Fold pure duplicate cand rows (identical rounded xy and class), keeping
+    # the best-attributed one: color present, then higher color_conf, then
+    # the lowest fid numerically. Distinct classes at one xy are not folded.
     def _fid_key(f):
         # detected_2 before detected_100: the numeric tail sorts as a
         # NUMBER; a fid with no numeric tail sorts after, by string.
@@ -1000,23 +811,15 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
             _best[k] = c
     if len(_best) != len(cands):
         cands = list(_best.values())
-    # NATURAL fid order, never string order. Lexicographic collation put
-    # every detected_1xx ahead of detected_2, so once a pass minted ~110
-    # rows its EARLIEST stops' finds fell past every served head -- the
-    # 8-crop catch, the 24-row broad head, the model's own r1[0:20] --
-    # and 140#138's GT lot (minted at stop 2, index 37 of 114) sat on
-    # the surface all episode, unreachable by position. Numeric order is
-    # mint order, which for a pass is STOP order: the heads read along
-    # the chain, and the catch's "in pass order" is true again.
+    # Natural fid order (detected_2 before detected_100): numeric order is
+    # mint order, which for an explore pass is stop order.
     cands.sort(key=lambda c: _fid_key(c["fid"]))
     anchors.sort(key=lambda a: _fid_key(a["fid"]))
-    # WINDOW-COVERING MASK FACT (geometric, tag-blind): a mask that CONTAINS
-    # every surface row position (a tile-covering admin/site relation) makes
-    # the gap TO it degenerate (d_=0 for every row). Stamp the VISIBLE
-    # ``covers_window`` fact on the row: the compare op serves the one
-    # containment fact instead of the constant columns, and the row's own
-    # render carries it wherever it appears as an item. Bbox prefilter keeps
-    # the exact containment test to the handful of window-spanning masks.
+    # Window-covering mask (geometric, tag-blind): a mask containing every
+    # surface row position makes the gap to it 0 for every row. The visible
+    # ``covers_window`` fact stamped here makes compare serve one containment
+    # fact instead; a bbox prefilter keeps the exact test to the few
+    # window-spanning masks.
     _all_rows = cands + anchors
     if len(_all_rows) >= 3:
         _xs = [r["xy"][0] for r in _all_rows]
@@ -1039,12 +842,9 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
 
 
 def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
-    """Split a flat ``(fid, node)`` iterable into detections (cands) vs priors
-    (anchors) by ``node.provenance`` and run :func:`build_surface`. The ONE
-    graph→surface path: the live ``analyze_scene`` tool (agentic, over the
-    runtime + prebake graphs) and the preflight Stage-2a round (over
-    ``ctx.graph``) both call this, so a preflight program and an in-flight
-    program see the same surface contract."""
+    """Split a flat ``(fid, node)`` iterable into detections (cands) and
+    priors (anchors) by ``node.provenance`` and run :func:`build_surface`:
+    the one graph -> surface path."""
     det, prior, seen = [], [], set()
     # TARGET-TYPE WALL (config B, benchmarks/citynav/PRIOR_CONTRACT.md): an
     # unnamed baked CityRefer prior of the episode's target annotation type is
@@ -1073,62 +873,38 @@ def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
     return build_surface(det, prior, origin_xy, cell_m)
 
 
-# Fields resolvable SERVER-SIDE by fid that no model-side decision needs verbatim.
-# ``search_text`` is the fuzzy-match haystack (descriptions walled out).
-# ``centerline`` is a full polyline (+~5-6 tokens/vertex; a road can be +300-1800
-# tokens PER ROW) recomputed by every geometry op from ``by_fid``
-# — the model chains ops on fids, it never needs the vertices in-prompt. The
-# scalar shape field (axis_length_m) stays on the row.
-# ``mask`` / ``mask_centroid`` are the EXACT footprint realisation (multi-loop
-# boundary of the ingested mask + its true area centroid) the ``compare`` op
-# resolves server-side (gap_witness); the model reads the d_*/dc_* columns,
-# never the vertices.
-# ``cells`` is the bake's own 2 m mesh: what a feature COVERS. It is NOT what
-# the spatial ops measure — distance and intersection run on the EXACT chains
-# each node was given (``gap_witness`` / ``polyline_crossings`` over
-# ``mask``), because a cell-set intersection agreed with them on only 85.0% of
-# the 397 road pairs the model asked for. Thousands of pairs per row, resolved
-# server-side by fid.
+# Row fields resolved server-side by fid that no model decision needs
+# verbatim: ``search_text`` (the fuzzy-match haystack), ``centerline`` (a
+# full polyline, hundreds of tokens on a road), ``mask``/``mask_centroid``
+# (the exact footprint compare resolves) and ``cells`` (the bake's 2 m mesh;
+# distance and intersection run on the exact ``mask`` chains).
 _MODEL_HIDDEN_ROW_FIELDS = ("search_text", "centerline", "mask",
                             "mask_centroid", "cells")
 
-# Render-INPUT fields: folded into the compact color cell at render time
-# (:func:`_mask_noise_color` — the dk/lt prefix and the ``?``), never served
-# as raw columns. Every "columns present" echo excludes them too (one rule:
-# every served key is documented or hidden; these are hidden-by-folding —
-# they leaked through the present-columns lists, measured 12+5 mentions).
+# Render-input fields: folded into the compact color cell
+# (:func:`_mask_noise_color`), never served as raw columns or named in a
+# present-columns echo.
 _RENDER_INPUT_ROW_FIELDS = ("color_shade", "color_flag")
 
 
-# Below this perception confidence a color LABEL is noise — and the model
-# LITERAL-MATCHES color words (measured: a decoy "white/white/red" pattern at
-# conf 0.004 outweighs anchor distance when it is the only literal match
-# rendered). The color-column math (color_match) is already conf-shrunk; the WORD is not. Below
-# the floor the MODEL-FACING render prints "?" so noise looks like noise; absent
-# conf (offline rebuild rows) keeps the word. RENDER-ONLY: the raw rows the ops
-# chain on keep the real color, so the color columns are byte-
-# unchanged. Hosted here so EVERY model-facing row — compact_results items,
-# compare KV records, a select's echoed row — masks identically on the live and
-# offline paths.
+# Below this color_conf a color word is noise, and the model literal-matches
+# color words, so the model-facing render marks it uncertain. Render only:
+# the raw rows keep the real color, so the color columns are unchanged.
 _COLOR_CONF_FLOOR = 0.15
 
 
 def _mask_noise_color(row):
-    """Render the color cell as a token-minimal ``col`` tag: ``[dk|lt ]word[/word2][?]``
-    (~1-2 tokens vs the ~12-token mixture). A trailing ``?`` = the read is UNCERTAIN
-    (below-floor color_conf OR an extractor ``color_flag='look'``) -- the SAME 'noise looks
-    like noise' signal as the legacy masked ``?``, which the agent resolves with a viewpoint;
-    an M6 ``color_shade`` (dk/lt) prefixes only when present. Pure render transform: the RAW
-    row keeps the mixture string, so the color columns / dedup / _parse_color_mixture are
-    untouched. Returns the row unchanged when it carries no color."""
+    """Render the color cell as a token-minimal ``col`` tag:
+    ``[dk|lt ]word[/word2][?]``. A trailing ``?`` marks an uncertain read
+    (below-floor color_conf, or ``color_flag='look'``); a ``color_shade`` of
+    dk/lt prefixes. Render only: the raw row keeps the mixture string.
+    Returns the row unchanged when it carries no color."""
     if not isinstance(row, dict):
         return row
     c = row.get("color")
     if not (isinstance(c, str) and c.strip()):
-        # shade/flag are render INPUTS to the `col` tag — with no color
-        # word there is nothing to fold them into, but they must still
-        # never reach the model as raw fields (a leaked color_shade on a
-        # colorless row is an undocumented served column).
+        # shade/flag are render inputs to the `col` tag; with no color word
+        # they are still stripped (never served raw).
         if "color_shade" in row or "color_flag" in row:
             row = dict(row)
             row.pop("color_shade", None)
@@ -1138,8 +914,8 @@ def _mask_noise_color(row):
     uncertain = ((isinstance(conf, (int, float)) and conf < _COLOR_CONF_FLOOR)
                  or row.get("color_flag") == "look")
     shade = row.get("color_shade")
-    # /word2 is meaningful only from a color-name posterior (the M6 extractor sets color_shade);
-    # the palette-MODE mixture's 2nd component is glass/shadow noise, so suppress it there.
+    # /word2 only when color_shade is set (a color-name posterior); the
+    # palette-mode mixture's second component is glass/shadow noise.
     rich = shade is not None
     out = {**row, "color": G.compact_color_cell(
         c, shade=shade if shade in ("dk", "lt") else None, uncertain=uncertain, rich=rich)}
@@ -1154,8 +930,7 @@ def _model_facing_row(row):
     mask a below-floor color word to '?' (noise looks like noise).
 
     The commit binds on ``fid`` and every op resolves geometry by fid, so the
-    hidden fields are pure context weight in the model-facing payload (the
-    dominant term of the dense-scene prompt blow-up). Idempotent where absent."""
+    hidden fields are pure context weight. Idempotent where absent."""
     if isinstance(row, dict) and any(k in row for k in _MODEL_HIDDEN_ROW_FIELDS):
         row = {k: val for k, val in row.items() if k not in _MODEL_HIDDEN_ROW_FIELDS}
     return _mask_noise_color(row)
@@ -1171,9 +946,7 @@ class _BroadRows(list):
     browse stays unordered and renders census + len only."""
 
     empty_condition: "str | None" = None
-    # A tied one-name set: the initial render is the SHAPE (len + the note
-    # naming the street and its size), never rows or fids. The handle is a
-    # normal ordered find -- slice it, page it, explore it.
+    # A tied one-name set renders its shape (len + name), never rows or fids.
     name_set: bool = False
     # POSITIVE ordering marker: True when this list's order is real
     # (query-matched best-first). Consumers: compact_results (rows render
@@ -1183,53 +956,34 @@ class _BroadRows(list):
     op_cols: list = []
 
 
-# THE one broad-result envelope law: ANY row-list result (find / score_by /
-# filter_items / compare) longer than _BROAD_DUMP_SOFT_ROWS renders as
-# census + the first _BROAD_HEAD_ROWS rows IN THE RESULT'S ORDER (a ranked
-# head IS the ranking's top), with the full set live in the rN handle
-# (slice/chain it). Response SHAPE only — never a candidate cap: the raw
-# rows all stay in program state, and the commit reads the RAW results
-# (reasoner_loop), so no row is ever dropped from the set. The head is bounded
-# (tag-heavy OSM rows measure ~0.6KB each rendered) where the uncapped dump
-# measured 113-148KB.
-#
-# The head IS the vision budget: a set crop badges the first LOOK_SET_ROWS
-# rows of the handle, so a shorter head is a head whose tail the model never
-# reads and vision is shown anyway. It read 12 against a 24-row crop, and the
-# 12 it hid were worth 9.9 points -- containment@12 69.2% vs containment@24
-# 79.1% over the same ordering (containment_probe, 325-episode facing
-# family). Measured cost of the wider head on a `find house near <road>.`
-# return over the calcity bake: +1,418 chars on the ordered table.
+# THE broad-result envelope law: any row-list result longer than
+# _BROAD_DUMP_SOFT_ROWS renders as census + the first _BROAD_HEAD_ROWS rows
+# in the result's order, with the full set live in the rN handle. Response
+# shape only, never a candidate cap: the commit reads the RAW results. The
+# head equals LOOK_SET_ROWS, so a set crop badges exactly the rows the head
+# shows.
 def join_hints(*parts) -> str:
     """Hints joined as SENTENCES, one per line -- the ONE hint shape.
 
-    Several ops contribute facts to one envelope and they were glued with a
-    literal " ALSO: " into a single run-on: 1,413 results over the audited
-    corpus served two independent facts as one sentence, and a reader has to
-    unpick which clause belongs to which. A line each is the whole fix.
-    Empty parts drop out, so a caller never has to test before appending.
+    Several ops contribute facts to one envelope; a line each keeps them
+    separable. Empty parts drop out.
     """
     return "\n".join(str(p) for p in parts if p)
 
 
 # Above this many tied ways under ONE name, a find's initial reply is the
-# SHAPE (how many ways, how long) and not a table. Below it the table is
-# cheap and a reader can hold it, so it renders: the point is not to hide
-# the set, it is that an arbitrary prefix of 64 tied rows costs more than
-# the sentence saying what the street IS, and reads as a ranking besides.
+# shape (how many ways, how long), not a table of arbitrarily ordered rows.
 _NAME_SET_SHAPE_ROWS = 8
 
 _BROAD_DUMP_SOFT_ROWS = 48
 _BROAD_HEAD_ROWS = LOOK_SET_ROWS
 
 
-# Above this many same-named row-ref instances, a compare's DEFAULT grid swaps
-# that name's wide per-instance column block for a census + three cells per
-# candidate reduced from the EXISTING d_<instance> columns (near_/by_/spread_).
-# Render shape only — the raw rows and every per-instance column stay live on
-# the rN (chain score_by/filter_items for full rows), mirroring the
-# _BROAD_DUMP_SOFT_ROWS census idiom. Never a cap: no instance is dropped from
-# the set, and the guard net (_FANOUT_TOKEN_GUARD) is unchanged.
+# Above this many same-named row-ref instances, a compare's default grid
+# swaps that name's per-instance column block for a census + three cells per
+# candidate reduced from the existing 'distance to <instance>' columns
+# (near_/by_/spread_). Render shape only: the rN keeps every column, and no
+# instance is dropped.
 _ANCHOR_FANOUT_CENSUS_INSTANCES = 6
 
 
@@ -1336,9 +1090,7 @@ class _EmptyFindMiss(list):
     an empty runtime-detection query."""
 
     empty_condition: "str | None" = None
-    # A tied one-name set: the initial render is the SHAPE (len + the note
-    # naming the street and its size), never rows or fids. The handle is a
-    # normal ordered find -- slice it, page it, explore it.
+    # A tied one-name set renders its shape (len + name), never rows or fids.
     name_set: bool = False
     # The truthful scope of the miss, set where provenance is known.
     searched: str = "the surface rows"
@@ -1393,44 +1145,18 @@ class _CompareRows(list):
 def _cut_stands_at(v, body: list, capped: list) -> str | None:
     """Where the ORDERING COLUMN stood at the head's cut, both sides of it.
 
-    A head of 24 rows out of 3,414 says nothing about whether the answer is
-    at rank 25. If the sort separated, row 25 sits far from row 24 and the
-    head really is "the near ones". If it did not -- 24 houses on one street
-    at 25.0..41.2 m and the next at 41.4 -- the head is an arbitrary slice
-    of a plateau and rank 0 is a coin flip. The rows are all in hand, so the
-    fact is free, and it is the one thing the served head cannot show: every
-    row's own column value is rendered, and the value of the row just past
-    the cut is not.
+    A head of 24 rows out of thousands says nothing about rank 25. If the
+    sort separated, the next row sits far from the last one shown; if not,
+    the head is an arbitrary slice of a plateau. The value just past the cut
+    is the one thing the served head cannot show. A fact, never a verdict.
 
-    Measured motive: the episodes that never got a crop onto the target
-    queried into a match set of median 3,080 rows against 146 for the ones
-    that did, and their correct row sat at rank 0 one time in eight against
-    six in ten.
+    It reports the composite ``score``, not a column: a multi-key sort is
+    ordered by the sum, and no single column is monotone in the head. Only a
+    ``score_by`` result (``_CueSortedRows``) is an ordering; a find's or a
+    filter's ``op_cols`` is a column-budget list, not a sort.
 
-    A FACT and never a verdict -- it names what was ranked and three
-    numbers, says nothing about what they mean, and drops nothing.
-
-    IT REPORTS THE COMPOSITE ``score``, NOT A COLUMN, and that is the whole
-    correctness of it. A multi-key sort is ordered by the SUM; no single
-    column is monotone in the head, so quoting one says something false
-    about the cut. Reading ``op_cols[0]`` was doubly wrong: ``score_by``
-    stores ``sorted(emphasis)``, so on the legend's own
-    ``near=<place>, color=<word>`` shape the alphabetically-first key is
-    ``color_white`` and the row just past the cut carries its BEST possible
-    value -- the note then read as "the cut discarded a row better than
-    everything shown" on a head that had separated cleanly.
-
-    Only a result ``score_by`` itself produced (``_CueSortedRows``) is an
-    ordering. A ``find`` and a ``filter_items`` also stamp ``op_cols`` --
-    it is a column-BUDGET priority list there, not a sort -- and firing on
-    a query find put this note in the same hint as find's own "all equally
-    good matches, so this order is arbitrary", one asserting a clean
-    ordering and the other denying it.
-
-    The next row comes from ``body``, the sequence the head was cut from,
-    not from the raw result: window-covering rows are dropped before the
-    cut, so ``v[len(capped)]`` is a row already on the page or one
-    deliberately omitted.
+    The next row comes from ``body`` (window-covering rows already dropped),
+    the sequence the head was cut from.
     """
     if not isinstance(v, _CueSortedRows) or len(capped) >= len(body):
         return None
@@ -1472,102 +1198,42 @@ _GRID_COL_PRIORITY = (
     "footprint_area_m2", "aspect_ratio", "axis_length_m",
 )
 
-# Repeat the header row every N DATA rows on a long dump so a reader deep in the
-# table never loses the column names (SOTA markdown-table best practice).
+# Repeat the header row every N data rows on a long dump.
 _GRID_HEADER_EVERY = 50
 
-# RENDER-SHAPE bound on a tag-fat row's tags cell: the first N tags render,
-# the rest fold to a factual '+K more tags' marker. A multilingual name_*
-# flood (measured 6KB on one admin row) is render weight, never information
-# the sort needs — the NODE keeps every tag and find/query still searches
-# ALL tags (search_text is built from the full set).
+# Render bound on a tag-fat row's tags cell: the first N tags render, the
+# rest fold to a '+K more tags' marker. The node keeps every tag and find
+# still searches all of them.
 _TAG_RENDER_HEAD = 12
 
-# Tag keys the RENDERER drops. Measured over 2,700 stored episodes as the share
-# naming the key anywhere in a say sentence OR in the model's own reasoning
-# text -- a gate that overcounts reads (substring match) and so fails toward
-# keeping: osm_id 0.5%, source_tag 0.7%, addr_postcode 0.3%, addr_city 0.4%,
-# oneway 1.2%, ref_GB_uprn 0.0%. Together ~8% of every served byte.
-#
-# This is a RENDER cut, not a data cut. The node keeps every tag and
-# ``search_text`` is still built from the full set, so a find on a postcode or
-# an osm id still matches -- the model just is not made to read the id of every
-# row to reach the ones it does use (addr_street 14.8%, building 84.0%,
-# surface 22.9%, highway 4.8%, addr_housenumber 2.4%, all kept).
+# Tag keys the renderer drops: ids, postal bookkeeping and import constants
+# the model does not read. A render cut only: the node keeps every tag and
+# ``search_text`` is built from the full set, so a find on them still
+# matches.
 _TAG_RENDER_DROP = frozenset({
     "osm_id", "source_tag", "addr_postcode", "addr_city", "oneway",
     "ref_GB_uprn",
-    # IMPORT BOOKKEEPING AND CONSTANTS. Measured over 16,110 reasoning
-    # responses on the calcity_ends run: tiger_reviewed 2 mentions,
-    # tiger_cfcc 21, tiger_source/tiger_tlid/tiger_separated 0,
-    # worldkit_layer 43 (and its value restates the class the highway= /
-    # building= tag already carries), calcity_object_id 21, source_lanes 0.
-    # tiger_county is "Kern, CA" on every row of the block and
-    # worldkit_height_m is 4.0 on 41,522 of 42,318 cells — a column that
-    # never varies carries no information, so no value-level read of it is
-    # even possible. ~950K chars of the corpus.
-    # tiger_name_base / tiger_name_type STAY: street names are not readable
-    # from nadir pixels and the model uses them to disambiguate.
+    # Import bookkeeping and constants (tiger_county and worldkit_height_m
+    # barely vary). tiger_name_base / tiger_name_type stay: street names are
+    # not readable from nadir pixels.
     "tiger_reviewed", "tiger_cfcc", "tiger_source", "tiger_tlid",
     "tiger_separated", "tiger_county", "worldkit_layer",
     "worldkit_height_m", "calcity_object_id", "source_lanes",
 })
 
-# Columns the renderer drops, by the COMPREHENSION rule -- what the model
-# actually DOES with each column at value level, not how often it names it
-# (wf_e09c2b2e: 8 readers over 96
-# stratified episodes of 2d0e85a:saydialect_1000, verifier-corrected). The
-# mention instrument (``served_surface --emit use``) inverted the two most
-# consequential calls -- values are quoted, names are not.
-# RESTORED (the mention instrument was wrong):
-#   footprint_area_m2  5/8 load-bearing; the only size-adjective sort
-#                      column and the only degenerate-mask detector;
-#                      decided commits; quoted by VALUE ("28,075 m2"),
-#                      never by name (0.7% mention).
-#   end1_xy            8/8 load-bearing consumed AS A PAIR with end0_xy
-#                      (direction, extent, ends, corners; ~1.2% mention).
-# CUT (raw fields all stay on the rows):
-#   name_match         7 not-observed / 1 distracting; zero
-#                      reads-to-pick-a-row in 8/8 packs; anti-correlated
-#                      on 2 committed rows.
-#   score              inert 1/1/4/2; never decided a commit as a value
-#                      (one counterexample, 533); on colour blocks it is a
-#                      rendered duplicate of an in-row value (literally
-#                      color_<word> - 0.5 there).
-# KEPT CUT (unchanged from 0df1803d, audit-confirmed):
-#   aspect_ratio       inert (the first diet's cut).
-#   axis_length_m      inert 1/2/5; in-row inconsistent with the
-#                      endpoints (78.19 vs a 68.0 chord).
-#   color_conf         occasional 1/4/3; trust gate in the looker
-#                      stratum, hazard in miss strata -- the cut stands
-#                      WITH the looker-stratum caveat named.
-# center distance to <ref> / facing <ref> are DEFERRED, not
-# kept: they attach in compare, and cutting an attach reaches the
-# round-era remedy strings and the OP_VOCAB claims -- a quarantine
-# decision, not a render cut.
-# aspect_ratio is an OWNER DECISION, not just an audit cut: a min-rect
-# scalar is a lossy proxy for shape, so that is a looking question -- the
-# crop channel answers it. The field stays on nodes; the mission surface
-# neither renders nor names it. Its axis-heading sibling is not cut here
-# but DELETED at the producer: orientation is a relation to the feature a
-# thing faces (the compare's 'facing <ref>'), and an undirected
-# [0, 180) rectangle heading reads the same for a north-facing and a
-# south-facing house on one street.
+# Columns the grid does not render (the raw fields stay on the rows):
+# name_match and score (never read to pick a row; score duplicates in-row
+# values on color sorts), aspect_ratio (a min-rect scalar is a lossy proxy
+# for shape; the crop answers shape), axis_length_m (inconsistent with the
+# endpoints) and color_conf.
 _GRID_COL_DROP = frozenset({
     "aspect_ratio", "axis_length_m", "color_conf",
     "name_match", "score",
 })
 
-# The ONE list of column names the model never sees, on ANY channel.
-# THREE paths render or name columns -- the grid, the Row repr on the
-# python surface, and the live-surface census echoed into error and
-# dedup notes -- and each grew its own filter, so a cut enforced on one
-# leaked out the others. Measured on calcity_conj_93_72fe9987, down the
-# Row path alone: aspect_ratio 1,315 occurrences over 49 of 93 episodes,
-# color_conf 1,158 over 43, score 431 over 45. The census echoes leaked
-# the same names a second way, as bare "Columns computed on rows so far:
-# [...]" lists -- no values, but naming a column is how the model learns
-# to ask for it. A name goes in ONE place now.
+# The one list of column names the model never sees, on any channel: the
+# grid, the Row repr on the python surface, and the census echoes in error
+# and dedup notes.
 MODEL_UNSERVED_COLUMNS = (
     _GRID_COL_DROP
     | frozenset(_MODEL_HIDDEN_ROW_FIELDS)
@@ -1617,10 +1283,8 @@ def _fmt_float(v: float) -> str:
 def _grid_cell(v) -> str:
     """One markdown cell. Absent/empty -> ``-``; floats -> the stored value
     verbatim (:func:`_fmt_float` — the ONE rounding rule); xy -> ``x, y``;
-    a tags dict -> compact ``k=v; k2=v2``; any stray ``|`` in a
-    string is neutralised to ``/`` so a value
-    can NEVER column-break the pipe table (defense in depth atop the
-    color-mixture delimiter fix — the only field that ever carried ``|``)."""
+    a tags dict -> compact ``k=v; k2=v2``; a stray ``|`` in a string becomes
+    ``/`` so a value never column-breaks the pipe table."""
     if v is None or v == "" or (isinstance(v, dict) and not v):
         return "-"
     if isinstance(v, bool):
@@ -1663,12 +1327,10 @@ def _grid_columns(rows) -> list[str]:
                 seen.append(k)
     prio = [c for c in _GRID_COL_PRIORITY if c in seen_set]
     extras = [c for c in seen if c not in _GRID_COL_PRIORITY]
-    # STANCE-PAIR CONTIGUITY: side columns are presence-pairs (one member
-    # per row), so first-seen union interleaves them with foreign columns
-    # in data-dependent order (523 layouts measured across one fleet; the
-    # pair split across three compare columns). Group each handle's four
-    # side columns at the FIRST position any of them appears, in the one
-    # fixed order left/right/ahead/behind.
+    # Side columns are presence pairs (one member per row), so a first-seen
+    # union interleaves them with foreign columns. Group each ref's four side
+    # columns at the first position any appears, in the fixed order
+    # left/right/ahead/behind.
     _side = re.compile(r"^(left of|right of|ahead of|behind) (.+)$")
     _order = {"left of": 0, "right of": 1, "ahead of": 2, "behind": 3}
     grouped: list[str] = []
@@ -1696,17 +1358,9 @@ def _render_grid_rows(rows, cols=None) -> str:
     (the main ``{len, items}`` list results AND ``compare`` evidence).
 
     ``| fid | <cols...> |`` -- every column at least one row carries. Absent
-    cells ``-``, floats 1 dp, the header repeated every ~_GRID_HEADER_EVERY
-    data rows on long dumps. The noise-color ``?`` mask + hidden-field strip
-    (:func:`_model_facing_row`) apply per row. Header-once (no repeated JSON key
-    labels) realises ~-38% tok/row vs the ``{len, items}`` dicts it replaces.
-
-    There is no ``idx`` column. It restated the row's own position in a table
-    the reader walks top-to-bottom, and position is what the ``rN[i]`` /
-    ``rN[a:b]`` reference grammar addresses -- that form needs no printed
-    index and keeps working. Measured over 2,700 stored episodes: ``idx``
-    named in 0.6% of episodes' prose, emitted in a say sentence 0 times, and
-    ``rN[k]`` itself emitted 0 times."""
+    cells ``-``, the header repeated every _GRID_HEADER_EVERY data rows. Rows
+    pass through :func:`_model_facing_row`. There is no index column:
+    position is what ``rN[i]`` / ``rN[a:b]`` addresses."""
     proj = [_model_facing_row(r) if isinstance(r, dict) else r for r in rows]
     if cols is None:
         cols = _grid_columns(proj)
@@ -1730,12 +1384,8 @@ def _render_grid_rows(rows, cols=None) -> str:
     return "\n".join(lines)
 
 
-# Compare v2's per-ref relation-column prefixes (dynamic names — suffixed with
-# the ref/set label) + the fixed absolute-view column names. compare_columns
-# captures exactly these so the pick-step evidence table folds the model's OWN
-# relation evidence in without re-listing every dynamic name. ``between_a`` /
-# ``between_b`` / ``span_m`` / ``perp_offset_m`` are flat row fields the static
-# evidence-field tuple already renders, so they are excluded here (no dup line).
+# The relation-column prefixes compare attaches (suffixed with the ref
+# label); compare_columns captures exactly these.
 _COMPARE_COL_PREFIXES = ("distance to ", "center distance to ",
                          "bearing from ", "facing ",
                          "contains ", "along ", "left of ", "right of ",
@@ -1766,25 +1416,15 @@ KEY_PATTERN = (
     "axis_length_m)[a-zA-Z0-9_]{0,40}$"
 )
 assert all(p in KEY_PATTERN for p in _COMPARE_COL_PREFIXES)
-# LOUD token-overflow safety net for a multi-instance compare ref (NOT a
-# per-instance cap). A ref that resolves to several instances fans out into one
-# column set PER instance, at ANY count -- a fragmented road or a duplicate-named
-# landmark keeps all its instances so the model can disambiguate. The ONLY bound
-# is this net: if the fan-out's rendered size (instances x candidates, in cells)
-# would be a genuinely crazy amount of tokens, it fails loud and STEERS (narrow /
-# sort / index one / pass-as-items). It fires ~never once the model narrows on
-# the result summary, and it catches the self-compare (refs = the candidate set).
-# ~8000 cells ~= tens of k tokens rendered; genuine landmark fan-outs sit far below.
+# Token-overflow net for a multi-instance compare ref (not a per-instance
+# cap): a ref resolving to several instances fans out into one column set per
+# instance, and only a fan-out of this many cells (instances x candidates)
+# fails loud and steers.
 _FANOUT_TOKEN_GUARD = 8000
 
-# The UNION's own bound, and it is a WALL-CLOCK net rather than a token one:
-# a union renders ONE column set however many members it folds, so nothing
-# here is about render size. A union member can be an rN, so
-# `near=find("house")` folds every house on the tile, which is the members x
-# items shape the union comment records as running for minutes without
-# returning. The bbox prune should hold it, but a wall-clock cliff discovered
-# inside a fleet run is the expensive place to discover it. A real cue's set -- the
-# pools on a street, the crossings of two roads -- sits far below this.
+# A union's own bound, a wall-clock net: a union renders one column set
+# however many members it folds, but an rN member can fold a whole class,
+# and members x items gap calls is the cost.
 _UNION_MAX_MEMBERS = 400
 
 
@@ -1798,9 +1438,8 @@ def compare_columns(results: dict) -> dict:
     """``{fid: {column: value}}`` over every ``compare`` result in a RAW (pre-
     ``compact_results``) results dict — the pick-step evidence table folds the
     model's OWN comparison in by fid (no harness backfill; a row the model never
-    compared shows nothing). Captures every relation column (d_/brg_ — the
-    brg_ prefix covers brg_gap_ — /dc_/along_/off_/vx_/vy_). Later compare
-    ops win per column on overlap."""
+    compared shows nothing). Captures every relation column
+    (_COMPARE_COL_PREFIXES). Later compare ops win per column on overlap."""
     out: dict = {}
     for v in (results or {}).values():
         if not isinstance(v, _CompareRows):
@@ -1817,11 +1456,9 @@ def compare_columns(results: dict) -> dict:
 
 
 def _sanitize_token(lbl, fallback="ref") -> str:
-    """The ONE column/cell-key sanitizer: a typed token (fid, ``rN`` base,
-    name, ``as:`` label) -> ``[^a-z0-9]+``-collapsed lowercase base. Single-
-    sourced so the compare column base (``d_road_1``), the aggregate labels
-    (``vx_road_1``), and the fan-out census cell keys (``near_road``) all
-    derive a base the SAME way — one naming law, no dialect drift."""
+    """The one column/cell-key sanitizer: a typed token (fid, ``rN`` base,
+    name, ``as:`` label) -> a ``[^a-z0-9]+``-collapsed lowercase base, shared
+    by the compare column labels and the fan-out census cell keys."""
     base = re.sub(r"[^a-z0-9]+", "_", str(lbl).lower()).strip("_")
     return base or fallback
 
@@ -1832,7 +1469,7 @@ def _anchor_fanout_census(v):
     Groups a compare's row-ref headers by ``ref_name``; a name with
     ``>= _ANCHOR_FANOUT_CENSUS_INSTANCES`` instances has its per-instance
     columns dropped from the DEFAULT grid and replaced, per candidate, by
-    three cells reduced from the EXISTING ``d_<instance>`` columns (no
+    three cells reduced from the existing ``distance to <instance>`` columns (no
     geometry recompute). The cell base is the group's shared ref-name run
     through the ONE ``_sanitize_token`` law (the same base the compare
     columns derive), echoed on the census header as ``cell_suffix``:
@@ -1866,10 +1503,7 @@ def _anchor_fanout_census(v):
                 d_by_fid[str(h["ref_fid"])] = dcol
         if len(d_by_fid) < _ANCHOR_FANOUT_CENSUS_INSTANCES:
             continue
-        # Same naming law as the compare columns: the cell key is the group's
-        # shared ref-name sanitized through the ONE ``_sanitize_token`` base
-        # (the per-instance columns it replaces were d_<fid>; this group cell
-        # keys on the name they share).
+        # The cell key is the group's shared ref name through _sanitize_token.
         key = _sanitize_token(name)
         _k, _n = key, 2
         while _k in used_keys:  # distinct names, same sanitized key -> counter
@@ -1903,10 +1537,8 @@ def _anchor_fanout_census(v):
             if pairs:
                 lo, lo_fid = min(pairs)
                 hi = max(p[0] for p in pairs)
-                # near_ IS the stored d_ value -- serve it verbatim (the one
-                # _fmt_float render law); a second 1-dp round here collapsed a
-                # 0.04 m gap to 0.0 beside the row's own 2-dp d_ column. spread_
-                # is a NEW derived value, stamped ONCE at the d_ family's 2 dp.
+                # near_ is the stored distance value, served verbatim;
+                # spread_ is derived here, at the distance family's 2 dp.
                 row[f"near_{key}"] = lo
                 row[f"by_{key}"] = lo_fid
                 row[f"spread_{key}"] = round(hi - lo, 2)
@@ -1914,25 +1546,17 @@ def _anchor_fanout_census(v):
     return render_rows, censuses
 
 
-# THE one render budget: a result's rendered rows-x-columns grid stays under
-# this many chars (~3k tokens). Priority when over: columns the program's own
-# ops named first, then base identity columns, then first-seen extras — the
-# tail elides with a count note. Shapes the RENDER only: every column lives
-# on the full set in the rN (the F485 bound case: one uncapped compare
-# rendered 96,775 chars for two already-known numbers).
+# THE one render budget: a result's rendered grid stays under this many
+# chars. Over it, columns the program's own ops named come first, then
+# identity columns, then first-seen extras; the tail elides with a count
+# note. Render only: every column lives on the full set in the rN.
 _RENDER_CHAR_BUDGET = 12_000
 
-# THE one-line table legend ("Beyond
-# columns" item 1: the axis-sign question alone derailed ~4 episodes per
-# pack in two packs; "one legend line would recover three columns").
-# Served ONCE per response, under the FIRST envelope that renders rows.
-# EVERY clause is code-derived and pinned by test_table_legend:
+# THE one-line table legend, served once per response under the first
+# envelope that renders rows. Every clause is code-derived (test_table_legend):
 #   xy       build_surface._xy: a detection's measured world_xy, else a
-#            point ON the row's own geometry (representative_point) --
-#            NOT an endpoint midpoint, NOT always the mask centroid.
-#            THE SAME point act.move flies (search_loop
-#            ._world_xy_for_node_locked reads it back), so a row states one
-#            position and the drone goes to it.
+#            point ON the row's own geometry (representative_point); the
+#            same point act.move flies.
 #   distance G.gap_witness min edge gap, 0.0 on contact; line refs:
 #            _poly_chart_one unsigned lateral
 #   along    arc m from the end0_xy end
@@ -1960,7 +1584,7 @@ def _budget_columns(rows_r, cols, op_cols) -> tuple[list, int]:
     one column) — one oversized column skips, it does not wall off the
     cheaper columns behind it. Returns ``(kept_cols, n_cut)``."""
     proj = [_model_facing_row(r) for r in rows_r if isinstance(r, dict)]
-    base = 20 * (len(proj) + 2)  # idx+fid cells + pipes per line
+    base = 20 * (len(proj) + 2)  # fid cell + pipes per line
     cost = {}
     for c in cols:
         # header cell + separator overhead, deliberately GENEROUS so the
@@ -2038,11 +1662,8 @@ def compact_results(results: dict, *, widen_form: str = "",
     Response shape as ever: every rN stays chainable and no row is dropped
     from any of them.
 
-    THE LEGEND RIDES EVERY RESPONSE, once, under its first rows-carrying
-    envelope. A once-per-mission countdown was tried and REGRESSED SR
-    -0.042 (pysurface4, efb4a7a3): the axis-sign and xy-is-a-recorded-
-    point inferences broke in exactly the episodes whose tables arrived
-    legend-less. The per-response copy is load-bearing, not repetition.
+    The legend rides every response, once, under its first rows-carrying
+    envelope.
     """
     _legend_out = [False]
 
@@ -2054,9 +1675,8 @@ def compact_results(results: dict, *, widen_form: str = "",
             # terminal walk (rank order preserved) without duplicating the
             # rows.
             head: dict = {"refs": list(getattr(v, "refs", []) or []), "len": len(v)}
-            # The header lists EVERY attached column key verbatim, so the model
-            # reads real names (d_r0, vx_road, ...) instead of guessing them
-            # (chains died on guessed absent columns).
+            # The header lists every attached column key verbatim, so the
+            # model reads real names instead of guessing them.
             _cols_echo = list(getattr(v, "columns", []) or [])
             if _cols_echo:
                 head["columns"] = _cols_echo
@@ -2076,11 +1696,8 @@ def compact_results(results: dict, *, widen_form: str = "",
                     head["anchor_census"] = _censuses
                 if len(v) > _BROAD_DUMP_SOFT_ROWS:
                     _rrows = list(_rrows)[:_BROAD_HEAD_ROWS]
-                # NO `fids` ARRAY BESIDE A GRID. It was the same fids, in
-                # the same order, as the grid's own first column, served
-                # twice — 1.30M chars over the corpus, dead by construction
-                # rather than by measurement. A census-only head (no rows)
-                # still carries it below, where it is the only fid source.
+                # No `fids` array beside a grid: its first column carries
+                # them. A census-only head carries it below.
                 _cols = _grid_columns(_rrows)
                 _cols, _n_cut = _budget_columns(
                     _rrows, _cols, getattr(v, "columns", None))
@@ -2097,13 +1714,10 @@ def compact_results(results: dict, *, widen_form: str = "",
             return head
         if isinstance(v, list):
             if len(v) == 0:
-                # An empty list is a VALID result (no item met the op's
-                # condition). State the mechanical fact — the
-                # op's TRUTHFUL condition when one was recorded (a query miss
-                # names its threshold + tokens), never a claim about the
-                # world. On a numeric cut the deterministic ``cut_stats``
-                # payload (cut / nearest_excluded / admit_at / n_at_admit)
-                # carries the threshold facts -- no widen-and-retry prose.
+                # An empty list is a valid result. State the op's truthful
+                # condition when one was recorded (a query miss names its
+                # threshold), never a claim about the world; a numeric cut's
+                # ``cut_stats`` carries the threshold facts.
                 _empty_hint = (getattr(v, "empty_condition", None)
                                or "this op returned NO items: nothing met "
                                   "its condition.")
@@ -2124,33 +1738,20 @@ def compact_results(results: dict, *, widen_form: str = "",
                     return {"len": 0, "items": [], "cut_stats": _cut,
                             "hint": _empty_hint}
                 return {"len": 0, "items": [], "hint": _empty_hint}
-            # Union-header markdown grid (header-once, ~-38% tok/row) is the
-            # SOLE model-facing serialization for a non-empty list result,
-            # under the ONE broad-result law: past _BROAD_DUMP_SOFT_ROWS the
-            # envelope is census + the first _BROAD_DUMP_SOFT_ROWS rows/fids
-            # in the result's order (a ranked head IS the ranking's top), and
-            # the hint states how many rows the rN holds and how to slice.
-            # The full-set fid array is deliberately NOT served (measured
-            # 113-148KB single messages); the commit path reads the RAW
-            # results, so nothing is dropped from the candidate set.
+            # The union-header grid is the one serialization for a non-empty
+            # list, under the broad-result law (census + head past
+            # _BROAD_DUMP_SOFT_ROWS; the full-set fid array is never served;
+            # the commit path reads the RAW results).
             #
-            # WINDOW-COVERING rows out of a SORT's rendered head (render
-            # shape, never a filter): a mask that contains the whole window
-            # holds d_=0 to every ref by containment, so such rows tie
-            # rank-0 of every closest-first sort while never being
-            # candidate referents (measured: admin boundaries owned ranks
-            # 0-2 of ranked views in 3 episodes and burned 12 iteration-0
-            # rounds). They are OMITTED from the rendered head of an
-            # ordering-op (score_by) result and NAMED in one truthful note;
-            # the full set (their rows included, covers_window fact riding
-            # them) stays live in the rN — find/query/census are untouched.
+            # Window-covering rows are omitted from the rendered head of a
+            # score_by result and named in one note: their mask contains the
+            # whole window, so they hold distance 0 to every ref and would
+            # tie rank 0 of every closest-first sort. The rN keeps them.
             _ordered = bool(getattr(v, "cue_sorted", False)
                             or getattr(v, "ordered", False))
             if not _ordered:
-                # NO real ordering exists -> census + len, NO row head: a
-                # fid-lexicographic head under a result billing reads as a
-                # candidate list (render shape only — the full set lives in
-                # the rN; the commit path reads the RAW results).
+                # No real ordering: census + len, no row head (a
+                # fid-lexicographic head reads as a candidate list).
                 head = {"len": len(v)}
                 census, named = _surface_census(v)
                 head.update({"census": census, "named": named})
@@ -2160,13 +1761,8 @@ def compact_results(results: dict, *, widen_form: str = "",
                     head["cut_stats"] = _cut
                 head["hint"] = join_hints(
                     head.get("hint"), *(getattr(v, "notes", None) or []))
-                # The route to rows, stated where the dead end appears
-                # (measured: 521 census heads over 97/101 episodes, with
-                # repeat loops trying to guess the way in). Stated as the
-                # FACT and in neither channel's spelling: this renders for
-                # the sentence surface AND for the frozen round-era one, so
-                # an op-JSON idiom here teaches a register the sentence
-                # channel cannot emit.
+                # The route to rows, stated as the fact in neither channel's
+                # spelling (it renders for the sentence surface too).
                 _rows_route = (
                     "no ordering exists on this result, so it renders "
                     "census + len and no fids: ordering it by an attached "
@@ -2195,33 +1791,23 @@ def compact_results(results: dict, *, widen_form: str = "",
                         f"this rendered head; they stay live in this rN "
                         f"(full set intact), covers_window marks them "
                         f"wherever they render.")
-            # A NAME'S SET RENDERS AS ITS SHAPE. Every row ties, so a head
-            # is an arbitrary prefix served as though it were a ranking --
-            # and the fids alone cost more than the sentence that says what
-            # the street IS. The rN keeps every row for a slice or explore.
+            # A name's set renders as its shape: every row ties, so a head
+            # would be an arbitrary prefix served as a ranking. The rN keeps
+            # every row.
             if getattr(v, "name_set", False):
                 capped = []
             else:
                 capped = list(_body[:_BROAD_HEAD_ROWS]
                               if len(v) > _BROAD_DUMP_SOFT_ROWS else _body)
-            # A truncated head must say so: an unstated prefix reads as the
-            # candidate set (measured: models hand-copy it into select).
-            # WHETHER the order means anything is the producing op's fact and
-            # is stated there -- `find` says either "best-first from a down
-            # to b" or "all equally well, so this order is arbitrary", once,
-            # from the scores it actually computed. Re-deriving it here from
-            # a uniform name_match column would let ONE hint carry two
-            # contradictory order claims.
+            # A truncated head says so. Whether the order means anything is
+            # stated by the producing op (find's best-first or tie note),
+            # never re-derived here.
             _head_note = None
             if getattr(v, "name_set", False):
                 pass
             elif len(capped) < len(_body):
-                # CHANNEL-SPECIFIC, and it has to be: this hint once
-                # advertised rN[a:b] to a channel whose language cannot spell
-                # a numeral, and the sentence lanes measured 36 attempts and
-                # 36 errors at it. The caller passes the form ITS channel can
-                # say (``widen_form``); a caller that passes none gets the
-                # fact without a form, never another dead end.
+                # Channel-specific: the caller passes the widening form its
+                # channel can say (``widen_form``); none gets the fact alone.
                 _head_note = (
                     f"showing the first {len(capped)} of {len(v)} row(s); "
                     f"the rest stay live in this rN -- later ops on it "
@@ -2235,10 +1821,7 @@ def compact_results(results: dict, *, widen_form: str = "",
             _cols = _grid_columns(capped)
             head = {"len": len(v)}
             if getattr(v, "name_set", False):
-                # The shape as DATA. It speaks Python and holds the handle:
-                # a sentence naming explore() and rN[a:b] is workflow legend,
-                # and the ways' own total length is the one fact len cannot
-                # carry.
+                # The shape as data: the name and the ways' total length.
                 head["name"] = str(_body[0].get("name") or "")
                 _set_m = sum(float(r.get("axis_length_m") or 0.0)
                              for r in _body)
@@ -2267,9 +1850,8 @@ def compact_results(results: dict, *, widen_form: str = "",
             if not head["hint"]:
                 head.pop("hint")
             if _cut:
-                # Iter-4 cut-stats: the one-row deterministic cut line on a
-                # NON-EMPTY numeric cut (how much was cut + the nearest row
-                # the threshold excluded + the admit-at value). Info-only.
+                # The one-row deterministic cut line on a non-empty numeric
+                # cut. Info only.
                 head["cut_stats"] = _cut
             head["hint"] = join_hints(
                 head.get("hint"), *(getattr(v, "notes", None) or []))
@@ -2281,13 +1863,8 @@ def compact_results(results: dict, *, widen_form: str = "",
             return _model_facing_row(v)
         return v
 
-    # Serve any identical census ONCE per response: a program whose ops each
-    # summarize the same broad set would otherwise render the same census
-    # block N times in one message (measured: 3 identical blocks in one
-    # 32.7 KB message).
-    #
-    # ANSWER FIRST, so the ref that survives the reduction below is the one
-    # that keeps its own census rather than a pointer to a dropped ref's.
+    # Serve any identical census once per response. The answer ref goes
+    # first, so it keeps its own census rather than a pointer.
     order = ([answer_ref] + [k for k in results if k != answer_ref]
              if answer_ref in results else list(results))
     out: dict = {}
@@ -2307,19 +1884,9 @@ def compact_results(results: dict, *, widen_form: str = "",
         out[k] = env
     if answer_ref not in out:
         return out
-    # ONE SENTENCE, ONE TABLE. `find house near <road>.` is one question and
-    # it compiled to find -> compare -> score_by; all three results were
-    # served, only the last was ordered, and it came last. 749 of the 3,120
-    # successful geometry returns on calcity_full_replyrepair served three
-    # tables and 57 served four -- the same rows re-rendered twice as the
-    # working before the answer.
-    #
-    # The working's FACTS survive: each dropped op's hint rides the answer,
-    # attributed to the ref that made it, which is also what keeps an order
-    # claim honest ("r0: ... this order is arbitrary" is about r0, whose
-    # order is still live in the handle, and not about the answer's). Every
-    # rN stays chainable -- nothing leaves program state, and the commit
-    # path reads the RAW results.
+    # One sentence, one table: the answer ref's envelope alone. Each other
+    # op's hint rides the answer, attributed to its ref; every rN stays
+    # chainable and the commit path reads the RAW results.
     answer = out[answer_ref]
     if isinstance(answer, dict):
         answer["hint"] = join_hints(
@@ -2332,15 +1899,11 @@ def compact_results(results: dict, *, widen_form: str = "",
 
 
 def _unwrap_listish(v):
-    """A list result echoed back in the legacy ``{len, items}`` shape -> its
-    items. Parity-safe: a raw ``{len, items}`` dict is never a valid list arg
-    (as_list/as_points hard-error on any dict), so this only turns a former
-    error into the obvious value. Post the markdown-grid cutover a NON-EMPTY
-    list result serializes as ``{len, fids, rows}`` (its rows a grid
-    STRING, not reconstructable row dicts) — such a pasted dict is NOT unwrapped
-    here and instead fails loud, directing the model to chain the ``rN`` ref
-    (which resolves against the RAW rows). Only an EMPTY result still carries
-    ``items: []``."""
+    """A list result echoed back as ``{len, items}`` -> its items. A raw
+    ``{len, items}`` dict is never a valid list arg, so this only turns an
+    error into the obvious value. A non-empty result serializes as ``{len,
+    fids, rows}`` (rows a grid string), which is not unwrapped and fails loud
+    toward chaining the ``rN``. Only an empty result carries ``items: []``."""
     if isinstance(v, dict) and "len" in v and isinstance(v.get("items"), list):
         return v["items"]
     return v
@@ -2348,21 +1911,10 @@ def _unwrap_listish(v):
 
 def _grouped_keys(present) -> str:
     """Key list -> a readable summary: singleton keys verbatim, per-instance
-    families collapsed ('distance to building_* (100 instances)') — a fan-out
-    compare against a multi-row ref attaches hundreds of per-fid columns, and
-    an error that DUMPS them all buries the one key the model needs (measured:
-    a 400-name dump the model had to fish 'distance to road_54' out of). Each
-    key is assigned to exactly ONE family — its longest matching prefix (the
-    same law the auto-attach prefix extraction states) — so no key prints
-    twice ('facing ' must win over 'bearing from ', which a
-    startswith re-scan double-listed).
-
-    The family is the COLUMN PREFIX, read from the one vocabulary
-    (:data:`_COMPARE_COL_PREFIXES` + ``color_``). This matched on
-    ``^([a-z]+_)([a-z]+_)?`` when the columns were spelled ``d_building_1``;
-    the rename to ``distance to building_1`` left no underscore where the
-    regex needed one, so every key fell through to its own family and the
-    400-name dump came straight back.
+    families collapsed ('distance to building_* (100 instances)'), so an
+    error naming hundreds of per-fid columns does not bury the one key the
+    model needs. Each key joins exactly one family, its longest matching
+    prefix from :data:`_COMPARE_COL_PREFIXES` + ``color_``.
     """
     prefixes = sorted(_COMPARE_COL_PREFIXES + ("color_",), key=len, reverse=True)
     fams: dict[str, list] = {}
@@ -2417,21 +1969,14 @@ def _present_keys_hint(items) -> str:
 
 
 def _key_remedy(key) -> str:
-    """The producing idiom for an ABSENT column, keyed to the MISSING key's
-    family — the ONE family->provenance remedy source, rendered into every
-    absent-key guard alongside the present-keys census (a one-size d_-family
-    default misdirected 7 of 8 measured absent-key errors). Returns a
-    sentence ending in a space, or '' for a key with no known family (the
-    census still shows what exists).
+    """The producing idiom for an ABSENT column, keyed to the missing key's
+    family -- the one family -> provenance remedy source, rendered beside the
+    present-keys census. Returns a sentence ending in a space, or ''.
 
-    TRUTHFUL AFFORDANCES ONLY: every example this channel serves must
-    EXECUTE if followed. A color example is echoed only after resolving
-    onto the closed palette (an off-palette echo like color_lt_white is a
-    remedy the palette gate then rejects — measured, 10624); a token that
-    is not column-shaped (prose, whitespace) gets no interpolated example;
-    and the attach sentence names the ONE place naming attaches (a score_by
-    emphasis / filter_items key) — naming a key anywhere else (e.g. a
-    select basis) does NOT attach it."""
+    Every example served must execute if followed: a color example is echoed
+    only after resolving onto the closed palette, a token that is not
+    column-shaped gets no example, and the attach sentence names the one
+    place naming attaches (a score_by emphasis / filter_items key)."""
     k = str(key)
     if not re.fullmatch(r"[A-Za-z][\w. ]{0,60}", k):
         return ""  # not a column-shaped token: no worked example applies
@@ -2472,21 +2017,15 @@ def _key_remedy(key) -> str:
                     f"color_<palette word>, named in a score_by emphasis "
                     f"(color orders, never filters). ")
         if re.fullmatch(r"[0-9][0-9_.]*", param):
-            # NOT "reads like a coordinate, not a fid": the model may never
-            # have written this label. A point named in one call mints it, and
-            # a later ordering can name that column over rows the first call
-            # never related to it. Accusing the model of a type error it did
-            # not make, then prescribing a JSON call, was wrong twice.
+            # The model may never have written this label: a point named in
+            # one call mints it, and a later ordering can name the column.
             return (f"{param!r} is not a fid: a number pair names a POINT, "
                     f"and a point carries columns only under the label it is "
                     f"given when it is related to rows -- the column is then "
                     f"{pre}<label>. ")
-        # The say path reaches here through `in <place>` (the one filter it
-        # spells), so the remedy names the FACT -- the column exists once
-        # the ref is related to these rows -- and not the op that would
-        # attach it. Naming score_by/filter_items taught a JSON register to
-        # a channel whose only move is a sentence, and 'along' / the side
-        # columns are productions the strip priced out.
+        # The say path reaches here through `in <place>`, so the remedy names
+        # the fact (the column exists once the ref is related to these rows),
+        # not an op.
         return (f"a '{pre}<ref>' column exists once <ref> has been related "
                 "to these rows, and <ref> must be a fid on this surface. ")
     return ""
@@ -2509,42 +2048,17 @@ def _polyline_arc_midpoint(verts) -> list:
 
 def _side_pair(row_put, lab, lateral, longitudinal=None, ci=None,
                distance=False, sides=True):
-    """Presence-pair side columns AS PHRASES: the column present names the
-    side ("left of X": 7.0) and the other side is simply absent — a signed
-    vx/off lies about half its values, and a phrase key is the model's own
-    training-data shape (no invented underscore grammar). 0.0 (on the
-    axis) lands on the right/ahead member. ``lateral`` + = right;
-    ``longitudinal`` + = ahead; ``distance`` also emits "distance to X" =
-    |lateral| (the either-side proximity sort, replacing the abs idiom).
+    """Presence-pair side columns as phrases: the column present names the
+    side ("left of X": 7.0) and the other side is absent. 0.0 (on the axis)
+    lands on the right/ahead member. ``lateral`` + = right; ``longitudinal``
+    + = ahead; ``distance`` also emits "distance to X" = |lateral|.
 
-    ``sides=False`` keeps the distance column and drops the LATERAL pair, for
-    a frame the ENGINE inferred rather than one the model declared.
-
-    This branch had already measured the cost of getting that side wrong, in
-    the note that used to describe these columns: on a 694-episode ordinal
-    stratum, render-window surfacing is 62.0% for "find building near
-    <road>.", 83.9% with the CORRECT side cut and 46.0% with a coin-flip one.
-    A wrong cut is worse than no cut, and the inference is a coin flip: ``lateral_convention`` scored every axis this
-    engine can compute at chance -- road_travel_intrinsic 0.461,
-    road_local_tangent 0.473, anchor_own_axis 0.479, north_up 0.442, against
-    sham_random_axis 0.519 -- on 926 resolved mentions, with cluster
-    intervals, block-flip significance and an anchor shuffle.
-
-    Fixing the convention was priced before being built and does not pay:
-    ``relation_replay``'s street-viewer arm (the conventions that ARE real,
-    0.642 / 0.752) re-orders the same items at top-1 0.095, against 0.110 for
-    the map-fixed axis and 0.217 for plain proximity, n=825. A side call is
-    binary and halves a pool; an ORDERING must rank INSIDE the half it keeps,
-    and the side word says nothing about that. Worse, a spatial relation is
-    the one thing the surface lets the model FILTER on, so a coin-flip side
-    call drops the target outright.
-
-    A stance the MODEL declared is a different claim and keeps its laterals:
-    ``frame_type == "viewer"`` here, and ``_attach_standing_columns`` (which
-    writes the staged-viewpoint pair directly, not through this function).
-    Neither was measured by the readers above, so neither is cut on their
-    evidence. The engine stops inventing an axis; it reports one when
-    somebody stood somewhere.
+    ``sides=False`` keeps the distance column and drops the lateral pair, for
+    a frame the engine inferred rather than one the model declared: an
+    inferred side is a coin flip, and a spatial relation is what the model
+    filters on, so a wrong side drops the target outright. A stance the model
+    declared (``frame_type == "viewer"``, a staged viewpoint) keeps its
+    laterals.
     """
     if lateral is not None:
         v = float(lateral)
@@ -2576,13 +2090,9 @@ def _geo_pt(p, nd=2):
 # on those families (the compare path), so nothing is re-implemented.
 _STANDING_SIDE_PREFIXES = ("left of ", "right of ", "ahead of ", "behind ")
 
-# EVERY column key naming a key is a computation REQUEST: an op that names
-# one of these gets the column computed for it (``_auto_attach``, inside
-# run_program). Module scope so the PYTHON surface can read the same tuple
-# -- a Row asked for one of these keys and unattached can name the call
-# that writes it instead of raising KeyError over a column list that does
-# not contain what was asked for.
-# ``brg_gap_`` MUST precede ``brg_`` (longest-prefix-first extraction).
+# Every key naming one of these prefixes is a computation request: an op that
+# names it gets the column computed (``_auto_attach``, in run_program). Module
+# scope so the python surface reads the same tuple.
 _AUTOATTACH_PREFIXES = ("facing ", "bearing from ",
                         "center distance to ", "distance to ",
                         "along ", "left of ", "right of ",
@@ -2619,9 +2129,8 @@ def _attach_standing_columns(items, frame, with_distance=False):
         # a re-attach must not leave BOTH members of a presence-pair behind
         for k in (left_k, right_k, ahead_k, behind_k):
             rec.pop(k, None)
-        # FIXED pair order (left/right, then ahead/behind): the grid's
-        # column order derives from first-seen insertion, and a varying
-        # order measured as 8 distinct layouts across one run.
+        # Fixed pair order: the grid's column order derives from first-seen
+        # insertion.
         rec[right_k if lat >= 0 else left_k] = round(abs(lat), 2)
         rec[ahead_k if lon >= 0 else behind_k] = round(abs(lon), 2)
         if with_distance:
@@ -2654,23 +2163,16 @@ def run_program(cands, anchors, program, seed_results=None,
     dicts (built identically offline and live). Returns ``{results}``; wrap
     with :func:`compact_results` for the model-facing payload.
 
-    ``geometry_sink`` (dashboard-side audit plumbing, never model-facing —
-    the ``raw_sink`` pattern): when given, receives under ``sink["ops"]``
-    one entry per executed ``compare`` with the resolved geometry the op
-    computed and does not return (chart polyline + end0 + travel, frame
-    basis/standpoint, linear-ref polylines, ref centroids, min-gap witness
-    pairs). Default None = zero behavioral change; the returned results
-    and every receipt stay byte-identical either way.
+    ``geometry_sink`` (audit plumbing, never model-facing): when given,
+    receives under ``sink["ops"]`` one entry per executed ``compare`` with the
+    resolved geometry it computed and does not return (chart polyline + end0
+    + travel, frame basis/standpoint, ref centroids, min-gap witness pairs).
+    The returned results are identical either way.
 
-    ``seed_results`` (the rN cross-call amnesia is the round's top friction,
-    8/20 episodes): a read-only
-    {ref: raw_result} map of PRIOR calls' results this round. Resolution
-    falls back to it when a ref is not defined in THIS program, so a
-    later analyze_scene call can reference an earlier call's ``r2``;
-    a ref redefined here shadows the seed. Seeded refs are resolvable
-    but never re-rendered (the returned ``results`` holds only THIS
-    program's ops). Default None = the offline teacher's byte-identical
-    single-call behavior.
+    ``seed_results``: a read-only {ref: raw_result} map of earlier calls'
+    results. Resolution falls back to it when a ref is not defined in THIS
+    program; a ref defined here shadows the seed. Seeded refs are never
+    re-rendered.
     """
     seed = seed_results or {}
     by_fid = {c["fid"]: c for c in cands}
@@ -2678,15 +2180,9 @@ def run_program(cands, anchors, program, seed_results=None,
     staged = staged or {}
     _standing_frame = staged.get(standing) if standing else None
     results: dict = {}
-    # Resolver hardening (measured: 57% of hard-errors are rN-ref/shape frictions
-    # on chains Qwen formed correctly). Each tolerant branch below fires only
-    # where a bare resolve would otherwise raise, so a currently-succeeding
-    # program is unaffected.
-    # The op currently dispatching. The resolver closures append THIS op's signature
-    # to their error message via ``_sig_suffix`` (the closures don't otherwise know
-    # the op name). A dict holder, not the loop-local ``name``, so a resolver called
-    # outside the op loop degrades to no-signature rather than a call-time NameError
-    # (see feedback_deadcode_callsite_nameerror).
+    # The op currently dispatching: resolver errors append its signature via
+    # ``_sig_suffix``. A holder rather than the loop-local ``name``, so a
+    # resolver called outside the op loop degrades to no signature.
     _cur_op = {"op": None}
 
     def _sig_suffix() -> str:
@@ -2733,15 +2229,10 @@ def run_program(cands, anchors, program, seed_results=None,
                             f"bad slice {part} in ref {token!r}: "
                             f"use [start:stop] with integer bounds")
                     if type(cur) is not list:
-                        # A window KEEPS its source's class and order-describing
-                        # attrs: list.__getitem__(slice) returns a bare list,
-                        # and the dropped cue_sorted/ordered bit downgraded
-                        # every windowed handle to the census envelope
-                        # (`more of` served rows 0 times in 451 flown calls,
-                        # and the round era's r0[:5] lost its order the same
-                        # way). Whole-set descriptors (notes, cut_stats, refs,
-                        # columns) stay behind on purpose -- they describe the
-                        # full result, not this window.
+                        # A window keeps its source's class and order
+                        # attributes (list slicing returns a bare list);
+                        # whole-set descriptors (notes, cut_stats, refs,
+                        # columns) stay behind.
                         _w = type(cur)(_win)
                         for _a in ("ordered", "op_cols"):
                             if _a in vars(cur):
@@ -2749,17 +2240,9 @@ def run_program(cands, anchors, program, seed_results=None,
                         _win = _w
                     cur = _win
                     if not cur and src_n:
-                        # a window that selected 0 of a NON-empty pool -- a start
-                        # index past the end or start >= stop (the [5:]/[:5]
-                        # direction slip). Loud, not a silent pool-drop: the
-                        # integer-index branch already fails loud on the analogous
-                        # single-row [i] miss. (An already-empty pool windows to
-                        # empty silently -- src_n == 0 -- which is correct.)
-                        # The FACT, in neither channel's spelling: this text
-                        # renders for the sentence surface AND the frozen
-                        # round-era one, and the sentence channel cannot emit
-                        # a slice at all — the window is the compiler's, never
-                        # the sentence's.
+                        # A window that selected 0 of a non-empty pool fails
+                        # loud, like the single-index miss. The fact is
+                        # stated in neither channel's spelling.
                         raise ProgramError(
                             f"window {part} in ref {token!r} selected 0 of "
                             f"{src_n} rows: this ref holds {src_n} row(s) and "
@@ -2826,9 +2309,8 @@ def run_program(cands, anchors, program, seed_results=None,
                 if isinstance(cur, dict) and part in cur:
                     cur = cur[part]
                 elif isinstance(cur, list) and part == "items":
-                    # '.items' on the RAW list IS the list itself -- the model
-                    # echoes the {len,items} VIEW compact_results renders it.
-                    # Parity-safe: '.items' on a list was always a hard error.
+                    # '.items' on the RAW list is the list itself (the model
+                    # echoes the {len, items} view).
                     pass
                 elif isinstance(cur, list) and part == "len":
                     cur = len(cur)
@@ -2841,17 +2323,12 @@ def run_program(cands, anchors, program, seed_results=None,
     def _resolve_ref(token):
         """Resolve a reference to a prior op result. The canonical form is the
         op's ``ref`` value BARE (an op with ``ref:"r0"`` reads back as ``"r0"``
-        — see the tool spec). Tolerant of the malformed forms the model emits
-        when the binding syntax reads ambiguously: a leading ``$`` (the old
-        sigil — stripped and forwarded silently, one meaning), ``ref:r0`` /
-        ``ref_r0`` (the literal word ``ref`` prepended to the bound name) and a
-        bare ``ref`` / ``prev`` / ``last`` (the immediately-preceding result).
-        Also supports a dotted / indexed access PATH onto the result —
-        ``r2.members[0]`` walks into a prior op's list result to pull a
-        chosen element. The spec teaches
-        ``r0``; this just keeps a minor syntactic slip from bricking the whole
-        program (a live bench measured 86% of programs hard-erroring on exactly
-        this), and the error below names the fix when it truly can't bind.
+        — see the tool spec). Tolerant of the malformed forms the model emits:
+        a leading ``$`` (stripped), ``ref:r0`` / ``ref_r0`` (the word ``ref``
+        prepended) and a bare ``ref`` / ``prev`` / ``last`` (the preceding
+        result). Also supports an access PATH onto the result
+        (``r2.members[0]``). The error below names the fix when it cannot
+        bind.
         """
         # de-sigil: a leading '$' is a tolerated slip for the bare form.
         key = token[1:] if token.startswith("$") else token
@@ -2863,11 +2340,8 @@ def run_program(cands, anchors, program, seed_results=None,
         for pre in ("ref:", "ref_", "ref-", "ref."):
             if base_key.startswith(pre) and base_key[len(pre):] in results:
                 return _walk_path(results[base_key[len(pre):]], path, token)
-        # Surface-list ABSORPTION (input tolerance only — no served surface
-        # teaches these words): a bare 'cands'/'anchors' (or a sigiled
-        # '$cands' slip, already de-sigiled above) resolves to the injected
-        # provenance list rather than erroring (measured when taught:
-        # 125/227 episodes hit "unknown ref cands").
+        # Surface-list absorption (input tolerance only): a bare
+        # 'cands'/'anchors' resolves to the injected provenance list.
         if base_key == "cands":
             return _walk_path(cands, path, token)
         if base_key == "anchors":
@@ -2892,9 +2366,7 @@ def run_program(cands, anchors, program, seed_results=None,
                 f"{token!r} names an op in this program whose result is not "
                 f"available: its producing op failed, or a reference cycle "
                 f"prevented resolution.")
-        # Cross-call persistence (S4): a ref from a PRIOR call this round
-        # resolves from the seed; a ref redefined in THIS program shadowed
-        # it above.
+        # A ref from an earlier call resolves from the seed.
         if base_key in seed:
             return _walk_path(seed[base_key], path, token)
         for pre in ("ref:", "ref_", "ref-", "ref."):
@@ -2996,12 +2468,9 @@ def run_program(cands, anchors, program, seed_results=None,
     def as_list(arg):
         v = _unwrap_listish(_raw(arg))
         if isinstance(v, list):
-            # A list LITERAL the model wrote (items:['r0'] / ['d0','d1']) carries
-            # unresolved tokens: a nested rN must flatten to its rows and a bare
-            # fid must resolve to its row dict -- otherwise a downstream .get() on
-            # the raw string crashes (was an unhandled AttributeError). Mirror of
-            # the as_points nested-rN fan-out. A list of already-resolved dicts
-            # (the normal `items:"r0"` path) has no strings and passes through.
+            # A list literal carries unresolved tokens: a nested rN flattens
+            # to its rows and a bare fid resolves to its row dict. A list of
+            # resolved dicts passes through.
             if any(isinstance(x, str) for x in v):
                 out: list = []
                 for x in v:
@@ -3011,10 +2480,7 @@ def run_program(cands, anchors, program, seed_results=None,
                     elif isinstance(x, str) and x in by_fid:
                         out.append(by_fid[x])
                     elif isinstance(x, str):
-                        # an unknown / typo'd fid string -- passing it through raw
-                        # would slip past the op's absent-key guard (a live sibling
-                        # dict carries the key) and crash a later .get() on the
-                        # string. Reject loud, mirroring the as_points loop.
+                        # an unknown fid string fails loud, as in as_points.
                         raise ProgramError(
                             f"cannot resolve {x!r} in list {arg!r}: not a fid in this "
                             f"surface or an rN ref. {_avail('list')}{_sig_suffix()}")
@@ -3040,7 +2506,6 @@ def run_program(cands, anchors, program, seed_results=None,
         v = _unwrap_listish(_raw(arg))
         if isinstance(v, list) and len(v) == 2 and all(isinstance(z, (int, float)) for z in v):
             v = [v]  # a bare [x,y] where a point-LIST is wanted -> a one-point list
-                     # (parity-safe: two bare numbers always hard-errored in the loop)
         if isinstance(v, dict) and (
                 v.get("fid") in by_fid
                 or (isinstance(v.get("xy"), (list, tuple)) and len(v.get("xy")) == 2)):
@@ -3084,23 +2549,11 @@ def run_program(cands, anchors, program, seed_results=None,
         return out
 
     # ---- auto-attach columns (the parameter rides in the key name) ----
-    # Naming a per-ref relation column d_/brg_gap_/brg_/dc_<ref>, a chart
-    # column along_/off_<ref> (a centerline-carrying <ref>), or a color
-    # column color_<word> anywhere a column key is accepted IS the
-    # computation request (measured before the attach: ~219 hits/110 eps of
-    # pure attach-first ceremony — the model reasons the geometry correctly
-    # and is blocked on ceremony). When <ref> is a LIVE surface fid the SAME
-    # nested single-op compare runs transparently — refs:[<fid>] for the
-    # relation columns, frame:{reference:<fid>} for the along_/off_ chart —
-    # and the op proceeds (full reuse, nothing reimplemented); a color_<word>
-    # key attaches the named color column the same way (an off-palette word
-    # is a loud error listing the palette). vx_/vy_ and the arrangement
-    # columns stay compare-only: a side/toward frame does not ride the key.
-    # The op's own absent-key guard stays as the fallback for a genuinely
-    # unresolvable / guessed key (compare attaches nothing there, so the loud
-    # error still fires).
-    # The tuple itself is at module scope, beside the other two prefix
-    # tables, so the Python surface reads the same one.
+    # Naming a relation column '<prefix> <ref>' or a color column
+    # color_<word> anywhere a column key is accepted is the computation
+    # request: when <ref> is a live surface fid (or a staged handle) the same
+    # nested single-op compare runs and the op proceeds. A key that resolves
+    # to nothing falls to the op's own absent-key guard.
 
     def _auto_attach(items, keys, notes=None):
         if not (isinstance(items, list) and items):
@@ -3113,11 +2566,7 @@ def run_program(cands, anchors, program, seed_results=None,
         # reference the suffix, so one key names the whole column.
         cardinals: list = []
         for k in keys:
-            # already-attached short-circuit: ANY present value means the
-            # attach ran -> byte-parity, skip. (brg_gap_ is absent-on-contact,
-            # so an all-contact pool re-runs the compare -- a no-op -- and the
-            # absent-key guard's CONTACT branch then states the fact:
-            # brg_gap_<ref> absent where d_<ref>=0; brg_<ref> still defined.)
+            # already attached (any present value) -> skip.
             if not isinstance(k, str) or any(
                     isinstance(it, dict) and it.get(k) is not None for it in items):
                 continue  # not a column key, or already attached
@@ -3227,14 +2676,11 @@ def run_program(cands, anchors, program, seed_results=None,
         return any(isinstance(it, dict) and sib in it for it in items)
 
     def _contact_fact(key, items) -> str:
-        """The degenerate-column FACTS for the absent-key guards — the cases
-        where the compare RAN and the column is legitimately absent, so a
-        'not a fid on this surface' remedy would state the wrong wrongness:
-        (a) a d_/brg_gap_<fid> whose <fid> mask contains the whole surface
-        window (the containment fact; gap-to-it is a degenerate constant);
-        (b) brg_gap_<fid> where d_<fid> is present-and-zero on every row
-        (contact — no min-gap direction exists). Returns the fact + the
-        defined siblings, or ''."""
+        """The degenerate-column facts for the absent-key guards, where the
+        compare ran and the column is legitimately absent: (a) 'distance to'
+        / 'facing' a <fid> whose mask contains the whole surface window; (b)
+        'facing <fid>' where 'distance to <fid>' is 0 on every row (contact:
+        no min-gap direction). Returns the fact, or ''."""
         if isinstance(key, str) and key.startswith(
                 ("distance to ", "facing ")):
             _p = (key[len("facing "):]
@@ -3265,30 +2711,21 @@ def run_program(cands, anchors, program, seed_results=None,
         return ""
 
     _prog_ops = list(program.get("ops", []) or [])
-    # Every ref THIS program defines — drives the top-to-bottom read rule in
-    # ``_resolve_ref`` (an rN ref may name only an op above it or an un-shadowed
-    # prior-call result; one way to read a name, no stale-read ambiguity).
+    # Every ref THIS program defines (drives _resolve_ref's in-program rule).
     _program_ref_names = {o.get("ref") for o in _prog_ops if isinstance(o, dict)}
-    # ``select`` is not an op; the decision is ``act.select`` under the three-
-    # verb surface. A program that carries a select op (a model drifting to a
-    # select-as-op grammar) gets the actionable redirect, not a bad-op.
+    # ``select`` is the act tool's field, not an op.
     if any(isinstance(o, dict) and o.get("op") == "select" for o in _prog_ops):
         raise ProgramError(
             "select is not a program op (programs ANALYZE only); the decision "
             "is the separate `act` TOOL's select field "
             "{fid, basis, runner_up (null ok), confirmed?}.")
 
-    # --- FULL ORDER FREEDOM: execute in dependency (topological) order --------
-    # A program is order-free: any op may reference a handle any OTHER op in the
-    # SAME program produces, regardless of emission position. We topologically
-    # sort by handle-dependency so every consumed handle is produced BEFORE it is
-    # read -- a forward reference is a resolved edge, not an error.
-    # The ops are PURE dataflow (each builds NEW rows via {**it, ...}, never
-    # mutating the shared surface), so ANY topological order yields the IDENTICAL
-    # result -- this is faithful evaluation of the program's DAG, not a
-    # meaning-changing reshuffle. The only order-sensitive shapes are LOUD errors
-    # (never silent guesses): a handle DEFINED TWICE (ambiguous), or a reference
-    # CYCLE (unresolvable). The agent's EMITTED-last op stays the terminal.
+    # --- order freedom: execute in dependency (topological) order ----------
+    # Any op may reference a handle another op in the same program produces,
+    # whatever its position. The ops are pure dataflow (each builds new rows,
+    # never mutating the surface), so any topological order yields the same
+    # result. A handle defined twice or a reference cycle fails loud. The
+    # emitted-last op stays the terminal.
     _emitted_terminal = _prog_ops[-1] if _prog_ops else None
     _handle_seen: set = set()
     for _o in _prog_ops:
@@ -3326,11 +2763,9 @@ def run_program(cands, anchors, program, seed_results=None,
         _found.discard(_o.get("ref") if isinstance(_o, dict) else None)
         return _found
 
-    # Stable Kahn sort: among ops whose deps are all produced, keep EMISSION
-    # order -- a fully-ordered program is left EXACTLY as written and the
-    # reorder is deterministic (served == teacher byte-parity). A handle a
-    # program never defines is not an edge here (it falls to _resolve_ref's
-    # unknown-ref path), so only a genuine mutual reference trips the cycle.
+    # Stable Kahn sort: among ready ops, emission order, so a fully ordered
+    # program runs exactly as written. A handle the program never defines is
+    # not an edge (it falls to _resolve_ref's unknown-ref path).
     _dict_ops = [_o for _o in _prog_ops if isinstance(_o, dict)]
     _nondict_ops = [_o for _o in _prog_ops if not isinstance(_o, dict)]
     _need = {id(_o): _consumed_handles(_o) for _o in _dict_ops}
@@ -3354,13 +2789,9 @@ def run_program(cands, anchors, program, seed_results=None,
         _produced.add(_pick.get("ref"))
     _prog_ops = _ordered + _nondict_ops
 
-    # The effective-args echo: one line per op, executor truth (defaults
-    # applied), served beside ``results`` so a decode-dropped key is visible.
     for op in _prog_ops:
         if not isinstance(op, dict):
-            # Keep the loud error surface (a silent skip would hide a malformed
-            # emission from the model); the grammar makes this an impossible
-            # token live, so this guards offline/direct callers.
+            # Loud: a non-object op from a direct caller.
             raise ProgramError(
                 f"each op must be an object {{ref, op, args}}; got "
                 f"{type(op).__name__}: {str(op)[:80]!r}")
@@ -3372,25 +2803,15 @@ def run_program(cands, anchors, program, seed_results=None,
                     f"{name!r} is not an op. {_DELETED_OPS[name]}")
             raise ProgramError(f"bad op {name!r}: not a known op; vocab={OP_VOCAB}")
         if not ref:
-            # The op name is VALID -- it just lacks its 'ref' field. State the
-            # mechanical fact, so the model does not read a "bad op X (ref=None)"
-            # message as X being an invalid op (it is in the vocab) and abandon it.
+            # The op name is valid; it lacks its 'ref' field.
             raise ProgramError(
                 f"op {name!r} lacks its required 'ref' field (the op name is "
                 f"valid; a later op reads the result back by that name, e.g. "
                 f"items:'r0').")
-        # REJECT unknown top-level keys instead of silently dropping them. An op
-        # is exactly {op, ref, args}; a 'frame' emitted at
-        # the top level would vanish without a trace (a verbatim-retry loop: the
-        # model re-emits the same op because nothing told it WHY the key had no
-        # effect). Echo the corrected form so the retry is mechanical.
+        # An op is exactly {op, ref, args}; unknown top-level keys fail loud
+        # with the corrected form. A stray top-level 'frame' on compare is its
+        # own documented arg and folds into args.
         _extra = [k for k in op if k not in ("op", "ref", "args")]
-        # A stray top-level key that is THIS op's own documented optional arg
-        # (compare's view/between/neighbors, and any key the op's args already
-        # accept) is folded into args instead of rejected — the intent is
-        # unambiguous, and rejecting it is the worst-chaining error class
-        # (29 errors / 12 eps; 41% of next turns errored again). Op-name keys
-        # still get the chain advice; genuinely unknown keys still fail loud.
         if _extra and name == "compare":
             _foldable = [k for k in _extra if k in ("frame",)]
             if _foldable:
@@ -3404,9 +2825,7 @@ def run_program(cands, anchors, program, seed_results=None,
         if _extra:
             _k0 = _extra[0]
             if _k0 in OP_VOCAB:
-                # The stray key is ITSELF an op name (e.g. rank_by attached to
-                # a compare) -- nesting it into args would be wrong advice
-                # (measured: a round collapse followed it). Chain it.
+                # The stray key is itself an op name: chain it.
                 raise ProgramError(
                     f"op {name!r} carries unknown top-level key(s) {_extra} -- an "
                     f"op is exactly {{op, ref, args}}. {_k0!r} is its own op: "
@@ -3417,22 +2836,16 @@ def run_program(cands, anchors, program, seed_results=None,
                 f"is exactly {{op, ref, args}}, so those keys were NOT applied. "
                 f"The corrected form: {{op:'{name}', ref:'{ref}', "
                 f"args:{{..., {_k0}:{{...}}}}}}.")
-        # A required arg accessed as ``a["k"]`` that the model omitted raises a
-        # CLEAN, actionable ProgramError (the agent reads it and retries) rather
-        # than a cryptic KeyError; optional args keep using ``a.get("k")``.
-        # NULL-STRIP (the required-form schema): a null value is the served
-        # "not this one" sentinel -- the executor sees exactly the args the
-        # model filled, and every absent-arg path behaves as before.
+        # A required arg read as ``a["k"]`` and omitted raises a clean
+        # ProgramError (_Args). Null values are stripped: the executor sees
+        # exactly the args the model filled.
         a = _Args({k: v for k, v in (op.get("args", {}) or {}).items()
                    if v is not None}, name)
         _cur_op["op"] = name  # so a resolver's ProgramError appends THIS op's signature
         if name == "find":
-            # SEARCH / EXPLORE the whole world-state surface — the absorbed
-            # search_features capability, surface-only (no graph/ctx, so the
-            # offline teacher runs it identically). Filters AND-compose; all
-            # optional. A query returns THE MATCH SET (best-first, len = the
-            # match count); a query-less find browses the full selected
-            # surface. Geometry ops chain on the rN either way.
+            # Search the whole surface. A query returns the match set
+            # (best-first, len = the match count); a query-less find browses
+            # the selected surface.
             _q_notes: list = []
             _q_matched = False   # a query ran and matched (the rN is ordered)
             _name_set = False    # tied ways of ONE name: render the shape
@@ -3447,35 +2860,24 @@ def run_program(cands, anchors, program, seed_results=None,
             elif prov in ("any", "all", "both"):
                 rows = cands + anchors            # the whole surface
             else:
-                # Fail LOUD on an unknown provenance instead of silently
-                # widening to the whole surface. The tool schema's enum
-                # promises any|prior|runtime, but the executor owns its own
-                # contract: ``run_program`` also serves callers with no
-                # grammar over them at all — the dashboard lab runs
-                # human-authored programs straight through it.
+                # Fail loud on an unknown provenance rather than widening to
+                # the whole surface.
                 raise ProgramError(
                     f"unknown find provenance {prov!r}; legal: any | prior "
                     f"(baked map features) | runtime (in-flight detections)."
                     f"{_sig_suffix()}")
             if a.get("class") is not None:
-                # Not an arg — retrieval is ONE idiom. Loud redirect naming
-                # query (never a silent drop of the narrowing the model asked
-                # for).
+                # Retrieval is one idiom (query): a loud redirect.
                 raise ProgramError(
                     f"find takes no 'class' arg; retrieval is find{{query}}: "
                     f"fuzzy free text over each row's name + tags (priors) "
                     f"or detector class (detections). Re-emit with "
                     f"query:{str(a['class'])!r}.{_sig_suffix()}")
             if a.get("color"):
-                # ATTACH the named color column color_<word> (conf-weighted
-                # cue match) on every color-carrying row and DROP NONE --
-                # color FEEDS the sort, it never GATES the pool (CLAUDE.md
-                # contract). FAMILY-soft + color_conf-shrunk: low-conf -> ~0.5
-                # neutral, so an unreliable color is muted, never a hard
-                # drop; a colorless row omits the column (score_by's neutral).
-                # There is NO hard color cut: filter_items on any color_* key
-                # is REJECTED (it dropped correctly-detected GTs); color is
-                # rank-only via score_by. See the filter_items handler.
+                # Attach color_<word> on every color-carrying row and drop
+                # none: color feeds the sort, never gates the pool
+                # (filter_items rejects color keys). Low color_conf shrinks
+                # toward the 0.5 neutral; a colorless row omits the column.
                 qc, _cnote = _resolve_color_word(str(a["color"]))
                 if _cnote is not None:
                     _q_notes.append(_cnote)
@@ -3485,30 +2887,21 @@ def run_program(cands, anchors, program, seed_results=None,
             _fid_hit = (by_fid.get(str(a.get("query") or "").strip())
                         if a.get("query") else None)
             if _fid_hit is not None:
-                # a query naming a live fid IS retrieval of that row --
-                # the fuzzy scorer matches text, never ids, and the old
-                # miss taught nothing (framestage_1000: the model looked
-                # rows up by fid and was told "no such object exists").
+                # A query naming a live fid is retrieval of that row (the
+                # fuzzy scorer matches text, never ids).
                 rows = [_fid_hit]
                 _q_matched = True
                 _q_notes.append(
                     "query " + repr(str(a.get("query")).strip())
                     + " is a live fid -- that row returned directly.")
             elif a.get("query"):
-                # Fuzzy free-text over the walled search_text + name (typo / OCR /
-                # abbreviation tolerant, strictly lexical). The result IS the
-                # MATCH SET, best-first: len = the match count, slices and
-                # downstream ops operate on matches, and the sub-threshold
-                # tail stays out (its size is stated in the result note; a
-                # query-less find browses it). Every RETURNED row carries
-                # name_match raw (a NAME matched, never WHICH instance the
-                # cue means); the grid renders no such column.
+                # Fuzzy free text over the walled search_text + name. The
+                # result is the match set, best-first; the sub-threshold tail
+                # stays out (its size is stated in the note). Every returned
+                # row carries name_match (the grid renders none).
                 _q_raw = str(a["query"])
                 if ";" in _q_raw:
-                    # ';' is not a query operator — silently fuzz-scoring the
-                    # compound as ONE text blob buried real matches (measured
-                    # at 0.63 with no remedy). Loud, naming the supported
-                    # idioms.
+                    # ';' is not a query operator: loud, naming the idioms.
                     raise ProgramError(
                         f"find query {_q_raw!r} contains ';', which is not a "
                         f"query operator (the whole string would fuzz-score "
@@ -3546,19 +2939,10 @@ def run_program(cands, anchors, program, seed_results=None,
                                            x.get("name"), x.get("tags"),
                                            idf=_idf), 3)}
                           for x in rows] if _hit is None else None
-                # WIDEN to the query's own tag FAMILY. An exact tag VALUE hit
-                # is a corpus fact the per-row scorer cannot see, so it is
-                # applied here, over the searched set: a query that IS a value
-                # of some tag key reaches every row carrying that key, at
-                # T.TAG_FAMILY_SCORE -- retrieved, and ranked BELOW every
-                # exact hit. `find house.` goes 41 -> 3,414 rows with the 41
-                # exact `building=house` hits still at 0-40 of the find order.
-                # Never a drop: no row that matched before stops matching.
-                #
-                # The widening pays off only WITH the distance order a
-                # `near <anchor>` clause compiles to: the two halves are one
-                # change, and the widening alone moves nothing, because 41
-                # rows never bind a 24-row budget.
+                # Widen to the query's own tag family: a query that is a
+                # value of some tag key reaches every row carrying that key,
+                # at T.TAG_FAMILY_SCORE, ranked below every exact hit. Never
+                # a drop: no row that matched before stops matching.
                 if _hit is None:
                     _fams = T.tag_family_keys(q_data, _searched_rows)
                     if _fams:
@@ -3570,14 +2954,9 @@ def run_program(cands, anchors, program, seed_results=None,
                     _memo["scored"][_mkey] = _hit = scored
                 scored = [dict(_r) for _r in _hit]
                 if scored and scored[0]["name_match"] < T.FUZZY_THRESHOLD:
-                    # The query matched NOTHING real: the honest answer to a
-                    # NAMED query is the no-match affordance (disambiguate via
-                    # the cue's other refs), not a noise-ordered dump. The
-                    # empty hint states the TRUTHFUL condition (the scoring
-                    # threshold — never a claim about the world), and the
-                    # QUERY-CONDITIONED census (tags sharing tokens with the
-                    # query, then the global top) rides the miss so the
-                    # re-query is one read.
+                    # Nothing matched: the no-match affordance, its truthful
+                    # condition (the scoring threshold) and the
+                    # query-conditioned census, so the re-query is one read.
                     scored = []
                     _q_tokens = sorted({t for _cl in q_data for t in _cl[1]})
                     _empty_cond = (
@@ -3585,13 +2964,8 @@ def run_program(cands, anchors, program, seed_results=None,
                         f"{T.FUZZY_THRESHOLD} against query {_q_raw!r} "
                         f"(query tokens: {_q_tokens}).")
                     _q_notes.append(_memo_census())
-                    # Producing-idiom parity for the color family: a query
-                    # clause that IS a palette color word matches no row
-                    # lexically because color is not row text -- the miss
-                    # names the column that carries it (the same parity
-                    # every absent-key error already serves). The column, not
-                    # the op that attaches it: this note reaches the sentence
-                    # channel, whose only move is a sentence.
+                    # A query word that is a palette color matches no row
+                    # text: the miss names the column that carries it.
                     for _cl in q_data:
                         _w = str(_cl[0] or "").strip()
                         if not _w or " " in _w:
@@ -3605,64 +2979,23 @@ def run_program(cands, anchors, program, seed_results=None,
                                 f"attaches when the color word is named.")
                             break
                 elif scored:
-                    # The MATCHED HEAD must survive the census summarizer: the
-                    # model asked "who is named X" -- a {len, census} census
-                    # that hides the two real matches manufactured a false
-                    # "lexical search is broken" belief on the first live
-                    # flight (17 wasted rounds). Name the best matches in a
-                    # note the census renders.
+                    # Name the best matches in a note, so a census-rendered
+                    # result still shows them.
                     _n_match = sum(1 for r in scored
                                    if r["name_match"] >= T.FUZZY_THRESHOLD)
-                    # IF THE QUERY NAMED SOMETHING, THE BAND IS A DIFFERENT
-                    # THING. A name tier (>= ``_NAME_PHRASE_TIER_BASE``)
-                    # means the query matched a NAME; everything under the
-                    # token-bag ceiling then shares a WORD and not a
-                    # referent. ``find("Neuralia Road")`` served its exact
-                    # rows plus 31 at 0.48 -- Mendiburu Road, Randsburg
-                    # Mojave Road, Kenniston Road -- every one of them on
-                    # the word "road".
-                    #
-                    # DERIVED, NOT DECLARED. The query's own result says
-                    # which kind it was, so the model never has to say.
-                    # It was asked to: ``find(<class>, name=<name>)`` exists
-                    # and matches a name "as a NAME, never fuzzily" -- and
-                    # over 500 episodes it was written 17 times against 682
-                    # bare proper-noun finds, 40 to 1. A declaration the
-                    # surface can compute is one it should compute.
-                    #
-                    # THE CUT IS EVERYTHING UNDER THE NAME TIER. A proper
-                    # noun that HITS is answered by the thing it names, and
-                    # a lesser tier under it is a different KIND of row, not
-                    # a worse match for the same one: `find("California City
-                    # Boulevard")` returned its 75 ways plus Ace Hardware,
-                    # Subway, Coyote Cafe and 7 more, every one of them a
-                    # business carrying `addr_street=California City
-                    # Boulevard`. They ride the same rN as the road and
-                    # dilute the head that answers "which street".
-                    #
-                    # A row reached this way is reachable a better way: a
-                    # named business is its OWN exact hit on its own name,
-                    # and `.tagged` still holds the tier as a set.
-                    #
-                    # DEGRADE ONLY WHEN THERE IS NOTHING TO DEGRADE FROM.
-                    # The cut is conditioned on a name tier EXISTING, so a
-                    # class word is untouched: `find("pool")` hits no exact
-                    # tier and keeps its whole fuzzy band, which carries all
-                    # 17 episodes where fuzz adds the ground truth (16W/0L
-                    # paired, p = 3.05e-5).
-                    #
-                    # DERIVED, NOT DECLARED -- the query's own result says
-                    # which kind it was, so the model never has to.
+                    # When the query hits a NAME, everything under the name
+                    # tier shares a word, not a referent (find("Neuralia
+                    # Road") would also return every other "... Road"), so
+                    # the band under the name tier is cut. Derived from the
+                    # result itself; the model never declares it. A class
+                    # word hits no name tier and keeps its whole fuzzy band.
                     _n_named = sum(
                         1 for r in scored
                         if r["name_match"] >= T._NAME_PHRASE_TIER_BASE)
-                    # A PROPER NOUN, not any exact hit. A detection whose
-                    # CLASS is the query scores 1.0 and reaches the name
-                    # tier too -- ``find("parking")`` over three parking
-                    # detections -- and cutting the band there would delete
-                    # the ``amenity=parking`` priors that ARE the candidates
-                    # for "the parking lot". Only a hit on a row's NAME
-                    # answers alone, because only a name is a referent.
+                    # A proper noun only: a detection whose CLASS is the query
+                    # also scores 1.0, and cutting there would delete the
+                    # priors that are the candidates. Only a name is a
+                    # referent.
                     _n_proper = sum(
                         1 for r in scored
                         if r["name_match"] >= T.NAME_TIER_FLOOR
@@ -3677,14 +3010,8 @@ def run_program(cands, anchors, program, seed_results=None,
                         _n_match = _n_exact
 
                     def _match_label(r):
-                        # what the query HIT, as a NAME: the row's own name
-                        # when it has one, else the tags that identify it.
-                        # A prefix of the match haystack is not a name --
-                        # `prior_1000 'osm_id=way/1136811785; building=yes;
-                        # sou'` cut off mid-word and led with the row's
-                        # unique id, which is the one tag that identifies
-                        # nothing (_census_counts drops it for the same
-                        # reason). Whole pairs only, and the id is not one.
+                        # What the query hit, as a name: the row's own name,
+                        # else whole identifying tag pairs (never osm_id).
                         nm = (r.get("name") or "").strip()
                         if nm:
                             return repr(nm[:32])
@@ -3703,39 +3030,21 @@ def run_program(cands, anchors, program, seed_results=None,
                         return repr(str(r.get("class")
                                         or r.get("fid") or "?")[:32])
 
-                    # OFF THE MATCH SET, NOT OFF ``scored``. The head names
-                    # what is IN this rN; sliced from ``scored`` it went on
-                    # advertising rows the name cut had just removed --
-                    # find("Neuralia Road") said "Best: ... 'Mendiburu Road'
-                    # (match 0.452)" about a row no op on that handle could
-                    # reach. A served list of things you cannot have is the
-                    # same defect as a served count that silently shrank.
+                    # The head names what is in this rN: off the match set,
+                    # never off ``scored`` (rows the name cut removed).
                     _head_note = "; ".join(
                         f"{r.get('fid')} {_match_label(r)} "
                         f"(match {r['name_match']})"
                         for r in scored[:_n_match][:4]
                         if r["name_match"] >= T.FUZZY_THRESHOLD)
-                    # SERVED TRUTH: the match set IS the result — state the
-                    # matched head's score range and the size of the
-                    # sub-threshold tail that stayed OUT of this rN (a
-                    # query-less find browses it).
-                    # "best-first" is a CLAIM about this order: when every
-                    # matched row scores the same, the order left is fid
-                    # order and nothing about it is best. The claim is
-                    # made only when the scores actually separate, and the
-                    # tie says so instead -- once, here, where the retrieval
-                    # knows it, so the render never states it a second time.
+                    # The match set is the result: state its score range and
+                    # the size of the sub-threshold tail kept out.
+                    # "best-first" is claimed only when the scores separate;
+                    # a tie says so.
                     _m_vals = [r["name_match"] for r in scored[:_n_match]]
-                    # A NAME'S WAYS ARE A SET, NOT A RANKING. Every row ties
-                    # at the name tier, so a rendered table is N rows in an
-                    # order that means nothing and the model reads the first
-                    # as the answer (calcity::284#282 took ``street_88[0]``
-                    # and swept 1 of 10 segments). The initial reply is the
-                    # SHAPE -- how much road, how many ways -- and the rN
-                    # holds every row for a slice or an explore. Saying the
-                    # order is arbitrary, then rendering it anyway, spends
-                    # tokens teaching the model to distrust what it is being
-                    # shown.
+                    # A name's ways are a set, not a ranking: every row ties at
+                    # the name tier, so the initial reply is the shape and the
+                    # rN holds every row.
                     _ex_rows = [r for r in scored[:_n_match]
                                 if r.get("name_match", 0.0)
                                 >= T.NAME_TIER_FLOOR]
@@ -3757,13 +3066,9 @@ def run_program(cands, anchors, program, seed_results=None,
                     else:
                         _order_frag = (f"best-first, match {_m_vals[0]}.."
                                        f"{_m_vals[-1]}")
-                        # A MIXED POOL WITH A TIED HEAD reads as decided
-                        # when it is not: "best-first" is true of the
-                        # POOL while the first k rows tie among
-                        # themselves (140#138's refly: six detections at
-                        # 1.0 over priors at 0.8, [0] taken as if the
-                        # rank had chosen). Said only when the tie is
-                        # real (k >= 2).
+                        # A mixed pool with a tied head: "best-first" is true
+                        # of the pool while the first k rows tie; said when
+                        # k >= 2.
                         _top_n = sum(1 for _x in _m_vals
                                      if _x == _m_vals[0])
                         if _top_n > 1:
@@ -3791,42 +3096,21 @@ def run_program(cands, anchors, program, seed_results=None,
                             f"tiers: {_n_ex} exact, {_n_tg} tagged, "
                             f"{_n_fz} fuzzy -- .exact / .tagged / .fuzzy "
                             "on this result hold each as a set.")
-                    # A NAME'S WAYS ARE A SET, NOT A RANKING. Every row here
-                    # ties at the name tier, which this envelope already
-                    # calls arbitrary -- so a rendered table is 64 rows in
-                    # an order that means nothing, and the model reads the
-                    # first one as the answer (calcity::284#282 took
-                    # ``street_88[0]`` and swept 1 of 10 segments). The SHAPE
-                    # is what the model needs: how much road this is, and
-                    # that one explore covers all of it.
                     if _band_cut and not _name_set:
-                        # SAY THAT THE CUT HAPPENED. The rows are gone from
-                        # the rN, and a count that silently shrank is the
-                        # shape this repo keeps getting wrong -- a set that
-                        # looks complete and is not. Naming it also teaches
-                        # the name/class split by showing it, which is what
-                        # a `name=` kwarg asked the model to know in advance.
+                        # Say that the cut happened: rows left the rN.
                         _q_notes.append(
                             f"matched as a NAME: {_band_cut} row(s) under "
                             f"the name tier are a different feature and are "
                             f"NOT in this rN.")
                     if _head_note and not _name_set:
-                        # "Best" is an ENDORSEMENT, and on a tag-tier head
-                        # it endorsed 0.5-0.8 matches the model then flew
-                        # (140#138 flew a parking_aisle 212 m off the cue's
-                        # street from exactly this banner). The word now
-                        # rides only a NAME-tier head; a class/tag head is
-                        # just the head, its numbers already visible.
+                        # "Best" only on a name-tier head; a class/tag head is
+                        # just the head.
                         _lead = ("Best" if _m_vals
                                  and _m_vals[0] >= T.NAME_TIER_FLOOR
                                  else "Head")
                         _q_notes.append(f"{_lead}: {_head_note}")
-                    # A token NO matched row carries: the match stands (a
-                    # real query often names an attribute no row spells),
-                    # but it is said out loud, because the same shape is
-                    # how a glued token binds silently -- pilot-7 measured
-                    # "find car withcolor blue." returning 520 rows with
-                    # no error and no note.
+                    # A query token no matched row carries: the match stands,
+                    # and the unmatched words are named.
                     _dead = _memo["dead"].get(_mkey)
                     if _dead is None:
                         _dead = _memo["dead"][_mkey] = T.unmatched_query_tokens(
@@ -3845,24 +3129,10 @@ def run_program(cands, anchors, program, seed_results=None,
                     _q_matched = True
                 # THE narrowing: the returned row set IS the match set.
                 rows = scored[:_n_match] if _q_matched else scored
-                # ``name=`` -- THE MODEL SAYS WHICH OF THE TWO IT MEANT.
-                # A query is either a CLASS ("house") or a PROPER NOUN
-                # ("Icaarus Court"). Guessing by retrieving every tier at
-                # once and trusting the ordering loses the exact hit: it
-                # ranks first on a bare find, and then `near=<anchor>`
-                # re-sorts by distance and buries it under tied fuzz rows.
-                #
-                # The model draws the line unprompted with
-                # find(<class>, name=<name>), and a silently-dropped kwarg
-                # would be the model's whole constraint vanishing, so the
-                # argument is implemented rather than ignored.
-                #
-                # Measured, the CLASS half does no disambiguating work: of
-                # 353 names in this bake exactly 1 is borne by more than one
-                # tag family, and over 1,009 cues naming a feature exactly 1
-                # spans families. So the class is accepted because the model
-                # writes it, and the NAME is what gates. Do not "optimise"
-                # the class term expecting it to narrow.
+                # ``name=``: the model says which of the two it meant, a class
+                # word plus a proper noun. The NAME gates (matched as a name,
+                # never fuzzily); the class is accepted because the model
+                # writes it.
                 _want = str(a.get("name") or "").strip()
                 if _want:
                     _nq = T.fuzzy_prepare_query(_want)
@@ -3890,11 +3160,9 @@ def run_program(cands, anchors, program, seed_results=None,
                     rows = _named
                     _q_matched = True
             if _color_col and not a.get("query") and isinstance(rows, list):
-                # A color-carrying browse ORDERS by its own attached column —
-                # unordered it renders census-only and reads as a null while
-                # the ranking signal sits silent in the handle (measured: the
-                # model abandoned the cue on exactly this shape). ORDERING
-                # only: every row, colorless included, stays in the rN.
+                # A color browse orders by its own attached column (unordered
+                # it would render census-only). Ordering only: every row
+                # stays.
                 rows = sorted(
                     rows,
                     key=lambda x: (x.get(_color_col) is not None,
@@ -3915,17 +3183,12 @@ def run_program(cands, anchors, program, seed_results=None,
                     (f"left of {_h}", f"right of {_h}",
                      f"ahead of {_h}", f"behind {_h}"))
             if standing_anchor and isinstance(rows, list) and rows:
-                # The standing ANCHOR's proximity column rides every find row,
-                # the same way the standing viewpoint's side columns do above.
-                # Ordering/reading evidence only -- never a gate. Skipped
-                # without error when the anchor's fid left this surface
-                # (detection eviction: build_surface fold), or when the column
-                # already rides (a program whose own compare attached it).
+                # The standing anchor's proximity column rides every find row,
+                # as the standing viewpoint's side columns do. Skipped when
+                # the anchor's fid left this surface or the column already
+                # rides.
                 _sa_lab = str(standing_anchor.get("label") or "")
                 _sa_ref = standing_anchor.get("ref")
-                # NOTE: _is_xy_literal is nested inside the COMPARE dispatch
-                # branch and is NOT in scope here -- the xy check is
-                # inlined (2 lines), not imported.
                 _sa_ok = (
                     (isinstance(_sa_ref, (list, tuple)) and len(_sa_ref) == 2
                      and all(isinstance(z, (int, float))
@@ -3959,13 +3222,9 @@ def run_program(cands, anchors, program, seed_results=None,
                                      "detections")
                     and (a.get("query")
                          or prov in ("prior", "priors", "prebaked"))):
-                # A ground attempt (a named query, or an explicit
-                # provenance:'prior' search) matched NOTHING -- mark it so
-                # the compacted hint states the searched-scope fact. The
-                # query notes (the class census, a color normalization)
-                # ride the marker like any other empty result -- the SAME
-                # miss on the runtime rows keeps them, so this path must
-                # too.
+                # A ground attempt (a named query, or provenance:'prior')
+                # matched nothing: the marker states the searched scope; the
+                # query notes ride it as on any empty result.
                 rows = _EmptyFindMiss()
                 rows.searched = (
                     "the prior map rows (provenance:'prior')"
@@ -3994,17 +3253,10 @@ def run_program(cands, anchors, program, seed_results=None,
                     rows.empty_condition = _empty_cond
             r = rows
         elif name == "crossings":
-            # CONSTRUCT: the places two named features MEET. Every other op
-            # ORDERS or CUTS rows that already exist; a road crossing is a
-            # point where NO row sits, so it is the one op that mints them.
-            #
-            # ONE ROW PER DISTINCT CROSSING, each with its own fid (its own
-            # [x, y] token — the tree's uniform fid-or-point address, so the
-            # row flies / stages / maps / anchors with no new plumbing) and
-            # its own xy. NEVER a centroid over several: a single centre over
-            # three crossings lands off all three and reads as a confident
-            # answer. Zero crossings is a LOUD refusal below, never an empty
-            # bind and never a fallback to something near-ish.
+            # CONSTRUCT the places two features meet: one row per distinct
+            # crossing, each with its own fid (its [x, y] token) and xy;
+            # never a centroid over several. Zero crossings is a loud
+            # refusal.
             refs_raw = a["refs"]
             if not isinstance(refs_raw, list) or len(refs_raw) != 2:
                 raise ProgramError(
@@ -4038,13 +3290,8 @@ def run_program(cands, anchors, program, seed_results=None,
                 return out
 
             def _x_polys(node):
-                """A row's EXACT geometry as vertex chains, else its point.
-
-                It used to prefer the ``centerline`` -- a PCA reduction of the
-                2 m cell raster -- so a BUILDING was intersected by its own
-                derived principal axis, and a road by a reconstruction of the
-                line that made it. The mask IS the geometry the feature was
-                given, and it crosses whatever it really crosses."""
+                """A row's exact geometry as vertex chains (its mask), else
+                its point."""
                 m = node.get("mask")
                 if m:
                     return list(m)
@@ -4074,12 +3321,8 @@ def run_program(cands, anchors, program, seed_results=None,
                         f"a shape. {_avail('point')}{_sig_suffix()}")
                 sides.append((_x_label(_nodes, _el), _polys,
                               {str(n.get("fid")) for n in _nodes}))
-            # NOTHING CROSSES ITSELF. Every segment touches its own
-            # neighbours, so a row appearing on both sides hands back the
-            # polyline's own CORNERS as crossings -- a confident answer with
-            # no error, exactly the class this op exists to refuse. Reachable
-            # by naming one road twice, and (the real case) by two name
-            # phrases fuzzy-grounding onto the same row.
+            # Nothing crosses itself: a row on both sides would hand back its
+            # own corners as crossings.
             _shared = sides[0][2] & sides[1][2]
             if _shared:
                 _same = "the same feature" if sides[0][2] == sides[1][2] \
@@ -4095,13 +3338,8 @@ def run_program(cands, anchors, program, seed_results=None,
             pa, pb = sides[0][1], sides[1][1]
             xpts, nearest = G.polyline_crossings(pa, pb)
             if not xpts:
-                # A ROW-PAIR fact, never a street-level verdict: a named
-                # street is many segments, and the tested pair not touching
-                # says nothing about its same-named siblings. One episode
-                # looped segments, was told "Airway Boulevard and Lime
-                # Avenue do not meet" on the FIRST non-touching pair, and
-                # never reached the sibling that crosses (22-block miss).
-                # Bounded sweep: do any same-named sibling pairs cross?
+                # A row-pair fact, never a street-level verdict: sweep a
+                # bounded set of same-named sibling pairs for a crossing.
                 _sa = [c for c in by_fid.values()
                        if str(c.get("name")) == str(la)
                        and str(c.get("fid")) not in fa][:8]
@@ -4150,27 +3388,15 @@ def run_program(cands, anchors, program, seed_results=None,
                     f"intersection; relate to ONE of them instead "
                     f"('... near <feature>').{_sig_suffix()}")
             rows = _BroadRows()
-            # WHOLE METRES, because this row's fid IS its coordinate and the
-            # model has to be able to SAY it. The language spells digits only
-            # as whole tokens (no invented ordinals or coordinates), so a
-            # 2 dp mint made the crossing referent unaddressable in every
-            # form it has: the fid verbatim is bracketed, the xy is decimal,
-            # and `rN` is scope-only -- `go to r0.` does not parse. Measured
-            # on calcity_v3base: 111 `parse: decimal coordinate` refusals
-            # against 16 before the crossings op started minting rows, 17 of
-            # 17 sampled echoing a number the surface had just served, and
-            # 14 of the 15 episodes that reached a crossing refused acting
-            # on it. The bake is a 2 m grid and SR is a 20 m radius, so the
-            # rounding is far inside both; the exact intersection stays in
-            # the geometry, this is the ADDRESS.
+            # Whole metres: this row's fid is its coordinate and the model has
+            # to be able to say it (the language spells whole numbers only).
+            # The exact intersection stays in the geometry.
             _seen: set = set()
             for _x, _y in xpts:
                 _x, _y = float(round(_x)), float(round(_y))
                 tok = format_xy_token(_x, _y)
-                # Rounding can collapse two crossings a metre apart onto one
-                # address, and two rows sharing a fid is a worse lie than one
-                # row: a fid is how every later sentence names this place.
-                # Two junctions <1 m apart on a 2 m bake are one junction.
+                # Rounding can collapse two crossings onto one address; two
+                # rows sharing a fid would be worse than one row.
                 if tok in _seen:
                     continue
                 _seen.add(tok)
@@ -4186,16 +3412,8 @@ def run_program(cands, anchors, program, seed_results=None,
                    "them; a point between crossings is at none of them.")]
             r = rows
         elif name == "ends":
-            # A ROAD'S TERMINI, as rows. The centerline's two ends are
-            # already on every linear row as end0_xy/end1_xy, and a cue
-            # naming one -- "the cul-de-sac at the end of Walker Court",
-            # 106 of 1,023 calcity cues say "end of" and 73 say
-            # "cul-de-sac" -- had no way to reach it: the value was SERVED
-            # and the only thing the model could do with it was type it
-            # back as a coordinate, which the moving calls refuse.
-            # Measured on 25713026: 44 episodes hit that refusal, scoring
-            # 13/44, and on calcity::814#808 end1_xy IS the ground truth
-            # to within a metre.
+            # A road's termini as rows: end0_xy/end1_xy served as rows a cue
+            # like "the end of Walker Court" can act on.
             _e_refs = a.get("refs")
             if not isinstance(_e_refs, list) or not _e_refs:
                 raise ProgramError(
@@ -4248,11 +3466,7 @@ def run_program(cands, anchors, program, seed_results=None,
                                      "name": f"{_lab} {_which}"})
                         _n_end += 1
             if not rows:
-                # LOUD, never an empty bind -- and a ROW fact, never a
-                # class verdict: the model was told "a road has [a
-                # centerline] and a footprint does not" about rows that
-                # WERE roads, whose centerlines this surface simply does
-                # not record.
+                # Loud, never an empty bind; a row fact, never a class verdict.
                 _named = ", ".join(_no_line[:4]) + (
                     f" (+{len(_no_line) - 4} more)"
                     if len(_no_line) > 4 else "")
@@ -4273,10 +3487,8 @@ def run_program(cands, anchors, program, seed_results=None,
             # nothing is auto-added, so the ordering is precisely the criteria
             # the agent stated (a single-key emphasis IS the one-key order).
             items = as_list(a["items"])
-            # Fail loud on keys/weights: score_by takes neither. The live serve grammar
-            # (additionalProperties:False) blocks them, but an older program or a frozen
-            # resume source hits the un-enforced offline/replay path -- error instead of
-            # silently re-shaping the sort it asked for.
+            # score_by takes no keys/weights: loud rather than re-shaping the
+            # sort.
             if a.get("keys") is not None or a.get("weights") is not None:
                 raise ProgramError(
                     "score_by takes no keys/weights -- it orders by EXACTLY the columns "
@@ -4320,41 +3532,20 @@ def run_program(cands, anchors, program, seed_results=None,
                     _k = "color_" + _canon
                 emphasis[_k] = float(_el["w"])
             items = _auto_attach(items, list(emphasis), notes=_sb_notes)
-            # An EMPHASIS key NO row carries would be a SILENT constant term (score_by
-            # treats a missing key as the neutral midpoint) -- a typo'd/never-attached
-            # column would just vanish from the sort. This fires AFTER the auto-attach
-            # above, i.e. only when the key genuinely resolved to nothing.
-            # The FACT, in neither channel's spelling: this raises for the
-            # sentence surface AND the frozen round-era one, and `score_by
-            # emphasis key` is a call the sentence channel cannot form. The
-            # model read it as proof its own sentence was malformed ("the tool
-            # is interpreting my input `the Brown one.` literally ... because I
-            # forgot proper syntax?") and repeated that sentence verbatim after
-            # 334 of 503 serves. The COLUMN stays named: it is a row header the
-            # model already reads, it disambiguates a multi-key emphasis, and
-            # the !r is load-bearing -- _err_class_sig collapses quoted tokens,
-            # so an unquoted key would split one loop class into many.
+            # An emphasis key no row carries (after the auto-attach) would be
+            # a silent constant term: loud. The text is the fact in neither
+            # channel's spelling; the quoted column (!r) keeps one error class
+            # per key.
             _dropped_color: list = []
             for _k in list(emphasis):
                 if items and not any(isinstance(it.get(_k), (int, float))
                                      for it in items if isinstance(it, dict)):
                     if _is_color_column_key(_k):
-                        # AN UNSEEN COLOUR IS NOT A BROKEN SORT WHEN THE
-                        # SORT HAS OTHER TERMS. Nothing carries a perceived
-                        # colour until a view has passed over it, so on a
-                        # pre-takeoff surface this key is absent BY
-                        # CONSTRUCTION -- and raising kills the whole block
-                        # (``reasoner_loop`` breaks the segment on the first
-                        # error), taking down the ``look_for`` that would
-                        # have armed the segmenter. The model is then unable
-                        # to ever see the thing whose colour it asked about,
-                        # from one legal call. So the term is DROPPED, said
-                        # out loud, and the remaining keys still rank.
-                        #
-                        # ALONE it is still a raise: a sort with no term
-                        # left is not an ordering, and serving one as though
-                        # it were is the silent failure this tree keeps
-                        # paying for.
+                        # An unseen colour drops its term when the sort has
+                        # other terms: nothing carries a perceived colour
+                        # before a view passes over it, and raising would
+                        # kill the block. Alone it still raises: a sort with
+                        # no term is not an ordering.
                         if len(emphasis) > 1:
                             _dropped_color.append(_k)
                             del emphasis[_k]
@@ -4440,13 +3631,9 @@ def run_program(cands, anchors, program, seed_results=None,
             # stays ordered (and renderable); a cut over a browse stays not.
             _in_ordered = bool(getattr(items, "cue_sorted", False)
                                or getattr(items, "ordered", False))
-            # FILTER = CLASS + SPATIAL ONLY. Color is an ORDERING signal, never a
-            # filter: a hard color cut drops a correctly-detected target whose
-            # perceived color reads a hair off the cue (nadir chroma-collapse makes
-            # the read unreliable). Reject a cut on ANY color key (the color/
-            # color_conf fields and every color_<word> column) and route the agent
-            # to the ordering path, which deprioritises by color without dropping
-            # the GT.
+            # Color is an ordering signal, never a filter: a hard color cut
+            # drops a correctly detected target whose perceived color reads a
+            # hair off the cue.
             if key == "color" or (
                     isinstance(key, str) and key.startswith("color_")):
                 raise ProgramError(
@@ -4459,19 +3646,14 @@ def run_program(cands, anchors, program, seed_results=None,
             items = _auto_attach(items, [key])
             _LEGAL_FILTER_OPS = FILTER_OPS
             if opr not in _LEGAL_FILTER_OPS:
-                # Fail loud: a .get(opr, False) fallthrough would be a SILENT dead-filter
-                # that zeroes the result and hides real matches (e.g. the on-street /
-                # near-row abs_le filter the teacher reaches for).
+                # Fail loud: a silent dead-filter would hide real matches.
                 raise ProgramError(
                     f"unknown filter_items op {opr!r}; legal: {list(_LEGAL_FILTER_OPS)}")
             # ``on_side`` compares against the column's own SIGN, so like
             # ``truthy`` it carries no value of its own.
             if opr not in ("truthy", "on_side") and val is None:
-                # Every comparison op takes an explicit 'value'; with it
-                # omitted, lt/le/gt/ge would TypeError against None and the
-                # default eq would run v == None — a silent dead-filter
-                # (len:0 with no error, exactly the class the absent-key
-                # guards kill). Fail loud, naming the op and the missing arg.
+                # Every comparison op takes an explicit 'value'; omitted, it
+                # would be a silent dead-filter. Loud.
                 raise ProgramError(
                     f"filter_items op {opr!r} takes an explicit 'value' to "
                     f"compare {key!r} against, and none was given. A "
@@ -4496,11 +3678,8 @@ def run_program(cands, anchors, program, seed_results=None,
                         f"A compass word has no ordering -- 'facing <ref>' "
                         f"answers eq/truthy, not gt/le. Shape is still a "
                         f"looking question: look at the rows for that.")
-                # Absent-key guard: a numeric op on a key NO item carries would
-                # be a SILENT dead-filter (v=None -> every predicate False ->
-                # len:0), e.g. filter_items{key:'d_x'} on a bare find list (d_*
-                # is attached by `compare`, not find) -> the agent gets 0
-                # results, no error, and falls back to hand-math. Fail loud + actionable.
+                # Absent-key guard: a numeric op on a key no item carries is a
+                # silent dead-filter. Loud and actionable.
                 if items and not any(isinstance(it.get(key), (int, float)) for it in items):
                     raise ProgramError(
                         f"filter_items op {opr!r} on key {key!r}: no item "
@@ -4510,19 +3689,10 @@ def run_program(cands, anchors, program, seed_results=None,
             elif (items
                   and not any(isinstance(it, dict) and key in it for it in items)
                   and not _relate_ran(key, items)):
-                # Absent-key guard for the equality/truthy ops: eq/ne/truthy on
-                # a column NO item carries is a SILENT dead-filter (eq -> len:0,
-                # ne/truthy -> a meaningless pass-all/none) -- the model GUESSED
-                # a column name, or the column is honestly absent everywhere
-                # (brg_gap_ on an all-contact pool). Fail loud with the
-                # missing key's OWN producing idiom + the live census.
-                #
-                # UNLESS THE RELATE RAN. A `facing <ref>` absent on EVERY row
-                # because every row TOUCHES <ref> is a geometric fact, not a
-                # guessed name, and `in_or_blank` answers it correctly by
-                # keeping them all. `_contact_fact` already separates the two
-                # cases but only for a bare-fid ref; the sibling column is the
-                # discriminator that also works for an `as` label.
+                # Absent-key guard for eq/ne/truthy/in_or_blank: loud with the
+                # missing key's own producing idiom, unless the relate ran (a
+                # 'facing <ref>' absent on every row because every row touches
+                # <ref> is a geometric fact; in_or_blank keeps them).
                 raise ProgramError(
                     f"filter_items op {opr!r} on key {key!r}: no item carries "
                     f"{key!r}. "
@@ -4547,31 +3717,17 @@ def run_program(cands, anchors, program, seed_results=None,
                         "on_side": lambda: v is None or (
                             isinstance(v, (int, float))
                             and not isinstance(v, bool) and v > 0),
-                        # `on_side` for a WORD column, and the reason it
-                        # takes a LIST rather than a value: a compass word
-                        # COMPOSES, so "facing south" is satisfied by
-                        # south, southeast and southwest, and the caller
-                        # passes the set that counts. The op layer stays a
-                        # comparison layer -- which words compose is the
-                        # compiler's question, beside COMPASS_UNIT.
-                        #
-                        # And the blank is KEPT: `facing <ref>` is absent
-                        # exactly at contact (no min-gap vector to take a
-                        # bearing from), and a house touching the road it
-                        # fronts is the COMMON case for "the south-facing
-                        # house on Viburnum Avenue". Plain equality
-                        # compares None to the word and drops it, refuting
-                        # a row that was never measured -- unmeasured is
-                        # never refuted, on a word column for the same
-                        # reason it is not on a signed one.
+                        # on_side for a word column: a compass word composes
+                        # ("facing south" counts southeast and southwest), so
+                        # the caller passes the set that counts. The blank is
+                        # kept: 'facing <ref>' is absent exactly at contact,
+                        # and unmeasured is never refuted.
                         "in_or_blank": lambda: v is None or v in val,
                         }[opr]()
             if opr == "in_or_blank":
-                # THE SAME THREE-WAY STATEMENT the side cut makes, for a
-                # word column: rows that read the word, rows that read a
-                # DIFFERENT word (dropped), and rows the geometry never
-                # measured (kept). Without it a facing cut that kept only
-                # blanks would look like a cut that found matches.
+                # The three-way statement for a word column: rows reading a
+                # counted word, rows reading another (dropped), and rows never
+                # measured (kept).
                 _on = [it for it in items if _ok(it)]
                 _blank = sum(1 for it in _on
                              if (it.get(key) if isinstance(it, dict)
@@ -4594,19 +3750,9 @@ def run_program(cands, anchors, program, seed_results=None,
                 r = _FilterCutRows(_on)
                 r.cut_stats = _eq_stats
             elif opr == "on_side":
-                # THE SIDE CUT STATES ITSELF. The three-way outcome is the
-                # whole point of this op and no other cut has it: rows ON the
-                # named side, rows measurably on the OTHER side (dropped),
-                # and rows the geometry could not place (kept, unmeasured).
-                #
-                # This lives HERE and not in the reasoner loop because the
-                # loop only ever sees the SURVIVORS. A note written there
-                # could never fire -- survivors are positive by construction,
-                # so it skipped; and when nothing survived the list was empty,
-                # so it skipped again. Measured: 0 firings in 194 episodes,
-                # exactly the present-but-always-empty failure this repo has
-                # a rule about. The count only exists at the moment of the
-                # cut.
+                # The side cut states its three-way outcome: on the side,
+                # measurably on the other side (dropped), unplaced (kept).
+                # Only the cut sees the dropped count.
                 _on = [it for it in items if _ok(it)]
                 _blank = sum(1 for it in _on
                              if not isinstance((it.get(key)
@@ -4631,14 +3777,10 @@ def run_program(cands, anchors, program, seed_results=None,
                 r = _FilterCutRows(_on)
                 r.cut_stats = _side_stats
             elif opr in _NUMERIC_OPS:
-                # Cut-stats: ONE deterministic info line on
-                # every NUMERIC cut -- how much was cut, the nearest-EXCLUDED
-                # row, and the (inclusive) threshold that would admit it, plus
-                # how many rows that relaxation admits. INFORMATION-ONLY: the
-                # MODEL reads it and decides whether to widen / rank instead;
-                # the harness never relaxes a cut itself (no soft-admit band,
-                # no election). Rendered by compact_results as ``cut_stats``
-                # (and folded into the loud hint on an EMPTY result).
+                # Cut stats on every numeric cut: how much was cut, the
+                # nearest excluded row, the inclusive threshold that would
+                # admit it and how many rows that admits. Information only:
+                # the harness never relaxes a cut.
                 kept: list = []
                 excluded: list = []
                 for it in items:
@@ -4685,16 +3827,9 @@ def run_program(cands, anchors, program, seed_results=None,
                     for p in ("left of", "right of", "ahead of", "behind")
                     if f"{p} {_m.group(1)}" != key)
         elif name == "stratum":
-            # THE MATCH TIERS AS SETS. A query find scores every row into
-            # the retrieval's own tiers (text_match: name tier, exact-tag
-            # tier, the word-share bag below), and until this op the tiers
-            # were a float column the grid does not render: the 140#138
-            # endgame took [0] of a pool where six detections at 1.0 sat
-            # over tag priors at 0.8, with no way to SAY "the ones that
-            # ARE the thing". r1.exact / r1.tagged / r1.fuzzy compile
-            # here. A VIEW, never a re-retrieval: input order preserved,
-            # nothing else dropped, the full set stays live behind its
-            # own handle.
+            # The match tiers as sets (r1.exact / r1.tagged / r1.fuzzy). A
+            # view, never a re-retrieval: input order kept, nothing else
+            # dropped, the full set live behind its own handle.
             items = as_list(a["items"])
             tier = str(a["tier"]).strip().lower()
             if tier not in ("exact", "tagged", "fuzzy"):
@@ -4725,25 +3860,14 @@ def run_program(cands, anchors, program, seed_results=None,
             r.ordered = bool(getattr(items, "cue_sorted", False)
                              or getattr(items, "ordered", False))
         elif name == "compare":
-            # compare — THE relation/arrangement attach. ATTACHES evidence
-            # columns onto every item row, PASSING the input row's fields
-            # THROUGH (kill-the-whitelist: a score_by key survives to the
-            # downstream sort). Per ref — the SAME four columns for EVERY ref
-            # whatever its mask shape (no linearity type-switch): d_<ref>
-            # (footprint gap, 0.0 on touch/overlap), brg_gap_<ref> (compass
-            # bearing of that min-gap vector ref->item; ABSENT on contact,
-            # where no local direction exists), dc_<ref> (centroid-to-centroid
-            # distance), brg_<ref> (centroid->centroid compass bearing, absent
-            # only when the centroids coincide). frame={reference:'auto' |
-            # along[,toward] | toward} is THE view aspect: G.frame fixes the
-            # view in code (viewer/auto; 'relative' survives for offline/lab
-            # programs) or G.frame_polyline charts the pool along a
-            # road/polyline — view coords become column
-            # reads. DELEGATE-ONLY: every number comes
-            # from a geom_compute primitive; this branch never touches raw
-            # coordinates. An ATTACH, not a sort: input rows + order
-            # preserved; a compare TERMINAL gets the out-loud warning
-            # (terminate in score_by).
+            # compare: THE relation/arrangement attach. Attaches evidence
+            # columns onto every item row, passing the row's fields through.
+            # Per ref: 'distance to' (footprint gap, 0.0 on contact), 'facing'
+            # (compass word of the min-gap vector, absent on contact), 'center
+            # distance to' and 'bearing from' (centroid to centroid). frame is
+            # the view aspect (G.frame / G.frame_polyline). Every number comes
+            # from a geom_compute primitive. An attach, not a sort: input
+            # order preserved.
             items = as_points(a["items"])
             # Audit-geometry capture (geometry_sink only): filled at the
             # sites below where the op resolves geometry it does not return.
@@ -4756,7 +3880,7 @@ def run_program(cands, anchors, program, seed_results=None,
             _cmp_src = _unwrap_listish(_raw(a["items"]))
             _in_ordered = bool(getattr(_cmp_src, "cue_sorted", False)
                                or getattr(_cmp_src, "ordered", False))
-            # Deleted aspects redirect loudly to the ONE arrangement aspect.
+            # Aspects that are not compare args redirect loudly to the frame.
             for _dead in ("view", "between", "neighbors"):
                 if a.get(_dead) is not None:
                     raise ProgramError(
@@ -4803,13 +3927,10 @@ def run_program(cands, anchors, program, seed_results=None,
                 return _sanitize_token(lbl, fallback)
 
             def _node_label(node):
-                """The node-derived column label: the FID. Deriving from the
-                display NAME made the model guess wrong ~12x/6 eps
-                (refs:["parking_4"] produced d_parking_lot_4); the FID is
-                (a) exactly what the model types, (b) identical whether the
-                ref was a bare fid or an rN that resolved to it (dialect
-                stability preserved), (c) round-stable. The display name
-                still shows in the result HEADER (ref_name)."""
+                """The node-derived column label: the FID -- what the model
+                types, and the same whether the ref was a bare fid or an rN
+                that resolved to it. The display name shows in the header
+                (ref_name)."""
                 return _sanitize_label(node["fid"])
 
             def _set_label(arg_token, fallback):
@@ -4853,14 +3974,9 @@ def run_program(cands, anchors, program, seed_results=None,
                 return None
 
             def _set_label_node(arg_token, fallback):
-                """(label, node) for an aggregate arg -- the FID-label rule
-                EXTENDED to view/between/neighbors: an arg
-                resolving to ONE surface row labels from the resolved NODE
-                (_node_label -- the SAME column whether passed as a bare
-                fid or an rN, so vx_road_1 never becomes vx_r0 the next
-                round); anything else (a multi-row set, constructed
-                geometry, an inline literal) keeps the token-derived
-                label, node=None."""
+                """(label, node) for a frame arg: one resolving to ONE
+                surface row labels from the node (_node_label); anything else
+                keeps the token-derived label, node=None."""
                 node = _arg_row(arg_token)
                 if node is not None:
                     return _node_label(node), node
@@ -4869,8 +3985,9 @@ def run_program(cands, anchors, program, seed_results=None,
             # --- element-wise ref resolution ---------------------------------
             # Each spec is (kind, payload, label_base, node|None, name_match):
             #   kind 'row'   -> payload = the canonical surface row
-            #   kind 'point' -> payload = [x, y] (a constructed literal)
-            #   kind 'line'  -> payload = centerline polyline (constructed axis)
+            #   kind 'point' -> payload = [x, y]
+            #   kind 'line'  -> payload = a polyline
+            #   kind 'union' -> payload = the member rows
             ref_specs: list = []
             _standing_ref_handles: list = []
             # Bare (label-less) [x,y] literal refs all label 'xy': one is the
@@ -4890,24 +4007,12 @@ def run_program(cands, anchors, program, seed_results=None,
                     ref_el = el["ref"]
                     if (isinstance(ref_el, (list, tuple)) and ref_el
                             and all(isinstance(x, str) for x in ref_el)):
-                        # UNION ref {ref:[fid|rN,...], as:'label'}: the union
-                        # of the named masks as ONE ref -- d_<label> is the
-                        # exact min gap over the members (witness from the
-                        # argmin member, so brg_gap_<label> is that member's
-                        # local direction), dc_/brg_<label> read from the
-                        # union's area-weighted centroid.
-                        #
-                        # A MEMBER MAY BE AN rN, and that is what makes the
-                        # union reachable at all. Spelling it needs the fids,
-                        # and a set a program MINTED does not have any until
-                        # it runs -- so "rank these houses by their nearest
-                        # pool" was expressible only by hand-typing every
-                        # pool fid. Fanning the rN out instead measures each
-                        # instance separately and dies on the token guard the
-                        # moment either side is large: 3,414 houses against
-                        # 40 pools is 136,560 cells. One label can only mean
-                        # one column, and the column a set folds to is the
-                        # gap to its NEAREST member.
+                        # Union ref {ref:[fid|rN,...], as:'label'}: the named
+                        # masks as ONE ref -- 'distance to <label>' is the min
+                        # gap over the members (facing from the argmin
+                        # member), the centre columns read the union's
+                        # area-weighted centroid. A member may be an rN, so a
+                        # set a program minted can be a union.
                         if not as_label:
                             raise ProgramError(
                                 "a union ref {ref:[fid|rN,...]} needs its "
@@ -4920,29 +4025,18 @@ def run_program(cands, anchors, program, seed_results=None,
                                 _rows = _unwrap_listish(_resolve_ref(x))
                                 if isinstance(_rows, dict):
                                     _rows = [_rows]
-                                # A CONSTRUCTED row (a crossing, a terminus)
-                                # is not in by_fid, and it is still a place:
-                                # it rides on its own xy, exactly as the
-                                # single-ref path's point branch does. The
-                                # by_fid-only filter served "inter is empty"
-                                # while len(inter)==1 printed true.
+                                # A constructed row (a crossing, a terminus)
+                                # is not in by_fid and rides on its own xy.
                                 _got = [by_fid.get(r["fid"], r)
                                         for r in _rows
                                         if isinstance(r, dict)
                                         and (r.get("fid") in by_fid
                                              or _is_xy_literal(r.get("xy")))]
                                 if not _got:
-                                    # NAME THE HANDLE THE MODEL WROTE, not
-                                    # the executor ref it compiled to, and
-                                    # name why it is usually empty. The
-                                    # common case by far is a detection
-                                    # class asked for before anything has
-                                    # looked: nothing is segmented until
-                                    # look_for names the class AND a flight
-                                    # goes over the place, so find("pool")
-                                    # on turn 1 is empty by construction and
-                                    # a sort against it could not mean
-                                    # anything.
+                                    # Name the handle the model wrote and why
+                                    # it is usually empty: nothing is
+                                    # segmented until look_for names the class
+                                    # and a flight goes over the place.
                                     _lbl = as_label or _sanitize_label(x)
                                     raise ProgramError(
                                         f"{_lbl} is empty, so 'distance to "
@@ -4958,12 +4052,8 @@ def run_program(cands, anchors, program, seed_results=None,
                                            "goes over the place -- arm it, "
                                            "fly, then find them again.")
                                         + f"{_sig_suffix()}")
-                                # A CAP: an rN member bounds a union by
-                                # nothing, and the union comment below
-                                # records a members x items case that runs
-                                # for minutes without returning. The bbox prune
-                                # should hold, but a wall-clock cliff inside
-                                # a fleet run is not the place to find out.
+                                # A cap: an rN member bounds a union by
+                                # nothing (see _UNION_MAX_MEMBERS).
                                 if len(_got) > _UNION_MAX_MEMBERS:
                                     raise ProgramError(
                                         f"{as_label or _sanitize_label(x)} "
@@ -5023,12 +4113,8 @@ def run_program(cands, anchors, program, seed_results=None,
                     # resolver below): a live surface row, else the loud miss.
                     node = by_fid.get(ref_el)
                     if node is None and ref_el in staged:
-                        # a staged viewpoint handle: the natural "score these
-                        # rows against my stance" call -- attach the stance's
-                        # OWN columns ('left of/right of/ahead of/behind vN'
-                        # + 'distance to vN'), not the point family
-                        # (framestage_1000: the model asked this way and got
-                        # bearings it could not use).
+                        # A staged viewpoint handle attaches the stance's own
+                        # columns, not the point family.
                         if ref_el not in _standing_ref_handles:
                             _standing_ref_handles.append(ref_el)
                         continue
@@ -5041,14 +4127,10 @@ def run_program(cands, anchors, program, seed_results=None,
                 v = _unwrap_listish(_resolve_ref(ref_el))
                 if isinstance(v, list) and len(v) == 1 and not _is_xy_literal(v):
                     v = v[0]
-                # STABLE column naming: a ref that resolves to a SURFACE ROW is
-                # labeled from the resolved node's FID — the SAME column whether the
-                # model passed the bare fid or an rN that resolved to it, and
-                # exactly the token the model types (d_road_1, never
-                # d_earl_street and never d_r0). Constructed geometry (an
-                # [x,y] literal, a fitted axis) has no node and keeps the
-                # token-derived label (r0 -> d_r0). An as:'label' always
-                # overrides.
+                # Stable column naming: a ref resolving to a surface row is
+                # labeled from the node's FID, whether passed bare or as an
+                # rN. Constructed geometry keeps the token-derived label; an
+                # as:'label' always overrides.
                 tok_base = _sanitize_label(_ref_base_of_token(ref_el))
                 if isinstance(v, str) and v in by_fid:
                     ref_specs.append(("row", by_fid[v], as_label,
@@ -5077,25 +4159,14 @@ def run_program(cands, anchors, program, seed_results=None,
                     ref_specs.append(("point", [float(v[0]), float(v[1])],
                                       as_label or tok_base, None, None))
                     continue
-                # MULTI-INSTANCE LANDMARK -> one column set PER instance (NO cap).
-                # A ref that resolves to several surface rows (a named landmark's
-                # instances -- a duplicate name, a fragmented road) fans out into
-                # one column set PER instance, reusing the per-ref machinery below:
-                # every candidate is measured (distance + direction) against EACH
-                # instance, and rank_by/emphasize resolves which one the target
-                # sits by -- the disambiguation signal a single collapsed distance
-                # would destroy. No election; the model holds the instances and the
-                # ordering decides. The ONLY bound is a LOUD token-overflow safety
-                # net: a fan-out whose rendered size (instances x candidates) would
-                # be a crazy amount of tokens fails loud and STEERS (narrow / sort /
-                # index one / pass-as-items). It fires ~never once the model narrows
-                # on the result summary, and catches the self-compare (refs = cands).
+                # Multi-instance ref -> one column set per instance (no cap):
+                # every candidate is measured against each instance and the
+                # ordering decides which one the cue means. Only the
+                # _FANOUT_TOKEN_GUARD net bounds it.
                 if (isinstance(v, list) and 2 <= len(v)
                         and all(isinstance(x, dict) and x.get("fid") in by_fid for x in v)):
-                    # The ATTACH cost (instances x items columns on the raw
-                    # rows, which chain into carry state and the compaction
-                    # budget) — the rendered grid is separately bounded by
-                    # the census+head envelope law.
+                    # The attach cost (instances x items columns on the raw
+                    # rows); the rendered grid is bounded separately.
                     _cells = len(v) * max(1, len(items))
                     if _cells > _FANOUT_TOKEN_GUARD:
                         raise ProgramError(
@@ -5115,13 +4186,8 @@ def run_program(cands, anchors, program, seed_results=None,
                         and all(isinstance(x, dict)
                                 and _is_xy_literal(x.get("xy"))
                                 and x.get("fid") not in by_fid for x in v)):
-                    # CONSTRUCTED points (a crossings result with several
-                    # crossings). The generic error below is loud but names
-                    # filter_items and 'rN[i]' -- op vocabulary the sentence
-                    # channel cannot say, which is the measured register
-                    # break. Say the same refusal in plain terms instead;
-                    # none of the places is dropped, so the narrowing is an
-                    # ordinary next question over that handle.
+                    # Constructed points (a crossings result with several):
+                    # refuse in plain terms; none of the places is dropped.
                     _pl = str(v[0].get("name") or "").strip()
                     raise ProgramError(
                         f"{ref_el!r} is {len(v)} places"
@@ -5182,9 +4248,7 @@ def run_program(cands, anchors, program, seed_results=None,
                 col_specs.append((kind, payload, lab))
 
             # --- the frame aspect: view/chart coords ---------------------------
-            # (resolved once, joined onto rows below; skipped on empty items)
-            # The DECLARED form orients counting and provides the metric view
-            # coords (G.frame / G.frame_polyline); no structure pass exists.
+            # Resolved once, joined onto rows below; skipped on empty items.
             frame_arg = a.get("frame")
             frame_join: dict = {}
             frame_cols: list = []
@@ -5204,10 +4268,8 @@ def run_program(cands, anchors, program, seed_results=None,
                 f_toward = frame_arg.get("toward")
                 f_from = frame_arg.get("from")
                 if f_from is not None and f_ref is not None:
-                    # 'from' is a VIEWER-form key; with 'reference' present it was
-                    # silently dropped (read only inside the toward branch) and the
-                    # call misdirected to the areal 'needs side' error. Name the
-                    # form the caller half-assembled instead.
+                    # 'from' belongs to the viewer form; name the form the
+                    # caller half-assembled.
                     raise ProgramError(
                         "'from' belongs to the VIEWER form {toward, [from]} "
                         "(stand at 'from', look at 'toward'); you gave "
@@ -5285,10 +4347,8 @@ def run_program(cands, anchors, program, seed_results=None,
                         # of that travel is a claim it made and keeps.
                         frame_declared = True
                     else:
-                        # Travel falls back to the stored end0->end1 order,
-                        # which is an arbitrary property of the bake -- this
-                        # is road_travel_intrinsic, measured at 0.461 against
-                        # a 0.470-0.535 chance band. No side columns.
+                        # Travel falls back to the stored end0->end1 order, an
+                        # arbitrary property of the bake: no side columns.
                         _dir_frag = (", travel direction UNDECLARED "
                                      "(toward:<ref> declares it)")
                     structured, f_receipt = G.frame_polyline(items, poly)
@@ -5317,15 +4377,10 @@ def run_program(cands, anchors, program, seed_results=None,
                         f"that side of the travel; 'distance to {flab}' = "
                         f"either side)")
                 elif f_toward is not None and f_ref is None:
-                    # VIEWER form: any mask fills either slot identically
-                    # (class-blind); toward may be a compass word. A slot
-                    # whose node carries a CENTERLINE resolves to the
-                    # nearest centerline point to its counterpart — a
-                    # describer "on Main St" stands where the road meets
-                    # the look, never at the road's area centroid (blocks
-                    # away on a long road). Pool-item positions stay area
-                    # centroids (POSITION intent, geom_compute MASK-INTENT
-                    # BASIS).
+                    # Viewer form: any mask fills either slot (class-blind);
+                    # toward may be a compass word. A slot whose node carries
+                    # a centerline stands at the nearest centerline point to
+                    # its counterpart, never at a long road's area centroid.
                     if frame_arg.get("side"):
                         raise ProgramError(
                             "the viewer frame fixes orientation by the look "
@@ -5401,15 +4456,10 @@ def run_program(cands, anchors, program, seed_results=None,
                     flab = flab or "auto"
                     view_frag = "no declared view (+vx = the pool's own axis, east-ward)"
                 else:
-                    # reference form -- dispatch by CALL SHAPE + DATA KIND:
-                    # an explicit 'side' is the DECLARED VIEW about the
-                    # reference's position (the mask's TRUE area centroid for
-                    # any areal reference -- a building/lot/road footprint --
-                    # else its point); NO side + a fid CARRYING a stored
-                    # centerline or an [[x,y],...] literal is the CURVILINEAR
-                    # chart along it. 'side' on a reference whose only
-                    # geometry is a polyline (no areal footprint, no point)
-                    # is undefined and errors loud, valid forms first.
+                    # Reference form: an explicit 'side' declares the view
+                    # about the reference's centre (its mask centroid, else
+                    # its point); a line with no side is the chart (along);
+                    # 'side' about a polyline-only reference errors loud.
                     _lab0, f_node = _set_label_node(f_ref, "frame")
                     poly = None
                     if (isinstance(f_ref, (list, tuple)) and len(f_ref) >= 2
@@ -5492,18 +4542,15 @@ def run_program(cands, anchors, program, seed_results=None,
                         raise ProgramError(
                             f"compare frame: {fr['error']}{_sig_suffix()}")
                     _fmeta = fr.get("frame") or {}
-                    # A DECLARED orientation: "viewer" (stand at from, look at
-                    # toward) or "relative" WITH a side the model named ("put
-                    # the shed at the bottom of my view"). "relative" without a
-                    # side, and "auto" (the pool's own measured axis), are the
-                    # engine choosing -- anchor_own_axis, measured 0.479.
+                    # A declared orientation: "viewer", or "relative" with a
+                    # side the model named. "relative" without a side and
+                    # "auto" are the engine choosing (no side columns).
                     frame_declared = (
                         _fmeta.get("frame_type") == "viewer"
                         or (_fmeta.get("frame_type") == "relative"
                             and bool(frame_arg.get("side"))))
                     _ru, _uu = _fmeta.get("right_unit"), _fmeta.get("up_unit")
-                    # the framed pts ARE the join rows (op_x/op_y view
-                    # coords); no structure pass exists any more.
+                    # the framed pts are the join rows (op_x/op_y view coords).
                     structured = fr.get("pts") or []
                     frame_basis = (_ru, _uu, _fmeta.get("origin"))
                     if _geo is not None:
@@ -5549,25 +4596,14 @@ def run_program(cands, anchors, program, seed_results=None,
                 if ci is not None:
                     ref_col_keys[ci][k] = None
 
-            # Per-ref MASK geometry, resolved ONCE: ``(geom, center)``.
-            # The gap side is the ref's EXACT realised mask (G.mask_geom over
-            # its ``mask`` chains — the geometry it was given, one chain per
-            # part, each stating its own closure) when present, else its point
-            # (a point's position IS its whole footprint). ``center`` is
-            # the mask's TRUE area centroid for dc_/brg_ (derived from the
-            # mask itself — unconditional whenever any geometry exists; a
-            # constructed axis reads its arc midpoint). A UNION ref holds a
-            # LIST of member geoms plus the union's area-weighted centroid.
-            # THE ONE GEOMETRY-RESOLUTION LAW (refs AND items route through
-            # here): a row's geometry is re-resolved BY FID from the
-            # authoritative node registry (``by_fid``) at compute time. Op
-            # OUTPUT rows strip the server-resolvable mask fields
-            # (_MODEL_HIDDEN_ROW_FIELDS), so a chained / sliced / re-labeled
-            # row would otherwise silently degrade to its xy point — the
-            # measured contact-flip / self-distance defect. Re-resolving here
-            # makes every chained op byte-identical to a fresh compare on the
-            # same fids; a fid-less row (an [x,y] literal, constructed
-            # geometry) keeps its own fields.
+            # Per-ref geometry, resolved once: ``(geom, center)``. The gap side
+            # is the exact realised mask (G.mask_geom over its chains), else
+            # its point; ``center`` is the mask's area centroid. A union holds
+            # a list of member geoms plus the area-weighted centroid. Refs and
+            # items re-resolve geometry BY FID from ``by_fid``: op output rows
+            # strip the mask fields, so a chained row would otherwise degrade
+            # to its point. A fid-less row (a literal, constructed geometry)
+            # keeps its own fields.
             def _row_geom_center(node):
                 if isinstance(node, dict):
                     node = by_fid.get(node.get("fid")) or node
@@ -5672,18 +4708,9 @@ def run_program(cands, anchors, program, seed_results=None,
                 else:
                     col_lin.append(None)
 
-            # WINDOW-COVERING REF (geometric fact, stamped at build_surface):
-            # a ref whose mask contains every surface row position makes the
-            # per-row gap columns DEGENERATE-CONSTANT (d_=0 for every row,
-            # brg_gap_ direction-less at contact). Serve the ONE containment
-            # fact in the envelope instead of stamping meaningless zeros
-            # (the flat-sort/contact idiom); dc_/brg_ (the centroid vector)
-            # stay per-row — they are informative.
             # --- the map-fixed cardinal columns -------------------------------
-            # Which DIRECTIONS were asked for, per column. Built once here
-            # rather than per row: the reference's point cloud is fixed for
-            # the whole pass, and a 64-way road densifies to ~9k points that
-            # would otherwise be rebuilt for every candidate.
+            # The directions asked for, per column, built once: the
+            # reference's point cloud is fixed for the whole pass.
             _card_req: dict = {}
             for _el in (a.get("cardinals") or []):
                 if not isinstance(_el, dict):
@@ -5716,6 +4743,9 @@ def run_program(cands, anchors, program, seed_results=None,
                     _g if isinstance(_g, list) else [_g])
                 col_cards.append((want, _pts) if _pts is not None else None)
 
+            # Window-covering ref (stamped at build_surface): its gap columns
+            # would be a constant 0, so the envelope carries one containment
+            # fact instead; the centre columns stay per-row.
             col_covers: list = []
             for (kind, payload, lab) in col_specs:
                 covers = bool(kind == "row" and isinstance(payload, dict)
@@ -5733,35 +4763,22 @@ def run_program(cands, anchors, program, seed_results=None,
                         f"'center distance to {lab}'/"
                         f"'bearing from {lab}' (centroid vector) ride per-row.")
 
-            # REF-IN-MASK CONTAINMENT (per ref index): rows whose OWN mask
-            # CONTAINS the ref -- the sub-window-but-huge container case
-            # (boundary/admin polygons km2-scale: a political-ward relation
-            # CONTAINS the cue's landmark, reads d_=0, and sits atop every
-            # nearest-first sort as if adjacent). covers_window handles only
-            # masks containing the WHOLE surface; this is its per-ref twin:
-            # the d_=0 row renders the containment fact (a contains_<ref>
-            # cell + one note). Sorts unchanged, nothing dropped.
+            # Ref-in-mask containment (per ref index): rows whose own mask
+            # contains the ref read distance 0; the row carries a
+            # 'contains <ref>' cell and one note names them. Sorts unchanged.
             contains_rows: dict[int, list[str]] = {}
             out_rows: list = []
             # Member boxes are a property of the REFERENCE, not of the item,
             # so they are stacked once per column and reused down the items.
             col_member_bb: dict[int, "object"] = {}
             for i, it in enumerate(items):
-                # intrinsic passthrough: every input field survives (row_index/
-                # row_size/cluster_*/color_<word>/along_*/... feed the downstream
-                # sort); only the server-resolvable fields stay hidden.
+                # every input field passes through except the hidden ones.
                 row = {k: v for k, v in it.items()
                        if k not in _MODEL_HIDDEN_ROW_FIELDS}
-                # MASK-INTENT BASIS (geom_compute design contract): d_ +
-                # brg_gap_ carry GAP/CONTAINMENT intent -> both sides use
-                # their EXACT realised mask (mask-to-mask min + its witness
-                # pair; a point-mask object degrades to its point
-                # consistently). dc_/brg_ carry POSITION intent -> the mask's
-                # TRUE area centroid is its position summary. The item side
-                # resolves through the SAME ``_row_geom_center`` law as the
-                # refs (geometry BY FID from the node registry), so item and
-                # ref read identical geometry for the same fid — a ref
-                # compared to ITSELF is exactly d=0 / dc=0.
+                # Gap intent (distance, facing) uses both sides' exact masks;
+                # position intent (centre columns) uses the area centroid. The
+                # item resolves through the same ``_row_geom_center`` as the
+                # refs, so a ref compared to itself is exactly 0.
                 item_geom, it_c = _row_geom_center(it)
                 for ci, (kind, payload, lab) in enumerate(col_specs):
                     # A cardinal is independent of the gap/chart split below:
@@ -5807,36 +4824,21 @@ def run_program(cands, anchors, program, seed_results=None,
                     if col_covers[ci]:
                         # window-covering ref: the gap columns are a
                         # degenerate constant — the envelope carries the ONE
-                        # containment fact; dc_/brg_ still attach below.
+                        # containment fact; the centre columns still attach.
                         d = None
                     elif kind == "union":
-                        # exact min gap over the members; the witness pair
-                        # comes from the argmin member (its LOCAL direction).
-                        #
-                        # THE SAME MIN, FEWER CALLS. A reference standing for
-                        # a whole class is a union of every member: `find
-                        # building in building.` is 3,452 items against 3,452
-                        # members, and calling gap_witness on all 11.9 M pairs
-                        # runs for minutes without returning.
-                        # gap_witness never reads below the two
-                        # bounding boxes' separation, so a member whose bound
-                        # already exceeds the best gap in hand cannot beat it,
-                        # and nothing beats 0. Members are still walked in
-                        # their own order and the test is still strict, so the
-                        # witness a tie keeps is the same one.
+                        # Exact min gap over the members; the witness comes
+                        # from the argmin member. A member whose bounding-box
+                        # separation already exceeds the best gap in hand
+                        # cannot beat it and is skipped; members are walked in
+                        # order with a strict test, so ties keep the same
+                        # witness.
                         _bbs = col_member_bb.get(ci)
                         if _bbs is None:
                             _bbs = col_member_bb[ci] = G.stack_bboxes(ref_geom)
                         _bounds = G.bbox_bounds(_bbs, item_geom)
-                        # SEED FROM THE NEAREST BOX. Walking members in their
-                        # own order means an unlucky far first member leaves
-                        # the cut loose for a long stretch. Measuring the
-                        # closest box first gives an upper bound on the answer
-                        # straight away, and a member whose box already
-                        # exceeds it cannot be the minimum -- so it is skipped
-                        # without ever being the recorded one. The witness is
-                        # still taken from the ordered pass below, so the
-                        # member a tie keeps does not move.
+                        # Seed from the nearest box: an upper bound straight
+                        # away. The witness still comes from the ordered pass.
                         _ub = None
                         _seed_i, _seed = -1, None
                         if len(ref_geom) > 1 and len(_bounds):
@@ -5864,16 +4866,10 @@ def run_program(cands, anchors, program, seed_results=None,
                         dr = round(d, 2)
                         _put(row, f"distance to {lab}", dr, ci)
                         if dr > 0.0 and wr is not None:
-                            # the min-gap vector's compass bearing, ref
-                            # witness -> item witness. ABSENT exactly when
-                            # d_<ref>=0: on contact no local direction
-                            # exists (brg_ still reads).
-                            # WHICH WAY THIS ROW FACES THE REF, as a word.
-                            # The witness pair runs ref->item; a thing faces
-                            # the place it fronts, so the served direction is
-                            # item->ref. Serving the reversal as a word
-                            # leaves the model no formula to forget to
-                            # apply: a word cannot be read backwards.
+                            # Which way this row faces the ref, as a word: the
+                            # witness pair runs ref->item and a thing faces the
+                            # place it fronts, so the word is item->ref. Absent
+                            # on contact (no local direction).
                             _put(row, f"facing {lab}",
                                  G.cardinal(wi, wr), ci)
                             if _geo is not None:
@@ -5894,7 +4890,7 @@ def run_program(cands, anchors, program, seed_results=None,
                               and bool(G.mask_contains(
                                   item_geom, ref_geom["V"]).all())):
                             # the row's OWN mask CONTAINS the ref (every ref
-                            # vertex inside it): d_=0 by containment, not
+                            # vertex inside it): distance 0 by containment, not
                             # adjacency — the visible fact rides the row.
                             _put(row, f"contains {lab}", True, ci)
                             contains_rows.setdefault(ci, []).append(
@@ -5905,7 +4901,7 @@ def run_program(cands, anchors, program, seed_results=None,
                         if dcr > 0.0:
                             # centroid->centroid bearing: defined on contact
                             # too, ABSENT only when the centroids coincide
-                            # (dc_<ref>=0 -- no direction exists; the
+                            # (centre distance 0 -- no direction exists; the
                             # self-compare case).
                             _put(row, f"bearing from {lab}",
                                  round(G.bearing(center, it_c), 1), ci)
@@ -5938,11 +4934,9 @@ def run_program(cands, anchors, program, seed_results=None,
                         f"carries 'contains {lab}'=true. distance reads 0 on ANY "
                         f"mask contact, so a 0 in a nearest-first read "
                         f"spans touching neighbors AND containers.")
-            # Header echo: each header entry lists ITS columns verbatim.
-            # With a frame present, each point-like ref ALSO projects into the
-            # SAME frame -- ref_vx/ref_vy in a view frame, ref_along/ref_off
-            # in a polyline chart -- so "left of X" is vx_<row> vs ref_vx (the
-            # same class-blind projection the items got).
+            # Header echo: each header lists its columns verbatim; with a
+            # frame present, each point-like ref also projects into the same
+            # frame (its own side columns).
             for hdr, keys, spec in zip(headers, ref_col_keys, col_specs):
                 if keys:
                     hdr["cols"] = list(keys)
