@@ -176,9 +176,14 @@ def flights_named(bases: list[Path]) -> list[tuple[str, tuple[float, float]]]:
                if (xy := f.get("resolved_xy") or f.get("pose_xy"))]
         if out:
             return out
+    return tour_stops(bases[0])
+
+
+def tour_stops(run_dir: Path) -> list[tuple[str, tuple[float, float]]]:
+    """The flights a run flew, in order: ``(target, xy)`` off its ``flight/tour_cursor.json``."""
     try:
-        cursor = json.loads((bases[0] / "flight" / "tour_cursor.json").read_text())
-    except (OSError, ValueError, IndexError):
+        cursor = json.loads((run_dir / "flight" / "tour_cursor.json").read_text())
+    except (OSError, ValueError):
         return []
     return [(str(s.get("stop_id") or ""), (float(s["xy"][0]), float(s["xy"][1])))
             for s in cursor.get("stops_visited") or [] if s.get("xy")]

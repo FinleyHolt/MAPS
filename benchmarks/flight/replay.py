@@ -61,6 +61,7 @@ from typing import Any
 import numpy as np
 
 from benchmarks.flight.live_source import ortho_observation
+from benchmarks.flight.measures import _bases, _rows, tour_stops
 from benchmarks.flight.mission import Mission
 
 log = logging.getLogger("flight.replay")
@@ -74,12 +75,6 @@ BLACK_LEVEL = 12
 DEFAULT_WINDOW = 262144
 #: Recorded environment flags that name paths on the aircraft, not the arm.
 _PATH_FLAG = re.compile(r"_(TILES|RGBD_DIR)$")
-
-
-def _rows(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
 # -- the recording -----------------------------------------------------------
@@ -113,21 +108,12 @@ class Recording:
     @property
     def stops(self) -> list[tuple[str, tuple[float, float]]]:
         """The flights flown, in order: ``(target, xy)`` off ``flight/tour_cursor.json``."""
-        return _stops(self.run_dir)
+        return tour_stops(self.run_dir)
 
     def observation(self, frame: dict[str, Any]) -> Path | None:
         sha = frame.get("observation")
         path = self.run_dir / "observations" / f"{sha}.jpg" if sha else None
         return path if path is not None and path.is_file() else None
-
-
-def _stops(run_dir: Path) -> list[tuple[str, tuple[float, float]]]:
-    try:
-        cursor = json.loads((run_dir / "flight" / "tour_cursor.json").read_text())
-    except (OSError, ValueError):
-        return []
-    return [(str(s.get("stop_id") or ""), (float(s["xy"][0]), float(s["xy"][1])))
-            for s in cursor.get("stops_visited") or [] if s.get("xy")]
 
 
 def _messages(new: Any) -> list[dict[str, Any]]:
@@ -159,17 +145,6 @@ def read_transcript(path: Path) -> tuple[dict[str, Any], list[list[dict]], list[
     return params, [requests[i] for i in keep], [responses[i] for i in keep]
 
 
-def run_dirs(sortie: Path, row: dict[str, Any]) -> Path | None:
-    """The run's folder: the aircraft's copy, else the ground station's."""
-    wd = row.get("workdir")
-    if not wd:
-        return None
-    for base in (sortie / wd, sortie.parent / f"{sortie.name}_grnd" / sortie.name / wd):
-        if (base / "flight" / "llm" / "transcript.jsonl").is_file():
-            return base
-    return None
-
-
 def open_recording(run_dir: Path) -> Recording:
     """The recording of the run in ``run_dir``, a folder under a sortie (or
     under its ``_grnd`` copy) that the sortie's ``episodes.jsonl`` names."""
@@ -195,11 +170,13 @@ def open_recording(run_dir: Path) -> Recording:
 
 
 def flown_runs(sorties: Path) -> list[Path]:
-    """Every run under a sorties root that holds a reasoner transcript, in the order flown."""
+    """Every run under a sorties root that holds a reasoner transcript, in the
+    order flown: the aircraft's copy of its folder, else the ground station's."""
     out = []
     for ledger in sorted(Path(sorties).glob("*Z/episodes.jsonl")):
         for row in _rows(ledger):
-            found = run_dirs(ledger.parent, row)
+            found = next((b for b in _bases(ledger.parent, row)
+                          if (b / "flight" / "llm" / "transcript.jsonl").is_file()), None)
             if found is not None:
                 out.append(found)
     return out
@@ -509,7 +486,7 @@ def diff(rec: Recording, replay_dir: Path) -> dict[str, Any]:
         out["turns"].append(turn)
         if out["first"] is None:
             out["first"] = turn
-    flown, replayed = rec.stops, _stops(replay_dir)
+    flown, replayed = rec.stops, tour_stops(replay_dir)
     same = len(flown) == len(replayed) and all(
         fa == fb and abs(xa[0] - xb[0]) < 0.5 and abs(xa[1] - xb[1]) < 0.5
         for (fa, xa), (fb, xb) in zip(flown, replayed))
