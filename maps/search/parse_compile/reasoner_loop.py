@@ -1679,21 +1679,19 @@ def advance_reasoner_one_round(
         cs = float(getattr(ctx, "cell_size_m", 0.0) or 2.0)
         return max(float(gs[0]), float(gs[1])) * cs or 200.0
 
-    def _build_map_requests(
-            items: list) -> tuple[list[dict], list[str], list[str]]:
+    def _build_map_requests(items: list) -> tuple[list[dict], list[str]]:
         """Resolve show_map items into render specs. Each item
         ``{around?, mark_fids?}`` centres one map (around absent = the whole
         tile); marks resolve off ``_ns_rows`` exactly like crops. Returns
-        ``(specs, skipped_fids, ref_notes)``."""
+        ``(specs, skipped_fids)``."""
         specs: list[dict] = []
         skipped: list[str] = []
-        notes: list[str] = []
         gs = getattr(ctx, "grid_shape", None) or (0, 0)
         cs = float(getattr(ctx, "cell_size_m", 0.0) or 2.0)
         ox, oy = getattr(ctx, "tile_origin_xy", (0.0, 0.0))
         tile_center = [round(float(ox) + float(gs[1]) * cs / 2.0, 2),
                        round(float(oy) + float(gs[0]) * cs / 2.0, 2)]
-        for _i, it in enumerate(items):
+        for it in items:
             if not isinstance(it, dict):
                 continue
             around = it.get("around")
@@ -1770,7 +1768,7 @@ def advance_reasoner_one_round(
                     f"image-up = {_sv['handle']}'s facing "
                     f"(bearing {_sv['bearing_deg']})")
             specs.append(spec)
-        return specs, skipped, notes
+        return specs, skipped
 
     def _map_vision_text(maps: list[dict]) -> str:
         """The map message's text: what the picture IS (world state, no
@@ -2969,15 +2967,12 @@ def advance_reasoner_one_round(
         _req: dict = {"around": fid}
         if mark_fids:
             _req["mark_fids"] = list(mark_fids)
-        specs, m_skipped, m_notes = _build_map_requests([_req])
+        specs, m_skipped = _build_map_requests([_req])
         ack: dict = {"maps": len(specs)}
         if m_skipped:
             ack["skipped"] = m_skipped[:20]
-        if m_notes:
-            ack["ref_notes"] = m_notes[:20]
         if not specs:
-            ack["error"] = ("; ".join(m_notes) if m_notes
-                            else "no resolvable map center")
+            ack["error"] = "no resolvable map center"
             return ack
         try:
             from maps.search.render.map_render import (  # noqa: PLC0415
