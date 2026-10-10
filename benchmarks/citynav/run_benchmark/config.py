@@ -301,19 +301,6 @@ def _assert_realstack_gt_isolation(
     The gt_perfect diagnostic tier never trips it. The static half of the
     gate is ``distill/tests/test_c1_gt_isolation.py``.
     """
-    # Tier-(c) oracle GT-injection derives a
-    # viewpoint from the withheld target_xy — deliberately GT-leaky, so it
-    # demands the same explicit ack as every other C1 diagnostic. Checked
-    # before the tier early-return: tier-independent by design.
-    if (
-        os.environ.get("SEARCH_ORACLE_INJECT_GT", "").strip() == "1"
-        and os.environ.get(_GT_DIAGNOSTIC_OPT_OUT_ENV) != "1"
-    ):
-        raise RuntimeError(
-            "SEARCH_ORACLE_INJECT_GT=1 without SEARCH_ALLOW_GT_DIAGNOSTIC=1 "
-            "— acknowledge the GT-injection diagnostic explicitly "
-            "(tier (c))."
-        )
     if cfg.perception != _REALSTACK_PERCEPTION_TIER:
         return  # not the real-SAM tier → guard does not apply (e.g. gt_perfect)
     if os.environ.get(_GT_DIAGNOSTIC_OPT_OUT_ENV) == "1":

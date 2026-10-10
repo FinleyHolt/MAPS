@@ -86,11 +86,6 @@ class CompilerInput:
     # so the drone flies + perceives real evidence instead of scoring a blind
     # pre-takeoff zero. ``None`` -> the installer falls back to ``robot_pose``
     # (the start pose).
-    oracle_inject_fid: str | None = None
-    # Diagnostic-only (the benchmarks-side ``SEARCH_ORACLE_INJECT_GT`` arm):
-    # a real prior graph fid appended as ONE extra requested viewpoint in
-    # the round-0 tour union. GT-derived by the caller — never set on a
-    # real arm. ``None`` (every normal run) is a no-op.
     start_altitude_m: float | None = None
     # Altitude hint for the orthographic picker (ortho).
     # Caller passes the current runtime altitude_m so the picker emits

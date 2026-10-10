@@ -384,16 +384,6 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
         va, vb = prov_a.get(key), prov_b.get(key)
         if va is not None and vb is not None and va != vb:
             arm.append(f"{label} differs:  A={va}  B={vb}")
-    # Presence-sensitive on purpose (unlike the arm keys above, whose
-    # absence-tolerant guard would miss flag-on-A / absent-on-B): an
-    # oracle-injected run vs a clean run is never a like-for-like A/B
-    # without the deliberate --allow-provenance-mismatch waiver.
-    oa = (prov_a.get("search_env_flags") or {}).get("SEARCH_ORACLE_INJECT_GT")
-    ob = (prov_b.get("search_env_flags") or {}).get("SEARCH_ORACLE_INJECT_GT")
-    if oa != ob:
-        arm.append(
-            f"oracle GT inject (SEARCH_ORACLE_INJECT_GT) differs:  A={oa}  B={ob}"
-        )
     return fatal, arm
 
 

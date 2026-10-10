@@ -75,10 +75,7 @@ ARM_ENV_FLAGS = (
     "SEARCH_DUMP_REASONING_TRACE",
     "SEARCH_DUMP_COMMIT_STATE",
     "SEARCH_COMMIT_STATE_DIR",
-    # Diagnostic arms must self-identify on the row (oracle_set_run_brief:
-    # an injected run WILL be compared to a real arm eventually), and
-    # per-k resample roots differ only by their pinned seed base.
-    "SEARCH_ORACLE_INJECT_GT",
+    # Per-k resample roots differ only by their pinned seed base.
     "SEARCH_SEED_BASE",
     # Score-affecting toggles that used to ride ambient env unstamped: a
     # row flown with any of these set is a different arm, and ab_report
@@ -143,7 +140,6 @@ AUDITED_ENV = (
     "SEARCH_ALLOW_GT_DIAGNOSTIC",
     "SEARCH_COMMIT_STATE_DIR",
     "SEARCH_LOOK_TOOL",
-    "SEARCH_ORACLE_INJECT_GT",
     "SEARCH_REALSTACK_GT_ISOLATION",
     "SEARCH_REASONER_MODEL",
     "SEARCH_SAMPLING_PRESENCE_PENALTY",

@@ -507,7 +507,6 @@ class SearchLoop:
         ortho_ground_z_m: float | None = None,
         rgbd_dir: str | None = None,
         marker_xy: tuple[float, float] | None = None,
-        oracle_inject_fid: str | None = None,
     ):
         self._cfg = cfg
         self._world_state = world_state
@@ -551,12 +550,6 @@ class SearchLoop:
         # pose (robot_pose).
         self._marker_xy = (
             (float(marker_xy[0]), float(marker_xy[1])) if marker_xy else None
-        )
-        # GT-derived diagnostic viewpoint fid (SEARCH_ORACLE_INJECT_GT arms
-        # only). Threaded onto ``CompilerInput.oracle_inject_fid``; ``None``
-        # on every real arm.
-        self._oracle_inject_fid = (
-            str(oracle_inject_fid) if oracle_inject_fid else None
         )
         self._resolve_look_gate(cfg)
         # Keep the reasoner's system-prompt look legend on the SAME gate as

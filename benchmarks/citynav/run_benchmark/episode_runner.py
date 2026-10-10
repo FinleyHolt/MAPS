@@ -49,7 +49,6 @@ from benchmarks.citynav.run_benchmark.mission_engine import run_mission_episode
 from benchmarks.citynav.run_benchmark.osm_prior import (
     _OsmPriorCtx,
     _build_osm_prior_ctx_from_graph,
-    _gt_nearest_prior_fid,
     _load_osm_prior_ctx,
     _resolve_osm_prior_graph_fids,
     _write_osm_percepts_sidecar,
@@ -301,10 +300,6 @@ def run_episode(
             sam_watchlist_setter = cp.apply_watchlist
 
     search_loop: SearchLoop | None = None
-    # Tier-(c) oracle-set diagnostic: set only
-    # under SEARCH_ORACLE_INJECT_GT=1, stamped onto the metrics row below.
-    _oracle_fid: str | None = None
-    _oracle_dist_m: float | None = None
     if compiler is not None:
         engine_cfg = SearchLoopConfig.from_env()
         # Operator marker mean-xy (admissible CityNav input, ~25 m from the
@@ -319,29 +314,6 @@ def run_episode(
             if _marker_positions
             else None
         )
-        if os.environ.get("SEARCH_ORACLE_INJECT_GT", "").strip() == "1":
-            # GT-nearest prior from the prebake graph at episode start
-            # (the flight/osm_percepts.json sidecar the brief names is a
-            # post-flight artifact and does not exist at compile time).
-            _oracle_fid, _oracle_dist_m = _gt_nearest_prior_fid(
-                graph, episode.target_xy
-            )
-            if _oracle_fid is None:
-                raise RuntimeError(
-                    "SEARCH_ORACLE_INJECT_GT=1 but the prebake graph for "
-                    f"{episode.map_name} has no contour-bearing prior; "
-                    "refusing to fly the diagnostic arm as a silent "
-                    "baseline"
-                )
-            log.warning(
-                "SEARCH_ORACLE_INJECT_GT=1: injecting GT-nearest prior "
-                "%s (%.1f m from target_xy=(%.1f, %.1f)) into the "
-                "compile viewpoint union",
-                _oracle_fid,
-                _oracle_dist_m,
-                episode.target_xy[0],
-                episode.target_xy[1],
-            )
         search_loop = SearchLoop(
             engine_cfg,
             world_state,
@@ -359,7 +331,6 @@ def run_episode(
             # when SEARCH_LOOK_TOOL + ortho are both active.
             rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
             marker_xy=_marker_xy,
-            oracle_inject_fid=_oracle_fid,
         )
         search_loop.start(prebake_graph=graph, runtime_graph=graph)
         # Expose the engine on the EpisodeState so log/record surfaces can
@@ -946,11 +917,6 @@ def run_episode(
     scores["referent_bucket"] = classify_referent(episode.description)
     scores["steps_taken"] = steps_taken
     scores["compile_s"] = round(compile_s, 2)
-    # Present ONLY on SEARCH_ORACLE_INJECT_GT episodes — an injected row
-    # must identify itself; a normal row must not carry an empty marker.
-    if _oracle_fid is not None:
-        scores["oracle_injected_fid"] = _oracle_fid
-        scores["oracle_inject_dist_m"] = round(float(_oracle_dist_m), 1)
     # What the episode spent on the LLM, reduced to row size. The flight dir
     # already holds it twice over (transcript + net_meter), but neither
     # survives a rows-only telemetry pull and both cost a file walk per

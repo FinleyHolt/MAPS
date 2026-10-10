@@ -180,44 +180,6 @@ def _build_osm_prior_ctx_from_graph(graph) -> "_OsmPriorCtx | None":
     return ctx
 
 
-def _gt_nearest_prior_fid(
-    graph, target_xy: tuple[float, float]
-) -> tuple[str | None, float | None]:
-    """GT-nearest prior fid for the tier-(c) oracle-set diagnostic
-   : the contour-bearing prior node whose
-    contour-centroid ``world_xy`` is nearest ``target_xy``. Same prior set
-    and centroid as :func:`_build_osm_prior_ctx_from_graph` (and hence the
-    ``flight/osm_percepts.json`` rows), computed from the graph because the
-    sidecar does not exist at compile time. ``(None, None)`` when the graph
-    carries no contour-bearing prior."""
-    nodes = getattr(graph, "nodes", None)
-    if not isinstance(nodes, dict) or not nodes:
-        return None, None
-    tx, ty = float(target_xy[0]), float(target_xy[1])
-    best_fid: str | None = None
-    best_d = math.inf
-    for fid, node in nodes.items():
-        if getattr(node, "provenance", None) == "detected":
-            continue
-        wc = getattr(node, "world_contour", None)
-        if not wc:
-            continue
-        try:
-            pts = [(float(p[0]), float(p[1])) for p in wc]
-        except (TypeError, ValueError, IndexError):
-            continue
-        if len(pts) < 3:
-            continue
-        cx = sum(p[0] for p in pts) / len(pts)
-        cy = sum(p[1] for p in pts) / len(pts)
-        d = math.hypot(cx - tx, cy - ty)
-        if d < best_d:
-            best_fid, best_d = str(fid), d
-    if best_fid is None:
-        return None, None
-    return best_fid, best_d
-
-
 def _resolve_osm_prior_graph_fids(
     osm_ctx: "_OsmPriorCtx",
     graph,
