@@ -472,7 +472,7 @@ def fly_one(
             view_corners=view_corners,
             assets=assets,
             osm_ctx=osm_ctx,
-            build_prior=True,
+            build_prior=not withheld("prior"),
         )
         for pfid, pattrs, ppx in _built["prior"]:
             search_loop.upsert_prior_percept(pfid, pattrs, px=ppx)
