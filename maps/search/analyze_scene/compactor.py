@@ -71,12 +71,10 @@ invariant and neither violation could arise.
 The budget is CALLER-SUPPLIED: ``target_input_tokens`` comes from the
 server-discovered ``EndpointSpec.input_budget``
 (``maps.llm.endpoint_spec``) — the compactor never guesses the
-served window. On a LIVE run an unmeasurable prompt (tokenizer
-unavailable) RAISES instead of passing through: "can't measure the
-prompt" against a discovered window is exactly the unmeasured overflow
-that produces a server-side 400. Only an explicitly-declared offline run
-(``SEARCH_ENDPOINT_OFFLINE=1``) passes through unmeasured — there is no
-live window to overflow.
+served window. A prompt that cannot be measured (the tokenizer cannot
+load or its chat template cannot render the transcript) raises: sending
+it unmeasured against a discovered window is the overflow that produces
+a server-side 400.
 
 Environment overrides (read at call time):
 
@@ -527,8 +525,6 @@ def _drop_spent_turns(
     candidates = droppable[:-keep_tail]
 
     before = _estimate_input_tokens(messages, model=model, tools=tools)
-    if before is None:
-        return messages, 0, 0
 
     folded: list[tuple[int, int]] = []
     sources: list[str] = []
@@ -544,8 +540,6 @@ def _drop_spent_turns(
                 if i >= folded[0][0] and not any(x <= i < y for x, y in folded)]
         out = head + [_script_block(sources, len(folded), findings)] + tail
         after = _estimate_input_tokens(out, model=model, tools=tools)
-        if after is None:
-            return messages, 0, 0
         freed = before - after
         # BOUNDED, but generously. The caller passes the shortfall to the LOW
         # WATER mark, not to target, so a fire folds ~16k of headroom deeper
@@ -617,46 +611,25 @@ def _estimate_input_tokens(
     *,
     model: str,
     tools: list[dict] | None = None,
-) -> int | None:
+) -> int:
     """Estimate the chat-templated input-token count vLLM will see.
 
-    Uses ``tokenizer.apply_chat_template(... add_generation_prompt=True,
-    tokenize=True)`` so the count matches the production token sequence.
-    Tool-call ``arguments`` are pre-parsed to dicts (see
+    Uses ``tokenizer.apply_chat_template(... add_generation_prompt=True)``
+    so the count matches the production token sequence. Tool-call
+    ``arguments`` are pre-parsed to dicts (see
     ``_messages_for_tokenization``) because the Qwen3 chat template
-    expects a mapping there, not a JSON string. Some tokenizer.json
-    bundles do not accept the ``tools`` kwarg; we fall back to omitting
-    it in that case.
-
-    Returns ``None`` when the tokenizer cannot be loaded (offline run,
-    unknown model alias) or when the chat template still raises after
-    the args fix-up. Callers treat ``None`` as "cannot estimate, skip
-    compaction".
+    expects a mapping there, not a JSON string. A tokenizer that cannot
+    load or a template that cannot render the transcript raises;
+    discovery renders a transcript of every turn kind first, so neither
+    happens mid-run.
     """
     tok = _tokenizer(model)
-    if tok is None:
-        return None
-    prepared = _messages_for_tokenization(messages)
-    try:
-        text = tok.apply_chat_template(
-            prepared,
-            tools=tools,
-            add_generation_prompt=True,
-            tokenize=False,
-        )
-    except (TypeError, ValueError):
-        try:
-            text = tok.apply_chat_template(
-                prepared,
-                add_generation_prompt=True,
-                tokenize=False,
-            )
-        except (TypeError, ValueError) as exc:
-            log.warning(
-                "compactor chat-template render failed: %s; skipping compaction",
-                exc,
-            )
-            return None
+    text = tok.apply_chat_template(
+        _messages_for_tokenization(messages),
+        tools=tools,
+        add_generation_prompt=True,
+        tokenize=False,
+    )
     if not isinstance(text, str):
         # Older transformers versions can return a list of strings when
         # multiple inputs are queued; we always pass one conversation.
@@ -724,13 +697,6 @@ def _validate_invariants(messages: list[dict]) -> None:
 def _enabled() -> bool:
     raw = os.environ.get("SEARCH_COMPACT_ENABLE", "1").strip().lower()
     return raw not in ("0", "false", "no", "off")
-
-
-def _offline() -> bool:
-    """The explicit offline/replay declaration (``SEARCH_ENDPOINT_OFFLINE=1``)
-    — the ONLY condition under which an unmeasurable prompt passes through
-    uncompacted (there is no live window to overflow)."""
-    return os.environ.get("SEARCH_ENDPOINT_OFFLINE", "").strip() == "1"
 
 
 # Verbose per-row RENDER keys in an analyze-op tool-result (geom_program._c /
@@ -885,7 +851,7 @@ def _degrade_oversized_tool_dumps(
         out[i] = new_msg
         n_trimmed += 1
         est = _estimate_input_tokens(out, model=model, tools=tools)
-        if est is not None and est <= target_input_tokens:
+        if est <= target_input_tokens:
             break
     return out, n_trimmed
 
@@ -959,22 +925,6 @@ def compact_transcript(
 
     # 2. Token estimate.
     input_tokens = _estimate_input_tokens(messages, model=model, tools=tools)
-    if input_tokens is None:
-        if _offline():
-            # Declared offline/replay run: no live window to overflow, so an
-            # unmeasurable prompt passes through unchanged.
-            return messages
-        # LIVE run: an unmeasurable prompt against a discovered window IS the
-        # unmeasured overflow that produces an unrecoverable server-side 400.
-        # Fail loud here (discover()'s tokenizer check makes this unreachable
-        # in a correctly-started process).
-        raise CompactionError(
-            f"cannot estimate prompt tokens for model={model!r} on a LIVE "
-            f"run (tokenizer unavailable); refusing to send an unmeasured "
-            f"prompt against the served window (site={site}). Set "
-            f"SEARCH_COMPACT_TOKENIZER_NAME, or declare "
-            f"SEARCH_ENDPOINT_OFFLINE=1 for a replay run."
-        )
 
     # 3. Budget check.
     if input_tokens <= target_input_tokens:
@@ -1048,7 +998,7 @@ def compact_transcript(
                     min(8000, target_input_tokens))
     folded_turns = 0
     out = messages
-    output_tokens: int | None = input_tokens
+    output_tokens = input_tokens
     if input_tokens > target_input_tokens:
         out, folded_turns, freed_fold = _drop_spent_turns(
             out, shed_tokens=input_tokens - low_water, model=model, tools=tools,
@@ -1084,7 +1034,7 @@ def compact_transcript(
         # measured, a 12-turn transcript cleared to 7,161 against a low water
         # of 8,000 and step 2 still took msg[4]. It also biased cleared_dumps
         # +1 on every fire, which is a number readers act on.
-        if output_tokens is not None and output_tokens <= low_water:
+        if output_tokens <= low_water:
             break
         stub = _degrade_tool_result_content(out[i]["content"], keep_color=True)
         if stub is None:
@@ -1096,7 +1046,7 @@ def compact_transcript(
         if '"colors":' in stub:
             colored.append(i)
         output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
-        if output_tokens is None or output_tokens <= low_water:
+        if output_tokens <= low_water:
             break
     color_tables_kept = len(colored)
 
@@ -1104,7 +1054,7 @@ def compact_transcript(
     # per-fid color tables from the stubs oldest-first. (Measured on the
     # run415_base fired corpus: plain stubs clear every carry with margin;
     # always-on color tables pushed 4/59 monster-dump carries back over.)
-    if output_tokens is not None and output_tokens > target_input_tokens:
+    if output_tokens > target_input_tokens:
         for i in colored:
             plain = _degrade_tool_result_content(
                 base[i]["content"], keep_color=False)
@@ -1115,7 +1065,7 @@ def compact_transcript(
             out[i] = new_msg
             color_tables_kept -= 1
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
-            if output_tokens is None or output_tokens <= target_input_tokens:
+            if output_tokens <= target_input_tokens:
                 break
 
     # 7. STEP 4 — degrade the remaining dumps largest-first to plain
@@ -1123,7 +1073,7 @@ def compact_transcript(
     # see _degrade_oversized_tool_dumps). Keeps every candidate fid; the
     # agent can re-derive.
     degraded_dumps = 0
-    if output_tokens is not None and output_tokens > target_input_tokens:
+    if output_tokens > target_input_tokens:
         out, degraded_dumps = _degrade_oversized_tool_dumps(
             out,
             model=model,
@@ -1142,8 +1092,7 @@ def compact_transcript(
     # 17,408 tokens. The census goes and the agent's own code stays, which is
     # the same call step 3 makes between a dump's rows and its fids.
     stripped_findings = False
-    if (output_tokens is not None and output_tokens > target_input_tokens
-            and folded_turns):
+    if output_tokens > target_input_tokens and folded_turns:
         # ONLY the block this fire just created. Stripping every block in the
         # list rewrites blocks EARLIER fires already served, which breaks the
         # prefix at the oldest one -- the deepest possible break, and precisely
@@ -1177,7 +1126,7 @@ def compact_transcript(
     # Text-only transcripts skip it entirely (no list content, nothing to
     # evict), so their compaction stays byte-identical.
     n_evicted = 0
-    if output_tokens is not None and output_tokens > target_input_tokens:
+    if output_tokens > target_input_tokens:
         out, n_evicted, freed = _evict_oldest_crops(
             out, shed_tokens=output_tokens - target_input_tokens
         )
@@ -1193,7 +1142,7 @@ def compact_transcript(
     # images are what will not fit; the alternative at this point is not a
     # richer context, it is a dead episode.
     evicted_current = 0
-    if output_tokens is not None and output_tokens > target_input_tokens:
+    if output_tokens > target_input_tokens:
         out, evicted_current, freed_current = _evict_current_turn_crops(
             out, shed_tokens=output_tokens - target_input_tokens
         )
@@ -1207,11 +1156,7 @@ def compact_transcript(
             )
 
     latency = time.time() - t0
-    if output_tokens is None:
-        # Tokenizer dropped mid-pass (extremely unlikely). Trust the clears;
-        # the invariant sweep below still guards tool-protocol closure.
-        output_tokens = -1
-    elif output_tokens > target_input_tokens:
+    if output_tokens > target_input_tokens:
         # cleared == degraded == 0 here means nothing was clearable at all
         # (no dumps, or every dump already stubbed): the residue is
         # head/prose mass this design deliberately does not touch. Name the

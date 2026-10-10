@@ -161,8 +161,30 @@ def test_case_g_tokenizer_load_failure(monkeypatch):
     monkeypatch.setattr(E, "_require_tokenizer", _REAL_REQUIRE_TOKENIZER)
     import maps.llm.tokenizer as tok
 
-    monkeypatch.setattr(tok, "_tokenizer", lambda m: None)
+    def _unloadable(m):
+        raise RuntimeError(f"tokenizer for served model {m!r} failed to load")
+
+    monkeypatch.setattr(tok, "_tokenizer", _unloadable)
     with pytest.raises(EndpointDiscoveryError, match="tokenizer"):
+        discover(_URL_A)
+
+
+class _NoToolTurnTemplate:
+    """A chat template that renders plain turns and fails on a tool turn."""
+
+    def apply_chat_template(self, messages, tools=None, **_kw):
+        if tools or any(m.get("tool_calls") for m in messages):
+            raise TypeError("template cannot render tool calls")
+        return "rendered"
+
+
+def test_case_g_discovery_refuses_a_template_that_cannot_render_a_tool_turn(monkeypatch):
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("gemma4-26b-a4b-nvfp4", 32768)})
+    monkeypatch.setattr(E, "_require_tokenizer", _REAL_REQUIRE_TOKENIZER)
+    import maps.llm.tokenizer as tok
+
+    monkeypatch.setattr(tok, "_tokenizer", lambda m: _NoToolTurnTemplate())
+    with pytest.raises(EndpointDiscoveryError, match="chat template"):
         discover(_URL_A)
 
 

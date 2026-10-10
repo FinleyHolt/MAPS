@@ -177,23 +177,22 @@ def _five_messages():
     ]
 
 
-def test_unmeasurable_prompt_raises_on_live_run(monkeypatch):
-    monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
-    monkeypatch.delenv("SEARCH_ENDPOINT_OFFLINE", raising=False)
-    monkeypatch.setattr(C, "_estimate_input_tokens", _const(None))
-    with pytest.raises(CompactionError) as ei:
-        compact_transcript(_five_messages(), target_input_tokens=1000,
-                           model="qwen")
-    assert "LIVE" in str(ei.value)
+class _NoToolsTemplate:
+    """A tokenizer whose chat template refuses the ``tools`` kwarg."""
+
+    def apply_chat_template(self, messages, tools=None, **_kw):
+        if tools is not None:
+            raise TypeError("apply_chat_template() got an unexpected keyword argument 'tools'")
+        return "rendered"
+
+    def encode(self, text, add_special_tokens=False):
+        return [0] * len(text)
 
 
-def test_unmeasurable_prompt_passes_through_when_offline(monkeypatch):
-    monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
-    monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")
-    monkeypatch.setattr(C, "_estimate_input_tokens", _const(None))
-    msgs = _five_messages()
-    assert compact_transcript(msgs, target_input_tokens=1000,
-                              model="qwen") is msgs
+def test_sizing_a_prompt_raises_on_a_render_failure(monkeypatch):
+    monkeypatch.setattr(C, "_tokenizer", lambda m: _NoToolsTemplate())
+    with pytest.raises(TypeError, match="tools"):
+        C._estimate_input_tokens(_five_messages(), model="m", tools=[{"type": "function"}])
 
 
 # --------------------------------------------------------------------------- #

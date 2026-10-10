@@ -333,23 +333,48 @@ def _probe_service_health(name: str, urls: str) -> None:
             )
 
 
-def _require_tokenizer(model_id: str) -> str:
-    """Resolve + load the tokenizer for ``model_id`` (case g).
+#: The turns and tool a Reasoner's transcript carries, in the shape the
+#: compactor sizes them (tool-call arguments parsed to a mapping): discovery
+#: renders it once, so a template that cannot render any of them is refused
+#: before a run starts.
+_TEMPLATE_PROBE = {
+    "messages": [
+        {"role": "system", "content": "s"},
+        {"role": "user", "content": "u"},
+        {"role": "assistant", "content": "", "reasoning_content": "r", "tool_calls": [
+            {"id": "c0", "type": "function", "function": {"name": "run", "arguments": {"code": "c"}}}]},
+        {"role": "tool", "tool_call_id": "c0", "content": "t"},
+    ],
+    "tools": [{"type": "function", "function": {
+        "name": "run", "description": "d",
+        "parameters": {"type": "object", "properties": {"code": {"type": "string"}}}}}],
+}
 
-    The tokenizer is a discovered fact: a served model whose tokenizer
-    cannot load aborts at startup naming the unresolved repo, instead of
-    the compactor silently skipping token estimation into an overflow.
-    Lazy import keeps ``spec()``/``install_spec()`` readers free of the
-    transformers import."""
+
+def _require_tokenizer(model_id: str) -> str:
+    """Load the tokenizer for ``model_id`` and render its chat template once
+    over :data:`_TEMPLATE_PROBE` (case g).
+
+    A tokenizer that cannot load, or whose chat template cannot render that
+    transcript, aborts at startup naming the repo, instead of leaving the
+    compactor unable to size a prompt. Lazy import keeps
+    ``spec()``/``install_spec()`` readers free of the transformers import."""
     from maps.llm.tokenizer import _hf_tokenizer_name, _tokenizer
 
     tokenizer_name = _hf_tokenizer_name(model_id)
-    if _tokenizer(model_id) is None:
+    try:
+        tok = _tokenizer(model_id)
+    except RuntimeError as exc:
+        raise EndpointDiscoveryError(str(exc)) from exc
+    try:
+        tok.apply_chat_template(_TEMPLATE_PROBE["messages"], tools=_TEMPLATE_PROBE["tools"],
+                                add_generation_prompt=True, tokenize=False)
+    except Exception as exc:  # noqa: BLE001 - any render failure refuses the tokenizer
         raise EndpointDiscoveryError(
-            f"tokenizer {tokenizer_name!r} for served model {model_id!r} "
-            f"failed to load — the discovered window would be unmeasurable. "
-            f"Set SEARCH_COMPACT_TOKENIZER_NAME to the correct HF repo."
-        )
+            f"tokenizer {tokenizer_name!r} for served model {model_id!r} cannot render its chat "
+            f"template ({type(exc).__name__}: {exc}). Point SEARCH_COMPACT_TOKENIZER_NAME at a "
+            f"repo or directory that carries the model's chat template."
+        ) from exc
     return tokenizer_name
 
 

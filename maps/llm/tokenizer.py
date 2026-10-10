@@ -10,7 +10,6 @@ infrastructure → robotics arrow pointing the right way.
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any
 
@@ -26,13 +25,9 @@ from transformers import AutoTokenizer
 
 from maps.llm.model_cards import CARDS
 
-log = logging.getLogger(__name__)
-
 
 # Process-wide tokenizer cache, keyed by HF name.
 _TOKENIZER_CACHE: dict[str, Any] = {}
-
-_TOKENIZER_LOAD_FAILURES: set[str] = set()
 
 
 def _hf_tokenizer_name(model: str) -> str:
@@ -51,33 +46,23 @@ def _hf_tokenizer_name(model: str) -> str:
 
 
 def _tokenizer(model: str):
-    """Return a cached HuggingFace tokenizer, or ``None`` if load fails.
+    """Return the cached HuggingFace tokenizer for ``model``.
 
-    Lazy-loaded on first call. Returns ``None`` (cached) when the HF repo
-    cannot be resolved (offline runs, unknown model alias, missing
-    ``SEARCH_COMPACT_TOKENIZER_NAME``). ``None`` is tolerated only under a
-    declared offline run (``SEARCH_ENDPOINT_OFFLINE=1``): on a live run
-    ``endpoint_spec.discover()`` verifies the tokenizer loads at startup
-    (its case g), and the compactor raises rather than sending an
-    unmeasured prompt. The first failure logs a WARNING; subsequent calls
-    are silent.
+    Lazy-loaded on first call. A repo that cannot be loaded raises
+    ``RuntimeError`` naming it: discovery (``endpoint_spec.discover``)
+    refuses to start a run on that, and nothing sizes a prompt without a
+    tokenizer.
     """
     hf_name = _hf_tokenizer_name(model)
     cached = _TOKENIZER_CACHE.get(hf_name)
     if cached is not None:
         return cached
-    if hf_name in _TOKENIZER_LOAD_FAILURES:
-        return None
     try:
         tok = AutoTokenizer.from_pretrained(hf_name)
     except Exception as exc:  # noqa: BLE001 — tokenizer load fails for many reasons
-        _TOKENIZER_LOAD_FAILURES.add(hf_name)
-        log.warning(
-            "tokenizer load failed for %r: %s; "
-            "set SEARCH_COMPACT_TOKENIZER_NAME to override.",
-            hf_name,
-            exc,
-        )
-        return None
+        raise RuntimeError(
+            f"tokenizer {hf_name!r} for served model {model!r} failed to load: {exc}. "
+            f"Set SEARCH_COMPACT_TOKENIZER_NAME to the HF repo or local directory that carries it."
+        ) from exc
     _TOKENIZER_CACHE[hf_name] = tok
     return tok

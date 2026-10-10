@@ -149,11 +149,6 @@ def main(argv: list[str] | None = None) -> int:
 
     c = assemble(sensor=args.sensor, agl_m=args.agl_m)
     tok = _tokenizer(args.model)
-    if tok is None:
-        print(f"contract: tokenizer for '{args.model}' unavailable "
-              "(offline, or set SEARCH_COMPACT_TOKENIZER_NAME)",
-              file=sys.stderr)
-        return 2
     rendered = tok.apply_chat_template(
         [{"role": "system", "content": c["system"]},
          {"role": "user", "content": _SAMPLE_INSTRUCTION}],
