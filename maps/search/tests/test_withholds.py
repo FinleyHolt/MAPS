@@ -63,8 +63,9 @@ def test_no_withhold_serves_the_flown_contract(monkeypatch, sensor):
 CASES = {
     "prior": (("SYSTEM", "TOOLS"),
               ("never a coordinate", "do not move you", "holds only PRIOR",
-               "not make it movable", "the prior map alone"),
-              (8, 9), (5, 5), (0, 0)),
+               "not make it movable", "the prior map alone",
+               "prior (map features)", "prior footprints"),
+              (13, 12), (5, 5), (0, 0)),
     "images": ((), (), (0, 0), (0, 0), (0, 0)),
     "look_for": (("SYSTEM", "TOOLS", "SURFACE"),
                  ("look_for", "watched classes", "segmenting your", "ARM EVERY CLASS",

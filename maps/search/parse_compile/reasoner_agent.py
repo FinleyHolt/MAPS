@@ -176,10 +176,12 @@ def _format_sensor_system_message(description: str) -> str:
     return (
         "Sensor rig (active for this run):\n"
         f"{description.strip()}\n\n"
-        "A concept this rig cannot see produces an empty SAM response. SAM "
-        "covers un-cataloged / movable objects; static map features are "
-        "already in the graph as prior footprints with "
-        "geometry and raw OSM tags."
+        "A concept this rig cannot see produces an empty SAM response."
+        + (" This run has no prior map: what SAM segments is the only thing"
+           " in the graph." if withheld("prior") else
+           " SAM covers un-cataloged / movable objects; static map features"
+           " are already in the graph as prior footprints with geometry and"
+           " raw OSM tags.")
         + ("" if withheld("look_for") else
            " SAM segments roads as merged blobs and over-splits buildings.")
     )

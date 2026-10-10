@@ -517,6 +517,13 @@ _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
         ("sub", "-- and never a coordinate.",
          "-- or an [x, y] point, since this run has no prior map."),
         ("sub", "; they do not move you.", "; go_to and explore fly to them too."),
+        ("sub", "provenance-tagged: prior (map features) | runtime (in-flight"
+                " detections). A prior carries raw OSM tags, and a name only"
+                " where OSM has one; a detection's class",
+         "provenance-tagged: runtime (in-flight detections) only, since this"
+         " run has no prior map. A detection's class"),
+        ("sub", " colour-enriches in-view priors and folds new detections in.",
+         " folds new detections in."),
     ],
     "look_for": [
         ("sub", " The flight folds that stop's perception into the"
