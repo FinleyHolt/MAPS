@@ -211,10 +211,9 @@ def test_keep_tail_is_an_env_arm(monkeypatch) -> None:
 
 
 def test_the_text_steps_still_work_on_a_post_fold_list() -> None:
-    """Steps 2-4 had NO coverage on a list the fold had already rewritten.
+    """Steps 2-4 on a list the fold has already rewritten.
 
-    The fixtures in test_compactor_arithmetic.py are sized so the fold does
-    not fire there. That left a real regression window: step 3 reads ``base[i]`` because the
+    The regression window: step 3 reads ``base[i]`` because the
     fold shifts indices, and reverting it to ``messages[i]`` broke no test.
     This drives a fold and THEN forces the text steps, asserting every
     surviving tool result still carries its own call's fids -- which is what an
