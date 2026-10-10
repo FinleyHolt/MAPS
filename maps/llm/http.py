@@ -21,11 +21,11 @@ miss raises `CacheMissError` immediately; there is no silent fall-back
 to a network call.
 
 A call that carries a ``cancel_event`` negotiates an SSE stream from
-vLLM rather than a blocking POST. That is the only way to abort in
-flight: the per-chunk iterator tears the TCP socket down when the
-event fires, releasing vLLM's KV-cache slot immediately, whereas a
-blocking read holds it until the server replies. The aggregated
-``response.json`` is written either way.
+vLLM rather than a blocking POST. When the event fires the call's TCP
+socket is shut down, so a read blocked on a silent serve returns at once
+and the serve frees the KV-cache slot, and the call raises
+:class:`CallCanceled`. An answer that lands as the event fires is never
+handed back, metered or recorded.
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ import hashlib
 import json
 import logging
 import os
+import socket
 import threading
 import time
 import uuid
@@ -124,43 +125,58 @@ class DegenerateCompletion(ValueError):
     """
 
 
-def _start_cancel_watchdog(
-    cancel_event: threading.Event | None, client: httpx.Client
-) -> threading.Thread | None:
-    """Spawn a daemon thread that closes ``client`` when ``cancel_event``
-    is set.
+#: How often an in-flight call's watch looks at its cancel event.
+_CANCEL_POLL_S = 0.25
 
-    Returns the thread (so the caller can let it die naturally after the
-    HTTP call completes; the wait loop exits as soon as the event fires
-    OR the client closes from the normal happy path).
+
+class _CancelWatch:
+    """Aborts one in-flight request the moment its cancel event is set.
+
+    The request runs on a blocking socket, and closing a client from another
+    thread does not wake a blocked read. The watch takes the socket off the
+    transport's ``trace`` extension as it connects and shuts it down on
+    cancel: the read returns at once and the serve sees the connection drop
+    and frees the slot.
     """
-    if cancel_event is None:
-        return None
 
-    def _wait_and_close() -> None:
-        # ``cancel_event.wait`` returns True if set, False on timeout.
-        # We loop short waits so the thread can exit promptly when the
-        # main call returns and closes the client itself (the next
-        # ``client.close()`` is a no-op).
-        while not cancel_event.is_set():
-            if cancel_event.wait(timeout=1.0):
-                break
-            # Cheap aliveness check: the underlying transport is closed
-            # by the main call when it exits the ``with`` block.
-            if client.is_closed:
+    def __init__(self, cancel_event: threading.Event) -> None:
+        self._cancel = cancel_event
+        self._done = threading.Event()
+        self._lock = threading.Lock()
+        self._sockets: list[socket.socket] = []
+        self._aborted = False
+        threading.Thread(target=self._watch, name="llm-cancel-watch", daemon=True).start()
+
+    def trace(self, name: str, info: dict) -> None:
+        if name not in ("connection.connect_tcp.complete", "connection.start_tls.complete"):
+            return
+        stream = info.get("return_value")
+        sock = stream.get_extra_info("socket") if stream is not None else None
+        if sock is None:
+            return
+        with self._lock:
+            self._sockets.append(sock)
+            if self._aborted:
+                _shutdown(sock)
+
+    def _watch(self) -> None:
+        while not self._done.is_set():
+            if self._cancel.wait(_CANCEL_POLL_S):
+                with self._lock:
+                    self._aborted = True
+                    for sock in self._sockets:
+                        _shutdown(sock)
                 return
-        try:
-            client.close()
-        except Exception:  # noqa: BLE001 - best-effort teardown
-            pass
 
-    t = threading.Thread(
-        target=_wait_and_close,
-        name="llm-http-cancel-watchdog",
-        daemon=True,
-    )
-    t.start()
-    return t
+    def close(self) -> None:
+        self._done.set()
+
+
+def _shutdown(sock: socket.socket) -> None:
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass  # already closed
 
 log = logging.getLogger(__name__)
 
@@ -556,129 +572,119 @@ def _stream_chat_completions(
     empty_chunk_count = 0
     first_empty_at: float | None = None
 
-    # Explicit Client so a watchdog thread can tear down the TCP
-    # socket on cancel. ``httpx.stream`` builds an anonymous Client
-    # we can't reach. Without this, ``iter_lines`` stalls between
-    # chunks block on a kernel read with no Python-level cancellation
-    # hook until the server emits another chunk or the read timeout
-    # fires.
-    client = httpx.Client(timeout=timeout)
-    _start_cancel_watchdog(cancel_event, client)
+    # The cancel watch shuts the TCP socket down when the event fires; a
+    # blocked read (the serve silent before its headers or between chunks)
+    # returns at once instead of waiting out the read timeout.
+    watch = _CancelWatch(cancel_event) if cancel_event is not None else None
     try:
-        with client.stream("POST", url, headers=headers, json=streamed_body) as resp:
-            try:
-                if resp.status_code >= 400:
-                    resp.read()  # the body is legible after the stream closes
-                resp.raise_for_status()
-            except Exception:
+        with httpx.Client(timeout=timeout) as client, client.stream(
+            "POST", url, headers=headers, json=streamed_body,
+            extensions={"trace": watch.trace} if watch is not None else None,
+        ) as resp:
+            if resp.status_code >= 400:
+                resp.read()  # the body is legible after the stream closes
+            resp.raise_for_status()
+            for raw_line in resp.iter_lines():
+                # Check cancellation per SSE chunk. The watch also
+                # shuts the socket down from the side; this check
+                # catches a chunk that arrived just before the
+                # cancel fired.
                 if cancel_event is not None and cancel_event.is_set():
-                    raise CallCanceled("canceled during stream open") from None
-                raise
-            try:
-                line_iter = resp.iter_lines()
-                for raw_line in line_iter:
-                    # Check cancellation per SSE chunk. The watchdog
-                    # also closes the socket from the side; this
-                    # check catches a chunk that arrived just before
-                    # the cancel fired.
-                    if cancel_event is not None and cancel_event.is_set():
-                        raise CallCanceled("canceled mid-stream")
-                    # httpx normally yields str, but tests / older
-                    # clients may yield bytes; normalize so the SSE
-                    # parser stays simple.
-                    if isinstance(raw_line, bytes):
-                        raw_line = raw_line.decode("utf-8", errors="replace")
-                    if not raw_line or not raw_line.startswith("data:"):
-                        continue
-                    payload = raw_line[len("data:") :].strip()
-                    if not payload or payload == "[DONE]":
-                        continue
-                    try:
-                        event = json.loads(payload)
-                    except json.JSONDecodeError:
-                        continue
-                    choices = event.get("choices") or []
-                    if not choices:
-                        if event.get("usage"):
-                            usage = event["usage"]
-                        if event.get("model"):
-                            model = event["model"]
-                        continue
-                    choice = choices[0]
-                    delta = choice.get("delta") or {}
-                    if "role" in delta and role is None:
-                        role = delta["role"]
-                    content_delta = delta.get("content")
-                    if content_delta:
-                        aggregated_text.append(content_delta)
-                    # vLLM v0.21+ emits the reasoning span on streaming
-                    # deltas under ``reasoning`` (PR #27752); older
-                    # backends used ``reasoning_content``. Aggregate
-                    # whichever shows up so the reassembled message
-                    # carries the ``<think>`` text on the streaming
-                    # path too (matches the non-streaming branch).
-                    reasoning_delta = delta.get("reasoning") or delta.get(
-                        "reasoning_content"
+                    raise CallCanceled("canceled mid-stream")
+                # httpx normally yields str, but tests / older
+                # clients may yield bytes; normalize so the SSE
+                # parser stays simple.
+                if isinstance(raw_line, bytes):
+                    raw_line = raw_line.decode("utf-8", errors="replace")
+                if not raw_line or not raw_line.startswith("data:"):
+                    continue
+                payload = raw_line[len("data:") :].strip()
+                if not payload or payload == "[DONE]":
+                    continue
+                try:
+                    event = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                choices = event.get("choices") or []
+                if not choices:
+                    if event.get("usage"):
+                        usage = event["usage"]
+                    if event.get("model"):
+                        model = event["model"]
+                    continue
+                choice = choices[0]
+                delta = choice.get("delta") or {}
+                if "role" in delta and role is None:
+                    role = delta["role"]
+                content_delta = delta.get("content")
+                if content_delta:
+                    aggregated_text.append(content_delta)
+                # vLLM v0.21+ emits the reasoning span on streaming
+                # deltas under ``reasoning`` (PR #27752); older
+                # backends used ``reasoning_content``. Aggregate
+                # whichever shows up so the reassembled message
+                # carries the ``<think>`` text on the streaming
+                # path too (matches the non-streaming branch).
+                reasoning_delta = delta.get("reasoning") or delta.get(
+                    "reasoning_content"
+                )
+                if reasoning_delta:
+                    aggregated_reasoning.append(reasoning_delta)
+                for tc in delta.get("tool_calls") or []:
+                    idx = tc.get("index", 0)
+                    slot = aggregated_tool_calls.setdefault(
+                        idx,
+                        {
+                            "id": "",
+                            "type": "function",
+                            "function": {"name": "", "arguments": ""},
+                        },
                     )
-                    if reasoning_delta:
-                        aggregated_reasoning.append(reasoning_delta)
-                    for tc in delta.get("tool_calls") or []:
-                        idx = tc.get("index", 0)
-                        slot = aggregated_tool_calls.setdefault(
-                            idx,
-                            {
-                                "id": "",
-                                "type": "function",
-                                "function": {"name": "", "arguments": ""},
-                            },
-                        )
-                        if tc.get("id"):
-                            slot["id"] = tc["id"]
-                        fn = tc.get("function") or {}
-                        if fn.get("name"):
-                            slot["function"]["name"] = fn["name"]
-                        if fn.get("arguments"):
-                            slot["function"]["arguments"] += fn["arguments"]
-                    fin = choice.get("finish_reason")
-                    if fin is not None:
-                        finish_reason = fin
-                    has_signal = bool(
-                        content_delta
-                        or reasoning_delta
-                        or delta.get("tool_calls")
-                        or fin is not None
-                        or delta.get("role")
+                    if tc.get("id"):
+                        slot["id"] = tc["id"]
+                    fn = tc.get("function") or {}
+                    if fn.get("name"):
+                        slot["function"]["name"] = fn["name"]
+                    if fn.get("arguments"):
+                        slot["function"]["arguments"] += fn["arguments"]
+                fin = choice.get("finish_reason")
+                if fin is not None:
+                    finish_reason = fin
+                has_signal = bool(
+                    content_delta
+                    or reasoning_delta
+                    or delta.get("tool_calls")
+                    or fin is not None
+                    or delta.get("role")
+                )
+                if has_signal:
+                    empty_chunk_count = 0
+                    first_empty_at = None
+                else:
+                    empty_chunk_count += 1
+                    now = time.monotonic()
+                    if first_empty_at is None:
+                        first_empty_at = now
+                    timed_out = (
+                        empty_stream_timeout_s > 0
+                        and now - first_empty_at >= empty_stream_timeout_s
                     )
-                    if has_signal:
-                        empty_chunk_count = 0
-                        first_empty_at = None
-                    else:
-                        empty_chunk_count += 1
-                        now = time.monotonic()
-                        if first_empty_at is None:
-                            first_empty_at = now
-                        timed_out = (
-                            empty_stream_timeout_s > 0
-                            and now - first_empty_at >= empty_stream_timeout_s
+                    chunk_capped = (
+                        empty_stream_max_chunks > 0
+                        and empty_chunk_count >= empty_stream_max_chunks
+                    )
+                    if timed_out or chunk_capped:
+                        raise httpx.ReadTimeout(
+                            "LLM stream emitted only empty deltas "
+                            f"for {empty_chunk_count} chunks"
                         )
-                        chunk_capped = (
-                            empty_stream_max_chunks > 0
-                            and empty_chunk_count >= empty_stream_max_chunks
-                        )
-                        if timed_out or chunk_capped:
-                            raise httpx.ReadTimeout(
-                                "LLM stream emitted only empty deltas "
-                                f"for {empty_chunk_count} chunks"
-                            )
-            except (httpx.RequestError, httpx.HTTPError):
-                if cancel_event is not None and cancel_event.is_set():
-                    raise CallCanceled("canceled mid-stream") from None
-                raise
+    except httpx.HTTPError:
+        if cancel_event is not None and cancel_event.is_set():
+            raise CallCanceled("canceled in flight") from None
+        raise
     finally:
-        try:
-            client.close()
-        except Exception:  # noqa: BLE001 - best-effort teardown
-            pass
+        if watch is not None:
+            watch.close()
 
     message: dict = {"role": role or "assistant", "content": "".join(aggregated_text)}
     if aggregated_reasoning:
@@ -854,18 +860,8 @@ def _chat_completions_raw(
                     cancel_event=cancel_event,
                 )
             else:
-                # Use an explicit Client so a watchdog thread can
-                # tear down the underlying TCP socket on cancel.
-                # ``httpx.post`` builds + discards a Client per
-                # call, leaving no handle for cancellation.
                 with httpx.Client(timeout=timeout) as client:
-                    _start_cancel_watchdog(cancel_event, client)
-                    try:
-                        r = client.post(url, headers=headers, json=body)
-                    except (httpx.RequestError, httpx.HTTPError):
-                        if cancel_event is not None and cancel_event.is_set():
-                            raise CallCanceled("canceled mid-request") from None
-                        raise
+                    r = client.post(url, headers=headers, json=body)
                 if 500 <= r.status_code < 600 and attempt < max_retries:
                     log.warning(
                         "LLM endpoint %d on attempt %d/%d; retrying in %.1fs",
@@ -888,6 +884,9 @@ def _chat_completions_raw(
                     )
                 r.raise_for_status()
                 response_json = r.json()
+            if cancel_event is not None and cancel_event.is_set():
+                # The answer landed as the caller gave up on it: never used.
+                raise CallCanceled("canceled as the answer landed")
             NetMeter.instance().record(
                 "reasoner_chat",
                 serialized_size(body),
