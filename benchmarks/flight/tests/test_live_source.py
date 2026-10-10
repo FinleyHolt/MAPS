@@ -145,3 +145,20 @@ def test_a_ring_frame_reads_the_graph_under_the_corrector_s_lock(built, make_twi
     live.graph.estimate = lambda t: estimates.append(live._correcting.locked()) or real(t)
     live._register_ring(seq, posed, t_host)
     assert estimates == [True]
+
+
+def test_the_mosaic_marks_imaged_only_the_ground_a_frame_lands_on():
+    """A frame turned 45 degrees covers half its bounding square; the rest is
+    unobserved and the alpha says so."""
+    import math
+
+    import numpy as np
+
+    from benchmarks.flight.live_source import composite
+
+    r = 50.0 * math.sqrt(2.0)
+    corners = np.asarray([[[0.0, r], [r, 0.0], [0.0, -r], [-r, 0.0]]])   # a diamond, 100 m on a side
+    _rgb, alpha, _extent, placed = composite(corners, [np.full((100, 100, 3), 200, np.uint8)], gsd_m=1.0)
+    assert placed == 1
+    share = float((alpha > 0).mean())
+    assert abs(share - 0.5) < 0.03, share

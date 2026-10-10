@@ -166,8 +166,11 @@ def composite(corners: np.ndarray, images, *, gsd_m: float
         warped = cv2.warpPerspective(img, hom, size, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
         dist = cv2.warpPerspective(_radius(h, w), hom, size, flags=cv2.INTER_LINEAR,
                                    borderMode=cv2.BORDER_CONSTANT, borderValue=float(np.finfo(np.float32).max))
+        # The pixels the frame's quad lands on: only these are imaged.
+        on = cv2.warpPerspective(np.ones((h, w), np.uint8), hom, size, flags=cv2.INTER_NEAREST,
+                                 borderMode=cv2.BORDER_CONSTANT, borderValue=0) > 0
         win = (slice(c0[1], c1[1]), slice(c0[0], c1[0]))
-        take = dist < nearest[win]
+        take = on & (dist < nearest[win])
         nearest[win][take] = dist[take]
         rgb[win][take] = warped[take]
         placed += 1
