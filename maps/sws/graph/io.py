@@ -52,10 +52,6 @@ def _node_to_dict(node: MapObject) -> dict:
         "orientation": node.orientation,
         "orientation_confidence": node.orientation_confidence,
     }
-    if node.geo is not None:
-        nd["geo"] = list(node.geo)
-    if node.boundary is not None:
-        nd["boundary"] = node.boundary
     if node.provenance != "prebaked":
         nd["provenance"] = node.provenance
     if node.first_seen_t is not None:
@@ -68,12 +64,8 @@ def _node_to_dict(node: MapObject) -> dict:
         nd["best_view_px"] = int(node.best_view_px)
     if node.confidence != 1.0:
         nd["confidence"] = node.confidence
-    if node.is_target_confidence != 0.0:
-        nd["is_target_confidence"] = node.is_target_confidence
     if node.embedding is not None:
         nd["embedding"] = list(node.embedding)
-    if node.descriptions:
-        nd["descriptions"] = list(node.descriptions)
     if node.semantic_attributes:
         nd["semantic_attributes"] = {
             k: dict(v) for k, v in node.semantic_attributes.items()
@@ -101,7 +93,6 @@ def _node_to_dict(node: MapObject) -> dict:
 
 
 def _dict_to_node(nd: dict) -> MapObject:
-    geo_raw = nd.get("geo")
     embedding_raw = nd.get("embedding")
     return MapObject(
         id=nd["id"],
@@ -113,17 +104,13 @@ def _dict_to_node(nd: dict) -> MapObject:
         cell_count=nd["cell_count"],
         orientation=nd.get("orientation"),
         orientation_confidence=nd.get("orientation_confidence", 0.0),
-        geo=tuple(geo_raw) if geo_raw else None,
-        boundary=nd.get("boundary"),
         provenance=nd.get("provenance", "prebaked"),
         first_seen_t=nd.get("first_seen_t"),
         last_seen_t=nd.get("last_seen_t"),
         observation_count=nd.get("observation_count", 0),
         best_view_px=nd.get("best_view_px", 0),
         confidence=nd.get("confidence", 1.0),
-        is_target_confidence=nd.get("is_target_confidence", 0.0),
         embedding=list(embedding_raw) if embedding_raw else None,
-        descriptions=list(nd.get("descriptions", [])),
         semantic_attributes={
             k: {str(val): int(cnt) for val, cnt in counts.items()}
             for k, counts in nd.get("semantic_attributes", {}).items()

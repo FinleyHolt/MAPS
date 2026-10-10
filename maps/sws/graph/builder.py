@@ -25,12 +25,11 @@ _NON_FEATURE_KEYS: frozenset[str] = frozenset(
 )
 
 
-# Geometry / bookkeeping keys stored on dedicated MapObject fields (or
-# consumed by the builder itself), never as tags. Everything else on a feature
-# rides into ``MapObject.tags`` verbatim — the agent pulls semantics from the
-# tags at runtime; there is no semantic tag denylist. ``descriptions`` is the
-# GT-label wall, stored on ``MapObject.descriptions`` for non-LLM
-# consumers only.
+# Geometry / bookkeeping keys stored on dedicated MapObject fields, consumed
+# by the builder itself, or dropped, never as tags. Everything else on a
+# feature rides into ``MapObject.tags`` verbatim — the agent pulls semantics
+# from the tags at runtime; there is no semantic tag denylist.
+# ``descriptions`` is the GT-label wall and never reaches a node.
 _TAG_SKIP_KEYS = frozenset(
     {
         "cells",
@@ -44,7 +43,7 @@ _TAG_SKIP_KEYS = frozenset(
         "lon",
         "orientation",
         "name",  # stored separately on MapObject
-        "descriptions",  # stored on MapObject.descriptions, not in tags
+        "descriptions",  # the GT-label wall: never a tag
         "cityref_id",  # explicitly added to tags below; skip generic scrape
         "object_type",
         "altitude_m",
@@ -186,16 +185,6 @@ def _build_node(
         _axis_resid_m = 0.0
         _cl_method = ""
 
-    # Read pre-computed WGS84 centroid if available
-    geo = None
-    if "centroid_lat" in feat and "centroid_lon" in feat:
-        geo = (feat["centroid_lat"], feat["centroid_lon"])
-    elif "lat" in feat and "lon" in feat:  # POIs use lat/lon directly
-        geo = (feat["lat"], feat["lon"])
-
-    descriptions_raw = feat.get("descriptions") or []
-    descriptions = [str(d) for d in descriptions_raw if d]
-
     # The feature's EXACT world-meter vertex chain from the bake — a ring, a
     # way, or a node's single vertex (benchmarks/citynav/bake/city.py).
     # Stamped verbatim onto MapObject.world_contour; build_surface prefers it
@@ -233,8 +222,6 @@ def _build_node(
         cell_count=len(cells),
         orientation=angle,
         orientation_confidence=confidence,
-        geo=geo,
-        descriptions=descriptions,
         cells=arr.astype(np.int32, copy=False),
         world_contour=world_contour,
         centerline=_centerline,

@@ -35,8 +35,8 @@ class GridDomain:
 class MapObject:
     """A feature in the spatial graph.
 
-    Its mask is materialized on demand from ``cells``/``boundary``; its
-    centroid is ``centroid`` (row, col).
+    Its mask is materialized on demand from ``cells``; its centroid is
+    ``centroid`` (row, col).
 
     Runtime fields (``provenance="detected"``) carry per-observation metadata
     so the orchestrator can trust-weight and age detected nodes independently
@@ -53,32 +53,6 @@ class MapObject:
     cell_count: int
     orientation: float | None  # Degrees [0, 180), 0=N-S, 90=E-W
     orientation_confidence: float = 0.0  # 0=round/ambiguous, 1=clearly linear
-    geo: tuple[float, float] | None = None  # (lat, lon) WGS84 centroid
-    boundary: list[list[float]] | None = None  # [[row, col, nr, nc], ...]
-    # Natural-language descriptions of this object (CityRefer ships ~4-6 per
-    # object, e.g. "this is a building with a gray roof and red walls...").
-    # Prebaked datasets without per-object NL leave this empty.
-    #
-    # GROUND-TRUTH LABEL LEAK: do NOT surface this field to any runtime LLM
-    # agent. That is the single persistent MAPS Reasoner across every round
-    # it runs — round-0 grounding, the per-stop reasoner rounds, and
-    # the deterministic end-of-tour commit all share the one reasoner context
-    # and inherit this constraint. The per-object descriptions are the
-    # superset CityRefer drew the operator instruction from; the per-episode
-    # instruction is one item of this list. An agent that can read both can
-    # string-match its instruction back to the matching catalog entry and
-    # recover ground-truth target id without ever looking at the world. The
-    # CityNav benchmark protocol provides only the single per-episode
-    # instruction (see benchmarks/citynav/bake/city.py for
-    # the bake-side rule and maps/search/analyze_scene/geom_program.py
-    # for the find-op surface wall — ``_anchor_search_text`` /
-    # ``_SEARCH_TAG_DENYLIST``; the ``find`` op absorbed the old
-    # ``search_features`` / ``get_feature_context``).
-    # New tools, new dashboards, and new evaluators all inherit this
-    # constraint — if a feature dict is going to an LLM, descriptions stays
-    # behind. The field stays on MapObject so non-LLM consumers (audit,
-    # ground-truth scoring, dataset analysis) can still read it.
-    descriptions: list[str] = field(default_factory=list)
     provenance: str = "prebaked"  # "prebaked" (OSM / CityRefer) | "detected"
     # Prebake feature id this detection corresponds to (class-compatible
     # prebake whose footprint overlaps the detection mask above threshold
@@ -102,10 +76,6 @@ class MapObject:
     # the one close read.)
     best_view_px: int = 0
     confidence: float = 1.0  # aggregated detection confidence [0,1]
-    # P(this node is the instruction's referent | observations). Default 0.0
-    # so unscored nodes bias the planner zero (the visibility multiplier is
-    # 1 + lambda * field). Populated at runtime by the reasoner's scoring.
-    is_target_confidence: float = 0.0
     embedding: list[float] | None = None  # optional vector for dedup / re-id
     semantic_attributes: dict[str, dict[str, int]] = field(default_factory=dict)
     # Tracker-assigned stable identity across frames. None for prebake nodes
