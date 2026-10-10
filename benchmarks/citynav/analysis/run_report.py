@@ -262,6 +262,12 @@ def report(root: Path) -> dict[str, dict]:
            if isinstance(m.get("spl_pos"), (int, float))]
     print(f"mean spl_pos = {sum(spl) / len(spl):.4f} (n={len(spl)})" if spl
           else "mean spl_pos = -- (no scored row carries spl_pos)")
+    # SAHI tiles the segmenter could not answer: those frames were
+    # partial-blind, so a run that lost any says so beside its SR.
+    tiles = [int(m.get("sam_tiles_failed") or 0) for m in scored.values()]
+    if any(tiles):
+        print(f"SAHI tiles failed = {sum(tiles)} over {sum(1 for t in tiles if t)} "
+              f"of {n} scored episode(s)")
     shaped = print_precise(list(scored.values()), n)
     if _criterion is None:
         # A run flown before the rows carried the stamp. Both readings are

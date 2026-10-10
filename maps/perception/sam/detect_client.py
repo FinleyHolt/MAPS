@@ -18,9 +18,10 @@ from __future__ import annotations
 import base64
 import itertools
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from PIL import Image
@@ -720,6 +721,14 @@ class SamDetectClient:
     # 4-wide client in front of 7 replicas leaves three idle.
     sahi_tile_workers: int | None = None
     decode_workers: int = 4
+    # SAHI tiles whose ``/segment`` gave no usable response after retries,
+    # over this client's life (one episode: the runner builds a client per
+    # episode and stamps the count on the row as ``sam_tiles_failed``). A
+    # frame with some failed tiles is partial-blind, not empty.
+    sahi_tiles_failed: int = field(default=0, init=False)
+    _failed_lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False, compare=False
+    )
 
     def detect(
         self,
@@ -946,6 +955,9 @@ class SamDetectClient:
                 n_failed += 1
             else:
                 tiledets.extend(tile_out)
+        if n_failed:
+            with self._failed_lock:
+                self.sahi_tiles_failed += n_failed
         if bounds and n_failed == len(bounds):
             # TOTAL outage: EVERY tile failed to get a usable response (each
             # returned ``None`` after retries). That is a whole-frame SAM

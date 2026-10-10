@@ -627,6 +627,7 @@ def run_episode(
             _scores["commit_to_target_m"] = None
             _scores["commit_would_score"] = None
             _scores["commit_step"] = None
+            _scores["sam_tiles_failed"] = int(getattr(perception, "sahi_tiles_failed", 0))
             _scores["mission"] = {
                 "flights_flown": 0,
                 "ended_by": mission_out["reply"].ended_by,
@@ -891,6 +892,9 @@ def run_episode(
     # commit_step: scout-fired step (preserves longitudinal score
     # comparability with pre-refactor traces).
     scores["commit_step"] = snap.lock_step if snap is not None else None
+    # SAHI tiles the segmenter could not answer: their objects are missing
+    # from those frames, which the episode survives.
+    scores["sam_tiles_failed"] = int(getattr(perception, "sahi_tiles_failed", 0))
 
     rec: dict[str, Any] = {
         "episode_id": episode.episode_id,
