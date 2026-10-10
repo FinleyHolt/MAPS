@@ -670,6 +670,7 @@ def main(argv: list[str] | None = None) -> int:
         from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
         from benchmarks.flight.live_source import open_live  # noqa: PLC0415
         from benchmarks.flight.recorded_ring import RecordedRing, run_window  # noqa: PLC0415
+        from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
         from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
 
         t0 = time.perf_counter()
@@ -679,7 +680,7 @@ def main(argv: list[str] | None = None) -> int:
         log.info("the ring over %s: %d frames kept, %.1f s to read", args.frames.name, len(ring.rows),
                  time.perf_counter() - t0)
         live = open_live(vehicle=ring, tiles_dir=TILES_DIR, map_name=str(rec.row.get("map_name") or "calcity"),
-                         sensor=resolve_sensor("oryx_orx32_25mm_nadir"), boresight_path=args.boresight,
+                         sensor=resolve_sensor(load_config(args.config).sensor), boresight_path=args.boresight,
                          register_raster=args.raster)
     if args.forced:
         mission, run = fly(rec, out, forced=True, live=live, config=args.config)
