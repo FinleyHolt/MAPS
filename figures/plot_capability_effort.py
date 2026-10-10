@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import sys
 from pathlib import Path
 
 from figures.capability_effort_arms import build
@@ -239,6 +240,11 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     data = build([r for r in args.roots if r.is_dir()])
+    splits = sorted({str(r["split"]) for r in data["records"]})
+    if args.split not in splits:
+        print(f"plot_capability_effort: no root carries split {args.split!r}; the roots carry {splits}",
+              file=sys.stderr)
+        return 2
     stem = args.stem or f"capability_effort_{args.split}_{args.cost}"
     args.out_dir.mkdir(parents=True, exist_ok=True)
     for theme in THEMES:

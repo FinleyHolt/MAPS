@@ -100,3 +100,10 @@ def test_the_effort_ladder_titles_itself_from_the_manifests(tmp_path):
     assert "Cal City: success and error" in svg
     assert "inkling-small, 4 arms, 3 episodes each, commit abcdef0" in svg
     assert "a second arm at an effort already on the line" in svg
+
+
+def test_a_split_no_root_carries_exits_nonzero_naming_the_splits_there_are(tmp_path, capsys):
+    root = _arm(tmp_path, "q", "qwen36-35b-a3b", "0.9", [1, 0], split="test_unseen")
+    assert plot_capability_effort.main([str(root), "--split", "calcity", "--out-dir", str(tmp_path / "f")]) == 2
+    assert "test_unseen" in capsys.readouterr().err
+    assert not (tmp_path / "f").exists()
