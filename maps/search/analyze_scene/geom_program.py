@@ -3539,11 +3539,10 @@ def run_program(cands, anchors, program, seed_results=None,
                     "cue-matching rows to the top without dropping any.")
             _reject_renamed_key(key)
             items = _auto_attach(items, [key])
-            _LEGAL_FILTER_OPS = FILTER_OPS
-            if opr not in _LEGAL_FILTER_OPS:
+            if opr not in FILTER_OPS:
                 # Fail loud: a silent dead-filter would hide real matches.
                 raise ProgramError(
-                    f"unknown filter_items op {opr!r}; legal: {list(_LEGAL_FILTER_OPS)}")
+                    f"unknown filter_items op {opr!r}; legal: {list(FILTER_OPS)}")
             # ``on_side`` compares against the column's own SIGN, so like
             # ``truthy`` it carries no value of its own.
             if opr not in ("truthy", "on_side") and val is None:
@@ -3680,13 +3679,12 @@ def run_program(cands, anchors, program, seed_results=None,
                 excluded: list = []
                 for it in items:
                     (kept if _ok(it) else excluded).append(it)
-                _absv = opr.startswith("abs_")
 
                 def _eff(it):
                     v = it.get(key) if isinstance(it, dict) else None
                     if isinstance(v, bool) or not isinstance(v, (int, float)):
                         return None
-                    return abs(v) if _absv else v
+                    return v
 
                 stats: dict = {"cut": f"{len(items)}->{len(kept)}"}
                 _excl_vals = [(e, it) for it in excluded
@@ -3805,28 +3803,15 @@ def run_program(cands, anchors, program, seed_results=None,
                 and isinstance(o.get("args"), dict) and o["args"].get("query")
             }
 
-            def _ref_base_of_token(token):
-                """The bare ref base of a token -- sigil-tolerant (a leading
-                ``$`` is a slip) and path-stripped (``r2.members[0]`` -> ``r2``,
-                bare ``road_3`` -> ``road_3``)."""
-                t = str(token)
-                t = t[1:] if t.startswith("$") else t
-                m = re.match(r"^([^.\[\]]+)", t)
-                return m.group(1) if m else t
-
             def _is_query_find_token(token):
-                return _ref_base_of_token(token) in _query_find_refs
-
-            def _sanitize_label(lbl, fallback="ref"):
-                # the ONE naming-law base (module-level _sanitize_token)
-                return _sanitize_token(lbl, fallback)
+                return _ref_base(token) in _query_find_refs
 
             def _node_label(node):
                 """The node-derived column label: the FID -- what the model
                 types, and the same whether the ref was a bare fid or an rN
                 that resolved to it. The display name shows in the header
                 (ref_name)."""
-                return _sanitize_label(node["fid"])
+                return _sanitize_token(node["fid"])
 
             def _set_label(arg_token, fallback):
                 """A short TOKEN-derived label for a SET/axis arg
@@ -3834,7 +3819,7 @@ def run_program(cands, anchors, program, seed_results=None,
                 'cands', a bare fid -> the fid, an inline list -> the
                 fallback. Sigil-tolerant on a '$' slip."""
                 if isinstance(arg_token, str):
-                    return _sanitize_label(_ref_base_of_token(arg_token), fallback)
+                    return _sanitize_token(_ref_base(arg_token), fallback)
                 return fallback
 
             def _arg_row(arg):
@@ -3893,7 +3878,7 @@ def run_program(cands, anchors, program, seed_results=None,
                             "compare refs object element must be {ref: <fid|rN|"
                             f"[x,y]>, as: 'label'}}; got keys {sorted(el)}.{_sig_suffix()}")
                     if el.get("as"):
-                        as_label = _sanitize_label(el["as"])
+                        as_label = _sanitize_token(el["as"])
                     ref_el = el["ref"]
                     if (isinstance(ref_el, (list, tuple)) and ref_el
                             and all(isinstance(x, str) for x in ref_el)):
@@ -3927,7 +3912,7 @@ def run_program(cands, anchors, program, seed_results=None,
                                     # it is usually empty: nothing is
                                     # segmented until look_for names the class
                                     # and a flight goes over the place.
-                                    _lbl = as_label or _sanitize_label(x)
+                                    _lbl = as_label or _sanitize_token(x)
                                     raise ProgramError(
                                         f"{_lbl} is empty, so 'distance to "
                                         f"{_lbl}' is undefined on every row "
@@ -3946,7 +3931,7 @@ def run_program(cands, anchors, program, seed_results=None,
                                 # nothing (see _UNION_MAX_MEMBERS).
                                 if len(_got) > _UNION_MAX_MEMBERS:
                                     raise ProgramError(
-                                        f"{as_label or _sanitize_label(x)} "
+                                        f"{as_label or _sanitize_token(x)} "
                                         f"holds {len(_got)} rows and a union "
                                         f"folds at most "
                                         f"{_UNION_MAX_MEMBERS}: measuring to "
@@ -4021,7 +4006,7 @@ def run_program(cands, anchors, program, seed_results=None,
                 # labeled from the node's FID, whether passed bare or as an
                 # rN. Constructed geometry keeps the token-derived label; an
                 # as:'label' always overrides.
-                tok_base = _sanitize_label(_ref_base_of_token(ref_el))
+                tok_base = _sanitize_token(_ref_base(ref_el))
                 if isinstance(v, str) and v in by_fid:
                     ref_specs.append(("row", by_fid[v], as_label,
                                       by_fid[v], None))
@@ -4174,7 +4159,7 @@ def run_program(cands, anchors, program, seed_results=None,
                     if (f_ref is None) == (f_toward is None):
                         raise ProgramError(
                             "compare " + _FRAME_FORMS + _sig_suffix())
-                flab = (_sanitize_label(frame_arg["as"])
+                flab = (_sanitize_token(frame_arg["as"])
                         if frame_arg.get("as") else None)
                 if frame_arg.get("scale_m") is not None:
                     raise ProgramError(
