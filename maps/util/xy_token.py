@@ -32,3 +32,10 @@ def format_xy_token(x: float, y: float) -> str:
     mission contract's ``target_xy`` arrays normalize through here at the
     accept site so every downstream consumer keeps reading one grammar."""
     return f"[{x:g}, {y:g}]"
+
+
+def is_xy(v) -> bool:
+    """True for a bare ``[x, y]`` point value: a list or tuple of exactly two
+    numbers (a bool is not a number here)."""
+    return (isinstance(v, (list, tuple)) and len(v) == 2
+            and all(isinstance(c, (int, float)) and not isinstance(c, bool) for c in v))
