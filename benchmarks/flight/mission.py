@@ -54,9 +54,8 @@ log = logging.getLogger("flight.mission")
 
 #: How long a leg may fly before its arrival is given up, counted from the
 #: aircraft leaving the ground. A C-12 pass is a 9 to 12 km lap at a 1.5 km
-#: turn radius and the crew go round again on a miss, so five minutes ended
-#: most legs with the aircraft still flying the pass; the cap stays so a leg
-#: the crew never fly still ends the mission.
+#: turn radius and the crew go round again on a miss; the cap ends a leg the
+#: crew never fly.
 ARRIVAL_TIMEOUT_S = 1800.0
 #: A leg has arrived when the recording holds this share of the area it was
 #: flown for. ponytail: a share rather than all of it, because a footprint's
