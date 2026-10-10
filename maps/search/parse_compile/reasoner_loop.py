@@ -405,12 +405,6 @@ log = logging.getLogger(__name__)
 # never a deliberate no-call: repair it, never carry on it.
 ENVELOPE_RESIDUE = ("<tool_call", "</tool_call", "<function")
 
-# The explicit carry word the no-call repair nudge offers ("call a tool, or
-# reply CARRY"). Uppercase, whole-word. The matcher is BUILT from the word so
-# the served vocabulary and the predicate that honors it cannot drift.
-CARRY_WORD = "CARRY"
-_CARRY_RE = re.compile(rf"\b{CARRY_WORD}\b")
-
 # Consecutive replies carrying ZERO flights that end the mission: the first
 # two draw NO_FLIGHT_REPLY_NUDGE, the third is a CONFIDENT ABSTAIN and ends
 # it. Three, because the turns are not free -- an episode arguing about
@@ -748,10 +742,10 @@ def _mission_sanitize_moves(raw, staged) -> tuple[list[dict], list[dict]]:
     """Normalize the mission act's ``move`` list.
 
     Each entry is ONE slot — a staged handle (vN, resolved to its stand
-    point), a literal fid / view-position sentinel, an [x, y] array, or
-    the canonical ``"[x, y]"`` token. A world point normalizes to the
-    canonical token under ``target_fid`` (``maps.util.xy_token``) so
-    every downstream consumer keeps reading the ONE wire grammar; a
+    point), a literal fid / view-position sentinel, or the canonical
+    ``"[x, y]"`` token. A staged handle normalizes to the canonical token
+    under ``target_fid`` (``maps.util.xy_token``) so every downstream
+    consumer keeps reading the ONE wire grammar; a
     vN-resolved item carries ``via`` so the flight report can echo the
     handle. Returns ``(accepted_items, item_errors)`` — per-entry errors
     carry the entry's list index so valid siblings still fly. The round
@@ -764,18 +758,6 @@ def _mission_sanitize_moves(raw, staged) -> tuple[list[dict], list[dict]]:
     accepted: list[dict] = []
     errors: list[dict] = []
     for i, it in enumerate(items):
-        if isinstance(it, (list, tuple)):
-            ok = (len(it) == 2
-                  and all(isinstance(v, (int, float))
-                          and not isinstance(v, bool) for v in it))
-            if not ok:
-                errors.append({"index": i, "error": (
-                    "a move point is an [x, y] array of two numbers "
-                    "(e.g. [900, 640])")})
-                continue
-            accepted.append(
-                {"target_fid": format_xy_token(float(it[0]), float(it[1]))})
-            continue
         if not isinstance(it, str) or not it.strip():
             errors.append({"index": i, "error": (
                 "each move entry is a staged handle (vN), a literal fid, "
@@ -938,21 +920,14 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
     ``geometry_sink`` is its dashboard-audit sibling: the resolved compare
     geometry under ``sink["ops"]`` (see :func:`run_program`), never model-facing.
 
-    The namespace's ``staged``/``standing``/``standing_anchor`` thread through
-    to :func:`run_program` (the staged-viewpoint side columns and the standing
-    anchor's ``distance to <label>`` ride every find result).
+    The namespace's ``staged``/``standing`` thread through to
+    :func:`run_program` (the staged-viewpoint side columns ride every find
+    result).
 
     Pure + in-process (no subprocess): the op vocabulary is the only affordance,
     so there is nothing to sandbox. A malformed program returns ``{"error": ...}``
     for the agent to read and retry (self-recovery), never raises into the loop.
     """
-    if isinstance(args, dict) and args.get("__args_parse_error"):
-        # The call's arguments JSON did not parse — say THAT, not
-        # "program must be an object" (the program was never evaluated).
-        return {"error": (
-            "your tool-call arguments did not parse as JSON "
-            f"({args['__args_parse_error']}); the program was not evaluated "
-            "-- re-emit the call")}
     program = (args or {}).get("program")
     if not isinstance(program, dict) or not program.get("ops"):
         return {"error": "program must be an object with a non-empty 'ops' array"}
@@ -964,8 +939,7 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
                            seed_results=seed_results,
                            geometry_sink=geometry_sink,
                            staged=ns.get("staged"),
-                           standing=ns.get("standing"),
-                           standing_anchor=ns.get("standing_anchor"))
+                           standing=ns.get("standing"))
     except _ProgramError as exc:
         _err = str(exc)
         if preflight and _program_requests_color(program):
@@ -1145,21 +1119,6 @@ def _envelope_residue(text: str) -> bool:
     repair, NEVER a carry."""
     t = str(text or "")
     return any(m in t for m in ENVELOPE_RESIDUE)
-
-
-# A decision written as PROSE (a JSON payload whose top-level keys are the
-# act fields, or a bare ``act(...)`` / ``select(...)`` call-shape) is a
-# decision the model MEANT to make but put on the wrong channel. It is NOT a
-# carry — a second such prose turn would else be eaten as carry-by-silence and
-# the re-decision lost. Route it to the malformed-envelope repair instead.
-PROSE_ACT_CALL_RE = re.compile(r"\b(act|select|view|analyze)\s*\(")
-# An act field named as a JSON key ("select":, "viewpoints":,
-# "sam_concepts":). Matches even when the surrounding object has nested
-# braces or is otherwise not strictly parseable -- the compound act payload
-# the model writes as prose always carries a nested object, so a
-# brace-balanced json.loads is not enough.
-PROSE_ACT_KEY_RE = re.compile(
-    r'"(?:select|viewpoints|sam_concepts)"\s*:')
 
 
 EMPTY_TURN_NUDGE = (
@@ -1522,13 +1481,9 @@ def advance_reasoner_one_round(
     _plan_stops: dict[str, list] = {}
 
     def _resolve_stage_point(tok) -> list[float] | None:
-        """A stage at/facing slot -> [x, y]: an [x, y] literal, a live
-        surface fid, a flown stop id, or the canonical '[x, y]' token;
-        None otherwise."""
-        if (isinstance(tok, (list, tuple)) and len(tok) == 2
-                and all(isinstance(v, (int, float))
-                        and not isinstance(v, bool) for v in tok)):
-            return [round(float(tok[0]), 2), round(float(tok[1]), 2)]
+        """A stage at/facing slot -> [x, y]: a live surface fid, a flown
+        stop id, a staged handle, or the canonical '[x, y]' token; None
+        otherwise."""
         if isinstance(tok, str):
             row = _ns_rows.get(tok.strip())
             if row is not None:
@@ -1635,132 +1590,6 @@ def advance_reasoner_one_round(
         return [str(x) for x in v if isinstance(x, str) and x.strip()] \
             if isinstance(v, list) else []
 
-    def _screen_crop_items(items: list) -> tuple[list, list[str]]:
-        """Crops are LITERAL ``{fid, mark_fids?, target_fid?}`` items. The
-        ref form (``{ref:'rN', top_k, mark_anchor}``) is RETIRED — 1 use in
-        1,376 audited transcripts, and that one malformed; a retired-form
-        item draws an actionable note and drops ONLY itself (never a silent
-        vanish)."""
-        kept: list = []
-        notes: list[str] = []
-        for it in items:
-            if isinstance(it, dict) and any(
-                    k in it for k in ("ref", "top_k", "mark_anchor")):
-                notes.append(
-                    "the crops ref form (ref/top_k/mark_anchor) is retired: "
-                    "pass literal items {fid, mark_fids?, target_fid?} with "
-                    "fids off the live rows.")
-                continue
-            kept.append(it)
-        return kept, notes
-
-    def _crop_frame_up(fr: dict, center_xy):
-        """Resolve one ``crops[].frame`` (compare.frame's forms) to a world
-        up-unit + ack note. Returns ``(up, note, err)``; err set = the frame
-        is ignored and the ack says why (advisory, never a bounce)."""
-        from maps.search.analyze_scene.geom_compute import (  # noqa: PLC0415
-            COMPASS_UNIT, ccw, cw, orient_polyline_toward,
-            polyline_nearest_point)
-
-        def _pt(tok, counterpart=None):
-            if (isinstance(tok, (list, tuple)) and len(tok) == 2
-                    and all(isinstance(v, (int, float)) for v in tok)):
-                return [float(tok[0]), float(tok[1])]
-            row = _ns_rows.get(str(tok))
-            if row is not None:
-                cl = row.get("centerline")
-                if (isinstance(cl, list) and len(cl) >= 2
-                        and counterpart is not None):
-                    return polyline_nearest_point(cl, counterpart)
-                return look_xy(row)
-            m = _XY_TARGET_RE.match(str(tok))
-            if m:
-                return [float(m.group(1)), float(m.group(2))]
-            return None
-
-        def _unit(vx, vy):
-            n = (vx * vx + vy * vy) ** 0.5
-            return None if n < 1e-9 else [vx / n, vy / n]
-
-        toward, frm = fr.get("toward"), fr.get("from")
-        along, ref, side = (fr.get("along"), fr.get("reference"),
-                            fr.get("side"))
-        if along is not None:
-            row = (_ns_rows.get(str(along))
-                   if isinstance(along, str) else None)
-            poly = (along if (isinstance(along, (list, tuple))
-                              and len(along) >= 2)
-                    else (row or {}).get("centerline"))
-            if not (isinstance(poly, (list, tuple)) and len(poly) >= 2):
-                return (None, "", "frame ignored: 'along' needs a "
-                        "centerline-carrying fid or [[x,y],...] polyline")
-            note = f"image-up = along {along if isinstance(along, str) else 'the line'}"
-            if toward is not None:
-                tw = (toward.strip().lower()
-                      if isinstance(toward, str)
-                      and toward.strip().lower() in COMPASS_UNIT
-                      else _pt(toward))
-                if tw is None:
-                    return (None, "",
-                            f"frame ignored: toward {toward!r} is not on "
-                            "this surface")
-                poly, _ = orient_polyline_toward(poly, tw)
-                note += (f" toward {toward}" if isinstance(toward, str)
-                         else " toward the point")
-            else:
-                note += " (travel direction undeclared)"
-            # ponytail: net end-to-end direction, not the local tangent —
-            # block-scale roads are near-straight; tangent-at-center if
-            # curvature ever bites.
-            up = _unit(float(poly[-1][0]) - float(poly[0][0]),
-                       float(poly[-1][1]) - float(poly[0][1]))
-            return (up, note, "" if up else "frame ignored: degenerate line")
-        if toward is not None:
-            if (isinstance(toward, str)
-                    and toward.strip().lower() in COMPASS_UNIT):
-                ux, uy = COMPASS_UNIT[toward.strip().lower()]
-                return ([ux, uy],
-                        f"image-up = {toward.strip().lower()}", "")
-            tw0 = _pt(toward)
-            if tw0 is None:
-                return (None, "", f"frame ignored: toward {toward!r} is "
-                        "not on this surface")
-            fp = _pt(frm, tw0) if frm is not None else list(center_xy)
-            if fp is None:
-                return (None, "", f"frame ignored: from {frm!r} is not on "
-                        "this surface")
-            tw = _pt(toward, fp) or tw0
-            up = _unit(tw[0] - fp[0], tw[1] - fp[1])
-            note = (f"image-up = toward {toward} from "
-                    f"{frm if frm is not None else 'the crop center'}")
-            return (up, note,
-                    "" if up else "frame ignored: from/toward coincide")
-        if ref is not None and side:
-            rp = _pt(ref)
-            if rp is None:
-                return (None, "", f"frame ignored: reference {ref!r} is "
-                        "not on this surface")
-            r = _unit(rp[0] - float(center_xy[0]),
-                      rp[1] - float(center_xy[1]))
-            if r is None:
-                return (None, "",
-                        "frame ignored: reference at the crop center")
-            s = str(side).strip().lower()
-            # The reference lands where `side` says: image-up u makes the
-            # image-LEFT direction ccw(u), so side:'left' needs r = ccw(u),
-            # i.e. u = cw(r); side:'right' the mirror. Same quarter-turn
-            # law as _frame_viewer/_frame_relative — pinned in the angle
-            # test.
-            table = {"bottom": (-r[0], -r[1]), "near": (-r[0], -r[1]),
-                     "top": (r[0], r[1]), "far": (r[0], r[1]),
-                     "left": cw(r), "right": ccw(r)}
-            if s not in table:
-                return None, "", f"frame ignored: side {side!r}"
-            ux, uy = table[s]
-            return [ux, uy], f"image-up puts {ref} at the {s}", ""
-        return (None, "", "frame ignored: takes {toward,[from]} | "
-                "{along,[toward]} | {reference, side}")
-
     def _build_crop_requests(
             items: list) -> tuple[list[dict], list[str], list[str]]:
         """Resolve one ``view.crops`` list into per-crop specs off ``_ns_rows``.
@@ -1776,7 +1605,7 @@ def advance_reasoner_one_round(
         ``(requests, skipped_fids, ref_notes)``."""
         skipped: list[str] = []
         requests: list[dict] = []
-        items, ref_notes = _screen_crop_items(items)
+        ref_notes: list[str] = []
         # PIXELS ARE EARNED BY FLYING. The sensor holds imagery only where
         # a flight's view square has been; a crop centered on ground no
         # flight has covered refuses toward the verb that earns it. Armed
@@ -1877,18 +1706,9 @@ def advance_reasoner_one_round(
             # The crop is centered on this fid; hand the renderer the fid's own
             # label + footprint so it can bracket-and-label the CENTER car (the
             # fid<->car identification) without occluding it.
-            fr = it.get("frame")
             frame_up = None
             frame_note = ""
-            if isinstance(fr, dict):
-                # round-era per-item frame (the mission schema has no
-                # crops[].frame -- orientation there is the stance's).
-                frame_up, frame_note, _ferr = _crop_frame_up(fr, xy)
-                if _ferr:
-                    ref_notes.append(f"crops {f}: {_ferr}")
-                elif frame_note:
-                    ref_notes.append(f"crops {f}: {frame_note}")
-            elif standing_handle[0] is not None:
+            if standing_handle[0] is not None:
                 # the STANDING viewpoint orients every unframed view; the
                 # caption + band state it (never a silent rotation).
                 _sv = staged_viewpoints[standing_handle[0]]
@@ -2050,11 +1870,6 @@ def advance_reasoner_one_round(
         for _i, it in enumerate(items):
             if not isinstance(it, dict):
                 continue
-            if len(specs) >= _LOOK_MAX_CROPS:
-                notes.append(
-                    f"only the first {_LOOK_MAX_CROPS} maps of this call "
-                    f"rendered; ask for the rest in a later call.")
-                break
             around = it.get("around")
             center_fid = ""
             if around is None:
@@ -2074,11 +1889,7 @@ def advance_reasoner_one_round(
                                             is_target=False)
                                 if center_fid else
                                 f"[{cxy[0]}, {cxy[1]}]")
-                try:
-                    _r = float(it.get("radius_m") or 0.0)
-                except (TypeError, ValueError):
-                    _r = 0.0
-                span = 2.0 * _r if _r > 0 else _map_default_span_m()
+                span = _map_default_span_m()
             marks: list[dict] = []
             _seen_mm: set[str] = set()
             _mm_raw = _look_strs(it.get("mark_fids"))
@@ -2086,12 +1897,6 @@ def advance_reasoner_one_round(
                 if mf in _seen_mm:
                     continue  # a degenerate emission repeated one fid 675x
                 _seen_mm.add(mf)
-                if len(marks) >= _LOOK_MAX_CROPS + 9:
-                    notes.append(
-                        f"map: only the first {len(marks)} distinct marks "
-                        f"badge ({len(_mm_raw) - len(marks)} more dropped); "
-                        "ask for the rest on another map.")
-                    break
                 row = _ns_rows.get(mf)
                 xy = look_xy(row)
                 if xy is None:
@@ -2119,13 +1924,13 @@ def advance_reasoner_one_round(
                 for _b in (_src or []):
                     if isinstance(_b, (list, tuple)) and len(_b) >= 2:
                         _fpts.append([float(_b[0]), float(_b[1])])
-            if not _fpts and around is not None and not it.get("radius_m"):
+            if not _fpts and around is not None:
                 # `show me the map near 2830 3600.` is an unambiguously
                 # LOCAL ask with nothing to frame from, and it fell through
                 # to the 6576 m tile — 7-10% of map requests across two
                 # runs. A named point gets the same floor a framed set does.
                 span = _MAP_FRAME_MIN_M
-            elif _fpts and not it.get("radius_m"):
+            elif _fpts:
                 _fx = [float(p[0]) for p in _fpts]
                 _fy = [float(p[1]) for p in _fpts]
                 cxy = [round((min(_fx) + max(_fx)) / 2.0, 2),
@@ -2227,18 +2032,6 @@ def advance_reasoner_one_round(
                 base += (f" ; requested mark(s) {', '.join(_mof)} lie "
                          f"outside this map's window and are NOT drawn")
         return base
-
-    def _nearest_in(bad: str, pool) -> list[str]:
-        """Up-to-3 lexically-nearest fids to ``bad`` drawn from ``pool`` (difflib
-        ratio, cutoff 0 so it always offers the closest names). Shared by the
-        surface-parity and BINDABILITY rejections so each points the model at
-        REAL fids from the RIGHT pool (all surface rows vs commit-eligible)."""
-        return difflib.get_close_matches(bad, sorted(pool), n=3, cutoff=0.0)
-
-    def _nearest_fids(bad: str) -> str:
-        near = _nearest_in(bad, _ns_rows)
-        return f"nearest fids on this surface: {near}" if near else \
-            "this surface has no fids"
 
     # Identical-error loop breaker, ESCALATING: after 2 same-class
     # ProgramError / select rejections in one round, the error text
@@ -2560,8 +2353,7 @@ def advance_reasoner_one_round(
             # precondition. Alias by the key's own emission-index
             # correspondence so a deduped program is indistinguishable from a
             # re-run to everything downstream of it.
-            _alias_deduped_refs(_prev[3] if len(_prev) > 3 else None,
-                                (a or {}).get("program"))
+            _alias_deduped_refs(_prev[3], (a or {}).get("program"))
             if _dedup_streak["key"] == _key:
                 _dedup_streak["n"] += 1
             else:
@@ -2881,7 +2673,7 @@ def advance_reasoner_one_round(
                 _report = {"error": str(_report)}
             if _via:
                 _report.setdefault("via", _via)
-            if _snap_from and isinstance(_report, dict):
+            if _snap_from:
                 _report.setdefault(
                     "note",
                     f"{_snap_from} is {_item['target_fid']}"
@@ -3321,8 +3113,7 @@ def advance_reasoner_one_round(
         """Substitute grounded anchor slots into compare refs: one fid
         stays a labeled single ref; top-tie multiples become the labeled
         UNION ref {ref:[fid,…], as} — one label, exact min gap over
-        members, never a per-instance fan-out. A flown-stop ref becomes
-        its recorded point (the executor takes labeled [x, y] refs)."""
+        members, never a per-instance fan-out."""
         import copy as _copy
         out = _copy.deepcopy(prog)
         for _op in out.get("ops") or []:
@@ -3337,11 +3128,6 @@ def advance_reasoner_one_round(
                     slot = _r[len("<anchor:"):-1]
                     fids = ties.get(slot) or []
                     refs[_i] = {"ref": fids[0] if len(fids) == 1 else fids,
-                                "as": _el.get("as")}
-                elif _r.startswith("<stop:"):
-                    sid = _r[len("<stop:"):-1]
-                    sp = _plan_stops[sid]  # presence pre-checked, loud
-                    refs[_i] = {"ref": [sp[0], sp[1]],
                                 "as": _el.get("as")}
         return out
 
@@ -3414,11 +3200,7 @@ def advance_reasoner_one_round(
         return res
 
     def _crops_of(fid, cid: str, marks: list | None = None,
-                   preamble: str = "", tally: dict | None = None) -> dict:
-        """``tally``, when passed, collects the per-reason fid lists behind an
-        unbadged row (``surface_gone`` / ``out_of_frame`` /
-        ``unbadged_in_frame``) so a caller can state WHY without deriving a
-        residual from counts it only half knows."""
+                   preamble: str = "") -> dict:
         if look_renderer is None:
             return {"delivered": 0, "error": (
                 "crop rendering is not available on this run/backend: "
@@ -3498,16 +3280,6 @@ def advance_reasoner_one_round(
                     str(f) for c in crops
                     if isinstance(c, dict) and c.get("jpeg")
                     for f in (c.get("marks_out_of_view") or [])][:20]
-            if tally is not None:
-                _shipped = [c for c in crops
-                            if isinstance(c, dict) and c.get("jpeg")]
-                tally["surface_gone"] = list(skipped)
-                tally["out_of_frame"] = [
-                    f for c in _shipped
-                    for f in (c.get("marks_out_of_view") or [])]
-                tally["unbadged_in_frame"] = [
-                    f for c in _shipped
-                    for f in (c.get("marks_unbadged_in_frame") or [])]
         else:
             ack["error"] = ("render returned no image bytes; no crop "
                             "will follow")
@@ -3519,8 +3291,7 @@ def advance_reasoner_one_round(
                 crops=crops)
         return ack
 
-    def _crops_set(handle: str, cid: str,
-                       asking: str = "", marks: list | None = None) -> dict:
+    def _crops_set(handle: str, cid: str, marks: list | None = None) -> dict:
         """"look at them." — ONE frame centred on the SET in scope, badging
         the rows that fall inside it.
 
@@ -3578,8 +3349,7 @@ def advance_reasoner_one_round(
             # everywhere else, so a code-surface model was being invited to
             # say a handle it never bound. Each crop names its own row, and
             # naming a row is what the next call needs.
-            preamble=(asking
-                      + "One crop per row, in order, each badged with the "
+            preamble=("One crop per row, in order, each badged with the "
                       "row it shows. "))
         if not withheld("images") and len(rows) > int(ack.get("delivered") or 0):
             ack.setdefault("ref_notes", []).append(
@@ -3783,20 +3553,6 @@ def advance_reasoner_one_round(
                         f"{_WHY_VERB.get(g['why'], 'using')} the best "
                         f"name match, {rows[0]['fid']} — say a fid to "
                         "choose precisely")
-        for _st in plan["steps"]:
-            if _st.get("do") != "analyze":
-                continue
-            for _op_ in _st["program"].get("ops") or []:
-                for _el_ in (_op_.get("args") or {}).get("refs") or []:
-                    _r_ = (str(_el_.get("ref", ""))
-                           if isinstance(_el_, dict) else "")
-                    if _r_.startswith("<stop:"):
-                        _sid_ = _r_[len("<stop:"):-1]
-                        if _sid_ not in _plan_stops:
-                            _known = ", ".join(sorted(_plan_stops))                                 or "none yet"
-                            return _plan_err(ack, (
-                                f"{_sid_} has not been flown; the flown "
-                                f"stops are: {_known}"))
 
         def _refval(ref):
             """A compiler step ref -> the literal token to execute with."""
@@ -3842,30 +3598,6 @@ def advance_reasoner_one_round(
                 ack["result"] = out
                 plan_rn[0] = max(plan_rn[0], int(plan.get("rn_end") or 0))
                 final_rows = carry_results.get(plan["last_ref"])
-                # A crossing standing where ONE literal fid must go (go to /
-                # show me the map / look at) binds from its own op result.
-                # SEVERAL crossings refuse HERE: a centre between them is at
-                # none of them, and taking one silently is the
-                # plausible-but-wrong class. The whole set stays live in its
-                # handle, so narrowing is the ordinary next sentence.
-                for _slot, _xref in (plan.get("crossings") or {}).items():
-                    _xr = [r for r in (carry_results.get(_xref) or [])
-                           if isinstance(r, dict) and r.get("fid")]
-                    if len(_xr) != 1:
-                        # NAMES NEITHER SIDE. Recovering the roads by
-                        # splitting ``plan["said"]`` on "the intersection
-                        # of " is a sentence-shaped read that hands back the
-                        # WHOLE code block on this surface. The crossing
-                        # handle is the executor's own ref, which the model
-                        # never bound and must not be served either. State
-                        # the mechanism and the two ways out instead.
-                        return _plan_err(ack, (
-                            f"{len(_xr)} distinct crossings, and this call "
-                            f"needs ONE place -- their centre is at none of "
-                            f"them. Bind them first (r = intersection(...)), "
-                            f"then index the one you mean (r[0]) or order "
-                            f"them (order_by(r, nearest=<place>))"))
-                    slot_fid[_slot] = str(_xr[0]["fid"])
             elif do == "move":
                 if step.get("cover"):
                     # AN EXPLORE IS ONE ACT MADE OF FLIGHTS, expanded HERE
@@ -4033,18 +3765,6 @@ def advance_reasoner_one_round(
                 if ack["boost"].get("error"):
                     return _plan_err(ack, str(ack["boost"]["error"]))
             elif do == "crops":
-                # THE LOOKING QUESTION rides the message the PIXELS are in.
-                # `look at them for <free words>.` puts the model's own
-                # sentence here verbatim. Until it existed the vision turn got
-                # a badge legend and no question, so the model had to
-                # re-derive what it was looking for from context. It is text
-                # to a READER, never a selector: nothing downstream parses or
-                # matches on it, and the render is byte-identical with and
-                # without it.
-                _asking = str(step.get("asking") or "").strip()
-                _ask_pre = (f'You are looking for: "{_asking}". Answer with '
-                            f"the badge digit and its fid. "
-                            if _asking else "")
                 _cf = step.get("fid")
                 _cf = ([_refval(f) for f in _cf] if isinstance(_cf, list)
                        else _refval(_cf)) if not step.get("of") else None
@@ -4055,11 +3775,9 @@ def advance_reasoner_one_round(
                 _mk = [_refval(m) for m in (step.get("mark_fids") or [])]
                 _mk = [m for m in _mk if isinstance(m, str) and m.strip()]
                 ack["crop"] = (
-                    _crops_set(str(step["of"]), cid, asking=_ask_pre,
-                                   marks=_mk or None)
+                    _crops_set(str(step["of"]), cid, marks=_mk or None)
                     if step.get("of")
-                    else _crops_of(_cf, cid, marks=_mk or None,
-                                    preamble=_ask_pre))
+                    else _crops_of(_cf, cid, marks=_mk or None))
                 if (ack["crop"].get("error")
                         and not ack["crop"].get("delivered")):
                     return _plan_err(ack, str(ack["crop"]["error"]))

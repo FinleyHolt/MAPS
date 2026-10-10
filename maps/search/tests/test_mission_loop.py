@@ -209,8 +209,7 @@ def test_unknown_tool_names_the_one_verb():
 
 
 def test_sanitizer_is_directly_pinned():
-    ok, errs = _mission_sanitize_moves(
-        [[900, 640], "marked_region"], {})
+    ok, errs = _mission_sanitize_moves(["[900, 640]", "marked_region"], {})
     assert ok == [{"target_fid": "[900, 640]"},
                   {"target_fid": "marked_region"}]
     assert errs == []
