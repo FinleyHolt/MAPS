@@ -577,7 +577,8 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
             return adapter
 
         perception.make_perception = recorded
-    if live is None:
+    frames = live is not None
+    if not frames:
         by_flight: dict[int, list[Held]] = {}
         if forced:
             for f in rec.frames:
@@ -594,7 +595,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     mission = ReplayMission(
         replay_of={"sortie": rec.sortie.name, "run_no": run_no, "run_id": row.get("run_id"),
                    "workdir": rec.run_dir.name,
-                   "mode": " ".join(m for m, on in (("forced", forced), ("frames", live is not None)) if on) or "bank"},
+                   "mode": " ".join(m for m, on in (("forced", forced), ("frames", frames)) if on) or "bank"},
         stops=rec.stops if forced else None, episode_id=episode_id, split=str(row.get("split") or "calcity"),
         config=config, workdir=ep.dir, live=live, instruction=str(row.get("description") or ""),
         recorder=ep.recorder, close_log=ep.close, run_id=f"replay-{rec.sortie.name}", run_no=run_no,

@@ -62,6 +62,30 @@ def test_ground_no_recorded_observation_holds_leaves_the_flight_without_one(buil
     assert "no frame held any of it" in [r["said"] for r in m.transcript if r.get("kind") == "leg"][-1]
 
 
+def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers(built, floor, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from benchmarks.calcity import _citynav_bridge
+    from benchmarks.citynav import episode_workdir
+
+    monkeypatch.setattr(_citynav_bridge, "activate", lambda: None)
+    monkeypatch.setattr(episode_workdir, "open_episode_dir",
+                        lambda *a, **k: SimpleNamespace(dir=tmp_path, recorder=None, close=lambda: None))
+    modes = []
+
+    def named(**kw):
+        modes.append(kw["replay_of"]["mode"])
+        raise StopIteration
+
+    monkeypatch.setattr(R, "ReplayMission", named)
+    rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run", row={"episode_id": "calcity::t", "start_xy": [0, 0]},
+                      params={}, requests=[], responses=[], conversation=[], frames=[])
+    for live in (None, object()):
+        with pytest.raises(StopIteration):
+            R.fly(rec, tmp_path, bank=[], live=live)
+    assert modes == ["bank", "frames"]
+
+
 # -- the forced diff -------------------------------------------------------------
 
 
