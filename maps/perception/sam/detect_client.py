@@ -721,11 +721,9 @@ class SamDetectClient:
 
     concept_provider: ConceptProvider
     model_id: str = "facebook/sam3.1"
-    device: str = "cuda"
     score_threshold: float = 0.3
     min_area_px: int = 16
     max_per_step: int = 64
-    dtype: str = "bfloat16"
     # Named color calibration for this camera/environment (see _COLOR_PALETTES).
     # None keeps the env/default palette; the CityNav configs set "citynav".
     # _build_perception activates it module-globally after construction.

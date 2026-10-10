@@ -151,11 +151,6 @@ _COVER_MAX_STOPS = 1000
 class SearchLoopConfig:
     """The engine's tunable knobs; the field defaults are the contract."""
 
-    # Commit lever (ablation): prefer a runtime SAM detection (on the
-    # perceived object) over a prebake catalog prior (which can be ~20-50m
-    # offset and lands an OSR near-miss). "off" | "prefer" | "only". Off by
-    # default; flag-gated for a clean paired A/B.
-    detected_target_mode: str = "off"
     # The ``look`` tool: a NON-TERMINAL vision fetch (nadir candidate crops
     # into the multimodal reasoner) at each per-stop round. It is the ONLY
     # path that puts an image in front of the model — with it off the reasoner
@@ -182,11 +177,6 @@ class SearchLoopConfig:
         base = cls()
         return dataclasses.replace(
             base,
-            detected_target_mode=_env_override(
-                "SEARCH_DETECTED_TARGET_MODE",
-                base.detected_target_mode,
-                str,
-            ),
             look_tool=_env_override(
                 "SEARCH_LOOK_TOOL",
                 base.look_tool,
