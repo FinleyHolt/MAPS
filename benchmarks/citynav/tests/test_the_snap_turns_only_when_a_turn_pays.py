@@ -1,0 +1,62 @@
+"""The discrete snap turns when the next 30-degree heading points closer.
+
+Upstream's executor (``gsamllavanav/teacher/algorithm/lookahead.py``) turns
+only past 30 degrees of bearing error. A snap that turns at 15, half the turn
+step, has no dead band: one forward step past the tolerance flips the error
+to the other side and the drone alternates turn, forward, turn, forward to
+the stop. A target within one forward step at a bearing no 30-degree heading
+aligns with is as close as the lattice gets: a forward step that would not
+close the distance ends the xy phase.
+"""
+
+from __future__ import annotations
+
+import math
+import random
+
+from benchmarks.citynav.action_snap import (
+    CityNavAction,
+    Pose,
+    apply_action,
+    snap_to_actions,
+)
+
+#: Inside this distance of its target a leg aligns at 15 degrees again.
+NEAR_M = 10.0
+TURNS = (CityNavAction.TURN_LEFT, CityNavAction.TURN_RIGHT)
+
+
+def test_a_long_leg_ten_degrees_off_heading_turns_once():
+    bearing = math.radians(10.0)
+    end = Pose(200 * math.sin(bearing), 200 * math.cos(bearing), 120.0, 0.0)
+    actions, _ = snap_to_actions(Pose(0.0, 0.0, 120.0, 0.0), end)
+    turns = sum(a in TURNS for a in actions)
+    assert turns <= 1, f"{turns} turns in {len(actions)} actions"
+
+
+def _random_leg(rng: random.Random) -> tuple[Pose, Pose]:
+    heading = rng.uniform(0, 360) if rng.random() < 0.5 else rng.choice([0, 30, 60, 90, 180, 270])
+    start = Pose(rng.uniform(-50, 50), rng.uniform(-50, 50), 120.0, heading)
+    end = Pose(rng.uniform(-300, 300), rng.uniform(-300, 300),
+               120.0 + rng.choice([0, 0, 2, -4, 7.3]), 0.0)
+    return start, end
+
+
+def _cruise_turns(start: Pose, end: Pose, actions: list[CityNavAction]) -> int:
+    """Turns taken after the leg's first forward step and farther than
+    ``NEAR_M`` from its target: the leg in cruise."""
+    pose, moved, turns = start, False, 0
+    for action in actions:
+        far = math.hypot(end.x - pose.x, end.y - pose.y) > NEAR_M
+        turns += action in TURNS and moved and far
+        moved = moved or action is CityNavAction.FORWARD
+        pose = apply_action(pose, action)
+    return turns
+
+
+def test_a_leg_turns_at_most_once_in_cruise():
+    rng = random.Random(0)
+    for _ in range(3000):
+        start, end = _random_leg(rng)
+        actions, _ = snap_to_actions(start, end)
+        assert _cruise_turns(start, end, actions) <= 1, (start, end)

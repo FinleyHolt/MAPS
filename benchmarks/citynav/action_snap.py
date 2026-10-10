@@ -9,8 +9,9 @@ CityNav-action sequence so the trajectory log is submittable. Consumed
 by the CityNav runner and ``flight_model.DiscreteFlightSimulator``.
 
 The decomposition is greedy and deterministic: rotate toward bearing,
-advance forward to the target XY, then step altitude to the target
-height. Altitude is the last phase so the drone never descends until
+advance forward to the target XY (turning again in cruise only once the
+target sits on the next 30-degree heading), then step altitude to the
+target height. Altitude is the last phase so the drone never descends until
 it is over the target XY (the standard quadcopter waypoint pattern).
 The achieved pose may differ from the requested end pose when the
 discrete action set cannot reach it exactly or the sequence hits
@@ -114,11 +115,25 @@ def apply_action(pose: Pose, action: CityNavAction) -> Pose:
     return _apply(pose, action)
 
 
+#: Bearing error a leg aligns within before its first forward step, and on
+#: its final approach (:data:`NEAR_M`): half the turn step, so the nearest
+#: lattice heading is taken.
+ALIGN_TOL_DEG: float = 15.0
+#: Bearing error a leg in cruise tolerates: it turns only once the target
+#: sits on the next 30-degree heading, as upstream's executor turns only past
+#: 30 degrees (``gsamllavanav/teacher/algorithm/lookahead.py``). Turning at
+#: half the step instead leaves no dead band, and the drone alternates turn
+#: and forward down the whole leg.
+CRUISE_TOL_DEG: float = 29.0
+#: Distance to the target inside which a leg aligns at :data:`ALIGN_TOL_DEG`
+#: again, so it ends within ``xy_tol_m / cos(ALIGN_TOL_DEG)`` of the target.
+NEAR_M: float = 10.0
+
+
 def snap_to_actions(
     start: Pose,
     end: Pose,
     *,
-    heading_tol_deg: float = 15.0,
     xy_tol_m: float = SNAP_XY_TOL_M,
     alt_tol_m: float = 1.0,
     max_actions: int = 1024,
@@ -132,6 +147,7 @@ def snap_to_actions(
     """
     actions: list[CityNavAction] = []
     pose = start
+    moved = False  # a forward step taken: the leg is in cruise
 
     def _emit(action: CityNavAction) -> bool:
         nonlocal pose
@@ -156,6 +172,7 @@ def snap_to_actions(
 
         if xy_err <= xy_tol_m and abs(alt_err) <= alt_tol_m:
             break
+        heading_tol_deg = CRUISE_TOL_DEG if moved and xy_err > NEAR_M else ALIGN_TOL_DEG
         if xy_err > xy_tol_m and abs(heading_err) > heading_tol_deg:
             if not _emit(
                 CityNavAction.TURN_LEFT if heading_err < 0 else CityNavAction.TURN_RIGHT
@@ -165,6 +182,7 @@ def snap_to_actions(
         if xy_err > xy_tol_m:
             if not _emit(CityNavAction.FORWARD):
                 break
+            moved = True
             continue
         if abs(alt_err) > alt_tol_m:
             if not _emit(
