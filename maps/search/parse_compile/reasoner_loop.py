@@ -2410,7 +2410,8 @@ def advance_reasoner_one_round(
                 f"the shape of a cul-de-sac bulb, a driveway, a pool, a "
                 f"car, or anything built since the survey -- no zoom "
                 f"shows those; what has been DETECTED is drawn where it "
-                f"was found. To see what is actually there, fly and look: "
+                f"was found. To see what is actually there, "
+                f"{'fly: ' if withheld('look') else 'fly and look: '}"
                 f"the camera is the live check on this. One per item in "
                 f"order: [{order}]. Numbered badges; per-map legend:")
         for k, m in enumerate(maps):

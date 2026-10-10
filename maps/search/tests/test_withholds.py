@@ -145,3 +145,61 @@ def test_an_unknown_withhold_is_refused(monkeypatch):
     monkeypatch.setenv(W.ENV, "pictures")
     with pytest.raises(ValueError, match="unknown withholds"):
         W.active()
+
+
+def _map_mission(script, monkeypatch, names=""):
+    """``script`` driven over two surveyed buildings, each flight adding a
+    car; returns (tool results, the (text, pictures) of every vision turn)."""
+    import numpy as np
+    from types import SimpleNamespace
+
+    from maps.search.analyze_scene.geom_program import build_surface_from_graph
+    from maps.search.parse_compile.reasoner_loop import MissionSpec, advance_reasoner_one_round
+    from maps.search.tests import test_flight_mints_a_handle as fx
+    from maps.search.tests.test_mission_loop import FakeReasoner
+
+    pytest.importorskip("cv2")
+    monkeypatch.setenv(W.ENV, names)
+
+    class _Vision(FakeReasoner):
+        def __init__(self, turns):
+            super().__init__(turns)
+            self.vision: list[tuple[str, list]] = []
+
+        def append_vision_user(self, text, jpegs):
+            self.vision.append((text, list(jpegs)))
+            super().append_vision_user(text, jpegs)
+
+    graph = fx._Graph(dict(fx._PRIORS))
+    for n in graph.nodes.values():
+        n.cells = np.asarray([[int(n.world_xy[1]), int(n.world_xy[0])]], dtype=np.int32)
+        n.tags = {"building": "yes"}
+
+    def _fly(item):
+        fid = f"detected_{len(graph.nodes)}"
+        node = fx._Node((34.0, 34.0), "car")
+        node.cells = np.asarray([[34, 34]], dtype=np.int32)
+        node.tags = {}
+        graph.nodes[fid] = node
+        return {"stop_id": "stop_001", "target": item["target_fid"], "pose_xy": [30.0, 30.0],
+                "alt_m": 100.0, "new_detections": 1, "cue": "the cue"}
+
+    cands, anchors = build_surface_from_graph(graph.nodes.items(), (0.0, 0.0), 1.0)
+    fr = _Vision([[fx._run(c)] for c in script] + ["done"])
+    advance_reasoner_one_round(
+        reasoner=fr, user_message="Find the car.",
+        ctx=SimpleNamespace(graph=graph, cell_size_m=1.0, tile_origin_xy=(0.0, 0.0),
+                            grid_shape=(100, 100), robot_pose=None),
+        grounded_fids=set(), rid_tag="m0", transcript=[],
+        compute_namespace={"cands": cands, "anchors": anchors, "cell_m": 1.0},
+        diag={}, look_renderer=lambda reqs: [],
+        mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: {"declared": []}))
+    results = [json.loads(m["content"]) for m in fr.messages if m.get("role") == "tool"]
+    return results, fr.vision
+
+
+def test_a_look_withhold_map_caption_says_fly_alone(monkeypatch):
+    _, vision = _map_mission(["show_map(around=prior_7)"], monkeypatch)
+    assert "fly and look: the camera" in vision[0][0]
+    _, vision = _map_mission(["show_map(around=prior_7)"], monkeypatch, "look")
+    assert "fly: the camera" in vision[0][0] and "fly and look" not in vision[0][0]
