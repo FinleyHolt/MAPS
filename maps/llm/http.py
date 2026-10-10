@@ -299,7 +299,7 @@ _FLIGHT_THREAD_DIGESTS: dict[tuple, list[str]] = {}
 _FLIGHT_PARAMS_SEEN: dict[str, set[str]] = {}
 
 
-def _scrub_image_parts(messages: list, replace=None) -> list:
+def _scrub_image_parts(messages: list) -> list:
     """Message list with every data-URL image part replaced by a sha ref.
 
     ``{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,…"}}``
@@ -307,9 +307,7 @@ def _scrub_image_parts(messages: list, replace=None) -> list:
     sha is of the DECODED bytes and matches the look manifest's per-crop
     ``sha256``, so a transcript image part resolves to its crop record (and
     re-renders) by hash. Non-data URLs pass through. Never mutates the input
-    — the HTTP body and the cache key see the original. ``replace(part,
-    media_type, raw, sha)`` names another part for the data URL to become:
-    the wire's ``sha256:`` ref (``_wire_body``) hashes the same bytes."""
+    — the HTTP body and the cache key see the original."""
     out: list = []
     for msg in messages:
         content = msg.get("content") if isinstance(msg, dict) else None
@@ -334,7 +332,7 @@ def _scrub_image_parts(messages: list, replace=None) -> list:
             except (ValueError, binascii.Error):
                 raw = b64.encode("utf-8")  # undecodable: fingerprint as-is
             sha = hashlib.sha256(raw).hexdigest()
-            parts.append(replace(part, media_type, raw, sha) if replace else {
+            parts.append({
                 "type": "image_ref",
                 "media_type": media_type,
                 "sha256": sha,
@@ -343,50 +341,6 @@ def _scrub_image_parts(messages: list, replace=None) -> list:
             changed = True
         out.append({**msg, "content": parts} if changed else msg)
     return out
-
-
-# The shas the image store has confirmed holding, per process: each image
-# crosses the link once. A 409 from the store's proxy drops the shas it
-# names (``_forget_missing``), so the next send PUTs them again.
-_IMAGE_STORE_CONFIRMED: set[str] = set()
-# Connect outlasts a radio dropout (twenty seconds): the store stands on the
-# reasoner's box, and a PUT that gives up inside the dropout loses the
-# turn's images to a link that was about to come back.
-_IMAGE_STORE_TIMEOUT = httpx.Timeout(30.0, read=180.0, write=180.0)
-
-
-def _wire_body(body: dict) -> dict:
-    """The body as it crosses the wire. With ``WORLDS_IMAGE_STORE_URL`` set,
-    every inline image rides as ``sha256:<sha>`` and its bytes are PUT to
-    the store once; ``maps.llm.reasoner_proxy`` expands the parts back
-    beside the router, so the model reads the same bytes while the
-    transcript, the cache key and the net meter keep the body as built."""
-    base = os.environ.get("WORLDS_IMAGE_STORE_URL", "").strip().rstrip("/")
-    if not base or not isinstance(body.get("messages"), list):
-        return body
-
-    def ref(part: dict, media_type: str, raw: bytes, sha: str) -> dict:
-        if sha not in _IMAGE_STORE_CONFIRMED:
-            # The run's routing key rides the once-image as it rides the
-            # call, so the store's log files the bytes under the run.
-            httpx.put(f"{base}/looks/{sha}", content=raw,
-                      headers={**_request_headers(None), "Content-Type": media_type},
-                      timeout=_IMAGE_STORE_TIMEOUT).raise_for_status()
-            _IMAGE_STORE_CONFIRMED.add(sha)
-        return {**part, "image_url": {**part["image_url"], "url": f"sha256:{sha}"}}
-
-    return {**body, "messages": _scrub_image_parts(body["messages"], ref)}
-
-
-def _forget_missing(resp) -> bool:
-    """A 409 from the store's proxy names the shas it does not hold (an
-    eviction, a restart): forget them, so the send that follows PUTs them."""
-    try:
-        missing = resp.json()["missing"]
-    except Exception:  # noqa: BLE001 - a 409 from something else
-        return False
-    _IMAGE_STORE_CONFIRMED.difference_update(missing)
-    return True
 
 
 def _append_flight_record(directory: Path, record: dict) -> None:
@@ -611,7 +565,7 @@ def _stream_chat_completions(
     client = httpx.Client(timeout=timeout)
     _start_cancel_watchdog(cancel_event, client)
     try:
-        with client.stream("POST", url, headers=headers, json=_wire_body(streamed_body)) as resp:
+        with client.stream("POST", url, headers=headers, json=streamed_body) as resp:
             try:
                 if resp.status_code >= 400:
                     resp.read()  # the body is legible after the stream closes
@@ -883,7 +837,6 @@ def _chat_completions_raw(
     # budget and end the episode on the next unrelated blip.
     attempt = 0
     rate_limit_attempt = 0
-    missing_retried = False
     while True:
         try:
             # Pre-call cancellation gate: don't even dial if the
@@ -908,7 +861,7 @@ def _chat_completions_raw(
                 with httpx.Client(timeout=timeout) as client:
                     _start_cancel_watchdog(cancel_event, client)
                     try:
-                        r = client.post(url, headers=headers, json=_wire_body(body))
+                        r = client.post(url, headers=headers, json=body)
                     except (httpx.RequestError, httpx.HTTPError):
                         if cancel_event is not None and cancel_event.is_set():
                             raise CallCanceled("canceled mid-request") from None
@@ -1002,9 +955,6 @@ def _chat_completions_raw(
                 if isinstance(e, httpx.HTTPStatusError)
                 else None
             )
-            if status == 409 and not missing_retried and _forget_missing(e.response):
-                missing_retried = True
-                continue
             if status in _RATE_LIMIT_STATUS:
                 # Capacity/quota, not a malformed body: the same request
                 # succeeds once the window resets. Both the streaming and
