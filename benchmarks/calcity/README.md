@@ -50,7 +50,7 @@ first target position lies within 0.2 m of a key of `ground_truth.json` on
 its own map. It holds 606 episodes.
 
 ```sh
-python -m benchmarks.calcity.data_prep.reviewed > output/reviewed_episodes.txt
+mkdir -p output && python -m benchmarks.calcity.data_prep.reviewed > output/reviewed_episodes.txt
 ```
 
 ## Run

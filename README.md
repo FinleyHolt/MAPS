@@ -264,7 +264,7 @@ Small served), or serve Gemma 4 E2B or E4B with no effort set.
 E3, the reviewed Cal City episodes per effort rung:
 
 ```sh
-python -m benchmarks.calcity.data_prep.reviewed > output/reviewed_episodes.txt
+mkdir -p output && python -m benchmarks.calcity.data_prep.reviewed > output/reviewed_episodes.txt
 for e in 0.0 0.3 0.6 0.9 0.99; do
   SEARCH_SAMPLING_REASONING_EFFORT=$e SEARCH_CALCITY_RGBD_DIR=<raster dir> \
     python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_episodes.txt \
