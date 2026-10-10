@@ -102,7 +102,7 @@ def similarity(frame_rgb: np.ndarray, render_rgb: np.ndarray, *, yaw_reach_deg: 
 
     best = max(read(float(y)) for y in np.arange(-yaw_reach_deg, yaw_reach_deg + 1e-9, yaw_step_deg))
     fine = np.arange(best[3] - yaw_step_deg, best[3] + yaw_step_deg + 1e-9, yaw_step_deg / 4.0)
-    best = max((read(float(y)) for y in fine if abs(y - best[3]) > 1e-9), default=best)
+    best = max([best] + [read(float(y)) for y in fine if abs(y - best[3]) > 1e-9])
     response, du, dv, yaw = best
     return du, dv, yaw, response
 
