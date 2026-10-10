@@ -222,20 +222,13 @@ def derive_centerlines(nodes: dict, cell_size_m: float) -> None:
 def load_graph_binary(path_stem: str) -> ObjectGraph:
     """Read ``{stem}_graph.npz`` + ``{stem}_nodes.json`` into an ObjectGraph.
 
-    Nodes only. Tiles baked before the edge-machinery removal carry packed
-    edge columns (``src``/``dst``/``relation``/…) in the npz; those arrays
-    are never read (ignored by omission), and ``mmap_mode='r'`` means they
-    are never paged into RAM either.
+    Nodes only. Packed edge columns (``src``/``dst``/``relation``/…) an
+    older npz carries are never read, and an npz loads an array only when it
+    is accessed, so they never reach RAM.
     """
     npz_path = f"{path_stem}_graph.npz"
     nodes_path = f"{path_stem}_nodes.json"
-    # mmap_mode='r' so any multi-GB column never loads eagerly into RAM.
-    try:
-        data = np.load(npz_path, allow_pickle=True, mmap_mode="r")
-    except TypeError:
-        # Older numpy without mmap_mode for npz archives — fall back to
-        # eager load (tiny tiles work fine; citynav mosaics will be slow).
-        data = np.load(npz_path, allow_pickle=True)
+    data = np.load(npz_path, allow_pickle=True)
     with open(nodes_path) as f:
         nodes_doc = _json.load(f)
 
