@@ -1,0 +1,292 @@
+"""Render what a declared nadir camera sees over a baked ortho, at its own
+field of view and a given altitude AGL.
+
+This is the sensor-aware counterpart to the bench observation.
+``observation.crop_ortho_observation`` is sensor-agnostic: its footprint is the
+CityNav view square, ``side = 2*AGL``, and the callsite passes ``sensor=None``.
+Here a ``SensorSpec``'s HFOV/VFOV plus the altitude give a ground rectangle, and
+the ortho is warped over that rectangle at the sensor's own pixel count. For a
+16.1-degree lens at 1,500 ft the two differ by 7.1x in linear ground extent.
+
+A nadir camera over a flat ground plane is exactly a homography, so the four
+footprint corners plus ``cv2.getPerspectiveTransform`` *is* the perspective
+render. Relief displacement is not modelled: a tall building at the frame edge
+should lean outward and does not.
+
+The render GSD is usually finer than the ortho it samples, so a frame is
+geometrically true and photometrically capped by the source. ``caption`` states
+both resolutions and the upsample factor between them, because the picture
+cannot be read without them.
+
+Site-specific loading (which raster, which bounds) belongs to the caller; every
+function here takes the ortho and its bounds as arguments.
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+
+M_PER_FT = 0.3048
+#: The taps ``INTER_LANCZOS4`` reads either side of a sample, so the margin
+#: a rendered window needs around its footprint.
+TAP_MARGIN_PX = 4
+
+
+def footprint_m(sensor, agl_m: float) -> tuple[float, float]:
+    """Ground footprint ``(width, height)`` in meters for a nadir ``sensor`` at
+    ``agl_m`` above a flat surface: ``2 * agl * tan(fov/2)`` per axis."""
+    intr = sensor.intrinsics
+    return (
+        2.0 * agl_m * math.tan(math.radians(intr.hfov_deg) / 2.0),
+        2.0 * agl_m * math.tan(math.radians(intr.vfov_deg) / 2.0),
+    )
+
+
+def footprint_corners_xy(
+    pose_xy: tuple[float, float], width_m: float, height_m: float, yaw_deg: float
+) -> list[tuple[float, float]]:
+    """Footprint corners ``[FL, FR, BR, BL]`` in world (x, y), image order
+    ``[TL, TR, BR, BL]``.
+
+    Same heading convention as ``observation.view_square_corners_xy`` (0 = North,
+    CW-positive, ``front = (sin, cos)``, ``left = (-cos, sin)``), widened to a
+    rectangle: ``front`` spans the image height, ``left`` the image width.
+    """
+    yaw_r = math.radians(float(yaw_deg))
+    sin_y, cos_y = math.sin(yaw_r), math.cos(yaw_r)
+    front = np.array([sin_y, cos_y]) * (height_m / 2.0)
+    left = np.array([-cos_y, sin_y]) * (width_m / 2.0)
+    c = np.array([float(pose_xy[0]), float(pose_xy[1])])
+    return [
+        tuple(c + front + left),  # front-left  -> image top-left
+        tuple(c + front - left),  # front-right -> image top-right
+        tuple(c - front - left),  # back-right  -> image bottom-right
+        tuple(c - front + left),  # back-left   -> image bottom-left
+    ]
+
+
+def ground_corners_xy(
+    sensor,
+    pose_xy: tuple[float, float],
+    agl_m: float,
+    yaw_deg: float,
+    *,
+    airframe_roll_deg: float = 0.0,
+    airframe_pitch_deg: float = 0.0,
+    ground_z: float = 0.0,
+) -> list[tuple[float, float]]:
+    """Where the frame's four corner pixels meet flat ground, image order ``[TL, TR, BR, BL]``.
+
+    Through the projector, so the sensor's mount angles and the airframe's
+    roll and pitch shape the footprint the way they shape every projection
+    in the tree. :func:`footprint_corners_xy` is the level, mount-aligned
+    special case of this, and the two agree there to a half pixel: this
+    lands the corner PIXEL CENTRES on the ground, which is what the warp's
+    destination corners are.
+    """
+    from maps.perception.geometry.geolocate import project_pixels_to_world  # noqa: PLC0415
+
+    intr = sensor.intrinsics
+    w, h = intr.image_width, intr.image_height
+    camera = np.array([float(pose_xy[0]), float(pose_xy[1]), float(ground_z) + float(agl_m)])
+    # The ray is taken at ground range, not unit depth: the projector hands
+    # back float32 world points, and a unit-depth point beside a camera at
+    # a few thousand metres carries a 1e-4 m quantisation that the range
+    # then scales into a tenth of a metre at the corner.
+    reach = np.full((1, 1), max(float(agl_m), 1.0))
+    out: list[tuple[float, float]] = []
+    for r, c in ((0, 0), (0, w - 1), (h - 1, w - 1), (h - 1, 0)):
+        # The point at ground range along the ray fixes the ray; the ground
+        # plane fixes where along it the corner lands.
+        p1 = project_pixels_to_world(
+            reach, pose_xy=pose_xy, altitude_m=camera[2], yaw_deg=yaw_deg, sensor=sensor,
+            airframe_roll_deg=airframe_roll_deg, airframe_pitch_deg=airframe_pitch_deg,
+            origin_rc=(r, c),
+        )[0, 0]
+        ray = np.asarray(p1, dtype=np.float64) - camera
+        if ray[2] >= 0.0:
+            raise ValueError("a frame corner looks at or above the horizon; no ground under it")
+        t = (camera[2] - float(ground_z)) / -ray[2]
+        ground = camera + t * ray
+        out.append((float(ground[0]), float(ground[1])))
+    return out
+
+
+def render_frame(
+    ortho_rgb: np.ndarray,
+    bounds,
+    px_per_m: float,
+    *,
+    sensor,
+    pose_xy: tuple[float, float],
+    agl_m: float,
+    yaw_deg: float = 0.0,
+    airframe_roll_deg: float = 0.0,
+    airframe_pitch_deg: float = 0.0,
+) -> tuple[np.ndarray, dict]:
+    """Warp ``ortho_rgb`` over the sensor footprint; return ``(frame, stats)``.
+
+    ``ortho_rgb`` is north-up with row 0 at ``bounds.y_max``, the layout
+    ``camera_model.bake_ortho_from_rasters`` produces. Raises if any footprint
+    corner falls outside ``bounds`` -- a black-bordered frame is a silent lie
+    about coverage.
+
+    The footprint is the projector's (:func:`ground_corners_xy`): a sensor
+    carrying mount angles, or an airframe that is banked or pitched, renders
+    the frame that camera would see. Flat ground under a pinhole is a
+    homography exactly, so the warp is exact for any orientation; relief is
+    what it does not carry.
+
+    ``stats["corners_xy"]`` is the world-space correspondence this render used,
+    in image order. Feeding it back through ``cv2.getPerspectiveTransform``
+    against the frame corners gives the world -> frame-pixel map, consistent
+    with the render by construction rather than by agreement.
+    """
+    width_m, height_m = footprint_m(sensor, agl_m)
+    src, corners = footprint_px(
+        ortho_rgb, bounds, px_per_m, sensor=sensor, pose_xy=pose_xy, agl_m=agl_m, yaw_deg=yaw_deg,
+        airframe_roll_deg=airframe_roll_deg, airframe_pitch_deg=airframe_pitch_deg,
+    )
+    out_w, out_h = sensor.intrinsics.image_width, sensor.intrinsics.image_height
+    frame = warp_window(ortho_rgb, src, out_w, out_h)
+    gsd = width_m / out_w
+    return np.ascontiguousarray(frame, np.uint8), {
+        "footprint_m": (width_m, height_m),
+        "gsd_m_per_px": gsd,
+        "source_gsd_m_per_px": 1.0 / px_per_m,
+        "upsample": (1.0 / px_per_m) / gsd,
+        "corners_xy": corners,
+    }
+
+
+def footprint_px(
+    ortho_rgb: np.ndarray,
+    bounds,
+    px_per_m: float,
+    *,
+    sensor,
+    pose_xy: tuple[float, float],
+    agl_m: float,
+    yaw_deg: float = 0.0,
+    airframe_roll_deg: float = 0.0,
+    airframe_pitch_deg: float = 0.0,
+) -> tuple[np.ndarray, list[tuple[float, float]]]:
+    """The frame's corner pixel centres on the raster, ``(4, 2)`` float32 in image order, and the
+    world corners they came from: the source half of :func:`render_frame`'s homography, which a
+    batched renderer builds for many poses before it samples any. Raises as :func:`render_frame`
+    does when a corner falls outside ``bounds``."""
+    corners = ground_corners_xy(
+        sensor, pose_xy, agl_m, yaw_deg,
+        airframe_roll_deg=airframe_roll_deg, airframe_pitch_deg=airframe_pitch_deg,
+    )
+    for x, y in corners:
+        if not (bounds.x_min <= x <= bounds.x_max and bounds.y_min <= y <= bounds.y_max):
+            raise ValueError(
+                f"footprint corner ({x:.1f}, {y:.1f}) is outside the block "
+                f"{tuple(round(v, 1) for v in bounds)}: the frame would carry "
+                f"no-data border. Move the aim point inward or lower the altitude."
+            )
+    rows = ortho_rgb.shape[0]
+    src = np.array(
+        [
+            [(x - bounds.x_min) * px_per_m, (rows - 1) - (y - bounds.y_min) * px_per_m]
+            for (x, y) in corners
+        ],
+        dtype=np.float32,
+    )
+    return src, corners
+
+
+def source_map(src_px: np.ndarray, width: int, height: int) -> tuple[np.ndarray, np.ndarray]:
+    """``(map_x, map_y)``: the ortho pixel every pixel of a ``width x height`` frame reads.
+
+    The four-corner homography inverted and evaluated over the frame's own
+    pixel grid, in float64 and returned float32, which is the map
+    ``cv2.warpPerspective`` builds for itself. It is built here instead so
+    :func:`warp_window` can slide it onto a window of the ortho.
+    """
+    import cv2  # noqa: PLC0415
+
+    inv = np.linalg.inv(
+        np.asarray(cv2.getPerspectiveTransform(src_px, frame_corners_px(width, height)), np.float64)
+    )
+    x, y = np.meshgrid(
+        np.arange(width, dtype=np.float64), np.arange(height, dtype=np.float64)
+    )
+    w = inv[2, 0] * x + inv[2, 1] * y + inv[2, 2]
+    return (
+        ((inv[0, 0] * x + inv[0, 1] * y + inv[0, 2]) / w).astype(np.float32),
+        ((inv[1, 0] * x + inv[1, 1] * y + inv[1, 2]) / w).astype(np.float32),
+    )
+
+
+def warp_window(ortho_rgb: np.ndarray, src_px: np.ndarray, width: int, height: int) -> np.ndarray:
+    """The frame the corners ``src_px`` cut from ``ortho_rgb``, reading only the window under them.
+
+    Pixel for pixel what a whole-raster warp gives: the map is computed
+    against the ortho's own origin, and the window's offset is a whole
+    number of pixels subtracted in float32, which is exact, so every tap
+    reads the same pixel -- or the same border -- either way. The window
+    carries :data:`TAP_MARGIN_PX` around the footprint so the taps at its
+    edge are real pixels rather than border.
+
+    The window is load-bearing, not a saving. OpenCV's ``remap`` refuses a
+    source or destination of 32,767 px or more, which a block-wide ortho
+    passes at 10 km and 0.3 m, and a whole-raster pass faults in every page
+    of the memory-mapped raster to fill one frame.
+    """
+    import cv2  # noqa: PLC0415
+
+    map_x, map_y = source_map(src_px, width, height)
+    x0 = max(0, int(np.floor(map_x.min())) - TAP_MARGIN_PX)
+    y0 = max(0, int(np.floor(map_y.min())) - TAP_MARGIN_PX)
+    x1 = min(ortho_rgb.shape[1], int(np.ceil(map_x.max())) + TAP_MARGIN_PX + 1)
+    y1 = min(ortho_rgb.shape[0], int(np.ceil(map_y.max())) + TAP_MARGIN_PX + 1)
+    return cv2.remap(
+        np.ascontiguousarray(ortho_rgb[y0:y1, x0:x1]),
+        map_x - np.float32(x0),
+        map_y - np.float32(y0),
+        interpolation=cv2.INTER_LANCZOS4,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(0, 0, 0),
+    )
+
+
+def frame_corners_px(width: int, height: int) -> np.ndarray:
+    """The frame's own corner pixels in image order ``[TL, TR, BR, BL]``.
+
+    The destination half of every homography over a rendered frame, so the
+    render and any overlay projected onto it share one definition.
+    """
+    return np.array(
+        [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]],
+        dtype=np.float32,
+    )
+
+
+def caption(frame: np.ndarray, lines: list[str]) -> np.ndarray:
+    """Burn ``lines`` bottom-left over a dark strip so they read over any
+    imagery. Scaled off the frame height so a 1024 px and a 2048 px render look
+    the same."""
+    import cv2  # noqa: PLC0415
+
+    s = frame.shape[0] / 1536.0
+    font, scale, thick = cv2.FONT_HERSHEY_SIMPLEX, 0.62 * s, max(1, round(1.4 * s))
+    pad, step = round(18 * s), round(30 * s)
+    top = frame.shape[0] - (len(lines) * step + pad)
+    strip = frame[top:, :].astype(np.float32) * 0.30
+    frame[top:, :] = strip.astype(np.uint8)
+    for i, text in enumerate(lines):
+        cv2.putText(
+            frame,
+            text,
+            (pad, top + pad + round(step * (i + 0.6))),
+            font,
+            scale,
+            (235, 235, 235),
+            thick,
+            cv2.LINE_AA,
+        )
+    return frame
