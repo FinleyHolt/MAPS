@@ -2631,6 +2631,28 @@ def run_program(cands, anchors, program, seed_results=None,
                     f"(centroid bearing) is defined on contact too. ")
         return ""
 
+    def _named_rows(el, need):
+        """One crossings/ends ref -> EVERY row it names (a road is routinely
+        several ways): a fid, an rN, a list of them, or {ref:..., as:...}. A
+        row off the surface counts when it carries ``need``."""
+        if isinstance(el, dict):
+            el = el.get("ref")
+        out: list = []
+        for t in (el if isinstance(el, list) else [el]):
+            vals = [t]
+            if isinstance(t, str) and t not in by_fid:
+                v = _unwrap_listish(_resolve_ref(t))
+                vals = v if isinstance(v, list) else [v]
+            for x in vals:
+                n = None
+                if isinstance(x, str):
+                    n = by_fid.get(x)
+                elif isinstance(x, dict):
+                    n = by_fid.get(x.get("fid")) or (x if x.get(need) else None)
+                if n is not None and n not in out:
+                    out.append(n)
+        return out
+
     _prog_ops = list(program.get("ops", []) or [])
     # Every ref THIS program defines (drives _resolve_ref's in-program rule).
     _program_ref_names = {o.get("ref") for o in _prog_ops if isinstance(o, dict)}
@@ -3186,30 +3208,6 @@ def run_program(cands, anchors, program, seed_results=None,
                     f"{len(refs_raw) if isinstance(refs_raw, list) else type(refs_raw).__name__}"
                     f".{_sig_suffix()}")
 
-            def _x_nodes(el):
-                """One crossings ref -> its surface rows. A road is routinely
-                several ways (179 of 457 named roads in the bake carry more
-                than one row), so a side is EVERY row the ref names."""
-                if isinstance(el, dict):
-                    el = el.get("ref")
-                toks = el if isinstance(el, list) else [el]
-                out: list = []
-                for t in toks:
-                    vals = [t]
-                    if isinstance(t, str) and t not in by_fid:
-                        v = _unwrap_listish(_resolve_ref(t))
-                        vals = v if isinstance(v, list) else [v]
-                    for x in vals:
-                        n = None
-                        if isinstance(x, str):
-                            n = by_fid.get(x)
-                        elif isinstance(x, dict):
-                            n = by_fid.get(x.get("fid")) or (
-                                x if x.get("xy") else None)
-                        if n is not None and n not in out:
-                            out.append(n)
-                return out
-
             def _x_polys(node):
                 """A row's exact geometry as vertex chains (its mask), else
                 its point."""
@@ -3233,7 +3231,7 @@ def run_program(cands, anchors, program, seed_results=None,
 
             sides = []
             for _i, _el in enumerate(refs_raw):
-                _nodes = _x_nodes(_el)
+                _nodes = _named_rows(_el, "xy")
                 _polys = [p for n in _nodes for p in _x_polys(n)]
                 if not _polys:
                     raise ProgramError(
@@ -3340,34 +3338,12 @@ def run_program(cands, anchors, program, seed_results=None,
                 raise ProgramError(
                     f"ends takes a LIST of refs -- the linear features whose "
                     f"termini you want.{_sig_suffix()}")
-            def _e_nodes(el):
-                """One ends ref -> its surface rows. A road is routinely
-                several ways, so a terminus set is EVERY row the ref names."""
-                if isinstance(el, dict):
-                    el = el.get("ref")
-                toks = el if isinstance(el, list) else [el]
-                out_n: list = []
-                for t in toks:
-                    vals = [t]
-                    if isinstance(t, str) and t not in by_fid:
-                        v = _unwrap_listish(_resolve_ref(t))
-                        vals = v if isinstance(v, list) else [v]
-                    for x in vals:
-                        nd = None
-                        if isinstance(x, str):
-                            nd = by_fid.get(x)
-                        elif isinstance(x, dict):
-                            nd = by_fid.get(x.get("fid")) or (
-                                x if x.get("centerline") else None)
-                        if nd is not None and nd not in out_n:
-                            out_n.append(nd)
-                return out_n
 
             rows = _BroadRows()
             _n_end = 0
             _no_line: list = []
             for _el in _e_refs:
-                _nodes = _e_nodes(_el)
+                _nodes = _named_rows(_el, "centerline")
                 if not _nodes:
                     raise ProgramError(
                         f"ends ref {_el!r} names no row on this surface. "
