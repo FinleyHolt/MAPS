@@ -1,8 +1,8 @@
 """Validity-masked interior hole fill for baked 2D orthomosaics.
 
-A top-down ortho baked from a point cloud (``camera_model.bake_ortho_from_ply``)
-or a PDAL rasterize leaves empty 0.1 m cells as ``alpha=0`` (rendered black).
-Two kinds of no-data coexist:
+A top-down ortho rasterized from a point cloud (CityNav's 0.1 m/px PDAL
+rasters) leaves empty cells as ``alpha=0`` (rendered black). Two kinds of
+no-data coexist:
 
 - **interior speckle holes** — cells enclosed by real coverage (photogrammetry
   gaps under tree canopy, thin scan seams). These are safe to fill: TELEA
@@ -13,31 +13,18 @@ Two kinds of no-data coexist:
 
 ``fill_ortho_holes`` fills the interior holes and leaves boundary no-data black,
 so the baked ortho has zero *interior* black while never inventing ground at a
-frame boundary. The interior/boundary split is the erosion + connected-component
-reconstruction in :func:`split_black_mask` (a black component is boundary iff it
-contains an all-black ``NO_COVERAGE_ERODE_PX`` neighborhood).
-
-The low-level recipe (``split_black_mask`` + ``fill_in_coverage_holes``) is the
-single fill engine shared by the ortho bake and any raster consumer.
+frame boundary. The interior/boundary split is frame connectivity
+(:func:`interior_holes`): a black component touching the frame edge is
+boundary, every other one is an interior hole.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-# A black connected component is classified as BOUNDARY no-coverage (true
-# no-data: water/glass/scan edge/frame border) iff it survives erosion by this
-# square kernel — i.e. it contains at least one all-black KxK neighborhood.
-# Everything else black is an interior speckle hole. 15 px (1.5 m at 0.1 m/px).
-NO_COVERAGE_ERODE_PX = 15
-
 # TELEA inpaint neighborhood radius (px). Holes are dominated by 1-4 px
 # components; 3 px reaches across them without long-range smearing.
 INPAINT_RADIUS_PX = 3
-
-
-
-
 
 
 def fill_in_coverage_holes(
@@ -78,8 +65,7 @@ def fill_in_coverage_holes(
 def _nearest_fill(layer: np.ndarray, covered: np.ndarray, hole: np.ndarray) -> np.ndarray:
     """Fill ``hole`` pixels of ``layer`` from the nearest ``covered`` pixel.
 
-    Used for non-photometric channels (height, semantic class-ids) where TELEA's
-    smooth interpolation is wrong (categorical labels) or gives a nonsense metric
+    Used for height, where TELEA's smooth interpolation gives a nonsense metric
     (a height of 0 under a filled canopy pixel). Nearest-neighbour keeps values
     exact and label-safe.
     """
@@ -118,20 +104,17 @@ def fill_ortho_holes(
     rgb: np.ndarray,
     height: np.ndarray,
     alpha: np.ndarray,
-    semantic: np.ndarray | None = None,
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Frame-connectivity hole fill for a baked ortho, keyed off ``alpha``.
 
     ``alpha == 0`` is the exact no-data mask. Every hole ENCLOSED by coverage
     (not connected to the frame edge — any size) is filled: ``rgb`` via TELEA
-    inpaint, ``height`` and (optional) ``semantic`` via nearest-covered-pixel
-    fill, ``alpha`` → 255. No-data that reaches the frame edge (the exterior
+    inpaint, ``height`` via nearest-covered-pixel fill, ``alpha`` → 255. No-data that reaches the frame edge (the exterior
     border, water/scan edges opening to it) stays black with ``alpha`` 0, so no
     fill ever projects to a frame boundary. Result: zero interior black, no
     edge smear.
 
-    Returns ``(rgb, height, alpha)`` or ``(rgb, height, alpha, semantic)`` when
-    a semantic layer is supplied. Inputs are not mutated.
+    Returns ``(rgb, height, alpha)``. Inputs are not mutated.
     """
     black = alpha == 0
     hole, no_coverage = interior_holes(alpha)
@@ -141,8 +124,4 @@ def fill_ortho_holes(
     filled_height = _nearest_fill(height, covered, hole)
     filled_alpha = alpha.copy()
     filled_alpha[hole] = 255
-
-    if semantic is None:
-        return filled_rgb, filled_height, filled_alpha
-    filled_semantic = _nearest_fill(semantic, covered, hole)
-    return filled_rgb, filled_height, filled_alpha, filled_semantic
+    return filled_rgb, filled_height, filled_alpha
