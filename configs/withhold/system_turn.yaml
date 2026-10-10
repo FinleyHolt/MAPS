@@ -1,0 +1,3 @@
+# CityNav with the system_turn part withheld (maps/search/withhold.py).
+base: ../citynav.yaml
+withhold: [system_turn]

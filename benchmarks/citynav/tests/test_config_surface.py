@@ -174,3 +174,12 @@ def test_every_cfg_attribute_the_bench_reads_is_a_field():
             for a, b in pattern.findall(p.read_text())}
     assert len(read) > 15, read
     assert read <= fields, sorted(read - fields)
+
+
+def test_each_withhold_config_is_the_control_less_its_own_part():
+    control = resolve_config(REPO_ROOT / "configs/citynav.yaml")[0]
+    shipped = sorted((REPO_ROOT / "configs/withhold").glob("*.yaml"))
+    assert len(shipped) == 6
+    for path in shipped:
+        resolved = resolve_config(path)[0]
+        assert resolved == {**control, "withhold": [path.stem]}, path.name
