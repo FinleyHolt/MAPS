@@ -488,6 +488,28 @@ def _diagonal_remedy(names) -> str:
     return ""
 
 
+_FILTER_KWARGS = _CARDINAL_KWARGS | {"near", "within", "dwithin", "facing", "direction"}
+
+
+def _refuse_filter_kwargs(names) -> None:
+    """A filter kwarg outside the set is refused, never ignored: one text
+    for every filter, and a colour cut gets its own reason."""
+    if "color" in names:
+        raise CodeError(
+            "colour never CUTS -- it orders. The same car reads red "
+            "0.63 through a tight mask and 0.38 through its full one, "
+            "so a colour threshold drops the right row on the width of "
+            "its mask. Say rows.order(color=\"red\") and let the "
+            "spatial cuts do the dropping.")
+    bad = sorted(k for k in names if k not in _FILTER_KWARGS)
+    if bad:
+        raise CodeError(
+            f"filter takes near=/within=/dwithin=/facing=, "
+            f"{'/'.join(sorted(_CARDINAL_KWARGS))} or a predicate; "
+            f"{'=, '.join(bad)}= is none of them."
+            + _diagonal_remedy(bad))
+
+
 class Row:
     """One selected row: what ``rows[i]`` binds, AND its served columns.
 
@@ -528,13 +550,7 @@ class Row:
 
     def filter(self, pred=None, **kw):
         mp = object.__getattribute__(self, "_mp")
-        if "color" in kw:
-            raise CodeError(
-                "colour never CUTS -- it orders. The same car reads red "
-                "0.63 through a tight mask and 0.38 through its full one, "
-                "so a colour threshold drops the right row on the width of "
-                "its mask. Say rows.order(color=\"red\") and let the "
-                "spatial cuts do the dropping.")
+        _refuse_filter_kwargs(kw)
         if pred is not None:
             if kw:
                 raise CodeError("filter takes a predicate OR "
@@ -753,6 +769,7 @@ class RowList(list):
         # narrowed to cars with a lambda, was refused order(color=), hand
         # scanned fifty rows off printed colour strings and committed 2.5 km
         # away.
+        _refuse_filter_kwargs(kw)
         if pred is None:
             if not kw:
                 raise CodeError(
@@ -923,18 +940,7 @@ class Rows:
         than about any object, so it takes no anchor and lives on
         ``order(direction=...)``.
         """
-        if "color" in kw:
-            raise CodeError(
-                "colour never CUTS -- it orders. The same car reads red "
-                "0.63 through a tight mask and 0.38 through its full one, "
-                "so a colour threshold drops the right row on the width of "
-                "its mask. Say rows.order(color=\"red\") and let the "
-                "spatial cuts do the dropping.")
-        if kw:
-            raise CodeError(
-                f"filter takes near=/within=/dwithin= or a predicate; "
-                f"{', '.join(sorted(kw))}= is neither."
-                + _diagonal_remedy(kw))
+        _refuse_filter_kwargs(kw)
         _refuse_metres_in_within(within)
         if pred is not None:
             if (near is not None or within is not None or dwithin is not None
@@ -1022,7 +1028,7 @@ class Rows:
 
     def __radd__(self, other):
         if isinstance(other, list):
-            return other + list(self)
+            return RowList(other + list(self))
         return NotImplemented
 
     def __repr__(self):
@@ -1433,24 +1439,8 @@ class MissionPython:
         # The one check that CANNOT wait for the compiler is the swapped
         # within=/dwithin= pair: _slot() turns a bare 25 into a slot dict,
         # so by the time the compiler sees it the type evidence is gone.
-        #
-        # A KWARG OUTSIDE THE SET IS REFUSED, NEVER IGNORED -- code_surface's
-        # own stated law, and this is the one funnel every filter path
-        # reaches (Rows.filter validates its own **kw, but Row.filter and
-        # RowList.filter forward theirs straight here). An unknown name used
-        # to land in ``cards`` and be dropped by the compiler's _CARDINALS
-        # comprehension, so `rows.filter(southeast_of=X)` cut NOTHING and
-        # said nothing: the exact shape of the `toward=` kwarg that was
-        # built, accepted, compiled to nothing, and had to be deleted.
-        bad = sorted(k for k in cards if k not in _CARDINAL_KWARGS)
-        if bad:
-            raise CodeError(
-                f"filter takes near=/within=/dwithin=/facing=, "
-                f"{'/'.join(sorted(_CARDINAL_KWARGS))} or a predicate; "
-                f"{'=, '.join(bad)}= is none of them."
-                + _diagonal_remedy(bad))
+        # Every caller has already refused a kwarg outside the set.
         _refuse_metres_in_within(within)
-        # ``within`` is a plain number and rides verbatim.
         extra: dict = {}
         st = self._step(
             "filter", [self._slot(items, "filter", extra)],

@@ -799,3 +799,27 @@ def test_a_non_callable_predicate_teaches_the_method_the_surface_serves():
         _reply, fr, _f, _d = _drive([[_run(f'r1 = find("car")\n{call}\n')], "done"])
         err = _tool_results(fr)[0].get("error") or ""
         assert "r.distance(x)" in err and "gap(" not in err, err
+
+
+def test_every_filter_refuses_an_unknown_kwarg_in_one_text():
+    errs = []
+    for rows in ("r1", "r1[0]", "r1.filter(lambda r: True)"):
+        _reply, fr, _f, _d = _drive([[_run(f'r1 = find("car")\n{rows}.filter(toward=1)\n')],
+                                     "done"])
+        errs.append(_tool_results(fr)[0].get("error") or "")
+    assert errs[0] == errs[1] == errs[2] and "toward=" in errs[0], errs
+
+
+def test_every_filter_refuses_a_colour_cut():
+    for rows in ("r1", "r1[0]", "r1.filter(lambda r: True)"):
+        _reply, fr, _f, _d = _drive([[_run(f'r1 = find("car")\n{rows}.filter(color="red")\n')],
+                                     "done"])
+        assert "colour never CUTS" in (_tool_results(fr)[0].get("error") or ""), rows
+
+
+def test_a_list_plus_rows_is_a_rowlist_either_way_round():
+    _reply, fr, _f, _d = _drive([[_run('r1 = find("car")\n'
+                                       'print(hasattr(r1 + [], "filter"),'
+                                       ' hasattr([] + r1, "filter"))\n')], "done"])
+    out = _tool_results(fr)[0]
+    assert (out.get("printed") or "").strip() == "True True", out
