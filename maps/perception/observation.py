@@ -90,12 +90,6 @@ class Observation:
     seg_ids: np.ndarray | None = (
         None  # (h, w) uint16 SensatUrban class ids; reserved (unused on the ortho path)
     )
-    # Per-frame airframe tilt (roll/pitch deviation from level, degrees),
-    # composed on top of the static mount by ``perception.geolocate`` when
-    # projecting masks to world. Always 0 on the ortho-only build (level-airframe
-    # nadir assumption).
-    airframe_roll_deg: float = 0.0
-    airframe_pitch_deg: float = 0.0
     # Optional tile georef. When set, adapters project pixel masks to
     # tile-grid (row, col) cells via ``project_mask_to_tile_cells`` and
     # stamp ``metadata["tile_cells"]`` on each ``DetectedObject`` for the

@@ -129,9 +129,7 @@ def test_observation_extent_is_the_footprint_long_side():
 
 def test_auto_tiling_gates_on_frame_size(monkeypatch):
     """detect_client tiles by default whenever the frame exceeds the encoder
-    input in either dimension; small frames keep the single-shot path; a big
-    frame without ortho corners (a real perspective sensor frame) does not
-    tile."""
+    input in either dimension; small frames keep the single-shot path."""
     from maps.perception.sam import detect_client as dc
 
     calls = []
@@ -158,8 +156,4 @@ def test_auto_tiling_gates_on_frame_size(monkeypatch):
     obs2 = _Obs()
     obs2.rgb = np.zeros((800, 800, 3), dtype=np.uint8)
     _Client._segment(client, obs2, ["car"])
-    obs3 = _Obs()
-    obs3.rgb = np.zeros((1536, 2048, 3), dtype=np.uint8)
-    obs3.ortho_view_corners_xy = None
-    _Client._segment(client, obs3, ["car"])
-    assert calls == ["sahi", "single", "single"]
+    assert calls == ["sahi", "single"]

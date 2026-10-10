@@ -24,7 +24,6 @@ from maps.search.withhold import withheld
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from maps.perception.geometry.geolocate import project_mask_to_tile_cells
 from maps.perception.observation import crop_observation
 from maps.perception.ortho.detection_stamping import (
     project_and_stamp_ortho_detections,
@@ -371,34 +370,10 @@ def fly_one(
     )
     _ph.at("segment")
 
-    # Project detection masks to tile cells. Ortho corners outrank the sensor:
-    # an Observation carrying both is an orthographic rendering of the sensor's
-    # footprint (the sensor-spec eval), so the shared ortho paint pass is its
-    # projection contract; the sensor-depth frustum path is for real sensor
-    # frames (field DEM), which carry no ortho corners.
+    # Project detection masks to tile cells through the observation's
+    # view square (an orthographic rendering of the sensor's footprint).
     tracked_projections: dict[int, object] = {}
-    if (
-        obs is not None
-        and obs.sensor is not None
-        and obs.ortho_view_corners_xy is None
-    ):
-        for i, det in enumerate(detections):
-            if det.mask is None:
-                continue
-            tp = project_mask_to_tile_cells(
-                det.mask,
-                depth=obs.depth,
-                pose_xy=obs.pose_xy,
-                altitude_m=float(obs.altitude_m),
-                yaw_deg=float(obs.yaw_deg),
-                sensor=obs.sensor,
-                airframe_roll_deg=float(obs.airframe_roll_deg),
-                airframe_pitch_deg=float(obs.airframe_pitch_deg),
-                tile=tile_frame,
-            )
-            if tp is not None:
-                tracked_projections[i] = tp
-    elif obs is not None and obs.ortho_view_corners_xy is not None:
+    if obs is not None:
         tracked_projections = dict(
             project_and_stamp_ortho_detections(
                 detections,

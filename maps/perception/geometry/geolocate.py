@@ -1,31 +1,21 @@
-"""Depth-aware pixel -> world (x, y) projection for the citynav runtime.
+"""Pixel <-> world projection.
 
-Every observation carries a per-pixel depth buffer (the ortho crop's
-``altitude − height``, or the field DSM raycast), so the canonical projection is
-per-pixel back-projection through that depth.
-Any pixel whose depth is non-finite, non-positive, or beyond
-``sensor.max_range_m`` is dropped. A detection whose mask has fewer
-than ``min_valid_depth_pixels`` valid samples is dropped entirely
-rather than have its world coordinates synthesised from a flat-ground
-fallback.
+The bench and the flight observe orthographically: every ``Observation``
+carries its view-square ground corners, and a mask pixel's world (x, y) is
+an exact affine over them (``project_mask_to_world_ortho``,
+``project_mask_to_tile_cells_ortho``, ``world_contour_from_region``). A
+mask pixel with no finite, positive depth is dropped, and a detection with
+fewer than ``_MIN_VALID_DEPTH_PIXELS`` valid pixels is dropped entirely
+rather than placed from a flat-ground fallback.
 
-Two call surfaces:
-
-- ``project_mask_to_world`` returns ``(world_xy, world_bbox)`` for a
-  detection. Used by the SAM 3.1 video adapter and the SegFormer
-  adapter to stamp world geometry onto a ``DetectedObject``.
-- ``project_mask_to_tile_cells`` rasterizes the same projected pixel
-  cloud onto a tile grid, returning a ``TileProjectedMask`` for the
-  CityNav per-step belief upsert.
-
-Both wrap ``project_pixels_to_world`` (perspective unprojection with
-camera-frame -> body -> world rotation) and apply the same drop rule.
+``project_pixels_to_world`` / ``project_world_to_pixels`` are the
+perspective pinhole pair (camera-frame -> body -> world) the flight's
+footprint, frame registration and locator use.
 """
 
 from __future__ import annotations
 
 import math
-import os
 from dataclasses import dataclass
 
 import numpy as np
@@ -78,8 +68,7 @@ class ProjectedMask:
     # centroid + tile_cells are all the re-id matcher needs).
     world_xy_cloud: np.ndarray | None = None
     # Tile-grid (row, col) cells the mask rasterizes into, ``(N, 2)
-    # int32``. Populated only when ``project_mask_to_world`` received a
-    # ``tile``; ``None`` otherwise (no-tile harnesses don't need it).
+    # int32``. Populated only when the projector received a ``tile``.
     tile_cells: np.ndarray | None = None
 
 
@@ -130,25 +119,9 @@ def _tile_mask_from_cell_indices(
     )
 
 
-# ---------------------------------------------------------------------------
-# Depth-aware projection (the runtime ingest path)
-# ---------------------------------------------------------------------------
-
-
 # Below this many valid depth pixels a mask's world position is noise, not a
 # measurement, so the detection is dropped rather than placed badly.
 _MIN_VALID_DEPTH_PIXELS = 16
-
-
-def _pitch_rotation_matrix(pitch_deg: float, roll_deg: float = 0.0, yaw_deg: float = 0.0) -> np.ndarray:
-    """Body <- camera rotation for the given pitch + roll (positive-down pitch,
-    body-X roll).
-
-    Delegates to ``sensor_spec.mount_rotation_matrix`` (the single source of
-    truth). Camera +Z = optical axis, +X = right, +Y = down; body +X = forward,
-    +Y = left, +Z = up.
-    """
-    return mount_rotation_matrix(pitch_deg, roll_deg, yaw_deg)
 
 
 def project_pixels_to_world(
@@ -204,7 +177,7 @@ def project_pixels_to_world(
     x_cam = (u_grid - intr.cx) / intr.fx * z_cam
     y_cam = (v_grid - intr.cy) / intr.fy * z_cam
 
-    R_bc = _pitch_rotation_matrix(
+    R_bc = mount_rotation_matrix(
         float(sensor.mount_pitch_deg), sensor.mount_roll_deg, float(sensor.mount_yaw_deg)
     )  # body <- camera
     # Per-frame airframe tilt (roll/pitch deviation from level) composes on top
@@ -292,8 +265,8 @@ def project_world_to_pixels(
     body_x = forward_m
     body_y = -right_m
 
-    R_bc = _pitch_rotation_matrix(float(sensor.mount_pitch_deg), sensor.mount_roll_deg,
-                                  float(sensor.mount_yaw_deg))
+    R_bc = mount_rotation_matrix(float(sensor.mount_pitch_deg), sensor.mount_roll_deg,
+                                 float(sensor.mount_yaw_deg))
     if airframe_roll_deg or airframe_pitch_deg:
         R_bc = body_tilt_matrix(airframe_roll_deg, airframe_pitch_deg) @ R_bc
     # Orthonormal, so camera <- body is the transpose.
@@ -315,173 +288,6 @@ def project_world_to_pixels(
     return out
 
 
-def _world_points_under_mask(
-    region: MaskRegion,
-    depth: np.ndarray,
-    **proj_kw,
-) -> np.ndarray:
-    """The world points under ``mask``, unprojecting only what it covers.
-
-    Both perspective projectors used to unproject the WHOLE depth buffer and
-    then index it with a whole-frame boolean mask — once per detection, for a
-    detection covering a few hundred pixels. On a real camera frame that is
-    several full-resolution float64 temporaries per object, and the work is
-    identical for every object in the frame.
-
-    Given the mask's own inclusive box, both passes shrink to it: the crop
-    unprojects to the same absolute world points (``origin_rc`` carries the
-    pixel grid), and boolean indexing walks row-major in the box exactly as it
-    did in the frame, so the returned point SEQUENCE is unchanged — which is
-    what matters, since callers take means over it.
-
-    There is no whole-frame branch: a region always knows its box, which is
-    the point of the type.
-    """
-    r0, c0 = region.bbox[0], region.bbox[1]
-    sub_depth = np.asarray(region.window(depth), dtype=np.float32)
-    world_xyz = project_pixels_to_world(sub_depth, origin_rc=(r0, c0), **proj_kw)
-    return world_xyz[region.crop]
-
-
-def project_mask_to_world(
-    region: MaskRegion,
-    *,
-    depth: np.ndarray | None,
-    pose_xy: tuple[float, float],
-    altitude_m: float,
-    yaw_deg: float,
-    sensor: SensorSpec,
-    airframe_roll_deg: float = 0.0,
-    airframe_pitch_deg: float = 0.0,
-    min_valid_depth_pixels: int | None = None,
-    return_xy_cloud: bool = False,
-    tile: TileFrame | None = None,
-) -> ProjectedMask | None:
-    """Project a boolean pixel mask through ``depth`` to a world centroid.
-
-    Returns a ``ProjectedMask`` carrying:
-      - ``world_xy``: mean (east, north) of all valid projected pixels
-      - ``n_valid_pixels``: count of mask pixels that survived the
-        depth filter — load-bearing signal for the engine's
-        ``area-ratio > 2x → centroid-distance fallback`` re-id path.
-      - ``tile_cells``: rasterized grid (row, col) positions when a
-        ``tile`` was provided. ``None`` otherwise. Downstream mask-IoU
-        re-identification reads this directly; AABB envelopes are gone.
-
-    Returns ``None`` when ``depth`` is absent, shape-mismatched against
-    the region, or has fewer than ``min_valid_depth_pixels`` valid
-    samples under the mask. No flat-ground fallback.
-    """
-    if depth is None:
-        return None
-    if tuple(region.frame_shape) != tuple(depth.shape[:2]):
-        return None
-    threshold = (
-        int(min_valid_depth_pixels)
-        if min_valid_depth_pixels is not None
-        else _MIN_VALID_DEPTH_PIXELS
-    )
-    pts = _world_points_under_mask(
-        region,
-        depth,
-        pose_xy=pose_xy,
-        altitude_m=altitude_m,
-        yaw_deg=yaw_deg,
-        sensor=sensor,
-        airframe_roll_deg=airframe_roll_deg,
-        airframe_pitch_deg=airframe_pitch_deg,
-    )
-    finite = np.isfinite(pts).all(axis=-1)
-    n_valid = int(finite.sum())
-    if n_valid < threshold:
-        return None
-    pts = pts[finite]
-    world_xy = (float(pts[:, 0].mean()), float(pts[:, 1].mean()))
-    cloud: np.ndarray | None = None
-    if return_xy_cloud:
-        cloud = pts[:, :2].astype(np.float32, copy=False)
-    tile_cells: np.ndarray | None = None
-    if tile is not None:
-        H, W = tile.grid_shape
-        col_idx = np.rint((pts[:, 0] - tile.x_min) / tile.cell_size_m - 0.5).astype(
-            np.int64
-        )
-        row_idx = np.rint((pts[:, 1] - tile.y_min) / tile.cell_size_m - 0.5).astype(
-            np.int64
-        )
-        in_bounds = (row_idx >= 0) & (row_idx < H) & (col_idx >= 0) & (col_idx < W)
-        if np.any(in_bounds):
-            grid = np.zeros((H, W), dtype=bool)
-            grid[row_idx[in_bounds], col_idx[in_bounds]] = True
-            rr, cc = np.where(grid)
-            tile_cells = np.stack(
-                [rr.astype(np.int32, copy=False), cc.astype(np.int32, copy=False)],
-                axis=1,
-            )
-    return ProjectedMask(
-        world_xy=world_xy,
-        n_valid_pixels=n_valid,
-        world_xy_cloud=cloud,
-        tile_cells=tile_cells,
-    )
-
-
-def project_mask_to_tile_cells(
-    region: MaskRegion,
-    *,
-    depth: np.ndarray | None,
-    pose_xy: tuple[float, float],
-    altitude_m: float,
-    yaw_deg: float,
-    sensor: SensorSpec,
-    tile: TileFrame,
-    airframe_roll_deg: float = 0.0,
-    airframe_pitch_deg: float = 0.0,
-    min_valid_depth_pixels: int | None = None,
-) -> TileProjectedMask | None:
-    """Rasterize a boolean pixel mask onto a ``TileFrame`` via per-pixel
-    depth back-projection.
-
-    Same drop rule as ``project_mask_to_world``: requires ``depth`` to
-    be present and shape-matched, and at least
-    ``min_valid_depth_pixels`` valid samples under the mask. Returns
-    ``None`` if no projected cell lands inside the tile.
-
-    Row 0 = south (matches the CityNav prebake convention in
-    ``benchmarks/citynav/adapter._rasterize_object`` and
-    ``maps.sws.graph.builder``).
-    """
-    if depth is None:
-        return None
-    if tuple(region.frame_shape) != tuple(depth.shape[:2]):
-        return None
-    threshold = (
-        int(min_valid_depth_pixels)
-        if min_valid_depth_pixels is not None
-        else _MIN_VALID_DEPTH_PIXELS
-    )
-    pts = _world_points_under_mask(
-        region,
-        depth,
-        pose_xy=pose_xy,
-        altitude_m=altitude_m,
-        yaw_deg=yaw_deg,
-        sensor=sensor,
-        airframe_roll_deg=airframe_roll_deg,
-        airframe_pitch_deg=airframe_pitch_deg,
-    )
-    finite = np.isfinite(pts).all(axis=-1)
-    if int(finite.sum()) < threshold:
-        return None
-    pts = pts[finite]
-    xs = pts[:, 0]
-    ys = pts[:, 1]
-
-    col_idx = np.rint((xs - tile.x_min) / tile.cell_size_m - 0.5).astype(np.int64)
-    row_idx = np.rint((ys - tile.y_min) / tile.cell_size_m - 0.5).astype(np.int64)
-    return _tile_mask_from_cell_indices(row_idx, col_idx, tile)
-
-
 def project_mask_to_tile_cells_ortho(
     region: MaskRegion,
     *,
@@ -489,7 +295,7 @@ def project_mask_to_tile_cells_ortho(
     tile: TileFrame,
     min_pixels: int | None = None,
 ) -> TileProjectedMask | None:
-    """Orthographic counterpart of :func:`project_mask_to_tile_cells`.
+    """Rasterize a mask onto ``tile`` through the view-square affine.
 
     The upstream CityNav (``ortho``) observation is an
     orthographic, yaw-rotated square warp, not a camera frustum, so
@@ -500,8 +306,7 @@ def project_mask_to_tile_cells_ortho(
     buffer is involved (the ground plane is the projection surface).
 
     Returns ``None`` when the mask has fewer than ``min_pixels`` set
-    pixels or no projected cell lands inside ``tile`` — same drop
-    semantics as the depth path.
+    pixels or no projected cell lands inside ``tile``.
 
     The scan runs over the region's own box, never the frame: the same
     pixels in the same row-major order, for a cost set by the object rather
@@ -619,7 +424,7 @@ def project_mask_to_world_ortho(
     return_xy_cloud: bool = False,
     tile: TileFrame | None = None,
 ) -> ProjectedMask | None:
-    """Orthographic counterpart of :func:`project_mask_to_world`.
+    """Project a mask to a world centroid through the view-square affine.
 
     The upstream CityNav (``ortho``) observation is an
     orthographic, yaw-rotated square warp, not a camera frustum, so
@@ -634,19 +439,17 @@ def project_mask_to_world_ortho(
     the forward geometry gate (corner/yaw invariants).
 
     Depth gates validity (a mask pixel with no finite, positive depth is
-    dropped, same rule as the perspective path). Upstream
+    dropped). Upstream
     ships depth at a different resolution than the RGB the mask lives in
     (224×224 RGB, 256×256 depth); both warp the same view square, so each
     mask pixel's normalized ``(u, v)`` is sampled in the depth grid by
     nearest-neighbor rather than requiring equal shapes.
 
-    Returns a ``ProjectedMask`` matching the perspective path's shape
-    (``world_xy``, ``n_valid_pixels``, optional ``world_xy_cloud`` /
-    ``tile_cells``). Drop semantics mirror
-    :func:`project_mask_to_world`: ``None`` when ``depth`` is absent or
-    fewer than ``min_valid_depth_pixels`` mask pixels have finite,
-    positive depth. There is no ``max_range_m`` gate (no sensor in the
-    orthographic path).
+    Returns a ``ProjectedMask`` (``world_xy``, ``n_valid_pixels``, optional
+    ``world_xy_cloud`` / ``tile_cells``), or ``None`` when ``depth`` is
+    absent or fewer than ``min_valid_depth_pixels`` mask pixels have
+    finite, positive depth. There is no ``max_range_m`` gate (no sensor in
+    the orthographic path).
 
     The set-pixel scan runs over the region's box, never the frame. The
     normalised ``(u, v)`` still divide by the FRAME extent, which is why a

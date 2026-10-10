@@ -39,10 +39,8 @@ import numpy as np
 import pytest
 
 from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
-from maps.perception.ortho.camera_model import CameraIntrinsics
 from maps.perception.observation import Observation
 from maps.perception.sam.detect_client import _SAM_INPUT_SIZE, SamDetectClient
-from maps.perception.geometry.sensor_spec import SensorSpec
 from maps.util.mask_codec import encode_mask_record
 
 
@@ -113,20 +111,8 @@ def _build_segment_payload(
 
 
 def _build_observation(rgb: np.ndarray) -> Observation:
-    sensor = SensorSpec(
-        name="unit-test-nadir",
-        intrinsics=CameraIntrinsics(
-            hfov_deg=87.0,
-            vfov_deg=58.0,
-            image_width=rgb.shape[1],
-            image_height=rgb.shape[0],
-        ),
-        mount_pitch_deg=90.0,
-        max_range_m=200.0,
-    )
-    # Depth buffer is required for the depth-aware projection path; the
-    # adapter drops detections without it. Constant 50 m gives every
-    # mask pixel a valid projection at the test pose.
+    # The adapter drops detections without depth. Constant 50 m gives every
+    # mask pixel a valid projection.
     depth = np.full(rgb.shape[:2], 50.0, dtype=np.float32)
     return Observation(
         pose_xy=(0.0, 0.0),
@@ -136,9 +122,9 @@ def _build_observation(rgb: np.ndarray) -> Observation:
         height=None,
         fov_m=120.0,
         world_window=(-60.0, -60.0, 60.0, 60.0),
-        sensor=sensor,
         rgb=rgb,
         depth=depth,
+        ortho_view_corners_xy=((-60.0, 60.0), (60.0, 60.0), (60.0, -60.0), (-60.0, -60.0)),
     )
 
 
@@ -382,9 +368,9 @@ def test_returns_empty_when_rgb_missing(adapter, monkeypatch):
     assert calls == []  # no HTTP traffic when there's no frame to send
 
 
-def test_requires_sensor(adapter):
+def test_requires_ortho_corners(adapter):
     obs = _build_observation(np.full((16, 16, 3), 128, dtype=np.uint8))
-    obs.sensor = None  # type: ignore[assignment]
+    obs.ortho_view_corners_xy = None
     with pytest.raises(ValueError):
         adapter.detect(obs, obs.pose_xy)
 

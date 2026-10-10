@@ -29,7 +29,6 @@ from maps.perception.base import DetectedObject
 from maps.perception.sam.class_hint import resolve_class_hint
 from maps.perception.sam.concept_provider import ConceptProvider
 from maps.perception.geometry.geolocate import (
-    project_mask_to_world,
     project_mask_to_world_ortho,
 )
 from maps.perception.observation import Observation
@@ -748,13 +747,13 @@ class SamDetectClient:
         canonical caller, where the drone teleports between cursors and
         cross-frame tracking would just produce noise.
         """
-        del pose_xy  # obs.pose_xy + obs.yaw_deg + obs.sensor drive nadir projection
+        del pose_xy  # obs.ortho_view_corners_xy drives the projection
         if obs.rgb is None:
             return []
-        if obs.sensor is None and obs.ortho_view_corners_xy is None:
+        if obs.ortho_view_corners_xy is None:
             raise ValueError(
-                "SamDetectClient.detect requires obs.sensor "
-                "(perspective) or obs.ortho_view_corners_xy (ortho)"
+                "SamDetectClient.detect requires obs.ortho_view_corners_xy "
+                "(the view square a mask projects through)"
             )
         concepts_list = self.concept_provider.concepts_for(obs, instruction_hint)
         if not concepts_list:
@@ -774,10 +773,9 @@ class SamDetectClient:
         ``_tile_bounds`` returns a single bound for small frames, so nothing
         changes below the threshold; ``sahi`` remains the explicit override
         for forcing tiles on frames that already fit."""
-        if obs.rgb is not None and obs.ortho_view_corners_xy is not None:
-            h, w = obs.rgb.shape[:2]
-            if self.sahi or h > _SAM_INPUT_SIZE or w > _SAM_INPUT_SIZE:
-                return self._sahi_segment(obs, concepts)
+        h, w = obs.rgb.shape[:2]
+        if self.sahi or h > _SAM_INPUT_SIZE or w > _SAM_INPUT_SIZE:
+            return self._sahi_segment(obs, concepts)
         return self._segment_image_via_server(obs, concepts)
 
     @staticmethod
@@ -1107,7 +1105,6 @@ class SamDetectClient:
         ``source_tier="sam3_1_image"``; other callers pass
         ``None`` (read from payload) and ``"sam"``.
         """
-        sensor = obs.sensor
         orig_h, orig_w = orig_HW
         wire_H, wire_W = payload.get(
             "image_shape_hw", [_SAM_INPUT_SIZE, _SAM_INPUT_SIZE]
@@ -1187,7 +1184,7 @@ class SamDetectClient:
         # split falsifiable.
         def _pack(region, det_idx, obj_id, score, label, comp_idx, n_comp):
             """Project + color + pack one region into a DetectedObject, or None
-            if it fails depth-projection. Closes over sensor/obs/frame_index/
+            if it fails depth-projection. Closes over obs/frame_index/
             source_tier/self.
 
             No frame-sized array is built anywhere on this path: the region
@@ -1195,39 +1192,17 @@ class SamDetectClient:
             the colour read, and out on the DetectedObject."""
             r0, c0, r1, c1 = region.bbox
             area = region.area
-            # Real depth or no detection. Both projection paths drop the mask
-            # when fewer than ``PERCEPTION_MIN_VALID_DEPTH_PIXELS`` pixels have
-            # finite, in-range depth. Perspective unprojects through the sensor
-            # frustum; the orthographic (ortho) path inverts the
-            # yaw-rotated view-rectangle affine over ``obs.ortho_view_corners_xy``.
-            # Ortho corners OUTRANK the sensor: an Observation carrying both is
-            # an orthographic rendering of that sensor's footprint (the bench's
-            # sensor-spec eval), and the corners are its projection contract —
-            # the frustum is for real sensor frames (the field DEM path, which
-            # carries a sensor and no ortho corners).
-            if sensor is not None and obs.ortho_view_corners_xy is None:
-                projected = project_mask_to_world(
-                    region,
-                    depth=obs.depth,
-                    pose_xy=obs.pose_xy,
-                    altitude_m=obs.altitude_m,
-                    yaw_deg=obs.yaw_deg,
-                    sensor=sensor,
-                    airframe_roll_deg=float(obs.airframe_roll_deg),
-                    airframe_pitch_deg=float(obs.airframe_pitch_deg),
-                    return_xy_cloud=True,
-                    tile=obs.tile,
-                )
-            elif obs.ortho_view_corners_xy is not None:
-                projected = project_mask_to_world_ortho(
-                    region,
-                    depth=obs.depth,
-                    view_corners_xy=obs.ortho_view_corners_xy,
-                    return_xy_cloud=True,
-                    tile=obs.tile,
-                )
-            else:
-                projected = None
+            # Real depth or no detection: the projection inverts the
+            # yaw-rotated view-rectangle affine over ``obs.ortho_view_corners_xy``
+            # and drops the mask when fewer than ``_MIN_VALID_DEPTH_PIXELS``
+            # pixels have finite, positive depth.
+            projected = project_mask_to_world_ortho(
+                region,
+                depth=obs.depth,
+                view_corners_xy=obs.ortho_view_corners_xy,
+                return_xy_cloud=True,
+                tile=obs.tile,
+            )
             if projected is None:
                 return None
             attrs: dict[str, str] = {}
