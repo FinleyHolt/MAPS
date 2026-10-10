@@ -32,4 +32,4 @@ def test_meter_follows_env_path_change(tmp_path, monkeypatch):
         assert len(lines) == 1, f"{path} holds {len(lines)} records, want 1"
 
     monkeypatch.delenv("NET_METER_LOG")
-    assert not NetMeter.instance().enabled
+    assert NetMeter.instance()._path is None
