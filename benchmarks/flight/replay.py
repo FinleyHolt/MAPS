@@ -594,7 +594,8 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     effort = reasoning_effort or rec.params.get("reasoning_effort") or row.get("reasoning_effort")
     mission = ReplayMission(
         replay_of={"sortie": rec.sortie.name, "run_no": run_no, "run_id": row.get("run_id"),
-                   "workdir": rec.run_dir.name, "mode": "forced" if forced else "frames" if bank is None else "bank"},
+                   "workdir": rec.run_dir.name,
+                   "mode": " ".join(m for m, on in (("forced", forced), ("frames", live is not None)) if on) or "bank"},
         stops=rec.stops if forced else None, episode_id=episode_id, split=str(row.get("split") or "calcity"),
         config=config, workdir=ep.dir, live=live, instruction=str(row.get("description") or ""),
         recorder=ep.recorder, close_log=ep.close, run_id=f"replay-{rec.sortie.name}", run_no=run_no,
