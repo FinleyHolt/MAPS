@@ -51,8 +51,6 @@ def _node_to_dict(node: MapObject) -> dict:
         nd["best_view_px"] = int(node.best_view_px)
     if node.confidence != 1.0:
         nd["confidence"] = node.confidence
-    if node.embedding is not None:
-        nd["embedding"] = list(node.embedding)
     if node.semantic_attributes:
         nd["semantic_attributes"] = {
             k: dict(v) for k, v in node.semantic_attributes.items()
@@ -80,7 +78,6 @@ def _node_to_dict(node: MapObject) -> dict:
 
 
 def _dict_to_node(nd: dict) -> MapObject:
-    embedding_raw = nd.get("embedding")
     return MapObject(
         id=nd["id"],
         class_name=nd["category"],
@@ -97,7 +94,6 @@ def _dict_to_node(nd: dict) -> MapObject:
         observation_count=nd.get("observation_count", 0),
         best_view_px=nd.get("best_view_px", 0),
         confidence=nd.get("confidence", 1.0),
-        embedding=list(embedding_raw) if embedding_raw else None,
         semantic_attributes={
             k: {str(val): int(cnt) for val, cnt in counts.items()}
             for k, counts in nd.get("semantic_attributes", {}).items()

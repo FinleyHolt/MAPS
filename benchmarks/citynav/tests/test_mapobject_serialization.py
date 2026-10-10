@@ -33,7 +33,6 @@ def _graph_with_detected() -> ObjectGraph:
         last_seen_t=101.5,
         observation_count=3,
         confidence=0.82,
-        embedding=[0.1, 0.2, 0.3],
     )
     return ObjectGraph(
         nodes={"buildings_0": prebaked, "detected_0": detected},
@@ -55,7 +54,6 @@ def test_roundtrip_preserves_runtime_fields(tmp_path):
     assert det.last_seen_t == 101.5
     assert det.observation_count == 3
     assert abs(det.confidence - 0.82) < 1e-9
-    assert det.embedding == [0.1, 0.2, 0.3]
 
 
 def test_prebaked_default_provenance_preserved(tmp_path):

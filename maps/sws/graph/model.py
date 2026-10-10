@@ -38,8 +38,6 @@ class MapObject:
     orientation: float | None  # Degrees [0, 180), 0=N-S, 90=E-W
     orientation_confidence: float = 0.0  # 0=round/ambiguous, 1=clearly linear
     provenance: str = "prebaked"  # "prebaked" | "detected"
-    # ponytail: never set; kept while the analyze_scene feature index reads it.
-    matched_prebake_id: str | None = None
     first_seen_t: float | None = None  # wall-clock of first observation
     last_seen_t: float | None = None
     observation_count: int = 0
@@ -48,8 +46,6 @@ class MapObject:
     # (runtime.apply_best_view_color). 0 = no color view yet.
     best_view_px: int = 0
     confidence: float = 1.0  # aggregated detection confidence [0,1]
-    # ponytail: never set; kept while the search loop passes embedding=None.
-    embedding: list[float] | None = None
     # Observed attributes, {key: {value: count}}; keys are open (color, ...).
     # Prebake nodes receive only pixel-derived attributes
     # (runtime.upsert_prior_percept), never catalog text.

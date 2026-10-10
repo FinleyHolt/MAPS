@@ -13,11 +13,9 @@ def test_the_prior_withhold_starts_an_empty_graph(monkeypatch):
     monkeypatch.setattr(episode_runner, "load_episode_graph",
                         lambda stem: (_ for _ in ()).throw(FileNotFoundError(stem)))
     monkeypatch.delenv("SEARCH_WITHHOLD", raising=False)
-    graph, prior = episode_runner._episode_graph("blk", assets)
-    assert prior is feats and len(graph.nodes) == 1
+    assert len(episode_runner._episode_graph("blk", assets).nodes) == 1
     monkeypatch.setenv("SEARCH_WITHHOLD", "prior")
-    graph, prior = episode_runner._episode_graph("blk", assets)
-    assert prior == {} and len(graph.nodes) == 0
+    assert len(episode_runner._episode_graph("blk", assets).nodes) == 0
 
 
 def test_the_prior_withhold_builds_no_prior_colour(monkeypatch):

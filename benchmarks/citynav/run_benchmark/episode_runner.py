@@ -92,18 +92,17 @@ def start_altitude_m(cfg, map_name: str, episode_id: str) -> tuple[float, float]
     )
 
 
-def _episode_graph(stem: str, assets) -> tuple:
-    """The episode's object graph and the prior features it starts from.
-    The ``prior`` withhold starts both empty."""
+def _episode_graph(stem: str, assets):
+    """The episode's object graph. The ``prior`` withhold starts it empty."""
     if withheld("prior"):
-        return build_object_graph({}, cell_size_m=float(assets.cell_size_m)), {}
+        return build_object_graph({}, cell_size_m=float(assets.cell_size_m))
     try:
-        return load_episode_graph(stem), assets.base_features
+        return load_episode_graph(stem)
     except FileNotFoundError:
         log.warning("  %s: no baked graph, building on the fly", stem)
         return build_object_graph(
             assets.base_features, cell_size_m=float(assets.cell_size_m),
-        ), assets.base_features
+        )
 
 
 def _success_mask(cfg, episode, objects_by_map: dict) -> tuple[str, dict]:
@@ -158,7 +157,7 @@ def run_episode(
     assets = load_episode_assets(episode.map_name, cfg.cell_size_m)
     graph_stem = tile_stem(episode.map_name)
     log.info("tile_stem=%s map_name=%s", graph_stem, episode.map_name)
-    graph, prior_features = _episode_graph(graph_stem, assets)
+    graph = _episode_graph(graph_stem, assets)
 
     if cfg.spawn == "uniform":
         # Seeded uniform spawn over the tile (run_benchmark.spawn). The
@@ -263,7 +262,6 @@ def run_episode(
             grid,
             tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
             tile_name=f"citynav::{assets.map_name}",
-            base_features=prior_features,
             compiler=compiler,
             sam_concept_setter=sam_concept_setter,
             sam_watchlist_setter=sam_watchlist_setter,

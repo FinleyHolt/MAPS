@@ -101,7 +101,6 @@ class SearchLoop:
         *,
         tile_origin_xy: tuple[float, float],
         tile_name: str,
-        base_features: dict,
         compiler: MapsCompiler,
         sam_concept_setter: Callable[[list[str]], None] | None = None,
         sam_watchlist_setter: Callable[[list[str]], None] | None = None,
@@ -114,7 +113,6 @@ class SearchLoop:
             float(tile_origin_xy[1]),
         )
         self._tile_name = tile_name
-        self._base_features = base_features
         self._compiler = compiler
         self._sam_concept_setter = sam_concept_setter
         # C4 three-verb surface: the FREEZE-EXEMPT agent-owned watchlist
@@ -762,9 +760,7 @@ class SearchLoop:
 
         return ToolContext(
             grid_shape=(int(self._grid.height), int(self._grid.width)),
-            features=self._base_features or {},
             graph=self.state.runtime_graph,
-            tile_name=self._tile_name,
             tile_origin_xy=self._tile_origin_xy,
             cell_size_m=self._cell_size_m,
         )
@@ -1008,14 +1004,8 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
         observation_count=1,
         best_view_px=best_view_px,
         confidence=float(det.confidence),
-        # Detected nodes do not STORE the dense per-node mask machinery:
-        # `centroid`/`bbox`/`cell_count` are derived from the local `cells`
-        # var above, and the live SR/commit path
-        # reads only those scalars + class/color/provenance — never the stored
-        # `cells` array or the re-id `embedding`. The viewpoint path grounds
-        # target_xy from `centroid` (see tour_synth._runtime_graph_to_viewpoint_features),
-        # and embedding-sim dedup is inert on the canonical track_id-only path.
-        embedding=None,
+        # `centroid`/`bbox`/`cell_count` come off the local `cells` above;
+        # the tracked upsert stamps the node's own cells.
         semantic_attributes=semantic_attributes,
         cells=None,
         world_contour=world_contour,

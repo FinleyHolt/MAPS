@@ -197,7 +197,6 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
         grid,
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
         tile_name=f"citynav::{assets.map_name}",
-        base_features=assets.base_features,
         compiler=compiler,
         sam_concept_setter=sam_concept_setter,
         # The block's ground datum: the mission's observation span is
