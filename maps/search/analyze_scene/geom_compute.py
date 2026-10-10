@@ -141,7 +141,6 @@ def cardinal(a, b) -> str:
 # failure. Family grouping keeps every within-family slip (GT-safe) and separates
 # only across families (gray car vs RED cue). Color stays a SOFT pre-filter the
 # agent reasons over; GEOMETRY (between/order) is the hard discriminator.
-_COLOR_SPELL = {"gray": "gray"}  # spelling only
 _COLOR_FAMILY = {
     "white": "achromatic", "silver": "achromatic", "gray": "achromatic", "black": "achromatic",
     "red": "red", "maroon": "red",
@@ -188,7 +187,7 @@ def _parse_color_mixture(s: str) -> "list[tuple[str, float]] | None":
         if not 0.0 <= frac <= 1.0:
             return None
         word = toks[0].lower()
-        comps.append((_COLOR_SPELL.get(word, word), frac))
+        comps.append((word, frac))
     return comps or None
 
 
@@ -220,7 +219,7 @@ def color_match(cand_color: str, cue_color: str, conf: float | None = None) -> f
     returns the family-soft score unchanged.
     Color stays a SOFT signal the agent reasons over; geometry is the hard
     discriminator."""
-    b = _COLOR_SPELL.get((cue_color or "").strip().lower(), (cue_color or "").strip().lower())
+    b = (cue_color or "").strip().lower()
     mix = _parse_color_mixture(cand_color or "")
     if mix is not None:
         if not b:
@@ -228,7 +227,7 @@ def color_match(cand_color: str, cue_color: str, conf: float | None = None) -> f
         else:
             raw = max(0.5 + frac * (_color_word_raw(w, b) - 0.5) for w, frac in mix)
     else:
-        a = _COLOR_SPELL.get((cand_color or "").strip().lower(), (cand_color or "").strip().lower())
+        a = (cand_color or "").strip().lower()
         raw = _color_word_raw(a, b)
     if conf is None:
         return raw
@@ -258,7 +257,7 @@ def normalize_color(word: str) -> str:
     """Map a (possibly open-world) cue color onto ``COLOR_ENUM``; identity if already an enum
     member; falls back to the raw word (the caller decides whether an off-enum word is a loud
     error — the color-column resolver — or flows into ``color_match``'s family/substring path)."""
-    w = _COLOR_SPELL.get((word or "").strip().lower(), (word or "").strip().lower())
+    w = (word or "").strip().lower()
     if w in COLOR_ENUM:
         return w
     return _COLOR_SYNONYMS.get(w, w)
@@ -289,7 +288,7 @@ def compact_color_cell(color_str: str, shade: "str | None" = None, uncertain: bo
         return "?"
     mix = _parse_color_mixture(s)
     if mix is None:  # a plain single word (not a mixture)
-        w = _COLOR_SPELL.get(s.lower(), s.lower())
+        w = s.lower()
         return f"{w}?" if uncertain else w
     word = mix[0][0]
     second = None
@@ -1959,7 +1958,7 @@ def _min_area_rect(hull):
     n = len(hull)
     if n < 2:
         return 0.0, 0.0
-    best = None  # (area, long_side, short_side, long_dir)
+    best = None  # (area, long_side, short_side)
     for i in range(n):
         ax, ay = hull[i]
         bx, by = hull[(i + 1) % n]
@@ -1985,12 +1984,10 @@ def _min_area_rect(hull):
         wu, wv = max_u - min_u, max_v - min_v
         area = wu * wv
         if best is None or area < best[0]:
-            best = ((area, wu, wv, (ux, uy)) if wu >= wv
-                    else (area, wv, wu, (vx, vy)))
+            best = (area, wu, wv) if wu >= wv else (area, wv, wu)
     if best is None:
         return 0.0, 0.0
-    _area, long_s, short_s, _u = best
-    return long_s, short_s
+    return best[1], best[2]
 
 
 def mask_shape_features(cells, cell_m):
@@ -2063,12 +2060,7 @@ def contour_shape_features(chains):
     rings = [ch for ch in rings if is_closed_chain(ch)]
     if not rings:
         return None
-    s = 0.0
-    for pts in rings:
-        for i in range(len(pts) - 1):
-            (x1, y1), (x2, y2) = pts[i], pts[i + 1]
-            s += x1 * y2 - x2 * y1
-    area = abs(s) / 2.0
+    area = loops_area(rings)
     long_s, short_s = _min_area_rect(
         _convex_hull([p for ch in rings for p in ch]))
     if area <= 1e-9 or short_s <= 1e-9:
