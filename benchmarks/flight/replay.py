@@ -589,7 +589,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
                           forced=(lambda: len(mission.flights)) if forced else None)
     sortie = Path(out) / rec.sortie.name
     run_no = int(row.get("run_no") or 1)
-    ep = open_episode_dir(sortie, episode_id=episode_id, map_name=map_name, run_no=run_no)
+    ep = open_episode_dir(sortie, episode_id=episode_id, run_no=run_no)
     effort = reasoning_effort or rec.params.get("reasoning_effort") or row.get("reasoning_effort")
     mission = ReplayMission(
         replay_of={"sortie": rec.sortie.name, "run_no": run_no, "run_id": row.get("run_id"),

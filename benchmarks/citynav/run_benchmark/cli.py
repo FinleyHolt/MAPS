@@ -417,7 +417,6 @@ def main() -> int:
         ep = open_episode_dir(
             out_root,
             episode_id=ep_meta.episode_id,
-            map_name=ep_meta.map_name,
             # A --workdir run's root IS the attempt's directory, so its
             # ledger row points at ".".
             workdir=out_root if args.workdir else None,

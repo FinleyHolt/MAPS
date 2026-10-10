@@ -3,7 +3,6 @@
     <root>/maps_<YYYYmmdd_HHMMSS>[_run<NN>]_<benchmark>_<slug>/  one ATTEMPT of one episode
         episode.json       the runner's row once the attempt lands: ok | infra
         run.log            this process's log while the episode runs
-        map_prior.json     the survey features the episode was handed, byte-for-byte
         conversation.jsonl the mission's event trace
         steps.jsonl        one line per step (``live_recorder``)
         detections.jsonl   one line per detection, stamped with its step
@@ -27,7 +26,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -36,7 +34,6 @@ from typing import Any, Callable
 log = logging.getLogger("run_benchmark")
 
 RUN_LOG = "run.log"
-MAP_PRIOR_JSON = "map_prior.json"
 
 
 #: The benchmarks a directory name may claim. One word each, and the word is
@@ -112,7 +109,6 @@ def open_episode_dir(
     root: Path | str,
     *,
     episode_id: str,
-    map_name: str,
     workdir: Path | str | None = None,
     run_log: bool = True,
     run_no: int | None = None,
@@ -160,8 +156,6 @@ def open_episode_dir(
         )
         logging.getLogger().addHandler(handler)
 
-    _copy_map_prior(d, map_name)
-
     recorder = LiveRecorder(d, episode_id=episode_id)
 
     def close() -> None:
@@ -173,17 +167,3 @@ def open_episode_dir(
                 pass
 
     return OpenEpisode(dir=d, recorder=recorder, close=close)
-
-
-def _copy_map_prior(d: Path, map_name: str) -> None:
-    """``map_prior.json`` is the block's ``_features.json`` from the tile bake,
-    copied byte-for-byte: what the episode was handed, hashing to the bake
-    that ``run_manifest.perception.bake_sha256`` names."""
-    # At call time: the Cal City bridge rebinds these names after import.
-    from benchmarks.citynav import paths
-
-    src = Path(f"{paths.tile_stem(map_name)}_features.json")
-    try:
-        shutil.copyfile(src, d / MAP_PRIOR_JSON)
-    except OSError as exc:
-        log.warning("%s not written from %s: %s", MAP_PRIOR_JSON, src, exc)

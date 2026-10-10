@@ -236,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
 
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     sortie = args.out / stamp
-    ep = open_episode_dir(sortie, episode_id=args.episode, map_name=map_name, run_no=1)
+    ep = open_episode_dir(sortie, episode_id=args.episode, run_no=1)
     mission = Mission(episode_id=args.episode, split=args.split, config=args.config, workdir=ep.dir, live=live,
                       instruction=args.instruction, recorder=ep.recorder, close_log=ep.close, run_id=stamp,
                       run_no=1, start_xy=args.start_xy, reasoning_effort=args.reasoning_effort)

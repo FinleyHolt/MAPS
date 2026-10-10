@@ -129,7 +129,6 @@ def _episode_server_loop(
             ep = open_episode_dir(
                 run_root,
                 episode_id=episode_id,
-                map_name=resolve_map(episode_id),
             )
             workdir = ep.dir
             log_path = workdir / RUN_LOG
