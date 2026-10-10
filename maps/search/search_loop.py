@@ -16,11 +16,9 @@ point, and the recorder writes its per-step snapshot from that.
 
 from __future__ import annotations
 
-import json
 import logging
 import math
 import os
-import re
 import threading
 import time
 from collections.abc import Callable
@@ -221,22 +219,6 @@ class _State:
     termination_decisions: list[dict] = field(default_factory=list)
     # Monotonic turn counter. Collapsed turns do not bump it.
     compile_seq: int = 0
-    # ----------------------------------------------------------------
-    # Persistent reasoner state (per-stop conversations).
-    # ----------------------------------------------------------------
-    # The live ``Reasoner`` per reasoner id, so a resume continues the SAME
-    # conversation (APC discount on the shared prefix).
-    reasoners: dict[int, Any] = field(default_factory=dict)
-    # Per-reasoner status. Set to "alive" at compile-commit time
-    # and stays "alive" for the whole episode: reasoners are
-    # immortal across stops. ``reasoner_alive_rids`` is the
-    # canonical alive-set; this dict is retained as a tombstone
-    # surface for the SPA's compile-tab "status" column.
-    reasoner_status: dict[int, str] = field(default_factory=dict)
-    # Per-reasoner stop history. One entry per stop the reasoner has
-    # already seen. Used as a defensive idempotency check so the same
-    # reasoner never sees the same stop_id twice in one episode.
-    reasoner_stop_history: dict[int, list[str]] = field(default_factory=dict)
     # Preflight target/anchor separation, lowercased class -> role tuple
     # (e.g. {"parking lot": ("target",), "road": ("anchor",), "car":
     # ("anchor","target")}). Built from the Stage-1 sam_concepts union
@@ -245,11 +227,6 @@ class _State:
     # candidate at commit — the per-task agent's own anchor/target split,
     # not a hardcoded rule.
     sam_class_to_roles: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    # Pre-flight broken filter: alive reasoner ids carried forward
-    # into the runtime. Read by the preflight arming path, the
-    # degenerate ``_forced_preflight_choice`` fallback, and the
-    # workdir dump. Broken reasoners are not entered here.
-    reasoner_alive_rids: set[int] = field(default_factory=set)
     # C4 three-verb surface: the per-episode PerceptionDirector — the live
     # SAM watchlist (initial = the round-0 sam_concepts union), the
     # queued/active boosts, and the addressable pending-stop registry
@@ -757,248 +734,6 @@ class SearchLoop:
         except OSError as e:
             log.warning("telemetry write failed at %s: %s", path, e)
 
-    def restore_from_workdir(
-        self,
-        src_workdir: Path | str,
-        *,
-        instruction: str,
-        turn: int | None = None,
-    ) -> dict:
-        """Rebuild engine state from a prior run's on-disk checkpoint.
-
-        Reads the canonical on-disk artifacts of a prior run and overlays
-        them onto the live state, so the next call to
-        ``update_perception`` proceeds as if the engine had run up through
-        ``turn`` already. ``start``
-        must be called first so the runtime graph and the
-        ``sam_concept_setter`` callback are wired.
-
-        Sources read from ``src_workdir``:
-
-        - ``compile/turn_<NNNN>/finalized/r*.json`` -> the concept union
-          rebuild (the SAM concept provider via the ``sam_concept_setter``
-          injected at construction, the per-class roles)
-        - ``state.compile_seq = turn + 1``
-
-        ``turn`` defaults to the highest ``compile/turn_<NNNN>/`` that
-        carries a finalized reasoner with reconstructable sam_concepts.
-        Returns a dict summarizing what was restored (turn index, sam
-        concept count, source workdir).
-        """
-        if self._state is None:
-            raise RuntimeError("SearchLoop.start must be called before restore.")
-        src = Path(src_workdir).resolve()
-        if not src.is_dir():
-            raise FileNotFoundError(f"resume workdir not found: {src}")
-
-        compile_root = src / "compile"
-        turn_dir_re = re.compile(r"turn_(\d+)$")
-
-        def _compile_turn_dir(idx: int) -> Path:
-            return compile_root / f"turn_{idx:04d}"
-
-        from maps.search.parse_compile.compiler import _extract_reasoner_concepts
-
-        def _record_restorable(d: dict) -> bool:
-            """A finalized reasoner record is restorable when it carries at
-            least one reconstructable SAM concept. The check routes through
-            the SAME ``_extract_reasoner_concepts`` the union rebuild below
-            consumes (it drops null-token/blank/non-dict classes), so the
-            restorability gate and the consumer agree — a record whose
-            ``sam_concepts`` are all junk (e.g. ``[{"class": "none"}]``) is
-            NOT restorable, and the turn selection skips it rather than
-            selecting it and then hard-raising."""
-            if not isinstance(d, dict):
-                return False
-            try:
-                return bool(_extract_reasoner_concepts(d))
-            except Exception:
-                return False
-
-        def _has_restorable_record(idx: int) -> bool:
-            fdir = _compile_turn_dir(idx) / "finalized"
-            if not fdir.is_dir():
-                return False
-            for hp in sorted(fdir.glob("r*.json")):
-                try:
-                    with hp.open("r") as fh:
-                        d = json.load(fh)
-                except (OSError, json.JSONDecodeError):
-                    continue
-                if _record_restorable(d):
-                    return True
-            return False
-
-        def _compile_turn_indices() -> list[int]:
-            if not compile_root.is_dir():
-                return []
-            out = []
-            for p in compile_root.iterdir():
-                m = turn_dir_re.match(p.name)
-                if m:
-                    out.append(int(m.group(1)))
-            return sorted(out)
-
-        if turn is None:
-            candidates = [
-                t for t in _compile_turn_indices() if _has_restorable_record(t)
-            ]
-            if not candidates:
-                raise FileNotFoundError(
-                    f"no turn under {compile_root} has a restorable finalized "
-                    f"reasoner (reconstructable sam_concepts)"
-                )
-            turn = candidates[-1]
-
-        ctd = _compile_turn_dir(turn)
-        finalized_records: list[dict] = []
-        fdir = ctd / "finalized"
-        if fdir.is_dir():
-            for hp in sorted(fdir.glob("r*.json")):
-                try:
-                    with hp.open("r") as fh:
-                        d = json.load(fh)
-                except (OSError, json.JSONDecodeError):
-                    continue
-                if not isinstance(d, dict):
-                    continue
-                finalized_records.append(d)
-
-        sam_concepts: list[str] = []
-        union_specs: list[dict] = []
-        # PRIMARY source of truth for the resumed target/anchor split: the
-        # round-0 roles each reasoner committed (the record's sam_concepts),
-        # rebuilt with the SAME canonical union builder the fresh compile
-        # uses — a role-less rebuild would tag every class "target" and hand
-        # a building target a car-dominated ballot on resume.
-        try:
-            from maps.search.parse_compile.concept_union import ConceptUnionBuilder
-
-            proposals: dict = {}
-            for d in finalized_records:
-                rid = d.get("reasoner_id")
-                if rid is not None:
-                    specs = _extract_reasoner_concepts(d)
-                    if specs:
-                        proposals[rid] = specs
-            if proposals:
-                ur = ConceptUnionBuilder().build(proposals)
-                sam_concepts = list(ur.union)
-                union_specs = [
-                    {"class": str(s.get("class") or ""),
-                     "roles": [str(r) for r in (s.get("roles") or [])]}
-                    for s in (ur.union_specs or [])
-                    if isinstance(s, dict) and s.get("class")
-                ]
-        except Exception as exc:  # noqa: BLE001
-            log.warning("restore: role union rebuild failed (%s)", exc)
-
-        # The finalized record always carries sam_concepts, so the
-        # rebuild above is the sole concept source. A restorable turn
-        # (see _record_restorable) guarantees at least one reconstructable
-        # concept; empty here means a genuinely malformed source -> fail loud
-        # rather than silently flying with no SAM concepts.
-        if not sam_concepts:
-            raise FileNotFoundError(
-                f"restore: no reconstructable sam_concepts under {fdir} "
-                f"(sam_concepts missing on every reasoner)"
-            )
-
-        s = self._state
-        s.compile_seq = max(s.compile_seq, turn + 1)
-        s.sam_class_to_roles = _class_to_roles_from_specs(union_specs)
-        restored_finalized: dict[int, dict] = {}
-        for d in finalized_records:
-            if not isinstance(d.get("reasoner_id"), int):
-                continue
-            if d.get("canceled") or d.get("error"):
-                continue
-            if not _record_restorable(d):
-                continue
-            restored_finalized[int(d["reasoner_id"])] = dict(d)
-        s.reasoner_alive_rids = set(restored_finalized)
-
-        # Reasoner re-arm: ``s.reasoners`` holds in-memory LLM sessions that
-        # are NEVER serialized (a restore strips ``_persistent_reasoner``),
-        # so a restore that only rehydrates the finalized records leaves
-        # ``s.reasoners`` empty and the runtime reasoning path is never
-        # exercised on resume. Rebuild a live ``Reasoner`` per restored rid.
-        #
-        # The per-stop packet is THIN and does NOT re-push the operator
-        # instruction (it lives on the persistent round-0 transcript, which is
-        # NOT on disk for a resumed source), and the system prompt carries no
-        # cue. A bare reasoner would be CUE-BLIND — unable to rank candidates
-        # toward the cue, nulling any runtime lever on BOTH arms of an A/B.
-        # Seed each rebuilt reasoner with the operator instruction + its
-        # committed round-0 intel. No new persistence: the instruction is
-        # an argument; the sam_concepts are on disk.
-        from maps.search.parse_compile.reasoner_agent import Reasoner
-
-        s.reasoners = {}
-        s.reasoner_status = {}
-        s.reasoner_stop_history = {}
-        sam_cs = [str(c) for c in sam_concepts if str(c).strip()]
-        for rid, d in restored_finalized.items():
-            seed = d.get("seed")
-            reasoner = Reasoner(
-                reasoner_url=self._compiler.reasoner_url,
-                endpoint_spec=self._compiler.endpoint_spec,
-                # Resume rebuilds the in-memory client only; reuse the
-                # compiler's already-resolved credential without serializing
-                # it into the checkpoint. Omitting this silently falls back to
-                # the local-vLLM ``EMPTY`` sentinel on hosted endpoints.
-                api_key=self._compiler.api_key,
-                seed=int(seed) if isinstance(seed, int) else None,
-                reasoner_index=int(rid),
-                sensor_description=getattr(self._compiler, "sensor_description", ""),
-            )
-            reasoner.append_user(
-                "RESUMED MISSION CONTEXT -- you already completed the "
-                "pre-takeoff planning round of this search; that transcript is "
-                "summarized below. Continue from here: the drone is now flying "
-                "the tour you planned, and each following packet is one "
-                "stop.\n\n"
-                "--- Operator instruction ---\n"
-                f"{instruction.strip()}\n\n"
-                "--- Your committed mission intel ---\n"
-                f"sam_concepts: {', '.join(sam_cs)}"
-            )
-            s.reasoners[rid] = reasoner
-            s.reasoner_status[rid] = "alive"
-            s.reasoner_stop_history[rid] = []
-
-        if self._sam_concept_setter is not None and sam_concepts:
-            self._sam_concept_setter(list(sam_concepts))
-        # C4: arm the PerceptionDirector on resume too (watchlist = the
-        # restored union), so view{watchlist}/boost work on resumed runs.
-        try:
-            self._arm_perception_director(list(sam_concepts))
-        except Exception:  # noqa: BLE001 — never fail the restore
-            log.exception("perception director arm failed on restore")
-
-        # Resume hydrates the pre-flight state ("when we started flying"),
-        # NOT the in-flight lock state. Carrying forward locked_detection_id
-        # / confirmed_target_xy from a prior run's mid-flight or landing
-        # phase means each resume starts post-lock, which makes iterating
-        # on the runtime / commit loop impossible.
-        summary = {
-            "src_workdir": str(src),
-            "turn": int(turn),
-            "sam_concepts": sam_concepts,
-            "alive_rids": sorted(s.reasoner_alive_rids),
-            "reasoners_armed": len(s.reasoners),
-            "compile_seq": int(s.compile_seq),
-        }
-        log.info(
-            "SearchLoop.restore_from_workdir: src=%s turn=%d "
-            "sam_concepts=%d reasoners_armed=%d",
-            src,
-            turn,
-            len(sam_concepts),
-            len(s.reasoners),
-        )
-        return summary
-
     @property
     def state(self) -> _State:
         if self._state is None:
@@ -1015,9 +750,8 @@ class SearchLoop:
 
     def _arm_perception_director(self, concepts: list) -> None:
         """(Re)build the per-episode PerceptionDirector with ``concepts`` as
-        the initial live watchlist (the round-0 sam_concepts union).
-        Called under ``self._lock`` at compile commit + resume-restore; a
-        fresh compile turn (new intel) rebuilds it outright."""
+        the initial live watchlist. Called under ``self._lock`` by the
+        first ``declare_mission_concepts``."""
         from maps.search.parse_compile.perception_director import (
             PerceptionDirector,
         )

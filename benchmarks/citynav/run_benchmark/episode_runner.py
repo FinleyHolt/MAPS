@@ -43,7 +43,6 @@ from benchmarks.citynav.run_benchmark.osm_prior import (
     _build_osm_prior_ctx_from_graph,
 )
 from benchmarks.citynav.run_benchmark.perception import make_perception
-from benchmarks.citynav.run_benchmark.resume import hydrate_resume_artifacts
 from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 from benchmarks.citynav.run_benchmark.reasoner_warmup import (
     ReasonerUnreachableError,
@@ -250,16 +249,13 @@ def run_episode(
     # SAM concept setter pushes each act.sam_concepts union back into a
     # SAM-style perception adapter; non-SAM adapters get a no-op. The
     # mission declares concepts latest-wins, so the catalog is never
-    # frozen mid-episode (``sam_concept_freezer`` fires only on the
-    # resume-restore path, which re-arms a finished catalog).
+    # frozen mid-episode.
     sam_concept_setter = None
-    sam_concept_freezer = None
     sam_watchlist_setter = None
     if isinstance(perception, SamDetectClient):
         cp = perception.concept_provider
         if isinstance(cp, ReasonerUnionConceptProvider):
             sam_concept_setter = cp.set_concepts
-            sam_concept_freezer = cp.freeze
             # C4: the freeze-exempt agent-owned watchlist channel — how a
             # view{watchlist} mutation / boost activation reaches the
             # per-flight /segment calls.
@@ -481,29 +477,6 @@ def run_episode(
     ]
     sensor_row = sensor.to_dict() if sensor is not None else None
 
-    if cfg.resume_from_workdir and search_loop is not None:
-        # One canonical resume path. ``restore_from_workdir`` loads
-        # belief, SAM video concepts,
-        # and compile_seq from the source run's on-disk artifacts.
-        # ``hydrate_resume_artifacts`` mirrors the dashboard tree so
-        # the SPA's compile-tab and reasoner panels populate.
-        try:
-            summary = search_loop.restore_from_workdir(
-                cfg.resume_from_workdir,
-                instruction=episode.description,
-                turn=cfg.resume_turn,
-            )
-            if sam_concept_freezer is not None:
-                sam_concept_freezer()
-            state.belief_snapshot = search_loop.snapshot()
-            hydrate_resume_artifacts(
-                src_workdir=summary["src_workdir"],
-                dst_workdir=os.environ.get("SEARCH_COMPILE_WORKDIR"),
-                turn=int(summary["turn"]),
-            )
-        except Exception as exc:
-            log.error("resume_from_workdir failed: %s", exc, exc_info=True)
-            raise
     steps_taken = 0
 
     # The episode takeoff pose, snapshotted before the mission moves the
