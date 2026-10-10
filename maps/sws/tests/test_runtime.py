@@ -183,14 +183,9 @@ def test_save_load_graph_preserves_world_contour_on_prior_and_detected():
     """``save_graph`` -> ``load_graph`` MUST preserve ``world_contour``.
 
     The SAM mask-tracking substrate rides on ``MapObject.world_contour`` (the
-    fine footprint polygon). The world_state ingest server hands the runtime a
-    graph over exactly this ``save_graph`` -> bytes -> ``load_graph`` round-trip
-    (``world_state_ingest_server._snapshot_bundle`` /
-    ``world_state_ingest_client._load_snapshot``). A stale server whose io
-    serdes predates this field silently DROPPED it on every node — priors AND
-    detections — which read as "world_contour_coverage 0/32 + 0/242" on the
-    2026-07-04 real-stack smoke while color (long-serialized) survived. Pin
-    both sides of the serdes so that regression cannot pass silently.
+    fine footprint polygon). A serdes that drops the field drops it on every
+    node, priors AND detections, while everything else survives. Pin both
+    sides of the serdes so that regression cannot pass silently.
     """
     import pathlib
     import tempfile

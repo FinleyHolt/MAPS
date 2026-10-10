@@ -8,21 +8,10 @@ def test_split_contract_is_calcity_owned():
     assert paths.split_path("calcity") == paths.SPLITS_DIR / "calcity.json"
 
 
-def test_every_split_declares_a_default_radius():
-    """A split with no radius would silently inherit the run config, so the
-    fallback for a shapeless row would depend on how the run was invoked."""
-    assert set(paths.SPLIT_FILES) == set(paths.DEFAULT_SUCCESS_RADIUS_M)
-    assert paths.DEFAULT_SUCCESS_RADIUS_M["calcity"] == 20.0
-
-
 def test_the_bench_declares_one_criterion_and_it_is_the_shape():
-    """Every row of this corpus resolves a footprint, which is why the
-    fallback radius above fires on no episode -- and why the retired
-    ``calcity_precise``, whose ONLY difference was a tighter fallback,
-    scored identically to this split on identical episodes."""
+    """Every row of this corpus resolves a footprint, so the fallback
+    radius fires on no episode."""
     assert paths.SUCCESS_CRITERION == "shape"
-    assert "calcity_precise" not in paths.SPLIT_FILES
-    assert not (paths.SPLITS_DIR / "calcity_precise.json").exists()
 
 
 def test_default_release_layout_is_inside_calcity_package(monkeypatch):

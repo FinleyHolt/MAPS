@@ -71,10 +71,6 @@ RUNTIME_FRAME: dict[str, str] = {
     "origin": "southwest",
 }
 
-# Benchmark slug: the split-name stem, the dashboard API param, and the rider
-# key inside every dataset row. Registered in ``benchmarks/calcity/paths.py``;
-# the manifest lives at ``benchmarks/calcity/benchmark.json``.
-SLUG = "calcity"
 
 # Fetch extent for the reproducible worldkit bundle. The ~130 m padding covers
 # the UTM grid-convergence bulge at the map edges; fetching only the map bbox

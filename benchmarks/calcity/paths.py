@@ -51,23 +51,9 @@ TILES_DIR = _env_path("SEARCH_CALCITY_TILES", PACKAGE_ROOT / "tiles")
 # ``benchmarks.citynav.paths.SUCCESS_CRITERION``; the bridge rebinds it.
 SUCCESS_CRITERION = "shape"
 
-# ONE dataset over the one unified map. There used to be a second,
-# ``calcity_precise``, differing from this one in a single field: the
-# fallback radius, 15.0 against 20.0. That fallback fires when a row
-# resolves no shape, and every one of the 1,023 rows resolves one, so the
-# two datasets produced identical verdicts on identical episodes -- the
-# "present but always empty" hazard at the size of a whole corpus. Under
-# one criterion per bench there is nothing left for it to mean.
+# ONE dataset over the one unified map.
 SPLIT_FILES: dict[str, str] = {
     "calcity": "calcity.json",
-}
-
-# The fallback success radius, for an episode with no annotated shape.
-# Per-episode overrides live in the ground-truth sidecar; a shape supersedes
-# the radius entirely, and on today's corpus every row has one. Mirrored in
-# the benchmark.json manifest — validate.py pins the two together.
-DEFAULT_SUCCESS_RADIUS_M: dict[str, float] = {
-    "calcity": 20.0,
 }
 
 
