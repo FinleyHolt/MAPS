@@ -7,8 +7,8 @@ self-hosted vLLM and a hosted endpoint honour. No LLM logic here; just
 the transport.
 
 Retries are split by cause. A 5xx or a transport error is a transient
-fault and burns the `max_retries` budget. A 429/402 is a capacity or
-quota event with its own, more patient budget (`max_rate_limit_retries`,
+fault and burns the `_MAX_RETRIES` budget. A 429/402 is a capacity or
+quota event with its own, more patient budget (`_MAX_RATE_LIMIT_RETRIES`,
 honouring `Retry-After`) — hosted endpoints rate-limit routinely, and
 spending the transient budget on that would end an episode mid-compile.
 Every other 4xx is a malformed-request bug and is surfaced immediately.
@@ -73,6 +73,11 @@ _NO_RETRY_TIMEOUTS = (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout)
 # ``Retry-After``; past this the run is better off failing loud than
 # silently parking a reasoner worker.
 _RATE_LIMIT_MAX_BACKOFF_S = 60.0
+
+# The two retry budgets and the exponential backoff base, in seconds.
+_MAX_RETRIES = 2
+_MAX_RATE_LIMIT_RETRIES = 5
+_BACKOFF_S = 1.5
 
 
 def _retry_after_delay(headers: object, default_s: float) -> float:
@@ -744,19 +749,16 @@ def _chat_completions_raw(
     base_url: str,
     api_key: str | None,
     *,
-    timeout: float = 14400.0,  # 4h: only kill a truly-hung call (was 300s); the stage deadline is the real ceiling
-    max_retries: int = 2,
-    max_rate_limit_retries: int = 5,
-    backoff_s: float = 1.5,
+    timeout: float,
     cancel_event: threading.Event | None = None,
     **kwargs,
 ) -> _RawResponse:
     """Send a chat completion via raw HTTP.
 
-    Retries transient 5xx responses up to `max_retries` times with exponential
+    Retries transient 5xx responses up to `_MAX_RETRIES` times with exponential
     backoff. Request errors (connection refused, timeout) also retry.
     Rate-limit and quota responses (429/402) draw on a separate
-    `max_rate_limit_retries` budget so a burst of them cannot consume the
+    `_MAX_RATE_LIMIT_RETRIES` budget so a burst of them cannot consume the
     transient-fault budget; each wait honours `Retry-After` when present.
     Every other 4xx is surfaced immediately; it indicates a malformed request
     that retrying would not fix.
@@ -862,15 +864,15 @@ def _chat_completions_raw(
             else:
                 with httpx.Client(timeout=timeout) as client:
                     r = client.post(url, headers=headers, json=body)
-                if 500 <= r.status_code < 600 and attempt < max_retries:
+                if 500 <= r.status_code < 600 and attempt < _MAX_RETRIES:
                     log.warning(
                         "LLM endpoint %d on attempt %d/%d; retrying in %.1fs",
                         r.status_code,
                         attempt + 1,
-                        max_retries + 1,
-                        backoff_s * (2**attempt),
+                        _MAX_RETRIES + 1,
+                        _BACKOFF_S * (2**attempt),
                     )
-                    time.sleep(backoff_s * (2**attempt))
+                    time.sleep(_BACKOFF_S * (2**attempt))
                     attempt += 1
                     continue
                 if r.status_code == 404:
@@ -958,7 +960,7 @@ def _chat_completions_raw(
                 # Capacity/quota, not a malformed body: the same request
                 # succeeds once the window resets. Both the streaming and
                 # blocking paths land here, so this covers both.
-                if rate_limit_attempt >= max_rate_limit_retries:
+                if rate_limit_attempt >= _MAX_RATE_LIMIT_RETRIES:
                     log.error(
                         "LLM endpoint %d after %d rate-limit retries; "
                         "giving up on this call",
@@ -967,7 +969,7 @@ def _chat_completions_raw(
                     )
                     raise
                 delay = _retry_after_delay(
-                    e.response.headers, backoff_s * (2**rate_limit_attempt)
+                    e.response.headers, _BACKOFF_S * (2**rate_limit_attempt)
                 )
                 rate_limit_attempt += 1
                 log.warning(
@@ -975,7 +977,7 @@ def _chat_completions_raw(
                     "retry %d/%d; waiting %.1fs",
                     status,
                     rate_limit_attempt,
-                    max_rate_limit_retries,
+                    _MAX_RATE_LIMIT_RETRIES,
                     delay,
                 )
                 time.sleep(delay)
@@ -1066,14 +1068,14 @@ def _chat_completions_raw(
                 # bug, not a capacity event; surface it (retry won't fix
                 # it).
                 raise
-            if attempt >= max_retries:
+            if attempt >= _MAX_RETRIES:
                 raise
             log.warning(
                 "LLM transport error on attempt %d/%d: %s; retrying in %.1fs",
                 attempt + 1,
-                max_retries + 1,
+                _MAX_RETRIES + 1,
                 e,
-                backoff_s * (2**attempt),
+                _BACKOFF_S * (2**attempt),
             )
-            time.sleep(backoff_s * (2**attempt))
+            time.sleep(_BACKOFF_S * (2**attempt))
             attempt += 1

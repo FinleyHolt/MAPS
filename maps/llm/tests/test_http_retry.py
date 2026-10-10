@@ -1,8 +1,8 @@
 """Retry behaviour of the chat-completions transport.
 
 The transport splits retries by cause: transient faults (5xx, connection
-errors) burn ``max_retries``; rate-limit and quota responses (429/402)
-draw on the separate ``max_rate_limit_retries`` budget; every other 4xx
+errors) burn ``_MAX_RETRIES``; rate-limit and quota responses (429/402)
+draw on the separate ``_MAX_RATE_LIMIT_RETRIES`` budget; every other 4xx
 is a malformed request and raises at once. These tests pin that split,
 because a hosted endpoint rate-limits routinely and a single shared
 budget would end an episode mid-compile.
@@ -87,12 +87,9 @@ def transport(monkeypatch):
     ``(result_or_exc, calls, sleeps)``. Sleeps are captured rather than
     taken so the rate-limit backoff is asserted without real waiting.
     """
-    monkeypatch.delenv("SEARCH_LLM_CACHE_MODE", raising=False)
     # No workdir means no mission to record -- the flight log is derived
     # from it and there is no separate switch to unset.
     monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
-    monkeypatch.delenv("SEARCH_LLM_DUMP_4XX_DIR", raising=False)
-    monkeypatch.delenv("SEARCH_STREAM_TOKENS", raising=False)
 
     sleeps: list[float] = []
     monkeypatch.setattr(http_mod.time, "sleep", lambda s: sleeps.append(s))
@@ -110,6 +107,7 @@ def transport(monkeypatch):
                 "key",
                 model="m",
                 messages=[{"role": "user", "content": "hi"}],
+                timeout=60.0,
                 **kwargs,
             )
         except Exception as exc:  # noqa: BLE001 - the test inspects it
@@ -142,15 +140,13 @@ def test_rate_limit_wait_is_capped(transport) -> None:
 
 
 def test_rate_limit_budget_is_separate_from_transient_budget(transport) -> None:
-    """A 429 storm must not be capped by ``max_retries``.
+    """A 429 storm must not be capped by ``_MAX_RETRIES``.
 
-    With ``max_retries=2`` and ``max_rate_limit_retries=5`` a permanent
+    With ``_MAX_RETRIES=2`` and ``_MAX_RATE_LIMIT_RETRIES=5`` a permanent
     429 is sent 6 times (initial + 5 waits) — proof the two budgets do
     not share a counter.
     """
-    result, calls, sleeps = transport(
-        [_FakeResponse(429)], max_retries=2, max_rate_limit_retries=5
-    )
+    result, calls, sleeps = transport([_FakeResponse(429)])
 
     assert isinstance(result, httpx.HTTPStatusError)
     assert result.response.status_code == 429
@@ -198,6 +194,7 @@ def _posted_body(monkeypatch, **kwargs) -> dict:
         "key",
         model="m",
         messages=[{"role": "user", "content": "hi"}],
+        timeout=60.0,
         **kwargs,
     )
     return client.bodies[0]
@@ -269,7 +266,7 @@ def test_transient_5xx_still_uses_the_fault_budget(transport) -> None:
 
 
 def test_permanent_5xx_exhausts_the_fault_budget(transport) -> None:
-    result, calls, _sleeps = transport([_FakeResponse(503)], max_retries=2)
+    result, calls, _sleeps = transport([_FakeResponse(503)])
 
     assert isinstance(result, httpx.HTTPStatusError)
     assert len(calls) == 3
@@ -310,7 +307,7 @@ def _run_raising(monkeypatch, exc: Exception) -> list[int]:
             "key",
             model="m",
             messages=[{"role": "user", "content": "hi"}],
-            max_retries=2,
+            timeout=60.0,
         )
     return calls
 
@@ -337,3 +334,9 @@ def test_connect_timeout_still_burns_the_fault_budget(monkeypatch) -> None:
     req = httpx.Request("POST", "http://endpoint/v1/chat/completions")
     calls = _run_raising(monkeypatch, httpx.ConnectTimeout("connect", request=req))
     assert calls == [0, 1, 2]
+
+
+def test_every_call_names_its_timeout() -> None:
+    with pytest.raises(TypeError, match="timeout"):
+        http_mod._chat_completions_raw(
+            "http://endpoint/v1", "key", model="m", messages=[{"role": "user", "content": "hi"}])
