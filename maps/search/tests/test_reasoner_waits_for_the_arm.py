@@ -53,10 +53,11 @@ class _Stop(threading.Event):
         return self.is_set()
 
 
-def _round(monkeypatch, faults: int, *, cancel_event=None, transcript=None):
+def _round(monkeypatch, faults: int, *, cancel_event=None, transcript=None,
+           fault: BaseException = httpx.ConnectError("relay down")):
     monkeypatch.setattr(
         "maps.search.parse_compile.reasoner_loop.time.sleep", lambda _s: None)
-    turns = iter([httpx.ConnectError("relay down")] * faults + [_REPLY] * 5)
+    turns = iter([fault] * faults + [_REPLY] * 5)
 
     def _step(tools):
         nxt = next(turns)
@@ -103,6 +104,24 @@ def test_stop_is_the_one_way_out_of_the_wait(monkeypatch):
 def test_the_bench_keeps_its_budget(monkeypatch):
     reply = _round(monkeypatch, faults=6)
     assert reply.ended_by == "transient_failures"
+
+
+def _status(code: int) -> httpx.HTTPStatusError:
+    req = httpx.Request("POST", "http://serve.invalid/v1/chat/completions")
+    return httpx.HTTPStatusError(f"{code}", request=req,
+                                 response=httpx.Response(code, request=req))
+
+
+@pytest.mark.parametrize("code, ended_by", [
+    (400, "request_refused"), (422, "request_refused"),
+    (408, "transient_failures"), (429, "transient_failures"),
+    (503, "transient_failures")])
+def test_a_refused_request_is_the_methods_failure(monkeypatch, code, ended_by):
+    """A 4xx other than 408/429 is the serve refusing what was sent: the
+    budget still retries it, and when it runs out the mission ends
+    ``request_refused``, which is scored, not ``transient_failures``."""
+    reply = _round(monkeypatch, faults=6, fault=_status(code))
+    assert reply.ended_by == ended_by
 
 
 def test_a_dead_relay_port_is_a_link_fault():

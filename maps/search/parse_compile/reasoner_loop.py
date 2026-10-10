@@ -152,6 +152,16 @@ def _is_oversize_rejection(exc: BaseException) -> bool:
         return False
     return any(s in body for s in _OVERSIZE_REJECTION)
 
+def _is_refused_request(exc: BaseException) -> bool:
+    """Did the serve refuse what was sent (a 4xx other than 408/429)?
+
+    A timeout or a rate limit is the serve's weather; any other 4xx is a
+    request the method built wrong, and re-sending it fails the same way."""
+    return (isinstance(exc, httpx.HTTPStatusError)
+            and 400 <= exc.response.status_code < 500
+            and exc.response.status_code not in (408, 429))
+
+
 def _summarise_exc(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"
 
@@ -593,7 +603,8 @@ class MissionReply:
 
     ``ended_by`` = "reply" (the model's plain no-tool-call turn — the ONE
     model-owned ending) | "turn_cap" | "transient_failures" |
-    "compaction_infeasible". The commit is the engine's job (it tracked
+    "request_refused" | "oversize_rejection" | "compaction_infeasible".
+    The commit is the engine's job (it tracked
     every flight it executed); this reply carries the conversation facts.
     """
 
@@ -4656,7 +4667,9 @@ def advance_reasoner_one_round(
                 })
             if cancel is None:
                 if transient_failures >= MAX_ROUND_TRANSIENT:
-                    return _mission_end("transient_failures", turns=turn_idx + 1)
+                    return _mission_end(
+                        "request_refused" if _is_refused_request(exc)
+                        else "transient_failures", turns=turn_idx + 1)
                 time.sleep(min(15.0, 0.5 + 2.0 * transient_failures))
             elif cancel.wait(min(30.0, 0.5 + 2.0 * transient_failures)):
                 raise CallCanceled("stopped while waiting for the reasoner")
