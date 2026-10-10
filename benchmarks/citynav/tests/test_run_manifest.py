@@ -274,3 +274,23 @@ def test_an_unreadable_manifest_is_refused_in_one_line(stub_run, tmp_path):
     with pytest.raises(run_manifest.ManifestIdentityError, match="unreadable") as e:
         run_manifest.emit_or_verify(tmp_path, stub_run, log=lambda *_: None)
     assert str(path) in str(e.value) and "\n" not in str(e.value)
+
+
+def test_a_failed_manifest_write_leaves_the_old_one_whole(stub_run, tmp_path, monkeypatch):
+    """A reader of a running root must never catch a half-written manifest,
+    and a resume that dies mid-write must not cut the record it verified."""
+    import pathlib
+
+    path = run_manifest.emit_or_verify(tmp_path, stub_run, log=lambda *_: None)
+    before = path.read_text()
+
+    def cut(self, text, *a, **k):
+        with open(self, "w") as fh:
+            fh.write(text[: len(text) // 2])
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(pathlib.Path, "write_text", cut)
+    monkeypatch.setattr("os.fsync", lambda fd: (_ for _ in ()).throw(OSError(28, "full")))
+    with pytest.raises(OSError):
+        run_manifest.emit_or_verify(tmp_path, stub_run, log=lambda *_: None)
+    assert path.read_text() == before

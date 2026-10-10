@@ -32,7 +32,8 @@ def _json_default(obj: Any) -> Any:
 
 
 def atomic_write_json(path: Path, payload: Any, *, sort_keys: bool = False) -> None:
-    """Write ``payload`` as JSON to ``path`` via tmp + ``os.replace``.
+    """Write ``payload`` as JSON to ``path`` via tmp + ``os.replace``, the
+    tmp flushed to disk before the rename.
 
     The tempfile is minted with ``mkstemp`` in the destination directory --
     not a fixed ``.tmp`` suffix -- so two writers racing on one path cannot
@@ -44,6 +45,8 @@ def atomic_write_json(path: Path, payload: Any, *, sort_keys: bool = False) -> N
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, default=_json_default, indent=2,
                       sort_keys=sort_keys)
+            fh.flush()
+            os.fsync(fh.fileno())
         os.replace(tmp, path)
     except Exception:
         try:

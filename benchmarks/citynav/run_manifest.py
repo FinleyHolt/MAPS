@@ -474,6 +474,9 @@ def emit_or_verify(out_root: Path, manifest: dict, log=print) -> Path:
     run root verifies identity and appends a ``resumes`` entry. Raises
     ``ManifestIdentityError`` on drift, on a manifest that does not read, and
     on a root holding a ledger but no manifest — the caller refuses the run."""
+    # Lazy: maps.search imports the engine, which no reader of this module needs.
+    from maps.search.io.atomic import atomic_write_json  # noqa: PLC0415
+
     path = Path(out_root) / MANIFEST_NAME
     if not path.exists():
         if (Path(out_root) / EPISODES_JSONL).exists():
@@ -482,7 +485,7 @@ def emit_or_verify(out_root: Path, manifest: dict, log=print) -> Path:
                 "nothing records what flew those rows, so a resume cannot be "
                 "checked against them. Use a new root."
             )
-        path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        atomic_write_json(path, manifest)
         log(f"run_manifest: wrote {path}")
         return path
     try:
@@ -506,6 +509,6 @@ def emit_or_verify(out_root: Path, manifest: dict, log=print) -> Path:
             "hostname": manifest.get("hostname"),
         }
     )
-    path.write_text(json.dumps(prior, indent=2) + "\n", encoding="utf-8")
+    atomic_write_json(path, prior)
     log(f"run_manifest: identity verified, resume #{len(prior['resumes'])} recorded")
     return path
