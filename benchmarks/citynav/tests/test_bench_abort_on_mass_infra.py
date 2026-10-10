@@ -43,12 +43,10 @@ def _driver(tmp_path: Path) -> bf.Driver:
     d._session_done = 0
     d._dispatch_lock = threading.Lock()
     d._done_cache = set()
-    d._done_cache_ts = 0.0
     d._in_flight = set()
     d._recent = deque(maxlen=bf.ABORT_WINDOW)
     d._abort = None
     d._deadline = None
-    d._done_index = bf._IncrementalDoneIndex(bf._done_qualify)
     d._selection = [f"ep{i}" for i in range(500)]
     d._cursor = 0
     # Only run() and _write_summary read the rest.

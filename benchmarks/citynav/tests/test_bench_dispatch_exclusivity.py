@@ -2,13 +2,13 @@
 
 `_next_claimed_episode` walks the selection with a cursor taken modulo
 its length, so it wraps. "Done" means a qualifying row reached
-episodes.jsonl — and the claim path must see that row IMMEDIATELY, not
-after the done-cache TTL: run contract300 re-flew 10/300 episodes when
-the in-flight release outran the 20 s cache refresh (same worker
-re-claimed its own episode in the same second), and the replicate
-attempts disagreed on SR. Completion here goes through the REAL writer
-(`_append_result`), and `_done_cache_ts` is pinned to +inf so no disk
-rescan can mask a missing synchronous done-cache add.
+episodes.jsonl — and the claim path must see that row IMMEDIATELY: run
+contract300 re-flew 10/300 episodes when the in-flight release outran a
+stale done cache (same worker re-claimed its own episode in the same
+second), and the replicate attempts disagreed on SR. Completion here goes
+through the REAL writer (`_append_result`), and nothing re-reads the
+ledger, so only the synchronous done-cache add keeps a finished episode
+out of the next claim.
 
 These drive the dispatch directly: constructing a real Driver needs a
 split, a GPU and a vLLM, and none of that is what broke.
@@ -30,7 +30,6 @@ class _Dispatch:
         self._cursor = 0
         self._dispatch_lock = threading.Lock()
         self._done_cache = set()
-        self._done_cache_ts = float("inf")  # never refresh from disk
         self._in_flight = set()
         self._deadline = None
         self.dispatcher = None
@@ -56,9 +55,6 @@ class _Dispatch:
 
     def log(self, msg):
         print(msg)
-
-    def _resume_done(self):
-        return set(self._done_cache)
 
     def complete(self, eid, **extra):
         # A worker finishing, in production order: run_one writes the
@@ -90,11 +86,10 @@ def test_a_worker_that_finishes_early_never_takes_a_live_episode(tmp_path):
     assert d._next_claimed_episode(0) is None
 
 
-def test_a_finished_episode_is_never_reclaimed_before_the_cache_refreshes(tmp_path):
+def test_a_finished_episode_is_never_reclaimed(tmp_path):
     # contract300's 10 doubles: END and the next claim in the same
-    # second, done cache up to 20 s stale. With the rescan disabled
-    # (ts=+inf), only the synchronous add at write time can keep "a"
-    # out of the very next claim.
+    # second. Only the synchronous add at write time keeps "a" out of the
+    # very next claim.
     d = _dispatch(tmp_path, ["a", "b"])
     assert d._next_claimed_episode(0) == "a"
     d.complete("a")

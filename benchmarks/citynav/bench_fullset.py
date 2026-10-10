@@ -51,22 +51,17 @@ from __future__ import annotations
 
 
 import argparse
-import hashlib
 import json
 import logging
 import os
 import queue
 import random
 import signal
-import socket
 import subprocess
 import sys
 import threading
 import time
-import urllib.error
-import urllib.request
 from collections import Counter, deque
-from collections.abc import Callable
 
 from pathlib import Path
 
@@ -122,15 +117,6 @@ DEFAULT_EPISODE_TIMEOUT_S = int(
 # whole cap inside one explore and recorded no prediction at all.
 _DEADLINE_RESERVE_FRAC = 0.1
 POLL_INTERVAL_S = 5.0
-# Standalone iteration re-reads the done set so a wrapped cursor sees
-# episodes OTHER writers finished since the pass started; recomputing
-# per claim would re-parse the file every time, so it is cached and
-# refreshed at most this often. Staleness never re-dispatches this
-# process's own completions: _append_result adds each qualifying
-# episode_id to the cache synchronously at write time (the contract300
-# run re-flew 10/300 episodes when the discard of the in-flight hold
-# outran this TTL), so the TTL bounds re-parse cost only.
-_DONE_CACHE_TTL_S = 20.0
 # Infra attempts an episode gets before the run leaves it out and reports
 # it as persistent infra with its errors (``--max-infra-attempts``).
 MAX_INFRA_ATTEMPTS = 3
@@ -520,8 +506,8 @@ def _infra_cause(row: dict) -> str:
 
 
 def _done_qualify(row: dict) -> str | None:
-    """Done-set membership predicate, factored so the incremental index
-    and the dispatch server apply byte-identical logic.
+    """Done-set membership predicate, shared by the pass-start read and the
+    result writer.
 
     An episode counts as done once it has a row with a string
     ``episode_id`` whose status is not ``infra`` (the attempt never got a
@@ -533,155 +519,6 @@ def _done_qualify(row: dict) -> str | None:
     if isinstance(eid, str) and not _infra_casualty(row):
         return eid
     return None
-
-
-class _FileReader:
-    """Offset-incremental reader for one append-only episodes.jsonl.
-
-    The done-set is a monotonic union over append-only files: the writer
-    ``_append_result`` only ever appends one ``json.dumps(row)+"\\n"``
-    under ``flock``. Parsing only the bytes appended past the last byte
-    ``offset`` therefore yields the identical per-line contribution as a
-    full re-parse, so the incremental union equals the from-scratch
-    union.
-
-    Only two events break append-only-ness, both detected by ``stat``
-    before any read: a ``--loop`` archive rename (``st_dev``/``st_ino``
-    changes) and a truncation/rotation (``st_size < offset``). Either
-    resets this file to a from-scratch read. ``carry`` holds an
-    unterminated trailing fragment (a record a writer is mid-append on,
-    or one split across a refresh boundary); it is bytes already read
-    from the file but not yet parsed, so ``offset`` (total file bytes
-    read) advances past it while the fragment is retained and the full
-    line is parsed exactly once on a later refresh once its newline
-    arrives. A torn-but-shorter prefix can never be mistaken for a
-    complete row: a proper prefix of a JSON-object line is never itself
-    a valid JSON object (the closing ``}`` is terminal), so a partial
-    record is never counted early — identical to the text-mode
-    full-re-parser, which skips it as a ``JSONDecodeError``.
-    """
-
-    __slots__ = ("path", "identity", "offset", "carry", "contributed")
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self.identity: tuple[int, int] | None = None
-        self.offset = 0
-        self.carry = b""
-        self.contributed: set[str] = set()
-
-    def refresh(self, qualifies: Callable[[dict], str | None]) -> bool:
-        """Fold newly-appended complete lines into ``contributed``.
-
-        Returns ``False`` iff the file does not exist (the caller drops
-        this reader); ``True`` otherwise (including transient stat/read
-        errors, where state is kept and the next refresh retries).
-        """
-        try:
-            st = os.stat(self.path)
-        except FileNotFoundError:
-            return False
-        except OSError:
-            return True
-        ident = (st.st_dev, st.st_ino)
-        if self.identity is not None and (
-            ident != self.identity or st.st_size < self.offset
-        ):
-            # --loop rename (new inode) or truncation/rotation: the prior
-            # contribution is no longer valid; re-read from scratch.
-            self.offset = 0
-            self.carry = b""
-            self.contributed.clear()
-        self.identity = ident
-        if st.st_size == self.offset:
-            # Nothing appended; carry can gain a newline only with new
-            # bytes, so the stat-only fast path is exact.
-            return True
-        try:
-            with open(self.path, "rb") as f:
-                f.seek(self.offset)
-                data = f.read()
-        except OSError:
-            return True
-        if not data:
-            return True
-        self.offset += len(data)
-        buf = self.carry + data
-        nl = buf.rfind(b"\n")
-        if nl < 0:
-            self.carry = buf
-            return True
-        self.carry = buf[nl + 1 :]
-        for line in buf[: nl + 1].split(b"\n"):
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except (json.JSONDecodeError, ValueError):
-                continue
-            eid = qualifies(row)
-            if eid is not None:
-                self.contributed.add(eid)
-        return True
-
-
-class _IncrementalDoneIndex:
-    """Offset-incremental replacement for the full re-parse of
-    ``episodes.jsonl`` on every done-set refresh.
-
-    Owns one ``_FileReader`` per file currently globbed. ``_resume_done``
-    re-globs every call so staggered new lanes are picked up, but each
-    file is parsed only past its last offset. Provably equivalent to the
-    full re-parse (monotonic union over append-only files; see
-    ``_FileReader``). A dedicated lock makes the
-    index self-contained: worker-path callers already hold
-    ``_dispatch_lock`` upstream and ``run()``/``dry_run()`` call it
-    single-threaded, so this lock is uncontended and always innermost
-    (no ordering cycle); it removes any dependence on a caller's locking
-    discipline.
-    """
-
-    def __init__(self, qualifies: Callable[[dict], str | None]) -> None:
-        self._qualifies = qualifies
-        self._files: dict[Path, _FileReader] = {}
-        self._lock = threading.Lock()
-
-    @staticmethod
-    def _key(p: Path) -> Path:
-        try:
-            return p.resolve()
-        except OSError:
-            return p
-
-    def resume_done(self, paths: list[Path]) -> set[str]:
-        """Return the fresh union over ``paths`` (a new set object each
-        call; reader ``contributed`` sets are never aliased out)."""
-        with self._lock:
-            seen: set[Path] = set()
-            for p in paths:
-                key = self._key(p)
-                if key in seen:
-                    continue
-                reader = self._files.get(key)
-                if reader is None:
-                    reader = _FileReader(p)
-                    self._files[key] = reader
-                if reader.refresh(self._qualifies):
-                    seen.add(key)
-                else:
-                    # File vanished (e.g. --loop archive rename): drop
-                    # its reader + contribution. A fresh file at the same
-                    # path is rediscovered next call from offset 0.
-                    self._files.pop(key, None)
-            # Drop readers for paths no longer globbed, mirroring the
-            # current glob-every-call: a file outside the glob never
-            # contributes.
-            for stale in [k for k in self._files if k not in seen]:
-                del self._files[stale]
-            out: set[str] = set()
-            for key in seen:
-                out |= self._files[key].contributed
-            return out
 
 
 def _missing_block_assets(episode_ids: list[str]) -> list[Path]:
@@ -754,7 +591,6 @@ class Driver:
         self._cursor = 0
         self._dispatch_lock = threading.Lock()
         self._done_cache: set[str] = set()
-        self._done_cache_ts = 0.0
         # Episodes this process's workers are RUNNING right now. "Done"
         # means a row landed in episodes.jsonl, so it says nothing about
         # an episode still in flight — without this, a worker that
@@ -767,7 +603,6 @@ class Driver:
         # Both guarded by _dispatch_lock.
         self._recent: deque[tuple[str | None, str]] = deque(maxlen=ABORT_WINDOW)
         self._abort: str | None = None
-        self._done_index = _IncrementalDoneIndex(_done_qualify)
         self._t_start = time.monotonic()
         # Rows THIS driver session appended — the only honest numerator
         # for the session-throughput line (all-time count over session
@@ -801,10 +636,8 @@ class Driver:
         # Dispatch-time invariant: a claim must never return an episode
         # whose qualifying row has been written this run. The write and
         # the done-cache add are one step from a claimer's view (claims
-        # take _dispatch_lock), so the TTL-stale cache window between
-        # this write and the worker_loop in-flight discard cannot re-offer
-        # the episode. Infra rows do not qualify and stay re-claimable
-        # (_done_qualify is the one shared predicate).
+        # take _dispatch_lock). Infra rows do not qualify and stay
+        # re-claimable up to max_infra_attempts.
         eid = _done_qualify(row)
         with self._dispatch_lock:
             if eid is not None:
@@ -885,12 +718,11 @@ class Driver:
         )
 
     def _resume_done(self) -> set[str]:
-        # This run's own episodes.jsonl. Offset-incremental (see
-        # _IncrementalDoneIndex / _FileReader): the file is parsed only
-        # past its last byte offset. The returned set is byte-for-byte
-        # the full-re-parse result; only the cost changes.
-        paths = [self.episodes_file]
-        return self._done_index.resume_done(paths)
+        """The episodes this root's ledger already answered. Read once per
+        pass: this run holds the root, so ``_append_result`` keeps the set
+        current from then on."""
+        return {e for r in _rows.iter_json_rows(self.episodes_file)
+                if (e := _done_qualify(r)) is not None}
 
     def _next_claimed_episode(self, worker_id: int) -> str | None:
         # Hand this worker the next undone episode, or None when nothing
@@ -902,17 +734,12 @@ class Driver:
         # episodes finish, nothing already written is touched.
         if self._abort is not None:
             return None
-        # Standalone: iterate the selection in-process. _in_flight keeps
-        # this process's own workers off each other's episodes (the
-        # cursor alone cannot — it wraps modulo the selection, so it
-        # would re-offer a live episode as soon as a worker finished
-        # early); the done cache keeps a wrapped cursor off episodes
-        # already finished since the pass started.
+        # _in_flight keeps this process's own workers off each other's
+        # episodes (the cursor alone cannot — it wraps modulo the
+        # selection, so it would re-offer a live episode as soon as a worker
+        # finished early); the done cache keeps a wrapped cursor off
+        # episodes already finished since the pass started.
         with self._dispatch_lock:
-            now = time.monotonic()
-            if now - self._done_cache_ts > _DONE_CACHE_TTL_S:
-                self._done_cache = self._resume_done()
-                self._done_cache_ts = now
             done = self._done_cache
             n = len(self._selection)
             scanned = 0
@@ -1468,7 +1295,6 @@ class Driver:
                 return 0
             self._cursor = 0
             self._done_cache = self._resume_done()
-            self._done_cache_ts = time.monotonic()
             self._infra_errors = {}
             for r in _rows.iter_json_rows(self.episodes_file):
                 if _infra_casualty(r) and isinstance(r.get("episode_id"), str):
