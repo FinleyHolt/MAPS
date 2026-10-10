@@ -26,7 +26,6 @@ only; no served surface teaches them.)
 """
 from __future__ import annotations
 
-import os
 import re
 
 from maps.search.analyze_scene import cardinal_side
@@ -846,14 +845,6 @@ def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
     priors (anchors) by ``node.provenance`` and run :func:`build_surface`:
     the one graph -> surface path."""
     det, prior, seen = [], [], set()
-    # TARGET-TYPE WALL (config B, benchmarks/citynav/PRIOR_CONTRACT.md): an
-    # unnamed baked CityRefer prior of the episode's target annotation type is
-    # the annotation's own target geometry — dropping it here (the ONE
-    # graph→surface seam) keeps the target reachable only through live
-    # perception. The wall keys on the row's OWN ``object_type`` tag (the
-    # CityRefer annotation type riding the bake). Set per-episode by
-    # run_benchmark; absent = no wall (offline tools, tests).
-    walled = os.environ.get("SEARCH_WALLED_UNNAMED_TYPE") or None
     for fid, node in nodes_iter:
         fid = str(fid)
         if fid in seen:
@@ -861,13 +852,6 @@ def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
         seen.add(fid)
         if getattr(node, "provenance", "prebaked") == "detected":
             det.append((fid, node))
-            continue
-        _tags = getattr(node, "tags", None) or {}
-        if (
-            walled
-            and _tags.get("object_type") == walled
-            and _tags.get("source") == "cityrefer_unnamed"
-        ):
             continue
         prior.append((fid, node))
     return build_surface(det, prior, origin_xy, cell_m)
