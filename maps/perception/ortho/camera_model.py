@@ -12,7 +12,10 @@ boundary no-data (the block's exterior frame, water, scan edges) keeps
 georeferenced ``<map>_rgb.tif`` (the program's own map of the block, at its
 native cell) is streamed straight into the memory-mapped cache
 (``_bake_geotiff_mmap``) with no fill: it is a capture, and ground it did not
-image stays black with ``alpha`` 0. Runtime nadir perception crops directly
+image stays black with ``alpha`` 0. The cache records the size and mtime of
+the rasters it was built from and is rebuilt when they change; workers that
+find no cache at once build it once, under a file lock beside it. Runtime
+nadir perception crops directly
 over this ortho (``observation.crop_ortho_observation``). This is an
 ortho-only build: the runtime observation is always the nadir ortho crop.
 
@@ -22,6 +25,8 @@ World frame convention (matches ``perception/observation.py``):
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import functools
 import json
 import logging
@@ -89,8 +94,22 @@ def _mmap_dir(rgbd_dir, map_name: str, m_per_px: float) -> Path:
 _MMAP_ARRAYS = ("rgb", "height", "alpha")
 
 
-def _read_ortho_mmap(d: Path, m_per_px: float) -> dict | None:
-    """The bake, memory-mapped. ``None`` when the cache is absent or partial.
+def _source_stamp(rgbd_dir, map_name: str) -> dict:
+    """What the published cache must have been built from: the RGB raster
+    (``<map>_rgb.tif`` when present, else ``<map>.png``) and the height plane
+    ``<map>.tif``, each as ``[byte size, mtime_ns]``. A raster rewritten in
+    place changes its mtime, so its stale cache is rebuilt."""
+    rgb = _geotiff_pair(rgbd_dir, map_name) or Path(rgbd_dir) / f"{map_name}.png"
+    out = {}
+    for path in (rgb, Path(rgbd_dir) / f"{map_name}.tif"):
+        st = path.stat()
+        out[path.name] = [int(st.st_size), int(st.st_mtime_ns)]
+    return out
+
+
+def _read_ortho_mmap(d: Path, m_per_px: float, stamp: dict) -> dict | None:
+    """The bake, memory-mapped. ``None`` when the cache is absent, partial,
+    or built from other rasters than ``stamp`` names.
 
     ``mmap_mode="r"`` is the point twice over. The arrays never enter this
     process's heap, so N bench workers on one node share ONE page-cache copy
@@ -102,6 +121,8 @@ def _read_ortho_mmap(d: Path, m_per_px: float) -> dict | None:
         return None
     try:
         meta = json.loads(meta_path.read_text())
+        if meta.get("source") != stamp:
+            return None
         bake: dict = {
             k: np.load(d / f"{k}.npy", mmap_mode="r") for k in _MMAP_ARRAYS
         }
@@ -140,8 +161,9 @@ def _publish_mmap(tmp: Path, d: Path) -> None:
         shutil.rmtree(old, ignore_errors=True)
 
 
-def _write_ortho_mmap(d: Path, bake: dict) -> None:
-    """Publish an in-heap ``bake`` so the next process maps it instead of building it.
+def _write_ortho_mmap(d: Path, bake: dict, stamp: dict) -> None:
+    """Publish an in-heap ``bake``, built from what ``stamp`` names, so the
+    next process maps it instead of building it.
 
     Best-effort. A read-only or full filesystem costs the build again, never
     the run.
@@ -151,10 +173,8 @@ def _write_ortho_mmap(d: Path, bake: dict) -> None:
         tmp.mkdir(parents=True, exist_ok=True)
         for k in _MMAP_ARRAYS:
             np.save(tmp / f"{k}.npy", np.ascontiguousarray(bake[k]))
-        (tmp / "meta.json").write_text(
-            json.dumps({k: float(bake[k])
-                        for k in ("x_min", "y_min", "px_per_m")})
-        )
+        meta = {k: float(bake[k]) for k in ("x_min", "y_min", "px_per_m")}
+        (tmp / "meta.json").write_text(json.dumps({**meta, "source": stamp}))
         _publish_mmap(tmp, d)
     except OSError as exc:
         log.warning("ortho mmap cache write failed at %s: %s", d, exc)
@@ -185,8 +205,9 @@ def raster_source_gsd_m(rgbd_dir, map_name: str) -> float | None:
         return float(abs(src.transform.a))
 
 
-def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, band_rows: int = 1024) -> None:
-    """Stream ``<map>_rgb.tif`` + ``<map>.tif`` into the cache at ``d``.
+def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, stamp: dict, band_rows: int = 1024) -> None:
+    """Stream ``<map>_rgb.tif`` + ``<map>.tif`` into the cache at ``d``,
+    recording ``stamp`` as its source.
 
     The block's own map at its native cell is gigapixels (Cal City at 0.15 m is
     six), so nothing here holds more than one band of rows: rasterio reads a
@@ -244,7 +265,7 @@ def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, band_rows: int = 1024) 
             for m in (rgb, height, alpha):
                 m.flush()
             del rgb, height, alpha
-        (tmp / "meta.json").write_text(json.dumps(meta))
+        (tmp / "meta.json").write_text(json.dumps({**meta, "source": stamp}))
         _publish_mmap(tmp, d)
     except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -303,6 +324,28 @@ def bake_ortho_from_rasters(
     }
 
 
+@contextlib.contextmanager
+def _build_lock(d: Path):
+    """Hold an exclusive lock on ``<d>.lock`` across processes, so of the
+    workers that find no cache at once the first builds and publishes it and
+    the rest wait, then map it. A directory that cannot hold the lock file
+    (read-only, or a filesystem without ``flock``) builds unlocked: each
+    process pays the build, and the atomic publish keeps every reader whole.
+    """
+    fd = None
+    try:
+        d.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(d.with_name(f"{d.name}.lock"), os.O_RDWR | os.O_CREAT, 0o644)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+    except OSError as exc:
+        log.warning("ortho build lock unavailable beside %s: %s", d, exc)
+    try:
+        yield
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
 _ORTHO_RASTER_CACHE: dict[tuple, dict] = {}
 _ORTHO_RASTER_BUILD_LOCK = threading.Lock()
 
@@ -342,26 +385,30 @@ def load_ortho_or_rasters(
         cached = _ORTHO_RASTER_CACHE.get(key)
         if cached is not None:
             return cached
-        # MAP IT IF SOMEONE ALREADY BUILT IT. Building this from rasters is ~20 s
-        # for the unified Cal City map and every process pays it: measured on a
-        # 48-worker arm, 47 cold builds cost 936 s, more than the 435 warm stops
-        # in the same window put together. The result is a pure function of the
-        # rasters, so the first process to build it publishes it and the rest map
-        # it -- which also collapses N heap copies of a ~3.6 GB map into one
-        # page-cache copy the whole node shares.
+        # MAP IT IF SOMEONE ALREADY BUILT IT FROM THESE RASTERS. Building this
+        # from rasters is ~20 s for the unified Cal City map and every process
+        # pays it: measured on a 48-worker arm, 47 cold builds cost 936 s, more
+        # than the 435 warm stops in the same window put together. The result
+        # is a pure function of the rasters, so the first process to build it
+        # publishes it under the file lock and the rest map it -- which also
+        # collapses N heap copies of a ~3.6 GB map into one page-cache copy the
+        # whole node shares.
         mm = _mmap_dir(rgbd_dir, map_name, m_per_px)
-        bake = _read_ortho_mmap(mm, m_per_px)
+        stamp = _source_stamp(rgbd_dir, map_name)
+        bake = _read_ortho_mmap(mm, m_per_px, stamp)
         if bake is None:
-            if _geotiff_pair(rgbd_dir, map_name) is not None:
-                # Gigapixels: never in the heap. Streamed into the cache and
-                # mapped back like any other process would map it.
-                _bake_geotiff_mmap(rgbd_dir, map_name, mm)
-                bake = _read_ortho_mmap(mm, m_per_px)
-                if bake is None:
-                    raise RuntimeError(f"{map_name}: the ortho cache at {mm} was written but does not read back")
-            else:
-                bake = bake_ortho_from_rasters(rgbd_dir, map_name, m_per_px=m_per_px)
-                _write_ortho_mmap(mm, bake)
+            with _build_lock(mm):
+                bake = _read_ortho_mmap(mm, m_per_px, stamp)
+                if bake is None and _geotiff_pair(rgbd_dir, map_name) is not None:
+                    # Gigapixels: never in the heap. Streamed into the cache and
+                    # mapped back like any other process would map it.
+                    _bake_geotiff_mmap(rgbd_dir, map_name, mm, stamp)
+                    bake = _read_ortho_mmap(mm, m_per_px, stamp)
+                    if bake is None:
+                        raise RuntimeError(f"{map_name}: the ortho cache at {mm} was written but does not read back")
+                elif bake is None:
+                    bake = bake_ortho_from_rasters(rgbd_dir, map_name, m_per_px=m_per_px)
+                    _write_ortho_mmap(mm, bake, stamp)
         if len(_ORTHO_RASTER_CACHE) >= _ORTHO_CACHE_MAX_ENTRIES:
             _ORTHO_RASTER_CACHE.pop(next(iter(_ORTHO_RASTER_CACHE)))
         _ORTHO_RASTER_CACHE[key] = bake

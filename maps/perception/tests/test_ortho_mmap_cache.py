@@ -24,6 +24,9 @@ import numpy as np
 
 from maps.perception.ortho import camera_model as cm
 
+# What a cache under test was built from (the rasters it names need not exist).
+_STAMP = {"blk.png": [1, 2], "blk.tif": [3, 4]}
+
 
 def _bake(seed: int = 0) -> dict:
     rng = np.random.default_rng(seed)
@@ -41,8 +44,8 @@ def _bake(seed: int = 0) -> dict:
 def test_the_round_trip_is_exact(tmp_path):
     src = _bake()
     d = tmp_path / "calcity_m0.1.mmap"
-    cm._write_ortho_mmap(d, src)
-    got = cm._read_ortho_mmap(d, 0.1)
+    cm._write_ortho_mmap(d, src, _STAMP)
+    got = cm._read_ortho_mmap(d, 0.1, _STAMP)
 
     assert got is not None
     for k in ("rgb", "height", "alpha"):
@@ -58,8 +61,8 @@ def test_it_is_mapped_not_loaded(tmp_path):
     """The memory claim, not just the value claim: N workers holding one
     ~3.6 GB map between them is the reason this exists."""
     d = tmp_path / "m.mmap"
-    cm._write_ortho_mmap(d, _bake())
-    got = cm._read_ortho_mmap(d, 0.1)
+    cm._write_ortho_mmap(d, _bake(), _STAMP)
+    got = cm._read_ortho_mmap(d, 0.1, _STAMP)
     assert isinstance(got["rgb"], np.memmap), type(got["rgb"])
     assert not got["rgb"].flags.writeable
 
@@ -68,22 +71,22 @@ def test_a_missing_or_partial_cache_reads_as_absent(tmp_path):
     """Absent is a build. PARTIAL must also be a build -- reading half a cache
     is the failure the atomic rename exists to prevent, and if one ever does
     appear it has to look like nothing rather than like an ortho."""
-    assert cm._read_ortho_mmap(tmp_path / "nope.mmap", 0.1) is None
+    assert cm._read_ortho_mmap(tmp_path / "nope.mmap", 0.1, _STAMP) is None
 
     d = tmp_path / "partial.mmap"
-    cm._write_ortho_mmap(d, _bake())
+    cm._write_ortho_mmap(d, _bake(), _STAMP)
     (d / "alpha.npy").unlink()
-    assert cm._read_ortho_mmap(d, 0.1) is None
+    assert cm._read_ortho_mmap(d, 0.1, _STAMP) is None
 
     d2 = tmp_path / "nometa.mmap"
-    cm._write_ortho_mmap(d2, _bake())
+    cm._write_ortho_mmap(d2, _bake(), _STAMP)
     (d2 / "meta.json").unlink()
-    assert cm._read_ortho_mmap(d2, 0.1) is None
+    assert cm._read_ortho_mmap(d2, 0.1, _STAMP) is None
 
 
 def test_a_write_leaves_no_temp_behind_and_publishes_atomically(tmp_path):
     d = tmp_path / "atomic.mmap"
-    cm._write_ortho_mmap(d, _bake())
+    cm._write_ortho_mmap(d, _bake(), _STAMP)
     assert d.is_dir()
     assert not list(tmp_path.glob("*.tmp*")), list(tmp_path.glob("*.tmp*"))
     assert json.loads((d / "meta.json").read_text())["px_per_m"] == 10.0
@@ -92,10 +95,10 @@ def test_a_write_leaves_no_temp_behind_and_publishes_atomically(tmp_path):
 def test_a_second_write_replaces_the_first(tmp_path):
     """A rebuilt ortho has to win, or a stale cache outlives its rasters."""
     d = tmp_path / "replace.mmap"
-    cm._write_ortho_mmap(d, _bake(seed=1))
+    cm._write_ortho_mmap(d, _bake(seed=1), _STAMP)
     second = _bake(seed=2)
-    cm._write_ortho_mmap(d, second)
-    got = cm._read_ortho_mmap(d, 0.1)
+    cm._write_ortho_mmap(d, second, _STAMP)
+    got = cm._read_ortho_mmap(d, 0.1, _STAMP)
     assert np.array_equal(got["rgb"], second["rgb"])
 
 
@@ -106,8 +109,8 @@ def test_an_unwritable_destination_costs_the_build_not_the_run(tmp_path):
     ro.mkdir()
     ro.chmod(0o500)
     try:
-        cm._write_ortho_mmap(ro / "x.mmap", _bake())  # must not raise
-        assert cm._read_ortho_mmap(ro / "x.mmap", 0.1) is None
+        cm._write_ortho_mmap(ro / "x.mmap", _bake(), _STAMP)  # must not raise
+        assert cm._read_ortho_mmap(ro / "x.mmap", 0.1, _STAMP) is None
     finally:
         ro.chmod(0o700)
 
@@ -140,9 +143,10 @@ def test_concurrent_cold_cache_builds_once_under_the_lock(tmp_path, monkeypatch)
             "px_per_m": 10.0,
         }
 
-    monkeypatch.setattr(cm, "_read_ortho_mmap", lambda d, m_per_px: None)
+    monkeypatch.setattr(cm, "_read_ortho_mmap", lambda d, m_per_px, stamp: None)
+    monkeypatch.setattr(cm, "_source_stamp", lambda rgbd_dir, map_name: _STAMP)
     monkeypatch.setattr(cm, "bake_ortho_from_rasters", fake_bake)
-    monkeypatch.setattr(cm, "_write_ortho_mmap", lambda d, bake: None)
+    monkeypatch.setattr(cm, "_write_ortho_mmap", lambda d, bake, stamp: None)
 
     barrier = threading.Barrier(2)
     results: list = []
@@ -212,8 +216,8 @@ def test_the_streamed_bake_matches_the_in_heap_bake_band_for_band(tmp_path):
     rgb = _geotiff_pair(tmp_path, H=41)
     Image.fromarray(rgb).save(tmp_path / "blk.png")
     heap = cm.bake_ortho_from_rasters(tmp_path, "blk", m_per_px=0.1)
-    cm._bake_geotiff_mmap(tmp_path, "blk", tmp_path / "s.mmap", band_rows=7)
-    got = cm._read_ortho_mmap(tmp_path / "s.mmap", 0.1)
+    cm._bake_geotiff_mmap(tmp_path, "blk", tmp_path / "s.mmap", _STAMP, band_rows=7)
+    got = cm._read_ortho_mmap(tmp_path / "s.mmap", 0.1, _STAMP)
     covered = rgb.max(axis=2) > 0
     for k in ("rgb", "alpha", "height"):
         assert np.array_equal(got[k][covered], heap[k][covered]), k
@@ -234,6 +238,6 @@ def test_an_unwritable_cache_raises_for_a_geotiff_pair(tmp_path):
     ro.chmod(0o500)
     try:
         with pytest.raises(OSError):
-            cm._bake_geotiff_mmap(tmp_path, "blk", ro / "x.mmap")
+            cm._bake_geotiff_mmap(tmp_path, "blk", ro / "x.mmap", _STAMP)
     finally:
         ro.chmod(0o700)
