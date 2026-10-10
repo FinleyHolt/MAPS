@@ -1473,16 +1473,7 @@ class SearchLoop:
                 s.runtime_graph,
                 batch_replaces,
             )
-            for src_i, fid in zip(batch_index_map, fids_out):
-                upsert_ids[src_i] = fid
-                # Copy the node's dedup record onto the detection metadata.
-                node = s.runtime_graph.nodes.get(fid)
-                if node is not None and "dedup" in node.tags:
-                    try:
-                        dedup_payload = json.loads(node.tags["dedup"])
-                    except Exception:
-                        dedup_payload = node.tags["dedup"]
-                    detections[src_i].metadata["dedup"] = dedup_payload
+            upsert_ids.update(zip(batch_index_map, fids_out))
             s.runtime_graph.step_index = step
             s.runtime_graph.tau = now
 
