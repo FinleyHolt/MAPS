@@ -41,35 +41,17 @@ detection rows, so a reader rebuilds rgb and the SAM overlay from the bake.
 No pixels are written per step.
 
 The JSONL files are append-and-flush, so a reader sees at most one torn final
-line; JSON files are tempfile-then-rename so a reader never sees a
-half-written one.
+line.
 """
 
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-
-def _atomic_write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".tmp.", dir=str(path.parent))
-    try:
-        with os.fdopen(fd, "w") as fh:
-            json.dump(payload, fh, default=_json_fallback)
-        os.replace(tmp, path)
-    except Exception:
-        try:
-            os.unlink(tmp)
-        except FileNotFoundError:
-            pass
-        raise
 
 
 def _json_fallback(o: Any) -> Any:

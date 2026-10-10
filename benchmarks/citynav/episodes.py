@@ -165,11 +165,11 @@ def upsert_row(root: Path, row: dict) -> None:
 
 
 def write_episode_json(episode_dir: Path, row: dict) -> None:
-    # Imported here: live_recorder pulls numpy, and the fleet driver and the
-    # launcher import this module before any episode needs it.
-    from benchmarks.citynav.live_recorder import _atomic_write_json
+    # Imported here: the writer pulls numpy, and the fleet driver imports
+    # this module before any episode needs it.
+    from maps.search.io.atomic import atomic_write_json
 
-    _atomic_write_json(Path(episode_dir) / EPISODE_JSON, strict(row))
+    atomic_write_json(Path(episode_dir) / EPISODE_JSON, strict(row))
 
 
 def read_episode_json(episode_dir: Path) -> dict | None:
