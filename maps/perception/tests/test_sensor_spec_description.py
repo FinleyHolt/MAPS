@@ -2,14 +2,13 @@
 
 The description is patched into the reasoner's system prompt, so
 every registered sensor must carry a non-empty description; YAML
-overrides must inherit from their base unless overridden; and the round
-trip through ``to_dict`` / ``from_dict`` must preserve it.
+overrides must inherit from their base unless overridden, and refuse a key
+they do not know.
 """
 
 from __future__ import annotations
 
 from maps.perception.geometry.sensor_spec import (
-    SensorSpec,
     _REGISTRY,
     resolve_sensor,
 )
@@ -39,12 +38,11 @@ def test_resolve_sensor_inline_dict_overrides_description() -> None:
     assert spec.description == "custom override"
 
 
-def test_to_dict_round_trip_preserves_description() -> None:
-    original = _REGISTRY["nadir_1008_90"]
-    payload = original.to_dict()
-    assert payload["description"] == original.description
-    restored = SensorSpec.from_dict(payload)
-    assert restored.description == original.description
+def test_resolve_sensor_refuses_an_unknown_override_key() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="unknown sensor override key"):
+        resolve_sensor({"base": "nadir_1008_90", "hfov": 40.0})
 
 
 def test_nadir_description_warns_about_vertical_surfaces() -> None:

@@ -148,40 +148,6 @@ class SensorSpec:
             "description": str(self.description),
         }
 
-    @classmethod
-    def from_dict(cls, d: Mapping[str, Any]) -> "SensorSpec":
-        """Inverse of ``to_dict``. Tolerates missing optional fields (they
-        fall back to the dataclass defaults)."""
-        defaults = cls(
-            name="_default",
-            intrinsics=CameraIntrinsics(
-                hfov_deg=87.0, vfov_deg=58.0, image_width=1280, image_height=720
-            ),
-            mount_pitch_deg=15.0,
-        )
-        return cls(
-            name=str(d.get("name", defaults.name)),
-            intrinsics=CameraIntrinsics(
-                hfov_deg=float(d.get("hfov_deg", defaults.intrinsics.hfov_deg)),
-                vfov_deg=float(d.get("vfov_deg", defaults.intrinsics.vfov_deg)),
-                image_width=int(d.get("image_width", defaults.intrinsics.image_width)),
-                image_height=int(
-                    d.get("image_height", defaults.intrinsics.image_height)
-                ),
-            ),
-            mount_pitch_deg=float(d.get("mount_pitch_deg", defaults.mount_pitch_deg)),
-            max_range_m=float(d.get("max_range_m", defaults.max_range_m)),
-            min_range_m=float(d.get("min_range_m", defaults.min_range_m)),
-            world_yaw_deg=float(d.get("world_yaw_deg", defaults.world_yaw_deg)),
-            mount_yaw_deg=float(d.get("mount_yaw_deg", defaults.mount_yaw_deg)),
-            mount_roll_deg=float(d.get("mount_roll_deg", defaults.mount_roll_deg)),
-            depth_subsample=int(d.get("depth_subsample", defaults.depth_subsample)),
-            body_offset_x=float(d.get("body_offset_x", defaults.body_offset_x)),
-            body_offset_y=float(d.get("body_offset_y", defaults.body_offset_y)),
-            body_offset_z=float(d.get("body_offset_z", defaults.body_offset_z)),
-            description=str(d.get("description", defaults.description)),
-        )
-
 
 _ARCHER_IMX290_NADIR_DESCRIPTION = (
     "RGB only, 1024x768, 90° HFOV × 73.7° VFOV, pointed straight down: the "
@@ -350,6 +316,10 @@ def sensor_catalog() -> list[dict[str, Any]]:
     ]
 
 
+# What an inline override may name: a registered base and SensorSpec.to_dict's keys.
+_INLINE_KEYS = frozenset({"base", *_REGISTRY["nadir_1008_90"].to_dict()})
+
+
 def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
     """Turn ``cfg.sensor`` into a ``SensorSpec``.
 
@@ -374,6 +344,9 @@ def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
         raise TypeError(  # pyright: ignore[reportUnreachable]
             f"cfg.sensor must be str, dict, or None; got {type(spec)}"
         )
+    unknown = sorted(set(spec) - _INLINE_KEYS)
+    if unknown:
+        raise ValueError(f"unknown sensor override key(s) {unknown}; known: {sorted(_INLINE_KEYS)}")
     base_name = spec.get("base")
     base = (
         _REGISTRY[str(base_name)]
