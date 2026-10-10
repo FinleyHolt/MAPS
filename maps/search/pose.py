@@ -1,8 +1,7 @@
-"""RobotPose: the drone's world-frame state at compile time.
+"""RobotPose: the drone's world-frame state.
 
-Carried on ``CompilerInput.robot_pose`` and threaded through to the
-``ExtendedExecutor`` so view-relative transforms (left/right/front/behind)
-can resolve their direction at query time.
+Carried on ``ToolContext.robot_pose`` so view-relative transforms
+(left/right/front/behind) can resolve their direction at query time.
 
 Convention:
 - World x is east-positive meters, y is north-positive meters, z is altitude.
@@ -17,7 +16,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class RobotPose:
-    """Drone pose at the moment a CompilerInput is built."""
+    """Drone pose at one moment."""
 
     x: float  # world east-positive meters
     y: float  # world north-positive meters

@@ -35,7 +35,6 @@ from maps.search.analyze_scene.tools import (
 )
 from maps.search.parse_compile.concept_union import ConceptUnionResult
 from maps.search.parse_compile.perception_director import WATCH_ROLES
-from maps.search.protocol import CompilerInput
 
 log = logging.getLogger(__name__)
 

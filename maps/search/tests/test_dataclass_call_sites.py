@@ -1,12 +1,8 @@
 """Every construction of an imported dataclass names fields that exist.
 
 Deleting a field is easy; finding the call site that still passes it is not.
-Nothing in the unit suite builds a ``SearchLoop`` far enough to construct a
-``CompilerInput``, so a stale keyword there survives a full green pytest and
-only surfaces as a runtime ``TypeError`` at pre-flight -- where the runner
-catches it, writes a crash-floor row with ``steps_taken: 0``, and reports the
-episode ``ok=True``. A whole fleet can grind through that and score SR 0
-without one loud failure.
+A stale keyword on a construction no unit test reaches survives a full green
+pytest and only surfaces as a runtime ``TypeError`` mid-episode.
 
 The set of tracked classes is DERIVED, not listed. A hand-list rots in the
 direction that hurts: of the four classes this file used to name, three had no
@@ -25,7 +21,6 @@ from __future__ import annotations
 import ast
 import pathlib
 
-import pytest
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
 
@@ -161,10 +156,8 @@ def _replace_sites(defs):
     the expression.
 
     ``replace`` is the blind spot a callee-name scan cannot see: the callee is
-    ``replace``, not the class, so ``dataclasses.replace(SearchLoopConfig
-    .from_env(), look_tool=False)`` in robots/ -- the only live cross-package
-    SearchLoopConfig seam there is -- went unwatched. Only the forms whose
-    first argument names the class are resolvable; anything else is skipped.
+    ``replace``, not the class. Only the forms whose first argument names the
+    class are resolvable; anything else is skipped.
     """
     for pkg in PACKAGES:
         for path in _py_files(pkg):
@@ -241,9 +234,8 @@ def test_the_scan_still_finds_constructions_to_check():
         f"only {len(CONSTRUCTIONS)} imported-dataclass constructions found; "
         "the alias resolution or the package walk has broken"
     )
-    # The repo can LEGITIMATELY hold zero class-resolvable replace sites (the
-    # last one left with the robots/ SearchLoopConfig seam), so the corpus
-    # count cannot be the floor. The floor is the MECHANISM: a planted
+    # The repo can LEGITIMATELY hold zero class-resolvable replace sites, so
+    # the corpus count cannot be the floor. The floor is the MECHANISM: a planted
     # fixture whose replace site the parser must find — with its planted
     # bogus field flagged — or the replace scan has broken.
     (module, _fields), key = next(
@@ -278,18 +270,3 @@ def test_every_imported_dataclass_replace_names_real_fields():
         "these dataclasses.replace calls pass fields the dataclass does not "
         "have:\n  " + "\n  ".join(offenders)
     )
-
-
-@pytest.mark.parametrize(
-    "pkg,cls_name",
-    [("maps", "CompilerInput"), ("maps", "SearchLoopConfig")],
-)
-def test_the_named_flight_contracts_are_still_dataclasses(pkg: str, cls_name: str):
-    """Two classes pinned by name, because the derivation cannot pin them.
-
-    If ``CompilerInput`` stops being a dataclass, or moves out of ``maps``,
-    the derived scan simply stops tracking it and every test above still
-    passes. These two carry the pre-flight compile contract that
-    ``0b44a88`` broke, so their disappearance should be loud.
-    """
-    assert (pkg, cls_name) in DEFS, f"{cls_name} is no longer a {pkg} dataclass"

@@ -29,11 +29,9 @@ from typing import Any
 
 import numpy as np
 
-from maps.search.compile_info import CompileTurnResult
 from maps.search.io.atomic import atomic_write_json
 from maps.search.parse_compile.compiler import MapsCompiler
 from maps.search.pose import RobotPose
-from maps.search.protocol import CompilerInput
 from maps.util.mask_codec import encode_mask_record
 
 
