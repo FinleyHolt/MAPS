@@ -117,3 +117,15 @@ def test_a_report_banks_one_ledger_row_and_a_second_report_replaces_it(built, ma
     rows = [json.loads(line) for line in (m.workdir.parent / "episodes.jsonl").read_text().splitlines()]
     assert len(rows) == 1
     assert rows[0]["episode_id"] == "calcity::t" and rows[0]["status"] == "ok" and rows[0]["workdir"] == "run"
+
+
+def test_an_unknown_episode_is_refused_by_name(monkeypatch):
+    import pytest
+
+    from benchmarks.citynav import adapter, paths
+    from benchmarks.flight import mission
+
+    monkeypatch.setattr(paths, "split_path", lambda split: split)
+    monkeypatch.setattr(adapter, "load_split", lambda path: [])
+    with pytest.raises(ValueError, match="calcity holds no episode calcity::9#9"):
+        mission.resolve_episode("calcity::9#9", "calcity")

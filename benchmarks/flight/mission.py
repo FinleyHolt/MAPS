@@ -140,8 +140,11 @@ def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] |
     if start_xy is not None:
         return authored_episode(episode_id, start_xy)
     rows = load_split(split_path(split))
-    return next(ep for ep in (parse_episode(r, row_index=i) for i, r in enumerate(rows))
-                if ep.episode_id == episode_id)
+    episode = next((ep for ep in (parse_episode(r, row_index=i) for i, r in enumerate(rows))
+                    if ep.episode_id == episode_id), None)
+    if episode is None:
+        raise ValueError(f"{split} holds no episode {episode_id}")
+    return episode
 
 
 def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
