@@ -20,8 +20,9 @@ angles can keep the cheaper seat.
 
 Pitch convention: positive = looking down; nadir is +90 deg.
 
-A run carries one sensor. Every shipped config resolves ``nadir_1008_90``,
-the 1008 px sensor the ortho observation is cropped for.
+A run carries one sensor: the CityNav config resolves ``nadir_1008_90``, the
+1008 px sensor its ortho observation is cropped for, and the Cal City config
+the C-12's ``oryx_orx32_25mm_nadir``.
 """
 
 from __future__ import annotations
@@ -149,22 +150,6 @@ class SensorSpec:
         }
 
 
-_ARCHER_IMX290_NADIR_DESCRIPTION = (
-    "RGB only, 1024x768, 90° HFOV × 73.7° VFOV, pointed straight down: the "
-    "Archer's IMX290 rectified to a pinhole. Nadir footprint about 2 x the height "
-    "above ground across, 1.5 x along.\n\n"
-    "OBSERVABILITY (use this to judge whether absent attributes are "
-    "evidence-against vs simply not-surfaceable):\n"
-    "  Reliably observable: roof color / shape / material; ground objects "
-    "beneath the drone (cars, road markings, athletic field lines); "
-    "footprint shape; relative spatial position.\n"
-    "  Hard or unreliable: building wall color, facade detail, story count "
-    "or vertical extent; text legibility on signage; small entity counts ±1.\n"
-    "When an operator description references a hard-to-observe attribute, "
-    "do not penalize the verdict for its absence."
-)
-
-
 # Teledyne FLIR Oryx ORX-10GS-32S4C (3.2 MP, 2048x1536, Sony IMX252: a
 # 1/1.8" sensor at 3.45 um a pixel, 7.07 x 5.30 mm) behind a 25 mm M112FM25
 # C-mount lens: 2 * atan(3.53 / 25) = 16.09 deg across and 12.10 deg down.
@@ -233,24 +218,6 @@ _NADIR_1008_90_DESCRIPTION = (
 
 
 _REGISTRY: dict[str, SensorSpec] = {
-    # The Archer's IMX290 behind its wide lens, RECTIFIED: the recorder
-    # remaps every frame to this pinhole
-    # and the calibration solves it at a 90 deg rectified field of view,
-    # so the horizontal field of view is 90 deg by
-    # construction and the vertical follows the 4:3 frame. What the bench
-    # calibration decides is whether 90 deg sits inside the lens's good field.
-    "archer_imx290_nadir": SensorSpec(
-        name="archer_imx290_nadir",
-        intrinsics=CameraIntrinsics(hfov_deg=90.0, vfov_deg=73.7398, image_width=1024, image_height=768),
-        mount_pitch_deg=90.0,
-        max_range_m=float("inf"),
-        min_range_m=0.3,
-        # The antenna-to-camera arm is applied by the readers.
-        body_offset_x=0.0,
-        body_offset_y=0.0,
-        body_offset_z=0.0,
-        description=_ARCHER_IMX290_NADIR_DESCRIPTION,
-    ),
     "nadir_1008_90": SensorSpec(
         name="nadir_1008_90",
         intrinsics=_NADIR_1008_INTRINSICS,
