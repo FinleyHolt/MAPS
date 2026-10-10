@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from benchmarks.citynav.flight_model import FlightModelConfig
-
 
 def test_compliant_trajectory_records_final_pose_prediction_xy(
     tmp_path, monkeypatch
@@ -36,11 +34,8 @@ def test_compliant_trajectory_records_final_pose_prediction_xy(
             self.visited_xy.append(self.pose_xy)
 
     cfg = load_config("configs/citynav.yaml")
-    cfg.flight_model = FlightModelConfig()
     cfg.max_steps = 1
     cfg.altitude_m = 50.0
-    cfg.descend_to_land = False
-    cfg.landing_altitude_m = 5.0
     state = _State()
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
 

@@ -1,15 +1,20 @@
-"""Deterministic replay of the flown stops + committed descent, in whatever
-action space the config declares (honest truncation; final pose is what
-scores).
+"""Deterministic replay of the flown stops + committed descent in the CityNav
+six-action alphabet (honest truncation; final pose is what scores).
 """
 
 from __future__ import annotations
 
-from benchmarks.citynav.action_snap import ARRIVAL_BOUND_M
+from benchmarks.citynav.action_snap import (
+    ARRIVAL_BOUND_M,
+    FORWARD_STEP_M,
+    SNAP_XY_TOL_M,
+    Pose,
+    apply_action,
+    snap_to_actions,
+)
 from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.citynav.episode import EpisodeState
 from maps.search.parse_compile.tour_state import FeatureTour
-from benchmarks.citynav.flight_model import resolve_flight_model
 from benchmarks.citynav.run_benchmark.config import RunConfig
 import math
 import logging
@@ -30,39 +35,28 @@ def synthesize_compliant_trajectory(
 
     The mission produces the flown viewpoint order (``feature_tour``) and
     the commit (``state.belief_snapshot.confirmed_target_xy``); perception
-    already happened, at those stops, in the order they flew. Replaying that order + the committed descent
-    through the declared action-space model (no perception, no LLM)
-    yields the genuine submittable
-    ``state.visited_xy`` / final drone pose the serial-compliant path
-    would have produced.
+    already happened, at those stops, in the order they flew. Replaying that
+    order + the committed descent through the six-action snap (no
+    perception, no LLM) yields the genuine submittable ``state.visited_xy``
+    / final drone pose the serial-compliant path would have produced, under
+    the ``cfg.max_steps`` action budget; no special-casing forces success on
+    overrun.
 
-    Flies the config-declared action-space model (``flight_model.kind``,
-    resolved by ``resolve_flight_model``) and honors the ``cfg.max_steps``
-    budget identically; no special-casing to force success on overrun.
+    The leg from the last tour stop to the committed centroid
+    (``descent_xy``) flies at cruise altitude: the final-leg target is 2D,
+    so dropping altitude never changes the scored xy position and only
+    burns budget.
 
-    Final-leg altitude policy. The leg from the last tour stop to the
-    committed centroid (``descent_xy``; name retained for historical
-    reasons) flies AT cruise altitude by default -- ``cfg.descend_to_land``
-    defaults to ``False`` because the final-leg target is 2D (xy only),
-    so dropping altitude never changes the scored xy position
-    and only burns budget for zero scoring benefit (22-60 of 100 actions
-    under ``discrete6``). The drone's final ``z``
-    is whatever the cruise leg left it at. Set ``descend_to_land: true``
-    only for a benchmark variant that needs the drone to physically
-    descend; do NOT enable it for paper-comparable runs.
-
-    Returns the tick count.
+    Returns the action count.
     """
     tour_wps: list[tuple[float, float]] = []
     tour_alts: list[float] = []
-    tour_yaws: list[float | None] = []
     tour_fids: list[str] = []
     for vp in feature_tour.viewpoints:
         tour_wps.append((float(vp.xy[0]), float(vp.xy[1])))
         tour_alts.append(
             float(vp.altitude_m) if vp.altitude_m is not None else float(cfg.altitude_m)
         )
-        tour_yaws.append(float(vp.heading_deg) if vp.heading_deg is not None else None)
         tour_fids.append(str(vp.fid))
 
     snap = state.belief_snapshot
@@ -72,74 +66,44 @@ def synthesize_compliant_trajectory(
     if descent_xy is not None:
         descent_xy = (float(descent_xy[0]), float(descent_xy[1]))
 
-    # The action-space model the config declares. ``max_steps`` counts its
-    # ticks: discrete actions under ``discrete6``, camera frames under a
-    # continuous model.
-    synth_sim = resolve_flight_model(
-        cfg.flight_model,
-        start_pose=start_pose_xyh,
-        start_altitude_m=float(start_alt),
-    )
     max_frames = int(cfg.max_steps)
-
-    state.visited_xy = []
+    pose = Pose(0.0, 0.0, 0.0, 0.0)  # set from the start pose per attempt
     steps = 0
 
-    def _drain(sim, limit: int) -> None:
-        nonlocal steps
-        while steps < limit and sim.has_pending_target():
-            fp = next(sim)
-            if fp.frame_idx >= limit:
-                break
-            state.pose_xy = (float(fp.x), float(fp.y))
-            state.heading_deg = float(fp.heading_deg)
-            if fp.altitude_m is not None:
-                state.altitude_m = float(fp.altitude_m)
-            state.record_visit()
-            steps = fp.frame_idx + 1
-
     # Re-aim from the current pose between legs so each leg consumes only as
-    # many ticks as it needs, bounded by the per-leg ``budget`` (the TOUR legs
-    # pass ``tour_budget`` so a single over-long leg can never eat the descent
-    # reserve mid-leg — the round-2 #6450 truncation path; the descent leg
-    # passes ``max_frames``).
-    #
-    # Arrival is judged against the FLYING model's own tolerance: a discrete
-    # walk stops within half a 5 m step of what it aimed at, a continuous one
-    # within a tick of travel. A literal here would apply the quadcopter's
-    # quantization to every airframe.
-    snap_xy_tol_m = float(synth_sim.arrival_tol_m)
-    # How far one tick carries the drone, for sizing the commit reserve below
-    # in the model's own ticks rather than in 5 m discrete steps.
-    _advance_m = float(synth_sim.advance_per_tick_m)
-
+    # many actions as it needs, bounded by the per-leg ``budget`` (the TOUR
+    # legs pass ``tour_budget`` so a single over-long leg can never eat the
+    # descent reserve mid-leg; the descent leg passes ``max_frames``).
     def _drive_to(
         target_xy: tuple[float, float],
         *,
-        altitude_m: float | None,
-        budget: int | None = None,
+        altitude_m: float,
+        budget: int,
     ) -> bool:
         """Fly one leg. Returns True when the leg was TRUNCATED by the
         action budget short of its target (False on arrival within
         ``ARRIVAL_BOUND_M``, the lattice's closest point to a target no
         heading aligns with, or on an honest no-progress stop below the
         budget)."""
-        nonlocal steps
-        limit = max_frames if budget is None else min(int(budget), max_frames)
+        nonlocal steps, pose
+        limit = min(int(budget), max_frames)
         while steps < limit:
-            if altitude_m is None:
-                synth_sim.set_next_target(target_xy)
-            else:
-                synth_sim.set_next_target(target_xy, altitude_m=altitude_m)
-            if not synth_sim.has_pending_target():
-                break  # snap returned no actions; already at target
-            before = steps
-            _drain(synth_sim, limit)
-            if steps == before:
-                break  # snap couldn't make progress; honest stop
+            target = Pose(
+                float(target_xy[0]), float(target_xy[1]), altitude_m, pose.heading_deg
+            )
+            actions, _ = snap_to_actions(pose, target)
+            if not actions:
+                break  # already at target
+            for action in actions[: limit - steps]:
+                pose = apply_action(pose, action)
+                state.pose_xy = (pose.x, pose.y)
+                state.heading_deg = pose.heading_deg
+                state.altitude_m = pose.altitude_m
+                state.record_visit()
+                steps += 1
             dx = float(state.pose_xy[0]) - float(target_xy[0])
             dy = float(state.pose_xy[1]) - float(target_xy[1])
-            if math.hypot(dx, dy) <= snap_xy_tol_m:
+            if math.hypot(dx, dy) <= SNAP_XY_TOL_M:
                 break
         dx = float(state.pose_xy[0]) - float(target_xy[0])
         dy = float(state.pose_xy[1]) - float(target_xy[1])
@@ -150,8 +114,8 @@ def synthesize_compliant_trajectory(
     # that leg sets ``pred_xy`` (the scored position). Reserve enough actions for
     # it so a long flight truncates its own TAIL (late stops, already perceived
     # in flight) rather than starving the commit fly-to (which would silently
-    # leave pred_xy at an intermediate pose, faking an SR regression). Sized to the planned descent distance in the
-    # FLYING model's own ticks; capped at half the budget.
+    # leave pred_xy at an intermediate pose, faking an SR regression). Sized to
+    # the planned descent distance in forward steps; capped at half the budget.
     #
     # COMMIT-ARRIVAL INTEGRITY (reasoning audit r7b, Action 1.iii): the static
     # reserve is sized from the PLANNED last-waypoint -> commit distance, but a
@@ -169,7 +133,7 @@ def synthesize_compliant_trajectory(
     if descent_xy is not None and tour_wps:
         _last = tour_wps[-1]
         _dd = math.hypot(descent_xy[0] - _last[0], descent_xy[1] - _last[1])
-        base_reserve = min(int(_dd / _advance_m) + 6, max_frames // 2)
+        base_reserve = min(int(_dd / FORWARD_STEP_M) + 6, max_frames // 2)
     react_descent_starved = False
     descent_truncated = False
     descent_replans = 0
@@ -199,7 +163,7 @@ def synthesize_compliant_trajectory(
                 break
             leg_truncated = _drive_to(
                 (float(wp[0]), float(wp[1])),
-                altitude_m=(float(tour_alts[i]) if i < len(tour_alts) else None),
+                altitude_m=tour_alts[i],
                 budget=tour_budget,
             )
             if leg_truncated:
@@ -221,39 +185,32 @@ def synthesize_compliant_trajectory(
             # leaves at least the descent reserve; this fires only on a
             # zero-reserve edge (e.g. empty tour with steps somehow spent).
             return True
-        # SR is 2D: traverse to the committed centroid, but only drop to
-        # landing_altitude when descend_to_land is set. Otherwise stay at
-        # cruise altitude (no vertical action budget spent for zero
-        # scoring benefit).
-        descent_alt = (
-            float(cfg.landing_altitude_m)
-            if cfg.descend_to_land
-            else float(state.altitude_m)
-        )
         # Final-approach overshoot, ALWAYS: the approach stops anywhere within
-        # the model's arrival tolerance SHORT of the target, biasing the achieved
+        # the snap's tolerance SHORT of the target, biasing the achieved
         # position away from the commit (knife-edge losses at NE 20.1-21.1 m). Aiming
         # one tolerance PAST the commit centers the achieved position on it.
         final_target = descent_xy
         px, py = float(state.pose_xy[0]), float(state.pose_xy[1])
         dx, dy = descent_xy[0] - px, descent_xy[1] - py
         dist = math.hypot(dx, dy)
-        if dist > snap_xy_tol_m + 0.5:
+        if dist > SNAP_XY_TOL_M + 0.5:
             final_target = (
-                descent_xy[0] + snap_xy_tol_m * dx / dist,
-                descent_xy[1] + snap_xy_tol_m * dy / dist,
+                descent_xy[0] + SNAP_XY_TOL_M * dx / dist,
+                descent_xy[1] + SNAP_XY_TOL_M * dy / dist,
             )
-        return _drive_to(final_target, altitude_m=descent_alt, budget=max_frames)
+        return _drive_to(
+            final_target, altitude_m=float(state.altitude_m), budget=max_frames
+        )
 
     descent_reserve = base_reserve
     while True:
-        # Fresh deterministic replay per attempt: new sim from the start
-        # pose, replay state reset (the closures rebind through the
-        # enclosing scope).
-        synth_sim = resolve_flight_model(
-            cfg.flight_model,
-            start_pose=start_pose_xyh,
-            start_altitude_m=float(start_alt),
+        # Fresh deterministic replay per attempt from the start pose, replay
+        # state reset (the closures rebind through the enclosing scope).
+        pose = Pose(
+            float(start_pose_xyh[0]),
+            float(start_pose_xyh[1]),
+            float(start_alt),
+            float(start_pose_xyh[2]) % 360.0,
         )
         state.visited_xy = []
         steps = 0
@@ -291,7 +248,7 @@ def synthesize_compliant_trajectory(
         _new_reserve = min(
             max_frames,
             max(2 * descent_reserve,
-                descent_reserve + int(_short_m / _advance_m) + 12,
+                descent_reserve + int(_short_m / FORWARD_STEP_M) + 12,
                 16),
         )
         log.warning(

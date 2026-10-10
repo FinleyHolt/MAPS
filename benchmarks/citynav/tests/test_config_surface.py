@@ -58,17 +58,16 @@ FLAT_SHA256 = {
 }
 # Keys nothing read.
 DEAD_TOP = ("descent_step_m", "altitude_tolerance_m", "landing_xy_tolerance_m", "perception",
-            "fov_m", "rgb_upscale_px", "compact")
+            "fov_m", "rgb_upscale_px", "compact", "flight_model", "landing_altitude_m")
 DEAD_SAM = ("device", "dtype")
-# Where a flat file left a key out, the value the code used (the RunConfig,
-# SamDetectClient and FlightModelConfig defaults; an
+# Where a flat file left a key out, the value the code used (the RunConfig
+# and SamDetectClient defaults; an
 # absent color_palette ran "citynav" in run_benchmark/perception.py).
 ABSENT_MEANT = {
     "precise_tolerance_m": 0.0, "precise_floor_radius_m": 5.0, "spawn": "episode",
-    "spawn_seed": 0, "start_altitude_agl_m": None, "altitude_cap_m": 200.0, "descend_to_land": False,
+    "spawn_seed": 0, "start_altitude_agl_m": None, "altitude_cap_m": 200.0,
     "withhold": [],
 }
-ABSENT_MEANT_FLIGHT = {"kind": "discrete6", "speed_mps": None}
 ABSENT_MEANT_SAM = {"color_palette": "citynav", "sahi": False, "sahi_overlap": 0.2,
                     "sahi_nms_iou": 0.5}
 
@@ -81,7 +80,6 @@ def _expected(flat: dict) -> dict:
     out = {**ABSENT_MEANT, **json.loads(json.dumps(flat))}
     for k in DEAD_TOP:
         del out[k]
-    out["flight_model"] = {**ABSENT_MEANT_FLIGHT, **out["flight_model"]}
     out["sam"] = {k: v for k, v in {**ABSENT_MEANT_SAM, **out["sam"]}.items()
                   if k not in DEAD_SAM}
     return out
@@ -119,11 +117,9 @@ def test_base_resolves_relative_to_the_file_and_deep_merges(tmp_path):
 @pytest.mark.parametrize("body,needle", [
     ("bogus: 1\n", "unknown config key(s) ['bogus']"),
     ("sam:\n  device: cuda\n", "unknown config key(s) ['sam.device']"),
-    ("flight_model:\n  speed: 3\n", "unknown config key(s) ['flight_model.speed']"),
     ("max_steps: 2.5\n", "max_steps must be int"),
     ("max_steps: 0\n", "max_steps must be > 0"),
     ("max_steps: true\n", "max_steps must be int"),
-    ("descend_to_land: 1\n", "descend_to_land must be bool"),
     ("sam:\n  score_threshold: 1.5\n", "sam.score_threshold must be in [0, 1]"),
     ("spawn: random\n", "spawn must be one of"),
     ("sam: true\n", "sam is a block of keys"),
@@ -166,7 +162,7 @@ def test_every_cfg_attribute_the_bench_reads_is_a_field():
     pattern = re.compile(r"\bcfg\.([a-z_]+)\b|getattr\(cfg, \"([a-z_]+)\"")
     read = {a or b for p in (REPO_ROOT / "benchmarks" / "citynav" / "run_benchmark").glob("*.py")
             for a, b in pattern.findall(p.read_text())}
-    assert len(read) > 15, read
+    assert len(read) > 10, read
     assert read <= fields, sorted(read - fields)
 
 

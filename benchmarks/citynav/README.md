@@ -88,7 +88,7 @@ and every value is checked by type and range at load
 | `run_benchmark/` | The runner: config, episode setup, the mission engine (`mission_engine.py`), the episode server, scoring rows. |
 | `adapter.py`, `episodes.py`, `paths.py` | The dataset, the ledger, the file layout. |
 | `eval.py` | Scoring: NE, SR, OSR, SPL, and the shape criterion the Cal City bench uses. |
-| `flight_model.py`, `action_snap.py`, `straight_flight.py` | The action-space models a flight is read in. |
+| `action_snap.py` | The six-action alphabet a flight is replayed in. |
 | `bake/city.py` | The OSM prior bake. |
 | `run_manifest.py` | The run manifest and the audited environment. |
 | `georef/` | Each city's OSM-to-CityNav alignment, used by the bake. |

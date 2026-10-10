@@ -54,16 +54,6 @@ sam:
   sahi_overlap: 0.2
   sahi_nms_iou: 0.5
 sensor: nadir_1008_90
-# The action-space model. The CityNav six-action alphabet is what a submitted
-# trajectory is read in, so it is a contract on this config.
-flight_model:
-  kind: discrete6
-  camera_hz: 5.0
-  speed_mps: null
-# The trajectory traverses to the committed point at cruise altitude; true
-# descends it to landing_altitude_m.
-descend_to_land: false
-landing_altitude_m: 5.0
 # Bench-only ablation withholds over the flown engine (maps.search.withhold):
 # prior, look_for, look, images, mission_map, system_turn. Empty serves the
 # flown text exactly; the flight mission refuses any.

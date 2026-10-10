@@ -6,7 +6,7 @@ trajectories on a fixed discrete action set: ``move_forward 5 m``,
 ``descend 2 m``, ``stop``. The compiler emits continuous viewpoints;
 this module decomposes each continuous hop into the closest
 CityNav-action sequence so the trajectory log is submittable. Consumed
-by the CityNav runner and ``flight_model.DiscreteFlightSimulator``.
+by the replay (``run_benchmark/trajectory.py``).
 
 The decomposition is greedy and deterministic: rotate toward bearing,
 advance forward to the target XY (turning again in cruise only once the

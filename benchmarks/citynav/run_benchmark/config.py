@@ -22,7 +22,6 @@ from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.search.withhold import ENV as WITHHOLD_ENV
 from maps.search.withhold import WITHHOLDS
 
-from benchmarks.citynav.flight_model import FlightModelConfig, known_flight_kinds
 
 log = logging.getLogger("run_benchmark")
 
@@ -57,14 +56,7 @@ _SCHEMA: dict[str, Any] = {
     "spawn_seed": (int, _NONNEG),
     "start_altitude_agl_m": ((*_NUM, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
     "altitude_cap_m": (_NUM, _POS),
-    "landing_altitude_m": (_NUM, _NONNEG),
-    "descend_to_land": (bool, _ANY),
     "sensor": ((str, dict), (_sensor_ok, "a registered sensor or an inline override")),
-    "flight_model": {
-        "kind": (str, _one_of(*known_flight_kinds())),
-        "camera_hz": (_NUM, _POS),
-        "speed_mps": ((*_NUM, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
-    },
     "sam": {
         "model_id": (str, _ANY),
         "color_palette": (str, _one_of("citynav", "default")),
@@ -104,13 +96,8 @@ class RunConfig:
     # set, replaces it with GROUND_LEVEL[map] + that value.
     start_altitude_agl_m: float | None
     altitude_cap_m: float
-    landing_altitude_m: float
-    # CityNav SR is 2D, so the default traverses to the committed centroid
-    # at cruise altitude; True descends to landing_altitude_m.
-    descend_to_land: bool
     # A registered sensor name or an inline override (sensor_spec).
     sensor: str | dict
-    flight_model: FlightModelConfig
     sam: dict
     # Bench-only ablation withholds (maps.search.withhold); empty serves the
     # flown text exactly.
@@ -215,6 +202,6 @@ def config_sha256(path: str | Path) -> str:
 
 def load_config(path: str | Path | None) -> RunConfig:
     data, p = resolve_config(path)
-    cfg = RunConfig(**{**data, "flight_model": FlightModelConfig(**data["flight_model"])})
+    cfg = RunConfig(**data)
     cfg.source_path = str(p)
     return cfg

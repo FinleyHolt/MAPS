@@ -1,15 +1,10 @@
-"""The action-space model is config-declared, and ``discrete6`` is unchanged.
+"""The replay of a flight is pinned pose for pose.
 
-The registry exists so a quadcopter, a straight-routing aircraft and a C-12
-each fly the same mission at their own cost. ``discrete6`` is not one option
-among them: it is the CityNav six-action contract the trajectory log is
-submitted under, so the refactor that made it swappable has to prove it did
-not move a single pose.
-
-``fixtures/discrete6_trajectory.json`` is that proof — the replay recorded on
-the tree before the registry existed. Equality against a recording fails OPEN
-if the recording is trivial, so every case also asserts a pose count and the
-six-action alphabet is pinned by name.
+``fixtures/replay_trajectory.json`` records the replay's whole flight for a
+multi-stop tour with turns, a climb and a descent; a commit-only flight; and
+a flight the action budget truncates short of its commit. Equality against a
+recording fails OPEN if the recording is trivial, so every case also asserts
+a pose count, and the six-action alphabet is pinned by name.
 """
 
 from __future__ import annotations
@@ -20,14 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from benchmarks.citynav.flight_model import (
-    DiscreteFlightSimulator,
-    FlightModelConfig,
-    known_flight_kinds,
-    resolve_flight_model,
-)
-
-FIXTURE = Path(__file__).parent / "fixtures" / "discrete6_trajectory.json"
+FIXTURE = Path(__file__).parent / "fixtures" / "replay_trajectory.json"
 
 
 class _State:
@@ -46,9 +34,6 @@ def _vp(xy, alt, heading, fid):
     return SimpleNamespace(xy=xy, altitude_m=alt, heading_deg=heading, fid=fid)
 
 
-# Byte-identical to the generator that produced the fixture: a multi-stop tour
-# with turns, a climb and a descent; a commit-only flight; and a flight the
-# action budget truncates short of its commit.
 CASES = {
     "tour_then_commit": dict(
         stops=[
@@ -68,18 +53,15 @@ CASES = {
 }
 
 
-def _replay(case, tmp_path, monkeypatch, flight_model: FlightModelConfig):
+def _replay(case, tmp_path, monkeypatch):
     from benchmarks.citynav.run_benchmark import (
         load_config,
         synthesize_compliant_trajectory,
     )
 
     cfg = load_config("configs/citynav.yaml")
-    cfg.flight_model = flight_model
     cfg.max_steps = case["max_steps"]
     cfg.altitude_m = 50.0
-    cfg.descend_to_land = False
-    cfg.landing_altitude_m = 5.0
     state = _State(case["commit"])
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
     steps = synthesize_compliant_trajectory(
@@ -94,11 +76,9 @@ def _replay(case, tmp_path, monkeypatch, flight_model: FlightModelConfig):
 
 
 @pytest.mark.parametrize("name", sorted(CASES))
-def test_discrete6_replays_the_recorded_trajectory_exactly(name, tmp_path, monkeypatch):
+def test_the_replay_flies_the_recorded_trajectory_exactly(name, tmp_path, monkeypatch):
     recorded = json.loads(FIXTURE.read_text())[name]
-    steps, state = _replay(
-        CASES[name], tmp_path, monkeypatch, FlightModelConfig()
-    )
+    steps, state = _replay(CASES[name], tmp_path, monkeypatch)
 
     assert steps == recorded["steps"]
     assert list(state.pose_xy) == recorded["pred_xy"] == recorded["final_pos_xy"]
@@ -125,7 +105,7 @@ def test_the_recording_is_not_vacuous():
 
 def test_the_six_action_alphabet_is_the_contract():
     """Pinned by name: the leaderboard trajectory log is submittable only in
-    these six primitives, and no registry entry may quietly extend them."""
+    these six primitives."""
     from benchmarks.citynav.action_snap import (
         ALTITUDE_STEP_M,
         FORWARD_STEP_M,
@@ -142,22 +122,3 @@ def test_the_six_action_alphabet_is_the_contract():
         "stop",
     }
     assert (FORWARD_STEP_M, TURN_STEP_DEG, ALTITUDE_STEP_M) == (5.0, 30.0, 2.0)
-
-
-def test_discrete6_is_the_default_kind_and_resolves_to_the_discrete_simulator():
-    cfg = FlightModelConfig()
-    assert cfg.kind == "discrete6"
-    sim = resolve_flight_model(cfg, start_pose=(0.0, 0.0, 0.0), start_altitude_m=50.0)
-    assert isinstance(sim, DiscreteFlightSimulator)
-    assert sim.arrival_tol_m == 2.5  # snap_to_actions(xy_tol_m=2.5)
-
-
-def test_an_unknown_kind_names_the_known_ones():
-    """A config typo must say what it could have said, not fail obscurely."""
-    with pytest.raises(ValueError) as exc:
-        FlightModelConfig(kind="helicopter")
-    message = str(exc.value)
-    assert "helicopter" in message
-    for kind in known_flight_kinds():
-        assert kind in message
-    assert "discrete6" in known_flight_kinds()
