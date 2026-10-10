@@ -332,34 +332,6 @@ def test_distinct_object_ids_yield_distinct_metadata(adapter, monkeypatch):
     assert object_ids == [1, 42]
 
 
-def test_reset_is_stateless_no_server_call(adapter, monkeypatch):
-    """Image mode keeps no server-side session, so ``reset()`` is a pure no-op
-    that issues NO HTTP traffic. A detect->reset->detect cycle is exactly two
-    ``/segment`` POSTs; the reset contributes none (regression guard against
-    re-introducing a session DELETE)."""
-    obs = _build_observation(_square_frame())
-    mask = _block_mask(404, 604, 404, 604)
-    payload = lambda: _build_segment_payload(
-        object_ids=[3],
-        masks=[mask],
-        scores=[0.8],
-        concepts=["building"],
-        image_shape=(_SAM_INPUT_SIZE, _SAM_INPUT_SIZE),
-    )
-    with _mock_requests_post(monkeypatch, [payload(), payload()]) as calls:
-        adapter.detect(obs, (0.0, 0.0))
-        after_first = len(calls)
-        adapter.reset()
-        after_reset = len(calls)
-        adapter.detect(obs, (0.0, 0.0))
-        after_second = len(calls)
-
-    assert after_first == 1
-    assert after_reset == 1  # reset() made no call
-    assert after_second == 2
-    assert all(c["url"].endswith("/segment") for c in calls)
-
-
 def test_returns_empty_when_rgb_missing(adapter, monkeypatch):
     obs = _build_observation(np.full((16, 16, 3), 128, dtype=np.uint8))
     obs.rgb = None  # type: ignore[assignment]

@@ -92,8 +92,6 @@ def _run(decode_workers: int):
         pad_top=0,
         pad_left=0,
         orig_HW=(H, W),
-        source_tier="sam3_1_image",
-        frame_index_override=-1,
     )
 
 

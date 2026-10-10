@@ -172,8 +172,6 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
     assets = load_episode_assets(episode.map_name, cfg.cell_size_m)
 
     perception = make_perception(cfg)
-    if perception is not None and hasattr(perception, "reset"):
-        perception.reset()
     sam_concept_setter = None
     cp = getattr(perception, "concept_provider", None)
     if isinstance(cp, ReasonerUnionConceptProvider):

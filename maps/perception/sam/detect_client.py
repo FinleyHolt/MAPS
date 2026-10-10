@@ -322,7 +322,7 @@ def _interior_mask(region) -> "np.ndarray":
 # score sane until then. Achromatic family enumerated locally to avoid importing the
 # maps.search palette (no cross-package layering).
 _COLOR_RELIABILITY_PRIOR_DEFAULT = 0.35  # chromatic seed
-_COLOR_ACHROMATIC = frozenset({"white", "black", "gray", "gray", "silver"})
+_COLOR_ACHROMATIC = frozenset({"white", "black", "gray", "silver"})
 
 
 def _color_reliability_prior(name: str) -> float:
@@ -391,27 +391,6 @@ def _set_color_attr(attrs: dict, rgb, region) -> None:
         attrs["color_conf"] = f"{col[2]:.3f}"
 
 
-# C3b DETERMINISTIC COLOR MIXTURE.
-# On the REAL perception path deterministic color is a MIXTURE, never an argmax
-# word: erode the mask 2-3 px (pavement bleed), drop the darkest ~30% of the
-# remaining pixels by luminance (glass/shadow; plus an absolute floor so a
-# glass-only mask cannot pass its own darkness off as paint) and the brightest
-# ~5% (specular), classify the survivors PER-PIXEL against the ACTIVE palette
-# (the existing color vocabulary -- nearest anchor in HSV; palette MODE, never
-# a mean), and emit the top-2..3 components with fractions
-# ("red 0.45 / black 0.30"). confidence = dominant fraction x surviving-mask
-# fraction. The mixture feeds the soft ``color_<word>`` column sort only (the
-# geom_compute matcher scores the cue word against ANY component, weighted by
-# its fraction); it never gates, and the agent's look pixel-read stays the
-# authority on finalists.
-_MIX_ERODE_PX_SMALL = 2
-_MIX_ERODE_PX_LARGE = 3
-_MIX_ERODE_LARGE_AREA_PX = 900  # ~30x30 px mask and up -> the 3 px kernel
-_MIX_DARK_PCTL = 30.0  # drop darkest ~30% of eroded pixels (glass/shadow)
-_MIX_BRIGHT_PCTL = 95.0  # drop brightest ~5% (specular)
-_MIX_DARK_ABS_LUM = 50.0  # absolute glass/shadow luminance floor (0-255 luma)
-_MIX_MAX_COMPONENTS = 3  # emit top-2..3 components
-_MIX_MIN_COMPONENT_FRAC = 0.10  # a <10% component is mask noise, not a reading
 
 
 
@@ -726,14 +705,6 @@ class SamDetectClient:
     sahi_tile_workers: int | None = None
     decode_workers: int = 4
 
-    def reset(self) -> None:
-        """Episode-boundary hook.
-
-        Image mode is stateless (no server-side session to drop), so this
-        is a no-op kept for API compatibility with callers that reset the
-        adapter between episodes.
-        """
-
     def detect(
         self,
         obs: Observation,
@@ -1011,8 +982,6 @@ class SamDetectClient:
             pad_top=0,
             pad_left=0,
             orig_HW=(H, W),
-            source_tier="sam3_1_image",
-            frame_index_override=-1,
         )
 
     def _segment_image_via_server(
@@ -1081,8 +1050,6 @@ class SamDetectClient:
             pad_top=pad_top,
             pad_left=pad_left,
             orig_HW=(orig_h, orig_w),
-            source_tier="sam3_1_image",
-            frame_index_override=-1,
         )
 
     def _decode_payload_to_detections(
@@ -1094,25 +1061,15 @@ class SamDetectClient:
         pad_top: int,
         pad_left: int,
         orig_HW: tuple[int, int],
-        source_tier: str,
-        frame_index_override: int | None,
     ) -> list[DetectedObject]:
-        """Shared decode for /segment and /detect wire payloads.
+        """Shared decode for the single-frame and SAHI ``/segment`` payloads.
 
         Inverts the letterbox, projects each mask through obs.depth,
-        and packs the result into a ``DetectedObject``. Image-mode
-        callers pass ``frame_index_override=-1`` and
-        ``source_tier="sam3_1_image"``; other callers pass
-        ``None`` (read from payload) and ``"sam"``.
+        and packs the result into a ``DetectedObject``.
         """
         orig_h, orig_w = orig_HW
         wire_H, wire_W = payload.get(
             "image_shape_hw", [_SAM_INPUT_SIZE, _SAM_INPUT_SIZE]
-        )
-        frame_index = (
-            int(payload.get("frame_index", -1))
-            if frame_index_override is None
-            else int(frame_index_override)
         )
 
         # --- PASS 1: decode every mask once and collect, per class, (a) the
@@ -1184,8 +1141,7 @@ class SamDetectClient:
         # split falsifiable.
         def _pack(region, det_idx, obj_id, score, label, comp_idx, n_comp):
             """Project + color + pack one region into a DetectedObject, or None
-            if it fails depth-projection. Closes over obs/frame_index/
-            source_tier/self.
+            if it fails depth-projection. Closes over obs/self.
 
             No frame-sized array is built anywhere on this path: the region
             travels from the wire, through the split, into the projection and
@@ -1210,10 +1166,7 @@ class SamDetectClient:
             # re-stamps ``wt_<id>`` by world position, but keep the source id
             # unique so no pre-tracker consumer folds two split instances).
             suffix = f"_c{comp_idx}" if n_comp > 1 else ""
-            if source_tier == "sam3_1_image":
-                track_id = f"sam3_1_img_{det_idx}{suffix}"
-            else:
-                track_id = f"sam3_1_{obj_id}{suffix}"
+            track_id = f"sam3_1_img_{det_idx}{suffix}"
             metadata: dict[str, object] = {
                 "concept": label,
                 "sam3_1_object_id": obj_id,
@@ -1223,7 +1176,7 @@ class SamDetectClient:
                 "pixel_area": area,
                 "mask_pixel_count": int(projected.n_valid_pixels),
                 "model_id": self.model_id,
-                "frame_index": frame_index,
+                "frame_index": -1,
             }
             if projected.tile_cells is not None and projected.tile_cells.size:
                 metadata["tile_cells"] = projected.tile_cells.astype(
@@ -1234,7 +1187,7 @@ class SamDetectClient:
                 label=label,
                 confidence=score,
                 class_hint=resolve_class_hint(label),
-                source_tier=source_tier,
+                source_tier="sam3_1_image",
                 metadata=metadata,
                 attributes=attrs,
                 mask=region,

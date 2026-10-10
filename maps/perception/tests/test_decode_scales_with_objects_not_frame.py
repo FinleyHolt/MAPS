@@ -105,8 +105,6 @@ def _per_detection_seconds(frame_px: int, reps: int = 3) -> tuple[float, int]:
             pad_top=0,
             pad_left=0,
             orig_HW=(frame_px, frame_px),
-            source_tier="sam3_1_image",
-            frame_index_override=-1,
         )
         best = min(best, time.perf_counter() - t0)
     return best / max(len(out), 1), len(out)

@@ -244,12 +244,6 @@ def run_episode(
     )
 
     perception = make_perception(cfg)
-    # The world-space tracker owns cross-frame identity: it assigns a
-    # stable object_id per tracked masklet which the adapter forwards into
-    # MapObject.track_id. Reset per episode so a fresh session starts here
-    # and object ids do not bleed across episodes.
-    if perception is not None and hasattr(perception, "reset"):
-        perception.reset()
 
     # Build the belief engine. The compiler carries the reasoner endpoint
     # facts the mission engine reads (None disables the LLM path entirely;

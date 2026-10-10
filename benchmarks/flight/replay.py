@@ -409,8 +409,7 @@ def recorded_segmenter(rec: Recording, state_of):
              "mask_zpacked_b64": d["mask_zpacked_b64"]}
             for i, d in enumerate(rows) if d.get("mask_zpacked_b64")]}
         return client._decode_payload_to_detections(payload, obs=obs, scale=1.0, pad_top=0, pad_left=0,
-                                                    orig_HW=(h, w), source_tier="sam3_1_image",
-                                                    frame_index_override=-1)
+                                                    orig_HW=(h, w))
 
     return segment
 
