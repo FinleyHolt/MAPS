@@ -216,7 +216,7 @@ def test_an_unstamped_run_refuses_to_elect_a_headline(tmp_path, capsys):
     report(tmp_path)
     out = capsys.readouterr().out
     assert "criterion: UNRECORDED" in out, out
-    assert "analysis.rescore" in out, out
+    assert "quote neither" in out, out
 
 
 def test_paired_refuses_across_criteria(tmp_path, capsys):

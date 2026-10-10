@@ -215,9 +215,7 @@ def score_precise(
 
     This IS ``SR`` on a bench whose ``SUCCESS_CRITERION`` is ``"shape"`` --
     the verdict key it returns is the same one the ring scorer returns,
-    because a row carries one success mask and one verdict under it. Called
-    on its own by the offline re-scorers (``rescore``, ``gt_trace``,
-    ``commit_replay``), which ask the shape question of a stored row.
+    because a row carries one success mask and one verdict under it.
 
     The target's shape substituted for a disc around its centre. Where an
     episode has annotated ground truth — a linked

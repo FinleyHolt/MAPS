@@ -306,8 +306,7 @@ def refuse_unscorable(col: str, cells: dict[str, int | None]) -> dict[str, int]:
         raise SystemExit(
             f"column {col!r} carries no verdict under its own criterion -- it "
             "was stored before this bench was scored on the target's shape. "
-            "Re-score the run into a NEW column (analysis.rescore); stored "
-            "cells are never rewritten."
+            "Re-run it into a NEW column; stored cells are never rewritten."
         )
     return scored
 
@@ -669,7 +668,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     ap.add_argument("--episodes", type=Path, default=None,
                     help="pair only the shared episodes listed in this file, one id per "
-                         "line (have_worlds.mapping.flown_episodes writes one)")
+                         "line")
     a = ap.parse_args(argv[1:])
 
     if a.cmd == "add":

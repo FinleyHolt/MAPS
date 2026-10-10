@@ -102,9 +102,7 @@ def print_precise(metrics: list[dict], n: int) -> bool:
     on a CityNav run, which resolves no shape at all.
 
     ``n`` is the full episode count, so ``coverage`` states how much of the run
-    this number actually speaks for. Shared with the offline rescorer: one
-    printer means a re-scored number and a run's own report cannot be formatted
-    to look different from each other.
+    this number actually speaks for.
 
     Returns whether it printed anything, so a caller can say what is on
     screen rather than assume.
@@ -277,7 +275,7 @@ def report(root: Path) -> dict[str, dict]:
                  if shaped else
                  ", and the run carries no shape verdict at all. Whether this "
                  "bench is scored on one is NOT recorded")
-              + " -- re-score with analysis.rescore rather than quoting one.")
+              + " -- quote neither as the bench's SR.")
     # OSR and the (OSR, SR) joint. SR alone cannot say whether a run got
     # WORSE at reaching the target or better at committing once it did:
     # OSR fell 0.68 -> 0.64 on the default-frame arm while SR rose, and
@@ -364,7 +362,7 @@ def paired(root_a: Path, root_b: Path) -> None:
             f"INVALID pairing -- {root_a.name} is scored on "
             f"{_CRITERION_LABEL.get(crit_a, crit_a)} and {root_b.name} on "
             f"{_CRITERION_LABEL.get(crit_b, crit_b)}. The two numbers answer "
-            "different questions; re-score one with analysis.rescore."
+            "different questions."
         )
     _key = "SR"
     print(

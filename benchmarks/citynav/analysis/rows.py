@@ -89,9 +89,7 @@ def episode_id(row: dict, m: dict | None = None) -> str | None:
 def final_xy(row: dict) -> tuple[float, float] | None:
     """Where this episode's flight ENDED, else ``None``.
 
-    The point ``SR`` was scored from, so anything re-scoring arrival offline
-    (:mod:`benchmarks.citynav.analysis.rescore`) asks the same question of the
-    same point. ``pred_xy`` before ``final_pos_xy``: they are the same point
+    The point ``SR`` was scored from. ``pred_xy`` before ``final_pos_xy``: they are the same point
     on a scored row, and ``pred_xy`` is the one the runner writes as the
     prediction.
     """
