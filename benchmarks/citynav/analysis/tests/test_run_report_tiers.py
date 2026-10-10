@@ -42,14 +42,14 @@ def _write(path: Path, *dicts: dict) -> None:
 
 
 def test_an_episode_json_beside_the_ledger_is_not_an_attempt(tmp_path):
-    """The runner's own copy of its row, and the pre-flight floor before
-    that. Neither is a second attempt."""
+    """The runner's own copy of its row is not a second attempt, and an
+    episode.json with no ledger row is no attempt at all."""
     root = tmp_path / "run"
     landed = _row("e::1#1", "20260725_110000", 1)
     _write(root / LEDGER, landed)
     _write(root / landed["workdir"] / "episode.json", {**landed, "worker_id": None})
     _write(root / "w0/maps_20260725_110500_citynav_e__2_2/episode.json",
-           {"episode_id": "e::2#2", "status": "flying", "provisional": True,
+           {"episode_id": "e::2#2", "status": "ok",
             "metrics": {"episode_id": "e::2#2", "SR": 1, "NE": 0.0}})
 
     files, tier = rows.result_files(root)

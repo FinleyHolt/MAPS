@@ -1,9 +1,9 @@
 """One verdict per row, under the bench's own success mask.
 
 ``eval.score_arrival`` is the single entry point every writer of a scored
-row goes through — the main merge, the zero-flight branch, and the
-pre-flight provisional floor. What it returns IS the row's metrics, so the
-three cannot drift onto different criteria.
+row goes through — the main merge and the zero-flight branch. What it
+returns IS the row's metrics, so the two cannot drift onto different
+criteria.
 """
 
 from __future__ import annotations
