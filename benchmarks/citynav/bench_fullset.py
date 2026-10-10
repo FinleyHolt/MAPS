@@ -208,6 +208,34 @@ def _success_criterion() -> str:
     return paths.SUCCESS_CRITERION
 
 
+# The native thread pools a warm runner starts: one thread each for BLAS
+# (OpenMP, OpenBLAS, MKL), OpenCV and the tokenizer (Rayon), and two malloc
+# arenas. Uncapped, every pool starts a thread per core in every runner, and
+# a thread that fails to start crashes its episode. A value the shell set
+# wins.
+RUNNER_THREAD_ENV = {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENCV_FOR_THREADS_NUM": "1",
+    "RAYON_NUM_THREADS": "1",
+    "MALLOC_ARENA_MAX": "2",
+}
+
+
+def _runner_env() -> dict[str, str]:
+    """The environment a warm runner is spawned under."""
+    env = {**RUNNER_THREAD_ENV, **os.environ}
+    # Unbuffered, so the worker's ``server.log`` gets every line as it
+    # happens: redirected to a file, Python block-buffers, and a worker that
+    # dies fast would leave a 0-byte log.
+    env["PYTHONUNBUFFERED"] = "1"
+    # episode_server.PARENT_PID_ENV, named here so the driver stays off
+    # the engine's imports.
+    env["CITYNAV_BENCH_PARENT_PID"] = str(os.getpid())
+    return env
+
+
 class _WarmRunner:
     """One persistent ``run_benchmark --episode-server`` per bench worker.
 
@@ -300,17 +328,7 @@ class _WarmRunner:
             "--run-root",
             str(self.run_root),
         ]
-        env = os.environ.copy()
-        # Force unbuffered stdout/stderr in the worker so its per-worker
-        # ``server.log`` (Popen stderr=slog below) gets every line as it
-        # happens. Python defaults to block-buffered when stdout/stderr
-        # is redirected to a non-tty file — a worker that dies fast
-        # leaves a 0-byte log otherwise, exactly the diagnostic blackout
-        # that masked spawn FileNotFoundError as "preflight OOM" earlier.
-        env["PYTHONUNBUFFERED"] = "1"
-        # episode_server.PARENT_PID_ENV, named here so the driver stays off
-        # the engine's imports.
-        env["CITYNAV_BENCH_PARENT_PID"] = str(os.getpid())
+        env = _runner_env()
         self._q = queue.Queue()
         self._early_done = None
         self._episodes_since_spawn = 0
