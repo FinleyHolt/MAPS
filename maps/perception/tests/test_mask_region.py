@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from maps.util.mask_region import MaskRegion
+from maps.perception.tests.regions import full
 
 
 def _mask(shape=(40, 50), r0=10, c0=12, h=6, w=8):
@@ -43,7 +44,7 @@ def test_round_trip_through_a_frame_is_lossless():
     m = _mask()
     region = MaskRegion.from_full(m)
     assert region is not None
-    assert np.array_equal(region.to_full(), m)
+    assert np.array_equal(full(region), m)
     assert region.bbox == (10, 12, 15, 19)
     assert region.area == int(m.sum())
     # The crop really is smaller — otherwise this round-trips a whole frame.
@@ -71,7 +72,7 @@ def test_window_writes_reach_the_frame_and_nothing_else():
     region.window(cov)[region.crop] += 1
 
     assert cov.sum() == region.area
-    assert np.array_equal(cov > 0, region.to_full())
+    assert np.array_equal(cov > 0, full(region))
 
 
 def test_empty_mask_is_not_a_region():
@@ -91,7 +92,7 @@ def test_tightened_keeps_the_pixels_and_shrinks_the_box():
 
     tight = comp.tightened()
     assert tight is not None
-    assert np.array_equal(tight.to_full(), comp.to_full())
+    assert np.array_equal(full(tight), full(comp))
     assert tight.area == comp.area
     assert tight.crop.size < comp.crop.size  # the box really shrank
 
@@ -99,7 +100,7 @@ def test_tightened_keeps_the_pixels_and_shrinks_the_box():
 def test_from_full_accepts_a_known_box_and_validates_it():
     m = _mask()
     assert np.array_equal(
-        MaskRegion.from_full(m, bbox=(10, 12, 15, 19)).to_full(), m
+        full(MaskRegion.from_full(m, bbox=(10, 12, 15, 19))), m
     )
     # A box that does not bound the mask loses pixels rather than raising, so
     # from_full is exactly as trustworthy as the box handed to it — the reason

@@ -70,7 +70,8 @@ def test_required_fields_nonempty(stub_run):
         assert run_manifest._get(m, keypath), f"empty manifest field: {keypath}"
     # By-name pins on the MEASURED identity (the fields whose disappearance
     # a derived scan could not notice).
-    for keypath in run_manifest.MEASURED_IDENTITY_FIELDS:
+    for keypath in (("git_commit",), ("config_sha256",), ("endpoints", "model_id"),
+                    ("perception", "bake_sha256")):
         assert run_manifest._get(m, keypath), f"measured field vanished: {keypath}"
     assert m["selection"]["episodes_n"] == 3
     assert m["withhold"] == []

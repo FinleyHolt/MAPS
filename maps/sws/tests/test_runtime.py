@@ -2,19 +2,18 @@
 
 - ``_find_track`` re-identifies by exact ByteTrack ``track_id`` and nothing
   else; a different id mints a distinct node even on an identical footprint.
-- ``serialize_graph`` / ``deserialize_graph`` round-trip ``semantic_attributes``
-  through JSON, which is where str/int coercion at the wire layer would show.
+- ``save_graph`` / ``load_graph`` round-trip ``semantic_attributes`` through
+  the nodes JSON, which is where str/int coercion at the wire layer would show.
 - ``save_graph`` / ``load_graph`` preserve ``cells``, ``tags['height_m']`` and
   ``world_contour`` -- the last one against a measured 2026-07-04 loss.
 """
 
 from __future__ import annotations
 
-import json
 
 
 from maps.sws import MapObject, ObjectGraph
-from maps.sws.graph.io import deserialize_graph, serialize_graph
+from maps.sws.graph.io import load_graph, save_graph
 from maps.sws.graph.runtime import _find_track
 
 
@@ -35,7 +34,7 @@ def _detected(centroid: tuple[int, int], **overrides) -> MapObject:
     return node
 
 
-def test_semantic_attributes_round_trip_via_json():
+def test_semantic_attributes_round_trip_via_json(tmp_path):
     node = _detected(
         (10, 12),
         semantic_attributes={"color": {"gray": 3, "white": 1}, "text_span": {"7B": 2}},
@@ -49,9 +48,8 @@ def test_semantic_attributes_round_trip_via_json():
         cell_size_m=5.0,
         objects_by_class={"object": {"detected_0": node}},
     )
-    data = serialize_graph(graph)
-    # Round-trip through JSON to flush str/int coercion at the wire layer.
-    restored = deserialize_graph(json.loads(json.dumps(data)))
+    save_graph(graph, str(tmp_path / "t"))
+    restored = load_graph(str(tmp_path / "t"))
     out = restored.nodes["detected_0"].semantic_attributes
     assert out == {"color": {"gray": 3, "white": 1}, "text_span": {"7B": 2}}
     # Counts must remain ints (not str), keys must remain str.

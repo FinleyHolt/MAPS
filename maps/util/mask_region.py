@@ -135,12 +135,5 @@ class MaskRegion:
         r0, c0, _r1, _c1 = self.bbox
         return rr + r0, cc + c0
 
-    def to_full(self) -> np.ndarray:
-        """A frame-sized boolean array. The boundary conversion — inside the
-        pipeline, work through ``window``/``rows_cols`` instead."""
-        full = np.zeros(self.frame_shape, dtype=bool)
-        self.window(full)[...] = self.crop
-        return full
-
 
 __all__ = ["MaskRegion"]

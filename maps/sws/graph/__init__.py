@@ -1,10 +1,8 @@
 """Feature graph: spatial relationship model, I/O, and construction."""
 
 from maps.sws.graph.io import (
-    deserialize_graph,
     load_graph,
     save_graph,
-    serialize_graph,
 )
 from maps.sws.graph.mask_cache import (
     MaskCache,
@@ -35,13 +33,11 @@ __all__ = [
     "attach_mask_cache",
     "build_mask_cache",
     "build_object_graph",
-    "deserialize_graph",
     "get_mask_cache",
     "get_prebake_evidence",
     "load_graph",
     "revoke_track_contribution",
     "save_graph",
-    "serialize_graph",
     "upsert_detected_centroid_only",
     "upsert_tracked_detected",
     "upsert_tracked_detected_batch",

@@ -27,47 +27,6 @@ from maps.search.withhold import withheld
 # reasoner_loop imports this module, so a module-level maps import closes
 # a cycle -- and a parser has no business needing the executor to load.
 
-# The served vocabulary, and the op each call compiles onto. Names are the
-# executor's own semantics in Python's clothing -- `order` is score_by,
-# `filter` is filter_items -- because a name the model already writes is
-# the whole point of the shape. They are served as METHODS on a result
-# (rows.filter(...), rows.order(...)): a cut and a sort belong to the rows
-# they act on, which is the spelling the model reached for unprompted.
-# THE TRIMMED SET. Four things the map can answer -- what is there, what
-# touches what, what is near what, and which is the reddest/biggest -- plus
-# the two that look and move. `compare` is plumbing this compiles for you,
-# never a call to write.
-# `look_for` is the SENSING verb and the only thing that arms perception:
-# nothing else on this surface makes a flight segment anything.
-CALLS = ("find", "intersection", "ends_of", "order", "filter", "look",
-         "show_map",
-         "look_for", "stand", "more_of")
-
-# THE TWO CALLS THAT MOVE, and they differ in how much ground they cover:
-#
-#   go_to    one stop, on the thing you named.
-#   explore  a covering pass over the WHOLE of a thing, stop by stop,
-#            segmenting the watched classes at each. It ends on the last
-#            stop of the pass.
-#
-# NEITHER RESTORES THE POSE, and both are therefore answers. SR is scored
-# on `final_pos_xy` (benchmarks/citynav/eval.py) -- WHERE THE DRONE STOPS,
-# not on any commit record -- so wherever the last flight of the last call
-# put the drone IS the commit, and an explore ending mid-shape is a commit
-# mid-shape. That is the honest cost of covering something: it is paid in
-# where you end, and it is undone by naming the row you meant and going to
-# it. A return leg would spend a flight putting the drone back somewhere
-# that is not an answer either (smoke 25712881's pre-explore pose was the
-# episode start, 4 km from the target).
-#
-# BOTH TAKE A THING, NEVER A COORDINATE -- see act_needs_a_thing.
-ACTS = ("go_to", "explore")
-
-# What `order` ranks by, and the column each keyword lands on. `size`
-# is footprint_area_m2 -- the column an 8-reader audit called "THE SLEEPER,
-# the only size-adjective->sort column", which the sentence language could
-# not name after its shape superlatives were stripped. Naming it here is
-# what makes it live again.
 # The four map-fixed directions, in the order their kwargs are read. Taken
 # from the executor's own table so the surface can never offer a direction
 # the geometry does not compute.
@@ -115,125 +74,10 @@ def _winds_holding(cardinal_word: str) -> list:
     return sorted(w for w in COMPASS_UNIT if cardinal_word in _wind_parts(w))
 
 
-# What each call accepts. A kwarg outside this set is REFUSED, never
-# ignored: the first live reasoner wrote find("church", name="Desert Song
-# Foursquare Church") and a silently-dropped `name=` is the model's whole
-# constraint disappearing with the run still looking successful.
-CALL_KWARGS = {"find": ("near", "nearest", "within", "dwithin",
-                        "query",
-                        # THE MODEL SAYS WHICH IT MEANT. A query is a CLASS
-                        # or a PROPER NOUN and the surface had to guess.
-                        # name= is the model drawing that line itself, and
-                        # it already does: 135 blocks over 61 episodes wrote
-                        # find(<class>, name=<name>) and were refused -- the
-                        # largest error family in the run, 13/61 against
-                        # 92/194. The class half does no disambiguating work
-                        # (1 of 353 bake names spans two tag families) and is
-                        # accepted because the model writes it, not because
-                        # it narrows.
-                        "name",
-                        # THE APPEARANCE ORDERING, and it is the only one
-                        # the language has. The executor's find has always
-                        # taken it (``geom_program`` attaches color_<word>
-                        # and drops nothing); the kwarg gate here was the
-                        # only thing refusing it, so the sole spelling left
-                        # was a SECOND call. Emission collapsed with the
-                        # surface: 440 colour-ordering heads over 175 of 300
-                        # episodes on the sentence language against 13 over
-                        # 2 of 500 here, while 12,706 served rows carried a
-                        # colour cell nothing sorted on
-                        #.
-                        "color",
-                        # THE SIGNED relation, one kwarg per anchor. 65% of
-                        # calcity cues name two places and 56% carry a
-                        # compass word, and "East of Orchid Drive and West of
-                        # North Loop Boulevard" is not proximity to two
-                        # things -- near=[A, B] would rank a car west of
-                        # Orchid exactly as well as one east of it. Each
-                        # kwarg ORDERS and never drops: the constraint is
-                        # right 97.4% over the 154 addressable corpus cues,
-                        # and the residual 2.6% is why no cut is taken.
-                        "east_of", "west_of", "north_of", "south_of"),
-               "show_map": ("around",),
-               "intersection": (),
-               "ends_of": (),
-               "order": ("nearest", "color", "items"),
-               # within= is CONTACT and near=/dwithin= is a GAP -- the two
-               # halves of "outside a house". A car in a front yard touches
-               # nothing, so containment cannot express it, and the only
-               # spelling left ordered by distance and cut nothing. That is
-               # the whole of calcity::200#198: the cue's car is 6.4 m off
-               # Poppy Boulevard and 19.9 m from its house, the committed
-               # decoy is 10.5 m off the road and 10.5 m from ITS house, so
-               # proximity-to-a-house ranks the wrong car first -- and the
-               # candidate that beat both on redness sat 44 m from any
-               # house with no threshold able to drop it.
-               # rows.filter(near=houses, dwithin=25) drops that one and
-               # leaves the ordering free to say which of the rest is on
-               # the boulevard. A set in near= is its union, so the gap is
-               # to the NEAREST member: this is distance to a CLASS.
-               "filter": ("within", "near", "dwithin", "items",
-                          "north_of", "south_of", "east_of",
-                          "west_of", "facing", "direction"),
-               # look() TAKES ONE THING AND SHOWS IT. The free-text second
-               # argument -- the "looking question" -- is gone: a sentence
-               # of English does not belong in a surface whose whole point
-               # is that the model writes the query. It answered into the
-               # picture and bound nothing, so a distinction it resolved had
-               # nowhere to land, and the model spent the turn asking
-               # "which of these has a pool behind it?" (89 of 500
-               # episodes) and then indexing rank 0 by DISTANCE anyway.
-               # What replaces it is the query: arm the class, cover the
-               # candidates, and the thing the question was about comes back
-               # as ROWS -- find("house", near=pools) ranks by the gap to
-               # the nearest pool, and houses.filter(within=pools) keeps
-               # the ones that hold one.
-               # marks= names what ELSE belongs in the picture: the road a
-               # candidate should be on, the thing it should be beside. The
-               # renderer already draws a named road as its NAME and gives
-               # it no badge digit; without a mark it draws nothing, so a
-               # set look of ten cars was ten crops each showing one car
-               # and no way to tell which street it sat on
-               # (calcity::200#198 committed the reddest of them, 116 m
-               # off the cue's boulevard and 11.9 m off another).
-               "look": ("marks",),
-               # The sensing verb: bare it ARMS the standing watchlist,
-               # near= it also boosts segmentation at the place named.
-               "look_for": ("at",),
-               # The STANDING VIEWPOINT. Free, nothing moves: it adopts a
-               # ground stance whose side columns ride every find row,
-               # whose handle is a point ref, and whose facing orients
-               # crops and maps.
-               "stand": ("at", "facing"),
-               # THE WIDENING. A result past the soft cap renders as a
-               # head and the rest stays live in the handle; this is how
-               # the next block of it is reached.
-               "more_of": (),
-               # NEITHER MOVING CALL TAKES A POINT. The aim was the model
-               # naming a coordinate, and it cannot: probed with crops and
-               # the world window it returned the crop's CENTER on 20/21
-               # replies, midpoint arithmetic with no visual pointing in
-               # it, and the first live episodes on this surface aimed
-               # 23-38 m off the footprint they named, repeatedly, on
-               # every flight. Reaching a PART of a thing is what explore
-               # plus a watchlist is for: cover it, and go_to the row the
-               # segmenter put there.
-               "go_to": (),
-               "explore": ()}
-
-ORDER_KEYS = {"nearest": None,                     # a place: distance to it
-              "color": "color_{}"}                 # color_<word>, higher wins
-
-# size= IS GONE. It sorted by footprint_area_m2 and was measured WORSE than
-# the order the rows already arrive in: 5 better / 17 worse (p=0.02) on the
-# population where a size word is in the cue, and 6/19 (p=0.01) once the
-# model's own class word has restricted the set. The mechanism is not
-# subtle -- "a large rectangular pool in the backyard of a north-facing
-# house" ranks the NEIGHBOURS' bigger pools first, because a size adjective
-# in these cues is relative to the thing's own kind and not to the map.
-#
-# It was relit as "THE SLEEPER, the only size-adjective->sort column".
-# The hypothesis did not survive its first paired read.
+# order() takes no size key: sorting by footprint_area_m2 measured worse
+# than the order the rows arrive in (5 better / 17 worse, p=0.02, where a
+# size word is in the cue), because a size adjective in these cues is
+# relative to the thing's own kind, not to the map.
 
 # THE MOVING CALLS TAKE A THING, NEVER A COORDINATE. One refusal, because
 # a coordinate reaches them by three spellings -- go_to(x, y), go_to([x,
@@ -269,7 +113,6 @@ def act_needs_a_thing(*, name: str, got: str) -> str:
 
 class CodeError(ValueError):
     """A refusal the model can act on: what was said, and what is allowed."""
-
 
 
 # ---------------------------------------------------------------------------

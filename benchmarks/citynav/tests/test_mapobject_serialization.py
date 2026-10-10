@@ -1,8 +1,8 @@
-"""MapObject runtime fields round-trip through serialize / deserialize."""
+"""MapObject runtime fields round-trip through save_graph / load_graph."""
 
 from __future__ import annotations
 
-from maps.sws.graph.io import deserialize_graph, serialize_graph
+from maps.sws.graph.io import load_graph, save_graph
 from maps.sws.graph.model import ObjectGraph, MapObject
 
 
@@ -41,10 +41,14 @@ def _graph_with_detected() -> ObjectGraph:
     )
 
 
-def test_roundtrip_preserves_runtime_fields():
+def _roundtrip(g: ObjectGraph, tmp_path) -> ObjectGraph:
+    save_graph(g, str(tmp_path / "t"))
+    return load_graph(str(tmp_path / "t"))
+
+
+def test_roundtrip_preserves_runtime_fields(tmp_path):
     g = _graph_with_detected()
-    blob = serialize_graph(g)
-    g2 = deserialize_graph(blob)
+    g2 = _roundtrip(g, tmp_path)
     det = g2.nodes["detected_0"]
     assert det.provenance == "detected"
     assert det.first_seen_t == 100.0
@@ -54,9 +58,9 @@ def test_roundtrip_preserves_runtime_fields():
     assert det.embedding == [0.1, 0.2, 0.3]
 
 
-def test_prebaked_default_provenance_preserved():
+def test_prebaked_default_provenance_preserved(tmp_path):
     g = _graph_with_detected()
-    g2 = deserialize_graph(serialize_graph(g))
+    g2 = _roundtrip(g, tmp_path)
     pre = g2.nodes["buildings_0"]
     assert pre.provenance == "prebaked"
     assert pre.first_seen_t is None

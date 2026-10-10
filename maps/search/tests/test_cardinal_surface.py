@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from maps.search.analyze_scene import geom_program as gp
-from maps.search.parse_compile.code_surface import CALL_KWARGS, CodeError
+from maps.search.parse_compile.code_surface import CodeError
 from maps.search.tests.test_code_surface_arm import (
     ops_of_block, plan_of_block, raising_ops_of_block)
 
@@ -38,8 +38,13 @@ def _surface():
 
 
 def test_every_cardinal_is_a_find_kwarg():
+    import inspect
+
+    from maps.search.parse_compile.python_surface import MissionPython
+
+    params = inspect.signature(MissionPython._call_find).parameters
     for d in ("east", "west", "north", "south"):
-        assert f"{d}_of" in CALL_KWARGS["find"]
+        assert f"{d}_of" in params
 
 
 def test_the_compiled_key_is_the_key_the_executor_writes():

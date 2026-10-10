@@ -1099,33 +1099,6 @@ def _program_requests_color(program) -> bool:
     return any(_color_words_of_op(op) for op in ops or [])
 
 
-def _color_qualified_concepts(concepts) -> list[str]:
-    """The entries of a visual-class list that carry a COLOR word (any token
-    normalizing onto the closed palette, spellings/synonyms included) — the
-    served no-color-qualifier rule made enforceable. Lexical token check
-    only ('greenhouse' passes; 'white building' and 'navy car' do not)."""
-    bad: list[str] = []
-    for c in concepts or []:
-        s = str(c)
-        toks = re.findall(r"[a-z]+", s.lower())
-        if any(_normalize_color(t) in _COLOR_ENUM for t in toks):
-            bad.append(s)
-    return bad
-
-
-# The ONE color-qualifier rejection, served wherever a visual class string
-# is accepted (sam_concepts / watchlist / boost). Factual + remedy-affording:
-# the rule protects the deterministic color extractor's read (color is
-# measured per-detection, never segmented as vocabulary).
-_COLOR_CONCEPT_ERROR = (
-    "visual class strings take no color qualifier: color is measured "
-    "per-detection by the color extractor and rides the color field / "
-    "color_<word> columns (a color-qualified segmentation class would "
-    "bypass that read). Re-emit the bare noun (e.g. 'building', not 'white "
-    "building') and read/weight color via the columns."
-)
-
-
 def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
                           raw_sink: dict | None = None,
                           seed_results: dict | None = None,
@@ -1320,67 +1293,6 @@ def _crop_token_of(row: dict, live: bool) -> str:
                     and not isinstance(v, bool) for v in xy)):
         return format_xy_token(float(xy[0]), float(xy[1]))
     return fid
-
-# What each grounding-free view-position sentinel resolves to (accepted call
-# forms echo their resolution, never a not-a-fid note).
-_SENTINEL_ECHO = {
-    "marked_region": "looks where the operator pointed",
-    "current_position": "looks from the current pose",
-}
-
-
-def _viewpoint_bind_echo(items, rows_by_fid, pose_xy=None) -> list[dict]:
-    """Deterministic requested-viewpoint bind echo.
-
-    For each accepted item, echo what its ``target_fid`` BOUND TO: a surface
-    fid echoes the bound row's name (or the explicit ``(unnamed)``) + its
-    compact tag head + xy + distance-from-current-pose -- the same truthful
-    row facts every other render serves, so a name<->fid slip (the model
-    asks for 'Building 9' but writes the fid of 'Building 10', 127 m away)
-    OR a hallucinated identity (a garage bound as a named landmark) is
-    visible in the tool result and the model can simply re-ask; an
-    [x,y]-literal target echoes the coordinate it will fly (bare-xy echo --
-    no row facts exist for it); a view-position sentinel echoes its
-    resolution. Only a token that is NONE of those gets the not-a-fid note.
-    Deterministic reads only: no thresholds, nothing is blocked or
-    rewritten."""
-    out: list[dict] = []
-    for it in items:
-        fid = str(it.get("target_fid") or "")
-        rec: dict = {"fid": fid}
-        row = rows_by_fid.get(fid) if isinstance(rows_by_fid, dict) else None
-        if isinstance(row, dict):
-            nm = row.get("name") or row.get("class")
-            rec["name"] = str(nm) if nm else "(unnamed)"
-            tags = row.get("tags")
-            if isinstance(tags, dict) and tags:
-                rec["tags"] = _grid_cell(tags)
-            xy = row.get("xy")
-            if isinstance(xy, (list, tuple)) and len(xy) == 2:
-                rec["xy"] = [round(float(xy[0]), 1), round(float(xy[1]), 1)]
-                if pose_xy is not None:
-                    rec["dist_from_here_m"] = round(
-                        math.hypot(float(xy[0]) - float(pose_xy[0]),
-                                   float(xy[1]) - float(pose_xy[1])), 1)
-        else:
-            _m = _XY_TARGET_RE.match(fid)
-            if _m:
-                _x, _y = float(_m.group(1)), float(_m.group(2))
-                rec["xy"] = [round(_x, 1), round(_y, 1)]
-                if pose_xy is not None:
-                    rec["dist_from_here_m"] = round(
-                        math.hypot(_x - float(pose_xy[0]),
-                                   _y - float(pose_xy[1])), 1)
-            elif fid in VIEW_POSITION_SENTINELS:
-                rec["note"] = _SENTINEL_ECHO.get(
-                    fid, "view-position sentinel")
-            else:
-                rec["note"] = "not a fid on the live surface"
-        out.append(rec)
-    return out
-
-
-
 
 def _pose_xy_of_ctx(ctx) -> tuple[float, float] | None:
     """The current pose carried on a ToolContext (None when absent)."""

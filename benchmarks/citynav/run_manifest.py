@@ -206,16 +206,6 @@ IDENTITY_KEYS = (
     ("search_env_flags", "SEARCH_CITYNAV_TILES"),
 )
 
-# The vacuity floor's by-name pins: fields that are MEASURED (not copied),
-# asserted non-empty by benchmarks/citynav/tests/test_run_manifest.py.
-MEASURED_IDENTITY_FIELDS = (
-    ("git_commit",),
-    ("config_sha256",),
-    ("endpoints", "model_id"),
-    ("perception", "bake_sha256"),
-)
-
-
 class ManifestIdentityError(RuntimeError):
     """A re-entering run's resolution contradicts the stored manifest."""
 

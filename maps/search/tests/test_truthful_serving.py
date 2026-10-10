@@ -461,26 +461,6 @@ def test_color_filter_rejection_names_the_real_remedy():
         raise AssertionError("color filter must be rejected loudly")
 
 
-
-
-
-
-
-
-def test_color_qualified_concepts_detector():
-    from maps.search.parse_compile.reasoner_loop import (
-        _COLOR_CONCEPT_ERROR,
-        _color_qualified_concepts,
-    )
-    bad = _color_qualified_concepts(
-        ["white building", "car", "navy car", "greenhouse", "silver suv"])
-    assert bad == ["white building", "navy car", "silver suv"]
-    assert "color" in _COLOR_CONCEPT_ERROR
-    assert "color_<word>" in _COLOR_CONCEPT_ERROR
-
-
-
-
 # ---------------------------------------------------------------------------
 # Dedup: an identical re-issue gets a one-line REFERENCE, never a payload
 # ---------------------------------------------------------------------------

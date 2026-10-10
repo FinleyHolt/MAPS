@@ -1,18 +1,8 @@
 """Feature graph serialization.
 
-Two on-disk formats are supported:
-
-1. ``{stem}_graph.npz`` + ``{stem}_nodes.json`` (preferred). The npz
-   carries the fid index + graph scalars; the per-node JSON carries the
-   ``MapObject`` metadata.
-
-2. ``{stem}_graph.json`` (legacy; nested dicts). Still loaded for
-   back-compat with existing baked per-block tiles.
-
-Both formats deserialize into the same ``ObjectGraph`` shape the
-resolver queries. Graphs are nodes-only: tiles baked before the
-edge-machinery removal still carry packed edge columns in the npz —
-those arrays are simply never read (ignored by omission).
+``{stem}_graph.npz`` + ``{stem}_nodes.json``: the npz carries the fid index
++ graph scalars; the per-node JSON carries the ``MapObject`` metadata. Graphs
+are nodes-only; packed edge columns an npz may carry are never read.
 """
 
 from __future__ import annotations
@@ -174,46 +164,6 @@ def _dict_to_node(nd: dict) -> MapObject:
         axis_residual_m=float(nd.get("axis_residual_m", 0.0)),
         centerline_method=nd.get("centerline_method", ""),
     )
-
-
-# ---------------------------------------------------------------------------
-# Legacy JSON serialization (kept for tiles baked before the binary format)
-# ---------------------------------------------------------------------------
-
-
-def serialize_graph(graph: ObjectGraph) -> dict:
-    """Serialize an ``ObjectGraph`` to a JSON-compatible dict (legacy)."""
-    nodes = {fid: _node_to_dict(node) for fid, node in graph.nodes.items()}
-    out: dict = {
-        "nodes": nodes,
-        "cell_size_m": float(graph.cell_size_m),
-    }
-    if graph.step_index:
-        out["step_index"] = graph.step_index
-    if graph.tau is not None:
-        out["tau"] = graph.tau
-    return out
-
-
-def deserialize_graph(data: dict) -> ObjectGraph:
-    """Deserialize a JSON-parsed graph dict (legacy).
-
-    Old graph JSONs carry an ``edges`` dict; it is ignored (graphs are
-    nodes-only since the edge-machinery removal).
-    """
-    nodes = {fid: _dict_to_node(nd) for fid, nd in data["nodes"].items()}
-    if "cell_size_m" not in data:
-        raise ValueError(
-            "Legacy graph JSON has no cell_size_m. Re-bake the tile via "
-            "benchmarks/citynav/data_prep/bake_tiles.sh."
-        )
-    graph = ObjectGraph(nodes=nodes, cell_size_m=float(data["cell_size_m"]))
-    graph.step_index = int(data.get("step_index", 0))
-    graph.tau = data.get("tau")
-    # Rebuild per-class view.
-    for fid, node in nodes.items():
-        graph.objects_by_class.setdefault(node.class_name, {})[fid] = node
-    return graph
 
 
 # ---------------------------------------------------------------------------
@@ -472,23 +422,16 @@ def save_graph(graph: ObjectGraph, path_stem: str) -> None:
 
 
 def load_graph(path_stem: str) -> ObjectGraph:
-    """Load the graph. Prefers the binary format, falls back to JSON."""
+    """Load the graph from its binary format."""
     npz_path = f"{path_stem}_graph.npz"
     nodes_path = f"{path_stem}_nodes.json"
-    json_path = f"{path_stem}_graph.json"
 
     if os.path.exists(npz_path) and os.path.exists(nodes_path):
         graph = load_graph_binary(path_stem)
         _load_prebake_evidence_sidecar(graph, path_stem)
         return graph
 
-    if os.path.exists(json_path):
-        with open(json_path) as f:
-            graph = deserialize_graph(_json.load(f))
-        _load_prebake_evidence_sidecar(graph, path_stem)
-        return graph
-
     # An npz without nodes.json carries arrays only: signal absence.
     raise FileNotFoundError(
-        f"No graph sidecar at {npz_path}, {nodes_path}, or {json_path}"
+        f"No graph sidecar at {npz_path} and {nodes_path}"
     )

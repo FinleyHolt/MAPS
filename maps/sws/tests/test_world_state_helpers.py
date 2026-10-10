@@ -8,7 +8,7 @@ from maps.sws import (
     ObjectGraph,
     WorldState,
 )
-from maps.sws.graph.io import deserialize_graph, serialize_graph
+from maps.sws.graph.io import load_graph, save_graph
 from maps.sws.graph.runtime import upsert_detected_centroid_only
 
 
@@ -44,7 +44,7 @@ def test_classes_from_object_graph():
     assert "roads" in ws.classes
 
 
-def test_objectgraph_step_index_round_trip():
+def test_objectgraph_step_index_round_trip(tmp_path):
     node = MapObject(
         id="roads_0",
         class_name="roads",
@@ -62,10 +62,8 @@ def test_objectgraph_step_index_round_trip():
         step_index=7,
         tau=123.456,
     )
-    data = serialize_graph(graph)
-    assert data["step_index"] == 7
-    assert data["tau"] == 123.456
-    restored = deserialize_graph(data)
+    save_graph(graph, str(tmp_path / "t"))
+    restored = load_graph(str(tmp_path / "t"))
     assert restored.step_index == 7
     assert restored.tau == 123.456
 

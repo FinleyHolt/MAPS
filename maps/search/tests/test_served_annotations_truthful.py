@@ -223,43 +223,6 @@ def test_all_flat_sort_serves_no_note():
 
 
 # ---------------------------------------------------------------------------
-# F4: the viewpoints.add bound echo serves row identity
-# ---------------------------------------------------------------------------
-
-def test_bound_echo_serves_name_and_tag_head():
-    from maps.search.parse_compile.reasoner_loop import _viewpoint_bind_echo
-    rows = {
-        "prior_1": {"fid": "prior_1", "name": "Garage 42",
-                    "tags": {"building": "garage"}, "xy": [10.0, 20.0]},
-        "prior_2": {"fid": "prior_2",
-                    "tags": {"landuse": "grass", "surface": "mud"},
-                    "xy": [5.0, 5.0]},
-    }
-    out = _viewpoint_bind_echo(
-        [{"target_fid": "prior_1"}, {"target_fid": "prior_2"}],
-        rows, pose_xy=(0.0, 0.0))
-    assert out[0]["name"] == "Garage 42"
-    assert "building=garage" in out[0]["tags"]
-    assert out[0]["xy"] == [10.0, 20.0]
-    # an unnamed row is explicitly '(unnamed)' + its tag head, never a
-    # bare {xy, dist} echo (the hallucinated-anchor bind read as confirmed)
-    assert out[1]["name"] == "(unnamed)"
-    assert "landuse=grass" in out[1]["tags"]
-
-
-def test_never_surfaced_tokens_keep_their_bare_echoes():
-    from maps.search.parse_compile.reasoner_loop import _viewpoint_bind_echo
-    out = _viewpoint_bind_echo(
-        [{"target_fid": "[3, 4]"}, {"target_fid": "prior_999"}],
-        {}, pose_xy=(0.0, 0.0))
-    # [x,y] literal: the bare-xy echo, no row facts exist for it
-    assert out[0]["xy"] == [3.0, 4.0]
-    assert "name" not in out[0] and "tags" not in out[0]
-    # a token that is no row at all keeps the not-a-fid note
-    assert out[1]["note"] == "not a fid on the live surface"
-
-
-# ---------------------------------------------------------------------------
 # F5: emphasis sign semantics served everywhere, matching the executor
 # ---------------------------------------------------------------------------
 

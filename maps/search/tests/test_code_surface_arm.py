@@ -403,9 +403,7 @@ def test_show_of_a_handle_is_the_bare_line_spelled_out():
     assert spelled["steps"] == bare["steps"], (spelled, bare)
     assert spelled["_code_shows"] == bare["_code_shows"] == {"r1": "r0"}
     # ...and it stays out of the served vocabulary: one way to display.
-    from maps.search.parse_compile.code_surface import ACTS, CALLS
     from maps.search.parse_compile.python_surface import _LIBRARY_CALLS
-    assert "show" not in CALLS and "show" not in ACTS
     assert "show" not in _LIBRARY_CALLS
 
 
@@ -686,9 +684,8 @@ def test_no_argument_is_dropped_on_the_floor():
     assert ops_of_block('r1 = find(query="Sherwood Avenue")\n')[0]["args"] \
         == {"query": "Sherwood Avenue"}
 
-    # go_to() never reached the kwarg gate at all: parse() handled ACTS
-    # first and never read value.keywords, so go_to(r1[0], offset=(400, 0))
-    # and offset=(-100, 0) flew to the identical pose (8 blocks).
+    # go_to() refuses a keyword it does not take: an ignored
+    # offset=(400, 0) would fly to the identical pose as offset=(-100, 0).
     with pytest.raises(CodeError, match="unexpected keyword argument 'offset'"):
         plan_of_block('go_to(r1, offset=(400, 0))\n', bound={"r1": "prior_1"})
     assert plan_of_block("go_to(r1)\n", bound={"r1": "prior_1"})["steps"] \
@@ -1518,16 +1515,20 @@ def test_the_legend_documents_every_call_the_surface_serves():
     the derivation cannot notice: what `within=` actually means, and the
     badge cap a slice is sized against.
     """
-    from maps.search.parse_compile.code_surface import (
-        ACTS, CALLS, CALL_KWARGS)
-    from maps.search.parse_compile.prompts import CODE_DOC
+    import inspect
 
-    names = tuple(CALLS) + tuple(ACTS)
+    from maps.search.parse_compile.prompts import CODE_DOC
+    from maps.search.parse_compile.python_surface import (
+        MissionPython, Rows, served_calls)
+
+    names = served_calls()
     assert len(names) >= 9, names                    # vacuity floor
     assert not [n for n in names if f"{n}(" not in CODE_DOC], names
-    # ...and every keyword, bar the two alternate spellings of a
-    # positional that are accepted and deliberately not advertised.
-    kws = {k for ks in CALL_KWARGS.values() for k in ks} - {"items", "query"}
+    # ...and every keyword the executing functions take, bar order(reverse=),
+    # which is accepted and not advertised.
+    fns = [getattr(MissionPython, f"_call_{n}") for n in names] + [Rows.order, Rows.filter]
+    kws = {n for f in fns for n, p in inspect.signature(f).parameters.items()
+           if p.kind is p.KEYWORD_ONLY} - {"reverse"}
     assert len(kws) >= 7, kws
     assert not [k for k in kws if f"{k}=" not in CODE_DOC], sorted(kws)
     # within= is 0 m CONTACT, and 21 of 36 uses returned zero rows because

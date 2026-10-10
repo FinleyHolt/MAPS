@@ -22,6 +22,7 @@ from maps.perception.sam.detect_client import (
     split_into_instances,
 )
 from maps.util.mask_region import MaskRegion
+from maps.perception.tests.regions import full
 
 _SHAPE = (160, 200)
 
@@ -60,7 +61,7 @@ def test_components_and_order_match_a_whole_frame_reference():
         ref = _reference_components(mask)
         assert len(got) == len(ref), name
         for i, (g, r) in enumerate(zip(got, ref)):
-            assert np.array_equal(g.to_full(), r), f"{name}: component {i} differs"
+            assert np.array_equal(full(g), r), f"{name}: component {i} differs"
         if len(ref) > 1:
             split_seen = True
             # A multi-component result re-boxes each component to its own
@@ -82,7 +83,7 @@ def test_equal_area_components_keep_their_tie_break():
     assert len(got) == 2
     assert got[0].area == got[1].area  # the tie is real
     assert np.array_equal(
-        max(got, key=lambda c: c.area).to_full(),
+        full(max(got, key=lambda c: c.area)),
         max(ref, key=lambda c: int(c.sum())),
     )
 

@@ -295,27 +295,6 @@ def list_sensors() -> list[str]:
     return sorted(_REGISTRY.keys())
 
 
-def sensor_catalog() -> list[dict[str, Any]]:
-    """Every registered sensor as a flat dict, name-sorted, JSON-safe.
-
-    What a UI needs to offer the rig as a choice rather than compile one in:
-    the map readouts derive "the altitude that sees this much ground" from a
-    picked sensor's HFOV, and this registry is where HFOV lives. Same
-    ``to_dict`` shape the episode record carries, so a served sensor and a
-    recorded one are read the same way — except that the depth-less rigs
-    carry ``max_range_m = inf``, which ``json.dumps`` writes as a bare
-    ``Infinity``. That is not JSON: a browser's ``JSON.parse`` rejects the
-    whole document, so a served catalog arrives empty and the readout
-    silently loses its field of view. Non-finite becomes ``null`` here,
-    which is what "no range envelope" means to a reader anyway.
-    """
-    return [
-        {k: (None if isinstance(v, float) and not math.isfinite(v) else v)
-         for k, v in _REGISTRY[name].to_dict().items()}
-        for name in list_sensors()
-    ]
-
-
 # What an inline override may name: a registered base and SensorSpec.to_dict's keys.
 _INLINE_KEYS = frozenset({"base", *_REGISTRY["nadir_1008_90"].to_dict()})
 

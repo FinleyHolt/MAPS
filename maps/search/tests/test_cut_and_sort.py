@@ -560,12 +560,14 @@ def test_further_is_gone_from_every_channel():
     What says it instead is the key ``order`` already takes, over a column
     the rows already carry.
     """
-    from maps.search.parse_compile import code_surface, prompts
+    import inspect
+
+    from maps.search.parse_compile import prompts
     from maps.search.parse_compile import python_surface as ps
 
     assert not hasattr(ps, "_FURTHER")
     assert not hasattr(ps, "_further_key")
-    assert "further" not in code_surface.CALL_KWARGS["order"]
+    assert "further" not in inspect.signature(ps.Rows.order).parameters
     desc = prompts.CODE_TOOLS[0]["function"]["description"]
     # the KWARG, not the English word: the axis line still reads "a larger y
     # is further north", which is prose about the frame and not a spelling.

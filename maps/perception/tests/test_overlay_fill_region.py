@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 
 from maps.perception.viewpoint.overlay import _fill_region
+from maps.perception.tests.regions import full
 
 _H, _W = 120, 160
 
@@ -54,7 +55,7 @@ def test_region_fill_matches_a_whole_frame_fill():
         ref = _reference(polys)
         region = _fill_region(polys, img_h=_H, img_w=_W)
         assert region is not None, name
-        assert np.array_equal(region.to_full(), ref), name
+        assert np.array_equal(full(region), ref), name
         assert region.area == int(ref.sum()), name
         # The box is inside the frame even when the polygon is not.
         r0, c0, r1, c1 = region.bbox
@@ -90,4 +91,4 @@ def test_nothing_inside_the_frame_is_none():
     ref = _reference(degenerate)
     assert int(ref.sum()) == 1
     got = _fill_region(degenerate, img_h=_H, img_w=_W)
-    assert got is not None and np.array_equal(got.to_full(), ref)
+    assert got is not None and np.array_equal(full(got), ref)
