@@ -41,7 +41,7 @@ def _build(records, monkeypatch):
 def test_every_way_of_one_street_survives(monkeypatch):
     """Two disjoint ways sharing a name are two objects, not one."""
     street = {"highway": "residential", "name": "Main Street"}
-    objects, _lm = _build(
+    objects = _build(
         [
             _rec(1, street, LineString([(100, 100), (900, 100)])),
             _rec(2, street, LineString([(1100, 100), (1900, 100)])),
@@ -57,7 +57,7 @@ def test_every_way_of_one_street_survives(monkeypatch):
 def test_colocated_duplicates_still_collapse(monkeypatch):
     """The dedup the name key was doing correctly: one shell tagged twice
     (buildings layer and pois layer) is still one object."""
-    objects, _lm = _build(
+    objects = _build(
         [
             _rec(1, {"building": "yes", "name": "City Hall"}, _square(500, 500)),
             _rec(2, {"amenity": "townhall", "name": "City Hall"}, _square(501, 500)),
@@ -70,7 +70,7 @@ def test_colocated_duplicates_still_collapse(monkeypatch):
 def test_unnamed_features_are_unaffected(monkeypatch):
     """Two unnamed footprints far apart stay two; the anon key always had the
     bucket and its behaviour must not shift."""
-    objects, _lm = _build(
+    objects = _build(
         [
             _rec(1, {"building": "yes"}, _square(200, 200)),
             _rec(2, {"building": "yes"}, _square(800, 800)),
@@ -83,7 +83,7 @@ def test_unnamed_features_are_unaffected(monkeypatch):
 def test_every_osm_tag_rides_through(monkeypatch):
     """Tags outside the retired 7-key allowlist reach the object. `ref` and
     `lanes` named a road; `building` said why it classed as a Building."""
-    objects, _lm = _build(
+    objects = _build(
         [
             _rec(
                 1,
@@ -104,19 +104,3 @@ def test_every_osm_tag_rides_through(monkeypatch):
     assert tags["lanes"] == "4"
     assert tags["surface"] == "asphalt"
     assert tags["highway"] == "primary"
-
-
-def test_landmark_is_the_largest_segment(monkeypatch):
-    """A name now maps to many objects, so the one landmark entry is the
-    biggest of them -- not whichever sorts first."""
-    street = {"highway": "residential", "name": "Main Street"}
-    objects, landmarks = _build(
-        [
-            _rec(1, street, LineString([(100, 100), (300, 100)])),   # short, west
-            _rec(2, street, LineString([(1000, 100), (2600, 100)])),  # long, east
-        ],
-        monkeypatch,
-    )
-    assert len(objects) == 2
-    biggest = max(objects.values(), key=lambda o: o["dimension"][0])
-    assert landmarks["Main Street"]["id"] == biggest["id"]

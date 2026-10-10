@@ -11,9 +11,6 @@ accumulating every block in ``benchmarks.calcity.data_prep.aoi.BLOCKS`` into one
 The world is flat (``aoi.GROUND_LEVEL_M``), so object ``z`` is
 ``GROUND_LEVEL_M + height/2`` with no DEM sampling.
 
-Also writes ``cache/landmarks.json`` (named objects -> block / id / type / xy)
-so episodes can be authored by landmark name.
-
 Usage::
 
     python -m benchmarks.calcity.data_prep.build_objects_json
@@ -122,8 +119,8 @@ def _contour_xy(poly) -> list[list[float]]:
     return [[float(x), float(y)] for x, y in coords]
 
 
-def build_block(bundle: Path, map_name: str, bbox) -> tuple[dict, dict]:
-    """Build one block's ``{id: object}`` dict + its named-landmark dict."""
+def build_block(bundle: Path, map_name: str, bbox) -> dict:
+    """Build one block's ``{id: object}`` dict."""
     lf = build_local_frame(bbox)
     records = load_features_local(bundle, lf)
     log.info("%s: %d bundle features in window", map_name, len(records))
@@ -181,12 +178,6 @@ def build_block(bundle: Path, map_name: str, bbox) -> tuple[dict, dict]:
     )
 
     objects: dict[str, dict] = {}
-    landmarks: dict[str, dict] = {}
-    # A street is many ways, so a name maps to many objects; the landmark entry
-    # is the largest of them. Authoring wants one representative point per name
-    # (authoring_tools' `context` / `nearest`), and first-in-sort-order would
-    # hand it whichever segment happens to sit furthest west.
-    landmark_area: dict[str, float] = {}
     for oid, f in enumerate(feats):
         poly = f["poly"]
         otype = f["object_type"]
@@ -198,13 +189,11 @@ def build_block(bundle: Path, map_name: str, bbox) -> tuple[dict, dict]:
         cx, cy = float(poly.centroid.x), float(poly.centroid.y)
         z_centroid = GROUND_LEVEL_M + h / 2.0
         name = f["name"] or otype
-        # Every OSM tag rides through, as CityNav's baker does it. A 7-key
-        # allowlist used to run here and destroyed ref / lanes / surface /
-        # building / natural / water / tourism / addr:* before the baker ever
-        # saw them -- classify_object_type branches on four of those, so the
-        # model could not read why a thing was Water or a Building. The baker
-        # colon-escapes arbitrary keys (city._normalise_props) and walls the
-        # ground-truth ones off itself (city._PRIVILEGED_KEYS).
+        # Every OSM tag rides through, as CityNav's baker does it:
+        # classify_object_type branches on ref / lanes / surface / building /
+        # natural / water / tourism / addr:* keys. The baker colon-escapes
+        # arbitrary keys (city._normalise_props) and walls the ground-truth
+        # ones off itself (city._PRIVILEGED_KEYS).
         osm_tags: dict[str, str] = {}
         for key in f["tags"]:
             v = tag_value(f["tags"], key)
@@ -221,41 +210,20 @@ def build_block(bundle: Path, map_name: str, bbox) -> tuple[dict, dict]:
             "tags": osm_tags,
         }
         objects[str(oid)] = obj
-        if f["name"] and f["area"] > landmark_area.get(f["name"], -1.0):
-            landmark_area[f["name"]] = f["area"]
-            landmarks[f["name"]] = {
-                "block": map_name,
-                "id": oid,
-                "object_type": otype,
-                "xy": [round(cx, 1), round(cy, 1)],
-                "z": round(z_centroid, 1),
-                "height_m": round(h, 1),
-            }
 
     by_type: dict[str, int] = {}
     for o in objects.values():
         by_type[o["object_type"]] = by_type.get(o["object_type"], 0) + 1
     log.info("%s: %d objects, type counts %s", map_name, len(objects), by_type)
-    return objects, landmarks
+    return objects
 
 
 def build(root: Path, bundle: Path, blocks: list[str]) -> Path:
-    all_objects: dict[str, dict] = {}
-    all_landmarks: dict[str, dict] = {}
-    for map_name in blocks:
-        objs, lms = build_block(bundle, map_name, BLOCKS[map_name])
-        all_objects[map_name] = objs
-        for nm, lm in lms.items():
-            # Disambiguate cross-block name collisions by block suffix.
-            all_landmarks.setdefault(
-                nm if nm not in all_landmarks else f"{nm} [{map_name}]", lm
-            )
+    all_objects = {m: build_block(bundle, m, BLOCKS[m]) for m in blocks}
 
     obj_path = root / "data" / "cityrefer" / "objects.json"
     obj_path.parent.mkdir(parents=True, exist_ok=True)
-    # Write exactly what this build produced. The old merge-into-existing
-    # (a block-era convenience for single-block rebuilds) silently carried
-    # stale map keys across a geometry cutover.
+    # Write exactly what this build produced: no merge into an existing file.
     obj_path.write_text(json.dumps(all_objects, separators=(",", ":")))
     log.info(
         "wrote %s (%d maps, %d objects)",
@@ -264,22 +232,6 @@ def build(root: Path, bundle: Path, blocks: list[str]) -> Path:
         sum(len(v) for v in all_objects.values()),
     )
 
-    lm_path = root / "cache" / "landmarks.json"
-    lm_path.parent.mkdir(parents=True, exist_ok=True)
-    existing_lm: dict = {}
-    if lm_path.is_file():
-        try:
-            existing_lm = json.loads(lm_path.read_text())
-        except json.JSONDecodeError:
-            existing_lm = {}
-    rebuilt = set(blocks)
-    existing_lm = {
-        k: v for k, v in existing_lm.items() if v.get("block") not in rebuilt
-    }
-    existing_lm.update(all_landmarks)
-    all_landmarks = existing_lm
-    lm_path.write_text(json.dumps(all_landmarks, indent=2, sort_keys=True))
-    log.info("wrote %s (%d named landmarks)", lm_path, len(all_landmarks))
     return obj_path
 
 
