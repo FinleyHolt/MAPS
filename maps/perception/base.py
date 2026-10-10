@@ -52,36 +52,6 @@ class DetectedObject:
     mask: "MaskRegion | None" = None
 
 
-@dataclass
-class GTObject:
-    """A single ground-truth landmark used to seed the synthetic detector.
-
-    Robot-agnostic: any benchmark that has a GT landmark set (CityNav,
-    Matterport, a warehouse layout, etc.) adapts its native schema into a
-    list[GTObject] at its own seam. Perception never sees the native schema.
-    """
-
-    world_xy: tuple[float, float]  # Centroid in world frame (meters)
-    label: str  # Display / readable name
-    class_hint: str  # Coarse class bucket that downstream graphs use
-    object_type: str  # Raw source-dataset type string (for metadata)
-    id: int | str  # Stable source-dataset identifier
-    # GT-PERFECT-only extensions (both default-valued, so every other
-    # GTObject construction is unaffected). ``contour`` is the object's 2D world-space footprint
-    # polygon (CityRefer ``contour``), rasterized into the true mask by the
-    # perfect sensor; ``attributes`` carries the offline GT color table row
-    # ({"color", "color_conf"}) injected onto the detection so it flows to the
-    # reasoner's color surface exactly like a real perceived attribute.
-    contour: list[tuple[float, float]] | None = None
-    attributes: dict[str, str] = field(default_factory=dict)
-    # Annotated object extent (dx, dy, dz) in meters (CityRefer ``dimension``).
-    # Consumed ONLY by the perfect sensor's WORLD_CONTOUR tightness gate (a
-    # contour whose area far exceeds dx*dy is a loose annotation hull, not a
-    # footprint); never surfaced to the reasoner. None when the source has no
-    # per-object extent.
-    dimension: tuple[float, float, float] | None = None
-
-
 class PerceptionAdapter(Protocol):
     def detect(
         self,

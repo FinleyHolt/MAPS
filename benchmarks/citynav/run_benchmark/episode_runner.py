@@ -8,13 +8,8 @@ from benchmarks.citynav.adapter import OBJTYPE_TO_LABEL, parse_episode
 from benchmarks.citynav.episode import EpisodeState
 from benchmarks.citynav.live_recorder import LiveRecorder
 from benchmarks.citynav.metrics import classify_referent
-from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, OBJECTS_JSON, tile_stem
-from benchmarks.citynav.run_benchmark.config import (
-    _REALSTACK_PERCEPTION_TIER,
-    RunConfig,
-    _assert_realstack_gt_isolation,
-)
-from collections.abc import Callable
+from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, tile_stem
+from benchmarks.citynav.run_benchmark.config import RunConfig
 from pathlib import Path
 from typing import Any
 from maps.llm import endpoint_spec as endpoint_spec_module
@@ -39,7 +34,6 @@ import json
 import math
 import numpy as np
 import os
-import threading
 import time
 from benchmarks.citynav.run_benchmark.assets import (
     load_episode_assets,
@@ -49,8 +43,6 @@ from benchmarks.citynav.run_benchmark.mission_engine import run_mission_episode
 from benchmarks.citynav.run_benchmark.osm_prior import (
     _OsmPriorCtx,
     _build_osm_prior_ctx_from_graph,
-    _load_osm_prior_ctx,
-    _resolve_osm_prior_graph_fids,
     _write_osm_percepts_sidecar,
 )
 from benchmarks.citynav.run_benchmark.perception import make_perception
@@ -169,7 +161,7 @@ def run_episode(
         log.warning("  skip %s: no CityRefer objects", episode.episode_id)
         return None
 
-    assets = load_episode_assets(episode.map_name, objs_for_map, cfg.cell_size_m)
+    assets = load_episode_assets(episode.map_name, cfg.cell_size_m)
     graph_stem = tile_stem(episode.map_name)
     log.info("tile_stem=%s map_name=%s", graph_stem, episode.map_name)
     graph, prior_features = _episode_graph(graph_stem, assets)
@@ -263,12 +255,7 @@ def run_episode(
         object_graph=graph,
     )
 
-    perception = make_perception(cfg, objs_for_map, episode.map_name)
-    # C1 GT-isolation, post-construction half (blocker V1-R2): now that the
-    # perception object exists, re-assert the gate WITH it so a sam
-    # tier that somehow resolved to a synthetic/GT-perfect object fails LOUD
-    # before any flight spend (folds in the SEARCH_SKIP_VLM leak vector).
-    _assert_realstack_gt_isolation(cfg, perception=perception)
+    perception = make_perception(cfg)
     # The world-space tracker owns cross-frame identity: it assigns a
     # stable object_id per tracked masklet which the adapter forwards into
     # MapObject.track_id. Reset per episode so a fresh session starts here
@@ -342,11 +329,6 @@ def run_episode(
     )
     # Per-frame OSM↔SAM registration state (the ortho prior-enrichment ctx).
     osm_ctx: _OsmPriorCtx | None = None
-    # True once ``osm_ctx`` is the CityRefer-free graph-sourced context (identity
-    # fid map, SPEC §5c LEAK L1 fix) — then the GT-position registration step
-    # (_resolve_osm_prior_graph_fids) is skipped (it is neither needed nor
-    # allowed for the identity-keyed ctx). False for the legacy objects.json ctx.
-    _osm_ctx_is_identity = False
     # The ortho backend gets an OSM prior-contour context so the per-frame
     # prior-color enrichment hook can PROJECT each in-view OSM prior footprint
     # onto the frame (build_prior_polys_ortho_from_contours, via
@@ -361,66 +343,14 @@ def run_episode(
     # capture goes to the side store + flight/osm_percepts.json sidecar; ONLY the
     # named subset graph_fid_by_fid maps is upserted onto the graph (headline
     # contract held).
+    # Sourced from the baked OSM world_contour priors; None (no contour on
+    # any prior) disables enrichment. objects.json is never read here.
+    osm_ctx = _build_osm_prior_ctx_from_graph(graph)
     if osm_ctx is None:
-        # Ortho pivot: re-source from the baked OSM world_contour priors.
-        osm_ctx = _build_osm_prior_ctx_from_graph(graph)
-        if osm_ctx is not None:
-            _osm_ctx_is_identity = True
-        if osm_ctx is None:
-            if cfg.perception == _REALSTACK_PERCEPTION_TIER:
-                # Real-SAM tier but no OSM world_contour source available →
-                # honest no-GT: DISABLE enrichment. NEVER read objects.json here
-                # (SPEC §5c LEAK L1). enrich_stats then show 0 enriched.
-                log.warning(
-                    "prior-enrichment: no OSM world_contour on graph priors for "
-                    "%s (%s) under the %s tier — enrichment DISABLED (no "
-                    "objects.json read; SPEC §5c LEAK L1)",
-                    episode.map_name,
-                    _REALSTACK_PERCEPTION_TIER,
-                )
-                osm_ctx = None
-            else:
-                # LEGACY DIAGNOSTIC path only (perspective backends, or a
-                # non-osmv2 CityRefer diagnostic run off the real-SAM tier):
-                # objects.json fallback. Unreachable under the pivot config —
-                # the loader refuses sam.
-                from benchmarks.citynav.paths import OBJECTS_JSON
-
-                try:
-                    osm_ctx = _load_osm_prior_ctx(
-                        OBJECTS_JSON, episode.map_name, perception=cfg.perception
-                    )
-                    log.info(
-                        "prior-enrichment: loaded %d CityRefer prior contours "
-                        "for %s (LEGACY objects.json path)",
-                        len(osm_ctx.contours_by_fid),
-                        episode.map_name,
-                    )
-                except KeyError:
-                    # map not in the CityRefer catalog (non-SensatUrban split)
-                    osm_ctx = None
-                except Exception as exc:  # noqa: BLE001
-                    log.warning(
-                        "prior-enrichment: OSM prior ctx load failed for %s: %s "
-                        "(enrichment disabled this episode)",
-                        episode.map_name,
-                        exc,
-                    )
-                    osm_ctx = None
-    # Resolve each LEGACY (objects.json) OSM prior contour fid -> its runtime-
-    # graph node id so the perspective prior-color enrichment upserts land on
-    # real nodes (the headline bake keys priors ``<class>_<idx>``, not the OSM
-    # cityref namespace). SKIPPED for the graph-sourced ctx, which is already
-    # keyed by graph fid (identity) — re-resolving it via GT positions is
-    # neither needed nor allowed (SPEC §5c LEAK L1). A no-op when no osm_ctx was
-    # loaded (disabled / non-catalog maps).
-    if osm_ctx is not None and not _osm_ctx_is_identity:
-        _resolve_osm_prior_graph_fids(
-            osm_ctx,
-            graph,
-            x_min=float(assets.bounds.x_min),
-            y_min=float(assets.bounds.y_min),
-            cell_size_m=float(assets.cell_size_m),
+        log.warning(
+            "prior-enrichment: no OSM world_contour on graph priors for %s "
+            "— enrichment DISABLED",
+            episode.map_name,
         )
     # TARGET-TYPE WALL (config B, PRIOR_CONTRACT.md): unnamed baked CityRefer
     # priors of the EPISODE'S TARGET annotation type pre-load the annotation's
@@ -1192,7 +1122,6 @@ def run_episode(
                 if endpoint_spec_module.spec_installed()
                 else None
             ),
-            "perception": cfg.perception,
         },
         "bounds": bounds_xyxy,
         "sensor": sensor_row,

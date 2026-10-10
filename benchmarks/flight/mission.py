@@ -147,9 +147,8 @@ def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] |
 def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
             start_xy: tuple[float, float] | None = None) -> Hydrated:
     """Assets, perception and the belief engine for one mission, exactly as the bench builds them."""
-    from benchmarks.citynav.adapter import load_objects  # noqa: PLC0415
     from benchmarks.citynav.episode import EpisodeState  # noqa: PLC0415
-    from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, OBJECTS_JSON, tile_stem  # noqa: PLC0415
+    from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, tile_stem  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark import load_config, load_episode_assets, load_episode_graph  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.perception import make_perception  # noqa: PLC0415
@@ -161,10 +160,9 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
 
     cfg = load_config(str(config))
     episode = resolve_episode(episode_id, split, start_xy)
-    objs_for_map = load_objects(OBJECTS_JSON).get(episode.map_name, [])
-    assets = load_episode_assets(episode.map_name, objs_for_map, cfg.cell_size_m)
+    assets = load_episode_assets(episode.map_name, cfg.cell_size_m)
 
-    perception = make_perception(cfg, objs_for_map, episode.map_name)
+    perception = make_perception(cfg)
     if perception is not None and hasattr(perception, "reset"):
         perception.reset()
     sam_concept_setter = None

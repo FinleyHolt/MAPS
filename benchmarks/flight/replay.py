@@ -544,7 +544,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     activate()
     from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
     from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
-    from benchmarks.flight.mission import STATE_AWAITING, STATE_ENDED, STATE_FLYING, STATE_IDLE  # noqa: PLC0415
+    from benchmarks.flight.mission import STATE_AWAITING, STATE_FLYING, STATE_IDLE  # noqa: PLC0415
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
 
     row = rec.row
@@ -566,11 +566,9 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         http._stream_chat_completions = script
         make = perception.make_perception
 
-        def recorded(cfg, objs, name):
-            adapter = make(cfg, objs, name)
-            if adapter is not None:
-                adapter._segment = functools.partial(recorded_segmenter(rec, lambda: mission._hydrated.state),
-                                                     adapter)
+        def recorded(cfg):
+            adapter = make(cfg)
+            adapter._segment = functools.partial(recorded_segmenter(rec, lambda: mission._hydrated.state), adapter)
             return adapter
 
         perception.make_perception = recorded

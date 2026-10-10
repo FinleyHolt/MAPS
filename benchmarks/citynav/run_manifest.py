@@ -81,9 +81,6 @@ ARM_ENV_FLAGS = (
     # row flown with any of these set is a different arm, and ab_report
     # must refuse to pair it against a row without. Set-only, so columns
     # recorded before these joined still pair.
-    "SEARCH_SKIP_VLM_PERCEPTION",
-    "SEARCH_ALLOW_GT_DIAGNOSTIC",
-    "SEARCH_REALSTACK_GT_ISOLATION",
     "SEARCH_STOP_AFTER",
     "SEARCH_WALLED_UNNAMED_TYPE",
     "SEARCH_REASONER_MODEL",
@@ -137,15 +134,12 @@ AUDITED_ENV = (
     "SEARCH_CITYNAV_TILES",
     "SEARCH_SEED_BASE",
     # arm toggles
-    "SEARCH_ALLOW_GT_DIAGNOSTIC",
     "SEARCH_COMMIT_STATE_DIR",
     "SEARCH_LOOK_TOOL",
-    "SEARCH_REALSTACK_GT_ISOLATION",
     "SEARCH_REASONER_MODEL",
     "SEARCH_SAMPLING_PRESENCE_PENALTY",
     "SEARCH_SAMPLING_REASONING_EFFORT",
     "SEARCH_SAMPLING_TEMPERATURE",
-    "SEARCH_SKIP_VLM_PERCEPTION",
     "SEARCH_STOP_AFTER",
     "SEARCH_WALLED_UNNAMED_TYPE",
     # endpoint identity (the two override vars FABRICATE served-model facts

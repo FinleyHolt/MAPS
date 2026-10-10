@@ -19,7 +19,6 @@
 #
 # The control config: it declares every key. Another config names it with
 # `base: citynav.yaml` and holds only the keys it changes.
-perception: sam
 # Primitive actions. 200 is GeoNav's published budget (arXiv 2504.09587 SS3);
 # the upstream budget is 100 (eval_max_timestep=20 x move_iteration=5).
 max_steps: 200
@@ -72,12 +71,6 @@ flight_model:
 # descends it to landing_altitude_m.
 descend_to_land: false
 landing_altitude_m: 5.0
-# The diagnostic perfect sensor (perception: gt_perfect).
-gt_perfect:
-  color_table_path: null
-  mask_px: 768
-  min_blob_px: 24
-  max_per_step: 0
 # Compaction budgets derive from the served window discovered off the live
 # endpoint's /v1/models at startup (maps.llm.endpoint_spec).
 compact:

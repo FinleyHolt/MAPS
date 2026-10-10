@@ -66,7 +66,7 @@ def test_every_identity_env_read_is_declared() -> None:
     assert len(found) >= 55, f"scan found only {len(found)} names — broken scan?"
     for pin in (
         "CITYNAV_BENCH_CONFIG",
-        "SEARCH_SKIP_VLM_PERCEPTION",
+        "SEARCH_STOP_AFTER",
         # Read only through sampling.py's ``_env_float`` helper: the pin that
         # proves the scan still follows an indirection, which is the shape
         # that hid this knob in the first place.

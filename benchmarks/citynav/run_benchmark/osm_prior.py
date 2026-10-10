@@ -4,20 +4,14 @@ ORDERING-only (CLAUDE.md): the enrichment feeds score_by, never a filter.
 
 from __future__ import annotations
 
-from benchmarks.citynav.run_benchmark.config import (
-    _GT_DIAGNOSTIC_OPT_OUT_ENV,
-    _REALSTACK_PERCEPTION_TIER,
-)
 from dataclasses import dataclass, field
 from pathlib import Path
 from maps.perception.viz.color import color_from_mask_m6
 from maps.search.analyze_scene.geom_compute import is_closed_chain
 import json
-import math
 import time
 
 import numpy as np
-import os
 import logging
 
 log = logging.getLogger("run_benchmark")
@@ -56,57 +50,6 @@ class _OsmPriorCtx:
     # color:{value:count}, color_rgb:{value:count}}`` — color counts aggregate
     # across the stop's frames exactly like the graph path's ``{value:count}``.
     percept_by_fid: dict[str, dict] = field(default_factory=dict)
-
-
-def _load_osm_prior_ctx(
-    objects_json: str | Path, map_name: str, *, perception: str | None = None
-) -> _OsmPriorCtx:
-    """Load per-feature world contours for the perspective prior overlay.
-
-    LEGACY / DIAGNOSTIC ONLY. Reads the CityRefer GT ``objects.json`` catalog
-    (the parameter name is historical — this is GROUND-TRUTH geometry, not OSM).
-    Under the real-stack pivot the prior-color enrichment context is re-sourced
-    CityRefer-free from the baked OSM ``world_contour`` graph priors
-    (:func:`_build_osm_prior_ctx_from_graph`), so this loader is HARD-REFUSED
-    under the ``sam`` tier: reading objects.json GT geometry to steer
-    which prior is color-enriched (and the color-sampling footprint) on the
-    agent path is exactly the C1 violation SPEC §5c LEAK L1 closes. This choke-
-    point guard makes an objects.json read IMPOSSIBLE under the pivot config no
-    matter the call site. The single documented escape is the same one the
-    runtime gate honors, ``SEARCH_ALLOW_GT_DIAGNOSTIC=1`` (a deliberate GT
-    diagnostic probe — never a fleet run).
-    """
-    if (
-        perception == _REALSTACK_PERCEPTION_TIER
-        and os.environ.get(_GT_DIAGNOSTIC_OPT_OUT_ENV) != "1"
-    ):
-        raise RuntimeError(
-            "C1 GT-ISOLATION VIOLATION (SPEC §5c LEAK L1): _load_osm_prior_ctx "
-            "reads CityRefer objects.json GT contours, forbidden under the "
-            f"{_REALSTACK_PERCEPTION_TIER!r} tier. Re-source prior enrichment "
-            "from the baked OSM world_contour graph priors "
-            "(_build_osm_prior_ctx_from_graph). Set "
-            f"{_GT_DIAGNOSTIC_OPT_OUT_ENV}=1 ONLY for a deliberate diagnostic probe."
-        )
-    objs = json.loads(Path(os.path.expanduser(str(objects_json))).read_text())[map_name]
-    contours: dict[str, np.ndarray] = {}
-    meta: dict[str, dict] = {}
-    for it in objs.values():
-        cid = it.get("id")
-        contour = it.get("contour")
-        position = it.get("position")
-        if cid is None or not contour or not position:
-            continue
-        fid = f"cityref_{cid}"
-        z = float(position[2])
-        contours[fid] = np.array([[float(x), float(y), z] for x, y in contour])
-        meta[fid] = {
-            "cityref_id": cid,
-            "name": it.get("name"),
-            "class_name": it.get("object_type") or "",
-            "world_xy": (float(position[0]), float(position[1])),
-        }
-    return _OsmPriorCtx(contours_by_fid=contours, meta_by_fid=meta)
 
 
 def _build_osm_prior_ctx_from_graph(graph) -> "_OsmPriorCtx | None":
@@ -178,109 +121,6 @@ def _build_osm_prior_ctx_from_graph(graph) -> "_OsmPriorCtx | None":
         len(contours),
     )
     return ctx
-
-
-def _resolve_osm_prior_graph_fids(
-    osm_ctx: "_OsmPriorCtx",
-    graph,
-    *,
-    x_min: float,
-    y_min: float,
-    cell_size_m: float,
-) -> None:
-    """Map each OSM prior contour fid -> the runtime-graph node id it belongs to.
-
-    The perspective prior-color enrichment projects OSM world contours
-    (``osm_ctx``, keyed ``cityref_<id>`` from objects.json) onto the frame and
-    upserts the perceived color onto a runtime-graph node. But the headline
-    ViSA bake keys named priors ``<class>_<idx>`` — it strips ``cityref_id`` —
-    so the OSM namespace never resolves against ``graph.nodes`` directly
-    (measured: 0/1791 on birmingham_block_3; the graph holds 16 named roads +
-    1 named building, none cityref-keyed). This fills ``osm_ctx.graph_fid_by_fid``
-    once per episode by CLASS-GATED FOOTPRINT CONTAINMENT: an OSM prior maps to
-    the prebaked node whose rasterized cells contain the prior's world centroid
-    AND whose class is compatible (a ``Building`` prior -> a ``building`` node,
-    a ``TrafficRoad`` prior -> a ``road`` node — never cross-class), the nearest
-    such node when a cell is shared. Priors with no matching node stay unmapped,
-    so the upsert no-ops honestly (e.g. cars / walls / street furniture, which
-    are in nobody's runtime graph). Best-effort: any failure leaves the map empty
-    (enrichment then no-ops, the pre-fix behavior) and never raises.
-    """
-    try:
-        nodes = getattr(graph, "nodes", None)
-        if not isinstance(nodes, dict) or cell_size_m <= 0:
-            return
-        # (row, col) cell -> list of (fid, class) for prebaked nodes.
-        cell_owner: dict[tuple[int, int], list[tuple[str, str]]] = {}
-        node_centroid_rc: dict[str, tuple[float, float]] = {}
-        for fid, node in nodes.items():
-            if getattr(node, "provenance", None) != "prebaked":
-                continue
-            cells = getattr(node, "cells", None)
-            if cells is None:
-                continue
-            gclass = str(getattr(node, "class_name", "") or "")
-            rsum = csum = ncell = 0
-            for cell in cells:
-                r, c = int(cell[0]), int(cell[1])
-                cell_owner.setdefault((r, c), []).append((fid, gclass))
-                rsum += r
-                csum += c
-                ncell += 1
-            if ncell:
-                node_centroid_rc[fid] = (rsum / ncell, csum / ncell)
-        if not cell_owner:
-            return
-
-        def _compat(gclass: str, oclass: str) -> bool:
-            g = gclass.strip().lower()
-            o = oclass.strip().lower()
-            if not g or not o:
-                return False
-            return g in o or o in g
-
-        out: dict[str, str] = {}
-        for fid, meta in osm_ctx.meta_by_fid.items():
-            wxy = meta.get("world_xy")
-            if not wxy:
-                continue
-            col = int((float(wxy[0]) - x_min) / cell_size_m)
-            row = int((float(wxy[1]) - y_min) / cell_size_m)
-            owners = cell_owner.get((row, col))
-            if not owners:
-                continue
-            oclass = str(meta.get("class_name", "") or "")
-            cands = [f for (f, g) in owners if _compat(g, oclass)]
-            if not cands:
-                continue
-            if len(cands) == 1:
-                out[fid] = cands[0]
-                continue
-            # Several same-class footprints share the cell: pick the nearest
-            # node centroid (deterministic).
-            best, bd = None, float("inf")
-            for f in cands:
-                crc = node_centroid_rc.get(f)
-                if crc is None:
-                    continue
-                d = (crc[0] - row) ** 2 + (crc[1] - col) ** 2
-                if d < bd:
-                    bd, best = d, f
-            if best is not None:
-                out[fid] = best
-        osm_ctx.graph_fid_by_fid = out
-        log.info(
-            "prior-enrichment: resolved %d/%d OSM priors to runtime-graph nodes "
-            "(class-gated footprint containment)",
-            len(out),
-            len(osm_ctx.meta_by_fid),
-        )
-    except Exception as exc:  # noqa: BLE001
-        log.warning(
-            "prior-enrichment: OSM->graph fid resolve failed (%s); perspective "
-            "enrichment will no-op this episode",
-            exc,
-        )
 
 
 def _merge_osm_percept(

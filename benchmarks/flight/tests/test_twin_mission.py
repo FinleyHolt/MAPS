@@ -106,7 +106,7 @@ def serves(monkeypatch):
 
     seen = SimpleNamespace(detect=lambda obs, xy, instruction_hint=None: [], reset=lambda: None,
                            concept_provider=None)
-    monkeypatch.setattr(perception, "make_perception", lambda cfg, objs, map_name: seen)
+    monkeypatch.setattr(perception, "make_perception", lambda cfg: seen)
     return sent
 
 

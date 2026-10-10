@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from benchmarks.citynav.adapter import build_features
 from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import (
     assert_current_tile_schema,
@@ -10,13 +9,11 @@ from benchmarks.citynav.paths import (
     rgbd_tiff,
     tile_stem,
 )
-from benchmarks.citynav.run_benchmark.config import RunConfig
 from dataclasses import dataclass
 from pathlib import Path
 from maps.perception.observation import BlockObservation, load_block_rasters
 from maps.sws.graph import load_graph
 import json
-import os
 import logging
 
 log = logging.getLogger("run_benchmark")
@@ -80,9 +77,7 @@ def _assert_descriptions_wall(features: object, source_path: str) -> None:
     _walk(features, "")
 
 
-def _load_block_assets(
-    map_name: str, objects_for_map: list, cell_size_m: float
-) -> BlockAssets:
+def _load_block_assets(map_name: str, cell_size_m: float) -> BlockAssets:
     stem = tile_stem(map_name)
     meta_path = Path(f"{stem}_meta.json")
     if not meta_path.exists():
@@ -116,30 +111,16 @@ def _load_block_assets(
             )
         cell_size_m = meta_cell_size
 
-    # Features dict comes from the baked sidecar if present; else rebuild.
+    # The features dict is the OSM bake's sidecar, never rebuilt from
+    # objects.json (that would hand the reasoner ground-truth geometry).
     feat_path = Path(f"{stem}_features.json")
-    if feat_path.exists():
-        base_features = json.loads(feat_path.read_text())
-        assert_current_tile_schema(base_features, str(feat_path))
-    else:
-        # C1 FAIL-LOUD (LEAK L1 re-verifier caveat, 2026-07-04): the rebuild
-        # feeds GT objects.json geometry/names/classes into base_features,
-        # which reach the reasoner. That is a bake-integrity hole, not a
-        # designed path — under real-SAM GT isolation (SEARCH_SKIP_VLM absent,
-        # sam), a MISSING _features.json must ABORT, never silently
-        # fall back to GT. The diagnostic opt-out still permits it.
-        if (os.environ.get("SEARCH_REALSTACK_GT_ISOLATION") == "1"
-                and os.environ.get("SEARCH_ALLOW_GT_DIAGNOSTIC") != "1"):
-            raise FileNotFoundError(
-                f"Missing {feat_path} under real-SAM GT isolation: refusing to "
-                f"rebuild base_features from GT objects.json (would leak GT "
-                f"geometry/names to the reasoner — spec C1). Re-bake this block "
-                f"(bake_city --osm-blocks) so the OSM _features.json exists, or "
-                f"set SEARCH_ALLOW_GT_DIAGNOSTIC=1 for a deliberate diagnostic."
-            )
-        base_features, _ = build_features(
-            objects_for_map, bounds, grid_shape, cell_size_m
+    if not feat_path.exists():
+        raise FileNotFoundError(
+            f"Missing {feat_path}: re-bake this block "
+            f"(benchmarks/citynav/data_prep/bake_tiles.sh)."
         )
+    base_features = json.loads(feat_path.read_text())
+    assert_current_tile_schema(base_features, str(feat_path))
     _assert_descriptions_wall(base_features, str(feat_path))
 
     png_path = rgbd_png(map_name)
@@ -217,13 +198,9 @@ def city_root_from_map_name(map_name: str) -> str:
     return map_name
 
 
-def load_episode_assets(
-    map_name: str,
-    objects_for_map: list,
-    cell_size_m: float,
-) -> BlockAssets:
+def load_episode_assets(map_name: str, cell_size_m: float) -> BlockAssets:
     """Load the episode's per-block bakes."""
-    return _load_block_assets(map_name, objects_for_map, cell_size_m)
+    return _load_block_assets(map_name, cell_size_m)
 
 
 def load_episode_graph(stem: str):

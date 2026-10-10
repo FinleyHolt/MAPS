@@ -57,21 +57,19 @@ FLAT_SHA256 = {
     "calcity": "366ceb132d850769dc3875e6615b2faaabf525576cf2fcb19cf0a446e2221e16",
 }
 # Keys nothing read.
-DEAD_TOP = ("descent_step_m", "altitude_tolerance_m", "landing_xy_tolerance_m")
+DEAD_TOP = ("descent_step_m", "altitude_tolerance_m", "landing_xy_tolerance_m", "perception")
 DEAD_SAM = ("device", "dtype")
 DEAD_COMPACT = ("stage1_budget", "stage2_3_budget", "teacher_budget", "grader_budget",
                 "concept_union_budget", "subagent_budget", "router_budget",
                 "examiner_budget")
 # Where a flat file left a key out, the value the code used (the RunConfig,
-# SamDetectClient, FlightModelConfig and GTPerfectPerception defaults; an
+# SamDetectClient and FlightModelConfig defaults; an
 # absent color_palette ran "citynav" in run_benchmark/perception.py).
 ABSENT_MEANT = {
     "precise_tolerance_m": 0.0, "precise_floor_radius_m": 5.0, "spawn": "episode",
     "spawn_seed": 0, "start_altitude_band_m": [100.0, 150.0],
     "start_altitude_agl_m": None, "altitude_cap_m": 200.0, "descend_to_land": False,
     "withhold": [],
-    "gt_perfect": {"color_table_path": None, "mask_px": 768, "min_blob_px": 24,
-                   "max_per_step": 0},
 }
 ABSENT_MEANT_FLIGHT = {"kind": "discrete6", "speed_mps": None}
 ABSENT_MEANT_SAM = {"color_palette": "citynav", "sahi": False, "sahi_overlap": 0.2,
@@ -98,7 +96,7 @@ def test_shipped_configs_resolve_to_the_flat_files(name, flat):
     assert _sha(flat) == FLAT_SHA256[name]
     resolved, _ = resolve_config(REPO_ROOT / "configs" / f"{name}.yaml")
     assert resolved == _expected(flat)
-    assert load_config(REPO_ROOT / "configs" / f"{name}.yaml").perception == "sam"
+    load_config(REPO_ROOT / "configs" / f"{name}.yaml")
 
 
 def _write(tmp_path: Path, name: str, text: str) -> Path:
@@ -144,7 +142,7 @@ def test_a_bad_key_or_value_is_refused_with_its_path(tmp_path, body, needle):
 
 def test_a_missing_key_is_refused(tmp_path):
     with pytest.raises(ValueError) as e:
-        resolve_config(_write(tmp_path, "x.yaml", "perception: sam\n"))
+        resolve_config(_write(tmp_path, "x.yaml", "sensor: nadir_1008_90\n"))
     assert "missing config key(s)" in str(e.value) and "'max_steps'" in str(e.value)
 
 

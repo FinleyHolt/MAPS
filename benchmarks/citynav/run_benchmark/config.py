@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 from maps.perception.geometry.sensor_spec import resolve_sensor
-from maps.perception.sam.detect_client import SamDetectClient
 from maps.search.withhold import ENV as WITHHOLD_ENV
 from maps.search.withhold import WITHHOLDS
 
@@ -48,7 +47,6 @@ _ANY = (lambda v: True), ""
 # Every YAML key: (accepted types, (test, what the test asks)). A dict value
 # is a nested block with its own keys. A float key reads an int too.
 _SCHEMA: dict[str, Any] = {
-    "perception": (str, _one_of("sam", "gt_perfect")),
     "max_steps": (int, _POS),
     "fov_m": (_NUM, _NONNEG),
     "altitude_m": (_NUM, _POS),
@@ -82,12 +80,6 @@ _SCHEMA: dict[str, Any] = {
         "sahi_overlap": (_NUM, ((lambda v: 0 <= v < 1), "in [0, 1)")),
         "sahi_nms_iou": (_NUM, ((lambda v: 0 < v <= 1), "in (0, 1]")),
     },
-    "gt_perfect": {
-        "color_table_path": ((str, _NONE), _ANY),
-        "mask_px": (int, _POS),
-        "min_blob_px": (int, _NONNEG),
-        "max_per_step": (int, _NONNEG),
-    },
     "compact": {
         "enable": (bool, _ANY),
     },
@@ -102,7 +94,6 @@ class RunConfig:
     """One resolved config: every ``_SCHEMA`` key, plus the run facts the
     CLI sets (``resume_*``) and the path the config resolved from."""
 
-    perception: str
     max_steps: int
     fov_m: float
     altitude_m: float
@@ -135,7 +126,6 @@ class RunConfig:
     sensor: str | dict
     flight_model: FlightModelConfig
     sam: dict
-    gt_perfect: dict
     compact: dict
     # Bench-only ablation withholds (maps.search.withhold); empty serves the
     # flown text exactly.
@@ -249,112 +239,4 @@ def load_config(path: str | Path | None) -> RunConfig:
     data, p = resolve_config(path)
     cfg = RunConfig(**{**data, "flight_model": FlightModelConfig(**data["flight_model"])})
     cfg.source_path = str(p)
-    _assert_realstack_gt_isolation(cfg, p)
     return cfg
-
-
-# The real-stack pivot GT-isolation runtime gate. TRIGGER CHOICE (revised
-# 2026-07-04, blocker V1-R3/V4-G2/V5-F1): the check fires on the resolved
-# config *CONTENT* — the perception tier — NOT on the config FILENAME. The
-# earlier filename trigger (``citynav.yaml``) was scoped too
-# narrowly: any DERIVED config (an A/B arm, a resume clone, a ``_lookoff``
-# variant) inherits the real-SAM ``sam`` substrate but a filename
-# gate skips it, so a carried-over ``color_table_path`` or a stray
-# ``SEARCH_SKIP_VLM_PERCEPTION=1`` would fly GT-leaky with zero signal. Any
-# config that resolves to the real-SAM tier now carries the guard. The
-# gt_perfect DIAGNOSTIC tier (``perception: gt_perfect``) never trips it (it
-# is not the real-SAM tier). An explicit, documented diagnostic opt-out
-# (``SEARCH_ALLOW_GT_DIAGNOSTIC=1``) is the ONLY escape — for a deliberate
-# GT-leaky probe under a sam config, a reviewable act.
-_REALSTACK_PERCEPTION_TIER = "sam"
-# Documented diagnostic opt-out for the C1 gate. Set to "1" ONLY for a
-# deliberate GT-diagnostic probe under the real-SAM tier; NEVER on a fleet
-# run. Off by default; its presence is logged loudly when it suppresses the
-# guard.
-_GT_DIAGNOSTIC_OPT_OUT_ENV = "SEARCH_ALLOW_GT_DIAGNOSTIC"
-
-
-def _assert_realstack_gt_isolation(
-    cfg: "RunConfig",
-    config_path: Path | None = None,
-    *,
-    perception: object | None = None,
-) -> None:
-    """C1 GT-isolation runtime gate (SPEC_real_stack_pivot_2026-07-04.md §1 C1).
-
-    Fires by CONTENT — whenever the resolved perception tier is the real-SAM
-    ``sam`` tier — so every DERIVED config inherits the guard, not
-    just the canonically-named one. Under that tier it asserts ALL of:
-
-      (a) no GT color table is wired (``gt_perfect.color_table_path``
-          unset) — color comes from pixels only;
-      (b) the perception tier IS ``sam`` (defense-in-depth);
-      (c) ``SEARCH_SKIP_VLM_PERCEPTION`` is NOT set — the GT-era toggle that
-          once swapped in synthetic GT perception; it is refused outright so
-          a stale environment can never masquerade as a real-SAM run;
-      (d) if a resolved ``perception`` OBJECT is passed (post-construction),
-          it IS the real SAM adapter, never a synthetic/GT-perfect adapter.
-
-    Fails LOUD (``RuntimeError`` citing C1) at config load — before any
-    compile/flight spend — and again post-construction with the object.
-    ``SEARCH_ALLOW_GT_DIAGNOSTIC=1`` is the ONLY (documented, logged) escape.
-    The gt_perfect diagnostic tier never trips it.
-    """
-    if cfg.perception != _REALSTACK_PERCEPTION_TIER:
-        return  # not the real-SAM tier → guard does not apply (e.g. gt_perfect)
-    if os.environ.get(_GT_DIAGNOSTIC_OPT_OUT_ENV) == "1":
-        log.warning(
-            "C1 GT-isolation gate SUPPRESSED by %s=1 — GT-diagnostic probe "
-            "under the sam tier. This MUST NOT be set on a fleet run.",
-            _GT_DIAGNOSTIC_OPT_OUT_ENV,
-        )
-        return
-    where = f"{config_path}: " if config_path is not None else ""
-    problems: list[str] = []
-    # (b) perception tier (defense-in-depth; trivially true at the trigger, but
-    # asserted so a future refactor of the trigger can't silently drop it).
-    if cfg.perception != _REALSTACK_PERCEPTION_TIER:
-        problems.append(
-            f"perception tier is {cfg.perception!r}, must be "
-            f"{_REALSTACK_PERCEPTION_TIER!r}"
-        )
-    # (a) no GT color table wired.
-    if (cfg.gt_perfect or {}).get("color_table_path"):
-        problems.append(
-            f"gt_perfect.color_table_path is set "
-            f"({cfg.gt_perfect['color_table_path']!r}), must be unset"
-        )
-    # (c) SEARCH_SKIP_VLM_PERCEPTION is the deleted GT-era toggle; refuse a
-    # stale environment outright rather than let it imply a GT run.
-    if os.environ.get("SEARCH_SKIP_VLM_PERCEPTION") == "1":
-        problems.append(
-            "SEARCH_SKIP_VLM_PERCEPTION=1 is set — this GT-era toggle no "
-            "longer exists; unset the env (use the gt_perfect DIAGNOSTIC "
-            "config for a GT run)"
-        )
-    # (d) if the resolved perception object is reachable, it must be the real
-    # SAM adapter — not a synthetic / GT-perfect substitute.
-    if perception is not None and not isinstance(
-        perception, SamDetectClient
-    ):
-        problems.append(
-            "resolved perception object is "
-            f"{type(perception).__name__}, must be SamDetectClient "
-            "(real SAM) under the sam tier — a synthetic/GT-perfect "
-            "object here is a GT leak"
-        )
-    if problems:
-        raise RuntimeError(
-            f"{where}C1 GT-ISOLATION VIOLATION under the real-stack "
-            f"sam tier — {'; '.join(problems)}. The pivot contract "
-            "(distill/SPEC_real_stack_pivot_2026-07-04.md, contract C1) "
-            "requires real SAM perception with pixels-only color and zero "
-            "CityRefer-derived attributes on the agent path. Set "
-            f"{_GT_DIAGNOSTIC_OPT_OUT_ENV}=1 ONLY for a deliberate diagnostic "
-            "probe (never on a fleet run)."
-        )
-    # GT isolation is confirmed IN FORCE for this run — publish it so the
-    # downstream bake-integrity guards (e.g. _load_block_assets' missing-
-    # _features.json fail-loud, LEAK L1 re-verifier caveat) activate without
-    # each re-deriving the tier. Idempotent; cleared by nothing (process-lived).
-    os.environ["SEARCH_REALSTACK_GT_ISOLATION"] = "1"

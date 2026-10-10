@@ -9,7 +9,6 @@ Example:
 from __future__ import annotations
 
 from benchmarks.citynav.adapter import load_objects, load_split, parse_episode
-from benchmarks.citynav.live_recorder import LiveRecorder
 from benchmarks.citynav.metrics import aggregate
 from benchmarks.citynav.paths import OBJECTS_JSON, assert_available, split_path
 from benchmarks.citynav.run_benchmark.config import (
@@ -240,11 +239,8 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
-    if args.eval:
-        if args.config is None:
-            args.config = DEFAULT_CONFIG
-        # Clear fast-mode ablations that would make the run non-canonical.
-        os.environ.pop("SEARCH_SKIP_VLM_PERCEPTION", None)
+    if args.eval and args.config is None:
+        args.config = DEFAULT_CONFIG
 
     if args.record_llm and args.replay_llm:
         log.error("--record-llm and --replay-llm are mutually exclusive")

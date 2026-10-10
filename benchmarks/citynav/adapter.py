@@ -30,7 +30,6 @@ from typing import Iterable
 import numpy as np
 
 from benchmarks.citynav.eval import WorldBounds
-from maps.sws.graph.model import ObjectGraph, MapObject
 
 
 # ---------------------------------------------------------------------------
@@ -322,86 +321,3 @@ def _rasterize_object(
         for c in range(col_min, col_max + 1):
             cells.append([r, c])
     return cells
-
-
-def build_features(
-    objects: list[CityRefObject],
-    bounds: WorldBounds,
-    grid_shape: tuple[int, int],
-    cell_size_m: float,
-) -> tuple[dict, ObjectGraph]:
-    """Produce ``(features_dict, ObjectGraph)`` keyed on open-vocab labels.
-
-    Feature dict shape: ``{label: [feature_dict, ...]}``. Each feature carries
-    ``name``, ``cells``, ``centroid_row``/``centroid_col``, ``cityref_id``,
-    ``object_type``. The ObjectGraph is built in memory with no edges; the
-    tile bake (``data_prep/bake_tiles.sh``) writes the full edge set.
-    """
-    features: dict[str, list[dict]] = {}
-    nodes: dict[str, MapObject] = {}
-
-    per_label: dict[str, list[CityRefObject]] = {}
-    for obj in objects:
-        label = object_label(obj)
-        if label is None:
-            continue
-        per_label.setdefault(label, []).append(obj)
-
-    for label in sorted(per_label.keys()):
-        objs = sorted(per_label[label], key=lambda o: int(o.id))
-        feat_list: list[dict] = []
-        for obj in objs:
-            cells = _rasterize_object(obj, bounds, grid_shape, cell_size_m)
-            if not cells:
-                continue
-            arr = np.array(cells)
-            centroid_row = int(round(arr[:, 0].mean()))
-            centroid_col = int(round(arr[:, 1].mean()))
-            fid = f"cityref_{obj.id}"
-            name = obj.name or obj.object_type or fid
-            altitude_m = float(obj.position[2])
-            height_m = float(obj.dimension[2])
-            # ``descriptions`` deliberately stripped at the bake — see
-            # benchmarks/citynav/bake/city.py for the
-            # CityNav-protocol leakage rationale (the agent gets one
-            # description per episode as the operator instruction; the
-            # full list is a label leak).
-            feat: dict = {
-                "name": name,
-                "cells": cells,
-                "centroid_row": centroid_row,
-                "centroid_col": centroid_col,
-                "cityref_id": obj.id,
-                "object_type": obj.object_type,
-                "altitude_m": altitude_m,
-                "height_m": height_m,
-            }
-            feat_list.append(feat)
-            tags: dict[str, str] = {"cityref_id": str(obj.id)}
-            if obj.object_type:
-                tags["object_type"] = obj.object_type
-            tags["altitude_m"] = f"{altitude_m:.3f}"
-            tags["height_m"] = f"{height_m:.3f}"
-            nodes[fid] = MapObject(
-                id=fid,
-                class_name=label,
-                name=name,
-                tags=tags,
-                centroid=(centroid_row, centroid_col),
-                bbox=(
-                    int(arr[:, 0].min()),
-                    int(arr[:, 1].min()),
-                    int(arr[:, 0].max()),
-                    int(arr[:, 1].max()),
-                ),
-                cell_count=len(cells),
-                orientation=None,
-                orientation_confidence=0.0,
-            )
-        features[label] = feat_list
-
-    graph = ObjectGraph(
-        nodes=nodes,
-        cell_size_m=float(cell_size_m),
-    )
-    return features, graph
