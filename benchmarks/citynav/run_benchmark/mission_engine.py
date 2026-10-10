@@ -42,7 +42,6 @@ from maps.search.parse_compile.tour_synth import (
 )
 from maps.search.pose import RobotPose
 from maps.util.xy_token import parse_xy_token
-import numpy as np
 import os
 import time
 import logging
@@ -380,21 +379,13 @@ def fly_one(
 
     _ph.at("project")
     step_detections: list[dict] = []
-    sensor_frames_rgb = (
-        [np.asarray(obs.rgb)] if obs is not None and obs.rgb is not None else None
-    )
     step_detections = search_loop.update_perception(
         step_idx=step_idx,
         pose_xy=state.pose_xy,
-        altitude_m=state.altitude_m,
-        heading_deg=state.heading_deg,
-        instruction=episode.description,
         detections=detections,
         projected_masks=tracked_projections,
         bounds_xy_min=(float(assets.bounds.x_min), float(assets.bounds.y_min)),
         cell_size_m=float(assets.cell_size_m),
-        grid_shape=tuple(assets.grid_shape),
-        sensor_frames_rgb=sensor_frames_rgb,
     )
     _ph.at("fold")
     state.belief_snapshot = search_loop.snapshot()

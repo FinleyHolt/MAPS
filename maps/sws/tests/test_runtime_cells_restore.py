@@ -58,7 +58,7 @@ def test_fresh_detection_stores_cells_matching_projection():
     mask = _square_mask(grid, 10, 12, 3)
     fid = upsert_tracked_detected(
         g, track_id="t1", base_node=_det_node("t1"), **_sparse(mask),
-        confidence=0.8, frame_idx=0, now=0.0,
+        confidence=0.8, now=0.0,
     )
     node = g.nodes[fid]
     assert node.cells is not None
@@ -76,13 +76,13 @@ def test_repeat_sighting_restamps_cells_and_keeps_one_node():
     m0 = _square_mask(grid, 10, 12, 3)
     fid0 = upsert_tracked_detected(
         g, track_id="t1", base_node=_det_node("t1"), **_sparse(m0),
-        confidence=0.8, frame_idx=0, now=0.0,
+        confidence=0.8, now=0.0,
     )
     # Same track_id, a moved/grown footprint next frame.
     m1 = _square_mask(grid, 14, 16, 4)
     fid1 = upsert_tracked_detected(
         g, track_id="t1", base_node=_det_node("t1"), **_sparse(m1),
-        confidence=0.9, frame_idx=1, now=1.0,
+        confidence=0.9, now=1.0,
     )
     assert fid1 == fid0                                    # exact track_id re-id
     node = g.nodes[fid0]
@@ -97,11 +97,11 @@ def test_distinct_track_ids_mint_distinct_nodes_each_with_cells():
     m2 = _square_mask(grid, 20, 20, 3)
     f1 = upsert_tracked_detected(
         g, track_id="t1", base_node=_det_node("t1"), **_sparse(m1),
-        confidence=0.8, frame_idx=0, now=0.0,
+        confidence=0.8, now=0.0,
     )
     f2 = upsert_tracked_detected(
         g, track_id="t2", base_node=_det_node("t2"), **_sparse(m2),
-        confidence=0.8, frame_idx=0, now=0.0,
+        confidence=0.8, now=0.0,
     )
     assert f1 != f2                                        # track_id is the sole re-id
     assert g.nodes[f1].cells is not None and g.nodes[f2].cells is not None
@@ -115,14 +115,13 @@ def test_batch_repeat_path_restamps_cells():
     m0 = _square_mask(grid, 8, 8, 3)
     fid = upsert_tracked_detected(
         g, track_id="t1", base_node=_det_node("t1"), **_sparse(m0),
-        confidence=0.8, frame_idx=0, now=0.0,
+        confidence=0.8, now=0.0,
     )
     # A repeat sighting through the BATCH path (exercises the batched repeat loop).
     m1 = _square_mask(grid, 9, 9, 4)
     out = upsert_tracked_detected_batch(g, [{
         "track_id": "t1", "base_node": _det_node("t1"), **_sparse(m1),
-        "confidence": 0.8, "frame_idx": 1, "now": 1.0,
-        "evidence_id": None,
+        "confidence": 0.8, "now": 1.0,
     }])
     assert out == [fid]                                    # folded onto the same node
     assert _cells_of(m1) == {(int(r), int(c)) for r, c in g.nodes[fid].cells}

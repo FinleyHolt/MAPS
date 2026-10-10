@@ -31,7 +31,6 @@ from maps.sws import GridDomain, WorldState
 from maps.search.withhold import withheld
 from maps.sws.graph import build_object_graph
 import math
-import numpy as np
 import os
 import time
 from benchmarks.citynav.run_benchmark.assets import (
@@ -441,9 +440,6 @@ def run_episode(
                 search_loop.update_perception(
                     step_idx=int(getattr(state, "step_idx", 0) or 0),
                     pose_xy=(_px, _py),
-                    altitude_m=_alt,
-                    heading_deg=0.0,
-                    instruction=episode.description,
                     detections=_dets,
                     projected_masks=_tracked,
                     bounds_xy_min=(
@@ -451,8 +447,6 @@ def run_episode(
                         float(assets.bounds.y_min),
                     ),
                     cell_size_m=float(assets.cell_size_m),
-                    grid_shape=tuple(assets.grid_shape),
-                    sensor_frames_rgb=[np.asarray(_obs.rgb)],
                 )
             except Exception as exc:  # noqa: BLE001 — surfaced as a tool fact
                 log.exception("retro ingest failed")

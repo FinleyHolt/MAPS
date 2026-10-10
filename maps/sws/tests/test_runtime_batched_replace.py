@@ -153,7 +153,6 @@ def test_car_and_gray_car_stay_separate_layers_single_path():
         base_node=_make_classed_tracked_node("t1", "car", cells, 0.8),
         **_sparse(mask),
         confidence=0.8,
-        frame_idx=0,
         now=0.0,
     )
     fid_gray = upsert_tracked_detected(
@@ -162,7 +161,6 @@ def test_car_and_gray_car_stay_separate_layers_single_path():
         base_node=_make_classed_tracked_node("t2", "gray car", cells, 0.8),
         **_sparse(mask),
         confidence=0.8,
-        frame_idx=1,
         now=1.0,
     )
 
@@ -191,18 +189,14 @@ def test_car_and_gray_car_stay_separate_layers_batch_path():
             "base_node": _make_classed_tracked_node("t1", "car", cells, 0.8),
             **_sparse(mask),
             "confidence": 0.8,
-            "frame_idx": 0,
             "now": 0.0,
-            "evidence_id": None,
         },
         {
             "track_id": "t2",
             "base_node": _make_classed_tracked_node("t2", "gray car", cells, 0.8),
             **_sparse(mask),
             "confidence": 0.8,
-            "frame_idx": 1,
             "now": 1.0,
-            "evidence_id": None,
         },
     ]
     out = upsert_tracked_detected_batch(graph, replaces)
@@ -235,7 +229,6 @@ def test_batch_with_only_fresh_tracks_falls_through_to_single():
                 "base_node": _make_tracked_node(tid, 0.8),
                 **_sparse(m),
                 "confidence": 0.8,
-                "frame_idx": 0,
                 "now": 0.0,
             }
         )
@@ -258,7 +251,6 @@ def test_batch_keeps_ids_aligned_when_a_repeat_has_no_cells():
             "rows": np.array(rows, dtype=np.int32),
             "cols": np.array(cols, dtype=np.int32),
             "confidence": 0.9,
-            "frame_idx": 1,
             "now": 1.0,
         }
 

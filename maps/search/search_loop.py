@@ -33,7 +33,6 @@ import numpy as np
 
 from maps.search.compile_info import CompileTurnResult
 from maps.search.io.atomic import atomic_write_json
-from maps.search.evidence import EvidenceItem
 from maps.search.parse_compile.compiler import MapsCompiler
 from maps.search.pose import RobotPose
 from maps.search.protocol import CompilerInput
@@ -1172,40 +1171,24 @@ class SearchLoop:
         *,
         step_idx: int,
         pose_xy: tuple[float, float],
-        altitude_m: float,
-        heading_deg: float,
-        instruction: str,
         detections: list,
         projected_masks: dict[int, object] | None = None,
         bounds_xy_min: tuple[float, float] | None = None,
         cell_size_m: float | None = None,
-        grid_shape: tuple[int, int] | None = None,
-        sensor_frames_rgb: list[np.ndarray | None] | None = None,
     ) -> list[dict]:
-        """Run phases 1–7 of the original step loop.
+        """Fold one flight's detections into the runtime graph.
 
         Returns the per-step detections record (the serialisable shape
         the recorder expects).
-
-        ``sensor_frames_rgb`` is the per-wedge RGB frame list the engine may
-        pass. The per-stop reasoner round is TEXT-ONLY (it consumes no image
-        crops), so this argument is currently accepted for interface stability
-        but not consumed; callers may pass ``None``. (Prior color enrichment
-        reads ``obs.rgb`` directly in the runner, not via this path.)
         """
         with self._lock:
             return self._update_perception_locked(
                 step_idx=step_idx,
                 pose_xy=pose_xy,
-                altitude_m=altitude_m,
-                heading_deg=heading_deg,
-                instruction=instruction,
                 detections=detections,
                 projected_masks=projected_masks,
                 bounds_xy_min=bounds_xy_min,
                 cell_size_m=cell_size_m,
-                grid_shape=grid_shape,
-                sensor_frames_rgb=sensor_frames_rgb,
             )
 
     def _update_perception_locked(
@@ -1213,34 +1196,20 @@ class SearchLoop:
         *,
         step_idx: int,
         pose_xy: tuple[float, float],
-        altitude_m: float,
-        heading_deg: float,
-        instruction: str,
         detections: list,
         projected_masks: dict[int, object] | None = None,
         bounds_xy_min: tuple[float, float] | None = None,
         cell_size_m: float | None = None,
-        grid_shape: tuple[int, int] | None = None,
-        sensor_frames_rgb: list[np.ndarray | None] | None = None,
     ) -> list[dict]:
         s = self.state
         if s.episode_start_xy is None:
             s.episode_start_xy = (float(pose_xy[0]), float(pose_xy[1]))
         bounds_min = bounds_xy_min or self._tile_origin_xy
         cell = float(cell_size_m or self._world_state.grid_domain.cell_size_m)
-        H, W = (
-            tuple(grid_shape)
-            if grid_shape is not None
-            else (
-                int(self._world_state.grid_domain.height),
-                int(self._world_state.grid_domain.width),
-            )
-        )
 
         now = time.time()
 
-        # --- Phase 1: graph upsert + unresolved anchor resolution -----------
-        upsert_ids, evidence_by_idx, step_detections = self._upsert_detections(
+        upsert_ids, step_detections = self._upsert_detections(
             detections=detections,
             projected_masks=projected_masks or {},
             step=step_idx,
@@ -1278,29 +1247,6 @@ class SearchLoop:
                 "conf": round(_conf, 3),
             })
         s.last_flight_detections = list(_seen.values())
-
-        # --- Phase 2: target evidence assembly ------------------------------
-        # Stage B per-thread match scoring set: prefer LLM-committed
-        # detection ids over generic class-noun matching.
-        committed_detected_ids: set[str] = set(s.committed_detected_ids or set())
-
-        # The per-stop reasoner consumes ``target_evidence`` per stop; here
-        # we just thread it through so the per-step log line records the
-        # running counts.
-        target_evidence, counts = self._assemble_target_evidence(
-            detections=detections,
-            upsert_ids=upsert_ids,
-            committed_detected_ids=committed_detected_ids,
-        )
-        log.info(
-            "perception update: evidence=%d (committed=%d) "
-            "at pose=(%.1f, %.1f)",
-            len(target_evidence),
-            counts["committed"],
-            float(pose_xy[0]),
-            float(pose_xy[1]),
-        )
-
         return step_detections
 
     def last_flight_detections(self) -> list[dict]:
@@ -1414,7 +1360,7 @@ class SearchLoop:
         now: float,
         bounds_min: tuple[float, float],
         cell_size_m: float,
-    ) -> tuple[dict[int, str], dict[int, EvidenceItem], list[dict]]:
+    ) -> tuple[dict[int, str], list[dict]]:
         """Project + upsert detections and resolve unresolved anchors."""
         from maps.sws.graph import (
             upsert_detected_centroid_only,
@@ -1439,9 +1385,6 @@ class SearchLoop:
             for i, det in enumerate(detections)
             if (det.metadata or {}).get("track_id")
         }
-        evidence_by_idx: dict[int, EvidenceItem] = {
-            i: _detection_to_evidence(det, now) for i, det in enumerate(detections)
-        }
 
         upsert_ids: dict[int, str] = {}
         if projected_masks:
@@ -1463,9 +1406,7 @@ class SearchLoop:
                         "rows": tp.rows,
                         "cols": tp.cols,
                         "confidence": float(det.confidence),
-                        "frame_idx": step,
                         "now": now,
-                        "evidence_id": evidence_by_idx[i].id,
                     }
                 )
                 batch_index_map.append(i)
@@ -1479,7 +1420,6 @@ class SearchLoop:
 
         step_detections: list[dict] = []
         for i, det in enumerate(detections):
-            ev = evidence_by_idx[i]
             if i not in upsert_ids:
                 node = _detection_to_mapobject(det, bounds_min, cell_size_m, now)
                 upsert_detected_centroid_only(
@@ -1487,7 +1427,6 @@ class SearchLoop:
                     node,
                     now=now,
                     step_index=step,
-                    evidence_id=ev.id,
                 )
             det_record = {
                 "world_xy": list(det.world_xy),
@@ -1506,7 +1445,7 @@ class SearchLoop:
                     det_record.update(mask_record)
             step_detections.append(det_record)
 
-        return upsert_ids, evidence_by_idx, step_detections
+        return upsert_ids, step_detections
 
     @staticmethod
     def _detection_id(det) -> str:
@@ -1537,39 +1476,6 @@ class SearchLoop:
         xy = getattr(det, "world_xy", None) or (0.0, 0.0)
         return f"{label}@{float(xy[0]):.0f},{float(xy[1]):.0f}"
 
-    def _assemble_target_evidence(
-        self,
-        *,
-        detections: list,
-        upsert_ids: dict[int, str],
-        committed_detected_ids: set[str],
-    ) -> tuple[list[tuple[float, float, float]], dict[str, int]]:
-        """Build the per-frame ``target_evidence`` list for ``perception_update``.
-
-        One source: **scout-committed detections** — when the scout fires
-        ``commit_target`` on a SAM mask, that detection's id is added to
-        ``state.committed_detected_ids`` and every subsequent frame
-        contributes weight 1.0 evidence at the detection centroid.
-
-        No heuristic class/anchor/attribute scoring runs here. The scout
-        owns target verification; this function just assembles whatever
-        the scout has already decided is evidence.
-        """
-        target_evidence: list[tuple[float, float, float]] = []
-        committed_match = 0
-
-        if committed_detected_ids:
-            for i, det in enumerate(detections):
-                upserted_id = upsert_ids.get(i)
-                if upserted_id in committed_detected_ids:
-                    target_evidence.append(
-                        (float(det.world_xy[0]), float(det.world_xy[1]), 1.0)
-                    )
-                    committed_match += 1
-
-        return target_evidence, {"committed": committed_match}
-
-
     def _arm_roles(self, union_specs: list[dict]) -> None:
         """Arm the per-class roles from union specs (the mid-flight
         ``act.sam_concepts`` declaration)."""
@@ -1591,7 +1497,6 @@ class SearchLoop:
 
 def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
     """Convert one DetectedObject into a graph MapObject node."""
-    import numpy as np
     from maps.sws.graph.model import MapObject
 
     meta = det.metadata or {}
@@ -1701,26 +1606,6 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
         # The tracker's continuous world position — the sub-cell truth the
         # int cell centroid quantizes away (build_surface prefers it).
         world_xy=(float(det.world_xy[0]), float(det.world_xy[1])),
-    )
-
-
-def _detection_to_evidence(det, now: float) -> EvidenceItem:
-    """Fold one DetectedObject into an EvidenceItem for the evidence log."""
-    return EvidenceItem(
-        kind="sensor_update",
-        reference_time=now,
-        raw={
-            "label": det.label,
-            "world_xy": list(det.world_xy),
-            "confidence": det.confidence,
-            "source_tier": det.source_tier,
-            **(det.metadata or {}),
-        },
-        metadata={
-            "source": det.source_tier,
-            "stated_confidence": det.confidence,
-            "provenance": "benchmarks.citynav",
-        },
     )
 
 

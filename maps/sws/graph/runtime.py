@@ -141,7 +141,6 @@ def upsert_detected_centroid_only(
     *,
     now: float | None = None,
     step_index: int | None = None,
-    evidence_id: str | None = None,  # ponytail: unread; the search loop still passes it
 ) -> str:
     """Mint a centroid-only detected node for a detection without a
     ``track_id``; the new ``detected_<N>`` id. Tracked detections go through
@@ -201,9 +200,6 @@ def upsert_tracked_detected(
     cols: np.ndarray,
     confidence: float,
     now: float | None = None,
-    # ponytail: frame_idx and evidence_id are unread; the search loop still passes both.
-    frame_idx: int | None = None,
-    evidence_id: str | None = None,
 ) -> str:
     """Upsert a tracked detection from its projected ground cells.
 
