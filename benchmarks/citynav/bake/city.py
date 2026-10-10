@@ -138,11 +138,10 @@ def _load_city_meta(city: str, tiles_dir: Path, *, imagery: bool = True
     """Meta + the geometry a block bakes over.
 
     Bounds come from the block's RASTER, not from the sidecar. The sidecar's
-    box used to run ~50 m past the imagery on every side, and OSM covers the
-    planet, so the graph filled that ring with candidates nothing could ever
-    observe — 42.7% of all graph nodes, measured, none of them backed by an
-    upstream CityRefer object or a CityNav target. The imagery is the block,
-    so the imagery sets the bounds and the grid is sized to match. Only when
+    box runs ~50 m past the imagery on every side, and OSM covers the
+    planet, so bounds off the sidecar fill that ring with candidates nothing
+    can observe (42.7% of all graph nodes, measured). The imagery is the
+    block, so the imagery sets the bounds and the grid is sized to match. Only when
     no raster is readable, or the block has no CityNav imagery
     (``imagery=False``), does the sidecar's box stand.
     """
@@ -329,25 +328,15 @@ def _world_contour_from_geometry(geometry: dict[str, Any]) -> list[list[float]] 
     by ``_chain_extent``. Rounded to 2 dp — the format
     ``MapObject.world_contour`` / ``build_surface`` consume.
 
-    Nothing here asks what the feature IS. The rule this replaced returned
-    the ring for a polygon and ``None`` for a line and a point, so 3,413 of
-    3,414 calcity buildings carried exact vertices and 0 of 1,739 roads did;
-    a road's served geometry was its 1.0 m line buffer rasterized at 2 m, its
-    centerline a reconstruction off that raster, and two tuned scales existed
-    downstream to recover contact and separation from the reconstruction. The
-    lines were never missing — the bundle hands this function 1,702 of them
-    intact — they were dropped because of what they were.
+    Nothing here asks what the feature IS: a road's centerline is served
+    from its own vertices, as a building's ring is.
 
-    The chain is NOT decimated. It used to be cut to 16 vertices by uniform
-    stride, and ``_mask_fields`` prefers this over the cell boundary, so that
-    16-gon WAS the footprint for every areal prior. Measured over the
-    3,963 polygon rings in the Cal City bundle: 2.3% run past 16 vertices, and
-    on those the stride cost a median 13.4% of the ring's area and at worst
-    99.1% — one 33,476 m2 footprint served as 294 m2. ``footprint_area_m2`` is
-    a VISIBLE column the model can score_by and filter on, so that is a wrong
-    number handed to the reasoner, not just a coarse picture. A uniform stride
-    is the wrong instrument regardless: it keeps every Nth vertex rather than
-    the ones carrying the shape.
+    The chain is kept whole. ``_mask_fields`` prefers it over the cell
+    boundary, so it IS the footprint for every areal prior, and
+    ``footprint_area_m2`` is a column the model can score_by and filter on.
+    Measured over the 3,963 polygon rings in the Cal City bundle, a 16-vertex
+    uniform stride would cost a median 13.4% of the area on the 2.3% of rings
+    past 16 vertices, and at worst 99.1%.
 
     The detection side still decimates (``perception.synthetic``), and should:
     a contour derived from a pixel mask is a measurement whose vertex budget is

@@ -170,10 +170,9 @@ def _metrics(eid, sr, **extra):
 
 
 def test_a_shape_bench_names_its_own_criterion(tmp_path, capsys):
-    """Cal City scores the TARGET'S OWN SHAPE. Leading with the 20 m disc
-    taught readers to quote the wrong number -- a whole arm was reported that
-    way before anyone noticed. The criterion rides the ROW, so the report
-    states it instead of inferring it from how many rows resolve a shape.
+    """Cal City scores the TARGET'S OWN SHAPE. The criterion rides the ROW, so
+    the report states it instead of inferring it from how many rows resolve
+    a shape.
     """
     _write(tmp_path / LEDGER,
            *[_row(f"e::{i}#{i}", "s", 1 if i < 3 else 0,

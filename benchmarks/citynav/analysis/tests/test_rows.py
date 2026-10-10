@@ -1,8 +1,4 @@
-"""The rule: an episode's result is its first fully complete attempt.
-
-Nothing pinned reader semantics before this file, which is exactly how
-four readers of the same rows came to disagree about the same run.
-"""
+"""The rule: an episode's result is its first fully complete attempt."""
 
 from __future__ import annotations
 
@@ -206,8 +202,7 @@ def test_metrics_is_one_shape():
 
 
 def test_a_crash_row_does_carry_an_episode_id():
-    """The canonical reader's docstring claimed otherwise for years. Every
-    no-metrics row in citynav_val_seen_2026-07-23_16-56-19 has one."""
+    """Every no-metrics row in citynav_val_seen_2026-07-23_16-56-19 has one."""
     row = {"episode_id": "e::9#9", "status": "ok"}
     assert rows.episode_id(row) == "e::9#9"
 

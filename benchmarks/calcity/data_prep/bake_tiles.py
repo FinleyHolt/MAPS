@@ -73,8 +73,7 @@ def local_osm_cache(bundle: Path, map_name: str) -> dict[str, Any]:
     grid on its own.
 
     The layer a feature came from rides as ``worldkit_layer``. OSM's own
-    ``source`` tag is left alone: the old builder overwrote it, which is a
-    tag the map actually carries.
+    ``source`` tag is left alone: it is a tag the map carries.
     """
     from shapely.geometry import mapping
 

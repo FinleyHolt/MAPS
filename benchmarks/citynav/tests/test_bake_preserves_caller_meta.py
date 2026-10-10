@@ -1,13 +1,9 @@
 """``_write_outputs`` drops only the flags this baker re-asserts.
 
-Regression cover: ``georef`` sat in ``_STALE_BAKE_FLAGS`` while nothing in
-this module ever wrote a top-level ``meta["georef"]`` — the only producer is
-an upstream caller (``benchmarks.calcity.data_prep.bake_tiles._write_meta``,
-which stamps the AOI's UTM zone and local origin). So the Cal City bake wrote
-the block and ``bake_city_from_cache`` deleted it moments later, every time.
-The strip landed 2026-07-15, the writer 2026-07-27: it never once survived,
-and the georef a global-coords caller reads was absent on
-any Cal City tile.
+A top-level ``meta["georef"]`` is written by an upstream caller
+(``benchmarks.calcity.data_prep.bake_tiles._write_meta``, which stamps the
+AOI's UTM zone and local origin), never by this module, so it passes through
+``bake_city_from_cache`` to the tile a global-coords caller reads.
 """
 
 from __future__ import annotations

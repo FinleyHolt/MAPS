@@ -137,11 +137,10 @@ def build_block(bundle: Path, map_name: str, bbox) -> dict:
         name = tag_value(rec["tags"], "name")
         cx, cy = float(poly.centroid.x), float(poly.centroid.y)
         # Both keys carry the centroid bucket, so dedup only ever collapses
-        # things in the same PLACE. A bare ("named", name) key competed every
-        # way of a street for one slot and kept the largest: OSM splits a road
-        # at each tag change, so California City Boulevard baked as a 908 m
-        # fragment in the south-east corner and its spine through downtown was
-        # absent from the prior. One row per way is what CityNav bakes and what
+        # things in the same PLACE. A bare ("named", name) key would compete
+        # every way of a street for one slot: OSM splits a road at each tag
+        # change, so California City Boulevard would bake as one 908 m
+        # fragment. One row per way is what CityNav bakes and what
         # the reasoner surface is written against -- "one road is routinely
         # several ways, pass them all".
         # ponytail: a 4 m centroid bucket, not a geometric-overlap test. It

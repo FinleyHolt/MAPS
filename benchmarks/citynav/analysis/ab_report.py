@@ -2,12 +2,9 @@
 """Paired A/B SR report with a bootstrap CI on the delta, McNemar, and the
 success->fail regression guard -- the gate every SR/DeltaSR claim passes through.
 
-WHY this exists: `run_report.paired` prints point SR for A and B but no CI on the
-*difference* and no flip count. The pose-lever work nearly shipped a phantom "+5"
-for exactly that reason (a stochastic verifier + thresholds overfit on n=298). A
-commit-protected override can only help in the oracle limit, but a *realistic*
-re-rank uses a fallible signal and can flip a SUCCESS to a FAIL -- so the
-success->fail count is the load-bearing safety number, not net SR.
+`run_report.paired` prints point SR for A and B; this adds the CI on the
+*difference* and the flip counts. A change can trade successes for failures
+at a flat net SR, so the success->fail count is reported beside the delta.
 
 Two entry points:
   * `ab_stats(pairs)` -- library core. `pairs` = list of (sr_a, sr_b) in {0,1}
@@ -168,8 +165,7 @@ def _bake_stamp(run_root: Path) -> str | None:
     The rows carry the bake's PATH; the manifest carries what was in it. Two
     bakes of the same block set live at the same path under the same name
     (`paths.bake_sha256`), which is exactly the case the path cannot see:
-    Cal City bakes all sit at ``benchmarks/calcity/tiles`` and two different
-    ones are live across the cluster today.
+    every Cal City bake sits at ``benchmarks/calcity/tiles``.
     """
     try:
         manifest = json.loads((run_root / "run_manifest.json").read_text())
@@ -183,8 +179,8 @@ def _ground_truth_keys(prov: dict) -> dict:
 
     The tile bake's identity is its NAME, not the absolute path: every site
     mounts the same bake under its own root (a cross-site pool run mixes
-    those prefixes inside ONE run), while the retired bake differs exactly
-    in the name (citynav_2m vs citynav_2m_osmv2)."""
+    those prefixes inside ONE run), while two CityNav bakes differ in the
+    name (citynav_2m_osmv2 vs citynav_2m_osmv3)."""
     flags = prov.get("search_env_flags") or {}
     tiles = flags.get("SEARCH_CITYNAV_TILES")
     return {
@@ -192,8 +188,8 @@ def _ground_truth_keys(prov: dict) -> dict:
         "tiles": Path(tiles).name if tiles else None,
         # Content, where the name cannot answer. Every CityNav bake encodes
         # itself in its directory (citynav_2m_osmv2 vs _osmv3) and the name
-        # check catches those; every Cal City bake is called ``tiles``, and
-        # two different ones are live across the cluster right now.
+        # check catches those; every Cal City bake is called ``tiles``, so two
+        # different ones share a name.
         "bake_sha256": prov.get("bake_sha256"),
     }
 

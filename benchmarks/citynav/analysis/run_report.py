@@ -42,8 +42,8 @@ def load_run(root: Path, *, allow_partial: bool = False) -> tuple[dict[str, dict
     Selection is the shared rule (``rows.pick_attempts``): each episode's
     result is its FIRST FULLY COMPLETE attempt, ordered by attempt START
     time -- NOT the last row in the file. The ledger appends on
-    COMPLETION, so last-row-wins scored whichever replicate happened to
-    finish last, which under the pre-f22e8fd dispatch was a coin flip.
+    COMPLETION, so last-row-wins would score whichever replicate happened
+    to finish last.
 
     ``no_metrics`` is a ROW count: non-infra ledger rows carrying no
     metrics dict at all. It is NOT a count of unscored episodes -- one episode can
@@ -97,7 +97,7 @@ def print_precise(metrics: list[dict], n: int) -> bool:
     attributable to ground truth rather than to the radius standing in for it.
     See :func:`benchmarks.citynav.eval.score_precise`.
 
-    Gated on ``precise_target``, NOT on the verdict. ``SR`` is now the verdict
+    Gated on ``precise_target``, NOT on the verdict. ``SR`` is the verdict
     under whichever mask ran, so gating on it would make every ring row
     "precise-scored" and print the 20 m disc number under a shape's label —
     on a CityNav run, which resolves no shape at all.
@@ -217,8 +217,8 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     print(f"\n=== {root} ===")
     print(f"source: {stats.tier} tier, {stats.files} file(s)")
     print(bake_line(root))
-    # ``rows`` counts ATTEMPTS; ``scored`` counts EPISODES. Their sum was
-    # never a total, which is what made the old rows_total misleading.
+    # ``rows`` counts ATTEMPTS; ``scored`` counts EPISODES. Their sum is
+    # no total.
     print(
         f"scored={n}  attempts={stats.rows}  "
         f"replicates_discarded={stats.keyed - len(picked)}  "
@@ -227,10 +227,8 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
         f"infra(re-queued)={stats.infra}"
     )
     # WHICH CRITERION THIS RUN IS SCORED UNDER, read off the rows' own stamp.
-    # There is ONE number now -- ``SR`` is the verdict under the bench's mask,
-    # and ``success_criterion`` says which mask that was. The >=90%-of-rows-
-    # resolve-a-shape heuristic this replaces existed because nothing on a row
-    # said; it had already been copied to two other readers and diverged once.
+    # ``SR`` is the verdict under the bench's mask, and ``success_criterion``
+    # says which mask that was.
     print(f"criterion: {_CRITERION_LABEL.get(_criterion, _criterion)}")
     print(f"SR = {_pct(sr, n)}")
     # The one distance on every scored row, under either criterion: metres
@@ -334,10 +332,9 @@ def _label(name: str, suc: int, tot: int) -> str:
 def paired(root_a: Path, root_b: Path, *, allow_partial: bool = False) -> None:
     """Paired SR on the shared scored episode set (apples-to-apples).
 
-    UNDER THE SAME CRITERION THE HEADLINE USES -- now by construction
-    rather than by two readers deriving it the same way. ``SR`` is the
-    verdict under whichever mask ran, so this pairs the same quantity
-    ``report`` printed. The criterion is still NAMED in the header so no
+    UNDER THE SAME CRITERION THE HEADLINE USES: ``SR`` is the verdict
+    under whichever mask ran, so this pairs the same quantity ``report``
+    printed. The criterion is NAMED in the header so no
     one has to infer which question moved, and a pairing ACROSS criteria
     refuses: it would difference two different questions.
     """

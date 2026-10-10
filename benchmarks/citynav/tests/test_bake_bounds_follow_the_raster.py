@@ -1,15 +1,14 @@
 """A block's bounds are its imagery's bounds.
 
-The OSM tile used to be baked over a box ~50 m larger than the block's raster
-on every side. OSM covers the planet, so that ring filled with features — but
-the point cloud, the raster and the ortho all stop at the same line, and no
-upstream CityRefer object (26,274 checked, 0 outside) or CityNav target
-(22,002 checked, 0 outside) lives past it. The graph was handing the agent
-candidates nothing could ever look at: 42.7% of all graph nodes, measured.
+The block's meta sidecar box runs ~50 m past its raster on every side. OSM
+covers the planet, so that ring would fill with features, but the point cloud,
+the raster and the ortho all stop at the same line, and no upstream CityRefer
+object (26,274 checked, 0 outside) or CityNav target (22,002 checked, 0
+outside) lives past it.
 
 So the bake derives bounds from the raster and sizes the grid to match. These
-tests pin that, including the fallback when no raster is readable — losing the
-raster must not silently resurrect the old box without saying so.
+tests pin that, including the fallback when no raster is readable, which says
+so when it falls back to the sidecar box.
 """
 
 from __future__ import annotations

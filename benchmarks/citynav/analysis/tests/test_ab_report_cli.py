@@ -1,10 +1,4 @@
-"""The CLI reaches its exit, and the arm-waiver warning names the waived keys.
-
-The comparability guards were unit-pinned, but ``main()`` itself never ran
-under test — so when the fatal/arm split renamed the mismatch list, the
-post-report warning kept reading the retired name and every CLI invocation
-died on NameError after printing.
-"""
+"""The CLI reaches its exit, and the arm-waiver warning names the waived keys."""
 
 from __future__ import annotations
 

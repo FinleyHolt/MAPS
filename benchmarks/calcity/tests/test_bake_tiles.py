@@ -1,8 +1,7 @@
 """The Cal City prior bakes the bundle's OSM verbatim.
 
 The contract is the CityNav baker's: every feature with a geometry is kept,
-every tag rides, and a geometry kind stays what OSM said it was. Each test
-here is a loss the retired objects.json projection used to take.
+every tag rides, and a geometry kind stays what OSM said it was.
 """
 
 from __future__ import annotations
@@ -76,9 +75,9 @@ def test_a_road_bakes_as_a_way_not_a_buffered_polygon(tmp_path, monkeypatch):
     assert prior["prior"][0]["name"] == "South Loop Boulevard"
 
 
-def test_the_classifier_no_longer_drops_features(tmp_path, monkeypatch):
-    """30% of raw OSM records had no CityRefer class and never reached the
-    bake -- 76% of every LineString. All five of these used to vanish."""
+def test_a_feature_with_no_cityrefer_class_is_baked(tmp_path, monkeypatch):
+    """30% of raw OSM records carry no CityRefer class -- 76% of every
+    LineString. Each bakes."""
     dropped = [
         _road(1, {"highway": "footway"}, [(100, 100), (400, 100)]),
         _road(2, {"highway": "service"}, [(100, 200), (400, 200)]),
@@ -92,7 +91,7 @@ def test_the_classifier_no_longer_drops_features(tmp_path, monkeypatch):
 
 
 def test_every_tag_rides_through(tmp_path, monkeypatch):
-    """ref / lanes / surface / building were destroyed by a 7-key allowlist."""
+    """ref / lanes / surface / building ride with every other tag."""
     _bundle(
         monkeypatch,
         [_area(9, {"building": "house", "addr:street": "Hacienda Boulevard",

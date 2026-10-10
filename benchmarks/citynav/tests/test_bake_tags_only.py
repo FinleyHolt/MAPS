@@ -115,11 +115,11 @@ def test_fetch_query_is_unrestricted_nwr_no_tag_allowlist():
 def test_a_polygon_ring_is_not_decimated():
     """The OSM ring IS the footprint, so it rides whole.
 
-    A 16-vertex uniform stride used to cut it, and _mask_fields prefers this
-    contour over the cell boundary, so the 16-gon WAS the footprint for every
-    areal prior. Measured on the Cal City bundle: 2.3% of rings run past 16
-    vertices and the stride cost them a median 13.4% of their area, at worst
-    99.1% -- a wrong footprint_area_m2, which the model scores and filters on.
+    _mask_fields prefers this contour over the cell boundary, so it is the
+    footprint for every areal prior. Measured on the Cal City bundle, a
+    16-vertex uniform stride would cost the 2.3% of rings past 16 vertices a
+    median 13.4% of their area, at worst 99.1% -- a wrong footprint_area_m2,
+    which the model scores and filters on.
     """
     import math
 

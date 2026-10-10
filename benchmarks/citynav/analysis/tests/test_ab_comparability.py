@@ -2,15 +2,13 @@
 
 An A/B's SR is a score AGAINST a ground truth: a split and a tile bake. Vary
 either and the two numbers answer different questions, so the delta is not
-small or noisy, it is meaningless. Measured on this repo: the retired
-``citynav_2m`` bake scored the same episodes 0.351 where ``citynav_2m_osmv2``
-scores 0.169. A baseline recalled from the wrong bake was nearly used to
-validate a 5,311-episode run.
+small or noisy, it is meaningless: two bakes of one name scored the same
+episodes 0.351 and 0.169.
 
 The waiver is the subtle half. ``--allow-provenance-mismatch`` exists because a
-refactor or model A/B is SUPPOSED to differ on git_commit -- but while it was
-one flat list, taking that legitimate override also switched off the tile
-check. These tests pin the split: arm keys waivable, ground truth never --
+refactor or model A/B is SUPPOSED to differ on git_commit, and taking that
+override must leave the tile check on. These tests pin the split: arm keys
+waivable, ground truth never --
 and UNRECORDED ground truth refuses like mismatched ground truth, because a
 null that skips the comparison is the guard silently off.
 """
@@ -85,7 +83,7 @@ def test_waiving_the_arm_keys_cannot_waive_the_tile_bake():
 
 
 def test_look_tool_difference_is_reported():
-    """Look off is a text-only reasoner. It was silently off for two weeks once."""
+    """Look off is a text-only reasoner."""
     _, arm = comparability_issues(_prov(look=True), _prov(look=False))
     assert arm and "look tool" in arm[0]
 

@@ -5,13 +5,7 @@ charging it to the model prices one as the other. The PRODUCER stamps such
 an attempt ``status: infra`` (``dispatch`` on ``ended_by ==
 transient_failures``, the driver on a serve death or spawn failure); a
 flight row carries the ending itself. One predicate, ``rows.is_infra_abort``,
-reads both -- two definitions of one question had already diverged once,
-with the driver re-queueing an episode the reader went on scoring.
-
-Measured twice. ``f40088a:calcity_full_replyrepair``: a serve OOM storm
-forced 50 of 1022 episodes to SR 0.000. And the reasoning-effort ladder,
-where the max-effort arm's failure was DETERMINISTIC, so the re-queue fired
-on every redo and the arm never terminated.
+reads both, so the driver re-queues exactly the episodes the reader drops.
 """
 
 from __future__ import annotations
@@ -74,8 +68,8 @@ def test_a_serve_failure_leaves_the_sr_denominator(tmp_path) -> None:
 
 
 def test_the_rerun_represents_the_episode_not_the_casualty(tmp_path) -> None:
-    """The exact ladder case: the driver re-queued, the re-run succeeded, and
-    first-complete-by-start-time was handing the episode to the failure."""
+    """The driver re-queued and the re-run succeeded: the re-run is the
+    episode's result, not the earlier-started failure."""
     root = _run(
         tmp_path,
         _row("c::7#0", "20260827_100000", 0, ended_by="transient_failures",
