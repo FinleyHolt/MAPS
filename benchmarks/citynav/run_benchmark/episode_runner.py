@@ -139,8 +139,8 @@ def _success_mask(cfg, episode, objects_by_map: dict) -> tuple[str, dict]:
         "radius_m": float(
             row_radius if row_radius is not None else cfg.success_radius_m
         ),
-        "tolerance_m": float(getattr(cfg, "precise_tolerance_m", 0.0)),
-        "floor_radius_m": float(getattr(cfg, "precise_floor_radius_m", 5.0)),
+        "tolerance_m": float(cfg.precise_tolerance_m),
+        "floor_radius_m": float(cfg.precise_floor_radius_m),
     }
 
 
