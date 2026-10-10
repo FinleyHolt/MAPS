@@ -1,0 +1,39 @@
+"""Bench-only ablation withholds over the flown engine.
+
+Each name takes one served part away; with none named the model is served
+exactly what flew. The bench config's ``withhold:`` list reaches the engine
+as ``SEARCH_WITHHOLD`` (comma separated), read at call time, and the flight
+mission refuses a run that names any.
+"""
+
+from __future__ import annotations
+
+import os
+
+ENV = "SEARCH_WITHHOLD"
+
+# name -> what the model loses.
+WITHHOLDS: dict[str, str] = {
+    "prior": "the OSM prior's rows: the graph starts with no prior features",
+    "look_for": "the segmenter watchlist verb and every sentence teaching it;"
+                " no class is ever detected",
+    "look": "the close-look verb and every sentence teaching it",
+    "images": "every picture: a look, a pass's catch, a map and a flight's"
+              " view deliver text only",
+    "mission_map": "the system turn's MISSION MAP section",
+    "system_turn": "the system turn",
+}
+
+
+def active() -> frozenset[str]:
+    names = frozenset(n.strip() for n in os.environ.get(ENV, "").split(",") if n.strip())
+    unknown = sorted(names - WITHHOLDS.keys())
+    if unknown:
+        raise ValueError(f"{ENV} names unknown withholds {unknown}; known: {sorted(WITHHOLDS)}")
+    return names
+
+
+def withheld(name: str) -> bool:
+    if name not in WITHHOLDS:
+        raise KeyError(f"{name!r} is not a withhold (maps/search/withhold.py)")
+    return name in active()

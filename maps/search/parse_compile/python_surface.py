@@ -51,8 +51,9 @@ from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
     _AUTOATTACH_PREFIXES, _STANDING_SIDE_PREFIXES, MODEL_UNSERVED_COLUMNS)
 from maps.search.analyze_scene.row_geometry import SurfaceGeometry
+from maps.search.withhold import withheld
 from maps.search.parse_compile.code_surface import (
-    CodeError, _ACT_NEEDS_A_THING, _fid_like, _plan_of, _split_diagonal,
+    CodeError, act_needs_a_thing, _fid_like, _plan_of, _split_diagonal,
     bind_row, _refuse_metres_in_within)
 
 BLOCK_FILENAME = "<mission-block>"
@@ -76,6 +77,13 @@ _MOVE_CALLS = ("go_to", "explore")
 _LIBRARY_CALLS = ("find", "look_for", "go_to", "explore", "look",
                   "show_map", "stand", "more_of",
                   "intersection", "ends_of", "distance")
+
+
+def served_calls() -> tuple[str, ...]:
+    """The mission calls this run binds: a ``look_for`` or ``look`` withhold
+    (maps.search.withhold) unbinds the verb of its name."""
+    return tuple(c for c in _LIBRARY_CALLS
+                 if c not in ("look_for", "look") or not withheld(c))
 
 # Retired free calls, and where the operation went. The refusal names the
 # method; nothing here defines the old name or runs anything.
@@ -224,7 +232,7 @@ class MissionNamespace(dict):
         known = [n for n in self if isinstance(n, str)
                  and not n.startswith("__") and n not in _SAFE_MODULES]
         close = difflib.get_close_matches(
-            k, tuple(_LIBRARY_CALLS) + tuple(known), n=2, cutoff=0.6)
+            k, served_calls() + tuple(known), n=2, cutoff=0.6)
         if close:
             raise CodeError(f"there is no {k} here -- did you mean "
                             + " or ".join(dict.fromkeys(close)) + "?")
@@ -293,7 +301,7 @@ def scan_block(code: str) -> ast.Module:
             if node.id in _FORBIDDEN_NAMES:
                 raise CodeError(f"there is no {node.id}()")
             if isinstance(node.ctx, ast.Store) \
-                    and node.id in _LIBRARY_CALLS:
+                    and node.id in served_calls():
                 raise CodeError(
                     f"{node.id} is a mission call -- binding over it "
                     f"would make {node.id}() uncallable for the rest of "
@@ -1154,7 +1162,7 @@ class MissionPython:
         # spelling just works instead of earning a did-you-mean.
         self.ns["show"] = self._call_show
         self.ns.update(_SAFE_MODULES)
-        for name in _LIBRARY_CALLS:
+        for name in served_calls():
             self.ns[name] = self._wrap_call(name)
         # Model spelling for every ref it was shown rows under, so the
         # served envelope is keyed by the model's own name.
@@ -1372,8 +1380,10 @@ class MissionPython:
         anchor = dkey[len("distance to "):]
         self._fold({"note": (
             f"nothing found for {str(query)!r} lies near {anchor} -- the "
-            f"nearest match is {min(vals):,.0f} m away. Rows of a watched "
-            f"class appear near {anchor} only when a flight covers it.")})
+            f"nearest match is {min(vals):,.0f} m away."
+            + ("" if withheld("look_for") else
+               f" Rows of a watched class appear near {anchor} only when a "
+               "flight covers it."))})
 
     def _rows_order(self, items, label, *, nearest=None, color=None):
         """ONE sort key, the way a table sorts. Never two.
@@ -1617,7 +1627,7 @@ class MissionPython:
                     f"{len(x)}. Index the one you mean -- {call}(<set>[0]) "
                     "-- or explore(<set>) to cover all of it.")
             if not _ok_set:
-                raise CodeError(_ACT_NEEDS_A_THING.format(
+                raise CodeError(act_needs_a_thing(
                     name="go_to/explore",
                     got=", ".join(f"{v:g}" if isinstance(v, (int, float))
                                   else str(v) for v in x)))

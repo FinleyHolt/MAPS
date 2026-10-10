@@ -1,14 +1,16 @@
 """Print the served LLM contract: system text + the mission tools.
 
 The audit artifact — what the model gets at THIS sha, assembled from the
-same single owners the flight path serves (``served_system_text`` over
-``CODE_SYSTEM_PROMPT``, and ``CODE_TOOLS``). A DERIVATION from the
+same single owners the flight path serves (``served_system_text`` and
+``served_tools``, which serve the flown constants unless a bench arm
+withholds a part). A DERIVATION from the
 constants; the flight log records what a real run actually sent (the
 capture side). Diff two shas by dumping at each.
 
   python -m maps.search.parse_compile.contract
   python -m maps.search.parse_compile.contract --sensor <rig>
   python -m maps.search.parse_compile.contract --rendered   # template bytes
+  python -m maps.search.parse_compile.contract --withhold look,images
 
 ``--rendered`` prints the chat-template render of [system + one sample
 operator instruction] with the tools attached — the byte stream the
@@ -28,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor
@@ -52,10 +55,8 @@ def assemble(sensor: str | None = None) -> dict:
                 f"contract: unknown sensor '{sensor}' -- one of: "
                 + ", ".join(list_sensors()))
         description = spec.description
-    system = ra.served_system_text(
-                                   sensor_description=description,
-                                   base=prompts.CODE_SYSTEM_PROMPT)
-    return {"system": system, "tools": prompts.CODE_TOOLS}
+    system = ra.served_system_text(sensor_description=description)
+    return {"system": system, "tools": prompts.served_tools()}
 
 
 def surface_lines() -> list[str]:
@@ -69,10 +70,10 @@ def surface_lines() -> list[str]:
     import inspect
 
     from maps.search.parse_compile.python_surface import (
-        _LIBRARY_CALLS, MissionPython, Rows)
+        MissionPython, Rows, served_calls)
 
     out = []
-    for call in _LIBRARY_CALLS:
+    for call in served_calls():
         sig = inspect.signature(getattr(MissionPython, f"_call_{call}"))
         params = ", ".join(
             str(p) for n, p in sig.parameters.items() if n != "self")
@@ -124,7 +125,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default="qwen36-35b-a3b",
                     help="served-model alias for the --rendered tokenizer "
                          "(SEARCH_COMPACT_TOKENIZER_NAME overrides)")
+    ap.add_argument("--withhold", metavar="NAMES", default=None,
+                    help="dump what a bench arm withholding these serves "
+                         "(comma separated; maps.search.withhold)")
     args = ap.parse_args(argv)
+    if args.withhold is not None:
+        from maps.search.withhold import ENV, active  # noqa: PLC0415
+        os.environ[ENV] = args.withhold
+        active()
 
     if not args.rendered:
         sys.stdout.write(dump_text(sensor=args.sensor))

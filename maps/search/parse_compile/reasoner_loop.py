@@ -58,6 +58,7 @@ from maps.search.render.look_render import (
 from maps.util.xy_token import (
     XY_TOKEN_RE, format_xy_token, parse_xy_token)
 from maps.search.analyze_scene.tools import ToolContext
+from maps.search.withhold import withheld
 from maps.search.analyze_scene.geom_compute import COLOR_ENUM as _COLOR_ENUM
 from maps.search.analyze_scene.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR,
@@ -948,6 +949,9 @@ _COVER_SET_MAX_STOPS = 1000
 # catch. Half the 16-image context budget, so the model's own later looks
 # keep room; the note pages the rest.
 _CATCH_CROPS = 8
+# What a look and a pass's catch say under the ``images`` withhold.
+_PICTURE_WITHHELD = ("the crop rendered and is not served: no picture "
+                     "reaches you on this run")
 
 
 def _mission_sanitize_moves(raw, staged) -> tuple[list[dict], list[dict]]:
@@ -1745,9 +1749,6 @@ def run_mission(
     at the top of each turn. With it unset the instruction is the single
     user message, exactly as measured.
     """
-    from maps.search.parse_compile.prompts import (  # noqa: PLC0415
-        CODE_SYSTEM_PROMPT,
-    )
     # THE ARM SERVES ONE SURFACE IN BOTH CHANNELS. Serving the sentence
     # prompt beside the code tool served two contradictory surfaces at
     # once: the prompt taught sentences the parser refuses, and every
@@ -1772,7 +1773,6 @@ def run_mission(
         reasoner_index=0,
         sensor_description=sensor_description,
         cancel_event=cancel_event,
-        system_prompt_base=CODE_SYSTEM_PROMPT,
         reasoning_effort=reasoning_effort,
     )
     reply = advance_reasoner_one_round(
@@ -2051,8 +2051,8 @@ def advance_reasoner_one_round(
     # parser's own refusals, which are ordinary tool results the model can
     # act on. A card declaring a decoder dialect would grammar-lock the
     # model out of emitting Python and kill the episode at the first call.
-    from maps.search.parse_compile.prompts import CODE_TOOLS
-    stop_tools = list(CODE_TOOLS)
+    from maps.search.parse_compile.prompts import served_tools
+    stop_tools = list(served_tools())
     pending_vision: list[tuple[str, list[bytes]]] = []
     _block_frames: list[str] = []
     _LOOK_MAX_CROPS = 16
@@ -3780,7 +3780,8 @@ def advance_reasoner_one_round(
                     f"{_snap_from} is {_item['target_fid']}"
                     "'s own position -- flown as that fid.")
             if "error" not in _report:
-                if not _report.get("new_detections") and not mission_sam:
+                if (not _report.get("new_detections") and not mission_sam
+                        and not withheld("look_for")):
                     # the watchlist gate is mechanical and invisible:
                     # pilot-3 measured 240 zero-detection flights, 99%
                     # with an empty watchlist, and 388 altitude
@@ -3836,7 +3837,7 @@ def advance_reasoner_one_round(
                 #
                 # A PASS RENDERS ONCE, not once a stop — see ``cover``.
                 if (look_renderer is not None and _report.get("pose_xy")
-                        and cover is None):
+                        and cover is None and not withheld("images")):
                     _tfid = str(_item.get("target_fid") or "")
                     _trow = _ns_rows.get(_tfid)
                     _tout = look_outline(_trow)
@@ -4361,7 +4362,10 @@ def advance_reasoner_one_round(
         # of a handle the model already holds.
         vis_text = preamble + _look_vision_text(crops)
         ack["delivered"] = len(jpegs)
-        if jpegs:
+        if jpegs and withheld("images"):
+            ack["delivered"] = 0
+            ack["note"] = _PICTURE_WITHHELD
+        elif jpegs:
             ack["note"] = "the crop follows in the next message"
             _deliver_frames(jpegs, _block_frames)
             pending_vision.append((vis_text, jpegs))
@@ -4521,7 +4525,11 @@ def advance_reasoner_one_round(
         jpegs = [m["jpeg"] for m in maps if m.get("jpeg")]
         vis_text = _map_vision_text(maps)
         ack["delivered"] = len(jpegs)
-        if jpegs:
+        if jpegs and withheld("images"):
+            ack["note"] = ("the map's caption follows in the next message; "
+                           "its picture is not served on this run")
+            pending_vision.append((vis_text, []))
+        elif jpegs:
             ack["note"] = "the map follows in the next message"
             _deliver_frames(jpegs, _block_frames)
             pending_vision.append((vis_text, jpegs))
@@ -4590,7 +4598,8 @@ def advance_reasoner_one_round(
                     f"is no further block to serve. Narrow it "
                     f"(order_by({_h}, color=\"<colour>\"), "
                     f"order_by({_h}, nearest=\"<fid>\"), "
-                    f"narrow({_h}, inside=\"<place>\")) or look({_h})."))
+                    f"narrow({_h}, inside=\"<place>\"))"
+                    + ("." if withheld("look") else f" or look({_h}).")))
         slot_fid: dict[str, str] = {}
         slot_ties: dict[str, list] = {}
         ground_notes: list[str] = []
@@ -4872,8 +4881,12 @@ def advance_reasoner_one_round(
                                         carry_results.get(_h) or []):
                                     mv["catch"]["shown"] = (
                                         f"first {len(_catch)} of "
-                                        f"{len(carry_results[_h])} -- "
-                                        f"look({_h}[a:b]) pages the rest")
+                                        f"{len(carry_results[_h])}" + (
+                                            "" if withheld("look") else
+                                            f" -- look({_h}[a:b]) pages "
+                                            "the rest"))
+                                if withheld("images"):
+                                    mv["catch"] = {"note": _PICTURE_WITHHELD}
                     continue
                 tok = _refval(step["to"])
                 _sp = (_plan_stops.get(str(tok).strip().lower())
@@ -5319,7 +5332,7 @@ def advance_reasoner_one_round(
             # the one way round-era text could land in a bench transcript.
             if name == "run":
                 out = _dispatch_run(args, cid)
-                if isinstance(out, dict):
+                if isinstance(out, dict) and not withheld("look_for"):
                     out.setdefault("watching", (
                         _watching_trailer()
                         or "nothing -- no class is segmented on any flight "

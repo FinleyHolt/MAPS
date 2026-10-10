@@ -51,7 +51,7 @@ def _reasoner_warmup_grammar(
 
     try:
         from maps.llm.sampling import thinking_sampling_kwargs
-        from maps.search.parse_compile.prompts import CODE_TOOLS
+        from maps.search.parse_compile.prompts import served_tools
     except Exception as exc:
         log.warning("grammar/cudagraph warmup skipped (import failed: %s)", exc)
         return
@@ -94,7 +94,7 @@ def _reasoner_warmup_grammar(
         "model": model,
         "messages": [_warm_msg],
         **thinking_samp,
-        "tools": CODE_TOOLS,
+        "tools": served_tools(),
         "tool_choice": "auto",
     }
 

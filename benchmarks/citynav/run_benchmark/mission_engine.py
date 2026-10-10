@@ -25,6 +25,7 @@ from benchmarks.citynav.run_benchmark.record import (
     _obs_class_histogram,
 )
 from benchmarks.citynav.run_benchmark.tour_cursor import _write_tour_cursor
+from maps.search.withhold import withheld
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -628,7 +629,7 @@ def fly_one(
         "cue": episode.description,
     }
     cp = getattr(perception, "concept_provider", None)
-    if cp is not None and hasattr(cp, "concepts_for"):
+    if cp is not None and hasattr(cp, "concepts_for") and not withheld("look_for"):
         report["watchlist"] = list(cp.concepts_for(None))
     _ph.at("report")
     # One line per stop, to the runner log. A pass flies its stops back to

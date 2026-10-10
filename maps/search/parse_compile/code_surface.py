@@ -21,6 +21,7 @@ import re
 from maps.search.analyze_scene.cardinal_side import CARDINALS as _GEOM_CARDINALS
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.util.xy_token import format_xy_token, parse_xy_token
+from maps.search.withhold import withheld
 
 # The executor's helpers are imported INSIDE the functions that use them.
 # reasoner_loop imports this module, so a module-level worlds import closes
@@ -59,7 +60,7 @@ CALLS = ("find", "intersection", "ends_of", "order", "filter", "look",
 # that is not an answer either (smoke 25712881's pre-explore pose was the
 # episode start, 4 km from the target).
 #
-# BOTH TAKE A THING, NEVER A COORDINATE -- see _ACT_NEEDS_A_THING.
+# BOTH TAKE A THING, NEVER A COORDINATE -- see act_needs_a_thing.
 ACTS = ("go_to", "explore")
 
 # What `order` ranks by, and the column each keyword lands on. `size`
@@ -252,9 +253,18 @@ ORDER_KEYS = {"nearest": None,                     # a place: distance to it
 _ACT_NEEDS_A_THING = (
     "{name}() takes a THING on the map, not a coordinate ({got}). Points "
     "are for RELATING and LOOKING -- near=, within=, show_map(around=), "
-    "stand(at=). To reach a part of something, look_for the class you "
+    "stand(at=).")
+_ACT_REACH_A_PART = (
+    " To reach a part of something, look_for the class you "
     "want, explore the thing so the segmenter puts rows on it, then "
     "{name}() the row you mean.")
+
+
+def act_needs_a_thing(*, name: str, got: str) -> str:
+    """The refusal of a coordinate where a move takes a thing; its remedy
+    names look_for, so a ``look_for`` withhold serves the refusal alone."""
+    text = _ACT_NEEDS_A_THING + ("" if withheld("look_for") else _ACT_REACH_A_PART)
+    return text.format(name=name, got=got)
 
 
 class CodeError(ValueError):
@@ -1344,7 +1354,7 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
                 # the picture's centre). Refuse it as a COORDINATE so the
                 # remedy the model reads is the true one: fly the row, or
                 # index the crossing that minted the token.
-                raise CodeError(_ACT_NEEDS_A_THING.format(
+                raise CodeError(act_needs_a_thing(
                     name="go_to/explore",
                     got=f"{_pt[0]:g}, {_pt[1]:g}")
                     + " A crossing you computed is a ROW: index it "

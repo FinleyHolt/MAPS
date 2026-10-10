@@ -39,6 +39,7 @@ from maps.search.analyze_scene import text_match as T
 from maps.search.render.look_render import LOOK_SET_ROWS
 from maps.util.node_fingerprint import fingerprint_node
 from maps.util.xy_token import format_xy_token
+from maps.search.withhold import withheld
 
 # The ONLY geometry/analysis vocabulary the structured surface exposes — the
 # four-op retrieve->relate->filter->order surface. ``select`` is the ``act{select}``
@@ -4645,8 +4646,10 @@ def run_program(cands, anchors, program, seed_results=None,
                     # to be seen rather than looked up.
                     _side_stats["nothing_on_that_side"] = (
                         "the prior map holds nothing on that side -- what is "
-                        "there has to be SEEN: look_for the class, then "
-                        "explore the place to segment it")
+                        "there has to be SEEN"
+                        + ("" if withheld("look_for") else
+                           ": look_for the class, then explore the place to "
+                           "segment it"))
                 r = _FilterCutRows(_on)
                 r.cut_stats = _side_stats
             elif opr in _NUMERIC_OPS:
@@ -4725,9 +4728,10 @@ def run_program(cands, anchors, program, seed_results=None,
                        for it in items):
                 raise ProgramError(
                     "these rows carry no match tiers -- strata come off a "
-                    "find's own result. A pass's minted rows are all THE "
-                    "thing the watchlist named; there is nothing to "
-                    "stratify.")
+                    "find's own result."
+                    + ("" if withheld("look_for") else
+                       " A pass's minted rows are all THE thing the "
+                       "watchlist named; there is nothing to stratify."))
             _lo, _hi = {"exact": (T.NAME_TIER_FLOOR, None),
                         "tagged": (T._KV_TIER_BASE, T.NAME_TIER_FLOOR),
                         "fuzzy": (None, T._KV_TIER_BASE)}[tier]
@@ -4966,14 +4970,16 @@ def run_program(cands, anchors, program, seed_results=None,
                                         f"{_lbl} is empty, so 'distance to "
                                         f"{_lbl}' is undefined on every row "
                                         f"and the ordering would be "
-                                        f"meaningless. If these are things "
-                                        f"the map does not carry (a pool, "
-                                        f"solar panels, a shed, a car), "
-                                        f"nothing is segmented until "
-                                        f"look_for names the class and a "
-                                        f"flight goes over the place -- arm "
-                                        f"it, fly, then find them again."
-                                        f"{_sig_suffix()}")
+                                        f"meaningless."
+                                        + ("" if withheld("look_for") else
+                                           " If these are things the map "
+                                           "does not carry (a pool, solar "
+                                           "panels, a shed, a car), nothing "
+                                           "is segmented until look_for "
+                                           "names the class and a flight "
+                                           "goes over the place -- arm it, "
+                                           "fly, then find them again.")
+                                        + f"{_sig_suffix()}")
                                 # A CAP, because the old guard is gone. A
                                 # union used to need hand-typed fids, which
                                 # bounded it by what a model would spell; an

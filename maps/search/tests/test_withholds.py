@@ -1,0 +1,146 @@
+"""Bench-only withholds: each takes exactly its part away, and none serves
+the flown text byte for byte.
+
+The flown baselines are the contract dumps of the flown engine (calcity rig,
+citynav rig, no rig), pinned here by sha256.
+"""
+
+from __future__ import annotations
+
+import difflib
+import hashlib
+import json
+
+import pytest
+
+from maps.llm.endpoint_spec import EndpointSpec
+from maps.search import withhold as W
+from maps.search.parse_compile import contract, prompts
+from maps.search.parse_compile import python_surface as ps
+from maps.search.parse_compile import reasoner_agent as ra
+from maps.search.parse_compile.code_surface import act_needs_a_thing
+from maps.search.parse_compile.reasoner_loop import _PICTURE_WITHHELD
+from maps.search.tests.test_look_set_frame import _cars, _fly, _run, ortho_dir  # noqa: F401
+
+FLOWN_SHA256 = {
+    "oryx_orx32_25mm_nadir": "d20444de5056b21cb0e84a78dd6c37991a9257d7dc8a5e34900936ac993cffd7",
+    "nadir_1008_90": "ae04a35e9450365d0bf3fe16e137285cc72a11b8adc0d01ac10e204e16884dec",
+    None: "761e32b3eebe88c7433e939a1f06426c4950da755a5c566d2d97dbb7041dd1fc",
+}
+
+
+def _dump(monkeypatch, names: str, sensor: str | None = "oryx_orx32_25mm_nadir") -> str:
+    monkeypatch.setenv(W.ENV, names)
+    return contract.dump_text(sensor=sensor)
+
+
+def _sections(text: str) -> dict[str, str]:
+    out, key = {}, None
+    for ln in text.splitlines(keepends=True):
+        if ln.startswith("=== ") and ln.split()[1] in ("SYSTEM", "TOOLS", "SURFACE", "USER"):
+            key = ln.split()[1]
+            out[key] = ""
+        out[key] += ln
+    return out
+
+
+def _diff(a: str, b: str) -> tuple[int, int]:
+    lines = list(difflib.ndiff(a.splitlines(), b.splitlines()))
+    return (sum(ln.startswith("- ") for ln in lines),
+            sum(ln.startswith("+ ") for ln in lines))
+
+
+@pytest.mark.parametrize("sensor", list(FLOWN_SHA256))
+def test_no_withhold_serves_the_flown_contract(monkeypatch, sensor):
+    text = _dump(monkeypatch, "", sensor)
+    assert hashlib.sha256(text.encode()).hexdigest() == FLOWN_SHA256[sensor]
+    assert prompts.served_tools() is prompts.CODE_TOOLS
+
+
+# withhold -> (sections that change, marker strings it takes away,
+# (removed, added) lines of the turn, of the description, of the surface)
+CASES = {
+    "prior": ((), (), (0, 0), (0, 0), (0, 0)),
+    "images": ((), (), (0, 0), (0, 0), (0, 0)),
+    "look_for": (("SYSTEM", "TOOLS", "SURFACE"),
+                 ("look_for", "watched classes", "segmenting your", "ARM EVERY CLASS",
+                  "WHAT YOU SEE BECOMES ROWS", "The flight folds"),
+                 (23, 10), (19, 2), (1, 0)),
+    "look": (("SYSTEM", "TOOLS", "SURFACE"),
+             ("look(", "a CLOSE look", "known only from a look",
+              "WHAT NO COLUMN CARRIES IS IN THE PIXELS", "look at them"),
+             (12, 5), (5, 2), (1, 0)),
+    "mission_map": (("SYSTEM",), ("=== MISSION MAP ===", "You are the reasoner"),
+                    (40, 0), (0, 0), (0, 0)),
+}
+
+
+@pytest.mark.parametrize("name", list(CASES))
+def test_each_withhold_takes_exactly_its_part(monkeypatch, name):
+    changes, markers, turn, doc, surface = CASES[name]
+    base = _sections(_dump(monkeypatch, ""))
+    got = _sections(_dump(monkeypatch, name))
+    for key in base:
+        if key in changes:
+            assert got[key] != base[key], key
+        else:
+            # an unchanged section keeps its bytes, length header included
+            assert got[key] == base[key], key
+    assert _diff(prompts.CODE_SYSTEM_PROMPT, prompts.served_system_prompt()) == turn
+    assert _diff(prompts.CODE_DOC, prompts.served_doc()) == doc
+    base_surface = base["SURFACE"].split("\n", 1)[1]
+    got_surface = got["SURFACE"].split("\n", 1)[1]
+    assert _diff(base_surface, got_surface) == surface
+    served = (prompts.served_system_prompt() + prompts.served_doc()
+              + "\n".join(contract.surface_lines()))
+    for m in markers:
+        assert m in base["SYSTEM"] + base["TOOLS"] + base_surface, m
+        assert m not in served, m
+
+
+def test_the_system_turn_withhold_serves_no_system_message(monkeypatch):
+    monkeypatch.setenv(W.ENV, "system_turn")
+    assert ra.served_system_text(sensor_description="RGB, nadir.") == ""
+    spec = EndpointSpec(base_url="http://unused", model_id="qwen", max_model_len=262144,
+                        tokenizer_name="qwen", output_reserve=40000)
+    r = ra.Reasoner(reasoner_url="http://unused", endpoint_spec=spec,
+                    sensor_description="RGB, nadir.")
+    assert r.messages == []
+    got = _sections(_dump(monkeypatch, "system_turn"))
+    base = _sections(_dump(monkeypatch, ""))
+    assert got["SYSTEM"] == "=== SYSTEM (0 chars) ===\n\n\n"
+    assert got["TOOLS"] == base["TOOLS"] and got["SURFACE"] == base["SURFACE"]
+
+
+def test_withheld_verbs_are_unbound(monkeypatch):
+    monkeypatch.setenv(W.ENV, "look_for,look")
+    assert "look_for" not in ps.served_calls() and "look" not in ps.served_calls()
+    env = ps.MissionEnv(run_plan=lambda plan, said: {}, rows_of_ref=lambda ref: [],
+                        plan_rn=[0], discourse={}, minted=[],
+                        say_err=lambda ack, msg: {**ack, "error": msg},
+                        row_of_fid=lambda fid: None)
+    mp = ps.MissionPython(env)
+    assert "look_for" not in mp.ns and "look" not in mp.ns and "go_to" in mp.ns
+    out = json.dumps(mp.run_block('look_for("pool")'))
+    assert "did you mean look_for" not in out
+
+
+def test_a_look_for_withhold_takes_its_remedies(monkeypatch):
+    assert "look_for" in act_needs_a_thing(name="go_to", got="1, 2")
+    monkeypatch.setenv(W.ENV, "look_for")
+    assert "look_for" not in act_needs_a_thing(name="go_to", got="1, 2")
+
+
+def test_an_images_withhold_delivers_no_picture(ortho_dir, monkeypatch):  # noqa: F811
+    monkeypatch.setenv(W.ENV, "images")
+    results, reqs, _recs, vision = _fly(
+        [[_run('a = find("car")')], [_run("look(a)")], "over"], _cars(3), ortho_dir)
+    assert reqs, "the look rendered"
+    assert vision == []
+    assert _PICTURE_WITHHELD in json.dumps(results)
+
+
+def test_an_unknown_withhold_is_refused(monkeypatch):
+    monkeypatch.setenv(W.ENV, "pictures")
+    with pytest.raises(ValueError, match="unknown withholds"):
+        W.active()

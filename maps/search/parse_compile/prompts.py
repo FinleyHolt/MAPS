@@ -26,6 +26,10 @@ emittable on every turn.
 
 from __future__ import annotations
 
+import textwrap
+
+from maps.search.withhold import WITHHOLDS, withheld
+
 # ── THE served surface ───────────────────────────────────────────────────────
 # The op DAG in Python's shape: one tool, one string argument.
 CODE_DOC = (
@@ -440,3 +444,153 @@ before it ran and stands. Names persist for the whole mission.
 - look_for(...) takes plain visual classes -- look_for("pool", "house")
   -- no proper nouns, no colour qualifier.
 """
+
+
+# ── bench-only withholds (maps.search.withhold) ──────────────────────────────
+# Each withhold's edits to the flown text, applied at call time. An edit is
+# ("sub", old, new): replace text written once; ("drop", opening): remove the
+# one entry that opens so; ("cut", start, end): remove from start up to end.
+# In the description an entry is a line; in the system turn it is a bullet,
+# matched on its words joined by single spaces and re-wrapped at 72 columns
+# when an edit changes it. With nothing withheld the literals are served as
+# written.
+_DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
+    "look_for": [
+        ("sub", '  look_for("pool", "house")\n  explore("Mill Lane")\n',
+         '  explore("Mill Lane")\n'),
+        ("cut", "\nEach line runs the moment it is reached", "\nTHE MAP"),
+        ("drop", "  find reads ONE set of rows"),
+        ("drop", '  look_for("pool", "house")   what the segmenter'),
+        ("drop", "  ARM EVERY CLASS THE CUE NAMES"),
+        ("drop", '  look_for("pool", at=<place>)'),
+        ("cut", "WHAT YOU SEE BECOMES ROWS", "MOVING -- "),
+        ("sub", "one stop at a time, segmenting your watched classes at every"
+                " stop.", "one stop at a time."),
+        ("sub", " To reach a PART of something -- the west side of a store,"
+                " the bulb at the end of a court -- look_for the class you"
+                " want, explore the thing so the segmenter puts rows on it,"
+                " then go_to the row you mean. That is a measured position; a"
+                " coordinate you read off a picture is a guess.", ""),
+    ],
+    "look": [
+        ("sub", "  look(r1[0:20])\n  go_to(r1[0])\n", "  go_to(r1[0])\n"),
+        ("sub", "explore(r1.exact), look(r1.tagged), anything a set can.",
+         "explore(r1.exact), anything a set can."),
+        ("drop", "  look(r1[0])       a CLOSE look"),
+        ("drop", "  look(r1, marks=<place>)"),
+        ("sub", " look_for the classes the cue names AND what stands on the"
+                " thing -- a lot is found by its cars, a helipad by its H, and"
+                " what stands on a thing is often the stronger detection --"
+                " explore the named place so the candidates become rows, then"
+                " look at them and choose by what the crops show.", ""),
+    ],
+}
+_TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
+    "look_for": [
+        ("sub", " The flight folds that stop's perception into the"
+                " world-state: SAM segments the classes you have looked for,"
+                " and a flight with none looked for adds no rows.", ""),
+        ("sub", "stop by stop, segmenting your watched classes at each.",
+         "stop by stop."),
+        ("sub", " look_for(...) directs the sensors. Neither moves the drone"
+                " or ends anything.", ""),
+        ("sub", " If you can see the thing, fly to the row that IS it -- so"
+                " the way to answer with a PART of something is to make the"
+                " segmenter put a row on that part and go_to it.", ""),
+        ("drop", "- One node set, provenance-tagged"),
+        ("drop", "- look_for(...) takes plain visual classes"),
+    ],
+    "look": [
+        ("sub", " -- and a cue word no column carries is known only from a"
+                " look, never from rank --", ","),
+        ("sub", " An attribute in NO column is settled by look(), not by"
+                " rank.", ""),
+        ("drop", "- WHAT NO COLUMN CARRIES IS IN THE PIXELS"),
+    ],
+    "mission_map": [
+        ("cut", "=== MISSION MAP ===", "=== WORLD CONVENTIONS ==="),
+    ],
+}
+
+
+def _units(text: str, turn: bool) -> list[str]:
+    """The text as entries that join back to it: a turn bullet with its
+    continuation lines, otherwise one line each."""
+    out: list[str] = []
+    for ln in text.splitlines(keepends=True):
+        if turn and out and ln.startswith("  ") and out[-1].startswith("- "):
+            out[-1] += ln
+        else:
+            out.append(ln)
+    return out
+
+
+def _flat(unit: str) -> str:
+    return " ".join(unit.split())
+
+
+def _edit(text: str, edit: tuple[str, ...], turn: bool) -> str | None:
+    """``text`` with ``edit`` applied, or None when it names no text there."""
+    kind, *args = edit
+    if kind == "cut":
+        i, j = text.find(args[0]), text.find(args[1])
+        return text[:i] + text[j:] if 0 <= i < j else None
+    units = _units(text, turn)
+    for k, u in enumerate(units):
+        if kind == "drop" and u.startswith(args[0]):
+            return "".join(units[:k] + units[k + 1:])
+        if kind == "sub" and turn and u.startswith("- ") and args[0] in _flat(u):
+            flat = _flat(u).replace(args[0], args[1])
+            units[k] = textwrap.fill(
+                flat[2:], 72, initial_indent="- ", subsequent_indent="  ",
+                break_on_hyphens=False, break_long_words=False) + "\n"
+            return "".join(units)
+    if kind == "sub" and not turn and text.count(args[0]) == 1:
+        return text.replace(args[0], args[1])
+    return None
+
+
+def _served(text: str, edits: dict, turn: bool) -> str:
+    for name in WITHHOLDS:
+        if name in edits and withheld(name):
+            for e in edits[name]:
+                # An earlier withhold may already have taken this text.
+                text = _edit(text, e, turn) or text
+    return text
+
+
+def served_doc() -> str:
+    """The ``run`` description this run serves."""
+    return _served(CODE_DOC, _DOC_EDITS, turn=False)
+
+
+def served_tools() -> list:
+    """The tools this run serves: ``CODE_TOOLS`` over ``served_doc()``."""
+    doc = served_doc()
+    if doc == CODE_DOC:
+        return CODE_TOOLS
+    return [{**CODE_TOOL, "function": {**CODE_TOOL["function"], "description": doc}}]
+
+
+def served_system_prompt() -> str:
+    """The mission prompt this run serves (``system_turn`` is
+    ``reasoner_agent.served_system_text``'s)."""
+    return _served(CODE_SYSTEM_PROMPT, _TURN_EDITS, turn=True)
+
+
+# Every edit names text the flown literals carry once, so an edit to a
+# literal that strands one fails here instead of serving the literal.
+for _edits, _text, _turn in ((_DOC_EDITS, CODE_DOC, False),
+                             (_TURN_EDITS, CODE_SYSTEM_PROMPT, True)):
+    for _name, _list in _edits.items():
+        assert _name in WITHHOLDS, _name
+        for _e in _list:
+            assert _edit(_text, _e, _turn) not in (None, _text), (_name, _e)
+            if _e[0] == "drop":
+                _n = sum(u.startswith(_e[1]) for u in _units(_text, _turn))
+            elif _e[0] == "sub" and _turn:
+                _n = sum(_e[1] in _flat(u) for u in _units(_text, _turn))
+            else:
+                _n = 1 if _e[0] == "cut" else _text.count(_e[1])
+            assert _n == 1, (_name, _e)
+del _edits, _text, _turn, _name, _list, _e, _n

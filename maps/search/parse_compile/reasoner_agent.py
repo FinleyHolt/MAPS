@@ -50,8 +50,7 @@ log = logging.getLogger(__name__)
 # imperative restatements: a fact in imperative dress is stated as its
 # mechanical consequence instead. The per-tool capability legend rides the
 # tool descriptions (``prompts.py``); this constant carries the rest.
-def served_system_text(*, sensor_description: str = "",
-                       base: str | None = None) -> str:
+def served_system_text(*, sensor_description: str = "") -> str:
     """The single system message the model is served.
 
     One edit to the one constant prompt: the run's sensor-rig block fuses
@@ -67,13 +66,15 @@ def served_system_text(*, sensor_description: str = "",
     its own look capability inline and ``run_mission`` asserts the renderer
     IS wired, so there was never a second byte stream to choose between.
 
-    ``base`` defaults to the served mission prompt. Keyword-only: a caller
-    that still passes the old positional flag fails loudly instead of fusing
-    nothing.
+    The ``system_turn`` withhold serves no system turn: an empty string,
+    which the ``Reasoner`` sends as no message.
     """
     from maps.search.parse_compile.prompts import (  # noqa: PLC0415
-        CODE_SYSTEM_PROMPT)
-    text = CODE_SYSTEM_PROMPT if base is None else base
+        served_system_prompt)
+    from maps.search.withhold import withheld  # noqa: PLC0415
+    if withheld("system_turn"):
+        return ""
+    text = served_system_prompt()
     if sensor_description.strip():
         text += "\n\n" + _format_sensor_system_message(sensor_description)
     return text
@@ -320,9 +321,6 @@ class Reasoner:
     # worker; the Reasoner stays workdir-agnostic — only the harvest knows
     # the episode dir.
     compaction_events: list[CompactionEvent] = field(default_factory=list)
-    # System-prompt base. ``run_mission`` passes ``CODE_SYSTEM_PROMPT``;
-    # None resolves to the same constant in ``served_system_text``.
-    system_prompt_base: str | None = None
     #: The reasoning effort this reasoner's requests carry, a string the
     #: serve accepts (``maps.llm.sampling``); None sends the arm's own.
     reasoning_effort: str | None = None
@@ -333,10 +331,9 @@ class Reasoner:
         return self.endpoint_spec.model_id
 
     def __post_init__(self) -> None:
-        if not self.messages:
-            self.messages.append({"role": "system", "content": served_system_text(
-                sensor_description=self.sensor_description,
-                base=self.system_prompt_base)})
+        system = served_system_text(sensor_description=self.sensor_description)
+        if not self.messages and system:
+            self.messages.append({"role": "system", "content": system})
 
     # ------------------------------------------------------------------
     # Message-history helpers

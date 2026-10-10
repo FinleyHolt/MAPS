@@ -33,7 +33,8 @@ from maps.search import (
     SearchLoopConfig,
 )
 from maps.sws import GridDomain, WorldState
-from maps.sws.graph import attach_mask_cache
+from maps.search.withhold import withheld
+from maps.sws.graph import attach_mask_cache, build_object_graph
 import json
 import math
 import numpy as np
@@ -107,6 +108,20 @@ def start_altitude_m(cfg, map_name: str, episode_id: str) -> tuple[float, float]
     )
 
 
+def _episode_graph(stem: str, assets) -> tuple:
+    """The episode's object graph and the prior features it starts from.
+    The ``prior`` withhold starts both empty."""
+    if withheld("prior"):
+        return build_object_graph({}, cell_size_m=float(assets.cell_size_m)), {}
+    try:
+        return load_episode_graph(stem), assets.base_features
+    except FileNotFoundError:
+        log.warning("  %s: no baked graph, building on the fly", stem)
+        return build_object_graph(
+            assets.base_features, cell_size_m=float(assets.cell_size_m),
+        ), assets.base_features
+
+
 def _success_mask(cfg, episode, objects_by_map: dict) -> tuple[str, dict]:
     """``(criterion, mask kwargs)`` for ``eval.score_arrival``.
 
@@ -160,16 +175,7 @@ def run_episode(
     assets = load_episode_assets(episode.map_name, objs_for_map, cfg.cell_size_m)
     graph_stem = tile_stem(episode.map_name)
     log.info("tile_stem=%s map_name=%s", graph_stem, episode.map_name)
-    try:
-        graph = load_episode_graph(graph_stem)
-    except FileNotFoundError:
-        log.warning("  %s: no baked graph, building on the fly", episode.map_name)
-        from maps.sws.graph import build_object_graph
-
-        graph = build_object_graph(
-            assets.base_features,
-            cell_size_m=float(assets.cell_size_m),
-        )
+    graph, prior_features = _episode_graph(graph_stem, assets)
 
     # Attach a mask cache so runtime upserts keep the fid ledger consistent
     # with graph.nodes. Seeded from the per-tile features.json so prebake
@@ -178,7 +184,7 @@ def run_episode(
     # World-state cleanout: the mask cache is a trivial scalar ledger
     # (fid -> centroid/cell_count) rebuilt from graph.nodes in ~ms — there is
     # no dense disk twin to resume and no shared-tile_stem concurrent clobber.
-    attach_mask_cache(graph, assets.grid_shape, features=assets.base_features)
+    attach_mask_cache(graph, assets.grid_shape, features=prior_features)
 
     if cfg.spawn == "uniform":
         # Seeded uniform spawn over the tile (run_benchmark.spawn). The
@@ -341,7 +347,7 @@ def run_episode(
             world_state,
             tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
             tile_name=f"citynav::{assets.map_name}",
-            base_features=assets.base_features,
+            base_features=prior_features,
             compiler=compiler,
             sam_concept_setter=sam_concept_setter,
             sam_watchlist_setter=sam_watchlist_setter,
