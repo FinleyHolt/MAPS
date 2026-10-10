@@ -135,16 +135,13 @@ def _detected_class_counts(graph):
     return counts
 
 
-def test_car_and_gray_car_stay_separate_layers_single_path(monkeypatch):
+def test_car_and_gray_car_stay_separate_layers_single_path():
     """Two-layer contract (tracked single path): the same physical car
     detected as a ``car`` mask (track t1) AND an identically-projected
     ``gray car`` mask (track t2) must NOT fold. Re-id is exact ``track_id``
     only, so the identical footprints stay two nodes and each keeps its own
     class — the agent counts the bare-class layer and reads color off the
-    overlapping one. Prebake attribution is disabled so the detections mint
-    discrete ``detected_<N>`` nodes (it is an orthogonal detected→prebake
-    lane)."""
-    monkeypatch.setenv("WORLD_STATE_DISABLE_PREBAKE_ATTRIBUTION", "1")
+    overlapping one."""
     grid = (32, 32)
     graph = _make_seed_graph(grid=grid)
     mask = _square_mask(grid, 10, 10, 6)  # identical footprints, distinct ids
@@ -179,11 +176,10 @@ def test_car_and_gray_car_stay_separate_layers_single_path(monkeypatch):
     assert counts["gray car"] == 1
 
 
-def test_car_and_gray_car_stay_separate_layers_batch_path(monkeypatch):
+def test_car_and_gray_car_stay_separate_layers_batch_path():
     """Same two-layer contract through ``upsert_tracked_detected_batch`` —
     both masks delivered in one batched call still resolve to two distinct
     nodes."""
-    monkeypatch.setenv("WORLD_STATE_DISABLE_PREBAKE_ATTRIBUTION", "1")
     grid = (32, 32)
     graph = _make_seed_graph(grid=grid)
     mask = _square_mask(grid, 10, 10, 6)

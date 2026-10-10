@@ -9,9 +9,6 @@ from maps.sws.graph.model import (
     MapObject,
 )
 from maps.sws.graph.runtime import (
-    PrebakeEvidence,
-    TrackContribution,
-    get_prebake_evidence,
     revoke_track_contribution,
     upsert_detected_centroid_only,
     upsert_tracked_detected,
@@ -21,10 +18,7 @@ from maps.sws.graph.runtime import (
 __all__ = [
     "MapObject",
     "ObjectGraph",
-    "PrebakeEvidence",
-    "TrackContribution",
     "build_object_graph",
-    "get_prebake_evidence",
     "load_graph",
     "revoke_track_contribution",
     "save_graph",

@@ -296,124 +296,9 @@ def load_graph_binary(path_stem: str) -> ObjectGraph:
 # ---------------------------------------------------------------------------
 
 
-def _prebake_evidence_to_dict(ev) -> dict:
-    """Serialize a ``PrebakeEvidence`` instance for ``prebake_evidence.json``.
-
-    Sets are written as sorted lists so the file is diffable across runs.
-    Embeddings stay capped at the in-memory cap because the fold helper
-    enforces it on entry. ``per_track`` carries the lifecycle ledger that
-    the lazy-revoke path subtracts from the aggregate.
-    """
-    return {
-        "confidence_sum": float(ev.confidence_sum),
-        "observation_count": int(ev.observation_count),
-        "attributes": {
-            str(k): {str(val): int(cnt) for val, cnt in v.items()}
-            for k, v in ev.attributes.items()
-        },
-        "embeddings": [[float(x) for x in e] for e in ev.embeddings],
-        "track_ids": sorted(str(t) for t in ev.track_ids),
-        "evidence_refs": [str(r) for r in ev.evidence_refs],
-        "first_seen_t": (None if ev.first_seen_t is None else float(ev.first_seen_t)),
-        "last_seen_t": (None if ev.last_seen_t is None else float(ev.last_seen_t)),
-        "per_track": {
-            str(tid): _track_contribution_to_dict(c) for tid, c in ev.per_track.items()
-        },
-    }
-
-
-def _track_contribution_to_dict(c) -> dict:
-    return {
-        "confidence_sum_added": float(c.confidence_sum_added),
-        "observation_count_added": int(c.observation_count_added),
-        "attribute_increments": {
-            str(k): {str(v): int(n) for v, n in (vc or {}).items()}
-            for k, vc in c.attribute_increments.items()
-        },
-        "evidence_refs_added": [str(r) for r in c.evidence_refs_added],
-        "embeddings_added_count": int(c.embeddings_added_count),
-        "first_added_t": (None if c.first_added_t is None else float(c.first_added_t)),
-        "last_added_t": (None if c.last_added_t is None else float(c.last_added_t)),
-    }
-
-
-def _dict_to_track_contribution(d: dict):
-    from maps.sws.graph.runtime import TrackContribution
-
-    return TrackContribution(
-        confidence_sum_added=float(d.get("confidence_sum_added", 0.0)),
-        observation_count_added=int(d.get("observation_count_added", 0)),
-        attribute_increments={
-            str(k): {str(v): int(n) for v, n in (vc or {}).items()}
-            for k, vc in (d.get("attribute_increments") or {}).items()
-        },
-        evidence_refs_added=[str(r) for r in (d.get("evidence_refs_added") or [])],
-        embeddings_added_count=int(d.get("embeddings_added_count", 0)),
-        first_added_t=(
-            None if d.get("first_added_t") is None else float(d["first_added_t"])
-        ),
-        last_added_t=(
-            None if d.get("last_added_t") is None else float(d["last_added_t"])
-        ),
-    )
-
-
-def _dict_to_prebake_evidence(d: dict):
-    from maps.sws.graph.runtime import PrebakeEvidence
-
-    return PrebakeEvidence(
-        confidence_sum=float(d.get("confidence_sum", 0.0)),
-        observation_count=int(d.get("observation_count", 0)),
-        attributes={
-            str(k): {str(val): int(cnt) for val, cnt in (v or {}).items()}
-            for k, v in (d.get("attributes") or {}).items()
-        },
-        embeddings=[[float(x) for x in e] for e in (d.get("embeddings") or [])],
-        track_ids={str(t) for t in (d.get("track_ids") or [])},
-        evidence_refs=[str(r) for r in (d.get("evidence_refs") or [])],
-        first_seen_t=(
-            None if d.get("first_seen_t") is None else float(d["first_seen_t"])
-        ),
-        last_seen_t=(None if d.get("last_seen_t") is None else float(d["last_seen_t"])),
-        per_track={
-            str(tid): _dict_to_track_contribution(cd)
-            for tid, cd in (d.get("per_track") or {}).items()
-        },
-    )
-
-
-def _save_prebake_evidence_sidecar(graph: ObjectGraph, path_stem: str) -> None:
-    """Write ``{stem}_prebake_evidence.json`` iff the sidecar is non-empty."""
-    bucket = graph.__dict__.get("_prebake_evidence") or {}
-    if not bucket:
-        return
-    doc = {fid: _prebake_evidence_to_dict(ev) for fid, ev in bucket.items()}
-    with open(f"{path_stem}_prebake_evidence.json", "w") as f:
-        _json.dump(doc, f, separators=(",", ":"))
-
-
-def _load_prebake_evidence_sidecar(graph: ObjectGraph, path_stem: str) -> None:
-    """Read ``{stem}_prebake_evidence.json`` if present; silent on absence."""
-    path = f"{path_stem}_prebake_evidence.json"
-    if not os.path.exists(path):
-        return
-    with open(path) as f:
-        doc = _json.load(f)
-    if not isinstance(doc, dict) or not doc:
-        return
-    from maps.sws.graph.runtime import get_prebake_evidence
-
-    bucket = get_prebake_evidence(graph)
-    for fid, d in doc.items():
-        if not isinstance(d, dict):
-            continue
-        bucket[str(fid)] = _dict_to_prebake_evidence(d)
-
-
 def save_graph(graph: ObjectGraph, path_stem: str) -> None:
     """Write the graph to disk in the binary format."""
     save_graph_binary(graph, path_stem)
-    _save_prebake_evidence_sidecar(graph, path_stem)
 
 
 def load_graph(path_stem: str) -> ObjectGraph:
@@ -422,9 +307,7 @@ def load_graph(path_stem: str) -> ObjectGraph:
     nodes_path = f"{path_stem}_nodes.json"
 
     if os.path.exists(npz_path) and os.path.exists(nodes_path):
-        graph = load_graph_binary(path_stem)
-        _load_prebake_evidence_sidecar(graph, path_stem)
-        return graph
+        return load_graph_binary(path_stem)
 
     # An npz without nodes.json carries arrays only: signal absence.
     raise FileNotFoundError(

@@ -17,82 +17,13 @@ geom_compute ops.
 
 from __future__ import annotations
 
-import logging
 import json
-import os
 import time
-from dataclasses import dataclass, field
 from typing import Iterable
 
 import numpy as np
 
-log = logging.getLogger(__name__)
-
 from maps.sws.graph.model import MapObject, ObjectGraph
-
-
-# Cap on embeddings stored per prebake node; bounds the serialized
-# prebake_evidence.json size and the in-memory aggregate at ~16 * embedding_dim
-# floats per node. SAM 3.1 detections rarely contribute embeddings today, but
-# the cap keeps future per-frame DINO-style embeddings from snowballing.
-_PREBAKE_EVIDENCE_EMBEDDING_CAP = 16
-
-
-@dataclass
-class TrackContribution:
-    """Per-track ledger of one track's accumulated fold onto a prebake.
-
-    Every entry in :attr:`PrebakeEvidence.per_track` is the cumulative
-    contribution of one ``track_id`` to the parent prebake across every
-    frame the matcher attributed it to that prebake. The aggregate
-    counters on :class:`PrebakeEvidence` are the sum of all
-    TrackContribution entries; subtracting one entry from the aggregate
-    is what makes a revoke exact.
-    """
-
-    confidence_sum_added: float = 0.0
-    observation_count_added: int = 0
-    attribute_increments: dict[str, dict[str, int]] = field(default_factory=dict)
-    evidence_refs_added: list[str] = field(default_factory=list)
-    embeddings_added_count: int = 0
-    first_added_t: float | None = None
-    last_added_t: float | None = None
-
-
-@dataclass
-class PrebakeEvidence:
-    """SAM evidence aggregated onto a prebake node.
-
-    The prebake's geometry (cells, bbox, centroid, altitude_m, height_m,
-    contour) is authoritative and immutable; this sidecar carries the
-    per-observation signal SAM produces (confidence, attributes,
-    embeddings, track ids) without mutating the MapObject.
-
-    Every fold is also recorded in :attr:`per_track` so a lazy-revoke
-    can subtract the exact contribution of one track from the aggregate
-    counters when the lifecycle state machine in
-    ``maps.search.search_loop`` switches or detaches a track's attribution.
-    """
-
-    confidence_sum: float = 0.0
-    observation_count: int = 0
-    attributes: dict[str, dict[str, int]] = field(default_factory=dict)
-    embeddings: list[list[float]] = field(default_factory=list)
-    track_ids: set[str] = field(default_factory=set)
-    evidence_refs: list[str] = field(default_factory=list)
-    first_seen_t: float | None = None
-    last_seen_t: float | None = None
-    per_track: dict[str, TrackContribution] = field(default_factory=dict)
-
-    @property
-    def confidence(self) -> float:
-        n = self.observation_count
-        return self.confidence_sum / n if n > 0 else 0.0
-
-
-def get_prebake_evidence(graph: ObjectGraph) -> dict[str, PrebakeEvidence]:
-    """Return the per-graph prebake-evidence sidecar, creating it lazily."""
-    return graph.__dict__.setdefault("_prebake_evidence", {})
 
 
 def revoke_track_contribution(
@@ -101,61 +32,12 @@ def revoke_track_contribution(
     *,
     only_fids: Iterable[str] | None = None,
 ) -> list[str]:
-    """Subtract one track's accumulated fold from every prebake it touched.
+    """The prebake fids ``track_id``'s fold was revoked from: always empty,
+    since a detection mints its own node and never folds onto a prebake.
 
-    Walks the per-graph prebake-evidence bucket, pops
-    :class:`TrackContribution` ledger entries for ``track_id``, and
-    subtracts each ledger entry from the parent aggregate counters. The
-    track is removed from :attr:`PrebakeEvidence.track_ids`, the
-    evidence refs the track added are dropped, and the trailing ``N``
-    embeddings (where ``N`` is :attr:`TrackContribution.embeddings_added_count`)
-    are popped from the embeddings list. Empty attribute buckets are
-    pruned.
-
-    Returns the list of prebake fids the track was revoked from. When
-    ``only_fids`` is provided, scoping is limited to those fids; other
-    prebakes the track may have folded onto are left untouched.
-    """
-    bucket = get_prebake_evidence(graph)
-    if not bucket:
-        return []
-    tid = str(track_id)
-    targets = set(only_fids) if only_fids is not None else None
-    revoked: list[str] = []
-    for fid, ev in bucket.items():
-        if targets is not None and fid not in targets:
-            continue
-        contrib = ev.per_track.pop(tid, None)
-        if contrib is None:
-            continue
-        ev.observation_count = max(
-            0, ev.observation_count - contrib.observation_count_added
-        )
-        ev.confidence_sum = max(0.0, ev.confidence_sum - contrib.confidence_sum_added)
-        ev.track_ids.discard(tid)
-        for ref in contrib.evidence_refs_added:
-            try:
-                ev.evidence_refs.remove(ref)
-            except ValueError:
-                pass
-        if contrib.embeddings_added_count > 0:
-            # Embeddings are appended in fold order; pop the trailing N as
-            # the cheapest revocation. The set is unordered for downstream
-            # consumers, so LIFO removal is safe.
-            keep = max(0, len(ev.embeddings) - contrib.embeddings_added_count)
-            del ev.embeddings[keep:]
-        for key, value_counts in list(contrib.attribute_increments.items()):
-            agg = ev.attributes.get(key)
-            if agg is None:
-                continue
-            for value, count in value_counts.items():
-                agg[value] = max(0, agg.get(value, 0) - int(count))
-                if agg[value] == 0:
-                    agg.pop(value, None)
-            if not agg:
-                ev.attributes.pop(key, None)
-        revoked.append(fid)
-    return revoked
+    ponytail: kept only for the attribution lifecycle in search_loop, which
+    still imports it; delete with that caller."""
+    return []
 
 
 # The four M6 color attrs (+ color_rgb) that travel together as ONE
@@ -354,77 +236,10 @@ def upsert_detected_centroid_only(
 # ---------------------------------------------------------------------------
 
 
-def _stamp_dedup_tag(
-    node: MapObject,
-    *,
-    status: str,
-    track_info: dict,
-    prebake_info: dict | None,
-) -> None:
-    """Write the dedup record onto ``node.tags['dedup']`` as JSON. The
-    engine layer reads this back into ``DetectedObject.metadata['dedup']``
-    so downstream audit / dashboard consumers see one canonical schema."""
-    rec = _dedup_record(
-        status=status,
-        track_info=track_info,
-        prebake_info=prebake_info,
-    )
-    node.tags["dedup"] = json.dumps(rec)
-
-
-def _dedup_record(
-    *,
-    status: str,
-    track_info: dict,
-    prebake_info: dict | None,
-) -> dict:
-    """Assemble the production dedup record stamped on the detected node.
-
-    Stamped onto ``MapObject.tags['dedup']`` as JSON so the engine /
-    dashboard / audit tools can inspect every match decision after the
-    fact. ``status`` is one of ``confirmed`` (prebake or detected match),
-    ``new`` (no candidate above threshold), or ``confirmed_track`` (exact
-    track_id reuse).
-    """
-    rec: dict = {"status": status}
-    if prebake_info:
-        rec["match_score"] = float(prebake_info.get("match_score", 0.0))
-        if "candidates" in prebake_info:
-            rec["candidates"] = prebake_info["candidates"]
-        if "top3" in prebake_info:
-            # Lifecycle state machine in maps.search.search_loop reads this to
-            # drive strengthen / hold / switch / detach decisions per track.
-            rec["top3"] = prebake_info["top3"]
-        if "all_attribution_fids" in prebake_info:
-            rec["all_attribution_fids"] = prebake_info["all_attribution_fids"]
-        if status == "confirmed":
-            match: dict = {}
-            for key in (
-                "fid",
-                "prebake_class",
-                "inter",
-                "sam_voxel_count",
-                "prebake_voxel_count",
-                "frac_in_sam",
-                "frac_of_prebake",
-                "reverse_coverage",
-                "z_extent_sam",
-                "z_extent_prebake",
-            ):
-                if key in prebake_info:
-                    match[key] = prebake_info[key]
-            rec["match"] = match
-        if "best_near_miss" in prebake_info and prebake_info["best_near_miss"]:
-            rec["best_near_miss"] = prebake_info["best_near_miss"]
-    elif track_info:
-        if "primary" in track_info:
-            rec["primary"] = track_info["primary"]
-        rec["match_score"] = float(track_info.get("match_score", 0.0))
-        if "candidates" in track_info:
-            rec["candidates"] = track_info["candidates"]
-        if track_info.get("best_near_miss"):
-            rec["best_near_miss"] = track_info["best_near_miss"]
-    return rec
+# The dedup record stamped on a detected node's ``tags['dedup']``: a first
+# sighting, or a repeat re-identified by its exact track_id.
+_DEDUP_NEW = json.dumps({"status": "new"})
+_DEDUP_TRACK = json.dumps({"status": "confirmed_track", "primary": "track_id", "match_score": 1.0})
 
 
 def _cells_from_mask(hm_rows: np.ndarray, hm_cols: np.ndarray) -> np.ndarray:
@@ -517,11 +332,7 @@ def upsert_tracked_detected(
         # ByteTrack-only / uniform-node model: every detection mints its own
         # ``detected_<N>`` node — it never folds onto a prebake. Prebakes and
         # detections coexist as distinct nodes, distinguished only by the
-        # ``provenance`` tag; there is no detection→prebake ``matched_prebake_id``
-        # link and no prebake-evidence fold.
-        prebake_match: str | None = None
-        prebake_match_info: dict | None = None
-
+        # ``provenance`` tag.
         fid = _next_detected_id(graph)
         base_node.id = fid
         base_node.track_id = track_id
@@ -539,13 +350,7 @@ def upsert_tracked_detected(
         base_node.last_seen_t = now
         if evidence_id is not None and evidence_id not in base_node.evidence_refs:
             base_node.evidence_refs.append(evidence_id)
-        base_node.matched_prebake_id = prebake_match
-        _stamp_dedup_tag(
-            base_node,
-            status="new",
-            track_info={},
-            prebake_info=prebake_match_info,
-        )
+        base_node.tags["dedup"] = _DEDUP_NEW
 
         graph.nodes[fid] = base_node
         if graph.objects_by_class:
@@ -592,12 +397,7 @@ def upsert_tracked_detected(
     node.last_seen_t = now
     if evidence_id is not None and evidence_id not in node.evidence_refs:
         node.evidence_refs.append(evidence_id)
-    _stamp_dedup_tag(
-        node,
-        status="confirmed_track",
-        track_info={"primary": "track_id", "match_score": 1.0},
-        prebake_info=None,
-    )
+    node.tags["dedup"] = _DEDUP_TRACK
 
     return existing_fid
 
