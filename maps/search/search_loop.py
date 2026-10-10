@@ -22,7 +22,6 @@ import os
 import threading
 import time
 from collections.abc import Callable
-import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -33,31 +32,6 @@ from maps.search.io.atomic import atomic_write_json
 from maps.search.parse_compile.compiler import MapsCompiler
 from maps.search.pose import RobotPose
 from maps.util.mask_codec import encode_mask_record
-
-
-# ``p0``, ``P3``, ``p0@(393.5, 358.8)`` style peak-id citations the
-# scout may put in its reasoning. The apply-time gate parses these
-# and verifies that every cited peak's world_xy sits within the
-# success radius of the candidate's centroid.
-def _parse_bool(raw: str) -> bool:
-    """Truthy parsing matching the legacy ``=="1"`` checks but a bit
-    more forgiving so ``SEARCH_FOO=true`` works the way humans expect."""
-    return raw.strip().lower() in ("1", "true", "yes", "on")
-
-
-def _env_override(envvar: str, default, parser):
-    """Return ``parser(os.environ[envvar])`` if the env var is set,
-    else ``default``.
-
-    This is the single override primitive for ``SearchLoopConfig``:
-    dataclass defaults are the source of truth, env vars are pure
-    overrides. Use the right ``parser`` for the field type
-    (``int`` / ``float`` / ``_parse_bool`` / ``str``).
-    """
-    raw = os.environ.get(envvar)
-    if raw is None:
-        return default
-    return parser(raw)
 
 
 log = logging.getLogger(__name__)
@@ -78,44 +52,6 @@ log = logging.getLogger(__name__)
 # more pools that might not be in the prior map". SR is the goal; a longer
 # pass is the price of an ambiguous cue, not a fault to be capped.
 _COVER_MAX_STOPS = 1000
-
-
-@dataclass
-class SearchLoopConfig:
-    """The engine's tunable knobs; the field defaults are the contract."""
-
-    # The ``look`` tool: a NON-TERMINAL vision fetch (nadir candidate crops
-    # into the multimodal reasoner) at each per-stop round. It is the ONLY
-    # path that puts an image in front of the model — with it off the reasoner
-    # is entirely text — so it is on by default and ``SEARCH_LOOK_TOOL=0`` is
-    # the off-switch. Only wires on the ortho backend (the renderer is the
-    # upstream crop path).
-    look_tool: bool = True
-
-    @classmethod
-    def from_env(cls) -> "SearchLoopConfig":
-        """Build a config from ``SEARCH_*`` env overrides.
-
-        The dataclass field defaults above are the single source of
-        truth for tuning knobs. ``from_env`` applies the matching env
-        var only when it is set; unset env vars leave the dataclass
-        default in place. This prevents the "double-default" failure
-        mode where a stale literal in this method silently overrides
-        a bumped field default (e.g. raising a deadline at the field
-        site but forgetting to update a duplicate string here).
-
-        Every knob goes through ``_env_override``; unset env vars
-        leave the dataclass default in place.
-        """
-        base = cls()
-        return dataclasses.replace(
-            base,
-            look_tool=_env_override(
-                "SEARCH_LOOK_TOOL",
-                base.look_tool,
-                _parse_bool,
-            ),
-        )
 
 
 @dataclass(frozen=True)
@@ -162,7 +98,6 @@ class SearchLoop:
 
     def __init__(
         self,
-        cfg: SearchLoopConfig,
         world_state,  # WorldState
         *,
         tile_origin_xy: tuple[float, float],
@@ -172,10 +107,9 @@ class SearchLoop:
         sam_concept_setter: Callable[[list[str]], None] | None = None,
         sam_watchlist_setter: Callable[[list[str]], None] | None = None,
         ortho_ground_z_m: float | None = None,
-        rgbd_dir: str | None = None,
+        rgbd_dir: str,
         marker_xy: tuple[float, float] | None = None,
     ):
-        self._cfg = cfg
         self._world_state = world_state
         self._tile_origin_xy = (
             float(tile_origin_xy[0]),
@@ -198,10 +132,8 @@ class SearchLoop:
         # view-square sizing (ortho). ``None`` for backends that
         # don't need it (the perspective picker ignores it).
         self._ortho_ground_z_m = ortho_ground_z_m
-        # Upstream rgbd raster dir (``CITYNAV_NATIVE_RGBD_DIR``) — the ONLY
-        # consumer is the opt-in ``look`` tool's crop renderer
-        # (``_render_candidate_crops``). ``None`` keeps look inert. Passed by the
-        # benchmark so maps.search stays benchmark-agnostic (no import benchmark).
+        # Upstream rgbd raster dir (``CITYNAV_NATIVE_RGBD_DIR``), read only
+        # by the ``look`` crop renderer (``_render_candidate_crops``).
         self._rgbd_dir = rgbd_dir
         #: What THIS RUN has captured, handed in by a live runner
         #: (``benchmarks/flight/run_imagery.RunImagery``): the imagery
@@ -217,17 +149,6 @@ class SearchLoop:
         self._marker_xy = (
             (float(marker_xy[0]), float(marker_xy[1])) if marker_xy else None
         )
-        self._resolve_look_gate(cfg)
-        # Keep the reasoner's system-prompt look legend on the SAME gate as
-        # tool exposure by stamping the resolved 3-way gate onto the run
-        # context the reasoner reads — otherwise the legend would fire on the
-        # env flag alone and could advertise look on a non-citynav backend
-        # where the tool is never exposed.
-        try:
-            if self._compiler is not None:
-                self._compiler.look_enabled = self._look_tool_enabled
-        except Exception:  # noqa: BLE001 — never block ctor on an odd compiler
-            pass
         # World-space tracker (UCMCTrack-core, constant-position). Assigns
         # a stable cross-frame ``track_id`` to per-frame detections so
         # ``_find_track``'s primary exact-id match collapses duplicates,
@@ -572,8 +493,7 @@ class SearchLoop:
 
     def _render_candidate_crops(self, requests: list[dict]) -> list[dict]:
         """The ``look`` renderer (ortho only), handed to the per-stop
-        round as ``look_renderer`` when ``self._look_tool_enabled`` — the
-        pure render and its window/upscale/badge constants live in
+        round as ``look_renderer`` — the pure render and its window/upscale/badge constants live in
         ``look_render``; this binds the loop's tile/raster identity."""
         from maps.search.render.look_render import render_candidate_crops  # noqa: PLC0415
 
@@ -584,35 +504,10 @@ class SearchLoop:
             imagery=self.look_imagery,
         )
 
-    def _resolve_look_gate(self, cfg) -> None:
-        """Set ``_look_tool_enabled``, or raise if look was asked for and
-        cannot be wired.
-
-        The gate is the flag (cfg / ``SEARCH_LOOK_TOOL``) AND the ortho backend
-        AND a raster dir. ``view{crops}`` is the only path that puts an image
-        in front of the reasoner, so a False gate means a text-only run.
-
-        That silence is what this loudness exists for: the tool was off from
-        ~13 to 25 July 2026 and every eval in the window flew a blind reasoner
-        with nothing saying so. Asking for look and not getting it is a startup
-        error now, not a quiet degrade — flying text-only has to be chosen.
-        """
-        want_look = bool(getattr(cfg, "look_tool", False))
-        self._look_tool_enabled = bool(want_look and self._rgbd_dir)
-        if want_look and not self._look_tool_enabled:
-            raise ValueError(
-                "look tool requested but its renderer cannot be wired: "
-                f"rgbd_dir={self._rgbd_dir!r} (needs a path). "
-                "Set SEARCH_LOOK_TOOL=0 to fly the reasoner text-only on "
-                "purpose."
-            )
-
     def _look_audit_dir(self) -> str | None:
         """``<workdir>/flight/look`` — the per-episode look-audit root, keyed by
-        stop_id + call id. ``None`` when look is off or no episode
-        workdir is known (``compiler.workdir`` / ``SEARCH_COMPILE_WORKDIR``)."""
-        if not self._look_tool_enabled:
-            return None
+        stop_id + call id. ``None`` when no episode workdir is known
+        (``compiler.workdir`` / ``SEARCH_COMPILE_WORKDIR``)."""
         wd = getattr(self._compiler, "workdir", None) or os.environ.get(
             "SEARCH_COMPILE_WORKDIR"
         )
@@ -1226,6 +1121,5 @@ def _json_safe(v):
 
 __all__ = [
     "SearchLoop",
-    "SearchLoopConfig",
     "SearchSnapshot",
 ]

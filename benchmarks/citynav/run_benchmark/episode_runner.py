@@ -25,7 +25,6 @@ from maps.perception.sam.detect_client import SamDetectClient
 from maps.search import (
     MapsCompiler,
     SearchLoop,
-    SearchLoopConfig,
 )
 from maps.sws import GridDomain, WorldState
 from maps.search.withhold import withheld
@@ -263,7 +262,6 @@ def run_episode(
 
     search_loop: SearchLoop | None = None
     if compiler is not None:
-        engine_cfg = SearchLoopConfig.from_env()
         # Operator marker mean-xy (admissible CityNav input, ~25 m from the
         # target; NOT the withheld GT). The mission engine resolves the
         # ``marked_region`` viewpoint token against it.
@@ -277,7 +275,6 @@ def run_episode(
             else None
         )
         search_loop = SearchLoop(
-            engine_cfg,
             world_state,
             tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
             tile_name=f"citynav::{assets.map_name}",
@@ -286,10 +283,8 @@ def run_episode(
             sam_concept_setter=sam_concept_setter,
             sam_watchlist_setter=sam_watchlist_setter,
             ortho_ground_z_m=ortho_ground_z_m,
-            # Upstream raster dir for the opt-in ``look`` tool's crop
-            # renderer. Passed as a str so maps.search stays
-            # benchmark-agnostic (no ``import benchmark``); only consumed
-            # when SEARCH_LOOK_TOOL + ortho are both active.
+            # Upstream raster dir for the ``look`` tool's crop renderer,
+            # passed as a str so maps.search stays benchmark-agnostic.
             rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
             marker_xy=_marker_xy,
         )

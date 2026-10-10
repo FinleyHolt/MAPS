@@ -751,12 +751,8 @@ def run_mission_episode(
         seed=seed,
         sensor_description=compiler.sensor_description,
         cancel_event=None,
-        look_enabled=search_loop._look_tool_enabled,
-        look_renderer=(
-            search_loop._render_candidate_crops
-            if search_loop._look_tool_enabled
-            else None
-        ),
+        look_enabled=True,
+        look_renderer=search_loop._render_candidate_crops,
         look_audit_dir=search_loop._look_audit_dir(),
         obs_span_m=obs_span_m,
         # The footprint's SHORT side arms the look coverage gate: pixels

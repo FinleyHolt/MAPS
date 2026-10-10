@@ -74,20 +74,6 @@ def sha256_file(path: str | pathlib.Path) -> str | None:
         return None
 
 
-def _resolved_look_tool() -> bool:
-    """Whether the reasoner will actually be shown images this run.
-
-    Not the env flag: ``search_env_flags`` records ``SEARCH_LOOK_TOOL`` only
-    when the launching shell exported it, so with the tool on by default the
-    flag is absent precisely when the tool is ON. The audit needs the resolved
-    answer, because "did the agent have eyes" is not readable from anything
-    else on the row — a blind run and a seeing run differ in no other field.
-    """
-    from maps.search.search_loop import SearchLoopConfig
-
-    return bool(SearchLoopConfig.from_env().look_tool)
-
-
 def repo_provenance(
     *,
     config_path: str | pathlib.Path | None = None,
@@ -130,7 +116,7 @@ def repo_provenance(
     # finest-grained build fact the endpoint spec measures.
     if served_build is not None:
         prov["served_build"] = served_build
-    prov["look_tool"] = _resolved_look_tool()
+    prov["look_tool"] = True
     return prov
 
 

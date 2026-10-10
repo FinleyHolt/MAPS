@@ -163,7 +163,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
     from maps.perception.geometry.geolocate import TileFrame  # noqa: PLC0415
     from maps.perception.geometry.sensor_spec import resolve_sensor, served_description  # noqa: PLC0415
     from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider  # noqa: PLC0415
-    from maps.search import MapsCompiler, SearchLoop, SearchLoopConfig  # noqa: PLC0415
+    from maps.search import MapsCompiler, SearchLoop  # noqa: PLC0415
     from maps.sws import GridDomain, WorldState  # noqa: PLC0415
 
     cfg = load_config(str(config))
@@ -197,7 +197,6 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
 
     start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.episode_id)
     search_loop = SearchLoop(
-        SearchLoopConfig.from_env(),
         world_state,
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
         tile_name=f"citynav::{assets.map_name}",
@@ -767,7 +766,7 @@ class Mission:
             common = dict(
                 ctx=session.ctx,
                 mission_spec=session.mission_spec,
-                look_renderer=(h.search_loop._render_candidate_crops if h.search_loop._look_tool_enabled else None),
+                look_renderer=h.search_loop._render_candidate_crops,
                 look_audit_dir=h.search_loop._look_audit_dir(),
                 obs_span_m=session.obs_span_m,
                 obs_minor_m=session.obs_minor_m,
@@ -785,7 +784,7 @@ class Mission:
                 seed=seed,
                 sensor_description=h.compiler.sensor_description,
                 cancel_event=self._cancel,
-                look_enabled=h.search_loop._look_tool_enabled,
+                look_enabled=True,
                 diag=self._turn_diag,
                 reasoning_effort=self.reasoning_effort,
                 **common,
