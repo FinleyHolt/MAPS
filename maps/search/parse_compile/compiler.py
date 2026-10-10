@@ -178,7 +178,7 @@ class MapsCompiler:
     # Public entrypoint
     # ------------------------------------------------------------------
 
-    def _resolve_seed_base(self, mission: object | None = None) -> int:
+    def _resolve_seed_base(self) -> int:
         """Resolve the base seed: ``SEARCH_SEED_BASE`` env if set, else a
         wall-clock nanosecond stamp. Per-attempt offsets (retry) and the
         per-reasoner ``+i`` fan-out are applied on top of this."""
@@ -186,8 +186,6 @@ class MapsCompiler:
         if env_seed_base is not None:
             return int(env_seed_base) & 0xFFFFFFFF
         return time.time_ns() & 0xFFFFFFFF
-
-
 
     # ------------------------------------------------------------------
     # Phase helpers (called from compile())

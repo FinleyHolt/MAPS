@@ -786,7 +786,7 @@ def run_mission_episode(
     obs_span_m = session.obs_span_m
     _obs_minor_m = session.obs_minor_m
     _boost = session.boost
-    seed = compiler._resolve_seed_base({"instruction": episode.description}) & 0x7FFFFFFF
+    seed = compiler._resolve_seed_base() & 0x7FFFFFFF
     workdir = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip() or None
     transcript = ConversationLog(
         Path(workdir) / CONVERSATION_JSONL if workdir else None

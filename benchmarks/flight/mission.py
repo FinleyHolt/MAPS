@@ -810,7 +810,7 @@ class Mission:
                 transcript=self.transcript,
                 retask=self._next_tasking,
             )
-            seed = h.compiler._resolve_seed_base({"instruction": instruction}) & 0x7FFFFFFF
+            seed = h.compiler._resolve_seed_base() & 0x7FFFFFFF
             reply, reasoner = run_mission(
                 instruction=instruction,
                 reasoner_url=h.compiler.reasoner_url,
