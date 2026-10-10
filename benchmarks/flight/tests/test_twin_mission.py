@@ -64,7 +64,7 @@ def calcity(tmp_path, monkeypatch):
 
     for name, value in (("CALCITY_ROOT", root), ("DATA_DIR", root / "data"), ("SPLITS_DIR", splits),
                         ("OBJECTS_JSON", root / "data" / "cityrefer" / "objects.json"), ("TILES_DIR", tiles),
-                        ("RGBD_DIR", root / "data" / "rgbd"), ("CALCITY_NATIVE_RGBD_DIR", rgbd)):
+                        ("CALCITY_NATIVE_RGBD_DIR", rgbd)):
         monkeypatch.setattr(paths, name, value)
     for name, value in _replacements().items():
         monkeypatch.setattr(shared_paths, name, getattr(shared_paths, name))

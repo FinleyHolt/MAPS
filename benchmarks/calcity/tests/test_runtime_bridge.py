@@ -75,7 +75,7 @@ def restores_shared_paths():
     from benchmarks.citynav import paths as shared_paths
 
     names = list(_replacements())
-    assert len(names) >= 15, "the bridge lost names -- this restore is derived"
+    assert len(names) >= 11, "the bridge lost names -- this restore is derived"
     before = {name: getattr(shared_paths, name) for name in names}
     try:
         yield shared_paths
@@ -165,8 +165,8 @@ def test_bridge_covers_every_shared_paths_name():
     }
     rebound = set(_replacements())
     # Vacuity floor: the scan and the bridge both carry a real surface.
-    assert len(public) >= 17, f"scan found only {sorted(public)}"
-    assert len(rebound) >= 15
+    assert len(public) >= 16, f"scan found only {sorted(public)}"
+    assert len(rebound) >= 11
     uncovered = public - rebound - _BENCHMARK_INDEPENDENT
     assert not uncovered, (
         f"benchmarks.citynav.paths grew {sorted(uncovered)} and the bridge does "

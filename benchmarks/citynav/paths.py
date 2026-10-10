@@ -5,7 +5,7 @@ HPC without edits:
 
 - ``SEARCH_CITYNAV_DATA`` (preferred) or ``CITYNAV_ROOT`` for the dataset
   root (the ``citynav-arxiv`` checkout: ``data/citynav/*.json``,
-  ``data/cityrefer/*``, ``data/rgbd/*``, ``raw_ply/*``).
+  ``data/cityrefer/*``, ``data/rgbd_upstream/*``).
 - ``SEARCH_CITYNAV_TILES`` for the prebaked feature-graph tile sidecars
   (defaults to ``<repo>/tiles/citynav_2m_osmv3/``, the OSM-only bake that
   is the tile source of truth).
@@ -65,15 +65,10 @@ SPLITS_DIR = (
     .resolve()
 )
 OBJECTS_JSON = DATA_DIR / "cityrefer" / "objects.json"
-RGBD_DIR = DATA_DIR / "rgbd"
 
-# Upstream CityNav prebaked nadir rasters for the byte-faithful
-# ``observation_backend: ortho`` path. Kept in a SEPARATE dir from
-# ``RGBD_DIR`` because the upstream ``<map>.png`` (0.1 m/px RGB ortho) share
-# filenames with this repo's own ``RGBD_DIR/<map>.png`` placeholders (1 m/px
-# mean-RGB, used by the existing FlightSim/raster path). Generate with
-# ``benchmarks/citynav/data_prep/rasterize_citynav_native.sh``. Override with
-# ``SEARCH_CITYNAV_RGBD_DIR``.
+# Upstream CityNav's nadir rasters (0.1 m/px), the imagery the observation
+# crops. Generate with ``benchmarks/citynav/data_prep/rasterize_citynav_native.sh``.
+# Override with ``SEARCH_CITYNAV_RGBD_DIR``.
 CITYNAV_NATIVE_RGBD_DIR = (
     Path(
         _env_value(
@@ -143,71 +138,15 @@ def split_path(split: str) -> Path:
     return SPLITS_DIR / SPLIT_FILES[split]
 
 
-def rgbd_png(map_name: str) -> Path:
-    """Rasterized top-down semantic ortho for a SensatUrban block."""
-    return RGBD_DIR / f"{map_name}.png"
-
-
-def rgbd_tiff(map_name: str) -> Path:
-    """Height-map (depth) ortho for a SensatUrban block."""
-    return RGBD_DIR / f"{map_name}.tiff"
-
-
 def tile_stem(map_name: str) -> str:
     """Stem path for the prebaked feature-graph sidecar (no suffix)."""
     return str(TILES_DIR / map_name)
 
 
-# Healthy SensatUrban PLYs run ~30-90 MB; the corrupt stubs upstream
-# rasterize.py blacklists are 3-4 MB. 10 MB cleanly separates the two
-# (and admits cambridge_block_32 at ~37 MB, which the older 100 MB guard
-# was silently rejecting).
-_RAW_PLY_MIN_BYTES = 10_000_000
-
-# Mirrors the hardcoded skip in upstream CityNav rasterize.py:97. Of these
-# three, blocks 0 and 1 also fail the size guard (~3-4 MB), but block_34's
-# PLY weighs in at ~38 MB so it would otherwise be admitted. Listing all
-# three keeps the policy explicit and resilient to PLY-size drift.
-_RAW_PLY_BLACKLIST = frozenset(
-    {"cambridge_block_0", "cambridge_block_1", "cambridge_block_34"}
-)
-
-
-def raw_ply(map_name: str) -> Path | None:
-    """Return the raw SensatUrban colored PLY for ``map_name`` if one exists.
-
-    CityNav's own demo videos render from these PLYs via Potree. Layout::
-
-        $CITYNAV_ROOT/raw_ply/<block>.ply
-        $CITYNAV_ROOT/raw_ply/<split>/<block>.ply
-        $CITYNAV_ROOT/raw_ply_fast/<block>.ply
-
-    Returns ``None`` when no complete file is on disk — partial ``.part``
-    stubs (mid-download) are ignored by the size guard.
-    """
-    if map_name in _RAW_PLY_BLACKLIST:
-        return None
-    candidates = [
-        CITYNAV_ROOT / "raw_ply" / f"{map_name}.ply",
-        CITYNAV_ROOT / "raw_ply" / "train" / f"{map_name}.ply",
-        CITYNAV_ROOT / "raw_ply" / "test" / f"{map_name}.ply",
-        CITYNAV_ROOT / "raw_ply_fast" / f"{map_name}.ply",
-    ]
-    for p in candidates:
-        if p.exists() and p.stat().st_size > _RAW_PLY_MIN_BYTES:
-            return p
-    return None
-
-
 def assert_available() -> None:
-    """Fail loudly if the core CityNav JSONs aren't fetched.
-
-    The rasterized RGBD tiles are optional for planning — the adapter falls
-    back to an open-terrain grid when absent — but the stepwise runner
-    (`run_benchmark/`) needs them for observations. We only hard-require the
-    splits + objects.json here; observation.py enforces RGBD presence
-    lazily when loaded.
-    """
+    """Fail loudly if the core CityNav JSONs (the splits and
+    ``objects.json``) aren't fetched. The rasters are checked where they are
+    read."""
     missing = [p for p in (SPLITS_DIR, OBJECTS_JSON) if not p.exists()]
     if missing:
         recipe = (

@@ -67,16 +67,12 @@ def _replacements() -> dict[str, object]:
         "DATA_DIR": paths.DATA_DIR,
         "SPLITS_DIR": paths.SPLITS_DIR,
         "OBJECTS_JSON": paths.OBJECTS_JSON,
-        "RGBD_DIR": paths.RGBD_DIR,
         "CITYNAV_NATIVE_RGBD_DIR": paths.CALCITY_NATIVE_RGBD_DIR,
         "TILES_DIR": paths.TILES_DIR,
         "SUCCESS_CRITERION": paths.SUCCESS_CRITERION,
         "SPLIT_FILES": paths.SPLIT_FILES,
         "split_path": paths.split_path,
-        "rgbd_png": paths.rgbd_png,
-        "rgbd_tiff": paths.rgbd_tiff,
         "tile_stem": paths.tile_stem,
-        "raw_ply": paths.raw_ply,
         "assert_available": paths.assert_available,
     }
 

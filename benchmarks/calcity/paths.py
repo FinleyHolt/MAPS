@@ -38,7 +38,6 @@ CALCITY_ROOT = _env_path(
 DATA_DIR = CALCITY_ROOT / "data"
 SPLITS_DIR = _env_path("SEARCH_CALCITY_SPLITS", PACKAGE_ROOT / "data")
 OBJECTS_JSON = DATA_DIR / "cityrefer" / "objects.json"
-RGBD_DIR = DATA_DIR / "rgbd"
 CALCITY_NATIVE_RGBD_DIR = _env_path(
     "SEARCH_CALCITY_RGBD_DIR", DATA_DIR / "rgbd_upstream"
 )
@@ -81,22 +80,8 @@ def split_path(split: str) -> Path:
     return SPLITS_DIR / SPLIT_FILES[split]
 
 
-def rgbd_png(map_name: str) -> Path:
-    return RGBD_DIR / f"{map_name}.png"
-
-
-def rgbd_tiff(map_name: str) -> Path:
-    return RGBD_DIR / f"{map_name}.tiff"
-
-
 def tile_stem(map_name: str) -> str:
     return str(TILES_DIR / map_name)
-
-
-def raw_ply(map_name: str) -> None:
-    """Cal City is a 2D imagery world and has no SensatUrban PLY source."""
-    del map_name
-    return None
 
 
 def assert_available() -> None:
