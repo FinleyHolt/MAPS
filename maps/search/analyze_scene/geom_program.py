@@ -4174,7 +4174,6 @@ def run_program(cands, anchors, program, seed_results=None,
             # Resolved once, joined onto rows below; skipped on empty items.
             frame_arg = a.get("frame")
             frame_join: dict = {}
-            frame_cols: list = []
             frame_basis: tuple | None = None
             frame_poly: list | None = None
             frame_arcs: list | None = None
@@ -4227,13 +4226,11 @@ def run_program(cands, anchors, program, seed_results=None,
                         + _sig_suffix())
                 fr = None
                 _geo_view = None
-                view_frag = ""
-                weak_side = False
                 if f_along is not None:
                     # THE CHART: travel along the line; 'toward' declares
                     # the direction (+off = right of the declared travel),
-                    # else the stored end0->end1 rides and the receipt
-                    # SAYS it is undeclared.
+                    # else the stored end0->end1 order rides, an arbitrary
+                    # property of the bake that earns no side columns.
                     _lab0, a_node = _set_label_node(f_along, "along")
                     poly = None
                     if (isinstance(f_along, (list, tuple)) and len(f_along) >= 2
@@ -4265,15 +4262,9 @@ def run_program(cands, anchors, program, seed_results=None,
                         poly, _ = G.orient_polyline_toward(poly, _dtw)
                         _dl = (_dtw if _dcomp
                                else _set_label_node(f_toward, "toward")[0])
-                        _dir_frag = f", travel TOWARD {_dl}"
                         # The model said which way it is going, so left/right
                         # of that travel is a claim it made and keeps.
                         frame_declared = True
-                    else:
-                        # Travel falls back to the stored end0->end1 order, an
-                        # arbitrary property of the bake: no side columns.
-                        _dir_frag = (", travel direction UNDECLARED "
-                                     "(toward:<ref> declares it)")
                     structured, f_receipt = G.frame_polyline(items, poly)
                     if f_receipt.get("error"):
                         raise ProgramError(
@@ -4281,24 +4272,15 @@ def run_program(cands, anchors, program, seed_results=None,
                             f"{_sig_suffix()}")
                     frame_poly = poly
                     frame_arcs = G._arc_lengths(poly)
-                    frame_cols = [f"along {flab}"]
-                    _a0 = frame_poly[0]
                     if _geo is not None:
                         _geo["chart"] = {
                             "label": flab,
                             "pts": [_geo_pt(q) for q in frame_poly],
-                            "end0_xy": _geo_pt(_a0),
+                            "end0_xy": _geo_pt(frame_poly[0]),
                             "travel": {
                                 "declared": f_toward is not None,
                                 "toward_label": (_dl if f_toward is not None
                                                  else None)}}
-                    view_frag = (
-                        f"{flab}: 'along {flab}' = meters along it "
-                        f"(0 = its ({_a0[0]:.0f},{_a0[1]:.0f}) end"
-                        f"{_dir_frag}), "
-                        f"'left of/right of {flab}' = lateral meters on "
-                        f"that side of the travel; 'distance to {flab}' = "
-                        f"either side)")
                 elif f_toward is not None and f_ref is None:
                     # Viewer form: any mask fills either slot (class-blind);
                     # toward may be a compass word. A slot whose node carries
@@ -4326,19 +4308,16 @@ def run_program(cands, anchors, program, seed_results=None,
                     _fxs = [it["xy"][0] for it in items]
                     _fys = [it["xy"][1] for it in items]
                     _pool_c = [sum(_fxs) / len(_fxs), sum(_fys) / len(_fys)]
-                    _vantage = False
                     if f_from is not None:
                         _fcl = _cline(_f_node)
                         if _fcl is not None:
                             _cp = (_pool_c if _compass
                                    else as_point(f_toward))
                             fp = G.polyline_nearest_point(_fcl, _cp)
-                            _vantage = True
                         else:
                             fp = as_point(f_from)
                     else:
-                        # vantage defaults to the pool centroid (stated in
-                        # the receipt); a compass frame needs no vantage.
+                        # the vantage defaults to the pool centroid.
                         fp = _pool_c
                     if _compass:
                         tw = f_toward.strip().lower()
@@ -4346,7 +4325,6 @@ def run_program(cands, anchors, program, seed_results=None,
                         _tcl = _cline(_t_node)
                         tw = (G.polyline_nearest_point(_tcl, fp)
                               if _tcl is not None else as_point(f_toward))
-                        _vantage = _vantage or _tcl is not None
                     fr = G.frame(items, (fp, tw), "viewer")
                     if _geo is not None:
                         _geo_view = {
@@ -4357,13 +4335,6 @@ def run_program(cands, anchors, program, seed_results=None,
                             "from_label": _fl}
                     if flab is None:
                         flab = f"{_fl}_{_tl}" if _fl else _tl
-                    _span = (fr.get("frame") or {}).get("span_m")
-                    view_frag = (f"looking at {_tl} from "
-                                 f"{_fl or 'the pool center'}"
-                                 + (f"; span {_span}m" if _span is not None
-                                    else "")
-                                 + (" (line slots stand at the nearest "
-                                    "centerline point)" if _vantage else ""))
                 elif isinstance(f_ref, str) and f_ref.strip().lower() == "auto":
                     if f_toward is not None:
                         raise ProgramError(
@@ -4377,7 +4348,6 @@ def run_program(cands, anchors, program, seed_results=None,
                             + _FRAME_FORMS + _sig_suffix())
                     fr = G.frame(items, None, "auto")
                     flab = flab or "auto"
-                    view_frag = "no declared view (+vx = the pool's own axis, east-ward)"
                 else:
                     # Reference form: an explicit 'side' declares the view
                     # about the reference's centre (its mask centroid, else
@@ -4430,22 +4400,6 @@ def run_program(cands, anchors, program, seed_results=None,
                             refpt = as_point(f_ref)
                         flab = flab or _lab0
                         fr = G.frame(items, refpt, "relative", f_side)
-                        if not fr.get("error"):
-                            # Premortem disclosure: a reference whose footprint
-                            # holds most of the pool, or whose point sits
-                            # INSIDE the pool's spread, orients a side weakly
-                            # (a receipt fact, never a gate).
-                            _m = (f_node or {}).get("mask") if isinstance(
-                                f_node, dict) else None
-                            if _m:
-                                _in = int(G.mask_contains(
-                                    G.mask_geom(_m),
-                                    [it["xy"] for it in items]).sum())
-                                weak_side = 2 * _in > len(items)
-                            if not weak_side and len(items) >= 3:
-                                _hull = G._convex_hull(
-                                    [it["xy"] for it in items])
-                                weak_side = G.point_in_polygon(refpt, _hull)
                     elif poly is not None:
                         # a line with no side is the CHART -- its name is
                         # 'along' (the arg says what it does); no alias.
@@ -4490,17 +4444,6 @@ def run_program(cands, anchors, program, seed_results=None,
                             "span_m": _fmeta.get("span_m"),
                             "side": frame_arg.get("side"),
                             **(_geo_view or {})}
-                    frame_cols = []
-                    if _fmeta.get("frame_type") == "relative":
-                        # the self-check echo: the declared reference read
-                        # back in the view it fixed, as WORDS.
-                        rox, roy = fr.get("reference_op") or (0.0, 0.0)
-                        if abs(rox) >= abs(roy):
-                            _w = "RIGHT" if rox >= 0 else "LEFT"
-                            view_frag = f"{flab} {abs(rox):.0f} m to your {_w}"
-                        else:
-                            _w = "AHEAD" if roy >= 0 else "BEHIND"
-                            view_frag = f"{flab} {abs(roy):.0f} m {_w}"
                 for rec in structured:
                     key = rec.get("fid") or (round(rec["xy"][0], 2),
                                              round(rec["xy"][1], 2))
