@@ -52,8 +52,6 @@ class SearchSnapshot:
     confirmed_target_xy: tuple[float, float] | None
     # Flight step the commit bound at. ``None`` = nothing flew.
     lock_step: int | None
-    # Which path bound the commit; the mission binds ``final_flight``.
-    commit_bind_phase: str | None
 
 
 @dataclass
@@ -73,9 +71,6 @@ class _State:
     # queued/active boosts, and the addressable pending-stop registry
     # (qstop_N). None until the first concept declaration arms it.
     perception_director: Any = None
-    # Which path bound the final commit (instrument). The mission binds
-    # ``final_flight``; a run that flew nothing leaves it None.
-    commit_bind_phase: str | None = None
     # Prior-color enrichment frames that raised this episode; the warning
     # prints on the first and every 50th.
     prior_enrich_fails: int = 0
@@ -725,7 +720,6 @@ class SearchLoop:
             return SearchSnapshot(
                 confirmed_target_xy=s.confirmed_target_xy,
                 lock_step=s.lock_step,
-                commit_bind_phase=s.commit_bind_phase,
             )
 
 

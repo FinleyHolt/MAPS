@@ -358,15 +358,6 @@ def run_episode(
 
     t_start = time.monotonic()
 
-    # The block frame and the rig, as every row of this attempt carries them.
-    bounds_xyxy = [
-        float(assets.bounds.x_min),
-        float(assets.bounds.y_min),
-        float(assets.bounds.x_max),
-        float(assets.bounds.y_max),
-    ]
-    sensor_row = sensor.to_dict() if sensor is not None else None
-
     steps_taken = 0
 
     # The episode takeoff pose, snapshotted before the mission moves the
@@ -473,9 +464,7 @@ def run_episode(
             _scores["committed_fid"] = None
             _scores["committed_provenance"] = None
             _scores["committed_xy"] = None
-            _scores["commit_to_target_m"] = None
             _scores["commit_would_score"] = None
-            _scores["commit_step"] = None
             _scores["sam_tiles_failed"] = int(getattr(perception, "sahi_tiles_failed", 0))
             _scores["mission"] = {
                 "flights_flown": 0,
@@ -491,8 +480,6 @@ def run_episode(
                 "pred_xy": list(_pred_xy),
                 "final_pos_xy": list(_pred_xy),
                 "visited_xy": [list(p) for p in _pos_traj],
-                "bounds": bounds_xyxy,
-                "sensor": sensor_row,
                 "metrics": _scores,
             }
         steps_taken = synthesize_compliant_trajectory(
@@ -600,13 +587,9 @@ def run_episode(
                 _inv,
                 _ne_pred,
             )
-    # NOTE: ``referent_bucket`` is a NOISY TEXT PROXY (regex over the
-    # description; matches "car" anywhere, so ~23% of building targets that
-    # merely mention a nearby car are mislabeled "car"). The AUTHORITATIVE
-    # target class is ``target_object_type`` (CityRefer GT, emitted by the
-    # perception/discernment block below). Kept under both names so the proxy
-    # is never mistaken for ground truth; downstream should prefer
-    # ``target_object_type`` and treat ``referent_bucket*`` as a text heuristic.
+    # ``referent_bucket`` is a NOISY TEXT PROXY (regex over the description;
+    # matches "car" anywhere, so ~23% of building targets that merely mention
+    # a nearby car are mislabeled "car").
     scores["referent_bucket"] = classify_referent(episode.description)
     scores["steps_taken"] = steps_taken
     scores["compile_s"] = round(compile_s, 2)
@@ -643,59 +626,10 @@ def run_episode(
         if mission_out is not None
         else None
     )
-    # The acquisition record (clause_coverage's read), off the mission
-    # reasoner itself. Written ONLY when the mission ran: an absent key is
-    # "instrument not present", which the reader must never conflate with
-    # a measured empty.
-    if mission_out is not None and "evidence_columns" in mission_out:
-        scores["evidence_columns"] = list(mission_out["evidence_columns"])
-    # Which branch bound the commit. The mission has exactly one --
-    # "final_flight" -- so this is a tripwire: any other value (or None on a
-    # flown episode) means something other than the last flight bound it.
-    scores["bind_phase"] = (
-        getattr(snap, "commit_bind_phase", None) if snap is not None else None
-    )
-    # PERCEPTION vs DISCERNMENT diagnostic. Per the anti-cheat protocol the
-    # dynamic target classes (Car/Bike) are NOT in the prebake graph, so a
-    # car target's GT is committable only if SAM detected that car in flight.
-    # For each MISS we want to know: was a target-CLASS detection present near
-    # the GT in the runtime graph? perception-limited (no target-class
-    # detection near GT -> could not be chosen) vs discernment-limited (one
-    # WAS there -> reasoner committed elsewhere). We emit the raw fields here
-    # and classify offline from episodes.jsonl; the split is sharpest for the
-    # Car/Bike buckets (structural targets always have a committable prior).
-    #
-    # The class MUST come from the target object's CityRefer ``object_type``
-    # (scoring-side GT, admissible like target_xy), NOT classify_referent on
-    # the description: the latter regex-matches "car" anywhere and mislabels
-    # ~23% of building targets ("the house with a red car in front") as car.
-    #   target_object_type: true CityRefer class of the GT target object
-    #   target_class_for_diag: the open-vocab label the counters counted
-    #   nearest_target_class_det_m: dist to nearest same-class detection
-    #   n_target_class_dets: count of same-class detections anywhere
-    #
-    # The counters are written ONLY when the diagnostic ARMED. Hardcoding
-    # them to 0/None would make every episode the diagnostic skipped read as
-    # a measured perception failure. An absent key is
-    # "instrument not present" to every reader (discernment.band -> the
-    # ``unrecorded`` bucket, episode_signal -> the ``class`` family absent
-    # from ``recorded``), which is the fact.
-    _target_object_type = None
-    try:
-        _tids = set(episode.target_object_ids or [])
-        if _tids:
-            for _o in objects_by_map.get(episode.map_name, []) or []:
-                if getattr(_o, "id", None) in _tids:
-                    _target_object_type = getattr(_o, "object_type", None)
-                    break
-    except Exception:  # noqa: BLE001
-        _target_object_type = None
-    scores["target_object_type"] = _target_object_type
-
     # SELECTION CEILING (decouples "picked the right place" from "the drone
     # physically reached it within the action budget"). ``committed_xy`` is
-    # the last flight's target (snap.confirmed_target_xy); ``commit_to_target_m``
-    # is its error vs ground truth; ``commit_would_score`` is True iff that
+    # the last flight's target (snap.confirmed_target_xy); ``commit_would_score``
+    # is True iff that
     # committed location itself SCORES under this bench's mask -- inside the
     # target's footprint where that is the criterion, within the success
     # radius where the ring is -- i.e. the episode
@@ -716,7 +650,6 @@ def run_episode(
             float(_committed_xy[1]) - episode.target_xy[1],
         )
         scores["committed_xy"] = [float(_committed_xy[0]), float(_committed_xy[1])]
-        scores["commit_to_target_m"] = round(_cmt, 1)
         if _criterion == "shape":
             from benchmarks.citynav.eval import score_precise
 
@@ -731,16 +664,7 @@ def run_episode(
             scores["commit_would_score"] = bool(_cmt <= cfg.success_radius_m)
     else:
         scores["committed_xy"] = None
-        scores["commit_to_target_m"] = None
         scores["commit_would_score"] = None
-    # (map-gap vs true-recall split is derived offline from the prebaked
-    # FOOTPRINTS -- a node's centroid can sit >R from a GT on its own
-    # footprint, so a centroid-based in-runner emit would mislabel large
-    # buildings as map-gap. Footprint distance is computed offline against
-    # the static per-tile features.json.)
-    # commit_step: scout-fired step (preserves longitudinal score
-    # comparability with pre-refactor traces).
-    scores["commit_step"] = snap.lock_step if snap is not None else None
     # SAHI tiles the segmenter could not answer: their objects are missing
     # from those frames, which the episode survives.
     scores["sam_tiles_failed"] = int(getattr(perception, "sahi_tiles_failed", 0))
@@ -754,8 +678,6 @@ def run_episode(
         "pred_xy": list(record_pred_xy),
         "final_pos_xy": list(final_pos_xy),
         "visited_xy": [list(p) for p in state.visited_xy],
-        "bounds": bounds_xyxy,
-        "sensor": sensor_row,
         "metrics": scores,
     }
 

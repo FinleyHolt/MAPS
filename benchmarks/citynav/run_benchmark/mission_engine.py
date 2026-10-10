@@ -489,10 +489,7 @@ def fly_one(
             heading_deg=new_heading,
         )
     )
-    feature_tour.cursor = len(feature_tour.viewpoints)
-    _write_tour_cursor(
-        feature_tour, step_idx, pose_xy=state.pose_xy, heading_deg=state.heading_deg
-    )
+    _write_tour_cursor(feature_tour)
 
     report: dict = {
         "stop_id": stop_id,
@@ -732,7 +729,7 @@ def run_mission_episode(
         Path(workdir) / CONVERSATION_JSONL if workdir else None
     )
     diag: dict = {}
-    reply, _reasoner = run_mission(
+    reply, _ = run_mission(
         instruction=episode.description,
         ctx=ctx,
         mission_spec=mission_spec,
@@ -765,7 +762,6 @@ def run_mission_episode(
                 float(last["resolved_xy"][1]),
             )
             s2.lock_step = int(last["step_idx"])
-            s2.commit_bind_phase = "final_flight"
         state.belief_snapshot = search_loop.snapshot()
         log.info(
             "mission commit: fid=%s xy=%s flights=%d ended_by=%s",
@@ -796,12 +792,4 @@ def run_mission_episode(
         "flights": flights,
         "reply": reply,
         "feature_tour": feature_tour,
-        # The episode's acquisition record: every evidence-column name the
-        # mission's programs attached, read off the ONE mission reasoner.
-        # The round era unioned this over state.reasoners; the mission
-        # reasoner never registers there, so the old read reported a fake
-        # empty on every mission row (clause_coverage's confident 0/850).
-        "evidence_columns": sorted(
-            str(c) for c in getattr(_reasoner, "evidence_columns", None) or ()
-        ),
     }
