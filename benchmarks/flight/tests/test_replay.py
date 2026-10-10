@@ -141,22 +141,21 @@ def _cdr_image(jpeg: bytes) -> bytes:
     return out
 
 
-def test_the_ring_reads_a_recording_at_the_spill_rate_posed_by_its_own_fixes_and_up_to_its_clock(tmp_path):
+def _recording(path, t0, chunk_size=1 << 20):
+    """Five seconds at 10 Hz of fixes and camera frames, flying north at 80 m/s; the frames' JPEGs by sequence."""
     from mcap.writer import Writer
 
     from benchmarks.flight import recorded_ring as RR
 
-    t0 = 1_800_000_000 * 10**9
-    path = tmp_path / "sensors.mcap"
     jpegs = {}
     with path.open("wb") as fh:
-        w = Writer(fh)
+        w = Writer(fh, chunk_size=chunk_size)
         w.start()
         js = w.register_schema(name="doc", encoding="jsonschema", data=b"{}")
         img = w.register_schema(name="sensor_msgs/msg/CompressedImage", encoding="ros2msg", data=b"")
         pvt = w.register_channel(topic=RR.TOPIC_PVT, message_encoding="json", schema_id=js)
         cam = w.register_channel(topic=RR.TOPIC_CAMERA, message_encoding="cdr", schema_id=img)
-        for k in range(50):                       # five seconds at 10 Hz, flying north at 80 m/s
+        for k in range(50):
             t = t0 + k * 10**8
             fix = {"lat": 35.0 + k * 8.0 / 111_320.0, "lon": -118.0, "altitudeMslMeters": 1500.0,
                    "altitudeHaeMeters": 1470.0, "speedMps": 80.0, "trackDeg": 0.0, "accuracyMeters": 0.5,
@@ -167,6 +166,15 @@ def test_the_ring_reads_a_recording_at_the_spill_rate_posed_by_its_own_fixes_and
             jpegs[k] = buf.getvalue()
             w.add_message(cam, log_time=t + 1, publish_time=t + 1, data=_cdr_image(jpegs[k]), sequence=k)
         w.finish()
+    return jpegs
+
+
+def test_the_ring_reads_a_recording_at_the_spill_rate_posed_by_its_own_fixes_and_up_to_its_clock(tmp_path):
+    from benchmarks.flight import recorded_ring as RR
+
+    t0 = 1_800_000_000 * 10**9
+    path = tmp_path / "sensors.mcap"
+    jpegs = _recording(path, t0)
     ring = RR.RecordedRing(path, start_ns=t0, end_ns=t0 + 5 * 10**9)
     assert [r["seq"] for r in ring.rows] == [0, 5, 10, 15, 20, 25, 30, 35, 40, 45]
     assert ring.index() == []
@@ -196,3 +204,21 @@ def test_the_recorded_reasoner_settings_stand_only_in_a_forced_replay(monkeypatc
     R._arm_env(rec, forced=True)
     assert os.environ["SEARCH_COMPACT_TOKENIZER_NAME"] == "recorded/tok"
     assert os.environ["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.9"
+
+
+def test_a_torn_recording_serves_a_frame_from_its_own_chunk_without_reading_from_the_top(tmp_path, monkeypatch):
+    from benchmarks.flight import recorded_ring as RR
+
+    t0 = 1_800_000_000 * 10**9
+    path = tmp_path / "sensors.mcap"
+    jpegs = _recording(path, t0, chunk_size=2048)
+    data = path.read_bytes()
+    path.write_bytes(data[: int(len(data) * 0.7)])          # the summary and footer torn off
+    ring = RR.RecordedRing(path, start_ns=t0, end_ns=t0 + 5 * 10**9)
+    assert [r["seq"] for r in ring.rows][:3] == [0, 5, 10]
+
+    def streamed(*a, **k):
+        raise AssertionError("frame() streamed the recording from the top")
+
+    monkeypatch.setattr(RR, "messages", streamed)
+    assert ring.frame(10)[0] == jpegs[10]

@@ -82,6 +82,58 @@ def messages(path: Path, topics: list[str], start_ns: int | None = None, end_ns:
             return
 
 
+def _indexed(path: Path) -> bool:
+    """True when the file carries a chunk index, so a window is a seek."""
+    from mcap.exceptions import McapError  # noqa: PLC0415
+    from mcap.reader import make_reader  # noqa: PLC0415
+
+    with Path(path).open("rb") as fh:
+        try:
+            summary = make_reader(fh).get_summary()
+        except (McapError, ValueError, EOFError, struct.error):
+            return False
+    return bool(summary and summary.chunk_indexes)
+
+
+def _chunked_camera(path: Path, start_ns: int, end_ns: int) -> Iterator[tuple[Any, int | None]]:
+    """``(message, chunk offset)`` for every camera message in ``[start_ns,
+    end_ns)``, read record by record from the top to the first torn record:
+    the offset is where the chunk holding the message starts (None for a
+    message outside any chunk), so one frame is re-read from its chunk alone."""
+    from mcap.exceptions import McapError  # noqa: PLC0415
+    from mcap.records import Channel, Chunk, Message  # noqa: PLC0415
+    from mcap.stream_reader import StreamReader, breakup_chunk  # noqa: PLC0415
+
+    cameras: set[int] = set()
+    with Path(path).open("rb") as fh:
+        records = iter(StreamReader(fh, emit_chunks=True).records)
+        while True:
+            at = fh.tell()
+            try:
+                record = next(records)
+            except (StopIteration, McapError, ValueError, EOFError, struct.error):
+                return
+            inner = breakup_chunk(record) if isinstance(record, Chunk) else [record]
+            for r in inner:
+                if isinstance(r, Channel) and r.topic == TOPIC_CAMERA:
+                    cameras.add(r.id)
+                elif isinstance(r, Message) and r.channel_id in cameras and start_ns <= r.log_time < end_ns:
+                    yield r, (at if isinstance(record, Chunk) else None)
+
+
+def _message_in_chunk(path: Path, offset: int, log_time: int):
+    """The camera message stamped ``log_time`` in the chunk starting at ``offset``, or None."""
+    from mcap.records import Chunk, Message  # noqa: PLC0415
+    from mcap.stream_reader import StreamReader, breakup_chunk  # noqa: PLC0415
+
+    with Path(path).open("rb") as fh:
+        fh.seek(offset)
+        chunk = next(iter(StreamReader(fh, skip_magic=True, emit_chunks=True).records))
+    if not isinstance(chunk, Chunk):
+        return None
+    return next((r for r in breakup_chunk(chunk) if isinstance(r, Message) and r.log_time == log_time), None)
+
+
 def json_docs(path: Path, topic: str, start_ns=None, end_ns=None) -> Iterator[tuple[int, dict]]:
     """``(log_time, doc)`` for every JSON document on ``topic`` in the window."""
     for _channel, message in messages(path, [topic], start_ns, end_ns):
@@ -279,8 +331,14 @@ class RecordedRing:
                 self.track.add_attitude(t_ns / 1e9, doc)
         #: ``{"seq", "log_time", "t_host", "pose"}`` per frame the ring kept, oldest first.
         self.rows: list[dict[str, Any]] = []
+        #: A torn recording's chunk offset per kept frame: frame() re-reads that chunk alone.
+        self._chunk_at: dict[int, int] = {}
+        if _indexed(self.path):
+            camera = ((m, None) for _c, m in messages(self.path, [TOPIC_CAMERA], start_ns, end_ns))
+        else:
+            camera = _chunked_camera(self.path, start_ns, end_ns)
         last = None
-        for _channel, message in messages(self.path, [TOPIC_CAMERA], start_ns, end_ns):
+        for message, chunk_at in camera:
             lt = int(message.log_time)
             if last is not None and lt - last < 1e9 / RING_HZ:
                 continue
@@ -290,6 +348,8 @@ class RecordedRing:
             last = lt
             self.rows.append({"seq": int(message.sequence), "log_time": lt, "t_host": lt / 1e9,
                               "pose": pose_tag(pose)})
+            if chunk_at is not None:
+                self._chunk_at[int(message.sequence)] = chunk_at
         self._by_seq = {r["seq"]: r for r in self.rows}
         self._stamps = [r["log_time"] for r in self.rows]
         #: The clock, nanoseconds of log time: a float second this far from 1970 cannot hold a nanosecond.
@@ -318,6 +378,13 @@ class RecordedRing:
         row = self._by_seq.get(int(seq))
         if row is None:
             self.last_error = f"no frame {seq} in the ring"
+            return None
+        if row["seq"] in self._chunk_at:
+            message = _message_in_chunk(self.path, self._chunk_at[row["seq"]], row["log_time"])
+            if message is not None:
+                self.last_error = ""
+                return compressed_jpeg(message.data), row["t_host"], row["log_time"], row["seq"], row["pose"]
+            self.last_error = f"frame {seq} is not in its chunk of {self.path.name}"
             return None
         for _channel, message in messages(self.path, [TOPIC_CAMERA], row["log_time"], row["log_time"] + 1):
             if int(message.log_time) == row["log_time"]:
