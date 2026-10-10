@@ -10,11 +10,7 @@ rename) cannot quietly break downstream consumers.
 from __future__ import annotations
 
 
-from maps.search.search_loop import (
-    _class_to_roles_from_specs,
-    _detection_to_mapobject,
-    _lookup_class_roles,
-)
+from maps.search.search_loop import _detection_to_mapobject
 from maps.perception.base import DetectedObject
 
 
@@ -73,30 +69,13 @@ def test_empty_attributes_still_records_sam_label():
     assert node.semantic_attributes == {"sam_label": {"truck": 1}}
 
 
-def test_runtime_node_carries_fine_label_and_resolves_target_anchor_role():
-    """A runtime detection's graph node must carry its FINE SAM label as
-    ``class_name`` (not the coarse ``class_hint`` bucket) so the per-task
-    target/anchor split resolves its role. This is the lever that lets the
-    in-flight commit prefer a target-class detection over a pure anchor.
-    """
+def test_runtime_node_carries_fine_label():
+    """A runtime detection's graph node carries its FINE SAM label as
+    ``class_name``, not the coarse ``class_hint`` bucket."""
     # The node class is the fine label, not the coarse "object" bucket.
     det = _make_detection(label="white car")
     node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0, now=0.0)
     assert node.class_name == "white car"
-
-    # The reasoner's Stage-1 split (its own sam_concepts roles).
-    split = _class_to_roles_from_specs(
-        [
-            {"class": "car", "roles": ["target"]},
-            {"class": "road", "roles": ["anchor"]},
-        ]
-    )
-    # The fine label resolves to the target role via substring match on the
-    # head noun ("car" in "white car"); a pure-anchor class stays anchor; an
-    # unmatched class returns no role.
-    assert "target" in _lookup_class_roles(node.class_name, split)
-    assert _lookup_class_roles("road", split) == ("anchor",)
-    assert _lookup_class_roles("river", split) == ()
 
 
 def test_runtime_node_falls_back_to_class_hint_when_unlabeled():

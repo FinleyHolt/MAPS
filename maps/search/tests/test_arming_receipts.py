@@ -52,17 +52,12 @@ def _duck(setter):
     director.init_watchlist([])
 
     class _S:
-        sam_class_to_roles: dict = {}
         perception_director = director
 
     class _Duck:
         state = _S()
         _lock = threading.Lock()
         _sam_concept_setter = staticmethod(setter)
-
-        def _arm_roles(self, union_specs):
-            from maps.search.search_loop import SearchLoop
-            return SearchLoop._arm_roles(self, union_specs)
 
     return _Duck()
 

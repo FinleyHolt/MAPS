@@ -99,7 +99,6 @@ def test_declare_arms_the_director_on_first_call():
     assert d is not None
     assert d.watchlist == ["car"]
     assert pushes[-1] == ["car"]
-    assert "car" in loop.state.sam_class_to_roles
 
 
 def test_redeclare_is_latest_wins_via_diff_not_rebuild():
@@ -111,8 +110,6 @@ def test_redeclare_is_latest_wins_via_diff_not_rebuild():
     assert d is director_first, "a redeclare diffs the live director, never rebuilds"
     assert d.watchlist == ["building"]
     assert pushes[-1] == ["building"]
-    assert "building" in loop.state.sam_class_to_roles
-    assert "car" not in loop.state.sam_class_to_roles
 
 
 def test_chase_live_graph_follows_the_replaced_runtime_graph():

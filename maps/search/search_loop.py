@@ -60,53 +60,6 @@ def _env_override(envvar: str, default, parser):
     return parser(raw)
 
 
-def _lookup_class_roles(
-    label: str, class_to_roles: dict[str, tuple[str, ...]]
-) -> tuple[str, ...]:
-    """Look up the role tag(s) for a SAM detection's class label.
-
-    Tries (a) exact case-insensitive match, then (b) substring match
-    in either direction so a composite runtime label matches a
-    sub-part union class (or vice versa). Multiple union classes that
-    match yield the union of their roles.
-    """
-    if not label or not class_to_roles:
-        return ()
-    norm = label.strip().lower()
-    if not norm:
-        return ()
-    if norm in class_to_roles:
-        return class_to_roles[norm]
-    matched: set[str] = set()
-    for cls, roles in class_to_roles.items():
-        if cls in norm or norm in cls:
-            for r in roles:
-                matched.add(r)
-    return tuple(sorted(matched))
-
-
-def _class_to_roles_from_specs(
-    union_specs: "list[dict] | None",
-) -> dict[str, tuple[str, ...]]:
-    """Build a lowercased ``class -> role tuple`` map from Stage-1
-    ``sam_concepts`` union specs (each ``{"class": str, "roles": [...]}``).
-
-    Roles stay a tuple so a class that is BOTH target and anchor (e.g.
-    "car next to a car") carries ``("anchor","target")`` and the consumer
-    can flag the ambiguity rather than force a binary label.
-    """
-    out: dict[str, set[str]] = {}
-    for spec in union_specs or []:
-        if not isinstance(spec, dict):
-            continue
-        cls = str(spec.get("class") or "").strip().lower()
-        if not cls:
-            continue
-        roles = [str(r).strip().lower() for r in (spec.get("roles") or []) if r]
-        out.setdefault(cls, set()).update(roles or ["target"])
-    return {cls: tuple(sorted(roles)) for cls, roles in out.items()}
-
-
 log = logging.getLogger(__name__)
 
 # THE RUNAWAY BACKSTOP, and nothing else. A footprint runs to 418k cells
@@ -190,14 +143,6 @@ class _State:
     confirmed_target_xy: tuple[float, float] | None = None
     # Flight step the commit bound at. ``None`` = nothing flew.
     lock_step: int | None = None
-    # Preflight target/anchor separation, lowercased class -> role tuple
-    # (e.g. {"parking lot": ("target",), "road": ("anchor",), "car":
-    # ("anchor","target")}). Built from the Stage-1 sam_concepts union
-    # specs (which carry per-class roles). Consumed in-flight to tag each
-    # candidate by the role(s) its class plays and to prefer a target-role
-    # candidate at commit — the per-task agent's own anchor/target split,
-    # not a hardcoded rule.
-    sam_class_to_roles: dict[str, tuple[str, ...]] = field(default_factory=dict)
     # C4 three-verb surface: the per-episode PerceptionDirector — the live
     # SAM watchlist (initial = the round-0 sam_concepts union), the
     # queued/active boosts, and the addressable pending-stop registry
@@ -797,10 +742,9 @@ class SearchLoop:
 
     def declare_mission_concepts(self, cleaned: list[dict]) -> dict:
         """Runtime hook (the mission engine's ``act.sam_concepts`` channel,
-        latest-wins): re-arm the SAME surfaces the compile fold arms — the
-        segmenter setter, the live director watchlist (armed here on the
-        first declaration; DIFFED afterwards, never rebuilt, so pending
-        qstops/boosts survive), and the per-class roles.
+        latest-wins): arms the segmenter setter and the live director
+        watchlist (armed on the first declaration; DIFFED afterwards, never
+        rebuilt, so pending qstops/boosts survive).
 
         ``cleaned`` is the validated ``[{class, role}]`` list the mission
         loop recorded. Returns the declaration receipt the act result
@@ -815,14 +759,6 @@ class SearchLoop:
         specs = _extract_reasoner_concepts({"sam_concepts": list(cleaned or [])})
         ur = ConceptUnionBuilder().build({0: specs})
         union = list(ur.union)
-        union_specs = [
-            {
-                "class": str(u.get("class") or ""),
-                "roles": [str(x) for x in (u.get("roles") or [])],
-            }
-            for u in (ur.union_specs or [])
-            if isinstance(u, dict) and u.get("class")
-        ]
         setter_err: str | None = None
         with self._lock:
             if self._sam_concept_setter is not None:
@@ -846,7 +782,6 @@ class SearchLoop:
                 rems = [c for c in have if c not in union]
                 if adds or rems:
                     d.watchlist_apply(adds, rems)
-            self._arm_roles(union_specs)
         rcpt = {
             "declared": [
                 f"{c.get('class')} ({c.get('role')})" for c in (cleaned or [])
@@ -1165,19 +1100,6 @@ class SearchLoop:
         xy = getattr(det, "world_xy", None) or (0.0, 0.0)
         return f"{label}@{float(xy[0]):.0f},{float(xy[1]):.0f}"
 
-    def _arm_roles(self, union_specs: list[dict]) -> None:
-        """Arm the per-class roles from union specs (the mid-flight
-        ``act.sam_concepts`` declaration)."""
-        s = self.state
-        # The in-flight commit + stop packet read the target/anchor split
-        # (an empty map reads every role "unknown").
-        s.sam_class_to_roles = _class_to_roles_from_specs(union_specs)
-        log.info(
-            "target/anchor split: %d classes (%s)",
-            len(s.sam_class_to_roles),
-            {k: list(v) for k, v in list(s.sam_class_to_roles.items())[:6]},
-        )
-
 
 # ---------------------------------------------------------------------------
 # Module-private helpers
@@ -1256,12 +1178,8 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
         label_bucket[label] = label_bucket.get(label, 0) + 1
     return MapObject(
         id=fid_placeholder,
-        # Carry the FINE SAM concept label as the node class so the
-        # per-task target/anchor role lookup (_lookup_class_roles) can match
-        # the reasoner's sam_concepts; fall back to the coarse class_hint
-        # bucket only when the detection has no label. Attribution is
-        # geometry-only (maps.sws.graph.runtime), so a fine class here
-        # cannot misattach a detection to a prebake footprint.
+        # The FINE SAM concept label is the node class; the coarse
+        # class_hint bucket only when the detection has no label.
         class_name=(str(det.label or "").strip() or det.class_hint),
         name=det.label,
         tags={
