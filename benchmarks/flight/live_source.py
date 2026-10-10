@@ -50,7 +50,7 @@ import logging
 import math
 import threading
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -67,7 +67,6 @@ from benchmarks.flight.pose_graph import INNOVATION_CAP_M, PoseGraph
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
 from maps.perception.geometry.sensor_spec import SensorSpec, resolve_sensor
 from maps.perception.observation import Observation
-from maps.perception.ortho.camera_model import CameraIntrinsics
 from maps.perception.ortho.sensor_frame import ground_corners_xy
 
 log = logging.getLogger(__name__)
@@ -324,7 +323,10 @@ def register_frame(register: Registration, rgb, pose_xy, altitude_m, yaw, roll, 
     measured: tuple[float, float, float] | None = None
     try:
         ground = register.ground_at(pose_xy)
-        expected = register.render(frame_offset.render_sensor(sensor), tuple(pose_xy), altitude_m - ground,
+        intr = sensor.intrinsics
+        expected = register.render(locator.sized(sensor, intr.image_width // frame_offset.DOWN,
+                                                 intr.image_height // frame_offset.DOWN),
+                                   tuple(pose_xy), altitude_m - ground,
                                    yaw, roll, pitch_proj)
     except ValueError:
         expected = None
@@ -381,15 +383,6 @@ class Corrector(threading.Thread):
 
     def stop(self) -> None:
         self._halt.set()
-
-
-def sensor_at(sensor: SensorSpec, width: int, height: int) -> SensorSpec:
-    """``sensor`` at a frame's own pixel dimensions, fields of view held."""
-    intr = sensor.intrinsics
-    if (intr.image_width, intr.image_height) == (width, height):
-        return sensor
-    return replace(sensor, intrinsics=CameraIntrinsics(
-        hfov_deg=intr.hfov_deg, vfov_deg=intr.vfov_deg, image_width=width, image_height=height))
 
 
 class LiveSource:
@@ -461,7 +454,7 @@ class LiveSource:
         pose_xy, alt_msl, yaw = self.camera_pose(pose)
         rgb = np.asarray(Image.open(BytesIO(jpeg)).convert("RGB"), dtype=np.uint8)
         h, w = rgb.shape[:2]
-        sensor = sensor_at(self.boresight.sensor, w, h)
+        sensor = locator.sized(self.boresight.sensor, w, h)
         camera_z = self.tile_ground_z + (alt_msl - self.floor_msl_m)
         ground_tile = self.ground_tile_z(pose_xy)
         agl = camera_z - ground_tile

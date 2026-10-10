@@ -12,8 +12,6 @@ how a whole north-up mosaic is registered as one.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
-
 import numpy as np
 
 from benchmarks.flight import locator
@@ -43,24 +41,14 @@ def structure(gray: np.ndarray, down: int = DOWN) -> np.ndarray:
     return np.stack(locator.edge_maps(small, template_half=locator.TEMPLATE_HALF)).astype(np.float32)
 
 
-def render_sensor(sensor, down: int = DOWN):
-    """``sensor`` at ``1/down`` of its pixels, the same fields of view: the
-    expected view is rendered straight onto the grid the structure is read at."""
-    from maps.perception.ortho.camera_model import CameraIntrinsics  # noqa: PLC0415
-
-    intr = sensor.intrinsics
-    return replace(sensor, intrinsics=CameraIntrinsics(hfov_deg=intr.hfov_deg, vfov_deg=intr.vfov_deg,
-                                                       image_width=intr.image_width // down,
-                                                       image_height=intr.image_height // down))
-
-
 def offset(frame_rgb: np.ndarray, render_rgb: np.ndarray) -> tuple[float, float, float]:
     """``(du, dv, response)``: the frame's content sits ``(du, dv)`` frame pixels from where the render puts it.
 
     ``frame(p) == render(p - d)``. The response is the normalised correlation
     at the peak, near one for the same ground and near zero for none; a render
     with no structure to locate is no match, ``(0, 0, 0)``. The render is the
-    frame's size or ``1/DOWN`` of it (:func:`render_sensor`).
+    frame's size or ``1/DOWN`` of it, rendered straight onto the grid the
+    structure is read at.
     """
     fh, rh = np.asarray(frame_rgb).shape[0], np.asarray(render_rgb).shape[0]
     render_down = DOWN if rh == fh else 1 if rh == fh // DOWN else None

@@ -49,21 +49,28 @@ def frame_gsd_m(sensor, agl_m: float) -> float:
     return float(agl_m) / float(sensor.intrinsics.fx)
 
 
+def sized(sensor, width: int, height: int):
+    """``sensor`` at ``width`` x ``height`` pixels, the same fields of view."""
+    from maps.perception.ortho.camera_model import CameraIntrinsics  # noqa: PLC0415
+
+    intr = sensor.intrinsics
+    if (intr.image_width, intr.image_height) == (width, height):
+        return sensor
+    return replace(sensor, intrinsics=CameraIntrinsics(hfov_deg=intr.hfov_deg, vfov_deg=intr.vfov_deg,
+                                                       image_width=width, image_height=height))
+
+
 def work_sensor(sensor, agl_m: float):
     """``(sensor, scale)``: the sensor binned to :data:`WORK_GSD_M`, and the
     frame's pixels per binned pixel; the sensor itself and 1.0 for a frame no
     finer than that."""
-    from maps.perception.ortho.camera_model import CameraIntrinsics  # noqa: PLC0415
-
     gsd = frame_gsd_m(sensor, agl_m)
     if gsd <= 0.0 or gsd * BIN_ABOVE >= WORK_GSD_M:
         return sensor, 1.0
     intr = sensor.intrinsics
     w = max(2 * SEARCH_HALF + 1, int(round(intr.image_width * gsd / WORK_GSD_M)))
     h = max(2 * SEARCH_HALF + 1, int(round(intr.image_height * gsd / WORK_GSD_M)))
-    binned = replace(sensor, intrinsics=CameraIntrinsics(hfov_deg=intr.hfov_deg, vfov_deg=intr.vfov_deg,
-                                                         image_width=w, image_height=h))
-    return binned, w / intr.image_width
+    return sized(sensor, w, h), w / intr.image_width
 
 
 def gray(rgb: np.ndarray) -> np.ndarray:
