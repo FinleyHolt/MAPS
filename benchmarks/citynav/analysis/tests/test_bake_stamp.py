@@ -57,7 +57,6 @@ def test_two_bakes_of_one_prior_hash_equal(tmp_path):
             "crs": "utm",
             "provenance": {"prior": "osm", "baked_at_utc": when, "bake_git_sha": sha}}))
     (b / "notes.txt").write_text("scratch")
-    (b / "block_0_mask_cache.npz").write_bytes(b"runtime cache")
     assert paths.bake_sha256(a) == paths.bake_sha256(b)
 
     (b / "block_0_meta.json").write_text(json.dumps({

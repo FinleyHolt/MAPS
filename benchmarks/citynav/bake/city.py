@@ -81,7 +81,7 @@ from maps.sws.graph import build_object_graph, save_graph
 
 log = logging.getLogger("bake_city")
 
-_CITY_CHOICES = ("birmingham", "cambridge", "stanford", "roble")
+_CITY_CHOICES = ("birmingham", "cambridge")
 # The one features.json key. Every baked prior lives in this single list; the
 # graph builder mints ``prior_<i>`` fids from it (provenance_index, mirroring
 # ``detected_<i>``), positionally stable per the deterministic record sort.
@@ -831,37 +831,10 @@ def _read_geojson_cache(
     return records, cache_meta if isinstance(cache_meta, dict) else None
 
 
-def _read_geojson_records(path: Path) -> list[tuple[dict[str, Any], dict[str, Any]]]:
-    return _read_geojson_cache(path)[0]
-
-
-def _read_geopandas_records(path: Path) -> list[tuple[dict[str, Any], dict[str, Any]]]:
-    try:
-        import geopandas as gpd
-    except ImportError as exc:  # pragma: no cover - depends on optional env
-        raise BakeError(
-            "GeoPackage/cache formats other than GeoJSON require the geo extra "
-            "(geopandas/osmnx/rasterio/pyproj/shapely)"
-        ) from exc
-
-    gdf = gpd.read_file(path)
-    records: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    for idx, row in gdf.iterrows():
-        geom = row.geometry
-        if geom is None or geom.is_empty:
-            continue
-        props = _normalise_props({k: row[k] for k in row.index if k != "geometry"})
-        props.setdefault("osm_id", str(idx))
-        records.append((props, geom.__geo_interface__))
-    return records
-
-
 def _read_osm_cache(path: Path) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     if not path.is_file():
         raise BakeError(f"missing OSM cache {path}")
-    if path.suffix.casefold() in {".json", ".geojson"}:
-        return _read_geojson_records(path)
-    return _read_geopandas_records(path)
+    return _read_geojson_cache(path)[0]
 
 
 def _validate_georef(path: Path) -> dict[str, Any]:
@@ -1111,15 +1084,10 @@ def dump_osm_cache(
 
 
 # Flag keys a previous bake may have written into meta.json. Stripped before
-# re-writing so a re-bake cannot inherit a stale provenance claim; the current bake re-asserts its own flags.
-#
-# EVERY member must be one this baker re-asserts through ``flags``. A key only
-# an upstream caller writes is not a stale claim to drop — it is that caller's
-# contribution, and stripping it deletes the key outright. ``georef`` sat here
-# and was exactly that: the Cal City baker writes the AOI's UTM zone and local
-# origin into the meta, then hands it to ``bake_city_from_cache``, which
-# removed it again on the way out. The block never once survived a bake, and
-# tour_to_tasking --coords global had nothing to read on any Cal City tile.
+# re-writing so a re-bake cannot inherit a stale provenance claim; the current
+# bake re-asserts its own flags. Every member is one this baker writes through
+# ``flags``: a key an upstream caller writes (the Cal City baker's ``georef``
+# block) is that caller's contribution and passes through.
 _STALE_BAKE_FLAGS = frozenset(
     {
         "bake_counts",
@@ -1209,10 +1177,6 @@ def _write_outputs(
         "excluded": list(excluded),
     }
     Path(f"{stem}_meta.json").write_text(json.dumps(out_meta, indent=2), encoding="utf-8")
-
-    mask_cache = Path(f"{stem}_mask_cache.npz")
-    if mask_cache.exists():
-        mask_cache.unlink()
 
     stats = {
         "city": city,
@@ -1382,10 +1346,7 @@ def bake_osm_blocks_from_cache(
     cache_path = Path(osm_cache).expanduser().resolve()
     if not cache_path.is_file():
         raise BakeError(f"missing OSM cache {cache_path}")
-    if cache_path.suffix.casefold() in {".json", ".geojson"}:
-        records, cache_meta = _read_geojson_cache(cache_path)
-    else:
-        records, cache_meta = _read_geopandas_records(cache_path), None
+    records, cache_meta = _read_geojson_cache(cache_path)
     cache_info = cache_meta or {}
     return bake_osm_blocks(
         city,
@@ -1411,7 +1372,8 @@ def _parser() -> argparse.ArgumentParser:
         )
     )
     ap.add_argument("--city", choices=_CITY_CHOICES, default=None)
-    ap.add_argument("--osm-cache", type=Path, default=None)
+    ap.add_argument("--osm-cache", type=Path, default=None,
+                    help="the GeoJSON cache in CityNav local XY that --dump-osm-cache writes")
     ap.add_argument("--georef", type=Path, default=None)
     ap.add_argument(
         "--osm-blocks",
