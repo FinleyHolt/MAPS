@@ -1838,8 +1838,6 @@ def test_a_set_pass_covers_a_long_street_rather_than_husbanding_stops():
     thing the mission never does, and calcity::26#26 settled for a prior
     1,790 m off the cue's road immediately after reading one.
     """
-    from maps.search.parse_compile.reasoner_loop import (
-        _COVER_SET_MAX_STOPS)
     from maps.util.xy_token import parse_xy_token
     long_stops = {
         "w1": [[float(x), 0.0] for x in range(0, 1200, 100)],
@@ -1854,7 +1852,6 @@ def test_a_set_pass_covers_a_long_street_rather_than_husbanding_stops():
     # (The drive harness has a 32-flight backstop of its own, so the exact
     # count is its limit and not the pass's.)
     assert len(flights) > 24, len(flights)
-    assert _COVER_SET_MAX_STOPS >= 96, _COVER_SET_MAX_STOPS
     note = out[0]["explored"].get("note") or ""
     # NO BUDGET FACT: not the ceiling, not "one pass", not advice to do less.
     for banned in ("SAMPLED", "Narrow it", "one pass flies"):

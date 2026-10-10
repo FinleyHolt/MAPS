@@ -421,20 +421,16 @@ class MissionSpec:
     #: stop before it. None on the bench, where a stop costs no flight and
     #: the order is the model's.
     held_now: "Callable[[list], list[bool]] | None" = None
-    # Liveness backstops, NEVER served: the model hears about no budget
-    # (a stated cap is an arbitrary head-tax on an agentic loop). The turn
-    # cap is the ONLY ending the model does not own; both bounds sit far
-    # above every observed episode (measured maxima: 10 flights, 48 turns
-    # only under a since-fixed friction class) and exist purely so a
-    # pathological conversation cannot run unbounded.
-    flight_budget: int = 96
+    # Liveness backstops, NEVER served: the model hears about no budget.
+    # The turn cap is the ONLY ending the model does not own; both bounds
+    # sit far above a working episode and exist so a pathological
+    # conversation cannot run unbounded. The flight budget also bounds an
+    # explore pass: a stop IS a flight.
+    flight_budget: int = 1000
     turn_cap: int = 100
     # The wall-clock half of the same backstop, as an ABSOLUTE epoch — a
     # count of stops cannot bound a count of seconds, and the harness kills
-    # on seconds. Two Cal City episodes flew 262 and 264 stops of one
-    # ``explore`` at ~40 s each and were SIGKILLed at the 4 h cap with no
-    # prediction row at all; the 1000-flight backstop above is ~11 h at that
-    # rate, so it could never fire first.
+    # on seconds.
     #
     # ABSOLUTE, not a duration: the harness owns the one true start and the
     # cap, so nothing here re-derives an elapsed that would drift past
@@ -660,16 +656,6 @@ def _named_feature_note(classes: list[str], names: set[str]) -> str | None:
             f"-- the segmenter takes visual classes like 'house' or "
             f"'pool'. Watched as said.")
 
-
-# A SET pass covers many members in one walk, and its bound is THE
-# MISSION'S OWN -- ``mission_spec.flight_budget``, read at the call site,
-# because a stop IS a flight and a second smaller number is a budget by
-# another name. This default only covers a caller that states none.
-#
-# It was 24, a quarter of the mission's flights: a 64-way road truncated
-# to a quarter of a pass and reported itself SAMPLED, and a served budget
-# makes the model settle -- which is exactly what calcity::26#26 did.
-_COVER_SET_MAX_STOPS = 1000
 
 # How many of a pass's own new rows ride back as crops on its ack -- the
 # catch. Half the 16-image context budget, so the model's own later looks
@@ -2746,8 +2732,7 @@ def advance_reasoner_one_round(
                 _flat.append((_m, _mv))
                 if _p is not None:
                     _kept_pts.append(_p)
-        _set_cap = int(getattr(mission_spec, "flight_budget", 0)
-                       or _COVER_SET_MAX_STOPS)
+        _set_cap = mission_spec.flight_budget
         if len(_flat) > _set_cap:
             _n = _set_cap
             _stride = (len(_flat) - 1) / (_n - 1)
