@@ -228,6 +228,28 @@ def arm_env_stamp() -> dict:
     return stamp
 
 
+_EFFORT = "SEARCH_SAMPLING_REASONING_EFFORT"
+
+
+def settle_effort(model_id: str) -> None:
+    """Write the arm's reasoning effort back to ``os.environ`` as the
+    requests carry it (stripped; blank is unset), after the served card's
+    check (``model_cards.check_effort``, which raises ``ValueError``), so
+    the stamp and every reader see one spelling. Called once, after
+    endpoint discovery and before any stamp or spawn."""
+    from maps.llm.model_cards import check_effort  # noqa: PLC0415
+
+    raw = os.environ.get(_EFFORT)
+    if raw is None:
+        return
+    effort = raw.strip()
+    if not effort:
+        del os.environ[_EFFORT]
+        return
+    check_effort(model_id, effort)
+    os.environ[_EFFORT] = effort
+
+
 def _audited_env() -> dict:
     keys = {k for k in AUDITED_ENV}
     keys.update(

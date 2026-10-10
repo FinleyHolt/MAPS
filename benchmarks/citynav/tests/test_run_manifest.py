@@ -242,3 +242,18 @@ def test_a_resume_is_refused_under_another_window_or_bake_but_not_another_path(s
     assert drift(lambda m: m["perception"].update(bake_sha256="0" * 64))
     assert not drift(lambda m: m["search_env_flags"].update(
         SEARCH_CITYNAV_TILES="/elsewhere/tiles"))
+
+
+@pytest.mark.parametrize("raw, flown", [(" 0.9 ", "0.9"), ("high\n", "high"), ("  ", None)])
+def test_the_effort_is_stamped_as_it_flies(monkeypatch, raw, flown):
+    """The request carries the stripped effort, so the stamp, a resume's
+    comparison and every reader carry the same one spelling."""
+    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", raw)
+    run_manifest.settle_effort("inkling-small")
+    assert run_manifest.arm_env_stamp().get("SEARCH_SAMPLING_REASONING_EFFORT") == flown
+
+
+def test_an_effort_the_card_does_not_take_is_refused(monkeypatch):
+    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.90")
+    with pytest.raises(ValueError, match="'0.9'"):
+        run_manifest.settle_effort("inkling-small")

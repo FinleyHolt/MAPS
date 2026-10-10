@@ -31,6 +31,7 @@ from benchmarks.citynav.run_benchmark.dispatch import (
 )
 from benchmarks.citynav.run_benchmark.episode_server import _episode_server_loop
 from benchmarks.citynav import episodes
+from benchmarks.citynav.run_manifest import settle_effort
 from benchmarks.citynav.episode_workdir import (
     benchmark,
     open_episode_dir,
@@ -289,12 +290,12 @@ def main() -> int:
     # facts to discover and skip the install (spec_installed() stays False).
     if not args.no_llm:
         try:
-            endpoint_spec_module.install_spec(
-                endpoint_spec_module.discover_from_env()
-            )
+            spec = endpoint_spec_module.discover_from_env()
         except endpoint_spec_module.EndpointDiscoveryError as exc:
             log.error("endpoint discovery failed: %s", exc)
             return 2
+        endpoint_spec_module.install_spec(spec)
+        settle_effort(spec.model_id)
     if args.resume_from_workdir is not None:
         cfg.resume_from_workdir = args.resume_from_workdir
     if args.resume_turn is not None:

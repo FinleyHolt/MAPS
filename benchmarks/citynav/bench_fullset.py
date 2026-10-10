@@ -1603,11 +1603,15 @@ def main(argv: list[str] | None = None) -> int:
         install_spec,
     )
 
+    from benchmarks.citynav.run_manifest import settle_effort
+
     try:
-        install_spec(discover_from_env())
+        spec = discover_from_env()
     except EndpointDiscoveryError as exc:
         print(f"FATAL: endpoint discovery failed: {exc}", file=sys.stderr)
         return 2
+    install_spec(spec)
+    settle_effort(spec.model_id)
     return driver.run()
 
 
