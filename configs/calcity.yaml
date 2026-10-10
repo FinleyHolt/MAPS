@@ -20,8 +20,6 @@ spawn_seed: 1234
 # Every episode starts at 3,000 ft AGL.
 start_altitude_agl_m: 914.4
 altitude_cap_m: 1000.0
-# Inert under a sensor spec: the frame ships at the sensor's native size.
-rgb_upscale_px: 1008
 sam:
   sahi: false
 # The C-12's camera: Oryx ORX-32 + 25 mm, 16.1 x 12.1 deg, 2048x1536, nadir.

@@ -368,7 +368,7 @@ def _build_datapoint(rgb: np.ndarray, concepts: list[str], dp_counter: list[int]
                     # ``interpolate(masks, target_size.tolist())`` for masks.
                     # Reversed, a non-square frame comes back transposed --
                     # invisible for every square frame the runtime feeds
-                    # (rgb_upscale_px, and SAHI tiles are 1008 square), and a
+                    # (the 1008 nadir frame and SAHI tiles are square), and a
                     # silent wrong answer for anything else.
                     original_size=[h, w],
                     object_id=0,

@@ -22,8 +22,6 @@
 # Primitive actions. 200 is GeoNav's published budget (arXiv 2504.09587 SS3);
 # the upstream budget is 100 (eval_max_timestep=20 x move_iteration=5).
 max_steps: 200
-# Inert on this backend (the view square is altitude-driven).
-fov_m: 0.0
 # Inert fallback: the start altitude is sampled from the 100-150 m band.
 altitude_m: 125.0
 cell_size_m: 2.0
@@ -40,10 +38,6 @@ spawn_seed: 0
 start_altitude_band_m: [100.0, 150.0]
 start_altitude_agl_m: null
 altitude_cap_m: 200.0
-# Model-input resolution: the native-resolution crop is resampled to this
-# size, and the reasoner and SAM consume this one frame. SAHI tiles it into
-# 1008 px crops fed to SAM 1:1.
-rgb_upscale_px: 2016
 sam:
   model_id: facebook/sam3.1
   # Perceived-color calibration (detect_client._COLOR_PALETTES): "citynav"

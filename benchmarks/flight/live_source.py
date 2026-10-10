@@ -104,15 +104,11 @@ def ortho_observation(rgb: np.ndarray, alpha: np.ndarray, extent: tuple[float, f
     orthographically: ``extent`` is ``(x0, y0, x1, y1)`` in bake-local metres,
     ``camera_z`` the camera's height in the tile frame."""
     x0, y0, x1, y1 = (float(v) for v in extent)
-    h, w = rgb.shape[:2]
     depth = np.where(alpha > 0, np.float32(camera_z - tile_ground_z), np.float32(0.0)).astype(np.float32)
     return Observation(
         pose_xy=((x0 + x1) / 2.0, (y0 + y1) / 2.0),
         altitude_m=float(camera_z),
         yaw_deg=0.0,
-        semantic=np.zeros((h, w), dtype=np.int16),
-        height=None,
-        fov_m=max(x1 - x0, y1 - y0),
         world_window=(x0, y0, x1, y1),
         sensor=None,          # ortho corners outrank a sensor, and there is no one camera here
         rgb=rgb,

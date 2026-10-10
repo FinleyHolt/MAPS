@@ -48,7 +48,6 @@ _ANY = (lambda v: True), ""
 # is a nested block with its own keys. A float key reads an int too.
 _SCHEMA: dict[str, Any] = {
     "max_steps": (int, _POS),
-    "fov_m": (_NUM, _NONNEG),
     "altitude_m": (_NUM, _POS),
     "cell_size_m": (_NUM, _POS),
     "success_radius_m": (_NUM, _POS),
@@ -61,7 +60,6 @@ _SCHEMA: dict[str, Any] = {
         and 0 < v[0] <= v[1], "[lo, hi] with 0 < lo <= hi")),
     "start_altitude_agl_m": ((*_NUM, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
     "altitude_cap_m": (_NUM, _POS),
-    "rgb_upscale_px": ((int, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
     "landing_altitude_m": (_NUM, _NONNEG),
     "descend_to_land": (bool, _ANY),
     "sensor": ((str, dict), (_sensor_ok, "a registered sensor or an inline override")),
@@ -95,7 +93,6 @@ class RunConfig:
     CLI sets (``resume_*``) and the path the config resolved from."""
 
     max_steps: int
-    fov_m: float
     altitude_m: float
     cell_size_m: float
     success_radius_m: float
@@ -115,9 +112,6 @@ class RunConfig:
     start_altitude_band_m: list
     start_altitude_agl_m: float | None
     altitude_cap_m: float
-    # The model-input frame size the native crop is resampled to; None
-    # keeps the native span.
-    rgb_upscale_px: int | None
     landing_altitude_m: float
     # CityNav SR is 2D, so the default traverses to the committed centroid
     # at cruise altitude; True descends to landing_altitude_m.

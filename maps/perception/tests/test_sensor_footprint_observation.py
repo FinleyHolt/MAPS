@@ -81,8 +81,6 @@ def test_sensor_frame_is_native_size_over_the_footprint(ortho_dir):
     expect = footprint_corners_xy((30.0, 30.0), w_m, h_m, 30.0)
     got = oc["view_corners_xy"]
     assert np.allclose(np.asarray(got), np.asarray(expect))
-    # fov_m reports the footprint width — the observation's long-side extent.
-    assert oc["fov_m"] == pytest.approx(w_m)
     # Flat world, full coverage: depth is AGL minus the constant height.
     assert bool((oc["validity"] > 0).all())
     assert np.allclose(oc["depth"], AGL - (GROUND_Z + 3.0), atol=1e-4)
@@ -100,7 +98,6 @@ def test_sensorless_path_is_byte_identical_to_before(ortho_dir):
     )
     # 10 m AGL -> 20 m square at 0.1 m/px -> 200 px output.
     assert oc["rgb"].shape == (200, 200, 3)
-    assert oc["fov_m"] == pytest.approx(20.0)
 
 
 def test_observation_extent_is_the_footprint_long_side():

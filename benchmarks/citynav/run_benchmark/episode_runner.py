@@ -396,15 +396,12 @@ def run_episode(
             _alt = float(_alt) if _alt is not None else float(cfg.altitude_m)
             try:
                 _obs = crop_observation(
-                    assets.raster,
                     (_px, _py),
-                    cfg.fov_m,
                     altitude_m=_alt,
                     yaw_deg=0.0,
                     sensor=sensor,
                     rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
                     map_name=episode.map_name,
-                    rgb_upscale_px=cfg.rgb_upscale_px,
                 )
             except Exception as exc:  # noqa: BLE001 — surfaced as a tool fact
                 log.exception("retro re-render failed")

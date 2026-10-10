@@ -686,8 +686,8 @@ class SamDetectClient:
     # fixed _SAM_INPUT_SIZE (1008) tiles fed to SAM 1:1 (no resample), remap to
     # full-frame, and cross-tile IoU-NMS dedup -- recovering dense-lot car recall
     # that full-frame SAM loses to sub-pixel cars (~67%->82% measured). Pair with
-    # a native-resolution render (run_benchmark rgb_upscale_px=2016) so the tiles
-    # carry real 0.1 m/px detail rather than an upscaled 1008 frame.
+    # a native-resolution render so the tiles carry real 0.1 m/px detail rather
+    # than an upscaled frame.
     sahi: bool = False
     sahi_overlap: float = 0.2
     sahi_nms_iou: float = 0.5

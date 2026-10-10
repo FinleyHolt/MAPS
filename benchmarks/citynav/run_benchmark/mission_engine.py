@@ -347,15 +347,12 @@ def fly_one(
     _ph = _StopPhases()
     if observe is None:
         obs = crop_observation(
-            assets.raster,
             new_xy,
-            cfg.fov_m,
             altitude_m=new_alt,
             yaw_deg=0.0,
             sensor=sensor,
             rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
             map_name=episode.map_name,
-            rgb_upscale_px=cfg.rgb_upscale_px,
         )
     _ph.at("render")
     if obs is not None:

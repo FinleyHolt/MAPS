@@ -6,7 +6,7 @@ masks, so the order is load-bearing. Reversed, every detection on a non-square
 frame comes back transposed: right shapes, plausible scores, wrong pixels.
 
 Nothing caught it because every frame the runtime feeds SAM is square --
-``rgb_upscale_px`` renders 1008 or 2016, and SAHI tiles are 1008 square -- and
+the CityNav nadir frame is 1008 square, and SAHI tiles are 1008 square -- and
 ``w == h`` makes the two orders identical. A caller that hands SAM a real
 camera frame (the 4:3 Oryx, 2048x1536) is the first to see it.
 """

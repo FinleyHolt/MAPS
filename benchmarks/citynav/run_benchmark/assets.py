@@ -5,13 +5,10 @@ from __future__ import annotations
 from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import (
     assert_current_tile_schema,
-    rgbd_png,
-    rgbd_tiff,
     tile_stem,
 )
 from dataclasses import dataclass
 from pathlib import Path
-from maps.perception.observation import BlockObservation, load_block_rasters
 from maps.sws.graph import load_graph
 import json
 import logging
@@ -21,14 +18,13 @@ log = logging.getLogger("run_benchmark")
 
 @dataclass
 class BlockAssets:
-    """Prebaked + rasterized state shared across episodes on the same block."""
+    """Prebaked state shared across episodes on the same block."""
 
     map_name: str
     bounds: WorldBounds
     cell_size_m: float
     grid_shape: tuple[int, int]
     base_features: dict  # Prebaked features dict, loaded once per block.
-    raster: BlockObservation
 
 
 def _assert_descriptions_wall(features: object, source_path: str) -> None:
@@ -116,58 +112,12 @@ def _load_block_assets(map_name: str, cell_size_m: float) -> BlockAssets:
     assert_current_tile_schema(base_features, str(feat_path))
     _assert_descriptions_wall(base_features, str(feat_path))
 
-    png_path = rgbd_png(map_name)
-    tiff_path = rgbd_tiff(map_name)
-    # Infer the raster's geotransform from the height TIFF when possible.
-    # CityNav's rasterize.py writes at 10 px/m centered on the point cloud's
-    # extent, which can be offset from (and smaller than) the block's
-    # nominal bounds. Falling back to 1 px/m + bounds corner is fine for
-    # the synthetic-only path (no real PNG present).
-    raster_x_min = bounds.x_min
-    raster_y_min = bounds.y_min
-    raster_px_per_m = 1.0
-    if png_path.exists():
-        try:
-            import rasterio  # type: ignore[import-not-found]
-
-            with rasterio.open(str(tiff_path)) as ds:
-                t = ds.transform
-                raster_px_per_m = 1.0 / float(t.a)  # a = pixel x-size (m/px)
-                raster_x_min = float(t.c)  # c = upper-left x
-                # upper-left y − height × pixel_size_y (a.e is negative)
-                raster_y_min = float(t.f + ds.height * t.e)
-        except Exception as e:
-            # The real upstream raster is present (png_path.exists()), so the
-            # 1 px/m + bounds-corner default set above is the WRONG georef:
-            # rasterize.py writes 10 px/m at an offset origin, so the default
-            # mislocates every crop ~10x and the cropclient observation is
-            # garbage (detections never land on targets -> every episode
-            # no-commits). That default is only valid for the synthetic path
-            # (no PNG, which never enters this branch). Fail loud rather than
-            # silently produce broken observations.
-            raise RuntimeError(
-                f"{map_name}: upstream raster {png_path.name} is present but "
-                f"its TIFF geotransform could not be read ({e}). The "
-                f"ortho backend needs the true georef; install the "
-                f"perception 'ortho' extra (rasterio>=1.3)."
-            ) from e
-
-    raster = load_block_rasters(
-        map_name=map_name,
-        png_path=png_path,
-        tiff_path=tiff_path,
-        x_min=raster_x_min,
-        y_min=raster_y_min,
-        px_per_m=raster_px_per_m,
-        grid_shape=grid_shape,
-    )
     return BlockAssets(
         map_name=map_name,
         bounds=bounds,
         cell_size_m=cell_size_m,
         grid_shape=grid_shape,
         base_features=base_features,
-        raster=raster,
     )
 
 

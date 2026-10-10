@@ -57,7 +57,8 @@ FLAT_SHA256 = {
     "calcity": "366ceb132d850769dc3875e6615b2faaabf525576cf2fcb19cf0a446e2221e16",
 }
 # Keys nothing read.
-DEAD_TOP = ("descent_step_m", "altitude_tolerance_m", "landing_xy_tolerance_m", "perception")
+DEAD_TOP = ("descent_step_m", "altitude_tolerance_m", "landing_xy_tolerance_m", "perception",
+            "fov_m", "rgb_upscale_px")
 DEAD_SAM = ("device", "dtype")
 DEAD_COMPACT = ("stage1_budget", "stage2_3_budget", "teacher_budget", "grader_budget",
                 "concept_union_budget", "subagent_budget", "router_budget",
