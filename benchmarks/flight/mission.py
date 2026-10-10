@@ -573,8 +573,8 @@ class Mission:
         """Where a short pass is asked again, and the line for why: the area's
         centroid moved toward the centroid of the points no frame held, by the
         missing ground's extent along that line, no further than the leg's
-        reach. Said in the transcript with the share, the frames, and the side
-        that is missing."""
+        reach. Said in the transcript with the points held, the frames, and the
+        side that is missing."""
         cov = self._last_coverage or {}
         best = cov.get("best") or []
         unheld = [p for p, b in zip(area, best) if b is None] or list(area)
@@ -590,13 +590,14 @@ class Mission:
             shift = min(max(extent, span), reach)
             moved = [cx + dx / span * shift, cy + dy / span * shift]
         side = "N NE E SE S SW W NW".split()[round(math.degrees(math.atan2(dx, dy)) / 45.0) % 8] if span >= 1.0 else "-"
-        block = self._coverage_block(cov) or {"fraction": 0.0, "frames": 0}
-        said = (f"the pass over {token} at ({xy[0]:.0f}, {xy[1]:.0f}) held {block['fraction']:.0%} of the area in "
-                f"{block['frames']} frame(s), the {side} side missing ({len(unheld)} of {len(area)} points); "
+        block = self._coverage_block(cov) or {"frames": 0}
+        held = sum(1 for b in best if b is not None)
+        said = (f"the pass over {token} at ({xy[0]:.0f}, {xy[1]:.0f}) held {held}/{len(area)} points of the area in "
+                f"{block['frames']} frame(s), the {side} side missing; "
                 f"the leg is asked again {shift:.0f} m {side} of the point (re-fly {n} of {SHORT_PASS_REQUESTS})")
         log.info(said)
         self.transcript.append({"kind": "leg", "said": said})
-        return moved, f"Re-fly {token}: the pass held {block['fraction']:.0%}, the {side} side missing"
+        return moved, f"Re-fly {token}: the pass held {held}/{len(area)} points, the {side} side missing"
 
     @staticmethod
     def _held_words(last: dict[str, Any]) -> str:
