@@ -112,52 +112,18 @@ def test_redeclare_is_latest_wins_via_diff_not_rebuild():
     assert pushes[-1] == ["building"]
 
 
-def test_chase_live_graph_follows_the_replaced_runtime_graph():
-    # The ingest wire replaces state.runtime_graph per fold; the ToolContext
-    # must chase the new object or every analyze reads the pre-flight world
-    # (the first-smoke regression: 114 folded, runtime finds len 0).
-    import threading
+def test_the_pose_echo_follows_a_flight_and_ignores_an_error():
     from types import SimpleNamespace
 
-    from benchmarks.citynav.run_benchmark.mission_engine import chase_live_graph
+    from benchmarks.citynav.run_benchmark.mission_engine import echo_pose
 
-    old_graph, new_graph = object(), object()
-    sl = SimpleNamespace(_lock=threading.Lock(),
-                         state=SimpleNamespace(runtime_graph=new_graph))
-    ctx = SimpleNamespace(graph=old_graph, robot_pose=None)
-    chase_live_graph(ctx, sl, {"pose_xy": [10.0, 20.0], "alt_m": 120.0},
-                     fallback_alt=100.0, heading_deg=0.0)
-    assert ctx.graph is new_graph
+    ctx = SimpleNamespace(robot_pose=None)
+    echo_pose(ctx, {"pose_xy": [10.0, 20.0], "alt_m": 120.0},
+              fallback_alt=100.0, heading_deg=0.0)
     assert ctx.robot_pose is not None and ctx.robot_pose.x == 10.0
-    # An errored flight changes nothing.
-    ctx2 = SimpleNamespace(graph=old_graph, robot_pose=None)
-    chase_live_graph(ctx2, sl, {"error": "unknown fid"},
-                     fallback_alt=100.0, heading_deg=0.0)
-    assert ctx2.graph is old_graph and ctx2.robot_pose is None
-
-
-def test_chase_after_boost_follows_the_replaced_runtime_graph():
-    # A retro boost folds through the SAME ingest wire as a flight and
-    # replaces state.runtime_graph; an un-chased ToolContext keeps reading
-    # the pre-boost world (pilot-2: 19/28 productive boosts dead-ended --
-    # "n_new: 479" then "Live now: 0 detection fid(s)").
-    import threading
-    from types import SimpleNamespace
-
-    from benchmarks.citynav.run_benchmark.mission_engine import chase_after_boost
-
-    old_graph, new_graph = object(), object()
-    sl = SimpleNamespace(_lock=threading.Lock(),
-                         state=SimpleNamespace(runtime_graph=new_graph))
-    ctx = SimpleNamespace(graph=old_graph, robot_pose=None)
-    chase_after_boost(ctx, sl, {"retro": [{"n_new": 2}]})
-    assert ctx.graph is new_graph
-    assert ctx.robot_pose is None  # a boost moves nothing
-    # an errored or shapeless boost changes nothing
-    for res in ({"error": "not wired"}, None, "queued"):
-        ctx2 = SimpleNamespace(graph=old_graph, robot_pose=None)
-        chase_after_boost(ctx2, sl, res)
-        assert ctx2.graph is old_graph
+    ctx2 = SimpleNamespace(robot_pose=None)
+    echo_pose(ctx2, {"error": "unknown fid"}, fallback_alt=100.0, heading_deg=0.0)
+    assert ctx2.robot_pose is None
 
 
 def test_the_mission_deadline_is_read_per_call_and_optional(monkeypatch):

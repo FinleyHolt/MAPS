@@ -226,19 +226,13 @@ def detected_digest(dets: list[dict], cap: int = _DETECTED_HEAD) -> dict:
     return out
 
 
-def chase_live_graph(ctx, search_loop, report: dict, *,
-                     fallback_alt: float, heading_deg: float) -> None:
-    """Re-point the conversation's ToolContext at the world that now exists.
-
-    After every successful flight the graph reference follows
-    ``state.runtime_graph`` and the pose echo follows the drone, so the
-    loop's own surface refresh (``_surface_from_ctx``) reads the folded
-    world from where the drone is.
-    """
+def echo_pose(ctx, report: dict, *, fallback_alt: float, heading_deg: float) -> None:
+    """After every successful flight the ToolContext's pose echo follows the
+    drone, so the loop's surface refresh reads the folded world from where
+    the drone is. The graph needs no following: the context holds the live
+    ``state.runtime_graph`` itself, which every fold mutates in place."""
     if not isinstance(report, dict) or "error" in report:
         return
-    with search_loop._lock:
-        ctx.graph = search_loop.state.runtime_graph
     pxy = report.get("pose_xy") or ()
     if len(pxy) == 2:
         ctx.robot_pose = RobotPose(
@@ -247,15 +241,6 @@ def chase_live_graph(ctx, search_loop, report: dict, *,
             yaw_deg=float(heading_deg),
             timestamp=time.time(),
         )
-
-
-def chase_after_boost(ctx, search_loop, res: dict | None) -> None:
-    """A retro boost folds into ``state.runtime_graph``; the ToolContext's
-    graph reference follows it. Pose untouched: a boost moves nothing."""
-    if not isinstance(res, dict) or "error" in res:
-        return
-    with search_loop._lock:
-        ctx.graph = search_loop.state.runtime_graph
 
 
 def fly_one(
@@ -617,15 +602,9 @@ def build_mission_session(
 
     def _fly(item: dict) -> dict:
         report = _fly_inner(item)
-        chase_live_graph(ctx, search_loop, report,
-                         fallback_alt=float(state.altitude_m),
-                         heading_deg=float(state.heading_deg))
+        echo_pose(ctx, report, fallback_alt=float(state.altitude_m),
+                  heading_deg=float(state.heading_deg))
         return report
-
-    def _boost(concepts, where):
-        res = search_loop._boost_queue_cb(concepts, where)
-        chase_after_boost(ctx, search_loop, res)
-        return res
 
     from maps.perception.observation import (
         observation_extent_m,
@@ -675,7 +654,7 @@ def build_mission_session(
         mission_spec=mission_spec,
         flights=flights,
         feature_tour=feature_tour,
-        boost=_boost,
+        boost=search_loop._boost_queue_cb,
         obs_span_m=obs_span_m,
         obs_minor_m=_obs_minor_m,
     )
