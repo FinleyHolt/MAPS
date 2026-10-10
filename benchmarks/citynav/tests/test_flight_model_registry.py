@@ -36,7 +36,6 @@ class _State:
         self.altitude_m = 50.0
         self.heading_deg = 0.0
         self.visited_xy = []
-        self.react_stats = {}
         self.belief_snapshot = SimpleNamespace(confirmed_target_xy=commit)
 
     def record_visit(self):

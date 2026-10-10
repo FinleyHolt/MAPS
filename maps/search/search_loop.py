@@ -420,28 +420,9 @@ class _State:
     # reasoner-agent decision packet renders sweep rows alongside
     # MLLM rows when both reference the same leaf question.
     cross_pollinate_records: list[dict] = field(default_factory=list)
-    # Per-flight prior-color-enrichment telemetry (makes the lever
-    # FALSIFIABLE). The runner's Phase-A enrichment hook bumps these as it
-    # reads a perceived color off each in-view PRIOR's projected footprint and
-    # calls ``upsert_prior_percept``: ``frames`` = enrichment sweeps attempted,
-    # ``osm_seen`` = in-view OSM priors processed across frames (named + unnamed,
-    # the all-osm SIDE STORE population), ``enriched`` = True upsert returns (a
-    # NAMED prior gained a perceived attr on the graph), ``noop`` = False upsert
-    # returns (missing/non-prebake/empty attrs), ``fail`` = per-frame exceptions
-    # (rate-limited warn). Surfaced into per-episode metrics as the
-    # ``prior_enrich`` block (with ``osm_percepts`` = side-store size +
-    # ``graph_enriched`` = ``enriched``) so the A/B + pd tooling can read whether
-    # BOTH the all-osm capture and the named-graph upsert fired (an inert 0s here
-    # means the lever did nothing).
-    prior_enrich_stats: dict[str, int] = field(
-        default_factory=lambda: {
-            "frames": 0,
-            "osm_seen": 0,
-            "enriched": 0,
-            "noop": 0,
-            "fail": 0,
-        }
-    )
+    # Prior-color enrichment frames that raised this episode; the warning
+    # prints on the first and every 50th.
+    prior_enrich_fails: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -1318,10 +1299,6 @@ class SearchLoop:
             self._arm_perception_director(list(sam_concepts))
         except Exception:  # noqa: BLE001 — never fail the restore
             log.exception("perception director arm failed on restore")
-            try:
-                self._react_stats_bump("perception_director_arm_failed")
-            except Exception:  # noqa: BLE001
-                pass
 
         # Resume hydrates the pre-flight state ("when we started flying"),
         # NOT the in-flight lock state. Carrying forward locked_detection_id
@@ -1380,11 +1357,6 @@ class SearchLoop:
         director.init_watchlist([str(c) for c in (concepts or [])])
         self.state.perception_director = director
 
-    def _react_stats_bump(self, key: str, n: int = 1) -> None:
-        _rs = getattr(self.state, "react_stats", None)
-        if isinstance(_rs, dict):
-            _rs[key] = int(_rs.get(key, 0)) + n
-
     def _watchlist_apply_cb(self, add, remove) -> dict:
         """``view{watchlist}`` channel handed to the per-stop round."""
         with self._lock:
@@ -1394,9 +1366,7 @@ class SearchLoop:
                 # union yet) — say so rather than acking a phantom mutation.
                 return {"error": "watchlist is not armed this episode "
                                  "(no compile committed a concept union)"}
-            res = d.watchlist_apply(add, remove)
-            self._react_stats_bump("watchlist_mutations")
-            return res
+            return d.watchlist_apply(add, remove)
 
     def _boost_queue_cb(self, concepts, where) -> dict:
         """``view{boost}`` channel handed to the per-stop round."""
@@ -1404,10 +1374,7 @@ class SearchLoop:
             d = self.state.perception_director
             if d is None:
                 return {"error": "boost queueing is not armed this episode"}
-            res = d.boost_queue(concepts, where)
-            if "error" not in res:
-                self._react_stats_bump("boost_queued")
-            return res
+            return d.boost_queue(concepts, where)
 
 
 

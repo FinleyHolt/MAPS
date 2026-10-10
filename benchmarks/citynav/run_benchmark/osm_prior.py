@@ -34,20 +34,6 @@ class _OsmPriorCtx:
     # runtime graph directly — the perspective enrichment upsert remaps through
     # this map so the perceived color lands on a real node.
     graph_fid_by_fid: dict[str, str] = field(default_factory=dict)
-    # SIDE STORE — perceived color for EVERY in-view OSM prior we see (named
-    # AND unnamed), keyed by OSM fid (``cityref_<id>``). This is a downstream
-    # capture ONLY: its size is reported in the episode's ``prior_enrich``
-    # block and it is NEVER added to the runtime ObjectGraph, never surfaced
-    # via ``analyze_scene`` (its ``find`` op, which absorbed the old
-    # ``search_features``), and never
-    # enters the candidate / committable set — the headline ViSA named-only
-    # contract (``benchmarks/citynav/PRIOR_CONTRACT.md``) stays intact. Only the
-    # NAMED subset that ``graph_fid_by_fid`` maps to a real node is ALSO upserted
-    # onto the graph (the committable, unchanged enrichment behavior). Each
-    # entry: ``{name, class, world_xy, is_named, graph_fid, frames,
-    # color:{value:count}, color_rgb:{value:count}}`` — color counts aggregate
-    # across the stop's frames exactly like the graph path's ``{value:count}``.
-    percept_by_fid: dict[str, dict] = field(default_factory=dict)
 
 
 def _build_osm_prior_ctx_from_graph(graph) -> "_OsmPriorCtx | None":
@@ -121,61 +107,6 @@ def _build_osm_prior_ctx_from_graph(graph) -> "_OsmPriorCtx | None":
     return ctx
 
 
-def _merge_osm_percept(
-    percept_by_fid: dict[str, dict],
-    fid: str,
-    meta: dict,
-    attrs: dict,
-    *,
-    graph_fid: str | None,
-) -> None:
-    """Accumulate one in-view OSM prior's perceived color into the SIDE STORE.
-
-    Called once per (frame, in-view OSM prior) in the enrichment hook for EVERY
-    OSM prior — named AND unnamed — BEFORE any graph remap. The color counts
-    aggregate as ``{value: count}`` across the stop's frames exactly like the
-    runtime graph path (``maps.sws.graph.runtime.upsert_prior_percept``);
-    ``frames`` counts the in-view sweeps for this fid. ``attrs`` may be empty
-    (no dominant color this frame) — the fid is still recorded (frames bumps,
-    metadata captured) so the side store reflects every OSM thing we saw.
-
-    This writes ONLY to ``percept_by_fid`` (a plain dict on ``_OsmPriorCtx``).
-    It never touches the
-    runtime ObjectGraph and never reaches a reasoner tool surface — the named
-    contract holds; the graph upsert is the caller's SEPARATE, named-only path.
-    """
-    entry = percept_by_fid.get(fid)
-    if entry is None:
-        wxy = meta.get("world_xy")
-        name = meta.get("name")
-        entry = {
-            "name": name,
-            "class": str(meta.get("class_name") or ""),
-            "world_xy": (
-                [float(wxy[0]), float(wxy[1])]
-                if wxy is not None and len(wxy) >= 2
-                else None
-            ),
-            "is_named": bool((name or "").strip()),
-            "graph_fid": graph_fid,
-            "frames": 0,
-            "color": {},
-            "color_rgb": {},
-        }
-        percept_by_fid[fid] = entry
-    elif graph_fid and not entry.get("graph_fid"):
-        entry["graph_fid"] = graph_fid
-    entry["frames"] = int(entry.get("frames", 0)) + 1
-    col = attrs.get("color")
-    if col:
-        bucket = entry["color"]
-        bucket[col] = bucket.get(col, 0) + 1
-    rgb = attrs.get("color_rgb")
-    if rgb:
-        bucket = entry["color_rgb"]
-        bucket[rgb] = bucket.get(rgb, 0) + 1
-
-
 def _maybe_build_prior_polys(
     *,
     rgb_shape: tuple[int, int],
@@ -224,75 +155,6 @@ def _maybe_build_prior_polys(
             rgb_shape=rgb_shape,
             features=assets.base_features,
             bounds=cr_bounds,
-            view_corners_xy=view_corners_xy,
-            fids_to_render=list(fids_to_render),
-            target_fid=target_fid or None,
-        )
-    except Exception as exc:  # noqa: BLE001
-        log.warning(
-            "catalog prior overlay build failed step=%d anchor=%s: %s",
-            step_idx,
-            target_fid or "?",
-            exc,
-        )
-        return None, None
-
-
-def _build_all_osm_polys(
-    *,
-    rgb_shape: tuple[int, int],
-    view_corners_xy,
-    fids_to_render,
-    step_idx: int = 0,
-    target_fid: str = "",
-    obs=None,
-    osm_ctx: "_OsmPriorCtx | None" = None,
-) -> tuple[list[dict] | None, list[dict] | None]:
-    """Project ALL in-view OSM prior footprints (named + unnamed) to image
-    masks for the downstream SIDE-STORE color capture.
-
-    Read-only projection for the all-OSM ``percept_by_fid`` side store. It
-    NEVER feeds the runtime graph or a
-    reasoner surface; the named-only committable graph enrichment uses the
-    separate :func:`_maybe_build_prior_polys` path. Original docstring follows.
-
-
-    Returns ``(prior_polys, cityref_table)``. ``prior_polys`` carries
-    per-feature masks the per-stop color enrichment reads pixels through (and
-    that the prior overlay can draw);
-    ``cityref_table`` mirrors the row shape minus the mask. Both are filtered to
-    ``fids_to_render`` (OSM fids, ``cityref_<id>``).
-
-    BOTH backends now source from the OSM contour context (``osm_ctx``), so the
-    enrichment can color EVERY in-view OSM prior — named AND unnamed — not just
-    the named ``base_features`` rows:
-
-    - ORTHOGRAPHIC (``view_corners_xy`` set, e.g. ortho): projects each
-      OSM world contour into the view square via
-      :func:`build_prior_polys_ortho_from_contours` (the same ortho ``world ->
-      pixel`` homography ``build_prior_polys_ortho`` uses, but over raw OSM
-      contours instead of the named tile-grid ``cells``).
-    - PERSPECTIVE (``view_corners_xy`` is ``None`` but ``obs.sensor`` +
-      ``osm_ctx`` present): projects
-      OSM world contours through the calibrated camera model via
-      :func:`build_prior_polys_perspective`, applying the per-frame OSM↔SAM
-      registration transform when present.
-
-    Returns ``(None, None)`` when ``fids_to_render`` is empty or ``osm_ctx`` is
-    absent (non-catalog map -> honest no-op). This is a read-only projection;
-    keeping unnamed percepts out of the runtime graph is the caller's job (it
-    upserts only fids ``graph_fid_by_fid`` maps to a named node).
-    """
-    if not fids_to_render or osm_ctx is None:
-        return None, None
-    try:
-        # Orthographic path: project OSM world contours into the view square.
-        from maps.perception.viewpoint.overlay import build_prior_polys_ortho_from_contours
-
-        return build_prior_polys_ortho_from_contours(
-            rgb_shape=rgb_shape,
-            contours_world_by_fid=osm_ctx.contours_by_fid,
-            feature_meta_by_fid=osm_ctx.meta_by_fid,
             view_corners_xy=view_corners_xy,
             fids_to_render=list(fids_to_render),
             target_fid=target_fid or None,
@@ -405,92 +267,6 @@ def _prior_fids_in_view(
     return out_p
 
 
-def _all_osm_fids_in_view(
-    view_corners_xy, *, osm_ctx: "_OsmPriorCtx | None" = None, obs=None
-) -> list[str]:
-    """In-view OSM prior fids — BACKEND-AGNOSTIC, ALL OSM (named + unnamed).
-
-    A cheap pre-filter so the per-frame footprint rasterization (via
-    :func:`_maybe_build_prior_polys`) only runs over plausibly in-frame priors,
-    not the whole city catalog. Both backends now cull over
-    ``osm_ctx.meta_by_fid`` (EVERY thing in objects.json — named AND unnamed),
-    so the color enrichment sees every in-view OSM prior, not just the named
-    ``base_features`` rows. Returns OSM fids (``cityref_<id>``); the caller
-    remaps the NAMED subset to a runtime-graph node for the committable upsert.
-
-    ORTHOGRAPHIC backend (``view_corners_xy`` set, e.g. ortho): OSM
-    prior centroids (``meta.world_xy``) whose xy lands within the view-square
-    bbox (+10% margin). The EXACT in-frame test happens downstream in
-    :func:`build_prior_polys_ortho_from_contours` (empty projected mask -> drop).
-
-    PERSPECTIVE backend (``view_corners_xy`` is ``None`` but ``osm_ctx`` +
-    ``obs.sensor`` present): OSM
-    prior centroids within a generous ground radius of the camera pose. Only a
-    coarse cull — :func:`build_prior_polys_perspective` drops any prior that
-    projects behind / off the camera. The radius scales with altitude so a
-    plausibly-visible prior is never pre-dropped; the projection does the real
-    culling.
-
-    Returns ``[]`` when ``osm_ctx`` is absent (non-catalog map) or the
-    backend's pose/corner inputs are missing — enrichment then no-ops honestly
-    rather than silently mis-firing."""
-    if osm_ctx is None:
-        return []
-    if view_corners_xy:
-        try:
-            xs = [float(c[0]) for c in view_corners_xy]
-            ys = [float(c[1]) for c in view_corners_xy]
-        except (TypeError, ValueError, IndexError):
-            return []
-        if not xs or not ys:
-            return []
-        x0, x1 = min(xs), max(xs)
-        y0, y1 = min(ys), max(ys)
-        # Margin so a footprint straddling the view edge still enriches.
-        mx = (x1 - x0) * 0.1 + 5.0
-        my = (y1 - y0) * 0.1 + 5.0
-        x0 -= mx
-        x1 += mx
-        y0 -= my
-        y1 += my
-        out: list[str] = []
-        for fid, meta in (osm_ctx.meta_by_fid or {}).items():
-            wxy = meta.get("world_xy")
-            if not wxy:
-                continue
-            wx, wy = float(wxy[0]), float(wxy[1])
-            if x0 <= wx <= x1 and y0 <= wy <= y1:
-                out.append(str(fid))
-        return out
-
-    # Perspective backend: coarse pose-radius cull over the OSM prior contours.
-    if obs is None or getattr(obs, "sensor", None) is None:
-        return []
-    pose = getattr(obs, "pose_xy", None)
-    if not pose:
-        return []
-    try:
-        px, py = float(pose[0]), float(pose[1])
-    except (TypeError, ValueError, IndexError):
-        return []
-    alt_m = float(getattr(obs, "altitude_m", 0.0) or 0.0)
-    fov_m = float(getattr(obs, "fov_m", 0.0) or 0.0)
-    # Conservative reach: keep the radius generous and let the projection
-    # cull exactly. max(FOV, 6*altitude, 250 m) covers CityNav block scales.
-    radius = max(fov_m, alt_m * 6.0, 250.0)
-    r2 = radius * radius
-    out_p: list[str] = []
-    for fid, meta in (osm_ctx.meta_by_fid or {}).items():
-        wxy = meta.get("world_xy")
-        if not wxy:
-            continue
-        dx = float(wxy[0]) - px
-        dy = float(wxy[1]) - py
-        if dx * dx + dy * dy <= r2:
-            out_p.append(str(fid))
-    return out_p
-
-
 def _build_frame_enrich(
     *,
     obs,
@@ -500,20 +276,19 @@ def _build_frame_enrich(
     osm_ctx,
     build_prior: bool,
 ):
-    """Pure per-frame OSM-enrich BUILD: in-view fids, poly rasterization,
-    and color extraction for both enrich passes — everything except the
-    graph/side-store APPLY, which stays serial in the flight body. Reads
+    """Pure per-frame prior-enrich BUILD: in-view fids, poly rasterization
+    and color extraction — everything except the graph APPLY, which stays
+    serial in the flight body. Reads
     only the frame (obs.rgb, view_corners) and episode-static context
     (assets.base_features, osm_ctx meta/contours/graph_fid_by_fid). A
     failure is carried (not raised) so the apply replays the serial
     rate-limited warn + fail-count semantics; items completed before the
     failure are returned, matching the serial partial-apply behavior.
-    Returns {"prior": [(pfid, pattrs, ppx)...], "prior_exc",
-             "osm": [(osm_fid, sattrs)...], "osm_exc"}.
+    Returns {"prior": [(pfid, pattrs, ppx)...], "prior_exc", "phase_s"}.
     """
-    out: dict = {"prior": [], "prior_exc": None, "osm": [], "osm_exc": None}
+    out: dict = {"prior": [], "prior_exc": None}
     # Where this frame's enrichment went. The whole build is one mark in the
-    # stop's phase line; these say which of its two passes spent it.
+    # stop's phase line; these say which of its steps spent it.
     _t: dict = {}
     _c = time.perf_counter
     rgb_arr = np.asarray(obs.rgb)
@@ -575,39 +350,5 @@ def _build_frame_enrich(
                 _t["p_color"] = _c() - _m
         except Exception as exc:  # noqa: BLE001 - carried to the apply
             out["prior_exc"] = exc
-    if osm_ctx is not None:
-        try:
-            _m = _c()
-            osm_fids = _all_osm_fids_in_view(view_corners, osm_ctx=osm_ctx, obs=obs)
-            _t["o_fids"] = _c() - _m
-            _t["o_n"] = float(len(osm_fids or []))
-            _m = _c()
-            if rgb_arr.ndim == 3 and osm_fids:
-                osm_polys, _ = _build_all_osm_polys(
-                    rgb_shape=(int(rgb_arr.shape[0]), int(rgb_arr.shape[1])),
-                    view_corners_xy=view_corners,
-                    fids_to_render=osm_fids,
-                    step_idx=step_idx,
-                    obs=obs,
-                    osm_ctx=osm_ctx,
-                )
-                _t["o_polys"] = _c() - _m
-                _m = _c()
-                if osm_polys:
-                    from maps.perception.sam.detect_client import (
-                        _set_color_attr as _sca,
-                    )
-
-                    for poly in osm_polys:
-                        osm_fid = str(poly.get("fid") or "")
-                        pmask = poly.get("mask")
-                        if not osm_fid or pmask is None:
-                            continue
-                        sattrs: dict = {}
-                        _sca(sattrs, rgb_arr, pmask)
-                        out["osm"].append((osm_fid, sattrs))
-                _t["o_color"] = _c() - _m
-        except Exception as exc:  # noqa: BLE001 - carried to the apply
-            out["osm_exc"] = exc
     out["phase_s"] = _t
     return out

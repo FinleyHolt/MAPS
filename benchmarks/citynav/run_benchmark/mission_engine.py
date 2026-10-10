@@ -18,7 +18,6 @@ from benchmarks.citynav.run_benchmark.config import RunConfig
 from benchmarks.citynav.run_benchmark.osm_prior import (
     _OsmPriorCtx,
     _build_frame_enrich,
-    _merge_osm_percept,
 )
 from benchmarks.citynav.run_benchmark.tour_cursor import _write_tour_cursor
 from maps.search.withhold import withheld
@@ -457,9 +456,8 @@ def fly_one(
             log.warning("mission step write failed step=%d: %s", step_idx, exc)
 
     _ph.at("record")
-    # Prior color enrichment + all-OSM side store: one frame, built inline
-    # (no pool), two-pass: graph upsert for named priors, side store for
-    # every OSM contour.
+    # Prior color enrichment: one frame, built inline (no pool), upserted
+    # onto the named priors of the graph.
     view_corners = (
         tuple(obs.ortho_view_corners_xy)
         if obs is not None and obs.ortho_view_corners_xy is not None
@@ -476,20 +474,11 @@ def fly_one(
             osm_ctx=osm_ctx,
             build_prior=True,
         )
-        _enrich_stats = getattr(search_loop.state, "prior_enrich_stats", None)
-        if isinstance(_enrich_stats, dict):
-            _enrich_stats["frames"] = _enrich_stats.get("frames", 0) + 1
         for pfid, pattrs, ppx in _built["prior"]:
-            if search_loop.upsert_prior_percept(pfid, pattrs, px=ppx):
-                if isinstance(_enrich_stats, dict):
-                    _enrich_stats["enriched"] = _enrich_stats.get("enriched", 0) + 1
-            elif isinstance(_enrich_stats, dict):
-                _enrich_stats["noop"] = _enrich_stats.get("noop", 0) + 1
+            search_loop.upsert_prior_percept(pfid, pattrs, px=ppx)
         if _built["prior_exc"] is not None:
-            _nfail = 1
-            if isinstance(_enrich_stats, dict):
-                _enrich_stats["fail"] = _enrich_stats.get("fail", 0) + 1
-                _nfail = _enrich_stats["fail"]
+            search_loop.state.prior_enrich_fails += 1
+            _nfail = search_loop.state.prior_enrich_fails
             if _nfail == 1 or _nfail % 50 == 0:
                 log.warning(
                     "prior percept enrichment failed (n=%d) step=%d: %s",
@@ -498,31 +487,6 @@ def fly_one(
                     _built["prior_exc"],
                     exc_info=_built["prior_exc"],
                 )
-        if osm_ctx is not None:
-            _gmap = osm_ctx.graph_fid_by_fid or {}
-            for osm_fid, sattrs in _built["osm"]:
-                if isinstance(_enrich_stats, dict):
-                    _enrich_stats["osm_seen"] = _enrich_stats.get("osm_seen", 0) + 1
-                _merge_osm_percept(
-                    osm_ctx.percept_by_fid,
-                    osm_fid,
-                    osm_ctx.meta_by_fid.get(osm_fid, {}),
-                    sattrs,
-                    graph_fid=_gmap.get(osm_fid),
-                )
-            if _built["osm_exc"] is not None:
-                _nfail = 1
-                if isinstance(_enrich_stats, dict):
-                    _enrich_stats["fail"] = _enrich_stats.get("fail", 0) + 1
-                    _nfail = _enrich_stats["fail"]
-                if _nfail == 1 or _nfail % 50 == 0:
-                    log.warning(
-                        "all-osm side-store capture failed (n=%d) step=%d: %s",
-                        _nfail,
-                        step_idx,
-                        _built["osm_exc"],
-                        exc_info=_built["osm_exc"],
-                    )
 
     _ph.at("enrich")
     _ph.note(_built.get("phase_s") if _built else None)

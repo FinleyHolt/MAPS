@@ -162,7 +162,7 @@ def synthesize_compliant_trajectory(
     # descent completes or the FULL budget is reserved. A commit reachable within
     # the budget therefore always completes its transit; only a genuinely
     # unreachable commit (start -> commit exceeds the whole budget) remains
-    # short, and that is logged loudly (react_stats.descent_unreachable).
+    # short, and that is logged loudly.
     base_reserve = 0
     if descent_xy is not None and tour_wps:
         _last = tour_wps[-1]
@@ -171,7 +171,6 @@ def synthesize_compliant_trajectory(
     react_descent_starved = False
     descent_truncated = False
     descent_replans = 0
-    descent_unreachable = False
 
     def _walk_tour_discrete(tour_budget: int, descent_reserve: int) -> bool:
         """Drive to each tour stop in turn with the re-snap loop above.
@@ -277,13 +276,11 @@ def synthesize_compliant_trajectory(
             # Even a descent-only flight (whole budget reserved, whole
             # tour dropped) cannot reach the commit: genuinely
             # unreachable within the action budget. Loud, not silent.
-            descent_unreachable = True
             log.error(
                 "COMPLIANT-PARALLEL: commit descent UNREACHABLE within the "
                 "action budget even with the FULL budget reserved (whole "
                 "tour dropped): pred_xy stays %.1fm short of the committed "
-                "target %s (steps=%d/%d, replans=%d) "
-                "(react_stats.descent_unreachable)",
+                "target %s (steps=%d/%d, replans=%d)",
                 _short_m, descent_xy, steps, int(max_frames),
                 descent_replans,
             )
@@ -313,31 +310,12 @@ def synthesize_compliant_trajectory(
         log.warning(
             "COMPLIANT-PARALLEL: commit descent TRUNCATED by the action "
             "budget %.1fm short of the committed target %s (steps=%d/%d) "
-            "-> pred_xy is the truncated pose, NOT the commit "
-            "(react_stats.descent_truncated)",
+            "-> pred_xy is the truncated pose, NOT the commit",
             _short_m, descent_xy, steps, int(max_frames),
         )
 
     final_pos_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
     pred_xy = final_pos_xy
-    # Replay telemetry: descent_starved = the reserve truncated the STOP TAIL
-    # (the descent itself still ran, so pred_xy carries the committed target);
-    # descent_truncated = the DESCENT LEG was cut short by the budget, so
-    # pred_xy is the truncated pose, NOT the commit (pred_xy stays pose-tied
-    # by protocol — the flag makes the shortfall loud instead of silent).
-    try:
-        _rs = getattr(state, "react_stats", None)
-        if isinstance(_rs, dict):
-            if react_descent_starved:
-                _rs["descent_starved"] = True
-            if descent_truncated:
-                _rs["descent_truncated"] = True
-            if descent_replans:
-                _rs["descent_replans"] = int(descent_replans)
-            if descent_unreachable:
-                _rs["descent_unreachable"] = True
-    except Exception:  # noqa: BLE001 — telemetry only
-        pass
     log.info(
         "COMPLIANT-PARALLEL trajectory (discrete 6-action): %d tour stops %s "
         "descent=%s frames=%d pred_xy=%s final_pos_xy=%s (budget=%d) "

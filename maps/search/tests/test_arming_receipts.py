@@ -52,7 +52,6 @@ def _duck(setter):
     director.init_watchlist([])
 
     class _S:
-        react_stats: dict = {}
         sam_class_to_roles: dict = {}
         last_target_spec = None
         last_intel_text = "find the house"
@@ -62,10 +61,6 @@ def _duck(setter):
         state = _S()
         _lock = threading.Lock()
         _sam_concept_setter = staticmethod(setter)
-
-        def _react_stats_bump(self, key, n=1):
-            from maps.search.search_loop import SearchLoop
-            return SearchLoop._react_stats_bump(self, key, n)
 
         def _arm_roles_and_spec(self, **kw):
             from maps.search.search_loop import SearchLoop

@@ -1,9 +1,8 @@
-"""OSM-enrich build/apply seam: the pure per-frame BUILD returns exactly
-the items the serial inline passes would have applied — remap through
+"""Prior-enrich build/apply seam: the pure per-frame BUILD returns exactly
+the items the serial inline pass would have applied — remap through
 graph_fid_by_fid, empty-fid / missing-mask / empty-mix filters — and a
-build failure is CARRIED (not raised) with the other pass unaffected, so
-the flight body's apply can replay the serial partial-apply + rate-limited
-warn semantics.
+build failure is CARRIED (not raised), so the flight body's apply can replay
+the serial partial-apply + rate-limited warn semantics.
 """
 
 from __future__ import annotations
@@ -32,7 +31,6 @@ def _ctx():
     return SimpleNamespace(
         graph_fid_by_fid={"cityref_9": "building_3"},
         meta_by_fid={},
-        percept_by_fid={},
     )
 
 
@@ -66,16 +64,6 @@ def test_build_items_remap_and_filters(monkeypatch):
             }
         ),
     )
-    monkeypatch.setattr(osm_prior, "_all_osm_fids_in_view", lambda *a, **k: ["o1"])
-    monkeypatch.setattr(
-        osm_prior,
-        "_build_all_osm_polys",
-        lambda **k: ([{"fid": "o1", "mask": m_ok}, {"fid": "", "mask": m_ok}], None),
-    )
-    monkeypatch.setattr(
-        "maps.perception.sam.detect_client._set_color_attr",
-        lambda attrs, rgb, mask: attrs.__setitem__("color", "blue"),
-    )
 
     out = osm_prior._build_frame_enrich(
         obs=_obs(),
@@ -86,8 +74,8 @@ def test_build_items_remap_and_filters(monkeypatch):
         build_prior=True,
     )
 
-    # vacuity floors: the filters really dropped 3 of 4 prior polys and
-    # 1 of 2 osm polys, and the remap really rewrote the fid.
+    # vacuity floors: the filters really dropped 3 of 4 prior polys, and the
+    # remap really rewrote the fid.
     assert out["prior"] == [
         (
             "building_3",
@@ -100,25 +88,16 @@ def test_build_items_remap_and_filters(monkeypatch):
             _mask(4).area,
         )
     ]
-    assert out["osm"] == [("o1", {"color": "blue"})]
-    assert out["prior_exc"] is None and out["osm_exc"] is None
+    assert out["prior_exc"] is None
 
 
-def test_build_failure_is_carried_and_passes_stay_independent(monkeypatch):
+def test_build_failure_is_carried(monkeypatch):
     monkeypatch.setattr(osm_prior, "_prior_fids_in_view", lambda *a, **k: ["f1"])
 
     def _boom(**k):
         raise RuntimeError("poly build boom")
 
     monkeypatch.setattr(osm_prior, "_maybe_build_prior_polys", _boom)
-    monkeypatch.setattr(osm_prior, "_all_osm_fids_in_view", lambda *a, **k: ["o1"])
-    monkeypatch.setattr(
-        osm_prior, "_build_all_osm_polys", lambda **k: ([{"fid": "o1", "mask": _mask()}], None)
-    )
-    monkeypatch.setattr(
-        "maps.perception.sam.detect_client._set_color_attr",
-        lambda attrs, rgb, mask: None,
-    )
 
     out = osm_prior._build_frame_enrich(
         obs=_obs(),
@@ -131,9 +110,6 @@ def test_build_failure_is_carried_and_passes_stay_independent(monkeypatch):
 
     assert isinstance(out["prior_exc"], RuntimeError)
     assert out["prior"] == []
-    # pass 2 is unaffected by pass 1's failure
-    assert out["osm"] == [("o1", {})]
-    assert out["osm_exc"] is None
 
 
 if __name__ == "__main__":

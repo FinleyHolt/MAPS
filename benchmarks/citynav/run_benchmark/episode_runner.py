@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from benchmarks.citynav.adapter import OBJTYPE_TO_LABEL, parse_episode
+from benchmarks.citynav.adapter import parse_episode
 from benchmarks.citynav.episode import EpisodeState
 from benchmarks.citynav.live_recorder import LiveRecorder
 from benchmarks.citynav.metrics import classify_referent
@@ -604,17 +604,6 @@ def run_episode(
             )
         except Exception:  # noqa: BLE001
             pass
-        # Mission telemetry floor: the director's watchlist/boost bumps and
-        # the replay's truncation flags both land here. Aliased onto the
-        # replay's EpisodeState so metrics read one dict.
-        try:
-            search_loop.state.react_stats = {
-                "descent_starved": False,
-                "descent_truncated": False,
-            }
-            state.react_stats = search_loop.state.react_stats
-        except Exception:  # noqa: BLE001 — telemetry only, never fatal
-            pass
         mission_out = run_mission_episode(
             cfg=cfg,
             state=state,
@@ -679,7 +668,6 @@ def run_episode(
                 "pred_xy": list(_pred_xy),
                 "final_pos_xy": list(_pred_xy),
                 "visited_xy": [list(p) for p in _pos_traj],
-                "compliant_parallel": True,
                 "bounds": bounds_xyxy,
                 "sensor": sensor_row,
                 "metrics": _scores,
@@ -751,15 +739,11 @@ def run_episode(
             log.warning(
                 "EPISODE-END: flight ended %.1fm SHORT of the committed target "
                 "%s (action budget exhausted mid-transit?) -> pred_xy is the "
-                "final pose, NOT the commit (react_stats.descent_truncated)",
+                "final pose, NOT the commit",
                 _short_of_commit_m,
                 (round(float(_committed_xy_end[0]), 1),
                  round(float(_committed_xy_end[1]), 1)),
             )
-            _rs_end = getattr(state, "react_stats", None)
-            if isinstance(_rs_end, dict):
-                _rs_end["descent_truncated"] = True
-                _rs_end["descent_short_m"] = round(_short_of_commit_m, 1)
 
     agent_traj = [(float(p[0]), float(p[1])) for p in state.visited_xy]
     # Upstream gsamllavanav/evaluate.py parity: 2D NE/SR/OSR with
@@ -886,91 +870,6 @@ def run_episode(
         _target_object_type = None
     scores["target_object_type"] = _target_object_type
 
-    # EVERY referent bucket, off the one canonical CityRefer-type -> label
-    # map. The hand-rolled car/bike/building subset that used to sit here
-    # left Ground and Parking targets — 25 of a 300-run, 8.3% — outside the
-    # diagnostic's domain forever, so they failed any
-    # ``n_target_class_dets == 0`` test unconditionally.
-    _target_class_for_diag = OBJTYPE_TO_LABEL.get(
-        str(_target_object_type or "").strip()
-    )
-    scores["target_class_for_diag"] = _target_class_for_diag
-    try:
-        if _target_class_for_diag is not None and search_loop is not None:
-            from maps.search.parse_compile.candidate_expansion import labels_match
-
-            _rg_diag = getattr(search_loop.state, "runtime_graph", None)
-            _n_dets = 0
-            _nearest: float | None = None
-            if _rg_diag is not None and hasattr(_rg_diag, "nodes"):
-                for _fid, _node in _rg_diag.nodes.items():
-                    if getattr(_node, "provenance", None) != "detected":
-                        continue
-                    if not labels_match(
-                        getattr(_node, "class_name", ""), _target_class_for_diag
-                    ):
-                        continue
-                    _n_dets += 1
-                    _xy = search_loop.world_xy_for_node(_fid)
-                    if _xy is None:
-                        continue
-                    _d = math.hypot(
-                        float(_xy[0]) - target_xy_world[0],
-                        float(_xy[1]) - target_xy_world[1],
-                    )
-                    if _nearest is None or _d < _nearest:
-                        _nearest = _d
-            scores["n_target_class_dets"] = _n_dets
-            scores["nearest_target_class_det_m"] = (
-                round(_nearest, 1) if _nearest is not None else None
-            )
-    except Exception as exc:  # noqa: BLE001
-        log.warning("perception/discernment diagnostic failed (non-fatal): %s", exc)
-
-    # PRIOR-ENRICHMENT telemetry (makes the lever FALSIFIABLE). The per-flight
-    # enrichment hook accumulates {frames, osm_seen, enriched, noop, fail} on the
-    # SearchLoop state as it colors in-view OSM priors from the pixels; surface
-    # it so the A/B + pd tooling can read whether the lever ACTUALLY FIRED (an
-    # all-zero block = the enrichment did nothing this episode). ``backend`` is
-    # the observation backend it ran under. Two derived fields make BOTH halves
-    # falsifiable: ``osm_percepts`` (side-store size — the ALL-osm capture; must
-    # be >> graph_enriched) and ``graph_enriched`` (NAMED-node upserts — the
-    # committable, unchanged path; must stay > 0). Emitted once per episode, where the prediction payload is written.
-    _enrich = (
-        getattr(search_loop.state, "prior_enrich_stats", None)
-        if search_loop is not None
-        else None
-    )
-    if isinstance(_enrich, dict):
-        _enrich_block = dict(_enrich)
-        _enrich_block["backend"] = "ortho"
-        _enrich_block["graph_enriched"] = int(_enrich.get("enriched", 0))
-        _percept_store = osm_ctx.percept_by_fid if osm_ctx is not None else {}
-        _enrich_block["osm_percepts"] = len(_percept_store)
-        scores["prior_enrich"] = _enrich_block
-        log.info(
-            "prior-enrichment: osm_seen=%d osm_percepts=%d graph_enriched=%d "
-            "noop=%d frames=%d fail=%d backend=%s",
-            _enrich.get("osm_seen", 0),
-            _enrich_block["osm_percepts"],
-            _enrich_block["graph_enriched"],
-            _enrich.get("noop", 0),
-            _enrich.get("frames", 0),
-            _enrich.get("fail", 0),
-            "ortho",
-        )
-    else:
-        scores["prior_enrich"] = None
-
-    # Loop telemetry, readable off episodes.jsonl instead of grepping runner
-    # logs: the replay's truncation flags (descent_starved / descent_truncated
-    # / descent_short_m) plus whatever the SearchLoop bumped in flight
-    # (sam_concepts_redeclared, canceled_stops, boost counters).
-    scores["react"] = (
-        getattr(search_loop.state, "react_stats", None)
-        if search_loop is not None
-        else None
-    )
     # SELECTION CEILING (decouples "picked the right place" from "the drone
     # physically reached it within the action budget"). ``committed_xy`` is
     # the last flight's target (snap.confirmed_target_xy); ``commit_to_target_m``
@@ -1021,16 +920,8 @@ def run_episode(
     # comparability with pre-refactor traces).
     scores["commit_step"] = snap.lock_step if snap is not None else None
 
-    # Content-derived, split-order-independent key (the ``episode_id`` ``#N``
-    # suffix is a split-row index that shifts when the split is re-enumerated
-    # or subset, so it can't be reconstructed offline -- this can). Lets
-    # cross-run joins + custom subsets work without split-name masquerading.
-    _ann = (episode.raw.get("ann_ids") or [None])[0]
-    _obj = (episode.target_object_ids or [None])[0]
-    episode_key = f"{episode.map_name}::ann{_ann}:obj{_obj}"
     rec: dict[str, Any] = {
         "episode_id": episode.episode_id,
-        "episode_key": episode_key,
         "map_name": episode.map_name,
         "description": episode.description,
         "start_xy": list(episode.start_xy),
@@ -1038,19 +929,6 @@ def run_episode(
         "pred_xy": list(record_pred_xy),
         "final_pos_xy": list(final_pos_xy),
         "visited_xy": [list(p) for p in state.visited_xy],
-        "compliant_parallel": True,
-        "protocol": {
-            "observation_backend": "ortho",
-            "scoring_basis": scores.get("scoring_basis", "final_pos_xy"),
-            "pred_xy_role": "final_drone_pose",
-            "compliant_parallel": True,
-            # The DISCOVERED served model (None on a --no-llm run).
-            "llm_model": (
-                endpoint_spec_module.spec().model_id
-                if endpoint_spec_module.spec_installed()
-                else None
-            ),
-        },
         "bounds": bounds_xyxy,
         "sensor": sensor_row,
         "metrics": scores,
