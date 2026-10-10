@@ -33,7 +33,7 @@ def light(monkeypatch):
 def _dispatch(tmp_path, per_episode=None):
     return dispatch._dispatch_one(
         row={}, orig_idx=0, idx=0, total=1, compiler=None, objects_by_map={},
-        cfg=None, recorder=None, episode_dir=tmp_path,
+        cfg=SimpleNamespace(withhold=["look"]), recorder=None, episode_dir=tmp_path,
         per_episode=per_episode if per_episode is not None else [],
     )
 
@@ -54,6 +54,7 @@ def test_an_exception_lands_an_infra_row(tmp_path, light, monkeypatch):
     row, failed_oom = _dispatch(tmp_path)
     assert row["status"] == episodes.STATUS_INFRA
     assert row["error"] == "RuntimeError: boom"
+    assert row["withhold"] == ["look"]
     assert failed_oom is False, "an unclassified exception must not respawn the runner"
     assert episodes.read_episode_json(tmp_path) == row
 

@@ -345,7 +345,8 @@ def build_manifest(
 
     from benchmarks.citynav.run_benchmark.config import resolve_config  # noqa: PLC0415
 
-    config_yaml = yaml.safe_dump(resolve_config(config_path)[0], sort_keys=False)
+    resolved = resolve_config(config_path)[0]
+    config_yaml = yaml.safe_dump(resolved, sort_keys=False)
     return {
         "schema": SCHEMA,
         "created_ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -358,6 +359,8 @@ def build_manifest(
         "out_root": str(out_root),
         **prov,
         "config_yaml": config_yaml,
+        # The arm's withholds (maps.search.withhold); readers group by it.
+        "withhold": list(resolved["withhold"]),
         "selection": {
             "sample_seed": sample_seed,
             "sample_offset": sample_offset,

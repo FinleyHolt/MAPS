@@ -14,6 +14,7 @@ from benchmarks.citynav.metrics import aggregate
 from benchmarks.citynav.paths import OBJECTS_JSON, assert_available, split_path
 from benchmarks.citynav.run_benchmark.config import (
     _export_compact_env,
+    export_withhold,
     load_config,
 )
 from datetime import datetime
@@ -267,6 +268,7 @@ def main() -> int:
     assert_available()
     cfg = load_config(args.config)
     _export_compact_env(cfg.compact)
+    export_withhold(cfg)
     # Row provenance reads the run facts only this process's argv knows:
     # the config the runner actually loaded and the row cap.
     set_run_context(

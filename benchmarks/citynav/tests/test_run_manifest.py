@@ -73,6 +73,7 @@ def test_required_fields_nonempty(stub_run):
     for keypath in run_manifest.MEASURED_IDENTITY_FIELDS:
         assert run_manifest._get(m, keypath), f"measured field vanished: {keypath}"
     assert m["selection"]["episodes_n"] == 3
+    assert m["withhold"] == []
 
 
 def test_secret_never_appears(stub_run):

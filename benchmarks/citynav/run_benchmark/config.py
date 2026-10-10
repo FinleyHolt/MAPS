@@ -20,6 +20,8 @@ from typing import Any, Callable
 
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.sam.detect_client import SamDetectClient
+from maps.search.withhold import ENV as WITHHOLD_ENV
+from maps.search.withhold import WITHHOLDS
 
 from benchmarks.citynav.flight_model import FlightModelConfig, known_flight_kinds
 
@@ -89,6 +91,9 @@ _SCHEMA: dict[str, Any] = {
     "compact": {
         "enable": (bool, _ANY),
     },
+    "withhold": (list, (
+        lambda v: len(set(v)) == len(v) and all(n in WITHHOLDS for n in v),
+        f"a list of distinct names from {sorted(WITHHOLDS)}")),
 }
 
 
@@ -132,6 +137,9 @@ class RunConfig:
     sam: dict
     gt_perfect: dict
     compact: dict
+    # Bench-only ablation withholds (maps.search.withhold); empty serves the
+    # flown text exactly.
+    withhold: list
     # Universal resume from a prior run's workdir (CLI --resume-from-workdir)
     # and its turn (None picks the latest reconstructable one).
     resume_from_workdir: str | None = None
@@ -145,6 +153,22 @@ def _export_compact_env(compact: dict) -> None:
     environment wins."""
     if os.environ.get("SEARCH_COMPACT_ENABLE") is None:
         os.environ["SEARCH_COMPACT_ENABLE"] = "1" if compact["enable"] else "0"
+
+
+def export_withhold(cfg: RunConfig) -> None:
+    """The config's ``withhold`` -> ``SEARCH_WITHHOLD``. The config owns it:
+    a value left in the shell never stands."""
+    os.environ[WITHHOLD_ENV] = ",".join(cfg.withhold)
+
+
+def assert_flight_config(cfg: RunConfig) -> None:
+    """The flight mission flies the flown engine: refuse a config, or an
+    environment, that withholds any part of it."""
+    if cfg.withhold or os.environ.get(WITHHOLD_ENV, "").strip():
+        raise ValueError(
+            f"{cfg.source_path}: the flight mission serves the flown engine; "
+            f"withhold={cfg.withhold} {WITHHOLD_ENV}="
+            f"{os.environ.get(WITHHOLD_ENV, '')!r} is a bench ablation")
 
 
 def _locate(path: str | Path | None) -> Path:

@@ -103,3 +103,13 @@ def test_label_falls_back_to_the_root_name(tmp_path):
     assert row["label"] == "no_receipt"
     assert row["effort"] is None
     assert row["n"] == 1
+
+
+def test_an_ablation_arm_is_labelled_by_its_withholds(tmp_path):
+    root = _arm(tmp_path, "ablate", _ledger("c::1#0", "20260827_100000", 1), effort=1.0)
+    (root / "run_manifest.json").write_text(json.dumps({"withhold": ["look", "images"]}))
+    (row,) = arm_table.table([root])
+    assert row["label"] == "withhold=look,images"
+    (root / "run_manifest.json").write_text(json.dumps({"withhold": []}))
+    (row,) = arm_table.table([root])
+    assert row["label"] == "e1.0"

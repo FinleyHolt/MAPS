@@ -82,3 +82,7 @@ gt_perfect:
 # endpoint's /v1/models at startup (maps.llm.endpoint_spec).
 compact:
   enable: true
+# Bench-only ablation withholds over the flown engine (maps.search.withhold):
+# prior, look_for, look, images, mission_map, system_turn. Empty serves the
+# flown text exactly; the flight mission refuses any.
+withhold: []

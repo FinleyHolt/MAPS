@@ -131,6 +131,7 @@ def _dispatch_one(
             **rec,
             "search_env_flags": rec.get("search_env_flags") or _arm_stamp,
             "provenance": rec.get("provenance") or _prov,
+            "withhold": list(cfg.withhold),
             "elapsed_s": round(time.monotonic() - t0, 1),
             "ts": round(time.time(), 1),
         }

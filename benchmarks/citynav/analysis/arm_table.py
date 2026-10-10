@@ -18,8 +18,9 @@ Usage:
     python -m benchmarks.citynav.analysis.arm_table <root> [<root> ...]
     python -m benchmarks.citynav.analysis.arm_table --json <root> [...]
 
-An arm's label is its ``arm.json`` ``label`` (the ladder writes one), else
-the root's basename.
+An arm's label is the withholds its run manifest records (an ablation arm),
+else its ``arm.json`` ``label`` (the ladder writes one), else the root's
+basename.
 """
 
 from __future__ import annotations
@@ -79,9 +80,11 @@ def arm_row(root: Path) -> dict:
     picked, stats = _rows.load_attempts(root)
     scored = [a.metrics for a in picked.values() if a.metrics]
     meta = _arm_meta(root)
+    withhold = _withhold(root)
     row: dict = {
         "root": str(root),
-        "label": meta.get("label") or root.name,
+        "label": (f"withhold={','.join(withhold)}" if withhold
+                  else meta.get("label") or root.name),
         "effort": meta.get("effort"),
         "criterion": run_criterion(scored) if scored else None,
         "n": len(scored),
@@ -112,6 +115,15 @@ def _arm_meta(root: Path) -> dict:
     except (OSError, ValueError):
         return {}
     return meta if isinstance(meta, dict) else {}
+
+
+def _withhold(root: Path) -> list:
+    """The withholds the run manifest records, or none."""
+    try:
+        manifest = json.loads((root / "run_manifest.json").read_text())
+    except (OSError, ValueError):
+        return []
+    return list(manifest.get("withhold") or []) if isinstance(manifest, dict) else []
 
 
 def _sort_key(row: dict) -> tuple[int, float, str]:

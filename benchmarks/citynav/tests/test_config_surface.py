@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from benchmarks.citynav.run_benchmark.config import (
+    assert_flight_config,
     load_config,
     resolve_config,
 )
@@ -68,6 +69,7 @@ ABSENT_MEANT = {
     "precise_tolerance_m": 0.0, "precise_floor_radius_m": 5.0, "spawn": "episode",
     "spawn_seed": 0, "start_altitude_band_m": [100.0, 150.0],
     "start_altitude_agl_m": None, "altitude_cap_m": 200.0, "descend_to_land": False,
+    "withhold": [],
     "gt_perfect": {"color_table_path": None, "mask_px": 768, "min_blob_px": 24,
                    "max_per_step": 0},
 }
@@ -131,6 +133,8 @@ def test_base_resolves_relative_to_the_file_and_deep_merges(tmp_path):
     ("spawn: random\n", "spawn must be one of"),
     ("start_altitude_band_m: [150, 100]\n", "start_altitude_band_m must be [lo, hi]"),
     ("sam: true\n", "sam is a block of keys"),
+    ("withhold: [pictures]\n", "withhold must be"),
+    ("withhold: [look, look]\n", "withhold must be"),
 ])
 def test_a_bad_key_or_value_is_refused_with_its_path(tmp_path, body, needle):
     with pytest.raises(ValueError) as e:
@@ -149,3 +153,9 @@ def test_a_base_loop_is_refused(tmp_path):
     _write(tmp_path, "b.yaml", "base: a.yaml\n")
     with pytest.raises(ValueError, match="base chain loops"):
         resolve_config(tmp_path / "a.yaml")
+
+
+def test_the_flight_mission_refuses_a_withholding_config(tmp_path):
+    assert_flight_config(load_config(REPO_ROOT / "configs" / "calcity.yaml"))
+    with pytest.raises(ValueError, match="withhold"):
+        assert_flight_config(load_config(_over(tmp_path, "withhold: [images]\n")))
