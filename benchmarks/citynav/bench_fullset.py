@@ -214,7 +214,7 @@ def _runner_env() -> dict[str, str]:
 class _WarmRunner:
     """One persistent ``run_benchmark --episode-server`` per bench worker.
 
-    The expensive cold start (CuPy/NVRTC, config, split, objects,
+    The expensive cold start (config, split, objects,
     MapsCompiler) is paid once at ``spawn``; every subsequent episode
     reuses it. Episodes are driven over the child's own stdin/stdout
     pipes (newline-delimited JSON). The child runs in its own session, so
@@ -322,7 +322,7 @@ class _WarmRunner:
             target=self._drain_stdout, args=(self.proc,), daemon=True
         )
         self._reader.start()
-        # Block on the one-time cold start (CuPy/NVRTC + compiler ctor).
+        # Block on the one-time cold start (config, split, compiler ctor).
         self._await_event({"ready"}, timeout_s=600.0, what="ready")
 
     def run_episode(
