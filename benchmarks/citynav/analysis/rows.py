@@ -9,10 +9,7 @@ directory holding the ledger. The runner's own copy of the row is
 ``<workdir>/episode.json``.
 
 An episode can be attempted more than once: an infra casualty is
-re-queued, and before ``f22e8fd`` the standalone dispatch took its claim
-cursor modulo the selection length, so it wrapped and a worker that
-finished early was handed a sibling's LIVE episode (one 4-worker /
-4-episode run produced nine attempts).
+re-queued.
 
 THE RULE, defined here and nowhere else: an episode's result is its
 FIRST FULLY COMPLETE attempt, ordered by attempt START time.
@@ -32,10 +29,11 @@ happened to run fastest.
 
 ``status`` is the one verdict on a row, stamped by the producer:
 ``ok`` (scored, complete -- ``ended_by`` turn_cap / compaction_infeasible
-/ oversize_rejection are the algorithm spending its own budget and stay
-``ok``), ``timed_out`` (scored, in the denominator, counted apart),
-``infra`` (never a fair run: serve death, OOM, ingest or SAM outage,
-spawn failure, crash; dropped at read time).
+/ oversize_rejection are the algorithm spending its own budget, and
+request_refused is a request the method built wrong; all stay ``ok``),
+``timed_out`` (scored, in the denominator, counted apart), ``infra``
+(never a fair run: serve death, SAM outage, spawn failure, worker crash;
+dropped at read time).
 
 Fallbacks for an episode with no complete attempt, in order: the LAST
 attempt carrying metrics (an all-failure episode still reports, and a
@@ -115,9 +113,9 @@ def is_infra_abort(row: dict) -> bool:
     """True when the attempt never got a fair run.
 
     The bench PRODUCER stamps ``status: infra`` -- for a serve dying under
-    the episode (``ended_by=transient_failures``), a CUDA/CuPy contention OOM,
-    an ingest or SAM outage, a warm-runner spawn failure, a crash. All are
-    infra casualties rather than algorithm misses. A flight row carries the
+    the episode (``ended_by=transient_failures``), a SAM outage, a
+    warm-runner spawn failure, a worker crash. All are infra casualties
+    rather than algorithm misses. A flight row carries the
     ending itself (``ended_by`` in ``INFRA_ENDINGS``) and reads the same way,
     so the closed-loop measures and the bench share this one rule. They are excluded
     from coverage and SR -- and dropped at READ time, not merely marked
@@ -126,21 +124,14 @@ def is_infra_abort(row: dict) -> bool:
     reasoner getting it wrong, and charging SR for it prices the
     cluster's weather as the model's skill.
 
-    THE DRIVER'S PREDICATE AND THIS ONE ARE THE SAME PREDICATE.
-    ``bench_fullset._infra_casualty`` delegates here. They were two
-    definitions of one question and they had already diverged: the driver
-    excluded a ``transient_failures`` row from its done-set and re-queued
-    the episode, while this reader scored the excluded attempt and
-    discarded the re-run as a replicate. Measured on the reasoning-effort
-    ladder, where 7 of one arm's 32 episodes went that way and the arm
-    re-queued them forever; and before that on
-    ``f40088a:calcity_full_replyrepair``, where a serve OOM storm forced
-    50 of 1022 episodes to SR 0.000.
+    THE DRIVER'S PREDICATE AND THIS ONE ARE THE SAME PREDICATE:
+    ``bench_fullset._infra_casualty`` delegates here, so the driver's
+    done-set and every reader reach one verdict on a row.
 
-    What is NOT here, deliberately: ``turn_cap``, ``compaction_infeasible``
-    and ``oversize_rejection`` stay ``ok``. Those are the algorithm
-    spending its own budget -- running out of turns, or growing a
-    conversation past the window -- not the serve failing underneath it.
+    ``turn_cap``, ``compaction_infeasible``, ``oversize_rejection`` and
+    ``request_refused`` stay ``ok``: the algorithm running out of turns,
+    growing a conversation past the window, or building a request the
+    serve refuses, not the serve failing underneath it.
     """
     return row.get("status") == "infra" or ended_by(row) in INFRA_ENDINGS
 
@@ -202,9 +193,7 @@ def attempt_stamp(row: dict) -> str:
 # -- mixing would count one attempt twice, inflating both no_metrics and
 # the denominator.
 RESULT_TIERS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    # The run's own ledger: one row per attempt, carrying status / workdir
-    # / oom_retries. Archived --loop passes are ``episodes.jsonl.pass<N>.
-    # <ts>``, which the exact name excludes.
+    # The run's own ledger: one row per attempt, carrying status / workdir.
     ("ledger", (EPISODES_JSONL,)),
 )
 
@@ -272,8 +261,7 @@ def iter_json_rows(path: Path) -> Iterator[dict]:
 
     Blanks, non-objects and undecodable lines are skipped: a LIVE run's
     last line is routinely a partial write, and a run root mid-rsync can
-    raise OSError mid-read. The bare ``read_text()`` this replaces died on
-    both.
+    raise OSError mid-read.
     """
     try:
         text = path.read_text()
