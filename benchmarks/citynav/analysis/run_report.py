@@ -1,4 +1,4 @@
-"""Canonical single-run / paired SR report for a multinode coord-root.
+"""Canonical single-run / paired SR report for a run root.
 
 ONE trustworthy view so analysis stops hand-rolling reads against the
 wrong nesting. The authoritative per-episode record is the ledger row's
