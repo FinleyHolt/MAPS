@@ -83,50 +83,6 @@ def test_secret_never_appears(stub_run):
     assert "SEARCH_REASONER_API_KEY" not in stub_run["env"]
 
 
-def test_replay_round_trip_and_refusals(stub_run, tmp_path):
-    src_path = tmp_path / "source_manifest.json"
-    src_path.write_text(json.dumps(stub_run))
-    source = run_manifest.load_manifest(src_path)
-    # Same checkout, same resolution: both gates pass.
-    run_manifest.assert_replay_git(source)
-    run_manifest.verify_replay(source, stub_run)
-    # Tampered git sha: refused, no auto-checkout.
-    tampered = json.loads(json.dumps(stub_run))
-    tampered["git_commit"] = "deadbeef" * 5
-    with pytest.raises(run_manifest.ManifestIdentityError, match="git mismatch"):
-        run_manifest.assert_replay_git(tampered)
-    # A re-derivation that selects different episodes: refused.
-    drifted = json.loads(json.dumps(stub_run))
-    drifted["selection"]["selection_sha"] = "000000000000"
-    with pytest.raises(run_manifest.ManifestIdentityError, match="replay drift"):
-        run_manifest.verify_replay(source, drifted)
-    # A random JSON is not a manifest.
-    (tmp_path / "not_manifest.json").write_text("{}")
-    with pytest.raises(run_manifest.ManifestIdentityError, match="schema"):
-        run_manifest.load_manifest(tmp_path / "not_manifest.json")
-
-
-def test_apply_replay_args_forces_recorded_selection(stub_run, tmp_path):
-    import argparse
-
-    src_path = tmp_path / "source_manifest.json"
-    src_path.write_text(json.dumps(stub_run))
-    args = argparse.Namespace(
-        from_manifest=str(src_path),
-        split="val_seen",
-        sample_seed=999,
-        sample_offset=7,
-        limit=0,
-        episode_allowlist=None,
-    )
-    source = run_manifest.apply_replay_args(args)
-    assert source["split"] == "train_seen"
-    assert args.split == "train_seen"
-    assert args.sample_seed == 1234
-    assert args.sample_offset == 0
-    assert args.limit == 3
-
-
 def test_write_once_resume_and_refusal(stub_run, tmp_path):
     path = run_manifest.emit_or_verify(tmp_path, stub_run, log=lambda *_: None)
     assert path.is_file()

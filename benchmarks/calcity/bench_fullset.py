@@ -3,8 +3,8 @@
 The same wrapper seam as ``benchmarks.calcity.run_benchmark``: name the Cal
 City contract, then hand
 off to the shared CityNav harness. Every knob is the shared one
-(``--workers``, ``--limit``, ``--sample-seed``, ``--sample-offset``,
-``--episode-allowlist``, ``--loop``, ``--out-root``); see
+(``--workers``, ``--limit``, ``--sample-seed``, ``--episode-allowlist``,
+``--out-root``); see
 ``benchmarks/citynav/bench_fullset.py`` for what they mean.
 
 The env has to be set BEFORE the import: the shared module activates its

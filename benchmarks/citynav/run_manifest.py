@@ -46,7 +46,7 @@ import socket
 import time
 from pathlib import Path
 
-from benchmarks import _git_provenance, repo_provenance, sha256_file
+from benchmarks import repo_provenance
 from benchmarks.citynav.episodes import EPISODES_JSONL
 
 SCHEMA = "maps.run_manifest/v1"
@@ -106,9 +106,7 @@ ARM_ENV_PREFIXES = ("SEARCH_COMPACT_",)
 AUDITED_ENV = (
     # selects what runs
     "BENCH_SAMPLE_SEED",
-    "BENCH_SAMPLE_OFFSET",
     "CITYNAV_BENCH_CONFIG",
-    "CITYNAV_BENCH_MAX_WALL_S",
     "CITYNAV_ROOT",
     "SEARCH_AGENTIC_REPO_ROOT",
     "SEARCH_BENCHMARK_AUTO_BAKE",
@@ -141,8 +139,6 @@ AUDITED_ENV = (
     "SEARCH_ENDPOINT_OFFLINE",
     "SEARCH_ENDPOINT_SPEC_OVERRIDE",
     "SEARCH_REASONER_URL",
-    # placement / throughput (wall clock, not scores)
-    "CITYNAV_BENCH_EPISODE_TIMEOUT_S",
 )
 AUDITED_ENV_PREFIXES = (
     "SEARCH_COMPACT_",
@@ -160,10 +156,6 @@ SECRET_ENV = ("SEARCH_REASONER_API_KEY",)
 # MECHANICS: wall clock, placement gates, retries, coordination transport —
 # never what is measured. Ambient by design; not worth a manifest line each.
 MECHANICS_ENV = (
-    "CITYNAV_BENCH_ABORT_FRACTION",
-    "CITYNAV_BENCH_ABORT_WINDOW",
-    "CITYNAV_BENCH_RECYCLE_AFTER",
-    "CITYNAV_BENCH_RECYCLE_MAPS",
     "SEARCH_LLM_ROUTING_KEY_HEADER",
     "SEARCH_REASONER_TIMEOUT_S",
     "SEARCH_REASONER_WARMUP_TIMEOUT_S",
@@ -400,73 +392,6 @@ def identity_drift(prior: dict, current: dict) -> list[str]:
         for kp in IDENTITY_KEYS
         if _identity(prior, kp) != _identity(current, kp)
     ]
-
-
-def load_manifest(path: str | Path) -> dict:
-    """A stored manifest, schema-checked. Loud on anything else — a replay
-    fed a random JSON must not half-work."""
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or data.get("schema") != SCHEMA:
-        raise ManifestIdentityError(
-            f"{path} is not a run manifest (schema="
-            f"{data.get('schema') if isinstance(data, dict) else None!r}, "
-            f"expected {SCHEMA!r})"
-        )
-    return data
-
-
-def assert_replay_git(source: dict) -> None:
-    """A replay refuses on git-sha mismatch: the recorded number is only
-    reproducible by the code that produced it. The human reconciles
-    (checkout the recorded sha); no auto-checkout."""
-    cur = str(_git_provenance().get("git_commit") or "")
-    rec = str(source.get("git_commit") or "")
-    # The two derivations may differ in length (a short deploy stamp vs a
-    # full rev-parse); prefix equality at sha length is the same commit.
-    same = bool(cur and rec) and (cur.startswith(rec) or rec.startswith(cur))
-    if not same:
-        raise ManifestIdentityError(
-            f"replay git mismatch: the manifest was flown at "
-            f"{rec or '<unrecorded>'}, this checkout is at "
-            f"{cur or '<no git>'}. Check out the recorded commit to replay "
-            f"its run (no auto-checkout)."
-        )
-
-
-def apply_replay_args(args) -> dict:
-    """``--from-manifest``: the record becomes an input again. Loads the
-    source manifest, refuses on git mismatch, and overwrites the selection
-    argv (split/seed/offset/limit/allowlist) so the identical episode set
-    replays. The live parts (endpoints, bake) are re-derived
-    at startup and gated against the source by ``verify_replay``."""
-    source = load_manifest(args.from_manifest)
-    assert_replay_git(source)
-    sel = source.get("selection") or {}
-    args.split = source.get("split") or args.split
-    args.sample_seed = int(sel.get("sample_seed") or 0)
-    args.sample_offset = int(sel.get("sample_offset") or 0)
-    args.limit = int(sel.get("limit") or 0)
-    allow = sel.get("allowlist")
-    if allow:
-        if not Path(allow).is_file():
-            raise ManifestIdentityError(
-                f"replay: the manifest's episode allowlist is missing: {allow}"
-            )
-        args.episode_allowlist = allow
-    return source
-
-
-def verify_replay(source: dict, fresh: dict) -> None:
-    """Gate a replay's re-derived resolution against the source record.
-    selection_sha proves the identical episode set; config sha, bake and
-    served model prove the identical measurement."""
-    drift = identity_drift(source, fresh)
-    if drift:
-        raise ManifestIdentityError(
-            "replay drift — the re-derived run does not reproduce the "
-            "manifest (fix the environment or serve, never the record):\n  "
-            + "\n  ".join(drift)
-        )
 
 
 def emit_or_verify(out_root: Path, manifest: dict, log=print) -> Path:

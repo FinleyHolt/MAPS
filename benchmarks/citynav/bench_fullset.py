@@ -108,9 +108,7 @@ RUNNER_MODULE = os.environ.get(
 # The ITERATION split. test_unseen is reserved for the one final run and
 # must be NAMED on the command line, never inherited from a default.
 DEFAULT_SPLIT = "train_seen"
-DEFAULT_EPISODE_TIMEOUT_S = int(
-    os.environ.get("CITYNAV_BENCH_EPISODE_TIMEOUT_S", str(4 * 3600))
-)
+DEFAULT_EPISODE_TIMEOUT_S = 4 * 3600
 # Share of the episode cap held back from FLYING, so the model still has
 # turns to reply and commit after the pass's wall-clock backstop fires. The
 # backstop trades the tail of a pass for a scored row: calcity::6#6 spent its
@@ -122,7 +120,7 @@ POLL_INTERVAL_S = 5.0
 MAX_INFRA_ATTEMPTS = 3
 # Wall-time budget for a continuous run (0 = unlimited; run until the
 # selection / run-count budget is exhausted).
-DEFAULT_MAX_WALL_S = int(os.environ.get("CITYNAV_BENCH_MAX_WALL_S", "0"))
+DEFAULT_MAX_WALL_S = 0
 # Mass-instant-failure abort. A tree deployed without its tile bake fails
 # EVERY episode in seconds. The driver recognizes the shape
 # (``no_prediction_unclassified``), but a warning line in the END-OF-RUN
@@ -138,8 +136,8 @@ DEFAULT_MAX_WALL_S = int(os.environ.get("CITYNAV_BENCH_MAX_WALL_S", "0"))
 #
 # Absolute count before rate: the window must FILL before the gate can
 # fire, so two failures out of two is never evidence.
-ABORT_WINDOW = int(os.environ.get("CITYNAV_BENCH_ABORT_WINDOW", "12"))
-ABORT_FRACTION = float(os.environ.get("CITYNAV_BENCH_ABORT_FRACTION", "0.9"))
+ABORT_WINDOW = 12
+ABORT_FRACTION = 0.9
 
 
 # Proactive warm-runner recycle. The persistent ``run_benchmark
@@ -148,19 +146,12 @@ ABORT_FRACTION = float(os.environ.get("CITYNAV_BENCH_ABORT_FRACTION", "0.9"))
 # a long-lived child under the Slurm cgroup ``--mem`` cap can get
 # SIGKILLed mid-flight. Recycling (kill, then lazy respawn on the
 # next attempt) after every large block AND after a fixed episode count
-# resets the child's RSS to its cold baseline. ``0`` disables the
-# count-based recycle (the per-block recycle still fires).
-WARM_RUNNER_RECYCLE_AFTER = int(os.environ.get("CITYNAV_BENCH_RECYCLE_AFTER", "8"))
+# resets the child's RSS to its cold baseline.
+WARM_RUNNER_RECYCLE_AFTER = 8
 # Substrings of map names whose per-block graphs are large enough that a
 # single episode should trigger a recycle once it finishes, so the next
 # episode starts from a cold RSS baseline rather than stacking on top.
-# Env-overridable comma-list (empty disables the per-map recycle; the
-# count-based recycle still fires) so it can be tuned from a measurement.
-WARM_RUNNER_RECYCLE_MAP_SUBSTRINGS = tuple(
-    s.strip()
-    for s in os.environ.get("CITYNAV_BENCH_RECYCLE_MAPS", "cambridge").split(",")
-    if s.strip()
-)
+WARM_RUNNER_RECYCLE_MAP_SUBSTRINGS = ("cambridge",)
 _log_lock = threading.Lock()
 
 
@@ -432,10 +423,7 @@ class _WarmRunner:
         """
         if any(s in (map_name or "") for s in WARM_RUNNER_RECYCLE_MAP_SUBSTRINGS):
             return True
-        return (
-            WARM_RUNNER_RECYCLE_AFTER > 0
-            and self._episodes_since_spawn >= WARM_RUNNER_RECYCLE_AFTER
-        )
+        return self._episodes_since_spawn >= WARM_RUNNER_RECYCLE_AFTER
 
     def clear_lockfile(self) -> None:
         try:
@@ -560,7 +548,6 @@ class Driver:
         # ledger at each pass start and kept current by _append_result.
         # Guarded by _dispatch_lock.
         self._infra_errors: dict[str, Counter] = {}
-        self.loop = bool(args.loop)
         self.out_root = Path(args.out_root)
         if not self.out_root.is_absolute():
             self.out_root = (REPO / self.out_root).resolve()
@@ -570,16 +557,11 @@ class Driver:
         self.summary_file = self.out_root / "summary.txt"
         self.limit = int(args.limit)
         self.sample_seed = int(args.sample_seed)
-        self.sample_offset = int(getattr(args, "sample_offset", 0) or 0)
         # Optional episode-allowlist file: newline-delimited episode_ids.
         # Intersected with the enumerated split in ``_select_episodes``
         # before the seeded shuffle, so an (allowlist, seed) pair selects
         # the same N episodes. Set by the ablation harness; production
         # runs leave it None.
-        # A --from-manifest run's source record; main() assigns it after
-        # apply_replay_args forced the recorded selection into args. run()
-        # gates the re-derived resolution against it before emitting.
-        self.replay_source: dict | None = None
         self.allowlist_path: Path | None = None
         if getattr(args, "episode_allowlist", None):
             ap = Path(args.episode_allowlist)
@@ -1121,23 +1103,6 @@ class Driver:
                 eid = self._next_claimed_episode(worker_id)
                 if eid is None:
                     return
-                # Write-once backstop (standalone only): a claim for an
-                # episode already completed this run is dropped loudly
-                # instead of flown — a re-fly would append a duplicate row
-                # whose replicate outcome is a coin flip under reasoner
-                # nondeterminism. Unreachable while _next_claimed_episode
-                # and _append_result share _dispatch_lock; kept as the
-                # guard against a future claim path that forgets.
-                with self._dispatch_lock:
-                    dup = eid in self._done_cache
-                    if dup:
-                        self._in_flight.discard(eid)
-                if dup:
-                    self.log(
-                        f"[w{worker_id}] DUP-CLAIM {eid}: result row "
-                        "already written this run; dropping claim"
-                    )
-                    continue
                 try:
                     self._wait_for_vllm()
                     self.run_one(worker_id, eid, runner)
@@ -1200,11 +1165,6 @@ class Driver:
         # correct A/B subset) and any partial run is a representative
         # random sample, not block-0-biased.
         random.Random(self.sample_seed).shuffle(episodes)
-        # Optional disjoint-slice offset (applied AFTER shuffle, BEFORE
-        # limit) so two clusters sharing a seed run non-overlapping
-        # slices of the same fixed subset.
-        if self.sample_offset > 0:
-            episodes = episodes[self.sample_offset :]
         if self.limit > 0:
             episodes = episodes[: self.limit]
         return episodes
@@ -1270,14 +1230,12 @@ class Driver:
                 config_path=CONFIG,
                 split=self.split,
                 sample_seed=self.sample_seed,
-                sample_offset=self.sample_offset,
+                sample_offset=0,
                 limit=self.limit,
                 workers=self.workers,
                 allowlist_path=self.allowlist_path,
                 episodes=episodes,
             )
-            if self.replay_source is not None:
-                _rm.verify_replay(self.replay_source, fresh_manifest)
             _rm.emit_or_verify(self.out_root, fresh_manifest, log=self.log)
         except _rm.ManifestIdentityError as exc:
             self.log(f"FATAL: {exc}")
@@ -1313,14 +1271,7 @@ class Driver:
             if not pending:
                 self.log(f"nothing left to fly: {len(episodes)} episodes selected")
                 self._write_summary()
-                if not self.loop:
-                    return 0
-                self.log("--loop set; archiving results and re-running the split")
-                ts = time.strftime("%Y%m%d_%H%M%S")
-                self.episodes_file.rename(
-                    self.episodes_file.with_suffix(f".jsonl.pass{pass_idx}.{ts}")
-                )
-                continue
+                return 0
             threads = []
             for wid in range(self.workers):
                 t = threading.Thread(target=self.worker_loop, args=(wid,), daemon=False)
@@ -1395,16 +1346,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "an A/B across code versions is on the identical subset.",
     )
     p.add_argument(
-        "--sample-offset",
-        type=int,
-        default=int(os.environ.get("BENCH_SAMPLE_OFFSET", "0")),
-        help="skip the first N episodes of the seeded shuffle BEFORE "
-        "--limit (default from BENCH_SAMPLE_OFFSET, else 0). With a "
-        "shared --sample-seed, (offset, limit) carves a disjoint slice "
-        "of the same fixed subset so two clusters can split one run "
-        "(e.g. offset=0 limit=400 vs offset=400 limit=100).",
-    )
-    p.add_argument(
         "--episode-allowlist",
         default=None,
         help="path to a newline-delimited file of episode_ids. When set, "
@@ -1414,23 +1355,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "for matched-pair statistical power.",
     )
     p.add_argument(
-        "--loop",
-        action="store_true",
-        help="after full coverage, archive results and run the split again",
-    )
-    p.add_argument(
         "--dry-run",
         action="store_true",
         help="print seed, selected episodes and done/pending; launch nothing",
-    )
-    p.add_argument(
-        "--from-manifest",
-        default=None,
-        help="replay a recorded run: load its run_manifest.json, force the "
-        "recorded selection (split/seed/offset/limit/allowlist), and gate "
-        "the re-derived live facts (git sha, config sha, bake, served "
-        "model, selection sha) against the record, refusing loud on any "
-        "mismatch. A git mismatch is reconciled by hand (no auto-checkout).",
     )
     return p
 
@@ -1447,17 +1374,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     stamp_repo_provenance()  # loud EVAL-PROVENANCE audit line (which code ran)
     args = _build_parser().parse_args(argv)
-    replay_source = None
-    if args.from_manifest:
-        from benchmarks.citynav import run_manifest as _rm
-
-        try:
-            replay_source = _rm.apply_replay_args(args)
-        except _rm.ManifestIdentityError as exc:
-            print(f"FATAL: {exc}", file=sys.stderr)
-            return 2
     driver = Driver(args)
-    driver.replay_source = replay_source
     if args.dry_run:
         return driver.dry_run()
     # Endpoint discovery: probe the vLLM /v1/models facts + every service /health ONCE, so a fleet run

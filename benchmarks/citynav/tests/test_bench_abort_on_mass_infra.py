@@ -56,11 +56,8 @@ def _driver(tmp_path: Path) -> bf.Driver:
     d.episode_timeout_s = 3600
     d.max_wall_s = 0
     d.sample_seed = 1234
-    d.sample_offset = 0
     d.limit = 0
     d.allowlist_path = None
-    d.replay_source = None
-    d.loop = False
     d.max_infra_attempts = 3
     d._infra_errors = {}
     d._split_size = 0
