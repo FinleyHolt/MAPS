@@ -269,8 +269,7 @@ def test_the_uniform_loop_retirements_do_not_reappear():
 # The commit-landing cutover's retired names: the select's basis apparatus
 # (justification lives in the think span), the [x,y] world-point select
 # form, and the saw:/delivered-crop channel that existed only for the
-# basis split. ``"xy_literal"`` is banned as the QUOTED label so the
-# unrelated ``_is_xy_literal`` program-compiler helper stays legal;
+# basis split. ``"xy_literal"`` is banned as the QUOTED label only;
 # ``select_xy`` is NOT banned (substring of the live
 # ``rejected_select_xy`` gate-veto channel).
 RETIRED_LANDING_CUTOVER_NAMES = (
