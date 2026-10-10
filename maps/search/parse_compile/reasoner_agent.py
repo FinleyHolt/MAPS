@@ -77,12 +77,6 @@ def served_system_text(*, sensor_description: str = "") -> str:
     return text
 
 
-def _env_look_enabled() -> bool:
-    return os.environ.get("SEARCH_LOOK_TOOL", "").strip().lower() in (
-        "1", "true", "yes",
-    )
-
-
 # There is no in-context image cap. Crops accumulate and the compactor bounds
 # them in TOKENS, which is the resource the served window actually spends.
 #
@@ -415,6 +409,13 @@ class Reasoner:
         envelope already pins, and the block inside it is held to the
         language by the parser's own refusals.
         """
+        self.messages = compact_transcript(
+            self.messages,
+            target_input_tokens=self.endpoint_spec.input_budget,
+            model=self.model,
+            tools=tools,
+            site="reasoner.step_tool_call",
+        )
         # Sampling lives in `maps.llm.sampling.thinking_sampling_kwargs`
         # so every reasoner turn stays in lock-step.
         kwargs: dict[str, Any] = {
@@ -451,16 +452,6 @@ class Reasoner:
         )
         if sub_id is not None:
             kwargs["transport_subagent_id"] = sub_id
-        compacted_messages = compact_transcript(
-            self.messages,
-            target_input_tokens=self.endpoint_spec.input_budget,
-            model=self.model,
-            tools=tools,
-            site="reasoner.step_tool_call",
-        )
-        if compacted_messages is not self.messages:
-            self.messages = compacted_messages
-        kwargs["messages"] = self.messages
         if self.cancel_event is not None:
             if self.cancel_event.is_set():
                 raise CallCanceled(
