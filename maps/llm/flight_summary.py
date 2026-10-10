@@ -7,14 +7,14 @@ Both are written on every episode. Neither survives a rows-only telemetry
 pull, and both cost a file walk per episode to read, so the population view
 that wants "tokens and turns across 1000 episodes" could not have them.
 
-:func:`summarize` collapses the pair into ~20 scalars plus three small
-histograms, cheap enough to ride the row into ``episodes.jsonl``.
+:func:`summarize` collapses the pair into ~10 scalars plus a call
+histogram and the declared tools, cheap enough to ride the row into
+``episodes.jsonl``.
 
 WHICH FILE OWNS WHICH NUMBER — one source per quantity, never two:
 
-  TRANSCRIPT owns turns, requests, tokens, and everything the model
-    emitted (tool calls, program ops, op args) plus the DECLARED
-    vocabulary each ``params`` record carries.
+  TRANSCRIPT owns turns, requests, tokens, the tool calls the model
+    emitted, and the DECLARED tools each ``params`` record carries.
 
   NET METER owns ``reasoning_tokens``. Whether it rides the wire is a
     backend fact, not a constant: measured over the pulled tree, 1055 of
@@ -28,10 +28,6 @@ WHICH FILE OWNS WHICH NUMBER — one source per quantity, never two:
 
     ``reasoning_tokens`` is a SLICE of ``completion_tokens``, not an
     addition — the two overlap by design.
-
-DECLARED vs USED is the interesting set, and only the transcript can
-state it: ``find`` declares a ``color`` arg, and whether the agent ever
-supplies one is load-bearing (CLAUDE.md: colour is ORDERING-only).
 """
 
 from __future__ import annotations
@@ -56,10 +52,6 @@ MALFORMED = "«malformed»"
 
 _TOOL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,39}\Z")
 
-#: The op list lives at ``analyze.parameters.program.ops.items``, as a
-#: variant list when the schema discriminates on ``op``.
-_ANALYZE = "analyze"
-
 
 def _tool_name(raw: Any) -> str:
     name = str(raw or "")
@@ -71,62 +63,18 @@ def _as_dict(v: Any) -> dict:
 
     ``x.get(k) or {}`` guards a missing or null field and nothing else: a
     field declared as an object arrives as a string often enough to matter,
-    and the next ``.get`` on it raises. Measured on the laptop hub — an
-    ``analyze`` call whose ``program`` was the bare string form raised
-    ``AttributeError: 'str' object has no attribute 'get'`` and took the
-    WHOLE fleet listing to a 500 over one episode.
-
-    Here the blast radius is different and worse: this runs inside the
-    episode, behind a catch-all, so an unguarded raise would silently
-    return the zero shape and lose that episode's telemetry with nothing
-    logged as missing.
+    and the next ``.get`` on it raises. This runs inside the episode,
+    behind a catch-all, so an unguarded raise would return the zero shape
+    and lose that episode's telemetry.
     """
     return v if isinstance(v, dict) else {}
 
 
-def _variants(item: dict) -> list[dict]:
-    for key in ("anyOf", "oneOf", "allOf"):
-        if isinstance(item.get(key), list):
-            return [v for v in item[key] if isinstance(v, dict)]
-    return [item] if item else []
-
-
-def _declared(params: dict) -> dict:
-    """``{"tools": [name...], "ops": {op: [arg...]}}`` from one params record."""
-    tools: list[str] = []
-    ops: dict[str, list[str]] = {}
-    for t in params.get("tools") or []:
-        fn = _as_dict(_as_dict(t).get("function"))
-        name = fn.get("name")
-        if not name:
-            continue
-        if name not in tools:
-            tools.append(name)
-        if name != _ANALYZE:
-            continue
-        props = _as_dict(_as_dict(fn.get("parameters")).get("properties"))
-        items = _as_dict(
-            _as_dict(_as_dict(props.get("program")).get("properties")).get("ops")
-        ).get("items")
-        for v in _variants(_as_dict(items)):
-            vprops = _as_dict(v.get("properties"))
-            op = _as_dict(vprops.get("op")).get("const")
-            if not op:
-                continue
-            args = _as_dict(_as_dict(vprops.get("args")).get("properties"))
-            ops[op] = sorted(args)
-    return {"tools": tools, "ops": ops}
-
-
-def _merge_declared(into: dict, more: dict) -> None:
-    for t in more.get("tools") or []:
-        if t not in into["tools"]:
-            into["tools"].append(t)
-    for op, args in (more.get("ops") or {}).items():
-        into["ops"].setdefault(op, [])
-        for a in args:
-            if a not in into["ops"][op]:
-                into["ops"][op].append(a)
+def _declared_tools(params: dict) -> list[str]:
+    """The tool names one params record declares, in order."""
+    names = (_as_dict(_as_dict(t).get("function")).get("name")
+             for t in params.get("tools") or [])
+    return [n for n in names if n]
 
 
 def _bump(d: dict, k: Any) -> None:
@@ -151,9 +99,7 @@ def blank() -> dict:
         "latency_s_sum": 0.0,
         "latency_s_max": 0.0,
         "calls": {},
-        "ops": {},
-        "op_args": {},
-        "declared": {"tools": [], "ops": {}},
+        "declared": {"tools": []},
     }
 
 
@@ -180,7 +126,9 @@ def _scan_transcript(path: Path, out: dict) -> None:
             rec = _as_dict(rec)
             kind = rec.get("kind")
             if kind == "params":
-                _merge_declared(out["declared"], _declared(_as_dict(rec.get("params"))))
+                for t in _declared_tools(_as_dict(rec.get("params"))):
+                    if t not in out["declared"]["tools"]:
+                        out["declared"]["tools"].append(t)
                 continue
             if kind == "request":
                 out["requests"] += 1
@@ -218,28 +166,7 @@ def _scan_transcript(path: Path, out: dict) -> None:
             )
             for tc in message.get("tool_calls") or []:
                 fn = _as_dict(_as_dict(tc).get("function"))
-                name = _tool_name(fn.get("name"))
-                _bump(out["calls"], name)
-                if name != _ANALYZE:
-                    continue
-                try:
-                    args = json.loads(fn.get("arguments") or "{}")
-                except ValueError:
-                    continue
-                for op in _as_dict(_as_dict(args).get("program")).get("ops") or []:
-                    if not isinstance(op, dict):
-                        continue
-                    op_name = op.get("op")
-                    _bump(out["ops"], op_name)
-                    if not op_name:
-                        continue
-                    per = out["op_args"].setdefault(op_name, {})
-                    for a, val in _as_dict(op.get("args")).items():
-                        # An arg present but null is not a use: the model
-                        # emitted the key and declined the value, which is
-                        # exactly the "ignored" case being measured.
-                        if val is not None:
-                            _bump(per, a)
+                _bump(out["calls"], _tool_name(fn.get("name")))
 
     # Requests still open at EOF never got a response — a crash, a timeout,
     # or a run killed mid-call. Counting them is why ``requests`` is read at

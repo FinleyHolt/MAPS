@@ -1,10 +1,9 @@
 """The row-sized LLM activity block, against a hand-built flight dir.
 
-``summarize`` is the ONLY producer of ``metrics.llm``, which the review
-hub's population view reads instead of walking transcripts. These pin the
-numbers that view puts on screen: turn and token counts, the declared-vs-
-used vocabulary, the arg-supply rule, and the thing a naive scan gets
-wrong — a request that never got a response.
+``summarize`` is the ONLY producer of ``metrics.llm``, which readers use
+instead of walking transcripts. These pin turn and token counts, the
+declared and called tools, and the thing a naive scan gets wrong — a
+request that never got a response.
 """
 
 from __future__ import annotations
@@ -169,22 +168,11 @@ def test_used_vocabulary(tmp_path: Path) -> None:
     # Pinned by name: a derived scan that silently stopped finding tool calls
     # would still return a plausible-looking dict.
     assert s["calls"] == {"analyze": 1, "act": 1}
-    assert s["ops"] == {"find": 1, "count": 1}
 
 
-def test_null_arg_is_not_a_use(tmp_path: Path) -> None:
-    """``color: None`` is the model declining the lever, not pulling it."""
+def test_declared_tools_come_from_the_run(tmp_path: Path) -> None:
     s = flight_summary.summarize(_flight(tmp_path))
-    assert s["op_args"]["find"] == {"query": 1}
-    assert "color" not in s["op_args"]["find"]
-
-
-def test_declared_vocabulary_comes_from_the_run(tmp_path: Path) -> None:
-    """Declared-but-unused is the interesting set, so ``color`` must appear
-    here even though nothing ever supplied it."""
-    s = flight_summary.summarize(_flight(tmp_path))
-    assert s["declared"]["tools"] == ["act", "analyze"]
-    assert s["declared"]["ops"] == {"find": ["color", "query"], "count": ["of"]}
+    assert s["declared"] == {"tools": ["act", "analyze"]}
 
 
 def test_malformed_tool_name_gets_its_own_bucket(tmp_path: Path) -> None:
@@ -219,32 +207,6 @@ def test_reasoning_tokens_come_from_the_meter(tmp_path: Path) -> None:
     assert flight_summary.summarize(flight)["reasoning_tokens"] == 300
 
 
-def test_string_program_does_not_raise(tmp_path: Path) -> None:
-    """The exact failure seen off the laptop hub: ``AttributeError: 'str'
-    object has no attribute 'get'`` at ``(args.get("program") or {}).get("ops")``
-    when the model emits the bare string form. Here it would be swallowed by
-    the episode-path catch-all and lose the whole block silently."""
-    flight = tmp_path / "flight"
-    _write(
-        flight,
-        [
-            _response(
-                "r1", 2.0, usage={"total_tokens": 7},
-                tool_calls=[{"function": {
-                    "name": "analyze",
-                    "arguments": json.dumps({"program": "go north"}),
-                }}],
-            )
-        ],
-    )
-    s = flight_summary.summarize(flight)
-    assert s["turns"] == 1
-    assert s["total_tokens"] == 7
-    assert s["calls"]["analyze"] == 1
-    # The program was unreadable, so no ops are credited — and nothing raised.
-    assert s["ops"] == {}
-
-
 def test_wrong_typed_fields_are_skipped_not_fatal(tmp_path: Path) -> None:
     """Every ``or {}`` site in the scan, handed a string instead of an object.
 
@@ -271,8 +233,7 @@ def test_wrong_typed_fields_are_skipped_not_fatal(tmp_path: Path) -> None:
     )
     s = flight_summary.summarize(flight)
     assert s["turns"] == 3
-    assert s["ops"] == {"find": 1}
-    assert s["op_args"]["find"] == {"color": 1}
+    assert s["calls"] == {"analyze": 1, flight_summary.MALFORMED: 1}
     assert s["declared"]["tools"] == ["analyze"]
 
 
