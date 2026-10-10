@@ -387,3 +387,30 @@ def test_the_abort_counts_attempts_and_says_nothing_was_scored_only_when_true(tm
     for i in range(bf.ABORT_WINDOW):
         fresh._append_result(_infra_row(i))
     assert "nothing was scored" in fresh.driver_log.read_text()
+
+
+def test_a_landed_crash_row_is_scored_not_infra(tmp_path: Path, monkeypatch) -> None:
+    """The runner's own verdict decides: a method exception lands ``ok``
+    with no metrics, and the driver keeps it ``ok`` (a scored miss) instead
+    of reading its missing metrics as an unrecognized infra death."""
+    from benchmarks.citynav import episodes
+
+    d = _driver(tmp_path)
+    wd = tmp_path / "w0" / "maps_20260805_101500_citynav_ep0"
+    episodes.write_episode_json(wd, {"episode_id": "ep0", "status": "ok",
+                                     "error": "RuntimeError: boom", "traceback": "..."})
+
+    class _Runner:
+        def alive(self):
+            return True
+
+        def run_episode(self, eid, deadline_epoch=None):
+            return {"workdir": str(wd), "map": "m"}, 1
+
+        def should_recycle(self, map_name):
+            return False
+
+    monkeypatch.setattr(d, "_wait_for_exit", lambda runner, seq, t: "exited")
+    row, retryable = d._run_attempt(0, "ep0", _Runner())
+    assert row["status"] == "ok" and row["error"] == "RuntimeError: boom"
+    assert not retryable and not bf._infra_casualty(row)

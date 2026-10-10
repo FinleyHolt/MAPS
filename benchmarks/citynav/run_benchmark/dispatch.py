@@ -19,6 +19,7 @@ from maps.perception.geometry.sensor_spec import resolve_sensor, served_descript
 from maps.search import MapsCompiler
 import os
 import time
+import traceback
 from benchmarks.citynav.run_benchmark.episode_runner import run_episode
 import logging
 
@@ -105,10 +106,10 @@ def _dispatch_one(
     """Run one episode and write its row to ``<episode_dir>/episode.json``,
     shared by the batch loop and the persistent episode server.
 
-    Returns the row. Its ``status`` is ``ok`` for a scored attempt and
-    ``infra`` when the algorithm never got a fair run: the episode raised,
-    the mission ended ``transient_failures``, or the runner produced no
-    record. The batch loop appends the row to the run's ledger.
+    Returns the row. Its ``status`` is ``ok`` for a scored attempt (a
+    method exception included) and ``infra`` when the algorithm never got a
+    fair run: an infrastructure fault raised, the mission ended
+    ``transient_failures``, or the runner produced no record. The batch loop appends the row to the run's ledger.
     """
     t0 = time.monotonic()
     try:
@@ -155,10 +156,13 @@ def _dispatch_one(
         else:
             token = None
         err = f"{type(e).__name__}: {e}"
+        # Anything else the method raised is its own failure: a scored miss
+        # (no metrics reads SR 0) carrying its traceback.
         out = _stamp({
             "episode_id": _eid,
-            "status": STATUS_INFRA,
+            "status": STATUS_INFRA if token else STATUS_OK,
             "error": f"{token}: {err}" if token else err,
+            **({} if token else {"traceback": traceback.format_exc()}),
         })
         write_episode_json(episode_dir, out)
         return out

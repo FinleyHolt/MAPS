@@ -143,7 +143,7 @@ DEFAULT_MAX_WALL_S = int(os.environ.get("CITYNAV_BENCH_MAX_WALL_S", "0"))
 # launcher can lengthen this without a redeploy.
 OOM_BACKOFF_BASE_S = float(os.environ.get("CITYNAV_BENCH_OOM_BACKOFF_BASE_S", "90"))
 # Mass-instant-failure abort. A tree deployed without its tile bake fails
-# EVERY episode in seconds. The classifier below recognizes the shape
+# EVERY episode in seconds. The driver recognizes the shape
 # (``no_prediction_unclassified``), but a warning line in the END-OF-RUN
 # summary alone lets the run grind to completion and report the problem
 # an hour late. When the last ABORT_WINDOW
@@ -180,53 +180,6 @@ WARM_RUNNER_RECYCLE_MAP_SUBSTRINGS = tuple(
     for s in os.environ.get("CITYNAV_BENCH_RECYCLE_MAPS", "cambridge").split(",")
     if s.strip()
 )
-# GPU-memory-exhaustion signatures. Under a worker cold-start cascade
-# the runner's GPU is briefly oversubscribed and the failing
-# allocation surfaces in several distinct forms, not just the torch /
-# cupy OOM string: cuBLAS and cuDNN handle creation allocate scratch
-# and report ``*_STATUS_ALLOC_FAILED``; the CUDA driver itself reports
-# ``CUDA error: out of memory`` / ``CUDA_ERROR_OUT_OF_MEMORY``. All are
-# the same transient-contention class and must trigger the retry, else
-# a cold-start casualty is recorded as a false permanent miss and the
-# measured SR is depressed.
-# Only unambiguous device-OOM signatures. Bare ``OutOfMemoryError`` and
-# ``cublasCreate`` were removed: the former matches any library merely
-# mentioning the class, the latter is normal cuBLAS handle init that
-# appears in healthy logs -> both false-positive a non-OOM no-tour
-# failure into "preflight OOM", polluting the OOM-excluded SR bucket on
-# a long grind. Genuine torch OOM still matches via the qualified
-# ``torch.OutOfMemoryError``.
-_OOM_MARKERS = (
-    "CUDA out of memory",
-    "torch.OutOfMemoryError",
-    "CUBLAS_STATUS_ALLOC_FAILED",
-    "CUDNN_STATUS_ALLOC_FAILED",
-    "CUDA error: out of memory",
-    "CUDA_ERROR_OUT_OF_MEMORY",
-)
-_NO_TOUR_MARKER = "produced no tour stops"
-# Canonical line run_benchmark logs on ANY pre-flight compile infra abort
-# (pose_resolution_oom / CUDA device fault)
-# before takeoff. The episode never got a fair run, so a row matching
-# this with no committed prediction is excluded from SR and fully
-# re-queued, never scored as a completed zero. Detected independently
-# of the CITYNAV_EPISODE_* tokens so a wording/token drift cannot
-# silently route an infra death back into the SR denominator.
-_PREFLIGHT_INFRA_MARKER = "pre-flight compile FAILED on INFRASTRUCTURE"
-# Emitted by run_benchmark's episode-loop except handler when an episode
-# dies on a CUDA/CuPy OOM before committing a prediction. Distinct from
-# the preflight-OOM-no-tour case: compile succeeded, the crash is a
-# mid-flight contention casualty, so retry + exclude from SR, never score
-# it as a completed zero.
-_RUNTIME_OOM_TOKEN = "CITYNAV_EPISODE_OOM_ABORT"
-# Emitted by run_benchmark._dispatch_one when an episode dies mid-flight
-# on a transient shared-server / network fault (vLLM/SAM/FlightSim
-# unreachable, 5xx, connection reset, read/connect timeout under
-# contention). Same accounting as the OOM token: the algorithm
-# never got a fair run, so exclude from SR + fully re-queue, never a
-# completed zero.
-_RUNTIME_INFRA_TOKEN = "CITYNAV_EPISODE_INFRA_ABORT"
-
 _log_lock = threading.Lock()
 
 
@@ -517,8 +470,7 @@ def _infra_casualty(row: dict) -> bool:
     the done-set below and the mass-instant-failure abort. A hard episode
     timeout with no prediction is deliberately NOT one of these — that is
     the ALGORITHM failing to answer within its budget, a legitimate
-    CityNav miss — and the classifier only stamps ``infra`` on a timeout
-    when an infra token is independently present in the log.
+    CityNav miss.
 
     A mission that ends ``ended_by=transient_failures`` (the reasoner
     endpoint failed MAX_ROUND_TRANSIENT calls in a row) IS one of these:
@@ -960,8 +912,7 @@ class Driver:
         "exited"    — the episode produced its result: a ``done``/
                       ``fatal`` for THIS seq. The runner ran to a decision
                       (a committed prediction, or a clean no-commit) and
-                      the downstream no-prediction + run.log
-                      classification scores it.
+                      its landed ``episode.json`` carries the verdict.
         "crashed"   — the runner process ended (stdout EOF) WITHOUT a
                       ``done``/``fatal`` for this seq: SIGKILL (Slurm
                       cgroup OOM) or a non-``Exception`` escape
@@ -1014,57 +965,6 @@ class Driver:
                     if vllm_down_streak >= 2:
                         return "vllm_dead"
         return "timeout"
-
-    @staticmethod
-    def _is_preflight_oom(log_path: Path) -> bool:
-        if not log_path.exists():
-            return False
-        try:
-            text = log_path.read_text(errors="replace")
-        except OSError:
-            return False
-        if _NO_TOUR_MARKER not in text:
-            return False
-        return any(m in text for m in _OOM_MARKERS)
-
-    @staticmethod
-    def _runtime_infra_cause(log_path: Path) -> str | None:
-        """Which infra-abort token (if any) the episode died on.
-
-        Returns ``"cuda_oom"`` for the runtime-OOM token,
-        ``"transient_infra"`` for the shared-server-fault token, else
-        ``None``. Both are infra casualties handled identically by the
-        retry-and-exclude path; the distinct return value only sharpens
-        the recorded ``error`` string for the audit.
-        """
-        if not log_path.exists():
-            return None
-        try:
-            text = log_path.read_text(errors="replace")
-        except OSError:
-            return None
-        if _RUNTIME_OOM_TOKEN in text:
-            return "cuda_oom"
-        if _RUNTIME_INFRA_TOKEN in text:
-            return "transient_infra"
-        return None
-
-    @staticmethod
-    def _is_preflight_infra(log_path: Path) -> bool:
-        """True if pre-flight compile aborted on an INFRASTRUCTURE fault
-        (pose-resolution OOM / CUDA device fault) before
-        takeoff. Matches run_benchmark's canonical infra-abort line so the
-        episode is recognized as infra even on a token/wording drift —
-        belt-and-suspenders with ``_runtime_infra_cause``. The episode
-        never got a fair run; the caller excludes it from SR and
-        re-queues it instead of scoring a zero."""
-        if not log_path.exists():
-            return False
-        try:
-            text = log_path.read_text(errors="replace")
-        except OSError:
-            return False
-        return _PREFLIGHT_INFRA_MARKER in text
 
     @staticmethod
     def _landed_row(workdir: Path) -> dict | None:
@@ -1134,7 +1034,6 @@ class Driver:
                 "ts": round(time.time(), 1),
             }, not isinstance(exc, permanent_excs)
         workdir = Path(handle["workdir"])
-        run_log = workdir / "run.log"
         status = self._wait_for_exit(runner, seq, self.episode_timeout_s)
         elapsed = time.monotonic() - t0
         killed = {
@@ -1172,45 +1071,14 @@ class Driver:
                 f"{elapsed:.0f}s; killing + re-queueing (not scored)"
             )
             return {**killed, "error": "killed_midrun"}, True
-        ok = status == "exited"
         if status == "timeout":
             self.log(
                 f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killing"
             )
             runner.kill()
+        # The runner's own verdict decides (dispatch classifies the episode's
+        # exception chain); the driver adds only what it alone saw.
         landed = self._landed_row(workdir)
-        scored = landed is not None and bool(landed.get("metrics"))
-        infra_cause = self._runtime_infra_cause(run_log) if not scored else None
-        # Pre-flight infra abort (pose-resolution OOM / CUDA fault)
-        # that emitted no token, or a token-detector
-        # drift: the canonical "FAILED on INFRASTRUCTURE" line still
-        # routes it to the infra path (excluded from SR + re-queued),
-        # never a scored zero. This is the bug that mis-scored ~half the
-        # bucket as misses.
-        if infra_cause is None and not scored and self._is_preflight_infra(run_log):
-            infra_cause = "preflight_infra"
-        # Fail-closed floor for the whole class: a runner that exits clean
-        # with NO record, NO timeout, and NO recognized infra token is not
-        # a completion — it is an unrecognized instant failure (a missing
-        # tile bake once laundered 762 of these as scored rows and
-        # "finished" the benchmark in 13 minutes, poisoning resume). Route
-        # it through the infra path: excluded from SR, re-queued.
-        if infra_cause is None and not scored and ok and status != "timeout":
-            infra_cause = "no_prediction_unclassified"
-        # NOTE: a hard episode-timeout with no committed record is NOT
-        # reclassified as infra. The agent failing to produce an answer
-        # within the episode budget is the ALGORITHM failing — a
-        # legitimate CityNav miss (SR=0), not an external fault. It is
-        # excluded + re-queued ONLY if an explicit infra token/marker is
-        # independently present (handled above by _runtime_infra_cause /
-        # _is_preflight_infra). Treating a slow / non-converging run as
-        # infra would inflate SR and break benchmark compliance.
-        runtime_infra = infra_cause is not None
-        oom_retryable = (
-            not scored
-            and ok
-            and (self._is_preflight_oom(run_log) or runtime_infra)
-        )
         row = {
             **(landed or {"episode_id": episode_id}),
             "worker_id": worker_id,
@@ -1218,18 +1086,22 @@ class Driver:
             "ts": round(time.time(), 1),
             "workdir": str(workdir.relative_to(self.out_root)),
         }
-        if runtime_infra or row.get("status") == episodes.STATUS_INFRA:
-            # The runner's own verdict (an exception before commit, a
-            # mission the serve failed out from under) or this driver's
-            # log-derived one; the row's error names the cause for the
-            # audit, and the done-set + SR layers exclude it.
+        retryable = False
+        if landed is None and status == "exited":
+            # Fail-closed floor: a runner that exits clean with NO record is
+            # not a completion but an unrecognized instant failure (a missing
+            # tile bake once laundered 762 of these as scored rows). Excluded
+            # from SR and re-queued.
             row["status"] = episodes.STATUS_INFRA
-            row["error"] = row.get("error") or infra_cause
+            row["error"] = "no_prediction_unclassified"
+            retryable = True
+        elif row.get("status") == episodes.STATUS_INFRA:
+            retryable = status == "exited" and not row.get("metrics")
         elif status == "timeout":
-            # First-class marker: the wall-clock cap is the binding bound
-            # under an unbounded step budget, so readers count these
-            # beside SR. Stays an algorithm failure (in the denominator,
-            # never infra) whether or not a record was committed.
+            # The wall-clock cap is the binding bound under an unbounded step
+            # budget, so readers count these beside SR. An algorithm failure
+            # (in the denominator, never infra) whether or not a record was
+            # committed.
             row["status"] = episodes.STATUS_TIMED_OUT
         else:
             row["status"] = episodes.STATUS_OK
@@ -1248,7 +1120,7 @@ class Driver:
                 f"served={runner._episodes_since_spawn})"
             )
             runner.kill()
-        return row, oom_retryable
+        return row, retryable
 
     def run_one(self, worker_id: int, episode_id: str, runner: "_WarmRunner") -> None:
         self.log(f"[w{worker_id}] START {episode_id}")

@@ -47,14 +47,19 @@ def _rec(ended_by: str = "reply") -> dict:
 
 
 @pytest.mark.parametrize("msg", ["boom", "CUDA out of memory"])
-def test_an_exception_lands_an_infra_row(tmp_path, light, monkeypatch, msg):
+def test_a_method_exception_lands_a_scored_miss(tmp_path, light, monkeypatch, msg):
+    """An exception the method raised is its own failure: the row is
+    ``ok`` with the error and traceback and no metrics, which every reader
+    scores SR 0. Only an infrastructure fault re-queues."""
     def boom(*a, **k):
         raise RuntimeError(msg)
 
     monkeypatch.setattr(dispatch, "run_episode", boom)
     row = _dispatch(tmp_path)
-    assert row["status"] == episodes.STATUS_INFRA
+    assert row["status"] == episodes.STATUS_OK
     assert row["error"] == f"RuntimeError: {msg}"
+    assert "in boom" in row["traceback"] and msg in row["traceback"]
+    assert "metrics" not in row
     assert row["withhold"] == ["look"]
     assert episodes.read_episode_json(tmp_path) == row
 
