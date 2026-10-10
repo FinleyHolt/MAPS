@@ -136,8 +136,9 @@ def _messages(new: Any) -> list[dict[str, Any]]:
 
 
 def read_transcript(path: Path) -> tuple[dict[str, Any], list[list[dict]], list[dict | None]]:
-    """``(params, requests, responses)`` of a ``flight/llm/transcript.jsonl``;
-    each request rebuilt whole as ``history[:n_prefix] + new_messages``."""
+    """``(params, requests, responses)`` of a ``flight/llm/transcript.jsonl``,
+    one per turn: each request rebuilt whole as ``history[:n_prefix] +
+    new_messages``, a transport retry folded into the request it repeats."""
     params: dict[str, Any] = {}
     requests: list[list[dict]] = []
     ids: list[str] = []
@@ -151,7 +152,11 @@ def read_transcript(path: Path) -> tuple[dict[str, Any], list[list[dict]], list[
             ids.append(str(rec.get("request_id")))
         elif rec.get("kind") == "response":
             answers[str(rec.get("request_id"))] = rec.get("response") or {}
-    return params, requests, [answers.get(i) for i in ids]
+    responses = [answers.get(i) for i in ids]
+    # A request left unanswered and sent again whole is the transport's retry, one turn.
+    keep = [i for i in range(len(requests))
+            if not (responses[i] is None and i + 1 < len(requests) and requests[i + 1] == requests[i])]
+    return params, [requests[i] for i in keep], [responses[i] for i in keep]
 
 
 def run_dirs(sortie: Path, row: dict[str, Any]) -> Path | None:
@@ -392,7 +397,9 @@ class Script:
         if k <= 0 or k >= len(self.rec.requests):
             return 0
         before = len(self.rec.requests[k - 1]) + 1     # the request before, and its answer
-        return sum(1 for m in self.rec.requests[k][before:] if m.get("role") == "user")
+        # An operator's turn is words alone; a picture rides a user turn as a list.
+        return sum(1 for m in self.rec.requests[k][before:]
+                   if m.get("role") == "user" and isinstance(m.get("content"), str))
 
     def __call__(self, url, headers, body, *, timeout, cancel_event):
         from maps.llm.http import CallCanceled  # noqa: PLC0415
@@ -547,7 +554,11 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         from benchmarks.citynav.run_benchmark import perception  # noqa: PLC0415
         from maps.llm import http  # noqa: PLC0415
 
-        os.environ.update({"SEARCH_ENDPOINT_OFFLINE": "1", "HF_HUB_OFFLINE": "1",
+        from huggingface_hub import constants as hub  # noqa: PLC0415
+
+        # The tokenizer comes off the local cache: the hub read its flag at import.
+        hub.HF_HUB_OFFLINE = True
+        os.environ.update({"SEARCH_ENDPOINT_OFFLINE": "1",
                            "SEARCH_ENDPOINT_SPEC_OVERRIDE": f"{rec.params.get('model')}:{rec.window}"})
         if rec.params.get("seed") is not None:
             os.environ["SEARCH_SEED_BASE"] = str(rec.params["seed"])

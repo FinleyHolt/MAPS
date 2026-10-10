@@ -65,11 +65,14 @@ def test_ground_no_recorded_observation_holds_leaves_the_flight_without_one(buil
 # -- the forced diff -------------------------------------------------------------
 
 
-def _transcript(path, exchanges, *, unanswered=False):
-    """A transcript of ``exchanges`` (``(new_messages, response)``) as the harness writes it."""
+def _transcript(path, exchanges, *, unanswered=False, retried=False):
+    """A transcript of ``exchanges`` (``(new_messages, response)``) as the harness writes it;
+    ``retried``, the first request sent twice, the first time unanswered."""
     lines = [{"kind": "params", "params": {"model": "m", "seed": 1}}]
     history: list[dict] = []
     for i, (new, response) in enumerate(exchanges):
+        if retried and i == 0:
+            lines.append({"kind": "request", "request_id": "lost", "n_prefix": 0, "new_messages": new})
         lines.append({"kind": "request", "request_id": f"r{i}", "n_prefix": len(history), "new_messages": new})
         history = history + new
         if response is not None:
@@ -80,7 +83,7 @@ def _transcript(path, exchanges, *, unanswered=False):
     path.write_text("".join(json.dumps(x) + "\n" for x in lines))
 
 
-def _run(root, name, receipt, *, unanswered=False):
+def _run(root, name, receipt, *, unanswered=False, retried=False):
     run = root / name
     call = {"id": "c", "type": "function", "function": {"name": "run", "arguments": "{\"code\": \"go_to(prior_1)\"}"}}
     answer = {"role": "assistant", "content": "", "tool_calls": [call]}
@@ -89,7 +92,8 @@ def _run(root, name, receipt, *, unanswered=False):
          {"choices": [{"message": answer}]}),
         ([answer, {"role": "tool", "tool_call_id": "c", "content": [
             {"type": "text", "text": receipt}, {"type": "image_ref", "sha256": "ab"}]}],
-         {"choices": [{"message": {"role": "assistant", "content": "there"}}]})], unanswered=unanswered)
+         {"choices": [{"message": {"role": "assistant", "content": "there"}}]})], unanswered=unanswered,
+                retried=retried)
     (run / "flight" / "tour_cursor.json").write_text(json.dumps({"stops_visited": [{"stop_id": "prior_1",
                                                                                      "xy": [10.0, 20.0]}]}))
     return run
@@ -97,7 +101,7 @@ def _run(root, name, receipt, *, unanswered=False):
 
 def test_the_forced_diff_passes_a_replay_that_sent_what_flew_and_names_the_first_receipt_that_did_not(tmp_path):
     sortie = tmp_path / "20260101T000000Z"
-    flown = _run(sortie, "worlds_run01", "flew to prior_1")
+    flown = _run(sortie, "worlds_run01", "flew to prior_1", retried=True)
     (sortie / "episodes.jsonl").write_text(json.dumps({"run_no": 1, "workdir": "worlds_run01"}) + "\n")
     rec = R.open_recording(flown)
     assert len(rec.requests) == 2 and rec.stops == [("prior_1", (10.0, 20.0))]
@@ -107,6 +111,20 @@ def test_the_forced_diff_passes_a_replay_that_sent_what_flew_and_names_the_first
     assert not other["reproduced"]
     assert (other["first"]["request"], other["first"]["role"]) == (1, "tool")
     assert "+[tool] flew to prior_2" in other["first"]["diff"]
+
+
+def test_the_recorded_reasoner_speaks_an_operator_turn_where_the_next_request_carried_it():
+    picture = {"role": "user", "content": [{"type": "text", "text": "a map"}, {"type": "image_ref", "sha256": "x"}]}
+    asked = [{"role": "system", "content": "s"}, {"role": "user", "content": "find it"}]
+    answer = {"role": "assistant", "content": "", "tool_calls": []}
+    rec = R.Recording(sortie=None, run_dir=None, row={}, params={}, conversation=[], frames=[],
+                      requests=[asked, asked + [answer, {"role": "tool", "content": "r"}, picture],
+                                asked + [answer, {"role": "tool", "content": "r"}, picture, answer,
+                                         {"role": "tool", "content": "r"}, picture,
+                                         {"role": "user", "content": "the red one"}]],
+                      responses=[{}, {}, {}])
+    script = R.Script(rec)
+    assert [script._user_turns(k) for k in range(3)] == [0, 0, 1]
 
 
 # -- the camera ring -------------------------------------------------------------
