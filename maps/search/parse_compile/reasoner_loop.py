@@ -3867,14 +3867,10 @@ def advance_reasoner_one_round(
                             f"{_report['note']} the view follows."
                             if _report.get("note") else "the view follows.")
                         # AUDIT: a flight view is a picture the model was
-                        # SHOWN, so it is persisted like any other. Without
-                        # this its spec exists only as the caption, and a
-                        # caption cannot state a mark's footprint -- a
+                        # SHOWN, so it is persisted like any other: a
+                        # caption cannot state a mark's footprint, and a
                         # detected_* mark's mask lives in the runtime object
-                        # graph and nowhere on disk, so 557 of these were
-                        # unrecoverable on calcity_croprow_500_c2f581d4 while
-                        # every manifest-backed crop re-rendered byte-exact
-                        # (benchmarks/citynav/analysis/look_rerender.py).
+                        # graph and nowhere on disk.
                         if look_audit_dir:
                             _persist_look_audit(
                                 audit_dir=look_audit_dir, stop_id=stop_id,

@@ -1775,8 +1775,7 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Bake per-block OSM sidecars for --city: rasterize the city-frame "
-            "records into every <city>_block_* window in --tiles-dir "
-            "(the tile_scope=per_block fleet layout)."
+            "records into every <city>_block_* window in --tiles-dir."
         ),
     )
     ap.add_argument(

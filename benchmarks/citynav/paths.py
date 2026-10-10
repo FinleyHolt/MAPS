@@ -84,7 +84,7 @@ CITYNAV_NATIVE_RGBD_DIR = (
     .resolve()
 )
 
-# Per-split prebaked feature-graph tiles. Baked by bake_graphs.py.
+# Per-split prebaked feature-graph tiles. Baked by data_prep/bake_tiles.sh.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # The tags-only OSM 2 m bake is the tile source of truth: ONE ``prior`` list
 # per block, rows = mask + raw OSM tags verbatim, masks coverage-clipped to

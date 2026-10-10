@@ -215,9 +215,8 @@ def _post_segment_avoid_stale_pool(*, picker, json_body) -> dict | None:
 # anchors with the median PERCEIVED car color measured on that imagery — the
 # ideal anchors are far too bright/saturated for dark, low-contrast aerial frames
 # (so "white"/"red" never fire). Select per run via the adapter's
-# ``color_palette`` field (YAML ``sam.color_palette``) /
-# ``set_color_palette`` / the ``SEARCH_COLOR_PALETTE`` env override; add a new
-# entry to calibrate a new camera.
+# ``color_palette`` field (YAML ``sam.color_palette``) or
+# ``set_color_palette``; add a new entry to calibrate a new camera.
 _COLOR_PALETTE_DEFAULT: dict[str, tuple[int, int, int]] = {
     "white": (235, 235, 235), "black": (32, 32, 32), "gray": (128, 128, 128),
     "silver": (190, 192, 198), "red": (170, 40, 40), "blue": (45, 70, 160),
@@ -396,7 +395,7 @@ def _set_color_attr(attrs: dict, rgb, region) -> None:
         attrs["color_conf"] = f"{col[2]:.3f}"
 
 
-# C3b DETERMINISTIC COLOR MIXTURE (distill/SPEC_real_stack_pivot_2026-07-04.md).
+# C3b DETERMINISTIC COLOR MIXTURE.
 # On the REAL perception path deterministic color is a MIXTURE, never an argmax
 # word: erode the mask 2-3 px (pavement bleed), drop the darkest ~30% of the
 # remaining pixels by luminance (glass/shadow; plus an absolute floor so a

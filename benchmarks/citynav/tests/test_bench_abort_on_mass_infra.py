@@ -107,7 +107,7 @@ def test_mass_instant_failure_stops_the_run(tmp_path: Path) -> None:
         "some preamble\n"
         "FileNotFoundError: Missing /home/x/MAPS-arm/tiles/"
         "citynav_2m_osmv3/birmingham_block_1_meta.json.\n"
-        "Run bake_graphs.py for this block first.\n"
+        "Run benchmarks/citynav/data_prep/bake_tiles.sh for this block first.\n"
     )
     d = _driver(tmp_path)
     for i in range(bf.ABORT_WINDOW - 1):

@@ -234,8 +234,8 @@ _NADIR_1008_90_DESCRIPTION = (
 _REGISTRY: dict[str, SensorSpec] = {
     # The Archer's IMX290 behind its wide lens, RECTIFIED: the recorder
     # remaps every frame to this pinhole
-    # and the calibration is told to write it (camera_intrinsics.py solve
-    # --rect-hfov 90), so the horizontal field of view is 90 deg by
+    # and the calibration solves it at a 90 deg rectified field of view,
+    # so the horizontal field of view is 90 deg by
     # construction and the vertical follows the 4:3 frame. What the bench
     # calibration decides is whether 90 deg sits inside the lens's good field.
     "archer_imx290_nadir": SensorSpec(

@@ -298,8 +298,7 @@ def _assert_realstack_gt_isolation(
     Fails LOUD (``RuntimeError`` citing C1) at config load — before any
     compile/flight spend — and again post-construction with the object.
     ``SEARCH_ALLOW_GT_DIAGNOSTIC=1`` is the ONLY (documented, logged) escape.
-    The gt_perfect diagnostic tier never trips it. The static half of the
-    gate is ``distill/tests/test_c1_gt_isolation.py``.
+    The gt_perfect diagnostic tier never trips it.
     """
     if cfg.perception != _REALSTACK_PERCEPTION_TIER:
         return  # not the real-SAM tier → guard does not apply (e.g. gt_perfect)

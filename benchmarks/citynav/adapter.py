@@ -335,8 +335,7 @@ def build_features(
     Feature dict shape: ``{label: [feature_dict, ...]}``. Each feature carries
     ``name``, ``cells``, ``centroid_row``/``centroid_col``, ``cityref_id``,
     ``object_type``. The ObjectGraph is built in memory with no edges; the
-    baked ``_graph.json`` written by ``bake_graphs.py`` carries the full
-    edge set.
+    tile bake (``data_prep/bake_tiles.sh``) writes the full edge set.
     """
     features: dict[str, list[dict]] = {}
     nodes: dict[str, MapObject] = {}

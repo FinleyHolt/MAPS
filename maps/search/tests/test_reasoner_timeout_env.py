@@ -29,7 +29,6 @@ def test_blank_takes_the_default(monkeypatch, blank):
 
 
 def test_the_value_the_run_scripts_export_actually_applies(monkeypatch):
-    # fsg_env.sh and ink_citynav.sh both export exactly this.
     monkeypatch.setenv(ENV, "900")
     assert _reasoner_timeout_s() == 900.0
     assert _reasoner_timeout_s() != _REASONER_TIMEOUT_DEFAULT_S

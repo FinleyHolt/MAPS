@@ -488,10 +488,7 @@ def load_graph(path_stem: str) -> ObjectGraph:
         _load_prebake_evidence_sidecar(graph, path_stem)
         return graph
 
-    # An npz without nodes.json carries arrays only; we
-    # surface nodes from the per-tile features.json in that case, but that
-    # schema is handled by downstream callers (``bake_graphs.py``). Here
-    # we simply signal absence.
+    # An npz without nodes.json carries arrays only: signal absence.
     raise FileNotFoundError(
         f"No graph sidecar at {npz_path}, {nodes_path}, or {json_path}"
     )

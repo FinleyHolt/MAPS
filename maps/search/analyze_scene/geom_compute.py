@@ -219,8 +219,7 @@ def color_match(cand_color: str, cue_color: str, conf: float | None = None) -> f
     the 0.4 find/select threshold, never hard-dropped) nor contributes much signal in
     either direction; a HIGH-conf color keeps ~today's discriminating power. ``conf=
     None`` (the offline tile-REBUILD surface carries no perceived color/confidence)
-    returns the family-soft score UNCHANGED -- BYTE-IDENTICAL to the pre-confidence
-    behavior (offline-rebuild parity, gated by verify_surface_commit_parity.py).
+    returns the family-soft score unchanged.
     Color stays a SOFT signal the agent reasons over; geometry is the hard
     discriminator."""
     b = _COLOR_SPELL.get((cue_color or "").strip().lower(), (cue_color or "").strip().lower())

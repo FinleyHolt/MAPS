@@ -340,14 +340,12 @@ del _WORKED, _tree, _calls, _find_kwargs
 #
 # The flag was also never uniform: it constrained qwen and inkling and did
 # nothing at all for gemma or muse, so it was never the fleet-wide guarantee
-# it reads as. benchmarks/citynav/analysis/tool_call_audit.py catches this
-# class after a run instead -- it is what found the show_map call.
+# it reads as.
 #
 # It was not even uniform. sglang's qwen parser built a tag from this flag and
 # its inkling parser builds one either way off the auto path, so the fleet has
 # been running constrained and unconstrained side by side to identical
-# conformance. benchmarks/citynav/analysis/tool_call_audit.py measures the
-# property after a run instead, on real traffic, at zero serving cost.
+# conformance.
 CODE_TOOL: dict = {
     "type": "function",
     "function": {

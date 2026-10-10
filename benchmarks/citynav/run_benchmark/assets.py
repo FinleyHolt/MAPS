@@ -145,7 +145,7 @@ def _load_block_assets(
     meta_path = Path(f"{stem}_meta.json")
     if not meta_path.exists():
         raise FileNotFoundError(
-            f"Missing {meta_path}. Run bake_graphs.py for this block first."
+            f"Missing {meta_path}. Run benchmarks/citynav/data_prep/bake_tiles.sh for this block first."
         )
     meta = json.loads(meta_path.read_text())
     bounds = WorldBounds(

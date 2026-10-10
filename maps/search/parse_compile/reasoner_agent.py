@@ -127,17 +127,13 @@ def _degenerate_reason(*, text: str, reasoning: str, calls: list) -> str:
     of pure garbage with no repair and no retry. The content check therefore
     runs BEFORE the has-a-real-reply short circuit, not after it.
 
-    ``finish_reason`` is deliberately NOT a test, and that is a correction.
-    An earlier version treated every ``finish_reason == "length"`` with no
-    content as degenerate -- which is exactly the CLIP ("the think span ran
-    long") that ``probes/probe_run.py`` was changed to stop conflating with
-    a collapse. That arm was deterministic per prompt, so it did not cost one
-    retry: six consecutive raises reach ``MAX_ROUND_TRANSIENT`` and end the
-    mission ``transient_failures``, which ``analysis/rows.py`` drops from SR
-    as an infra abort and ``bench_fullset`` re-queues for a full redo -- a
-    deterministic failure re-queues the same episode forever. A clip has to
-    keep taking the empty-turn repair, whose measured next-turn recovery is
-    84%.
+    ``finish_reason`` is NOT a test. A ``finish_reason == "length"`` with
+    no content is a CLIP (the think span ran long), not a collapse, and it
+    is deterministic per prompt: raised as a serve fault, six consecutive
+    raises reach ``MAX_ROUND_TRANSIENT`` and end the mission
+    ``transient_failures``, which ``analysis/rows.py`` drops from SR as an
+    infra abort and ``bench_fullset`` re-queues forever. A clip keeps taking
+    the empty-turn repair, whose measured next-turn recovery is 84%.
     """
     if calls:
         return ""
@@ -297,11 +293,7 @@ class Reasoner:
     # Per-call transport timeout. The default fits local-serve turn latencies;
     # a slower endpoint (a frontier-model shim whose fresh first turn processes
     # the whole packet, or any serve reached across a field link) raises it via
-    # SEARCH_REASONER_TIMEOUT_S without touching the default arm. The env read
-    # is load-bearing, not decoration: two run scripts and fsg_env.sh export
-    # 900 believing it applies, maps/search/README.md documents it as the
-    # per-round deadline, and while nothing read it a slow call died at 240 s
-    # with every caller convinced it had 900.
+    # SEARCH_REASONER_TIMEOUT_S without touching the default arm.
     # A garbage value raises here rather than reverting to the default: a
     # typo'd export that silently fell back to 240 while every caller believed
     # 900 is the failure this read exists to end. 0 is rejected for the same
@@ -371,9 +363,7 @@ class Reasoner:
 
         EVERY tool_call id the assistant emitted gets exactly one result
         (the compactor's id-closure sweep requires a result per id). Dict
-        results serialize as ``json.dumps(result, default=str)`` —
-        byte-matching ``distill/render/chat_render.tool_result_msg`` so the
-        student trains on the exact string the harness serves.
+        results serialize as ``json.dumps(result, default=str)``.
         """
         if isinstance(result, str):
             content = result
@@ -400,9 +390,7 @@ class Reasoner:
         """One native tool-call turn under ``tool_choice="auto"``.
 
         Appends the assistant turn (content + ``reasoning_content`` +
-        normalized ``tool_calls``) to the persistent history — the exact
-        shape ``distill/render/chat_render.trace_to_messages`` renders, so
-        training and serving share one message surface — and returns:
+        normalized ``tool_calls``) to the persistent history, and returns:
 
             {"kind": "tool_call", "tool_calls": [...], "content": str,
              "reasoning": str, "finish_reason": str}

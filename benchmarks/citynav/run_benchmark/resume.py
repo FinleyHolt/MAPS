@@ -80,9 +80,7 @@ def hydrate_resume_artifacts(
         _link_or_copy(union_src, union_dst)
         copied.append(str(union_dst.relative_to(dst_p)))
     # The LLM transport directory holds flight/llm/transcript.jsonl, the
-    # record stream the SPA's threads.py groups into ChatThread cards.
-    # Without it the "agent threads" panel renders empty even when the
-    # per-reasoner finalized JSONs exist on disk.
+    # reasoner's record stream the flight summary reads.
     if llm_src.is_dir() and not llm_dst.exists():
         llm_dst.parent.mkdir(parents=True, exist_ok=True)
         _link_or_copy(llm_src, llm_dst)
