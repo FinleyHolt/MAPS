@@ -34,9 +34,9 @@ RUN_LOG = "run.log"
 
 
 #: The benchmarks a directory name may claim. One word each, and the word is
-#: the corpus the episode came from -- not the engine that flew it: Stanford
-#: flies the CityNav engine over its own bake and is its own test program.
-BENCHMARKS = ("citynav", "calcity", "stanford")
+#: the corpus the episode came from -- not the engine that flew it: Cal City
+#: flies the CityNav engine over its own bake.
+BENCHMARKS = ("citynav", "calcity")
 
 #: Every attempt directory this tree mints starts here, whichever benchmark
 #: flew it. The name says MAPS ran; the benchmark word says what it ran.

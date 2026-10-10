@@ -37,15 +37,15 @@ def test_the_directory_is_named_by_stamp_benchmark_and_slug(tmp_path, monkeypatc
 def test_each_benchmark_mints_its_own_name_and_the_stamp_reader_reads_it(tmp_path, monkeypatch):
     """``maps_<stamp>_<benchmark>_<episode>``, for every declared benchmark.
 
-    Vacuity floor: the three names are pinned here by hand, every one is
-    exercised, and the three minted names must DIFFER -- a ``benchmark()``
+    Vacuity floor: the names are pinned here by hand, every one is
+    exercised, and the minted names must DIFFER -- a ``benchmark()``
     that ignored its input and answered one word would collapse them. The
     canonical reader must recover each name's stamp, because that stamp is
     what orders an episode's attempts.
     """
     from benchmarks.citynav.analysis import rows
 
-    assert ew.BENCHMARKS == ("citynav", "calcity", "stanford")
+    assert ew.BENCHMARKS == ("citynav", "calcity")
 
     minted: dict[str, str] = {}
     for name in ew.BENCHMARKS:
