@@ -12,9 +12,8 @@ digest hue muted to context, detections their class's digest hue at full
 saturation. Hue identity within a kind still comes from the digest, so a
 label keeps one hue on every surface.
 
-``osm_label`` and the raw digest pair (:func:`color_for` /
-:func:`color_word`) are the label rule and the colour rule every surface
-reads.
+``osm_label`` and the label digest (:func:`_hue`) are the label rule and
+the colour rule every surface reads.
 """
 
 from __future__ import annotations
@@ -50,22 +49,23 @@ def osm_label(tags: dict | None, fallback: str = "prior") -> str:
     return str(fallback or "prior").strip().lower()
 
 
-def color_for(label: str) -> tuple[int, int, int]:
-    """A stable, distinct RGB for an OSM label (same label, same colour,
-    every surface)."""
+def _hue(label: str) -> float:
+    """A stable hue in [0, 1] for an OSM label (same label, same hue, every
+    surface)."""
     digest = hashlib.sha256(label.encode("utf-8")).digest()
-    hue = int.from_bytes(digest[:4], "big") / 0xFFFFFFFF
-    r, g, b = colorsys.hsv_to_rgb(hue, 0.58, 0.86)
+    return int.from_bytes(digest[:4], "big") / 0xFFFFFFFF
+
+
+def _hsv_rgb(label: str, s: float, v: float) -> tuple[int, int, int]:
+    r, g, b = colorsys.hsv_to_rgb(_hue(label), s, v)
     return round(r * 255), round(g * 255), round(b * 255)
 
 
 def color_word(label: str) -> str:
     """The hue-bucket word for a label's colour, for the map's text legend
-    ("residential=teal"). Derived from the SAME digest as :func:`color_for`
-    so word and paint can never disagree."""
-    digest = hashlib.sha256(label.encode("utf-8")).digest()
-    hue = int.from_bytes(digest[:4], "big") / 0xFFFFFFFF
-    return _HUE_WORDS[int(hue * 12.0) % 12]
+    ("residential=teal"). Derived from the SAME digest as the paint so word
+    and paint can never disagree."""
+    return _HUE_WORDS[int(_hue(label) * 12.0) % 12]
 
 
 # The schematic's reserved kind colors (RGB). Roads are linework, buildings
@@ -105,18 +105,12 @@ def paint_color(label: str, *, kind: str = "area",
     muted to ground. Stable per (label, kind, provenance) by construction.
     """
     if detected:
-        digest = hashlib.sha256(label.encode("utf-8")).digest()
-        hue = int.from_bytes(digest[:4], "big") / 0xFFFFFFFF
-        r, g, b = colorsys.hsv_to_rgb(hue, 0.80, 0.95)
-        return round(r * 255), round(g * 255), round(b * 255)
+        return _hsv_rgb(label, 0.80, 0.95)
     if kind == "road":
         return _ROAD_RGB
     if kind == "building":
         return _BUILDING_RGB
-    digest = hashlib.sha256(label.encode("utf-8")).digest()
-    hue = int.from_bytes(digest[:4], "big") / 0xFFFFFFFF
-    r, g, b = colorsys.hsv_to_rgb(hue, 0.30, 0.34)
-    return round(r * 255), round(g * 255), round(b * 255)
+    return _hsv_rgb(label, 0.30, 0.34)
 
 
 def paint_word(label: str, *, kind: str = "area",
