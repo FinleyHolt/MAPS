@@ -1,0 +1,13 @@
+"""The C-12's geometry as the flight harness reads it."""
+
+#: Antenna-to-camera arm ``(fwd, right, down)`` in body metres, from the
+#: airframe stations: GPS antenna at WL 124.4, camera at WL 77.26. The two
+#: horizontal terms are zero until the FS/BL stations are transcribed; left at
+#: zero the offset lands in the boresight solve.
+C12_LEVER_M = (0.0, 0.0, (124.4 - 77.26) * 0.0254)
+
+#: 160 knots, the speed every pass is laid at.
+C12_SPEED_MPS = 160.0 * 0.514444
+
+#: Metres per degree of latitude: the flat-earth step off a fix.
+M_PER_DEG_LAT = 111_320.0

@@ -1,0 +1,52 @@
+"""A synthetic Cal City for the flight tests: a georeferenced bake frame and a raster of buildings on it."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+
+#: The world: 1.2 km square at half a metre a pixel.
+SIZE_M = 1200.0
+PX_M = 0.5
+#: Where its origin sits in UTM 11N, inside Cal City's AOI.
+ORIGIN_E, ORIGIN_N = 410000.0, 3886000.0
+#: The C-12's camera at a quarter of its pixels, the fields of view held.
+SENSOR = {"base": "oryx_orx32_25mm_nadir", "image_width": 1024, "image_height": 768}
+AGL_M = 914.4
+
+
+def build(root: Path) -> tuple[Path, Path]:
+    """``(tiles_dir, raster_dir)`` under ``root``: ``calcity_meta.json`` with
+    bounds and georef, and the ``calcity_rgb.tif`` / ``calcity.tif`` pair."""
+    import cv2
+    import rasterio
+    from rasterio.transform import from_origin
+
+    tiles, raster = root / "tiles", root / "raster"
+    tiles.mkdir(parents=True)
+    raster.mkdir(parents=True)
+    (tiles / "calcity_meta.json").write_text(json.dumps({
+        "map_name": "calcity", "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": SIZE_M, "y_max": SIZE_M},
+        "georef": {"crs_utm_epsg": 32611, "origin_e": ORIGIN_E, "origin_n": ORIGIN_N}}))
+    n = int(SIZE_M / PX_M)
+    rng = np.random.default_rng(7)
+    rgb = np.full((n, n, 3), 140, np.uint8)
+    rgb += rng.integers(0, 12, (n, n, 1), dtype=np.uint8)
+    for _ in range(1800):
+        x, y = rng.integers(0, n - 40, 2)
+        w, h = rng.integers(10, 40, 2)
+        cv2.rectangle(rgb, (int(x), int(y)), (int(x + w), int(y + h)), tuple(int(c) for c in rng.integers(20, 255, 3)), -1)
+    for k in range(0, n, 160):
+        cv2.line(rgb, (0, k), (n, k + 30), (60, 60, 60), 6)
+        cv2.line(rgb, (k, 0), (k + 20, n), (60, 60, 60), 6)
+    transform = from_origin(0.0, SIZE_M, PX_M, PX_M)
+    with rasterio.open(raster / "calcity_rgb.tif", "w", driver="GTiff", width=n, height=n, count=3, dtype="uint8",
+                       transform=transform) as dst:
+        for b in range(3):
+            dst.write(rgb[..., b], b + 1)
+    with rasterio.open(raster / "calcity.tif", "w", driver="GTiff", width=n, height=n, count=1, dtype="float32",
+                       transform=transform) as dst:
+        dst.write(np.zeros((1, n, n), np.float32))
+    return tiles, raster

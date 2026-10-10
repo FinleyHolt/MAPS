@@ -1,0 +1,259 @@
+"""A kinematic twin of the aircraft over a supplied ortho, and the CLI that flies one Cal City mission through it.
+
+    python -m benchmarks.flight.twin --config configs/calcity.yaml --episode <id> --ortho <raster dir>
+
+The twin implements :class:`benchmarks.flight.vehicle.Vehicle`: it flies each
+posted leg straight to its point and on through the rest of the pass at the
+C-12's speed, wings level at the mission's height, and records a frame at the
+camera's rate, each tagged with its pose. A frame's pixels are rendered on
+request from the ortho through the same camera model the bench renders with,
+at the camera pose the live source will place the frame by, so the twin's
+frames and the recording's index agree by construction.
+
+The ortho is a raster directory holding ``<map>_rgb.tif`` beside ``<map>.tif``
+on the bake's grid (``benchmarks.calcity.data_prep.build_rgbd_ortho``). The
+endpoints come from the environment as the bench's do: ``SEARCH_REASONER_URL``
+and ``SAM_SERVER_URL``. The run lands under ``--out/<UTC stamp>/`` with the
+records a flown sortie carries: ``episodes.jsonl``, and per run
+``conversation.jsonl``, ``flight/llm/transcript.jsonl``, ``frames.jsonl`` and
+``observations/``.
+
+ponytail: the twin's clock moves only while the harness waits on it, so the
+aircraft holds still while the model thinks; a real-time clock is the
+upgrade if a measure ever needs the aircraft's flying time.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import logging
+import math
+import os
+import sys
+import threading
+import time
+from io import BytesIO
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from benchmarks.flight import map_render
+from benchmarks.flight.airframe import C12_LEVER_M, C12_SPEED_MPS
+from benchmarks.flight.nav_track import Pose, camera_pose_local, pose_tag
+from benchmarks.flight.tile_georef import FLOOR_MSL_M, local_to_lonlat
+from benchmarks.flight.vehicle import Leg
+
+log = logging.getLogger("flight.twin")
+
+#: The recorder's frame rate: two frames a second.
+CAMERA_HZ = 2.0
+#: A twin frame's JPEG quality, the recorder's own.
+FRAME_JPEG_QUALITY = 90
+#: The receiver's clock at the twin's time zero.
+EPOCH = dt.datetime(2000, 1, 1, tzinfo=dt.timezone.utc)
+
+
+class Twin:
+    """The aircraft flown kinematically, its frames rendered off ``ortho``.
+
+    ``start_xy`` is where it starts in the tile frame, heading north at
+    ``agl_m`` over the map's floor; ``sensor`` is the camera its frames are
+    rendered through, ``ground`` the height under a point in the map's MSL.
+    """
+
+    def __init__(self, *, tiles_dir, map_name: str, ortho, sensor, start_xy: tuple[float, float], agl_m: float,
+                 ground=None, speed_mps: float = C12_SPEED_MPS, lever: tuple[float, float, float] = C12_LEVER_M
+                 ) -> None:
+        self.tiles_dir, self.map_name, self.sensor = Path(tiles_dir), map_name, sensor
+        self.floor_msl_m = FLOOR_MSL_M[map_name]
+        self.ground = ground or (lambda xy: self.floor_msl_m)
+        self.agl_m, self.speed_mps, self.lever = float(agl_m), float(speed_mps), lever
+        self._render = map_render.renderer(ortho)
+        self._lock = threading.Lock()
+        self.t = 0.0
+        #: Time slept and not yet flown: less than one camera tick.
+        self._owed = 0.0
+        self.xy = (float(start_xy[0]), float(start_xy[1]))
+        self.heading_deg = 0.0
+        self.route: list[tuple[float, float]] = []
+        self.legs: list[Leg] = []
+        #: Every frame recorded: ``{"seq", "log_time", "t_host", "pose"}``.
+        self.rows: list[dict[str, Any]] = []
+        #: The track at every camera tick, ``(t, x, y, heading_deg)``, which ``pose(t)`` interpolates.
+        self._track: list[tuple[float, float, float, float]] = [(0.0, *self.xy, 0.0)]
+        self.last_error = ""
+        self._record()
+
+    def post(self, leg: Leg) -> None:
+        with self._lock:
+            self.legs.append(leg)
+            self.route = [tuple(leg.point)] + [tuple(p) for p in leg.ahead]
+
+    def now(self) -> float:
+        return self.t
+
+    def sleep(self, seconds: float) -> None:
+        """Fly ``seconds`` of the route on the twin's clock, a camera tick at a time."""
+        dt_s = 1.0 / CAMERA_HZ
+        with self._lock:
+            self._owed += max(0.0, float(seconds))
+            while self._owed >= dt_s - 1e-9:
+                self._advance(dt_s)
+                self._owed -= dt_s
+                self.t = len(self._track) / CAMERA_HZ
+                self._track.append((self.t, *self.xy, self.heading_deg))
+                self._record()
+
+    def _advance(self, dt_s: float) -> None:
+        """Straight at the route's next point at the airframe's speed, through it
+        and on to the next; past the last, on along the same heading."""
+        step = self.speed_mps * dt_s
+        while self.route:
+            tx, ty = self.route[0]
+            dx, dy = tx - self.xy[0], ty - self.xy[1]
+            d = math.hypot(dx, dy)
+            if d > 1e-6:
+                self.heading_deg = math.degrees(math.atan2(dx, dy)) % 360.0
+            if d > step:
+                break
+            self.xy, step = (tx, ty), step - d
+            self.route.pop(0)
+        h = math.radians(self.heading_deg)
+        self.xy = (self.xy[0] + step * math.sin(h), self.xy[1] + step * math.cos(h))
+
+    def _pose_at_track(self, t: float, x: float, y: float, heading_deg: float) -> Pose | None:
+        lonlat = local_to_lonlat(self.tiles_dir, self.map_name, x, y)
+        if lonlat is None:
+            return None
+        alt = self.ground((x, y)) + self.agl_m + self.lever[2]
+        utc = (EPOCH + dt.timedelta(seconds=t)).isoformat()
+        return Pose(t=t, lat=lonlat[1], lon=lonlat[0], alt_msl_m=alt, alt_hae_m=alt, track_deg=heading_deg,
+                    speed_mps=self.speed_mps, h_acc_m=0.5, gap_s=0.0, utc=utc, heading_deg=heading_deg,
+                    attitude="fusion")
+
+    def _record(self) -> None:
+        pose = self._pose_at_track(self.t, *self.xy, self.heading_deg)
+        if pose is not None:
+            self.rows.append({"seq": len(self.rows), "log_time": int(round(self.t * 1e9)), "t_host": self.t,
+                              "pose": pose_tag(pose)})
+
+    def pose(self, t: float | None = None) -> Pose | None:
+        with self._lock:
+            t = self.t if t is None else float(t)
+            track = self._track
+            if t >= track[-1][0]:
+                return self._pose_at_track(t, *track[-1][1:])
+            i = max(0, min(len(track) - 2, int(t * CAMERA_HZ)))
+            (t0, x0, y0, h0), (t1, x1, y1, h1) = track[i], track[i + 1]
+            w = min(max((t - t0) / (t1 - t0), 0.0), 1.0)
+            return self._pose_at_track(t, x0 + (x1 - x0) * w, y0 + (y1 - y0) * w, h1 if w >= 0.5 else h0)
+
+    def index(self, since: int | None = None) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(r) for r in self.rows if since is None or r["log_time"] >= since]
+
+    def frame(self, seq: int):
+        """``(jpeg, t_host, log_time, seq, tag)``: the frame rendered off the
+        ortho at the camera pose the tag places it at; None off the ortho."""
+        from PIL import Image  # noqa: PLC0415
+
+        from benchmarks.flight.nav_track import tag_pose  # noqa: PLC0415
+
+        with self._lock:
+            row = dict(self.rows[seq]) if 0 <= seq < len(self.rows) else None
+        if row is None:
+            self.last_error = f"no frame {seq} in the ring"
+            return None
+        pose = tag_pose(row["pose"], row["t_host"])
+        cam_xy, cam_alt, yaw = camera_pose_local(pose, self.tiles_dir, self.map_name, lever=self.lever)
+        try:
+            rgb = self._render(self.sensor, cam_xy, cam_alt - self.ground(cam_xy), yaw,
+                               pose.roll_deg, -pose.pitch_deg)
+        except ValueError as exc:
+            self.last_error = f"frame {seq} reaches off the ortho: {exc}"
+            return None
+        out = BytesIO()
+        Image.fromarray(np.ascontiguousarray(rgb)).save(out, format="JPEG", quality=FRAME_JPEG_QUALITY)
+        self.last_error = ""
+        return out.getvalue(), row["t_host"], row["log_time"], seq, row["pose"]
+
+
+def _xy(text: str) -> tuple[float, float]:
+    x, y = (float(v) for v in text.split(","))
+    return x, y
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--config", default="configs/calcity.yaml")
+    ap.add_argument("--split", default="calcity")
+    ap.add_argument("--episode", required=True, help="the episode id; with --start-xy, an operator-authored mission's")
+    ap.add_argument("--ortho", required=True, type=Path, help="the raster directory the twin's frames are rendered off")
+    ap.add_argument("--instruction", default=None, help="the operator's words in place of the episode's")
+    ap.add_argument("--start-xy", type=_xy, default=None, help="x,y: fly a mission with no row from here")
+    ap.add_argument("--then", action="append", default=[], help="a tasking spoken after each report, in order")
+    ap.add_argument("--reasoning-effort", default=None)
+    ap.add_argument("--boresight", type=Path, default=None, help="a boresight solve; unset flies the datasheet camera")
+    ap.add_argument("--register", type=Path, default=None,
+                    help="the raster directory each frame is registered against; unset registers nothing")
+    ap.add_argument("--out", type=Path, default=Path("output/flight"))
+    args = ap.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
+
+    os.environ["SEARCH_BENCHMARK_NAME"] = "calcity"
+    from benchmarks.calcity._citynav_bridge import activate  # noqa: PLC0415
+
+    activate()
+    from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
+    from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
+    from benchmarks.flight.live_source import open_live  # noqa: PLC0415
+    from benchmarks.flight.mission import STATE_AWAITING, STATE_ENDED, STATE_FLYING, STATE_IDLE, Mission, resolve_episode  # noqa: PLC0415
+    from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
+    from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
+    from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
+
+    cfg = load_config(args.config)
+    sensor = resolve_sensor(cfg.sensor)
+    episode = resolve_episode(args.episode, args.split, args.start_xy)
+    map_name = episode.map_name
+    ortho = map_render.load_raster(args.ortho, map_name)
+    if ortho is None:
+        print(f"no {map_name} raster under {args.ortho}", file=sys.stderr)
+        return 2
+    start_alt, ground_z = start_altitude_m(cfg, map_name, episode.episode_id)
+    terrain = map_render.terrain(map_name, str(TILES_DIR))
+    ground = None if terrain is None else (
+        lambda xy: float(terrain.elevation(np.asarray([xy[0]]), np.asarray([xy[1]]))[0]))
+    twin = Twin(tiles_dir=TILES_DIR, map_name=map_name, ortho=ortho, sensor=sensor, start_xy=episode.start_xy,
+                agl_m=start_alt - ground_z, ground=ground)
+    live = open_live(vehicle=twin, tiles_dir=TILES_DIR, map_name=map_name, sensor=sensor,
+                     boresight_path=args.boresight, register_raster=args.register)
+
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    sortie = args.out / stamp
+    ep = open_episode_dir(sortie, episode_id=args.episode, map_name=map_name, split=args.split,
+                          config_path=args.config, run_no=1)
+    mission = Mission(episode_id=args.episode, split=args.split, config=args.config, workdir=ep.dir, live=live,
+                      instruction=args.instruction, recorder=ep.recorder, close_log=ep.close, run_id=stamp,
+                      run_no=1, start_xy=args.start_xy, reasoning_effort=args.reasoning_effort)
+    mission.start()
+    taskings, heard = list(args.then), 0
+    while mission.status in (STATE_IDLE, STATE_FLYING, STATE_AWAITING):
+        if mission.replies > heard:
+            heard = mission.replies
+            if not taskings:
+                mission.stop()
+                break
+            mission.tasking(taskings.pop(0))
+        time.sleep(0.2)
+    mission.wait()
+    live.close()
+    print(f"{ep.dir}: {mission.status}, ended by {mission.ended_by}, {len(mission.flights)} flights, "
+          f"{mission.turns_used} turns" + (f", error {mission.error}" if mission.error else ""))
+    return 0 if mission.status == STATE_ENDED else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
