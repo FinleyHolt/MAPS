@@ -867,7 +867,7 @@ class Driver:
             )
             self._abort = (
                 f"mass instant failure: {len(bad)} of the last "
-                f"{ABORT_WINDOW} episodes produced no prediction and were "
+                f"{ABORT_WINDOW} attempts produced no prediction and were "
                 f"excluded as infra casualties (dominant cause {top!r}, "
                 f"{k}x). This run cannot produce results; stopping instead "
                 f"of spending the rest of the allocation on it."
@@ -878,10 +878,12 @@ class Driver:
         self.log(f"!! by cause: {dict(counts.most_common())}")
         self.log(f"!! representative worker log: {log_path or '(none recorded)'}")
         self.log(self._log_excerpt(log_path))
+        scored = sum(1 for r in _rows.iter_json_rows(self.episodes_file)
+                     if r.get("status") == episodes.STATUS_OK and _rows.metrics(r))
         self.log(
-            "!! nothing was scored: every one of these rows is excluded + "
-            "re-queued, so a resume into this out-root re-flies them once "
-            "the cause is fixed."
+            ("!! nothing was scored" if not scored else f"!! {scored} attempt(s) were scored")
+            + f"; the {len(bad)} infra attempts are excluded and re-queued, so a "
+            "resume into this out-root re-flies them once the cause is fixed."
         )
 
     def _resume_done(self) -> set[str]:

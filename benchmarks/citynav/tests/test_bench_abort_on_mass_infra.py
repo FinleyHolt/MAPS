@@ -372,3 +372,18 @@ def test_a_missing_worker_log_does_not_break_the_abort(
         d._append_result(_infra_row(i, missing))
     assert d._abort is not None
     assert "ABORTING RUN" in d.driver_log.read_text()
+
+
+def test_the_abort_counts_attempts_and_says_nothing_was_scored_only_when_true(tmp_path: Path) -> None:
+    d = _driver(tmp_path)
+    d._append_result(_scored_row(100, sr=1.0))
+    for i in range(bf.ABORT_WINDOW):
+        d._append_result(_infra_row(i))
+    assert d._abort is not None and "attempts" in d._abort and "episodes" not in d._abort
+    assert "nothing was scored" not in d.driver_log.read_text()
+
+    (tmp_path / "fresh").mkdir()
+    fresh = _driver(tmp_path / "fresh")
+    for i in range(bf.ABORT_WINDOW):
+        fresh._append_result(_infra_row(i))
+    assert "nothing was scored" in fresh.driver_log.read_text()
