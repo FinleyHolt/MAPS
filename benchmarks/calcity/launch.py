@@ -10,7 +10,6 @@ from pathlib import Path
 from benchmarks.calcity._citynav_bridge import activate
 from benchmarks.calcity.paths import (
     CALCITY_NATIVE_RGBD_DIR,
-    CALCITY_ROOT,
     TILES_DIR,
     tile_stem,
 )
@@ -20,39 +19,18 @@ DEFAULT_RUN_ROOT = "output/calcity_runs"
 SPLIT_PROBE_ORDER = ("calcity",)
 
 
-def _rebuild_commands(
-    *,
-    map_name: str,
-    repo: Path,
-    missing_tiles: bool,
-    missing_rasters: bool,
-) -> list[tuple[str, list[str]]]:
-    commands: list[tuple[str, list[str]]] = []
-    if missing_rasters:
-        commands.append(
-            (
-                "Cal City ortho rasters",
-                [
-                    sys.executable,
-                    "-m",
-                    "benchmarks.calcity.data_prep.build_rgbd_ortho",
-                    "--root",
-                    str(CALCITY_ROOT),
-                    "--px",
-                    "0.3",
-                    "--blocks",
-                    map_name,
-                ],
-            )
+def _rebuild_commands(*, map_name: str, missing_tiles: bool) -> list[tuple[str, list[str]]]:
+    """What preflight may build on its own: the tile bake, from the OSM
+    bundle (``CALCITY_BUNDLE``) into ``SEARCH_CALCITY_TILES``."""
+    if not missing_tiles:
+        return []
+    return [
+        (
+            "Cal City tile artifacts",
+            [sys.executable, "-m", "benchmarks.calcity.data_prep.bake_tiles",
+             "--blocks", map_name],
         )
-    if missing_tiles:
-        commands.append(
-            (
-                "Cal City tile artifacts",
-                [str(repo / "benchmarks" / "calcity" / "data_prep" / "bake.sh"), map_name],
-            )
-        )
-    return commands
+    ]
 
 
 def preflight_artifacts(
@@ -62,63 +40,63 @@ def preflight_artifacts(
     repo_root: Path | None = None,
     auto_bake: bool = True,
 ) -> None:
-    """Ensure Cal City rasters and feature-graph artifacts exist."""
+    """Ensure the block's raster pair and its tile bake exist.
+
+    The raster pair is ``<map>_rgb.tif`` (the block's own map, which the
+    ortho loader streams into its cache) beside ``<map>.tif`` (the flat
+    height plane on the same grid), both under ``SEARCH_CALCITY_RGBD_DIR``.
+    The repo ships no imagery, so a missing pair is never built here: the
+    failure names the raster and the command that lays the pair down from
+    the user's own map.
+    """
     repo = repo_root or Path(__file__).resolve().parents[2]
     stem = Path(tile_stem(map_name))
-    tile_suffixes = (
-        "_meta.json",
-        "_features.json",
-        "_graph.npz",
-        "_nodes.json",
-    )
+    tile_suffixes = ("_meta.json", "_features.json", "_graph.npz", "_nodes.json")
+    rasters = [
+        CALCITY_NATIVE_RGBD_DIR / f"{map_name}.tif",
+        CALCITY_NATIVE_RGBD_DIR / f"{map_name}_rgb.tif",
+    ]
 
-    def missing() -> tuple[list[Path], list[Path]]:
-        tiles = [Path(f"{stem}{suffix}") for suffix in tile_suffixes]
-        rasters = [
-            CALCITY_NATIVE_RGBD_DIR / f"{map_name}.tif",
-            CALCITY_NATIVE_RGBD_DIR / f"{map_name}.png",
-        ]
-        return (
-            [path for path in tiles if not path.exists()],
-            [path for path in rasters if not path.exists()],
-        )
-
-    missing_tiles, missing_rasters = missing()
-    if not missing_tiles and not missing_rasters:
-        print(
-            f"[preflight] local Cal City assets ready (tiles={TILES_DIR})",
-            file=sys.stderr,
-        )
-        return
+    def missing_tiles() -> list[Path]:
+        return [p for p in (Path(f"{stem}{s}") for s in tile_suffixes) if not p.exists()]
 
     if auto_bake:
         for label, command in _rebuild_commands(
-            map_name=map_name,
-            repo=repo,
-            missing_tiles=bool(missing_tiles),
-            missing_rasters=bool(missing_rasters),
+            map_name=map_name, missing_tiles=bool(missing_tiles())
         ):
             print(f"[preflight] baking missing {label}...", file=sys.stderr)
             print(f"[preflight]   {' '.join(command)}", file=sys.stderr)
-            try:
-                subprocess.run(command, cwd=repo, check=False)
-            except FileNotFoundError as exc:
-                print(f"[preflight] bake command failed: {exc}", file=sys.stderr)
-        missing_tiles, missing_rasters = missing()
-        if not missing_tiles and not missing_rasters:
-            return
+            subprocess.run(command, cwd=repo, check=False)
+
+    tiles_gone = missing_tiles()
+    rasters_gone = [p for p in rasters if not p.exists()]
+    if not tiles_gone and not rasters_gone:
+        print(
+            f"[preflight] local Cal City assets ready (tiles={TILES_DIR}, "
+            f"raster={rasters[1]})",
+            file=sys.stderr,
+        )
+        return
 
     print(
         f"[preflight] FAIL: local Cal City assets missing for {map_name} "
         f"(config={config_path})",
         file=sys.stderr,
     )
-    for path in (*missing_tiles, *missing_rasters):
+    for path in (*tiles_gone, *rasters_gone):
         print(f"[preflight]   {path}", file=sys.stderr)
-    print(
-        "[preflight] rebuild with benchmarks/calcity/data_prep/prepare.sh",
-        file=sys.stderr,
-    )
+    if tiles_gone:
+        print(
+            "[preflight] bake the tiles: python -m benchmarks.calcity.data_prep.bake_tiles "
+            "(OSM bundle at CALCITY_BUNDLE)",
+            file=sys.stderr,
+        )
+    if rasters_gone:
+        print(
+            "[preflight] lay down the raster pair from the block's map: "
+            "python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>",
+            file=sys.stderr,
+        )
     raise SystemExit(2)
 
 

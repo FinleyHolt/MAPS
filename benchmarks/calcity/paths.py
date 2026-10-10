@@ -5,14 +5,15 @@ CityRefer-compatible object catalog and orthographic rasters; released splits
 and tiles live with this package by default.
 
 ``SEARCH_CALCITY_RGBD_DIR`` names the imagery the bench crops: a directory
-holding ``<map>.png`` (the RGB raster on the bake's grid) beside ``<map>.tif``
-(the bake's flat height plane). It defaults to the release's
-``data/rgbd_upstream``. A second raster of the block -- the program's own
-map of it -- is a second directory, never an overwrite: the ortho loader
-(``maps.perception.ortho.camera_model``) keys its mmap cache on the
-directory alone and never checks the raster's freshness. The run stamps the
-resolved directory on every row (``run_manifest.ARM_ENV_FLAGS``), so two arms
-over two rasters read as two arms on one bake.
+holding ``<map>_rgb.tif`` (the block's own map) beside ``<map>.tif`` (the
+flat height plane on the same grid), built by
+``benchmarks.calcity.data_prep.build_rgbd_ortho`` from the user's raster. It
+defaults to ``data/rgbd_upstream`` under the data root. A second raster of
+the block is a second directory, never an overwrite: the ortho loader
+(``maps.perception.ortho.camera_model``) keys its mmap cache on the directory
+alone and never checks the raster's freshness. The run stamps the resolved
+directory on every row (``run_manifest.ARM_ENV_FLAGS``), so two arms over two
+rasters read as two arms on one bake.
 """
 
 from __future__ import annotations
@@ -82,8 +83,8 @@ def bake_meta() -> dict:
     if not path.exists():
         raise FileNotFoundError(
             f"the Cal City bake under {TILES_DIR} carries no calcity_meta.json. "
-            "Build it with benchmarks/calcity/data_prep/prepare.sh, or point "
-            "SEARCH_CALCITY_TILES at a bake that has one."
+            "Build it with python -m benchmarks.calcity.data_prep.bake_tiles, "
+            "or point SEARCH_CALCITY_TILES at a bake that has one."
         )
     return json.loads(path.read_text())
 
@@ -125,8 +126,9 @@ def assert_available() -> None:
     if missing:
         raise FileNotFoundError(
             f"Cal City data is incomplete under {CALCITY_ROOT}.\n"
-            "Build or validate it with:\n"
-            "  benchmarks/calcity/data_prep/prepare.sh\n"
+            "Build it with:\n"
+            "  python -m benchmarks.calcity.data_prep.build_objects_json\n"
+            "  python -m benchmarks.calcity.data_prep.bake_tiles\n"
             "Override locations with SEARCH_CALCITY_DATA, "
             "SEARCH_CALCITY_SPLITS, and SEARCH_CALCITY_TILES.\n\n"
             f"Missing: {', '.join(str(path) for path in missing)}"
@@ -139,5 +141,5 @@ def assert_available() -> None:
         raise RuntimeError(
             f"the Cal City bake under {TILES_DIR} declares coordinate_frame "
             f"y_axis={frame!r}; the engine's world frame is y-north. "
-            "Re-author the bake with benchmarks/calcity/data_prep/prepare.sh."
+            "Re-bake with python -m benchmarks.calcity.data_prep.bake_tiles."
         )

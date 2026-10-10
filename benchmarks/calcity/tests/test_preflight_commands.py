@@ -9,26 +9,40 @@ def test_calcity_corpus_is_auto_resolvable():
     assert SPLIT_PROBE_ORDER == ("calcity",)
 
 
-def test_calcity_preflight_uses_calcity_builders(tmp_path: Path):
-    repo = tmp_path / "repo"
-    commands = _rebuild_commands(
-        map_name="calcity",
-        repo=repo,
-        missing_tiles=True,
-        missing_rasters=True,
-    )
-    assert len(commands) == 2
-    raster_label, raster_cmd = commands[0]
-    tile_label, tile_cmd = commands[1]
-    assert raster_label == "Cal City ortho rasters"
-    assert "benchmarks.calcity.data_prep.build_rgbd_ortho" in raster_cmd
-    assert "rasterize_citynav_native.sh" not in " ".join(raster_cmd)
-    assert tile_label == "Cal City tile artifacts"
-    assert tile_cmd == [
-        str(repo / "benchmarks" / "calcity" / "data_prep" / "bake.sh"),
-        "calcity",
+def test_calcity_preflight_bakes_tiles_with_the_calcity_baker():
+    commands = _rebuild_commands(map_name="calcity", missing_tiles=True)
+    assert commands == [
+        (
+            "Cal City tile artifacts",
+            [sys.executable, "-m", "benchmarks.calcity.data_prep.bake_tiles",
+             "--blocks", "calcity"],
+        )
     ]
-    assert "rebake_citynav_local.sh" not in " ".join(tile_cmd)
+    assert _rebuild_commands(map_name="calcity", missing_tiles=False) == []
+
+
+def test_a_missing_raster_pair_fails_naming_the_raster_and_its_builder(
+    tmp_path: Path, monkeypatch, capsys
+):
+    """The block's raster is the user's to supply, so preflight never
+    builds it: it names ``<map>_rgb.tif`` and the command that lays the
+    pair down from the user's own raster."""
+    import pytest
+
+    from benchmarks.calcity import launch
+
+    monkeypatch.setattr(launch, "CALCITY_NATIVE_RGBD_DIR", tmp_path)
+    monkeypatch.setattr(launch, "tile_stem", lambda m: str(tmp_path / m))
+    for suffix in ("_meta.json", "_features.json", "_graph.npz", "_nodes.json"):
+        (tmp_path / f"calcity{suffix}").write_text("{}")
+    (tmp_path / "calcity.tif").write_bytes(b"")
+    with pytest.raises(SystemExit) as e:
+        launch.preflight_artifacts(map_name="calcity", config_path=Path("c.yaml"))
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert str(tmp_path / "calcity_rgb.tif") in err
+    assert "benchmarks.calcity.data_prep.build_rgbd_ortho --raster" in err
+    assert str(tmp_path / "calcity.tif") + "\n" not in err
 
 
 def test_configured_launcher_resolves_a_released_calcity_episode():
