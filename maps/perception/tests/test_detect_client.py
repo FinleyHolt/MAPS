@@ -263,8 +263,8 @@ def test_the_clients_read_outwaits_the_servers_in_flight_hold() -> None:
     held = re.search(r'os\.environ\.get\("SAM_INFLIGHT_WAIT_S", "([0-9.]+)"\)', server_source)
     assert held is not None, "sam_server.py no longer declares SAM_INFLIGHT_WAIT_S with a default"
     assert dc.SEGMENT_READ_TIMEOUT_S > float(held.group(1)) >= 600.0
-    # The ladder in front of it spans a radio dropout: 3 + 6 + 12 s of backoff.
-    assert dc.TILE_PROXY_TRIES * dc.TILE_PROXY_RETRY_S > 20.0 and dc.TILE_PROXY_TIMEOUT[0] > 20.0
+    # The connect budget outlasts a radio dropout.
+    assert dc.SEGMENT_CONNECT_TIMEOUT_S > 20.0
 
 
 def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, monkeypatch):

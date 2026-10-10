@@ -16,8 +16,6 @@ from ``SAM_SERVER_URL``. Default is ``http://127.0.0.1:8772``.
 from __future__ import annotations
 
 import base64
-import hashlib
-import io
 import itertools
 import os
 import time
@@ -182,7 +180,7 @@ def _post_segment_avoid_stale_pool(*, picker, json_body) -> dict | None:
                 s.mount("http://", adapter)
                 s.mount("https://", adapter)
                 resp = s.post(url, json=json_body, headers=headers,
-                              timeout=(TILE_PROXY_TIMEOUT[0], SEGMENT_READ_TIMEOUT_S))
+                              timeout=(SEGMENT_CONNECT_TIMEOUT_S, SEGMENT_READ_TIMEOUT_S))
                 if 400 <= resp.status_code < 500:
                     print(
                         f"[sam] /segment 4xx at {url}: "
@@ -629,23 +627,9 @@ def _png_wire_bytes(canvas: np.ndarray) -> bytes:
     return buf.tobytes()
 
 
-# The once-image's encode: the quality the model's own observation is served
-# at (benchmarks.flight.live_source.OBSERVATION_JPEG_QUALITY), so the
-# segmenter sees the pixels the model reasons over. Chosen on 2026-09-14 in
-# flight, where a lossless once-image still cost the radio ~5 MB a look: a
-# lossy wire was measured to move about one detection in eight on the
-# bench, and the link is the scarcer thing.
-ONCE_IMAGE_JPEG_QUALITY = 92
-#: Seconds the once-image upload may take: a pass of megabytes on a slow radio.
-ONCE_IMAGE_UPLOAD_S = 600
-#: The tile proxy's asks on a transport error, and the pause between them:
-#: three, ten seconds apart, so the ladder spans a radio dropout (twenty
-#: seconds) instead of ending inside one and losing the look to a link that
-#: was about to come back. The connect budget outlasts the dropout on its
-#: own for the same reason; the read is the tiles' own time.
-TILE_PROXY_TRIES = 3
-TILE_PROXY_RETRY_S = 10.0
-TILE_PROXY_TIMEOUT = (45, 180)
+#: How long the direct /segment call waits to connect: it outlasts a radio
+#: dropout (about twenty seconds).
+SEGMENT_CONNECT_TIMEOUT_S = 45
 #: How long the direct /segment call waits for the server's answer. The
 #: server holds a request behind its in-flight semaphore for
 #: ``serving/sam_server.py``'s ``_INFLIGHT_WAIT_S`` (600 s) before
@@ -653,13 +637,6 @@ TILE_PROXY_TIMEOUT = (45, 180)
 #: the server is still going to serve and posts the tile again on top.
 #: ``maps/perception/tests/test_detect_client.py`` pins the order.
 SEGMENT_READ_TIMEOUT_S = 660
-
-
-def once_image_bytes(rgb: np.ndarray) -> bytes:
-    """The whole image as it crosses the link to the tile proxy, once."""
-    out = io.BytesIO()
-    Image.fromarray(np.ascontiguousarray(rgb, dtype=np.uint8)).save(out, format="JPEG", quality=ONCE_IMAGE_JPEG_QUALITY)
-    return out.getvalue()
 
 
 def _letterbox_to_sam(rgb: np.ndarray) -> tuple[np.ndarray, float, int, int]:
@@ -871,66 +848,6 @@ class SamDetectClient:
                 kept.append((crop, bb, a, lab, sc))
         return [(crop, bb, lab, sc) for (crop, bb, _a, lab, sc) in kept]
 
-    def _proxied_tiles(
-        self,
-        rgb: np.ndarray,
-        bounds: "list[tuple[int, int, int, int]]",
-        sam_body: dict,
-    ) -> "list[dict | None] | None":
-        """Every bound's SAM payload from the tile proxy
-        (``maps.perception.sam.tile_proxy``, ``SAM_TILE_PROXY_URL``), the
-        image having crossed the link once as the model's own JPEG; None
-        when no proxy is named.
-
-        A proxy that is named carries every look or none of it. When the
-        upload or the tiles fail -- reset mid-upload, timed out, unreachable
-        -- every bound answers None and NOTHING goes up direct: the link is
-        what failed, the direct tiles are five times the bytes on it, and
-        the proxy stands on the same box as the reasoner's, so a proxy that
-        cannot be reached is a mission that cannot be flown either way. The
-        32-frame pass of 20260914T211322Z run 2: its 8 MB upload was reset
-        22 s in on a degraded link, the tiles went up direct through the
-        same link, every post was reset and retried, and the segment phase
-        read 507.6 s. The look is lost either way, and this way the next one
-        is not."""
-        base = os.environ.get("SAM_TILE_PROXY_URL", "").strip().rstrip("/")
-        if not base:
-            return None
-        import requests
-
-        wire = once_image_bytes(rgb)
-        sha = hashlib.sha256(wire).hexdigest()
-        body = {**sam_body, "bounds": [list(b) for b in bounds], "workers": self.sahi_tile_workers}
-        # The run's key rides every call, the way it rides the reasoner's, so
-        # the proxy's log reads per run.
-        key = {"x-smg-routing-key": os.environ.get("SEARCH_LLM_ROUTING_KEY", "-")}
-        tiles_url = f"{base}/looks/{sha}/tiles"
-        uploaded = False
-        last: Exception | None = None
-        for attempt in range(TILE_PROXY_TRIES):
-            try:
-                r = requests.post(tiles_url, json=body, headers=key, timeout=TILE_PROXY_TIMEOUT)
-                if r.status_code == 404 and not uploaded:
-                    # The one upload gets the time a slow link needs: a pass is
-                    # megabytes, and abandoning it at 180 s is what costs the look.
-                    requests.put(f"{base}/looks/{sha}", data=wire,
-                                 headers={"Content-Type": "image/jpeg", **key},
-                                 timeout=(TILE_PROXY_TIMEOUT[0], ONCE_IMAGE_UPLOAD_S)).raise_for_status()
-                    uploaded = True
-                    r = requests.post(tiles_url, json=body, headers=key, timeout=TILE_PROXY_TIMEOUT)
-                r.raise_for_status()
-                return list(r.json()["payloads"])
-            except (requests.ConnectionError, requests.Timeout) as exc:
-                last = exc          # the link: asked again past the dropout
-            except requests.RequestException as exc:
-                last = exc          # the proxy answered; asking again changes nothing
-                break
-            if attempt + 1 < TILE_PROXY_TRIES:
-                time.sleep(TILE_PROXY_RETRY_S)
-        print(f"[sam] WARNING: tile proxy {base} answered no tiles ({type(last).__name__}: {last}); "
-              "this look has none, and nothing goes up direct", flush=True)
-        return [None] * len(bounds)
-
     def _sahi_segment(
         self, obs: Observation, concepts: list[str]
     ) -> list[DetectedObject]:
@@ -957,10 +874,6 @@ class SamDetectClient:
             "max_per_image": int(self.max_per_step),
             "resolution": _SAM_INPUT_SIZE,
         }
-        # One image over the link, the tiles cut beside SAM: the proxy answers
-        # every bound's payload at once, or None when no proxy is named.
-        proxied = self._proxied_tiles(rgb, bounds, sam_body)
-
         def _one_tile(i: int) -> list[tuple] | None:
             """Fetch + decode one tile. Returns that tile's tiledets in wire
             order, or None on poster failure. Self-contained: reads only
@@ -971,16 +884,13 @@ class SamDetectClient:
             sub = rgb[r0:r1, c0:c1]
             ch, cw = int(sub.shape[0]), int(sub.shape[1])
             canvas, scale, pad_top, pad_left = _letterbox_to_sam(sub)
-            if proxied is not None:
-                payload = proxied[i]
-            else:
-                json_body = {
-                    **sam_body,
-                    "image_b64": base64.b64encode(_png_wire_bytes(canvas)).decode("ascii"),
-                }
-                payload = _post_segment_avoid_stale_pool(
-                    picker=_pick_url, json_body=json_body
-                )
+            json_body = {
+                **sam_body,
+                "image_b64": base64.b64encode(_png_wire_bytes(canvas)).decode("ascii"),
+            }
+            payload = _post_segment_avoid_stale_pool(
+                picker=_pick_url, json_body=json_body
+            )
             if payload is None:
                 # A genuine tile failure (the poster exhausted its replica x retry
                 # budget), NOT "no detections". Skipping it silently would blind

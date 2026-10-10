@@ -181,7 +181,6 @@ window.
 | `SEARCH_SAMPLING_TEMPERATURE`, `SEARCH_SAMPLING_PRESENCE_PENALTY` | client | Replace the envelope's temperature or presence penalty. |
 | `SAM_SERVER_URL` | client | The SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772`. |
 | `SAM_VIDEO_SERVER_URL` | client | A separate URL for video calls. Default `SAM_SERVER_URL`. |
-| `SAM_TILE_PROXY_URL` | client | A tile proxy that segments a look's tiles beside the reasoner. Unset sends tiles to `SAM_SERVER_URL`. |
 | `SAM_PORT`, `SAM_MODEL_ID`, `SAM_DEVICE`, `SAM_DTYPE` | serve | Port (8772), checkpoint id (`facebook/sam3.1`), device, dtype (`bfloat16`). |
 | `SAM3_CHECKPOINT` | serve | A local checkpoint file. |
 | `SAM_MAX_INFLIGHT`, `SAM_INFLIGHT_WAIT_S`, `SAM_GPU_CHUNK`, `SAM_PREWARM`, `SAM_HEALTH_MIN_FREE_GB` | serve | Admission, batching and health limits (`serving/sam_server.py`). |
