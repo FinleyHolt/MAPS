@@ -78,6 +78,8 @@ class Twin:
         self.heading_deg = 0.0
         self.route: list[tuple[float, float]] = []
         self.legs: list[Leg] = []
+        #: Called after each sleep, once the clock has moved (the live source's corrector).
+        self.on_sleep: list = []
         #: Every frame recorded: ``{"seq", "log_time", "t_host", "pose"}``.
         self.rows: list[dict[str, Any]] = []
         #: The track at every camera tick, ``(t, x, y, heading_deg)``, which ``pose(t)`` interpolates.
@@ -104,6 +106,8 @@ class Twin:
                 self.t = len(self._track) / CAMERA_HZ
                 self._track.append((self.t, *self.xy, self.heading_deg))
                 self._record()
+        for hook in self.on_sleep:
+            hook()
 
     def _advance(self, dt_s: float) -> None:
         """Straight at the route's next point at the airframe's speed, through it

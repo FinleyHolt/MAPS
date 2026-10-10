@@ -419,12 +419,30 @@ class LiveSource:
         self.graph: PoseGraph | None = None
         self._correcting = threading.Lock()
         self.corrector: Corrector | None = None
+        #: The log time past the newest frame a simulated vehicle's clock has corrected.
+        self._clocked_since: int | None = None
 
-    def start_corrector(self) -> Corrector:
-        if self.corrector is None:
+    def start_corrector(self) -> None:
+        """Register frames into the pose graph as the vehicle records them. A
+        simulated vehicle (one that carries ``on_sleep``) moves its clock only
+        when the harness sleeps, so it corrects every frame up to that clock,
+        in order, before the sleep returns; a real vehicle runs the
+        wall-clock :class:`Corrector`."""
+        hooks = getattr(self.vehicle, "on_sleep", None)
+        if hooks is not None:
+            if self._correct_through_now not in hooks:
+                hooks.append(self._correct_through_now)
+        elif self.corrector is None:
             self.corrector = Corrector(self)
             self.corrector.start()
-        return self.corrector
+
+    def _correct_through_now(self) -> None:
+        rows = self.vehicle.index(since=self._clocked_since) or []
+        for row in sorted(rows, key=lambda r: int(r["log_time"])):
+            self._clocked_since = int(row["log_time"]) + 1
+            got = self.vehicle.frame(int(row["seq"]))
+            if got is not None:
+                self.correct(got)
 
     def close(self) -> None:
         if self.corrector is not None:

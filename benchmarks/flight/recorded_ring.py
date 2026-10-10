@@ -323,6 +323,8 @@ class RecordedRing:
         self.last_error = ""
         self.legs: list[Any] = []
         self._lock = threading.Lock()
+        #: Called after each sleep, once the clock has moved (the live source's corrector).
+        self.on_sleep: list[Any] = []
         self.track = NavTrack()
         for mcap in nav or [self.path]:
             for t_ns, fix in json_docs(mcap, TOPIC_PVT, start_ns - NAV_MARGIN_NS, end_ns + NAV_MARGIN_NS):
@@ -364,6 +366,8 @@ class RecordedRing:
     def sleep(self, seconds: float) -> None:
         with self._lock:
             self.t_ns += max(0, int(round(float(seconds) * 1e9)))
+        for hook in self.on_sleep:
+            hook()
 
     def pose(self, t: float | None = None) -> Pose | None:
         return self.track.pose_at(self.now() if t is None else t)
