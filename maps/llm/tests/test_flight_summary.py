@@ -313,25 +313,6 @@ def test_no_transcript_is_the_zero_shape(tmp_path: Path) -> None:
     assert flight_summary.summarize(tmp_path / "nothing") == flight_summary.blank()
 
 
-def test_compactions_count_fired_only(tmp_path: Path) -> None:
-    """FIRED compactions are the number; infeasible aborts and headroom
-    summaries share the trace file and must not inflate it."""
-    flight = tmp_path / "flight"
-    _write(flight, [{"kind": "request", "request_id": "r1", "created_at": 1.0}])
-    (flight / "compaction_trace.jsonl").write_text(
-        "".join(
-            json.dumps(r) + "\n"
-            for r in [
-                {"kind": "compaction", "fired": True, "infeasible": False},
-                {"kind": "compaction", "fired": True, "infeasible": False},
-                {"kind": "compaction", "fired": False, "infeasible": True},
-                {"kind": "compaction_headroom", "checks": 6},
-            ]
-        )
-    )
-    assert flight_summary.summarize(flight)["compactions"] == 2
-
-
 def test_truncated_tail_is_not_an_error(tmp_path: Path) -> None:
     """A live writer mid-append leaves half a line; the turns before it still
     count."""

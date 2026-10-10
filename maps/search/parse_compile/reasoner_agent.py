@@ -27,10 +27,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from maps.search.analyze_scene.compactor import (
-    CompactionEvent,
-    compact_transcript,
-)
+from maps.search.analyze_scene.compactor import compact_transcript
 from maps.llm.endpoint_spec import EndpointSpec
 from maps.llm.http import (
     CallCanceled,
@@ -316,11 +313,6 @@ class Reasoner:
     messages: list[dict] = field(default_factory=list)
     sensor_description: str = ""
     cancel_event: threading.Event | None = None
-    # Compaction-event buffer, drained to compaction_trace.jsonl at the
-    # episode's persistence point. Thread-confined to this reasoner's
-    # worker; the Reasoner stays workdir-agnostic — only the harvest knows
-    # the episode dir.
-    compaction_events: list[CompactionEvent] = field(default_factory=list)
     #: The reasoning effort this reasoner's requests carry, a string the
     #: serve accepts (``maps.llm.sampling``); None sends the arm's own.
     reasoning_effort: str | None = None
@@ -473,7 +465,6 @@ class Reasoner:
             model=self.model,
             tools=tools,
             site="reasoner.step_tool_call",
-            log_fn=self.compaction_events.append,
         )
         if compacted_messages is not self.messages:
             self.messages = compacted_messages

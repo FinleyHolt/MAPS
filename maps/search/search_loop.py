@@ -1133,62 +1133,6 @@ class SearchLoop:
         except Exception:  # noqa: BLE001
             log.debug("anchor_bindings append non-fatal", exc_info=True)
 
-    def _append_compaction_trace(self, *, workdir, stop_id, step_idx,
-                                 stop_seq_idx, compile_turn) -> None:
-        """Drain every reasoner's ``compaction_events`` buffer and append to
-        flight/compaction_trace.jsonl — the per-episode compaction telemetry
-        (fire rate, infeasible aborts, headroom distribution). Write-only,
-        on by default (SEARCH_DUMP_COMPACTION_TRACE=0 disables the write; the
-        drain still runs so buffers never grow unbounded); never raises.
-
-        Fired/infeasible events get one line each; the per-turn below-budget
-        checks collapse to one headroom summary line per reasoner per drain.
-        A concurrent round fan-out (round-era quarantine) may append
-        while this drains, so the drain is a single-consumer atomic pop loop
-        and the stop fields mean "harvested at this stop", not "occurred at
-        this stop" — event attribution is per-episode/per-rid, order exact,
-        stop approximate."""
-        try:
-            with self._lock:
-                reasoners = dict(self.state.reasoners)
-            enabled = True
-            lines = []
-            for rid, reasoner in reasoners.items():
-                buf = getattr(reasoner, "compaction_events", None)
-                if not buf:
-                    continue
-                events = []
-                while buf:
-                    events.append(buf.pop(0))
-                if not enabled:
-                    continue
-                ctx = {"kind": "compaction", "stop_id": stop_id,
-                       "step_idx": int(step_idx), "stop_seq_idx": stop_seq_idx,
-                       "compile_turn": compile_turn, "rid": int(rid)}
-                headroom = [e for e in events if not e.fired and not e.infeasible]
-                for e in events:
-                    if e.fired or e.infeasible:
-                        lines.append(json.dumps(
-                            {**ctx, **dataclasses.asdict(e)},
-                            ensure_ascii=False))
-                if headroom:
-                    worst = max(headroom, key=lambda e: e.input_tokens)
-                    lines.append(json.dumps(
-                        {**ctx, "kind": "compaction_headroom",
-                         "checks": len(headroom),
-                         "max_input_tokens": worst.input_tokens,
-                         "target_input_tokens": worst.target_input_tokens},
-                        ensure_ascii=False))
-            if lines:
-                path = Path(workdir) / "flight" / "compaction_trace.jsonl"
-                path.parent.mkdir(parents=True, exist_ok=True)
-                with path.open("a") as fh:
-                    fh.write("\n".join(lines) + "\n")
-        except OSError as e:
-            log.warning("compaction_trace append failed at %s: %s", workdir, e)
-        except Exception:  # noqa: BLE001
-            log.debug("compaction_trace append non-fatal", exc_info=True)
-
     def restore_from_workdir(
         self,
         src_workdir: Path | str,

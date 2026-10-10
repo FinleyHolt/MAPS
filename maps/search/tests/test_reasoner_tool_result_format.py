@@ -1,20 +1,12 @@
 #!/usr/bin/env python
-"""``Reasoner.compaction_events`` buffer + ``append_tool_result`` byte-format.
+"""``Reasoner.append_tool_result`` byte-format.
 
-Two FROZEN contracts:
-
-  * ``compaction_events`` is a per-instance ``field(default_factory=list)`` — the
-    per-stop persistence point drains it to ``compaction_trace.jsonl``. If it were
-    a class attribute, two reasoners in one turn's fanout would share (and
-    cross-contaminate) one buffer; this pins that they do NOT.
-  * ``append_tool_result`` serializes EXACTLY as the distillation renderer
-    (``chat_render.tool_result_msg``): a ``str`` result passes verbatim; anything
-    else is ``json.dumps(result, default=str)``; a value ``json.dumps`` cannot
-    encode even with ``default=str`` (a non-str/non-scalar dict KEY) falls back to
-    ``str(result)``. The student must train on the exact string the harness serves.
+A ``str`` result passes verbatim; anything else is ``json.dumps(result,
+default=str)``; a value ``json.dumps`` cannot encode even with ``default=str``
+(a non-str/non-scalar dict KEY) falls back to ``str(result)``.
 
 No network. Run:
-``pytest maps/search/tests/test_reasoner_compaction_buffer.py``.
+``pytest maps/search/tests/test_reasoner_tool_result_format.py``.
 """
 from __future__ import annotations
 
@@ -36,31 +28,6 @@ _TEST_SPEC = EndpointSpec(
 def _mk() -> Reasoner:
     # Cheap: __post_init__ only seeds the system prompt — no network.
     return Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
-
-
-# --------------------------------------------------------------------------- #
-# compaction_events buffer                                                    #
-# --------------------------------------------------------------------------- #
-
-
-def test_new_reasoner_has_empty_buffer():
-    r = _mk()
-    assert r.compaction_events == []
-
-
-def test_buffer_appends():
-    r = _mk()
-    r.compaction_events.append("evt-1")
-    r.compaction_events.append("evt-2")
-    assert r.compaction_events == ["evt-1", "evt-2"]
-
-
-def test_two_reasoners_do_not_share_buffer():
-    # default_factory=list, NOT a shared class attribute.
-    r1, r2 = _mk(), _mk()
-    assert r1.compaction_events is not r2.compaction_events
-    r1.compaction_events.append("only-r1")
-    assert r2.compaction_events == []
 
 
 # --------------------------------------------------------------------------- #

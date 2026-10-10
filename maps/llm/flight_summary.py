@@ -31,12 +31,6 @@ WHICH FILE OWNS WHICH NUMBER — one source per quantity, never two:
     ``reasoning_tokens`` is a SLICE of ``completion_tokens``, not an
     addition — the two overlap by design.
 
-  COMPACTION TRACE owns ``compactions`` — fired context compactions
-    (``search_loop._append_compaction_trace``: one ``kind:"compaction"``
-    line per fired-or-infeasible event; ``fired`` distinguishes them, and
-    headroom summaries are neither). The transcript cannot state this: a
-    compacted request just looks like a shorter one.
-
 DECLARED vs USED is the interesting set, and only the transcript can
 state it: ``find`` declares a ``color`` arg, and whether the agent ever
 supplies one is load-bearing (CLAUDE.md: colour is ORDERING-only).
@@ -151,9 +145,7 @@ def blank() -> dict:
         "unanswered": 0,
         "prompt_tokens": 0,
         # Largest single-request prompt — peak context occupancy. The sums
-        # above measure spend; this measures how full the window ever got,
-        # and pairs with ``compactions``: a fired compaction means the
-        # conversation logically outgrew the window it peaks at.
+        # above measure spend; this measures how full the window ever got.
         "prompt_tokens_max": 0,
         "completion_tokens": 0,
         "total_tokens": 0,
@@ -161,7 +153,6 @@ def blank() -> dict:
         "reasoning_tokens": 0,
         "latency_s_sum": 0.0,
         "latency_s_max": 0.0,
-        "compactions": 0,
         "calls": {},
         "ops": {},
         "op_args": {},
@@ -287,23 +278,6 @@ def summarize(flight_dir: Path) -> dict:
         out["reasoning_tokens"] = int(meter.get("total_reasoning_tokens") or 0)
     except Exception as exc:  # noqa: BLE001 — never fail the episode
         log.warning("flight summary meter read failed at %s: %s", flight_dir, exc)
-
-    trace = Path(flight_dir) / "compaction_trace.jsonl"
-    try:
-        with trace.open(errors="replace") as fh:
-            for line in fh:
-                if '"kind": "compaction"' not in line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except ValueError:
-                    continue
-                if rec.get("kind") == "compaction" and rec.get("fired"):
-                    out["compactions"] += 1
-    except OSError:
-        pass  # no trace = no compactions; the zero is honest
-    except Exception as exc:  # noqa: BLE001 — never fail the episode
-        log.warning("flight summary trace read failed at %s: %s", trace, exc)
 
     out["latency_s_sum"] = round(out["latency_s_sum"], 3)
     out["latency_s_max"] = round(out["latency_s_max"], 3)
