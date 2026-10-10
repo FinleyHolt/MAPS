@@ -37,24 +37,13 @@ class RunImagery:
         with self._lock:
             return min((g for *_r, g in self._products), default=DEFAULT_GSD_M)
 
-    def add(self, obs: Any) -> bool:
-        """One perceived observation, kept when it is a north-up product on
-        the map grid (``ortho_view_corners_xy`` set, a ``world_window``);
-        a perspective frame is not, and is left to its own path."""
-        rgb = getattr(obs, "rgb", None)
-        window = getattr(obs, "world_window", None)
-        if rgb is None or window is None or getattr(obs, "ortho_view_corners_xy", None) is None:
-            return False
-        x0, y0, x1, y1 = (float(v) for v in window)
-        h, w = rgb.shape[:2]
-        if w < 1 or h < 1 or x1 <= x0 or y1 <= y0:
-            return False
-        alpha = getattr(obs, "alpha", None)
-        alpha = np.full((h, w), 255, np.uint8) if alpha is None else np.asarray(alpha, np.uint8)
+    def add(self, obs: Any) -> None:
+        """One perceived observation: a north-up product on the map grid
+        (``live_source.ortho_observation``), its ``world_window`` and alpha."""
+        x0, y0, x1, y1 = (float(v) for v in obs.world_window)
         with self._lock:
-            self._products.append((np.ascontiguousarray(rgb[..., :3], np.uint8), alpha, (x0, y0, x1, y1),
-                                   (x1 - x0) / w))
-        return True
+            self._products.append((np.ascontiguousarray(obs.rgb[..., :3], np.uint8), np.asarray(obs.alpha, np.uint8),
+                                   (x0, y0, x1, y1), (x1 - x0) / obs.rgb.shape[1]))
 
     def ortho(self, window: tuple[float, float, float, float]) -> dict[str, Any]:
         """The run's imagery over ``window`` as one north-up canvas at the
@@ -97,4 +86,4 @@ class RunImagery:
             rgb[r0:r1, c0:c1][on] = piece[on]
             alpha[r0:r1, c0:c1][on] = 255
         return {"rgb": rgb, "alpha": alpha, "height": np.zeros((h, w), np.float32),
-                "x_min": x0, "y_min": y0, "px_per_m": 1.0 / gsd, "m_per_px": gsd}
+                "x_min": x0, "y_min": y0, "px_per_m": 1.0 / gsd}
