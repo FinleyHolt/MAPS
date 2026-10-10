@@ -101,7 +101,6 @@ def _dispatch_one(
     cfg: RunConfig,
     recorder: LiveRecorder | None,
     episode_dir: Path,
-    per_episode: list[dict],
 ) -> dict:
     """Run one episode and write its row to ``<episode_dir>/episode.json``,
     shared by the batch loop and the persistent episode server.
@@ -168,7 +167,7 @@ def _dispatch_one(
         return out
     if rec is None:
         # The runner exited clean with no record (no objects for the map,
-        # the reasoner unreachable pre-flight, a --stop-after exit): not a
+        # the reasoner unreachable pre-flight, a SEARCH_STOP_AFTER exit): not a
         # scored attempt, so it is excluded and re-queued.
         out = _stamp({
             "episode_id": _eid,
@@ -177,7 +176,6 @@ def _dispatch_one(
         })
         write_episode_json(episode_dir, out)
         return out
-    per_episode.append(rec["metrics"])
     m = rec["metrics"]
     # A mission the serve failed out from under is the cluster's weather,
     # not the model's skill: excluded from SR and re-queued.

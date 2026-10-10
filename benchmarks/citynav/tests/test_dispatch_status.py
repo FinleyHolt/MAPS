@@ -30,11 +30,10 @@ def light(monkeypatch):
     monkeypatch.setattr(dispatch, "_cached_run_provenance", lambda flags: {"commit": "abc"})
 
 
-def _dispatch(tmp_path, per_episode=None):
+def _dispatch(tmp_path):
     return dispatch._dispatch_one(
         row={}, orig_idx=0, idx=0, total=1, compiler=None, objects_by_map={},
         cfg=SimpleNamespace(withhold=["look"]), recorder=None, episode_dir=tmp_path,
-        per_episode=per_episode if per_episode is not None else [],
     )
 
 
@@ -118,14 +117,12 @@ def test_a_serve_death_under_the_mission_is_infra(tmp_path, light, monkeypatch):
 
 def test_a_scored_record_is_ok_and_on_disk(tmp_path, light, monkeypatch):
     monkeypatch.setattr(dispatch, "run_episode", lambda *a, **k: _rec())
-    per_episode: list[dict] = []
-    row = _dispatch(tmp_path, per_episode)
+    row = _dispatch(tmp_path)
     assert row["status"] == episodes.STATUS_OK
     assert row["error"] is None
     assert row["search_env_flags"] == {"SEARCH_X": "1"}
     assert row["provenance"] == {"commit": "abc"}
     assert isinstance(row["elapsed_s"], float) and isinstance(row["ts"], float)
-    assert per_episode == [row["metrics"]]
     assert episodes.read_episode_json(tmp_path) == row
 
 

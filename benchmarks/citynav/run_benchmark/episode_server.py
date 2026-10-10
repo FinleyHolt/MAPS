@@ -172,7 +172,6 @@ def _episode_server_loop(
                 cfg=cfg,
                 recorder=recorder,
                 episode_dir=workdir,
-                per_episode=[],
             )
             # The verdict is in <workdir>/episode.json; the driver
             # reads it there and writes the ledger row.
