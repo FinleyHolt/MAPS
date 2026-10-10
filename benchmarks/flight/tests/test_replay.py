@@ -32,7 +32,7 @@ def bank_mission(built, floor, tmp_path):
         workdir = tmp_path / "sortie" / "run"
         workdir.mkdir(parents=True)
         m = M.Mission(episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,
-                      live=live, run_no=1)
+                      live=live, recorder=None, close_log=lambda: None, run_no=1)
         m.map_name, m._tiles_dir = "calcity", built[0]
         return m, live
     return make

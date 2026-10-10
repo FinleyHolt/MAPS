@@ -64,9 +64,6 @@ ARRIVAL_TIMEOUT_S = 1800.0
 COVERED_FRACTION = 0.9
 #: How many of a footprint's cells sample its area for the arrival rule.
 AREA_POINTS = 48
-#: The radius of the disc about a point with no footprint when the run's own
-#: observation span is not known.
-AREA_DISC_M = 60.0
 #: How many times the recording is asked whether it holds the area before a
 #: leg is posted anyway, and the pause between asks: a read that never
 #: answered is not ground the pass never held. Bounded, because the aircraft
@@ -186,7 +183,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
         grid_domain=GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),
         object_graph=graph,
     )
-    sensor = resolve_sensor(cfg.sensor) if cfg.sensor else None
+    sensor = resolve_sensor(cfg.sensor)
     if sensor is None:
         raise RuntimeError(f"cfg.sensor did not resolve a SensorSpec: {cfg.sensor!r}")
     compiler = MapsCompiler(sensor_description=served_description(sensor, cfg.start_altitude_agl_m),
@@ -222,15 +219,10 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
 
 def leg_span_m(h: Hydrated) -> float:
     """The run's observation span in metres: what one frame holds along its
-    long side at the mission's height, or twice ``AREA_DISC_M`` when the height
-    is not known."""
+    long side at the mission's height."""
     from maps.perception.observation import observation_extent_m  # noqa: PLC0415
 
-    alt = getattr(h.state, "altitude_m", None)
-    ground = getattr(h.search_loop, "_ortho_ground_z_m", None)
-    if alt is None or ground is None:
-        return 2.0 * AREA_DISC_M
-    return float(observation_extent_m(float(alt), float(ground), h.sensor))
+    return float(observation_extent_m(float(h.state.altitude_m), float(h.search_loop._ortho_ground_z_m), h.sensor))
 
 
 def leg_area(h: Hydrated, token: str, xy) -> list[tuple[float, float]]:
@@ -270,7 +262,7 @@ class Mission:
     """A mission in the seat: its thread, its tasking queue, its record."""
 
     def __init__(self, *, episode_id: str, split: str, config: str, workdir: Path, live: LiveSource,
-                 instruction: str | None = None, recorder: Any = None, close_log=None,
+                 recorder: Any, close_log, instruction: str | None = None,
                  run_id: str | None = None, run_no: int | None = None,
                  start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None) -> None:
         self.episode_id = episode_id
@@ -286,7 +278,7 @@ class Mission:
         self._live = live
         self._vehicle = live.vehicle
         self._recorder = recorder
-        self.close_log = close_log or (lambda: None)
+        self.close_log = close_log
 
         self._lock = threading.Lock()
         self._taskings: queue.Queue[str] = queue.Queue()
@@ -300,7 +292,6 @@ class Mission:
         #: is the mission's and not the park's.
         self.ended_at: float | None = None
         self.error: str | None = None
-        self.reply_text: str | None = None
         #: Model turns of the conversations that have ENDED; :meth:`_turns` adds the one in flight.
         self.turns_used = 0
         #: How many reports the model has made.
@@ -370,17 +361,9 @@ class Mission:
 
     # -- the leg ------------------------------------------------------------
 
-    def _area_lonlat(self, area: list[tuple[float, float]]) -> list[tuple[float, float]] | None:
-        """``area`` in WGS84, the form the recording is asked in; None when the map georeferences nothing."""
-        if not self._tiles_dir or not self.map_name:
-            return None
-        out: list[tuple[float, float]] = []
-        for x, y in area:
-            lonlat = local_to_lonlat(self._tiles_dir, self.map_name, float(x), float(y))
-            if lonlat is None:
-                return None
-            out.append((float(lonlat[0]), float(lonlat[1])))
-        return out
+    def _area_lonlat(self, area: list[tuple[float, float]]) -> list[tuple[float, float]]:
+        """``area`` in WGS84, the form the recording is asked in."""
+        return [local_to_lonlat(self._tiles_dir, self.map_name, float(x), float(y)) for x, y in area]
 
     def _fly_live(self, inner, h: Hydrated, item: dict[str, Any]) -> dict[str, Any]:
         """A flight on the aircraft, under the one arrival rule: a leg is flown
@@ -437,12 +420,12 @@ class Mission:
                         f"({self._live.last_refusal or 'no reason recorded'}); the leg is flown")})
                 ahead = [(float(x), float(y)) for x, y in (item.get("pass_ahead") or [])]
                 leg = Leg(target=token, point=(xy[0], xy[1]), step=step, area=area_ll,
-                          coverage_floor=COVERED_FRACTION if area_ll is not None else None, ahead=ahead)
+                          coverage_floor=COVERED_FRACTION, ahead=ahead)
                 self._vehicle.post(leg)
                 # The leg's reach: how far from the point the aircraft is still
                 # over the area. A pass that came inside it and left with the
                 # area part held is short.
-                reach = max(math.dist(xy, p) for p in area) if area else None
+                reach = max(math.dist(xy, p) for p in area)
                 shorts = 0
                 self._closest_m = float("inf")
                 while True:
@@ -508,11 +491,9 @@ class Mission:
             self._vehicle.sleep(0.25)
         return self._vehicle.now() - t0
 
-    def _coverage(self, area_lonlat: list[tuple[float, float]] | None) -> dict[str, Any] | None:
+    def _coverage(self, area_lonlat: list[tuple[float, float]]) -> dict[str, Any] | None:
         """How much of the area the recording holds now, poses only; None when
-        it cannot be asked, or there is no area."""
-        if not area_lonlat:
-            return None
+        it cannot be asked."""
         cov = self._live.coverage(area_lonlat)
         if cov is not None:
             self._last_coverage = cov
@@ -523,8 +504,6 @@ class Mission:
         ``COVERAGE_RETRY_S`` apart, because only a read that answers may decide
         whether a leg is flown. ``(coverage, refusal)``: the refusal is the
         live source's when the ring never answered."""
-        if not area_lonlat:
-            return None, None
         refusal = None
         for k in range(1, COVERAGE_TRIES + 1):
             cov = self._coverage(area_lonlat)
@@ -539,16 +518,6 @@ class Mission:
                     break
         return None, refusal
 
-    @staticmethod
-    def _coverage_block(cov: dict[str, Any] | None) -> dict[str, Any] | None:
-        """The recording's answer as a record: the share, which of the area's
-        points some frame held, and how many frames held any."""
-        if cov is None:
-            return None
-        best = cov.get("best") or []
-        return {"fraction": round(float(cov.get("fraction") or 0.0), 3), "held": [b is not None for b in best],
-                "frames": len({b[1] for b in best if b is not None})}
-
     def _held_now(self, h: Hydrated, stops: list) -> list[bool]:
         """Which of a pass's stops the recording holds already, for the loop's
         greedy order (``MissionSpec.held_now``): each stop's ground as its leg
@@ -560,10 +529,8 @@ class Mission:
         for i, (token, xy) in enumerate(stops):
             if xy is None:
                 continue
-            ll = self._area_lonlat(leg_area(h, str(token), [float(xy[0]), float(xy[1])]))
-            if ll:
-                areas.append(ll)
-                idx.append(i)
+            areas.append(self._area_lonlat(leg_area(h, str(token), [float(xy[0]), float(xy[1])])))
+            idx.append(i)
         covs = self._live.coverage_of_each(areas) if areas else None
         for i, cov in zip(idx, covs or []):
             out[i] = bool(cov and float(cov.get("fraction") or 0.0) >= COVERED_FRACTION)
@@ -590,10 +557,10 @@ class Mission:
             shift = min(max(extent, span), reach)
             moved = [cx + dx / span * shift, cy + dy / span * shift]
         side = "N NE E SE S SW W NW".split()[round(math.degrees(math.atan2(dx, dy)) / 45.0) % 8] if span >= 1.0 else "-"
-        block = self._coverage_block(cov) or {"frames": 0}
+        frames = len({b[1] for b in best if b is not None})
         held = sum(1 for b in best if b is not None)
         said = (f"the pass over {token} at ({xy[0]:.0f}, {xy[1]:.0f}) held {held}/{len(area)} points of the area in "
-                f"{block['frames']} frame(s), the {side} side missing; "
+                f"{frames} frame(s), the {side} side missing; "
                 f"the leg is asked again {shift:.0f} m {side} of the point (re-fly {n} of {SHORT_PASS_REQUESTS})")
         log.info(said)
         self.transcript.append({"kind": "leg", "said": said})
@@ -612,10 +579,7 @@ class Mission:
         """The ground the pass held over ``area`` (tile metres, about ``xy``) as
         the observation, with the live source's record of it; None when no
         frame held any of it."""
-        points = self._area_lonlat(area)
-        if points is None:
-            return None
-        obs = self._live.observe_area(points)
+        obs = self._live.observe_area(self._area_lonlat(area))
         last, refusal = dict(self._live.last or {}), self._live.last_refusal
         if obs is None:
             log.info("no frame in the recording held the area about (%.0f, %.0f): %s",
@@ -656,7 +620,7 @@ class Mission:
         # aircraft is still on the ground.
         t0 = self._vehicle.now()
         while not self._cancel.is_set():
-            pose = self._pose()
+            pose = self._live.ownship()
             if pose is not None:
                 d = math.hypot(pose["x"] - float(xy[0]), pose["y"] - float(xy[1]))
                 best = min(best, d)
@@ -683,13 +647,6 @@ class Mission:
                 return "lost"
             self._vehicle.sleep(1.0)
         return "cancel"
-
-    def _pose(self) -> dict[str, float] | None:
-        """Where the aircraft is: tile-local x/y and the height above the map's floor; None without a fix."""
-        own = self._live.ownship()
-        if not own or own.get("x") is None:
-            return None
-        return {"x": float(own["x"]), "y": float(own["y"]), "agl_m": float(own.get("agl_m") or 0.0)}
 
     def _note_frame(self, last: dict[str, Any], obs) -> None:
         """One row of ``frames.jsonl``: the observation this mission just
@@ -762,6 +719,9 @@ class Mission:
                 self.instruction = instruction
                 self.map_name = h.episode.map_name
             self._tiles_dir = TILES_DIR
+            if local_to_lonlat(TILES_DIR, self.map_name, 0.0, 0.0) is None:
+                raise ValueError(f"{self.map_name} carries no georef under {TILES_DIR}: a leg's area cannot be "
+                                 f"asked of the recording")
 
             # The live frames project onto this mission's tile grid; look crops
             # what this run captured, never the bake's raster.
@@ -900,7 +860,6 @@ class Mission:
         with self._lock:
             self.ended_by = reply.ended_by
             self.ended_at = time.time()
-            self.reply_text = getattr(reply, "reply_text", None)
             self.turns_used += int(getattr(reply, "turns_used", 0) or 0)
             self._turn_diag.clear()
             self.replies += 1
