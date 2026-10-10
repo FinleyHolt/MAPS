@@ -310,7 +310,7 @@ def run_episode(
     osm_ctx: _OsmPriorCtx | None = None
     # The ortho backend gets an OSM prior-contour context so the per-frame
     # prior-color enrichment hook can PROJECT each in-view OSM prior footprint
-    # onto the frame (build_prior_polys_ortho_from_contours, via
+    # onto the frame (build_prior_polys_ortho, via
     # _maybe_build_prior_polys). Without it osm_ctx stays None and enrichment
     # is silently inert.
     #

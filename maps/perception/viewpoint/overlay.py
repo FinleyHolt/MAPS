@@ -13,10 +13,6 @@ Builders:
 - :func:`build_prior_polys_ortho` (canonical): per-feature masks + table
   rows for the ortho (``ortho``) crop, sourced from the NAMED
   ``base_features`` tile-grid footprints.
-- :func:`build_prior_polys_ortho_from_contours`: the all-OSM ortho sibling —
-  projects raw OSM world contours (named AND unnamed) into the ortho view so
-  every in-view prior gets a color-read mask.
-- :func:`build_peg_polys_ortho`: unified prior/runtime footprint masks.
 """
 
 from __future__ import annotations
@@ -28,7 +24,6 @@ import numpy as np
 
 from maps.util.mask_region import MaskRegion
 
-from maps.perception.geometry.sensor_spec import SensorSpec
 from maps.perception.viewpoint.base import TileBounds
 
 
@@ -265,16 +260,10 @@ def build_prior_polys_ortho(
                 continue
             wx = bounds.x_min + (float(cc) + 0.5) * cs
             wy = bounds.y_min + (float(cr) + 0.5) * cs
-            # Pixel centroid from the world centroid through the homography.
+            # A centroid on the homography's line at infinity has no pixel.
             denom = world_to_px[2, 0] * wx + world_to_px[2, 1] * wy + world_to_px[2, 2]
             if denom == 0:
                 continue
-            cx_pix = (
-                world_to_px[0, 0] * wx + world_to_px[0, 1] * wy + world_to_px[0, 2]
-            ) / denom
-            cy_pix = (
-                world_to_px[1, 0] * wx + world_to_px[1, 1] * wy + world_to_px[1, 2]
-            ) / denom
             mask = _rasterize_cells_to_mask(
                 feat.get("cells") or [], bounds, world_to_px, img_h, img_w
             )
@@ -325,106 +314,4 @@ def build_prior_polys_ortho(
     # outline land first and any later overlap respects its presence.
     prior_polys.sort(key=lambda p: (not p["is_target"], p["short_id"]))
     table.sort(key=lambda r: (not r["is_target_anchor"], r["short_id"]))
-    return prior_polys, table
-
-
-def build_prior_polys_ortho_from_contours(
-    *,
-    rgb_shape: tuple[int, int],
-    contours_world_by_fid: Mapping[str, np.ndarray],
-    feature_meta_by_fid: Mapping[str, Mapping[str, Any]],
-    view_corners_xy: Sequence[tuple[float, float]],
-    fids_to_render: Sequence[str],
-    target_fid: str | None = None,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Ortho sibling of :func:`build_prior_polys_perspective`, sourced from OSM
-    WORLD CONTOURS rather than the named tile-grid ``base_features``.
-
-    :func:`build_prior_polys_ortho` rasterizes a NAMED catalog feature's
-    tile-grid ``cells`` — so it can only color the named priors that have a
-    baked footprint. This sibling instead projects each OSM prior's raw world
-    contour (``contours_world_by_fid``, the ``(K, 3)`` east/north/roof-z
-    polygons :func:`run_benchmark._load_osm_prior_ctx` loads for EVERY thing in
-    ``objects.json`` — named AND unnamed) through the SAME ortho ``world ->
-    pixel`` homography (``cv2.getPerspectiveTransform(view_corners_xy ->
-    image_corners)``), so the per-stop color enrichment can read a perceived
-    color off the pixels inside ANY in-view OSM prior, not just the named ones.
-
-    Emits ``(prior_polys, cityref_table)`` in the same row shape the named ortho
-    / perspective builders produce. Features with no contour, or whose contour
-    projects entirely outside the view square (empty mask), are silently
-    skipped. The masks come out at ``rgb_shape`` resolution. This is a read-only
-    PROJECTION helper: it never touches the runtime graph or the reasoner
-    surfaces; the contract gate that keeps unnamed percepts out of the graph
-    lives in the caller (``run_benchmark`` upserts only fids that
-    ``graph_fid_by_fid`` maps to a named node).
-    """
-    img_h, img_w = int(rgb_shape[0]), int(rgb_shape[1])
-    src = np.array(
-        [(float(c[0]), float(c[1])) for c in view_corners_xy], dtype=np.float32
-    )
-    dst = np.array(
-        [(0, 0), (img_w - 1, 0), (img_w - 1, img_h - 1), (0, img_h - 1)],
-        dtype=np.float32,
-    )
-    world_to_px = cv2.getPerspectiveTransform(src, dst).astype(np.float64)
-    wanted = {str(f).strip() for f in (fids_to_render or []) if f}
-
-    prior_polys: list[dict[str, Any]] = []
-    table: list[dict[str, Any]] = []
-
-    for fid in wanted:
-        contour = contours_world_by_fid.get(fid)
-        if contour is None:
-            continue
-        wc = np.asarray(contour, dtype=np.float64).reshape(-1, 3)
-        if wc.shape[0] < 3:
-            continue
-        pts_h = np.column_stack([wc[:, 0], wc[:, 1], np.ones(wc.shape[0])])
-        proj = pts_h @ world_to_px.T
-        denom = proj[:, 2]
-        if not np.all(np.isfinite(denom)) or np.any(np.abs(denom) < 1e-9):
-            continue
-        uv = np.column_stack([proj[:, 0] / denom, proj[:, 1] / denom])
-        region = _fill_region(
-            [uv.astype(np.int32)], img_h=img_h, img_w=img_w
-        )
-        if region is None:
-            continue
-
-        meta = feature_meta_by_fid.get(fid, {})
-        cid = meta.get("cityref_id")
-        ys, xs = region.rows_cols()
-        pixel_centroid = (int(xs.mean()), int(ys.mean()))
-        world_xy = meta.get("world_xy")
-        if world_xy is None:
-            world_xy = (float(wc[:, 0].mean()), float(wc[:, 1].mean()))
-        is_target = fid == target_fid
-        short_id = f"C{cid}" if cid is not None else fid
-        name = meta.get("name") or ""
-        label_text = f"{short_id}{(' ' + name) if name else ''}"
-        if is_target:
-            label_text = f"TARGET {label_text}"
-        row: dict[str, Any] = {
-            "cityref_id": cid,
-            "fid": fid,
-            "short_id": short_id,
-            "class_name": meta.get("class_name") or "",
-            "name": meta.get("name"),
-            "world_xy": tuple(world_xy),
-            "pixel_centroid": pixel_centroid,
-            "n_hit_cells": 0,
-            "n_hit_pixels": region.area,
-            "ray_length_m_mean": None,
-            "is_target_anchor": is_target,
-        }
-        poly: dict[str, Any] = dict(row)
-        poly["mask"] = region
-        poly["label"] = label_text
-        poly["is_target"] = is_target
-        prior_polys.append(poly)
-        table.append(row)
-
-    prior_polys.sort(key=lambda p: (not p["is_target"], str(p["short_id"])))
-    table.sort(key=lambda r: (not r["is_target_anchor"], str(r["short_id"])))
     return prior_polys, table

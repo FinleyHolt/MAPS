@@ -53,11 +53,9 @@ def _build_osm_prior_ctx_from_graph(graph) -> "_OsmPriorCtx | None":
     allowed — the enrichment upsert lands directly on the node whose contour we
     projected. A prior with no ``world_contour`` is skipped (no fabrication).
 
-    Contours come out ``(K, 3)`` with z padded 0.0 so the ORTHO projection
-    helper (:func:`build_prior_polys_ortho_from_contours`, which reads only
-    x/y — z is irrelevant top-down) consumes them unchanged; this is the
-    ortho pivot backend. ``world_xy`` is the contour centroid (already
-    world meters), which the in-view culls (:func:`_all_osm_fids_in_view`) use.
+    Contours come out ``(K, 3)`` with z padded 0.0 (z is irrelevant
+    top-down). ``world_xy`` is the contour centroid (already world meters),
+    which the in-view culls use.
 
     Returns ``None`` when ``graph`` carries no contour-bearing priors — the
     caller then disables enrichment under the pivot (honest no-GT) rather than
