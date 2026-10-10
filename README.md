@@ -331,7 +331,7 @@ repository's harness, at three tiers:
 
 The station registered frames against NAIP 2024 imagery: the `calcity.png`
 of the v5 Cal City data release beside the flown bake. Pass that raster's
-directory as `--raster` to replay as flown. The recordings are not distributed.
+directory as `--raster` to replay as flown.
 
 ## Repository layout
 
