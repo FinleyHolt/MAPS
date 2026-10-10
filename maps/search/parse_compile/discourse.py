@@ -11,14 +11,6 @@ earlier block bound and a later one may refer to:
                of the same one. Written only by a plan that EXECUTED: a
                refused widening must not advance the window.
 
-Those are the two slots the surface actually reads. The say surface carried
-three more -- ``it``, ``anchor``, and the ``binds_it`` / ``bind_key`` pair
-behind a singular-fragment rule -- and every one of them is gone with it.
-They are not kept "in case": ``code_surface`` hardcoded ``binds_it`` to
-False and ``new_anchor`` to None, so the branches reading them had never
-turned over on this surface, and a key whose producer always writes the same
-empty value reads exactly like a live one (CLAUDE.md).
-
 ``update_discourse`` applies a SUCCESSFULLY executed plan's writes; a plan
 that raised must never reach it. ``echo`` orders one executed call's served
 result -- what ran, then the result envelopes byte-identical. It never states

@@ -16,14 +16,9 @@ capture side). Diff two shas by dumping at each.
 operator instruction] with the tools attached — the byte stream the
 model, xgrammar and the prefix cache see — and the token count on stderr.
 
-THE CODE ARM's contract. There is no crops-off variant and no ``--look``:
-the code legend states the look()/show_map() capability unconditionally
-and the loop asserts the wiring that makes that true. There is no
-LANGUAGE section either — Python is not EBNF-able, the arm builds no
-decoder mask, and ``CODE_DOC`` IS the language, so it rides the TOOLS
-section where the model reads it. A dump that kept the sentence grammar
-and lexicon beside a code tool would be the same
-two-contradictory-surfaces artifact the system prompt was wired to end.
+The code legend states the look()/show_map() capability unconditionally
+and the loop asserts the wiring that makes that true. ``CODE_DOC`` IS the
+language, so it rides the TOOLS section where the model reads it.
 """
 
 from __future__ import annotations

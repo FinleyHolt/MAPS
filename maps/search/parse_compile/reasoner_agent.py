@@ -9,10 +9,8 @@ reasoner across the mission. The only step mode is:
     else is thinking; the tool call IS the output, and there is no second
     emission after it.
 
-Serving rails (load-bearing): per-tool ``strict: true`` (the xgrammar
-constraint makes a malformed tool-args envelope an impossible token);
-``tool_choice`` is ALWAYS ``"auto"`` — never ``required``/named — because
-auto IS the abstain path.
+Serving rail (load-bearing): ``tool_choice`` is ALWAYS ``"auto"`` — never
+``required``/named — because auto IS the abstain path.
 
 The reasoner only knows its own context.
 """
@@ -53,15 +51,9 @@ def served_system_text(*, sensor_description: str = "") -> str:
     One edit to the one constant prompt: the run's sensor-rig block fuses
     onto the tail. The Qwen3 template rejects a second ``role=system`` turn,
     so the rig block is fused here rather than appended as its own message.
-    The ``Reasoner``, the contract dump and the dashboard lab all serve this
-    exact string, so what the lab shows on screen is the byte stream a
-    flight sends. A blank ``sensor_description`` returns the constant prompt
-    alone, no trailing separator — what a run with no rig configured serves.
-
-    There is no crops variant. The say surface swapped a no-crops fact for a
-    look-capability legend when the renderer was wired; this surface states
-    its own look capability inline and ``run_mission`` asserts the renderer
-    IS wired, so there was never a second byte stream to choose between.
+    The ``Reasoner`` and the contract dump both serve this exact string. A
+    blank ``sensor_description`` returns the constant prompt alone, no
+    trailing separator — what a run with no rig configured serves.
 
     The ``system_turn`` withhold serves no system turn: an empty string,
     which the ``Reasoner`` sends as no message.
@@ -78,20 +70,10 @@ def served_system_text(*, sensor_description: str = "") -> str:
 
 
 # There is no in-context image cap. Crops accumulate and the compactor bounds
-# them in TOKENS, which is the resource the served window actually spends.
-#
-# A count cap stood here, evicting the oldest crops after every delivery to keep
-# sixteen. It guarded a per-request limit no serve declared: none passed
-# --limit-mm-data-per-request, and sglang defaults it to None. The 400 it defended against could not happen, and the
-# eviction it performed to prevent it rewrote already-sent history, which is the
-# one thing a radix prefix cannot survive. Measured on 1,525 pulled Cal City
-# episodes: rollbacks on 8.13% of requests discarding a mean of 35.2 messages,
-# and all 763 classified rollbacks were this eviction losing exactly one image.
-#
-# A count is also the wrong proxy: sixteen thumbnails are ~3.6k tokens and
-# sixteen full-size crops ~17k. If a serve ever does advertise
-# limit_mm_data_per_request, enforce it at DELIVERY by declining the crop that
-# would exceed it. Never by rewriting the first one.
+# them in TOKENS, the resource the served window actually spends; evicting an
+# already-sent crop would rewrite history, which no radix prefix survives. If
+# a serve ever advertises limit_mm_data_per_request, enforce it at DELIVERY by
+# declining the crop that would exceed it.
 
 _REASONER_TIMEOUT_DEFAULT_S = 240.0
 
@@ -145,11 +127,8 @@ def _reasoner_timeout_s() -> float:
 
     Unset or blank takes the default. Anything else must be a positive
     number of seconds no larger than ``threading.TIMEOUT_MAX``: a
-    malformed, zero, NaN or unbounded value raises rather than falling back,
-    because a silent fallback is exactly what this read was written to end
-    (the env was exported by two run scripts and documented in
-    ``maps/search/README.md`` while nothing read it, so a slow call died
-    at the default with every caller convinced it had 900).
+    malformed, zero, NaN or unbounded value raises rather than falling back
+    to a default the caller did not ask for.
     """
     raw = os.environ.get("SEARCH_REASONER_TIMEOUT_S", "").strip()
     if not raw:
@@ -195,9 +174,8 @@ def _normalize_tool_call_arguments(tc: dict) -> dict:
     ``chat_utils._postprocess_messages`` ``json.loads``-es a non-empty
     arguments string into a dict before templating, then raises if the
     JSON is malformed and 400s when the decoded value is not a mapping.
-    Per-tool ``strict: true`` enforces the schema on the SERVER, but the
-    parser can still hand back oddities on edge paths (and offline test
-    doubles inject arbitrary strings). Normalizing at the point of history
+    The serve's tool parser can hand back oddities on edge paths (and
+    offline test doubles inject arbitrary strings). Normalizing at the point of history
     append keeps every subsequent turn's chat-template render safe.
     """
     fn = dict(tc.get("function") or {})
@@ -290,14 +268,9 @@ class Reasoner:
     reasoner_url: str
     endpoint_spec: EndpointSpec
     api_key: str = "EMPTY"
-    # Per-call transport timeout. The default fits local-serve turn latencies;
-    # a slower endpoint (a frontier-model shim whose fresh first turn processes
-    # the whole packet, or any serve reached across a field link) raises it via
-    # SEARCH_REASONER_TIMEOUT_S without touching the default arm.
-    # A garbage value raises here rather than reverting to the default: a
-    # typo'd export that silently fell back to 240 while every caller believed
-    # 900 is the failure this read exists to end. 0 is rejected for the same
-    # reason -- httpx reads it as "time out immediately", never "no limit".
+    # Per-call transport timeout (``_reasoner_timeout_s``). The default fits
+    # local-serve turn latencies; a slower endpoint raises it via
+    # SEARCH_REASONER_TIMEOUT_S.
     timeout: float = field(
         default_factory=lambda: _reasoner_timeout_s())
     seed: int | None = None
@@ -324,14 +297,8 @@ class Reasoner:
     # ------------------------------------------------------------------
 
     def append_user(self, content: str) -> None:
-        """Append a TEXT user-role turn (homework packet).
-
-        The per-stop reasoner round reasons over the structured world-state
-        (SAM detections + perceived attributes on the runtime graph, read in
-        TEXT via ``analyze``). This method only ever appends text; the
-        opt-in ``view{crops}`` path is the SOLE one that attaches image
-        crops, via the separate :meth:`append_vision_user`.
-        """
+        """Append a TEXT user-role turn. Images ride only
+        :meth:`append_vision_user`."""
         self.messages.append({"role": "user", "content": content})
 
     def append_vision_user(self, text: str, jpegs: list[bytes]) -> None:
@@ -339,10 +306,8 @@ class Reasoner:
         that puts non-text on the reasoner's context, driven exclusively by the
         opt-in ``look`` tool (``reasoner_loop`` two-message delivery). ``content``
         is the OpenAI multi-part list (``vision_content.build_vision_user_content``: text
-        part first, then one image part per JPEG) the vLLM Qwen3.6 endpoint
-        forwards unchanged. With ``look`` unexposed this is never called, so the
-        history stays 100% text (parity). An empty ``jpegs`` degrades to a plain
-        text turn.
+        part first, then one image part per JPEG). An empty ``jpegs`` degrades
+        to a plain text turn.
 
         Append-only: no earlier message is touched, so a crop delivery extends
         the served prefix rather than invalidating it."""
@@ -406,10 +371,9 @@ class Reasoner:
         Rails: ``tool_choice`` is hard-pinned to ``"auto"`` (never
         required/named — auto is the abstain path); NON-STREAMING only;
         the tool call IS the output — no free-standing structured-output
-        emission. No client-side grammar rides the request: the surface is
-        one tool with one string argument, which ``strict: true`` on the
-        envelope already pins, and the block inside it is held to the
-        language by the parser's own refusals.
+        emission. No grammar rides the request: the surface is one tool with
+        one string argument, and the block inside it is held to the language
+        by the parser's own refusals.
         """
         self.messages = compact_transcript(
             self.messages,
