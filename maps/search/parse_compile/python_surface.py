@@ -7,21 +7,15 @@ loops, comprehensions, `print()` and `len()` behave exactly as the model's
 priors say they do -- and an error costs the line it is on, never the
 lines that already ran.
 
-What executes underneath is unchanged: each call builds the SAME parsed
-step the retired parser produced and hands it to ``code_surface._plan_of``
--> ``reasoner_loop._run_plan``, so the op programs, grounding, serving,
-flights and receipts are byte-for-byte the ones the DSL arm measured.
+Each call builds one step and hands it to ``code_surface._plan_of`` ->
+``reasoner_loop._run_plan``, which own the op programs, grounding, serving,
+flights and receipts.
 
-The guardrails that are science stay, moved from parse time to call time:
-the moving calls take a thing and never a coordinate, a whole result set
-cannot be flown, and a move inside a loop is refused up front (measured:
-18 of 35 model-written loops flew in the body). Everything else that the
-old surface refused because it could not compile it -- print, while, if,
-def, slicing, len -- is simply Python here, and the pure deterministic
-stdlib (``math``, ``itertools``, ...) is loaded in the namespace: the
-top kicked-back family on the first fleets was the model hand-rolling
-Euclidean distance ("without math module", its own comment) and mangling
-the exponent, block after block.
+The guardrails hold at call time: the moving calls take a thing and never a
+coordinate, a whole result set cannot be flown to, and a move inside a loop
+is refused up front (18 of 35 model-written loops flew in the body). The
+pure deterministic stdlib (``math``, ``itertools``, ...) is loaded in the
+namespace.
 """
 
 from __future__ import annotations
@@ -63,18 +57,15 @@ BLOCK_FILENAME = "<mission-block>"
 # A block that runs 100k model-written lines is a runaway loop, not a plan.
 TRACE_LINE_CEILING = 100_000
 
-# Wall-clock ceiling on ONE block's execution. The line ceiling catches a
-# runaway loop; this catches a BOUNDED loop whose calls are each slow -- a
-# `for d in rows: find(near=d, dwithin=40)` over the live world state ran ~7
-# minutes on a live sortie and froze the whole mission, since the runner
-# thread is the one executing the block. Past this the block stops at its
-# line with a served error the model can act on, the way a syntax error does.
+# Wall-clock ceiling on ONE block's execution: it catches a BOUNDED loop
+# whose calls are each slow (`for d in rows: find(near=d, dwithin=40)` over
+# the live world state), since the runner thread is the one executing the
+# block. Past it the block stops at its line with a served error.
 TRACE_DEADLINE_S = 90.0
 
 _MOVE_CALLS = ("go_to", "explore")
-# order/filter are METHODS on a result (rows.order(...), rows.filter(...)):
-# a cut and a sort belong to the rows they act on, which is the spelling
-# the model reached for on its own. They are served through Rows, not here.
+# order/filter are METHODS on a result (rows.order(...), rows.filter(...)),
+# served through Rows.
 _LIBRARY_CALLS = ("find", "look_for", "go_to", "explore", "look",
                   "show_map", "stand", "more_of",
                   "intersection", "ends_of", "distance")
@@ -92,9 +83,8 @@ def served_calls() -> tuple[str, ...]:
 _MOVED_TO_METHOD = {
     "narrow": "rows.filter(near=<place>, dwithin=<metres>)",
     "order_by": "rows.order(nearest=<place>)",
-    # There is one distance on this surface and it is the footprint gap,
-    # so the measurement is spelled with the word the served column
-    # already uses ("distance to <ref>").
+    # The one distance is the footprint gap, spelled as the served column
+    # spells it ("distance to <ref>").
     "gap": "distance(a, b), or a.distance(b)",
 }
 
@@ -111,10 +101,8 @@ _SAFE_BUILTINS = {n: getattr(builtins, n)
                             "isinstance", "hasattr", "map", "filter",
                             "repr", "divmod", "pow", "type", "dir",
                             "next",
-                            # try/except is ordinary Python, and a bare
-                            # `except Exception:` died on NameError
-                            # (calcity::113#112 b32) -- the standard
-                            # exception names are part of the language.
+                            # the standard exception names, for
+                            # try/except
                             "Exception", "ValueError", "KeyError",
                             "TypeError", "IndexError", "AttributeError",
                             "ZeroDivisionError", "RuntimeError",
@@ -122,12 +110,9 @@ _SAFE_BUILTINS = {n: getattr(builtins, n)
                             "LookupError")}
 
 # Pure, deterministic stdlib only: no I/O, no clock, no randomness --
-# anything ambient would break the identical-bytes -> identical-trajectory
-# property every ledger A/B leans on, and numpy-class C loops would bypass
-# the trace-line liveness ceiling. Grown by measured demand (the
-# kickback_audit import histogram), never by speculation. `statistics` is
-# OUT on the same rule: NormalDist.samples() draws from ambient
-# `random.gauss` -- verified two identical blocks, two different results.
+# anything ambient would break identical bytes -> identical trajectory, and
+# numpy-class C loops would bypass the trace-line liveness ceiling.
+# `statistics` is out: NormalDist.samples() draws from ambient random.gauss.
 _SAFE_MODULES = {m.__name__: m for m in (
     bisect, collections, functools, heapq, itertools, json, math,
     operator, re)}
@@ -146,10 +131,8 @@ def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
         raise CodeError(_import_refusal(name.split(".")[0] or "that"))
     return __import__(name, globals, locals, fromlist, level)
 
-# The printed channel is capped the way a notebook caps cell output: a
-# loop that prints 3,414 rows must not flood the conversation -- one
-# episode printed a city-wide result, blew the context, and died with
-# zero flights (compaction_infeasible; at least 5 SR=0 siblings).
+# The printed channel is capped the way a notebook caps cell output, so a
+# loop that prints a city-wide result cannot flood the context.
 PRINT_LINE_CAP = 60
 PRINT_CHAR_CAP = 8_000
 
@@ -168,21 +151,14 @@ class MissionNamespace(dict):
     """The exec globals: an undefined name that SPELLS a served fid IS
     that fid.
 
-    The model writes go_to(detected_192) because every receipt prints
-    fids bare -- 541 NameErrors over 149 episodes on the first pysurface
-    fleet, 92% self-repaired but each one a wasted turn. A fid string is
-    what every slot takes, so the name resolves to itself -- and when the
-    live surface can hand over the row, to a :class:`Row` view of it,
-    because the next thing the model does with a bare fid is read it
-    (``detected_192.xy``: the 'str' object AttributeError family).
-    CPython honors __missing__ on a dict-subclass globals for LOAD_NAME
-    and LOAD_GLOBAL, which is what makes this a namespace fact rather
-    than a parser feature.
+    Every receipt prints fids bare, so the model writes go_to(detected_192).
+    The name resolves to a :class:`Row` view of the live row when the
+    surface has it, else to the fid string. CPython honors __missing__ on a
+    dict-subclass globals for LOAD_NAME and LOAD_GLOBAL.
 
-    A name that misses entirely still answers: a name this mission
-    UNBOUND says why (a failed rebind removed it), and a near-miss of
-    something visible gets the did-you-mean (``show(...)`` was reached
-    for 25 times on arm 1; ``show_map`` existed the whole time).
+    A name that misses entirely still answers: a name this mission UNBOUND
+    says why (a failed rebind removed it), and a near-miss of something
+    visible gets the did-you-mean.
     """
 
     mp: "MissionPython | None" = None
@@ -193,17 +169,14 @@ class MissionNamespace(dict):
             row = mp.env.row_of_fid(k) if mp and mp.env.row_of_fid else None
             return Row(row, mp=mp) if isinstance(row, dict) else k
         # A plain KeyError is what lets LOAD_GLOBAL fall through to
-        # __builtins__ -- a CodeError here would make len()/list()/dict()
-        # unreachable (measured in review: `list` did-you-meant `bisect`).
+        # __builtins__.
         if k in (dict.get(self, "__builtins__") or {}):
             raise KeyError(k)
         if mp and k in mp._unbound:
             raise CodeError(f"{k} is unbound: {mp._unbound[k]}")
-        # A near-miss of a LIVE fid names the correction (go_to(detect_59)
-        # with detected_59 printed one block earlier got a bare NameError)
-        # -- but ONLY when the prefix itself is a near-miss of a fid
-        # family: an ordinary `corner_5` variable typo must fall through
-        # to the model's own bound handles, not to a coincidental prior_5.
+        # A near-miss of a LIVE fid names the correction (detect_59 ->
+        # detected_59), but ONLY when the prefix is a near-miss of a fid
+        # family: a `corner_5` typo falls through to the bound handles.
         m = re.fullmatch(r"([A-Za-z]+)_(\d+)", k)
         if m and mp and mp.env.row_of_fid:
             for pref in ("detected", "prior", "stop"):
@@ -214,11 +187,8 @@ class MissionNamespace(dict):
                 if fix != k and mp.env.row_of_fid(fix) is not None:
                     raise CodeError(f"there is no {k} on this surface -- "
                                     f"did you mean {fix}?")
-        # A cut and a sort MOVED onto the rows they act on. This is not an
-        # alias and calls nothing: the name stays undefined, and the
-        # refusal spells where the call went. Without it a model reaching
-        # for the old name gets a bare NameError and spends the turn
-        # guessing, which measures its rename luck rather than the shape.
+        # A free spelling of a method: the name stays undefined and the
+        # refusal names the method.
         _moved = difflib.get_close_matches(k, tuple(_MOVED_TO_METHOD),
                                            n=1, cutoff=0.8)
         if k in _MOVED_TO_METHOD or _moved:
@@ -227,9 +197,8 @@ class MissionNamespace(dict):
                 f"there is no {k}() here -- did you mean "
                 f"{_MOVED_TO_METHOD[k]}? A cut and a sort are methods on the "
                 "rows they act on.")
-        # The suggestion pool is what the model plausibly MISSPELLED: the
-        # mission calls and its own bound handles -- never the module
-        # names, whose close matches are noise ("list" is not "bisect").
+        # The suggestion pool: the mission calls and the model's own bound
+        # handles, never the module names.
         known = [n for n in self if isinstance(n, str)
                  and not n.startswith("__") and n not in _SAFE_MODULES]
         close = difflib.get_close_matches(
@@ -249,15 +218,12 @@ class MissionNamespace(dict):
 def scan_block(code: str) -> ast.Module:
     """Parse and vet one block. Raises :class:`CodeError` with the reason.
 
-    A syntax error echoes the offending source line with a caret: the
-    grinding families repeat the same slip (``(a)**2`` emitted as
-    ``+ **(a)2``) up to 8 blocks in a row when all they are told is
-    "invalid syntax".
+    A syntax error echoes the offending source line with a caret.
     """
     try:
         tree = ast.parse(code)
         # Some syntax errors (a repeated keyword argument) are raised by the
-        # compiler, not the parser; uncaught they end the episode as infra.
+        # compiler, not the parser.
         compile(tree, BLOCK_FILENAME, "exec")
     except SyntaxError as e:
         where = ""
@@ -309,10 +275,8 @@ def scan_block(code: str) -> ast.Module:
                     "the mission. Pick another name.")
             if isinstance(node.ctx, ast.Store) \
                     and node.id in _SAFE_MODULES:
-                # Same self-shadow class the mission-call guard closed
-                # (two episodes looped 32 errors against a shadowed
-                # intersection()): one bad bind breaks the module for
-                # every remaining turn of the mission.
+                # one bad bind would break the module for the rest of the
+                # mission
                 raise CodeError(
                     f"{node.id} is a loaded module -- binding over it "
                     f"would shadow it for the rest of the mission. Pick "
@@ -355,10 +319,8 @@ def _instrument(tree: ast.Module) -> ast.Module:
 def looks_like_code(text: str) -> bool:
     """A plain reply that is really a block: parses AND calls the library.
 
-    The repair nudge's detector -- the two-part rule survives the parser
-    it used to lean on: real Python parses far more than the DSL did, so
-    the library-call requirement is what separates 'wrote code outside
-    the tool' from prose that happens to parse.
+    The repair nudge's detector; the library-call requirement separates
+    code written outside the tool from prose that happens to parse.
     """
     try:
         tree = ast.parse(text)
@@ -374,22 +336,11 @@ def looks_like_code(text: str) -> bool:
 
 
 # Geometry blobs and internals stay off the Python view: they are served
-# coarsely through the real columns (xy, end0_xy, end1_xy) and printing a
-# row must never dump a polygon into the context.
-# mask_centroid rides _MODEL_HIDDEN_ROW_FIELDS on the op path and was not
-# hidden here, so a row off the LIVE surface served it. Two points on a row
-# is two points to subtract, and centroid-to-centroid is the measurement
-# this surface exists to make impossible: Poppy Boulevard way 5 is 7.0 m
-# from the car parked against it by footprint and 408.4 m by centroid.
-#
-# The COLUMN DIET rides here too, for the same reason and by the same
-# mechanism. A render cut is not a diet while a second render path exists:
-# the grid dropped _GRID_COL_DROP and the Row did not, so `print(row)` --
-# which this surface's own docstring teaches -- served every cut column
-# straight back. Measured on calcity_conj_93_72fe9987: aspect_ratio 1,315
-# occurrences over 49 of 93 episodes, color_conf 1,158 over 43, score 431
-# over 45, axis_length_m 192 over 36, name_match 160 over 32, each one a
-# column an 8-reader audit found inert or harmful. One rule, both paths.
+# coarsely through the real columns (xy, end0_xy, end1_xy). mask_centroid is
+# hidden because centroid-to-centroid is the measurement this surface exists
+# to make impossible (a road way is 7.0 m from the car parked against it by
+# footprint, 408.4 m by centroid). The column diet the grid serves is the
+# Row's too.
 _ROW_HIDDEN = frozenset({
     "mask", "cells", "centerline", "polygon", "contour", "search_text",
     "world_contour", "metadata", "mask_centroid"}) | MODEL_UNSERVED_COLUMNS
@@ -399,11 +350,9 @@ def _norm_key(k: str) -> str:
     """A column spelling, normalised the way the producer normalises labels.
 
     ``geom_program._sanitize_token`` collapses ``[^a-z0-9]+`` to ``_`` on
-    every ref label, so the served key is ``"facing poppy_boulevard"`` while
-    the cue -- and therefore the model -- says "Poppy Boulevard". Running
-    BOTH sides through the same collapse is what lets the model spell a
-    column by the name it was given. Same rule, one place, all three ref
-    column families.
+    every ref label (``"facing poppy_boulevard"``) while the model says
+    "Poppy Boulevard"; running BOTH sides through the same collapse lets it
+    spell a column by the name it was given.
     """
     return re.sub(r"[^a-z0-9]+", "_", k.lower()).strip("_")
 
@@ -417,19 +366,10 @@ _CARDINAL_KWARGS = frozenset(f"{w}_of" for w in cardinal_side.CARDINALS)
 def _direction_key(word):
     """A compass word -> the sort key that puts the FURTHEST that way first.
 
-    A DIRECTION ORDERS GLOBALLY. "The northernmost pool" is a fact about
-    the map frame, not a relation to any object, so this takes no anchor
-    and reads the rows' own ``xy`` off the axis line the legend states
-    (+x runs EAST, +y runs NORTH). Every relation to a place is a CUT and
-    lives on ``filter``.
-
-    The unit vector IS the key: a diagonal is both terms at once, which
-    the ONE compass table already carries, and a per-word branch would
-    re-derive five hand-written direction tables' worth of the same thing
-    (0aea70c7 collapsed exactly that).
-
-    Client-side on the rows in hand, like the ``key=`` sort it sits
-    beside. ``nearest=`` is the slot that re-ranks a whole set server-side.
+    A DIRECTION ORDERS GLOBALLY: "the northernmost pool" is a fact about
+    the map frame, so this takes no anchor and reads the rows' own ``xy``
+    (+x runs EAST, +y runs NORTH) along the compass table's unit vector.
+    Client-side on the rows in hand, like the ``key=`` sort.
     """
     w = str(word).strip().lower()
     if w not in COMPASS_UNIT:
@@ -447,14 +387,9 @@ def _direction_key(word):
 
 
 def _refuse_reversed_direction(direction, reverse) -> None:
-    """``order(direction=..., reverse=True)`` is the OPPOSITE direction.
-
-    The model reaches for ``reverse=`` out of ``sorted()`` habit, and on a
-    key= sort that is exactly right, so it is served there. On a
-    direction= sort it is a second spelling of an ordering the surface
-    already has a word for, which is the thing this surface keeps
-    refusing. One home so a handle and a list cannot answer differently.
-    """
+    """``order(direction=..., reverse=True)`` is the OPPOSITE direction,
+    so it is refused with the word for it (``reverse=`` is served on a
+    key= sort)."""
     if not reverse:
         return
     w = str(direction).strip().lower()
@@ -466,18 +401,9 @@ def _refuse_reversed_direction(direction, reverse) -> None:
 
 
 def _diagonal_remedy(names) -> str:
-    """The extra sentence a ``<diag>_of=`` mistake earns.
-
-    Listing the four spellings that exist is not enough on its own: the
-    model still has to invent the CONJUNCTION. So the refusal writes it,
-    because a diagonal cut is exactly its two cardinal cuts against the same
-    place -- and on this corpus that is not an approximation. Of the 150
-    conjunctive cues, 95 read "the <diag> corner of A and B" and 17 more are
-    a diagonal of an intersection or of a street's end: quadrants of a
-    POINT, where south-of AND east-of is exact. Only ~14 ask a diagonal of
-    an extended feature, which is why cardinal_side offers four winds and
-    this names the composition rather than a fifth.
-    """
+    """The extra sentence a ``<diag>_of=`` mistake earns: the conjunction
+    of its two cardinal cuts against the same place, which is exact for the
+    quadrants of a POINT (112 of the corpus's 150 conjunctive cues)."""
     for n in names:
         n = str(n)
         pair = _split_diagonal(n[:-3]) if n.endswith("_of") else None
@@ -516,14 +442,11 @@ _MISSING = object()
 class Row:
     """One selected row: what ``rows[i]`` binds, AND its served columns.
 
-    The model treats a row as data -- ``r.xy``, ``r["class"]``,
-    ``r.get("color")``, ``print(r)`` -- because that is what a row is in
-    Python (measured on the first pysurface fleet: the thin fid-only Row
-    drew 150+ AttributeErrors over 69 episodes). So a Row is a read-only
-    view of the columns the tables already serve: attribute access,
-    mapping access (spaced column names like "distance to p0" go through
-    ``r["..."]``; ``r.distance_to_p0`` aliases it), ``.get``/``.keys``.
-    Geometry blobs stay hidden -- the coarse columns carry the geometry.
+    A Row is a read-only view of the columns the tables already serve:
+    attribute access, mapping access (spaced column names like "distance to
+    p0" go through ``r["..."]``; ``r.distance_to_p0`` aliases it),
+    ``.get``/``.keys``, ``print(r)``. Geometry blobs stay hidden -- the
+    coarse columns carry the geometry.
 
     ``bind`` is what a slot takes -- the fid, or the [x, y] point for a
     computed row (a crossing, a terminus) that no fid-slot reader knows.
@@ -541,11 +464,9 @@ class Row:
         self.name = row.get("name")
         self.src = src                       # (ref, index) or None
 
-    # ONE row cuts and orders as the one-element set it is. The free calls
-    # took a Row in their items slot, and measuring a single candidate
-    # against an anchor is the useful half of that: r.order(nearest=poppy)
-    # puts a "distance to poppy" column on the row you are about to commit,
-    # which is how a constraint stops being something you assumed.
+    # ONE row cuts and orders as the one-element set it is:
+    # r.order(nearest=poppy) puts a "distance to poppy" column on the row
+    # you are about to commit.
     def distance(self, other) -> float:
         """Metres from this row's footprint to ``other``."""
         mp = object.__getattribute__(self, "_mp")
@@ -577,26 +498,11 @@ class Row:
     def _resolve_key(self, k):
         """The served column a Python spelling names, or None.
 
-        ONE resolver for attribute, item and ``.get`` access -- ``.get``
-        resolving differently from ``.``/``[]`` was the silent hole: a
-        wrong-key ``.get(k, 9999)`` fed its sentinel straight into a real
-        filter (22% of arm-1 blocks touch ``.get``).
-
-        A REF-LABELLED COLUMN IS SPELLED BY ITS PLACE'S REAL NAME. Every
-        label rides ``geom_program._sanitize_token``, so relating rows to
-        Poppy Boulevard writes ``"facing poppy_boulevard"`` -- while the cue
-        says "Poppy Boulevard" and the legend's own example said
-        ``r["facing Poppy Boulevard"]``, which was a KeyError on the largest
-        directional family in the corpus. The model writes the name it was
-        given; the producer writes the name it sanitized. Normalising BOTH
-        sides the producer's way is what makes those the same lookup, and it
-        covers all three ref column families at once (``facing ``,
-        ``distance to ``, ``<dir> of ``) because it is the label rule rather
-        than a per-prefix alias.
-
-        An ambiguous normalisation resolves to NOTHING. Two served columns
-        that normalise alike is a silent bind waiting to happen, and this
-        surface would rather refuse and name the columns.
+        ONE resolver for attribute, item and ``.get`` access. A
+        REF-LABELLED COLUMN IS SPELLED BY ITS PLACE'S REAL NAME: both sides
+        are normalised the producer's way (:func:`_norm_key`), which covers
+        all three ref column families (``facing ``, ``distance to ``,
+        ``<dir> of ``). An ambiguous normalisation resolves to NOTHING.
         """
         row = object.__getattribute__(self, "_row")
         if not isinstance(k, str) or k in _ROW_HIDDEN:
@@ -630,14 +536,8 @@ class Row:
 
         A RELATION COLUMN IS NOT MISSING, IT IS UNASKED-FOR. ``distance to
         <ref>``, ``facing <ref>`` and ``<dir> of <ref>`` exist only where a
-        compare named that ref, so the model asking for one has not
-        misremembered a name -- it has named a place these rows were never
-        related to, and the executor would compute the column on request
-        (``geom_program._auto_attach``, whose prefix tuple this reads).
-        Answering with a truncated list of twelve columns that are not the
-        one asked for sent the block looking for a spelling instead of a
-        relate: 104 blocks over 77 episodes died this way across six
-        500-episode roots, 95 of them on ``distance to <ref>``.
+        compare named that ref (``geom_program._auto_attach``, whose prefix
+        tuple this reads), so the remedy is the relate that writes it.
         """
         row = object.__getattribute__(self, "_row")
         pre = next((p for p in _AUTOATTACH_PREFIXES
@@ -683,12 +583,9 @@ class Row:
         v = self._column(k)
         if v is not _MISSING:
             return v
-        # .get keeps its contract (a true miss returns the default,
-        # silently) -- but a miss that NEAR-matches a real column is a
-        # misremembered name feeding a sentinel into real logic
-        # (`distance to Airway Boulevard` vs the served `along airway`;
-        # three burned blocks in one episode). The receipt gets one note
-        # per key per block; the return value is untouched.
+        # .get keeps its contract (a true miss returns the default), but a
+        # miss that NEAR-matches a real column gets one receipt note per key
+        # per block.
         mp = object.__getattribute__(self, "_mp")
         if mp is not None and isinstance(k, str):
             close = difflib.get_close_matches(
@@ -705,12 +602,9 @@ class Row:
         return [k for k in row if k not in _ROW_HIDDEN
                 and not k.startswith("_")]
 
-    # Value equality, not identity: a bare fid name mints a FRESH Row
-    # view per reference (``__missing__`` caches nothing), so identity
-    # comparison made ``detected_192 == detected_192`` False and every
-    # model-written dedup/membership test silently wrong. Two views of
-    # the same bind are the same place; a Row also equals its own fid
-    # string, which is what the receipts print and lists hold.
+    # Value equality: a bare fid name mints a FRESH Row view per reference,
+    # and two views of the same bind are the same place. A Row also equals
+    # its own fid string.
     def _eq_key(self):
         b = self.bind
         return tuple(b) if isinstance(b, list) else b
@@ -740,13 +634,9 @@ class Row:
 class RowList(list):
     """Rows the model narrowed in PYTHON: a plain list that still chains.
 
-    A predicate keeps an arbitrary subset, and the executor has no ref for
-    one -- ``window`` spans a contiguous slice and nothing spans a scatter.
-    A list of :class:`Row` already rides every slot (``_slot`` maps a list
-    element-wise to fids), so the materialised subset IS first-class; what
-    a bare ``list`` loses is the ability to keep chaining. Subclassing
-    restores that and costs nothing else: it is still a list everywhere
-    else, so a comprehension and a ``.filter`` are interchangeable.
+    A predicate keeps an arbitrary subset, which no executor ref spans. A
+    list of :class:`Row` rides every slot element-wise, so the subset is
+    first-class; the subclass only keeps ``.filter``/``.order`` chaining.
     """
 
     __slots__ = ()
@@ -762,14 +652,8 @@ class RowList(list):
             "these rows are empty, so there is nothing to cut or order")
 
     def filter(self, pred=None, **kw) -> "RowList | Rows":
-        # A PREDICATE FILTER IS NOT A DEAD END. A list of Row rides the
-        # items slot element-wise, so the served cut works on a
-        # materialised subset exactly as it does on a handle. Refusing the
-        # kwarg form here made the first lambda in a block a ONE-WAY DOOR
-        # out of every served cut and sort -- measured: calcity::200#198
-        # narrowed to cars with a lambda, was refused order(color=), hand
-        # scanned fifty rows off printed colour strings and committed 2.5 km
-        # away.
+        # A PREDICATE FILTER IS NOT A DEAD END: the served cut works on a
+        # materialised subset exactly as it does on a handle.
         _refuse_filter_kwargs(kw)
         if pred is None:
             if not kw:
@@ -842,24 +726,11 @@ class Rows:
 
     def __getitem__(self, i):
         # A TIED VIEW IS NOT SUBSCRIPTABLE, the way ``dict.keys()`` is not:
-        # every row ties, so there is no order for [0] or [20:40] to be
-        # the [0] or the middle OF. Python refuses the same operation for
-        # the same reason, and the model has met that refusal ten thousand
-        # times.
-        #
-        # It is not a rule about care. calcity::284#282 took
-        # street_88[0] and swept 1 of 10 segments; calcity::26#26 took
-        # road[20:40] and covered a third of Neuralia; calcity::147#145
-        # and 26#26 both took pools[0]. Each index READ as a choice and
-        # was a coin flip.
+        # every row ties, so an index would read as a choice and be a coin
+        # flip.
         if self._tied():
             name = self.mp.name_of(self) or self.ref
-            # NAME THE CALL THAT DOES WORK. A refusal with no exit is
-            # routed around: the two episodes that met this one went to a
-            # sliceable proxy set and to a raw coordinate, while the
-            # episode that met the LOOK refusal -- which names explore --
-            # explored all ten segments of its street on the very next
-            # block. go_to on a set already names it (_call_go_to).
+            # The refusal names the call that does the work.
             raise CodeError(
                 f"{name} is a tied view of {len(self._rows())} rows and is "
                 "not subscriptable: they all match equally, so no row is "
@@ -887,11 +758,9 @@ class Rows:
         return (Row(r, src=(self.ref, i), mp=self.mp)
                 for i, r in enumerate(self._rows()))
 
-    # THE MATCH TIERS AS ATTRIBUTES. A find scores every row into the
-    # retrieval's own tiers, and the agent chooses its stratum by holding
-    # it -- r1.exact, explore(r1.exact + r1.tagged) -- instead of by
-    # reading a float column the grid does not render. Live views: the
-    # full set stays behind this handle, nothing is dropped anywhere.
+    # THE MATCH TIERS AS ATTRIBUTES: the agent chooses a find's stratum by
+    # holding it -- r1.exact, explore(r1.exact + r1.tagged). Live views; the
+    # full set stays behind this handle.
     @property
     def exact(self) -> "Rows":
         """The rows that ARE the queried thing -- the top match tier."""
@@ -917,29 +786,18 @@ class Rows:
 
     # -- cut and order: many filters, ONE ordering ------------------------
     #
-    # Both spellings reach the same two executor ops. The kwarg form is
-    # SERVED -- it compiles to a `distance to <anchor>` column and a cut on
-    # it, so the measurement is on the table the model reads and the
-    # distance is a footprint gap to a set's nearest member. The predicate
-    # form is the one the model reached for unprompted
-    # (`r1.filter(lambda r: ...)`, calcity::200#198 on the gap arm) and it
-    # permits any Python, including centroid arithmetic off an xy -- which
-    # is the shape that cost ~18 points. Both exist; the served one is the
-    # short one.
+    # The kwarg form is SERVED: it compiles to a `distance to <anchor>`
+    # column and a cut on it, a footprint gap to a set's nearest member.
+    # The predicate form runs any Python over the rows in hand.
     def filter(self, pred=None, *, near=None, within=None, dwithin=None,
                north_of=None, south_of=None, east_of=None, west_of=None,
                facing=None, direction=None,
                **kw) -> "Rows | RowList":
-        """Keep the rows that hold. Filters compose; run as many as the
-        cue has constraints.
+        """Keep the rows that hold. Filters compose.
 
-        A DIRECTION FILTERS RELATIVELY and orders globally. Every cut here
-        is a relation to a place, so each takes its anchor: ``east_of=``
-        keeps what lies that way of it, ``facing=`` with ``direction=``
-        keeps what FACES it that way. An anchor may be one place or a set
-        of them. Ranking by a direction is a fact about the map rather
-        than about any object, so it takes no anchor and lives on
-        ``order(direction=...)``.
+        Every cut is a relation to a place, so each takes its anchor (one
+        place or a set): ``east_of=`` keeps what lies that way of it,
+        ``facing=`` with ``direction=`` keeps what FACES it that way.
         """
         _refuse_filter_kwargs(kw)
         _refuse_metres_in_within(within)
@@ -955,10 +813,6 @@ class Rows:
             return RowList(r for r in self if pred(r))
         src = self if not self.spec else self.mp._materialize(self)
         name = self.mp.name_of(self) or self.ref
-        # A CARDINAL IS A CUT, on the rows themselves. find(west_of=X) has
-        # kept what lies that way of X since before this surface; a set in
-        # hand could not ask the same question, so a narrowed candidate set
-        # lost the relation entirely.
         return self.mp._rows_filter(
             src, f"{name}.filter(...)", within=within, near=near,
             dwithin=dwithin, north_of=north_of, south_of=south_of,
@@ -969,21 +823,13 @@ class Rows:
               direction=None, reverse=False) -> "Rows | RowList":
         """Put the rows in ONE order. A table sorts by one column.
 
-        A DIRECTION ORDERS GLOBALLY. "Furthest north" is a fact about the
-        map frame, not about any object, so ``direction=`` takes no anchor
-        -- it ranks on the rows' own ``xy`` off the axis line the legend
-        states (+x runs EAST, +y runs NORTH). Relating rows to a PLACE is
-        the other question and it is a cut: ``filter(east_of=<place>)``
-        keeps what lies that way of it, ``filter(facing=<place>,
-        direction=<word>)`` keeps what faces it that way.
+        A DIRECTION ORDERS GLOBALLY: ``direction=`` and ``key=`` order the
+        rows IN HAND (``reverse=`` flips a key sort, as ``sorted()`` does);
+        ``nearest=`` and ``color=`` re-rank the whole set server-side.
 
         Relating rows to a place stamps ``facing <place>`` and ``distance
-        to <place>`` on them; the signed ``<dir> of <place>`` column rides
-        a cardinal CUT against that same place.
-
-        This orders the rows IN HAND, like the ``key=`` sort beside it --
-        ``nearest=`` is the one that re-ranks the whole set server-side --
-        and ``reverse=`` flips it, exactly as ``sorted()`` does.
+        to <place>``; the signed ``<dir> of <place>`` column rides a
+        cardinal CUT against that same place.
         """
         if key is not None or direction is not None:
             if key is not None and direction is not None:
@@ -1007,20 +853,12 @@ class Rows:
                                    nearest=nearest, color=color)
 
     def distance(self, other) -> float:
-        """Metres to ``other``, this set counting as ONE place.
-
-        The same measurement the free ``gap(a, b)`` makes. Served both
-        ways because a surface whose cut and sort are methods reads as one
-        where the measurement is too: the arm that served only the free
-        call was asked for ``row.gap(other)`` and answered "carries no
-        'gap'", which reads as a missing COLUMN.
-        """
+        """Metres to ``other``, this set counting as ONE place: the free
+        ``distance(a, b)`` as a method."""
         return self.mp._call_distance(self, other)
 
     def __add__(self, other):
-        # Set union, the Python way: a plain list of rows to loop and
-        # read. Slots still take a real handle; this is for the model's
-        # own bookkeeping.
+        # Set union, the Python way: a list of rows to loop and read.
         if isinstance(other, Rows):
             return RowList(list(self) + list(other))
         if isinstance(other, list):
@@ -1033,9 +871,7 @@ class Rows:
         return NotImplemented
 
     def __repr__(self):
-        """Named rows, not an opaque count: `print(rw_end)` served
-        `<rw_end: 2 rows>` and the model's next block invented
-        `explore(end_0)` off a fid it had never been shown."""
+        """Named rows, not an opaque count."""
         name = self.mp.name_of(self) or self.ref
         rows = self._rows()
         if not rows:
@@ -1049,12 +885,8 @@ class Rows:
             return str(fid)
 
         if self._tied():
-            # A TIED VIEW SHOWS ITS SHAPE, the same as the served head. The
-            # head deliberately serves no fids and no points, and the repr
-            # handed both back: calcity::26#26 wrote print(road), read
-            # "prior_5775 [2242.27, 3048.07], ..." off the repr, and flew
-            # go_to([2242.27, 3048.07]) -- one way of a 64-way road, reached
-            # by a coordinate the surface had refused to serve.
+            # A TIED VIEW SHOWS ITS SHAPE, as the served head does: no
+            # fids and no points.
             _nm = str((rows[0] or {}).get("name") or name)
             return f"<{_nm}: {len(rows)} ways>"
         head = ", ".join(_one(r) for r in rows[:3])
@@ -1067,10 +899,8 @@ class Rows:
 # --------------------------------------------------------------------------
 
 
-# One block's measuring budget. `for h in houses: for p in pools: gap(h, p)`
-# is one call per PAIR, and at real set sizes that is millions of mask-to-
-# mask scans: the block never finishes and the turn buys nothing. The
-# ceiling names the shape back rather than hanging.
+# One block's measuring budget: a nested loop of distance() calls is one per
+# PAIR, millions of mask-to-mask scans at real set sizes.
 MEASURE_CALL_CEILING = 20_000
 
 
@@ -1083,16 +913,10 @@ def _tuple_xy(xy):
 def _places(v, who: str) -> tuple:
     """A Python value -> the ``(fid, xy)`` places geometry measures over.
 
-    ONE coercion for every measuring slot, because a set means the same
-    thing in all of them: A SET IS ONE PLACE AND MEANS ITS NEAREST MEMBER.
-    That falls out of unioning the members' chains and letting the min-gap
-    witness pick, never a ``min()`` over per-member gaps.
-
-    The fid rides even when the row also carries a point: op OUTPUT rows
-    strip ``mask``, so a carried row measured off its own point alone would
-    silently degrade to a centroid distance. The point rides too, because a
-    COMPUTED row (a crossing, a terminus) is nowhere on the surface and its
-    position is its whole footprint.
+    A SET IS ONE PLACE AND MEANS ITS NEAREST MEMBER. The fid rides so the
+    geometry measures the row's footprint, not its point; the point rides
+    because a COMPUTED row (a crossing, a terminus) is nowhere on the
+    surface and its position is its whole footprint.
     """
     if isinstance(v, Row):
         return ((v.fid, _tuple_xy(v.get("xy"))),)
@@ -1109,9 +933,7 @@ def _places(v, who: str) -> tuple:
     if isinstance(v, str):
         if _fid_like(v):
             return ((v, None),)
-        # A NAME HAS NO GEOMETRY until it is retrieved. Grounding one here
-        # would be a second grounding path beside find's, answering off a
-        # different match than the rows the model is reading.
+        # A NAME HAS NO GEOMETRY until find retrieves it.
         raise CodeError(
             f"{who}() measures between things on the surface, and {v!r} is "
             f"a name. find({v!r}) first, then measure against the rows it "
@@ -1165,9 +987,8 @@ class MissionPython:
         self.ns["__builtins__"]["print"] = self._print
         self.ns["__builtins__"]["__import__"] = _safe_import
         self.ns["__show__"] = self._show
-        # show(x) is the model's own display verb (reached 25x on arm 1,
-        # steadily since): it IS the bare-expression renderer, so the
-        # spelling just works instead of earning a did-you-mean.
+        # show(x) is the bare-expression renderer under the model's own
+        # display verb.
         self.ns["show"] = self._call_show
         self.ns.update(_SAFE_MODULES)
         for name in served_calls():
@@ -1192,10 +1013,8 @@ class MissionPython:
 
     def _wrap_call(self, name: str):
         """The library callable the namespace serves: the real
-        ``_call_*``, with signature TypeErrors re-said in the surface's
-        own voice. The raw message names ``MissionPython._call_find`` --
-        an internal spelling the model then reaches for -- and never
-        lists the keywords that DO exist."""
+        ``_call_*``, with signature TypeErrors re-said without the internal
+        name and with the keywords that DO exist."""
         fn = getattr(self, f"_call_{name}")
         kws = ", ".join(
             f"{p.name}=" for p in inspect.signature(fn).parameters.values()
@@ -1297,7 +1116,7 @@ class MissionPython:
             return name
         if isinstance(v, (list, tuple)) and not is_xy(v) \
                 and any(isinstance(x, (Row, Rows)) for x in v):
-            # a LIST of things -- order_by(nearest=[roadA, roadB]) -- maps
+            # a LIST of things -- order(nearest=[roadA, roadB]) -- maps
             # element-wise, so a Row rides as its fid, never as an object.
             return [self._slot(x, extra) for x in v]
         return v
@@ -1364,12 +1183,9 @@ class MissionPython:
         self._near_miss_note(st.get("_ref"), query)
         return Rows(st["_ref"], self, label=f"find({query!r})")
 
-    # The spatial fact behind the prior-anchor miss class (147#145, 26#26):
-    # find("pool", near=<street>) re-sorts a global name-match, so 3 pools
-    # 2.5 km away read like "the pools near the street". The count trailer
-    # says how many detections exist ANYWHERE; this note says none of what
-    # was found is NEAR the anchor -- the one sentence the model otherwise
-    # has to assemble from three places.
+    # find("pool", nearest=<street>) re-sorts a global name-match, so pools
+    # 2.5 km away can read like "the pools near the street"; this note says
+    # none of what was found is NEAR the anchor.
     _NEAR_MISS_M = 500.0
 
     def _near_miss_note(self, ref, query) -> None:
@@ -1396,16 +1212,10 @@ class MissionPython:
     def _rows_order(self, items, label, *, nearest=None, color=None):
         """ONE sort key, the way a table sorts. Never two.
 
-        A ranking is one-dimensional: rows come out in one order or they do
-        not come out. Two keys have to be combined to make one, and every
-        way of combining them loses a row that is second on everything and
-        first on nothing -- measured on calcity::200#198, where the target
-        sits 6.4 m off the boulevard and 19.9 m from a house and FIVE
-        combiners (min-max sum, z-score sum, rank sum, product, distances
-        only) each rank a wrong car above it. The fused form was also
-        never once written: 587 order_by sites across three flown arms
-        passed two kwargs zero times. So this refuses rather than fuses,
-        and what does not order is a CUT -- .filter(near=..., dwithin=...).
+        Two keys have to be combined to make one, and every way of
+        combining them can rank a row that is second on everything below
+        wrong rows. So this refuses rather than fuses, and what does not
+        order is a CUT -- .filter(near=..., dwithin=...).
         """
         if nearest is not None and color is not None:
             raise CodeError(
@@ -1508,11 +1318,9 @@ class MissionPython:
 
     def _call_look(self, x, *, marks=None):
         extra: dict = {}
-        # WHAT ELSE IS IN THE PICTURE. marks= names the rows whose identity
-        # bears on the decision -- the road a candidate is supposed to be
-        # on, the thing it is supposed to be beside. A named road is drawn
-        # as its NAME and takes no badge digit; everything else outlines and
-        # badges. Naming them is the model stating what it is looking FOR.
+        # marks= names the rows whose identity bears on the decision; a
+        # named road is drawn as its NAME, everything else outlines and
+        # badges.
         _mk = None
         if marks is not None:
             _mk = [self._slot(m, extra)
@@ -1549,8 +1357,7 @@ class MissionPython:
         return None
 
     def _call_look_for(self, *classes, at=None):
-        # at=, not near=: this names WHERE to segment extra, which is a
-        # third job for a word that already meant cut and order.
+        # at=, not near=: this names WHERE to segment extra.
         if not classes:
             raise CodeError('look_for takes the classes to watch: '
                             'look_for("house", "pool")')
@@ -1583,8 +1390,7 @@ class MissionPython:
     def _move(self, call: str, x):
         extra: dict = {}
         if isinstance(x, Rows):
-            # A SET is one place for explore -- the pass covers its
-            # union. go_to still lands on exactly one thing.
+            # A SET is one place for explore; go_to lands on one thing.
             if call == "go_to":
                 name = self.name_of(x) or x.ref
                 raise CodeError(
@@ -1601,15 +1407,11 @@ class MissionPython:
         elif isinstance(x, (list, tuple)):
             # explore's list is a SET of things -- rows, sets, fids -- as
             # one place to cover; any numeric element is the coordinate
-            # hatch, refused in every spelling.
+            # hatch.
             _things = (bool(x) and not is_xy(x)
                        and all(isinstance(e, (Row, Rows, str)) for e in x))
             _ok_set = call == "explore" and _things
-            # A SET OF THINGS IS NOT A COORDINATE. go_to takes one thing, so
-            # a list is still refused -- but saying "not a coordinate" about
-            # a list of rows names the wrong defect and the model has to
-            # guess. It costs a turn: canary 139#137 wrote go_to(lot68) over
-            # a one-row predicate result and only then found go_to(lot68[0]).
+            # A SET OF THINGS IS NOT A COORDINATE: go_to refuses it as a set.
             if _things and not _ok_set:
                 raise CodeError(
                     f"{call}() takes ONE thing and that is a set of "
@@ -1622,8 +1424,7 @@ class MissionPython:
                                   else str(v) for v in x)))
         if isinstance(x, str) and re.fullmatch(r"v\d{1,3}", x):
             # A staged viewpoint is a pose, not a thing on the map: the
-            # move wire resolves one to its stand point, which is the
-            # coordinate hatch again, two hops long.
+            # move wire would resolve it to its stand point, a coordinate.
             raise CodeError(
                 f"{x} is a viewpoint you adopted, not a thing on the "
                 f"map, and {call}() takes a thing. A stance is for "
@@ -1632,8 +1433,7 @@ class MissionPython:
         st = self._step(call, [self._slot(x, extra)], act=True)
         self._dispatch([st], f"{call}(...)", extra)
         # The arrivals: a flight minted a handle over the rows it added,
-        # so `r = explore(x)` binds them (45 NoneType errors on the first
-        # fleet came from exactly this expectation).
+        # so `r = explore(x)` binds them.
         minted = getattr(self, "_call_minted", None) or []
         return self.ns.get(minted[-1]) if minted else None
 
@@ -1732,10 +1532,7 @@ class MissionPython:
         """A rebind that failed UNBINDS the name.
 
         Python leaves the target holding its OLD value when the right-hand
-        side raises -- and a stale pick that stays bound is a wrong commit
-        (measured: `r3 = r2[99]` failed, the old r3 stayed live, and the
-        next go_to(r3) flew the previous block's row). The model was told
-        the bind failed, so the name must be gone, not stale.
+        side raises, and a stale pick that stays bound is a wrong commit.
         """
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign) and node.lineno == line:
@@ -1784,11 +1581,9 @@ class MissionPython:
         res = out.get("result")
         if isinstance(res, dict) and isinstance(res.get("results"), dict):
             results = dict(res["results"])
-            # ONE BLOCK, ONE TABLE -- compact_results' answer law at block
-            # scope: the block's LAST result keeps its rows, everything the
-            # model explicitly showed keeps its rows, and every other
-            # envelope folds to its hint, attributed to the model's name
-            # for it. The facts survive; the re-render is defunded.
+            # ONE BLOCK, ONE TABLE: the block's LAST result and everything
+            # the model explicitly showed keep their rows; every other
+            # envelope folds to its hint under the model's name for it.
             keys = list(results)
             answer = keys[-1] if keys else None
             folded = []
@@ -1825,17 +1620,10 @@ class MissionPython:
 # --------------------------------------------------------------------------
 #
 # ``sys.monitoring`` delivers LINE events for exactly the block's code
-# objects. A ``sys.settrace`` function did this job before, and it is
-# GLOBAL: CPython hands it a call event for every Python function the
-# executor runs beneath the block and keeps the whole interpreter
-# de-specialised while it is installed. Measured on the Cal City surface
-# (7,205 priors + 40 folds): one ``find("building", near=d, dwithin=40)``
-# ran 1.26 s with no trace function and 17.2 s with one -- the 7-minute
-# sortie freeze was six of those, and every flight's fold and surface
-# rebuild paid the same tax. A local event costs the executor nothing.
-#
-# The trace function stays for a Python without ``sys.monitoring`` (< 3.12):
-# the ceilings are liveness, and a slow executor beats an unbounded one.
+# objects, so the executor beneath the block runs untraced (a global
+# ``sys.settrace`` slowed one find from 1.26 s to 17.2 s). The trace function
+# serves a Python without ``sys.monitoring`` (< 3.12): a slow executor beats
+# an unbounded one.
 
 _MON = getattr(sys, "monitoring", None)
 _MON_LOCK = threading.Lock()
