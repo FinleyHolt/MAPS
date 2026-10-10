@@ -158,8 +158,8 @@ def crop_ortho_observation(
 
     ``ortho`` is the raster to crop, in hand: ``{rgb, height, alpha, x_min,
     y_min, px_per_m}``, the shape :func:`camera_model.load_ortho_or_rasters`
-    returns. Given, nothing is loaded: a live station hands the imagery its
-    own run captured (``have_worlds/station/run_imagery.py``); the bench
+    returns. Given, nothing is loaded: a flight hands the imagery its own
+    run captured (``benchmarks/flight/run_imagery.py``); the bench
     leaves it unset and crops the bake's raster, which is its camera.
 
     Warps ``rgb`` + ``height`` + ``validity`` from the canonical filled ortho

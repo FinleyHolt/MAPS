@@ -631,7 +631,7 @@ def _png_wire_bytes(canvas: np.ndarray) -> bytes:
 
 
 # The once-image's encode: the quality the model's own observation is served
-# at (have_worlds.station.live_source.OBSERVATION_JPEG_QUALITY), so the
+# at (benchmarks.flight.live_source.OBSERVATION_JPEG_QUALITY), so the
 # segmenter sees the pixels the model reasons over. Chosen on 2026-09-14 in
 # flight, where a lossless once-image still cost the radio ~5 MB a look: a
 # lossy wire was measured to move about one detection in eight on the

@@ -549,7 +549,7 @@ class SearchLoop:
         # benchmark so maps.search stays benchmark-agnostic (no import benchmark).
         self._rgbd_dir = rgbd_dir
         #: What THIS RUN has captured, handed in by a live runner
-        #: (``have_worlds/station/run_imagery.RunImagery``): the imagery
+        #: (``benchmarks/flight/run_imagery.RunImagery``): the imagery
         #: ``look`` crops instead of the bake's raster. None is the bench,
         #: whose camera is the raster.
         self.look_imagery = None

@@ -10,7 +10,7 @@ It compiles nothing. The name predates the mission cutover, when this
 class ran a pre-flight compile; that pipeline is deleted and the class is
 now a carrier. Constructed once per process by
 ``benchmarks.citynav.run_benchmark.dispatch`` and by
-``have_worlds.station.mission_runner``, then handed to every ``SearchLoop``.
+``benchmarks.flight.mission``, then handed to every ``SearchLoop``.
 
 Artifact writes: when the constructor is given a ``workdir`` (or
 ``SEARCH_COMPILE_WORKDIR`` is set), per-turn artifacts land under it as
