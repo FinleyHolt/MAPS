@@ -57,5 +57,3 @@ def fingerprint_node(n):
     if d is None:
         return ("repr", repr(n))
     return tuple(sorted((k, fingerprint_value(v)) for k, v in d.items()))
-
-

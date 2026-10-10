@@ -41,5 +41,3 @@ class CompileTurnResult:
 
     info: dict
     raw: dict
-
-

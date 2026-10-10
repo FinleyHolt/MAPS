@@ -51,4 +51,3 @@ class FeatureTour:
     @classmethod
     def empty(cls) -> "FeatureTour":
         return cls(viewpoints=[])
-
