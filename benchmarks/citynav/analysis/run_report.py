@@ -173,7 +173,7 @@ def _local_bake_dir(resolved: str | None) -> Path | None:
     if Path(resolved).is_dir():
         return Path(resolved)
     parts = PurePosixPath(resolved).parts
-    for i in range(1, len(parts)):
+    for i in range(1, len(parts) - 1):          # a tail of two parts at least: "tiles" alone names nothing
         cand = _REPO_ROOT.joinpath(*parts[i:])
         if cand.is_dir():
             return cand
