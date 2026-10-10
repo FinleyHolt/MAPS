@@ -18,55 +18,14 @@ def test_set_concepts_dedups_and_preserves_order() -> None:
     assert provider.concepts_for(obs=None) == ["red car", "tree"]
 
 
-def test_set_concepts_replaces_prior_turn_until_frozen() -> None:
-    """Pre-freeze, ``set_concepts`` replaces the held union wholesale.
-
-    The compiler's union builder already produced a deduped, canonical
-    set across every active reasoner thread; carrying entries from a
-    prior call would defeat that canonicalization. (Post-freeze,
-    subsequent calls are no-ops — see the freeze tests below.)
-    """
+def test_set_concepts_replaces_the_prior_call() -> None:
+    """``set_concepts`` replaces the held union wholesale: the union builder
+    already produced a deduped, canonical set, and carrying entries from a
+    prior call would defeat that canonicalization."""
     provider = ReasonerUnionConceptProvider()
     provider.set_concepts(["red car", "tree"])
     provider.set_concepts(["blue truck"])
     assert provider.concepts_for(obs=None) == ["blue truck"]
-
-
-def test_freeze_locks_concept_list() -> None:
-    """After ``freeze``, ``set_concepts`` calls are silently ignored.
-
-    The runner calls this once after the pre-flight compile so the
-    SAM-video tracker keeps the turn-0 union for the rest of the
-    episode, even when in-flight compile turns produce a different
-    union (e.g. operator intel changes the target).
-    """
-    provider = ReasonerUnionConceptProvider()
-    provider.set_concepts(["building", "car"])
-    provider.freeze()
-    provider.set_concepts(["unrelated"])
-    assert provider.concepts_for(obs=None) == ["building", "car"]
-    assert provider.frozen is True
-
-
-def test_freeze_is_idempotent() -> None:
-    provider = ReasonerUnionConceptProvider()
-    provider.set_concepts(["a"])
-    provider.freeze()
-    provider.freeze()
-    assert provider.concepts_for(obs=None) == ["a"]
-    assert provider.frozen is True
-
-
-def test_freeze_with_empty_concepts_is_valid() -> None:
-    """Freezing before any concepts are set leaves the provider empty.
-
-    Caller-side: a crashed pre-flight compile produces no union; the
-    runner still freezes so a stray in-flight turn can't retroactively
-    populate the catalog."""
-    provider = ReasonerUnionConceptProvider()
-    provider.freeze()
-    provider.set_concepts(["building"])
-    assert provider.concepts_for(obs=None) == []
 
 
 def test_concepts_for_ignores_instruction_hint() -> None:

@@ -75,8 +75,8 @@ _SCHEMA: dict[str, Any] = {
 
 @dataclass
 class RunConfig:
-    """One resolved config: every ``_SCHEMA`` key, plus the run facts the
-    CLI sets (``resume_*``) and the path the config resolved from."""
+    """One resolved config: every ``_SCHEMA`` key, plus the path the config
+    resolved from."""
 
     max_steps: int
     altitude_m: float
@@ -102,10 +102,6 @@ class RunConfig:
     # Bench-only ablation withholds (maps.search.withhold); empty serves the
     # flown text exactly.
     withhold: list
-    # Universal resume from a prior run's workdir (CLI --resume-from-workdir)
-    # and its turn (None picks the latest reconstructable one).
-    resume_from_workdir: str | None = None
-    resume_turn: int | None = None
     # The resolved top-level YAML path, written by ``load_config``.
     source_path: str | None = None
 

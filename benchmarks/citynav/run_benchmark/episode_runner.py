@@ -229,17 +229,16 @@ def run_episode(
     # the engine still runs perception_update / paint in that mode). The
     # SAM concept setter pushes each act.sam_concepts union back into a
     # SAM-style perception adapter; non-SAM adapters get a no-op. The
-    # mission declares concepts latest-wins, so the catalog is never
-    # frozen mid-episode.
+    # mission declares concepts latest-wins.
     sam_concept_setter = None
     sam_watchlist_setter = None
     if isinstance(perception, SamDetectClient):
         cp = perception.concept_provider
         if isinstance(cp, ReasonerUnionConceptProvider):
             sam_concept_setter = cp.set_concepts
-            # C4: the freeze-exempt agent-owned watchlist channel — how a
-            # view{watchlist} mutation / boost activation reaches the
-            # per-flight /segment calls.
+            # The agent-owned watchlist channel: how a view{watchlist}
+            # mutation / boost activation reaches the per-flight /segment
+            # calls.
             sam_watchlist_setter = cp.apply_watchlist
 
     search_loop: SearchLoop | None = None

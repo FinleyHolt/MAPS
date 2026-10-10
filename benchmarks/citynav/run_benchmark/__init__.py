@@ -4,8 +4,8 @@ The episode engine is a package of purpose-named modules: ``cli`` (main),
 ``dispatch`` -> ``episode_runner`` (per-episode flow) -> ``mission_engine``
 (the one-conversation fly-on-request executor) -> ``trajectory`` (discrete
 replay), with ``assets`` / ``perception`` / ``osm_prior`` / ``tour_cursor``
-/ ``record`` / ``resume`` / ``reasoner_warmup`` / ``profiling`` as leaves
-and ``config`` / ``error_taxonomy`` / ``episode_server`` alongside. This
+/ ``spawn`` / ``reasoner_warmup`` as leaves and ``config`` /
+``error_taxonomy`` / ``episode_server`` alongside. This
 surface re-exports the names external callers (serving, the citynav tests,
 the console entry point) depend on.
 """
