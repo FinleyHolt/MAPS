@@ -1,17 +1,10 @@
-"""Per-episode belief state machine.
+"""Per-episode search state: the one world graph and what the mission reads.
 
-Wraps ``MapsCompiler`` with the surrounding orchestration: graph
-upsert, target lock, per-frame lock refresh, paint-layer TTL,
-target-evidence assembly, perception_update wiring, parse-compile call,
-and the per-turn artifact build (target spec, resolved features,
-reasoner thread, committed detected ids).
-
-ONE reasoner on a ReAct loop drives all of it, with no subagents.
-
-``update_perception(detections, ...)`` folds one flight into the belief:
-graph upsert, lock refresh, paint TTL, target-evidence assembly. It
-mutates internal state; ``snapshot()`` returns the current view at any
-point, and the recorder writes its per-step snapshot from that.
+``update_perception(detections, ...)`` folds one flight's detections into
+the graph through the world tracker; the concept and boost hooks drive the
+segmenter's watchlist; ``snapshot()`` returns the bound commit the
+trajectory replay and the row read. ONE reasoner on a ReAct loop drives the
+mission, with no subagents.
 """
 
 from __future__ import annotations
@@ -66,8 +59,7 @@ class SearchSnapshot:
 
 @dataclass
 class _State:
-    """Mutable internal state. Mirrors the autonomy fields that used to
-    live on ``EpisodeState``."""
+    """Mutable internal state, read and written under ``SearchLoop._lock``."""
 
     runtime_graph: object  # ObjectGraph
     # {fid, class, xy} for the detections the LAST update_perception
@@ -78,11 +70,9 @@ class _State:
     confirmed_target_xy: tuple[float, float] | None = None
     # Flight step the commit bound at. ``None`` = nothing flew.
     lock_step: int | None = None
-    # C4 three-verb surface: the per-episode PerceptionDirector — the live
-    # SAM watchlist (initial = the round-0 sam_concepts union), the
+    # The per-episode PerceptionDirector: the live SAM watchlist, the
     # queued/active boosts, and the addressable pending-stop registry
-    # (qstop_N). Rebuilt fresh at each compile commit (new intel = new
-    # perception plan); None until the first compile pushes a union.
+    # (qstop_N). None until the first concept declaration arms it.
     perception_director: Any = None
     # Which path bound the final commit (instrument). The mission binds
     # ``final_flight``; a run that flew nothing leaves it None.
@@ -122,11 +112,8 @@ class SearchLoop:
         # actually reach the per-stop /segment calls (``set_concepts`` is
         # frozen after preflight and would silently no-op them).
         self._sam_watchlist_setter = sam_watchlist_setter
-        # Observation backend the runtime crops frames through. Drives
-        # viewpoint-picker dispatch (perception.viewpoint).
-        # Per-block upstream ground datum for the orthographic picker's
-        # view-square sizing (ortho). ``None`` for backends that
-        # don't need it (the perspective picker ignores it).
+        # Per-block upstream ground datum: the mission's observation span is
+        # measured off it.
         self._ortho_ground_z_m = ortho_ground_z_m
         # Upstream rgbd raster dir (``CITYNAV_NATIVE_RGBD_DIR``), read only
         # by the ``look`` crop renderer (``_render_candidate_crops``).
@@ -136,22 +123,15 @@ class SearchLoop:
         #: ``look`` crops instead of the bake's raster. None is the bench,
         #: whose camera is the raster.
         self.look_imagery = None
-        # World-space tracker (UCMCTrack-core, constant-position). Assigns
-        # a stable cross-frame ``track_id`` to per-frame detections so
-        # ``_find_track``'s primary exact-id match collapses duplicates,
-        # replacing the fragile per-frame world-IoU re-id fallback. One
-        # instance per episode (SearchLoop is per-episode); always on.
+        # World-space tracker (UCMCTrack-core, constant-position): a stable
+        # cross-frame ``track_id`` per detection, the upsert's sole re-id key.
+        # One instance per episode.
         from maps.perception.world_tracker import WorldTracker
 
         self._world_tracker = WorldTracker()
         self._state: _State | None = None
-        # Re-entrant lock so a worker thread and the main thread can both
-        # reach ``update_perception`` / ``snapshot`` / the commit predicates
-        # without racing.
-        # Every public mutator + reader of ``_State`` acquires this lock so
-        # the worker and main thread serialize on shared state without
-        # data races. ``RLock`` because some methods call others that also
-        # take the lock (e.g. a snapshot taken inside a commit path).
+        # Every public mutator and reader of ``_State`` takes this lock.
+        # ``RLock`` so a locked path may call another public method.
         self._lock = threading.RLock()
 
     # ------------------------------------------------------------------ #
@@ -455,7 +435,6 @@ class SearchLoop:
             return None
         return str(Path(wd) / "flight" / "look")
 
-
     def _fid_is_detected(self, fid: str) -> bool:
         """True if the candidate is a runtime SAM detection (provenance
         ``detected``) rather than a prebake catalog prior. At a stop the
@@ -473,7 +452,7 @@ class SearchLoop:
         return self._state
 
     # ------------------------------------------------------------------ #
-    # C4 three-verb surface: PerceptionDirector plumbing
+    # PerceptionDirector plumbing
     # ------------------------------------------------------------------ #
 
     def _arm_perception_director(self, concepts: list) -> None:
@@ -500,8 +479,8 @@ class SearchLoop:
         with self._lock:
             d = self.state.perception_director
             if d is None:
-                # Honest degradation: no armed director (no compile landed a
-                # union yet) — say so rather than acking a phantom mutation.
+                # No armed director: say so rather than ack a phantom
+                # mutation.
                 return {"error": "watchlist is not armed this episode "
                                  "(no compile committed a concept union)"}
             return d.watchlist_apply(add, remove)
@@ -513,7 +492,6 @@ class SearchLoop:
             if d is None:
                 return {"error": "boost queueing is not armed this episode"}
             return d.boost_queue(concepts, where)
-
 
     def set_retro_perceiver(self, fn) -> None:
         """Install the RETROSPECTIVE-perception executor: the
@@ -611,11 +589,7 @@ class SearchLoop:
 
 
     # ------------------------------------------------------------------ #
-    # Turn boundary
-    # ------------------------------------------------------------------ #
-
-    # ------------------------------------------------------------------ #
-    # Per-frame perception (graph upsert, target evidence accumulation)
+    # Per-flight perception
     # ------------------------------------------------------------------ #
 
     def update_perception(
@@ -705,14 +679,7 @@ class SearchLoop:
         with self._lock:
             return [dict(d) for d in self.state.last_flight_detections]
 
-    # ------------------------------------------------------------------ #
-    # Phase 8: parse-compile + per-turn artifacts
-    # ------------------------------------------------------------------ #
 
-
-    # ------------------------------------------------------------------ #
-    # Termination
-    # ------------------------------------------------------------------ #
 
 
     def upsert_prior_percept(self, fid: str, attrs: dict, *, px: int = 0) -> bool:
@@ -743,19 +710,10 @@ class SearchLoop:
             log.debug("upsert_prior_percept failed for %s", fid, exc_info=True)
             return False
 
-
     def _tool_ctx_for_examiner(self):
-        """Build a :class:`ToolContext` the runtime reasoner rounds run against.
-
-        Mirrors the per-reasoner context the Stage-2 reasoner used: the
-        prebake graph + runtime graph (shared mutable reference) and the
-        tile metadata for spatial filters. ``grid_shape`` is the REAL tile
-        grid: the perceive{map} painter clamps every cell to it, and the
-        old (0, 0) "filler" silently dropped every cell on every live map
-        render — 182/182 maps in framestage_1000 delivered dark with an
-        empty class legend while the offline painter (fed a real shape)
-        painted fine.
-        """
+        """The :class:`ToolContext` the mission's analyze programs run
+        against: the live graph and the tile frame. ``grid_shape`` is the
+        real tile grid, which the map painter clamps every cell to."""
         from maps.search.analyze_scene.tools import ToolContext
 
         return ToolContext(
@@ -776,10 +734,6 @@ class SearchLoop:
 
 
     # ------------------------------------------------------------------ #
-    # Commit predicate (PR2): planner-side descend_and_land trigger
-    # ------------------------------------------------------------------ #
-
-    # ------------------------------------------------------------------ #
     # Internal phase helpers
     # ------------------------------------------------------------------ #
 
@@ -793,7 +747,9 @@ class SearchLoop:
         bounds_min: tuple[float, float],
         cell_size_m: float,
     ) -> tuple[dict[int, str], list[dict]]:
-        """Project + upsert detections and resolve unresolved anchors."""
+        """Upsert each detection: tracked ones with a projected footprint
+        through the tracked upsert, the rest centroid-only. Returns the
+        tracked index -> fid map and the per-step detection records."""
         from maps.sws.graph import (
             upsert_detected_centroid_only,
             upsert_tracked_detected,
