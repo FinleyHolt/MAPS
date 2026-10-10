@@ -10,10 +10,7 @@ from benchmarks.citynav.episode import EpisodeState
 from maps.search.parse_compile.tour_state import FeatureTour
 from benchmarks.citynav.flight_model import resolve_flight_model
 from benchmarks.citynav.run_benchmark.config import RunConfig
-from pathlib import Path
-import json
 import math
-import os
 import logging
 
 log = logging.getLogger("run_benchmark")
@@ -355,35 +352,5 @@ def synthesize_compliant_trajectory(
         react_descent_starved,
         descent_truncated,
     )
-
-    workdir_env = os.environ.get("SEARCH_COMPILE_WORKDIR")
-    if workdir_env:
-        try:
-            run_dir = Path(workdir_env) / "run"
-            run_dir.mkdir(parents=True, exist_ok=True)
-            (run_dir / "compliant_trajectory.json").write_text(
-                json.dumps(
-                    {
-                        "episode_id": episode.episode_id,
-                        "tour_fids": tour_fids,
-                        "tour_xy": tour_wps,
-                        "tour_alts": tour_alts,
-                        "descent_xy": descent_xy,
-                        "n_steps": steps,
-                        "pred_xy": list(pred_xy),
-                        "final_pos_xy": list(final_pos_xy),
-                        "max_steps": int(cfg.max_steps),
-                        # round-2 audit FIX B truncation observability
-                        "descent_starved": bool(react_descent_starved),
-                        "descent_truncated": bool(descent_truncated),
-                        # r7b Action 1.iii commit-arrival integrity
-                        "descent_replans": int(descent_replans),
-                        "descent_unreachable": bool(descent_unreachable),
-                    },
-                    indent=2,
-                )
-            )
-        except OSError as exc:
-            log.warning("compliant_trajectory.json write failed: %s", exc)
 
     return steps

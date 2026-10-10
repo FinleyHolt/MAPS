@@ -5,10 +5,8 @@ ORDERING-only (CLAUDE.md): the enrichment feeds score_by, never a filter.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from maps.perception.viz.color import color_from_mask_m6
 from maps.search.analyze_scene.geom_compute import is_closed_chain
-import json
 import time
 
 import numpy as np
@@ -38,8 +36,8 @@ class _OsmPriorCtx:
     graph_fid_by_fid: dict[str, str] = field(default_factory=dict)
     # SIDE STORE — perceived color for EVERY in-view OSM prior we see (named
     # AND unnamed), keyed by OSM fid (``cityref_<id>``). This is a downstream
-    # capture ONLY: it is dumped to the ``flight/osm_percepts.json`` sidecar at
-    # episode end and is NEVER added to the runtime ObjectGraph, never surfaced
+    # capture ONLY: its size is reported in the episode's ``prior_enrich``
+    # block and it is NEVER added to the runtime ObjectGraph, never surfaced
     # via ``analyze_scene`` (its ``find`` op, which absorbed the old
     # ``search_features``), and never
     # enters the candidate / committable set — the headline ViSA named-only
@@ -141,8 +139,8 @@ def _merge_osm_percept(
     (no dominant color this frame) — the fid is still recorded (frames bumps,
     metadata captured) so the side store reflects every OSM thing we saw.
 
-    This writes ONLY to ``percept_by_fid`` (a plain dict on ``_OsmPriorCtx``
-    dumped to the ``flight/osm_percepts.json`` sidecar). It never touches the
+    This writes ONLY to ``percept_by_fid`` (a plain dict on ``_OsmPriorCtx``).
+    It never touches the
     runtime ObjectGraph and never reaches a reasoner tool surface — the named
     contract holds; the graph upsert is the caller's SEPARATE, named-only path.
     """
@@ -176,42 +174,6 @@ def _merge_osm_percept(
     if rgb:
         bucket = entry["color_rgb"]
         bucket[rgb] = bucket.get(rgb, 0) + 1
-
-
-def _write_osm_percepts_sidecar(
-    workdir: str | None, percept_by_fid: dict[str, dict]
-) -> int:
-    """Dump the all-OSM perceived-color SIDE STORE to ``flight/osm_percepts.json``.
-
-    Best-effort downstream capture (named + unnamed OSM priors, each with its
-    aggregated perceived color). A write failure NEVER fails the flight — it is
-    logged and swallowed. Adds a ``color_top`` / ``color_rgb_top`` convenience
-    field (the highest-count value) alongside the full ``{value:count}`` maps.
-    Returns the number of fids written (0 on no-op / failure).
-    """
-    if not workdir or not percept_by_fid:
-        return 0
-    try:
-        out: dict[str, dict] = {}
-        for fid, entry in percept_by_fid.items():
-            color_map = dict(entry.get("color") or {})
-            rgb_map = dict(entry.get("color_rgb") or {})
-            rec = dict(entry)
-            rec["color_top"] = (
-                max(color_map, key=color_map.get) if color_map else None
-            )
-            rec["color_rgb_top"] = max(rgb_map, key=rgb_map.get) if rgb_map else None
-            out[str(fid)] = rec
-        flight_dir = Path(workdir) / "flight"
-        flight_dir.mkdir(parents=True, exist_ok=True)
-        target = flight_dir / "osm_percepts.json"
-        tmp = target.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(out, indent=2, sort_keys=True))
-        tmp.replace(target)
-        return len(out)
-    except Exception as exc:  # noqa: BLE001
-        log.warning("prior-enrichment: osm_percepts.json sidecar write failed: %s", exc)
-        return 0
 
 
 def _maybe_build_prior_polys(
@@ -289,8 +251,8 @@ def _build_all_osm_polys(
     """Project ALL in-view OSM prior footprints (named + unnamed) to image
     masks for the downstream SIDE-STORE color capture.
 
-    Read-only projection for the all-OSM ``percept_by_fid`` side store +
-    ``flight/osm_percepts.json`` sidecar. It NEVER feeds the runtime graph or a
+    Read-only projection for the all-OSM ``percept_by_fid`` side store. It
+    NEVER feeds the runtime graph or a
     reasoner surface; the named-only committable graph enrichment uses the
     separate :func:`_maybe_build_prior_polys` path. Original docstring follows.
 

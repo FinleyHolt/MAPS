@@ -15,8 +15,7 @@ class CompileInfraError(RuntimeError):
 
     ``cause_tag`` is a short machine-readable reason (e.g.
     ``pose_resolution_oom``). ``device`` / ``mem_snapshot`` carry the
-    GPU attribution so the failure is self-describing in the log and in
-    ``pre_flight_health.json`` without a traceback hunt.
+    GPU attribution so the failure is self-describing in the log.
     """
 
     def __init__(

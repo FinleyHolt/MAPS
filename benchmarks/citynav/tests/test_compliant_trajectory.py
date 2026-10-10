@@ -9,7 +9,6 @@ pred diagnostics.
 
 from __future__ import annotations
 
-import json
 from types import SimpleNamespace
 
 from benchmarks.citynav.flight_model import FlightModelConfig
@@ -54,12 +53,9 @@ def test_compliant_trajectory_records_final_pose_prediction_xy(
         start_alt=50.0,
     )
 
-    traj = json.loads((tmp_path / "run" / "compliant_trajectory.json").read_text())
-
     # One discrete step of budget cannot reach the committed centroid at
     # (100, 0): the honest final pose is what gets scored.
-    assert traj["pred_xy"] == traj["final_pos_xy"]
-    assert traj["final_pos_xy"] != [100.0, 0.0]
+    assert state.pose_xy != (100.0, 0.0)
 
 
 def test_citynav_native_protocol_keeps_final_pose_as_canonical_score() -> None:

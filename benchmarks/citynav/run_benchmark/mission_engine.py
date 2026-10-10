@@ -44,7 +44,6 @@ from maps.search.parse_compile.tour_synth import (
 )
 from maps.search.pose import RobotPose
 from maps.util.xy_token import parse_xy_token
-import json
 import numpy as np
 import os
 import time
@@ -230,30 +229,6 @@ def detected_digest(dets: list[dict], cap: int = _DETECTED_HEAD) -> dict:
     if len(dets) > len(head):
         out["detected_more"] = len(dets) - len(head)
     return out
-
-
-def build_commit_decision(flights: list[dict], ended_by: str) -> dict:
-    """The mission commit artifact: the LAST flight's target, verbatim.
-
-    Same file/location contract as the retired ground-walk commit
-    (``flight/commit_decision.json``); the shape names the mission facts.
-    """
-    last = flights[-1]
-    return {
-        "decision": {
-            "terminal": "final_flight",
-            "commit_path": "final_flight",
-            "target_fid": str(last["target"]),
-            "world_xy_resolved": [
-                float(last["resolved_xy"][0]),
-                float(last["resolved_xy"][1]),
-            ],
-            "committed_provenance": str(last["provenance"]),
-            "flights_flown": len(flights),
-            "ended_by": str(ended_by),
-        },
-        "single_reasoner": True,
-    }
 
 
 def chase_live_graph(ctx, search_loop, report: dict, *,
@@ -821,9 +796,8 @@ def run_mission_episode(
     Builds the session (:func:`build_mission_session`), runs
     :func:`run_mission` over it, then binds the commit onto the engine state
     the trajectory replay and metrics read (``locked_detection_id`` /
-    ``confirmed_target_xy`` / ``lock_step``) and writes
-    ``flight/commit_decision.json``. Returns ``{"flights", "reply",
-    "feature_tour", "decision"}``; zero flights leaves the engine state
+    ``confirmed_target_xy`` / ``lock_step``). Returns ``{"flights", "reply",
+    "feature_tour", ...}``; zero flights leaves the engine state
     unbound so the runner scores the honest zero.
     """
     session = build_mission_session(
@@ -882,7 +856,6 @@ def run_mission_episode(
         diag=diag,
     )
 
-    decision: dict | None = None
     if flights:
         last = flights[-1]
         with search_loop._lock:
@@ -895,17 +868,6 @@ def run_mission_episode(
             s2.lock_step = int(last["step_idx"])
             s2.commit_bind_phase = "final_flight"
         state.belief_snapshot = search_loop.snapshot()
-        decision = build_commit_decision(flights, reply.ended_by)
-        if workdir is not None:
-            try:
-                tp = Path(workdir) / "flight" / "commit_decision.json"
-                tp.parent.mkdir(parents=True, exist_ok=True)
-                tmp = tp.with_suffix(".tmp")
-                with tmp.open("w") as fh:
-                    json.dump(decision, fh, indent=2)
-                tmp.replace(tp)
-            except OSError as exc:
-                log.warning("commit decision write failed: %s", exc)
         log.info(
             "mission commit: fid=%s xy=%s flights=%d ended_by=%s",
             last["target"],
@@ -935,7 +897,6 @@ def run_mission_episode(
         "flights": flights,
         "reply": reply,
         "feature_tour": feature_tour,
-        "decision": decision,
         # The episode's acquisition record: every evidence-column name the
         # mission's programs attached, read off the ONE mission reasoner.
         # The round era unioned this over state.reasoners; the mission

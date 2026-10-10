@@ -245,10 +245,7 @@ class SearchSnapshot:
 # K is the consecutive-frame streak length that triggers a switch; α is
 # the EMA weight on the held attribution's accumulated score
 # (accumulated_score <- α * accumulated_score + (1 - α) * frame_score).
-# Starting values picked from intuition; the JSONL audit
-# (attribution_changes.jsonl + match_scores.jsonl) carries every
-# decision so a follow-up calibration pass can fit defensible values
-# from labeled ground truth without re-instrumenting.
+# Starting values picked from intuition.
 _ATTRIBUTION_DELTA: float = 0.2  # TODO(calibrate)
 _ATTRIBUTION_K: int = 3  # TODO(calibrate)
 _ATTRIBUTION_ALPHA: float = 0.7  # TODO(calibrate)
@@ -1009,9 +1006,8 @@ class SearchLoop:
             )
 
     def _look_audit_dir(self) -> str | None:
-        """``<workdir>/flight/look`` — the per-episode look-audit root, co-located
-        with ``flight/reasoning_trace.jsonl`` so persisted crops+text key to the
-        trace by stop_id + call id. ``None`` when look is off or no episode
+        """``<workdir>/flight/look`` — the per-episode look-audit root, keyed by
+        stop_id + call id. ``None`` when look is off or no episode
         workdir is known (``compiler.workdir`` / ``SEARCH_COMPILE_WORKDIR``)."""
         if not self._look_tool_enabled:
             return None
@@ -1073,63 +1069,6 @@ class SearchLoop:
             atomic_write_json(path, payload)
         except OSError as e:
             log.warning("telemetry write failed at %s: %s", path, e)
-
-    def _append_reasoning_trace(self, *, workdir, stop_id, step_idx, stop_seq_idx,
-                                compile_turn, pose_xy, replies_by_rid) -> None:
-        """Append one JSONL line per reasoner to flight/reasoning_trace.jsonl — the
-        per-stop {programs, surfaced candidate set, reasoned pick + reshuffle}
-        OFFLINE-ANALYSIS side channel. Write-only, gated on
-        SEARCH_DUMP_REASONING_TRACE; never raises (never perturbs the round). Called
-        once per stop in tour/completion order (the single serialization point), so
-        append-mode ordering is deterministic and race-free."""
-        from maps.search.parse_compile.reasoner_loop import StopEvidenceReply
-        try:
-            path = Path(workdir) / "flight" / "reasoning_trace.jsonl"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            lines = []
-            for rid, reply in (replies_by_rid or {}).items():
-                trace = getattr(reply, "trace", {}) if isinstance(reply, StopEvidenceReply) else {}
-                rec = {"kind": "stop", "stop_id": stop_id, "step_idx": step_idx,
-                       "stop_seq_idx": stop_seq_idx, "compile_turn": compile_turn,
-                       "rid": int(rid), "pose_xy": [pose_xy[0], pose_xy[1]],
-                       "select_fid": str(getattr(reply, "select_fid", "") or ""),
-                       "note": getattr(reply, "note", ""), **(trace or {})}
-                lines.append(json.dumps(rec, ensure_ascii=False, default=str))
-            if lines:
-                with path.open("a") as fh:
-                    fh.write("\n".join(lines) + "\n")
-        except OSError as e:
-            log.warning("reasoning_trace append failed at %s: %s", workdir, e)
-        except Exception:  # noqa: BLE001
-            log.debug("reasoning_trace append non-fatal", exc_info=True)
-
-    def _append_anchor_bindings(self, *, workdir, stop_id, step_idx,
-                                stop_seq_idx, replies_by_rid) -> None:
-        """Append each reasoner's prior-``find`` landmark resolutions to
-        flight/anchor_bindings.jsonl — the ALWAYS-ON grounding telemetry
-        (query phrase -> top name-matched catalog rows) offline analysis
-        classifies from directly. Tiny (top-6 rows per find), write-only,
-        never raises."""
-        try:
-            lines = []
-            for rid, reply in (replies_by_rid or {}).items():
-                bindings = getattr(reply, "anchor_bindings", ()) or ()
-                if not bindings:
-                    continue
-                lines.append(json.dumps(
-                    {"kind": "stop", "stop_id": stop_id,
-                     "step_idx": int(step_idx), "stop_seq_idx": stop_seq_idx,
-                     "rid": int(rid), "bindings": list(bindings)},
-                    ensure_ascii=False, default=str))
-            if lines:
-                path = Path(workdir) / "flight" / "anchor_bindings.jsonl"
-                path.parent.mkdir(parents=True, exist_ok=True)
-                with path.open("a") as fh:
-                    fh.write("\n".join(lines) + "\n")
-        except OSError as e:
-            log.warning("anchor_bindings append failed at %s: %s", workdir, e)
-        except Exception:  # noqa: BLE001
-            log.debug("anchor_bindings append non-fatal", exc_info=True)
 
     def restore_from_workdir(
         self,
@@ -1982,11 +1921,7 @@ class SearchLoop:
                     continue
                 if isinstance(parsed, dict):
                     lifecycle_sidecar[track_id] = parsed
-            self._apply_attribution_lifecycle(
-                dedup_sidecar=lifecycle_sidecar,
-                step=step,
-                now=now,
-            )
+            self._apply_attribution_lifecycle(dedup_sidecar=lifecycle_sidecar)
             s.runtime_graph.step_index = step
             s.runtime_graph.tau = now
 
@@ -2058,35 +1993,7 @@ class SearchLoop:
 
         return upsert_ids, evidence_by_idx, step_detections
 
-    @staticmethod
-    def _flight_dir() -> Path | None:
-        """``<SEARCH_COMPILE_WORKDIR>/flight``, where the per-frame audit
-        writers append ``match_scores.jsonl`` and
-        ``attribution_changes.jsonl``. ``None`` when no episode directory is
-        open (a test invocation without a recorder), and the writers no-op.
-        """
-        wd = os.environ.get("SEARCH_COMPILE_WORKDIR")
-        if not wd:
-            return None
-        p = Path(wd) / "flight"
-        return p if p.is_dir() else None
-
-    @staticmethod
-    def _append_jsonl(path: Path, record: dict) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(record, default=_json_safe) + "\n")
-        except OSError:
-            pass
-
-    def _apply_attribution_lifecycle(
-        self,
-        *,
-        dedup_sidecar: dict,
-        step: int,
-        now: float,
-    ) -> None:
+    def _apply_attribution_lifecycle(self, *, dedup_sidecar: dict) -> None:
         """Strengthen / hold / switch / detach the per-track prebake commitment.
 
         Reads the matcher's top-3 candidates from the dedup sidecar for
@@ -2107,7 +2014,6 @@ class SearchLoop:
         from maps.sws.graph import revoke_track_contribution
 
         s = self.state
-        ep_dir = self._flight_dir()
 
         for track_id, rec in dedup_sidecar.items():
             if not isinstance(rec, dict):
@@ -2116,12 +2022,6 @@ class SearchLoop:
             match_block = rec.get("match") or {}
             primary = match_block.get("fid")
             match_score = float(rec.get("match_score", 0.0))
-            all_folded = rec.get("all_attribution_fids")
-            if not all_folded and primary:
-                all_folded = [primary]
-            else:
-                all_folded = list(all_folded or [])
-
             if top3:
                 top1 = top3[0]
                 top1_fid = top1.get("fid")
@@ -2136,8 +2036,6 @@ class SearchLoop:
                 top1_passed = False
 
             prev = s._track_attribution.get(track_id)
-            decision: str
-            revoked: list[str] = []
 
             # Lifecycle branches decouple the per-frame fold gate from the
             # commitment decision:
@@ -2164,26 +2062,22 @@ class SearchLoop:
                         accumulated_score=match_score or top1_score,
                         frames_held=1,
                     )
-                    decision = "fresh"
                 else:
-                    # No prior commitment, no candidate cleared the gate
-                    # this frame either. Skip the audit row to keep the
-                    # signal-to-noise ratio of match_scores.jsonl up
-                    # without losing real lifecycle events.
+                    # No prior commitment, and no candidate cleared the
+                    # gate this frame either: nothing to hold.
                     continue
             elif top1 is None:
                 # Truly absent: matcher returned no candidates for this
                 # track this frame (z-gap filtered all of them out, or
                 # the voxel set was empty). Revoke the held commitment
                 # from the prebake's ledger.
-                revoked = revoke_track_contribution(
+                revoke_track_contribution(
                     s.runtime_graph,
                     track_id,
                     only_fids=[prev.matched_fid],
                 )
                 self._clear_matched_prebake_stamp_for_track(track_id)
                 s._track_attribution.pop(track_id, None)
-                decision = "detach"
             elif top1_fid == prev.matched_fid:
                 if top1_passed:
                     new_acc = (
@@ -2199,7 +2093,6 @@ class SearchLoop:
                         competitor_streak=0,
                         competitor_accumulated=0.0,
                     )
-                    decision = "strengthen"
                 else:
                     # Same prebake is still #1 by geometric overlap, but
                     # the per-frame gate just barely missed. Hold the
@@ -2215,7 +2108,6 @@ class SearchLoop:
                         competitor_streak=0,
                         competitor_accumulated=0.0,
                     )
-                    decision = "hold_subgate"
             else:
                 margin = top1_score - prev.accumulated_score
                 if margin > _ATTRIBUTION_DELTA and top1_passed:
@@ -2229,7 +2121,7 @@ class SearchLoop:
                         new_streak = 1
                         new_comp_acc = top1_score
                     if new_streak >= _ATTRIBUTION_K:
-                        revoked = revoke_track_contribution(
+                        revoke_track_contribution(
                             s.runtime_graph,
                             track_id,
                             only_fids=[prev.matched_fid],
@@ -2240,7 +2132,6 @@ class SearchLoop:
                             accumulated_score=new_comp_acc,
                             frames_held=1,
                         )
-                        decision = "switch"
                     else:
                         s._track_attribution[track_id] = AttributionState(
                             matched_fid=prev.matched_fid,
@@ -2251,7 +2142,6 @@ class SearchLoop:
                             competitor_streak=new_streak,
                             competitor_accumulated=new_comp_acc,
                         )
-                        decision = "contradicted"
                 else:
                     # Competitor is #1 this frame but either the margin
                     # isn't decisive or the competitor itself didn't pass
@@ -2264,68 +2154,6 @@ class SearchLoop:
                         competitor_fid=None,
                         competitor_streak=0,
                         competitor_accumulated=0.0,
-                    )
-                    decision = "hold_competitor"
-
-            cur_state = s._track_attribution.get(track_id)
-
-            if ep_dir is not None:
-                self._append_jsonl(
-                    ep_dir / "match_scores.jsonl",
-                    {
-                        "step": int(step),
-                        "ts": float(now),
-                        "track_id": str(track_id),
-                        "decision": decision,
-                        "primary_fid": primary,
-                        "match_score": match_score,
-                        "matched_fid": (
-                            cur_state.matched_fid if cur_state is not None else None
-                        ),
-                        "accumulated_score": (
-                            cur_state.accumulated_score
-                            if cur_state is not None
-                            else 0.0
-                        ),
-                        "frames_held": (
-                            cur_state.frames_held if cur_state is not None else 0
-                        ),
-                        "competitor_fid": (
-                            cur_state.competitor_fid if cur_state is not None else None
-                        ),
-                        "competitor_streak": (
-                            cur_state.competitor_streak if cur_state is not None else 0
-                        ),
-                        "top3": top3,
-                    },
-                )
-                if decision in {"fresh", "switch", "detach"}:
-                    self._append_jsonl(
-                        ep_dir / "attribution_changes.jsonl",
-                        {
-                            "step": int(step),
-                            "ts": float(now),
-                            "track_id": str(track_id),
-                            "decision": decision,
-                            "old_matched_fid": (
-                                prev.matched_fid if prev is not None else None
-                            ),
-                            "new_matched_fid": (
-                                cur_state.matched_fid if cur_state is not None else None
-                            ),
-                            "revoked_from": revoked,
-                            "primary_fid": primary,
-                            "top1_fid": top1_fid,
-                            "top1_score": top1_score,
-                            "accumulated_score": (
-                                cur_state.accumulated_score
-                                if cur_state is not None
-                                else 0.0
-                            ),
-                            "frames_held": (
-                                prev.frames_held if prev is not None else 0
-                            ),
-                        },
                     )
 
     def _clear_matched_prebake_stamp_for_track(self, track_id: str) -> None:

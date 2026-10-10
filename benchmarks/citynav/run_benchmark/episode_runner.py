@@ -30,7 +30,6 @@ from maps.search import (
 from maps.sws import GridDomain, WorldState
 from maps.search.withhold import withheld
 from maps.sws.graph import attach_mask_cache, build_object_graph
-import json
 import math
 import numpy as np
 import os
@@ -43,7 +42,6 @@ from benchmarks.citynav.run_benchmark.mission_engine import run_mission_episode
 from benchmarks.citynav.run_benchmark.osm_prior import (
     _OsmPriorCtx,
     _build_osm_prior_ctx_from_graph,
-    _write_osm_percepts_sidecar,
 )
 from benchmarks.citynav.run_benchmark.perception import make_perception
 from benchmarks.citynav.run_benchmark.resume import hydrate_resume_artifacts
@@ -51,7 +49,6 @@ from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_tra
 from benchmarks.citynav.run_benchmark.reasoner_warmup import (
     ReasonerUnreachableError,
     _reasoner_warmup_ping,
-    _write_pre_flight_health,
 )
 import logging
 
@@ -340,7 +337,7 @@ def run_episode(
     # fid map), so objects.json GT geometry NEVER steers which prior is enriched
     # or the color-sampling footprint. z is unused in the ortho top-down
     # projection, so the 2-D OSM contours (z padded 0) are exact. The all-osm
-    # capture goes to the side store + flight/osm_percepts.json sidecar; ONLY the
+    # capture goes to the side store; ONLY the
     # named subset graph_fid_by_fid maps is upserted onto the graph (headline
     # contract held).
     # Sourced from the baked OSM world_contour priors; None (no contour on
@@ -559,8 +556,6 @@ def run_episode(
         # pre-pay representative thinking/schema/image requests. Without
         # this, the mission's first turn pays the cold
         # prefill/grammar/cudagraph path on the clock.
-        _warmup_workdir_str = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip()
-        _warmup_workdir = Path(_warmup_workdir_str) if _warmup_workdir_str else None
         try:
             _endpoint_spec = endpoint_spec_module.spec()
             _reasoner_warmup_ping(
@@ -576,7 +571,6 @@ def run_episode(
                 # ending the episode so the bench's vLLM-health monitor can
                 # re-queue it instead of hanging the slot for hours.
                 total_wait_s=float(os.environ.get("SEARCH_REASONER_WARMUP_TOTAL_S", "900")),
-                workdir=_warmup_workdir,
                 # Only a dedicated engine we launched has a cold grammar /
                 # CUDA-graph path worth pre-paying. A hosted endpoint is
                 # already warm, and the warmup's tool-schema + image calls
@@ -641,17 +635,6 @@ def run_episode(
             # target was committed. Scored-failure row, cause "no_flights".
             from benchmarks.citynav.eval import score_arrival
 
-            _workdir = os.environ.get("SEARCH_COMPILE_WORKDIR")
-            _write_pre_flight_health(
-                Path(_workdir) if _workdir else None,
-                {
-                    "kind": "mission",
-                    "status": "no_flights",
-                    "cause": "no_flights",
-                    "ended_by": mission_out["reply"].ended_by,
-                    "turns_used": mission_out["reply"].turns_used,
-                },
-            )
             _pred_xy = (float(episode.start_xy[0]), float(episode.start_xy[1]))
             _pos_traj = [_pred_xy, _pred_xy]
             # ``flew=False`` is the honest zero: no target was committed and
@@ -952,9 +935,7 @@ def run_episode(
     # the observation backend it ran under. Two derived fields make BOTH halves
     # falsifiable: ``osm_percepts`` (side-store size — the ALL-osm capture; must
     # be >> graph_enriched) and ``graph_enriched`` (NAMED-node upserts — the
-    # committable, unchanged path; must stay > 0). The ``flight/osm_percepts.json``
-    # sidecar (all-osm perceived color, named + unnamed) is also written here.
-    # Emitted once per episode, where the prediction payload is written.
+    # committable, unchanged path; must stay > 0). Emitted once per episode, where the prediction payload is written.
     _enrich = (
         getattr(search_loop.state, "prior_enrich_stats", None)
         if search_loop is not None
@@ -964,12 +945,8 @@ def run_episode(
         _enrich_block = dict(_enrich)
         _enrich_block["backend"] = "ortho"
         _enrich_block["graph_enriched"] = int(_enrich.get("enriched", 0))
-        _osm_workdir = os.environ.get("SEARCH_COMPILE_WORKDIR")
         _percept_store = osm_ctx.percept_by_fid if osm_ctx is not None else {}
         _enrich_block["osm_percepts"] = len(_percept_store)
-        _enrich_block["osm_sidecar_written"] = _write_osm_percepts_sidecar(
-            _osm_workdir, _percept_store
-        )
         scores["prior_enrich"] = _enrich_block
         log.info(
             "prior-enrichment: osm_seen=%d osm_percepts=%d graph_enriched=%d "
@@ -1035,55 +1012,6 @@ def run_episode(
         scores["committed_xy"] = None
         scores["commit_to_target_m"] = None
         scores["commit_would_score"] = None
-    if os.environ.get("SEARCH_DUMP_REASONING_TRACE") and search_loop is not None:
-        try:
-            _wd = (os.environ.get("SEARCH_COMPILE_WORKDIR")
-                   or getattr(state, "workdir", None))
-            if _wd:
-                _tp = Path(_wd) / "flight" / "reasoning_trace.jsonl"
-                _tp.parent.mkdir(parents=True, exist_ok=True)
-                # OBSERVED same-class set, INDEPENDENT of the color-qualified
-                # candidate pool (POOL_HEADNOUN only refills on an EMPTY color pool,
-                # so a wrong-color pool silently drops the GT car). This is the TRUE
-                # observed set the offline within20 trichotomy keys off -- iterate the
-                # runtime graph's detected nodes whose class matches the target type.
-                _observed_same_class: list[dict] = []
-                try:
-                    from maps.search.parse_compile.candidate_expansion import labels_match
-                    _rg_obs = getattr(search_loop.state, "runtime_graph", None)
-                    _tot = scores.get("target_object_type") or ""
-                    if _rg_obs is not None and hasattr(_rg_obs, "nodes") and _tot:
-                        for _ofid, _onode in _rg_obs.nodes.items():
-                            if getattr(_onode, "provenance", None) != "detected":
-                                continue
-                            _ocls = getattr(_onode, "class_name", "") or ""
-                            if not labels_match(_ocls, _tot):
-                                continue
-                            _oxy = search_loop.world_xy_for_node(_ofid)
-                            _observed_same_class.append({
-                                "fid": _ofid,
-                                "xy": ([float(_oxy[0]), float(_oxy[1])] if _oxy is not None else None),
-                                "class": _ocls})
-                except Exception:  # noqa: BLE001
-                    _observed_same_class = []
-                _crec = {"kind": "commit", "episode_id": episode.episode_id,
-                    "target_object_type": scores.get("target_object_type"),
-                    "target_xy": [target_xy_world[0], target_xy_world[1]],  # GT — OFFLINE dump only, never to the model
-                    # The criterion says which of these two decided
-                    # ``commit_would_score``; the radius is a fallback that
-                    # fires on no row of a fully-shaped corpus.
-                    "success_criterion": _criterion,
-                    "success_radius_m": float(cfg.success_radius_m),
-                    "committed_fid": getattr(snap, "locked_detection_id", None) if snap is not None else None,
-                    "committed_xy": scores.get("committed_xy"),
-                    "commit_to_target_m": scores.get("commit_to_target_m"),
-                    "commit_would_score": scores.get("commit_would_score"),
-                    "bind_phase": scores.get("bind_phase"),
-                    "observed_same_class": _observed_same_class}
-                with _tp.open("a") as _fh:
-                    _fh.write(json.dumps(_crec, ensure_ascii=False, default=str) + "\n")
-        except Exception as _exc:  # noqa: BLE001
-            log.warning("reasoning_trace commit-record failed (non-fatal): %s", _exc)
     # (map-gap vs true-recall split is derived offline from the prebaked
     # FOOTPRINTS -- a node's centroid can sit >R from a GT on its own
     # footprint, so a centroid-based in-runner emit would mislabel large

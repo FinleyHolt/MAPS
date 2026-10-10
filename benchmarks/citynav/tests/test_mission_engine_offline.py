@@ -1,15 +1,10 @@
 """Offline contracts for the mission engine's pure parts.
 
 No SAM, no render, no LLM: :func:`resolve_flight_target` (fid / xy token /
-view-position sentinel / unknown) against a stubbed graph resolver, and
-:func:`build_commit_decision` (the ``flight/commit_decision.json`` shape the
-smoke gate and audit readers consume).
+view-position sentinel / unknown) against a stubbed graph resolver.
 """
 
-from benchmarks.citynav.run_benchmark.mission_engine import (
-    build_commit_decision,
-    resolve_flight_target,
-)
+from benchmarks.citynav.run_benchmark.mission_engine import resolve_flight_target
 
 _GRAPH = {
     "building_7": ((100.0, 200.0), "prior"),
@@ -73,57 +68,6 @@ def test_marked_region_without_a_marker_is_an_error():
     out = _resolve("marked_region", marker_xy=None)
     assert "xy" not in out
     assert "marked region" in out["error"]
-
-
-_FLIGHTS = [
-    {
-        "stop_id": "stop_000",
-        "target": "building_7",
-        "pose_xy": [100.0, 200.0],
-        "resolved_xy": [100.0, 200.0],
-        "provenance": "prior",
-        "step_idx": 0,
-    },
-    {
-        "stop_id": "stop_001",
-        "target": "detected_3",
-        "pose_xy": [55.5, 66.25],
-        "resolved_xy": [55.5, 66.25],
-        "provenance": "detected",
-        "step_idx": 1,
-    },
-]
-
-
-def test_commit_decision_is_the_last_flight():
-    out = build_commit_decision(_FLIGHTS, "reply")
-    assert out["single_reasoner"] is True
-    d = out["decision"]
-    assert d["terminal"] == "final_flight"
-    assert d["commit_path"] == "final_flight"
-    assert d["target_fid"] == "detected_3"
-    assert d["world_xy_resolved"] == [55.5, 66.25]
-    assert d["committed_provenance"] == "detected"
-    assert d["flights_flown"] == 2
-    assert d["ended_by"] == "reply"
-
-
-def test_commit_decision_point_target():
-    flights = [
-        {
-            "stop_id": "stop_000",
-            "target": "[900, 640]",
-            "pose_xy": [900.0, 640.0],
-            "resolved_xy": [900.0, 640.0],
-            "provenance": "point",
-            "step_idx": 0,
-        }
-    ]
-    d = build_commit_decision(flights, "turn_cap")["decision"]
-    assert d["target_fid"] == "[900, 640]"
-    assert d["committed_provenance"] == "point"
-    assert d["world_xy_resolved"] == [900.0, 640.0]
-    assert d["ended_by"] == "turn_cap"
 
 
 # ---------------------------------------------------------------------------

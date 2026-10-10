@@ -72,7 +72,6 @@ ARM_ENV_FLAGS = (
     # different arm and has to say so.
     "SEARCH_MAP_MAX_PX",
     "SEARCH_LOOK_TOOL",
-    "SEARCH_DUMP_REASONING_TRACE",
     "SEARCH_DUMP_COMMIT_STATE",
     "SEARCH_COMMIT_STATE_DIR",
     # Per-k resample roots differ only by their pinned seed base.

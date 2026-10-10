@@ -4,7 +4,6 @@ pre-flight health sidecar.
 
 from __future__ import annotations
 
-from pathlib import Path
 import json
 import os
 import time
@@ -15,19 +14,6 @@ log = logging.getLogger("run_benchmark")
 
 class ReasonerUnreachableError(RuntimeError):
     """Raised when the reasoner warmup probe exhausts its retry budget."""
-
-
-def _write_pre_flight_health(workdir: Path | None, payload: dict) -> None:
-    if workdir is None:
-        return
-    try:
-        workdir.mkdir(parents=True, exist_ok=True)
-        target = workdir / "pre_flight_health.json"
-        tmp = target.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(payload, indent=2))
-        os.replace(tmp, target)
-    except Exception as exc:
-        log.warning("pre_flight_health.json write failed: %s", exc)
 
 
 def _reasoner_warmup_grammar(
@@ -237,7 +223,6 @@ def _reasoner_warmup_ping(
     timeout_s: float = 30.0,
     poll_every_s: float = 15.0,
     total_wait_s: float = 0.0,
-    workdir: Path | None = None,
     pre_pay_cold_start: bool = True,
 ) -> None:
     """Probe the endpoint until it answers, then run representative warmups.
@@ -255,9 +240,7 @@ def _reasoner_warmup_ping(
 
     ``total_wait_s <= 0`` means wait indefinitely (operator can SIGINT
     when they give up). A positive value caps the wait and raises
-    ``ReasonerUnreachableError`` on exhaustion. The outcome is stamped into
-    ``pre_flight_health.json`` so sweep post-mortem can attribute the
-    abort without grepping logs.
+    ``ReasonerUnreachableError`` on exhaustion.
     """
     import httpx
 
@@ -266,10 +249,8 @@ def _reasoner_warmup_ping(
     if api_key and api_key != "EMPTY":
         headers["Authorization"] = f"Bearer {api_key}"
     bounded = float(total_wait_s) > 0.0
-    started_at = time.time()
     t0 = time.perf_counter()
     attempts = 0
-    last_error: BaseException | None = None
     last_heartbeat_at = 0.0
     while True:
         attempts += 1
@@ -277,7 +258,6 @@ def _reasoner_warmup_ping(
             r = httpx.get(url, headers=headers, timeout=timeout_s)
             r.raise_for_status()
         except (httpx.HTTPError, OSError) as exc:
-            last_error = exc
             elapsed = time.perf_counter() - t0
             if bounded and elapsed + poll_every_s > total_wait_s:
                 log.error(
@@ -286,22 +266,6 @@ def _reasoner_warmup_ping(
                     elapsed,
                     attempts,
                     exc,
-                )
-                _write_pre_flight_health(
-                    workdir,
-                    {
-                        "kind": "reasoner_warmup",
-                        "status": "down",
-                        "base_url": base_url,
-                        "model": model,
-                        "started_ts": started_at,
-                        "finished_ts": time.time(),
-                        "elapsed_s": round(elapsed, 3),
-                        "attempts": attempts,
-                        "poll_every_s": poll_every_s,
-                        "total_wait_s": total_wait_s,
-                        "last_error": f"{type(exc).__name__}: {exc}",
-                    },
                 )
                 raise ReasonerUnreachableError(
                     f"reasoner warmup failed after {elapsed:.0f}s "
@@ -331,19 +295,4 @@ def _reasoner_warmup_ping(
                 "with no engine cold start to pre-pay",
                 base_url,
             )
-        payload = {
-            "kind": "reasoner_warmup",
-            "status": "up",
-            "base_url": base_url,
-            "model": model,
-            "started_ts": started_at,
-            "finished_ts": time.time(),
-            "elapsed_s": round(elapsed, 3),
-            "attempts": attempts,
-            "poll_every_s": poll_every_s,
-            "total_wait_s": total_wait_s,
-        }
-        if last_error is not None:
-            payload["last_error"] = f"{type(last_error).__name__}: {last_error}"
-        _write_pre_flight_health(workdir, payload)
         return

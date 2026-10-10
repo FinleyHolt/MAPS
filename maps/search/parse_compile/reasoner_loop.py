@@ -349,43 +349,6 @@ def _ordinal(n: int) -> str:
     return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
 
 
-def _extract_anchor_bindings(program: object, raw_results: dict) -> list[dict]:
-    """Per-landmark RESOLUTION telemetry: every prior-reaching ``find`` with a
-    query, paired with its top name-matched result rows.
-
-    This is the model's OWN landmark binding — the query phrase it extracted
-    from the cue and the catalog rows that answered it. Persisted per
-    episode (round 0: the r0.json transcript; per-stop:
-    ``flight/anchor_bindings.jsonl``) so offline analysis can classify
-    grounding directly instead of lexically inferring it from viewpoint
-    fids. Tiny (top-6 rows per find) and always-on.
-    """
-    out: list[dict] = []
-    ops = program.get("ops") if isinstance(program, dict) else None
-    if not isinstance(ops, list):
-        return out
-    for op in ops:
-        if not isinstance(op, dict) or op.get("op") != "find":
-            continue
-        a = op.get("args") or {}
-        query = a.get("query")
-        prov = str(a.get("provenance") or "any")
-        if not query or prov == "runtime":
-            continue
-        ref = str(op.get("ref") or "").lstrip("$")
-        rows = raw_results.get(ref)
-        keep = [
-            {"fid": r["fid"], "name": r.get("name"),
-             "name_match": r.get("name_match"), "xy": r.get("xy")}
-            for r in (rows if isinstance(rows, list) else [])
-            if isinstance(r, dict) and r.get("fid")
-        ]
-        keep.sort(key=lambda r: (r.get("name_match") or 0.0), reverse=True)
-        out.append({"query": str(query), "provenance": prov, "ref": ref,
-                    "n_results": len(keep), "results": keep[:6]})
-    return out
-
-
 def _persist_look_audit(
     *, audit_dir: str, stop_id: str, step_idx: int, rid_tag: str, cid: str,
     annotate: bool, tool_ack: dict, vision_text: str, crops: list[dict],
@@ -397,8 +360,8 @@ def _persist_look_audit(
     candidate, unreadable — not "vision doesn't help", and that is only checkable
     by SEEING what the model saw).
 
-    Writes ``manifest.json`` under ``<audit_dir>/<stop_id>/<cid>/`` (keyed to
-    ``flight/reasoning_trace.jsonl`` by stop_id + the tool-call id): the
+    Writes ``manifest.json`` under ``<audit_dir>/<stop_id>/<cid>/`` (keyed by
+    stop_id + the tool-call id): the
     tool-ack + the vision-user message TEXT, plus per crop the FULL render
     record minus the jpeg bytes — the resolved spec
     (``look_render.render_look_from_spec``'s input: map_name / center / marks /
@@ -588,20 +551,6 @@ class StopEvidenceReply:
     # own program pick is honored even when it recorded no candidate. Not read
     # on the select path (``candidates`` wins).
     program_rank0: tuple[str, ...] = ()
-    # OFFLINE-ANALYSIS observability ONLY — never read by the commit. Populated
-    # when SEARCH_DUMP_REASONING_TRACE is set: the program(s) this round, the
-    # candidate SET the decision assembled
-    # (fid/xy/class/color/color_conf/rank/admissible/is_pick), the select + its
-    # rank in the ordering tail, the terminal turn's think span. {} when the
-    # flag is off or on a carry/cap/transient path. compare=False keeps
-    # equality unchanged.
-    trace: dict = field(default_factory=dict, compare=False)
-    # ALWAYS-ON grounding telemetry: the round's prior-``find`` landmark
-    # resolutions (``_extract_anchor_bindings``) — the model's own binding of
-    # cue landmarks to catalog rows. search_loop appends them to
-    # flight/anchor_bindings.jsonl; offline analysis classifies from them.
-    # Never read by the commit.
-    anchor_bindings: tuple = field(default=(), compare=False)
     # Telemetry ONLY: True when the round's select.fid differs from EVERY
     # detected fid the model named in the select turn's THINK span (the
     # valid-typo class: the reasoning argued detected_54, the typed select
@@ -1969,8 +1918,6 @@ def advance_reasoner_one_round(
         1 for _r in (compute_namespace or {}).get("cands") or []
         if isinstance(_r, dict) and _r.get("fid")
         and _admissible(str(_r["fid"])))
-    _DUMP_TRACE = bool(os.environ.get("SEARCH_DUMP_REASONING_TRACE"))
-    programs_this_round: list[dict] = []
     # Anti-spiral result reuse: successful SELF-CONTAINED programs seen this
     # round, keyed by canonical ops JSON (``_program_dedup_key``) ->
     # ``(surface_version, compacted_out)``. A repeat RE-RENDERS the stored
@@ -1983,8 +1930,6 @@ def advance_reasoner_one_round(
     # re-arms every program.
     _programs_seen: dict[str, tuple] = {}
     _surface_version = [0]
-    # The round's prior-find landmark resolutions (grounding telemetry).
-    round_anchor_bindings: list[dict] = []
 
     # The round's SELECT decision (the terminal tool call that passed BOTH
     # validation layers; within one turn the LAST valid select wins).
@@ -3180,13 +3125,6 @@ def advance_reasoner_one_round(
                                   carry_refs=carry_results.keys())
         _prev = _programs_seen.get(_key) if _key is not None else None
         if _prev is not None and _prev[0] == _surface_version[0]:
-            if _DUMP_TRACE:
-                programs_this_round.append({
-                    "ops": ((a or {}).get("program") or {}).get("ops"),
-                    "errored": False, "deduped": True,
-                    "terminal_op": None, "terminal_ref": None,
-                    "terminal_fids": [],
-                })
             # ONE-LINE REFERENCE, never a payload and never a lockout: the
             # original's rN handles stay live in carry_results (a new
             # program can slice/chain them), so nothing is locked away —
@@ -3271,11 +3209,6 @@ def advance_reasoner_one_round(
                 _programs_seen[_key] = (_surface_version[0], out, turn_idx,
                                         ((a or {}).get("program") or {})
                                         .get("ops"))
-            try:
-                round_anchor_bindings.extend(_extract_anchor_bindings(
-                    (a or {}).get("program"), _raw_sink.get("results") or {}))
-            except Exception:  # noqa: BLE001 — telemetry never perturbs the round
-                pass
             carry_results.update(_raw_sink.get("results") or {})
             _fresh.update(_raw_sink.get("results") or {})
             _ops_now = ((a or {}).get("program") or {}).get("ops")
@@ -3323,21 +3256,6 @@ def advance_reasoner_one_round(
                 evidence_columns.update(
                     _surface_census_counts(compute_namespace or {})[2])
             except Exception:  # noqa: BLE001 — evidence plumbing never perturbs the round
-                pass
-        if _DUMP_TRACE:
-            try:
-                _p = (a or {}).get("program")
-                _errd = isinstance(out, dict) and "error" in out
-                # last_geom["out"] holds this call's RAW results on success
-                # (the served envelope's fids are head-capped).
-                _fids, _tref, _top = _program_answer(
-                    {} if _errd else last_geom["out"], _p)
-                programs_this_round.append({
-                    "ops": (_p or {}).get("ops") if isinstance(_p, dict) else None,
-                    "errored": bool(_errd), "terminal_op": _top,
-                    "terminal_ref": _tref, "terminal_fids": list(_fids)[:60],
-                })
-            except Exception:  # noqa: BLE001 — observability never perturbs the round
                 pass
         return out
 
@@ -3388,7 +3306,6 @@ def advance_reasoner_one_round(
             multi_select_turn=multi_select_turn,
             rejected_select_fid=round_rejected["fid"],
             rejected_select_xy=tuple(round_rejected["xy"] or ()),
-            anchor_bindings=tuple(round_anchor_bindings),
             sam_concepts=tuple(round_sam_concepts),
         )
 
@@ -3506,41 +3423,11 @@ def advance_reasoner_one_round(
                 "no_call_turns": no_call_turns,
                 "multi_select_turn": multi_select_turn,
             })
-        trace_payload: dict = {}
-        if _DUMP_TRACE:
-            try:
-                _ns = compute_namespace or {}
-                _by_fid = {r["fid"]: r for r in (_ns.get("cands") or []) if isinstance(r, dict) and r.get("fid")}
-                _by_fid.update({r["fid"]: r for r in (_ns.get("anchors") or []) if isinstance(r, dict) and r.get("fid")})
-                _tf, _tref, _top = _program_answer(last_geom["out"], last_geom["program"])
-                _cmp_cols = last_geom.get("compare_cols") or {}
-                _walk = ordered_decision if sel else list(
-                    _program_ranked_admissible(last_geom["out"], last_geom["program"], _admissible))
-                surfaced = []
-                for _i, _fid in enumerate(_walk):
-                    _row = _by_fid.get(_fid) or {}
-                    surfaced.append({"fid": _fid, "rank": _i, "xy": _row.get("xy"),
-                        "class": _row.get("class"), "color": _row.get("color"),
-                        "color_conf": _row.get("color_conf"),
-                        "admissible": _fid in grounded_fids,
-                        "is_pick": bool(sel and _fid == sel["fid"]),
-                        "evidence": (_cmp_cols.get(_fid) or None)})
-                trace_payload = {"terminal_op": _top, "programs": programs_this_round,
-                    "surfaced": surfaced,
-                    "picked_target": (sel["fid"] if sel else ""),
-                    "reshuffled": reshuffled,
-                    "pick_rank_in_program": pick_rank_in_program,
-                    # The think span IS the witness (no separate
-                    # reasoning_witness emission).
-                    "think_span": (think_span or "")[:300],
-                    "turn_idx": turn_idx}
-            except Exception:  # noqa: BLE001 — observability never perturbs the round
-                trace_payload = {}
         return StopEvidenceReply(
             candidates=candidates,
             select_fid=(sel["fid"] if sel else ""),
             requested_viewpoints=tuple(requested_viewpoints),
-            note=note, trace=trace_payload,
+            note=note,
             pick_witness_mismatch=pick_witness_mismatch,
             select_think_fids=(tuple(sel["think_fids"]) if sel else ()),
             pick_rank_in_program=int(pick_rank_in_program),
@@ -3549,7 +3436,6 @@ def advance_reasoner_one_round(
             multi_select_turn=multi_select_turn,
             rejected_select_fid=round_rejected["fid"],
             rejected_select_xy=tuple(round_rejected["xy"] or ()),
-            anchor_bindings=tuple(round_anchor_bindings),
             sam_concepts=tuple(round_sam_concepts),
             terminal=True,
         )
