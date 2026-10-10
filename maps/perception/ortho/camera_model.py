@@ -23,6 +23,7 @@ World frame convention (matches ``perception/observation.py``):
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
@@ -204,6 +205,24 @@ def _geotiff_pair(rgbd_dir, map_name: str) -> Path | None:
     """The block's georeferenced RGB raster, when the rasters are that kind."""
     path = Path(rgbd_dir) / f"{map_name}_rgb.tif"
     return path if path.is_file() else None
+
+
+@functools.lru_cache(maxsize=8)
+def raster_source_gsd_m(rgbd_dir, map_name: str) -> float | None:
+    """The detail limit of a block's raster, when the raster states one.
+
+    A georeferenced ``<map>_rgb.tif`` is the block's own map laid at the
+    collection's native cell, so that cell is what the camera resolved. A
+    PNG-sourced raster states no capture cell (it may be a resample of a
+    coarser source), so it reports nothing rather than a guess.
+    """
+    path = _geotiff_pair(rgbd_dir, map_name)
+    if path is None:
+        return None
+    import rasterio  # noqa: PLC0415
+
+    with rasterio.open(path) as src:
+        return float(abs(src.transform.a))
 
 
 def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, band_rows: int = 1024) -> None:

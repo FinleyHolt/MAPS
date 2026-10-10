@@ -60,16 +60,6 @@ LOOK_CTX_MIN_PX: int = 150
 # holds them. Scoped to bare [x, y] subjects: a maskless FID is still a
 # small named thing and keeps the tight frame.
 LOOK_POINT_CTX_M: float = 60.0
-# THE CAMERA'S OWN RESOLUTION, per source map — the limit the delivered
-# grid spacing says nothing about. Cal City is NAIP at 0.6 m native
-# (configs/calcity.yaml states it), baked to a 0.3 m/px grid and then
-# Lanczos-upscaled up to 3x, which is how a crop came to be captioned
-# "0.10 m/px". Unknown maps report nothing rather than a guess.
-_SOURCE_GSD_M: dict = {"calcity": 0.6}
-
-
-def _source_gsd_m(map_name: str) -> float | None:
-    return _SOURCE_GSD_M.get(str(map_name or "").strip().lower())
 # THE PIXEL BUDGET, declared here because here is where it is enforced.
 # 1024 visual tokens = a 1024x1024 px image, and ``LOOK_CTX_BUDGET_PX``
 # below is the delivered side that keeps the W x (W+20) crop (the 20 px
@@ -603,6 +593,7 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     import hashlib  # noqa: PLC0415
     import cv2  # noqa: PLC0415 — hard dep of the overlay renderer
     import numpy as np  # noqa: PLC0415
+    from maps.perception.ortho.camera_model import raster_source_gsd_m  # noqa: PLC0415
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
     from maps.perception.viz.mllm_overlay import render_look_overlay  # noqa: PLC0415
     from maps.perception.observation import crop_ortho_observation  # noqa: PLC0415
@@ -722,9 +713,10 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         # clamp(round(450/native), 1, 3)), so the caption states it per crop
         "side_px": int(W),
         # what the CAMERA resolved, against which the line above is only
-        # grid spacing over a resample factor
+        # grid spacing over a resample factor: the live imager's, or the
+        # configured raster's own cell (camera_model.raster_source_gsd_m)
         "source_gsd_m": (round(float(imagery.gsd_m), 4) if imagery is not None
-                         else _source_gsd_m(map_name)),
+                         else raster_source_gsd_m(str(rgbd_dir), map_name)),
         # whose pixels: this run's own captures, or the bake's raster (the bench's camera)
         "source": "run" if imagery is not None else "bake",
         "world_window": [round(float(v), 2) for v in (x0, y0, x1, y1)],
