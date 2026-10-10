@@ -944,7 +944,7 @@ class Rows:
             if not callable(pred):
                 raise CodeError(
                     f"filter's first argument is a predicate and {pred!r} "
-                    "is not callable: rows.filter(lambda r: gap(r, x) <= 25)")
+                    "is not callable: rows.filter(lambda r: r.distance(x) <= 25)")
             return RowList(r for r in self if pred(r))
         src = self if not self.spec else self.mp._materialize(self)
         name = self.mp.name_of(self) or self.ref
@@ -992,7 +992,7 @@ class Rows:
             if not callable(key):
                 raise CodeError(
                     f"order's first argument is a key function and {key!r} "
-                    "is not callable: rows.order(lambda r: gap(r, x))")
+                    "is not callable: rows.order(lambda r: r.distance(x))")
             return RowList(sorted(self, key=key, reverse=bool(reverse)))
         src = self if not self.spec else self.mp._materialize(self)
         name = self.mp.name_of(self) or self.ref

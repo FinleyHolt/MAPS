@@ -792,3 +792,10 @@ def test_the_prefix_table_has_one_home():
     assert set(gp._STANDING_SIDE_PREFIXES) <= set(_AUTOATTACH_PREFIXES)
     for p in ("distance to ", "facing ", "east of ", "along ", "color_"):
         assert p in _AUTOATTACH_PREFIXES, p
+
+
+def test_a_non_callable_predicate_teaches_the_method_the_surface_serves():
+    for call in ("r1.filter(5)", "r1.order(5)"):
+        _reply, fr, _f, _d = _drive([[_run(f'r1 = find("car")\n{call}\n')], "done"])
+        err = _tool_results(fr)[0].get("error") or ""
+        assert "r.distance(x)" in err and "gap(" not in err, err
