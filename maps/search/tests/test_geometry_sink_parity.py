@@ -1,8 +1,7 @@
-"""geometry_sink is dashboard-audit-only: the model-facing payload is
-byte-identical with and without it (hard rule: zero A/B contamination),
-and the sink receives exactly the geometry the compare op resolved —
-chart polyline + end0 + travel, frame basis/standpoint, linear-ref
-polylines, ref centroids, min-gap witness pairs — including the
+"""geometry_sink is audit-only: the model-facing payload is identical with
+and without it, and the sink receives exactly the geometry the compare op
+resolved — chart polyline + end0 + travel, frame basis/standpoint, ref
+centroids, min-gap witness pairs — including the
 ``_auto_attach`` re-entry a score_by emphasis key triggers.
 """
 from __future__ import annotations
@@ -14,7 +13,7 @@ from maps.search.analyze_scene.geom_program import (
 from maps.search.parse_compile.reasoner_loop import run_geom_program_tool
 
 # Two buildings in contact, one detached 30 m away, one road with a
-# stored centerline (the chart / linear-ref / auto-attach subject).
+# stored centerline (the chart / auto-attach subject).
 _B1 = {"fid": "prior_1", "name": "One", "xy": [9.0, 9.0],
        "mask": [[[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]]],
        "mask_centroid": [10.0, 10.0], "tags": {"building": "yes"}}
@@ -93,21 +92,14 @@ def test_sink_holds_the_resolved_geometry():
         by_ref.setdefault(e["ref"], []).append(e)
 
     # r1: EVERY row ref resolves to gap witnesses + centroid, road_1
-    # included. linear_refs carries only a DECLARED chart (frame:{along:...});
-    # an elongated row ref used to land there and swap its gap for a lateral
-    # offset, which made 'distance to <road>' a different quantity than
-    # 'distance to <building>' under one column name.
+    # included.
     (e1,) = by_ref["r1"]
-    assert e1["linear_refs"] == []
     centers = {c["label"]: c["center_xy"] for c in e1["ref_centers"]}
     assert centers["prior_1"] == [10.0, 10.0]
     rows = {r.get("fid"): r for r in out["results"]["r1"]}
-    # Keyed by (ref label, row fid): EVERY ref produces a gap witness for
-    # every row now, road_1 included, so a fid-only key collides across refs.
+    # Keyed by (ref label, row fid): every ref produces a gap witness for
+    # every row, road_1 included, so a fid-only key collides across refs.
     gaps = {(g["label"], g["fid"]): g for g in e1["gaps"]}
-    # Every row now carries a gap witness against every ref, road_1
-    # included: an elongated ref used to ride linear_refs and contribute no
-    # gap at all, so prior_1 and prior_2 had none to any ref they touched.
     assert {fid for _lab, fid in gaps} == {"prior_1", "prior_2",
                                            "prior_3", "road_1"}
     g3 = gaps[("prior_1", "prior_3")]
@@ -115,7 +107,7 @@ def test_sink_holds_the_resolved_geometry():
     assert g3["a_xy"][0] == 20.0 and g3["b_xy"][0] == 50.0
     assert (gaps[("prior_1", "road_1")]["gap_m"]
             == rows["road_1"]["distance to prior_1"] == 10.0)
-    # road_1 as a REF gaps too -- the line branch used to give it none.
+    # road_1 as a REF gaps too.
     assert ("road_1", "prior_3") in gaps
 
     # r2: the chart -- oriented centerline, end0 flag, declared travel.

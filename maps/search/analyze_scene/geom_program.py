@@ -1955,9 +1955,7 @@ def _key_remedy(key) -> str:
 
 
 def _polyline_arc_midpoint(verts) -> list:
-    """The arc-length midpoint of a world-meter polyline — the CENTER a
-    constructed-axis compare ref reports dc_/brg_ from (a row ref uses its
-    baked centroid ``xy``)."""
+    """The arc-length midpoint of a world-meter polyline."""
     arcs = G._arc_lengths(verts)
     half = arcs[-1] / 2.0
     for i in range(len(verts) - 1):
@@ -3796,7 +3794,7 @@ def run_program(cands, anchors, program, seed_results=None,
             # sites below where the op resolves geometry it does not return.
             _geo = None if geometry_sink is None else {
                 "ref": ref, "op": "compare", "chart": None, "frame": None,
-                "linear_refs": [], "ref_centers": [], "gaps": []}
+                "ref_centers": [], "gaps": []}
             # Order propagation: compare preserves input order, so its result
             # is ordered iff its input was (as_points builds a fresh list, so
             # read the marker off the resolved source).
@@ -3909,7 +3907,6 @@ def run_program(cands, anchors, program, seed_results=None,
             # Each spec is (kind, payload, label_base, node|None, name_match):
             #   kind 'row'   -> payload = the canonical surface row
             #   kind 'point' -> payload = [x, y]
-            #   kind 'line'  -> payload = a polyline
             #   kind 'union' -> payload = the member rows
             ref_specs: list = []
             _standing_ref_handles: list = []
@@ -4068,12 +4065,6 @@ def run_program(cands, anchors, program, seed_results=None,
                                and _is_query_find_token(ref_el)) else None,
                     ))
                     continue
-                if isinstance(v, dict) and isinstance(v.get("centerline"), list) \
-                        and len(v["centerline"]) >= 2:
-                    # a constructed axis (row_centerline_fit result)
-                    ref_specs.append(("line", v["centerline"],
-                                      as_label or tok_base, None, None))
-                    continue
                 if isinstance(v, dict) and _is_xy_literal(v.get("xy")):
                     ref_specs.append(("point", [float(v["xy"][0]), float(v["xy"][1])],
                                       as_label or tok_base, None, None))
@@ -4162,11 +4153,9 @@ def run_program(cands, anchors, program, seed_results=None,
                 elif kind == "point":
                     hdr = {"ref_name": lab, "kind": "point",
                            "xy": [round(payload[0], 2), round(payload[1], 2)]}
-                elif kind == "union":
+                else:
                     hdr = {"ref_name": lab, "kind": "union",
                            "members": [n["fid"] for n in payload]}
-                else:
-                    hdr = {"ref_name": lab, "kind": "axis"}
                 headers.append(hdr)
                 col_specs.append((kind, payload, lab))
 
@@ -4507,10 +4496,6 @@ def run_program(cands, anchors, program, seed_results=None,
                     else:
                         u_c = None
                     col_geoms.append((_geoms, u_c))
-                elif kind == "line":
-                    col_geoms.append(
-                        (G.mask_geom([payload]),
-                         _polyline_arc_midpoint(payload)))
                 else:  # constructed point
                     col_geoms.append(
                         (G.mask_geom([[payload]]), payload))
@@ -4519,60 +4504,6 @@ def run_program(cands, anchors, program, seed_results=None,
                     if _cc is not None:
                         _geo["ref_centers"].append(
                             {"label": _lc, "center_xy": _geo_pt(_cc)})
-
-            # LINEAR REF -> ITS OWN CHART: a ref that IS a line (a stored
-            # centerline ≥2 verts — mask presence irrelevant, so masked and
-            # unmasked road priors behave identically — or an [[x,y],...]
-            # polyline literal) attaches TWO columns, 'along <ref>' (arc
-            # meters from its end0_xy end) + 'distance to <ref>' (the chart's
-            # UNSIGNED lateral), INSTEAD of the hull-gap columns: a 946 m
-            # road's gap tie-block at 0.0 is contact, not location (measured:
-            # it misled repeatedly while 'along' carried 100 legitimate ops).
-            # The chart's SIGNED lateral stays unserved — see _side_pair.
-            # Point/polygon refs keep their four gap/centroid columns.
-            col_lin: list = []
-            # per line ref, its polyline and that polyline's cumulative arc
-            # lengths — the chart every row on this ref projects onto.
-            for kind, payload, lab in col_specs:
-                # ONLY a DECLARED chart (frame:{along: ...}) charts. A row ref
-                # measures its gap, whatever shape it is: distance is nearest
-                # point to nearest point and a road has exactly one of those,
-                # like a building does. Substituting a lateral offset for the
-                # gap because the ref was elongated made `distance to <road>`
-                # a different quantity than `distance to <building>` under one
-                # column name -- 11.24 m where the footprints are 3.66 m
-                # apart, against a 20 m success radius, on the closest
-                # house/road pair the calcity bake has. Roads carry real
-                # footprints (median 57 cells of the 2 m mesh), so the mask
-                # gap has their width in it and the centerline never could.
-                _lin = payload if kind == "line" else None
-                if _lin is not None:
-                    col_lin.append((_lin, G._arc_lengths(_lin)))
-                    if _geo is not None:
-                        _geo["linear_refs"].append(
-                            {"label": lab, "pts": [_geo_pt(q) for q in _lin]})
-                    # Says only what attaches. It claimed a lateral pair that
-                    # _side_pair drops (sides=False below): measured over
-                    # saydialect_1000, 308/308 note-carrying grids carried
-                    # 'along' and 'distance to' and ZERO carried a side, while
-                    # 348 notes over 227 episodes said the pair attached. Both
-                    # words are also productions the sentence language dropped,
-                    # and the model tried them -- four sentences, all refused.
-                    # The old parenthetical named the counterfactual hull-gap
-                    # column with the name of a column that IS served and does
-                    # NOT behave that way.
-                    notes.append(
-                        f"ref {lab} is a LINE (stored centerline): two "
-                        f"chart columns attach instead of a footprint-gap "
-                        f"column. 'along {lab}' is arc m from its end0_xy "
-                        f"end, un-clamped past both ends (negative before "
-                        f"end0_xy). 'distance to {lab}' is unsigned lateral "
-                        f"m off that chart, the same either side of the "
-                        f"line. A footprint gap would read 0.0 for every row "
-                        f"touching the line anywhere along its length -- "
-                        f"contact, not location.")
-                else:
-                    col_lin.append(None)
 
             # --- the map-fixed cardinal columns -------------------------------
             # The directions asked for, per column, built once: the
@@ -4647,10 +4578,9 @@ def run_program(cands, anchors, program, seed_results=None,
                 # refs, so a ref compared to itself is exactly 0.
                 item_geom, it_c = _row_geom_center(it)
                 for ci, (kind, payload, lab) in enumerate(col_specs):
-                    # A cardinal is independent of the gap/chart split below:
-                    # it needs the reference's extent and the row's position
-                    # and nothing else, so it attaches to a charting linear
-                    # ref and a merged multi-way one alike.
+                    # A cardinal needs only the reference's extent and the
+                    # row's position, so it attaches to a merged multi-way
+                    # ref too.
                     if col_cards[ci] is not None and it_c is not None:
                         _dirs, _rpts = col_cards[ci]
                         for _d in _dirs:
@@ -4662,30 +4592,6 @@ def run_program(cands, anchors, program, seed_results=None,
                             # like a real measurement.
                             if _v is not None:
                                 _put(row, f"{_d} of {lab}", round(_v, 1), ci)
-                    if col_lin[ci] is not None:
-                        # linear ref: its own chart, not hull-gap columns.
-                        _lp, _la = col_lin[ci]
-                        _pr = (G._poly_chart_one(_lp, _la, it_c)
-                               if it_c is not None else None)
-                        if _pr is not None:
-                            _put(row, f"along {lab}", _pr[0], ci)
-                            # sides=False: travel on a BAKED centerline is the
-                            # stored end0->end1 order, an arbitrary property
-                            # of the bake, measured at 0.461 against a
-                            # 0.470-0.535 chance band. Only the unsigned
-                            # magnitude serves, so an undeclared road chart
-                            # names no side and no compass for one.
-                            # ci rides the kwarg: _side_pair calls
-                            # row_put(key, val, ci) with its OWN ci, so a
-                            # lambda default here is overwritten by the
-                            # third positional -- that dropped `distance to
-                            # <lab>` from every line ref's cols echo
-                            # (308/308 grids on saydialect_1000) while the
-                            # program-wide columns echo carried it.
-                            _side_pair(lambda k, v, c, _r=row:
-                                       _put(_r, k, v, c), lab, _pr[1],
-                                       ci=ci, distance=True, sides=False)
-                        continue
                     ref_geom, center = col_geoms[ci]
                     if col_covers[ci]:
                         # window-covering ref: the gap columns are a
