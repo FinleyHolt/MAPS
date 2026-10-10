@@ -35,7 +35,7 @@ from maps.search.analyze_scene.cardinal_side import CARDINALS
 from maps.search.analyze_scene import text_match as T
 from maps.search.render.look_render import LOOK_SET_ROWS
 from maps.util.node_fingerprint import fingerprint_node
-from maps.util.xy_token import format_xy_token
+from maps.util.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld
 
 # The op vocabulary: find retrieves; crossings/ends construct rows; compare
@@ -3133,9 +3133,7 @@ def run_program(cands, anchors, program, seed_results=None,
                 _sa_lab = str(standing_anchor.get("label") or "")
                 _sa_ref = standing_anchor.get("ref")
                 _sa_ok = (
-                    (isinstance(_sa_ref, (list, tuple)) and len(_sa_ref) == 2
-                     and all(isinstance(z, (int, float))
-                             and not isinstance(z, bool) for z in _sa_ref))
+                    is_xy(_sa_ref)
                     or (isinstance(_sa_ref, str) and _sa_ref in by_fid)
                     or (isinstance(_sa_ref, list) and _sa_ref
                         and all(isinstance(x, str) and x in by_fid
@@ -3839,10 +3837,6 @@ def run_program(cands, anchors, program, seed_results=None,
                     return _sanitize_label(_ref_base_of_token(arg_token), fallback)
                 return fallback
 
-            def _is_xy_literal(v):
-                return (isinstance(v, (list, tuple)) and len(v) == 2
-                        and all(isinstance(z, (int, float)) for z in v))
-
             def _arg_row(arg):
                 """The ONE surface row an aggregate arg (view reference /
                 between a|b / neighbors pool) resolves to, else None: a
@@ -3861,7 +3855,7 @@ def run_program(cands, anchors, program, seed_results=None,
                 # must follow the same resolution or a pasted one-row echo
                 # computes from the node yet labels from the fallback token.
                 v = _unwrap_listish(v)
-                if isinstance(v, list) and len(v) == 1 and not _is_xy_literal(v):
+                if isinstance(v, list) and len(v) == 1:
                     v = v[0]
                 if isinstance(v, str):
                     # a resolved value / a bare fid -- never a live ref name here
@@ -3927,7 +3921,7 @@ def run_program(cands, anchors, program, seed_results=None,
                                         for r in _rows
                                         if isinstance(r, dict)
                                         and (r.get("fid") in by_fid
-                                             or _is_xy_literal(r.get("xy")))]
+                                             or is_xy(r.get("xy")))]
                                 if not _got:
                                     # Name the handle the model wrote and why
                                     # it is usually empty: nothing is
@@ -3980,7 +3974,7 @@ def run_program(cands, anchors, program, seed_results=None,
                                    r"(-?\d+(?:\.\d+)?)\s*\]\s*$", ref_el)
                     if _xy:
                         ref_el = [float(_xy.group(1)), float(_xy.group(2))]
-                if _is_xy_literal(ref_el):
+                if is_xy(ref_el):
                     if not as_label:
                         _bare_xy_refs += 1
                         if _bare_xy_refs > 1:
@@ -4021,7 +4015,7 @@ def run_program(cands, anchors, program, seed_results=None,
                     ref_specs.append(("row", node, as_label, node, None))
                     continue
                 v = _unwrap_listish(_resolve_ref(ref_el))
-                if isinstance(v, list) and len(v) == 1 and not _is_xy_literal(v):
+                if isinstance(v, list) and len(v) == 1:
                     v = v[0]
                 # Stable column naming: a ref resolving to a surface row is
                 # labeled from the node's FID, whether passed bare or as an
@@ -4041,11 +4035,11 @@ def run_program(cands, anchors, program, seed_results=None,
                                and _is_query_find_token(ref_el)) else None,
                     ))
                     continue
-                if isinstance(v, dict) and _is_xy_literal(v.get("xy")):
+                if isinstance(v, dict) and is_xy(v.get("xy")):
                     ref_specs.append(("point", [float(v["xy"][0]), float(v["xy"][1])],
                                       as_label or tok_base, None, None))
                     continue
-                if _is_xy_literal(v):
+                if is_xy(v):
                     ref_specs.append(("point", [float(v[0]), float(v[1])],
                                       as_label or tok_base, None, None))
                     continue
@@ -4074,7 +4068,7 @@ def run_program(cands, anchors, program, seed_results=None,
                     continue
                 if (isinstance(v, list) and len(v) >= 2
                         and all(isinstance(x, dict)
-                                and _is_xy_literal(x.get("xy"))
+                                and is_xy(x.get("xy"))
                                 and x.get("fid") not in by_fid for x in v)):
                     # Constructed points (a crossings result with several):
                     # refuse in plain terms; none of the places is dropped.
@@ -4439,7 +4433,7 @@ def run_program(cands, anchors, program, seed_results=None,
                 if isinstance(node, dict):
                     node = by_fid.get(node.get("fid")) or node
                 _cxy = (node.get("xy")
-                        if _is_xy_literal(node.get("xy")) else None)
+                        if is_xy(node.get("xy")) else None)
                 m = node.get("mask")
                 if m:
                     g, c = _mask_geom_center(m)
