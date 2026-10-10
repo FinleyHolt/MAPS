@@ -30,6 +30,11 @@ class ModelCard(TypedDict):
     # which is a serve fact and can move under us.
     min_p: NotRequired[float]
     repetition_penalty: NotRequired[float]
+    # The ``reasoning_effort`` values the chat template takes: its named
+    # rungs, and whether it also takes a number in [0, 0.99]. A card that
+    # names no rungs takes any rung below or any such number.
+    efforts: NotRequired[tuple[str, ...]]
+    effort_numbers: NotRequired[bool]
 
 
 _QWEN = ModelCard(
@@ -113,6 +118,8 @@ _INKLING = ModelCard(
     top_p=0.95,
     top_k=64,
     presence_penalty=None,
+    efforts=("none", "minimal", "low", "medium", "high", "max"),
+    effort_numbers=True,
 )
 
 # Qwen3-VL-235B-A22B-Instruct, the open same-generation counterpart to the
@@ -213,6 +220,7 @@ _QWEN38_FLASH_NEXT_NVFP4 = ModelCard(
     top_p=0.95,
     top_k=20,
     presence_penalty=None,
+    efforts=("xhigh", "medium", "low"),
     # The serve's --tool-call-parser qwen3_coder owns enforcement.
 )
 
@@ -310,6 +318,38 @@ def card_for(model_id: str | None) -> ModelCard:
         raise ValueError(f"no model card for served model {model_id!r}; serve it under one of: "
                          + ", ".join(sorted(CARDS)))
     return hit
+
+
+_EFFORT_RUNGS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+_EFFORT_MAX = 0.99
+
+
+def check_effort(model_id: str | None, raw: str) -> None:
+    """Refuse a ``reasoning_effort`` the served model's card does not take.
+
+    A rung the card names passes; so does a number in [0, 0.99] where the
+    card takes numbers, spelled as Python writes the float (``"0.90"`` is
+    refused naming ``"0.9"``, ``"-0.0"`` naming ``"0.0"``), because the
+    value rides the wire and the row as the string it was given. NaN, inf,
+    negatives and typos are refused.
+    """
+    card = card_for(model_id)
+    rungs = card.get("efforts", _EFFORT_RUNGS)
+    if raw in rungs:
+        return
+    accepted = "|".join(rungs)
+    if "efforts" not in card or card.get("effort_numbers"):
+        accepted += " or a number in [0, 0.99]"
+        try:
+            value = float(raw)
+        except ValueError:
+            value = None
+        if value is not None and 0.0 <= value <= _EFFORT_MAX:  # NaN fails the range
+            canonical = repr(value + 0.0)
+            if raw == canonical:
+                return
+            raise ValueError(f"reasoning effort {raw!r} is spelled {canonical!r}")
+    raise ValueError(f"reasoning effort {raw!r} is not one {model_id!r} takes: {accepted}")
 
 
 def envelope_kwargs(model_id: str | None) -> dict[str, Any]:

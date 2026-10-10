@@ -465,3 +465,32 @@ def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
     with pytest.raises(EndpointDiscoveryError, match="after 3 tries"):
         E._get_json("http://arm:18001/v1/models")
     assert len(calls) == E._PROBE_TRIES
+
+
+# --------------------------------------------------------------------------- #
+# The arm's reasoning effort is one the served card takes                     #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("model_id,effort", [
+    ("inkling-small", "0.0"), ("inkling-small", "0.3"), ("inkling-small", "0.99"),
+    ("inkling-small", "high"), ("qwen38-flash-next-nvfp4", "xhigh"), ("gemma4-e4b", "0.9"),
+])
+def test_discovery_takes_an_effort_the_card_takes(monkeypatch, model_id, effort):
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(model_id, 262144)})
+    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", effort)
+    assert discover(_URL_A).model_id == model_id
+
+
+@pytest.mark.parametrize("model_id,effort,named", [
+    ("inkling-small", "nan", "nan"), ("inkling-small", "inf", "inf"),
+    ("inkling-small", "-1", "-1"), ("inkling-small", "1.0", "1.0"),
+    ("inkling-small", "hgih", "hgih"), ("inkling-small", "xhigh", "xhigh"),
+    ("inkling-small", "0.90", "'0.9'"), ("inkling-small", "-0.0", "'0.0'"),
+    ("qwen38-flash-next-nvfp4", "0.9", "0.9"),
+])
+def test_discovery_refuses_an_effort_the_card_does_not_take(monkeypatch, model_id, effort, named):
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(model_id, 262144)})
+    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", effort)
+    with pytest.raises(EndpointDiscoveryError, match=f"SEARCH_SAMPLING_REASONING_EFFORT.*{named}"):
+        discover(_URL_A)

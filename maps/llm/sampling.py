@@ -64,24 +64,12 @@ def thinking_sampling_kwargs(
     passed through VERBATIM as a top-level string. Unset sends no key and
     the served chat template's own default applies; this layer holds no
     default of its own, because a value invented here would become the
-    arm's identity without an arm having asked for it. What a card accepts
-    is the card's business — a named rung (``high``) or a raw float
-    spelled as a string (``0.99``) — and the wire type is a STRING either
-    way: a serve that takes the field refuses a JSON float for it
-    (``invalid type: floating point 0.99, expected a string``), so the
-    value is never parsed into a number here.
-
-    A serve whose template has no such field, or that refuses the rung it
-    was handed, answers 400 on EVERY request of the arm. What that costs
-    is worth stating plainly, because it is deterministic in the request
-    and the loop above cannot tell: ``llm.http`` logs the response body
-    and a request summary naming the field and its value, then raises;
-    ``reasoner_loop`` counts an ``HTTPStatusError`` as a transient round
-    (only an oversize rejection is read as deterministic there), re-sends
-    the same bytes to its cap, and ends the episode
-    ``transient_failures`` — which drops it from SR as infra. So a
-    misspelled effort costs the arm every episode, and the ONE place that
-    says why is the request summary in the log.
+    arm's identity without an arm having asked for it. Discovery refuses
+    a value the served card does not take (``model_cards.check_effort``):
+    a named rung (``high``) or a raw float spelled as a string (``0.99``).
+    The wire type is a STRING either way: a serve that takes the field
+    refuses a JSON float for it (``invalid type: floating point 0.99,
+    expected a string``), so the value is never parsed into a number here.
 
     ``reasoning_effort`` given here is the mission's own word and wins over
     the environment: the field station's console names one per mission.
@@ -104,13 +92,10 @@ def thinking_sampling_kwargs(
               else os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "")).strip()
     if effort:
         # ponytail: the request key is spelled `reasoning_effort` for every
-        # card, and a card whose dial is spelled otherwise (muse-glimmer
-        # reads `reasoning_strength`; inkling's continuous ladder is a
-        # SERVE env var, `CARD_EFFORT_ENV`) takes this field and ignores
-        # it, while the row stamps an effort the template never saw. The
-        # upgrade path is the card: `model_cards` carries the key name and
-        # the accepted values the way it already carries the envelope, and
-        # this refuses a rung the card does not declare instead of handing
-        # the serve a field it discards.
+        # card; a card that names no effort values (the gemma rows) takes any
+        # well-formed value at discovery, and a template without the field
+        # ignores it while the row stamps an effort the template never saw.
+        # The upgrade path is declaring those cards' values once their serves
+        # are checked.
         kwargs["reasoning_effort"] = effort
     return kwargs
