@@ -58,8 +58,9 @@ def offset(frame_rgb: np.ndarray, render_rgb: np.ndarray) -> tuple[float, float,
     """``(du, dv, response)``: the frame's content sits ``(du, dv)`` frame pixels from where the render puts it.
 
     ``frame(p) == render(p - d)``. The response is the normalised correlation
-    at the peak, near one for the same ground and near zero for none. The
-    render is the frame's size or ``1/DOWN`` of it (:func:`render_sensor`).
+    at the peak, near one for the same ground and near zero for none; a render
+    with no structure to locate is no match, ``(0, 0, 0)``. The render is the
+    frame's size or ``1/DOWN`` of it (:func:`render_sensor`).
     """
     fh, rh = np.asarray(frame_rgb).shape[0], np.asarray(render_rgb).shape[0]
     render_down = DOWN if rh == fh else 1 if rh == fh // DOWN else None
@@ -73,7 +74,7 @@ def offset(frame_rgb: np.ndarray, render_rgb: np.ndarray) -> tuple[float, float,
     y0, x0 = (h - th) // 2, (w - tw) // 2
     score = locator._joint_ncc(b, a[:, y0:y0 + th, x0:x0 + tw])
     if score is None:
-        return float("nan"), float("nan"), 0.0
+        return 0.0, 0.0, 0.0
     at, peak, _margin = locator._peak(score, max(1, locator.UNIQUE_RADIUS // DOWN))
     return float(at[0] - x0) * DOWN, float(at[1] - y0) * DOWN, float(peak)
 

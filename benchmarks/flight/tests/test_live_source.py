@@ -88,6 +88,26 @@ def test_a_frame_off_the_map_is_refused_by_name(built, make_twin, make_live):
     assert not record["applied"] and record["why"] == "the frame reaches off the map"
 
 
+def test_a_featureless_map_is_no_match_and_the_frame_is_refused_by_its_response(built, make_twin, make_live):
+    from dataclasses import replace
+
+    from benchmarks.flight import frame_offset
+    from benchmarks.flight.nav_track import tag_pose
+
+    twin = make_twin()
+    live = make_live(twin, register=True)
+    _fly_over(twin, (600.0, 600.0), 6.0)
+    jpeg, t_host, _log, _seq, tag = twin.frame(len(twin.rows) - 1)
+    posed = live._posed(jpeg, t_host, pose=tag_pose(tag, t_host))
+    blank = np.full_like(posed.rgb, 128)
+    assert frame_offset.offset(posed.rgb, blank) == (0.0, 0.0, 0.0)
+    flat = replace(live.register, render=lambda s, *a, **k: np.full(
+        (s.intrinsics.image_height, s.intrinsics.image_width, 3), 128, np.uint8))
+    _xy, record = register_frame(flat, posed.rgb, posed.pose_xy, posed.alt_msl, posed.yaw, posed.roll,
+                                 posed.pitch_proj, posed.sensor)
+    assert not record["applied"] and record["why"].startswith("the frame does not register: response 0.00"), record
+
+
 def test_the_corrector_graph_places_a_leg_and_gates_a_ring_frame_by_its_nearest_node(built, make_twin, make_live):
     """Frames registered as they arrive are solved together; a ring frame
     whose own measurement sits further than the cap from the graph's node

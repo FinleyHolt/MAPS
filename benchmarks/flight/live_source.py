@@ -230,9 +230,7 @@ def register_mosaic(rgb: np.ndarray, alpha: np.ndarray, extent: tuple[float, flo
     record: dict[str, Any] = {"applied": False, "response": round(float(response), 4),
                               "shift_yaw_deg": round(float(yaw), 2)}
     reach = frame_offset.reach_px(w, h)
-    if not (math.isfinite(du) and math.isfinite(dv)):
-        record["why"] = "the mosaic's offset put it nowhere"
-    elif response < FRAME_RESPONSE_MIN:
+    if response < FRAME_RESPONSE_MIN:
         record["why"] = f"the mosaic does not register: response {response:.2f} under {FRAME_RESPONSE_MIN}"
     elif abs(du) >= reach[0] - frame_offset.DOWN or abs(dv) >= reach[1] - frame_offset.DOWN:
         record["why"] = "the mosaic's peak sits at the search's wall"
@@ -339,7 +337,7 @@ def register_frame(register: Registration, rgb, pose_xy, altitude_m, yaw, roll, 
         du, dv, response = frame_offset.offset(rgb, expected)
         record["response"] = round(response, 4)
         de, dn = frame_offset.ground_correction(pose, sensor, altitude_m=altitude_m, ground_z=ground, d_px=(du, dv))
-        if not (math.isfinite(du) and math.isfinite(de) and math.isfinite(dn)):
+        if not (math.isfinite(de) and math.isfinite(dn)):
             record["why"] = "the frame's offset put the camera nowhere"
         elif response < FRAME_RESPONSE_MIN:
             record["why"] = f"the frame does not register: response {response:.2f} under {FRAME_RESPONSE_MIN}"
