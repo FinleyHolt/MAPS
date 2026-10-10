@@ -159,3 +159,18 @@ def test_the_flight_mission_refuses_a_withholding_config(tmp_path):
     assert_flight_config(load_config(REPO_ROOT / "configs" / "calcity.yaml"))
     with pytest.raises(ValueError, match="withhold"):
         assert_flight_config(load_config(_over(tmp_path, "withhold: [images]\n")))
+
+
+
+def test_every_cfg_attribute_the_bench_reads_is_a_field():
+    import dataclasses
+    import re
+
+    from benchmarks.citynav.run_benchmark.config import RunConfig
+
+    fields = {f.name for f in dataclasses.fields(RunConfig)}
+    pattern = re.compile(r"\bcfg\.([a-z_]+)\b|getattr\(cfg, \"([a-z_]+)\"")
+    read = {a or b for p in (REPO_ROOT / "benchmarks" / "citynav" / "run_benchmark").glob("*.py")
+            for a, b in pattern.findall(p.read_text())}
+    assert len(read) > 15, read
+    assert read <= fields, sorted(read - fields)

@@ -491,45 +491,10 @@ def run_episode(
             )
     except Exception as exc:  # noqa: BLE001
         log.warning("target-type wall: resolution failed (%s); wall unset", exc)
-    # Resolve the per-episode SensorSpec. Inline render.* keys still
-    # override intrinsics for quick experiments; pitch overrides are
-    # rejected because the runtime ingest expects the canonical nadir
-    # SensorSpec (mount_pitch_deg=90) at the rotator-camera tier.
+    # Resolve the per-episode SensorSpec (a registered name or an inline
+    # sensor override; resolve_sensor).
     episode_ply_path = None
     sensor = resolve_sensor(cfg.sensor) if cfg.sensor else None
-    if sensor is not None:
-        has_intr_override = any(
-            k in cfg.render
-            for k in ("hfov_deg", "vfov_deg", "image_width", "image_height")
-        )
-        if "pitch_deg" in cfg.render:
-            raise ValueError(
-                "cfg.render.pitch_deg overrides are no longer accepted; the "
-                "runtime ingest requires a nadir SensorSpec (mount_pitch_deg=90)."
-            )
-        if has_intr_override:
-            from maps.perception.ortho.camera_model import CameraIntrinsics as _CI
-            from maps.perception.geometry.sensor_spec import SensorSpec as _Spec
-
-            intr = sensor.intrinsics
-            new_intr = _CI(
-                hfov_deg=float(cfg.render.get("hfov_deg", intr.hfov_deg)),
-                vfov_deg=float(cfg.render.get("vfov_deg", intr.vfov_deg)),
-                image_width=int(cfg.render.get("image_width", intr.image_width)),
-                image_height=int(cfg.render.get("image_height", intr.image_height)),
-            )
-            sensor = _Spec(
-                name=sensor.name + "_override",
-                intrinsics=new_intr,
-                mount_pitch_deg=sensor.mount_pitch_deg,
-                max_range_m=sensor.max_range_m,
-                min_range_m=sensor.min_range_m,
-                world_yaw_deg=sensor.world_yaw_deg,
-                depth_subsample=sensor.depth_subsample,
-                body_offset_x=sensor.body_offset_x,
-                body_offset_y=sensor.body_offset_y,
-                body_offset_z=sensor.body_offset_z,
-            )
     state.sensor_spec = sensor
     if search_loop is not None:
         search_loop.state.sensor_spec = sensor
@@ -1204,7 +1169,7 @@ def run_episode(
     if os.environ.get("SEARCH_DUMP_REASONING_TRACE") and search_loop is not None:
         try:
             _wd = (os.environ.get("SEARCH_COMPILE_WORKDIR")
-                   or getattr(cfg, "workdir", None) or getattr(state, "workdir", None))
+                   or getattr(state, "workdir", None))
             if _wd:
                 _tp = Path(_wd) / "flight" / "reasoning_trace.jsonl"
                 _tp.parent.mkdir(parents=True, exist_ok=True)
