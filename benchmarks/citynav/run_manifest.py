@@ -55,7 +55,7 @@ MANIFEST_NAME = "run_manifest.json"
 # the results row itself, not inferred from side-effect artifacts. Set-only
 # (an unset flag stays absent), except the tile bake, which is resolved —
 # see ``arm_env_stamp``. Readers: run_benchmark.dispatch (row stamp),
-# analysis.episode_ledger / ab_report (pairing refusal).
+# analysis.ab_report (pairing refusal).
 ARM_ENV_FLAGS = (
     "SEARCH_CITYNAV_TILES",
     # The imagery raster the ortho crops read. The Cal City bridge resolves

@@ -12,7 +12,6 @@ time) and `eval.aggregate` averages.
 | `run_report.py <root> [<root>]` | One root, or a pair | SR, NE, SPL, OSR and the OSR x SR joint, SR by referent bucket, commit provenance, the bake check; for a pair, paired SR on the shared episodes. |
 | `arm_table.py <root>...` | Many roots, one per arm | One row per arm: effort, n, SR, OSR, shape and radius SR, NE; refuses roots that mix success criteria. `--json` for the rows. |
 | `ab_report.py <a> <b>` | Two roots | Paired SR with a bootstrap interval on the difference, McNemar, and the flip counts. |
-| `episode_ledger.py` | A ledger of runs | Per-episode outcomes indexed by commit; pairing and pooled replicates. |
 
 The figures in `figures/` read the same rows: `capability_effort_arms` adds
 the cost of the same picked attempts (`metrics.llm`) and the arm's identity

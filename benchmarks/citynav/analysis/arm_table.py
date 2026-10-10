@@ -1,8 +1,7 @@
 """One metrics row per run root — the N-arm view a ladder is read with.
 
-``run_report`` speaks for one root or a pair; ``episode_ledger table``
-renders per-episode X/. cells. Neither prints SR and NE side by side for a
-dozen arms, which is what a sweep over one knob produces.
+``run_report`` speaks for one root or a pair; it does not print SR and NE
+side by side for a dozen arms, which is what a sweep over one knob produces.
 
 This defines NO metric. Every number comes from the canonical readers:
 ``rows.load_attempts`` decides which attempt IS an episode's result (the
