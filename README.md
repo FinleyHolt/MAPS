@@ -85,7 +85,7 @@ The closed-loop measures are read from the flown sorties' own records by
 |---|---|---|
 | SR, 20 m radius | 40/82 | The commit lies within 20 m of the target centroid. |
 | SR, committed area | 33/82 | The committed feature's outline contains the target centroid. |
-| OSR | 70/81 | The aircraft's GNSS track came within one camera footprint width of the target centroid. |
+| OSR | 71/81 | The aircraft's path (GNSS track, else keyframe poses) came within one camera footprint width of the target centroid. |
 
 ```sh
 python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <tasking split JSON>
