@@ -348,39 +348,45 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
             return got[0]
         return got
 
-    def key_for(anchor):
-        """The column `compare` will write for this anchor.
-
-        Through the executor's OWN naming law, not a guess at it: an `as`
-        label is sanitized ("the depot" -> "the_depot"), so a key built by
-        string-joining the raw name names a column that does not exist and
-        score_by refuses it. One law, called rather than copied.
-        """
-        r = ref_of(anchor)
-        lbl = r["as"] if isinstance(r, dict) and "as" in r else r
-        return f"distance to {_sanitize_token(lbl)}"
-
     def _label_of(anchor):
+        """The label a compare's columns carry for this anchor, through the
+        executor's OWN sanitizer ("the depot" -> "the_depot"), so a key
+        built here never names a column that does not exist. A compare's
+        ``cardinals`` element addresses its ref by this label too: the op
+        matches on the ref's fid first and its label second."""
         r = ref_of(anchor)
         lbl = r["as"] if isinstance(r, dict) and "as" in r else r
         return _sanitize_token(lbl)
 
-    def cardinal_key(direction, anchor):
-        """The column `compare` will write for this signed relation.
+    def key_for(anchor):
+        """The distance column `compare` writes for this anchor."""
+        return f"distance to {_label_of(anchor)}"
 
-        Same law as :func:`key_for` -- the executor's own sanitizer, called
-        rather than copied, so a key never names a column that does not
-        exist and score_by never refuses one it asked for.
-        """
+    def cardinal_key(direction, anchor):
+        """The signed column `compare` writes for this relation."""
         return f"{direction} of {_label_of(anchor)}"
 
-    def _card_ref(anchor):
-        """What the compare's ``cardinals`` element addresses.
+    def result_of(src, said: str, maker: str) -> str:
+        """The executor ref a handle names, refused unless it is a RESULT."""
+        got = handles.get(src) if isinstance(src, str) else None
+        if not (isinstance(got, str) and re.fullmatch(r"r\d+", got)):
+            raise CodeError(
+                f"{said} a RESULT, and {src} is "
+                + (f"one row ({got})" if got is not None else "not bound")
+                + f". Name a handle {maker} left.")
+        return got
 
-        The op matches on the ref's fid first and its LABEL second, and the
-        label is the one thing available before the surface resolves the
-        name, so it is what rides here."""
-        return _label_of(anchor)
+    def cut_le(items, anchor, value):
+        """Keep the rows within ``value`` metres of ``anchor``: one compare
+        and one ``le`` cut on the distance column it writes."""
+        cmp_ref = mint()
+        ops.append({"ref": cmp_ref, "op": "compare",
+                    "args": {"items": items, "refs": [ref_of(anchor)]}})
+        out = mint()
+        ops.append({"ref": out, "op": "filter_items",
+                    "args": {"items": cmp_ref, "key": key_for(anchor),
+                             "op": "le", "value": value}})
+        return out
 
     def window(src_ref, spec: str = ""):
         """The IDENTITY WINDOW op: the rows a handle already holds, served.
@@ -406,14 +412,8 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
             # compile to the executor's own stratum op -- a view over a
             # handle a find left, exactly as a window is.
             src = args["of"]
-            got = handles.get(src) if isinstance(src, str) else None
-            if not (isinstance(got, str) and re.fullmatch(r"r\d+", got)):
-                raise CodeError(
-                    f"{src}.{args['tier']} takes a tier of a RESULT, and "
-                    f"{src} is "
-                    + (f"one row ({got})" if got is not None
-                       else "not bound")
-                    + ". Name a handle a find left.")
+            got = result_of(src, f"{src}.{args['tier']} takes a tier of",
+                            "a find")
             ref = mint()
             ops.append({"ref": ref, "op": "stratum",
                         "args": {"items": got, "tier": args["tier"]}})
@@ -427,19 +427,13 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
             # for. Nothing new executes -- the executor windows a handle
             # itself, and this is the identity op the widening form uses.
             src = args["win_of"]
-            got = handles.get(src) if isinstance(src, str) else None
-            if not (isinstance(got, str) and re.fullmatch(r"r\d+", got)):
-                raise CodeError(
-                    f"{src}{args['spec']} windows a RESULT, and {src} is "
-                    + (f"one row ({got})" if got is not None
-                       else "not bound")
-                    + ". Name a handle a find or an ordering left.")
+            got = result_of(src, f"{src}{args['spec']} windows",
+                            "a find or an ordering")
             ref = window(got, args["spec"])
             st["_ref"] = ref
             if st.get("target"):
                 handles[st["target"]] = ref
-            if not st.get("target") or st["target"].startswith("_"):
-                st["_label"] = f"{src}{args['spec']}"
+            st["_label"] = f"{src}{args['spec']}"
             continue
         if st.get("act") or call in ("look", "show_map", "look_for", "stand"):
             continue                       # an ACT is a plan step, not an op
@@ -523,29 +517,11 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                     raise CodeError(
                         f"dwithin= is a gap in metres and cannot be negative "
                         f"({_dwithin!r}).")
-                cmp_ref = mint()
-                ops.append({"ref": cmp_ref, "op": "compare",
-                            "args": {"items": ref,
-                                     "refs": [ref_of(_anchor)]}})
-                out = mint()
-                ops.append({"ref": out, "op": "filter_items",
-                            "args": {"items": cmp_ref,
-                                     "key": key_for(_anchor),
-                                     "op": "le", "value": _wv}})
-                ref = out
+                ref = cut_le(ref, _anchor, _wv)
             if args.get("within") is not None:
                 # within= CUTS: 0 m contact is a measured geometric fact, and
                 # it stays its own compare + filter ahead of every ordering.
-                anchor = args["within"]
-                cmp_ref = mint()
-                ops.append({"ref": cmp_ref, "op": "compare",
-                            "args": {"items": ref,
-                                     "refs": [ref_of(anchor)]}})
-                out = mint()
-                ops.append({"ref": out, "op": "filter_items",
-                            "args": {"items": cmp_ref, "key": key_for(anchor),
-                                     "op": "le", "value": 0}})
-                ref = out
+                ref = cut_le(ref, args["within"], 0)
             # THE SIGNED relations. One compare carrying every named anchor
             # (refs is a LIST, so multi-anchor needs no new op), then ONE
             # score_by whose emphasis is every cardinal at +1: further in the
@@ -647,7 +623,7 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                     _add_near(a)
                 cmp_args = {"items": ref, "refs": refs}
                 if cards:
-                    cmp_args["cardinals"] = [{"dir": d, "ref": _card_ref(a)}
+                    cmp_args["cardinals"] = [{"dir": d, "ref": _label_of(a)}
                                              for d, a in cards]
                 cmp_ref = mint()
                 ops.append({"ref": cmp_ref, "op": "compare", "args": cmp_args})
@@ -725,22 +701,15 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                         "args": {"items": items, "emphasis": emphasis}})
         elif call == "more_of":
             src = pos[0]
-            got = handles.get(src) if isinstance(src, str) else None
-            if not (isinstance(got, str) and re.fullmatch(r"r\d+", got)):
-                raise CodeError(
-                    f"more_of({src}) pages a RESULT, and {src} is "
-                    + (f"one row ({got})" if got is not None
-                       else "not bound")
-                    + ". Name a handle a find or an ordering left.")
+            got = result_of(src, f"more_of({src}) pages",
+                            "a find or an ordering")
             lo = _BROAD_HEAD_ROWS + int(seen.get(got) or 0)
             ref = window(got, f"[{lo}:{lo + _BROAD_HEAD_ROWS}]")
             st["_page"] = (got, lo)
-            if not st.get("target"):
-                # The rows served are NOT the handle -- they are a window
-                # of it -- so the envelope is labelled with what was asked
-                # for rather than with a name that would claim to be the
-                # whole set.
-                st["_label"] = f"more_of({src})"
+            # The rows served are NOT the handle -- they are a window of it
+            # -- so the envelope is labelled with what was asked for rather
+            # than with a name that would claim to be the whole set.
+            st["_label"] = f"more_of({src})"
         elif call == "filter":
             items = items_of(pos[0])
             within = args.get("within")
@@ -848,7 +817,7 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                             "args": {"items": items,
                                      "refs": [ref_of(a) for _d, a in _cards],
                                      "cardinals": [
-                                         {"dir": d, "ref": _card_ref(a)}
+                                         {"dir": d, "ref": _label_of(a)}
                                          for d, a in _cards]}})
                 for d, a in _cards:
                     cut = mint()
@@ -901,14 +870,7 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                         f"dwithin= is a gap in metres and cannot be negative "
                         f"({dwithin!r}). dwithin=0 is contact, which is "
                         "within=.")
-            cmp_ref = mint()
-            ops.append({"ref": cmp_ref, "op": "compare",
-                        "args": {"items": items, "refs": [ref_of(anchor)]}})
-            ref = mint()
-            ops.append({"ref": ref, "op": "filter_items",
-                        "args": {"items": cmp_ref,
-                                 "key": key_for(anchor),
-                                 "op": "le", "value": value}})
+            ref = cut_le(items, anchor, value)
         else:
             raise CodeError(f"there is no {call}()")
         st["_ref"] = ref
