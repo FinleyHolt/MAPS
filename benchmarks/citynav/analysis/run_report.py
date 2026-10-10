@@ -46,13 +46,11 @@ def load_run(root: Path) -> tuple[dict[str, dict], int]:
     all. It is NOT a count of unscored episodes -- one episode can
     contribute both a crash row and a scored row.
 
-    Episodes whose pick carries no metrics (an episode that never
-    committed) are absent from ``scored``, so the return contract is
-    unchanged and ``report`` / ``paired`` need no adaptation.
+    An episode whose pick carries no metrics (it never committed) scores
+    as a miss (``rows.scored_metrics``).
     """
     picked, stats = _rows.load_attempts(root)
-    scored = {eid: a.metrics for eid, a in picked.items() if a.metrics}
-    return scored, stats.no_metrics
+    return _rows.scored_metrics(picked), stats.no_metrics
 
 
 def _pct(num: int, den: int) -> str:
@@ -218,7 +216,7 @@ def bake_line(root: Path) -> str:
 
 def report(root: Path) -> dict[str, dict]:
     picked, stats = _rows.load_attempts(root)
-    scored = {eid: a.metrics for eid, a in picked.items() if a.metrics}
+    scored = _rows.scored_metrics(picked)
     n = len(scored)
     if n == 0:
         raise SystemExit(

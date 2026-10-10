@@ -1,8 +1,7 @@
 {
   "rule": "an episode's result is its FIRST fully complete attempt, ordered by attempt START time",
   "asserted_by": [
-    "benchmarks/citynav/analysis/tests/test_rows.py",
-    "dashboard/server/tests/test_episode_pick.py"
+    "benchmarks/citynav/analysis/tests/test_rows.py"
   ],
   "runs": {
     "citynav_pin_2026-07-25_11-04-15": {
@@ -46,7 +45,7 @@
       ]
     }
   },
-  "scope": "`picks` is the SCORED set both readers publish: run_report.load_run's mapping, and episode_pick.pick's. `unscored` episodes appear in the ledger but produced no metrics on any non-infra attempt -- they are counted in no_metrics and must NOT be keyed as a result. `never_landed` episodes have an episode.json under a worker dir (status flying) and NO ledger row: an owner never appends a flying row, so they contribute no attempt to either reader.",
+  "scope": "`picks` are the picked episodes carrying metrics. `unscored` episodes appear in the ledger but produced no metrics on any non-infra attempt -- they are counted in no_metrics and score as a miss (SR 0). `never_landed` episodes have an episode.json under a worker dir (status flying) and NO ledger row: an owner never appends a flying row, so they contribute no attempt.",
   "counts": "rows counts every ledger line; no_metrics every line without a metrics dict (infra rows included); timed_out every line with status timed_out; infra every line with status infra.",
-  "tiers": "Both readers name the tier that answered. 'ledger' is the run's own episodes.jsonl. The canonical reader also has a separate 'lanes' tier for lane fleets (lane*/episodes.jsonl, lane*/inst*/episodes.jsonl), which the dashboard's shallow glob folds into 'ledger'; no lane layout is in this fixture, so the pin does not cover that difference."
+  "tiers": "'ledger' is the run's own episodes.jsonl, the one tier the reader reads."
 }

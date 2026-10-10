@@ -81,7 +81,7 @@ def arm_row(root: Path) -> dict:
     dropping its row would leave a table that looks complete.
     """
     picked, stats = _rows.load_attempts(root)
-    scored = [a.metrics for a in picked.values() if a.metrics]
+    scored = list(_rows.scored_metrics(picked).values())
     manifest = read_manifest(root)
     withhold = list(manifest.get("withhold") or [])
     row: dict = {

@@ -234,14 +234,8 @@ def test_a_truncated_last_line_does_not_break_the_read(tmp_path):
 
 
 def test_every_shared_fixture_case():
-    """The same tree and the same expected picks the dashboard's
-    replication asserts against. If this moves, both suites move.
-
-    ``picks`` is the SCORED set — what ``load_run`` publishes, and what
-    ``episode_pick.pick`` publishes — so the two readers are compared on
-    their public contract rather than on an internal representation only
-    one of them has.
-    """
+    """The shared fixture tree and its expected picks: ``picks`` carry
+    metrics, ``unscored`` are picked episodes with none (each a miss)."""
     assert FIXTURES.is_dir(), f"shared attempt-pick fixture missing at {FIXTURES}"
     expected = json.loads((FIXTURES / "expected.json").read_text())
     assert expected["runs"], "vacuity floor: the fixture pins at least one run"
@@ -266,10 +260,32 @@ def test_every_shared_fixture_case():
         }, run_name
 
         scored, no_metrics = load_run(root)
-        assert set(scored) == set(want["picks"]), run_name
+        assert set(scored) == set(want["picks"]) | set(want["unscored"]), run_name
         assert no_metrics == want["no_metrics"], run_name
         for eid in want["unscored"]:
-            assert eid in picked and eid not in scored, \
-                f"{run_name}: {eid} keeps its slot and must not be scored"
+            assert scored[eid] == {"SR": 0}, \
+                f"{run_name}: {eid} keeps its slot and scores a miss"
         for eid in want["never_landed"]:
             assert eid not in picked, f"{run_name}: {eid} has no ledger row"
+
+
+def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_path):
+    """A wall-clock timeout before any commit is a miss inside the SR
+    denominator; summary.txt counts it, so every reader must."""
+    from benchmarks.citynav.analysis import ab_report, arm_table, run_report
+
+    root = _run(
+        tmp_path,
+        _ledger("e1", "20260101_000001", 1),
+        _ledger("e2", "20260101_000002", 0),
+        _ledger("e3", "20260101_000003", status="timed_out"),
+        {"episode_id": "e4", "status": "infra", "error": "serve_down"},
+        _ledger("e4", "20260101_000005", 0),
+    )
+    scored, _ = load_run(root)
+    assert sorted(scored) == ["e1", "e2", "e3", "e4"]
+    assert scored["e3"] == {"SR": 0}
+    assert len(run_report.report(root)) == 4
+    row = arm_table.arm_row(root)
+    assert (row["n"], row["SR_n"], row["SR"]) == (4, 1, 0.25)
+    assert ab_report._sr_by_episode(root)["e3"] == 0

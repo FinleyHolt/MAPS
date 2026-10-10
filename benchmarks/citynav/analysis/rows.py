@@ -363,3 +363,14 @@ def load_attempts(root: Path) -> tuple[dict[str, Attempt], ReadStats]:
     files, tier = result_files(root)
     attempts, stats = read_attempts(files, tier)
     return pick_attempts(attempts), stats
+
+
+def scored_metrics(picked: dict[str, Attempt]) -> dict[str, dict]:
+    """episode_id -> the metrics every reader scores, one per picked episode.
+
+    A picked attempt with no metrics (a no-commit miss, or a wall-clock
+    timeout before any commit) is a miss inside the denominator: it reads
+    as ``{"SR": 0}``, carrying no NE or OSR. Infra rows never reach here
+    (``read_attempts`` drops them).
+    """
+    return {eid: a.metrics or {"SR": 0} for eid, a in picked.items()}

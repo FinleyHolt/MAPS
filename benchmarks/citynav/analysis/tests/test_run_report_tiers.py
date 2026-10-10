@@ -148,19 +148,27 @@ def test_the_report_counts_timeouts_and_infra_apart(tmp_path, capsys):
     assert "infra(re-queued)=1" in out
 
 
-def test_an_all_crash_run_reports_its_rows_instead_of_nothing(tmp_path):
-    """The refusal names what it read, so a run holding fourteen no-commit
-    rows never reports as "no_metrics rows seen: 0"."""
+def test_an_all_no_commit_run_scores_every_episode_a_miss(tmp_path, capsys):
     root = tmp_path / "run"
     _write(root / LEDGER, *[
         {"episode_id": f"e::{i}#{i}", "worker_id": "w0", "status": "ok",
          "workdir": f"w0/maps_2026072{i}_110000_citynav_e__{i}_{i}"}
         for i in range(5)
     ])
-    assert load_run(root) == ({}, 5)
+    assert load_run(root) == ({f"e::{i}#{i}": {"SR": 0} for i in range(5)}, 5)
+    report(root)
+    assert "SR = 0/5" in capsys.readouterr().out
+
+
+def test_an_all_infra_run_refuses_and_names_what_it_read(tmp_path):
+    root = tmp_path / "run"
+    _write(root / LEDGER, *[
+        {"episode_id": f"e::{i}#{i}", "status": "infra", "error": "serve_down"}
+        for i in range(3)
+    ])
     with pytest.raises(SystemExit) as excinfo:
         report(root)
-    assert "no_metrics: 5" in str(excinfo.value)
+    assert "infra: 3" in str(excinfo.value)
     assert "tier: ledger" in str(excinfo.value)
 
 
