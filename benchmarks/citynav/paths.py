@@ -24,6 +24,7 @@ Both defaults assume a laptop layout (``~/datasets/citynav-arxiv``,
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -268,8 +269,27 @@ def assert_current_tile_schema(features: dict, source: str) -> None:
         )
 
 
+#: The per-block files the bake writes, the content :func:`bake_sha256` hashes.
+_BAKE_OUTPUT_SUFFIXES = ("_meta.json", "_features.json", "_graph.npz", "_nodes.json")
+#: When and from which commit a block was baked: provenance, not content.
+_BAKE_WHEN_WHO = ("baked_at_utc", "bake_git_sha")
+
+
+def _bake_content(f: Path) -> bytes:
+    """``f``'s bytes, a block meta's bake time and commit left out."""
+    data = f.read_bytes()
+    if not f.name.endswith("_meta.json"):
+        return data
+    meta = json.loads(data)
+    prov = meta.get("provenance")
+    if isinstance(prov, dict):
+        meta["provenance"] = {k: v for k, v in prov.items() if k not in _BAKE_WHEN_WHO}
+    return json.dumps(meta, sort_keys=True).encode()
+
+
 def bake_sha256(tiles_dir: Path | None = None) -> str | None:
-    """Content identity of a tile bake: one hash over every file in it.
+    """Content identity of a tile bake: one hash over the name and content
+    of every per-block file the bake writes (``_BAKE_OUTPUT_SUFFIXES``).
 
     ``assert_current_tile_schema`` refuses retired SHAPES; this pins the
     retired CONTENT that shares a shape. Two bakes of the same block set
@@ -279,16 +299,18 @@ def bake_sha256(tiles_dir: Path | None = None) -> str | None:
     episodes, measured). A run stamps this so a later reader can say which
     bake produced the number instead of trusting a directory name.
 
-    Hashes names and bytes, so a renamed, added, or dropped file changes
-    the result. Returns ``None`` when the directory does not exist -- an
-    unhashable bake is an unknown one, never a passing one.
+    A renamed, added, or dropped block file changes the result; any other
+    file in the directory, and a meta's bake time and commit, do not, so two
+    bakes of one prior hash equal. Returns ``None`` when the directory does
+    not exist -- an unhashable bake is an unknown one, never a passing one.
     """
     root = Path(tiles_dir) if tiles_dir is not None else TILES_DIR
     if not root.is_dir():
         return None
     h = hashlib.sha256()
-    for f in sorted(p for p in root.rglob("*") if p.is_file()):
-        h.update(f.relative_to(root).as_posix().encode())
+    for f in sorted(p for p in root.iterdir()
+                    if p.is_file() and p.name.endswith(_BAKE_OUTPUT_SUFFIXES)):
+        h.update(f.name.encode())
         h.update(b"\0")
-        h.update(hashlib.sha256(f.read_bytes()).digest())
+        h.update(hashlib.sha256(_bake_content(f)).digest())
     return h.hexdigest()

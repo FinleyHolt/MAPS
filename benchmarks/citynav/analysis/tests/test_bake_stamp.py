@@ -35,7 +35,7 @@ def test_hash_is_stable_and_content_sensitive(tmp_path):
     assert paths.bake_sha256(a) != first, "content change must move the hash"
 
 
-def test_hash_sees_renames_and_additions(tmp_path):
+def test_hash_sees_renames_and_added_blocks(tmp_path):
     a = _bake(tmp_path / "a")
     base = paths.bake_sha256(a)
     (a / "block_0_meta.json").rename(a / "block_1_meta.json")
@@ -43,8 +43,26 @@ def test_hash_sees_renames_and_additions(tmp_path):
 
     b = _bake(tmp_path / "b")
     added = paths.bake_sha256(b)
-    (b / "extra.json").write_text("{}")
-    assert paths.bake_sha256(b) != added, "an added file must move the hash"
+    (b / "block_2_nodes.json").write_text("{}")
+    assert paths.bake_sha256(b) != added, "an added block file must move the hash"
+
+
+def test_two_bakes_of_one_prior_hash_equal(tmp_path):
+    """When and from which commit a block was baked is not its content, and
+    a file the bake did not write is no part of it."""
+    a, b = _bake(tmp_path / "a"), _bake(tmp_path / "b")
+    for root, when, sha in ((a, "2026-09-01T00:00:00+00:00", "abc1234"),
+                            (b, "2026-10-01T00:00:00+00:00", None)):
+        (root / "block_0_meta.json").write_text(json.dumps({
+            "crs": "utm",
+            "provenance": {"prior": "osm", "baked_at_utc": when, "bake_git_sha": sha}}))
+    (b / "notes.txt").write_text("scratch")
+    (b / "block_0_mask_cache.npz").write_bytes(b"runtime cache")
+    assert paths.bake_sha256(a) == paths.bake_sha256(b)
+
+    (b / "block_0_meta.json").write_text(json.dumps({
+        "crs": "utm", "provenance": {"prior": "osm-other"}}))
+    assert paths.bake_sha256(a) != paths.bake_sha256(b), "the prior is content"
 
 
 def test_missing_bake_is_none_not_a_pass(tmp_path):
