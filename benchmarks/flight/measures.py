@@ -341,16 +341,17 @@ def keyframe_poses(bases: list[Path], t0: float, t1: float) -> list[dict[str, An
             if xy and utc:
                 t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
                 if t0 <= t <= t1:
-                    out.append({"t_unix": t, "x": float(xy[0]), "y": float(xy[1]), "alt_agl_m": f.get("altitude_m")})
+                    out.append({"t_unix": t, "x": float(xy[0]), "y": float(xy[1]),
+                                "alt_agl_m": f.get("altitude_m"), "src": "keyframes"})
         if out:
             return sorted(out, key=lambda f: f["t_unix"])
     return []
 
 
 def _agl(fix, bases: list[Path], events) -> tuple[float | None, str | None]:
-    """Height above ground at ``fix``: the track's, else the keyframes', else the waypoints' commanded."""
+    """Height above ground at ``fix``: its own (a GNSS fix or a keyframe pose), else the keyframes', else the waypoints' commanded."""
     if fix.get("alt_agl_m") is not None:
-        return float(fix["alt_agl_m"]), "GNSS track"
+        return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
     alts = [float(f["altitude_m"]) for b in bases for f in _rows(b / "frames.jsonl") if f.get("altitude_m") is not None]
     if alts:
         return statistics.median(alts), "keyframes"
@@ -531,25 +532,25 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         out["spl"] = 0.0
     out["track_coverage"], _hole = track_coverage(track, t_start, t_end_run)
     flown = _window(track, t_start, t_end_run) if track else []
-    out["track_source"] = "GNSS track"
+    # The keyframes carry the live navigation's pose: beside a thin
+    # recording they can still show the aircraft came within the width.
+    thin = out["track_coverage"] < SPL_MIN_COVERAGE
+    poses = keyframe_poses(bases, t_start, t_end_run) if thin else []
+    out["track_source"] = "GNSS track" if flown else "keyframe poses" if poses else "none"
     if not flown:
-        # The recorder was not writing: the keyframes carry the live
-        # navigation's pose, enough for OSR when a pose is inside the width.
-        flown = keyframe_poses(bases, t_start, t_end_run)
-        out["track_source"] = "keyframe poses" if flown else "none"
         if success:
             out["spl_note"] = "undefined: the recording does not cover the run"
-        if not flown:
+        if not poses:
             return out
-    d, nearest = closest_approach(flown, target)
+    d, nearest = min((closest_approach(p, target) for p in (flown, poses) if p), key=lambda c: c[0])
     out["closest_approach_ft"] = round(d * FT_PER_M, 1)
     agl, out["agl_source"] = _agl(nearest, bases, events)
     if agl is not None:
         width = 2.0 * agl * math.tan(math.radians(C12_HFOV_DEG) / 2.0)
         out["hfov_width_ft"] = round(width * FT_PER_M, 1)
         out["oracle_success"] = d <= width
-    if out["oracle_success"] is False and out["track_source"] != "GNSS track":
-        out["oracle_success"] = None  # sparse poses cannot show the aircraft never came near
+    if out["oracle_success"] is False and thin:
+        out["oracle_success"] = None  # a thin recording cannot show the aircraft never came near
     if out["track_source"] != "GNSS track" or len(flown) < 2:
         return out
     loiter = row.get("start_xy") or (row.get("visited_xy") or [None])[0]

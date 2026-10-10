@@ -62,3 +62,35 @@ def test_the_measures_score_the_commit_against_the_truth_and_the_track_against_t
     assert Q.check(got, master) == []
     one["success_area"] = False
     assert Q.check(got, master) == [f"('{root.name}', 1) success_area: False here, 'True' in the master table"]
+
+
+def _thin_track_run(tmp_path, keyframe_xy):
+    """A run whose recording holds 5 s far from the target, plus one keyframe pose at ``keyframe_xy``."""
+    import datetime as dt
+
+    root, truth, tiles = tmp_path / "20260101T000000Z", tmp_path / "truth", tmp_path / "tiles"
+    tiles.mkdir()
+    (tiles / "calcity_features.json").write_text(json.dumps({"prior": []}))
+    row = _run(root, "run1", commit=("prior_9", [400.0, 100.0]))
+    (root / "episodes.jsonl").write_text(json.dumps(row) + "\n")
+    (root / "flight_track.jsonl").write_text("".join(
+        json.dumps({"t_unix": T0 + k, "x": 5000.0, "y": 0.0, "alt_agl_m": 600.0, "track_deg": 0.0,
+                    "ground_speed_mps": 100.0}) + "\n" for k in range(5)))
+    utc = dt.datetime.fromtimestamp(T0 + 300.0, dt.timezone.utc).isoformat()
+    (root / "run1" / "frames.jsonl").write_text(json.dumps({"pose_xy": keyframe_xy, "utc": utc,
+                                                            "altitude_m": 600.0}) + "\n")
+    truth.mkdir()
+    (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
+    (got,), _radius, _turns = Q.collect([root], Q.Truth([truth]), tiles_dir=tiles)
+    return got
+
+
+def test_osr_reads_the_keyframe_poses_beside_a_thin_recording(tmp_path):
+    got = _thin_track_run(tmp_path, [120.0, 100.0])
+    assert got["track_coverage"] < Q.SPL_MIN_COVERAGE
+    assert got["oracle_success"] is True
+    assert got["agl_source"] == "keyframes"
+
+
+def test_a_thin_recording_with_no_pose_near_the_target_cannot_show_a_miss(tmp_path):
+    assert _thin_track_run(tmp_path, [3000.0, 3000.0])["oracle_success"] is None
