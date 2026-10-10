@@ -72,8 +72,6 @@ ARM_ENV_FLAGS = (
     # different arm and has to say so.
     "SEARCH_MAP_MAX_PX",
     "SEARCH_LOOK_TOOL",
-    "SEARCH_DUMP_COMMIT_STATE",
-    "SEARCH_COMMIT_STATE_DIR",
     # Per-k resample roots differ only by their pinned seed base.
     "SEARCH_SEED_BASE",
     # Score-affecting toggles that used to ride ambient env unstamped: a
@@ -82,7 +80,6 @@ ARM_ENV_FLAGS = (
     # recorded before these joined still pair.
     "SEARCH_STOP_AFTER",
     "SEARCH_WALLED_UNNAMED_TYPE",
-    "SEARCH_REASONER_MODEL",
     # The envelope sweep's two knobs (maps/llm/sampling.py). Reasoner turns
     # sample at temperature 1.0, so these move the score directly — and they
     # were read through a helper that took the key as a parameter, which put
@@ -98,9 +95,7 @@ ARM_ENV_FLAGS = (
     "SEARCH_SAMPLING_REASONING_EFFORT",
 )
 # Set keys under these prefixes join the stamp the same way (compaction
-# budgets change reasoning behavior; concurrency / resume
-# knobs change only wall clock and stay off the row — the manifest's env
-# map records them).
+# budgets change reasoning behavior).
 ARM_ENV_PREFIXES = ("SEARCH_COMPACT_",)
 
 # The audited ambient-env inventory: vars that select WHAT runs (config,
@@ -133,9 +128,7 @@ AUDITED_ENV = (
     "SEARCH_CITYNAV_TILES",
     "SEARCH_SEED_BASE",
     # arm toggles
-    "SEARCH_COMMIT_STATE_DIR",
     "SEARCH_LOOK_TOOL",
-    "SEARCH_REASONER_MODEL",
     "SEARCH_SAMPLING_PRESENCE_PENALTY",
     "SEARCH_SAMPLING_REASONING_EFFORT",
     "SEARCH_SAMPLING_TEMPERATURE",
@@ -153,9 +146,7 @@ AUDITED_ENV = (
     "CITYNAV_BENCH_MAX_OOM_RETRIES",
 )
 AUDITED_ENV_PREFIXES = (
-    "SEARCH_DUMP_",
     "SEARCH_COMPACT_",
-    "SEARCH_RESUME_",
     "SEARCH_CALCITY_",
 )
 # Never recorded, ever. `.env` is the only home for secrets.
