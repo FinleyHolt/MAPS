@@ -13,15 +13,8 @@ saturation. Hue identity within a kind still comes from the digest, so a
 label keeps one hue on every surface.
 
 ``osm_label`` and the raw digest pair (:func:`color_for` /
-:func:`color_word`) are the dashboard's rules verbatim
-(``dashboard/server/segmap.py:color_for``,
-``dashboard/server/annotate.py:osm_label``) — the annotate canvas and the
-tile debug view keep reading them.
-
-# ponytail: label rule + digest deliberately duplicated from the dashboard
-# pair -- those modules import no worlds packages and the model side cannot
-# import the dashboard; keep the digest rule and the tag-key order in sync
-# with them.
+:func:`color_word`) are the label rule and the colour rule every surface
+reads.
 """
 
 from __future__ import annotations
@@ -29,8 +22,7 @@ from __future__ import annotations
 import colorsys
 import hashlib
 
-# The tag whose value names a feature's kind, first hit wins (the dashboard's
-# order). ``highway=residential`` -> "residential"; a bare flag value
+# The tag whose value names a feature's kind, first hit wins. ``highway=residential`` -> "residential"; a bare flag value
 # (``building=yes``) labels as its key ("building").
 _LABEL_TAG_KEYS = (
     "highway", "building", "natural", "landuse", "leisure", "amenity",
@@ -59,8 +51,8 @@ def osm_label(tags: dict | None, fallback: str = "prior") -> str:
 
 
 def color_for(label: str) -> tuple[int, int, int]:
-    """A stable, distinct RGB for an OSM label -- the dashboard's digest
-    rule verbatim (same label, same colour, every surface)."""
+    """A stable, distinct RGB for an OSM label (same label, same colour,
+    every surface)."""
     digest = hashlib.sha256(label.encode("utf-8")).digest()
     hue = int.from_bytes(digest[:4], "big") / 0xFFFFFFFF
     r, g, b = colorsys.hsv_to_rgb(hue, 0.58, 0.86)

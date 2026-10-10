@@ -79,8 +79,7 @@ class CityNavEpisode:
 # ---------------------------------------------------------------------------
 #
 # CityRefer ships 13 object_types. We emit one canonical open-vocab label per
-# type. No collapsing. Priority hints only feed the int-grid shim at the
-# dashboard boundary; the renderer is render-spec-only.
+# type. No collapsing.
 
 OBJTYPE_TO_LABEL: dict[str, str] = {
     "Building": "building",
@@ -176,11 +175,6 @@ def map_name_for_row(row: dict) -> str:
     ``<area>_block_<block>``; an ``area`` that already contains "block"
     is a full tile id and wins verbatim; a row with no (or empty)
     ``block`` names a whole-AOI map — ``area`` verbatim.
-
-    ``dashboard.server.episode_row.map_name_for_row`` is the
-    byte-identical twin on the far side of the dashboard's
-    no-benchmark-imports wall; change both together
-    (test_map_name_for_row pins the agreement).
     """
     area = str(row["area"])
     block = row.get("block")

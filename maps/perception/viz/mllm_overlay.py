@@ -33,7 +33,7 @@ try:
 except ImportError as exc:
     raise ImportError(
         "perception.mllm_overlay requires opencv-python. "
-        "Install via `micromamba install -n worlds -y opencv` or pip."
+        "Install opencv-python-headless."
     ) from exc
 
 __all__ = [

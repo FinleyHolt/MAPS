@@ -233,7 +233,7 @@ _NADIR_1008_90_DESCRIPTION = (
 
 _REGISTRY: dict[str, SensorSpec] = {
     # The Archer's IMX290 behind its wide lens, RECTIFIED: the recorder
-    # remaps every frame to this pinhole (have_worlds/archer/pi_camera.py)
+    # remaps every frame to this pinhole
     # and the calibration is told to write it (camera_intrinsics.py solve
     # --rect-hfov 90), so the horizontal field of view is 90 deg by
     # construction and the vertical follows the 4:3 frame. What the bench
@@ -244,7 +244,7 @@ _REGISTRY: dict[str, SensorSpec] = {
         mount_pitch_deg=90.0,
         max_range_m=float("inf"),
         min_range_m=0.3,
-        # The antenna-to-camera arm lives in have_worlds.airframe, applied by the readers.
+        # The antenna-to-camera arm is applied by the readers.
         body_offset_x=0.0,
         body_offset_y=0.0,
         body_offset_z=0.0,

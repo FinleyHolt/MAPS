@@ -104,7 +104,7 @@ MAP_BOUNDS = {
 # Local (non-upstream) tiles. Additive only: the upstream GROUND_LEVEL /
 # MAP_BOUNDS literals above stay byte-identical to water-cookie/citynav.
 # These map names are not SensatUrban blocks — they are built from OSM + SCC
-# 2025 (see have_worlds/fieldsites/stanford). Values are in the tile's local UTM-minus-
+# 2025. Values are in the tile's local UTM-minus-
 # origin frame (meters) with a NAVD88 vertical datum, copied from each tile
 # build's cache/ground_level.json.
 # --------------------------------------------------------------------------

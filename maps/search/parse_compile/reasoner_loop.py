@@ -704,7 +704,7 @@ class MissionSpec:
     # pre-flight pose resolution and ingest.
     #
     # ``None`` means NO CLOCK, and it is the default because the field
-    # station has no harness cap: a ``have_worlds`` mission flies for
+    # station has no harness cap: a flight mission flies for
     # as long as the crew is flying and must never stop on a timer.
     deadline_epoch: float | None = None
 
@@ -2486,8 +2486,7 @@ def advance_reasoner_one_round(
                 # overwrites, and no episode has ever flown it.
                 # It DOES bind where the frustum is small, which is why it
                 # exists: the stanford car field test flies a fixed 50 m
-                # AMSL over a 16.74 m datum (have_worlds/fieldsites/stanford/configs/
-                # citynav_stanford_car.yaml), 33 m AGL, and a nadir sensor
+                # AMSL over a 16.74 m datum, 33 m AGL, and a nadir sensor
                 # there really does see only 66.5 m across.
                 # maps/search/tests/test_look_obs_span_ceiling.py and
                 # benchmarks/citynav/tests/test_start_altitude_span.py pin

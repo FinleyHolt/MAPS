@@ -23,9 +23,6 @@ the failure as non-fatal, and on any host without the raw PLYs that took
 ``bounds_world_xy``, ``cell_size_m`` and ``tile_id`` down with the image the
 readers never asked for.
 
-Mirrors the SPA picker (``dashboard/server/picker.py``) so CLI-launched runs
-(batch drivers, smoke scripts) produce the same dashboard-renderable workdir
-as picker-launched ones.
 
 Standalone::
 

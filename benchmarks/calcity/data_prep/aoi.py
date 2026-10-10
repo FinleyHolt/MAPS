@@ -28,7 +28,7 @@ imagery cannot resolve anyway; a constant plane is the honest encoding of a
 
 World source
 ------------
-OSM vectors come from a worldkit bundle (``manifest.json`` +
+OSM vectors come from a world bundle (``manifest.json`` +
 ``osm/*.geojson``), located via ``CALCITY_BUNDLE`` (default
 ``~/datasets/calcity/bundle``); the imagery is the program's own map of the
 block, ``data/rgbd_upstream/<map>_rgb.tif``. The bundle must
@@ -48,7 +48,7 @@ import os
 # ``adapter.map_name_for_row`` uses the area verbatim.
 # --------------------------------------------------------------------------
 BLOCKS: dict[str, tuple[float, float, float, float]] = {
-    # The briefed area of operations (have_worlds/tile_georef.AO_BBOX_WGS84)
+    # The briefed area of operations
     # plus 3 km on every side: the C-12 turns at about 1.5 km and a reversal
     # onto a line runs 2.9 km beside it, so a hold about a target at the
     # AO's edge, or a turn back into it, stays on imagery. The developed core
@@ -72,7 +72,7 @@ RUNTIME_FRAME: dict[str, str] = {
 }
 
 
-# Fetch extent for the reproducible worldkit bundle. The ~130 m padding covers
+# Fetch extent for the world bundle. The ~130 m padding covers
 # the UTM grid-convergence bulge at the map edges; fetching only the map bbox
 # leaves black pixels along parts of the projected canvas.
 BUNDLE_BBOX_WGS84: tuple[float, float, float, float] = (
@@ -91,14 +91,14 @@ GROUND_LEVEL_M = 0.0
 # build_rgbd_ortho; this scalar sizes the _features.json cell grid.
 CELL_SIZE_M = 2.0
 
-# Build tree, laid out like the ``citynav-arxiv`` checkout. Holds the worldkit
+# Build tree, laid out like the ``citynav-arxiv`` checkout. Holds the world
 # bundle, the scan cache, and the intermediate rasters — hundreds of MB that
 # stay outside the repo. Point ``SEARCH_CALCITY_DATA`` here to read the
 # CityRefer catalog it builds.
 DEFAULT_ROOT = Path.home() / "datasets" / "calcity"
 
 # Published benchmark folder: the manifest, the episode splits, and the tile
-# bake that ``calcity-bench`` and the dashboard's annotate mode read. This is
+# bake that ``calcity-bench`` reads. This is
 # the self-contained folder the benchmark ships as — point
 # ``SEARCH_CALCITY_SPLITS`` here and ``SEARCH_CALCITY_TILES`` at its ``tiles/``.
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -108,7 +108,7 @@ BENCH_TILES_DIR = BENCHMARK_ROOT / "tiles"
 
 
 def bundle_root() -> Path:
-    """The worldkit bundle directory (``CALCITY_BUNDLE`` env override)."""
+    """The world bundle directory (``CALCITY_BUNDLE`` env override)."""
     return Path(os.environ.get("CALCITY_BUNDLE", str(DEFAULT_ROOT / "bundle"))).expanduser()
 
 

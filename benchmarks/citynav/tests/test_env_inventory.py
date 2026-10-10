@@ -5,7 +5,7 @@ run-path code but absent from ``benchmarks.citynav.run_manifest``'s classes
 is an invisible knob — exactly the undocumented-approach hazard the manifest
 exists to close. This derived scan holds the two in lockstep: add a
 ``SEARCH_*`` / ``CITYNAV_BENCH_*`` / ``BENCH_*`` read anywhere under
-``maps/`` / ``benchmarks/`` / ``compute/`` and this test fails until the
+``maps/`` / ``benchmarks/`` and this test fails until the
 name is classified — ``AUDITED_ENV`` when it changes what runs or what is
 measured (the default when unsure: recording is free, an invisible knob is
 not), ``MECHANICS_ENV`` when it moves only wall clock / placement /

@@ -28,7 +28,7 @@ def _wgs(dx_m: float, dy_m: float) -> list[float]:
 
 
 def _bundle(monkeypatch, features):
-    """Stand in for the worldkit bundle reader with a literal feature list."""
+    """Stand in for the world bundle reader with a literal feature list."""
     monkeypatch.setattr(
         bake_tiles,
         "load_features_local",

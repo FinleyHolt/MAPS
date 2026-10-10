@@ -23,7 +23,7 @@ def _ledger(eid: str, stamp: str, sr: int | None = None, *, status: str = "ok",
     slug = eid.replace("::", "__").replace("#", "_")
     row: dict = {
         "episode_id": eid, "worker_id": worker, "status": status, "error": None,
-        "elapsed_s": 1.0, "workdir": f"{worker}/worlds_{stamp}_citynav_{slug}",
+        "elapsed_s": 1.0, "workdir": f"{worker}/maps_{stamp}_citynav_{slug}",
         "oom_retries": 0,
     }
     if sr is not None:

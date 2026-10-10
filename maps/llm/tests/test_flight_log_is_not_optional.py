@@ -40,9 +40,9 @@ def test_the_destination_matches_what_every_caller_used_to_set_by_hand(
     """All five deleted assignments read ``<workdir>/flight/llm``. The
     derivation reproduces that path exactly, so an existing run tree and a
     new one are the same shape and every reader keeps working."""
-    monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path / "worlds_run"))
+    monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path / "maps_run"))
     assert llm_http._resolved_flight_log_dir() == (
-        tmp_path / "worlds_run" / "flight" / "llm")
+        tmp_path / "maps_run" / "flight" / "llm")
 
 
 def test_no_environment_variable_switches_recording_off(monkeypatch, tmp_path):

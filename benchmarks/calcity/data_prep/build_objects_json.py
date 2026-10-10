@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build a CityRefer-schema ``objects.json`` from the worldkit bundle's OSM.
+"""Build a CityRefer-schema ``objects.json`` from the world bundle's OSM.
 
 Each OSM footprint becomes one CityRefer object. Geometry is reprojected from
 the bundle's WGS84 GeoJSON into each block's local metric frame, overlapping
-footprints are deduped, heights come from OSM tags (worldkit stamps
+footprints are deduped, heights come from OSM tags (the bundle stamps
 ``worldkit:height_m`` on buildings), and the nested ``{map_name: {id: {...}}}``
 dict that ``benchmarks.citynav.adapter.load_objects`` reads is written —
 accumulating every block in ``benchmarks.calcity.data_prep.aoi.BLOCKS`` into one file.
@@ -66,7 +66,7 @@ _CONTOUR_MAX_PTS = 300
 
 
 def _parse_height_m(tags: dict) -> float | None:
-    """Best-effort height in meters from OSM/worldkit tags."""
+    """Best-effort height in meters from OSM and bundle tags."""
     v = tag_value(tags, "worldkit:height_m")
     if v is not None:
         try:

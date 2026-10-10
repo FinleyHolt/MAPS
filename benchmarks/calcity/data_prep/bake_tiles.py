@@ -7,18 +7,8 @@ nothing dropped. That is the same contract CityNav bakes under -- see
 ``benchmarks.citynav.bake.city._read_geojson_cache``, "Every feature with a
 geometry is kept -- no classification, no drop-gate."
 
-This used to route through ``objects.json``, the CityRefer catalog, and the
-prior inherited every loss that projection takes: a 13-class classifier that
-returned ``None`` for 30% of raw OSM records (76% of all LineStrings --
-footways, service roads, steps, crossings, cycleways, paths, railways,
-waterways, tracks), every line buffered into a 4 m polygon so no line stayed a
-line, non-largest parts of a multipart feature discarded, and the ring
-simplified to 1 m and capped at 300 points before the baker decimated it again
-to 16. None of that is recoverable downstream.
-
-``objects.json`` is still built and still the ground-truth and authoring
-substrate (episode ``object_ids``, ``link_house_targets``, ``road_crossings``,
-``cache/landmarks.json``). It is no longer in the prior's path.
+``objects.json``, the CityRefer catalog, is the ground-truth and authoring
+substrate (episode ``object_ids``); the prior is baked from the bundle alone.
 """
 
 from __future__ import annotations

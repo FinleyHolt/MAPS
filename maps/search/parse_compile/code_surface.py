@@ -24,7 +24,7 @@ from maps.util.xy_token import format_xy_token, parse_xy_token
 from maps.search.withhold import withheld
 
 # The executor's helpers are imported INSIDE the functions that use them.
-# reasoner_loop imports this module, so a module-level worlds import closes
+# reasoner_loop imports this module, so a module-level maps import closes
 # a cycle -- and a parser has no business needing the executor to load.
 
 # The served vocabulary, and the op each call compiles onto. Names are the

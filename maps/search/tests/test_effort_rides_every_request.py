@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 """The mission's reasoning effort reaches the WIRE, on every request.
 
-The field console's dial names an effort per mission
-(``have_worlds/station/mode.py::EFFORT_CHOICES``) and the whole point is
-that the mission's requests carry it in place of the arm's
-``SEARCH_SAMPLING_REASONING_EFFORT``. The dial's other pins stop short of
-the body: ``maps/llm/tests/test_sampling.py`` pins the kwargs builder,
-and ``have_worlds/station/tests/test_mission_runner.py`` pins the session
-handing the word to ``run_mission``. Nothing pinned the two passes
-between them, so dropping either left the mission flying the arm's value
-with every suite green and no crash row -- the failure this file exists
-to make loud.
+The operator names an effort per mission
+(``benchmarks.flight.mission.Mission(reasoning_effort=...)``) and the
+mission's requests carry it in place of the arm's
+``SEARCH_SAMPLING_REASONING_EFFORT``. ``maps/llm/tests/test_sampling.py``
+pins the kwargs builder; this pins the two passes between the mission and
+the request body, so dropping either fails here instead of flying the
+arm's value with no crash row.
 
 The vacuity floor is ``test_a_reasoner_with_no_word_sends_the_arms``: a
 reasoner that names none must still send the environment's, or these

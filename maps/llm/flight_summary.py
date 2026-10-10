@@ -172,9 +172,8 @@ def blank() -> dict:
 def _scan_transcript(path: Path, out: dict) -> None:
     """Fold one transcript into ``out``.
 
-    A RAW LINE SCAN, not ``dashboard.readers.scan_llm_dir``: that reader
-    reconstructs every request's full message list from per-thread deltas,
-    which this does not need and which costs far more. Only ``params``
+    A raw line scan: it never reconstructs a request's full message list
+    from the per-thread deltas. Only ``params``
     (the declared vocabulary), ``request`` (timestamps, for latency and
     the unanswered count) and ``response`` matter.
     """

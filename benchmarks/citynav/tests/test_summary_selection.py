@@ -50,7 +50,7 @@ def _row(eid: str, stamp: str, sr: int, *, status: str = "ok", **extra) -> dict:
     slug = eid.replace("::", "__").replace("#", "_")
     row = {
         "episode_id": eid, "worker_id": 0, "status": status, "elapsed_s": 1.0,
-        "workdir": f"w0/worlds_{stamp}_citynav_{slug}", "oom_retries": 0,
+        "workdir": f"w0/maps_{stamp}_citynav_{slug}", "oom_retries": 0,
         "metrics": {"episode_id": eid, "SR": sr, "OSR": sr, "NE": 10.0},
     }
     row.update(extra)

@@ -101,8 +101,8 @@ def _run(root, name, receipt, *, unanswered=False, retried=False):
 
 def test_the_forced_diff_passes_a_replay_that_sent_what_flew_and_names_the_first_receipt_that_did_not(tmp_path):
     sortie = tmp_path / "20260101T000000Z"
-    flown = _run(sortie, "worlds_run01", "flew to prior_1", retried=True)
-    (sortie / "episodes.jsonl").write_text(json.dumps({"run_no": 1, "workdir": "worlds_run01"}) + "\n")
+    flown = _run(sortie, "maps_run01", "flew to prior_1", retried=True)
+    (sortie / "episodes.jsonl").write_text(json.dumps({"run_no": 1, "workdir": "maps_run01"}) + "\n")
     rec = R.open_recording(flown)
     assert len(rec.requests) == 2 and rec.stops == [("prior_1", (10.0, 20.0))]
     same = R.diff(rec, _run(tmp_path / "replay", "same", "flew to prior_1", unanswered=True))

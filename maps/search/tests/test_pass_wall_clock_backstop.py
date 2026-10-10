@@ -46,7 +46,7 @@ def test_a_pass_already_past_its_deadline_flies_nothing():
 def test_no_deadline_flies_the_whole_pass():
     """``deadline_epoch=None`` is the FIELD path and must be untouched.
 
-    A ``have_worlds`` mission has no harness cap: it flies for as long
+    A flight mission has no harness cap: it flies for as long
     as the crew is flying, and a timer that stopped it would be a bug with a
     aircraft in the air. ``None`` is the default for exactly that reason.
     """

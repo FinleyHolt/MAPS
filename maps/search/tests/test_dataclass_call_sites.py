@@ -29,7 +29,7 @@ import pytest
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
 
-PACKAGES = ("maps", "benchmarks", "have_worlds")
+PACKAGES = ("maps", "benchmarks")
 
 _DATACLASS_DECORATORS = {"dataclass", "dataclasses.dataclass"}
 

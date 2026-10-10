@@ -1,12 +1,9 @@
-"""Read a worldkit world bundle as the Cal City data source.
+"""Read a world bundle as the Cal City data source.
 
-A worldkit bundle is deliberately plain files (see worldkit's README,
-"Consuming from WORLDS"): ``manifest.json`` and ``osm/<layer>.geojson`` in
-WGS84. This module is the only place Cal City touches that layout, and it
-reads those files directly rather than importing ``benchmarks.worldkit`` —
-that package MINTS a bundle, and reading one back must not depend on the
-tool that wrote it. The block's imagery is not in the bundle: it is the
-program's own map, ``data/rgbd_upstream/<map>_rgb.tif``.
+A world bundle is plain files: ``manifest.json`` and ``osm/<layer>.geojson``
+in WGS84. This module is the only place Cal City touches that layout. The
+block's imagery is not in the bundle: it is the block's own map,
+``data/rgbd_upstream/<map>_rgb.tif``.
 
 Two consumers:
 
@@ -28,7 +25,7 @@ from benchmarks.calcity.data_prep.aoi import LocalFrame
 
 log = logging.getLogger("calcity.bundle")
 
-# Vector layers a worldkit bundle may carry (absent layers are skipped).
+# Vector layers a world bundle may carry (absent layers are skipped).
 OSM_LAYERS = (
     "buildings",
     "roads",
@@ -44,7 +41,7 @@ OSM_LAYERS = (
 def load_manifest(bundle: Path) -> dict[str, Any]:
     manifest = json.loads((bundle / "manifest.json").read_text())
     if "osm" not in manifest.get("layers", {}):
-        raise ValueError(f"{bundle} does not look like a worldkit bundle")
+        raise ValueError(f"{bundle} does not look like a world bundle")
     return manifest
 
 
