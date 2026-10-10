@@ -447,8 +447,7 @@ def representative_point(chains) -> list:
 
     Rounded to the 2 dp every other served point is spelled at.
     """
-    flat = [p for ch in chains for p in ch]
-    if not flat:
+    if not any(chains):
         return [0.0, 0.0]
     geom = G.mask_geom(chains)
     if geom["closed"]:
@@ -1682,16 +1681,14 @@ def compact_results(results: dict, *, widen_form: str = "",
                     if isinstance(v, _FilterCutRows) else None
                 if _cut:
                     head["cut_stats"] = _cut
-                head["hint"] = join_hints(
-                    head.get("hint"), *(getattr(v, "notes", None) or []))
                 # The route to rows, stated as the fact in neither channel's
                 # spelling (it renders for the sentence surface too).
-                _rows_route = (
+                head["hint"] = join_hints(
+                    *(getattr(v, "notes", None) or []),
                     "no ordering exists on this result, so it renders "
                     "census + len and no fids: ordering it by an attached "
                     "column renders the ordered rows of THIS handle, and a "
                     "name or color match returns matched rows directly.")
-                head["hint"] = join_hints(head.get("hint"), _rows_route)
                 return head
             _body = list(v)
             _cover_note = None
@@ -2365,8 +2362,6 @@ def run_program(cands, anchors, program, seed_results=None,
 
     def as_point(arg):
         xy = _node_xy(_raw(arg))
-        if xy is None and isinstance(arg, str) and arg in by_fid:
-            xy = by_fid[arg]["xy"]
         if xy is None:
             # an rN ref that resolved to a SINGLETON list (a find narrowed
             # to one) where ONE point was wanted -- unwrap it. Only in the
@@ -3599,7 +3594,6 @@ def run_program(cands, anchors, program, seed_results=None,
                 # would raise TypeError ('True < None') whenever ANY item
                 # carried the key. Only the selected predicate runs.
                 v = it.get(key)
-                av = abs(v) if isinstance(v, (int, float)) else None
                 return {"eq": lambda: v == val, "ne": lambda: v != val,
                         "lt": lambda: v is not None and v < val,
                         "le": lambda: v is not None and v <= val,
@@ -3813,15 +3807,6 @@ def run_program(cands, anchors, program, seed_results=None,
                 (ref_name)."""
                 return _sanitize_token(node["fid"])
 
-            def _set_label(arg_token, fallback):
-                """A short TOKEN-derived label for a SET/axis arg
-                (between/neighbors/view): 'r1' -> 'r1', 'cands' ->
-                'cands', a bare fid -> the fid, an inline list -> the
-                fallback. Sigil-tolerant on a '$' slip."""
-                if isinstance(arg_token, str):
-                    return _sanitize_token(_ref_base(arg_token), fallback)
-                return fallback
-
             def _arg_row(arg):
                 """The ONE surface row an aggregate arg (view reference /
                 between a|b / neighbors pool) resolves to, else None: a
@@ -3851,12 +3836,15 @@ def run_program(cands, anchors, program, seed_results=None,
 
             def _set_label_node(arg_token, fallback):
                 """(label, node) for a frame arg: one resolving to ONE
-                surface row labels from the node (_node_label); anything else
-                keeps the token-derived label, node=None."""
+                surface row labels from the node (_node_label); a token
+                labels from its ref base; anything else takes ``fallback``,
+                node=None."""
                 node = _arg_row(arg_token)
                 if node is not None:
                     return _node_label(node), node
-                return _set_label(arg_token, fallback), None
+                if isinstance(arg_token, str):
+                    return _sanitize_token(_ref_base(arg_token), fallback), None
+                return fallback, None
 
             # --- element-wise ref resolution ---------------------------------
             # Each spec is (kind, payload, label_base, node|None, name_match):
