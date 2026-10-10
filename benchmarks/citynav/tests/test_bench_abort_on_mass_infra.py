@@ -416,3 +416,37 @@ def test_persistent_infra_is_reported_with_its_errors(
     assert not flown, "a capped infra episode was handed to a worker"
     for text in (d.summary_file.read_text(), d.driver_log.read_text()):
         assert "persistent infra: 1 episode(s)" in text and "A=2, B=1" in text, text
+
+
+def test_a_second_run_into_a_held_root_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two drivers into one root fly the same episodes twice. The first
+    holds the root for its lifetime; the second refuses, naming it."""
+    import os
+    import subprocess
+    import sys
+
+    from benchmarks.citynav import run_manifest as rm
+
+    holder = subprocess.Popen(
+        [sys.executable, "-c",
+         "import sys, time\n"
+         "from pathlib import Path\n"
+         "from benchmarks.citynav import episodes\n"
+         "lock = episodes.hold_root(Path(sys.argv[1]))\n"
+         "print('held', flush=True)\n"
+         "time.sleep(60)\n", str(tmp_path)],
+        cwd=Path(bf.__file__).resolve().parents[2], stdout=subprocess.PIPE, text=True,
+    )
+    try:
+        assert holder.stdout.readline().strip() == "held"
+        monkeypatch.setattr(rm, "build_manifest", lambda **kw: pytest.fail("flew"))
+        d = _driver(tmp_path)
+        monkeypatch.setattr(d, "_select_episodes", lambda: ["ep0"])
+        assert d.run() == 2
+        assert f"pid {holder.pid}" in d.driver_log.read_text()
+    finally:
+        holder.kill()
+        holder.wait()
+    assert os.path.exists(tmp_path / ".bench.lock")

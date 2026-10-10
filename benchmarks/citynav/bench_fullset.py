@@ -1374,13 +1374,24 @@ class Driver:
         return 0
 
     def run(self) -> int:
+        try:
+            lock = episodes.hold_root(self.out_root)
+        except episodes.RootHeld as exc:
+            self.log(f"FATAL: {exc}")
+            return 2
+        try:
+            return self._run()
+        finally:
+            lock.close()
+
+    def _run(self) -> int:
         episodes = self._select_episodes()
         self._selection = episodes
         self._split_size = len(episodes)
         # The run's ONE machine-written record, emitted with everything
         # resolved and nothing flown: measured endpoint identity,
-        # inlined config, tiered env. Re-entry into this out_root (a resume,
-        # a joiner lane) verifies identity against the stored manifest and
+        # inlined config, tiered env. Re-entry into this out_root (a resume)
+        # verifies identity against the stored manifest and
         # REFUSES drift — a resumed run under a different bake/model/config
         # is two runs wearing one run root's name.
         from benchmarks.citynav import run_manifest as _rm

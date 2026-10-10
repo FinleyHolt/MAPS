@@ -30,9 +30,50 @@ STATUS_OK = "ok"
 STATUS_TIMED_OUT = "timed_out"
 STATUS_INFRA = "infra"
 
-# Threads within one owner serialize here; owners in other processes
-# (lanes sharing a root) serialize on the flock.
+# Threads within one owner serialize here; the flock serializes against a
+# reader or a station in another process.
 _append_lock = threading.Lock()
+
+# The run root's lock file, held exclusively by the run that owns the root.
+ROOT_LOCK = ".bench.lock"
+
+
+class RootHeld(RuntimeError):
+    """Another run owns this root, or its filesystem cannot lock."""
+
+
+def hold_root(root: Path):
+    """Take ``root``'s exclusive lock for this run's lifetime and return the
+    open file holding it (the flock lifts when it closes or the process
+    ends, however it ended).
+
+    Two runs into one root fly the same episodes twice, and the pick lets a
+    later ``ok`` supersede an earlier miss. Raises ``RootHeld`` naming the
+    holder, or naming the filesystem when it cannot flock.
+    """
+    lock = (Path(root) / ROOT_LOCK).open("a+")
+    try:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock.seek(0)
+        holder = lock.read().strip() or "unknown"
+        lock.close()
+        raise RootHeld(
+            f"another run holds {root} ({holder}); two runs into one root fly "
+            "the same episodes twice. Wait for it to end, or give this one its "
+            "own root."
+        ) from None
+    except OSError as exc:
+        lock.close()
+        raise RootHeld(
+            f"{root} cannot be locked ({exc}); a run root needs flock: local "
+            "disk, or a network filesystem mounted with locking."
+        ) from None
+    lock.seek(0)
+    lock.truncate()
+    lock.write(f"pid {os.getpid()} on {os.uname().nodename}\n")
+    lock.flush()
+    return lock
 
 
 def strict(value: Any) -> Any:

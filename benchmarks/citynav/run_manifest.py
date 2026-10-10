@@ -29,8 +29,8 @@ on the mission's record first (``analysis.provenance.resolve``), so a
 per-mission fact is never read off the sortie's arm-wide stamp.
 
 Write-once semantics (the commit_state "first dump wins" idiom): the first
-emit writes the file; every re-entry into the same run root (a resume, a
-second driver) verifies the current resolution against it and REFUSES on
+emit writes the file; every re-entry into the same run root (a resume)
+verifies the current resolution against it and REFUSES on
 identity drift — a resumed run under a different bake/model/config/selection
 is two runs wearing one run id. Git-sha drift on resume is recorded (a
 ``resumes`` entry), not refused: mid-campaign code fixes are routine and the

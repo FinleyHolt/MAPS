@@ -403,6 +403,11 @@ def main() -> int:
         ).resolve()
         run_log = True
     out_root.mkdir(parents=True, exist_ok=True)
+    try:
+        root_lock = episodes.hold_root(out_root)  # held until the process ends
+    except episodes.RootHeld as exc:
+        log.error("%s", exc)
+        return 2
 
     _emit_run_manifest(args, out_root=out_root, indexed_rows=indexed_rows)
 
