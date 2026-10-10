@@ -165,3 +165,79 @@ def test_concurrent_cold_cache_builds_once_under_the_lock(tmp_path, monkeypatch)
     assert len(builds) == 1, f"expected ONE build under the lock, got {len(builds)}"
     assert results[0] is results[1], "both threads must get the one published bake"
     cm._ORTHO_RASTER_CACHE.clear()
+
+
+def _geotiff_pair(d, seed=3, H=37, W=53, px=0.15, ground=610.0):
+    """A block's rasters as the release ships them: ``<map>_rgb.tif`` + the flat height plane."""
+    import rasterio
+    from rasterio.transform import from_origin
+
+    rng = np.random.default_rng(seed)
+    rgb = rng.integers(1, 256, (H, W, 3), dtype=np.uint8)
+    rgb[5:9, 10:20] = 0  # ground the aircraft did not image
+    rgb[0, :] = 0
+    tr = from_origin(1200.0, 3400.0 + H * px, px, px)
+    with rasterio.open(d / "blk_rgb.tif", "w", driver="GTiff", width=W, height=H, count=3, dtype="uint8",
+                       transform=tr, compress="deflate") as dst:
+        for b in range(3):
+            dst.write(rgb[..., b], b + 1)
+    with rasterio.open(d / "blk.tif", "w", driver="GTiff", width=W, height=H, count=1, dtype="float32",
+                       transform=tr) as dst:
+        dst.write(np.full((H, W), ground, np.float32), 1)
+    return rgb
+
+
+def test_a_geotiff_pair_is_streamed_into_the_cache_and_never_filled(tmp_path):
+    """The block's own map is gigapixels, so it goes raster -> mmap a band of
+    rows at a time, and ground the aircraft did not image stays black."""
+    rgb = _geotiff_pair(tmp_path)
+    cm._ORTHO_RASTER_CACHE.clear()
+    got = cm.load_ortho_or_rasters("blk", rgbd_dir=str(tmp_path), m_per_px=0.1)
+    cm._ORTHO_RASTER_CACHE.clear()
+
+    assert isinstance(got["rgb"], np.memmap) and not got["rgb"].flags.writeable
+    assert np.array_equal(got["rgb"], rgb)
+    covered = rgb.max(axis=2) > 0
+    assert np.array_equal(got["alpha"] > 0, covered)
+    assert np.all(got["height"][covered] == 610.0) and np.all(got["height"][~covered] == 0.0)
+    assert (got["x_min"], got["y_min"]) == (1200.0, 3400.0)
+    assert got["px_per_m"] == 1.0 / 0.15
+    # vacuity floor: the hole is a real interior hole, so a fill WOULD have changed it
+    assert (~covered)[5:9, 10:20].all() and covered[4, 10] and covered[9, 10]
+    assert not list(tmp_path.glob("ortho/*.tmp*"))
+
+
+def test_the_streamed_bake_matches_the_in_heap_bake_band_for_band(tmp_path):
+    """Same contract as the PNG path (minus the fill): one band boundary must
+    not shift a row."""
+    from PIL import Image
+
+    rgb = _geotiff_pair(tmp_path, H=41)
+    Image.fromarray(rgb).save(tmp_path / "blk.png")
+    heap = cm.bake_ortho_from_rasters(tmp_path, "blk", m_per_px=0.1, fill=False)
+    cm._bake_geotiff_mmap(tmp_path, "blk", tmp_path / "s.mmap", band_rows=7)
+    got = cm._read_ortho_mmap(tmp_path / "s.mmap", 0.1)
+    for k in ("rgb", "alpha"):
+        assert np.array_equal(got[k], heap[k]), k
+    for k in ("x_min", "y_min", "px_per_m"):
+        assert got[k] == heap[k], k
+    # Height rides the plane where the map has pixels and is sentinel-cleared
+    # under no-data, which the in-heap path only does inside its fill.
+    covered = heap["alpha"] > 0
+    assert np.array_equal(got["height"][covered], heap["height"][covered])
+    assert np.all(got["height"][~covered] == 0.0) and (~covered).any()
+
+
+def test_an_unwritable_cache_raises_for_a_geotiff_pair(tmp_path):
+    """No in-heap fallback exists for a raster this size, so the failure is loud."""
+    import pytest
+
+    _geotiff_pair(tmp_path)
+    ro = tmp_path / "ro"
+    ro.mkdir()
+    ro.chmod(0o500)
+    try:
+        with pytest.raises(OSError):
+            cm._bake_geotiff_mmap(tmp_path, "blk", ro / "x.mmap")
+    finally:
+        ro.chmod(0o700)

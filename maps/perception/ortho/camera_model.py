@@ -5,13 +5,17 @@ Bakes a 0.10 m/px RGB+height orthomosaic from a SensatUrban PLY
 / ``load_ortho``), and exposes the pinhole intrinsics dataclass
 (``CameraIntrinsics``) the rest of the perception package consumes.
 
-The bake is the single hole-free 2D source of truth: interior holes (cells
-enclosed by coverage — photogrammetry gaps under canopy) are filled by
-``ortho_fill.fill_ortho_holes`` at bake time, while boundary no-data (the
-block's exterior frame, water, scan edges) keeps ``alpha=0`` so no fill
-projects to a frame edge. Runtime nadir perception crops directly over this
-ortho (``observation.crop_ortho_observation``). This is an ortho-only build:
-the runtime observation is always the nadir ortho crop.
+The bake is the single 2D source of truth. A PLY or PNG-sourced bake has
+its interior holes (cells enclosed by coverage — photogrammetry gaps under
+canopy) filled by ``ortho_fill.fill_ortho_holes`` at bake time, while
+boundary no-data (the block's exterior frame, water, scan edges) keeps
+``alpha=0`` so no fill projects to a frame edge. A block whose rasters are a
+georeferenced ``<map>_rgb.tif`` (the program's own map of the block, at its
+native cell) is streamed straight into the memory-mapped cache
+(``_bake_geotiff_mmap``) with no fill: it is a capture, and ground it did not
+image stays black with ``alpha`` 0. Runtime nadir perception crops directly
+over this ortho (``observation.crop_ortho_observation``). This is an
+ortho-only build: the runtime observation is always the nadir ortho crop.
 
 World frame convention (matches ``perception/observation.py``):
     x = east, y = north, z = up (meters).
@@ -151,13 +155,13 @@ def _read_ortho_mmap(d: Path, m_per_px: float) -> dict | None:
     return bake
 
 
-def _write_ortho_mmap(d: Path, bake: dict) -> None:
-    """Publish ``bake`` so the next process maps it instead of building it.
+def _publish_mmap(tmp: Path, d: Path) -> None:
+    """RENAME a fully written cache dir into place.
 
-    Written to a sibling temp dir and RENAMED. The readers are other bench
-    workers starting at the same moment, and a half-written ``rgb.npy`` sitting
-    at its final path is a torn ortho every one of them would map and trust.
-    Rename is atomic: a reader sees the whole cache or no cache.
+    The readers are other bench workers starting at the same moment, and a
+    half-written ``rgb.npy`` sitting at its final path is a torn ortho every
+    one of them would map and trust. Rename is atomic: a reader sees the whole
+    cache or no cache.
 
     A REBUILD HAS TO WIN. ``os.replace`` refuses a non-empty directory, so
     renaming onto a cache that already exists fails and leaves the stale one
@@ -165,12 +169,23 @@ def _write_ortho_mmap(d: Path, bake: dict) -> None:
     one way this cache could be wrong rather than merely slow. The old cache is
     moved aside first. A reader arriving in the gap between the two renames
     sees no cache and builds, which is correct and only costs it the build.
+    """
+    old = d.with_name(f"{d.name}.old{os.getpid()}")
+    try:
+        if d.exists():
+            os.replace(d, old)
+        os.replace(tmp, d)
+    finally:
+        shutil.rmtree(old, ignore_errors=True)
+
+
+def _write_ortho_mmap(d: Path, bake: dict) -> None:
+    """Publish an in-heap ``bake`` so the next process maps it instead of building it.
 
     Best-effort. A read-only or full filesystem costs the build again, never
     the run.
     """
     tmp = d.with_name(f"{d.name}.tmp{os.getpid()}")
-    old = d.with_name(f"{d.name}.old{os.getpid()}")
     try:
         tmp.mkdir(parents=True, exist_ok=True)
         for k in _MMAP_ARRAYS:
@@ -179,14 +194,82 @@ def _write_ortho_mmap(d: Path, bake: dict) -> None:
             json.dumps({k: float(bake[k])
                         for k in ("x_min", "y_min", "px_per_m")})
         )
-        if d.exists():
-            os.replace(d, old)
-        os.replace(tmp, d)
+        _publish_mmap(tmp, d)
     except OSError as exc:
         log.warning("ortho mmap cache write failed at %s: %s", d, exc)
         shutil.rmtree(tmp, ignore_errors=True)
-    finally:
-        shutil.rmtree(old, ignore_errors=True)
+
+
+def _geotiff_pair(rgbd_dir, map_name: str) -> Path | None:
+    """The block's georeferenced RGB raster, when the rasters are that kind."""
+    path = Path(rgbd_dir) / f"{map_name}_rgb.tif"
+    return path if path.is_file() else None
+
+
+def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, band_rows: int = 1024) -> None:
+    """Stream ``<map>_rgb.tif`` + ``<map>.tif`` into the cache at ``d``.
+
+    The block's own map at its native cell is gigapixels (Cal City at 0.15 m is
+    six), so nothing here holds more than one band of rows: rasterio reads a
+    window and the three arrays are ``open_memmap`` files written band by band.
+    The height plane's affine supplies the world extent and the cell, as it
+    does for the PNG-sourced bake, and height under no-data is sentinel-cleared
+    to 0 the same way.
+
+    No hole fill. The raster is the program's own capture of the block, and
+    ground the aircraft did not image stays black with ``alpha`` 0 -- the rule
+    a live run's imagery follows -- rather than being inpainted from its
+    neighbours across a gap between passes.
+
+    Not best-effort: there is no in-heap alternative for a raster this size,
+    so a destination that cannot be written raises instead of costing the
+    run an OOM.
+    """
+    import rasterio  # noqa: PLC0415
+    from numpy.lib.format import open_memmap  # noqa: PLC0415
+    from rasterio.windows import Window  # noqa: PLC0415
+
+    rgbd_dir = Path(rgbd_dir)
+    tmp = d.with_name(f"{d.name}.tmp{os.getpid()}")
+    try:
+        tmp.mkdir(parents=True, exist_ok=True)
+        with rasterio.open(rgbd_dir / f"{map_name}_rgb.tif") as rgb_src, \
+                rasterio.open(rgbd_dir / f"{map_name}.tif") as h_src:
+            H, W = rgb_src.height, rgb_src.width
+            if (h_src.height, h_src.width) != (H, W):
+                raise ValueError(
+                    f"{map_name}: the RGB raster is {W}x{H} and the height plane "
+                    f"{h_src.width}x{h_src.height}; the pair shares one grid"
+                )
+            if rgb_src.count < 3:
+                raise ValueError(f"{map_name}_rgb.tif carries {rgb_src.count} band(s); the RGB raster carries three")
+            b = h_src.bounds
+            meta = {
+                "x_min": float(b.left),
+                "y_min": float(b.bottom),
+                "px_per_m": 1.0 / abs(float(h_src.transform.a)),
+            }
+            rgb = open_memmap(tmp / "rgb.npy", mode="w+", dtype=np.uint8, shape=(H, W, 3))
+            height = open_memmap(tmp / "height.npy", mode="w+", dtype=np.float32, shape=(H, W))
+            alpha = open_memmap(tmp / "alpha.npy", mode="w+", dtype=np.uint8, shape=(H, W))
+            for r0 in range(0, H, band_rows):
+                n = min(band_rows, H - r0)
+                win = Window(0, r0, W, n)
+                band = np.ascontiguousarray(rgb_src.read([1, 2, 3], window=win).transpose(1, 2, 0))
+                covered = band.max(axis=2) > 0
+                h = h_src.read(1, window=win).astype(np.float32)
+                h[~covered] = 0.0
+                rgb[r0:r0 + n] = band
+                height[r0:r0 + n] = h
+                alpha[r0:r0 + n] = covered.astype(np.uint8) * 255
+            for m in (rgb, height, alpha):
+                m.flush()
+            del rgb, height, alpha
+        (tmp / "meta.json").write_text(json.dumps(meta))
+        _publish_mmap(tmp, d)
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
 
 
 def _read_ortho_npz(path, m_per_px: float) -> dict:
@@ -468,11 +551,19 @@ def load_ortho_or_rasters(
             npz = _rgbd_ortho_path(rgbd_dir, map_name, m_per_px)
             if npz.exists():
                 bake = _read_ortho_npz(npz, m_per_px)
+                _write_ortho_mmap(mm, bake)
+            elif _geotiff_pair(rgbd_dir, map_name) is not None:
+                # Gigapixels: never in the heap. Streamed into the cache and
+                # mapped back like any other process would map it.
+                _bake_geotiff_mmap(rgbd_dir, map_name, mm)
+                bake = _read_ortho_mmap(mm, m_per_px)
+                if bake is None:
+                    raise RuntimeError(f"{map_name}: the ortho cache at {mm} was written but does not read back")
             else:
                 bake = bake_ortho_from_rasters(
                     rgbd_dir, map_name, m_per_px=m_per_px, fill=True
                 )
-            _write_ortho_mmap(mm, bake)
+                _write_ortho_mmap(mm, bake)
         if len(_ORTHO_RASTER_CACHE) >= _ORTHO_CACHE_MAX_ENTRIES:
             _ORTHO_RASTER_CACHE.pop(next(iter(_ORTHO_RASTER_CACHE)))
         _ORTHO_RASTER_CACHE[key] = bake
@@ -515,8 +606,8 @@ def ortho_gsd_m(
     The divisor that turns a window in metres into delivered pixels, so a
     caller sizing a crop against a pixel budget reads the map's real grid
     instead of assuming one. Not the camera's resolution: CityNav's grid is
-    0.1 m/px and Cal City's is 0.3 m/px baked from 0.6 m NAIP, so this says
-    how many PIXELS a span costs, never how much DETAIL it holds.
+    0.1 m/px and Cal City's is the block raster's own cell, so this says how
+    many PIXELS a span costs, never how much DETAIL it holds.
     """
     ortho = load_ortho_or_rasters(
         map_name, ply_path=ply_path, rgbd_dir=rgbd_dir, m_per_px=m_per_px
