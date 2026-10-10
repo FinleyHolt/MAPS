@@ -48,7 +48,7 @@ def assemble(sensor: str | None = None, agl_m: float | None = None) -> dict:
     if sensor:
         try:
             spec = resolve_sensor(sensor)
-        except Exception:
+        except ValueError:
             spec = None
         if spec is None:
             raise SystemExit(
