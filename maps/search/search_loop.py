@@ -1601,7 +1601,6 @@ class SearchLoop:
                 "confidence": float(det.confidence),
                 "class_hint": det.class_hint,
                 "source_tier": det.source_tier,
-                "description": det.description,
                 "attributes": dict(det.attributes or {}),
                 "metadata": {k: _json_safe(v) for k, v in (det.metadata or {}).items()},
             }
@@ -1959,8 +1958,7 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
         tags={
             "label": det.label,
             "source_tier": det.source_tier,
-        }
-        | ({"description": det.description} if det.description else {}),
+        },
         centroid=centroid,
         bbox=bbox,
         cell_count=cell_count,
@@ -1998,7 +1996,6 @@ def _detection_to_evidence(det, now: float) -> EvidenceItem:
             "label": det.label,
             "world_xy": list(det.world_xy),
             "confidence": det.confidence,
-            "description": det.description,
             "source_tier": det.source_tier,
             **(det.metadata or {}),
         },

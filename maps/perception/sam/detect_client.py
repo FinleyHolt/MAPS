@@ -27,7 +27,7 @@ from PIL import Image
 
 from maps.perception.base import DetectedObject
 from maps.perception.sam.class_hint import resolve_class_hint
-from maps.perception.sam.concept_provider import ConceptProvider
+from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.geometry.geolocate import (
     project_mask_to_world_ortho,
 )
@@ -672,7 +672,7 @@ class SamDetectClient:
     decoder runs in the same forward.
     """
 
-    concept_provider: ConceptProvider
+    concept_provider: ReasonerUnionConceptProvider
     model_id: str = "facebook/sam3.1"
     score_threshold: float = 0.3
     min_area_px: int = 16

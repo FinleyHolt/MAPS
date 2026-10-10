@@ -1,23 +1,17 @@
-"""Perception contract: detection dataclass, adapter protocol, GT seed type.
+"""Perception contract: the detection dataclass.
 
-Perception layers convert an observation + pose (+ optional instruction hint)
-into a list of detected objects. Each detection carries enough metadata for a
-caller to promote it into a spatial graph, wrap it as evidence, or dedup it
-across steps — none of which is perception's job.
-
-All adapters are callable via ``adapter.detect(obs, pose_xy, instruction_hint)``.
-The GT-perfect tier reads a ground-truth landmark list; the real tier
-(:class:`perception.sam.detect_client.SamDetectClient`) segments one crop per
-call and returns masks carrying the world tracker's stable
-``metadata["track_id"]``, which the graph upsert uses to re-identify objects.
+The segmenter (:class:`maps.perception.sam.detect_client.SamDetectClient`)
+converts an observation + pose into a list of detected objects, one crop per
+call. Each detection carries enough metadata for a caller to promote it into
+a spatial graph, wrap it as evidence, or dedup it across steps — none of
+which is perception's job — and the world tracker stamps the stable
+``metadata["track_id"]`` the graph upsert uses to re-identify objects.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol
 
-from maps.perception.observation import Observation
 from maps.util.mask_region import MaskRegion
 
 
@@ -29,8 +23,6 @@ class DetectedObject:
     label: str  # Free-form class-less label ("car", "building", ...)
     confidence: float  # [0, 1]
     class_hint: str = "object"  # Coarse bucket for dedup/re-id (node class = fine label)
-    description: str | None = None  # Free-form descriptor (optional)
-    embedding: list[float] | None = None  # Optional vector for dedup / re-id
     source_tier: str = "synthetic"  # "synthetic" | "sam" | ...
     metadata: dict = field(default_factory=dict)  # provenance, bbox, track_id, ...
     attributes: dict[str, str] = field(default_factory=dict)
@@ -50,12 +42,3 @@ class DetectedObject:
     # which costs the SENSOR's resolution per detection. A region cannot be
     # separated from its box.
     mask: "MaskRegion | None" = None
-
-
-class PerceptionAdapter(Protocol):
-    def detect(
-        self,
-        obs: Observation,
-        pose_xy: tuple[float, float],
-        instruction_hint: str | None = None,
-    ) -> list[DetectedObject]: ...

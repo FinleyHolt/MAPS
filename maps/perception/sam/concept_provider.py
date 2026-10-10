@@ -1,6 +1,6 @@
 """Concept providers — what to look for on each frame.
 
-A ``ConceptProvider`` returns a ``list[str]`` of short noun phrases for
+``ReasonerUnionConceptProvider`` returns a ``list[str]`` of short noun phrases for
 SAM 3.1's concept-prompt segmenter. The source of truth in the v1
 parse-first stack is the canonicalized union of every active reasoner
 thread's ``sam_concepts``: the reasoning engine's ``ConceptUnionBuilder``
@@ -15,17 +15,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Iterable, Protocol
+from typing import Iterable
 
 from maps.perception.observation import Observation
 
 log = logging.getLogger(__name__)
-
-
-class ConceptProvider(Protocol):
-    def concepts_for(
-        self, obs: Observation | None, instruction_hint: str | None = None
-    ) -> list[str]: ...
 
 
 @dataclass

@@ -1,6 +1,6 @@
 """Robot-agnostic perception: observation crop + detection contract."""
 
-from maps.perception.base import DetectedObject, PerceptionAdapter
+from maps.perception.base import DetectedObject
 from maps.perception.observation import (
     BlockObservation,
     Observation,
@@ -13,7 +13,6 @@ __all__ = [
     "BlockObservation",
     "DetectedObject",
     "Observation",
-    "PerceptionAdapter",
     "SamDetectClient",
     "crop_observation",
     "load_block_rasters",

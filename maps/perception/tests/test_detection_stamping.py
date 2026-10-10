@@ -2,7 +2,7 @@
 
 Pins the gates both call sites (the sweep's Phase A and the
 retrospective re-perception) rely on: projection keys for projectable
-masks only, ``world_contour``/color stamped for REAL tiers only, the
+masks only, ``world_contour``/color stamped, the
 ``color``/``color_rgb`` supersession rule, and the ``color_conf``
 format.
 """
@@ -12,7 +12,6 @@ from __future__ import annotations
 import numpy as np
 
 from maps.util.mask_region import MaskRegion
-import pytest
 
 from maps.perception.base import DetectedObject
 from maps.perception.geometry.geolocate import TileFrame
@@ -65,17 +64,6 @@ def test_real_tier_gets_contour_and_color():
     float(det.attributes["color_conf"])
     assert len(det.attributes["color_conf"].split(".")[1]) == 3
     assert det.attributes["color_px"] == str(20 * 20)
-
-
-@pytest.mark.parametrize("tier", ["gt_perfect", "synthetic"])
-def test_gt_and_synthetic_tiers_never_stamped(tier):
-    det = _det(tier)
-    tracked = project_and_stamp_ortho_detections(
-        [det], view_corners_xy=_CORNERS, rgb=_rgb(), tile=_TILE
-    )
-    assert 0 in tracked, "projection itself is tier-independent"
-    assert not det.metadata.get("world_contour")
-    assert "color" not in det.attributes
 
 
 def test_higher_fidelity_color_never_overwritten():

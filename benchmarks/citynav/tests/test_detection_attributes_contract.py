@@ -22,7 +22,7 @@ _BOUNDS = (0.0, 0.0)
 
 
 def _make_detection(
-    *, world_xy=(10.0, 20.0), attributes=None, label="truck", embedding=None
+    *, world_xy=(10.0, 20.0), attributes=None, label="truck"
 ) -> DetectedObject:
     return DetectedObject(
         world_xy=world_xy,
@@ -30,7 +30,6 @@ def _make_detection(
         confidence=0.8,
         class_hint="object",
         attributes=attributes or {},
-        embedding=embedding,
     )
 
 
@@ -110,11 +109,10 @@ def test_runtime_node_falls_back_to_class_hint_when_unlabeled():
 def test_label_and_source_tier_survive_onto_tags():
     det = _make_detection(label="fire_hydrant", attributes={"color": "yellow"})
     det.source_tier = "vlm"
-    det.description = "A yellow fire hydrant on the sidewalk."
     node = _detection_to_mapobject(det, _BOUNDS, 5.0, now=0.0)
     assert node.tags["label"] == "fire_hydrant"
     assert node.tags["source_tier"] == "vlm"
-    assert node.tags["description"] == "A yellow fire hydrant on the sidewalk."
+    assert node.tags == {"label": "fire_hydrant", "source_tier": "vlm"}
     assert node.semantic_attributes == {
         "color": {"yellow": 1},
         "sam_label": {"fire_hydrant": 1},

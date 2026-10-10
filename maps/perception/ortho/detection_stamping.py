@@ -34,7 +34,7 @@ def project_and_stamp_ortho_detections(
     """Return ``{detection_index: TileProjectedMask}`` for projectable masks.
 
     Mutates the detections in place: ``metadata["world_contour"]`` and the
-    ``color*`` attributes are stamped per the gates below. ``rgb`` is the
+    ``color*`` attributes are stamped per the rules below. ``rgb`` is the
     crop the masks were segmented on; ``None`` disables color stamping.
     """
     tracked: dict[int, TileProjectedMask] = {}
@@ -49,31 +49,18 @@ def project_and_stamp_ortho_detections(
         )
         # WORLD_CONTOUR (SAM ortho path): native-precision footprint
         # polygon from the pixel mask via the same view-square affine.
-        # Only for REAL segmentation tiers — gt_perfect stamps its own
-        # tightness-gated exact contour (its mask rasterizes the
-        # loose annotation hull, which must NOT be re-traced), and
-        # synthetic disc masks carry no real shape.
-        if (
-            tp is not None
-            and det.source_tier not in ("gt_perfect", "synthetic")
-            and isinstance(det.metadata, dict)
-            and not det.metadata.get("world_contour")
-        ):
+        if tp is not None and not det.metadata.get("world_contour"):
             wc = world_contour_from_region(region, view_corners_xy)
             if wc:
                 det.metadata["world_contour"] = wc
         # COLOR MIXTURE (C3b): deterministic color on the real path is a
-        # mixture string, never an argmax word. Same gating as
-        # world_contour: REAL tiers only, never gt_perfect/synthetic. It
-        # SUPERSEDES the adapter's deterministic single-word median (same
+        # mixture string, never an argmax word. It SUPERSEDES the adapter's deterministic single-word median (same
         # fidelity class -- ``color_rgb`` alongside ``color`` is that
         # path's signature) but never overwrites a color set by a
         # higher-fidelity source (a color WITHOUT color_rgb, e.g. a
         # GT-table/vision fill).
         if (
             tp is not None
-            and det.source_tier not in ("gt_perfect", "synthetic")
-            and isinstance(det.attributes, dict)
             and rgb is not None
             and (
                 "color" not in det.attributes
