@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "maps"
+version = "0.1.0"
+description = "MAPS: Multimodal Agentic Planning and Search for aerial language-guided target search"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "numpy",
+    "scipy>=1.11",
+    "pillow",
+    "matplotlib",
+    "tifffile",
+    "requests",
+    "httpx",
+    "pyyaml",
+    "transformers",
+    "rasterio>=1.3",
+    "opencv-python-headless>=4.8",
+    "shapely>=2.0",
+    "pyproj>=3.6",
+]
+
+[project.optional-dependencies]
+# The CityNav OSM prior bake (benchmarks.citynav.bake.city).
+bake = ["osmnx", "geopandas", "certifi"]
+dev = ["pytest==9.1.1", "ruff==0.17.0"]
+
+[project.scripts]
+maps-bench = "benchmarks.citynav.run_benchmark:main"
+calcity-bench = "benchmarks.calcity.run_benchmark:main"
+
+[tool.setuptools.packages.find]
+include = ["maps*", "benchmarks*"]
+exclude = ["*tests*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+"maps.perception" = ["prompts/*", "viz/data/*"]

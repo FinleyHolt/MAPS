@@ -1,0 +1,18 @@
+target-version = "py311"
+
+exclude = [
+    # Vendored upstream CityNav rasterize (water-cookie/citynav, MIT), kept verbatim.
+    "benchmarks/citynav/data_prep/_vendor_citynav_rasterize.py",
+]
+
+[lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",
+    "F401",
+    "F841",
+    "E402",
+    "E702",
+    "E731",
+    "E741",
+]
