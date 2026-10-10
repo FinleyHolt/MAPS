@@ -104,8 +104,8 @@ def renderer(ortho):
 
     def render(sensor, pose_xy, agl_m: float, yaw_deg: float, roll_deg: float = 0.0,
                pitch_deg: float = 0.0) -> np.ndarray:
-        frame, _stats = render_frame(rgb, bounds, ppm, sensor=sensor, pose_xy=pose_xy, agl_m=agl_m,
-                                     yaw_deg=yaw_deg, airframe_roll_deg=roll_deg, airframe_pitch_deg=pitch_deg)
+        frame = render_frame(rgb, bounds, ppm, sensor=sensor, pose_xy=pose_xy, agl_m=agl_m,
+                             yaw_deg=yaw_deg, airframe_roll_deg=roll_deg, airframe_pitch_deg=pitch_deg)
         return np.ascontiguousarray(np.asarray(frame)[..., :3])
 
     return render

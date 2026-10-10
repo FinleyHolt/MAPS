@@ -86,13 +86,10 @@ def test_marker_lands_where_the_projection_predicts(mount_yaw_deg, across, down)
     marker = (aim[0] + w_m / 4.0, aim[1] + h_m / 4.0)
     rgb = _synthetic_ortho(px_per_m, bounds, marker)
 
-    frame, st = render_frame(
+    frame = render_frame(
         rgb, bounds, px_per_m, sensor=sensor, pose_xy=aim, agl_m=agl, yaw_deg=0.0
     )
     assert frame.shape == (1536, 2048, 3)
-    assert st["footprint_m"] == pytest.approx((w_m, h_m))
-    assert st["source_gsd_m_per_px"] == pytest.approx(0.5)
-    assert st["upsample"] == pytest.approx(0.5 / st["gsd_m_per_px"])
 
     rows, cols = np.nonzero(frame.max(axis=2) > 128)
     assert rows.size, "marker did not survive the warp"
@@ -171,7 +168,7 @@ def test_the_window_under_the_footprint_renders_the_whole_ortho_s_frame():
     """
     import cv2
 
-    from maps.perception.ortho.sensor_frame import source_map
+    from maps.perception.ortho.sensor_frame import ground_corners_xy, source_map
 
     bounds, px_per_m = Bounds(0.0, 0.0, 1000.0, 1000.0), 2.0
     rgb = np.random.default_rng(7).integers(0, 256, (2000, 2000, 3), dtype=np.uint8)
@@ -180,14 +177,16 @@ def test_the_window_under_the_footprint_renders_the_whole_ortho_s_frame():
         ((300.0, 700.0), 610.0, 37.0, 12.0, -4.0),
         ((620.0, 410.0), 300.0, 250.0, -20.0, 6.0),
     ):
-        frame, st = render_frame(
+        frame = render_frame(
             rgb, bounds, px_per_m, sensor=ORYX, pose_xy=pose, agl_m=agl, yaw_deg=yaw,
             airframe_roll_deg=roll, airframe_pitch_deg=pitch,
         )
+        corners = ground_corners_xy(ORYX, pose, agl, yaw, airframe_roll_deg=roll,
+                                    airframe_pitch_deg=pitch)
         src = np.array(
             [
                 [(x - bounds.x_min) * px_per_m, (rgb.shape[0] - 1) - (y - bounds.y_min) * px_per_m]
-                for (x, y) in st["corners_xy"]
+                for (x, y) in corners
             ],
             dtype=np.float32,
         )

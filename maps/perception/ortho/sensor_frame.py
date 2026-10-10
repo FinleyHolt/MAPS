@@ -14,9 +14,7 @@ render. Relief displacement is not modelled: a tall building at the frame edge
 should lean outward and does not.
 
 The render GSD is usually finer than the ortho it samples, so a frame is
-geometrically true and photometrically capped by the source. ``caption`` states
-both resolutions and the upsample factor between them, because the picture
-cannot be read without them.
+geometrically true and photometrically capped by the source.
 
 Site-specific loading (which raster, which bounds) belongs to the caller; every
 function here takes the ortho and its bounds as arguments.
@@ -28,7 +26,6 @@ import math
 
 import numpy as np
 
-M_PER_FT = 0.3048
 #: The taps ``INTER_LANCZOS4`` reads either side of a sample, so the margin
 #: a rendered window needs around its footprint.
 TAP_MARGIN_PX = 4
@@ -125,8 +122,8 @@ def render_frame(
     yaw_deg: float = 0.0,
     airframe_roll_deg: float = 0.0,
     airframe_pitch_deg: float = 0.0,
-) -> tuple[np.ndarray, dict]:
-    """Warp ``ortho_rgb`` over the sensor footprint; return ``(frame, stats)``.
+) -> np.ndarray:
+    """Warp ``ortho_rgb`` over the sensor footprint and return the frame.
 
     ``ortho_rgb`` is north-up with row 0 at ``bounds.y_max``, the layout
     ``camera_model.bake_ortho_from_rasters`` produces. Raises if any footprint
@@ -138,45 +135,7 @@ def render_frame(
     the frame that camera would see. Flat ground under a pinhole is a
     homography exactly, so the warp is exact for any orientation; relief is
     what it does not carry.
-
-    ``stats["corners_xy"]`` is the world-space correspondence this render used,
-    in image order. Feeding it back through ``cv2.getPerspectiveTransform``
-    against the frame corners gives the world -> frame-pixel map, consistent
-    with the render by construction rather than by agreement.
     """
-    width_m, height_m = footprint_m(sensor, agl_m)
-    src, corners = footprint_px(
-        ortho_rgb, bounds, px_per_m, sensor=sensor, pose_xy=pose_xy, agl_m=agl_m, yaw_deg=yaw_deg,
-        airframe_roll_deg=airframe_roll_deg, airframe_pitch_deg=airframe_pitch_deg,
-    )
-    out_w, out_h = sensor.intrinsics.image_width, sensor.intrinsics.image_height
-    frame = warp_window(ortho_rgb, src, out_w, out_h)
-    gsd = width_m / out_w
-    return np.ascontiguousarray(frame, np.uint8), {
-        "footprint_m": (width_m, height_m),
-        "gsd_m_per_px": gsd,
-        "source_gsd_m_per_px": 1.0 / px_per_m,
-        "upsample": (1.0 / px_per_m) / gsd,
-        "corners_xy": corners,
-    }
-
-
-def footprint_px(
-    ortho_rgb: np.ndarray,
-    bounds,
-    px_per_m: float,
-    *,
-    sensor,
-    pose_xy: tuple[float, float],
-    agl_m: float,
-    yaw_deg: float = 0.0,
-    airframe_roll_deg: float = 0.0,
-    airframe_pitch_deg: float = 0.0,
-) -> tuple[np.ndarray, list[tuple[float, float]]]:
-    """The frame's corner pixel centres on the raster, ``(4, 2)`` float32 in image order, and the
-    world corners they came from: the source half of :func:`render_frame`'s homography, which a
-    batched renderer builds for many poses before it samples any. Raises as :func:`render_frame`
-    does when a corner falls outside ``bounds``."""
     corners = ground_corners_xy(
         sensor, pose_xy, agl_m, yaw_deg,
         airframe_roll_deg=airframe_roll_deg, airframe_pitch_deg=airframe_pitch_deg,
@@ -196,7 +155,8 @@ def footprint_px(
         ],
         dtype=np.float32,
     )
-    return src, corners
+    out_w, out_h = sensor.intrinsics.image_width, sensor.intrinsics.image_height
+    return np.ascontiguousarray(warp_window(ortho_rgb, src, out_w, out_h), np.uint8)
 
 
 def source_map(src_px: np.ndarray, width: int, height: int) -> tuple[np.ndarray, np.ndarray]:
@@ -264,29 +224,3 @@ def frame_corners_px(width: int, height: int) -> np.ndarray:
         [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]],
         dtype=np.float32,
     )
-
-
-def caption(frame: np.ndarray, lines: list[str]) -> np.ndarray:
-    """Burn ``lines`` bottom-left over a dark strip so they read over any
-    imagery. Scaled off the frame height so a 1024 px and a 2048 px render look
-    the same."""
-    import cv2  # noqa: PLC0415
-
-    s = frame.shape[0] / 1536.0
-    font, scale, thick = cv2.FONT_HERSHEY_SIMPLEX, 0.62 * s, max(1, round(1.4 * s))
-    pad, step = round(18 * s), round(30 * s)
-    top = frame.shape[0] - (len(lines) * step + pad)
-    strip = frame[top:, :].astype(np.float32) * 0.30
-    frame[top:, :] = strip.astype(np.uint8)
-    for i, text in enumerate(lines):
-        cv2.putText(
-            frame,
-            text,
-            (pad, top + pad + round(step * (i + 0.6))),
-            font,
-            scale,
-            (235, 235, 235),
-            thick,
-            cv2.LINE_AA,
-        )
-    return frame
