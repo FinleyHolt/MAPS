@@ -887,16 +887,10 @@ class Mission:
     def _mission_stamp(self) -> dict[str, Any]:
         """The mission's own grain of the run manifest: the reasoning effort its
         requests carry, the mission's pick, else the arm's environment value,
-        else the serve's own default (None), and which."""
-        arm = os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT") or None
-        if self.reasoning_effort is not None:
-            effort, source = self.reasoning_effort, "mission"
-        elif arm is not None:
-            effort, source = arm, "arm"
-        else:
-            effort, source = None, "serve"
+        else the serve's own default (None)."""
+        effort = self.reasoning_effort or os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT") or None
         return {"episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no,
-                "reasoning_effort": effort, "reasoning_effort_source": source}
+                "reasoning_effort": effort}
 
     def _turns(self) -> int:
         """Model turns taken: the conversations that have ended plus the turn the one in flight is on."""

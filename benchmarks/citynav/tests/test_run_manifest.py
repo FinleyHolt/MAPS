@@ -217,9 +217,9 @@ def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tm
                   sample_seed=None, sample_offset=None, limit=None, workers=None, allowlist_path=None,
                   episodes=["calcity::1#1"])
     stamp = {"episode_id": "calcity::1#1", "run_id": "20260917T160207Z", "run_no": 3,
-             "reasoning_effort": "0.3", "reasoning_effort_source": "console"}
+             "reasoning_effort": "0.3"}
     m = run_manifest.build_manifest(**common, mission=stamp)
     assert m["mission"] == stamp and m["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.3"
-    m = run_manifest.build_manifest(**common, mission={**stamp, "reasoning_effort": None, "reasoning_effort_source": "arm"})
+    m = run_manifest.build_manifest(**common, mission={**stamp, "reasoning_effort": None})
     assert m["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.99"
     assert "mission" not in run_manifest.build_manifest(**common)

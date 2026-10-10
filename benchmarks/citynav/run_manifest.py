@@ -294,7 +294,7 @@ def build_manifest(
 
     ``mission`` is the field station's per-mission grain: the mission's own
     identity and sampling (``episode_id``, ``run_id``, ``run_no``,
-    ``reasoning_effort``, ``reasoning_effort_source``), recorded whole under
+    ``reasoning_effort``), recorded whole under
     ``mission``. A ``reasoning_effort`` it names REPLACES the arm's in
     ``search_env_flags``, because that is what the mission's requests
     carried; None leaves the arm's stamp standing."""
