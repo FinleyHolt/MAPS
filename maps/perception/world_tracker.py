@@ -45,7 +45,6 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -71,31 +70,6 @@ class WorldTrackerConfig:
     p_max_pos_var: float = 20.0**2  # cap on dormant-track covariance
     gate_chi2: float = _CHI2_2DOF_P99
     n_init: int = 3  # consecutive hits before a track is "confirmed"
-    # EVERY ADMITTED DETECTION DESERVES AN IDENTITY. Admission is the
-    # detector's job (score_threshold); a birth floor ABOVE it opened a
-    # dead band (0.3-0.5) whose detections got no wt_ id, fell back to a
-    # per-frame-churning key downstream, and re-homed each other's graph
-    # nodes across a pass -- 140#138's GT lot at conf 0.41 was minted and
-    # destroyed by every later stop, four runs in a row. Provisional
-    # births + n_init pruning already kill single-frame flicker; that is
-    # the tracker's own noise valve, not a second admission gate.
-    birth_score: float = 0.0  # spawn a track for every admitted detection
-
-    @classmethod
-    def from_env(cls) -> "WorldTrackerConfig":
-        def _f(key: str, default: float) -> float:
-            v = os.environ.get(key)
-            return float(v) if v not in (None, "") else default
-
-        return cls(
-            q_pos_var=_f("WORLD_TRACK_Q_M", 0.2) ** 2,
-            r_pos_var=_f("WORLD_TRACK_R_M", 1.0) ** 2,
-            p0_pos_var=_f("WORLD_TRACK_P0_M", 1.0) ** 2,
-            p_max_pos_var=_f("WORLD_TRACK_PMAX_M", 20.0) ** 2,
-            gate_chi2=_f("WORLD_TRACK_GATE_CHI2", _CHI2_2DOF_P99),
-            n_init=int(_f("WORLD_TRACK_N_INIT", 3)),
-            birth_score=_f("WORLD_TRACK_BIRTH_SCORE", 0.0),
-        )
 
 
 @dataclass
@@ -127,8 +101,10 @@ class WorldTracker:
     def update(self, detections: list[DetectedObject]) -> None:
         """Predict → Mahalanobis-assign → KF-update → lifecycle, then
         stamp a stable ``metadata['track_id']`` ('wt_<int>') in place on
-        every detection that bound to (or spawned) a track. Detections
-        below ``birth_score`` that match nothing are left untouched."""
+        every detection with a finite ``world_xy``: it binds to a track or
+        spawns one. Admission is the detector's job (score_threshold);
+        provisional births + ``n_init`` pruning are the tracker's own
+        flicker valve, never a second admission gate."""
         self._frame += 1
         cfg = self.cfg
 
@@ -171,16 +147,12 @@ class WorldTracker:
                     trk.confirmed = True
                 matched_track_idx.add(r)
                 detections[det_i].metadata["track_id"] = f"wt_{trk.track_id}"
-                _stamp(detections[det_i], trk)  # after confirm flip
                 dets[c] = (-1, z, "")  # consume
 
         # --- unmatched detections -> births ---------------------------
         born_idx: set[int] = set()
         for det_i, z, label in dets:
             if det_i < 0:
-                continue
-            score = float(getattr(detections[det_i], "confidence", 0.0))
-            if score < cfg.birth_score:
                 continue
             trk = _Track(
                 track_id=self._next_id,
@@ -193,7 +165,6 @@ class WorldTracker:
             self._tracks.append(trk)
             born_idx.add(len(self._tracks) - 1)
             detections[det_i].metadata["track_id"] = f"wt_{trk.track_id}"
-            _stamp(detections[det_i], trk)
 
         # --- true misses -> dormant (confirmed tracks never deleted) --
         survivors: list[_Track] = []
@@ -265,13 +236,6 @@ class WorldTracker:
         k = trk.p @ sinv  # Kalman gain (2,2)
         trk.x = trk.x + k @ (z - trk.x)
         trk.p = (np.eye(2) - k) @ trk.p
-
-
-def _stamp(det: DetectedObject, trk: _Track) -> None:
-    """Record tracker provenance for downstream/debug (inert metadata)."""
-    md = det.metadata
-    md["world_track_confirmed"] = bool(trk.confirmed)
-    md["world_track_hits"] = int(trk.hits)
 
 
 __all__ = ["WorldTracker", "WorldTrackerConfig"]

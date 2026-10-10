@@ -394,12 +394,9 @@ class SearchLoop:
         # ``_find_track``'s primary exact-id match collapses duplicates,
         # replacing the fragile per-frame world-IoU re-id fallback. One
         # instance per episode (SearchLoop is per-episode); always on.
-        from maps.perception.world_tracker import (
-            WorldTracker,
-            WorldTrackerConfig,
-        )
+        from maps.perception.world_tracker import WorldTracker
 
-        self._world_tracker = WorldTracker(WorldTrackerConfig.from_env())
+        self._world_tracker = WorldTracker()
         self._graph: object | None = None  # frozen prebake graph
         self._state: _State | None = None
         # Re-entrant lock so a worker thread and the main thread can both
@@ -1806,7 +1803,7 @@ class SearchLoop:
         per-frame post-NMS index, so stop N's detection 3 exact-matched
         stop N+1's unrelated detection 3 and ``_find_track`` re-homed the
         node 300 m — a pass DESTROYED its own rows as it flew (140#138's
-        GT lot, four runs). With ``birth_score=0`` every SAM detection
+        GT lot, four runs). Every SAM detection with a world position
         carries ``wt_``; a non-churning adapter track id (gt_perfect's
         stable object ids) still rides, and everything else keys on
         label@xy — a per-frame identity that collides only when two
