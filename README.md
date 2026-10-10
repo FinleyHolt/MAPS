@@ -180,7 +180,7 @@ window.
 | `SEARCH_REASONER_URL` | client | The reasoner's base URL, one endpoint. Default `http://127.0.0.1:8001/v1`. |
 | `SEARCH_REASONER_API_KEY` | client | Bearer token for the reasoner. |
 | `SEARCH_REASONER_TIMEOUT_S` | client | Per-call transport timeout, seconds. |
-| `SEARCH_REASONER_WARMUP_TIMEOUT_S`, `SEARCH_REASONER_WARMUP_TOTAL_S` | bench | How long the bench waits for the reasoner to answer at startup. |
+| `SEARCH_REASONER_WARMUP_TOTAL_S` | bench | How long the bench waits for the reasoner to answer at startup. |
 | `SEARCH_ENDPOINT_SPEC_OVERRIDE` | client | `<model_id>:<max_model_len>` for an endpoint whose `/v1/models` reports no window. |
 | `SEARCH_LLM_ROUTING_KEY_HEADER` | client | The header name the per-episode routing key rides (default `x-smg-routing-key`). |
 | `SEARCH_SAMPLING_REASONING_EFFORT` | client | The arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`); discovery refuses a value the served model's card does not take. Unset sends none. |

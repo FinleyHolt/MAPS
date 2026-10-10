@@ -372,19 +372,13 @@ def run_episode(
     )
     _synth_start_alt = float(state.altitude_m)
 
-    # Pre-mission infrastructure warmup. The mission conversation is the
-    # first (and only) LLM consumer, so prove the reasoner endpoint is
-    # reachable before any flight spend.
+    # The mission conversation is the first (and only) LLM consumer, so
+    # prove the reasoner endpoint is reachable before any flight spend.
     if search_loop is not None and compiler is not None:
-        # Cold-start warmup: first prove the reasoner API is reachable, then
-        # pre-pay representative thinking/schema/image requests. Without
-        # this, the mission's first turn pays the cold
-        # prefill/grammar/cudagraph path on the clock.
         try:
             _endpoint_spec = endpoint_spec_module.spec()
             _reasoner_warmup_ping(
                 base_url=_endpoint_spec.base_url,
-                model=_endpoint_spec.model_id,
                 api_key=os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY"),
                 # Bound the warmup: a reachable vLLM answers on attempt 1
                 # (cold FP8 compile ~2-3 min, well under this cap), so the
@@ -395,11 +389,6 @@ def run_episode(
                 # ending the episode so the bench's vLLM-health monitor can
                 # re-queue it instead of hanging the slot for hours.
                 total_wait_s=float(os.environ.get("SEARCH_REASONER_WARMUP_TOTAL_S", "900")),
-                # Only a dedicated engine we launched has a cold grammar /
-                # CUDA-graph path worth pre-paying. A hosted endpoint is
-                # already warm, and the warmup's tool-schema + image calls
-                # would just be billed.
-                pre_pay_cold_start=_endpoint_spec.server_declared_window,
             )
         except ReasonerUnreachableError as exc:
             log.error("Pre-flight aborted: vLLM unreachable (%s)", exc)
