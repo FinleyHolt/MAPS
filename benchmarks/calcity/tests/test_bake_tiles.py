@@ -162,3 +162,38 @@ def test_ground_truth_keys_can_never_enter_the_prior(tmp_path, monkeypatch):
     )["prior"][0]
     for leaked in ("descriptions", "target_id", "ann_id", "cityref_id"):
         assert leaked not in prior, f"{leaked} reached the prior"
+
+
+def test_the_bake_reads_no_citynav_raster_and_keeps_the_bounds_rectangle(tmp_path, monkeypatch):
+    """Cal City has no CityNav raster: its coverage is the bounds rectangle
+    by rule, and the bake is byte for byte the one a CityNav raster
+    directory without Cal City produced."""
+    from benchmarks.citynav import paths as citynav_paths
+    from benchmarks.citynav.bake import city
+
+    features = [_road(1, {"highway": "residential", "name": "Elm"}, [(100, 100), (400, 120)]),
+                _area(2, {"building": "yes"}, 200, 200, 260, 250)]
+    _bundle(monkeypatch, features)
+    empty = tmp_path / "citynav_rasters"
+    empty.mkdir()
+    monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", empty)
+    reaching = tmp_path / "reaching"
+    bake_tiles._write_meta("calcity", reaching)
+    cache = tmp_path / "calcity_osm_local.geojson"
+    cache.write_text(json.dumps(bake_tiles.local_osm_cache(tmp_path / "bundle", "calcity")))
+    city.bake_city_from_cache("calcity", cache, tiles_dir=reaching, imagery=True)
+
+    class Untouchable:
+        def __fspath__(self):
+            raise AssertionError("the Cal City bake reached into CityNav's raster directory")
+
+        __str__ = __truediv__ = __fspath__
+
+    monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", Untouchable())
+    bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity")
+    meta = json.loads((tmp_path / "tiles" / "calcity_meta.json").read_text())
+    assert meta["coverage_source"] == "bounds rectangle" and meta["bounds_source"] == "meta sidecar"
+    names = sorted(p.name for p in reaching.iterdir())
+    assert names == sorted(p.name for p in (tmp_path / "tiles").iterdir()) and len(names) == 4
+    for name in names:
+        assert (tmp_path / "tiles" / name).read_bytes() == (reaching / name).read_bytes(), name

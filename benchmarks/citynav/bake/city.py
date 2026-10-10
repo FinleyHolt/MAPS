@@ -133,7 +133,8 @@ def _raster_bounds(block: str) -> tuple[float, float, float, float] | None:
         return None
 
 
-def _load_city_meta(city: str, tiles_dir: Path) -> tuple[dict[str, Any], WorldBounds, tuple[int, int], float]:
+def _load_city_meta(city: str, tiles_dir: Path, *, imagery: bool = True
+                    ) -> tuple[dict[str, Any], WorldBounds, tuple[int, int], float]:
     """Meta + the geometry a block bakes over.
 
     Bounds come from the block's RASTER, not from the sidecar. The sidecar's
@@ -142,7 +143,8 @@ def _load_city_meta(city: str, tiles_dir: Path) -> tuple[dict[str, Any], WorldBo
     observe — 42.7% of all graph nodes, measured, none of them backed by an
     upstream CityRefer object or a CityNav target. The imagery is the block,
     so the imagery sets the bounds and the grid is sized to match. Only when
-    no raster is readable does the sidecar's box stand.
+    no raster is readable, or the block has no CityNav imagery
+    (``imagery=False``), does the sidecar's box stand.
     """
     meta_path = tiles_dir / f"{city}_meta.json"
     if not meta_path.is_file():
@@ -155,7 +157,7 @@ def _load_city_meta(city: str, tiles_dir: Path) -> tuple[dict[str, Any], WorldBo
     b = meta.get("bounds") or {}
     try:
         cell_size_m = float(meta.get("cell_size_m", 2.0))
-        rb = _raster_bounds(city)
+        rb = _raster_bounds(city) if imagery else None
         if rb is not None:
             x_min, y_min, x_max, y_max = rb
             # Rows run north-to-south, so grid_shape is (rows, cols) = (y, x).
@@ -187,6 +189,8 @@ def _cell_coverage(
     bounds: WorldBounds,
     grid_shape: tuple[int, int],
     cell_size_m: float,
+    *,
+    imagery: bool = True,
 ) -> np.ndarray | None:
     """Boolean ``grid_shape`` mask of where the block's IMAGERY has pixels.
 
@@ -201,12 +205,15 @@ def _cell_coverage(
     vertically before the block reduce. Returns ``None`` — and stamps
     ``meta["coverage_source"]`` accordingly — when no ortho resolves or its
     geometry disagrees with the block bounds (fieldsite and city-aggregate
-    bakes keep the rectangle rule).
+    bakes keep the rectangle rule). A block with no CityNav imagery
+    (``imagery=False``, Cal City) takes the rectangle as its rule.
     """
+    meta["coverage_source"] = "bounds rectangle"
+    if not imagery:
+        return None
     from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
     from maps.perception.ortho.camera_model import load_ortho_or_rasters
 
-    meta["coverage_source"] = "bounds rectangle"
     try:
         ortho = load_ortho_or_rasters(block, rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR))
     except Exception as exc:  # noqa: BLE001 — a city aggregate has no raster
@@ -1227,11 +1234,14 @@ def bake_city_from_cache(
     osm_cache: str | Path,
     *,
     tiles_dir: str | Path = TILES_DIR,
+    imagery: bool = True,
 ) -> dict[str, Any]:
-    """Bake one CityNav city from an OSM cache in CityNav local XY."""
+    """Bake one city from an OSM cache in its local XY. ``imagery=False`` is a
+    block with no CityNav raster: the meta sidecar's bounds and the bounds
+    rectangle's coverage."""
     tiles_path = Path(tiles_dir).expanduser().resolve()
-    meta, bounds, grid_shape, cell_size_m = _load_city_meta(city, tiles_path)
-    coverage = _cell_coverage(city, meta, bounds, grid_shape, cell_size_m)
+    meta, bounds, grid_shape, cell_size_m = _load_city_meta(city, tiles_path, imagery=imagery)
+    coverage = _cell_coverage(city, meta, bounds, grid_shape, cell_size_m, imagery=imagery)
     records = _read_osm_cache(Path(osm_cache).expanduser().resolve())
     bake_counts: dict[str, Any] = {}
     features = _features_from_records(

@@ -114,7 +114,7 @@ def bake_block(bundle: Path, tiles_dir: Path, map_name: str) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix=f"{map_name}_osm_") as tmp:
         cache_path = Path(tmp) / f"{map_name}_osm_local.geojson"
         cache_path.write_text(json.dumps(cache), encoding="utf-8")
-        return bake_city_from_cache(map_name, cache_path, tiles_dir=tiles_dir)
+        return bake_city_from_cache(map_name, cache_path, tiles_dir=tiles_dir, imagery=False)
 
 
 def main(argv: list[str] | None = None) -> int:
