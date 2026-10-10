@@ -46,7 +46,6 @@ _CANDS = [
     {"fid": "d1", "xy": [10.0, 0.0], "class": "car",
      "distance to new_park_street": 3.2},
 ]
-_GROUNDED = {"d0", "d1"}
 
 
 class _DummyCtx:
@@ -79,7 +78,6 @@ def _drive(turn_list):
         reasoner=r,
         user_message="the car near New Park Street",
         ctx=_DummyCtx(),
-        grounded_fids=set(_GROUNDED),
         compute_namespace={"cands": [dict(c) for c in _CANDS],
                            "anchors": []},
         rid_tag="h0",

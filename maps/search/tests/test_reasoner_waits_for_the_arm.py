@@ -74,7 +74,7 @@ def _round(monkeypatch, faults: int, *, cancel_event=None, transcript=None,
 
     return advance_reasoner_one_round(
         reasoner=r, user_message="find the car", ctx=_Ctx(),
-        grounded_fids=set(), compute_namespace={"cands": [], "anchors": []},
+        compute_namespace={"cands": [], "anchors": []},
         rid_tag="h0", transcript=transcript,
         mission_spec=MissionSpec(
             fly=lambda item: {"stop_id": "stop_000", "target": item["target_fid"],

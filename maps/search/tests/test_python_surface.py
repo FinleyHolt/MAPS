@@ -579,7 +579,7 @@ def test_an_explore_names_the_uncovered_sibling_segments():
         reasoner=fr, user_message="Find it.", ctx=SimpleNamespace(
             graph=None, cell_size_m=1.0, tile_origin_xy=(0.0, 0.0),
             grid_shape=(10, 10), robot_pose=None),
-        grounded_fids=set(), rid_tag="m0",
+        rid_tag="m0",
         compute_namespace={"cands": cands, "anchors": [], "cell_m": 1.0},
         diag={}, obs_span_m=200.0,
         mission_spec=MissionSpec(

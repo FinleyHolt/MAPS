@@ -395,7 +395,6 @@ def _view_ack_for(view_args: dict) -> dict:
         reasoner=r,
         user_message="find the car",
         ctx=_DummyCtx(),
-        grounded_fids={"d0"},
         compute_namespace={"cands": [dict(c) for c in _CANDS],
                            "anchors": []},
         rid_tag="h0",

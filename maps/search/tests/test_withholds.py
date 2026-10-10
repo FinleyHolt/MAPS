@@ -196,7 +196,7 @@ def _map_mission(script, monkeypatch, names="", renderer=None, finds=1):
         reasoner=fr, user_message="Find the car.",
         ctx=SimpleNamespace(graph=graph, cell_size_m=1.0, tile_origin_xy=(0.0, 0.0),
                             grid_shape=(100, 100), robot_pose=None),
-        grounded_fids=set(), rid_tag="m0", transcript=[],
+        rid_tag="m0", transcript=[],
         compute_namespace={"cands": cands, "anchors": anchors, "cell_m": 1.0},
         diag={}, look_renderer=renderer or (lambda reqs: []),
         mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: {"declared": []}))

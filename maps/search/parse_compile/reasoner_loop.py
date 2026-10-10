@@ -1284,12 +1284,10 @@ def run_mission(
         reasoner=reasoner,
         user_message=instruction.strip(),
         ctx=ctx,
-        grounded_fids=set(),
         rid_tag=rid_tag,
         transcript=transcript,
         compute_namespace=_surface_from_ctx(ctx),
         diag=diag,
-        pose_xy=_pose_xy_of_ctx(ctx),
         look_renderer=look_renderer,
         obs_span_m=obs_span_m,
         obs_minor_m=obs_minor_m,
@@ -1339,12 +1337,10 @@ def continue_mission(
         reasoner=reasoner,
         user_message=instruction.strip(),
         ctx=ctx,
-        grounded_fids=set(),
         rid_tag=rid_tag,
         transcript=transcript,
         compute_namespace=_surface_from_ctx(ctx),
         diag=diag,
-        pose_xy=_pose_xy_of_ctx(ctx),
         look_renderer=look_renderer,
         obs_span_m=obs_span_m,
         obs_minor_m=obs_minor_m,
@@ -1366,20 +1362,14 @@ def advance_reasoner_one_round(
     reasoner: Reasoner,
     user_message: str,
     ctx: ToolContext,
-    grounded_fids: set[str] | None = None,
     rid_tag: str = "h?",
     transcript: list[dict] | None = None,
     compute_namespace: dict | None = None,
     diag: dict | None = None,
-    pose_xy: tuple[float, float] | None = None,
-    gate_streak: dict | None = None,
-    live_grounded_pred: Callable[[str], bool] | None = None,
     look_renderer: Callable[[list[dict]], list[dict]] | None = None,
     obs_span_m: float | None = None,
     obs_minor_m: float | None = None,
     look_audit_dir: str | None = None,
-    stop_id: str = "",
-    step_idx: int = -1,
     watchlist_apply: Callable[[list, list], dict] | None = None,
     boost_queue: Callable[[list, list], dict] | None = None,
     preflight: bool = False,
@@ -1413,16 +1403,6 @@ def advance_reasoner_one_round(
     When ``diag`` is provided, ``diag["turns_used"]`` is stamped each turn
     (failure-mode diagnostics; survives every return path).
     """
-    grounded_fids = set(grounded_fids or [])
-
-    # Grounded-gate rejections are counted per STOP-ROUND across ALL fids.
-    # A fresh round starts a fresh
-    # rolling total (the round's frozen grounded set is also rebuilt per
-    # round, so a cross-round repeat re-evaluates against new perception
-    # anyway). The caller's per-rid dict is mutated in place.
-    if gate_streak is not None:
-        gate_streak.clear()
-
     # Text-only round: the reasoner reasons over the structured world-state
     # (SAM detections + perceived attributes on the runtime graph) via
     # analyze_scene alone (the ONE query tool). No images are attached.
@@ -3005,8 +2985,8 @@ def advance_reasoner_one_round(
                         # graph and nowhere on disk.
                         if look_audit_dir and _shown:
                             _persist_look_audit(
-                                audit_dir=look_audit_dir, stop_id=stop_id,
-                                step_idx=step_idx, rid_tag=rid_tag,
+                                audit_dir=look_audit_dir, stop_id="",
+                                step_idx=-1, rid_tag=rid_tag,
                                 cid=f"flight_{_report.get('stop_id') or ''}",
                                 annotate=False,
                                 tool_ack={"flight_view": 1,
@@ -3533,8 +3513,8 @@ def advance_reasoner_one_round(
                             "will follow")
         if look_audit_dir:
             _persist_look_audit(
-                audit_dir=look_audit_dir, stop_id=stop_id,
-                step_idx=step_idx, rid_tag=rid_tag, cid=cid,
+                audit_dir=look_audit_dir, stop_id="",
+                step_idx=-1, rid_tag=rid_tag, cid=cid,
                 annotate=True, tool_ack=ack, vision_text=vis_text,
                 crops=crops)
         return ack
@@ -3661,8 +3641,8 @@ def advance_reasoner_one_round(
                             "will follow")
         if look_audit_dir:
             _persist_look_audit(
-                audit_dir=look_audit_dir, stop_id=stop_id,
-                step_idx=step_idx, rid_tag=rid_tag, cid=cid,
+                audit_dir=look_audit_dir, stop_id="",
+                step_idx=-1, rid_tag=rid_tag, cid=cid,
                 annotate=False, tool_ack=ack, vision_text=vis_text,
                 crops=maps)
         return ack

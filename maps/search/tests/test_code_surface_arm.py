@@ -266,10 +266,10 @@ def _explore_drive(script, *, stops=_STOPS, obs_span_m=200.0, cands=None,
                           robot_pose=SimpleNamespace(x=_START[0], y=_START[1]))
     reply = advance_reasoner_one_round(
         reasoner=fr, user_message="Find the goal object.", ctx=ctx,
-        grounded_fids=set(), rid_tag="m0",
+        rid_tag="m0",
         compute_namespace={"cands": list(_CANDS if cands is None else cands),
                            "anchors": [], "cell_m": 1.0},
-        diag={}, pose_xy=_START, obs_span_m=obs_span_m,
+        diag={}, obs_span_m=obs_span_m,
         obs_minor_m=obs_minor_m,
         look_renderer=_renderer if with_renderer else None,
         mission_spec=MissionSpec(held_now=held_now,

@@ -100,7 +100,6 @@ def _fly(script, cands, ortho_dir):
         ctx=SimpleNamespace(graph=None, cell_size_m=1.0,
                             tile_origin_xy=(0.0, 0.0), grid_shape=(10, 10),
                             robot_pose=None),
-        grounded_fids=set(),
         rid_tag="m0",
         transcript=[],
         compute_namespace={"cands": list(cands), "anchors": [],

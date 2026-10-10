@@ -32,7 +32,6 @@ _CANDS = [
     {"fid": "d1", "xy": [10.0, 0.0], "class": "building", "rk": 1.0,
      "search_text": "building"},
 ]
-_GROUNDED = {"d0", "d1"}
 
 # find -> order is a real ordering terminal, so its rows reach row_latest
 # and the turn's attached-column census is non-empty.
@@ -63,7 +62,6 @@ def _round(r, turns):
         reasoner=r,
         user_message="the middle building",
         ctx=_DummyCtx(),
-        grounded_fids=set(_GROUNDED),
         compute_namespace={"cands": [dict(c) for c in _CANDS], "anchors": []},
         rid_tag="h0",
         mission_spec=MissionSpec(

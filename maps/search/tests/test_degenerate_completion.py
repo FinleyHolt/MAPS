@@ -185,7 +185,6 @@ def test_loop_retries_a_collapse_instead_of_ending_the_mission(monkeypatch):
         reasoner=r,
         user_message="find the car",
         ctx=_DummyCtx(),
-        grounded_fids=set(),
         compute_namespace={"cands": [], "anchors": []},
         rid_tag="h0",
         mission_spec=MissionSpec(

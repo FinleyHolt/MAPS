@@ -85,7 +85,6 @@ def drive_blocks(blocks: list[str]) -> list[dict]:
         reasoner=r,
         user_message="the gray car",
         ctx=_DummyCtx(),
-        grounded_fids={"detected_0", "detected_1"},
         compute_namespace={"cands": [dict(c) for c in _CANDS],
                            "anchors": []},
         rid_tag="h0",

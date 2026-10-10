@@ -173,7 +173,6 @@ def test_dynamic_mission_output_is_commensurate():
         reasoner=fr,
         user_message="instruction",
         ctx=_ctx(),
-        grounded_fids=set(),
         rid_tag="m0",
         transcript=[],
         compute_namespace={
@@ -213,7 +212,7 @@ def test_the_transcript_says_what_json_says():
     tr: list[dict] = []
     fr = FakeReasoner([[("run", {"code": 'look_for("car")'})], "over"])
     rl.advance_reasoner_one_round(
-        reasoner=fr, user_message="i", ctx=_ctx(), grounded_fids=set(),
+        reasoner=fr, user_message="i", ctx=_ctx(),
         rid_tag="m0", transcript=tr,
         compute_namespace={"cands": [], "anchors": [], "cell_m": 1.0},
         diag={},
