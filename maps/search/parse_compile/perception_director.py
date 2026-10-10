@@ -22,18 +22,12 @@ mutates and the ``act`` tool coordinates with:
     ACTIVATES pending boosts for the next perception round
     (``activate_pending`` pushes ``watchlist + boost concepts``) and
     RETIRES them after it (``retire_after_round``); an unmatched targeted
-    boost returns to pending so it stays attached to its queued stop until
-    that stop flies. ``where`` entries address a pending stop by its
-    ``qstop_N``/``stop_NNN`` id, a fid, or an ``[x, y]`` literal.
-  * the PENDING-STOP registry — ``pending_stops``, which the watchlist and
-    boost results report. The mission flies each viewpoint the moment it
-    lands, so nothing registers there and it stays empty.
-
-The dedup-bypass contract (C4, NARROWED by retrospective perception): a
-boost never re-flies anything on its own; an EXPLICIT ``act{viewpoints}``
-re-request of an already-flown pose bypasses the dedup only while a
-genuinely-pending boost exists for it (``dedup_exempt`` is the predicate
-``tour_synth.synthesize_extension`` consults).
+    boost returns to pending so it stays attached to its target until that
+    target flies. ``where`` entries address a flown stop by its
+    ``qstop_N``/``stop_NNN`` id, a fid, or an ``[x, y]`` literal. The
+    mission flies each viewpoint the moment it lands, so no stop is ever
+    queued unflown: the watchlist and boost results report
+    ``pending_stops: 0`` and ``pending: []``.
 
 Pure state + arithmetic (no LLM, no perception imports; the retro executor
 is an injected callable) so the whole surface is unit-testable without the
@@ -43,8 +37,6 @@ engine.
 from __future__ import annotations
 
 import logging
-
-from maps.util.xy_token import parse_xy_token
 import math
 from dataclasses import dataclass, field
 from typing import Callable
@@ -100,13 +92,10 @@ class _Boost:
     where: list[dict] = field(default_factory=list)
     active: bool = False
 
-    def label(self) -> str:
-        return "/".join(self.concepts)
-
 
 @dataclass
 class PerceptionDirector:
-    """Agent-owned perception direction (watchlist / boosts / stop queue)."""
+    """Agent-owned perception direction (watchlist / boosts)."""
 
     # The live channel to the SAM concept provider (freeze-exempt). None keeps
     # every mutation state-only (offline tests / non-SAM adapters); the delta
@@ -122,9 +111,6 @@ class PerceptionDirector:
 
     watchlist: list[str] = field(default_factory=list)
     boosts: list[_Boost] = field(default_factory=list)
-    # stop id -> {"target_fid": str, "xy": (x, y) | None, "flown": bool,
-    #             "canceled": bool}; empty under the mission (see above).
-    pending_stops: dict[str, dict] = field(default_factory=dict)
     # Flown-observation log (appended by retire_after_round): each entry
     # {"pose_xy": (x, y), "alt_m": float|None, "stop_id": str|None,
     #  "target_fids": [str, ...]} — the RETROSPECTIVE address space (an
@@ -161,7 +147,7 @@ class PerceptionDirector:
             "added": added,
             "removed": removed,
             "unknown_removes": unknown_removes,
-            "pending_stops": self.pending_unflown_count(),
+            "pending_stops": 0,
             "live": push_status == "ok",
         }
         if push_status == "failed":
@@ -184,59 +170,15 @@ class PerceptionDirector:
             return "failed"
 
     # ------------------------------------------------------------------
-    # Pending-stop registry (the addressable queue)
-    # ------------------------------------------------------------------
-
-    def pending_unflown_count(self) -> int:
-        return sum(1 for p in self.pending_stops.values()
-                   if not p["flown"] and not p["canceled"])
-
-    def pending_stop_ids(self) -> list[str]:
-        return [sid for sid, p in self.pending_stops.items()
-                if not p["flown"] and not p["canceled"]]
-
-    # ------------------------------------------------------------------
-    # Cancellation
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
     # Boosts (queue + RETROSPECTIVE execution)
     # ------------------------------------------------------------------
 
     def _find_flown(self, w: dict) -> dict | None:
-        """The flown observation a resolved where entry addresses, or None.
-
-        Matches (in order): a registered stop id marked flown — resolved to
-        its RECORDED flown-log observation by stop id, target fid, or
-        xy-radius (amendment verifier A2: the log's pose+altitude is the
-        view the drone actually captured); only when no log entry matches
-        does the target-centered synthetic fallback fire (a nadir ortho
-        render centered on the target — deterministic and legitimate, but
-        not the recorded frame; alt None -> the executor's default). Then:
-        a fid any flown stop targeted; an [x, y] within radius of a flown
-        pose."""
+        """The flown observation a resolved where entry addresses, or None:
+        the flown-log entry with that stop id; a fid any flown stop
+        targeted; an [x, y] within radius of a flown pose."""
         sid = w.get("stop")
         if sid:
-            p = self.pending_stops.get(sid)
-            if p is not None and p["flown"]:
-                for f in self.flown_log:
-                    if sid == f.get("stop_id") or (
-                        p["target_fid"]
-                        and p["target_fid"] in (f.get("target_fids") or [])
-                    ):
-                        return f
-                pxy = _xy_of(p.get("xy"))
-                if pxy is not None:
-                    for f in self.flown_log:
-                        fxy = _xy_of(f.get("pose_xy"))
-                        if fxy is not None and math.hypot(
-                                pxy[0] - fxy[0], pxy[1] - fxy[1]
-                        ) <= BOOST_MATCH_RADIUS_M:
-                            return f
-                return {"pose_xy": p["xy"], "alt_m": None,
-                        "stop_id": sid, "target_fids": [p["target_fid"]]}
-            # An unregistered stop token may still name a flown tour stop
-            # present only in the flown log.
             for f in self.flown_log:
                 if sid == f.get("stop_id"):
                     return f
@@ -274,18 +216,8 @@ class PerceptionDirector:
             token = str(w or "").strip()
             if not token:
                 continue
-            if token in self.pending_stops:
-                p = self.pending_stops[token]
-                if p["canceled"]:
-                    unresolved.append(token)
-                    continue
-                resolved.append({
-                    "kind": "stop", "stop": token,
-                    "fid": p["target_fid"], "xy": p["xy"],
-                })
-            elif token.startswith(("qstop_", "stop_")):
-                # A stop token: maybe a flown tour stop known only to the
-                # flown log; else unknown.
+            if token.startswith(("qstop_", "stop_")):
+                # A stop token: a flown stop in the flown log, else unknown.
                 resolved.append({"kind": "stop", "stop": token,
                                  "fid": "", "xy": None})
             else:
@@ -298,7 +230,7 @@ class PerceptionDirector:
             token = (w.get("stop") or w.get("fid")
                      or [round(w["xy"][0], 1), round(w["xy"][1], 1)])
             if flown is None:
-                if w["kind"] == "stop" and w.get("stop") not in self.pending_stops:
+                if w["kind"] == "stop":
                     unresolved.append(w["stop"])
                     continue
                 queue_where.append(w)
@@ -351,7 +283,7 @@ class PerceptionDirector:
                 "error": ("no boost target resolved; nothing was queued or "
                           "re-segmented"),
                 "unknown_where": unresolved,
-                "pending": self.pending_stop_ids(),
+                "pending": [],
             }
         return ack
 
@@ -395,7 +327,7 @@ class PerceptionDirector:
         return False
 
     def retire_after_round(self, flown: list[dict]) -> None:
-        """Consume boosts + mark pending stops after one perception round.
+        """Consume boosts after one perception round.
 
         ``flown`` entries: ``{"pose_xy": (x, y), "alt_m"?: float,
         "stop_id"?: str, "target_fids": [str, ...]}`` — one per stop the
@@ -403,9 +335,8 @@ class PerceptionDirector:
         retrospective address space). A where-less ACTIVE boost is
         consumed; a where-targeted active boost is consumed iff any of its
         where entries matched a flown stop, else it returns to PENDING (it
-        stays attached to its queued stop until that stop flies). Pending
-        stops whose id / target fid / xy matched are marked flown. Pushes
-        the post-retire concept set live."""
+        stays attached to its target until that target flies). Pushes the
+        post-retire concept set live."""
         flown = [f for f in (flown or []) if isinstance(f, dict)]
         for f in flown:
             self.flown_log.append({
@@ -416,31 +347,6 @@ class PerceptionDirector:
                 "target_fids": [str(x) for x in (f.get("target_fids") or [])
                                 if x],
             })
-        flown_fids = {
-            str(x) for f in flown for x in (f.get("target_fids") or []) if x}
-        flown_sids = {str(f.get("stop_id")).strip() for f in flown
-                      if f.get("stop_id")}
-        flown_xys = [xy for xy in (_xy_of(f.get("pose_xy")) for f in flown)
-                     if xy is not None]
-        for qid, p in self.pending_stops.items():
-            if p["flown"] or p["canceled"]:
-                continue
-            if qid in flown_sids or (
-                    p["target_fid"] and p["target_fid"] in flown_fids):
-                p["flown"] = True
-                continue
-            # xy-radius fallback ONLY for AGENT-queued stops (their eventual
-            # synthesized pose may differ from the request's target xy). A
-            # registered TOUR stop's own stop_id IS its identity — a radius
-            # fallback would blanket-mark neighboring tour stops flown.
-            if p["source"] != "agent":
-                continue
-            pxy = p.get("xy")
-            if pxy is not None and any(
-                math.hypot(pxy[0] - fx, pxy[1] - fy) <= BOOST_MATCH_RADIUS_M
-                for fx, fy in flown_xys
-            ):
-                p["flown"] = True
         survivors: list[_Boost] = []
         for b in self.boosts:
             if not b.active:
@@ -454,34 +360,3 @@ class PerceptionDirector:
             survivors.append(b)
         self.boosts = survivors
         self._push_live()
-
-    # ------------------------------------------------------------------
-    # Dedup bypass (C4, narrowed: explicit re-request + pending boost only)
-    # ------------------------------------------------------------------
-
-    def dedup_exempt(self, target_fid: str, pose_xy=None) -> bool:
-        """True when an EXPLICIT ``act{viewpoints}`` re-request over
-        ``target_fid`` (resolved pose ``pose_xy`` when known) has a
-        genuinely-PENDING boost for that stop/area — the re-flight is a new
-        perception act and bypasses the already-flown dedup. Vocabulary
-        alone never re-flies (flown-targeted boosts execute retrospectively
-        and never linger here); this predicate only widens what an explicit
-        re-request may do."""
-        fid = str(target_fid or "").strip()
-        pxy = _xy_of(pose_xy)
-        for b in self.boosts:
-            if not b.where:
-                # A where-less outstanding boost applies to every
-                # subsequently-flown stop: an explicit re-flight perceives
-                # with new vocabulary.
-                return True
-            for w in b.where:
-                if fid and w.get("fid") == fid:
-                    return True
-                wxy = w.get("xy")
-                if wxy is not None and pxy is not None and (
-                    math.hypot(wxy[0] - pxy[0], wxy[1] - pxy[1])
-                    <= BOOST_MATCH_RADIUS_M
-                ):
-                    return True
-        return False
