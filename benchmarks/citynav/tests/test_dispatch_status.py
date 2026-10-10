@@ -146,3 +146,17 @@ def test_rows_are_strict_json(tmp_path):
         assert parsed["sensor"]["max_range_m"] is None
         assert parsed["metrics"] == {"NE": None, "SR": 1}
         assert parsed["visited_xy"] == [[1.0, None]]
+
+
+def test_a_cut_last_line_loses_only_its_own_row(tmp_path):
+    """A worker killed mid-append leaves a cut last line; the next append
+    starts a line of its own, so only the cut row is lost."""
+    from benchmarks.citynav.analysis import rows
+
+    episodes.append_row(tmp_path, {"episode_id": "A", "status": "ok"})
+    cut = json.dumps({"episode_id": "B", "status": "ok"})
+    with (tmp_path / episodes.EPISODES_JSONL).open("a") as fh:
+        fh.write(cut[: len(cut) // 2])
+    episodes.append_row(tmp_path, {"episode_id": "C", "status": "ok"})
+    got = [r["episode_id"] for r in rows.iter_json_rows(tmp_path / episodes.EPISODES_JSONL)]
+    assert got == ["A", "C"]

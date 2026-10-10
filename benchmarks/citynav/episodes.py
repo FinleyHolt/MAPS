@@ -19,6 +19,7 @@ from __future__ import annotations
 import fcntl
 import json
 import math
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -53,11 +54,21 @@ def strict(value: Any) -> Any:
 
 
 def append_row(root: Path, row: dict) -> None:
+    """Append one attempt to the run's ledger, under an exclusive flock.
+
+    A writer killed mid-append leaves a cut last line with no newline; the
+    next row would glue onto it and be lost with it. So a ledger that does
+    not end in a newline gets one first: the cut line stays undecodable and
+    this row reads whole.
+    """
     line = json.dumps(strict(row), allow_nan=False)
-    with _append_lock, (Path(root) / EPISODES_JSONL).open("a") as f:
+    with _append_lock, (Path(root) / EPISODES_JSONL).open("ab+") as f:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX)
         try:
-            f.write(line + "\n")
+            size = os.fstat(f.fileno()).st_size
+            if size and os.pread(f.fileno(), 1, size - 1) != b"\n":
+                f.write(b"\n")
+            f.write((line + "\n").encode("utf-8"))
             f.flush()
         finally:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
