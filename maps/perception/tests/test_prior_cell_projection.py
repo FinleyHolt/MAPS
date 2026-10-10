@@ -94,9 +94,22 @@ def test_malformed_cells_fall_back_and_keep_the_good_ones():
     assert _rasterize_cells_to_mask(ragged, _BOUNDS, h_t, _IMG, _IMG) is not None
 
 
-def test_no_cells_is_an_empty_mask_not_a_none():
-    h_t = _homography()
-    out = _rasterize_cells_to_mask([], _BOUNDS, h_t, _IMG, _IMG)
-    assert out is not None
-    assert not np.asarray(out).any()
-    assert np.asarray(out).shape == (_IMG, _IMG)
+def test_a_prior_with_no_cells_is_skipped_and_the_rest_of_the_stop_survives():
+    """An empty footprint projects to no mask (``None``), the same as one wholly
+    outside the view, so the builder skips that prior and keeps the others.
+    A frame-sized array in its place raised on ``rows_cols()`` and the caller's
+    broad except dropped the whole stop's prior overlay."""
+    from maps.perception.viewpoint.overlay import build_prior_polys_ortho
+
+    assert _rasterize_cells_to_mask([], _BOUNDS, _homography(), _IMG, _IMG) is None
+    features = {"building": [
+        {"fid": "empty", "centroid_row": 62, "centroid_col": 74, "cells": []},
+        {"fid": "kept", "centroid_row": 62, "centroid_col": 74, "cells": _footprints()[0]},
+    ]}
+    corners = [(100.0, 340.0), (420.0, 340.0), (420.0, 100.0), (100.0, 100.0)]
+    polys, table = build_prior_polys_ortho(
+        rgb_shape=(_IMG, _IMG), features=features, bounds=_BOUNDS,
+        view_corners_xy=corners, fids_to_render=["empty", "kept"],
+    )
+    assert [p["fid"] for p in polys] == ["kept"]
+    assert [r["fid"] for r in table] == ["kept"]

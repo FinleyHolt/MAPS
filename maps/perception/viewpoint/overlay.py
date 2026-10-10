@@ -148,7 +148,7 @@ def _rasterize_cells_to_mask(
     cells across 500 Cal City footprints, 0 differing.
     """
     if cells is None or len(cells) == 0:
-        return np.zeros((img_h, img_w), dtype=bool)
+        return None
     cs = float(bounds.cell_size_m)
     half = cs / 2.0
     h_t = world_to_px.astype(np.float64, copy=False)
