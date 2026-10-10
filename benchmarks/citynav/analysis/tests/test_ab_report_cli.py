@@ -3,7 +3,7 @@
 The comparability guards were unit-pinned, but ``main()`` itself never ran
 under test — so when the fatal/arm split renamed the mismatch list, the
 post-report warning kept reading the retired name and every CLI invocation
-died on NameError after printing (``--log`` was unreachable).
+died on NameError after printing.
 """
 
 from __future__ import annotations
@@ -136,3 +136,12 @@ def test_the_served_alias_is_not_the_served_build():
     # stop pairing against every column stored after it.
     fatal2, arm2 = comparability_issues(a, {**gt, "served_model": "inkling-small"})
     assert not fatal2 and not arm2
+
+
+def test_a_metric_no_row_carries_is_refused(tmp_path, monkeypatch):
+    _write_run(tmp_path / "a", "aaaaaaa", {"e1": 1, "e2": 0})
+    _write_run(tmp_path / "b", "aaaaaaa", {"e1": 0, "e2": 1})
+    monkeypatch.setattr(sys, "argv", ["ab_report", str(tmp_path / "a"), str(tmp_path / "b"),
+                                      "--metric", "OSR"])
+    with pytest.raises(SystemExit, match="no scored row .* carries OSR"):
+        main()

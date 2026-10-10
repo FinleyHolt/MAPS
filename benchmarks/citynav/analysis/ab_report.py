@@ -15,11 +15,10 @@ Two entry points:
     bootstrap CI on the delta (episode resampling), McNemar (b/c discordant +
     chi-square-1df p via math.erfc), and the win/loss (fail->success /
     success->fail) flip counts. No numpy/scipy.
-  * CLI -- pair two run roots by episode_id on SR and print + optionally append
-    a verdict block to SR_REPORT.md.
+  * CLI -- pair two run roots by episode_id on SR and print the verdict.
 
 Usage:
-  python -m benchmarks.citynav.analysis.ab_report <run_a> <run_b> [--label "..."] [--log]
+  python -m benchmarks.citynav.analysis.ab_report <run_a> <run_b> [--label "..."]
 """
 
 from __future__ import annotations
@@ -33,10 +32,8 @@ from benchmarks.citynav.analysis import rows as _rows
 
 
 def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    """Wilson score interval for a binomial proportion k/n (95% at z=1.96).
-
-    The oracle-substitution recovery readouts (tier-b replay driver, the
-    tier-c arm read) all quote their flip rates through this one function."""
+    """Wilson score interval for a binomial proportion k/n (95% at z=1.96):
+    the capability figure's interval."""
     if n <= 0:
         return (float("nan"), float("nan"))
     p = k / n
@@ -103,7 +100,6 @@ def ab_stats(
     pairs: list[tuple[int, int]],
     *,
     label: str = "",
-    boot_seed: int = 12345,
     metric: str = "SR",
 ) -> dict:
     """Paired statistics over (a, b) in {0,1}. The shared-set core.
@@ -246,6 +242,8 @@ def _sr_by_episode(run_root: Path, key: str = "SR") -> dict[str, int]:
     from benchmarks.citynav.analysis.run_report import load_run
 
     scored, _ = load_run(run_root)
+    if not any(key in m for m in scored.values()):
+        raise SystemExit(f"--metric {key}: no scored row of {run_root} carries {key}")
     return {eid: int(bool(m.get(key))) for eid, m in scored.items()}
 
 
@@ -399,23 +397,11 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
     return fatal, arm
 
 
-def log_to_sr_report(st: dict, extra: str = "") -> None:
-    """Append a dated verdict block to benchmarks/citynav/analysis/SR_REPORT.md."""
-    rep = Path(__file__).resolve().parent / "SR_REPORT.md"
-    block = (
-        f"\n### A/B verdict: {st['label']}\n```\n{render(st)}\n```\n"
-        + (extra + "\n" if extra else "")
-    )
-    with rep.open("a") as fh:
-        fh.write(block)
-
-
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("run_a", help="baseline run root")
     ap.add_argument("run_b", help="treatment run root")
     ap.add_argument("--label", default="A_vs_B")
-    ap.add_argument("--log", action="store_true", help="append verdict to SR_REPORT.md")
     ap.add_argument("--min-overlap-frac", type=float, default=0.8,
                     help="refuse if shared/min(n_a,n_b) is below this (coord-root/seed bug)")
     ap.add_argument("--allow-low-overlap", action="store_true")
@@ -428,12 +414,9 @@ def main() -> None:
                          "The forensics entry point: every trace-level "
                          "mechanism hunt starts from these ids.")
     ap.add_argument("--subset", default=None, metavar="FILE",
-                    help="episode-id list file (one per line, e.g. "
-                         "benchmarks/citynav/analysis/fired_list.py --out output): pair + test "
-                         "ONLY these episodes — the gated-lever discipline "
-                         "powers the McNemar on the FIRED subset where the "
-                         "effect concentrates, reported alongside the "
-                         "diluted full-set headline")
+                    help="episode-id list file (one per line): pair and "
+                         "test ONLY these episodes, reported alongside the "
+                         "full-set headline")
     ap.add_argument("--metric", default="SR", metavar="KEY",
                     help="which SERVED binary metric to pair on (SR, OSR). "
                          "OSR answers a different question than SR -- "
@@ -543,9 +526,6 @@ def main() -> None:
     if arm and args.allow_provenance_mismatch:
         print("WARNING comparing non-comparable runs (override active):\n  - "
               + "\n  - ".join(arm))
-    if args.log:
-        log_to_sr_report(st, extra)
-        print(f"-> appended to {Path(__file__).resolve().parent / 'SR_REPORT.md'}")
 
 
 if __name__ == "__main__":
