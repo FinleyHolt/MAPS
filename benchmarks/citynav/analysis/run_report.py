@@ -159,16 +159,19 @@ def read_manifest(root: Path) -> dict:
 
 
 def _local_bake_dir(resolved: str | None) -> Path | None:
-    """This repo's copy of the tiles dir a run recorded flying.
+    """This machine's copy of the tiles dir a run recorded flying.
 
-    ``tiles_dir_resolved`` is absolute on the machine that flew the run, so
-    the longest tail of it that is a directory here is the local copy --
+    ``tiles_dir_resolved`` is absolute on the machine that flew the run: the
+    path itself when it is a directory here, else the longest tail of it
+    that is a directory under this repo --
     ``/scratch/<user>/MAPS/benchmarks/calcity/tiles`` resolves to
     ``benchmarks/calcity/tiles``. Longest tail first, so a run under
     ``.../tiles`` cannot match a shorter unrelated path.
     """
     if not resolved:
         return None
+    if Path(resolved).is_dir():
+        return Path(resolved)
     parts = PurePosixPath(resolved).parts
     for i in range(1, len(parts)):
         cand = _REPO_ROOT.joinpath(*parts[i:])
@@ -198,10 +201,13 @@ def bake_line(root: Path) -> str:
 
     perception = read_manifest(root).get("perception") or {}
     stamped = perception.get("bake_sha256")
-    local = _local_bake_dir(perception.get("tiles_dir_resolved")) or paths.TILES_DIR
+    recorded = perception.get("tiles_dir_resolved")
 
     if not stamped:
         return "bake: UNVERIFIED (run stamps no bake_sha256)"
+    local = _local_bake_dir(recorded) if recorded else paths.TILES_DIR
+    if local is None:
+        return f"bake: UNKNOWN (the run's bake {recorded} is not on this machine)  run={stamped[:12]}"
     here = paths.bake_sha256(local)
     if here is None:
         return f"bake: UNKNOWN (no bake at {local})  run={stamped[:12]}"

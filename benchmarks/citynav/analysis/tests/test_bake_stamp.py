@@ -141,3 +141,25 @@ def test_the_resolved_tiles_dir_names_the_bake_to_check(tmp_path, monkeypatch):
         )
     )
     assert "verified" not in run_report.bake_line(root)
+
+
+def test_a_bake_outside_the_repo_is_checked_where_the_run_recorded_it(tmp_path, monkeypatch):
+    """Tiles under an absolute path outside the checkout are read there; a
+    recorded bake that is nowhere here is UNKNOWN, never compared against
+    the CityNav default."""
+    monkeypatch.setattr(run_report, "_REPO_ROOT", tmp_path / "repo")
+    _bake(tmp_path / "repo" / "tiles" / "citynav_2m_osmv3", features='{"a": 1}')
+    monkeypatch.setattr(paths, "TILES_DIR", tmp_path / "repo" / "tiles" / "citynav_2m_osmv3")
+    outside = _bake(tmp_path / "elsewhere" / "calcity_tiles", features='{"b": 2}')
+
+    def run(name, tiles_dir):
+        root = tmp_path / name
+        root.mkdir()
+        (root / "run_manifest.json").write_text(json.dumps({"perception": {
+            "tiles_dir_resolved": str(tiles_dir), "bake_sha256": paths.bake_sha256(outside)}}))
+        return root
+
+    line = run_report.bake_line(run("abs", outside))
+    assert "verified" in line, line
+    line = run_report.bake_line(run("gone", tmp_path / "nowhere" / "tiles"))
+    assert "UNKNOWN" in line and "MISMATCH" not in line, line
