@@ -318,7 +318,7 @@ def register_frame(register: Registration, rgb, pose_xy, altitude_m, yaw, roll, 
     level one: its peak is noisier, and the graph's vote over the window is
     what reads it.
     """
-    pose = SimpleNamespace(pose_xy=pose_xy, yaw_deg=yaw, roll_deg=roll, pitch_deg=-pitch_proj)
+    pose = frame_ties.Pose(tuple(pose_xy), float(altitude_m), float(yaw), float(roll), -float(pitch_proj))
     record: dict[str, Any] = {"applied": False, "source": None, "shift_yaw_deg": 0.0}
     measured: tuple[float, float, float] | None = None
     try:
@@ -344,8 +344,7 @@ def register_frame(register: Registration, rgb, pose_xy, altitude_m, yaw, roll, 
             record.update(shift_e_m=de, shift_n_m=dn)
             measured = (de, dn, response)
     if graph is not None and seq is not None and t is not None:
-        frame_pose = frame_ties.Pose(tuple(pose_xy), float(altitude_m), float(yaw), float(roll), -float(pitch_proj))
-        placed = graph.offer(seq, t, frame_pose, locator.gray(rgb), measured)
+        placed = graph.offer(seq, t, pose, locator.gray(rgb), measured)
         if placed.get("why") and not record.get("why"):
             record["why"] = placed["why"]
         record.update({k: v for k, v in placed.items() if k != "why"})
