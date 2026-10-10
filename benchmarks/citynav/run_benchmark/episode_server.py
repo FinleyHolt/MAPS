@@ -10,15 +10,35 @@ from datetime import datetime
 from pathlib import Path
 from maps.search import MapsCompiler
 import argparse
+import ctypes
 import json
 import logging
 import os
+import signal
 import sys
 from benchmarks.citynav.run_benchmark.dispatch import _dispatch_one
 from benchmarks.citynav.run_benchmark.mission_engine import MISSION_DEADLINE_ENV
 from benchmarks.citynav.episode_workdir import RUN_LOG, open_episode_dir
 
 log = logging.getLogger("run_benchmark")
+
+
+# The driver's pid, set by bench_fullset when it spawns this runner.
+PARENT_PID_ENV = "CITYNAV_BENCH_PARENT_PID"
+_PR_SET_PDEATHSIG = 1
+
+
+def _die_with_parent() -> None:
+    """Have the kernel SIGKILL this runner when the driver that spawned it
+    dies. The runner sits in its own session, so nothing else reaps it
+    mid-episode. A driver already gone before the request is armed is
+    caught by the parent-pid check."""
+    parent = os.environ.get(PARENT_PID_ENV)
+    if not parent:
+        return
+    ctypes.CDLL(None, use_errno=True).prctl(_PR_SET_PDEATHSIG, signal.SIGKILL)
+    if os.getppid() != int(parent):
+        os._exit(1)
 
 
 def _resolve_indexed_row(
@@ -76,6 +96,7 @@ def _episode_server_loop(
         resolve_map,
     )
 
+    _die_with_parent()
     run_root = Path(args.run_root or "output/citynav_runs")
     if not run_root.is_absolute():
         run_root = (Path.cwd() / run_root).resolve()

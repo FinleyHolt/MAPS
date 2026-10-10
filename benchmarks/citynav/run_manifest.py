@@ -174,6 +174,7 @@ MECHANICS_ENV = (
 # launcher→runner transport). An ambient value is meaningless; the facts
 # they carry land in the manifest as explicit fields (split, seed, run id).
 DERIVED_ENV = (
+    "CITYNAV_BENCH_PARENT_PID",
     "CITYNAV_BENCH_SAMPLE_SEED",
     "CITYNAV_BENCH_SPLIT",
     "SEARCH_CITYNAV_RUNNER_CMD_JSON",

@@ -218,10 +218,9 @@ class _WarmRunner:
     The expensive cold start (CuPy/NVRTC, config, split, objects,
     MapsCompiler) is paid once at ``spawn``; every subsequent episode
     reuses it. Episodes are driven over the child's own stdin/stdout
-    pipes (newline-delimited JSON): a SIGKILL of the bench driver
-    auto-closes the pipe and the child is reaped with its process group,
-    so there is no orphaned GPU holder. The child reproduces launch.py's
-    per-episode workdir.
+    pipes (newline-delimited JSON). The child runs in its own session, so
+    it arms a parent-death signal (``episode_server._die_with_parent``): a
+    SIGKILLed driver leaves no runner flying on.
     """
 
     def __init__(self, run_root: Path, split: str) -> None:
@@ -313,6 +312,9 @@ class _WarmRunner:
         # leaves a 0-byte log otherwise, exactly the diagnostic blackout
         # that masked spawn FileNotFoundError as "preflight OOM" earlier.
         env["PYTHONUNBUFFERED"] = "1"
+        # episode_server.PARENT_PID_ENV, named here so the driver stays off
+        # the engine's imports.
+        env["CITYNAV_BENCH_PARENT_PID"] = str(os.getpid())
         self._q = queue.Queue()
         self._early_done = None
         self._episodes_since_spawn = 0
