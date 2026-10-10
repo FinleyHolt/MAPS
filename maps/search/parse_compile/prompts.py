@@ -14,10 +14,9 @@ asserted at import against the real parser, because the model copies its
 shape and an example the surface would refuse teaches a form that cannot
 run.
 
-NO DECODER MASK. Python is not EBNF-able here: ``strict: true`` on the
-one-string envelope fixes the tool name and the argument shape, and the
-parser's own refusals -- ordinary tool results the model can act on -- do
-the rest.
+NO DECODER MASK. Python is not EBNF-able here and the tool carries no
+``strict``: the parser's own refusals -- ordinary tool results the model
+can act on -- hold a block to the language.
 
 ``tool_choice`` is ALWAYS ``"auto"`` -- never required/named -- because auto
 IS the abstain path: the plain reply that ends the mission has to stay
@@ -44,9 +43,8 @@ CODE_DOC = (
     # the shape that comes back. The say legend's single example is a
     # flight onto a junction and the model copies BOTH halves of it; one
     # legend line carrying a crossing moved crossing-as-anchor 9 -> 24
-    # (2.7x, p=0.0015). Every entry below is a one-line menu item, and the
-    # first live episode on this surface wrote one call per block, five
-    # blocks, find and fly only.
+    # (2.7x, p=0.0015). Every entry below is a one-line menu item, so the
+    # example is what teaches a multi-line block.
     #
     # The example carries the WHOLE chain the surface exists for, ending on
     # the one that reaches a part of a thing by measuring rather than by
@@ -77,8 +75,7 @@ CODE_DOC = (
     "\nTHE MAP -- free, moves nothing\n"
     # The link that makes look_for read as load-bearing rather than
     # optional. find WORKS with an empty watchlist -- it returns priors --
-    # so nothing in a find receipt says the segmenter is off, and the
-    # first live episode read `find` succeeding as perception working.
+    # so nothing in a find receipt says the segmenter is off.
     "  find reads ONE set of rows: the PRIOR map, plus whatever flights"
     " have detected. Nothing is detected until look_for names a class, so"
     " before that the set is the prior map alone.\n"
@@ -205,12 +202,9 @@ CODE_DOC = (
     " is KNOWN, drawn as a schematic, not what is there.\n"
     "\nWHAT YOU SEE BECOMES ROWS -- the distinction the map cannot make,"
     " asked as a query instead of as a question\n"
-    # THE REPLACEMENT FOR THE LOOKING QUESTION. `look(rows, "which of these
-    # has a pool behind it?")` is gone: it answered into the picture and
-    # bound nothing, so what it resolved had nowhere to land, and the
-    # measured behaviour was to ask it (89 of 500 episodes) and then index
-    # rank 0 by distance anyway. A set slot folds to its NEAREST member, so
-    # the same question is a sort over rows the segmenter produced.
+    # A which-of-these question about rows is a QUERY: a set slot folds to
+    # its NEAREST member, so "which house has a pool behind it" is a sort
+    # over rows the segmenter produced, and its answer binds.
     "  A thing the map does not carry -- a pool, solar panels, a shed, a"
     " parked car -- is not a row until look_for names it and a flight goes"
     " over it. Then it IS one, and it sorts and cuts like any other:\n"
@@ -272,11 +266,9 @@ CODE_DOC = (
     " chose, or explore(the set) to cover it all in one pass.\n")
 
 # THE WORKED BLOCK IS SERVED CODE, so the surface's own scan is what says
-# whether it is right. A legend that teaches a form the surface refuses is
-# the failure this arm was built after: 30 blocks in 22% of episodes were
-# the model writing sentences the prompt taught and the parser would not
-# take. Read back out of the legend rather than restated here -- a second
-# copy is a second thing to go stale.
+# whether it is right: a legend that teaches a form the surface refuses
+# teaches a form that cannot run. Read back out of the legend rather than
+# restated here -- a second copy is a second thing to go stale.
 import ast as _ast
 
 from maps.search.parse_compile.python_surface import (
@@ -294,56 +286,26 @@ _calls = [n.func.id for n in _ast.walk(_tree)
 assert {"look_for", "find", "look",
         "explore", "go_to"} <= set(_calls), _calls
 # ORDERING IS PINNED ON THE ARGS, not on the token `order`: the example
-# RANKS ON EVERY CRITERION THE CUE NAMED, appearance included -- that is
-# the thing that went extinct (13 colour-ordering heads over 2 of 500
-# episodes, against 440 over 175 of 300 on the sentence language) and the
-# worked block is the lever on it.
+# RANKS ON EVERY CRITERION THE CUE NAMED, appearance included (colour
+# ordering heads: 13 over 2 of 500 episodes without it in the example,
+# 440 over 175 of 300 with it).
 _find_kwargs = {k.arg for n in _ast.walk(_tree)
                 if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Name)
                 and n.func.id == "find" for k in n.keywords}
 assert "color" in _find_kwargs, _find_kwargs
-# nearest= is the ORDERING spelling (near= now cuts and needs dwithin=),
+# nearest= is the ORDERING spelling (near= cuts and needs dwithin=),
 # so the spatial criterion the worked block must carry is either.
 assert _find_kwargs & {"nearest", "near", "within", "east_of", "west_of",
                        "north_of", "south_of"}, _find_kwargs
 del _WORKED, _tree, _calls, _find_kwargs
 
-# NO `strict`. It asked the SERVE to compile a decode-time constraint out of
-# the schema below, and that schema is `{code: string}` -- every token sequence
-# satisfies it, so the only thing a tag could ever hold was the tool name and
-# the JSON envelope. The envelope is the part models never get wrong.
-#
-# MEASURED, on the arms that were GENUINELY unenforced -- gemma-4 E2B on a
-# stock venv (381 calls), Muse Glimmer, whose parser compiles nothing (2,305),
-# and this flag's own removal arm (1,266). 3,952 calls across a 130x parameter
-# range, of which ONE left the served surface.
-#
-# It is worth naming, because it is the whole of what this flag bought:
-#
-#     show_map(around="prior_150")   <- called as a TOOL
-#     {"error": "unknown tool 'show_map'; available: run"}
-#     run(code="for q in [...]: r = find(q) ...")   <- recovered, next turn
-#
-# show_map is a code-surface FUNCTION; the model emitted it one level up.
-# The harness named the error, the model fixed it in one turn, and the
-# episode scored SR=1 in BOTH arms. One recoverable turn per ~4,000 calls,
-# against roughly 20 turns spent of a 100-turn cap.
-#
-# Paired on identical val_seen episodes, arms differing only by this flag:
-# 36/48 against 34/48 on the shared set, 3 wins against 5 losses, exact
-# McNemar p = 0.73. Stopped at 48 of 64 shared episodes once the answer
-# stopped moving, so it is a partial read and says so -- and it is quoted
-# over the earlier 29/29 tie because that tie was the FAST half of the set,
-# where short episodes skew easy.
-#
-# The flag was also never uniform: it constrained qwen and inkling and did
-# nothing at all for gemma or muse, so it was never the fleet-wide guarantee
-# it reads as.
-#
-# It was not even uniform. sglang's qwen parser built a tag from this flag and
-# its inkling parser builds one either way off the auto path, so the fleet has
-# been running constrained and unconstrained side by side to identical
-# conformance.
+# NO `strict`. The schema is `{code: string}`, which every token sequence
+# satisfies, so a decode-time constraint could only pin the tool name and the
+# JSON envelope. Over 3,952 calls on arms that enforce nothing (130x
+# parameter range) ONE left the surface -- a code function called as a tool
+# -- and the unknown-tool error recovered it the next turn. Paired val_seen
+# arms differing only by the flag: 36/48 without it, 34/48 with it (exact
+# McNemar p = 0.73, 48 of 64 shared episodes).
 CODE_TOOL: dict = {
     "type": "function",
     "function": {
@@ -366,13 +328,8 @@ CODE_TOOLS: list = [CODE_TOOL]
 # flight is the answer, naming commits nothing, the answer is a point, a
 # picture is north-up and its caption carries the world rectangle, a name is
 # not a place, a colour orders and never drops. The from-looking
-# prefix becomes stand().
-#
-# It exists because serving the sentence prompt beside a code tool served
-# two contradictory surfaces at once: 30 blocks in 22% of episodes were
-# the model writing sentences the prompt taught and the parser refused,
-# and every tool result footer told it to call look_for("<class>") on an
-# arm where no such call existed.
+# prefix becomes stand(). It is written in this surface's notation
+# because a prompt in another notation teaches forms the parser refuses.
 CODE_SYSTEM_PROMPT = """\
 === MISSION MAP ===
 You are the reasoner for a drone search instruction, in ONE persistent
