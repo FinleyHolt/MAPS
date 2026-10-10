@@ -18,6 +18,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import cv2
 import numpy as np
 
 from maps.perception.geometry.sensor_spec import SensorSpec, body_tilt_matrix, mount_rotation_matrix
@@ -75,18 +76,38 @@ class TileFrame:
     grid_shape: tuple[int, int]  # (H, W)
 
 
-def _tile_mask_from_cell_indices(
-    row_idx: np.ndarray, col_idx: np.ndarray, tile: TileFrame
-) -> TileProjectedMask | None:
-    """Dedupe per-pixel cell indices into a ``TileProjectedMask``.
+def _view_square_xy(
+    view_corners_xy: tuple, u: np.ndarray, v: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """World (x, y) at normalised frame coordinates ``u = col / (w - 1)``,
+    ``v = row / (h - 1)`` through the view-square corners ``[FL, FR, BR, BL]``
+    (== image ``[TL, TR, BR, BL]``, the inverse of upstream
+    ``cropclient.crop_image``'s warp).
 
-    The shared tail of both projectors: clip to the tile, collapse the
-    many pixels that land in one cell, and derive the centroid. Dedupe
-    runs on the flat index ``row * W + col`` through ``np.unique``, which
-    returns ascending order — identical cells in identical order to a
-    dense bool raster scanned by ``np.where``, without materializing the
-    (H, W) raster.
+    world = FL + u*(FR-FL) + v*(BL-FL); exact, since the square is a
+    parallelogram and the bilinear map is affine.
     """
+    flx, fly = float(view_corners_xy[0][0]), float(view_corners_xy[0][1])
+    frx, fry = float(view_corners_xy[1][0]), float(view_corners_xy[1][1])
+    blx, bly = float(view_corners_xy[3][0]), float(view_corners_xy[3][1])
+    xs = flx + u * (frx - flx) + v * (blx - flx)
+    ys = fly + u * (fry - fly) + v * (bly - fly)
+    return xs, ys
+
+
+def _tile_mask_from_world(
+    xs: np.ndarray, ys: np.ndarray, tile: TileFrame
+) -> TileProjectedMask | None:
+    """Rasterize world points onto ``tile`` as a ``TileProjectedMask``.
+
+    Clip to the tile, collapse the many pixels that land in one cell, and
+    derive the centroid. Dedupe runs on the flat index ``row * W + col``
+    through ``np.unique``, which returns ascending order — identical cells
+    in identical order to a dense bool raster scanned by ``np.where``,
+    without materializing the (H, W) raster.
+    """
+    col_idx = np.rint((xs - tile.x_min) / tile.cell_size_m - 0.5).astype(np.int64)
+    row_idx = np.rint((ys - tile.y_min) / tile.cell_size_m - 0.5).astype(np.int64)
     H, W = tile.grid_shape
     in_bounds = (row_idx >= 0) & (row_idx < H) & (col_idx >= 0) & (col_idx < W)
     if not np.any(in_bounds):
@@ -286,49 +307,31 @@ def project_mask_to_tile_cells_ortho(
     *,
     view_corners_xy: tuple,
     tile: TileFrame,
-    min_pixels: int | None = None,
 ) -> TileProjectedMask | None:
     """Rasterize a mask onto ``tile`` through the view-square affine.
 
     The upstream CityNav (``ortho``) observation is an
     orthographic, yaw-rotated square warp, not a camera frustum, so
     perspective depth unprojection does not apply. Instead each mask pixel
-    maps to world (x, y) by an exact affine over the four view-square
-    ground corners ``[FL, FR, BR, BL]`` (== image ``[TL, TR, BR, BL]``,
-    the inverse of upstream ``cropclient.crop_image``'s warp). No depth
-    buffer is involved (the ground plane is the projection surface).
+    maps to world (x, y) by the exact view-square affine
+    (:func:`_view_square_xy`). No depth buffer is involved (the ground
+    plane is the projection surface).
 
-    Returns ``None`` when the mask has fewer than ``min_pixels`` set
-    pixels or no projected cell lands inside ``tile``.
+    Returns ``None`` when the mask has fewer than ``_MIN_VALID_DEPTH_PIXELS``
+    set pixels or no projected cell lands inside ``tile``.
 
     The scan runs over the region's own box, never the frame: the same
     pixels in the same row-major order, for a cost set by the object rather
     than by the sensor's resolution.
     """
-    threshold = (
-        int(min_pixels) if min_pixels is not None else _MIN_VALID_DEPTH_PIXELS
-    )
     rr, cc = region.rows_cols()
-    if rr.size < threshold:
+    if rr.size < _MIN_VALID_DEPTH_PIXELS:
         return None
-
-    (flx, fly), (frx, fry), _br, (blx, bly) = (
-        (float(view_corners_xy[0][0]), float(view_corners_xy[0][1])),
-        (float(view_corners_xy[1][0]), float(view_corners_xy[1][1])),
-        view_corners_xy[2],
-        (float(view_corners_xy[3][0]), float(view_corners_xy[3][1])),
-    )
     h, w = region.frame_shape
     u = cc.astype(np.float64) / max(w - 1, 1)
     v = rr.astype(np.float64) / max(h - 1, 1)
-    # world = FL + u*(FR-FL) + v*(BL-FL); exact (the square is a
-    # parallelogram, so the bilinear map is affine).
-    xs = flx + u * (frx - flx) + v * (blx - flx)
-    ys = fly + u * (fry - fly) + v * (bly - fly)
-
-    col_idx = np.rint((xs - tile.x_min) / tile.cell_size_m - 0.5).astype(np.int64)
-    row_idx = np.rint((ys - tile.y_min) / tile.cell_size_m - 0.5).astype(np.int64)
-    return _tile_mask_from_cell_indices(row_idx, col_idx, tile)
+    xs, ys = _view_square_xy(view_corners_xy, u, v)
+    return _tile_mask_from_world(xs, ys, tile)
 
 
 def world_contour_from_region(
@@ -353,15 +356,9 @@ def world_contour_from_region(
     rounded to 2 dp, and returned CLOSED — the chain ends on the vertex it
     started from, which is how a reader tells a ring from a way.
 
-    Returns ``None`` when cv2 is unavailable (graceful degrade: ``cells``
-    still flow, the node just gets no fine contour), when the mask/corners
-    are degenerate, or when the simplified contour has < 3 vertices.
+    Returns ``None`` when the mask/corners are degenerate, or when the
+    simplified contour has < 3 vertices.
     """
-    try:
-        import cv2
-    except ImportError:
-        return None
-
     if view_corners_xy is None:
         return None
     if not region.crop.any():
@@ -389,17 +386,13 @@ def world_contour_from_region(
         if approx.shape[0] < 3:
             return None
 
-    flx, fly = float(view_corners_xy[0][0]), float(view_corners_xy[0][1])
-    frx, fry = float(view_corners_xy[1][0]), float(view_corners_xy[1][1])
-    blx, bly = float(view_corners_xy[3][0]), float(view_corners_xy[3][1])
     # Normalised by the FRAME, which is why a region carries its frame shape.
     h, w = region.frame_shape
     r0, c0 = region.bbox[0], region.bbox[1]
     # cv2 contour points are (x=col, y=row), crop-relative until shifted.
     u = (approx[:, 0].astype(np.float64) + c0) / max(w - 1, 1)
     v = (approx[:, 1].astype(np.float64) + r0) / max(h - 1, 1)
-    xs = flx + u * (frx - flx) + v * (blx - flx)
-    ys = fly + u * (fry - fly) + v * (bly - fly)
+    xs, ys = _view_square_xy(view_corners_xy, u, v)
     ring = [[round(float(x), 2), round(float(y), 2)] for x, y in zip(xs, ys)]
     # A traced mask boundary ENCLOSES, and the chain says so by returning to
     # its first vertex — the one rule that tells a ring from a way
@@ -413,7 +406,6 @@ def project_mask_to_world_ortho(
     *,
     depth: np.ndarray | None,
     view_corners_xy: tuple,
-    min_valid_depth_pixels: int | None = None,
     tile: TileFrame | None = None,
 ) -> ProjectedMask | None:
     """Project a mask to a world centroid through the view-square affine.
@@ -439,7 +431,7 @@ def project_mask_to_world_ortho(
 
     Returns a ``ProjectedMask`` (``world_xy``, ``n_valid_pixels``, optional
     ``tile_cells``), or ``None`` when ``depth`` is
-    absent or fewer than ``min_valid_depth_pixels`` mask pixels have
+    absent or fewer than ``_MIN_VALID_DEPTH_PIXELS`` mask pixels have
     finite, positive depth. There is no ``max_range_m`` gate (no sensor in
     the orthographic path).
 
@@ -452,28 +444,13 @@ def project_mask_to_world_ortho(
         return None
     depth_arr = np.asarray(depth, dtype=np.float32)
     depth2d = depth_arr if depth_arr.ndim == 2 else depth_arr[:, :, 0]
-    threshold = (
-        int(min_valid_depth_pixels)
-        if min_valid_depth_pixels is not None
-        else _MIN_VALID_DEPTH_PIXELS
-    )
     rr, cc = region.rows_cols()
     if rr.size == 0:
         return None
-
-    (flx, fly), (frx, fry), _br, (blx, bly) = (
-        (float(view_corners_xy[0][0]), float(view_corners_xy[0][1])),
-        (float(view_corners_xy[1][0]), float(view_corners_xy[1][1])),
-        view_corners_xy[2],
-        (float(view_corners_xy[3][0]), float(view_corners_xy[3][1])),
-    )
     h, w = region.frame_shape
     u = cc.astype(np.float64) / max(w - 1, 1)
     v = rr.astype(np.float64) / max(h - 1, 1)
-    # world = FL + u*(FR-FL) + v*(BL-FL); exact (the square is a
-    # parallelogram, so the bilinear map is affine).
-    xs = flx + u * (frx - flx) + v * (blx - flx)
-    ys = fly + u * (fry - fly) + v * (bly - fly)
+    xs, ys = _view_square_xy(view_corners_xy, u, v)
 
     # Upstream CityNav ships the depth raster at a different resolution
     # than the RGB the mask lives in (224x224 RGB vs 256x256 depth). Both
@@ -487,25 +464,16 @@ def project_mask_to_world_ortho(
     d = depth2d[dr, dc]
     finite = np.isfinite(d) & (d > 0.0)
     n_valid = int(finite.sum())
-    if n_valid < threshold:
+    if n_valid < _MIN_VALID_DEPTH_PIXELS:
         return None
     xs = xs[finite]
     ys = ys[finite]
     world_xy = (float(xs.mean()), float(ys.mean()))
     tile_cells: np.ndarray | None = None
     if tile is not None:
-        H, W = tile.grid_shape
-        col_idx = np.rint((xs - tile.x_min) / tile.cell_size_m - 0.5).astype(np.int64)
-        row_idx = np.rint((ys - tile.y_min) / tile.cell_size_m - 0.5).astype(np.int64)
-        in_bounds = (row_idx >= 0) & (row_idx < H) & (col_idx >= 0) & (col_idx < W)
-        if np.any(in_bounds):
-            grid = np.zeros((H, W), dtype=bool)
-            grid[row_idx[in_bounds], col_idx[in_bounds]] = True
-            gr, gc = np.where(grid)
-            tile_cells = np.stack(
-                [gr.astype(np.int32, copy=False), gc.astype(np.int32, copy=False)],
-                axis=1,
-            )
+        tm = _tile_mask_from_world(xs, ys, tile)
+        if tm is not None:
+            tile_cells = np.stack([tm.rows, tm.cols], axis=1)
     return ProjectedMask(
         world_xy=world_xy,
         n_valid_pixels=n_valid,

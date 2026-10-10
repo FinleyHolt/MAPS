@@ -119,12 +119,11 @@ def test_min_pixels_counts_the_regions_own_pixels():
     the wrong ones would keep or drop detections the geometry does not."""
     corners = _corners(10.0, 12.0, 30.0)
     mask = np.zeros((64, 64), dtype=bool)
-    mask[30:32, 30:32] = True  # exactly 4 px
-    region = MaskRegion.from_full(mask)
-    assert region.area == 4
-
-    for min_px, expect in ((1, True), (4, True), (5, False), (9, False)):
-        tp = project_mask_to_tile_cells_ortho(
-            region, view_corners_xy=corners, tile=_TILE, min_pixels=min_px
-        )
-        assert (tp is not None) is expect, min_px
+    mask[30:34, 30:34] = True  # exactly 16 px, the threshold
+    for drop_one, expect in ((False, True), (True, False)):
+        m = mask.copy()
+        if drop_one:
+            m[30, 30] = False
+        region = MaskRegion.from_full(m)
+        tp = project_mask_to_tile_cells_ortho(region, view_corners_xy=corners, tile=_TILE)
+        assert (tp is not None) is expect, region.area
