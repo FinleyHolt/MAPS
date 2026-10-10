@@ -200,7 +200,7 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(monkeypatch):
     folded: list = []
     loop = SimpleNamespace(
         activate_pending_boosts=lambda: None,
-        update_perception=lambda **kw: folded.append(kw["pose_xy"]) or [],
+        update_perception=lambda **kw: folded.append(kw) or [],
         snapshot=lambda: None,
         retire_boosts_after_round=lambda rounds: None,
         last_flight_detections=lambda: [],
@@ -219,7 +219,7 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(monkeypatch):
         recorder=None, osm_ctx=None, t_start=0.0, observe=lambda: frame,
     )
     report = me.fly_one({"target_fid": "building_7"}, **common)
-    assert folded == [(130.0, 240.0)], "the fold reads the frame's own pose"
+    assert len(folded) == 1, "the frame is folded once"
     assert report["pose_xy"] == [100.0, 200.0] and "note" not in report
     assert report["answer_if_you_reply_now"] == "building_7"
     assert flights[-1]["pose_xy"] == flights[-1]["resolved_xy"] == [100.0, 200.0]

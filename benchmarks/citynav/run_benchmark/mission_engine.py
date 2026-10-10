@@ -381,7 +381,6 @@ def fly_one(
     step_detections: list[dict] = []
     step_detections = search_loop.update_perception(
         step_idx=step_idx,
-        pose_xy=state.pose_xy,
         detections=detections,
         projected_masks=tracked_projections,
         bounds_xy_min=(float(assets.bounds.x_min), float(assets.bounds.y_min)),
@@ -711,8 +710,8 @@ def run_mission_episode(
 
     Builds the session (:func:`build_mission_session`), runs
     :func:`run_mission` over it, then binds the commit onto the engine state
-    the trajectory replay and metrics read (``locked_detection_id`` /
-    ``confirmed_target_xy`` / ``lock_step``). Returns ``{"flights", "reply",
+    the trajectory replay and metrics read (``confirmed_target_xy`` /
+    ``lock_step``). Returns ``{"flights", "reply",
     "feature_tour", ...}``; zero flights leaves the engine state
     unbound so the runner scores the honest zero.
     """
@@ -774,7 +773,6 @@ def run_mission_episode(
         last = flights[-1]
         with search_loop._lock:
             s2 = search_loop.state
-            s2.locked_detection_id = str(last["target"])
             s2.confirmed_target_xy = (
                 float(last["resolved_xy"][0]),
                 float(last["resolved_xy"][1]),

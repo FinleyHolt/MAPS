@@ -435,7 +435,6 @@ def run_episode(
             try:
                 search_loop.update_perception(
                     step_idx=int(getattr(state, "step_idx", 0) or 0),
-                    pose_xy=(_px, _py),
                     detections=_dets,
                     projected_masks=_tracked,
                     bounds_xy_min=(
@@ -536,15 +535,6 @@ def run_episode(
     # replay of the flown stops + committed final leg.
     mission_out: dict | None = None
     if search_loop is not None and compiler is not None:
-        # True episode start for the packet/telemetry surfaces (the
-        # SearchLoop otherwise only ever sees stop poses). Best-effort.
-        try:
-            search_loop.state.episode_start_xy = (
-                float(episode.start_xy[0]),
-                float(episode.start_xy[1]),
-            )
-        except Exception:  # noqa: BLE001
-            pass
         mission_out = run_mission_episode(
             cfg=cfg,
             state=state,

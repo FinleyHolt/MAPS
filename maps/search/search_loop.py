@@ -167,33 +167,13 @@ class SearchLoopConfig:
 
 @dataclass(frozen=True)
 class SearchSnapshot:
-    """Read-only view consumed by the recorder, the planner, and tests.
+    """The bound commit, as the trajectory replay and the row read it."""
 
-    Fields that were once mutable lists / sets / dicts on ``EpisodeState``
-    are returned as immutable tuples / frozensets to keep the snapshot
-    safe to share across callers.
-    """
-
-    runtime_graph: object  # ObjectGraph
-    thread_history: tuple[dict, ...]
-    committed_detected_ids: frozenset[str]
-    locked_detection_id: str | None
     confirmed_target_xy: tuple[float, float] | None
+    # Flight step the commit bound at. ``None`` = nothing flew.
     lock_step: int | None
-    termination_decisions: tuple[dict, ...]
-    planned_rollout_xy: tuple[tuple[float, float], ...]
-    # Monotonic counter incremented once per successful compile drain.
-    # Lets event-driven consumers (e.g. the planner replan gate) tell
-    # "no-op turn" from "fresh intel applied" without diffing engine
-    # state.
-    compile_seq: int = 0
-    # Which path bound the commit (instrument). Copied from _State so the
-    # full-flight commit trace records it (run_benchmark reads the snapshot,
-    # not the live state).
-    commit_bind_phase: str | None = None
-    # Every evidence-column name the reasoner's programs attached over the
-    # episode, copied from _State on the same route as commit_bind_phase.
-    # The offline read of what the agent actually acquired.
+    # Which path bound the commit; the mission binds ``final_flight``.
+    commit_bind_phase: str | None
 
 
 @dataclass
@@ -207,16 +187,9 @@ class _State:
     # detection is one step, not an analyze away: most observed-and-
     # zero-row episodes never analyze after acquisition.
     last_flight_detections: list[dict] = field(default_factory=list)
-    thread_history: list[dict] = field(default_factory=list)
-    committed_detected_ids: set[str] = field(default_factory=set)
-    planned_rollout_xy: list[tuple[float, float]] = field(default_factory=list)
-    locked_detection_id: str | None = None
     confirmed_target_xy: tuple[float, float] | None = None
     # Flight step the commit bound at. ``None`` = nothing flew.
     lock_step: int | None = None
-    termination_decisions: list[dict] = field(default_factory=list)
-    # Monotonic turn counter. Collapsed turns do not bump it.
-    compile_seq: int = 0
     # Preflight target/anchor separation, lowercased class -> role tuple
     # (e.g. {"parking lot": ("target",), "road": ("anchor",), "car":
     # ("anchor","target")}). Built from the Stage-1 sam_concepts union
@@ -234,9 +207,6 @@ class _State:
     # Which path bound the final commit (instrument). The mission binds
     # ``final_flight``; a run that flew nothing leaves it None.
     commit_bind_phase: str | None = None
-    # First pose seen this episode (probe-parity start_xy for the
-    # clean-room selection message). Set once by update_perception.
-    episode_start_xy: tuple[float, float] | None = None
     # Prior-color enrichment frames that raised this episode; the warning
     # prints on the first and every 50th.
     prior_enrich_fails: int = 0
@@ -902,7 +872,6 @@ class SearchLoop:
         self,
         *,
         step_idx: int,
-        pose_xy: tuple[float, float],
         detections: list,
         projected_masks: dict[int, object] | None = None,
         bounds_xy_min: tuple[float, float] | None = None,
@@ -916,7 +885,6 @@ class SearchLoop:
         with self._lock:
             return self._update_perception_locked(
                 step_idx=step_idx,
-                pose_xy=pose_xy,
                 detections=detections,
                 projected_masks=projected_masks,
                 bounds_xy_min=bounds_xy_min,
@@ -927,15 +895,12 @@ class SearchLoop:
         self,
         *,
         step_idx: int,
-        pose_xy: tuple[float, float],
         detections: list,
         projected_masks: dict[int, object] | None = None,
         bounds_xy_min: tuple[float, float] | None = None,
         cell_size_m: float | None = None,
     ) -> list[dict]:
         s = self.state
-        if s.episode_start_xy is None:
-            s.episode_start_xy = (float(pose_xy[0]), float(pose_xy[1]))
         bounds_min = bounds_xy_min or self._tile_origin_xy
         cell = float(cell_size_m or self._world_state.grid_domain.cell_size_m)
 
@@ -1062,15 +1027,8 @@ class SearchLoop:
         with self._lock:
             s = self.state
             return SearchSnapshot(
-                runtime_graph=s.runtime_graph,
-                thread_history=tuple(s.thread_history),
-                committed_detected_ids=frozenset(s.committed_detected_ids),
-                locked_detection_id=s.locked_detection_id,
                 confirmed_target_xy=s.confirmed_target_xy,
                 lock_step=s.lock_step,
-                termination_decisions=tuple(s.termination_decisions),
-                planned_rollout_xy=tuple(s.planned_rollout_xy),
-                compile_seq=s.compile_seq,
                 commit_bind_phase=s.commit_bind_phase,
             )
 

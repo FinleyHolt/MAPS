@@ -28,9 +28,8 @@ def synthesize_compliant_trajectory(
     """Deterministic pure-kinematics replay of the mission's flown stops.
 
     The mission produces the flown viewpoint order (``feature_tour``) and
-    the commit (``state.belief_snapshot.confirmed_target_xy`` /
-    ``locked_detection_id``); perception already happened, at those stops,
-    in the order they flew. Replaying that order + the committed descent
+    the commit (``state.belief_snapshot.confirmed_target_xy``); perception
+    already happened, at those stops, in the order they flew. Replaying that order + the committed descent
     through the declared action-space model (no perception, no LLM)
     yields the genuine submittable
     ``state.visited_xy`` / final drone pose the serial-compliant path
