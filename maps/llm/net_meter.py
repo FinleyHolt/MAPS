@@ -95,7 +95,7 @@ class NetMeter:
         completion_tokens: int = 0,
         prompt_tokens: int = 0,
         reasoning_tokens: int = 0,
-        cached_tokens: int = 0,
+        cached_tokens: int | None = None,
         stage: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
@@ -112,10 +112,11 @@ class NetMeter:
             "prompt_tokens": int(prompt_tokens),
             "completion_tokens": int(completion_tokens),
             "reasoning_tokens": int(reasoning_tokens),
-            "cached_tokens": int(cached_tokens),
             "latency_s": max(0.0, ts_end - ts_start),
             "stage": stage if stage is not None else active_stage,
         }
+        if cached_tokens is not None:
+            record["cached_tokens"] = int(cached_tokens)
         merged_meta: dict[str, Any] = {}
         if active_meta:
             merged_meta.update(active_meta)
@@ -209,29 +210,18 @@ def prompt_tokens_of(response_json: dict) -> int:
     return _usage_int(response_json, "prompt_tokens")
 
 
-def cached_tokens_of(response_json: dict) -> int:
-    """Extract cached-prompt-token count from a chat-completions response.
-
-    Reads ``usage.prompt_tokens_details.cached_tokens`` (the canonical
-    OpenAI-compat shape Gemini and OpenAI itself use). Falls back to a
-    flattened ``usage.cached_tokens`` field for gateways that drop the
-    nesting. Returns 0 when neither is present — implicit caching has no
-    guarantee of emission, so a missing field is the common case.
+def cached_tokens_of(response_json: dict) -> int | None:
+    """The prompt tokens the serve read from its prefix cache,
+    ``usage.prompt_tokens_details.cached_tokens``; ``None`` when the serve
+    sends no ``prompt_tokens_details``, so a serve without cache reporting
+    reads n/a rather than 0.
     """
     usage = response_json.get("usage") if isinstance(response_json, dict) else None
-    if not isinstance(usage, dict):
-        return 0
-    details = usage.get("prompt_tokens_details")
-    if isinstance(details, dict):
-        val = details.get("cached_tokens")
-        try:
-            if val is not None:
-                return int(val)
-        except (TypeError, ValueError):
-            pass
-    val = usage.get("cached_tokens")
+    details = usage.get("prompt_tokens_details") if isinstance(usage, dict) else None
+    if not isinstance(details, dict):
+        return None
     try:
-        return int(val) if val is not None else 0
+        return int(details.get("cached_tokens") or 0)
     except (TypeError, ValueError):
         return 0
 
@@ -369,7 +359,6 @@ def summarize_window(
         "total_prompt_tokens": 0,
         "total_completion_tokens": 0,
         "total_reasoning_tokens": 0,
-        "total_cached_tokens": 0,
         "total_latency_s": 0.0,
         "total_up_bytes": 0,
         "total_down_bytes": 0,
@@ -405,7 +394,7 @@ def _accumulate(summary: dict[str, Any], rec: dict[str, Any]) -> None:
     pt = int(rec.get("prompt_tokens") or 0)
     ct = int(rec.get("completion_tokens") or 0)
     rt = int(rec.get("reasoning_tokens") or 0)
-    cached = int(rec.get("cached_tokens") or 0)
+    cached = rec.get("cached_tokens")
     lat = float(rec.get("latency_s") or 0.0)
     up = int(rec.get("up_bytes") or 0)
     down = int(rec.get("down_bytes") or 0)
@@ -415,7 +404,8 @@ def _accumulate(summary: dict[str, Any], rec: dict[str, Any]) -> None:
     summary["total_prompt_tokens"] += pt
     summary["total_completion_tokens"] += ct
     summary["total_reasoning_tokens"] += rt
-    summary["total_cached_tokens"] += cached
+    if cached is not None:
+        summary["total_cached_tokens"] = summary.get("total_cached_tokens", 0) + int(cached)
     summary["total_latency_s"] += lat
     summary["total_up_bytes"] += up
     summary["total_down_bytes"] += down
@@ -426,7 +416,6 @@ def _accumulate(summary: dict[str, Any], rec: dict[str, Any]) -> None:
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "reasoning_tokens": 0,
-            "cached_tokens": 0,
             "latency_s": 0.0,
             "kinds": {},
         },
@@ -435,7 +424,8 @@ def _accumulate(summary: dict[str, Any], rec: dict[str, Any]) -> None:
     by_stage["prompt_tokens"] += pt
     by_stage["completion_tokens"] += ct
     by_stage["reasoning_tokens"] += rt
-    by_stage["cached_tokens"] += cached
+    if cached is not None:
+        by_stage["cached_tokens"] = by_stage.get("cached_tokens", 0) + int(cached)
     by_stage["latency_s"] += lat
     by_stage["kinds"][kind] = by_stage["kinds"].get(kind, 0) + 1
     by_kind = summary["by_kind"].setdefault(
@@ -445,7 +435,6 @@ def _accumulate(summary: dict[str, Any], rec: dict[str, Any]) -> None:
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "reasoning_tokens": 0,
-            "cached_tokens": 0,
             "latency_s": 0.0,
         },
     )
@@ -453,7 +442,6 @@ def _accumulate(summary: dict[str, Any], rec: dict[str, Any]) -> None:
     by_kind["prompt_tokens"] += pt
     by_kind["completion_tokens"] += ct
     by_kind["reasoning_tokens"] += rt
-    by_kind["cached_tokens"] += cached
     by_kind["latency_s"] += lat
 
 

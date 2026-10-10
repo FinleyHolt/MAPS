@@ -55,6 +55,13 @@ LAUNCH_MODULE = os.environ.get(
 )
 
 
+def _cached_share(cached: int | None, prompt: int) -> str:
+    """The cache-hit readout: n/a when the serve reported no cache."""
+    if cached is None:
+        return "n/a"
+    return f"{cached} ({100.0 * cached / prompt if prompt else 0.0:.1f}%)"
+
+
 def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
     """Write this run's receipt at the run root.
 
@@ -470,31 +477,26 @@ def main() -> int:
 
             nm_summary = summarize_window(Path(raw_path).expanduser())
             total_prompt = nm_summary.get("total_prompt_tokens", 0)
-            total_cached = nm_summary.get("total_cached_tokens", 0)
+            total_cached = nm_summary.get("total_cached_tokens")
             total_completion = nm_summary.get("total_completion_tokens", 0)
             total_reasoning = nm_summary.get("total_reasoning_tokens", 0)
             n_calls = nm_summary.get("n_calls", 0)
-            ratio_pct = 100.0 * total_cached / total_prompt if total_prompt else 0.0
             log.info(
-                "── LLM tokens (n=%d): prompt=%d cached=%d (%.1f%%) "
+                "── LLM tokens (n=%d): prompt=%d cached=%s "
                 "completion=%d reasoning=%d ──",
                 n_calls,
                 total_prompt,
-                total_cached,
-                ratio_pct,
+                _cached_share(total_cached, total_prompt),
                 total_completion,
                 total_reasoning,
             )
             for stage_name, by in (nm_summary.get("by_stage") or {}).items():
                 pt = by.get("prompt_tokens", 0)
-                ch = by.get("cached_tokens", 0)
-                pct = 100.0 * ch / pt if pt else 0.0
                 log.info(
-                    "  %s: prompt=%d cached=%d (%.1f%%) completion=%d calls=%d",
+                    "  %s: prompt=%d cached=%s completion=%d calls=%d",
                     stage_name,
                     pt,
-                    ch,
-                    pct,
+                    _cached_share(by.get("cached_tokens"), pt),
                     by.get("completion_tokens", 0),
                     by.get("n", 0),
                 )

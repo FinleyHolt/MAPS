@@ -3,9 +3,8 @@
 ``summarize`` is the ONLY producer of ``metrics.llm``, which the review
 hub's population view reads instead of walking transcripts. These pin the
 numbers that view puts on screen: turn and token counts, the declared-vs-
-used vocabulary, the arg-supply rule, and the two things a naive scan gets
-wrong — a request that never got a response, and a cached-token count that
-lives one level down inside ``usage``.
+used vocabulary, the arg-supply rule, and the thing a naive scan gets
+wrong — a request that never got a response.
 """
 
 from __future__ import annotations
@@ -154,27 +153,15 @@ def test_turns_tokens_and_latency(tmp_path: Path) -> None:
     assert s["prompt_tokens_max"] == 1100
     assert s["completion_tokens"] == 150
     assert s["total_tokens"] == 2150
-    # Lives under ``usage.prompt_tokens_details``, not flat on ``usage``.
-    assert s["cached_tokens"] == 1440
 
     assert s["latency_s_sum"] == 12.5
     assert s["latency_s_max"] == 10.0
 
 
-def test_flat_cached_tokens_spelling(tmp_path: Path) -> None:
-    """A backend that puts ``cached_tokens`` flat on ``usage`` counts the same."""
-    flight = tmp_path / "flight"
-    _write(
-        flight,
-        [
-            {"kind": "request", "request_id": "r1", "created_at": 1.0},
-            _response(
-                "r1", 2.0, usage={"prompt_tokens": 10, "cached_tokens": 4},
-                tool_calls=[],
-            ),
-        ],
-    )
-    assert flight_summary.summarize(flight)["cached_tokens"] == 4
+def test_the_row_carries_no_cached_count(tmp_path: Path) -> None:
+    """Cache hits are a serve fact only some serves report; the row holds none."""
+    assert "cached_tokens" not in flight_summary.summarize(_flight(tmp_path))
+    assert "cached_tokens" not in flight_summary.blank()
 
 
 def test_used_vocabulary(tmp_path: Path) -> None:

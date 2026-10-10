@@ -149,7 +149,6 @@ def blank() -> dict:
         "prompt_tokens_max": 0,
         "completion_tokens": 0,
         "total_tokens": 0,
-        "cached_tokens": 0,
         "reasoning_tokens": 0,
         "latency_s_sum": 0.0,
         "latency_s_max": 0.0,
@@ -215,12 +214,6 @@ def _scan_transcript(path: Path, out: dict) -> None:
             p = usage.get("prompt_tokens")
             if isinstance(p, (int, float)):
                 out["prompt_tokens_max"] = max(out["prompt_tokens_max"], int(p))
-            # vLLM reports the prefix-cache hit under ``prompt_tokens_details``;
-            # some backends put it flat. Same quantity, two spellings.
-            details = _as_dict(usage.get("prompt_tokens_details"))
-            cached = details.get("cached_tokens", usage.get("cached_tokens"))
-            if isinstance(cached, (int, float)):
-                out["cached_tokens"] += int(cached)
 
             message = _as_dict(
                 _as_dict((body.get("choices") or [{}])[0]).get("message")
