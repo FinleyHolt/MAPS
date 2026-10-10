@@ -3,8 +3,8 @@
 #
 # Eval protocol: the upstream CityNav scoring (water-cookie/citynav,
 # gsamllavanav, Lee et al. arXiv 2406.14240): NE/SR/OSR in 2D world metres
-# (SR = ||pred_xy - target_xy|| <= 20 m), the 100-150 m start altitude band
-# sampled per episode from the episode id, a 200 m altitude ceiling, and the
+# (SR = ||pred_xy - target_xy|| <= 20 m), the start pose of the split row's
+# trajectory[0] (position, altitude and heading), a 200 m altitude ceiling, and the
 # six-action alphabet (move_forward 5 m, turn +-30 deg, ascend/descend 2 m,
 # stop). SPL rides as spl_pos: Anderson over the flown xy path.
 #
@@ -22,7 +22,7 @@
 # Primitive actions. 200 is GeoNav's published budget (arXiv 2504.09587 SS3);
 # the upstream budget is 100 (eval_max_timestep=20 x move_iteration=5).
 max_steps: 200
-# Inert fallback: the start altitude is sampled from the 100-150 m band.
+# Inert fallback: the start altitude is the row's z.
 altitude_m: 125.0
 cell_size_m: 2.0
 success_radius_m: 20.0
@@ -30,12 +30,11 @@ success_radius_m: 20.0
 # footprint that counts as arriving, and the narrowest target radius scored.
 precise_tolerance_m: 0.0
 precise_floor_radius_m: 5.0
-# Start: the dataset's recorded pose, at an altitude sampled per episode from
-# the upstream band (start_altitude_agl_m, when set, replaces the band with
-# that height above ground), under the paper's 200 m ceiling.
+# Start: the dataset's recorded pose at its z (start_altitude_agl_m, when
+# set, replaces the z with that height above ground), held to [ground + 1 m,
+# the paper's 200 m ceiling].
 spawn: episode
 spawn_seed: 0
-start_altitude_band_m: [100.0, 150.0]
 start_altitude_agl_m: null
 altitude_cap_m: 200.0
 sam:

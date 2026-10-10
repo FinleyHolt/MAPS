@@ -55,9 +55,6 @@ _SCHEMA: dict[str, Any] = {
     "precise_floor_radius_m": (_NUM, _NONNEG),
     "spawn": (str, _one_of("episode", "uniform")),
     "spawn_seed": (int, _NONNEG),
-    "start_altitude_band_m": (list, (
-        lambda v: len(v) == 2 and all(isinstance(x, _NUM) and not isinstance(x, bool) for x in v)
-        and 0 < v[0] <= v[1], "[lo, hi] with 0 < lo <= hi")),
     "start_altitude_agl_m": ((*_NUM, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
     "altitude_cap_m": (_NUM, _POS),
     "landing_altitude_m": (_NUM, _NONNEG),
@@ -103,10 +100,8 @@ class RunConfig:
     # point over the tile bounds, deterministic per (spawn_seed, episode_id).
     spawn: str
     spawn_seed: int
-    # Upstream start-altitude band [lo, hi], sampled per episode (seeded by
-    # episode_id); start_altitude_agl_m, when set, replaces it with
-    # GROUND_LEVEL[map] + that value.
-    start_altitude_band_m: list
+    # The start altitude is upstream's start z; start_altitude_agl_m, when
+    # set, replaces it with GROUND_LEVEL[map] + that value.
     start_altitude_agl_m: float | None
     altitude_cap_m: float
     landing_altitude_m: float

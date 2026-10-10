@@ -115,7 +115,7 @@ def authored_episode(episode_id: str, start_xy: tuple[float, float]):
 
     return CityNavEpisode(
         map_name=episode_id.split("::")[0], episode_id=episode_id, description="",
-        start_xy=(float(start_xy[0]), float(start_xy[1])), target_xy=None,
+        start_xy=(float(start_xy[0]), float(start_xy[1])), start_z=None, target_xy=None,
         target_object_ids=[], target_mask=None, marker_positions=[], raw={},
     )
 
@@ -192,7 +192,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
     compiler = MapsCompiler(sensor_description=served_description(sensor, cfg.start_altitude_agl_m),
                             workdir=workdir)
 
-    start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.episode_id)
+    start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.start_z)
     search_loop = SearchLoop(
         grid,
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),

@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     if ortho is None:
         print(f"no {map_name} raster under {args.ortho}", file=sys.stderr)
         return 2
-    start_alt, ground_z = start_altitude_m(cfg, map_name, episode.episode_id)
+    start_alt, ground_z = start_altitude_m(cfg, map_name, episode.start_z)
     twin = Twin(tiles_dir=TILES_DIR, map_name=map_name, ortho=ortho, sensor=sensor, start_xy=episode.start_xy,
                 agl_m=start_alt - ground_z, terrain=map_render.terrain(map_name, str(TILES_DIR)))
     live = open_live(vehicle=twin, tiles_dir=TILES_DIR, map_name=map_name, sensor=sensor,

@@ -5,9 +5,8 @@ The dataset's recorded start pose (``spawn: episode``) pins CityNav's
 wants the harder question — find the target from anywhere — so ``uniform``
 replaces the start with a point drawn uniformly over the tile bounds,
 deterministic per ``(spawn_seed, episode_id)``: one seed reproduces a run
-exactly, two seeds give independent spawn sets. Same construction as the
-start-altitude band sample (hash fraction, no RNG state to share across
-workers).
+exactly, two seeds give independent spawn sets: a hash fraction, with no
+RNG state to share across workers.
 """
 
 from __future__ import annotations

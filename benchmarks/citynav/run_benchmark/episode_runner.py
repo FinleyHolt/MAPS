@@ -52,24 +52,17 @@ import logging
 log = logging.getLogger("run_benchmark")
 
 
-def start_altitude_m(cfg, map_name: str, episode_id: str) -> tuple[float, float]:
+def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, float]:
     """``(start altitude AMSL, block ground datum)`` for one episode.
 
-    The ortho profile samples the upstream 100-150 m band (paper SS3.2)
-    per episode, deterministic (seeded by ``episode_id``) so a run is
-    reproducible and parallel-safe; ``start_altitude_agl_m`` replaces the
-    AMSL band with a uniform above-ground cruise. The result is clamped
-    into ``[ground + 1, altitude_cap_m]``.
+    The altitude is upstream's start z, the split row's ``trajectory[0]``
+    z; ``start_altitude_agl_m`` replaces it with a uniform above-ground
+    cruise. The result is held to ``[ground + 1, altitude_cap_m]``.
 
-    This pair IS the crop window's observation ceiling — the mission's
-    ``obs_span_m = 2 * (alt - ground)`` — so it is a named function a test
-    can call. ``cfg.altitude_m`` is deliberately NOT read: it is the inert
-    fallback for the non-ortho paths, and reading it as the start pose is
-    what put a 25.8 m median span in the tree that no episode has flown
-    (the real median is ~192 m).
+    This pair IS the crop window's observation ceiling: the mission's
+    ``obs_span_m = 2 * (alt - ground)``. ``cfg.altitude_m`` is not the
+    start pose.
     """
-    import hashlib  # noqa: PLC0415
-
     from maps.perception.ortho.ground_level import (  # noqa: PLC0415
         GROUND_LEVEL,
     )
@@ -77,15 +70,13 @@ def start_altitude_m(cfg, map_name: str, episode_id: str) -> tuple[float, float]
     ground = float(GROUND_LEVEL.get(map_name, 0.0))
     if cfg.start_altitude_agl_m is not None:
         alt = ground + float(cfg.start_altitude_agl_m)
+    elif start_z is None:
+        raise ValueError(
+            f"{map_name}: the episode has no start z and the config sets no "
+            "start_altitude_agl_m"
+        )
     else:
-        lo_m, hi_m = (
-            float(cfg.start_altitude_band_m[0]),
-            float(cfg.start_altitude_band_m[1]),
-        )
-        seed = int(
-            hashlib.sha256(str(episode_id).encode()).hexdigest()[:16], 16
-        )
-        alt = lo_m + (seed / float(0xFFFFFFFFFFFFFFFF)) * (hi_m - lo_m)
+        alt = float(start_z)
     return (
         float(min(max(alt, ground + 1.0), float(cfg.altitude_cap_m))),
         ground,
@@ -203,7 +194,7 @@ def run_episode(
     # square from the same scalar the crop uses (``side = 2 * (alt -
     # ground)``) instead of any per-object height prior.
     start_alt_m, ortho_ground_z_m = start_altitude_m(
-        cfg, episode.map_name, episode.episode_id
+        cfg, episode.map_name, episode.start_z
     )
     log.info(
         "  ortho start altitude: %.2f m (%s, ground=%.2f, "
@@ -212,8 +203,7 @@ def run_episode(
         (
             f"AGL {cfg.start_altitude_agl_m:.0f} m"
             if cfg.start_altitude_agl_m is not None
-            else f"band [{cfg.start_altitude_band_m[0]:.0f}, "
-                 f"{cfg.start_altitude_band_m[1]:.0f}]"
+            else f"row z={episode.start_z:.2f}"
         ),
         ortho_ground_z_m,
         float(cfg.altitude_cap_m),

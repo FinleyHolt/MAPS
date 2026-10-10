@@ -59,6 +59,10 @@ class CityNavEpisode:
     episode_id: str  # stable string id for logging
     description: str  # the NL instruction
     start_xy: tuple[float, float]  # first trajectory pose xy
+    #: Upstream's start altitude, the row's ``trajectory[0]`` z (absolute, as
+    #: every altitude here is); None on a mission flown under an operator's
+    #: own words.
+    start_z: float | None
     #: Mean of target_positions (xy); None on a mission flown under an
     #: operator's own words, which has no row and which the bench does not score.
     target_xy: tuple[float, float] | None
@@ -227,6 +231,7 @@ def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
         episode_id=episode_id,
         description=descriptions[0] if descriptions else "",
         start_xy=start_xy,
+        start_z=float(trajectory[0][2]),
         target_xy=(tx, ty),
         target_object_ids=list(row.get("object_ids") or []),
         target_mask=target_mask,

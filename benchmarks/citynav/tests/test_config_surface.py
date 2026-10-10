@@ -65,8 +65,7 @@ DEAD_SAM = ("device", "dtype")
 # absent color_palette ran "citynav" in run_benchmark/perception.py).
 ABSENT_MEANT = {
     "precise_tolerance_m": 0.0, "precise_floor_radius_m": 5.0, "spawn": "episode",
-    "spawn_seed": 0, "start_altitude_band_m": [100.0, 150.0],
-    "start_altitude_agl_m": None, "altitude_cap_m": 200.0, "descend_to_land": False,
+    "spawn_seed": 0, "start_altitude_agl_m": None, "altitude_cap_m": 200.0, "descend_to_land": False,
     "withhold": [],
 }
 ABSENT_MEANT_FLIGHT = {"kind": "discrete6", "speed_mps": None}
@@ -127,7 +126,6 @@ def test_base_resolves_relative_to_the_file_and_deep_merges(tmp_path):
     ("descend_to_land: 1\n", "descend_to_land must be bool"),
     ("sam:\n  score_threshold: 1.5\n", "sam.score_threshold must be in [0, 1]"),
     ("spawn: random\n", "spawn must be one of"),
-    ("start_altitude_band_m: [150, 100]\n", "start_altitude_band_m must be [lo, hi]"),
     ("sam: true\n", "sam is a block of keys"),
     ("withhold: [pictures]\n", "withhold must be"),
     ("withhold: [look, look]\n", "withhold must be"),
