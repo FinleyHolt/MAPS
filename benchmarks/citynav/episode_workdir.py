@@ -10,11 +10,8 @@
         flight/            the engine's working files: llm/transcript.jsonl (the wire
                            log), look/ (the look audit), net_meter.jsonl, tour_cursor.json
 
-The launcher (``launch.spawn_runner``), the warm runner (``episode_server``)
-and the batch loop (``cli.main``) each carried their own copy of this setup
-and had drifted: one ``setdefault`` the env where another assigned it, one
-attached a log handler where another attached two. One function, three
-callers, and the field station is the fourth.
+The warm runner (``episode_server``), the batch loop (``cli.main``) and the
+field station each open their attempt directories through one function.
 
 The stamp in the name is the attempt's start; the readers order attempts of
 one episode by it, so a retry is a new directory, never an overwrite. A
@@ -109,17 +106,10 @@ def open_episode_dir(
     root: Path | str,
     *,
     episode_id: str,
-    workdir: Path | str | None = None,
-    run_log: bool = True,
     run_no: int | None = None,
 ) -> OpenEpisode:
-    """Create the attempt's directory and point this process at it.
-
-    ``workdir`` names a directory a launcher already minted (it wrote the
-    in-flight handle for it before spawning); otherwise one is minted under
-    ``root``. ``run_log=False`` is for that launched child, whose stdout and
-    stderr the launcher already redirects into ``<workdir>/run.log``: a
-    second handler would print every line twice.
+    """Mint the attempt's directory under ``root`` and point this process at
+    it, its log into ``<dir>/run.log``.
 
     ``run_no`` is the run's number in its sortie; it rides the directory name
     so a folder and a run row find each other (:func:`mint_workdir`). A bench
@@ -128,10 +118,10 @@ def open_episode_dir(
     ``close()`` detaches the log handler, so a warm runner's next episode
     does not bleed into this one's file.
     """
-    # numpy at import; the launcher imports this module and must stay light.
+    # numpy at import; the driver imports this module and must stay light.
     from benchmarks.citynav.live_recorder import LiveRecorder
 
-    d = Path(workdir) if workdir is not None else mint_workdir(Path(root), episode_id, run_no)
+    d = mint_workdir(Path(root), episode_id, run_no)
     flight = d / "flight"
     flight.mkdir(parents=True, exist_ok=True)
 
@@ -144,26 +134,23 @@ def open_episode_dir(
     # key-affine router keeps the episode on one worker.
     os.environ["SEARCH_LLM_ROUTING_KEY"] = episode_id
 
-    handler: logging.FileHandler | None = None
-    if run_log:
-        handler = logging.FileHandler(d / RUN_LOG, mode="a")
-        handler.setLevel(logging.INFO)
-        handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s %(levelname)-5s %(name)s %(message)s",
-                datefmt="%H:%M:%S",
-            )
+    handler = logging.FileHandler(d / RUN_LOG, mode="a")
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s %(levelname)-5s %(name)s %(message)s",
+            datefmt="%H:%M:%S",
         )
-        logging.getLogger().addHandler(handler)
+    )
+    logging.getLogger().addHandler(handler)
 
     recorder = LiveRecorder(d, episode_id=episode_id)
 
     def close() -> None:
-        if handler is not None:
-            logging.getLogger().removeHandler(handler)
-            try:
-                handler.close()
-            except OSError:
-                pass
+        logging.getLogger().removeHandler(handler)
+        try:
+            handler.close()
+        except OSError:
+            pass
 
     return OpenEpisode(dir=d, recorder=recorder, close=close)

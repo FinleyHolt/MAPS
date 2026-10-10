@@ -51,9 +51,6 @@ DEFAULT_CONFIG = os.environ.get(
 )
 DEFAULT_SPLIT = os.environ.get("SEARCH_BENCHMARK_DEFAULT_SPLIT", "val_seen")
 OUTPUT_ROOT = os.environ.get("SEARCH_BENCHMARK_OUTPUT_ROOT", "output/citynav")
-LAUNCH_MODULE = os.environ.get(
-    "SEARCH_BENCHMARK_LAUNCH_MODULE", "benchmarks.citynav.launch"
-)
 
 
 def _cached_share(cached: int | None, prompt: int) -> str:
@@ -146,15 +143,6 @@ def main() -> int:
     )
     parser.add_argument("--no-llm", action="store_true", help="Skip compiler entirely")
     parser.add_argument(
-        "--workdir",
-        default=None,
-        help=(
-            "A launcher-minted episode directory: this process runs ONE "
-            "episode into it and treats it as the run root. The launcher "
-            "redirects stdout+stderr into <workdir>/run.log."
-        ),
-    )
-    parser.add_argument(
         "--episode-id",
         default=None,
         help="Run only the episode with this id (for dashboard-driven single runs).",
@@ -228,11 +216,9 @@ def main() -> int:
             "MapsCompiler) once, emit a {'event':'ready'} line on stdout, "
             "then read newline-delimited JSON run commands from stdin and "
             "execute one episode per command through the same run_episode "
-            "path the batch loop uses, reproducing launch.py's per-episode "
-            "workdir + .in_flight.json contract. stdout carries "
-            "ONLY the protocol JSON; all logging stays on the per-episode "
-            "run.log. Not for manual use; the manual path is "
-            f"python -m {LAUNCH_MODULE}."
+            "path the batch loop uses, each into its own attempt directory. "
+            "stdout carries ONLY the protocol JSON; all logging stays on the "
+            "per-episode run.log. Not for manual use: bench_fullset spawns it."
         ),
     )
     parser.add_argument(
@@ -240,10 +226,8 @@ def main() -> int:
         default=None,
         help=(
             "Episode-server mode only: the per-worker run-root under which "
-            f"each episode's maps_<stamp>_{benchmark()}_<slug>/ workdir and "
-            "the shared "
-            ".in_flight.json lockfile are written (mirrors launch.py "
-            "--run-root)."
+            "each episode's maps_<stamp>_<benchmark>_<slug>/ workdir is "
+            "written."
         ),
     )
     args = parser.parse_args()
@@ -387,22 +371,11 @@ def main() -> int:
             raw_rows=raw_rows,
         )
 
-    if args.workdir:
-        # The launcher minted this directory, wrote the in-flight handle
-        # for it, and redirects this process's stdout+stderr into
-        # <workdir>/run.log. One episode, and the directory IS the run.
-        if len(indexed_rows) != 1:
-            log.error("--workdir runs exactly one episode; got %d", len(indexed_rows))
-            return 2
-        out_root = Path(args.workdir).resolve()
-        run_log = False
-    else:
-        out_root = Path(
-            args.out
-            or f"{OUTPUT_ROOT}/{benchmark()}_{args.split}_"
-            f"{datetime.now():%Y-%m-%d_%H-%M-%S}"
-        ).resolve()
-        run_log = True
+    out_root = Path(
+        args.out
+        or f"{OUTPUT_ROOT}/{benchmark()}_{args.split}_"
+        f"{datetime.now():%Y-%m-%d_%H-%M-%S}"
+    ).resolve()
     out_root.mkdir(parents=True, exist_ok=True)
     try:
         root_lock = episodes.hold_root(out_root)  # held until the process ends
@@ -433,14 +406,7 @@ def main() -> int:
         except (KeyError, ValueError, TypeError) as exc:
             log.error("row %d: unparseable episode: %s", orig_idx, exc)
             continue
-        ep = open_episode_dir(
-            out_root,
-            episode_id=ep_meta.episode_id,
-            # A --workdir run's root IS the attempt's directory, so its
-            # ledger row points at ".".
-            workdir=out_root if args.workdir else None,
-            run_log=run_log,
-        )
+        ep = open_episode_dir(out_root, episode_id=ep_meta.episode_id)
         try:
             # Shared with the persistent episode server so both paths run
             # the identical run_episode + row-write + infra-token code (this

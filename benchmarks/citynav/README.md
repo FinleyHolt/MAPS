@@ -58,10 +58,10 @@ A run root holds:
 Read a root with [`analysis/`](analysis/README.md); never parse
 `episodes.jsonl` by hand.
 
-One episode, through the launcher:
+One episode, straight through the runner (its root is `--out`):
 
 ```sh
-python -m benchmarks.citynav.launch --episode-id <id> --split train_seen
+python -m benchmarks.citynav.run_benchmark --split train_seen --episode-id <id> --out output/citynav_one
 ```
 
 ## Configs
@@ -77,7 +77,6 @@ and every value is checked by type and range at load
 | Module | Role |
 |---|---|
 | `bench_fullset.py` | The full-split driver. |
-| `launch.py`, `preflight.py` | One episode, with the endpoint preflight. |
 | `run_benchmark/` | The runner: config, episode setup, the mission engine (`mission_engine.py`), the episode server, scoring rows. |
 | `adapter.py`, `episodes.py`, `paths.py` | The dataset, the ledger, the file layout. |
 | `eval.py` | Scoring: NE, SR, OSR, SPL, and the shape criterion the Cal City bench uses. |

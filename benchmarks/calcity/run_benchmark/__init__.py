@@ -12,7 +12,6 @@ def main() -> int:
     os.environ["SEARCH_BENCHMARK_DEFAULT_CONFIG"] = "configs/calcity.yaml"
     os.environ["SEARCH_BENCHMARK_DEFAULT_SPLIT"] = "calcity"
     os.environ["SEARCH_BENCHMARK_OUTPUT_ROOT"] = "output/calcity"
-    os.environ["SEARCH_BENCHMARK_LAUNCH_MODULE"] = "benchmarks.calcity.launch"
     os.environ["SEARCH_BENCHMARK_NAME"] = "calcity"
     activate()
     from benchmarks.citynav.run_benchmark.cli import main as shared_main

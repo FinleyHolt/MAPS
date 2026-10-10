@@ -102,19 +102,6 @@ def test_run_log_receives_the_loggers_and_close_detaches_it(tmp_path, caplog):
     assert "after close" not in (ep.dir / "run.log").read_text()
 
 
-def test_a_launched_child_attaches_no_handler(tmp_path):
-    root = logging.getLogger()
-    before = list(root.handlers)
-    wd = tmp_path / "maps_20260101_000000_citynav_block_7__0_3"
-    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3",
-                             workdir=wd, run_log=False)
-    try:
-        assert ep.dir == wd and root.handlers == before
-        assert not (wd / "run.log").exists()
-    finally:
-        ep.close()
-
-
 def test_a_station_attempt_names_its_run_number_and_a_bench_attempt_names_none(
     tmp_path, monkeypatch
 ):

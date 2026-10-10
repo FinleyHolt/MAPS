@@ -42,7 +42,7 @@ Outputs (under ``--out-root``, default ``output/citynav_fullset``):
     summary.txt     live human-readable aggregate (SR, coverage, ETA)
     driver.log      orchestrator log
     w<id>/          per-worker run-root: server.log (the warm child's
-                    stderr), .in_flight.json while an episode runs, and one
+                    stderr), and one
                     maps_<stamp>_<benchmark>_<slug>/ directory per attempt
                     holding episode.json, run.log and flight/
 """
@@ -61,13 +61,13 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from collections import Counter, deque
 
 from pathlib import Path
 
 from benchmarks.citynav import episodes
 from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.preflight import reasoner_alive
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -75,8 +75,7 @@ REPO = Path(__file__).resolve().parents[2]
 # A peer benchmark reuses this harness by naming its adapter here (e.g.
 # benchmarks.calcity._citynav_bridge): the module's ``activate()`` rebinds
 # ``benchmarks.citynav.paths`` to the peer's contract before any split or
-# preflight read. Same seam family as ``launch.py``'s
-# SEARCH_BENCHMARK_RUNNER_MODULE; unset = CityNav, no-op.
+# preflight read. Unset = CityNav, no-op.
 def _activate_bridge_from_env() -> None:
     bridge = os.environ.get("SEARCH_BENCHMARK_BRIDGE", "").strip()
     if bridge:
@@ -101,7 +100,7 @@ CONFIG = (
 
 DEFAULT_WORKERS = 6
 # The runner each worker process spawns; a peer benchmark names its own
-# (which self-activates its bridge), same seam as launch.py's.
+# (which self-activates its bridge).
 RUNNER_MODULE = os.environ.get(
     "SEARCH_BENCHMARK_RUNNER_MODULE", "benchmarks.citynav.run_benchmark"
 )
@@ -330,8 +329,8 @@ class _WarmRunner:
         self, episode_id: str, *, deadline_epoch: float | None = None
     ) -> tuple[dict, int]:
         """Dispatch one episode; block until the child created the
-        per-episode workdir + .in_flight.json and emitted ``started``.
-        Returns (launch-style handle, seq)."""
+        per-episode workdir and emitted ``started``.
+        Returns (handle, seq)."""
         if not self.alive():
             raise RuntimeError("warm runner not alive")
         self._seq += 1
@@ -362,38 +361,14 @@ class _WarmRunner:
             # Resolved before flight (e.g. episode_not_found). Synthesize
             # a handle; _wait_for_exit returns immediately on _early_done.
             self._early_done = obj
-            return (
-                {
-                    "pid": obj.get("pid", self.proc.pid),
-                    "workdir": obj.get("workdir", ""),
-                    "log_path": obj.get("log_path", ""),
-                    "episode_id": episode_id,
-                    "map": "",
-                    "split": self.split,
-                    "started_ts": time.time(),
-                },
-                seq,
-            )
-        handle = {
-            k: obj.get(k)
-            for k in (
-                "pid",
-                "workdir",
-                "log_path",
-                "episode_id",
-                "map",
-                "split",
-                "started_ts",
-            )
-        }
-        return handle, seq
+            return {"workdir": obj.get("workdir", ""), "map": ""}, seq
+        return {"workdir": obj.get("workdir"), "map": obj.get("map")}, seq
 
     def kill(self) -> None:
         """SIGTERM the child's process group, SIGKILL after 5 s.
 
         Process-group (not bare pid) because the warm runner spawns
-        SearchLoop / executor threads + child renders; mirrors
-        launch.force_stop's proven semantics.
+        SearchLoop / executor threads + child renders.
         """
         proc = self.proc
         if proc is None or proc.poll() is not None:
@@ -425,12 +400,6 @@ class _WarmRunner:
             return True
         return self._episodes_since_spawn >= WARM_RUNNER_RECYCLE_AFTER
 
-    def clear_lockfile(self) -> None:
-        try:
-            (self.run_root / ".in_flight.json").unlink()
-        except OSError:
-            pass
-
     def shutdown(self) -> None:
         proc = self.proc
         if proc is not None and proc.poll() is None:
@@ -448,7 +417,6 @@ class _WarmRunner:
                 time.sleep(0.2)
             if proc.poll() is None:
                 self.kill()
-        self.clear_lockfile()
 
 
 def _infra_casualty(row: dict) -> bool:
@@ -767,7 +735,18 @@ class Driver:
     # -- health gate -------------------------------------------------------
 
     def _vllm_healthy(self) -> bool:
-        return reasoner_alive()
+        """True when the reasoner endpoint answers ``/models``, asked with
+        the chat path's bearer (hosted endpoints auth ``/v1/models``)."""
+        url = os.environ.get("SEARCH_REASONER_URL", "").strip().rstrip("/")
+        req = urllib.request.Request(f"{url}/models")
+        key = os.environ.get("SEARCH_REASONER_API_KEY")
+        if key:
+            req.add_header("Authorization", f"Bearer {key}")
+        try:
+            with urllib.request.urlopen(req, timeout=10.0) as resp:
+                return 200 <= resp.status < 400
+        except (OSError, ValueError):
+            return False
 
     def _wait_for_vllm(self) -> None:
         if self._vllm_healthy():
@@ -872,14 +851,13 @@ class Driver:
             # runner is replaced with a fresh process. This re-pays cold
             # start exactly once, then amortizes again.
             if not runner.alive():
-                runner.clear_lockfile()
                 runner.spawn()
             handle, seq = runner.run_episode(
                 episode_id, deadline_epoch=deadline_epoch)
-        except Exception as exc:  # spawn / dispatch failure ~ launcher exit
+        except Exception as exc:  # spawn / dispatch failure
             # The warm runner could not even start/dispatch the episode
-            # (process spawn failed under host/GPU contention, lockfile
-            # race, transient exec error). The algorithm never ran, so
+            # (process spawn failed under host contention, transient exec
+            # error). The algorithm never ran, so
             # this is infra: excluded from SR + the done-set and fully
             # re-queued. No ``workdir``: an episode that never started has
             # none, and the child's own stderr (``w<id>/server.log``) is

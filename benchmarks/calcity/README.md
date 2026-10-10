@@ -65,7 +65,7 @@ python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_e
 a seeded uniform start. One episode:
 
 ```sh
-python -m benchmarks.calcity.launch --episode-id 'calcity::6#6'
+python -m benchmarks.calcity.run_benchmark --episode-id 'calcity::6#6' --out output/calcity_one
 ```
 
 Read a root with [`benchmarks/citynav/analysis`](../citynav/analysis/README.md).
@@ -76,7 +76,7 @@ Read a root with [`benchmarks/citynav/analysis`](../citynav/analysis/README.md).
 |---|---|
 | `paths.py` | The file layout and the success criterion. |
 | `_citynav_bridge.py` | Restates the Cal City contract in the shared engine's variables. |
-| `bench_fullset.py`, `launch.py`, `run_benchmark/` | The CityNav driver, launcher and runner under the Cal City contract. |
+| `bench_fullset.py`, `run_benchmark/` | The CityNav driver and runner under the Cal City contract. |
 | `data_prep/aoi.py` | The area, its local metric frame and the flat ground plane. |
 | `data_prep/bundle.py` | Reads the world bundle. |
 | `data_prep/build_objects_json.py`, `data_prep/build_rgbd_ortho.py`, `data_prep/bake_tiles.py` | The build steps. |

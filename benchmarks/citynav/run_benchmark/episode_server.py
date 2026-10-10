@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from benchmarks.citynav.adapter import parse_episode
 from benchmarks.citynav.run_benchmark.config import RunConfig
-from datetime import datetime
 from pathlib import Path
 from maps.search import MapsCompiler
 import argparse
@@ -18,7 +17,7 @@ import signal
 import sys
 from benchmarks.citynav.run_benchmark.dispatch import _dispatch_one
 from benchmarks.citynav.run_benchmark.mission_engine import MISSION_DEADLINE_ENV
-from benchmarks.citynav.episode_workdir import RUN_LOG, open_episode_dir
+from benchmarks.citynav.episode_workdir import open_episode_dir
 
 log = logging.getLogger("run_benchmark")
 
@@ -86,129 +85,105 @@ def _episode_server_loop(
 
     Reads newline-delimited JSON commands on stdin and runs one episode
     per ``{"cmd":"run",...}`` through the SAME ``_dispatch_one`` /
-    ``run_episode`` path the batch loop uses, reproducing launch.py's
-    per-episode workdir + ``.in_flight.json``. stdout carries ONLY the protocol JSON; logging stays on the
+    ``run_episode`` path the batch loop uses, each into its own attempt
+    directory. stdout carries ONLY the protocol JSON; logging stays on the
     per-episode ``run.log``.
     """
-    from benchmarks.citynav.launch import (
-        _atomic_write_json,
-        _in_flight_path,
-        resolve_map,
-    )
-
     _die_with_parent()
     run_root = Path(args.run_root or "output/citynav_runs")
     if not run_root.is_absolute():
         run_root = (Path.cwd() / run_root).resolve()
     run_root.mkdir(parents=True, exist_ok=True)
-    pid = os.getpid()
     indexed_rows: list[tuple[int, dict]] = list(enumerate(raw_rows))
-    root_logger = logging.getLogger()
     out = sys.stdout
 
     def emit(obj: dict) -> None:
         out.write(json.dumps(obj) + "\n")
         out.flush()
 
-    def clear_lockfile() -> None:
+    emit({"event": "ready"})
+    for raw_line in sys.stdin:
+        line = raw_line.strip()
+        if not line:
+            continue
         try:
-            _in_flight_path(run_root).unlink()
-        except OSError:
-            pass
-
-    emit({"event": "ready", "pid": pid})
-    try:
-        for raw_line in sys.stdin:
-            line = raw_line.strip()
-            if not line:
-                continue
-            try:
-                cmd = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if cmd.get("cmd") == "shutdown":
-                break
-            if cmd.get("cmd") != "run":
-                continue
-            seq = cmd.get("seq")
-            episode_id = str(cmd.get("episode_id"))
-            split = str(cmd.get("split") or args.split)
-            resolved = _resolve_indexed_row(indexed_rows, split, episode_id)
-            if resolved is None:
-                emit(
-                    {
-                        "event": "done",
-                        "seq": seq,
-                        "episode_id": episode_id,
-                        "reason": "episode_not_found",
-                    }
-                )
-                continue
-            orig_idx, row = resolved
-
-            # --- per-episode directory ---------------------------------
-            ep = open_episode_dir(
-                run_root,
-                episode_id=episode_id,
+            cmd = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if cmd.get("cmd") == "shutdown":
+            break
+        if cmd.get("cmd") != "run":
+            continue
+        seq = cmd.get("seq")
+        episode_id = str(cmd.get("episode_id"))
+        split = str(cmd.get("split") or args.split)
+        resolved = _resolve_indexed_row(indexed_rows, split, episode_id)
+        if resolved is None:
+            emit(
+                {
+                    "event": "done",
+                    "seq": seq,
+                    "episode_id": episode_id,
+                    "reason": "episode_not_found",
+                }
             )
-            workdir = ep.dir
-            log_path = workdir / RUN_LOG
-            recorder = ep.recorder
-            # The wall-clock backstop's deadline. The DRIVER picks it: it
-            # owns the cap and the moment it started this episode's clock,
-            # and a warm child serves many episodes, so this cannot ride the
-            # spawn env. Absent means CLEARED, never carried over -- last
-            # episode's deadline would stop this one's first pass on arrival.
-            _deadline = cmd.get("deadline_epoch")
-            if _deadline is None:
-                os.environ.pop(MISSION_DEADLINE_ENV, None)
-            else:
-                os.environ[MISSION_DEADLINE_ENV] = repr(float(_deadline))
-            if compiler is not None:
-                # workdir is a pure artifact sink on MapsCompiler;
-                # reassigning it per episode lands its compile/ tree in
-                # the right directory without touching any compile
-                # decision (results stay bit-identical to the batch
-                # oracle, which leaves it None).
-                compiler.workdir = workdir
+            continue
+        orig_idx, row = resolved
 
-            handle = {
-                "pid": pid,
-                "workdir": str(workdir),
-                "log_path": str(log_path),
-                "episode_id": episode_id,
-                "map": resolve_map(episode_id),
-                "split": split,
-                "started_ts": datetime.now().timestamp(),
-            }
-            _atomic_write_json(_in_flight_path(run_root), handle)
-            emit({"event": "started", "seq": seq, **handle})
+        # --- per-episode directory ---------------------------------
+        ep = open_episode_dir(
+            run_root,
+            episode_id=episode_id,
+        )
+        workdir = ep.dir
+        recorder = ep.recorder
+        # The wall-clock backstop's deadline. The DRIVER picks it: it
+        # owns the cap and the moment it started this episode's clock,
+        # and a warm child serves many episodes, so this cannot ride the
+        # spawn env. Absent means CLEARED, never carried over -- last
+        # episode's deadline would stop this one's first pass on arrival.
+        _deadline = cmd.get("deadline_epoch")
+        if _deadline is None:
+            os.environ.pop(MISSION_DEADLINE_ENV, None)
+        else:
+            os.environ[MISSION_DEADLINE_ENV] = repr(float(_deadline))
+        if compiler is not None:
+            # workdir is a pure artifact sink on MapsCompiler;
+            # reassigning it per episode lands its compile/ tree in
+            # the right directory without touching any compile
+            # decision (results stay bit-identical to the batch
+            # oracle, which leaves it None).
+            compiler.workdir = workdir
 
-            try:
-                _dispatch_one(
-                    row=row,
-                    orig_idx=orig_idx,
-                    idx=0,
-                    total=1,
-                    compiler=compiler,
-                    objects_by_map=objects_by_map,
-                    cfg=cfg,
-                    recorder=recorder,
-                    episode_dir=workdir,
-                    per_episode=[],
-                )
-                # The verdict is in <workdir>/episode.json; the driver
-                # reads it there and writes the ledger row.
-                emit(
-                    {
-                        "event": "done",
-                        "seq": seq,
-                        "episode_id": episode_id,
-                        "workdir": str(workdir),
-                    }
-                )
-            finally:
-                ep.close()
-    finally:
-        clear_lockfile()
+        handle = {
+            "workdir": str(workdir),
+            "map": episode_id.split("::", 1)[0].split("#", 1)[0],
+        }
+        emit({"event": "started", "seq": seq, **handle})
+
+        try:
+            _dispatch_one(
+                row=row,
+                orig_idx=orig_idx,
+                idx=0,
+                total=1,
+                compiler=compiler,
+                objects_by_map=objects_by_map,
+                cfg=cfg,
+                recorder=recorder,
+                episode_dir=workdir,
+                per_episode=[],
+            )
+            # The verdict is in <workdir>/episode.json; the driver
+            # reads it there and writes the ledger row.
+            emit(
+                {
+                    "event": "done",
+                    "seq": seq,
+                    "episode_id": episode_id,
+                    "workdir": str(workdir),
+                }
+            )
+        finally:
+            ep.close()
     return 0
