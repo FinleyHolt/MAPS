@@ -126,6 +126,7 @@ def test_base_resolves_relative_to_the_file_and_deep_merges(tmp_path):
     ("flight_model:\n  speed: 3\n", "unknown config key(s) ['flight_model.speed']"),
     ("max_steps: 2.5\n", "max_steps must be int"),
     ("max_steps: 0\n", "max_steps must be > 0"),
+    ("max_steps: true\n", "max_steps must be int"),
     ("descend_to_land: 1\n", "descend_to_land must be bool"),
     ("sam:\n  score_threshold: 1.5\n", "sam.score_threshold must be in [0, 1]"),
     ("spawn: random\n", "spawn must be one of"),
