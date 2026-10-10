@@ -64,12 +64,11 @@ class Twin:
     """
 
     def __init__(self, *, tiles_dir, map_name: str, ortho, sensor, start_xy: tuple[float, float], agl_m: float,
-                 ground=None, speed_mps: float = C12_SPEED_MPS, lever: tuple[float, float, float] = C12_LEVER_M
-                 ) -> None:
+                 ground=None) -> None:
         self.tiles_dir, self.map_name, self.sensor = Path(tiles_dir), map_name, sensor
         self.floor_msl_m = FLOOR_MSL_M[map_name]
         self.ground = ground or (lambda xy: self.floor_msl_m)
-        self.agl_m, self.speed_mps, self.lever = float(agl_m), float(speed_mps), lever
+        self.agl_m = float(agl_m)
         self._render = map_render.renderer(ortho)
         self._lock = threading.Lock()
         self.t = 0.0
@@ -109,7 +108,7 @@ class Twin:
     def _advance(self, dt_s: float) -> None:
         """Straight at the route's next point at the airframe's speed, through it
         and on to the next; past the last, on along the same heading."""
-        step = self.speed_mps * dt_s
+        step = C12_SPEED_MPS * dt_s
         while self.route:
             tx, ty = self.route[0]
             dx, dy = tx - self.xy[0], ty - self.xy[1]
@@ -127,10 +126,10 @@ class Twin:
         lonlat = local_to_lonlat(self.tiles_dir, self.map_name, x, y)
         if lonlat is None:
             return None
-        alt = self.ground((x, y)) + self.agl_m + self.lever[2]
+        alt = self.ground((x, y)) + self.agl_m + C12_LEVER_M[2]
         utc = (EPOCH + dt.timedelta(seconds=t)).isoformat()
         return Pose(t=t, lat=lonlat[1], lon=lonlat[0], alt_msl_m=alt, alt_hae_m=alt, track_deg=heading_deg,
-                    speed_mps=self.speed_mps, h_acc_m=0.5, gap_s=0.0, utc=utc, heading_deg=heading_deg,
+                    speed_mps=C12_SPEED_MPS, h_acc_m=0.5, gap_s=0.0, utc=utc, heading_deg=heading_deg,
                     attitude="fusion")
 
     def _record(self) -> None:
@@ -167,7 +166,7 @@ class Twin:
             self.last_error = f"no frame {seq} in the ring"
             return None
         pose = tag_pose(row["pose"], row["t_host"])
-        cam_xy, cam_alt, yaw = camera_pose_local(pose, self.tiles_dir, self.map_name, lever=self.lever)
+        cam_xy, cam_alt, yaw = camera_pose_local(pose, self.tiles_dir, self.map_name, lever=C12_LEVER_M)
         try:
             rgb = self._render(self.sensor, cam_xy, cam_alt - self.ground(cam_xy), yaw,
                                pose.roll_deg, -pose.pitch_deg)

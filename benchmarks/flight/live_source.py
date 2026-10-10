@@ -361,10 +361,9 @@ class Corrector(threading.Thread):
     """Registers every frame the vehicle records, as it arrives, into the pose
     graph. When it falls behind it takes the newest frame."""
 
-    def __init__(self, source: "LiveSource", period_s: float = CORRECTOR_PERIOD_S) -> None:
+    def __init__(self, source: "LiveSource") -> None:
         super().__init__(name="corrector", daemon=True)
         self.source = source
-        self.period_s = period_s
         self._halt = threading.Event()
         #: The log time past the newest frame registered: the index is asked for what came since.
         self._since: int | None = None
@@ -380,7 +379,7 @@ class Corrector(threading.Thread):
                     self._since = int(newest["log_time"]) + 1
                     self.source.correct(got)
             # What is left of the period after the frame, so the rate is the period's.
-            self._halt.wait(max(0.0, self.period_s - (time.perf_counter() - t0)))
+            self._halt.wait(max(0.0, CORRECTOR_PERIOD_S - (time.perf_counter() - t0)))
 
     def stop(self) -> None:
         self._halt.set()
@@ -400,10 +399,9 @@ class LiveSource:
 
     def __init__(self, *, tiles_dir: str | Path, map_name: str, boresight: Boresight, vehicle,
                  tile_ground_z: float, floor_msl_m: float, register: Registration | None = None,
-                 tile: object | None = None, lever: tuple[float, float, float] = C12_LEVER_M) -> None:
+                 tile: object | None = None) -> None:
         self.tiles_dir = Path(tiles_dir)
         self.map_name = map_name
-        self.lever = lever
         self.boresight = boresight
         self.register = register
         self.vehicle = vehicle
@@ -422,9 +420,9 @@ class LiveSource:
         self._correcting = threading.Lock()
         self.corrector: Corrector | None = None
 
-    def start_corrector(self, period_s: float = CORRECTOR_PERIOD_S) -> Corrector:
+    def start_corrector(self) -> Corrector:
         if self.corrector is None:
-            self.corrector = Corrector(self, period_s=period_s)
+            self.corrector = Corrector(self)
             self.corrector.start()
         return self.corrector
 
@@ -520,7 +518,7 @@ class LiveSource:
 
     def camera_pose(self, pose: Pose) -> tuple[tuple[float, float], float, float]:
         """``(pose_xy, alt_msl, yaw)`` of the camera in the tile frame, the solved GNSS bias applied."""
-        pose_xy, alt_msl, yaw = camera_pose_local(pose, self.tiles_dir, self.map_name, lever=self.lever)
+        pose_xy, alt_msl, yaw = camera_pose_local(pose, self.tiles_dir, self.map_name, lever=C12_LEVER_M)
         return (pose_xy[0] + self.boresight.gnss_bias_e_m, pose_xy[1] + self.boresight.gnss_bias_n_m), alt_msl, yaw
 
     def in_frame(self, x: float, y: float) -> bool | None:
@@ -558,15 +556,15 @@ class LiveSource:
         pose_xy, alt_msl, _yaw = self.camera_pose(pose)
         return {"x": pose_xy[0], "y": pose_xy[1], "agl_m": alt_msl - self.floor_msl_m, "utc": pose.utc}
 
-    def coverage(self, points: list[tuple[float, float]], since: int | None = None) -> dict[str, Any] | None:
+    def coverage(self, points: list[tuple[float, float]]) -> dict[str, Any] | None:
         """How much of an area the recording holds. ``points`` are the area's
         (lon, lat) samples; ``fraction`` is the share some frame held, and
         ``best`` per point the ``(off-nadir degrees, sequence)`` of the frame
         that saw it nearest nadir, None for a point no frame held. Read off the
-        ring's index over every frame stamped at or after ``since``, through
-        the solved camera's field of view. None with ``last_refusal`` when the
+        ring's index over every frame, through the solved camera's field of
+        view. None with ``last_refusal`` when the
         ring cannot be asked."""
-        rows = self._ring_rows(since)
+        rows = self._ring_rows(None)
         if rows is None:
             return None
         return self._held_by(rows, points)
@@ -621,7 +619,7 @@ class LiveSource:
         return {"points": len(points), "held": held,
                 "fraction": (held / len(points)) if points else 0.0, "best": best, "frames": len(rows)}
 
-    def observe_area(self, points: list[tuple[float, float]], since: int | None = None) -> Observation | None:
+    def observe_area(self, points: list[tuple[float, float]]) -> Observation | None:
         """The ground the pass held over an AREA, as one north-up observation on
         the map grid: the frames that saw each of ``points`` nearest nadir,
         fused (:meth:`_fused`). ``last["coverage"]`` says how much of the area
@@ -635,7 +633,7 @@ class LiveSource:
         ranks. Only the frames that win a point are fetched, so choosing costs
         no frame bytes.
         """
-        cov = self.coverage(points, since)
+        cov = self.coverage(points)
         if cov is None:
             return None
         if not cov["held"]:

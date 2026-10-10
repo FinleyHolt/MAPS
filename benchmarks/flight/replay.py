@@ -227,7 +227,6 @@ class Held:
     extent: tuple[float, float, float, float]
     camera_z: float
     frame: dict[str, Any] = field(compare=False, hash=False)
-    run: str = ""
 
     @classmethod
     def of(cls, rec: Recording, frame: dict[str, Any]) -> "Held | None":
@@ -237,7 +236,7 @@ class Held:
             return None
         xs, ys = [float(c[0]) for c in corners], [float(c[1]) for c in corners]
         return cls(path=path, extent=(min(xs), min(ys), max(xs), max(ys)), camera_z=float(frame["altitude_m"]),
-                   frame=frame, run=rec.run_id)
+                   frame=frame)
 
     def pixels(self) -> tuple[np.ndarray, np.ndarray]:
         return _pixels(self.path)
@@ -336,7 +335,7 @@ class BankSource:
                 best, best_held = i, held
         return best, best_held
 
-    def coverage(self, points, since=None) -> dict[str, Any]:
+    def coverage(self, points) -> dict[str, Any]:
         best, held = self._best(points)
         n = sum(held)
         self.last_refusal = ""
@@ -346,7 +345,7 @@ class BankSource:
     def coverage_of_each(self, areas) -> list[dict[str, Any]]:
         return [self.coverage(a) for a in areas]
 
-    def observe_area(self, points, since=None):
+    def observe_area(self, points):
         best, held = self._best(points)
         if best is None or not any(held):
             self.last_refusal = f"no recorded observation holds any of the area's {len(points)} points"

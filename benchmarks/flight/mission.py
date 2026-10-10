@@ -415,9 +415,7 @@ class Mission:
             if held is not None:
                 self.transcript.append({"kind": "leg", "said": (
                     f"{token} at ({xy[0]:.0f}, {xy[1]:.0f}) is held by the pass already: "
-                    f"{self._held_words(held[1])}; no leg is flown"),
-                    "area": [[float(lon), float(lat)] for lon, lat in area_ll],
-                    "coverage_floor": COVERED_FRACTION, "coverage": self._coverage_block(cov)})
+                    f"{self._held_words(held[1])}; no leg is flown")})
             else:
                 if unread is not None:
                     log.warning("the leg to %s at (%.0f, %.0f) is posted unread: the recording did not answer "
@@ -490,7 +488,7 @@ class Mission:
             # later observation in the turn is the pass over it again.
             self._held = None
 
-    def _wait_departure(self, xy, poll_s: float = 0.25) -> float:
+    def _wait_departure(self, xy) -> float:
         """Hold until the point leaves the camera's frame, and answer with the
         seconds it took. The arrival rule turns true as the point crosses INTO
         the frame; waiting for it to fall out the other side puts the whole
@@ -504,7 +502,7 @@ class Mission:
         while not self._cancel.is_set() and self._vehicle.now() - t0 < bound:
             if not self._live.in_frame(float(xy[0]), float(xy[1])):
                 break
-            self._vehicle.sleep(poll_s)
+            self._vehicle.sleep(0.25)
         return self._vehicle.now() - t0
 
     def _coverage(self, area_lonlat: list[tuple[float, float]] | None) -> dict[str, Any] | None:
@@ -643,7 +641,7 @@ class Mission:
         return sha
 
     def _wait_arrival(self, xy: Any, *, area: list[tuple[float, float]] | None, timeout_s: float,
-                      poll_s: float = 1.0, reach_m: float | None = None) -> str:
+                      reach_m: float | None = None) -> str:
         """``arrived`` when the recording holds ``area`` at ``COVERED_FRACTION``
         (asked as it grows, poses only); ``short`` when ``reach_m`` is given and
         the pass came inside it, left (``SHORT_PASS_LEAVE_M`` for
@@ -680,7 +678,7 @@ class Mission:
                 log.warning("no arrival at (%.0f, %.0f) in %.0f s, closest %.0f m: the leg is lost",
                             float(xy[0]), float(xy[1]), timeout_s, best)
                 return "lost"
-            self._vehicle.sleep(poll_s)
+            self._vehicle.sleep(1.0)
         return "cancel"
 
     def _pose(self) -> dict[str, float] | None:
@@ -912,11 +910,11 @@ class Mission:
             self.status = STATE_AWAITING
         self.bank()
 
-    def _await_tasking(self, poll_s: float = 0.5) -> str | None:
+    def _await_tasking(self) -> str | None:
         """Block until the operator speaks or the mission is stopped."""
         while not self._cancel.is_set():
             try:
-                return self._taskings.get(timeout=poll_s)
+                return self._taskings.get(timeout=0.5)
             except queue.Empty:
                 continue
         return None

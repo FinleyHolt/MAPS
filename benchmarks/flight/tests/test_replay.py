@@ -21,7 +21,7 @@ def _held(tmp_path, name, extent, black_east=False):
         rgb[:, 100:] = 0
     path = tmp_path / f"{name}.jpg"
     Image.fromarray(rgb).save(path, quality=90)
-    return R.Held(path=path, extent=extent, camera_z=914.4, run=name,
+    return R.Held(path=path, extent=extent, camera_z=914.4,
                   frame={"seq": 7, "log_time": 7, "boresight": "/some/where/boresight.json", "corners_xy": None})
 
 
