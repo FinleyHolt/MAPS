@@ -9,7 +9,6 @@ from benchmarks.citynav.analysis import rows as _rows
 from benchmarks.citynav.live_recorder import LiveRecorder
 from benchmarks.citynav.run_benchmark.config import RunConfig
 from benchmarks.citynav.run_benchmark.error_taxonomy import (
-    _exc_is_cuda_oom,
     _exc_is_sam_infra,
     _exc_is_transient_infra,
 )
@@ -102,18 +101,15 @@ def _dispatch_one(
     recorder: LiveRecorder | None,
     episode_dir: Path,
     per_episode: list[dict],
-) -> tuple[dict, bool]:
+) -> dict:
     """Run one episode and write its row to ``<episode_dir>/episode.json``,
     shared by the batch loop and the persistent episode server.
 
-    Returns ``(row, failed_oom)``. The row's ``status`` is ``ok`` for a
-    scored attempt and ``infra`` when the algorithm never got a fair run:
-    the episode raised, the mission ended ``transient_failures``, or the
-    runner produced no record. The batch loop appends the row to the run's
-    ledger; the server uses ``failed_oom`` to tear itself down so its next
-    episode gets a fresh CUDA context.
+    Returns the row. Its ``status`` is ``ok`` for a scored attempt and
+    ``infra`` when the algorithm never got a fair run: the episode raised,
+    the mission ended ``transient_failures``, or the runner produced no
+    record. The batch loop appends the row to the run's ledger.
     """
-    failed_oom = False
     t0 = time.monotonic()
     try:
         _eid = parse_episode(row, row_index=orig_idx).episode_id
@@ -151,19 +147,13 @@ def _dispatch_one(
         # exc_info lands the traceback in run.log through the root
         # handler; a bare print_exc reaches only stderr.
         log.error("  fail row %d: %s", idx, e, exc_info=True)
-        # The greppable tokens the fleet driver's log classifier reads.
-        # Each names an infra death before commit -- a CUDA/CuPy contention
-        # OOM, a SAM outage, a transient shared-server fault -- and each
-        # makes the warm runner respawn so the re-attempt starts clean.
-        if _exc_is_cuda_oom(e):
-            token = "CITYNAV_EPISODE_OOM_ABORT"
-            log.error("%s episode_id=%s", token, _eid)
-        elif _exc_is_sam_infra(e) or _exc_is_transient_infra(e):
+        # The token names an infra death before commit: a SAM outage or a
+        # transient shared-server fault.
+        if _exc_is_sam_infra(e) or _exc_is_transient_infra(e):
             token = "CITYNAV_EPISODE_INFRA_ABORT"
             log.error("%s episode_id=%s type=%s", token, _eid, type(e).__qualname__)
         else:
             token = None
-        failed_oom = token is not None
         err = f"{type(e).__name__}: {e}"
         out = _stamp({
             "episode_id": _eid,
@@ -171,7 +161,7 @@ def _dispatch_one(
             "error": f"{token}: {err}" if token else err,
         })
         write_episode_json(episode_dir, out)
-        return out, failed_oom
+        return out
     if rec is None:
         # The runner exited clean with no record (no objects for the map,
         # the reasoner unreachable pre-flight, a --stop-after exit): not a
@@ -182,7 +172,7 @@ def _dispatch_one(
             "error": "no_prediction_unclassified",
         })
         write_episode_json(episode_dir, out)
-        return out, failed_oom
+        return out
     per_episode.append(rec["metrics"])
     m = rec["metrics"]
     # A mission the serve failed out from under is the cluster's weather,
@@ -213,4 +203,4 @@ def _dispatch_one(
         m.get("committed_fid") or "-",
         m["compile_s"],
     )
-    return out, failed_oom
+    return out

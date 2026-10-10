@@ -46,36 +46,57 @@ def _rec(ended_by: str = "reply") -> dict:
     }
 
 
-def test_an_exception_lands_an_infra_row(tmp_path, light, monkeypatch):
+@pytest.mark.parametrize("msg", ["boom", "CUDA out of memory"])
+def test_an_exception_lands_an_infra_row(tmp_path, light, monkeypatch, msg):
     def boom(*a, **k):
-        raise RuntimeError("boom")
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(dispatch, "run_episode", boom)
-    row, failed_oom = _dispatch(tmp_path)
+    row = _dispatch(tmp_path)
     assert row["status"] == episodes.STATUS_INFRA
-    assert row["error"] == "RuntimeError: boom"
+    assert row["error"] == f"RuntimeError: {msg}"
     assert row["withhold"] == ["look"]
-    assert failed_oom is False, "an unclassified exception must not respawn the runner"
     assert episodes.read_episode_json(tmp_path) == row
 
 
-def test_a_classified_infra_exception_carries_its_token(tmp_path, light, monkeypatch):
-    exc = RuntimeError("CUDA out of memory")
-    assert dispatch._exc_is_cuda_oom(exc), "vacuity floor: the fixture must classify"
+def _status_error(code: int) -> Exception:
+    import httpx
 
+    req = httpx.Request("POST", "http://reasoner/v1/chat/completions")
+    return httpx.HTTPStatusError("x", request=req, response=httpx.Response(code, request=req))
+
+
+def test_a_serve_fault_carries_the_infra_token(tmp_path, light, monkeypatch):
     def boom(*a, **k):
-        raise exc
+        raise RuntimeError("compile failed") from _status_error(503)
 
     monkeypatch.setattr(dispatch, "run_episode", boom)
-    row, failed_oom = _dispatch(tmp_path)
+    row = _dispatch(tmp_path)
     assert row["status"] == episodes.STATUS_INFRA
-    assert row["error"].startswith("CITYNAV_EPISODE_OOM_ABORT: RuntimeError")
-    assert failed_oom is True
+    assert row["error"].startswith("CITYNAV_EPISODE_INFRA_ABORT: RuntimeError")
+
+
+@pytest.mark.parametrize("exc", [
+    _status_error(400),
+    RuntimeError("CUDA out of memory"),
+    RuntimeError("upstream said: Connection refused"),
+])
+def test_a_refused_request_or_a_quoted_phrase_is_not_infra(exc):
+    from benchmarks.citynav.run_benchmark.error_taxonomy import _exc_is_transient_infra
+
+    assert _exc_is_transient_infra(exc) is False
+
+
+@pytest.mark.parametrize("code", [408, 429, 500, 503])
+def test_a_status_the_serve_may_clear_is_infra(code):
+    from benchmarks.citynav.run_benchmark.error_taxonomy import _exc_is_transient_infra
+
+    assert _exc_is_transient_infra(_status_error(code)) is True
 
 
 def test_no_record_is_infra_not_a_scored_zero(tmp_path, light, monkeypatch):
     monkeypatch.setattr(dispatch, "run_episode", lambda *a, **k: None)
-    row, _ = _dispatch(tmp_path)
+    row = _dispatch(tmp_path)
     assert row["status"] == episodes.STATUS_INFRA
     assert row["error"] == "no_prediction_unclassified"
     assert episodes.read_episode_json(tmp_path) == row
@@ -83,7 +104,7 @@ def test_no_record_is_infra_not_a_scored_zero(tmp_path, light, monkeypatch):
 
 def test_a_serve_death_under_the_mission_is_infra(tmp_path, light, monkeypatch):
     monkeypatch.setattr(dispatch, "run_episode", lambda *a, **k: _rec("transient_failures"))
-    row, _ = _dispatch(tmp_path)
+    row = _dispatch(tmp_path)
     assert row["status"] == episodes.STATUS_INFRA
     assert row["error"] == "mission ended_by=transient_failures"
     assert row["metrics"]["SR"] == 1, "the record stays on the row for the audit"
@@ -93,10 +114,9 @@ def test_a_serve_death_under_the_mission_is_infra(tmp_path, light, monkeypatch):
 def test_a_scored_record_is_ok_and_on_disk(tmp_path, light, monkeypatch):
     monkeypatch.setattr(dispatch, "run_episode", lambda *a, **k: _rec())
     per_episode: list[dict] = []
-    row, failed_oom = _dispatch(tmp_path, per_episode)
+    row = _dispatch(tmp_path, per_episode)
     assert row["status"] == episodes.STATUS_OK
     assert row["error"] is None
-    assert failed_oom is False
     assert row["search_env_flags"] == {"SEARCH_X": "1"}
     assert row["provenance"] == {"commit": "abc"}
     assert isinstance(row["elapsed_s"], float) and isinstance(row["ts"], float)

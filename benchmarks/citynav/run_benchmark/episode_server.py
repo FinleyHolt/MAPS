@@ -1,5 +1,5 @@
 """Warm-runner stdin protocol: one persistent process executes
-episodes on command for bench_fullset (recycle + OOM-retry contract).
+episodes on command for bench_fullset.
 """
 
 from __future__ import annotations
@@ -163,9 +163,8 @@ def _episode_server_loop(
             _atomic_write_json(_in_flight_path(run_root), handle)
             emit({"event": "started", "seq": seq, **handle})
 
-            failed_oom = False
             try:
-                _, failed_oom = _dispatch_one(
+                _dispatch_one(
                     row=row,
                     orig_idx=orig_idx,
                     idx=0,
@@ -185,18 +184,10 @@ def _episode_server_loop(
                         "seq": seq,
                         "episode_id": episode_id,
                         "workdir": str(workdir),
-                        "oom": bool(failed_oom),
                     }
                 )
             finally:
                 ep.close()
-            if failed_oom:
-                # A CUDA/CuPy OOM can leave the process's CUDA context
-                # unusable. Exit so the bench worker's respawn-on-dead
-                # path gives the next episode a fresh context (mirrors
-                # launch.py's fresh-process-per-episode failure cost for
-                # exactly one episode, then amortizes again).
-                break
     finally:
         clear_lockfile()
     return 0

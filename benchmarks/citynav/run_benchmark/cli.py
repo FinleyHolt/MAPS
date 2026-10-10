@@ -431,9 +431,9 @@ def main() -> int:
         )
         try:
             # Shared with the persistent episode server so both paths run
-            # the identical run_episode + row-write + OOM-token code (this
+            # the identical run_episode + row-write + infra-token code (this
             # batch loop is the bit-identical correctness oracle).
-            result, _ = _dispatch_one(
+            result = _dispatch_one(
                 row=row,
                 orig_idx=orig_idx,
                 idx=i,
