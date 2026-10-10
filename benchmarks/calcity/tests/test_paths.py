@@ -35,3 +35,21 @@ def test_citynav_registry_contains_no_calcity_splits():
     from benchmarks.citynav.paths import SPLIT_FILES as citynav_splits
 
     assert not any("calcity" in split for split in citynav_splits)
+
+
+def test_the_build_commands_default_to_the_bench_s_own_roots(monkeypatch, tmp_path):
+    from benchmarks.calcity import paths
+    from benchmarks.calcity.data_prep import bake_tiles, build_objects_json, build_rgbd_ortho
+
+    monkeypatch.setattr(paths, "CALCITY_ROOT", tmp_path / "root")
+    monkeypatch.setattr(paths, "TILES_DIR", tmp_path / "tiles")
+    seen = {}
+    monkeypatch.setattr(build_objects_json, "build", lambda root, bundle, blocks: seen.setdefault("objects", root))
+    monkeypatch.setattr(build_rgbd_ortho, "build_block",
+                        lambda root, name, bbox, raster: seen.setdefault("ortho", root) and (None, None))
+    monkeypatch.setattr(bake_tiles, "bake_block",
+                        lambda bundle, tiles, name: seen.setdefault("tiles", tiles) and {"features": 0, "nodes": 0})
+    build_objects_json.main(["--bundle", str(tmp_path)])
+    build_rgbd_ortho.main(["--raster", str(tmp_path / "r.tif")])
+    bake_tiles.main(["--bundle", str(tmp_path)])
+    assert seen == {"objects": tmp_path / "root", "ortho": tmp_path / "root", "tiles": tmp_path / "tiles"}

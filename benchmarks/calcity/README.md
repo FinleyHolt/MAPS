@@ -31,8 +31,9 @@ python -m benchmarks.calcity.data_prep.bake_tiles
 | `build_rgbd_ortho --raster` | The raster pair under `<root>/data/rgbd_upstream`: the raster as given, `<map>_rgb.tif`, and a constant height plane on its grid, `<map>.tif`. The raster must be the block's frame at its own cell. |
 | `bake_tiles` | The OSM prior bake and `calcity_meta.json` under `SEARCH_CALCITY_TILES`. |
 
-`<root>` is the build commands' `--root`, default `~/datasets/calcity`, the
-same default the bench reads its build tree from.
+`<root>` is the build commands' `--root`, default the bench's own build tree
+(`SEARCH_CALCITY_DATA`, then `CALCITY_ROOT`); `bake_tiles --tiles-dir`
+defaults to `SEARCH_CALCITY_TILES`.
 
 | Variable | Default | Names |
 |---|---|---|
@@ -40,7 +41,7 @@ same default the bench reads its build tree from.
 | `SEARCH_CALCITY_RGBD_DIR` | `<root>/data/rgbd_upstream` | The raster pair the observation crops. A second raster of the block goes in a second directory. |
 | `SEARCH_CALCITY_TILES` | `benchmarks/calcity/tiles` | The OSM prior bake. |
 | `SEARCH_CALCITY_SPLITS` | `benchmarks/calcity/data` | The corpus. |
-| `CALCITY_BUNDLE` | `~/datasets/calcity/bundle` | The world bundle. |
+| `CALCITY_BUNDLE` | `<root>/bundle` | The world bundle. |
 
 ## The reviewed episodes
 

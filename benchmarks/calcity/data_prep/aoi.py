@@ -79,24 +79,12 @@ GROUND_LEVEL_M = 0.0
 # build_rgbd_ortho; this scalar sizes the _features.json cell grid.
 CELL_SIZE_M = 2.0
 
-# Build tree, laid out like the ``citynav-arxiv`` checkout. Holds the world
-# bundle, the scan cache, and the intermediate rasters — hundreds of MB that
-# stay outside the repo. Point ``SEARCH_CALCITY_DATA`` here to read the
-# CityRefer catalog it builds.
-DEFAULT_ROOT = Path.home() / "datasets" / "calcity"
-
-# Published benchmark folder: the manifest, the episode splits, and the tile
-# bake that ``calcity-bench`` reads. This is
-# the self-contained folder the benchmark ships as — point
-# ``SEARCH_CALCITY_SPLITS`` here and ``SEARCH_CALCITY_TILES`` at its ``tiles/``.
-REPO_ROOT = Path(__file__).resolve().parents[3]
-BENCHMARK_ROOT = REPO_ROOT / "benchmarks" / "calcity"
-BENCH_TILES_DIR = BENCHMARK_ROOT / "tiles"
-
-
 def bundle_root() -> Path:
-    """The world bundle directory (``CALCITY_BUNDLE`` env override)."""
-    return Path(os.environ.get("CALCITY_BUNDLE", str(DEFAULT_ROOT / "bundle"))).expanduser()
+    """The world bundle directory (``CALCITY_BUNDLE`` env override), else
+    ``bundle/`` under the Cal City root."""
+    from benchmarks.calcity.paths import CALCITY_ROOT  # noqa: PLC0415
+
+    return Path(os.environ.get("CALCITY_BUNDLE", str(CALCITY_ROOT / "bundle"))).expanduser()
 
 
 @dataclass(frozen=True)

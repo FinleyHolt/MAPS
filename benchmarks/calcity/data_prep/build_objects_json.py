@@ -27,9 +27,9 @@ from pathlib import Path
 
 import numpy as np
 
+from benchmarks.calcity import paths
 from benchmarks.calcity.data_prep.aoi import (
     BLOCKS,
-    DEFAULT_ROOT,
     GROUND_LEVEL_M,
     build_local_frame,
     bundle_root,
@@ -237,7 +237,7 @@ def build(root: Path, bundle: Path, blocks: list[str]) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--root", type=Path, default=paths.CALCITY_ROOT)
     parser.add_argument("--bundle", type=Path, default=None)
     parser.add_argument(
         "--blocks", nargs="+", default=sorted(BLOCKS), choices=sorted(BLOCKS)

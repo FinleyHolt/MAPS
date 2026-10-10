@@ -19,8 +19,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from benchmarks.calcity import paths
 from benchmarks.calcity.data_prep.aoi import (
-    BENCH_TILES_DIR,
     BLOCKS,
     CELL_SIZE_M,
     build_local_frame,
@@ -120,7 +120,7 @@ def bake_block(bundle: Path, tiles_dir: Path, map_name: str) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, default=None)
-    parser.add_argument("--tiles-dir", type=Path, default=BENCH_TILES_DIR)
+    parser.add_argument("--tiles-dir", type=Path, default=paths.TILES_DIR)
     parser.add_argument(
         "--blocks", nargs="+", default=sorted(BLOCKS), choices=sorted(BLOCKS)
     )
