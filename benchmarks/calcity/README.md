@@ -15,6 +15,7 @@ succeeds when its commit lands inside the target's own annotated footprint
 | The reviewed target shapes | `data_prep/authoring/ground_truth.json` | Ships. |
 | The C-12 v6 map raster of the block | `<map>_rgb.tif` | You supply it. |
 | A world bundle of OpenStreetMap layers | `manifest.json` and `osm/<layer>.geojson` in WGS84 | You supply it, covering `aoi.BUNDLE_BBOX_WGS84`. |
+| The block's bare-earth surface, read by the flight harness | `calcity_dem.tif` under `SEARCH_CALCITY_TILES` | You supply it from public USGS 3DEP data (the top-level README's Cal City section). |
 
 ## Build
 

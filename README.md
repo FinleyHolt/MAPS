@@ -230,6 +230,21 @@ python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <map>_rgb.tif
 python -m benchmarks.calcity.data_prep.bake_tiles
 ```
 
+The flight harness also reads the block's bare-earth surface, as the flown
+bake carried it: `calcity_dem.tif` beside `calcity_meta.json` under
+`SEARCH_CALCITY_TILES`, heights in metres NAVD88 on 10 m cells in EPSG:32611
+over the bake's bounds. It is public USGS 3DEP data (the 1/3 arc-second DEM,
+from The National Map), resampled onto the bake's frame, for example:
+
+```sh
+gdalwarp -t_srs EPSG:32611 -tr 10 10 -r bilinear -te <origin_e> <origin_n> <origin_e + x_max> <origin_n + y_max> \
+  USGS_13_*.tif "$SEARCH_CALCITY_TILES/calcity_dem.tif"
+```
+
+`origin_e` and `origin_n` are the bake's `georef` in `calcity_meta.json`,
+`x_max` and `y_max` its `bounds`. Without the file the flight places every
+frame over flat ground at the block's floor (`tile_georef.FLOOR_MSL_M`).
+
 See [`benchmarks/calcity`](benchmarks/calcity/README.md).
 
 ## Reproduce the experiments
@@ -321,6 +336,9 @@ City mission end to end without an aircraft:
 ```sh
 python -m benchmarks.flight.twin --config configs/calcity.yaml --episode 'calcity::6#6' --ortho <raster dir>
 ```
+
+The twin, the live source and the frame registration stand each frame on
+the bake's `calcity_dem.tif` where it is present (see [Cal City](#cal-city)).
 
 ## Replay a flown run
 
