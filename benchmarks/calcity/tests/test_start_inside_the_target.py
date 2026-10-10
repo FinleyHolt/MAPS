@@ -24,10 +24,10 @@ import pytest
 
 from benchmarks.calcity import paths as calcity_paths
 from benchmarks.citynav import eval as cn_eval
-from benchmarks.citynav.run_benchmark.config import RunConfig
+from benchmarks.citynav.run_benchmark.config import resolve_config
 
-#: ``score_precise``'s floor, as the runner passes it (config.py default).
-FLOOR_M = RunConfig.precise_floor_radius_m
+#: ``score_precise``'s floor, as the runner passes it from the Cal City config.
+FLOOR_M = resolve_config("configs/calcity.yaml")[0]["precise_floor_radius_m"]
 
 
 def _episodes_that_start_on_their_target() -> list[tuple[int, float]]:

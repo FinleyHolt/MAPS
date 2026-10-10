@@ -71,11 +71,11 @@ CASES = {
 
 def _replay(case, tmp_path, monkeypatch, flight_model: FlightModelConfig):
     from benchmarks.citynav.run_benchmark import (
-        RunConfig,
+        load_config,
         synthesize_compliant_trajectory,
     )
 
-    cfg = RunConfig()
+    cfg = load_config("configs/citynav.yaml")
     cfg.flight_model = flight_model
     cfg.max_steps = case["max_steps"]
     cfg.altitude_m = 50.0

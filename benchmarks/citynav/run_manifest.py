@@ -85,7 +85,6 @@ ARM_ENV_FLAGS = (
     # must refuse to pair it against a row without. Set-only, so columns
     # recorded before these joined still pair.
     "SEARCH_SKIP_VLM_PERCEPTION",
-    "SEARCH_DETECTED_TARGET_MODE",
     "SEARCH_ALLOW_GT_DIAGNOSTIC",
     "SEARCH_REALSTACK_GT_ISOLATION",
     "SEARCH_STOP_AFTER",
@@ -143,7 +142,6 @@ AUDITED_ENV = (
     # arm toggles
     "SEARCH_ALLOW_GT_DIAGNOSTIC",
     "SEARCH_COMMIT_STATE_DIR",
-    "SEARCH_DETECTED_TARGET_MODE",
     "SEARCH_LOOK_TOOL",
     "SEARCH_ORACLE_INJECT_GT",
     "SEARCH_REALSTACK_GT_ISOLATION",
@@ -343,10 +341,11 @@ def build_manifest(
         served_model=endpoints["model_id"],
         served_build=endpoints["tokenizer"],
     )
-    try:
-        config_yaml = Path(config_path).read_text(encoding="utf-8")
-    except OSError:
-        config_yaml = None
+    import yaml  # noqa: PLC0415
+
+    from benchmarks.citynav.run_benchmark.config import resolve_config  # noqa: PLC0415
+
+    config_yaml = yaml.safe_dump(resolve_config(config_path)[0], sort_keys=False)
     return {
         "schema": SCHEMA,
         "created_ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

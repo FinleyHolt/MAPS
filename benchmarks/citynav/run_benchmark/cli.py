@@ -273,20 +273,6 @@ def main() -> int:
         config_path=cfg.source_path,
         limit=args.limit if (args.limit and args.limit > 0) else None,
     )
-    # Push the runner-side cfg field the engine reads from env. The YAML
-    # OWNS this fact: a stale export left over from an earlier arm's shell
-    # must never beat the config this process is about to fly — an arm is
-    # a config, not an export. A discarded ambient value is logged, not
-    # honored, so the operator sees the collision instead of the wrong arm.
-    _ambient_dtm = os.environ.get("SEARCH_DETECTED_TARGET_MODE")
-    if _ambient_dtm is not None and _ambient_dtm != str(cfg.detected_target_mode):
-        log.info(
-            "SEARCH_DETECTED_TARGET_MODE=%s from the shell discarded — the "
-            "config owns detected_target_mode=%s",
-            _ambient_dtm,
-            cfg.detected_target_mode,
-        )
-    os.environ["SEARCH_DETECTED_TARGET_MODE"] = str(cfg.detected_target_mode)
     # Endpoint discovery — ONE probe per process, before any inference or
     # perception call. The served model id, context window (-> compaction
     # budget + max_tokens pin) and service URLs are DISCOVERED from the live

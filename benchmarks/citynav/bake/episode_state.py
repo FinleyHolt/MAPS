@@ -58,23 +58,12 @@ def _write_json(path: Path, payload: dict) -> None:
     os.replace(tmp, path)
 
 
-def _read_config(config_path: Path | None) -> dict:
-    if config_path is None:
-        return {}
-    try:
-        import yaml  # type: ignore[import-not-found]
-
-        return yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    except Exception as exc:
-        print(
-            f"[episode-state] warning: failed to read {config_path}: {exc}",
-            file=sys.stderr,
-        )
-        return {}
-
-
 def _read_cell_size_m(config_path: Path | None) -> float:
-    return float(_read_config(config_path).get("cell_size_m", _DEFAULT_CELL_SIZE_M))
+    if config_path is None:
+        return _DEFAULT_CELL_SIZE_M
+    from benchmarks.citynav.run_benchmark.config import resolve_config  # noqa: PLC0415
+
+    return float(resolve_config(config_path)[0]["cell_size_m"])
 
 
 def prewrite_episode_state(

@@ -19,7 +19,7 @@ def test_compliant_trajectory_records_final_pose_prediction_xy(
     tmp_path, monkeypatch
 ):
     from benchmarks.citynav.run_benchmark import (
-        RunConfig,
+        load_config,
         synthesize_compliant_trajectory,
     )
 
@@ -36,7 +36,7 @@ def test_compliant_trajectory_records_final_pose_prediction_xy(
         def record_visit(self):
             self.visited_xy.append(self.pose_xy)
 
-    cfg = RunConfig()
+    cfg = load_config("configs/citynav.yaml")
     cfg.flight_model = FlightModelConfig()
     cfg.max_steps = 1
     cfg.altitude_m = 50.0

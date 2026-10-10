@@ -9,7 +9,7 @@
 # footprint at the cruise AGL (2 * AGL * tan(fov/2) per axis, ~258 x 194 m at
 # 3,000 ft), rendered at the sensor's native 2048x1536. The warp is
 # orthographic and pixel->world stays on the ortho projector.
-perception: sam
+base: citynav.yaml
 # Far above any real flight: the effective episode bound is the wall-clock
 # timeout, not this count.
 max_steps: 100000
@@ -17,41 +17,12 @@ max_steps: 100000
 # (spawn_seed, episode_id).
 spawn: uniform
 spawn_seed: 1234
-# Inert on this backend (the view rectangle is sensor-footprint-driven);
-# required key.
-fov_m: 0.0
 # Every episode starts at 3,000 ft AGL.
 start_altitude_agl_m: 914.4
 altitude_cap_m: 1000.0
-# Inert fallback.
-altitude_m: 125.0
-cell_size_m: 2.0
-success_radius_m: 20.0
 # Inert under a sensor spec: the frame ships at the sensor's native size.
 rgb_upscale_px: 1008
 sam:
-  model_id: facebook/sam3.1
-  device: cuda
-  dtype: bfloat16
-  score_threshold: 0.3
-  min_area_px: 32
-  # A backstop against a pathological frame, not a budget (see citynav.yaml).
-  max_per_step: 1024
+  sahi: false
 # The C-12's camera: Oryx ORX-32 + 25 mm, 16.1 x 12.1 deg, 2048x1536, nadir.
 sensor: oryx_orx32_25mm_nadir
-flight_model:
-  camera_hz: 5.0
-descent_step_m: 5.0
-landing_altitude_m: 5.0
-altitude_tolerance_m: 1.0
-landing_xy_tolerance_m: 5.0
-compact:
-  enable: true
-  stage1_budget: 8000
-  stage2_3_budget: 38000
-  teacher_budget: 38000
-  grader_budget: 38000
-  concept_union_budget: 20000
-  subagent_budget: 20000
-  router_budget: 8000
-  examiner_budget: 8000

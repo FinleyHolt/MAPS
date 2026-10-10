@@ -84,21 +84,9 @@ def make_perception(
         )
         # Activate this camera's color calibration module-globally so BOTH the
         # detection path and the prior-percept enrichment path (which calls
-        # _set_color_attr directly) share it. None keeps the env/default palette.
+        # _set_color_attr directly) share it.
         from maps.perception.sam.detect_client import set_color_palette
 
-        palette = adapter.color_palette
-        # The recalibrated CityNav palette is the DEFAULT for the nadir-ortho
-        # ortho backend. The ideal-sRGB "default" anchors are too
-        # bright/saturated for the dark, low-saturation aerial imagery (red->brown,
-        # dark->brown; +10.8pp color-family when calibrated, 313c5e32), so a
-        # config that OMITS color_palette must NOT silently fall back to it.
-        # the canonical config sets it explicitly; a config that omits it used to
-        # silently run the broken default.
-        # An explicit color_palette in the config still wins (e.g. "default" for
-        # an isolating A/B arm).
-        if not palette:
-            palette = "citynav"
-        set_color_palette(palette)
+        set_color_palette(adapter.color_palette)
         return adapter
     raise ValueError(f"Unknown perception: {cfg.perception!r}")

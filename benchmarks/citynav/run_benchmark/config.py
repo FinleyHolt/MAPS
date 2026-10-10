@@ -1,256 +1,232 @@
-"""``RunConfig`` — the master knob object for one CityNav run — with its YAML
-loader, env exports, required-field validation, and the ground-truth-isolation
-guard. A configuration leaf: depends only on stdlib + ``maps.perception`` +
-``flight_model``; nothing here reaches back into the episode engine.
+"""``RunConfig`` -- the knob object for one bench run -- and its YAML loader.
+
+A config file is either the control (``configs/citynav.yaml``, which declares
+every key) or an override: ``base: <file>`` names the file it changes,
+relative to itself, and the file holds only the keys it changes. Chains
+resolve and deep-merge; ``_SCHEMA`` is the one statement of every key, its
+type and its range, and the loader refuses an unknown key, a missing key or
+a bad value at load, naming its dotted path and the file.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
+from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.sam.detect_client import SamDetectClient
 
-from benchmarks.citynav.flight_model import FlightModelConfig
+from benchmarks.citynav.flight_model import FlightModelConfig, known_flight_kinds
 
 log = logging.getLogger("run_benchmark")
 
-
-class _Required:
-    """Sentinel for a sim-setup knob that the named YAML must supply.
-
-    Fields defaulted to ``_REQUIRED`` carry no usable value out of the
-    dataclass; ``load_config`` raises and names every still-sentinel key
-    plus the config-file path. The YAML is the single source of truth for
-    sim setup, so a missing key fails loudly instead of falling back to a
-    silent dataclass default.
-    """
-
-    def __repr__(self) -> str:  # pragma: no cover - debug aid only
-        return "<REQUIRED-from-YAML>"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_NUM = (int, float)
+_NONE = type(None)
 
 
-_REQUIRED = _Required()
+def _one_of(*allowed: object) -> tuple[Callable[[Any], bool], str]:
+    return (lambda v: v in allowed), f"one of {list(allowed)}"
+
+
+def _sensor_ok(v: Any) -> bool:
+    resolve_sensor(v)  # raises, naming the problem
+    return True
+
+
+_POS = (lambda v: v > 0), "> 0"
+_NONNEG = (lambda v: v >= 0), ">= 0"
+_ANY = (lambda v: True), ""
+
+# Every YAML key: (accepted types, (test, what the test asks)). A dict value
+# is a nested block with its own keys. A float key reads an int too.
+_SCHEMA: dict[str, Any] = {
+    "perception": (str, _one_of("sam", "gt_perfect")),
+    "max_steps": (int, _POS),
+    "fov_m": (_NUM, _NONNEG),
+    "altitude_m": (_NUM, _POS),
+    "cell_size_m": (_NUM, _POS),
+    "success_radius_m": (_NUM, _POS),
+    "precise_tolerance_m": (_NUM, _NONNEG),
+    "precise_floor_radius_m": (_NUM, _NONNEG),
+    "spawn": (str, _one_of("episode", "uniform")),
+    "spawn_seed": (int, _NONNEG),
+    "start_altitude_band_m": (list, (
+        lambda v: len(v) == 2 and all(isinstance(x, _NUM) and not isinstance(x, bool) for x in v)
+        and 0 < v[0] <= v[1], "[lo, hi] with 0 < lo <= hi")),
+    "start_altitude_agl_m": ((*_NUM, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
+    "altitude_cap_m": (_NUM, _POS),
+    "rgb_upscale_px": ((int, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
+    "landing_altitude_m": (_NUM, _NONNEG),
+    "descend_to_land": (bool, _ANY),
+    "sensor": ((str, dict), (_sensor_ok, "a registered sensor or an inline override")),
+    "flight_model": {
+        "kind": (str, _one_of(*known_flight_kinds())),
+        "camera_hz": (_NUM, _POS),
+        "speed_mps": ((*_NUM, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
+    },
+    "sam": {
+        "model_id": (str, _ANY),
+        "color_palette": (str, _one_of("citynav", "default")),
+        "score_threshold": (_NUM, ((lambda v: 0 <= v <= 1), "in [0, 1]")),
+        "min_area_px": (int, _NONNEG),
+        "max_per_step": (int, _POS),
+        "sahi": (bool, _ANY),
+        "sahi_overlap": (_NUM, ((lambda v: 0 <= v < 1), "in [0, 1)")),
+        "sahi_nms_iou": (_NUM, ((lambda v: 0 < v <= 1), "in (0, 1]")),
+    },
+    "gt_perfect": {
+        "color_table_path": ((str, _NONE), _ANY),
+        "mask_px": (int, _POS),
+        "min_blob_px": (int, _NONNEG),
+        "max_per_step": (int, _NONNEG),
+    },
+    "compact": {
+        "enable": (bool, _ANY),
+    },
+}
 
 
 @dataclass
 class RunConfig:
-    # "sam" (production real-SAM) | "gt_perfect" (diagnostic perfect
-    # sensor). YAML-authoritative (see _REQUIRED).
-    perception: str = _REQUIRED  # type: ignore[assignment]
-    # Step budget per episode. Under the strict CityNav action space
-    # (5m forward / 30deg turn / 2m altitude) an episode needs hundreds
-    # of discrete steps to walk to several tour stops and descend; 200
-    # matches the GeoNav (arXiv 2504.09587) / HETT / CityNavAgent
-    # community standard. YAML wins; this dataclass default is the
-    # fallback only when no config supplies the key.
-    max_steps: int = 200
-    fov_m: float = _REQUIRED  # type: ignore[assignment]  # YAML-authoritative
-    altitude_m: float = 50.0
-    # GT-PERFECT diagnostic perception (perfect sensor). Knobs:
-    # ``color_table_path`` (JSON {map:{object_id:{color,color_conf}}}, the offline
-    # cue-independent GT color table), ``mask_px``, ``min_blob_px``.
-    gt_perfect: dict = field(default_factory=dict)
-    sam: dict = field(default_factory=dict)
-    # Sensor parameterization. String = registered sensor or suite (see
-    # ``perception.sensor_spec.list_sensors``); dict =
-    # inline override. YAML-authoritative (see _REQUIRED): the named config picks
-    # the sensor. CityNav runs use ``nadir_1008_90``, a single 1008x1008
-    # ``SensorSpec`` (one nadir frame per step).
-    sensor: str | dict = _REQUIRED  # type: ignore[assignment]
-    # Legacy knobs; prefer ``sensor``. When ``render.pitch_deg`` is set it
-    # overrides the sensor spec's mount pitch (useful for comparing
-    # nadir vs forward-looking runs without editing the registry).
-    render: dict = field(default_factory=dict)
-    cell_size_m: float = 2.0
-    success_radius_m: float = 20.0
-    # How close to an annotated target SHAPE counts as arriving, for
-    # a shape-scored SR (eval.score_precise). 0.0 is strict containment: the agent
-    # must finish inside the footprint. Raise it to allow a margin around the
-    # edge — a car-sized target is only a few metres across, so the right
-    # value depends on how big the annotated shapes actually are.
-    precise_tolerance_m: float = 0.0
-    # The tightest target the shape criterion will ask for. A shape narrower than this
-    # is widened until a circle of this radius fits inside it, so no episode
-    # is scored on a precision finer than the agent can resolve. Measured on
-    # the Cal City corpus: on episodes the agent already gets right it lands
-    # 2.9 m from the target at the median and within 5 m 69% of the time,
-    # while a road junction is 4 m across. 5 m is the knee — it reaches every
-    # junction and still leaves 83% of buildings scored as drawn, where 6 m
-    # would take half of them. Set 0.0 to score every shape exactly as drawn.
-    precise_floor_radius_m: float = 5.0
-    # Where an episode starts: "episode" flies the dataset's recorded start
-    # pose (CityNav's 50-350 m regime); "uniform" replaces it with a seeded
-    # uniform point over the tile bounds (run_benchmark.spawn), deterministic
-    # per (spawn_seed, episode_id) — one seed reproduces a run exactly, two
-    # seeds give independent spawn sets. The flown start replaces the
-    # episode's everywhere downstream (records, metrics, floors).
-    spawn: str = "episode"
-    spawn_seed: int = 0
-    # Upstream start-altitude band [lo, hi] (paper SS3.2: random 100-150 m).
-    # Sampled per episode deterministically (seeded by episode_id) on the ortho
-    # backend.
-    start_altitude_band_m: tuple[float, float] = (100.0, 150.0)
-    # AGL override (meters above ground) for the ortho backend. When
-    # set (non-None), the per-episode start altitude becomes GROUND_LEVEL[map]
-    # + this value INSTEAD of sampling start_altitude_band_m — a UNIFORM
-    # above-ground cruise across maps of differing elevation (Birmingham ~10 m,
-    # Cambridge ~38 m AMSL), so the altitude-driven view square 2*(z - ground)
-    # is identical everywhere. None preserves the strict AMSL-band behavior
-    # byte-for-byte.
-    start_altitude_agl_m: float | None = None
-    # Hard physical flight ceiling (paper caps at 200 m). The ortho
-    # altitude executor clamps GO_UP / per-target altitude into
-    # [GROUND_LEVEL[map] + eps, altitude_cap_m].
-    altitude_cap_m: float = 200.0
-    # Model-input resolution for the ortho crop. The native-resolution
-    # crop (real ground detail, warped directly from the raster) is resampled to
-    # this square size — UP or DOWN, since the native pixel span varies with
-    # altitude — and the reasoner, SAM, and dashboard all consume it. ``None`` =
-    # no resample (raw native span). SAM no longer reads a separate crop; this is
-    # the single model-input frame.
-    rgb_upscale_px: int | None = None
-    # When set, the step loop samples flight at camera_hz between tour
-    # stops instead of teleporting one waypoint per tick. See
-    # benchmarks/citynav/flight_model.py.
-    flight_model: FlightModelConfig | None = None
-    # Universal resume from a prior run's workdir. When set,
-    # ``SearchLoop.restore_from_workdir`` rebuilds belief, target_spec,
-    # last_intel_text, SAM video concepts, and compile_seq from the
-    # source's on-disk artifacts before the step loop starts. Pre-flight
-    # compile is then suppressed (``should_compile`` returns False for an
-    # unchanged instruction) and the runtime resumes as if the prior run
-    # had reached ``resume_turn`` already. ``hydrate_resume_artifacts``
-    # mirrors the dashboard tree for the SPA in the same call site.
+    """One resolved config: every ``_SCHEMA`` key, plus the run facts the
+    CLI sets (``resume_*``) and the path the config resolved from."""
+
+    perception: str
+    max_steps: int
+    fov_m: float
+    altitude_m: float
+    cell_size_m: float
+    success_radius_m: float
+    # How close to an annotated target SHAPE counts as arriving, for a
+    # shape-scored SR (eval.score_precise); 0.0 is strict containment.
+    precise_tolerance_m: float
+    # A shape narrower than this is widened until a circle of this radius
+    # fits inside it, so no episode is scored finer than the agent resolves.
+    precise_floor_radius_m: float
+    # "episode" flies the dataset's start pose; "uniform" a seeded uniform
+    # point over the tile bounds, deterministic per (spawn_seed, episode_id).
+    spawn: str
+    spawn_seed: int
+    # Upstream start-altitude band [lo, hi], sampled per episode (seeded by
+    # episode_id); start_altitude_agl_m, when set, replaces it with
+    # GROUND_LEVEL[map] + that value.
+    start_altitude_band_m: list
+    start_altitude_agl_m: float | None
+    altitude_cap_m: float
+    # The model-input frame size the native crop is resampled to; None
+    # keeps the native span.
+    rgb_upscale_px: int | None
+    landing_altitude_m: float
+    # CityNav SR is 2D, so the default traverses to the committed centroid
+    # at cruise altitude; True descends to landing_altitude_m.
+    descend_to_land: bool
+    # A registered sensor name or an inline override (sensor_spec).
+    sensor: str | dict
+    flight_model: FlightModelConfig
+    sam: dict
+    gt_perfect: dict
+    compact: dict
+    # Universal resume from a prior run's workdir (CLI --resume-from-workdir)
+    # and its turn (None picks the latest reconstructable one).
     resume_from_workdir: str | None = None
-    # Optional explicit turn index. ``None`` (default) picks the latest
-    # ``compile/turn_<NNNN>/`` whose finalized reasoner carries
-    # reconstructable sam_concepts.
     resume_turn: int | None = None
-    # Per-turn run-checkpoint resume target for the reasoning engine. When
-    # set (one of ``segment``, ``ingest``, ``stage3``, ``paint``,
-    # ``grade``), each compile call reads prior phase outputs from
-    # ``<workdir>/compile/turn_<step>/`` and skips every earlier phase.
-    # Wired from ``--resume-from`` in ``main()``; default ``None`` runs
-    # the full pipeline (``SearchLoop.restore_from_workdir``).
-    # Commit lever (ablation): prefer a runtime SAM detection over a prebake
-    # prior at commit. "off" | "prefer" | "only". Forwarded into
-    # ``SEARCH_DETECTED_TARGET_MODE`` so SearchLoopConfig.from_env picks it up.
-    detected_target_mode: str = "off"
-    # Descent planner: meters of altitude to drop per planning tick
-    # while ``confirmed_target_xy`` is set.
-    descent_step_m: float = 5.0
-    # Target altitude for landing. Episode terminates when
-    # ``state.altitude_m <= landing_altitude_m + altitude_tolerance_m``
-    # AND the drone is within ``landing_xy_tolerance_m`` of the
-    # confirmed target XY.
-    landing_altitude_m: float = 5.0
-    altitude_tolerance_m: float = 1.0
-    landing_xy_tolerance_m: float = 5.0
-    # CityNav SR is 2D (NE over x,y only), so descending the committed
-    # centroid to landing_altitude never changes pred_xy's xy -- it only
-    # burns step budget (~22 steps at 50 m, ~60 at 125 m). Default False:
-    # traverse to the committed centroid AT cruise altitude, leaving the
-    # whole budget for navigation. Set True for a benchmark variant that
-    # needs the drone to actually descend.
-    descend_to_land: bool = False
-    # Autocompact (LLM-summary context compaction). Per-stage budgets are
-    # input-token caps; calls under budget pass through identity. ``enable``
-    # toggles the whole subsystem. Values get exported as ``SEARCH_COMPACT_*``
-    # env vars at startup so every LLM call site sees them; CLI / shell
-    # overrides win because env vars are not overwritten when already set.
-    compact: dict = field(default_factory=dict)
-    # The resolved YAML path this config was loaded from. Written by
-    # ``load_config`` (never by YAML): row provenance hashes THIS path, so
-    # config_sha256 pins the file that actually resolved, not the argv
-    # spelling (which may only exist relative to the repo root).
+    # The resolved top-level YAML path, written by ``load_config``.
     source_path: str | None = None
 
 
-# The compaction budget is the server-discovered ``EndpointSpec.input_budget``
-# (maps.llm.endpoint_spec), never a YAML/env window pin — only the live
-# knobs (enable / tokenizer) map to a read env var.
-_COMPACT_YAML_TO_ENV: dict[str, str] = {
-    "enable": "SEARCH_COMPACT_ENABLE",
-    "tokenizer_name": "SEARCH_COMPACT_TOKENIZER_NAME",
-}
-
-
 def _export_compact_env(compact: dict) -> None:
-    """Translate the ``compact:`` yaml block into ``SEARCH_COMPACT_*`` env vars.
-
-    Existing env values win (so a shell-level ``SEARCH_COMPACT_ENABLE``
-    override is honored). The compactor reads these env vars at call time.
-    """
-    if not compact:
-        return
-    for key, env_name in _COMPACT_YAML_TO_ENV.items():
-        if key not in compact:
-            continue
-        if os.environ.get(env_name) is not None:
-            # Shell / CLI override wins.
-            continue
-        value = compact[key]
-        if isinstance(value, bool):
-            os.environ[env_name] = "1" if value else "0"
-        else:
-            os.environ[env_name] = str(value)
+    """``compact.enable`` -> ``SEARCH_COMPACT_ENABLE``; a value already in the
+    environment wins."""
+    if os.environ.get("SEARCH_COMPACT_ENABLE") is None:
+        os.environ["SEARCH_COMPACT_ENABLE"] = "1" if compact["enable"] else "0"
 
 
-# Sim-setup knobs the named YAML must supply. Each defaults to ``_REQUIRED``
-# on ``RunConfig``; the YAML is the single source of truth for sim setup.
-_REQUIRED_SETUP_FIELDS: tuple[str, ...] = (
-    "perception",
-    "fov_m",
-    "sensor",
-)
-
-
-def _validate_required(cfg: RunConfig, src: str) -> None:
-    """Fail loudly if the named config omits any required sim-setup knob.
-
-    Names every missing key and the config path so the operator knows
-    exactly what to add and where. No silent dataclass fallback.
-    """
-    missing: list[str] = [
-        name for name in _REQUIRED_SETUP_FIELDS if getattr(cfg, name) is _REQUIRED
-    ]
-    if missing:
-        raise RuntimeError(
-            f"{src}: missing required sim-setup keys: {sorted(missing)}. "
-            f"Sim setup is YAML-authoritative; add the listed key(s) to "
-            f"{src} (no dataclass fallback)."
-        )
-
-
-def load_config(path: str | None) -> RunConfig:
+def _locate(path: str | Path | None) -> Path:
     if not path:
-        raise RuntimeError(
-            "a --config YAML is required; sim setup is YAML-authoritative. "
-            "Pass --config configs/citynav.yaml."
-        )
+        raise RuntimeError("a --config YAML is required: pass --config configs/citynav.yaml.")
     candidates = [Path(path)]
     if not candidates[0].is_absolute():
-        # Resolve against cwd first, then against the repo root, so both an
-        # absolute path and a repo-root-relative
-        # ``configs/<name>.yaml`` work.
-        candidates.append(Path(__file__).resolve().parents[2] / path)
+        candidates.append(_REPO_ROOT / path)
     for p in candidates:
         if p.exists():
-            import yaml  # lazy — only required for config runs
-
-            data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-            fm_block = data.pop("flight_model", None)
-            if fm_block is not None:
-                data["flight_model"] = FlightModelConfig(**fm_block)
-            cfg = RunConfig(**data)
-            cfg.source_path = str(p)
-            _validate_required(cfg, str(p))
-            _assert_realstack_gt_isolation(cfg, p)
-            return cfg
+            return p
     raise FileNotFoundError(f"Config not found: tried {[str(p) for p in candidates]}")
+
+
+def _merge(base: dict, over: dict) -> dict:
+    out = dict(base)
+    for k, v in over.items():
+        out[k] = _merge(base[k], v) if isinstance(v, dict) and isinstance(base.get(k), dict) else v
+    return out
+
+
+def _read_chain(p: Path, seen: tuple[Path, ...] = ()) -> dict:
+    import yaml  # lazy -- only required for config runs
+
+    p = p.resolve()
+    if p in seen:
+        raise ValueError(f"{p}: base chain loops ({' -> '.join(map(str, (*seen, p)))})")
+    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{p}: a config is a mapping of keys")
+    base = data.pop("base", None)
+    if base is None:
+        return data
+    if not isinstance(base, str):
+        raise ValueError(f"{p}: base must name a config file")
+    return _merge(_read_chain(p.parent / base, (*seen, p)), data)
+
+
+def _check(data: dict, schema: dict, src: Path, prefix: str = "") -> None:
+    unknown = sorted(set(data) - set(schema))
+    missing = sorted(set(schema) - set(data))
+    if unknown:
+        raise ValueError(f"{src}: unknown config key(s) {[prefix + k for k in unknown]}")
+    if missing:
+        raise ValueError(f"{src}: missing config key(s) {[prefix + k for k in missing]}")
+    for key, rule in schema.items():
+        path, v = prefix + key, data[key]
+        if isinstance(rule, dict):
+            if not isinstance(v, dict):
+                raise ValueError(f"{src}: {path} is a block of keys, got {v!r}")
+            _check(v, rule, src, path + ".")
+            continue
+        types, (ok, says) = rule
+        types = types if isinstance(types, tuple) else (types,)
+        if not isinstance(v, types) or (isinstance(v, bool) and bool not in types):
+            names = "/".join("null" if t is _NONE else t.__name__ for t in types)
+            raise ValueError(f"{src}: {path} must be {names}, got {v!r}")
+        if not ok(v):
+            raise ValueError(f"{src}: {path} must be {says}, got {v!r}")
+
+
+def resolve_config(path: str | Path | None) -> tuple[dict, Path]:
+    """The checked, fully merged key dict of a config file, and its path."""
+    p = _locate(path)
+    data = _read_chain(p)
+    _check(data, _SCHEMA, p)
+    return data, p
+
+
+def config_sha256(path: str | Path) -> str:
+    """sha256 of the resolved config's canonical JSON: the identity of what a
+    run flew, whichever base chain spelled it."""
+    data, _ = resolve_config(path)
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
+def load_config(path: str | Path | None) -> RunConfig:
+    data, p = resolve_config(path)
+    cfg = RunConfig(**{**data, "flight_model": FlightModelConfig(**data["flight_model"])})
+    cfg.source_path = str(p)
+    _assert_realstack_gt_isolation(cfg, p)
+    return cfg
 
 
 # The real-stack pivot GT-isolation runtime gate. TRIGGER CHOICE (revised
@@ -286,9 +262,8 @@ def _assert_realstack_gt_isolation(
     ``sam`` tier — so every DERIVED config inherits the guard, not
     just the canonically-named one. Under that tier it asserts ALL of:
 
-      (a) no GT color table is wired (``color_table_path`` unset on the
-          ``sam`` AND ``gt_perfect`` config blocks) — color comes
-          from pixels only;
+      (a) no GT color table is wired (``gt_perfect.color_table_path``
+          unset) — color comes from pixels only;
       (b) the perception tier IS ``sam`` (defense-in-depth);
       (c) ``SEARCH_SKIP_VLM_PERCEPTION`` is NOT set — the GT-era toggle that
           once swapped in synthetic GT perception; it is refused outright so
@@ -333,14 +308,12 @@ def _assert_realstack_gt_isolation(
             f"perception tier is {cfg.perception!r}, must be "
             f"{_REALSTACK_PERCEPTION_TIER!r}"
         )
-    # (a) no GT color table wired on either the real-SAM or gt_perfect block.
-    for block_name in ("gt_perfect", "sam"):
-        block = getattr(cfg, block_name, None) or {}
-        if isinstance(block, dict) and block.get("color_table_path"):
-            problems.append(
-                f"{block_name}.color_table_path is set "
-                f"({block['color_table_path']!r}), must be unset"
-            )
+    # (a) no GT color table wired.
+    if (cfg.gt_perfect or {}).get("color_table_path"):
+        problems.append(
+            f"gt_perfect.color_table_path is set "
+            f"({cfg.gt_perfect['color_table_path']!r}), must be unset"
+        )
     # (c) SEARCH_SKIP_VLM_PERCEPTION is the deleted GT-era toggle; refuse a
     # stale environment outright rather than let it imply a GT run.
     if os.environ.get("SEARCH_SKIP_VLM_PERCEPTION") == "1":
