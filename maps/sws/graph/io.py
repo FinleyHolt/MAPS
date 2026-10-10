@@ -15,18 +15,15 @@ import numpy as np
 from maps.sws.graph.model import ObjectGraph, MapObject
 
 
-# A v2->v3 bump was tried (c1e76ebc) when b4f53005's per-node ``centerline``
-# field turned out absent from pre-2026-06-15 tiles. It was REVERTED after
-# adversarial review (distill/CENTERLINE_DETERMINATION.md): the centerline family
-# (centerline / centerline_arc_m / axis_length_m / axis_residual_m /
-# centerline_method) is a DETERMINISTIC reduction of the persisted ``cells``, so
-# it is DERIVED (``derive_centerlines`` below, called by the loader AND by the
-# runtime upsert) rather than separately persisted. A field re-derived from its
-# source can never drift from it -- the train/serve skew the v3 bump reached for,
-# fixed structurally instead. (Bumping would also have hard-refused every
-# existing v2 tile and forced a needless re-bake.) RULE: bump this version ONLY
-# for a genuinely persisted-and-read atom, NEVER for a derived geometry. The
-# schema_version field + the load-refusal gate stay as machinery for that case.
+# The centerline family (centerline / centerline_arc_m / axis_length_m /
+# axis_residual_m / centerline_method) is a DETERMINISTIC reduction of the
+# persisted ``cells``, so it is DERIVED (``derive_centerlines`` below, called by
+# the loader AND by the runtime upsert) rather than separately persisted. A
+# field re-derived from its source can never drift from it, and a version bump
+# for it would hard-refuse every existing tile for nothing. RULE: bump this
+# version ONLY for a genuinely persisted-and-read atom, NEVER for a derived
+# geometry. The schema_version field + the load-refusal gate are the machinery
+# for that case.
 #
 # v3 is that case. ``world_contour`` holds a feature's EXACT vertex chain for
 # every node — a ring, a way or a single point — and states its own closure by
@@ -195,10 +192,8 @@ def derive_centerlines(nodes: dict, cell_size_m: float) -> None:
     The centerline (``centerline`` / ``centerline_arc_m`` / ``axis_length_m`` /
     ``axis_residual_m`` / ``centerline_method``) is a parameter-free PCA reduction
     of the mask cells, NOT an independent atom -- so it is derived via the SAME
-    ``builder._mask_centerline`` the bake and the offline teacher use, making
-    the served surface byte-identical to the trained surface (drift-proof by
-    construction; see distill/CENTERLINE_DETERMINATION.md, the adversarially-
-    validated decision to derive rather than re-bake / version-bump).
+    ``builder._mask_centerline`` the bake uses, so a loaded graph and a baked
+    one carry the same centerline by construction.
 
     ``cell_size_m`` is the graph's cell size (read from the npz by the load
     caller -- it is required there). Only nodes that carry ``cells`` but no
@@ -250,7 +245,7 @@ def load_graph_binary(path_stem: str) -> ObjectGraph:
     """
     npz_path = f"{path_stem}_graph.npz"
     nodes_path = f"{path_stem}_nodes.json"
-    # mmap_mode='r' so any multi-GB legacy edge columns never load into RAM.
+    # mmap_mode='r' so any multi-GB column never loads eagerly into RAM.
     try:
         data = np.load(npz_path, allow_pickle=True, mmap_mode="r")
     except TypeError:
@@ -263,10 +258,10 @@ def load_graph_binary(path_stem: str) -> ObjectGraph:
     fids = [str(x) for x in data["fids"]]
     nodes: dict[str, MapObject] = {fid: _dict_to_node(nodes_doc[fid]) for fid in fids}
 
-    # Schema version is required and must match the current build. The
-    # bake on HPC is the canonical producer; every tile in tiles/citynav
-    # is rebaked when the schema bumps, and the loader refuses to invent
-    # legacy compat. ``./benchmarks/citynav/data_prep/bake_tiles.sh`` is the recipe.
+    # Schema version is required and must match the current build. Every
+    # tile is rebaked when the schema bumps, and the loader refuses a
+    # mismatched tile rather than guess a compatibility read.
+    # ``./benchmarks/citynav/data_prep/bake_tiles.sh`` is the recipe.
     file_schema = int(data["schema_version"]) if "schema_version" in data.files else 0
     if file_schema != GRAPH_SCHEMA_VERSION:
         raise ValueError(

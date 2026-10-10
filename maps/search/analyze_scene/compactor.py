@@ -172,10 +172,9 @@ class CompactionEvent:
 # str/dict, never a parts list), so the text-only compaction is byte-identical
 # (parity).
 #
-# THE PLACEHOLDER IS NOT THE PRICE. This comment used to add that "the SERVER
-# vision-token budget is governed independently (``--limit-mm image=16``)",
-# and that is the error the estimate was built on: the flag caps the image
-# COUNT, and the tokens are billed against the same window as the text.
+# THE PLACEHOLDER IS NOT THE PRICE. The server's ``--limit-mm image=16`` flag
+# caps the image COUNT, and the tokens are billed against the same window as
+# the text.
 # ``_estimate_input_tokens`` adds ``image_tokens_in`` back after the flatten
 # for exactly that reason.
 _IMAGE_PART_PLACEHOLDER = "[image crop]"
@@ -1015,19 +1014,16 @@ def compact_transcript(
     # THE LADDER IS ORDERED BY WHAT THE LOSS COSTS, cheapest first, which
     # puts text before pixels.
     #
-    # Crops used to run FIRST, on a measurement that has since expired:
-    # "sixteen 1024 px maps are 42,112 tokens, 87% of a 48,128 budget,
-    # against text dumps measured in hundreds." The budget is 221,120 now,
-    # and a delivered crop measures a median 225 tokens (mean 317) across
-    # 11,635 look manifests, so images are ~9% of a large prompt and text is
-    # the other ~91%. The premise inverted; the order follows it.
+    # A delivered crop runs a few hundred tokens against a window of
+    # hundreds of thousands, so images are a small share of a large prompt
+    # and text is most of it.
     #
     # A dump is also RE-DERIVABLE where a crop is not. The analyze surface
     # rebuilds from the world after every flight, so a stubbed dump costs a
     # re-query; an evicted crop costs the view of a place at a moment, and
     # its pixels survive only in the on-disk look audit, which the model
-    # cannot read. Taking crops first would also undo, one tier down,
-    # exactly what removing the in-context image cap was for.
+    # cannot read. Taking crops first would also re-impose, one tier down,
+    # an in-context image cap.
     #
     # 4. STEP 1 — fold the spent turns into one script block.
     #

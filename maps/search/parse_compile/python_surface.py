@@ -85,8 +85,9 @@ def served_calls() -> tuple[str, ...]:
     return tuple(c for c in _LIBRARY_CALLS
                  if c not in ("look_for", "look") or not withheld(c))
 
-# Retired free calls, and where the operation went. The refusal names the
-# method; nothing here defines the old name or runs anything.
+# Free-call spellings the surface refuses, mapped to the method that performs
+# the operation. The refusal names the method; nothing here defines the free
+# name or runs anything.
 _MOVED_TO_METHOD = {
     "narrow": "rows.filter(near=<place>, dwithin=<metres>)",
     "order_by": "rows.order(nearest=<place>)",

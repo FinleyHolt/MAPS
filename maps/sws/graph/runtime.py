@@ -165,7 +165,7 @@ def revoke_track_contribution(
     return revoked
 
 
-# The four M6 color attrs (+ the legacy color_rgb) that travel together as ONE
+# The four M6 color attrs (+ color_rgb) that travel together as ONE
 # best-view read. Overwritten atomically as a set so a partial stale mix never lingers.
 _BEST_VIEW_COLOR_KEYS = ("color", "color_conf", "color_shade", "color_flag", "color_rgb")
 
@@ -588,7 +588,7 @@ def upsert_tracked_detected(
         base_node.centroid = centroid_rc
         base_node.bbox = bbox
         base_node.cell_count = cell_count
-        # Per-detection mask tracking (restored 2026-07-03): store the projected
+        # Per-detection mask tracking: store the projected
         # footprint cells in the SAME format prebake nodes use, so build_surface
         # attaches a boundary + shape features to this detection uniformly.
         _stamp_cells(base_node, hm_rows, hm_cols, graph.cell_size_m)
@@ -628,7 +628,7 @@ def upsert_tracked_detected(
     node.centroid = centroid_rc
     node.bbox = bbox
     node.cell_count = cell_count
-    # Per-detection mask tracking (restored 2026-07-03): re-stamp the current
+    # Per-detection mask tracking: re-stamp the current
     # frame's projected footprint so the node's cells track the latest
     # observation (centroid/bbox above are re-derived from the same cells).
     _stamp_cells(node, hm_rows, hm_cols, graph.cell_size_m)
@@ -822,7 +822,7 @@ def upsert_tracked_detected_batch(
         node.centroid = centroid_rc
         node.bbox = bbox
         node.cell_count = cell_count
-        # Per-detection mask tracking (restored 2026-07-03): re-stamp cells from
+        # Per-detection mask tracking: re-stamp cells from
         # this frame's projection, same as the single-call repeat path.
         _stamp_cells(node, hm_rows, hm_cols, graph.cell_size_m)
         # WORLD_CONTOUR re-stamp, same as the single-call repeat path: latest

@@ -352,9 +352,9 @@ def main() -> int:
                     "No episode with id=%s in split=%s", args.episode_id, args.split
                 )
                 return 2
-            # CityNav can have multiple descriptions sharing the legacy
-            # ``map::ann`` id. For dashboard-driven single-episode runs we
-            # want one — the dashboard now uses the disambiguated form.
+            # CityNav can have multiple descriptions sharing one bare
+            # ``map::ann`` id. A dashboard-driven single-episode run wants
+            # one; the dashboard addresses episodes by the disambiguated form.
             indexed_rows = indexed_rows[:1]
     if args.limit and args.limit > 0:
         indexed_rows = indexed_rows[: args.limit]

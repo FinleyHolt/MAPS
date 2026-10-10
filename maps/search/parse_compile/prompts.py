@@ -53,15 +53,13 @@ CODE_DOC = (
     # estimating: watch a class, narrow to the thing, COVER it so the
     # segmenter puts a row on the part that matters, then fly to that row.
     #
-    # IT PREVIOUSLY ENDED THE NARROWING ON `h = r2[0]` -- rank 0 by
-    # DISTANCE, taken straight after asking the picture which one had the
-    # pool. The model copied both halves: `look(r[a:b], "<question>")` in
-    # 89 of 500 episodes and a colour ordering in 2. So the example spent
-    # its ordering on proximity, spent its discrimination on a question
-    # whose answer it then discarded, and taught that the answer is
-    # whatever sorted first.
+    # THE MODEL COPIES THE EXAMPLE'S MOVES, so the narrowing must not end on
+    # `h = r2[0]` -- rank 0 by DISTANCE, taken straight after asking the
+    # picture which one had the pool. That spends the ordering on
+    # proximity, spends the discrimination on a question whose answer is
+    # then discarded, and teaches that the answer is whatever sorted first.
     #
-    # ONE BLOCK NOW CARRIES THE WHOLE CHAIN. Lines execute eagerly in
+    # ONE BLOCK CARRIES THE WHOLE CHAIN. Lines execute eagerly in
     # source order -- a find AFTER an explore reads what the pass just
     # detected -- so the worked example is the full arc: watch, cover,
     # query what the pass found, rank on every criterion the cue names,

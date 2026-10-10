@@ -125,17 +125,17 @@ class MapObject:
     # Rasterized tile-grid footprint cells, shape ``(N, 2) int32`` (row, col) —
     # ONE lean format across every node type. PREBAKE nodes carry their footprint
     # cells (``builder.build_object_graph`` sets ``cells=arr``); DETECTED nodes
-    # carry their per-observation projected footprint too (restored 2026-07-03 —
-    # ``runtime._cells_from_mask`` off the authoritative ``grid_mask``, re-stamped
+    # carry their per-observation projected footprint too
+    # (``runtime._cells_from_mask`` off the authoritative ``grid_mask``, re-stamped
     # each frame; the SAM detection-mask tracking). Both are round-tripped by
     # ``io`` and consumed uniformly: build_surface realises the EXACT
     # multi-loop boundary (the relation/gap substrate — every fragment and
     # hole, no decimation) + the mask-derived shape columns (footprint_area_m2
     # / aspect_ratio) for detected and prebake nodes alike, and
     # color-enrichment containment / the viewpoint / painter paths read cells
-    # directly. This is the sparse cell list ONLY — NOT the dense per-node
-    # MaskCache raster stack the 2026-06-29 cleanout removed for memory (that
-    # stays a scalar ledger; re-ID is exact track_id only, never mask-overlap).
+    # directly. This is the sparse cell list ONLY: no dense per-node raster
+    # stack is kept, for memory (re-ID is exact track_id only, never
+    # mask-overlap).
     # A centroid-only detection mint (``upsert_detected_centroid_only``, no
     # grid_mask) legitimately leaves this ``None`` and gets no footprint columns.
     cells: np.ndarray | None = None

@@ -120,7 +120,7 @@ def assert_available() -> None:
             f"Missing: {', '.join(str(path) for path in missing)}"
         )
     # The bake must speak the engine's world frame (x east, y north). A
-    # bake authored to the retired y-south frame would score every N/S
+    # bake authored to a y-south frame would score every N/S
     # relation mirrored with a normal-looking row — refuse it loudly.
     frame = (bake_meta().get("coordinate_frame") or {}).get("y_axis")
     if frame != "north":

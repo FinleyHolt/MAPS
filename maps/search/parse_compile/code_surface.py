@@ -84,14 +84,11 @@ def _winds_holding(cardinal_word: str) -> list:
 # y]), and a name bound to a literal point one line earlier -- and a
 # surface that refuses one of them teaches the other two.
 #
-# Why the point form is gone at all: it is the escape hatch that lets the
-# model answer with an estimate instead of a measurement. Smoke 25712881
-# is the whole argument. Told to find "the west side of the Rite Aid
-# building", the model flew the building's centroid, then walked
-# go_to([4630, 2965]), go_to([4625, 2965]), go_to([4635, 2965]) -- three
-# coordinates it read off a picture, all at one y, while the answer sat
-# 16 m away in the y it never varied. It missed by 3.3 m against a 20 m
-# radius, with the segmenter never armed and zero detections all episode.
+# Why the point form is refused at all: it is the escape hatch that lets the
+# model answer with an estimate instead of a measurement. Told to find "the
+# west side of" a building, a model given points walks coordinates it read
+# off a picture, all at one y, while the answer sits in the y it never
+# varies, with the segmenter never armed.
 # The rows are what carry measured positions; nothing else on this
 # surface does.
 _ACT_NEEDS_A_THING = (
@@ -232,13 +229,13 @@ def compile_steps(steps: list[dict], rn: int = 0,
             got = handles[v]
             if isinstance(got, str) and re.fullmatch(r"r\d+", got):
                 # A WHOLE RESULT IN A PLACE SLOT IS ITS UNION: one column,
-                # the gap to its NEAREST member. `near=<set>` used to be
-                # refused outright ("index it -- r2[0] -- or use a name"),
-                # which is the wrong answer to the question being asked:
+                # the gap to its NEAREST member. Refusing `near=<set>`
+                # ("index it -- r2[0] -- or use a name") would be the wrong
+                # answer to the question being asked:
                 # "the house with a pool in the backyard" is not about pool
                 # number one, it is about whichever pool is nearest each
                 # house, and indexing throws exactly that away. Fanning out
-                # instead measures every instance separately and dies on the
+                # instead would measure every instance separately and die on the
                 # executor's token guard the moment either side is large
                 # (3,414 houses x 40 pools = 136,560 cells).
                 #
@@ -259,12 +256,11 @@ def compile_steps(steps: list[dict], rn: int = 0,
             # AN INLINE POINT TAKES THE SAME WRAPPER, and it must: the
             # executor labels a bare [x, y] 'distance to xy' while
             # key_for sanitizes the literal into 'distance to 4630_2965',
-            # so the ordering asked for a column the compare never wrote
-            # and score_by refused the whole program. The surface then
-            # punished the NATURAL spelling and rewarded the roundabout
-            # one -- smoke 25712973 wrote find("tree", near=[4630, 2965]),
-            # was refused, and recovered by binding the identical point to
-            # a name first, twice. Same law as a handle, one door over.
+            # so without it the ordering asks for a column the compare never
+            # wrote and score_by refuses the whole program, punishing the
+            # NATURAL spelling and rewarding the roundabout one (binding the
+            # identical point to a name first). Same law as a handle, one
+            # door over.
             return {"ref": [float(v[0]), float(v[1])],
                     "as": f"{v[0]:g} {v[1]:g}"}
         if isinstance(v, (list, tuple)):
@@ -414,12 +410,9 @@ def compile_steps(steps: list[dict], rn: int = 0,
         call, args = st["call"], st["args"]
         pos = args.get("_pos") or []
         if call == "show":
-            # A DISPLAY IS AN OP. The mission path used to drop the show
-            # step on the floor: a `r1` or `r1[0]` line came back with no
-            # rows and no error, while the legend promised it shows them
-            # and the did-not-bind note told the model to "Show it first,
-            # then index it" -- advice nothing could act on. 25 such lines
-            # over 11 episodes.
+            # A DISPLAY IS AN OP. A `r1` or `r1[0]` line returns its rows:
+            # the legend promises it shows them, and the did-not-bind note
+            # tells the model to "Show it first, then index it".
             of, label = args["of"], args["label"]
             name = (of.get("row_of") or of["win_of"]
                     if isinstance(of, dict) else of)
@@ -572,15 +565,14 @@ def compile_steps(steps: list[dict], rn: int = 0,
             if _dwithin is not None:
                 # THE CUT WHERE THE MODEL PUTS IT. find(near=X) orders and
                 # find(within=X) cuts at contact, so a stated gap on the
-                # same call is the one reading left -- reached for three
-                # times in one episode on the arm that did not serve it
-                # (calcity::200#198, e898fdc9), each time a burned turn.
+                # same call is the one reading left, and the model reaches
+                # for it; refusing it burns a turn each time.
                 # dwithin= CUTS AGAINST WHICHEVER ANCHOR WAS NAMED. The
                 # model wrote find("parking", nearest=[X], dwithin=500) --
                 # rank by the gap to X and drop past 500 -- which is
                 # coherent, unambiguous, and what anyone would write. There
-                # is one anchor either way, so refusing it was a spelling
-                # objection to a correct idea (canary 139#137 on 237952f9).
+                # is one anchor either way, so refusing it would be a
+                # spelling objection to a correct idea.
                 _anchor = args.get("near")
                 if _anchor is None:
                     _anchor = args.get("nearest")

@@ -1953,7 +1953,7 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
     # Prefer the perception adapter's rasterized tile cells when present —
     # they are the ground truth for mask-IoU re-identification. Falls
     # back to a 1x1 cell at the projected centroid when the adapter did
-    # not stamp cells (no-tile harnesses; legacy code).
+    # not stamp cells (no-tile harnesses).
     raw_cells = meta.get("tile_cells")
     cells: np.ndarray | None = None
     if raw_cells is not None:
@@ -2043,9 +2043,9 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
         observation_count=1,
         best_view_px=best_view_px,
         confidence=float(det.confidence),
-        # World-state cleanout: detected nodes no longer STORE the dense
-        # per-node mask machinery. `centroid`/`bbox`/`cell_count` were already
-        # derived from the local `cells` var above, and the live SR/commit path
+        # Detected nodes do not STORE the dense per-node mask machinery:
+        # `centroid`/`bbox`/`cell_count` are derived from the local `cells`
+        # var above, and the live SR/commit path
         # reads only those scalars + class/color/provenance — never the stored
         # `cells` array or the re-id `embedding`. The viewpoint path grounds
         # target_xy from `centroid` (see tour_synth._runtime_graph_to_viewpoint_features),

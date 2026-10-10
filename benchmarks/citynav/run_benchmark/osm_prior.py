@@ -79,9 +79,9 @@ def _build_osm_prior_ctx_from_graph(graph) -> "_OsmPriorCtx | None":
             pts = [(float(p[0]), float(p[1])) for p in wc]
         except (TypeError, ValueError, IndexError):
             continue
-        # A fill needs something enclosed. `len >= 3` used to mean "a polygon"
-        # because only polygons carried a contour; it now admits a 3-vertex
-        # WAY and fills the triangle its bend happens to subtend.
+        # A fill needs something enclosed. A bare `len >= 3` test admits a
+        # 3-vertex WAY and fills the triangle its bend happens to subtend, so
+        # only a closed chain counts as a polygon.
         if not is_closed_chain(pts):
             continue
         fid = str(fid)
@@ -333,10 +333,8 @@ def _build_frame_enrich(
                             pfid = gmap.get(pfid, pfid)
                         # UNIFIED COLOR CONTRACT: priors get M6 — the SAME
                         # extractor detections get — over the projected OSM
-                        # footprint (accurate, not the old inflated CityNav
-                        # hull), keyed on best-view pixels. Replaces the
-                        # legacy single-word median so every mask, prior or
-                        # detected, obeys one color contract.
+                        # footprint, keyed on best-view pixels, so every
+                        # mask, prior or detected, obeys one color contract.
                         mix = color_from_mask_m6(rgb_arr, pmask)
                         if not mix:
                             continue

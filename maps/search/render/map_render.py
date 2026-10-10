@@ -39,11 +39,9 @@ log = logging.getLogger(__name__)
 # Delivered-side pixel budget (the look renderer's constant, same serving
 # math) and the schematic's finest useful sampling.
 # The schematic is DRAWN ink, so it has no ground sampling distance to
-# floor -- there is no sensor and no capture to select less of. It used to
-# size itself at span/0.35, which for a 200 m window resolved 571 px
-# against a 1024 px budget: 1.8x linear resolution given away to honour a
-# photographic constraint a map does not have. Chip glyphs landed ~14 px,
-# barely over the measured ~10-12 px character floor. Contours, strokes
+# floor -- there is no sensor and no capture to select less of, so it
+# sizes itself to the pixel budget rather than to a photographic span/GSD
+# constraint a map does not have. Contours, strokes
 # and chips are all drawn at CANVAS resolution, so the budget is the only
 # real limit and spending it is free of artefacts.
 # Env-overridable so the delivered size can be SWEPT against accuracy and
@@ -327,12 +325,11 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     # caption states how many stayed unchipped.
     #
     # EVERY chip is PREFIXED, and that is load-bearing rather than
-    # cosmetic. Prior chips used to be bare numerals, disjoint from the
-    # white-on-black legend digits by PILL COLOR alone -- and the model
-    # cannot make that distinction. Asked which chip named the outlined
-    # building, it answered the center legend badge "1" on 17 of 18 probe
-    # items (0% id_binding). A
-    # namespace separated by styling is not separated. Now: bare digit =
+    # cosmetic. Bare numerals would be disjoint from the white-on-black
+    # legend digits by PILL COLOR alone -- and the model cannot make that
+    # distinction: asked which chip names the outlined building, it answers
+    # the center legend badge. A
+    # namespace separated by styling is not separated. So: bare digit =
     # legend badge, ``p`` = prior fid, ``d`` = detection fid, disjoint by
     # construction at the glyph.
     px_per_m = float(W) / max(span, 1e-6)

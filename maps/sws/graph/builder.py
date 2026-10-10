@@ -277,8 +277,8 @@ def build_object_graph(
             cityref_id = feat.get("cityref_id")
             if cityref_id is not None:
                 # str form supports block-namespaced ids in the city-level
-                # aggregate (``birmingham_block_0_3``); int is the legacy
-                # per-block shape. Both pass through unchanged.
+                # aggregate (``birmingham_block_0_3``); int is the per-block
+                # shape. Both pass through unchanged.
                 if isinstance(cityref_id, str):
                     fid = f"cityref_{cityref_id}"
                 else:

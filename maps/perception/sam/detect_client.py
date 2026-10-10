@@ -228,14 +228,13 @@ _COLOR_PALETTE_DEFAULT: dict[str, tuple[int, int, int]] = {
 # colors keep the ideal anchor — EXCEPT anchors the calibration shows are
 # INSIDE the calibrated cluster:
 #
-# "silver" is REMOVED here (2026-07-02). It was under-sampled (kept the bright
-# ideal (190,192,198)), which sits ABOVE the recalibrated white (175,183,191)
-# on this dark imagery — so ~2/3 of true white cars snapped to "silver"
-# (measured on 30 episodes / 1844 vehicle detections: 325 "silver" labels, ALL
-# 325 relabel to "white" without the anchor), a word CityNav cues essentially
-# never use, while the 8-unit white/silver margin crushed achromatic
-# color_conf. A genuine silver car labeled "white" still matches a "silver"
-# cue at 0.8 via the achromatic family — nothing is droppable by this change.
+# "silver" is dropped from this palette. It is under-sampled, so it would keep
+# the bright ideal (190,192,198), which sits ABOVE the recalibrated white
+# (175,183,191) on this dark imagery — so most true white cars would snap to
+# "silver", a word CityNav cues essentially never use, while the 8-unit
+# white/silver margin crushes achromatic color_conf. A genuine silver car
+# labeled "white" still matches a "silver" cue at 0.8 via the achromatic
+# family — nothing is droppable by omitting it.
 _COLOR_PALETTE_CITYNAV: dict[str, tuple[int, int, int]] = {
     k: v
     for k, v in {
@@ -1332,12 +1331,9 @@ class SamDetectClient:
                     n_lost += 1  # no valid depth anywhere — same as pre-split
             if hit_cap:
                 break
-        # ``hit_cap`` gets its own trigger, not a ride on the fallback counters.
-        # It used to print only when a fallback or a lost detection also fired,
-        # so a run could truncate every stop at max_per_step and say nothing:
-        # `configs/calcity_uncapped_detections.yaml` was written around exactly
-        # that blind spot ("cannot be priced offline"), and the hit rate had to
-        # be recovered from the SAM server's own ndet log instead. A cap that
+        # ``hit_cap`` gets its own trigger, not a ride on the fallback counters:
+        # printed only alongside a fallback or a lost detection, a run could
+        # truncate every stop at max_per_step and say nothing. A cap that
         # binds is the loudest thing this function knows.
         if n_union_fallback or n_lost or hit_cap:
             print(

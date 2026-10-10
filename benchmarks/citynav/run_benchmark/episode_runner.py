@@ -359,12 +359,12 @@ def run_episode(
     # seam; it is not a behavior A/B flag.
     #
     # SPEC §5c LEAK L1: this reads the target type only from a CITYREF-keyed
-    # ``osm_ctx`` (the legacy objects.json ctx). Under the pivot the ctx is the
-    # graph-sourced identity map (``cityref_id`` absent), so the lookup returns
-    # nothing and the wall UNSETS — which is correct: the osmv2 bake never
-    # rasterizes objects.json target geometry into a prior (base_features are
-    # OSM), so there is no annotation-geometry prior to wall, and dropping the
-    # GT-class read tightens C1. The wall stays live for the legacy path.
+    # ``osm_ctx``. The ctx built above is the graph-sourced identity map
+    # (``cityref_id`` absent), so the lookup returns nothing and the wall
+    # UNSETS — which is correct: the tile bake never rasterizes objects.json
+    # target geometry into a prior (base_features are OSM), so there is no
+    # annotation-geometry prior to wall, and skipping the GT-class read
+    # tightens C1. The wall fires for any CITYREF-keyed ctx.
     os.environ.pop("SEARCH_WALLED_UNNAMED_TYPE", None)
     try:
         _tids = set(episode.target_object_ids or [])
@@ -846,9 +846,8 @@ def run_episode(
     #   n_target_class_dets: count of same-class detections anywhere
     #
     # The counters are written ONLY when the diagnostic ARMED. Hardcoding
-    # them to 0/None first made every episode the diagnostic skipped read as
-    # a measured perception failure: round 8's own first-draft attribution
-    # scored 8 of 24 "coverage" misses off that artifact. An absent key is
+    # them to 0/None would make every episode the diagnostic skipped read as
+    # a measured perception failure. An absent key is
     # "instrument not present" to every reader (discernment.band -> the
     # ``unrecorded`` bucket, episode_signal -> the ``class`` family absent
     # from ``recorded``), which is the fact.

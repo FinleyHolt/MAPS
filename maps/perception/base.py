@@ -45,10 +45,10 @@ class DetectedObject:
     # When present, the downstream geolocator projects it onto the tile grid
     # and the runtime upsert consumes the resulting ground mask.
     #
-    # A region, not a frame-sized array with a box beside it: the two used to
-    # be separate fields and every consumer re-derived the box by scanning the
-    # whole frame, which cost the SENSOR's resolution per detection. A region
-    # cannot be separated from its box, so that cannot come back.
+    # A region, not a frame-sized array with a box beside it: with separate
+    # fields every consumer re-derives the box by scanning the whole frame,
+    # which costs the SENSOR's resolution per detection. A region cannot be
+    # separated from its box.
     mask: "MaskRegion | None" = None
 
 

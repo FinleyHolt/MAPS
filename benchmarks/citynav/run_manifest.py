@@ -74,16 +74,15 @@ ARM_ENV_FLAGS = (
     "SEARCH_LOOK_TOOL",
     # Per-k resample roots differ only by their pinned seed base.
     "SEARCH_SEED_BASE",
-    # Score-affecting toggles that used to ride ambient env unstamped: a
-    # row flown with any of these set is a different arm, and ab_report
-    # must refuse to pair it against a row without. Set-only, so columns
-    # recorded before these joined still pair.
+    # Score-affecting toggles: a row flown with any of these set is a
+    # different arm, and ab_report must refuse to pair it against a row
+    # without. Set-only, so rows that never set them still pair.
     "SEARCH_STOP_AFTER",
     "SEARCH_WALLED_UNNAMED_TYPE",
     # The envelope sweep's two knobs (maps/llm/sampling.py). Reasoner turns
-    # sample at temperature 1.0, so these move the score directly — and they
-    # were read through a helper that took the key as a parameter, which put
-    # them outside the env-inventory scan and outside the manifest entirely.
+    # sample at temperature 1.0, so these move the score directly. They are
+    # read through a helper that takes the key as a parameter, which hides
+    # them from the env-inventory scan, so they are listed here by name.
     # An arm flown at a different temperature is not a null.
     "SEARCH_SAMPLING_TEMPERATURE",
     "SEARCH_SAMPLING_PRESENCE_PENALTY",

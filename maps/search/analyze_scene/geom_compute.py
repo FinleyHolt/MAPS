@@ -4,9 +4,7 @@ This module is the **single source of truth** for the spatial primitives the
 reasoner needs to disambiguate same-class instances ("the 4th car from the
 corner", "the white car between A and B", "on the road left of the church").
 The ``analyze_scene`` op-program executor
-(:mod:`maps.search.analyze_scene.geom_program`) calls these primitives to run each op,
-and the offline distillation teacher harness imports the SAME executor — so
-the live student and the teacher compute over *identical* geometry.
+(:mod:`maps.search.analyze_scene.geom_program`) calls these primitives to run each op.
 
 Design contract (load-bearing):
 

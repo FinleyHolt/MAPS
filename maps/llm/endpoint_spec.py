@@ -62,8 +62,8 @@ log = logging.getLogger(__name__)
 _PROBE_TIMEOUT_S = 15.0
 # A transport failure is asked again before it is a verdict: the arm's ground
 # box relays these ports over a link that re-forms when the box changes
-# networks, and one closed connection during that (a flight-line laptop
-# moving from a hotspot to the wifi, 2026-09-14) failed a Fly next outright.
+# networks, and one closed connection during that would otherwise fail a Fly
+# next outright.
 _PROBE_TRIES = 3
 _PROBE_RETRY_S = 3.0
 
@@ -430,12 +430,10 @@ def discover(
         sam_video_url=services.get("sam_video", ""),
         server_declared_window=server_declared_window,
     )
-    # Checked off the SPEC, never off a second spelling of the arithmetic. This
-    # guard used to recompute `max_model_len - output_reserve - margin` inline,
-    # which is the property's formula written twice -- and the two drifted the
-    # moment the property was corrected to subtract the pinned
-    # `max_output_tokens` instead. One source, so a fix cannot land in half the
-    # places that use it.
+    # Checked off the SPEC, never off a second spelling of the arithmetic.
+    # Recomputing the budget inline writes the property's formula twice, and
+    # the two drift the moment one of them changes. One source, so a fix
+    # cannot land in half the places that use it.
     if spec.input_budget < _MIN_INPUT_BUDGET:
         raise EndpointDiscoveryError(
             f"served window max_model_len={max_model_len} leaves "

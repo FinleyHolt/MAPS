@@ -266,8 +266,8 @@ def report(root: Path) -> dict[str, dict]:
     if _criterion is None:
         # A run flown before the rows carried the stamp. Both readings are
         # printed and NEITHER is called the headline: the criterion is
-        # unrecorded ground truth, and picking one here would be the same
-        # guess the heuristic used to make, with the same failure.
+        # unrecorded ground truth, and picking one here would be a guess
+        # that misreports the headline whenever it is wrong.
         #
         # What it says depends on whether a shape reading actually printed:
         # pointing at "the shape line beside it" when the run carries no
@@ -331,11 +331,9 @@ def report(root: Path) -> dict[str, dict]:
     )
 
 
-    # No failure-mode buckets here, deliberately. The retired _stage split
-    # keyed on OSR, which sorts misses by transit proximity while reading
-    # as mechanism; measured, the dominant funnel loss was the same on both
-    # sides of it. Mechanism takes
-    # a person or agent reading the episode's own record.
+    # Failure mechanism comes from reading each episode's own record. A
+    # split keyed on OSR sorts misses by transit proximity while reading as
+    # mechanism, so the report prints counts only.
     return scored
 
 

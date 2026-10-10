@@ -339,15 +339,13 @@ def fly_one(
     state.altitude_m = new_alt
     state.heading_deg = new_heading
 
-    # NORTH-UP, deliberately, not the episode heading. Over a nadir ortho
-    # the heading carries zero information and only rotates the segmenter's
-    # input: the 140#138 GT lot reads at conf 0.38-0.43 north-up and
-    # VANISHES at two of five yaws (probe at the pass's own stop,
-    # 2026-08-22), and two of four reflies lost the target row to exactly
-    # that. The served captions have always promised north-up pictures,
-    # and the retro-boost re-render (episode_runner) has always drawn at
-    # yaw 0 -- this makes the flight observation say the same thing. The
-    # pose keeps its heading: the replay's motion model still turns.
+    # NORTH-UP, not the episode heading. Over a nadir ortho the heading
+    # carries zero information and only rotates the segmenter's input, and a
+    # target that reads north-up can vanish from detection at other yaws.
+    # The served captions promise north-up pictures, and the retro-boost
+    # re-render (episode_runner) draws at yaw 0 -- this makes the flight
+    # observation say the same thing. The pose keeps its heading: the
+    # replay's motion model still turns.
     _ph = _StopPhases()
     if observe is None:
         obs = crop_observation(

@@ -143,11 +143,10 @@ DEFAULT_MAX_WALL_S = int(os.environ.get("CITYNAV_BENCH_MAX_WALL_S", "0"))
 # launcher can lengthen this without a redeploy.
 OOM_BACKOFF_BASE_S = float(os.environ.get("CITYNAV_BENCH_OOM_BACKOFF_BASE_S", "90"))
 # Mass-instant-failure abort. A tree deployed without its tile bake fails
-# EVERY episode in seconds: 282 of 282 in ~15 min of an exclusive 8xL40S
-# node (2026-08-05). The classifier below already recognized the shape
-# (``no_prediction_unclassified``) and the only response was a warning
-# line in the END-OF-RUN summary, so the run ground to completion and
-# reported the problem an hour late. When the last ABORT_WINDOW
+# EVERY episode in seconds. The classifier below recognizes the shape
+# (``no_prediction_unclassified``), but a warning line in the END-OF-RUN
+# summary alone lets the run grind to completion and report the problem
+# an hour late. When the last ABORT_WINDOW
 # completions are ABORT_FRACTION infra casualties the run is not
 # producing results and stops, loudly, naming the dominant cause and the
 # tail of a representative worker log.

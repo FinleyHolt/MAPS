@@ -64,10 +64,9 @@ def _reasoner_warmup_grammar(
     # with tool_choice "auto" and NO decoder mask -- reasoner_loop states
     # why the mission path carries none: a say mask built over CODE_TOOL
     # names the wrong tool, the wrong argument and a grammar this surface
-    # does not speak. This warmed the retired say surface plus that mask
-    # instead, so it pre-paid an xgrammar setup no request ever used and
-    # left the real one to the first live call -- which is the entire cost
-    # this function exists to avoid.
+    # does not speak. Warming any other shape pre-pays an xgrammar setup no
+    # request uses and leaves the real one to the first live call -- which
+    # is the entire cost this function exists to avoid.
     _warm_msg = {
         "role": "user",
         "content": (

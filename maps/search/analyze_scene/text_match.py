@@ -53,10 +53,8 @@ Query grammar (ONE canonical form each):
     the score is the MAX over the OR-clauses.
 
 It is the pure, stdlib-only counterpart to the geometry
-kernel in :mod:`maps.search.analyze_scene.geom_compute`, and like it is imported by BOTH
-the live executor (:mod:`maps.search.analyze_scene.geom_program`) and the offline
-distillation teacher (via ``geom_program``) — so the served search surface
-is byte-identical to the trained one.
+kernel in :mod:`maps.search.analyze_scene.geom_compute`, and like it is imported by
+the live executor (:mod:`maps.search.analyze_scene.geom_program`).
 
 Design contract (load-bearing):
 

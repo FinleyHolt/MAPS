@@ -88,10 +88,9 @@ CITYNAV_NATIVE_RGBD_DIR = (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # The tags-only OSM 2 m bake is the tile source of truth: ONE ``prior`` list
 # per block, rows = mask + raw OSM tags verbatim, masks coverage-clipped to
-# the block's imagery (no prior over no-data). Earlier bakes
-# (``tiles/citynav_2m_osmv2`` typed classes, ``tiles/citynav_2m``,
-# ``tiles/citynav``) are retired; ``assert_current_tile_schema`` refuses
-# them rather than let a run ground against the wrong priors.
+# the block's imagery (no prior over no-data). ``assert_current_tile_schema``
+# refuses a bake of any other schema rather than let a run ground against
+# the wrong priors.
 # THE bake, by name (an SR measured against another bake is not comparable).
 DEFAULT_TILE_BAKE = "tiles/citynav_2m_osmv3"
 TILES_DIR = (
@@ -223,12 +222,11 @@ def assert_available() -> None:
         raise FileNotFoundError(recipe)
 
 
-# A run against a retired bake grounds on entirely different priors and still
-# completes, so the only symptom is a wrong SR -- which is how a stale
-# SEARCH_CITYNAV_TILES went unnoticed across a whole calibration arm (SR 0.351
-# vs 0.169 on the same episodes). The current bake writes ONE ``prior`` list
-# per block (tags-only, PRIOR_CONTRACT config B): rows are mask + ALL raw tags
-# verbatim + ``source`` provenance, nothing minted. The retired shapes are the
+# A run against another bake grounds on entirely different priors and still
+# completes, so the only symptom is a wrong SR, and a stale
+# SEARCH_CITYNAV_TILES goes unnoticed. The current bake writes ONE ``prior``
+# list per block (tags-only, PRIOR_CONTRACT config B): rows are mask + ALL raw
+# tags verbatim + ``source`` provenance, nothing minted. The refused shapes are the
 # typed-class bake (``building``/``footpath``/... keys, rows minting
 # ``prior_role``/``prior_source``) and the older opaque bucket whose rows
 # carry no ``source`` at all.

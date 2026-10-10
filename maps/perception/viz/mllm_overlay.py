@@ -250,11 +250,11 @@ def render_look_overlay(
 
     # neighbors: thin outlines, digits 3.. in caller order.
     pm = max(float(px_per_m), 1.0)
-    # MARK GEOMETRY (owner directive 2026-07-28): the mark IS the object's
+    # MARK GEOMETRY: the mark IS the object's
     # recorded mask polygon — ALWAYS, however coarse. A stair-stepped 2 m
     # grid loop is the honest realisation of what the system knows about
     # that footprint; a proxy shape (circle/ellipse/right-sized square)
-    # asserts geometry the mask does not carry and is deleted. A mark with
+    # asserts geometry the mask does not carry, so none is drawn. A mark with
     # NO polygon draws no outline: its numbered badge + leader line binds
     # the digit to the point, and the missing footprint stays visibly
     # missing. Salience: center 3 px > target 2 > nbr 1.
@@ -268,10 +268,9 @@ def render_look_overlay(
     def _has_poly(arcs):
         if not arcs:
             return False
-        # A FLAT vertex list is the retired shape, and it fails open: each
-        # (x, y) has len 2, so it reads as a two-point arc and draws as
-        # scatter. Both renderers clip to arcs now; anything else is a
-        # caller that was never updated, and it says so.
+        # A FLAT vertex list fails open: each (x, y) has len 2, so it reads
+        # as a two-point arc and draws as scatter. Both renderers clip to
+        # arcs; anything else is a caller bug, and it says so.
         if any(not isinstance(a, (list, tuple)) or len(a) < 2
                or not isinstance(a[0], (list, tuple)) for a in arcs):
             raise TypeError(
@@ -369,7 +368,7 @@ def render_look_overlay(
             # badge tagging nothing. The flight view's pose mark is exactly
             # that case — a position, with no footprint anywhere — so a
             # point mark gets a small ring AT the point.
-            # NOT the proxy shape the 2026-07-28 directive deleted: the
+            # This ring is no footprint proxy: the
             # radius is frozen in DELIVERED pixels and scales with nothing,
             # so it asserts a location and never an extent, which is the
             # thing a circle-standing-in-for-a-footprint got wrong.

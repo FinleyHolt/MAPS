@@ -8,9 +8,7 @@ pinned inside ``geom_compute``, and every op returns RAW geometry the caller mus
 still interpret (it never returns "the answer").
 
 This is the SINGLE source of the executor: the live ``analyze_scene`` tool
-(surface from the runtime graph) and the offline synth ``distill/gen/geom_exec``
-(surface from a bundle) both import ``run_program`` from here, so the served
-surface is byte-identical to the trained surface.
+runs ``run_program`` from here over the surface built from the runtime graph.
 
 Program shape (JSON) — EXPLORE, ONE composed ``compare``, then the analysis
 ordering (programs ANALYZE only; the DECISION is the ``act{select}`` terminal
@@ -331,15 +329,14 @@ FILTER_OPS = ("eq", "ne", "lt", "le", "gt", "ge", "truthy", "on_side",
 # 150 of 154 addressable corpus cues.
 
 # Generic color basis: _color_of extracts a color TOKEN from a class label
-# (legacy color-qualified concepts). PARITY NOTE: the surface ``color`` field is
+# (color-qualified concepts). PARITY NOTE: the surface ``color`` field is
 # produced by _node_color, which reads PERCEIVED color off semantic_attributes
 # when present (live runtime graph + the captured-live geom_surface) and falls
 # back to _color_of(class) otherwise. So color is NOT byte-parity on the offline
 # REBUILD-from-tile path (offline tile nodes carry no semantic_attributes ->
 # color='' -> find keeps ALL such rows, colorless); only
 # the captured-live geom_surface is color-parity-safe. The LIVE eval is
-# unaffected (perception supplies color); populating offline perceived color is
-# a distillation-parity follow-up. The descriptions WALL and the name/class/tag
+# unaffected (perception supplies color). The descriptions WALL and the name/class/tag
 # search_text parity are unaffected by this. The color_<word> columns are attached
 # as sortable per-row fields inside run_program (the find color branch + the
 # emphasis-key lazy attach; NOT at build_surface time), so the gated build_surface
@@ -782,8 +779,6 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
     def _axis_q(n, key):
         # axis_length_m is meaningful only for a node that HAS a baked
         # centerline (a linear feature); None when there is no centerline.
-        # (axis_residual_m was retired from the served surface: zero
-        # operations across every audited run.)
         if not getattr(n, "centerline", None):
             return None
         v = getattr(n, key, None)
@@ -1114,8 +1109,7 @@ _RENDER_INPUT_ROW_FIELDS = ("color_shade", "color_flag")
 # chain on keep the real color, so the color columns are byte-
 # unchanged. Hosted here so EVERY model-facing row — compact_results items,
 # compare KV records, a select's echoed row — masks identically on the live and
-# offline paths (cached bundles are stale against this render — regenerate before
-# any distillation).
+# offline paths.
 _COLOR_CONF_FLOOR = 0.15
 
 
@@ -1785,12 +1779,11 @@ _FANOUT_TOKEN_GUARD = 8000
 
 # The UNION's own bound, and it is a WALL-CLOCK net rather than a token one:
 # a union renders ONE column set however many members it folds, so nothing
-# here is about render size. Before a union member could be an rN it was
-# bounded by what a model would hand-type; now `near=find("house")` folds
-# every house on the tile, which is the members x items shape the union
-# comment records as having "ran 885 s without returning". The bbox prune
-# should hold it, but a wall-clock cliff discovered inside a 500-episode
-# fleet run is the expensive place to discover it. A real cue's set -- the
+# here is about render size. A union member can be an rN, so
+# `near=find("house")` folds every house on the tile, which is the members x
+# items shape the union comment records as running for minutes without
+# returning. The bbox prune should hold it, but a wall-clock cliff discovered
+# inside a fleet run is the expensive place to discover it. A real cue's set -- the
 # pools on a street, the crossings of two roads -- sits far below this.
 _UNION_MAX_MEMBERS = 400
 
@@ -2216,11 +2209,9 @@ def compact_results(results: dict, *, widen_form: str = "",
             # WHETHER the order means anything is the producing op's fact and
             # is stated there -- `find` says either "best-first from a down
             # to b" or "all equally well, so this order is arbitrary", once,
-            # from the scores it actually computed. This render used to
-            # re-derive the same fact from a uniform name_match column and
-            # append it, so a result could carry "(best-first, match 0.8)"
-            # and "all 3414 rows are equally good matches, so this head's
-            # order is arbitrary" in ONE hint.
+            # from the scores it actually computed. Re-deriving it here from
+            # a uniform name_match column would let ONE hint carry two
+            # contradictory order claims.
             _head_note = None
             if getattr(v, "name_set", False):
                 pass
@@ -3564,14 +3555,10 @@ def run_program(cands, anchors, program, seed_results=None,
                 # exact `building=house` hits still at 0-40 of the find order.
                 # Never a drop: no row that matched before stops matching.
                 #
-                # Priced on the 325-episode facing family (containment_probe,
-                # 2026-08-16): the widening ALONE is worth 0.0 points, and
-                # WITH the distance order a `near <anchor>` clause compiles
-                # to it is +76.3 [+70.6, +82.0] containment@24, 161W/0L,
-                # exact McNemar p=6.8e-49 (2.8% -> 79.1% of the 211-episode
-                # reachable pool, 1.8% -> 51.4% of all 325). The two halves
-                # are one change: the order alone is +0.5 and the widening
-                # alone is 0.0, because 41 rows never bind a 24-row budget.
+                # The widening pays off only WITH the distance order a
+                # `near <anchor>` clause compiles to: the two halves are one
+                # change, and the widening alone moves nothing, because 41
+                # rows never bind a 24-row budget.
                 if _hit is None:
                     _fams = T.tag_family_keys(q_data, _searched_rows)
                     if _fams:
@@ -3732,17 +3719,12 @@ def run_program(cands, anchors, program, seed_results=None,
                     # matched head's score range and the size of the
                     # sub-threshold tail that stayed OUT of this rN (a
                     # query-less find browses it).
-                    # "best-first" is a CLAIM about this order, and it was
-                    # false on 34.2% of the results that made it: when every
+                    # "best-first" is a CLAIM about this order: when every
                     # matched row scores the same, the order left is fid
-                    # order and nothing about it is best. The claim is now
+                    # order and nothing about it is best. The claim is
                     # made only when the scores actually separate, and the
                     # tie says so instead -- once, here, where the retrieval
-                    # knows it. The render used to say it a second time in
-                    # its own words, and a result carrying both read
-                    # "(best-first, match 0.8)" and "all 3414 rows are
-                    # equally good matches, so this head's order is
-                    # arbitrary" in one hint.
+                    # knows it, so the render never states it a second time.
                     _m_vals = [r["name_match"] for r in scored[:_n_match]]
                     # A NAME'S WAYS ARE A SET, NOT A RANKING. Every row ties
                     # at the name tier, so a rendered table is N rows in an
@@ -3865,19 +3847,15 @@ def run_program(cands, anchors, program, seed_results=None,
                 rows = scored[:_n_match] if _q_matched else scored
                 # ``name=`` -- THE MODEL SAYS WHICH OF THE TWO IT MEANT.
                 # A query is either a CLASS ("house") or a PROPER NOUN
-                # ("Icaarus Court"), and the surface used to guess by
-                # retrieving every tier at once and trusting the ordering.
-                # That is exactly where it lost: the exact hit does rank
-                # first on a bare find, and then `near=<anchor>` re-sorts by
-                # distance and buries it under 65-98 tied fuzz rows.
+                # ("Icaarus Court"). Guessing by retrieving every tier at
+                # once and trusting the ordering loses the exact hit: it
+                # ranks first on a bare find, and then `near=<anchor>`
+                # re-sorts by distance and buries it under tied fuzz rows.
                 #
-                # The model already draws the line unprompted --
-                # find(<class>, name=<name>) was the LARGEST error family in
-                # the run, 135 blocks over 61 episodes scoring 13/61 against
-                # 92/194, and the surface answered "find() has no name=
-                # argument". It was refused because a silently-dropped kwarg
-                # would be the model's whole constraint vanishing, which is
-                # an argument for implementing it.
+                # The model draws the line unprompted with
+                # find(<class>, name=<name>), and a silently-dropped kwarg
+                # would be the model's whole constraint vanishing, so the
+                # argument is implemented rather than ignored.
                 #
                 # Measured, the CLASS half does no disambiguating work: of
                 # 353 names in this bake exactly 1 is borne by more than one
@@ -4295,10 +4273,10 @@ def run_program(cands, anchors, program, seed_results=None,
             # nothing is auto-added, so the ordering is precisely the criteria
             # the agent stated (a single-key emphasis IS the one-key order).
             items = as_list(a["items"])
-            # CLEAN-CUTOVER fail-loud (adversarial-verify gap): keys/weights are DELETED.
-            # The live serve grammar (additionalProperties:False) blocks them, but a legacy
-            # program or a frozen resume source hits the un-enforced offline/replay
-            # path -- error instead of silently re-shaping the sort it asked for.
+            # Fail loud on keys/weights: score_by takes neither. The live serve grammar
+            # (additionalProperties:False) blocks them, but an older program or a frozen
+            # resume source hits the un-enforced offline/replay path -- error instead of
+            # silently re-shaping the sort it asked for.
             if a.get("keys") is not None or a.get("weights") is not None:
                 raise ProgramError(
                     "score_by takes no keys/weights -- it orders by EXACTLY the columns "
@@ -4481,9 +4459,9 @@ def run_program(cands, anchors, program, seed_results=None,
             items = _auto_attach(items, [key])
             _LEGAL_FILTER_OPS = FILTER_OPS
             if opr not in _LEGAL_FILTER_OPS:
-                # Previously fell through to .get(opr, False) -> a SILENT dead-filter
-                # that zeroed the result and hid real matches (e.g. the on-street /
-                # near-row abs_le filter the teacher reaches for). Fail loud instead.
+                # Fail loud: a .get(opr, False) fallthrough would be a SILENT dead-filter
+                # that zeroes the result and hides real matches (e.g. the on-street /
+                # near-row abs_le filter the teacher reaches for).
                 raise ProgramError(
                     f"unknown filter_items op {opr!r}; legal: {list(_LEGAL_FILTER_OPS)}")
             # ``on_side`` compares against the column's own SIGN, so like
@@ -4980,15 +4958,12 @@ def run_program(cands, anchors, program, seed_results=None,
                                            "goes over the place -- arm it, "
                                            "fly, then find them again.")
                                         + f"{_sig_suffix()}")
-                                # A CAP, because the old guard is gone. A
-                                # union used to need hand-typed fids, which
-                                # bounded it by what a model would spell; an
-                                # rN member bounds it by nothing, and the
-                                # union comment below records a members x
-                                # items case that "ran 885 s without
-                                # returning". The bbox prune should hold, but
-                                # a wall-clock cliff inside a 500-episode
-                                # fleet run is not the place to find out.
+                                # A CAP: an rN member bounds a union by
+                                # nothing, and the union comment below
+                                # records a members x items case that runs
+                                # for minutes without returning. The bbox prune
+                                # should hold, but a wall-clock cliff inside
+                                # a fleet run is not the place to find out.
                                 if len(_got) > _UNION_MAX_MEMBERS:
                                     raise ProgramError(
                                         f"{as_label or _sanitize_label(x)} "
@@ -5842,8 +5817,8 @@ def run_program(cands, anchors, program, seed_results=None,
                         # a whole class is a union of every member: `find
                         # building in building.` is 3,452 items against 3,452
                         # members, and calling gap_witness on all 11.9 M pairs
-                        # is why that one sentence ran 885 s without
-                        # returning. gap_witness never reads below the two
+                        # runs for minutes without returning.
+                        # gap_witness never reads below the two
                         # bounding boxes' separation, so a member whose bound
                         # already exceeds the best gap in hand cannot beat it,
                         # and nothing beats 0. Members are still walked in
@@ -5896,13 +5871,9 @@ def run_program(cands, anchors, program, seed_results=None,
                             # WHICH WAY THIS ROW FACES THE REF, as a word.
                             # The witness pair runs ref->item; a thing faces
                             # the place it fronts, so the served direction is
-                            # item->ref. That reversal used to be a formula
-                            # in the legend, `(b + 180) % 360`, and the one
-                            # episode that read the degrees column applied it
-                            # zero times and called an facing of 0
-                            # "on the north side" (calcity::480#478, a
-                            # baseline hit the arm lost). A word cannot be
-                            # read backwards.
+                            # item->ref. Serving the reversal as a word
+                            # leaves the model no formula to forget to
+                            # apply: a word cannot be read backwards.
                             _put(row, f"facing {lab}",
                                  G.cardinal(wi, wr), ci)
                             if _geo is not None:

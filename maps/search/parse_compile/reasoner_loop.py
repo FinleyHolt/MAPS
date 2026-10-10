@@ -908,9 +908,9 @@ def _single_fid_of_geom_result_value(v) -> str | None:
         fid = v.get("fid")
         return fid if isinstance(fid, str) and fid else None
     # Compacted list shape: a len-1 list whose single row carries a fid counts
-    # as the program isolating one object. Post the markdown-grid cutover a list
-    # result carries its ordered fids as ``fids`` (the rows render as a grid
-    # string); a legacy ``items`` list is still read for older payloads. A
+    # as the program isolating one object. A list result carries its ordered
+    # fids as ``fids`` (the rows render as a grid string); an ``items`` list is
+    # also read, for older payloads. A
     # ``compare`` result (which has ``refs``) is an ATTACH, never an isolation.
     if isinstance(v, dict) and v.get("len") == 1 and "refs" not in v:
         items = v.get("items")
@@ -1633,9 +1633,9 @@ def advance_reasoner_one_round(
 
     # THE canonical in-flight surface (flagless): ``analyze_scene`` — a typed
     # op-program run through the SHARED ``run_program`` over this round's
-    # (cands, anchors) surface (``compute_namespace``), so the student is served
-    # byte-for-byte the surface its offline teacher (distill/gen/geom_exec) was
-    # trained on. Retrieval folds INTO the program (the find op).
+    # (cands, anchors) surface (``compute_namespace``), so the live path and any
+    # offline replay serve byte-for-byte the same surface. Retrieval folds INTO
+    # the program (the find op).
     # The LAST groundable (non-errored) program + its compacted output.
     # ``diag`` gets the zero-regression sel_geom_* observer stamps;
     # None -> pure no-op.
@@ -4126,16 +4126,11 @@ def advance_reasoner_one_round(
                         "works"))
                 slot_fid[g["slot"]] = str(rows[0]["fid"])
                 # A token NO matched row carries -- the same note the
-                # query find serves, on the path that had none. That
-                # note was wired only into the query-find,
-                # so glue landing in a GROUNDING ("go to <name>", "show
+                # query find serves, on the grounding path. Without it,
+                # glue landing in a GROUNDING ("go to <name>", "show
                 # me <place>", "from <site>, looking …", an anchor)
-                # rode the top name_match tie and bound silently: round 8
-                # measured 46 name-run glue tokens in pilot-8 with 26
-                # unwarned. Glue is exposure-matched costly (episodes
-                # with glue 12/37 = 32.4% vs 116/263 = 44.1%, say-count
-                # matched at median 15 vs 15, MWU p=0.797; pilot-7
-                # replicates the direction at 37.5% vs 42.9%). A NOTE,
+                # rides the top name_match tie and binds silently, and
+                # episodes carrying glue score lower. A NOTE,
                 # never an error and never a filter: the match stays
                 # untouched because a real query often names an attribute
                 # no row spells.
@@ -4223,9 +4218,9 @@ def advance_reasoner_one_round(
                     _xr = [r for r in (carry_results.get(_xref) or [])
                            if isinstance(r, dict) and r.get("fid")]
                     if len(_xr) != 1:
-                        # NAMES NEITHER SIDE. The roads used to be recovered
-                        # by splitting ``plan["said"]`` on "the intersection
-                        # of " -- a sentence-shaped read that hands back the
+                        # NAMES NEITHER SIDE. Recovering the roads by
+                        # splitting ``plan["said"]`` on "the intersection
+                        # of " is a sentence-shaped read that hands back the
                         # WHOLE code block on this surface. The crossing
                         # handle is the executor's own ref, which the model
                         # never bound and must not be served either. State
@@ -4836,7 +4831,7 @@ def advance_reasoner_one_round(
                 #
                 # IT NAMES THE TOOL THAT IS SERVED. The one message sent
                 # when the model has already lost the tool name must not
-                # hand it a retired one: a surface that refuses a form must
+                # hand it one the surface refuses: a surface that refuses a form must
                 # not still teach it.
                 reasoner.append_tool_result(cid, name or "unknown", {
                     "error": f"unknown tool {name!r}; available: run"})
