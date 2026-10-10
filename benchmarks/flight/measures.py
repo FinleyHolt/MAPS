@@ -48,6 +48,8 @@ import statistics
 import sys
 from bisect import bisect_left
 from pathlib import Path
+
+from benchmarks.citynav.analysis.rows import is_infra_abort
 from typing import Any
 
 FT_PER_M = 1.0 / 0.3048
@@ -504,6 +506,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         "replay_of": row.get("replay_of"), "model": params.get("model"),
         "reasoning_effort": params.get("reasoning_effort"), "intel_quality": quality[0],
         "end": end, "excluded": " ".join(str(reason).split()) or None if reason else None,
+        "infra": is_infra_abort(row),
         "determination": determined, "commit_fid": fid,
         "commit_xy": None if xy is None else [round(xy[0], 2), round(xy[1], 2)],
         "truth_xy": None if target is None else [round(target[0], 2), round(target[1], 2)],
@@ -604,11 +607,14 @@ def _median(vals) -> float | None:
 
 
 def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """The rates over the runs kept that carry a truth; times and tokens over the runs kept."""
-    kept = [r for r in rows if not r["excluded"]]
+    """The rates over the runs kept that carry a truth; times and tokens over the
+    runs kept. A run the serve failed under (``rows.is_infra_abort``, the
+    bench's rule) is out of every rate and named in ``infra``."""
+    infra = [f"{r['sortie']} run {r['run_no']}" for r in rows if r["infra"] and not r["excluded"]]
+    kept = [r for r in rows if not r["excluded"] and not r["infra"]]
     scored = [r for r in kept if r["truth_xy"] is not None]
     spl = [r["spl"] for r in scored if r["spl"] is not None]
-    return {"runs": len(rows), "kept": len(kept), "scored": len(scored),
+    return {"runs": len(rows), "kept": len(kept), "scored": len(scored), "infra": infra,
             "sr_area": _rate(scored, "success_area"), "sr_20m": _rate(scored, "success_radius"),
             "osr": _rate(scored, "oracle_success"),
             "ne_median_ft": _median(r["ne_ft"] for r in scored),
@@ -669,6 +675,8 @@ def main(argv: list[str] | None = None) -> int:
                     f"  NE med {s['ne_median_ft']} ft  time to ID med {s['time_to_id_median_s']} s"
                     f"  SPL {s['spl_pct']}% (n {s['spl_n']})  tokens med {s['total_tokens_median']}")
         print(line("all", doc["summary"]))
+        if doc["summary"]["infra"]:
+            print(f"out of every rate (the serve failed under them): {', '.join(doc['summary']['infra'])}")
         for k, v in doc["by_intel_quality"].items():
             print(line(f"intel {k}", v))
         for k, v in doc["by_effort"].items():

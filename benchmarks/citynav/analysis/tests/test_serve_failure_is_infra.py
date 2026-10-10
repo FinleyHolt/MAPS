@@ -3,10 +3,10 @@
 That is not the reasoner getting it wrong; it is the cluster's weather, and
 charging it to the model prices one as the other. The PRODUCER stamps such
 an attempt ``status: infra`` (``dispatch`` on ``ended_by ==
-transient_failures``, the driver on a serve death or spawn failure), and
-the reader reads ONLY that stamp -- two definitions of one question had
-already diverged once, with the driver re-queueing an episode the reader
-went on scoring.
+transient_failures``, the driver on a serve death or spawn failure); a
+flight row carries the ending itself. One predicate, ``rows.is_infra_abort``,
+reads both -- two definitions of one question had already diverged once,
+with the driver re-queueing an episode the reader went on scoring.
 
 Measured twice. ``f40088a:calcity_full_replyrepair``: a serve OOM storm
 forced 50 of 1022 episodes to SR 0.000. And the reasoning-effort ladder,
@@ -45,15 +45,13 @@ def _run(tmp_path: Path, *ledger_rows: dict) -> Path:
     return root
 
 
-def test_the_reader_reads_only_the_status_the_producer_stamped() -> None:
-    """The verdict is one key. A row whose mission ended in
-    transient_failures but whose producer stamped ``ok`` is NOT infra
-    here -- the producer-side pin (that it never does that) lives beside
-    the producer."""
+def test_one_rule_reads_the_stamp_or_the_ending() -> None:
+    """The bench producer stamps ``infra``; a flight row carries the ending
+    itself with ``ok``. One predicate reads both."""
     assert rows.is_infra_abort(
         _row("c::1#0", "20260827_100000", 0, ended_by="transient_failures",
              status="infra"))
-    assert not rows.is_infra_abort(
+    assert rows.is_infra_abort(
         _row("c::2#0", "20260827_100000", 0, ended_by="transient_failures"))
     assert not rows.is_infra_abort(_row("c::3#0", "20260827_100000", 1))
     assert rows.is_infra_abort({"episode_id": "c::4#0", "status": "infra"})

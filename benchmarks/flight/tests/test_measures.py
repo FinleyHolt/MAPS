@@ -95,3 +95,20 @@ def test_osr_reads_the_keyframe_poses_beside_a_thin_recording(tmp_path):
 
 def test_a_thin_recording_with_no_pose_near_the_target_cannot_show_a_miss(tmp_path):
     assert _thin_track_run(tmp_path, [3000.0, 3000.0])["oracle_success"] is None
+
+
+def test_a_run_the_serve_failed_under_is_out_of_every_rate_and_named(tmp_path):
+    root, truth, tiles = tmp_path / "20260101T000000Z", tmp_path / "truth", tmp_path / "tiles"
+    tiles.mkdir()
+    (tiles / "calcity_features.json").write_text(json.dumps({"prior": [{"world_contour": TARGET}]}))
+    rows = [_run(root, "run1", commit=("prior_0", [101.0, 99.0])),
+            {**_run(root, "run2", commit=("prior_9", [400.0, 100.0])), "ended_by": "transient_failures"},
+            {**_run(root, "run3", commit=("prior_9", [400.0, 100.0])), "status": "infra"}]
+    (root / "episodes.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    truth.mkdir()
+    (truth / f"{root.name}.json").write_text(json.dumps(
+        {f"calcity::run{k}": {"target_mask": TARGET} for k in (1, 2, 3)}))
+    got, _radius, _turns = Q.collect([root], Q.Truth([truth]), tiles_dir=tiles)
+    s = Q.summarize(got)
+    assert (s["sr_20m"]["k"], s["sr_20m"]["n"]) == (1, 1)
+    assert s["infra"] == [f"{root.name} run 2", f"{root.name} run 3"]

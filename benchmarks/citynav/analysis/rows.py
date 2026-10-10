@@ -98,13 +98,26 @@ def final_xy(row: dict) -> tuple[float, float] | None:
     return None
 
 
+#: A mission the serve failed out from under: the cluster's weather, not the
+#: model's skill.
+INFRA_ENDINGS = ("transient_failures",)
+
+
+def ended_by(row: dict) -> str | None:
+    """How the attempt's mission ended: the row's own key (a flight row), else
+    the scored mission block's (a bench row)."""
+    return row.get("ended_by") or (metrics(row).get("mission") or {}).get("ended_by")
+
+
 def is_infra_abort(row: dict) -> bool:
     """True when the attempt never got a fair run.
 
-    The PRODUCER stamps ``status: infra`` -- for a serve dying under the
-    episode (``ended_by=transient_failures``), a CUDA/CuPy contention OOM,
+    The bench PRODUCER stamps ``status: infra`` -- for a serve dying under
+    the episode (``ended_by=transient_failures``), a CUDA/CuPy contention OOM,
     an ingest or SAM outage, a warm-runner spawn failure, a crash. All are
-    infra casualties rather than algorithm misses, so they are excluded
+    infra casualties rather than algorithm misses. A flight row carries the
+    ending itself (``ended_by`` in ``INFRA_ENDINGS``) and reads the same way,
+    so the closed-loop measures and the bench share this one rule. They are excluded
     from coverage and SR -- and dropped at READ time, not merely marked
     incomplete, so one can never represent its episode through the
     last-resort fallback. A serve dying under an episode is not the
@@ -127,7 +140,7 @@ def is_infra_abort(row: dict) -> bool:
     spending its own budget -- running out of turns, or growing a
     conversation past the window -- not the serve failing underneath it.
     """
-    return row.get("status") == "infra"
+    return row.get("status") == "infra" or ended_by(row) in INFRA_ENDINGS
 
 
 def is_complete(row: dict, m: dict | None = None) -> bool:

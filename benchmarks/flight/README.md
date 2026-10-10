@@ -108,6 +108,7 @@ python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications d
 Per run: SR two ways (the committed area contains the target centroid; the
 commit lies within 20 m of it), NE, OSR (the aircraft's path, GNSS track,
 else keyframe poses, came within one camera footprint width of the target), time to identification, SPL, and
-tokens. It prints the totals, the totals by intel quality and by model and
-reasoning effort, then one line per run. `--check <master table>` compares SR and OSR
+tokens. A run the serve failed under (the bench's infra rule) is out of every
+rate and named. It prints the totals, the totals by intel quality and by model
+and reasoning effort, then one line per run. `--check <master table>` compares SR and OSR
 row by row against a table.

@@ -5,6 +5,7 @@ the shared batch-loop/server episode wrapper.
 from __future__ import annotations
 
 from benchmarks.citynav.adapter import parse_episode
+from benchmarks.citynav.analysis import rows as _rows
 from benchmarks.citynav.live_recorder import LiveRecorder
 from benchmarks.citynav.run_benchmark.config import RunConfig
 from benchmarks.citynav.run_benchmark.error_taxonomy import (
@@ -186,7 +187,7 @@ def _dispatch_one(
     m = rec["metrics"]
     # A mission the serve failed out from under is the cluster's weather,
     # not the model's skill: excluded from SR and re-queued.
-    serve_failed = (m.get("mission") or {}).get("ended_by") == "transient_failures"
+    serve_failed = _rows.ended_by({"metrics": m}) in _rows.INFRA_ENDINGS
     out = _stamp({
         **rec,
         "status": STATUS_INFRA if serve_failed else STATUS_OK,
