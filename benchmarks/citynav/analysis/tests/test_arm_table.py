@@ -122,3 +122,12 @@ def test_an_ablation_arm_is_labelled_by_its_withholds(tmp_path):
     (root / "run_manifest.json").write_text(json.dumps({"withhold": []}))
     (row,) = arm_table.table([root])
     assert row["label"] == "ablate"
+
+
+def test_a_long_withhold_label_keeps_the_columns_aligned(capsys):
+    label = "withhold=look_for,mission_map"
+    arm_table.render([{"label": label, "criterion": "shape", "n": 1},
+                      {"label": "e1", "criterion": "shape", "n": 1}])
+    lines = capsys.readouterr().out.splitlines()[-3:]
+    assert all(ln[len(label):len(label) + 2] == "  " for ln in lines), lines
+    assert lines[1].startswith(label + "  ")

@@ -142,15 +142,17 @@ def _cell(row: dict, key: str) -> str:
 
 
 def render(rows: list[dict]) -> None:
+    label_w = max([10] + [len(str(r["label"])) for r in rows])
     seen = {r["criterion"] for r in rows if r["criterion"] is not None}
     criterion = seen.pop() if seen else None
     print(f"criterion: {criterion or 'UNRECORDED (pre-cutover runs)'}   arms: {len(rows)}")
     if criterion == "shape":
         # Said once, here, so nobody reads the missing column as a zero.
         print("OSR is ring-basis and absent from every shape-scored row.")
-    print("  ".join(fmt.format(head) for _, head, fmt in COLUMNS))
+    columns = [(k, h, f"{{:<{label_w}}}" if k == "label" else fmt) for k, h, fmt in COLUMNS]
+    print("  ".join(fmt.format(head) for _, head, fmt in columns))
     for row in rows:
-        print("  ".join(fmt.format(_cell(row, key)) for key, _, fmt in COLUMNS))
+        print("  ".join(fmt.format(_cell(row, key)) for key, _, fmt in columns))
 
 
 def main(argv: list[str]) -> int:
