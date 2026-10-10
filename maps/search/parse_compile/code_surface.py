@@ -53,41 +53,21 @@ def _wind_parts(word: str) -> frozenset:
 def _winds_holding(cardinal_word: str) -> list:
     """Every served wind that COUNTS AS facing this cardinal.
 
-    ``south`` is satisfied by south, southeast and southwest. Measured on
-    the corpus's own ground truth: asking the served column for an EXACT
-    word matched the cue on 12.1% of corner-facing cues, because a house
-    sits DIAGONALLY from the crossing it is on the corner of, and the
-    column reads `southwest` where the cue says `south`. Composition takes
-    that cell to 87.9%, and the named-road cell from 87.8% to 89.9% (a cue
-    asking a diagonal now matches a measured diagonal). No cell loses.
-
-    The cut is LOOSER by construction -- three of eight winds per cardinal
-    against one -- and that is the trade this surface already makes twice:
-    `on_side` keeps the row it could not PLACE, `in_or_blank` keeps the row
-    it could not MEASURE. Dropping the ground truth is the failure that
-    costs points; chaining the two cardinals of a diagonal takes the
+    ``south`` is satisfied by south, southeast and southwest: a house sits
+    DIAGONALLY from the crossing it is on the corner of, so the column reads
+    `southwest` where the cue says `south` (exact-word matching held 12.1% of
+    corner-facing cues on ground truth, composition 87.9%). The cut is looser
+    by construction; chaining the two cardinals of a diagonal takes the
     precision back.
     """
     return sorted(w for w in COMPASS_UNIT if cardinal_word in _wind_parts(w))
 
 
-# order() takes no size key: sorting by footprint_area_m2 measured worse
-# than the order the rows arrive in (5 better / 17 worse, p=0.02, where a
-# size word is in the cue), because a size adjective in these cues is
-# relative to the thing's own kind, not to the map.
-
-# THE MOVING CALLS TAKE A THING, NEVER A COORDINATE. One refusal, because
-# a coordinate reaches them by three spellings -- go_to(x, y), go_to([x,
-# y]), and a name bound to a literal point one line earlier -- and a
-# surface that refuses one of them teaches the other two.
-#
-# Why the point form is refused at all: it is the escape hatch that lets the
-# model answer with an estimate instead of a measurement. Told to find "the
-# west side of" a building, a model given points walks coordinates it read
-# off a picture, all at one y, while the answer sits in the y it never
-# varies, with the segmenter never armed.
-# The rows are what carry measured positions; nothing else on this
-# surface does.
+# THE MOVING CALLS TAKE A THING, NEVER A COORDINATE (outside the prior
+# withhold). One refusal for every spelling of a point -- go_to([x, y]), a
+# quoted token, a name bound to a literal -- because a point is the escape
+# hatch that answers with an estimate read off a picture instead of a
+# measurement; the rows are what carry measured positions.
 _ACT_NEEDS_A_THING = (
     "{name}() takes a THING on the map, not a coordinate ({got}). Points "
     "are for RELATING and LOOKING -- near=, within=, show_map(around=), "
@@ -112,28 +92,19 @@ class CodeError(ValueError):
 # ---------------------------------------------------------------------------
 # The compiler: steps -> geom_program ops
 # ---------------------------------------------------------------------------
-# Every call lands on an op the executor already runs, so this surface adds
-# NO execution model. `order` is score_by, `filter` is filter_items,
-# `intersection` is crossings -- Python's clothing over the DAG the sentence
-# language already compiles onto.
-#
-# `rN[i]` is the exception and it is deliberate: the executor has no
-# take-a-row op, and the sentence language does row selection through
-# discourse binding (rule R) rather than through the program. So indexing
-# resolves CLIENT-SIDE against the stored rows of that handle, exactly as
-# the loop binds `it`. That is the one piece the `dsl` arm lacked.
+# Every call lands on an op the executor already runs: `order` is score_by,
+# `filter` is filter_items, `intersection` is crossings. `rN[i]` is the one
+# exception -- the executor has no take-a-row op, so indexing resolves
+# client-side against the rows that handle holds.
 
 
 def _refuse_metres_in_within(v):
     """``within=`` takes a PLACE; a bare number is ``dwithin=``.
 
     The two names are Shapely's: ``a.within(b)`` is containment and
-    ``dwithin(a, b, d)`` is a distance. They were spelled the other way
-    round here until this change, so the old ``within=25`` still reads as
-    ordinary Python and would otherwise cut against a "place" called 25 --
-    a kwarg that does nothing, the hazard this tree has been bitten by
-    twice. The two arguments have different TYPES, so the mistake is
-    catchable, and it is caught here rather than served as an empty set.
+    ``dwithin(a, b, d)`` is a distance. The two arguments have different
+    TYPES, so ``within=25`` is caught here rather than served as a cut
+    against a "place" called 25.
     """
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         return
@@ -147,15 +118,10 @@ def _refuse_metres_in_within(v):
 def _add_color(emphasis: list, args: dict) -> None:
     """Append the colour term to an emphasis, once, for find and order.
 
-    A colour ORDERS and never drops -- the executor rejects a colour filter
-    outright, and the language has always been explicit that a hard cut can
-    lose the true target.
-
-    It rides the SAME emphasis as the distance terms rather than a second
-    score_by, because two sorts in a row is not two constraints: the second
-    re-ranks what the first ordered and the first contributes nothing. That
-    is the defect that silently dropped the proximity out of
-    ``find("house", near="Taylor", south_of="Viburnum Avenue")``.
+    A colour ORDERS and never drops: the executor rejects a colour filter,
+    since a hard cut can lose the true target. It rides the SAME emphasis
+    as the distance terms, because a second score_by re-ranks what the
+    first ordered and the first then contributes nothing.
     """
     if args.get("color"):
         emphasis.append({"key": f"color_{args['color']}", "w": 1})
@@ -176,23 +142,14 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
     and the rows it failed to reach stay reachable.
     """
     ops: list[dict] = []
-    # Handles bound by EARLIER segments resolve here too. Without them a
-    # segment computes its ordering key from a name it cannot resolve while
-    # the ref itself gets substituted later -- the label and the column then
-    # disagree and score_by finds nothing to order by.
+    # Handles bound by EARLIER segments resolve here too, so an ordering key
+    # and the ref it names agree.
     handles: dict = dict(known)
     # THE TWO NAMESPACES ARE KEPT DISJOINT. The executor's refs are rN and
-    # so are the model's handles, and an `as` label rides IN the op's args
+    # so are the model's handles, and an `as` label rides IN the op's args,
     # where the executor's cycle detector reads every string as a possible
-    # in-program handle (_consumed_handles). `r3 = r1[1]` then
-    # find(near=r3) put "r3" in the compare's args while the compare's own
-    # ref was r2 and the score_by's was r3: "reference cycle among ['r2',
-    # 'r3']", for a program that is a straight line. So this program never
-    # mints an rN any name in play already spells -- which also makes the
-    # served receipt's rename unambiguous.
-    # EVERY rN the model is using here, argument names included: an
-    # UNBOUND r0 is a place to ground, and minting r0 for an op would make
-    # the program answer its own question instead.
+    # in-program handle. So this program never mints an rN that any name in
+    # play -- argument names included -- already spells.
     _mine = {k for k in handles if re.fullmatch(r"r\d+", k)}
     _seen = list(steps)
     while _seen:
@@ -225,59 +182,25 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
             got = handles[v]
             if isinstance(got, str) and re.fullmatch(r"r\d+", got):
                 # A WHOLE RESULT IN A PLACE SLOT IS ITS UNION: one column,
-                # the gap to its NEAREST member. Refusing `near=<set>`
-                # ("index it -- r2[0] -- or use a name") would be the wrong
-                # answer to the question being asked:
-                # "the house with a pool in the backyard" is not about pool
-                # number one, it is about whichever pool is nearest each
-                # house, and indexing throws exactly that away. Fanning out
-                # instead would measure every instance separately and die on the
-                # executor's token guard the moment either side is large
-                # (3,414 houses x 40 pools = 136,560 cells).
-                #
-                # `items_of` unwraps this back to the bare ref, because the
-                # items slot takes a whole result and not a place.
+                # the gap to its NEAREST member ("the house with a pool" is
+                # about whichever pool is nearest each house). `items_of`
+                # unwraps this back to the bare ref.
                 return {"ref": [got], "as": v}
-            # A ROW -- a point or a fid -- and both take the {ref, as}
-            # form. The label names the column after the handle the code
-            # used; the WRAPPER is what stops a bound fid being read as a
-            # bare name, which sent it back through the fuzzy grounding
-            # find that produced it ("nothing named 'car_2' is on this
-            # surface" once the surface had moved under it).
+            # A ROW -- a point or a fid. The wrapper stops a bound fid
+            # being read as a bare name and grounded again.
             return {"ref": list(got) if isinstance(got, (list, tuple))
                     else got, "as": v}
         if is_xy(v):
-            # AN INLINE POINT TAKES THE SAME WRAPPER, and it must: the
-            # executor labels a bare [x, y] 'distance to xy' while
-            # key_for sanitizes the literal into 'distance to 4630_2965',
-            # so without it the ordering asks for a column the compare never
-            # wrote and score_by refuses the whole program, punishing the
-            # NATURAL spelling and rewarding the roundabout one (binding the
-            # identical point to a name first). Same law as a handle, one
-            # door over.
+            # AN INLINE POINT TAKES THE SAME WRAPPER: the executor labels a
+            # bare [x, y] 'distance to xy' while key_for would name
+            # 'distance to 4630_2965', so the label must ride with it.
             return {"ref": [float(v[0]), float(v[1])],
                     "as": f"{v[0]:g} {v[1]:g}"}
         if isinstance(v, (list, tuple)):
-            # AN ANCHOR MAY BE A SET OF OBJECTS, and this is the one door
-            # every slot comes through -- cardinals, within=, facing=,
-            # near=, nearest= all resolve here -- so the rule is written
-            # once rather than per kwarg.
-            #
-            # Measured over six 500-episode roots: 156 blocks on 112
-            # episodes died on `compare refs element ... must be a bare
-            # fid string, an rN result, an [x,y] literal, or {ref, as}`,
-            # and the rejected value was almost always a LIST --
-            # ['prior_12', 'prior_13'], ['detected_5'], [[x, y]],
-            # ['prior_3', 'forest_rows']. That is the top structural
-            # refusal on the surface, and `near=[A, B]` had worked the
-            # whole time, so the model was reading a slot that accepts a
-            # set and generalising correctly.
-            #
-            # A set folds to its UNION -- ONE ref, ONE column, ONE cut --
-            # which is what `ref_of` already means by a whole result
-            # (`{"ref": [rN], "as": …}`). Two cuts against two anchors is
-            # `.filter(east_of=A).filter(east_of=B)`, which the surface
-            # spells and this must not silently become.
+            # AN ANCHOR MAY BE A SET OF OBJECTS, and every slot comes
+            # through here. A set folds to its UNION -- ONE ref, ONE column,
+            # ONE cut; two cuts against two anchors is
+            # `.filter(east_of=A).filter(east_of=B)`.
             if not v:
                 raise CodeError(
                     "an empty list names no place. Give the anchor: one "
@@ -312,15 +235,8 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
             if len(_labels) > 2:
                 _as = f"{_as}_plus{len(_labels) - 2}"
             return {"ref": _members, "as": _as}
-        # A CROSSING'S FID *IS* ITS [x, y] TOKEN, and the model quotes a fid
-        # exactly the way every other fid is quoted (`h = "prior_3123"`).
-        # Left a bare string it goes to the grounding find as a NAME and
-        # draws `rule N: nothing named "[1058, 3418]" is on this surface` --
-        # on 25713026 that killed the surface's own headline chain on 45
-        # episodes, one of which burned SIX consecutive blocks on spellings
-        # before abandoning an intersection it had already computed
-        # correctly. The act slots learned this already (see `_site`); the
-        # op ref slots had not.
+        # A CROSSING'S FID *IS* ITS [x, y] TOKEN, and the model quotes it
+        # like any fid; left a string it would be grounded as a NAME.
         _pt = parse_xy_token(v) if isinstance(v, str) else None
         if _pt:
             return {"ref": [float(_pt[0]), float(_pt[1])],
@@ -330,14 +246,9 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
     def items_of(v):
         """The `items` slot: the SAME lookup, without the label.
 
-        A one-place slot takes ``{ref, as}``; `items` takes a WHOLE result
-        and its coercer wants a bare ref or list ("cannot resolve a
-        POINT-LIST from {'ref': 'car_1', 'as': 'r2'}"). Same law, two
-        shapes, so the two slots ask for it differently.
-
-        A set reaches ``ref_of`` as its UNION -- ``{"ref": ["rN"], "as": …}``
-        -- which is what a PLACE slot means by one. Here it means the rows
-        themselves, so the one-element wrapper comes back off.
+        `items` takes a WHOLE result and its coercer wants a bare ref or a
+        list, so the ``{ref, as}`` wrapper -- and a union's one-element
+        ``["rN"]`` -- comes back off.
         """
         got = ref_of(v)
         if isinstance(got, dict) and "ref" in got:
@@ -392,11 +303,8 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
         """The IDENTITY WINDOW op: the rows a handle already holds, served.
 
         ``filter_items`` truthy on ``xy`` drops nothing (every served row
-        carries an xy), so the op computes nothing and its whole job is to
-        make an existing result -- or a slice of one -- the answer of a
-        program. That is exactly what the widening form does, and it is
-        the only op shape that can spell "the rows I already have": `find`
-        re-retrieves and `compare` demands a non-empty refs list.
+        carries an xy), so its whole job is to make an existing result -- or
+        a slice of one -- the answer of a program.
         """
         ref = mint()
         ops.append({"ref": ref, "op": "filter_items",
@@ -421,11 +329,8 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
             st["_label"] = f"{src}.{args['tier']}"
             continue
         if call == "window":
-            # THE TOP-N SLICE. `look(r2[0:20], "...")` is what the model
-            # wrote and it was refused; a badged frame over the head of an
-            # ordering is the disambiguation the vision channel exists
-            # for. Nothing new executes -- the executor windows a handle
-            # itself, and this is the identity op the widening form uses.
+            # THE TOP-N SLICE (r2[0:20]): the identity window over a
+            # handle, so a slice rides every slot a set can.
             src = args["win_of"]
             got = result_of(src, f"{src}{args['spec']} windows",
                             "a find or an ordering")
@@ -438,13 +343,8 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
         if st.get("act") or call in ("look", "show_map", "look_for", "stand"):
             continue                       # an ACT is a plan step, not an op
         if call == "ends_of":
-            # THE TWO ENDS OF A LINE, as rows. end0_xy/end1_xy were already
-            # SERVED on every linear row and the only thing the model could
-            # do with one was type it back as a coordinate, which the moving
-            # calls refuse: 44 episodes on 25713026 hit that refusal and
-            # scored 13/44, while 106 of 1,023 cues say "end of" and 73 say
-            # "cul-de-sac". On calcity::814#808 the served end1_xy IS the
-            # ground truth, to within a metre.
+            # THE TWO ENDS OF A LINE, as rows a move can take ("the end
+            # of", "cul-de-sac").
             ref = mint()
             ops.append({"ref": ref, "op": "ends",
                         "args": {"refs": [ref_of(pos[0])]}})
@@ -460,36 +360,23 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
             if args.get("name") is not None:
                 _fargs["name"] = args["name"]
             ops.append({"ref": ref, "op": "find", "args": _fargs})
-            # ONE WORD, ONE OPERATION. near= ORDERED and dropped nothing,
-            # and it reads exactly like a filter -- the model bound its
-            # result to `cars_near_poppy`, `houses_near_poppy`, `red_cars`
-            # on five straight arms and then treated the constraint as
-            # applied. The variable names ARE the false belief. So near=
-            # now cuts and needs the gap to cut at, and the ordering is
-            # spelled nearest=, the same word .order() already uses.
+            # ONE WORD, ONE OPERATION: near= reads like a filter, so it
+            # CUTS and needs the gap to cut at; the ordering is nearest=,
+            # the word .order() uses.
             if args.get("near") is not None and args.get("dwithin") is None:
                 raise CodeError(
                     "near= CUTS and needs the gap to cut at: "
                     "find(<thing>, near=<place>, dwithin=25) keeps what is "
                     "that close and DROPS the rest. To rank without "
                     "dropping, say nearest=<place>.")
-            # COLOUR STAYS ON find, deliberately, against the one-word-one-
-            # operation tidiness: requiring a second call for it measured 13
-            # colour-ordering heads over 2 of 500 episodes, against 440 over
-            # 175 of 300 when it was inline. The elicitation cost of moving
-            # it is larger than the naming inconsistency it leaves.
+            # COLOUR STAYS ON find, against the one-word-one-operation
+            # tidiness: a second call for it measured 13 colour-ordering
+            # heads over 2 of 500 episodes, against 440 over 175 of 300
+            # inline.
             _dwithin = args.get("dwithin")
             if _dwithin is not None:
-                # THE CUT WHERE THE MODEL PUTS IT. find(near=X) orders and
-                # find(within=X) cuts at contact, so a stated gap on the
-                # same call is the one reading left, and the model reaches
-                # for it; refusing it burns a turn each time.
-                # dwithin= CUTS AGAINST WHICHEVER ANCHOR WAS NAMED. The
-                # model wrote find("parking", nearest=[X], dwithin=500) --
-                # rank by the gap to X and drop past 500 -- which is
-                # coherent, unambiguous, and what anyone would write. There
-                # is one anchor either way, so refusing it would be a
-                # spelling objection to a correct idea.
+                # dwithin= CUTS AGAINST WHICHEVER ANCHOR WAS NAMED, near= or
+                # nearest= -- there is one anchor either way.
                 _anchor = args.get("near")
                 if _anchor is None:
                     _anchor = args.get("nearest")
@@ -522,45 +409,17 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                 # within= CUTS: 0 m contact is a measured geometric fact, and
                 # it stays its own compare + filter ahead of every ordering.
                 ref = cut_le(ref, args["within"], 0)
-            # THE SIGNED relations. One compare carrying every named anchor
-            # (refs is a LIST, so multi-anchor needs no new op), then ONE
-            # score_by whose emphasis is every cardinal at +1: further in the
-            # asked-for direction ranks higher, and a row the relation cannot
-            # place carries no cell, which score_by already treats as the
-            # neutral. Nothing is dropped -- the cut is not earned, and a
-            # hard directional cut can drop the ground truth.
-            #
-            # A SUM IS NOT A CONJUNCTION, and this is the honest limit of the
-            # ordering. score_by min-max normalizes each key to [0,1] and adds
-            # them, so magnitude cannot swamp, but a row that VIOLATES one
-            # clause and maximally satisfies the other can still tie the row
-            # that satisfies both: two roads 600 m apart, a car 300 m east of
-            # the far one scores 1.0 + 0.0 against 0.31 + 0.68 for a car
-            # between them. Both columns are SERVED, so the model can read the
-            # signs and reject the violator itself; what the sort alone cannot
-            # express is "both, at once". Measured, the two-clause shape is 21
-            # of 1,023 cues and its intersection contains the target 21/21, so
-            # the case this mis-ranks is rare and visible rather than silent.
-            # A min-composite emphasis is the fix if the arm shows it costs.
-            #
-            # ONE compare and ONE score_by for EVERY ordering constraint. Two
-            # sorts in a row is not two constraints: the second re-ranks the
-            # rows the first ordered and the first contributes nothing, so
-            # `find("house", near="Taylor", south_of="Viburnum Avenue")` was
-            # ordered by the side alone and the proximity was silently
-            # dropped -- the model asked for two things and got one, with no
-            # error. Caught reading live blocks off 25713014.
+            # ONE compare carrying every named anchor, a cut per cardinal,
+            # and ONE score_by for every ordering constraint: a second sort
+            # re-ranks what the first ordered and the first is lost.
             cards = [(d, args[f"{d}_of"]) for d in _CARDINALS
                      if args.get(f"{d}_of") is not None]
             near_anchor = args.get("nearest")
             if near_anchor is not None or cards:
-                # REFS ARE DEDUPED BY LABEL. The executor disambiguates a
-                # repeated ref by suffixing its label (`jacaranda_avenue_2`),
-                # and the key built here would still name the first -- so
-                # score_by would ask for a column that was never written.
-                # `find("house", east_of="Jacaranda Avenue",
-                # north_of="Jacaranda Avenue")` is the naming of one corner
-                # and the model wrote it on the first pass.
+                # REFS ARE DEDUPED BY LABEL. The executor suffixes a
+                # repeated ref's label (`jacaranda_avenue_2`), so a key built
+                # here would name a column never written; one corner names
+                # the same place twice.
                 refs: list = []
                 seen_labels: set = set()
 
@@ -570,21 +429,10 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                         seen_labels.add(lab)
                         refs.append(ref_of(anchor))
 
-                # A CARDINAL CUTS; PROXIMITY ORDERS. Emphasising the signed
-                # column ranked by HOW FAR the asked-for way a row is, so
-                # rank 0 was the far edge of the map -- median 1,220 m from
-                # the anchor, max 5,940 m, which is the map's full width
-                # (measured over 54 cardinal tables on 25713026). But 194 of
-                # this corpus's 208 cardinal cues mean ADJACENT: "the house
-                # east of 87th Street" is the one just east of it, not the
-                # one 3 km east. With the served head capped at 24 rows of
-                # 2,522, the rows the cue meant were unreachable.
-                #
-                # So the side is a FILTER (below) and the ordering is
-                # NEARNESS to the same anchor. That also retires the
-                # sum-is-not-a-conjunction problem: two cardinals are now two
-                # cuts and one proximity sort, never a weighted sum of signed
-                # magnitudes.
+                # A CARDINAL CUTS; PROXIMITY ORDERS. 194 of the corpus's
+                # 208 cardinal cues mean ADJACENT ("the house east of 87th
+                # Street" is just east of it), so the side is a filter and
+                # the ordering is nearness to the same anchor.
                 emphasis: list = []
                 seen_keys: set = set()
 
@@ -594,25 +442,10 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                         seen_keys.add(k)
                         emphasis.append({"key": k, "w": -1})
 
-                # TWO ANCHORS ORDER BETTER THAN ONE, measured: ranking rows
-                # by closeness to BOTH features a cue names takes top-24 from
-                # 68.7% to 92.9% on the 281 episodes whose cue names two --
-                # +6.65 points corpus-wide, held out across three anchor
-                # splits at +16 to +28, wins far outnumbering losses in every
-                # fold. score_by min-max normalizes each key, so two
-                # distances fuse without either magnitude swamping the other.
-                #
-                # The SENTENCE surface has been able to say this since before
-                # any of these runs -- "find <thing> near <place> near
-                # <place>." -- and the executor already fuses the keys. Only
-                # the CODE surface could not spell it, which is the
-                # multi-anchor gap this arm closes.
-                #
-                # The model is not short of the intent: it writes "the
-                # intersection of A and B" 4,994 times and uses it as a
-                # FLIGHT TARGET 3,810 times against 291 as a ranking anchor.
-                # It names both roads, then throws the pairing away at the
-                # moment it ranks.
+                # TWO ANCHORS ORDER BETTER THAN ONE: ranking by closeness to
+                # BOTH features a cue names took top-24 from 68.7% to 92.9%
+                # on the 281 episodes whose cue names two. score_by min-max
+                # normalizes each key, so two distances fuse evenly.
                 for _na in (near_anchor if _is_place_list(near_anchor)
                             else [near_anchor] if near_anchor is not None
                             else []):
@@ -627,18 +460,10 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                                              for d, a in cards]
                 cmp_ref = mint()
                 ops.append({"ref": cmp_ref, "op": "compare", "args": cmp_args})
-                # A SIDE CONSTRAINT CUTS. Ordering alone handed the model
-                # the least-wrong row at rank 0 and it read like a hit:
-                # find("parking", south_of="California City Middle School")
-                # ranked a lot 1,552 m NORTH of the school first, across 163
-                # rows none of which was south of it (25713025). A row the
-                # geometry PLACES on the other side is not a candidate.
-                #
-                # `on_side` keeps the rows the column could not place --
-                # those are unmeasured, not refuted, and on that same case
-                # all 19 real parking rows in the bake abstained. Conjoined
-                # constraints chain, which is the AND that a weighted sum of
-                # normalized columns could never express.
+                # A SIDE CONSTRAINT CUTS: a row the geometry PLACES on the
+                # other side is not a candidate. `on_side` keeps the rows the
+                # column could not place -- unmeasured, not refuted -- and
+                # conjoined constraints chain.
                 for d, a in cards:
                     cut = mint()
                     ops.append({"ref": cut, "op": "filter_items",
@@ -647,9 +472,6 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                                          "op": "on_side"}})
                     cmp_ref = cut
                 _add_color(emphasis, args)
-                # direction= asks for a COLUMN, so a find that only asks has
-                # nothing to rank on. An empty score_by is a sort that
-                # sorts by nothing -- emit the compare and stop.
                 if emphasis:
                     out = mint()
                     ops.append({"ref": out, "op": "score_by",
@@ -659,9 +481,7 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                 else:
                     ref = cmp_ref
             elif args.get("color"):
-                # COLOUR WITH NO PLACE. Nothing to compare against, so this
-                # is the sort alone -- the same score_by order builds,
-                # spelled inside the find that already named the class.
+                # COLOUR WITH NO PLACE: the sort alone.
                 emphasis: list = []
                 _add_color(emphasis, args)
                 out = mint()
@@ -673,13 +493,9 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
             emphasis = []
             anchor = args.get("nearest")
             if anchor is not None:
-                # nearest= takes ONE place or a LIST of them, exactly as
-                # find's near= does: one compare carrying every anchor,
-                # one score_by fusing the normalized distances. The model
-                # wrote houses.order(nearest=[roadA, roadB]) against
-                # a single-anchor branch and was refused -- the same
-                # measured two-anchor win find already carries (+6.65
-                # pts corpus-wide) spelled from the other call.
+                # nearest= takes ONE place or a LIST of them, as find's
+                # does: one compare carrying every anchor, one score_by
+                # fusing the normalized distances.
                 anchors = (list(anchor) if _is_place_list(anchor)
                            else [anchor])
                 refs, seen_labels = [], set()
@@ -715,35 +531,16 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
             within = args.get("within")
             near = args.get("near")
             dwithin = args.get("dwithin")
-            # A CARDINAL IS A CUT and rides the on_side op find already
-            # compiles: the band rule, which ABSTAINS rather than guessing
-            # (cardinal_side). A row the geometry cannot place keeps its
-            # blank column and is KEPT -- unmeasured is never refuted.
+            # A CARDINAL IS A CUT on the on_side op find compiles: a row the
+            # geometry cannot place keeps its blank column and is KEPT.
             _cards = [(d, args[f"{d}_of"]) for d in _CARDINALS
                       if args.get(f"{d}_of") is not None]
-            # WHICH WAY A THING FACES A PLACE is a CUT, and it needs the
-            # anchor: "the south-facing house on Viburnum Avenue" is a
-            # question about the house AND the avenue, and it is the
-            # largest directional family in the corpus (325 of 1,023
-            # cues). Every compare already stamps `facing <ref>` as a
-            # compass WORD (geom_program), so this needs no new column --
-            # only the cut that reads it, against the cue's own word.
-            #
-            # The word rides as DATA in direction=, never in the kwarg
-            # name: `faces_south=` put it in the name and reached 3 of 45
-            # episodes before 8e00c408 deleted it, while the served word
-            # column was read 30 times over 6 of 29 and took facing
-            # clauses from 15% to 65%.
-            #
-            # FOUR CARDINALS, and a diagonal is the two of them CHAINED.
-            # A thing facing southwest faces south and it faces west, so
-            # `direction="south"` keeps it -- the served column still
-            # reads all eight winds and the model still reads `southwest`
-            # off it; only the CUT composes. Measured on ground truth:
-            # exact-word matching answered the cue on 12.1% of
-            # corner-facing cues (a house sits diagonally from the
-            # crossing it is on the corner of), 87.9% under composition,
-            # and the named-road cell went 87.8% -> 89.9%.
+            # WHICH WAY A THING FACES A PLACE is a CUT on the `facing <ref>`
+            # compass word every compare stamps, and it needs the anchor
+            # ("the south-facing house on Viburnum Avenue"). The word rides
+            # as DATA in direction=, never in the kwarg name. Four
+            # cardinals; a diagonal is the two of them CHAINED, while the
+            # served column still reads all eight winds.
             _facing = args.get("facing")
             _direction = args.get("direction")
             if _facing is not None or _direction is not None:
@@ -786,16 +583,9 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                             "args": {"items": items,
                                      "refs": [ref_of(_facing)]}})
                 ref = mint()
-                # the compiled key IS the key the compare writes: both
-                # sides go through _label_of, the executor's own sanitizer.
-                #
-                # in_or_blank over the winds that HOLD this cardinal, never
-                # an equality: south is south, southeast and southwest.
-                # And the blank stays kept -- `facing <ref>` is ABSENT at
-                # contact, and a house touching the road it fronts is the
-                # common case for "the south-facing house on Viburnum
-                # Avenue". Unmeasured is never refuted, the same law
-                # on_side keeps for the signed columns.
+                # in_or_blank over the winds that HOLD this cardinal, and
+                # the blank stays kept: `facing <ref>` is ABSENT at contact,
+                # and a house touching the road it fronts is the common case.
                 ops.append({"ref": ref, "op": "filter_items",
                             "args": {"items": cmp_ref,
                                      "key": f"facing {_label_of(_facing)}",
@@ -850,11 +640,8 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
                     "near= needs the gap to keep: r1.filter(near=<place>, "
                     "dwithin=<meters>). Without one it orders and drops "
                     "nothing, which is find(near=<place>).")
-            # THE GAP IS THE ONLY NEW THING. within= already compiles to a
-            # `distance to <anchor>` cut at 0 (contact), so a stated gap is
-            # that same cut at a different value -- one number, not a new
-            # mechanism, and it inherits the union's nearest-member reading
-            # for free.
+            # within= is the `distance to <anchor>` cut at 0 (contact); a
+            # stated gap is the same cut at its value.
             anchor = within if within is not None else near
             if dwithin is None:
                 value = 0
@@ -880,19 +667,8 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
 
 
 # ---------------------------------------------------------------------------
-# Running a block: selection is a SEQUENCING point
+# A selected row: rN[i] resolves against the rows rN came back with
 # ---------------------------------------------------------------------------
-# `r0[0]` cannot be an op, because which row is row 0 is not known until the
-# program that produced r0 has run. So a block compiles to SEGMENTS: execute
-# up to the selection, resolve it against the rows that came back, substitute
-# the chosen row's fid, continue.
-#
-# This is not a limitation of the code shape -- it is the executor's own law
-# surfacing where it belongs. `intersection("Redwood Boulevard", "85th
-# Street")` is THREE crossings on the calcity bake, and `compare` refuses a
-# relation to all three ("their centre is at none of them"). The sentence
-# surface meets the same wall and answers it with a refusal the model has to
-# recover from in prose; here the answer is a subscript.
 
 
 def bind_row(row: dict):
@@ -902,14 +678,9 @@ def bind_row(row: dict):
     POINT rather than the string that spells it -- a token in a name slot
     is grounded as text and refused. Every other row type keeps its fid.
 
-    A TERMINUS binds the same way, off its own ``xy``. It is COMPUTED, so
-    nothing on the surface answers to ``end_0``, and a slot handed that
-    name draws "unknown fid 'end_0'; it is not on the surface". Registering
-    computed rows with every reader is the general fix and it is not this
-    branch's: the sibling that renamed crossings to ``xing_N`` registered
-    them with the picture path only, took 252 blocks of that error, and
-    lost 17 points. Binding to the POINT needs no registry at all, and it
-    is the path a crossing already flies at 96.8%.
+    A TERMINUS binds the same way, off its own ``xy``: it is COMPUTED, so
+    nothing on the surface answers to ``end_0``, and the point needs no
+    registry.
     """
     fid = row.get("fid")
     if isinstance(fid, str) and fid.startswith("end_"):
@@ -923,15 +694,9 @@ def bind_row(row: dict):
 # ---------------------------------------------------------------------------
 # The adapter: a code block -> the plan the loop runs
 # ---------------------------------------------------------------------------
-# `_run_plan` consumes ONLY the plan dict. Emit that dict and the whole
-# downstream is inherited: grounding resolution under the name-match floor,
-# the analyze execution, flights, the watchlist, the discourse writes, and
-# every piece of mission law those carry.
-#
-# A bare NAME string becomes a GROUNDING, exactly as a place
-# does, so `find("house", near="Green Street")` resolves its anchor through
-# the same plumbing find and the same floor as `find house near Green
-# Street.` -- and a name that matches nothing fails with the same rule N.
+# `_run_plan` consumes ONLY the plan dict, so grounding under the name-match
+# floor, the analyze execution, flights, the watchlist and the discourse
+# writes are all the loop's. A bare NAME string becomes a GROUNDING.
 
 def _is_place_list(v) -> bool:
     """``near=[A, B]`` is TWO PLACES; ``near=[4630, 2965]`` is one point."""
@@ -965,15 +730,10 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
         steps, rn_start, known=dict(bound),
         seen=(discourse or {}).get("widened") or {})
 
-    # Bare names in a ref slot are places to ground, one slot each. What
-    # counts as a NAME is everything the compiler did not itself put
-    # there: a row binding left ref_of as {ref, as}, and a SET binding
-    # left it as one of these refs -- `intersection(r1, "Cross Street")`
-    # relates to every way r1 names, which is the escape hatch for a road
-    # whose name matches several. Testing `not v.startswith("r")` instead
-    # meant a road called "Riverside" was never grounded and reached the
-    # executor as a fid, while an unbound r3 reached it as an op ref and
-    # came back talking about reference cycles.
+    # Bare names in a ref slot are places to ground, one slot each. A NAME
+    # is everything the compiler did not itself put there: a row binding
+    # left ref_of as {ref, as}, and a SET binding left it as one of these
+    # refs.
     live = {op["ref"] for op in prog["ops"]} | {
         v for v in handles.values()
         if isinstance(v, str) and re.fullmatch(r"r\d+", v)}
@@ -991,16 +751,10 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
                 refs[i] = {"ref": f"<anchor:{_slot(v, 'anchor')}>", "as": v}
 
     def _facing(arg):
-        """A heading: a compass word rides as a plain string, anything
-        else is a place to look TOWARD. The loop reads the two apart by
-        type, so the compass word must not be wrapped.
-
-        EIGHT winds, off geom_compute's one table. This read the sentence
-        language's four-word `looking` slot, so `stand(facing="southeast")`
-        fell through to _site() and was grounded as a lookup for a place
-        NAMED "southeast" -- a silent bind, on a word the surface itself
-        emits: `facing <ref>` serves all eight. The crop rotation takes any
-        unit vector, so four was never the geometry's limit.
+        """A heading: a compass word (any of geom_compute's eight) rides as
+        a plain string, anything else is a place to look TOWARD. The loop
+        reads the two apart by type, so the compass word must not be
+        wrapped.
         """
         if isinstance(arg, str) and arg.strip().lower() in COMPASS_UNIT:
             return arg.strip().lower()
@@ -1009,26 +763,10 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
     def _site(arg, why: str):
         """An act's PLACE slot: a point, a fid, or a name to ground.
 
-        A POINT rides as ``("xy", [x, y])``. A selected crossing's fid IS
-        its ``[x, y]`` token, so putting it in a ``"lit"`` slot hands the
-        loop the TEXT that spells the point and it is grounded as a name:
-        `rule N: nothing named "[6076, 4226]" is on this surface`, 28
-        blocks over 23 episodes -- the surface's headline chain dying at
-        its last step.
-
-        And a NAME is grounded here exactly as an op's ref slot is. The
-        act slots took the string verbatim, so `go_to("the depot")` reached
-        the flight as a fid nothing on the surface answers to; the
-        sentence surface's `go to <place>.` has always resolved a place
-        through the plumbing find and the name-match floor, and this is
-        that one resolver, reached from the other notation.
-
-        WHAT A BINDING HOLDS IS NEVER LOOKED UP -- ref_of's law, one slot
-        kind over. A fid a selection resolved came OUT of a row, so
-        sending it back through the fuzzy find that produced it asks for a
-        row named after its own fid. Only a bare string the MODEL typed is
-        a place, and a fid it typed stays literal: grounding one looks its
-        NAME up and finds nothing.
+        A POINT rides as ``("xy", [x, y])`` -- a selected crossing's fid IS
+        its ``[x, y]`` token. A NAME is grounded exactly as an op's ref slot
+        is. WHAT A BINDING HOLDS IS NEVER LOOKED UP: a fid a selection
+        resolved came out of a row, and a fid the model typed stays literal.
         """
         if isinstance(arg, str) and arg in handles:
             got = handles[arg]
@@ -1037,20 +775,11 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
             return ("lit", got if isinstance(got, str) else arg)
         if isinstance(arg, (list, tuple)) and len(arg) == 2:
             return ("xy", [float(arg[0]), float(arg[1])])
-        # A QUOTED [x, y] IS A POINT, and it reaches here because a crossing's
-        # fid IS its token and the model quotes a fid the way it quotes every
-        # other one. Left to fall through it is grounded as a NAME and draws
-        # `rule N: nothing named "[2707, 5217]" is on this surface` -- the
-        # wrong wrongness twice over, because for a RELATING slot the point is
-        # welcome and for a MOVING one the objection is not that nothing bears
-        # that name, it is that a coordinate is not a thing.
+        # A QUOTED [x, y] IS A POINT (a crossing's fid is its token): welcome
+        # in a relating slot, refused as a COORDINATE in a moving one.
         _pt = parse_xy_token(arg) if isinstance(arg, str) else None
         if _pt:
             if why in ("move", "cover") and not withheld("prior"):
-                # The no-coordinate law stands (a point read off a picture is
-                # the picture's centre). Refuse it as a COORDINATE so the
-                # remedy the model reads is the true one: fly the row, or
-                # index the crossing that minted the token.
                 raise CodeError(act_needs_a_thing(
                     name="go_to/explore",
                     got=f"{_pt[0]:g}, {_pt[1]:g}")
@@ -1062,11 +791,9 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
             return ("fid", _slot(arg, why))
         return ("lit", arg)
 
-    # A STANCE IS A PREFIX, as it is on the sentence surface: it gates
-    # nothing, but what it buys -- the side columns on every find row, the
-    # facing crops and maps render up -- is only bought by the steps that
-    # come after it. A block that stands and then finds means the find
-    # under that stance whichever line the model wrote first.
+    # A STANCE IS A PREFIX: what it buys (the side columns on every find
+    # row, the facing crops and maps) reaches only the steps after it, so a
+    # block that stands and finds means the find under that stance.
     plan_steps: list[dict] = [
         {"do": "stage", "at": _site(st["args"]["at"], "stage"),
          "facing": _facing(st["args"]["facing"])}
@@ -1077,16 +804,10 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
         if st.get("act"):
             arg = (st["args"].get("_pos") or [None])[0]
             if st["call"] == "explore":
-                # THE ONE BIT THAT SEPARATES THE TWO VERBS, and the loop is
-                # where it can be honoured: the stops come off the place's
-                # own cells, which do not exist at compile time. A `cover`
-                # move flies a pass over the thing and ends on its last
-                # stop. A SET is one place to cover, so a list compiles
-                # element-wise (through _site a len-2 fid list would
-                # misparse as an [x, y] point -- the look branch below
-                # documents the same hazard); `said_to` carries the
-                # model's own spelling so the ack never serves an
-                # executor ref.
+                # A `cover` move flies a pass over the thing (the loop
+                # takes the stops off its cells) and ends on its last stop.
+                # A SET is one place to cover and compiles element-wise;
+                # `said_to` carries the model's own spelling for the ack.
                 if isinstance(arg, (list, tuple)) \
                         and not is_xy(arg):
                     move = {"do": "move",
@@ -1103,21 +824,12 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
             pos = st["args"].get("_pos") or [None]
             arg = pos[0]
             ref = handles.get(arg) if isinstance(arg, str) else None
-            # A SET look is the badged frame over its rows -- the set-of-marks
-            # the whole scene-understanding case rests on -- and it must name
-            # the EXECUTOR's ref, not the code's handle for it. The test is
-            # the ref SHAPE, not its first letter: a row bound to a fid that
-            # happens to start with r (road_1, runway_2) took the set branch
-            # and looked at a handle that does not exist.
+            # A SET look is the badged frame over its rows and names the
+            # EXECUTOR's ref, tested by the ref's shape (a fid may start
+            # with r).
             if isinstance(arg, (list, tuple)) \
                     and not is_xy(arg):
-                # look([a, b, c]) crops EACH element (_say_crops' own
-                # list form). Through _site this misparsed: a len-2 fid
-                # list became an [x, y] point (float('prior_...') ->
-                # ValueError) and every other length stringified into
-                # ONE bogus fid refused as "not on the live surface"
-                # while its fids were live -- 7 -> 52 blocks the arm the
-                # look doc first taught list looks.
+                # look([a, b, c]) crops EACH element.
                 def _look_tok(a):
                     if isinstance(a, str) and a in handles:
                         got = handles[a]
@@ -1150,19 +862,9 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
             around = st["args"].get("around")
             plan_steps.append({"do": "map", "around": _site(around, "map")})
         elif st["call"] == "look_for":
-            # THE SEGMENTER CHANNEL, and it is what arms perception at
-            # all. Nothing on this surface reached it: the last 200-episode
-            # run flew 167 flights and returned ZERO detections, because
-            # the watchlist was empty on every one of them, while every
-            # tool-result footer told the model to call look_for("<class>")
-            # -- which it wrote 54 times, unprompted, into a surface that
-            # had no such call. FREE: it directs the sensors and moves
-            # nothing, so it is legal inside a loop.
-            # THE SEGMENTER READS WORDS, so the underscore the model wrote
-            # it in does not survive to the wire: look_for("parking_lot")
-            # and look_for("parking lot") arm the same class rather than
-            # two, one of which SAM would meet as a nonsense open-vocab
-            # token (the colour-prefixed class defect, another spelling).
+            # THE SEGMENTER CHANNEL: it arms perception and moves nothing.
+            # The segmenter reads WORDS, so look_for("parking_lot") and
+            # look_for("parking lot") arm the same class.
             classes = [str(c).strip().lower().replace("_", " ")
                        for c in (st["args"].get("_pos") or []) if str(c).strip()]
             near = st["args"].get("at")
@@ -1177,16 +879,9 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
                                    "where": [_site(near, "boost")]})
     groundings = [{"slot": s, "query": q.lower(), "provenance": "any",
                    "why": w} for q, (s, w) in grounds.items()]
-    # The answer ref: the last handle this segment bound to an OP result,
-    # or the last thing it was asked to SHOW. A handle standing for a fid
-    # or a point names no result to read. It matters which: the executor
-    # serves the answer ref's envelope and folds the other ops' hints into
-    # it, so a display whose ref is not the answer comes back as a hint.
     # THE COLUMN THIS SEGMENT ORDERED BY -- the last score_by's leading
-    # emphasis, which is the sort the model is about to read rank 0 off.
-    # A large anchor makes that sort meaningless (every house on a 4 km
-    # road is 0 m from it), and the loop can only say so if it knows the
-    # column.
+    # emphasis -- so the loop can say when a large anchor made the sort
+    # meaningless (every house on a 4 km road is 0 m from it).
     _order_key = None
     for _op in reversed(prog["ops"]):
         if _op["op"] == "score_by":
@@ -1195,6 +890,9 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
             if isinstance(_emph, dict) and _emph.get("key"):
                 _order_key = [str(_emph["key"]), int(_emph.get("w") or 1)]
             break
+    # The answer ref: the last handle this segment bound to an OP result, or
+    # the last thing it was asked to SHOW; the executor serves its envelope
+    # and folds the other ops' hints into it.
     last = None
     for st in reversed(steps):
         t = st.get("target") or ""
