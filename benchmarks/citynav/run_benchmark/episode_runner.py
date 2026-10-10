@@ -500,7 +500,7 @@ def run_episode(
 
     if cfg.resume_from_workdir and search_loop is not None:
         # One canonical resume path. ``restore_from_workdir`` loads
-        # belief, target_spec, SAM video concepts,
+        # belief, SAM video concepts,
         # and compile_seq from the source run's on-disk artifacts.
         # ``hydrate_resume_artifacts`` mirrors the dashboard tree so
         # the SPA's compile-tab and reasoner panels populate.

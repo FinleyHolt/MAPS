@@ -53,7 +53,6 @@ def _duck(setter):
 
     class _S:
         sam_class_to_roles: dict = {}
-        last_target_spec = None
         perception_director = director
 
     class _Duck:
@@ -61,9 +60,9 @@ def _duck(setter):
         _lock = threading.Lock()
         _sam_concept_setter = staticmethod(setter)
 
-        def _arm_roles_and_spec(self, **kw):
+        def _arm_roles(self, union_specs):
             from maps.search.search_loop import SearchLoop
-            return SearchLoop._arm_roles_and_spec(self, **kw)
+            return SearchLoop._arm_roles(self, union_specs)
 
     return _Duck()
 
@@ -75,7 +74,7 @@ def test_setter_failure_reaches_the_receipt():
         raise RuntimeError("sam server gone")
 
     rcpt = SearchLoop.declare_mission_concepts(
-        _duck(_boom), [{"class": "house", "role": "target"}], "find it")
+        _duck(_boom), [{"class": "house", "role": "target"}])
     assert "sam server gone" in rcpt["error"]
     assert rcpt["declared"] == ["house (target)"]      # what DID happen
 
@@ -84,8 +83,7 @@ def test_clean_setter_keeps_a_clean_receipt():
     from maps.search.search_loop import SearchLoop
 
     rcpt = SearchLoop.declare_mission_concepts(
-        _duck(lambda cs: None), [{"class": "house", "role": "target"}],
-        "find it")
+        _duck(lambda cs: None), [{"class": "house", "role": "target"}])
     assert "error" not in rcpt
 
 

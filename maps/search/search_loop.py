@@ -182,7 +182,6 @@ class SearchSnapshot:
     runtime_graph: object  # ObjectGraph
     thread_history: tuple[dict, ...]
     committed_detected_ids: frozenset[str]
-    last_target_spec: object | None
     locked_detection_id: str | None
     confirmed_target_xy: tuple[float, float] | None
     lock_step: int | None
@@ -256,7 +255,6 @@ class _State:
     # Flight step the commit bound at. ``None`` = nothing flew.
     lock_step: int | None = None
     termination_decisions: list[dict] = field(default_factory=list)
-    last_target_spec: object | None = None
     # Monotonic turn counter. Collapsed turns do not bump it.
     compile_seq: int = 0
     # Per-track prebake-attribution lifecycle. Populated by
@@ -832,9 +830,8 @@ class SearchLoop:
         Sources read from ``src_workdir``:
 
         - ``compile/turn_<NNNN>/finalized/r*.json`` -> the concept union
-          rebuild (``state.last_target_spec``, the SAM concept provider
-          via the ``sam_concept_setter`` injected at construction, the
-          per-class roles)
+          rebuild (the SAM concept provider via the ``sam_concept_setter``
+          injected at construction, the per-class roles)
         - ``state.compile_seq = turn + 1``
 
         ``turn`` defaults to the highest ``compile/turn_<NNNN>/`` that
@@ -961,13 +958,6 @@ class SearchLoop:
                 f"(sam_concepts missing on every reasoner)"
             )
 
-        from maps.perception.target_spec import TargetSpec
-
-        target_spec = TargetSpec.from_union(
-            raw_instruction=instruction,
-            union_concepts=union_specs or None,
-        )
-
         s = self._state
         s.compile_seq = max(s.compile_seq, turn + 1)
         s.sam_class_to_roles = _class_to_roles_from_specs(union_specs)
@@ -1030,7 +1020,6 @@ class SearchLoop:
             s.reasoners[rid] = reasoner
             s.reasoner_status[rid] = "alive"
             s.reasoner_stop_history[rid] = []
-        s.last_target_spec = target_spec
 
         if self._sam_concept_setter is not None and sam_concepts:
             self._sam_concept_setter(list(sam_concepts))
@@ -1158,12 +1147,12 @@ class SearchLoop:
             if d is not None:
                 d.retire_after_round(flown)
 
-    def declare_mission_concepts(self, cleaned: list[dict], instruction: str) -> dict:
+    def declare_mission_concepts(self, cleaned: list[dict]) -> dict:
         """Runtime hook (the mission engine's ``act.sam_concepts`` channel,
         latest-wins): re-arm the SAME surfaces the compile fold arms — the
         segmenter setter, the live director watchlist (armed here on the
         first declaration; DIFFED afterwards, never rebuilt, so pending
-        qstops/boosts survive), and the roles + TargetSpec.
+        qstops/boosts survive), and the per-class roles.
 
         ``cleaned`` is the validated ``[{class, role}]`` list the mission
         loop recorded. Returns the declaration receipt the act result
@@ -1209,9 +1198,7 @@ class SearchLoop:
                 rems = [c for c in have if c not in union]
                 if adds or rems:
                     d.watchlist_apply(adds, rems)
-            self._arm_roles_and_spec(
-                union_specs=union_specs, instruction=instruction
-            )
+            self._arm_roles(union_specs)
         rcpt = {
             "declared": [
                 f"{c.get('class')} ({c.get('role')})" for c in (cleaned or [])
@@ -1453,7 +1440,6 @@ class SearchLoop:
                 runtime_graph=s.runtime_graph,
                 thread_history=tuple(s.thread_history),
                 committed_detected_ids=frozenset(s.committed_detected_ids),
-                last_target_spec=s.last_target_spec,
                 locked_detection_id=s.locked_detection_id,
                 confirmed_target_xy=s.confirmed_target_xy,
                 lock_step=s.lock_step,
@@ -1899,44 +1885,18 @@ class SearchLoop:
         return target_evidence, {"committed": committed_match}
 
 
-    def _arm_roles_and_spec(
-        self, *, union_specs: list[dict], instruction: str
-    ) -> None:
-        """Arm the per-class roles + TargetSpec from union specs — the ONE
-        spec-arming path, shared by the compile fold and a mid-flight
-        ``act.sam_concepts`` re-declaration."""
+    def _arm_roles(self, union_specs: list[dict]) -> None:
+        """Arm the per-class roles from union specs (the mid-flight
+        ``act.sam_concepts`` declaration)."""
         s = self.state
-        # Persist the target/anchor split UNCONDITIONALLY — the union specs
-        # carry per-class roles regardless of whether a TargetSpec is
-        # built, and the in-flight commit + stop packet need it (a guarded
-        # population left it empty -> all roles "unknown").
+        # The in-flight commit + stop packet read the target/anchor split
+        # (an empty map reads every role "unknown").
         s.sam_class_to_roles = _class_to_roles_from_specs(union_specs)
         log.info(
             "target/anchor split: %d classes (%s)",
             len(s.sam_class_to_roles),
             {k: list(v) for k, v in list(s.sam_class_to_roles.items())[:6]},
         )
-        # Build the TargetSpec UNCONDITIONALLY. The union_specs fallback
-        # supplies the canonical visual_concepts/specs, so
-        # runtime_target_classes is populated on the bench path instead of
-        # being silently empty.
-        try:
-            from maps.perception.target_spec import TargetSpec
-
-            s.last_target_spec = TargetSpec.from_union(
-                raw_instruction=instruction,
-                union_concepts=union_specs or None,
-            )
-            log.info(
-                "target_spec: visual_attrs=%s visual_concepts=%s",
-                {
-                    k: list(v)
-                    for k, v in s.last_target_spec.visual_attributes.items()
-                },
-                s.last_target_spec.visual_concepts,
-            )
-        except Exception as e:
-            log.warning("TargetSpec build failed: %s", e)
 
 
 # ---------------------------------------------------------------------------

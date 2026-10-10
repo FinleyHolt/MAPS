@@ -601,15 +601,11 @@ def build_mission_session(
     recorder: "LiveRecorder | None",
     osm_ctx: "_OsmPriorCtx | None",
     t_start: float,
-    instruction: str,
     observe=None,
 ) -> MissionSession:
     """Wire the mission surface over the live SearchLoop.
 
-    The seeded prior graph IS the analyze surface. ``instruction`` arms the
-    perception-direction surface and rides every concept declaration, so a
-    console's free-form tasking reaches ``declare_mission_concepts`` the
-    same way an episode's own description does.
+    The seeded prior graph IS the analyze surface.
     """
     _markers = episode.marker_positions or []
     marker_xy = (
@@ -629,12 +625,12 @@ def build_mission_session(
         return ((float(xy[0]), float(xy[1])), provenance)
 
     def _declare_concepts(cleaned: list[dict]) -> dict:
-        return search_loop.declare_mission_concepts(cleaned, instruction)
+        return search_loop.declare_mission_concepts(cleaned)
 
     # Arm the perception-direction surface (empty watchlist) so
     # view{watchlist}/view{boost} are live from the first turn; the model's
     # act.sam_concepts declarations mutate it latest-wins.
-    search_loop.declare_mission_concepts([], instruction)
+    search_loop.declare_mission_concepts([])
 
     # ToolContext over the LIVE runtime graph — the same construction the
     # examiner surface is built from, plus the start pose for the echo.
@@ -775,7 +771,6 @@ def run_mission_episode(
         recorder=recorder,
         osm_ctx=osm_ctx,
         t_start=t_start,
-        instruction=episode.description,
     )
     ctx = session.ctx
     flights = session.flights
