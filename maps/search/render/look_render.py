@@ -815,8 +815,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     _place_labels: list = []
     _seen_lab: set = set()
     _neighbor_digits: list = []
-    _next_digit = [0]              # resolved after the loop, once the base
-                                   # (2 with a target, 1 without) is known
     for mk in (marks or []):
         mxy = mk.get("xy") if isinstance(mk, dict) else None
         if not (isinstance(mxy, (list, tuple)) and len(mxy) == 2):
@@ -884,9 +882,9 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     # always counted (2 + len(neighbor_px)). Not the map renderer's base,
     # which reassigns 2 when no target is present.
     _seq = 2
-    _ctx = [_le for _le in legend if _le.get("role") == "context"]
+    _ctx_rows = [_le for _le in legend if _le.get("role") == "context"]
     for _i, _slot in enumerate(_neighbor_digits):
-        _le = _ctx[_i] if _i < len(_ctx) else None
+        _le = _ctx_rows[_i] if _i < len(_ctx_rows) else None
         if _slot is None:
             # Identified by NAME: no ordinal drawn, and the legend says so
             # rather than advertising a badge the picture does not carry.
