@@ -43,7 +43,6 @@ from typing import Callable
 
 import httpx
 
-from maps.llm.endpoint_spec import EndpointSpec
 from maps.llm.http import CallCanceled, DegenerateCompletion
 from maps.llm.net_meter import stage as net_meter_stage
 from maps.search.analyze_scene.compactor import (
@@ -59,7 +58,6 @@ from maps.util.xy_token import (
     XY_TOKEN_RE, format_xy_token, parse_xy_token)
 from maps.search.analyze_scene.tools import ToolContext
 from maps.search.withhold import withheld
-from maps.search.analyze_scene.geom_compute import COLOR_ENUM as _COLOR_ENUM
 from maps.search.analyze_scene.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR,
     unmatched_query_tokens as _unmatched_query_tokens,
@@ -69,24 +67,18 @@ from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
     MODEL_UNSERVED_COLUMNS,
     ProgramError as _ProgramError,
-    _grid_cell,
     _is_color_column_key,
     compact_results as _compact_results,
     join_hints,
     run_program as _run_program,
 )
-from maps.search.parse_compile.reasoner_agent import (
-    Reasoner,
-    _complete_json_brackets,
-    _env_look_enabled,
-)
+from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.discourse import (
     echo as _echo,
     new_discourse as _new_discourse,
     update_discourse as _update_discourse,
 )
 from maps.search.parse_compile import python_surface as _py_surface
-from maps.search.parse_compile.tour_synth import VIEW_POSITION_SENTINELS
 
 # Transient LLM-side errors. Treated as retry rounds rather than
 # reasoner kills:
@@ -1181,7 +1173,7 @@ def run_mission(
     seed: int | None = None,
     sensor_description: str = "",
     cancel_event: "threading.Event | None" = None,
-    look_enabled: bool | None = None,
+    look_enabled: bool,
     look_renderer: "Callable[[list[dict]], list[dict]] | None" = None,
     look_audit_dir: str | None = None,
     obs_span_m: float | None = None,
@@ -1222,8 +1214,7 @@ def run_mission(
     # in this tree declares. The assert is what makes that true rather than
     # assumed; give the prompt the needle and a code-spelled capability
     # fact if a crops-less code arm is ever wanted.
-    assert (look_enabled if look_enabled is not None
-            else _env_look_enabled()), (
+    assert look_enabled, (
         "the code arm's system prompt states the look()/show_map() "
         "capability unconditionally; a crops-less run would serve a legend "
         "for calls it cannot make")
