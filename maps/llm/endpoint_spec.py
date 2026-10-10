@@ -150,12 +150,10 @@ class EndpointSpec:
 
         Subtracts ``max_output_tokens``, which is what the request actually
         pins, NOT ``output_reserve``. The two differ below a 32,768 window,
-        where the ``_MIN_OUTPUT_TOKENS`` floor exceeds ``maxlen // 4`` -- and
-        there the old arithmetic handed compaction a ceiling the server would
-        reject, so a transcript compacted exactly to budget 400s on length:
-        at 24,576, budget 17,408 plus a pinned 8,192 is 25,600 against a
-        24,576 window. The docstring said "modulo the floor on tiny windows"
-        where it meant "wrong on tiny windows".
+        where the ``_MIN_OUTPUT_TOKENS`` floor exceeds ``maxlen // 4``:
+        subtracting the reserve there would hand compaction a ceiling the
+        server rejects (at 24,576, budget 17,408 plus a pinned 8,192 is
+        25,600 against the window).
 
         A no-op wherever the reserve already clears the floor, which is every
         window at or above 32,768 and so every served model in the fleet.
