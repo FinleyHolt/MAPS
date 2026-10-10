@@ -33,6 +33,7 @@ impossible.
 from __future__ import annotations
 
 from maps.search.analyze_scene import geom_compute as G
+from maps.util.xy_token import is_xy
 
 # A place, resolved: ``(fid | None, (x, y) | None)``. Both halves ride
 # because a fid is the only way to reach a mask and the point is the only
@@ -53,15 +54,9 @@ def chains_of(row) -> list:
     if mask:
         return list(mask)
     xy = row.get("xy")
-    if _is_xy(xy):
+    if is_xy(xy):
         return [[[float(xy[0]), float(xy[1])]]]
     return []
-
-
-def _is_xy(v) -> bool:
-    return (isinstance(v, (list, tuple)) and len(v) == 2
-            and all(isinstance(c, (int, float)) and not isinstance(c, bool)
-                    for c in v))
 
 
 class SurfaceGeometry:
@@ -90,7 +85,7 @@ class SurfaceGeometry:
             for fid, xy in places:
                 row = self.row_of_fid(fid) if fid else None
                 part = chains_of(row) if isinstance(row, dict) else []
-                if not part and _is_xy(xy):
+                if not part and is_xy(xy):
                     part = [[[float(xy[0]), float(xy[1])]]]
                 chains.extend(part)
             got = self._geoms[places] = G.mask_geom(chains)
