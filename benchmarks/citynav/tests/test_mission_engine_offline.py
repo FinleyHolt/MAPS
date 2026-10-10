@@ -215,7 +215,7 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(monkeypatch):
         assets=SimpleNamespace(bounds=SimpleNamespace(x_min=0.0, y_min=0.0), cell_size_m=2.0,
                                grid_shape=(10, 10)),
         episode=SimpleNamespace(map_name="calcity", description="the largest building"),
-        sensor=None, tile_frame=None, episode_ply_path=None, perception=None, search_loop=loop,
+        sensor=None, tile_frame=None, perception=None, search_loop=loop,
         recorder=None, osm_ctx=None, t_start=0.0, observe=lambda: frame,
     )
     report = me.fly_one({"target_fid": "building_7"}, **common)

@@ -6,8 +6,8 @@ bounds regions are zero-padded; the crop retains its world extent so the
 orthographic raster channels (semantic/height/alpha) stay axis-aligned to
 world NE.
 
-When ``ply_path`` is supplied, ``obs.rgb`` comes from a yaw-rotated nadir
-warp of the ortho at the drone heading. ``obs.world_window`` still describes the
+``obs.rgb`` comes from a yaw-rotated nadir warp of the ortho at the drone
+heading. ``obs.world_window`` still describes the
 axis-aligned raster window; it does NOT describe the yaw-rotated RGB.
 Camera-derived pixel -> world projection for the RGB lives in
 ``perception.geolocate.project_mask_to_world`` and must use
@@ -141,7 +141,6 @@ def crop_ortho_observation(
     yaw_deg: float,
     ground_z: float,
     rgbd_dir: Path | str | None = None,
-    ply_path: Path | str | None = None,
     m_per_px: float = 0.10,
     max_px: int = 2048,
     sensor: "SensorSpec | None" = None,
@@ -156,9 +155,9 @@ def crop_ortho_observation(
     run captured (``benchmarks/flight/run_imagery.py``); the bench
     leaves it unset and crops the bake's raster, which is its camera.
 
-    Warps ``rgb`` + ``height`` + ``validity`` from the canonical filled ortho
-    (:func:`camera_model.load_ortho_or_rasters` — baked npz or rasters, interior
-    holes filled), then derives ``depth = altitude_m - height``.
+    Warps ``rgb`` + ``height`` + ``validity`` from the canonical ortho
+    (:func:`camera_model.load_ortho_or_rasters`), then derives
+    ``depth = altitude_m - height``.
 
     The view rectangle is one of two shapes:
 
@@ -183,15 +182,9 @@ def crop_ortho_observation(
     from maps.perception.ortho.camera_model import load_ortho_or_rasters  # noqa: PLC0415
 
     if ortho is None:
-        ortho = load_ortho_or_rasters(
-            map_name, ply_path=ply_path, rgbd_dir=rgbd_dir, m_per_px=m_per_px
-        )
+        ortho = load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir, m_per_px=m_per_px)
     if ortho is None:
-        raise FileNotFoundError(
-            f"No ortho for {map_name!r}: pass rgbd_dir (0.1 m/px rasters) or a "
-            f"ply_path with a baked ortho npz "
-            f"(bake via `python -m benchmarks.citynav.bake.ortho`)."
-        )
+        raise FileNotFoundError(f"No ortho for {map_name!r}: pass rgbd_dir (the block's rasters).")
     rgb_map, height_map, alpha_map = ortho["rgb"], ortho["height"], ortho["alpha"]
     ox_min, oy_min, ppm = (
         float(ortho["x_min"]),
@@ -450,7 +443,6 @@ def crop_observation(
     *,
     yaw_deg: float = 0.0,
     sensor: SensorSpec | None = None,
-    ply_path: Path | str | None = None,
     rgbd_dir: Path | str | None = None,
     map_name: str | None = None,
     rgb_upscale_px: int | None = None,
@@ -475,10 +467,8 @@ def crop_observation(
     ``sensor`` and ortho corners is an ortho rendering of that sensor's
     footprint — the corners, not the frustum, are its projection contract).
     The belief-grid semantic/height/alpha channels are still cropped from the
-    1 m/px raster over the same axis-aligned bbox. The ortho is loaded
-    from a baked npz (if ``ply_path`` resolves one) or built + interior-filled
-    from the 0.1 m/px rasters under ``rgbd_dir``. No 3D / non-nadir render
-    backend exists here.
+    1 m/px raster over the same axis-aligned bbox. The ortho is read from
+    the rasters under ``rgbd_dir``.
     """
     H, W = block.shape
 
@@ -501,7 +491,6 @@ def crop_observation(
         yaw_deg=yaw_deg,
         ground_z=float(GROUND_LEVEL[map_name]),
         rgbd_dir=rgbd_dir,
-        ply_path=ply_path,
         sensor=sensor,
     )
     # Belief-grid underlay (semantic/height/alpha) cropped over the same

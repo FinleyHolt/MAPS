@@ -21,6 +21,7 @@ from maps.perception.observation import (
     observation_extent_m,
 )
 from maps.perception.ortho.sensor_frame import footprint_corners_xy, footprint_m
+from maps.search.tests.ortho_fixture import write_rasters
 
 MAP = "unit_test_sensor_block"
 GROUND_Z = 0.0
@@ -41,19 +42,7 @@ def ortho_dir(tmp_path, monkeypatch):
     rgb[..., 1] = cols.astype(np.uint8)
     rgb[..., 2] = 77
     height = np.full((n, n), GROUND_Z + 3.0, dtype=np.float32)
-    alpha = np.full((n, n), 255, dtype=np.uint8)
-
-    out = tmp_path / "ortho"
-    out.mkdir()
-    np.savez(
-        out / f"{MAP}_ortho_m0.1.npz",
-        rgb=rgb,
-        height=height,
-        alpha=alpha,
-        x_min=np.float64(0.0),
-        y_min=np.float64(0.0),
-        px_per_m=np.float64(PX_PER_M),
-    )
+    write_rasters(tmp_path, MAP, rgb, height, m_per_px=1.0 / PX_PER_M)
     monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
     camera_model._ORTHO_RASTER_CACHE.clear()
     return tmp_path

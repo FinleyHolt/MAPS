@@ -128,7 +128,7 @@ def test_concurrent_cold_cache_builds_once_under_the_lock(tmp_path, monkeypatch)
     cm._ORTHO_RASTER_CACHE.clear()
     builds: list[str] = []
 
-    def fake_bake(rgbd_dir, map_name, *, m_per_px, fill):
+    def fake_bake(rgbd_dir, map_name, *, m_per_px):
         builds.append(map_name)
         time.sleep(0.05)  # widen the window an unlocked race would exploit
         return {
@@ -141,9 +141,6 @@ def test_concurrent_cold_cache_builds_once_under_the_lock(tmp_path, monkeypatch)
         }
 
     monkeypatch.setattr(cm, "_read_ortho_mmap", lambda d, m_per_px: None)
-    monkeypatch.setattr(
-        cm, "_rgbd_ortho_path", lambda rgbd_dir, map_name, m_per_px: tmp_path / "absent.npz"
-    )
     monkeypatch.setattr(cm, "bake_ortho_from_rasters", fake_bake)
     monkeypatch.setattr(cm, "_write_ortho_mmap", lambda d, bake: None)
 
@@ -208,24 +205,23 @@ def test_a_geotiff_pair_is_streamed_into_the_cache_and_never_filled(tmp_path):
 
 
 def test_the_streamed_bake_matches_the_in_heap_bake_band_for_band(tmp_path):
-    """Same contract as the PNG path (minus the fill): one band boundary must
-    not shift a row."""
+    """Same contract as the PNG path where the map has pixels (the PNG path
+    also fills enclosed holes): one band boundary must not shift a row."""
     from PIL import Image
 
     rgb = _geotiff_pair(tmp_path, H=41)
     Image.fromarray(rgb).save(tmp_path / "blk.png")
-    heap = cm.bake_ortho_from_rasters(tmp_path, "blk", m_per_px=0.1, fill=False)
+    heap = cm.bake_ortho_from_rasters(tmp_path, "blk", m_per_px=0.1)
     cm._bake_geotiff_mmap(tmp_path, "blk", tmp_path / "s.mmap", band_rows=7)
     got = cm._read_ortho_mmap(tmp_path / "s.mmap", 0.1)
-    for k in ("rgb", "alpha"):
-        assert np.array_equal(got[k], heap[k]), k
+    covered = rgb.max(axis=2) > 0
+    for k in ("rgb", "alpha", "height"):
+        assert np.array_equal(got[k][covered], heap[k][covered]), k
     for k in ("x_min", "y_min", "px_per_m"):
         assert got[k] == heap[k], k
-    # Height rides the plane where the map has pixels and is sentinel-cleared
-    # under no-data, which the in-heap path only does inside its fill.
-    covered = heap["alpha"] > 0
-    assert np.array_equal(got["height"][covered], heap["height"][covered])
+    # The streamed bake sentinel-clears height under no-data and never fills.
     assert np.all(got["height"][~covered] == 0.0) and (~covered).any()
+    assert np.all(got["alpha"][~covered] == 0)
 
 
 def test_an_unwritable_cache_raises_for_a_geotiff_pair(tmp_path):

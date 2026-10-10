@@ -370,7 +370,6 @@ def run_episode(
         log.warning("target-type wall: resolution failed (%s); wall unset", exc)
     # Resolve the per-episode SensorSpec (a registered name or an inline
     # sensor override; resolve_sensor).
-    episode_ply_path = None
     sensor = resolve_sensor(cfg.sensor) if cfg.sensor else None
     # ---- RETROSPECTIVE PERCEPTION executor (spec C4) --------------------
     # The ortho ortho render is DETERMINISTIC over the static
@@ -403,7 +402,6 @@ def run_episode(
                     altitude_m=_alt,
                     yaw_deg=0.0,
                     sensor=sensor,
-                    ply_path=episode_ply_path,
                     rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
                     map_name=episode.map_name,
                     rgb_upscale_px=cfg.rgb_upscale_px,
@@ -590,7 +588,6 @@ def run_episode(
             episode=episode,
             sensor=sensor,
             tile_frame=tile_frame,
-            episode_ply_path=episode_ply_path,
             perception=perception,
             search_loop=search_loop,
             recorder=recorder,

@@ -16,7 +16,7 @@ import io
 
 import numpy as np
 import pytest
-from maps.search.tests.ortho_fixture import write_ortho
+from maps.search.tests.ortho_fixture import write_ortho, write_rasters
 
 from maps.search.render.look_render import (
     LOOK_CAR_MARGIN_M,
@@ -204,17 +204,8 @@ def coarse_ortho_dir(tmp_path, monkeypatch):
     rgb = np.zeros((n, n, 3), dtype=np.uint8)
     rgb[..., 0] = (np.arange(n, dtype=np.uint32)[:, None] % 256).astype(np.uint8)
     rgb[..., 1] = (np.arange(n, dtype=np.uint32)[None, :] % 256).astype(np.uint8)
-    out = tmp_path / "ortho"
-    out.mkdir()
-    np.savez(
-        out / f"{MAP}_ortho_m0.1.npz",
-        rgb=rgb,
-        height=np.full((n, n), GROUND_Z + 5.0, dtype=np.float32),
-        alpha=np.full((n, n), 255, dtype=np.uint8),
-        x_min=np.float64(0.0),
-        y_min=np.float64(0.0),
-        px_per_m=np.float64(1.0 / 0.3),
-    )
+    rgb[..., 2] = 96
+    write_rasters(tmp_path, MAP, rgb, np.full((n, n), GROUND_Z + 5.0, dtype=np.float32), m_per_px=0.3)
     monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
     camera_model._ORTHO_RASTER_CACHE.clear()
     return tmp_path

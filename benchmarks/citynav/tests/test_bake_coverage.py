@@ -34,6 +34,7 @@ from benchmarks.citynav.bake.city import (  # noqa: E402
     _features_from_records,
 )
 from benchmarks.citynav.eval import WorldBounds  # noqa: E402
+from maps.search.tests.ortho_fixture import write_rasters  # noqa: E402
 
 
 def _poly(x0: float, y0: float, x1: float, y1: float) -> dict:
@@ -50,19 +51,9 @@ CELL = 2.0
 
 def test_cell_coverage_orientation(tmp_path, monkeypatch) -> None:
     """North-half imagery covers the HIGH cell rows (south-up grid)."""
-    ortho_dir = tmp_path / "ortho"
-    ortho_dir.mkdir()
-    alpha = np.zeros((80, 80), dtype=np.uint8)
-    alpha[:40, :] = 255  # ortho row 0 is y_max: the NORTH half has imagery
-    np.savez_compressed(
-        ortho_dir / "toy_block_0_ortho_m0.1.npz",
-        rgb=np.zeros((80, 80, 3), dtype=np.uint8),
-        height=np.zeros((80, 80), dtype=np.float32),
-        alpha=alpha,
-        x_min=0.0,
-        y_min=0.0,
-        px_per_m=10.0,
-    )
+    rgb = np.zeros((80, 80, 3), dtype=np.uint8)
+    rgb[:40, :] = 90  # raster row 0 is y_max: the NORTH half has imagery
+    write_rasters(tmp_path, "toy_block_0", rgb, np.zeros((80, 80), dtype=np.float32))
     monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", tmp_path)
     meta: dict = {}
     cov = _cell_coverage("toy_block_0", meta, BOUNDS, GRID, CELL)
