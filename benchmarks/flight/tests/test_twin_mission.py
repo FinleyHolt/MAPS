@@ -83,7 +83,7 @@ def serves(monkeypatch):
     from maps.llm import endpoint_spec, http
     from maps.llm.endpoint_spec import EndpointSpec
 
-    spec = EndpointSpec(base_url="http://unused", model_id="qwen36-35b-a3b", max_model_len=262144, tokenizer_name="qwen",
+    spec = EndpointSpec(base_url="http://unused", model_id="inkling-small", max_model_len=262144, tokenizer_name="qwen",
                         output_reserve=40000)
     monkeypatch.setattr(endpoint_spec, "_SPEC", None)
     monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")   # no tokenizer to measure the prompt with

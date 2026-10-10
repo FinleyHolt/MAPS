@@ -128,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rendered", action="store_true",
                     help="print the chat-template render instead of the "
                          "sectioned dump; token count goes to stderr")
-    ap.add_argument("--model", default="qwen36-35b-a3b",
+    ap.add_argument("--model", default="inkling-small",
                     help="served-model alias for the --rendered tokenizer "
                          "(SEARCH_COMPACT_TOKENIZER_NAME overrides)")
     ap.add_argument("--withhold", metavar="NAMES", default=None,

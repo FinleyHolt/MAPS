@@ -8,10 +8,7 @@ native tool calls (``tools`` + ``tool_choice="auto"``, per-tool
 
 The envelope is the served model's card-recommended thinking-mode set
 (``maps.llm.model_cards``, keyed off the discovered
-``EndpointSpec.model_id``). Qwen3.6's card note: ``min_p=0.0`` official
-— measured 0 empty turns across 770 calls on the pinned serve,
-SERVE_STRICT.md's 50-episode segment; the historical 0.05 floor
-addressed an empty-turn mode an earlier stack exhibited.
+``EndpointSpec.model_id``).
 """
 
 from __future__ import annotations

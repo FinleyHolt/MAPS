@@ -139,7 +139,7 @@ def _tool_call_ids(msgs):
 def _spec(max_model_len: int) -> EndpointSpec:
     return EndpointSpec(
         base_url="http://unused/v1",
-        model_id="qwen36-35b-a3b",
+        model_id="inkling-small",
         max_model_len=max_model_len,
         tokenizer_name="Qwen/Qwen3.6-35B-A3B",
         output_reserve=min(40000, max_model_len // 4),

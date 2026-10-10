@@ -215,12 +215,12 @@ def test_an_arm_naming_no_effort_puts_no_effort_key_on_the_wire(
     from maps.llm.sampling import thinking_sampling_kwargs
 
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
-    quiet = _posted_body(monkeypatch, **thinking_sampling_kwargs(temperature=1.0, model_id="qwen36-35b-a3b"))
+    quiet = _posted_body(monkeypatch, **thinking_sampling_kwargs(temperature=1.0, model_id="inkling-small"))
     assert "reasoning_effort" not in quiet
     assert "reasoning_effort" not in json.dumps(quiet)
 
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
-    named = _posted_body(monkeypatch, **thinking_sampling_kwargs(temperature=1.0, model_id="qwen36-35b-a3b"))
+    named = _posted_body(monkeypatch, **thinking_sampling_kwargs(temperature=1.0, model_id="inkling-small"))
     assert named["reasoning_effort"] == "0.99"
     assert '"reasoning_effort": "0.99"' in json.dumps(named)
     assert {k: v for k, v in named.items() if k != "reasoning_effort"} == quiet

@@ -167,9 +167,11 @@ The reasoner is any OpenAI-compatible chat-completions endpoint whose
 `/v1/models` lists the served model and its `max_model_len` (vLLM reports
 both). The served model name selects a sampling envelope from
 [`maps/llm/model_cards.py`](maps/llm/model_cards.py) (tokenizer, `top_p`,
-`top_k`, presence penalty), and must be one of that table's keys exactly
-(E1 to E3 serve `inkling-small`, `qwen38-flash-next-nvfp4` and
-`gemma4-26b-a4b`); any other name is refused at startup with the list. Every request runs in thinking mode at
+`top_k`, the reasoning efforts it takes), and must be one of that table's
+keys exactly: `inkling-small`, `qwen38-flash-next-nvfp4`,
+`gemma4-26b-a4b-nvfp4` (E1 to E3), `gemma4-e4b`, `gemma4-e2b` (E2), and
+`gemma4-26b-a4b-gguf` (the llama.cpp serve flown aboard); any other name is
+refused at startup with the list. Every request runs in thinking mode at
 temperature 1.0, and `max_tokens` is the output reserve of the discovered
 window.
 
@@ -181,8 +183,8 @@ window.
 | `SEARCH_REASONER_WARMUP_TIMEOUT_S`, `SEARCH_REASONER_WARMUP_TOTAL_S` | bench | How long the bench waits for the reasoner to answer at startup. |
 | `SEARCH_ENDPOINT_SPEC_OVERRIDE` | client | `<model_id>:<max_model_len>` for an endpoint whose `/v1/models` reports no window. |
 | `SEARCH_LLM_ROUTING_KEY_HEADER` | client | The header name the per-episode routing key rides (default `x-smg-routing-key`). |
-| `SEARCH_SAMPLING_REASONING_EFFORT` | client | The arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`). Unset sends none. |
-| `SEARCH_SAMPLING_TEMPERATURE`, `SEARCH_SAMPLING_PRESENCE_PENALTY` | client | Replace the envelope's temperature or presence penalty. |
+| `SEARCH_SAMPLING_REASONING_EFFORT` | client | The arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`); discovery refuses a value the served model's card does not take. Unset sends none. |
+| `SEARCH_SAMPLING_TEMPERATURE`, `SEARCH_SAMPLING_PRESENCE_PENALTY` | client | Replace the envelope's temperature, or add a presence penalty. |
 | `SEARCH_COMPACT_TOKENIZER_NAME` | client | The HF tokenizer repo, replacing the model card's. |
 | `SAM_SERVER_URL` | client | The SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772`. |
 | `SAM_VIDEO_SERVER_URL` | client | A separate URL for video calls. Default `SAM_SERVER_URL`. |

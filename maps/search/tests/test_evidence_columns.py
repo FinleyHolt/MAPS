@@ -20,7 +20,7 @@ from maps.search.parse_compile.reasoner_loop import (
 
 _TEST_SPEC = EndpointSpec(
     base_url="http://unused",
-    model_id="qwen36-35b-a3b",
+    model_id="inkling-small",
     max_model_len=262144,
     tokenizer_name="qwen",
     output_reserve=40000,

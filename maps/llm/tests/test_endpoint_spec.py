@@ -30,7 +30,7 @@ _URL_B = "http://b:8001/v1"
 _REAL_REQUIRE_TOKENIZER = E._require_tokenizer
 
 
-def _models_payload(model_id="qwen36-35b-a3b", max_model_len=262144, extra=None):
+def _models_payload(model_id="gemma4-e4b", max_model_len=262144, extra=None):
     data = [{"id": model_id, "max_model_len": max_model_len}]
     if extra:
         data.extend(extra)
@@ -66,7 +66,7 @@ def test_discover_single_endpoint(monkeypatch):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload()})
     s = discover(_URL_A)
     assert s.base_url == _URL_A
-    assert s.model_id == "qwen36-35b-a3b"
+    assert s.model_id == "gemma4-e4b"
     assert s.max_model_len == 262144
     assert s.output_reserve == 40000
     assert s.input_budget == 262144 - 40000 - 1024
@@ -79,7 +79,7 @@ def test_small_window_derivation(monkeypatch):
     # 32768 -> reserve 8192 (min(40000, window//4)), input_budget 24576 - margin.
     _fake_http(
         monkeypatch,
-        {f"{_URL_A}/models": _models_payload("gemma4-26b-a4b", 32768)},
+        {f"{_URL_A}/models": _models_payload("gemma4-26b-a4b-nvfp4", 32768)},
     )
     s = discover(_URL_A)
     assert s.output_reserve == 8192
@@ -145,7 +145,7 @@ def test_case_e_comma_list_refused():
 
 
 def test_case_f_window_too_small(monkeypatch):
-    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("qwen35-4b-nvfp4", 8192)})
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("gemma4-e2b", 8192)})
     with pytest.raises(EndpointDiscoveryError, match="input_budget"):
         discover(_URL_A)
 
@@ -156,7 +156,7 @@ def test_case_f_window_too_small(monkeypatch):
 
 
 def test_case_g_tokenizer_load_failure(monkeypatch):
-    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("gemma4-26b-a4b", 32768)})
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("gemma4-26b-a4b-nvfp4", 32768)})
     # Re-enable the REAL _require_tokenizer over a stubbed loader.
     monkeypatch.setattr(E, "_require_tokenizer", _REAL_REQUIRE_TOKENIZER)
     import maps.llm.tokenizer as tok
@@ -241,9 +241,9 @@ def test_offline_with_pin_skips_probes(monkeypatch):
         _URL_A,
         {"sam": "http://sam:8772"},
         offline=True,
-        override=EndpointOverride("qwen36-35b-a3b", 131072),
+        override=EndpointOverride("gemma4-e4b", 131072),
     )
-    assert s.model_id == "qwen36-35b-a3b"
+    assert s.model_id == "gemma4-e4b"
     assert s.max_model_len == 131072
     assert s.sam_url == "http://sam:8772"  # frozen unprobed offline
     assert s.server_declared_window is False  # nothing probed, nothing declared
@@ -263,12 +263,12 @@ def test_override_selects_among_many_models(monkeypatch):
         monkeypatch,
         {
             f"{_URL_A}/models": {
-                "data": [{"id": "qwen36-35b-a3b"}, {"id": "gemma4-26b-a4b"}, {"id": "inkling-small"}]
+                "data": [{"id": "gemma4-e4b"}, {"id": "gemma4-26b-a4b-nvfp4"}, {"id": "inkling-small"}]
             }
         },
     )
-    s = discover(_URL_A, override=EndpointOverride("gemma4-26b-a4b", 131072))
-    assert s.model_id == "gemma4-26b-a4b"
+    s = discover(_URL_A, override=EndpointOverride("gemma4-26b-a4b-nvfp4", 131072))
+    assert s.model_id == "gemma4-26b-a4b-nvfp4"
     assert s.max_model_len == 131072
     # No max_model_len on any entry: a hosted endpoint, already warm.
     assert s.server_declared_window is False
@@ -278,13 +278,13 @@ def test_override_on_a_window_declaring_endpoint_stays_self_hosted(monkeypatch):
     # A pin against a real vLLM (which does report max_model_len) must not
     # be mistaken for a hosted endpoint — it still has a cold start.
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(max_model_len=131072)})
-    s = discover(_URL_A, override=EndpointOverride("qwen36-35b-a3b", 131072))
+    s = discover(_URL_A, override=EndpointOverride("gemma4-e4b", 131072))
     assert s.server_declared_window is True
 
 
 def test_parse_override():
-    o = parse_override("qwen36-35b-a3b:262144")
-    assert o == EndpointOverride("qwen36-35b-a3b", 262144)
+    o = parse_override("gemma4-e4b:262144")
+    assert o == EndpointOverride("gemma4-e4b", 262144)
     with pytest.raises(EndpointDiscoveryError, match="malformed"):
         parse_override("no-window")
     with pytest.raises(EndpointDiscoveryError, match="malformed"):
@@ -299,7 +299,7 @@ def test_parse_override():
 def _spec(**kw) -> EndpointSpec:
     base = dict(
         base_url=_URL_A,
-        model_id="qwen36-35b-a3b",
+        model_id="gemma4-e4b",
         max_model_len=262144,
         tokenizer_name="Qwen/Qwen3.6-35B-A3B",
         output_reserve=40000,
@@ -345,15 +345,15 @@ def test_lora_pin_validates_both_components(monkeypatch):
         monkeypatch,
         {
             f"{_URL_A}/models": _models_payload(
-                extra=[{"id": "qwen36-35b-a3b-lora", "max_model_len": None}]
+                extra=[{"id": "gemma4-e4b-lora", "max_model_len": None}]
             )
         },
     )
     s = discover(
         _URL_A,
-        override=E.parse_override("qwen36-35b-a3b:qwen36-35b-a3b-lora:262144"),
+        override=E.parse_override("gemma4-e4b:gemma4-e4b-lora:262144"),
     )
-    assert s.model_id == "qwen36-35b-a3b:qwen36-35b-a3b-lora"
+    assert s.model_id == "gemma4-e4b:gemma4-e4b-lora"
     assert s.max_model_len == 262144
 
 
@@ -365,7 +365,7 @@ def test_lora_pin_unserved_adapter_refused(monkeypatch):
     with pytest.raises(EndpointDiscoveryError, match="not match the live"):
         discover(
             _URL_A,
-            override=E.parse_override("qwen36-35b-a3b:no-such-adapter:262144"),
+            override=E.parse_override("gemma4-e4b:no-such-adapter:262144"),
         )
 
 
