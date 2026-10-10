@@ -1,0 +1,28 @@
+{
+ "status": "flying",
+ "episode_id": "flying::6#6",
+ "map_name": "flying",
+ "description": "d",
+ "start_xy": [
+  0.0,
+  0.0
+ ],
+ "target_xy": [
+  5.0,
+  5.0
+ ],
+ "bounds": [
+  0.0,
+  0.0,
+  100.0,
+  100.0
+ ],
+ "provisional": true,
+ "metrics": {
+  "episode_id": "flying::6#6",
+  "SR": 1,
+  "OSR": 1,
+  "NE": 3.0,
+  "referent_bucket": "car"
+ }
+}

@@ -1,0 +1,67 @@
+{
+  "_why": "The shared pin for the two readers of ledger.jsonl: benchmarks/citynav/analysis/episode_ledger.load (the owner) and dashboard/server/ledger_read.load (a replication \u2014 the dashboard venv imports no benchmarks package). Both suites assert THIS file. If one fails, one reader moved and the other did not. The calcity column is a SHAPE column whose sr and sr_precise cells disagree, so a reader that takes the wrong cell fails here rather than silently reporting the other criterion.",
+  "column_order": [
+    "aaa1111:armA_aaa1111",
+    "bbb2222:armB_bbb2222",
+    "ccc3333:armC_calcity_ccc3333"
+  ],
+  "episodes": [
+    "birmingham_block_1::a#1",
+    "birmingham_block_1::b#2",
+    "calcity::a#1",
+    "calcity::b#2",
+    "calcity::c#3",
+    "cambridge_block_2::c#3",
+    "dorset_block_9::d#4"
+  ],
+  "columns": {
+    "aaa1111:armA_aaa1111": {
+      "sha": "aaa1111",
+      "run": "armA_aaa1111",
+      "split": "train_seen",
+      "tile": "citynav_2m_osmv2",
+      "tile_current": false,
+      "served_model": "qwen36-35b-a3b",
+      "n": 3,
+      "successes": 2,
+      "cells": {
+        "birmingham_block_1::a#1": 1,
+        "birmingham_block_1::b#2": 0,
+        "cambridge_block_2::c#3": 1
+      },
+      "criterion": "ring"
+    },
+    "bbb2222:armB_bbb2222": {
+      "sha": "bbb2222",
+      "run": "armB_bbb2222",
+      "split": "train_seen",
+      "tile": "citynav_2m_osmv3",
+      "tile_current": true,
+      "served_model": "qwen36-35b-a3b",
+      "n": 3,
+      "successes": 1,
+      "cells": {
+        "birmingham_block_1::a#1": 0,
+        "birmingham_block_1::b#2": 0,
+        "dorset_block_9::d#4": 1
+      },
+      "criterion": "ring"
+    },
+    "ccc3333:armC_calcity_ccc3333": {
+      "sha": "ccc3333",
+      "run": "armC_calcity_ccc3333",
+      "split": "calcity",
+      "criterion": "shape",
+      "tile": "calcity",
+      "tile_current": false,
+      "served_model": "qwen36-35b-a3b",
+      "n": 3,
+      "successes": 2,
+      "cells": {
+        "calcity::a#1": 0,
+        "calcity::b#2": 1,
+        "calcity::c#3": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,445 @@
+#!/usr/bin/env python
+"""Fail-loud taxonomy + budget arithmetic of ``maps.llm.endpoint_spec``.
+
+Offline + hermetic: ``_get_json`` (the one HTTP seam) is monkeypatched with a
+url->payload table, and ``_require_tokenizer`` is stubbed except in the
+tokenizer-failure test (which drives the REAL ``_require_tokenizer`` against a
+stubbed ``maps.llm.tokenizer._tokenizer``). Every abort case a-i is a
+distinct ``EndpointDiscoveryError`` naming the fact; the install-once authority
+is exercised on an isolated module global.
+
+Run: ``pytest maps/llm/tests/test_endpoint_spec.py``.
+"""
+from __future__ import annotations
+
+import pytest
+
+from maps.llm import endpoint_spec as E
+from maps.llm.endpoint_spec import (
+    EndpointDiscoveryError,
+    EndpointOverride,
+    EndpointSpec,
+    discover,
+    parse_override,
+)
+
+_URL_A = "http://a:8001/v1"
+_URL_B = "http://b:8001/v1"
+
+# The real tokenizer check, captured before the autouse stub patches it.
+_REAL_REQUIRE_TOKENIZER = E._require_tokenizer
+
+
+def _models_payload(model_id="qwen36-35b-a3b", max_model_len=262144, extra=None):
+    data = [{"id": model_id, "max_model_len": max_model_len}]
+    if extra:
+        data.extend(extra)
+    return {"data": data}
+
+
+def _fake_http(monkeypatch, table: dict):
+    """``_get_json`` fake: an absent url raises like an unreachable host."""
+
+    def _get(url, *, bearer=None):
+        if url not in table:
+            raise EndpointDiscoveryError(f"endpoint unreachable: GET {url}")
+        return table[url]
+
+    monkeypatch.setattr(E, "_get_json", _get)
+
+
+@pytest.fixture(autouse=True)
+def _isolated(monkeypatch):
+    """Fresh install slot + a stub tokenizer check per test (the
+    tokenizer-failure test overrides the stub with the real path)."""
+    monkeypatch.setattr(E, "_SPEC", None)
+    monkeypatch.setattr(E, "_require_tokenizer", lambda m: f"tok:{m}")
+    yield
+
+
+# --------------------------------------------------------------------------- #
+# Happy path + derivation arithmetic                                          #
+# --------------------------------------------------------------------------- #
+
+
+def test_discover_single_endpoint(monkeypatch):
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload()})
+    s = discover(_URL_A)
+    assert s.base_url == _URL_A
+    assert s.model_id == "qwen36-35b-a3b"
+    assert s.max_model_len == 262144
+    assert s.output_reserve == 40000
+    assert s.input_budget == 262144 - 40000 - 1024
+    assert s.max_output_tokens == 40000
+    # vLLM states its own window: a dedicated engine with a cold start.
+    assert s.server_declared_window is True
+
+
+def test_small_window_derivation(monkeypatch):
+    # 32768 -> reserve 8192 (min(40000, window//4)), input_budget 24576 - margin.
+    _fake_http(
+        monkeypatch,
+        {f"{_URL_A}/models": _models_payload("gemma", 32768)},
+    )
+    s = discover(_URL_A)
+    assert s.output_reserve == 8192
+    assert s.input_budget == 32768 - 8192 - 1024
+    assert s.max_output_tokens == 8192  # the defensive floor == reserve here
+
+
+def test_service_urls_frozen_and_probed(monkeypatch):
+    _fake_http(
+        monkeypatch,
+        {
+            f"{_URL_A}/models": _models_payload(),
+            "http://sam:8772/health": {"service": "sam"},
+        },
+    )
+    s = discover(_URL_A, {"sam": "http://sam:8772", "sam_video": ""})
+    assert s.sam_url == "http://sam:8772"
+    assert s.sam_video_url == ""  # unset service is skipped, not an error
+
+
+# --------------------------------------------------------------------------- #
+# Abort taxonomy a-f                                                          #
+# --------------------------------------------------------------------------- #
+
+
+def test_case_a_unreachable_endpoint(monkeypatch):
+    _fake_http(monkeypatch, {})
+    with pytest.raises(EndpointDiscoveryError, match="unreachable"):
+        discover(_URL_A)
+
+
+def test_case_b_empty_model_list(monkeypatch):
+    _fake_http(monkeypatch, {f"{_URL_A}/models": {"data": []}})
+    with pytest.raises(EndpointDiscoveryError, match="no served models"):
+        discover(_URL_A)
+
+
+def test_case_c_more_than_one_model(monkeypatch):
+    _fake_http(
+        monkeypatch,
+        {
+            f"{_URL_A}/models": _models_payload(
+                extra=[{"id": "other", "max_model_len": 8192}]
+            )
+        },
+    )
+    with pytest.raises(EndpointDiscoveryError, match="2 models"):
+        discover(_URL_A)
+
+
+def test_case_d_missing_max_model_len(monkeypatch):
+    _fake_http(monkeypatch, {f"{_URL_A}/models": {"data": [{"id": "m"}]}})
+    with pytest.raises(EndpointDiscoveryError, match="max_model_len"):
+        discover(_URL_A)
+
+
+def test_case_e_comma_list_refused():
+    # The retired multi-endpoint convention: engine-native dp replaced it,
+    # so a comma-list reaching discovery is a stale env — refused BEFORE
+    # any probe (no HTTP fake installed here on purpose).
+    with pytest.raises(EndpointDiscoveryError, match="comma-list"):
+        discover(f"{_URL_A},{_URL_B}")
+
+
+def test_case_f_window_too_small(monkeypatch):
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("tiny", 8192)})
+    with pytest.raises(EndpointDiscoveryError, match="input_budget"):
+        discover(_URL_A)
+
+
+# --------------------------------------------------------------------------- #
+# Case g: tokenizer is a discovered fact                                      #
+# --------------------------------------------------------------------------- #
+
+
+def test_case_g_tokenizer_load_failure(monkeypatch):
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("gemma", 32768)})
+    # Re-enable the REAL _require_tokenizer over a stubbed loader.
+    monkeypatch.setattr(E, "_require_tokenizer", _REAL_REQUIRE_TOKENIZER)
+    import maps.llm.tokenizer as tok
+
+    monkeypatch.setattr(tok, "_tokenizer", lambda m: None)
+    with pytest.raises(EndpointDiscoveryError, match="tokenizer"):
+        discover(_URL_A)
+
+
+# --------------------------------------------------------------------------- #
+# Cases h/i: service URLs are first-class in the fail-loud engine             #
+# --------------------------------------------------------------------------- #
+
+
+def test_case_h_service_unreachable(monkeypatch):
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload()})
+    with pytest.raises(EndpointDiscoveryError, match="'sam'"):
+        discover(_URL_A, {"sam": "http://sam:8772"})
+
+
+def test_case_i_service_identity_mismatch(monkeypatch):
+    # A reachable-but-WRONG server on the right port: /health answers 200
+    # with a foreign identity -> abort instead of a silently-wrong green run.
+    _fake_http(
+        monkeypatch,
+        {
+            f"{_URL_A}/models": _models_payload(),
+            "http://sam:8772/health": {"service": "flight_sim"},
+        },
+    )
+    with pytest.raises(EndpointDiscoveryError, match="WRONG"):
+        discover(_URL_A, {"sam": "http://sam:8772"})
+
+
+def test_service_health_without_identity_field_is_reachability_only(monkeypatch):
+    _fake_http(
+        monkeypatch,
+        {
+            f"{_URL_A}/models": _models_payload(),
+            "http://sam:8772/health": {"status": "ok"},
+        },
+    )
+    s = discover(_URL_A, {"sam": "http://sam:8772"})
+    assert s.sam_url == "http://sam:8772"
+
+
+# --------------------------------------------------------------------------- #
+# Offline + override escape hatches                                           #
+# --------------------------------------------------------------------------- #
+
+
+def test_offline_without_pin_raises():
+    with pytest.raises(EndpointDiscoveryError, match="OFFLINE"):
+        discover(_URL_A, offline=True)
+
+
+def test_offline_with_pin_skips_probes(monkeypatch):
+    _fake_http(monkeypatch, {})  # every URL unreachable — must not matter
+    s = discover(
+        _URL_A,
+        {"sam": "http://sam:8772"},
+        offline=True,
+        override=EndpointOverride("qwen36-35b-a3b", 131072),
+    )
+    assert s.model_id == "qwen36-35b-a3b"
+    assert s.max_model_len == 131072
+    assert s.sam_url == "http://sam:8772"  # frozen unprobed offline
+    assert s.server_declared_window is False  # nothing probed, nothing declared
+
+
+def test_override_cross_checked_against_live_ids(monkeypatch):
+    # The override never bypasses the live check: pin absent from /v1/models
+    # -> abort (stale-override / LoRA-second-card re-entry of the 404).
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("served-model")})
+    with pytest.raises(EndpointDiscoveryError, match="does not match"):
+        discover(_URL_A, override=EndpointOverride("pinned-model", 131072))
+
+
+def test_override_selects_among_many_models(monkeypatch):
+    # Non-vLLM shape: many served models -> the pin picks one, live-checked.
+    _fake_http(
+        monkeypatch,
+        {
+            f"{_URL_A}/models": {
+                "data": [{"id": "m1"}, {"id": "m2"}, {"id": "m3"}]
+            }
+        },
+    )
+    s = discover(_URL_A, override=EndpointOverride("m2", 131072))
+    assert s.model_id == "m2"
+    assert s.max_model_len == 131072
+    # No max_model_len on any entry: a hosted endpoint, already warm.
+    assert s.server_declared_window is False
+
+
+def test_override_on_a_window_declaring_endpoint_stays_self_hosted(monkeypatch):
+    # A pin against a real vLLM (which does report max_model_len) must not
+    # be mistaken for a hosted endpoint — it still has a cold start.
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(max_model_len=131072)})
+    s = discover(_URL_A, override=EndpointOverride("qwen36-35b-a3b", 131072))
+    assert s.server_declared_window is True
+
+
+def test_parse_override():
+    o = parse_override("qwen36-35b-a3b:262144")
+    assert o == EndpointOverride("qwen36-35b-a3b", 262144)
+    with pytest.raises(EndpointDiscoveryError, match="malformed"):
+        parse_override("no-window")
+    with pytest.raises(EndpointDiscoveryError, match="malformed"):
+        parse_override(":123")
+
+
+# --------------------------------------------------------------------------- #
+# install_spec / spec: one authority, install-once-or-abort                   #
+# --------------------------------------------------------------------------- #
+
+
+def _spec(**kw) -> EndpointSpec:
+    base = dict(
+        base_url=_URL_A,
+        model_id="qwen36-35b-a3b",
+        max_model_len=262144,
+        tokenizer_name="Qwen/Qwen3.6-35B-A3B",
+        output_reserve=40000,
+    )
+    base.update(kw)
+    return EndpointSpec(**base)
+
+
+def test_spec_before_install_raises():
+    with pytest.raises(EndpointDiscoveryError, match="no EndpointSpec installed"):
+        E.spec()
+    assert E.spec_installed() is False
+
+
+def test_install_then_read_back():
+    s = _spec()
+    assert E.install_spec(s) is s
+    assert E.spec() is s
+    assert E.spec_installed() is True
+
+
+def test_identical_second_install_is_noop():
+    E.install_spec(_spec())
+    E.install_spec(_spec())  # equal fields: idempotent
+    assert E.spec() == _spec()
+
+
+def test_divergent_second_install_raises():
+    E.install_spec(_spec())
+    with pytest.raises(EndpointDiscoveryError, match="divergent"):
+        E.install_spec(_spec(max_model_len=131072))
+
+
+# --------------------------------------------------------------------------- #
+# LoRA pin: SGLang's ``base:adapter`` OpenAI form                             #
+# --------------------------------------------------------------------------- #
+
+
+def test_lora_pin_validates_both_components(monkeypatch):
+    # SGLang lists the base and each adapter; the adapter entry carries
+    # max_model_len null, so the window check anchors on the BASE entry.
+    _fake_http(
+        monkeypatch,
+        {
+            f"{_URL_A}/models": _models_payload(
+                extra=[{"id": "qwen36-35b-a3b-lora", "max_model_len": None}]
+            )
+        },
+    )
+    s = discover(
+        _URL_A,
+        override=E.parse_override("qwen36-35b-a3b:qwen36-35b-a3b-lora:262144"),
+    )
+    assert s.model_id == "qwen36-35b-a3b:qwen36-35b-a3b-lora"
+    assert s.max_model_len == 262144
+
+
+def test_lora_pin_unserved_adapter_refused(monkeypatch):
+    # A bare-adapter or unserved-adapter pin must refuse: SGLang silently
+    # serves the BASE for a model id with no colon, so an unvalidated pin
+    # would fly the wrong arm while stamping the adapter name.
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload()})
+    with pytest.raises(EndpointDiscoveryError, match="not match the live"):
+        discover(
+            _URL_A,
+            override=E.parse_override("qwen36-35b-a3b:no-such-adapter:262144"),
+        )
+
+
+def test_the_budget_and_the_pin_always_fit_the_window() -> None:
+    """``input_budget + max_output_tokens <= max_model_len``, at EVERY window.
+
+    A transcript compacted exactly to budget is served with ``max_output_tokens``
+    pinned, so if the two do not fit the window together the request 400s on
+    length -- and it 400s only for the episodes that needed compaction most.
+
+    This held above 32,768 and failed below it: ``input_budget`` subtracted
+    ``output_reserve`` (``maxlen // 4``) while the request pins
+    ``max(output_reserve, _MIN_OUTPUT_TOKENS)``, and below 32,768 the floor is
+    the larger. At 24,576 that gave budget 17,408 plus a pinned 8,192 = 25,600
+    against a 24,576 window. Swept rather than spot-checked, because the defect
+    lived in a range nobody had a served model in.
+    """
+    from maps.llm.endpoint_spec import _MIN_INPUT_BUDGET, _output_reserve_for
+
+    # Windows that survive discovery. Below ~18k the reasoner minimum rejects
+    # the endpoint outright, so no EndpointSpec exists to check.
+    for window in (24576, 32768, 49152, 65536, 131072, 200000, 262144,
+                   1048576):
+        spec = EndpointSpec(
+            model_id="m", base_url="u", tokenizer_name="t",
+            max_model_len=window, output_reserve=_output_reserve_for(window),
+        )
+        assert spec.input_budget + spec.max_output_tokens <= window, (
+            f"window={window}: budget {spec.input_budget} + pin "
+            f"{spec.max_output_tokens} exceeds it; a prompt compacted to "
+            f"budget would 400 on length"
+        )
+        assert spec.input_budget >= _MIN_INPUT_BUDGET, (
+            f"window={window}: budget {spec.input_budget} is below the "
+            f"reasoner minimum, so discovery should have refused it"
+        )
+
+
+def test_the_fleet_windows_are_unchanged_by_that_correction() -> None:
+    """Vacuity guard on the fix: it must move nothing a served model uses.
+
+    Every window at or above 32,768 has a reserve that already clears the
+    floor, so the corrected subtraction is the same subtraction there. If these
+    move, the fix stopped being a no-op in production and every stored ledger
+    column's compaction behaviour changed with it.
+    """
+    from maps.llm.endpoint_spec import _output_reserve_for
+
+    for window, expected in ((262144, 221120), (131072, 97280),
+                             (65536, 48128), (32768, 23552)):
+        spec = EndpointSpec(
+            model_id="m", base_url="u", tokenizer_name="t",
+            max_model_len=window, output_reserve=_output_reserve_for(window),
+        )
+        assert spec.input_budget == expected, (
+            f"window={window}: budget moved to {spec.input_budget}, expected "
+            f"{expected} — this was supposed to be a no-op above 32,768"
+        )
+
+
+def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
+    """One closed connection while the arm's relay re-forms is not an
+    unreachable endpoint: the probe asks again, and only a link that stays
+    down is a verdict."""
+    import io
+    import urllib.error
+
+    monkeypatch.setattr(E, "_PROBE_RETRY_S", 0.0)
+    calls: list[int] = []
+
+    class _Resp(io.BytesIO):
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def flaky(req, timeout):
+        calls.append(1)
+        if len(calls) < 3:
+            raise urllib.error.URLError("Remote end closed connection without response")
+        return _Resp(b'{"data": []}')
+
+    monkeypatch.setattr(E.urllib.request, "urlopen", flaky)
+    assert E._get_json("http://arm:18001/v1/models") == {"data": []}
+    assert len(calls) == 3
+
+    calls.clear()
+
+    def dead(req, timeout):
+        calls.append(1)
+        raise urllib.error.URLError("No route to host")
+
+    monkeypatch.setattr(E.urllib.request, "urlopen", dead)
+    with pytest.raises(EndpointDiscoveryError, match="after 3 tries"):
+        E._get_json("http://arm:18001/v1/models")
+    assert len(calls) == E._PROBE_TRIES

@@ -1,0 +1,52 @@
+{
+  "rule": "an episode's result is its FIRST fully complete attempt, ordered by attempt START time",
+  "asserted_by": [
+    "benchmarks/citynav/analysis/tests/test_rows.py",
+    "dashboard/server/tests/test_episode_pick.py"
+  ],
+  "runs": {
+    "citynav_pin_2026-07-25_11-04-15": {
+      "tier": "ledger",
+      "files": 1,
+      "rows": 9,
+      "no_metrics": 3,
+      "timed_out": 2,
+      "infra": 2,
+      "picks": {
+        "replicate::1#1": {
+          "attempt": "maps_20260725_110958_citynav_replicate__1_1",
+          "SR": 1,
+          "NE": 10.0,
+          "why": "started first, completed second; append order would score the SR=0 replicate"
+        },
+        "timed_out::2#2": {
+          "attempt": "maps_20260725_112500_citynav_timed_out__2_2",
+          "SR": 0,
+          "NE": 10.0,
+          "why": "the timed_out attempt started first and scores SR=1; status != ok, so it is not complete"
+        },
+        "only_timeout::3#3": {
+          "attempt": "maps_20260725_112700_citynav_only_timeout__3_3",
+          "SR": 0,
+          "NE": 10.0,
+          "why": "no complete attempt; a timed_out row is scored and stays in the denominator through the scored fallback"
+        },
+        "retry::4#4": {
+          "attempt": "maps_20260725_113500_citynav_retry__4_4",
+          "SR": 1,
+          "NE": 10.0,
+          "why": "the infra attempt started first; it is dropped at read, so the re-queued attempt is the result"
+        }
+      },
+      "unscored": [
+        "crashed::5#5"
+      ],
+      "never_landed": [
+        "flying::6#6"
+      ]
+    }
+  },
+  "scope": "`picks` is the SCORED set both readers publish: run_report.load_run's mapping, and episode_pick.pick's. `unscored` episodes appear in the ledger but produced no metrics on any non-infra attempt -- they are counted in no_metrics and must NOT be keyed as a result. `never_landed` episodes have an episode.json under a worker dir (status flying) and NO ledger row: an owner never appends a flying row, so they contribute no attempt to either reader.",
+  "counts": "rows counts every ledger line; no_metrics every line without a metrics dict (infra rows included); timed_out every line with status timed_out; infra every line with status infra.",
+  "tiers": "Both readers name the tier that answered. 'ledger' is the run's own episodes.jsonl. The canonical reader also has a separate 'lanes' tier for lane fleets (lane*/episodes.jsonl, lane*/inst*/episodes.jsonl), which the dashboard's shallow glob folds into 'ledger'; no lane layout is in this fixture, so the pin does not cover that difference."
+}

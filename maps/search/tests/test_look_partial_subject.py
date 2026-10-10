@@ -1,0 +1,92 @@
+"""A subject bigger than its frame says so, in metres.
+
+The three existing partial-visibility captions all key on the subject being
+partly or wholly OUT of the window. The case that confuses a reader most
+passes all three: centroid in frame, footprint in frame, and the shape
+running kilometres past the window on every side. Cal City's
+``landuse=residential`` relation is 1,162 x 2,672 m against a 300 m ceiling,
+and the badge then binds its digit to two line fragments in a corner with
+nothing saying the thing continues.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from maps.search.render.look_render import render_candidate_crops
+
+MAP = "unit_test_partial_block"
+GROUND_Z = 10.0
+
+
+@pytest.fixture
+def ortho_dir(tmp_path, monkeypatch):
+    from maps.perception.ortho import camera_model
+    from maps.perception.ortho.ground_level import GROUND_LEVEL
+
+    n = 4000                                   # 400 m at 0.1 m/px
+    rgb = np.full((n, n, 3), 120, dtype=np.uint8)
+    out = tmp_path / "ortho"
+    out.mkdir()
+    np.savez(
+        out / f"{MAP}_ortho_m0.1.npz",
+        rgb=rgb,
+        height=np.full((n, n), GROUND_Z + 5.0, dtype=np.float32),
+        alpha=np.full((n, n), 255, dtype=np.uint8),
+        x_min=np.float64(0.0),
+        y_min=np.float64(0.0),
+        px_per_m=np.float64(10.0),
+    )
+    monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
+    camera_model._ORTHO_RASTER_CACHE.clear()
+    return tmp_path
+
+
+def _crop(ortho_dir, boundary):
+    xs = [p[0] for p in boundary]
+    ys = [p[1] for p in boundary]
+    req = {"center_fid": "f0", "center_xy": [(min(xs) + max(xs)) / 2,
+                                             (min(ys) + max(ys)) / 2],
+           "center_label": "f0", "center_boundary": boundary,
+           "annotate": False, "marks": []}
+    recs = render_candidate_crops([req], map_name=MAP, rgbd_dir=ortho_dir)
+    assert len(recs) == 1, recs
+    return recs[0]
+
+
+def test_a_subject_that_overruns_its_frame_reports_its_true_size(ortho_dir):
+    # 900 x 1200 m against a 100 m budget ceiling on this 0.1 m/px ortho.
+    big = [[-400.0, -550.0], [500.0, -550.0], [500.0, 650.0], [-400.0, 650.0]]
+    rec = _crop(ortho_dir, big)
+    assert rec["subject_outline_cut"] is True, rec
+    assert rec["subject_extent_m"] == [900.0, 1200.0], rec["subject_extent_m"]
+    # ...and it is still IN the window by every existing test, which is why
+    # none of the three older captions covers it.
+    assert rec["subject_in_window"] is True, rec
+    assert rec["subject_centroid_in_window"] is True, rec
+
+
+def test_a_subject_inside_its_frame_is_not_flagged(ortho_dir):
+    # VACUITY FLOOR: without this, a renderer that flags everything passes.
+    small = [[195.0, 195.0], [205.0, 195.0], [205.0, 205.0], [195.0, 205.0]]
+    rec = _crop(ortho_dir, small)
+    assert rec["subject_outline_cut"] is False, rec
+    assert rec["subject_extent_m"] == [10.0, 10.0], rec["subject_extent_m"]
+
+
+def test_the_caption_states_the_extent_and_calls_the_ink_a_fragment():
+    from maps.search.parse_compile.reasoner_loop import _look_vision_text
+
+    text = _look_vision_text([{
+        "center_fid": "f0", "center_label": "f0",
+        "context_m": 100.0, "side_px": 1000,
+        "world_window": [0.0, 0.0, 100.0, 100.0],
+        "subject_in_window": True, "subject_centroid_in_window": True,
+        "subject_on_data": True, "window_valid_frac": 1.0,
+        "subject_extent_m": [900.0, 1200.0], "subject_outline_cut": True,
+        "legend": [{"digit": 1, "fid": "f0", "label": "f0",
+                    "role": "center"}],
+    }])
+    assert "900 x 1200 m" in text, text
+    assert "fragment" in text, text
