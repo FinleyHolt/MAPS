@@ -15,7 +15,7 @@ from benchmarks.citynav.run_benchmark.error_taxonomy import (
 from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
 from pathlib import Path
 from maps.llm import endpoint_spec as endpoint_spec_module
-from maps.perception.geometry.sensor_spec import resolve_sensor
+from maps.perception.geometry.sensor_spec import resolve_sensor, served_description
 from maps.search import MapsCompiler
 import os
 import time
@@ -37,7 +37,8 @@ def _build_compiler(cfg: RunConfig) -> MapsCompiler:
     client-side model knob.
     """
     _sensor = resolve_sensor(cfg.sensor) if cfg.sensor else None
-    _sensor_description = _sensor.description if _sensor is not None else ""
+    _sensor_description = (served_description(_sensor, cfg.start_altitude_agl_m)
+                           if _sensor is not None else "")
     return MapsCompiler(sensor_description=_sensor_description)
 
 

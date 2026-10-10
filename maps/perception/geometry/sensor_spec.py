@@ -175,9 +175,9 @@ _ARCHER_IMX290_NADIR_DESCRIPTION = (
 # sortie 20260910T162111Z it reads this entry's focal length long by 0.3%
 # over 4,140 pairs at 88.8 m/s and 1,034 m AGL (`flow_timing.json`,
 # `lens.focal_scale` -0.0028), three metres of terrain at that height, where
-# the 2/3" figure reads a fifth. Nadir-mounted on the C-12 belly.
-# At the 6,000 ft AGL test band this is a 517 x 388 m footprint at
-# 0.25 m/px -- a real recon frame, not the coarse 224 px ortho square.
+# the 2/3" figure reads a fifth. Nadir-mounted on the C-12 belly. The
+# served description states its footprint at the height the config flies
+# (:func:`served_description`).
 _ORYX_ORX32_25MM_INTRINSICS = CameraIntrinsics(
     hfov_deg=16.09, vfov_deg=12.10, image_width=2048, image_height=1536
 )
@@ -185,9 +185,10 @@ _ORYX_ORX32_25MM_INTRINSICS = CameraIntrinsics(
 
 _ORYX_ORX32_25MM_NADIR_DESCRIPTION = (
     "RGB only, 2048x1536, 16.1 deg HFOV x 12.1 deg VFOV, pointed "
-    "straight down. Narrow telephoto-style nadir FOV: at the 6,000 ft AGL "
-    "band the footprint is ~517 x 388 m at ~0.25 m/px, so the frame covers a "
-    "few city blocks, not a whole town, and a 5 m object spans ~20 px. Depth "
+    "straight down. Narrow telephoto-style nadir FOV: at the {agl_ft:,.0f} ft "
+    "AGL this run flies, the footprint is ~{w:.0f} x {h:.0f} m at ~{gsd:.2f} m/px, "
+    "so the frame covers a few city blocks, not a whole town, and a 5 m object "
+    "spans ~{px_5m:.0f} px. Depth "
     "is synthesised post-flight by raycasting the terrain surface (no stereo), "
     "so it has no sensor range envelope.\n\n"
     "OBSERVABILITY (use this to judge whether absent attributes are "
@@ -200,7 +201,7 @@ _ORYX_ORX32_25MM_NADIR_DESCRIPTION = (
     "  Hard or unreliable: building wall color, facades, story count and "
     "vertical extent (the 2.5D DSM does not model walls); text legibility on "
     "signage or tail numbers; small entity counts +-1; objects smaller than "
-    "~0.5 m (about 2 px at the 6,000 ft band).\n"
+    "~0.5 m (about {px_half_m:.0f} px at that height).\n"
     "When an operator description references a hard-to-observe attribute, do "
     "not penalize the verdict for its absence."
 )
@@ -288,6 +289,24 @@ _REGISTRY: dict[str, SensorSpec] = {
         description=_ORYX_ORX32_25MM_NADIR_DESCRIPTION,
     ),
 }
+
+
+def served_description(spec: SensorSpec, agl_m: float | None) -> str:
+    """The rig's description as served. A description that states a footprint
+    states the sensor's own (``sensor_frame.footprint_m``) at ``agl_m``, the
+    height the config flies (``start_altitude_agl_m``); one that states none
+    is served as written."""
+    if "{" not in spec.description:
+        return spec.description
+    if agl_m is None:
+        raise ValueError(f"{spec.name} states its footprint at the height the run flies: "
+                         "the config sets no start_altitude_agl_m")
+    from maps.perception.ortho.sensor_frame import footprint_m  # noqa: PLC0415
+
+    w, h = footprint_m(spec, agl_m)
+    gsd = w / spec.intrinsics.image_width
+    return spec.description.format(agl_ft=agl_m / 0.3048, w=w, h=h, gsd=gsd, px_5m=5.0 / gsd,
+                                   px_half_m=0.5 / gsd)
 
 
 def list_sensors() -> list[str]:

@@ -1,8 +1,9 @@
 """Bench-only withholds: each takes exactly its part away, and none serves
 the flown text byte for byte.
 
-The flown baselines are the contract dumps of the flown engine (calcity rig,
-citynav rig, no rig), pinned here by sha256.
+The baselines are the contract dumps of the flown engine (calcity rig,
+citynav rig, no rig), pinned here by sha256; the calcity rig's states its
+footprint at the 914.4 m AGL configs/calcity.yaml flies.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from maps.search.parse_compile.reasoner_loop import _PICTURE_WITHHELD
 from maps.search.tests.test_look_set_frame import _cars, _fly, _run, ortho_dir  # noqa: F401
 
 FLOWN_SHA256 = {
-    "oryx_orx32_25mm_nadir": "d20444de5056b21cb0e84a78dd6c37991a9257d7dc8a5e34900936ac993cffd7",
+    "oryx_orx32_25mm_nadir": "32c45644985a346c96f4a6748d5b74c0c6c48120369404e04030233765e48115",
     "nadir_1008_90": "ae04a35e9450365d0bf3fe16e137285cc72a11b8adc0d01ac10e204e16884dec",
     None: "761e32b3eebe88c7433e939a1f06426c4950da755a5c566d2d97dbb7041dd1fc",
 }
@@ -31,7 +32,7 @@ FLOWN_SHA256 = {
 
 def _dump(monkeypatch, names: str, sensor: str | None = "oryx_orx32_25mm_nadir") -> str:
     monkeypatch.setenv(W.ENV, names)
-    return contract.dump_text(sensor=sensor)
+    return contract.dump_text(sensor=sensor, agl_m=914.4)
 
 
 def _sections(text: str) -> dict[str, str]:

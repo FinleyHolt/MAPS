@@ -8,7 +8,7 @@ constants; the flight log records what a real run actually sent (the
 capture side). Diff two shas by dumping at each.
 
   python -m maps.search.parse_compile.contract
-  python -m maps.search.parse_compile.contract --sensor <rig>
+  python -m maps.search.parse_compile.contract --sensor <rig> [--agl-m <m>]
   python -m maps.search.parse_compile.contract --rendered   # template bytes
   python -m maps.search.parse_compile.contract --withhold look,images
 
@@ -33,17 +33,17 @@ import json
 import os
 import sys
 
-from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor
+from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor, served_description
 from maps.search.parse_compile import prompts
 from maps.search.parse_compile import reasoner_agent as ra
 
 _SAMPLE_INSTRUCTION = "<operator cue>"
 
 
-def assemble(sensor: str | None = None) -> dict:
+def assemble(sensor: str | None = None, agl_m: float | None = None) -> dict:
     """The contract parts exactly as served: system text (with the optional
-    sensor block fused the way ``Reasoner`` fuses it) and the mission
-    tools."""
+    sensor block fused the way ``Reasoner`` fuses it, its footprint at
+    ``agl_m``) and the mission tools."""
     description = ""
     if sensor:
         try:
@@ -54,7 +54,10 @@ def assemble(sensor: str | None = None) -> dict:
             raise SystemExit(
                 f"contract: unknown sensor '{sensor}' -- one of: "
                 + ", ".join(list_sensors()))
-        description = spec.description
+        try:
+            description = served_description(spec, agl_m)
+        except ValueError as exc:
+            raise SystemExit(f"contract: {exc} (pass --agl-m)") from exc
     system = ra.served_system_text(sensor_description=description)
     return {"system": system, "tools": prompts.served_tools()}
 
@@ -90,8 +93,8 @@ def surface_lines() -> list[str]:
     return out
 
 
-def dump_text(sensor: str | None = None) -> str:
-    c = assemble(sensor=sensor)
+def dump_text(sensor: str | None = None, agl_m: float | None = None) -> str:
+    c = assemble(sensor=sensor, agl_m=agl_m)
     tools_json = json.dumps(c["tools"], indent=2, ensure_ascii=False)
     names = ", ".join(t["function"]["name"] for t in c["tools"])
     # The SURFACE section replaces the sentence dump's LANGUAGE + LEXICON.
@@ -119,6 +122,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sensor", metavar="RIG",
                     help="append this rig's sensor block, as a run does; "
                          "one of the sensor_spec registry names")
+    ap.add_argument("--agl-m", type=float, default=None,
+                    help="the height above ground the run flies, for a rig that "
+                         "states its footprint (configs/calcity.yaml: 914.4)")
     ap.add_argument("--rendered", action="store_true",
                     help="print the chat-template render instead of the "
                          "sectioned dump; token count goes to stderr")
@@ -135,13 +141,13 @@ def main(argv: list[str] | None = None) -> int:
         active()
 
     if not args.rendered:
-        sys.stdout.write(dump_text(sensor=args.sensor))
+        sys.stdout.write(dump_text(sensor=args.sensor, agl_m=args.agl_m))
         return 0
 
     # Lazy: maps.llm.tokenizer eagerly imports transformers.
     from maps.llm.tokenizer import _tokenizer
 
-    c = assemble(sensor=args.sensor)
+    c = assemble(sensor=args.sensor, agl_m=args.agl_m)
     tok = _tokenizer(args.model)
     if tok is None:
         print(f"contract: tokenizer for '{args.model}' unavailable "

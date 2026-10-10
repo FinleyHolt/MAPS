@@ -156,7 +156,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
     from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.perception import make_perception  # noqa: PLC0415
     from maps.perception.geometry.geolocate import TileFrame  # noqa: PLC0415
-    from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
+    from maps.perception.geometry.sensor_spec import resolve_sensor, served_description  # noqa: PLC0415
     from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider  # noqa: PLC0415
     from maps.search import MapsCompiler, SearchLoop, SearchLoopConfig  # noqa: PLC0415
     from maps.sws import GridDomain, WorldState  # noqa: PLC0415
@@ -189,7 +189,8 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
     sensor = resolve_sensor(cfg.sensor) if cfg.sensor else None
     if sensor is None:
         raise RuntimeError(f"cfg.sensor did not resolve a SensorSpec: {cfg.sensor!r}")
-    compiler = MapsCompiler(sensor_description=sensor.description, workdir=workdir)
+    compiler = MapsCompiler(sensor_description=served_description(sensor, cfg.start_altitude_agl_m),
+                            workdir=workdir)
 
     start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.episode_id)
     search_loop = SearchLoop(
