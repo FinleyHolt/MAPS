@@ -211,7 +211,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
         # crop is cut from the run's own imagery instead (``look_imagery``).
         rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
     )
-    search_loop.start(prebake_graph=graph, runtime_graph=graph)
+    search_loop.start(graph)
 
     state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m, graph=graph)
     state.record_visit()

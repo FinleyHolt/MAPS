@@ -41,7 +41,7 @@ def _loop_over(cells):
         nodes = {"prior_9": _Node()}
 
     class _S:
-        runtime_graph = None
+        runtime_graph = _Graph()
 
     class _Loop(SearchLoop):     # read-only properties on the real loop, so
         _cell_size_m = _CELL_M   # the stand-in overrides the class
@@ -50,7 +50,6 @@ def _loop_over(cells):
 
     lp = _Loop.__new__(_Loop)
     lp._lock = threading.RLock()
-    lp._graph = _Graph()
     return lp
 
 
@@ -171,7 +170,7 @@ def test_nothing_from_the_vector_ring_leaks_into_the_stops():
     the clipping mismatch. Not one stop may come from it."""
     cells = [[100, j] for j in range(50, 60)]
     lp = _loop_over(cells)
-    lp._graph.nodes["prior_9"].world_contour = [
+    lp.state.runtime_graph.nodes["prior_9"].world_contour = [
         [100.0, 200.0], [118.0, 200.0], [118.0, 202.0],
         [2500.0, 202.0], [2500.0, 900.0], [100.0, 202.0]]
     stops = lp.node_coverage_stops("prior_9", 20.0)
@@ -189,7 +188,7 @@ def test_a_fid_with_no_cells_has_nothing_to_cover():
         cells = np.array([])
         centroid = (0, 0)
 
-    lp._graph.nodes["prior_9"] = _Bare()
+    lp.state.runtime_graph.nodes["prior_9"] = _Bare()
     assert lp.node_coverage_stops("prior_9", 20.0) is None
 
 

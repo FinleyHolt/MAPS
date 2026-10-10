@@ -275,7 +275,7 @@ def run_episode(
             # passed as a str so maps.search stays benchmark-agnostic.
             rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
         )
-        search_loop.start(prebake_graph=graph, runtime_graph=graph)
+        search_loop.start(graph)
 
     tile_frame = TileFrame(
         x_min=float(assets.bounds.x_min),

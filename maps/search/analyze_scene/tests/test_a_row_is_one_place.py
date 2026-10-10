@@ -237,12 +237,11 @@ def test_the_flown_pose_is_the_row_s_served_xy():
     # centroid->world conversion -- so the fixture supplies that rather
     # than shadowing the property.
     loop = SearchLoop.__new__(SearchLoop)
-    loop._graph = _Graph()
     loop._tile_origin_xy = (0.0, 0.0)
     loop._world_state = type("W", (), {
         "grid_domain": type("D", (), {"cell_size_m": 2.0})()})()
     loop._lock = __import__("threading").RLock()
-    loop._state = type("S", (), {"runtime_graph": None})()
+    loop._state = type("S", (), {"runtime_graph": _Graph()})()
 
     _c, anchors = build_surface([], ways, (0.0, 0.0), 2.0)
     assert anchors, "fixture built no rows"

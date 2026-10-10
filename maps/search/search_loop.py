@@ -146,7 +146,6 @@ class SearchLoop:
         from maps.perception.world_tracker import WorldTracker
 
         self._world_tracker = WorldTracker()
-        self._graph: object | None = None  # frozen prebake graph
         self._state: _State | None = None
         # Re-entrant lock so a worker thread and the main thread can both
         # reach ``update_perception`` / ``snapshot`` / the commit predicates
@@ -161,14 +160,9 @@ class SearchLoop:
     # Lifecycle
     # ------------------------------------------------------------------ #
 
-    def start(
-        self,
-        *,
-        prebake_graph,
-        runtime_graph,
-    ) -> None:
-        self._graph = prebake_graph
-        self._state = _State(runtime_graph=runtime_graph)
+    def start(self, graph) -> None:
+        """Bind the episode's graph: the prior seed every detection folds into."""
+        self._state = _State(runtime_graph=graph)
 
     # ------------------------------------------------------------------ #
     # Grid frame conversions
@@ -206,21 +200,22 @@ class SearchLoop:
     def _prior_surface_xy_locked(self) -> dict:
         """``{fid: (x, y)}`` for every PRIOR row, as the surface serves it.
 
-        Caller MUST hold ``self._lock``. Built once and kept: the prebake
-        graph is frozen for the mission, so it cannot go stale, and
-        rebuilding costs ~10 s on the calcity bake.
+        Caller MUST hold ``self._lock``. Built once and kept: prior rows do
+        not move during a mission, and rebuilding costs ~10 s on the calcity
+        bake.
         """
         cached = getattr(self, "_prior_xy_cache", None)
         if cached is not None:
             return cached
         out: dict = {}
-        if self._graph is not None and hasattr(self._graph, "nodes"):
+        g = self.state.runtime_graph
+        if g is not None:
             from maps.search.analyze_scene.geom_program import (  # noqa: PLC0415
                 build_surface_from_graph,
             )
 
             _c, anchors = build_surface_from_graph(
-                self._graph.nodes.items(), self._tile_origin_xy,
+                g.nodes.items(), self._tile_origin_xy,
                 float(self._cell_size_m))
             out = {str(r["fid"]): (float(r["xy"][0]), float(r["xy"][1]))
                    for r in anchors if r.get("xy")}
@@ -251,19 +246,10 @@ class SearchLoop:
           model cannot name one, and the fallback exists for readers walking
           the graph directly.
 
-        Caller MUST hold ``self._lock``. Tries the live runtime graph first,
-        then the frozen prebake (prior) graph, so a pre-flight
-        ``cityref_<id>`` candidate still grounds when it has not been folded
-        into the runtime graph. Returns ``None`` only when the fid is in
-        neither graph or has no position at all.
+        Caller MUST hold ``self._lock``. Returns ``None`` only when the fid
+        is off the graph or has no position at all.
         """
-        s = self.state
-        node = None
-        rg = getattr(s, "runtime_graph", None)
-        if rg is not None and hasattr(rg, "nodes"):
-            node = rg.nodes.get(target_fid)
-        if node is None and self._graph is not None and hasattr(self._graph, "nodes"):
-            node = self._graph.nodes.get(target_fid)
+        node = self._node_for_fid_locked(target_fid)
         if node is None:
             return None
         w = getattr(node, "world_xy", None)
@@ -280,21 +266,14 @@ class SearchLoop:
             return self._world_xy_for_node_locked(target_fid)
 
     def _node_for_fid_locked(self, fid: str):
-        """The graph node for ``fid`` (runtime graph first, then the frozen
-        prebake), or ``None``. Caller MUST hold ``self._lock``. Mirrors the
-        node-resolution in :meth:`_world_xy_for_node_locked`."""
-        rg = getattr(self.state, "runtime_graph", None)
-        if rg is not None and hasattr(rg, "nodes"):
-            n = rg.nodes.get(fid)
-            if n is not None:
-                return n
-        if self._graph is not None and hasattr(self._graph, "nodes"):
-            return self._graph.nodes.get(fid)
-        return None
+        """The graph node for ``fid``, or ``None``. Caller MUST hold
+        ``self._lock``."""
+        g = self.state.runtime_graph
+        return g.nodes.get(fid) if g is not None else None
 
     def _cells_xy_locked(self, target_fid: str) -> list[tuple[float, float]] | None:
         """The centres of this fid's cells in world metres, its footprint as
-        the bake rasterized it; None off both graphs or without cells. Under
+        the bake rasterized it; None off the graph or without cells. Under
         the lock."""
         node = self._node_for_fid_locked(target_fid)
         cells = getattr(node, "cells", None) if node is not None else None
@@ -312,7 +291,7 @@ class SearchLoop:
     def node_cells_xy(self, target_fid: str) -> list[tuple[float, float]] | None:
         """The ground this fid stands on, as the centres of its cells in
         world metres: the area a flight to it has to hold before it has
-        arrived (the station's arrival rule). None off both graphs or
+        arrived (the station's arrival rule). None off the graph or
         without cells."""
         with self._lock:
             return self._cells_xy_locked(target_fid)
@@ -324,7 +303,7 @@ class SearchLoop:
         """Points ON this fid's footprint, in world metres, walking the
         shape along its length — the stops an ``explore`` flies.
 
-        ``None`` when the fid is on neither graph or carries no cells.
+        ``None`` when the fid is off the graph or carries no cells.
         Flying to the centroid alone lands within 20 m of the target on
         65.6% of the calcity set; a point anywhere in this footprint does
         on 97.6%. That 32-point gap used to be reached by the model naming
@@ -486,19 +465,14 @@ class SearchLoop:
         object while a prior CityRefer node can be ~20-50m offset, so the
         detection is the more precise commit. Missing node / unknown
         provenance -> False (treated as non-detected)."""
-        nodes = getattr(self.state.runtime_graph, "nodes", None)
-        node = nodes.get(fid) if (nodes is not None and hasattr(nodes, "get")) else None
-        return bool(node is not None and getattr(node, "provenance", "") == "detected")
+        node = self._node_for_fid_locked(fid)
+        return node is not None and node.provenance == "detected"
 
     @property
     def state(self) -> _State:
         if self._state is None:
             raise RuntimeError("SearchLoop.start must be called before update.")
         return self._state
-
-    @property
-    def runtime_graph(self):
-        return self.state.runtime_graph
 
     # ------------------------------------------------------------------ #
     # C4 three-verb surface: PerceptionDirector plumbing
