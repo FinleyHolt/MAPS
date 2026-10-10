@@ -20,8 +20,8 @@ detections into the graph) and returns the flight report the model reads.
 | The Python surface: executing a block, the library calls, rows, `.filter` and `.order` | `search/parse_compile/python_surface.py` |
 | Compiling library calls onto geometry ops | `search/parse_compile/code_surface.py` |
 | The conversation on disk (`conversation.jsonl`) | `search/parse_compile/conversation.py` |
-| A tour of viewpoints for `explore`, and the flight-side cursor | `search/parse_compile/tour_synth.py`, `search/parse_compile/tour_state.py` |
-| Which classes the segmenter watches | `search/parse_compile/perception_director.py`, `search/parse_compile/concept_union.py` |
+| The flown stops and the flight-side cursor over them | `search/parse_compile/tour_state.py` |
+| Which classes the segmenter watches | `search/parse_compile/perception_director.py`, `search/parse_compile/compiler.py` |
 | The geometry op program behind `find`, `intersection`, `ends_of`, `distance` | `search/analyze_scene/geom_program.py`, `search/analyze_scene/geom_compute.py`, `search/analyze_scene/row_geometry.py` |
 | Matching a query to rows by name | `search/analyze_scene/text_match.py` |
 | Side-of-feature and facing words | `search/analyze_scene/cardinal_side.py` |
@@ -37,7 +37,7 @@ detections into the graph) and returns the flight report the model reads.
 | Detections stamped onto the tile grid | `perception/ortho/detection_stamping.py` |
 | World-space tracking of detections across flights | `perception/world_tracker.py` |
 | Seen colour of a detection | `perception/viz/color.py` |
-| Where to fly to see a target | `perception/viewpoint/` |
+| Catalog-prior footprints projected onto the ortho crop | `perception/viewpoint/` |
 | Endpoint discovery: served model, window, output reserve | `llm/endpoint_spec.py` |
 | Per-model sampling envelopes and the reasoning effort | `llm/model_cards.py`, `llm/sampling.py` |
 | The chat-completions transport and its flight log | `llm/http.py` |

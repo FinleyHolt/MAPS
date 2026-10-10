@@ -35,10 +35,11 @@ from maps.search.parse_compile.conversation import (
     ConversationLog,
 )
 from maps.search.parse_compile.reasoner_loop import MissionSpec, run_mission
-from maps.search.parse_compile.tour_state import FeatureTour, TourViewpoint
-from maps.search.parse_compile.tour_synth import (
+from maps.search.parse_compile.tour_state import (
     VIEW_POSITION_CURRENT,
     VIEW_POSITION_MARKER,
+    FeatureTour,
+    TourViewpoint,
 )
 from maps.search.pose import RobotPose
 from maps.util.xy_token import parse_xy_token
