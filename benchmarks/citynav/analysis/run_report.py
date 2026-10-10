@@ -42,8 +42,8 @@ def load_run(root: Path) -> tuple[dict[str, dict], int]:
     COMPLETION, so last-row-wins scored whichever replicate happened to
     finish last, which under the pre-f22e8fd dispatch was a coin flip.
 
-    ``no_metrics`` is a ROW count: ledger rows carrying no metrics dict at
-    all. It is NOT a count of unscored episodes -- one episode can
+    ``no_metrics`` is a ROW count: non-infra ledger rows carrying no
+    metrics dict at all. It is NOT a count of unscored episodes -- one episode can
     contribute both a crash row and a scored row.
 
     An episode whose pick carries no metrics (it never committed) scores

@@ -294,8 +294,9 @@ def read_attempts(
 
     Infra rows are counted and DROPPED -- they never got a fair run, so
     they must not represent their episode even through the last-resort
-    fallback. Rows with no derivable episode_id cannot be keyed and are
-    dropped too, but still count in ``rows`` and ``no_metrics``.
+    fallback, and do not count in ``no_metrics``. Rows with no derivable
+    episode_id cannot be keyed and are dropped too, but still count in
+    ``rows`` and ``no_metrics``.
     """
     attempts: list[Attempt] = []
     rows = no_metrics = timed_out = infra = 0
@@ -303,14 +304,14 @@ def read_attempts(
     for source in files:
         for row in iter_json_rows(source):
             rows += 1
-            m = metrics(row)
-            if not m:
-                no_metrics += 1
             if row.get("status") == "timed_out":
                 timed_out += 1
             if is_infra_abort(row):
                 infra += 1
                 continue
+            m = metrics(row)
+            if not m:
+                no_metrics += 1
             eid = episode_id(row, m)
             if not eid:
                 continue

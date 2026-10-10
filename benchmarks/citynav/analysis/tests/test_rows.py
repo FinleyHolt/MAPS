@@ -126,7 +126,7 @@ def test_an_infra_abort_never_represents_its_episode(tmp_path):
     picked, stats = rows.load_attempts(root)
     assert "e::5#5" not in picked
     assert stats.infra == 1
-    assert stats.no_metrics == 1
+    assert stats.no_metrics == 0
 
 
 # --------------------------------------------------------------------------
@@ -168,7 +168,7 @@ def test_a_crash_row_with_no_workdir_is_counted_and_never_wins(tmp_path):
     root = _run(tmp_path, naked, _ledger("e::8#8", "20260725_120000", 1))
     picked, stats = rows.load_attempts(root)
     assert _picked_stamp(picked["e::8#8"]) == "20260725_120000"
-    assert stats.rows == 2 and stats.infra == 1 and stats.no_metrics == 1
+    assert stats.rows == 2 and stats.infra == 1 and stats.no_metrics == 0
 
 
 # --------------------------------------------------------------------------
