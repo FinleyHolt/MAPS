@@ -262,6 +262,21 @@ def test_a_syntax_error_echoes_the_offending_line():
     assert "**(c - f)2" in msg and "^" in msg, msg
 
 
+def test_a_compile_stage_syntax_error_reaches_the_model():
+    """A repeated keyword argument passes ast.parse and is rejected only by
+    compile(); it must come back as a tool error the model reads, not end
+    the episode as infra."""
+    with pytest.raises(CodeError) as e:
+        scan_block('r = find("car", near="a", near="b")\n')
+    assert "keyword argument repeated" in str(e.value)
+    reply, fr, _f, _d = _drive([
+        [_run('r = find("car", near="a", near="b")\n')],
+        "done",
+    ])
+    err = _tool_results(fr)[0].get("error") or ""
+    assert "keyword argument repeated" in err, err
+
+
 def test_an_unknown_call_gets_a_did_you_mean():
     reply, fr, _f, _d = _drive([
         [_run('r1 = find("car")\nnarow(r1, within="the depot")\n')],

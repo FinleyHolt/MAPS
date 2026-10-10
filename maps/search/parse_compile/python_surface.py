@@ -247,6 +247,9 @@ def scan_block(code: str) -> ast.Module:
     """
     try:
         tree = ast.parse(code)
+        # Some syntax errors (a repeated keyword argument) are raised by the
+        # compiler, not the parser; uncaught they end the episode as infra.
+        compile(tree, BLOCK_FILENAME, "exec")
     except SyntaxError as e:
         where = ""
         if e.text and e.text.strip():
