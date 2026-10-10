@@ -19,7 +19,7 @@ def make_mission(built, make_twin, make_live, tmp_path):
         workdir = tmp_path / "sortie" / "run"
         workdir.mkdir(parents=True)
         m = M.Mission(episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,
-                      live=live)
+                      live=live, run_no=1)
         m.map_name, m._tiles_dir = "calcity", built[0]
         return m, twin
     return make
@@ -108,13 +108,12 @@ def test_a_leg_whose_area_the_aircraft_never_reaches_is_lost(built, make_mission
     assert m._wait_arrival((600.0, 1100.0), area=area_ll, timeout_s=5.0) == "lost"
 
 
-def test_the_record_is_a_ledger_row_the_run_report_reads(built, make_mission):
-    from benchmarks.citynav.analysis import rows as R
-
+def test_a_report_banks_one_ledger_row_and_a_second_report_replaces_it(built, make_mission):
     m, _twin = make_mission()
     m.started_at = 0.0
     m.status, m.ended_by = M.STATE_AWAITING, "reply"
     m.bank()
-    row = json.loads((m.workdir.parent / "episodes.jsonl").read_text().splitlines()[0])
-    assert row["episode_id"] == "calcity::t" and row["status"] == "ok" and row["workdir"] == "run"
-    assert R.attempt_stamp(row) == ""     # the twin's CLI mints maps_<stamp> workdirs; this one is bare
+    m.bank()
+    rows = [json.loads(line) for line in (m.workdir.parent / "episodes.jsonl").read_text().splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["episode_id"] == "calcity::t" and rows[0]["status"] == "ok" and rows[0]["workdir"] == "run"
