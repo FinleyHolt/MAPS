@@ -257,3 +257,20 @@ def test_an_effort_the_card_does_not_take_is_refused(monkeypatch):
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.90")
     with pytest.raises(ValueError, match="'0.9'"):
         run_manifest.settle_effort("inkling-small")
+
+
+def test_a_root_with_episodes_and_no_manifest_is_refused(stub_run, tmp_path):
+    """A ledger with no record of what flew it cannot be resumed into: the
+    resume would write a manifest describing only itself."""
+    (tmp_path / "episodes.jsonl").write_text('{"episode_id": "e", "status": "ok"}\n')
+    with pytest.raises(run_manifest.ManifestIdentityError, match="no run_manifest.json"):
+        run_manifest.emit_or_verify(tmp_path, stub_run, log=lambda *_: None)
+    assert not (tmp_path / run_manifest.MANIFEST_NAME).exists()
+
+
+def test_an_unreadable_manifest_is_refused_in_one_line(stub_run, tmp_path):
+    path = tmp_path / run_manifest.MANIFEST_NAME
+    path.write_text('{"schema": "maps.run_manifest/v1", ')
+    with pytest.raises(run_manifest.ManifestIdentityError, match="unreadable") as e:
+        run_manifest.emit_or_verify(tmp_path, stub_run, log=lambda *_: None)
+    assert str(path) in str(e.value) and "\n" not in str(e.value)

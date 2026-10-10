@@ -47,6 +47,7 @@ import time
 from pathlib import Path
 
 from benchmarks import _git_provenance, repo_provenance, sha256_file
+from benchmarks.citynav.episodes import EPISODES_JSONL
 
 SCHEMA = "maps.run_manifest/v1"
 MANIFEST_NAME = "run_manifest.json"
@@ -471,13 +472,23 @@ def verify_replay(source: dict, fresh: dict) -> None:
 def emit_or_verify(out_root: Path, manifest: dict, log=print) -> Path:
     """First entry writes the manifest (write-once); re-entry into the same
     run root verifies identity and appends a ``resumes`` entry. Raises
-    ``ManifestIdentityError`` on drift — the caller refuses the run."""
+    ``ManifestIdentityError`` on drift, on a manifest that does not read, and
+    on a root holding a ledger but no manifest — the caller refuses the run."""
     path = Path(out_root) / MANIFEST_NAME
     if not path.exists():
+        if (Path(out_root) / EPISODES_JSONL).exists():
+            raise ManifestIdentityError(
+                f"{out_root} holds episodes.jsonl and no run_manifest.json: "
+                "nothing records what flew those rows, so a resume cannot be "
+                "checked against them. Use a new root."
+            )
         path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         log(f"run_manifest: wrote {path}")
         return path
-    prior = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        prior = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ManifestIdentityError(f"{path} unreadable: {exc}") from None
     drift = identity_drift(prior, manifest)
     if drift:
         raise ManifestIdentityError(

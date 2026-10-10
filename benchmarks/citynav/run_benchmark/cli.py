@@ -410,7 +410,13 @@ def main() -> int:
         log.error("%s", exc)
         return 2
 
-    _emit_run_manifest(args, out_root=out_root, indexed_rows=indexed_rows)
+    from benchmarks.citynav.run_manifest import ManifestIdentityError
+
+    try:
+        _emit_run_manifest(args, out_root=out_root, indexed_rows=indexed_rows)
+    except ManifestIdentityError as exc:
+        log.error("%s", exc)
+        return 2
 
     compiler: MapsCompiler | None = None
     if not args.no_llm:
