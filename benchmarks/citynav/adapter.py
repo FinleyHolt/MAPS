@@ -23,6 +23,7 @@ feature graph instead.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -70,6 +71,9 @@ class CityNavEpisode:
     target_mask: list[tuple[float, float]] | None  # hand-labeled GT polygon
     marker_positions: list[tuple[float, float, float]]
     raw: dict  # underlying JSON row for provenance
+    #: Upstream's start yaw as this tree's heading (degrees clockwise from
+    #: north, :func:`start_heading_deg`). The replay starts facing it.
+    start_heading_deg: float = 0.0
     success_radius_m: float | None = None
     """This episode's fallback success radius in the dataset it was read
     from, when the split states one per row (Cal City publishes the same
@@ -185,6 +189,30 @@ def map_name_for_row(row: dict) -> str:
     return f"{area}_block_{block_s}" if (block_s and "block" not in area) else area
 
 
+def start_heading_deg(start_pose: list) -> float:
+    """The heading a row's ``trajectory[0]`` starts the drone at, as upstream
+    reads it (``gsamllavanav/dataset/mturk_trajectory.py::MTurkTrajectory``):
+    ``[x, y, z, yaw, pitch]`` carries the yaw, ``[x, y, z, dx, dy, dz]`` a
+    direction whose yaw is ``atan2(dy, dx)``; upstream's yaw is radians
+    counter-clockwise from east. Returned in this tree's heading convention
+    (``action_snap``): degrees clockwise from north, in ``[0, 360)``.
+    ``[x, y, z]`` (Cal City's authored rows) carries no heading and faces
+    north. Any other length is no start pose upstream reads, and raises.
+    """
+    if len(start_pose) == 3:
+        return 0.0
+    if len(start_pose) == 5:
+        yaw = float(start_pose[3])
+    elif len(start_pose) == 6:
+        yaw = math.atan2(float(start_pose[4]), float(start_pose[3]))
+    else:
+        raise ValueError(
+            f"trajectory[0] has {len(start_pose)} values; upstream reads "
+            "[x, y, z, yaw, pitch] or [x, y, z, dx, dy, dz]"
+        )
+    return (90.0 - math.degrees(yaw)) % 360.0
+
+
 def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
     """Coerce one split-JSON row into a CityNavEpisode.
 
@@ -232,6 +260,7 @@ def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
         description=descriptions[0] if descriptions else "",
         start_xy=start_xy,
         start_z=float(trajectory[0][2]),
+        start_heading_deg=start_heading_deg(trajectory[0]),
         target_xy=(tx, ty),
         target_object_ids=list(row.get("object_ids") or []),
         target_mask=target_mask,

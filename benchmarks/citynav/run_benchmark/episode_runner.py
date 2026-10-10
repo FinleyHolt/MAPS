@@ -446,12 +446,14 @@ def run_episode(
     steps_taken = 0
 
     # The episode takeoff pose, snapshotted before the mission moves the
-    # drone: the replay below flies from exactly here, so the submittable
-    # trajectory starts where the episode did.
+    # drone: the replay below flies from exactly here, facing upstream's
+    # start heading, so the submittable trajectory starts where the episode
+    # did and the turn to the first stop costs actions. The mission works
+    # north-up, as every frame the model reads is.
     _synth_start_pose_xyh = (
         float(state.pose_xy[0]),
         float(state.pose_xy[1]),
-        float(state.heading_deg),
+        float(episode.start_heading_deg),
     )
     _synth_start_alt = float(state.altitude_m)
 
