@@ -552,9 +552,8 @@ def test_near_takes_TWO_places_and_fuses_both_distances():
         'r1 = find("house", nearest="Lime Avenue")\n') if o["op"] == "score_by")
     assert len(score["args"]["emphasis"]) == 1
     # ...and a bare point is still a POINT, not a two-place list
-    from maps.search.parse_compile.code_surface import (_is_place_list,
-                                                          _is_point_literal)
-    assert _is_point_literal([4630, 2965]) and not _is_place_list([4630, 2965])
+    from maps.search.parse_compile.code_surface import _is_place_list
+    assert not _is_place_list([4630, 2965])
     assert _is_place_list(["A Road", "B St"])
 
 

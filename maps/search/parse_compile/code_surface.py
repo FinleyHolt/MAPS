@@ -21,7 +21,7 @@ import re
 from maps.search.analyze_scene.cardinal_side import CARDINALS as _GEOM_CARDINALS
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import _BROAD_HEAD_ROWS, _sanitize_token
-from maps.util.xy_token import format_xy_token, parse_xy_token
+from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
 from maps.search.withhold import withheld
 
 # The four map-fixed directions, in the order their kwargs are read. Taken
@@ -246,9 +246,7 @@ def compile_steps(steps: list[dict], rn: int, known: dict,
             # surface" once the surface had moved under it).
             return {"ref": list(got) if isinstance(got, (list, tuple))
                     else got, "as": v}
-        if isinstance(v, (list, tuple)) and len(v) == 2 \
-                and all(isinstance(x, (int, float)) and not isinstance(x, bool)
-                        for x in v):
+        if is_xy(v):
             # AN INLINE POINT TAKES THE SAME WRAPPER, and it must: the
             # executor labels a bare [x, y] 'distance to xy' while
             # key_for sanitizes the literal into 'distance to 4630_2965',
@@ -976,18 +974,7 @@ def bind_row(row: dict):
 def _is_place_list(v) -> bool:
     """``near=[A, B]`` is TWO PLACES; ``near=[4630, 2965]`` is one point."""
     return (isinstance(v, (list, tuple)) and len(v) >= 2
-            and not _is_point_literal(v))
-
-
-def _is_point_literal(v) -> bool:
-    """A bare [x, y], as opposed to a LIST OF PLACES.
-
-    ``near=[A, B]`` names two anchors; ``near=[4630, 2965]`` is one point.
-    Two numbers is the point form and everything else is a place list.
-    """
-    return (isinstance(v, (list, tuple)) and len(v) == 2
-            and all(isinstance(x, (int, float)) and not isinstance(x, bool)
-                    for x in v))
+            and not is_xy(v))
 
 
 #: The fid families the world mints. Everything else in a place position is
@@ -1139,7 +1126,7 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
                 # model's own spelling so the ack never serves an
                 # executor ref.
                 if isinstance(arg, (list, tuple)) \
-                        and not _is_point_literal(arg):
+                        and not is_xy(arg):
                     move = {"do": "move",
                             "to": [_site(a, "cover") for a in arg]}
                 else:
@@ -1161,7 +1148,7 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
             # happens to start with r (road_1, runway_2) took the set branch
             # and looked at a handle that does not exist.
             if isinstance(arg, (list, tuple)) \
-                    and not _is_point_literal(arg):
+                    and not is_xy(arg):
                 # look([a, b, c]) crops EACH element (_say_crops' own
                 # list form). Through _site this misparsed: a len-2 fid
                 # list became an [x, y] point (float('prior_...') ->
@@ -1180,7 +1167,7 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
                                 and not re.fullmatch(r"r\d+", got):
                             return got
                         return a
-                    if _is_point_literal(a):
+                    if is_xy(a):
                         return format_xy_token(float(a[0]), float(a[1]))
                     return str(a)
                 step = {"do": "crops",

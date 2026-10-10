@@ -52,6 +52,7 @@ from maps.search.analyze_scene.geom_program import (
     _AUTOATTACH_PREFIXES, _STANDING_SIDE_PREFIXES, MODEL_UNSERVED_COLUMNS)
 from maps.search.analyze_scene.row_geometry import SurfaceGeometry
 from maps.search.withhold import withheld
+from maps.util.xy_token import is_xy
 from maps.search.parse_compile.code_surface import (
     CodeError, act_needs_a_thing, _fid_like, _plan_of, _split_diagonal,
     bind_row, _refuse_metres_in_within)
@@ -1075,7 +1076,7 @@ MEASURE_CALL_CEILING = 20_000
 def _tuple_xy(xy):
     """A served ``xy`` as a hashable pair, or None. The place tuple is the
     geometry cache's key, so a list would make it unhashable."""
-    return (float(xy[0]), float(xy[1])) if _is_point(xy) else None
+    return (float(xy[0]), float(xy[1])) if is_xy(xy) else None
 
 
 def _places(v, who: str) -> tuple:
@@ -1097,7 +1098,7 @@ def _places(v, who: str) -> tuple:
     if isinstance(v, Rows):
         return tuple((r.get("fid"), _tuple_xy(r.get("xy")))
                      for r in v._rows())
-    if _is_point(v):
+    if is_xy(v):
         return ((None, (float(v[0]), float(v[1]))),)
     if isinstance(v, (list, tuple)):
         if not v:
@@ -1293,7 +1294,7 @@ class MissionPython:
             name = self.name_of(v) or (v.fid or "row")
             extra[name] = v.bind
             return name
-        if isinstance(v, (list, tuple)) and not _is_point(v) \
+        if isinstance(v, (list, tuple)) and not is_xy(v) \
                 and any(isinstance(x, (Row, Rows)) for x in v):
             # a LIST of things -- order_by(nearest=[roadA, roadB]) -- maps
             # element-wise, so a Row rides as its fid, never as an object.
@@ -1334,7 +1335,7 @@ class MissionPython:
         for _nm in ("nearest", "near"):
             _v = nearest if _nm == "nearest" else near
             if isinstance(_v, (list, tuple)) and len(_v) == 1 \
-                    and not _is_point(_v):
+                    and not is_xy(_v):
                 # near=[one thing] is the thing
                 if _nm == "nearest":
                     nearest = _v[0]
@@ -1344,7 +1345,7 @@ class MissionPython:
         extra: dict = {}
         kw = {"nearest": ([self._slot(a, extra) for a in nearest]
                           if isinstance(nearest, (list, tuple))
-                          and not _is_point(nearest)
+                          and not is_xy(nearest)
                           else self._slot(nearest, extra)
                           if nearest is not None else None),
               "near": (self._slot(near, extra)
@@ -1419,7 +1420,7 @@ class MissionPython:
                 "rows.order(<function>) for one you compute yourself.")
         extra: dict = {}
         near = nearest
-        if isinstance(near, (list, tuple)) and not _is_point(near):
+        if isinstance(near, (list, tuple)) and not is_xy(near):
             # nearest=[A, B] is a SET -- one place, its nearest member --
             # not two keys to average.
             near = [self._slot(a, extra) for a in near]
@@ -1594,13 +1595,13 @@ class MissionPython:
                 raise CodeError(
                     f"{name} holds 0 row(s) here; there is nothing to "
                     "cover.")
-        elif _is_point(x) and withheld("prior"):
+        elif is_xy(x) and withheld("prior"):
             pass  # no map to name a thing on: a point is the place to fly
         elif isinstance(x, (list, tuple)):
             # explore's list is a SET of things -- rows, sets, fids -- as
             # one place to cover; any numeric element is the coordinate
             # hatch, refused in every spelling.
-            _things = (bool(x) and not _is_point(x)
+            _things = (bool(x) and not is_xy(x)
                        and all(isinstance(e, (Row, Rows, str)) for e in x))
             _ok_set = call == "explore" and _things
             # A SET OF THINGS IS NOT A COORDINATE. go_to takes one thing, so
@@ -1816,12 +1817,6 @@ class MissionPython:
         if names:
             out["handles"] = names
         return out
-
-
-def _is_point(v) -> bool:
-    return (isinstance(v, (list, tuple)) and len(v) == 2
-            and all(isinstance(x, (int, float)) and not isinstance(x, bool)
-                    for x in v))
 
 
 # --------------------------------------------------------------------------
