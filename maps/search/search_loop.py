@@ -543,14 +543,11 @@ class SearchLoop:
         carries."""
         from maps.search.parse_compile.compiler import (
             _extract_reasoner_concepts,
-        )
-        from maps.search.parse_compile.concept_union import (
-            ConceptUnionBuilder,
+            concept_union,
         )
 
-        specs = _extract_reasoner_concepts({"sam_concepts": list(cleaned or [])})
-        ur = ConceptUnionBuilder().build({0: specs})
-        union = list(ur.union)
+        union = concept_union(
+            _extract_reasoner_concepts({"sam_concepts": list(cleaned or [])}))
         setter_err: str | None = None
         with self._lock:
             if self._sam_concept_setter is not None:

@@ -67,20 +67,11 @@ def _extract_reasoner_concepts(plan: dict) -> list[tuple[str, str]]:
     return out
 
 
-def concept_union(
-    specs: list[tuple[str, str]],
-) -> tuple[list[str], list[dict]]:
-    """The SAM class union of ``(class, role)`` specs (as
-    ``_extract_reasoner_concepts`` returns them): ``union`` is the classes in
-    first-seen order, the set SAM segments (SAM reads no roles);
-    ``union_specs`` is ``[{"class": c, "roles": [...]}]`` in the same order,
-    each class's roles merged in first-seen order."""
-    roles: dict[str, list[str]] = {}
-    for cls, role in specs:
-        merged = roles.setdefault(cls, [])
-        if role not in merged:
-            merged.append(role)
-    return list(roles), [{"class": c, "roles": r} for c, r in roles.items()]
+def concept_union(specs: list[tuple[str, str]]) -> list[str]:
+    """The classes of ``(class, role)`` specs (as ``_extract_reasoner_concepts``
+    returns them) in first-seen order: the set SAM segments, which reads no
+    roles."""
+    return list(dict.fromkeys(cls for cls, _role in specs))
 
 
 class MapsCompiler:

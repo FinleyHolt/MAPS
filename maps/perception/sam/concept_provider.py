@@ -1,14 +1,11 @@
 """Concept providers — what to look for on each frame.
 
 ``ReasonerUnionConceptProvider`` returns a ``list[str]`` of short noun phrases for
-SAM 3.1's concept-prompt segmenter. The source of truth in the v1
-parse-first stack is the canonicalized union of every active reasoner
-thread's ``sam_concepts``: the reasoning engine's ``ConceptUnionBuilder``
-deduplicates and rewrites synonyms to a single canonical form, capped at
-32 entries, and the runner pushes that union into the provider via
-:meth:`ReasonerUnionConceptProvider.set_concepts` after the pre-flight
-compile turn. The provider then serves the same list verbatim on every
-per-frame ``detect`` call for the rest of the episode.
+SAM 3.1's concept-prompt segmenter. The source of truth is the declared
+class union (``maps.search.parse_compile.compiler.concept_union``: case-folded,
+deduplicated, first-seen order), which the search loop pushes into the
+provider via :meth:`ReasonerUnionConceptProvider.set_concepts`. The provider
+serves that list verbatim on every per-frame ``detect`` call.
 """
 
 from __future__ import annotations

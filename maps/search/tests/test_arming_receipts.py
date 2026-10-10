@@ -104,7 +104,7 @@ if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
 
 
-def test_concept_union_keeps_first_seen_order_and_merges_roles():
+def test_concept_union_keeps_first_seen_order():
     from maps.search.parse_compile.compiler import (
         _extract_reasoner_concepts,
         concept_union,
@@ -114,8 +114,4 @@ def test_concept_union_keeps_first_seen_order_and_merges_roles():
         {"class": "red car", "role": "anchor"},
         {"class": "tree", "role": "bogus"},
     ]})
-    assert concept_union(specs) == (
-        ["red car", "tree"],
-        [{"class": "red car", "roles": ["target", "anchor"]},
-         {"class": "tree", "roles": ["target"]}],
-    )
+    assert concept_union(specs) == ["red car", "tree"]
