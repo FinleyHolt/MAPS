@@ -319,8 +319,8 @@ def score_arrival(
     every success flag goes to 0 while the distances stay true. Passing it
     is how a caller says "no flight", instead of naming the flags itself.
 
-    Every writer of a scored row goes through here -- the main merge, the
-    zero-flight branch, and the pre-flight provisional floor -- so the three
+    Every writer of a scored row goes through here -- the bench's main merge
+    and zero-flight branch, and the flight station's mission row -- so they
     cannot drift onto different criteria.
     """
     if criterion not in ("ring", "shape"):

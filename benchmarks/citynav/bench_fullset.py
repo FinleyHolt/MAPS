@@ -19,9 +19,8 @@ the shuffle.
 Per-episode dedup
 -----------------
 An episode is "done" (skipped on resume) once it has a row in
-``episodes.jsonl`` whose ``status`` is neither ``infra`` (the attempt
-never got a fair run) nor ``flying`` (an un-flown pre-flight binding).
-Infra rows never gate, so the next pass re-attempts them; they are
+``episodes.jsonl`` whose ``status`` is not ``infra`` (the attempt never
+got a fair run). Infra rows never gate, so the next pass re-attempts them; they are
 retained as an audit trail. Among several qualifying attempts the reader
 scores the first-started complete one (``analysis.rows.pick_attempts``).
 
