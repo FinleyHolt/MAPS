@@ -435,7 +435,7 @@ class Reasoner:
             # `.env.example` documents as a supported target and which 400s
             # on unrecognized params: six retries, then every episode ends
             # `transient_failures` and is dropped from SR as infra.
-            **thinking_sampling_kwargs(temperature=1.0, reasoning_effort=self.reasoning_effort),
+            **thinking_sampling_kwargs(temperature=1.0, model_id=self.model, reasoning_effort=self.reasoning_effort),
             "tools": tools,
             "tool_choice": "auto",
             "transport_kind": "reasoner",

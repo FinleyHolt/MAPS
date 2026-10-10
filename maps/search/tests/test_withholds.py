@@ -102,7 +102,7 @@ def test_each_withhold_takes_exactly_its_part(monkeypatch, name):
 def test_the_system_turn_withhold_serves_no_system_message(monkeypatch):
     monkeypatch.setenv(W.ENV, "system_turn")
     assert ra.served_system_text(sensor_description="RGB, nadir.") == ""
-    spec = EndpointSpec(base_url="http://unused", model_id="qwen", max_model_len=262144,
+    spec = EndpointSpec(base_url="http://unused", model_id="qwen36-35b-a3b", max_model_len=262144,
                         tokenizer_name="qwen", output_reserve=40000)
     r = ra.Reasoner(reasoner_url="http://unused", endpoint_spec=spec,
                     sensor_description="RGB, nadir.")

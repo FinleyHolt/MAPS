@@ -7,8 +7,8 @@ TP, spec-decode composition) belongs to whoever runs the serve — serve
 and client run on different boxes, so each layer carries only the fields
 it consumes.
 
-Resolution: exact served-alias match, else family substring, else the
-Qwen card (the fleet default serve). ``presence_penalty: None`` means
+Resolution: exact served-alias match (a LoRA ``base:adapter`` takes its
+base's card); any other name is refused. ``presence_penalty: None`` means
 the card declares no penalty term and the request carries no key.
 """
 
@@ -59,11 +59,8 @@ _GEMMA_GGUF = ModelCard(
     presence_penalty=None,
 )
 
-# The other four sizes. Each needs its own row rather than riding the family
-# substring, because the two readers of this dict disagree — card_for() falls
-# back through _FAMILY_SUBSTRING, but tokenizer.py takes an EXACT alias hit
-# only. Absent these rows 'gemma4-e4b' would draw the gemma envelope and then
-# try to load a tokenizer named 'gemma4-e4b'.
+# The other four sizes. Each needs its own row: card_for() and tokenizer.py
+# both take an EXACT alias hit only.
 #
 # The envelope is one family fact (top_p 0.95, top_k 64, no penalty term) and
 # the say dialect is another, so only the tokenizer repo varies — and it
@@ -136,8 +133,7 @@ _QWEN3VL = ModelCard(
 # envelope: generation_config.json gives top_p 0.95 / top_k 20 (temperature
 # 0.8), wider than the Instruct row's 0.8 / 20, and a different tokenizer
 # repo because a different quantization of the weights is what is served.
-# Its own row rather than the family substring, because tokenizer.py takes an
-# EXACT alias hit only — the trap the _GEMMA_E4B comment above records.
+# Its own row: every reader takes an EXACT alias hit.
 _QWEN3VL_THINKING = ModelCard(
     tokenizer="QuantTrio/Qwen3-VL-235B-A22B-Thinking-AWQ",
     top_p=0.95,
@@ -178,10 +174,8 @@ _QWEN_NVFP4_W4A4 = ModelCard(
 
 # Qwen3.8-27B NVFP4 — a DIFFERENT MODEL from the Qwen3.6 rows above, not a
 # requantization of one, so it takes its publisher's envelope rather than
-# inheriting theirs. It needs its own row for one concrete reason: without it
-# the alias falls through _FAMILY_SUBSTRING's "qwen" to _QWEN and picks up
-# presence_penalty=1.5, which is a Qwen3.6 thinking-loop fix and NOT part of
-# this model's recommendation. The full published thinking-mode set is
+# inheriting theirs: no presence_penalty, which on _QWEN is a Qwen3.6
+# thinking-loop fix and NOT part of this model's recommendation. The full published thinking-mode set is
 # temperature 1.0, top_p 0.95, top_k 20, min_p 0.0, presence_penalty 0.0,
 # repetition_penalty 1.0; temperature is the caller's argument
 # (sampling.thinking_sampling_kwargs already passes 1.0 for reasoner turns)
@@ -206,10 +200,8 @@ _QWEN38_NVFP4 = ModelCard(
 # min_p or repetition_penalty: the publisher declares neither, and inventing
 # identity values would pin an envelope the model card never claimed.
 #
-# The row exists to keep presence_penalty OFF. Without it the alias falls
-# through _FAMILY_SUBSTRING's "qwen" to _QWEN and picks up presence_penalty=1.5
-# — a Qwen3.6 thinking-loop fix, not part of this model's recommendation. The
-# tokenizer is the served NVFP4 repo, which ships its own tokenizer and chat
+# presence_penalty stays OFF: _QWEN's 1.5 is a Qwen3.6 thinking-loop fix,
+# not part of this model's recommendation. The tokenizer is the served NVFP4 repo, which ships its own tokenizer and chat
 # template, and tokenizer.py takes an EXACT alias hit only.
 #
 # Response length here is governed by the chat template's `reasoning_effort`
@@ -250,9 +242,8 @@ _MUSE_NVFP4 = ModelCard(
     presence_penalty=None,
 )
 
-# Qwen3.5, four served sizes. Each needs its own row rather
-# than riding the family substring: tokenizer.py takes an EXACT alias hit, and
-# the tokenizer repo is the SERVED one because every quantized repo here ships
+# Qwen3.5, four served sizes. Each needs its own row: every reader takes an
+# EXACT alias hit, and the tokenizer repo is the SERVED one because every quantized repo here ships
 # its own.
 #
 # presence_penalty is None on all four, and that is a declaration rather than
@@ -309,28 +300,16 @@ CARDS: dict[str, ModelCard] = {
     "muse-glimmer-30b-nvfp4": _MUSE_NVFP4,
 }
 
-# Order matters: "qwen3vl" precedes "qwen", or every Qwen3-VL alias draws the
-# Qwen3.6 tokenizer and prompt sizing goes silently wrong — the same trap the
-# _GEMMA_E4B row above exists to close.
-_FAMILY_SUBSTRING: list[tuple[str, ModelCard]] = [
-    ("gemma", _GEMMA),
-    ("inkling", _INKLING),
-    ("muse", _MUSE),
-    ("qwen3vl", _QWEN3VL),
-    ("qwen", _QWEN),
-]
-
-
 def card_for(model_id: str | None) -> ModelCard:
-    """The card for a served alias; family substring, then Qwen, as fallback."""
-    alias = (model_id or "").strip().lower()
+    """The card for a served alias, by exact name (a LoRA ``base:adapter``
+    rides its base's card). A name the table does not carry is refused: a
+    near name would draw another model's envelope."""
+    alias = (model_id or "").strip().lower().partition(":")[0]
     hit = CARDS.get(alias)
-    if hit is not None:
-        return hit
-    for needle, card in _FAMILY_SUBSTRING:
-        if needle in alias:
-            return card
-    return _QWEN
+    if hit is None:
+        raise ValueError(f"no model card for served model {model_id!r}; serve it under one of: "
+                         + ", ".join(sorted(CARDS)))
+    return hit
 
 
 def envelope_kwargs(model_id: str | None) -> dict[str, Any]:

@@ -79,7 +79,7 @@ def test_small_window_derivation(monkeypatch):
     # 32768 -> reserve 8192 (min(40000, window//4)), input_budget 24576 - margin.
     _fake_http(
         monkeypatch,
-        {f"{_URL_A}/models": _models_payload("gemma", 32768)},
+        {f"{_URL_A}/models": _models_payload("gemma4-26b-a4b", 32768)},
     )
     s = discover(_URL_A)
     assert s.output_reserve == 8192
@@ -145,7 +145,7 @@ def test_case_e_comma_list_refused():
 
 
 def test_case_f_window_too_small(monkeypatch):
-    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("tiny", 8192)})
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("qwen35-4b-nvfp4", 8192)})
     with pytest.raises(EndpointDiscoveryError, match="input_budget"):
         discover(_URL_A)
 
@@ -156,7 +156,7 @@ def test_case_f_window_too_small(monkeypatch):
 
 
 def test_case_g_tokenizer_load_failure(monkeypatch):
-    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("gemma", 32768)})
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("gemma4-26b-a4b", 32768)})
     # Re-enable the REAL _require_tokenizer over a stubbed loader.
     monkeypatch.setattr(E, "_require_tokenizer", _REAL_REQUIRE_TOKENIZER)
     import maps.llm.tokenizer as tok
@@ -241,12 +241,12 @@ def test_override_selects_among_many_models(monkeypatch):
         monkeypatch,
         {
             f"{_URL_A}/models": {
-                "data": [{"id": "m1"}, {"id": "m2"}, {"id": "m3"}]
+                "data": [{"id": "qwen36-35b-a3b"}, {"id": "gemma4-26b-a4b"}, {"id": "inkling-small"}]
             }
         },
     )
-    s = discover(_URL_A, override=EndpointOverride("m2", 131072))
-    assert s.model_id == "m2"
+    s = discover(_URL_A, override=EndpointOverride("gemma4-26b-a4b", 131072))
+    assert s.model_id == "gemma4-26b-a4b"
     assert s.max_model_len == 131072
     # No max_model_len on any entry: a hosted endpoint, already warm.
     assert s.server_declared_window is False
