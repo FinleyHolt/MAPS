@@ -61,7 +61,10 @@ def test_no_withhold_serves_the_flown_contract(monkeypatch, sensor):
 # withhold -> (sections that change, marker strings it takes away,
 # (removed, added) lines of the turn, of the description, of the surface)
 CASES = {
-    "prior": ((), (), (0, 0), (0, 0), (0, 0)),
+    "prior": (("SYSTEM", "TOOLS"),
+              ("never a coordinate", "do not move you", "holds only PRIOR",
+               "not make it movable", "the prior map alone"),
+              (8, 9), (5, 5), (0, 0)),
     "images": ((), (), (0, 0), (0, 0), (0, 0)),
     "look_for": (("SYSTEM", "TOOLS", "SURFACE"),
                  ("look_for", "watched classes", "segmenting your", "ARM EVERY CLASS",
@@ -239,3 +242,21 @@ def test_a_look_for_withhold_serves_no_watchlist(monkeypatch):
         served = json.dumps(results)
         assert all("error" not in r for r in results), served
         assert "watching" not in served and "look_for" not in served, served
+
+
+def test_a_prior_withhold_flies_to_a_point_and_serves_no_prior_row(monkeypatch):
+    from maps.search.tests.test_mission_loop import _drive, _tool_results
+
+    script = [[_run_code('go_to([30, 30])\nexplore([40, 40])\ngo_to("[50, 50]")\n')], "done"]
+    _reply, fr, flights, _d = _drive(script, cands=[])
+    assert "takes a THING" in (_tool_results(fr)[0].get("error") or "")
+    assert not flights
+    monkeypatch.setenv(W.ENV, "prior")
+    _reply, fr, flights, _d = _drive(script, cands=[])
+    served = json.dumps(_tool_results(fr))
+    assert "error" not in served and "prior_" not in served, served
+    assert [f["target_fid"] for f in flights] == ["[30, 30]", "[40, 40]", "[50, 50]"], flights
+
+
+def _run_code(code):
+    return ("run", {"code": code})

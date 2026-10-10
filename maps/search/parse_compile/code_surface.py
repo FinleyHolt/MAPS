@@ -1184,7 +1184,7 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
         # that name, it is that a coordinate is not a thing.
         _pt = parse_xy_token(arg) if isinstance(arg, str) else None
         if _pt:
-            if why in ("move", "cover"):
+            if why in ("move", "cover") and not withheld("prior"):
                 # The no-coordinate law stands (a point read off a picture is
                 # the picture's centre). Refuse it as a COORDINATE so the
                 # remedy the model reads is the true one: fly the row, or

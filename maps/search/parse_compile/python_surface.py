@@ -1600,6 +1600,8 @@ class MissionPython:
                 raise CodeError(
                     f"{name} holds 0 row(s) here; there is nothing to "
                     "cover.")
+        elif _is_point(x) and withheld("prior"):
+            pass  # no map to name a thing on: a point is the place to fly
         elif isinstance(x, (list, tuple)):
             # explore's list is a SET of things -- rows, sets, fids -- as
             # one place to cover; any numeric element is the coordinate

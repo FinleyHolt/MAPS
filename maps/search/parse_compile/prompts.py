@@ -451,6 +451,23 @@ before it ran and stands. Names persist for the whole mission.
 # when an edit changes it. With nothing withheld the literals are served as
 # written.
 _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
+    "prior": [
+        ("sub", " the PRIOR map, plus whatever flights have detected. Nothing is"
+                " detected until look_for names a class, so before that the set is"
+                " the prior map alone.",
+         " whatever flights have detected. This run has no prior map: nothing"
+         " is a row until look_for names a class and a flight goes over it."),
+        ("sub", "BOTH TAKE A THING ON THE MAP, never a coordinate.",
+         "BOTH TAKE A THING ON THE MAP OR AN [x, y] POINT: this run has no"
+         " prior map, so go_to([3411, 1468]) flies to that point and"
+         " explore([3411, 1468]) is one stop there."),
+        ("sub", "they do not move you.", "and go_to/explore fly to them."),
+        ("sub", "go_to takes ONE THING; explore takes ONE THING or ONE SET",
+         "go_to takes ONE THING or ONE POINT; explore takes ONE THING, ONE"
+         " POINT or ONE SET"),
+        ("sub", ", and binding it does not make it movable.",
+         ", and go_to(corner) flies to it."),
+    ],
     "look_for": [
         ("sub", '  look_for("pool", "house")\n  explore("Mill Lane")\n'
                 '  pools = find("pool")\n'
@@ -494,6 +511,13 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
     ],
 }
 _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
+    "prior": [
+        ("sub", "Before the first flight the graph holds only PRIOR map features.",
+         "This run has no prior map: the graph starts empty."),
+        ("sub", "-- and never a coordinate.",
+         "-- or an [x, y] point, since this run has no prior map."),
+        ("sub", "; they do not move you.", "; go_to and explore fly to them too."),
+    ],
     "look_for": [
         ("sub", " The flight folds that stop's perception into the"
                 " world-state: SAM segments the classes you have looked for,"
