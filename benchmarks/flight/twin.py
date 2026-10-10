@@ -29,10 +29,8 @@ import argparse
 import datetime as dt
 import logging
 import math
-import os
 import sys
 import threading
-import time
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -205,14 +203,13 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
 
-    os.environ["SEARCH_BENCHMARK_NAME"] = "calcity"
-    from benchmarks.calcity._citynav_bridge import activate  # noqa: PLC0415
+    from benchmarks.flight.mission import (STATE_ENDED, Mission, activate_calcity, converse,  # noqa: PLC0415
+                                           resolve_episode, summary_line)
 
-    activate()
+    activate_calcity()
     from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
     from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
     from benchmarks.flight.live_source import open_live  # noqa: PLC0415
-    from benchmarks.flight.mission import STATE_AWAITING, STATE_ENDED, STATE_FLYING, STATE_IDLE, Mission, resolve_episode  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
     from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
@@ -240,20 +237,8 @@ def main(argv: list[str] | None = None) -> int:
     mission = Mission(episode_id=args.episode, split=args.split, config=args.config, workdir=ep.dir, live=live,
                       instruction=args.instruction, recorder=ep.recorder, close_log=ep.close, run_id=stamp,
                       run_no=1, start_xy=args.start_xy, reasoning_effort=args.reasoning_effort)
-    mission.start()
-    taskings, heard = list(args.then), 0
-    while mission.status in (STATE_IDLE, STATE_FLYING, STATE_AWAITING):
-        if mission.replies > heard:
-            heard = mission.replies
-            if not taskings:
-                mission.stop()
-                break
-            mission.tasking(taskings.pop(0))
-        time.sleep(0.2)
-    mission.wait()
-    live.close()
-    print(f"{ep.dir}: {mission.status}, ended by {mission.ended_by}, {len(mission.flights)} flights, "
-          f"{mission.turns_used} turns" + (f", error {mission.error}" if mission.error else ""))
+    converse(mission, args.then)
+    print(summary_line(mission))
     return 0 if mission.status == STATE_ENDED else 1
 
 

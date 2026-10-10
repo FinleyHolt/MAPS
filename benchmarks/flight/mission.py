@@ -100,6 +100,14 @@ STATE_ENDED = "ended"
 STATE_FAILED = "failed"
 
 
+def activate_calcity() -> None:
+    """The Cal City bench's bridge, active for every flight entry point."""
+    os.environ["SEARCH_BENCHMARK_NAME"] = "calcity"
+    from benchmarks.calcity._citynav_bridge import activate  # noqa: PLC0415
+
+    activate()
+
+
 def authored_episode(episode_id: str, start_xy: tuple[float, float]):
     """The episode of a mission flown under the operator's own words: the map
     its id names, the start given, and no target, so nothing scores it."""
@@ -954,3 +962,33 @@ class Mission:
             upsert_row(sortie, {**row, "workdir": str(self.workdir.relative_to(sortie))})
         except Exception:  # noqa: BLE001 -- a mission is not failed by its paperwork
             log.exception("the row for %s did not land", self.episode_id)
+
+
+def converse(mission: Mission, taskings: list[str], *, ended=None) -> None:
+    """Fly ``mission`` to its end: at each report the next of ``taskings`` is
+    spoken, and the mission is stopped when none is left. With ``ended`` the
+    taskings come from elsewhere, and the mission is stopped at the first
+    report after ``ended()`` turns true. The live source is closed after."""
+    mission.start()
+    pending, heard = list(taskings), 0
+    while mission.status in (STATE_IDLE, STATE_FLYING, STATE_AWAITING):
+        if mission.status == STATE_AWAITING and mission.replies > heard:
+            heard = mission.replies
+            if ended is not None:
+                if ended():
+                    mission.stop()
+                    break
+            elif pending:
+                mission.tasking(pending.pop(0))
+            else:
+                mission.stop()
+                break
+        time.sleep(0.2)
+    mission.wait()
+    mission._live.close()
+
+
+def summary_line(mission: Mission) -> str:
+    """How a mission ended, in one line."""
+    return (f"{mission.workdir}: {mission.status}, ended by {mission.ended_by}, {len(mission.flights)} flights, "
+            f"{mission.turns_used} turns" + (f", error {mission.error}" if mission.error else ""))

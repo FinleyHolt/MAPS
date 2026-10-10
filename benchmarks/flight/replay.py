@@ -62,7 +62,7 @@ import numpy as np
 
 from benchmarks.flight.live_source import ortho_observation
 from benchmarks.flight.measures import _bases, _rows, tour_stops
-from benchmarks.flight.mission import Mission
+from benchmarks.flight.mission import Mission, activate_calcity, converse, summary_line
 
 log = logging.getLogger("flight.replay")
 
@@ -520,13 +520,9 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     """Fly ``rec`` again under ``out/<sortie>/``; ``live`` is a live source (the
     frame tier), else the bank answers. Returns the mission, ended, and its folder."""
     _arm_env(rec, forced=forced)
-    os.environ["SEARCH_BENCHMARK_NAME"] = "calcity"
-    from benchmarks.calcity._citynav_bridge import activate  # noqa: PLC0415
-
-    activate()
+    activate_calcity()
     from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
     from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
-    from benchmarks.flight.mission import STATE_AWAITING, STATE_FLYING, STATE_IDLE  # noqa: PLC0415
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
 
     row = rec.row
@@ -579,23 +575,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         start_xy=tuple(row["start_xy"]), reasoning_effort=None if effort is None else str(effort))
     if script is not None:
         script.mission = mission
-    mission.start()
-    pending, heard = list(taskings or []), 0
-    while mission.status in (STATE_IDLE, STATE_FLYING, STATE_AWAITING):
-        if mission.status == STATE_AWAITING and mission.replies > heard:
-            heard = mission.replies
-            if script is not None:
-                if script.ended:
-                    mission.stop()
-                    break
-            elif pending:
-                mission.tasking(pending.pop(0))
-            else:
-                mission.stop()
-                break
-        time.sleep(0.2)
-    mission.wait()
-    live.close()
+    converse(mission, taskings or [], ended=None if script is None else (lambda: script.ended))
     return mission, ep.dir
 
 
@@ -640,10 +620,7 @@ def main(argv: list[str] | None = None) -> int:
     live = None
     bank: list[Held] | None = None
     if args.frames is not None:
-        from benchmarks.calcity._citynav_bridge import activate  # noqa: PLC0415
-
-        os.environ["SEARCH_BENCHMARK_NAME"] = "calcity"
-        activate()
+        activate_calcity()
         from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
         from benchmarks.flight.live_source import open_live  # noqa: PLC0415
         from benchmarks.flight.recorded_ring import RecordedRing, run_window  # noqa: PLC0415
@@ -671,8 +648,7 @@ def main(argv: list[str] | None = None) -> int:
         log.info("observation bank: %d observations from %d run(s)", len(bank), len(recs))
     mission, run = fly(rec, out, bank=bank, live=live, config=args.config, taskings=rec.taskings,
                        reasoning_effort=args.reasoning_effort)
-    print(f"{run}: {mission.status}, ended by {mission.ended_by}, {len(mission.flights)} flights, "
-          f"{mission.turns_used} turns" + (f", error {mission.error}" if mission.error else ""))
+    print(summary_line(mission))
     return 0 if mission.error is None else 1
 
 
