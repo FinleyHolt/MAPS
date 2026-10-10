@@ -393,12 +393,6 @@ def run_episode(
         except ReasonerUnreachableError as exc:
             log.error("Pre-flight aborted: vLLM unreachable (%s)", exc)
             return None
-        # ``--stop-after ingest``: the graph seed (prebake load + mask cache
-        # + SearchLoop.start) is the whole pre-flight, so this exits here,
-        # after warmup and before any flight spend.
-        if os.environ.get("SEARCH_STOP_AFTER", "").strip().lower() == "ingest":
-            log.info("SEARCH_STOP_AFTER=ingest: exiting after the graph seed.")
-            return None
 
     # Mission branch: the episode is ONE reasoner conversation over the
     # seeded prior graph — requested viewpoints fly the moment they land,

@@ -167,8 +167,8 @@ def _dispatch_one(
         return out
     if rec is None:
         # The runner exited clean with no record (no objects for the map,
-        # the reasoner unreachable pre-flight, a SEARCH_STOP_AFTER exit): not a
-        # scored attempt, so it is excluded and re-queued.
+        # the reasoner unreachable pre-flight): not a scored attempt, so it
+        # is excluded and re-queued.
         out = _stamp({
             "episode_id": _eid,
             "status": STATUS_INFRA,

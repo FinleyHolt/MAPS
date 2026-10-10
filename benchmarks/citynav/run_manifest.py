@@ -68,10 +68,6 @@ ARM_ENV_FLAGS = (
     "SEARCH_LOOK_TOOL",
     # Per-k resample roots differ only by their pinned seed base.
     "SEARCH_SEED_BASE",
-    # Score-affecting toggles: a row flown with any of these set is a
-    # different arm, and ab_report must refuse to pair it against a row
-    # without. Set-only, so rows that never set them still pair.
-    "SEARCH_STOP_AFTER",
     # The envelope sweep's two knobs (maps/llm/sampling.py). Reasoner turns
     # sample at temperature 1.0, so these move the score directly. They are
     # read through a helper that takes the key as a parameter, which hides
@@ -113,7 +109,6 @@ AUDITED_ENV = (
     "SEARCH_SAMPLING_PRESENCE_PENALTY",
     "SEARCH_SAMPLING_REASONING_EFFORT",
     "SEARCH_SAMPLING_TEMPERATURE",
-    "SEARCH_STOP_AFTER",
     # endpoint identity (the two override vars FABRICATE served-model facts
     # without probing — they must be on the record whenever set)
     "SAM_SERVER_URL",
