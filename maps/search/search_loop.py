@@ -29,7 +29,7 @@ from typing import Any
 import numpy as np
 
 from maps.search.parse_compile.compiler import MapsCompiler
-from maps.search.pose import RobotPose
+from maps.sws.graph.model import GridDomain
 from maps.util.mask_codec import encode_mask_record
 
 
@@ -97,7 +97,7 @@ class SearchLoop:
 
     def __init__(
         self,
-        world_state,  # WorldState
+        grid: GridDomain,
         *,
         tile_origin_xy: tuple[float, float],
         tile_name: str,
@@ -108,7 +108,7 @@ class SearchLoop:
         ortho_ground_z_m: float | None = None,
         rgbd_dir: str,
     ):
-        self._world_state = world_state
+        self._grid = grid
         self._tile_origin_xy = (
             float(tile_origin_xy[0]),
             float(tile_origin_xy[1]),
@@ -172,7 +172,7 @@ class SearchLoop:
     def _cell_size_m(self) -> float:
         """Tile-grid cell size in meters: the one source for every
         grid-to-world conversion."""
-        return float(self._world_state.grid_domain.cell_size_m)
+        return float(self._grid.cell_size_m)
 
     def _grid_centroid_to_world_xy(
         self, centroid: object
@@ -654,7 +654,7 @@ class SearchLoop:
     ) -> list[dict]:
         s = self.state
         bounds_min = bounds_xy_min or self._tile_origin_xy
-        cell = float(cell_size_m or self._world_state.grid_domain.cell_size_m)
+        cell = float(cell_size_m or self._grid.cell_size_m)
 
         now = time.time()
 
@@ -760,19 +760,13 @@ class SearchLoop:
         """
         from maps.search.analyze_scene.tools import ToolContext
 
-        s = self.state
-        cell_size_m = self._cell_size_m
-        gd = getattr(self._world_state, "grid_domain", None)
-        grid_shape = (
-            (int(gd.height), int(gd.width)) if gd is not None else (0, 0)
-        )
         return ToolContext(
-            grid_shape=grid_shape,
+            grid_shape=(int(self._grid.height), int(self._grid.width)),
             features=self._base_features or {},
-            graph=s.runtime_graph,
+            graph=self.state.runtime_graph,
             tile_name=self._tile_name,
             tile_origin_xy=self._tile_origin_xy,
-            cell_size_m=cell_size_m,
+            cell_size_m=self._cell_size_m,
         )
 
     def snapshot(self) -> SearchSnapshot:

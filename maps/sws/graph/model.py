@@ -1,9 +1,8 @@
 """Feature graph data structures.
 
   MapObject   — a spatial feature with geometry and metadata
-  ObjectGraph — dict-backed node graph with per-class object sets
+  ObjectGraph — dict-backed node graph
   GridDomain  — the tile raster grid and its cell size
-  WorldState  — the grid domain and the object graph together
 """
 
 from __future__ import annotations
@@ -21,10 +20,6 @@ class GridDomain:
     height: int
     width: int
     cell_size_m: float
-
-    @property
-    def shape(self) -> tuple[int, int]:
-        return (self.height, self.width)
 
 
 @dataclass
@@ -95,38 +90,9 @@ class MapObject:
 class ObjectGraph:
     """Node graph over tile features, without edges: spatial relations are
     computed from node xy/cells by the geom_compute ops at query time.
-
-    ``objects_by_class`` maps a category to its ``{fid: MapObject}``.
     """
 
     nodes: dict[str, MapObject]  # id -> node
     cell_size_m: float  # meters per grid cell; sourced from the tile's _meta.json
-    objects_by_class: dict[str, dict[str, MapObject]] = field(default_factory=dict)
     step_index: int = 0  # set by the upserts that are given one
     tau: float | None = None  # wall-clock seconds of the latest update
-
-    def objects(self, category: str) -> dict[str, MapObject]:
-        """The ``{fid: MapObject}`` of one class; empty if absent."""
-        return self.objects_by_class.get(category, {})
-
-    @property
-    def classes(self) -> frozenset[str]:
-        """The classes present in the graph."""
-        return frozenset(self.objects_by_class.keys())
-
-
-@dataclass
-class WorldState:
-    """The grid domain and the object graph of one episode."""
-
-    grid_domain: GridDomain
-    object_graph: ObjectGraph | None = None
-    step_index: int = 0
-    tau: float | None = None
-
-    @property
-    def classes(self) -> frozenset[str]:
-        """The object graph's classes; empty without a graph."""
-        if self.object_graph is None:
-            return frozenset()
-        return self.object_graph.classes

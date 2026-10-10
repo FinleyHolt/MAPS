@@ -164,7 +164,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
     from maps.perception.geometry.sensor_spec import resolve_sensor, served_description  # noqa: PLC0415
     from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider  # noqa: PLC0415
     from maps.search import MapsCompiler, SearchLoop  # noqa: PLC0415
-    from maps.sws import GridDomain, WorldState  # noqa: PLC0415
+    from maps.sws import GridDomain  # noqa: PLC0415
 
     cfg = load_config(str(config))
     assert_flight_config(cfg)
@@ -185,10 +185,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
         graph = build_object_graph(assets.base_features, cell_size_m=float(assets.cell_size_m))
 
     grid_h, grid_w = assets.grid_shape
-    world_state = WorldState(
-        grid_domain=GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),
-        object_graph=graph,
-    )
+    grid = GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m))
     sensor = resolve_sensor(cfg.sensor)
     if sensor is None:
         raise RuntimeError(f"cfg.sensor did not resolve a SensorSpec: {cfg.sensor!r}")
@@ -197,7 +194,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
 
     start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.episode_id)
     search_loop = SearchLoop(
-        world_state,
+        grid,
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
         tile_name=f"citynav::{assets.map_name}",
         base_features=assets.base_features,

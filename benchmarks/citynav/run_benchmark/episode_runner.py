@@ -26,7 +26,7 @@ from maps.search import (
     MapsCompiler,
     SearchLoop,
 )
-from maps.sws import GridDomain, WorldState
+from maps.sws import GridDomain
 from maps.search.withhold import withheld
 from maps.sws.graph import build_object_graph
 import math
@@ -233,11 +233,8 @@ def run_episode(
     state.record_visit()
 
     grid_h, grid_w = assets.grid_shape
-    world_state = WorldState(
-        grid_domain=GridDomain(
-            height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)
-        ),
-        object_graph=graph,
+    grid = GridDomain(
+        height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)
     )
 
     perception = make_perception(cfg)
@@ -263,7 +260,7 @@ def run_episode(
     search_loop: SearchLoop | None = None
     if compiler is not None:
         search_loop = SearchLoop(
-            world_state,
+            grid,
             tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
             tile_name=f"citynav::{assets.map_name}",
             base_features=prior_features,

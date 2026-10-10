@@ -265,13 +265,5 @@ def build_object_graph(
             if node is not None:
                 nodes[fid] = node
 
-    objects_by_class: dict[str, dict[str, MapObject]] = {}
-    for fid, node in nodes.items():
-        objects_by_class.setdefault(node.class_name, {})[fid] = node
-
     logging.info("Graph complete: %d nodes", len(nodes))
-    return ObjectGraph(
-        nodes=nodes,
-        cell_size_m=float(cell_size_m),
-        objects_by_class=objects_by_class,
-    )
+    return ObjectGraph(nodes=nodes, cell_size_m=float(cell_size_m))

@@ -44,7 +44,6 @@ def test_semantic_attributes_round_trip_via_json(tmp_path):
     graph = ObjectGraph(
         nodes={"detected_0": node},
         cell_size_m=5.0,
-        objects_by_class={"object": {"detected_0": node}},
     )
     save_graph(graph, str(tmp_path / "t"))
     restored = load_graph(str(tmp_path / "t"))
@@ -77,7 +76,7 @@ def test_find_track_exact_track_id_only():
         track_id="wt_existing",
     )
     graph = ObjectGraph(
-        nodes={"detected_0": car}, cell_size_m=2.0, objects_by_class={}
+        nodes={"detected_0": car}, cell_size_m=2.0
     )
     # Same track_id -> re-identifies the existing node.
     assert _find_track(graph, "wt_existing") == "detected_0"
@@ -182,10 +181,6 @@ def test_save_load_graph_preserves_world_contour_on_prior_and_detected():
     g = ObjectGraph(
         nodes={"building_0": prior, "detected_0": detected},
         cell_size_m=2.0,
-        objects_by_class={
-            "building": {"building_0": prior},
-            "car": {"detected_0": detected},
-        },
     )
     with tempfile.TemporaryDirectory() as d:
         stem = str(pathlib.Path(d) / "tile")

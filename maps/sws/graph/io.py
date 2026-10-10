@@ -228,8 +228,6 @@ def load_graph_binary(path_stem: str) -> ObjectGraph:
     if tau_arr is not None:
         tau_val = float(tau_arr)
         graph.tau = None if np.isnan(tau_val) else tau_val
-    for fid, node in nodes.items():
-        graph.objects_by_class.setdefault(node.class_name, {})[fid] = node
     return graph
 
 

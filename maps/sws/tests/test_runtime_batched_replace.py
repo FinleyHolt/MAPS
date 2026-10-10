@@ -149,8 +149,6 @@ def test_car_and_gray_car_stay_separate_layers_single_path():
     assert fid_car != fid_gray
     assert graph.nodes[fid_car].class_name == "car"
     assert graph.nodes[fid_gray].class_name == "gray car"
-    assert "car" in graph.objects_by_class
-    assert "gray car" in graph.objects_by_class
     counts = _detected_class_counts(graph)
     assert counts["car"] == 1
     assert counts["gray car"] == 1

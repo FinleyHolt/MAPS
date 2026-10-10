@@ -232,14 +232,12 @@ def test_the_flown_pose_is_the_row_s_served_xy():
     class _Graph:
         nodes = dict(ways)
 
-    # ``_cell_size_m`` is a read-only property sourced from the world
-    # state's grid_domain -- the single source of truth for the
-    # centroid->world conversion -- so the fixture supplies that rather
-    # than shadowing the property.
+    # ``_cell_size_m`` is a read-only property sourced from the loop's grid
+    # -- the single source of truth for the centroid->world conversion -- so
+    # the fixture supplies that rather than shadowing the property.
     loop = SearchLoop.__new__(SearchLoop)
     loop._tile_origin_xy = (0.0, 0.0)
-    loop._world_state = type("W", (), {
-        "grid_domain": type("D", (), {"cell_size_m": 2.0})()})()
+    loop._grid = type("D", (), {"cell_size_m": 2.0})()
     loop._lock = __import__("threading").RLock()
     loop._state = type("S", (), {"runtime_graph": _Graph()})()
 

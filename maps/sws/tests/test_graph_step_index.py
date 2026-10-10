@@ -1,47 +1,10 @@
-"""Unit tests for WorldState properties and graph round-trip fields."""
+"""The graph's step index and clock survive a save/load and an upsert."""
 
 from __future__ import annotations
 
-from maps.sws import (
-    GridDomain,
-    MapObject,
-    ObjectGraph,
-    WorldState,
-)
+from maps.sws import MapObject, ObjectGraph
 from maps.sws.graph.io import load_graph, save_graph
 from maps.sws.graph.runtime import upsert_detected_centroid_only
-
-
-def _make_ws(h: int = 4, w: int = 4) -> WorldState:
-    return WorldState(
-        grid_domain=GridDomain(height=h, width=w, cell_size_m=5.0),
-    )
-
-
-def test_classes_empty_when_graph_missing():
-    ws = _make_ws()
-    assert ws.classes == frozenset()
-
-
-def test_classes_from_object_graph():
-    node = MapObject(
-        id="roads_0",
-        class_name="roads",
-        name=None,
-        tags={},
-        centroid=(1, 1),
-        bbox=(1, 1, 1, 1),
-        cell_count=1,
-        orientation=None,
-    )
-    graph = ObjectGraph(
-        nodes={"roads_0": node},
-        cell_size_m=5.0,
-        objects_by_class={"roads": {"roads_0": node}},
-    )
-    ws = _make_ws()
-    ws.object_graph = graph
-    assert "roads" in ws.classes
 
 
 def test_objectgraph_step_index_round_trip(tmp_path):
@@ -58,7 +21,6 @@ def test_objectgraph_step_index_round_trip(tmp_path):
     graph = ObjectGraph(
         nodes={"roads_0": node},
         cell_size_m=5.0,
-        objects_by_class={"roads": {"roads_0": node}},
         step_index=7,
         tau=123.456,
     )
@@ -69,7 +31,7 @@ def test_objectgraph_step_index_round_trip(tmp_path):
 
 
 def test_upsert_detected_centroid_only_sets_step_index():
-    graph = ObjectGraph(nodes={}, cell_size_m=5.0, objects_by_class={})
+    graph = ObjectGraph(nodes={}, cell_size_m=5.0)
     det = MapObject(
         id="detected_pending",
         class_name="object",

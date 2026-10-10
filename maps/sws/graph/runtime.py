@@ -156,8 +156,6 @@ def upsert_detected_centroid_only(
     node.last_seen_t = now
     node.observation_count = 1
     graph.nodes[fid] = node
-    if graph.objects_by_class:
-        graph.objects_by_class.setdefault(node.class_name, {})[fid] = node
     if step_index is not None:
         graph.step_index = step_index
     graph.tau = now
@@ -255,8 +253,6 @@ def upsert_tracked_detected(
         base_node.tags["dedup"] = _DEDUP_NEW
 
         graph.nodes[fid] = base_node
-        if graph.objects_by_class:
-            graph.objects_by_class.setdefault(base_node.class_name, {})[fid] = base_node
         return fid
 
     # Repeat sighting: the latest observation's footprint, contour and xy win.
