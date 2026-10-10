@@ -29,7 +29,6 @@ import bisect
 import json
 import math
 import struct
-import threading
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -205,7 +204,6 @@ class NavTrack:
     """
 
     def __init__(self) -> None:
-        self._lock = threading.Lock()
         self._fix_t: list[float] = []
         self._fix: list[dict] = []
         self._att_t: list[float] = []
@@ -213,24 +211,19 @@ class NavTrack:
 
     def add_fix(self, t: float, fix: dict) -> None:
         if _usable(fix):
-            with self._lock:
-                i = bisect.bisect_right(self._fix_t, t)
-                self._fix_t.insert(i, float(t))
-                self._fix.insert(i, dict(fix))
+            i = bisect.bisect_right(self._fix_t, t)
+            self._fix_t.insert(i, float(t))
+            self._fix.insert(i, dict(fix))
 
     def add_attitude(self, t: float, doc: dict) -> None:
         """A fused attitude view poses frames; a receiver's unfused view does not."""
         if doc.get("fused") or doc.get("attitude") in ("fusion", "estimated"):
-            with self._lock:
-                i = bisect.bisect_right(self._att_t, t)
-                self._att_t.insert(i, float(t))
-                self._att.insert(i, dict(doc))
+            i = bisect.bisect_right(self._att_t, t)
+            self._att_t.insert(i, float(t))
+            self._att.insert(i, dict(doc))
 
     def pose_at(self, t: float) -> Pose | None:
-        with self._lock:
-            return self._pose_at(float(t))
-
-    def _pose_at(self, t: float) -> Pose | None:
+        t = float(t)
         if not self._fix:
             return None
         i = bisect.bisect_left(self._fix_t, t)
@@ -318,8 +311,6 @@ class RecordedRing:
                  clock_ns: int | None = None) -> None:
         self.path = Path(frames)
         self.last_error = ""
-        self.legs: list[Any] = []
-        self._lock = threading.Lock()
         #: Called after each sleep, once the clock has moved (the live source's corrector).
         self.on_sleep: list[Any] = []
         self.track = NavTrack()
@@ -355,14 +346,13 @@ class RecordedRing:
         self.t_ns = int(start_ns if clock_ns is None else clock_ns)
 
     def post(self, leg) -> None:
-        self.legs.append(leg)
+        """The recording flies nothing: a leg posted to it is answered as the recording reaches its ground."""
 
     def now(self) -> float:
         return self.t_ns / 1e9
 
     def sleep(self, seconds: float) -> None:
-        with self._lock:
-            self.t_ns += max(0, int(round(float(seconds) * 1e9)))
+        self.t_ns += max(0, int(round(float(seconds) * 1e9)))
         for hook in self.on_sleep:
             hook()
 

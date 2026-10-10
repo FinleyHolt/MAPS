@@ -16,7 +16,6 @@ reach it pasted onto one canvas, the latest on top, in the shape
 
 from __future__ import annotations
 
-import threading
 from typing import Any
 
 import numpy as np
@@ -27,23 +26,20 @@ DEFAULT_GSD_M = 0.10
 
 class RunImagery:
     def __init__(self) -> None:
-        self._lock = threading.Lock()
         #: ``(rgb, alpha, (x0, y0, x1, y1), gsd_m)`` per product, in the order perceived.
         self._products: list[tuple[np.ndarray, np.ndarray, tuple[float, float, float, float], float]] = []
 
     @property
     def gsd_m(self) -> float:
         """The finest ground sample any product carries: the grid a look is cut at."""
-        with self._lock:
-            return min((g for *_r, g in self._products), default=DEFAULT_GSD_M)
+        return min((g for *_r, g in self._products), default=DEFAULT_GSD_M)
 
     def add(self, obs: Any) -> None:
         """One perceived observation: a north-up product on the map grid
         (``live_source.ortho_observation``), its ``world_window`` and alpha."""
         x0, y0, x1, y1 = (float(v) for v in obs.world_window)
-        with self._lock:
-            self._products.append((np.ascontiguousarray(obs.rgb[..., :3], np.uint8), np.asarray(obs.alpha, np.uint8),
-                                   (x0, y0, x1, y1), (x1 - x0) / obs.rgb.shape[1]))
+        self._products.append((np.ascontiguousarray(obs.rgb[..., :3], np.uint8), np.asarray(obs.alpha, np.uint8),
+                               (x0, y0, x1, y1), (x1 - x0) / obs.rgb.shape[1]))
 
     def ortho(self, window: tuple[float, float, float, float]) -> dict[str, Any]:
         """The run's imagery over ``window`` as one north-up canvas at the
@@ -60,9 +56,7 @@ class RunImagery:
         h = max(1, int(round((y1 - y0) / gsd)))
         rgb = np.zeros((h, w, 3), np.uint8)
         alpha = np.zeros((h, w), np.uint8)
-        with self._lock:
-            products = list(self._products)
-        for prgb, palpha, (px0, py0, px1, py1), pgsd in products:
+        for prgb, palpha, (px0, py0, px1, py1), pgsd in self._products:
             ox0, oy0, ox1, oy1 = max(x0, px0), max(y0, py0), min(x1, px1), min(y1, py1)
             if ox1 <= ox0 or oy1 <= oy0:
                 continue

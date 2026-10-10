@@ -30,7 +30,6 @@ import datetime as dt
 import logging
 import math
 import sys
-import threading
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -68,7 +67,6 @@ class Twin:
         self.terrain = terrain
         self.agl_m = float(agl_m)
         self._render = map_render.renderer(ortho)
-        self._lock = threading.Lock()
         self.t = 0.0
         #: Time slept and not yet flown: less than one camera tick.
         self._owed = 0.0
@@ -89,9 +87,8 @@ class Twin:
         return map_render.ground_msl(self.terrain, self.floor_msl_m, xy)
 
     def post(self, leg: Leg) -> None:
-        with self._lock:
-            self.legs.append(leg)
-            self.route = [tuple(leg.point)] + [tuple(p) for p in leg.ahead]
+        self.legs.append(leg)
+        self.route = [tuple(leg.point)] + [tuple(p) for p in leg.ahead]
 
     def now(self) -> float:
         return self.t
@@ -99,14 +96,13 @@ class Twin:
     def sleep(self, seconds: float) -> None:
         """Fly ``seconds`` of the route on the twin's clock, a camera tick at a time."""
         dt_s = 1.0 / CAMERA_HZ
-        with self._lock:
-            self._owed += max(0.0, float(seconds))
-            while self._owed >= dt_s - 1e-9:
-                self._advance(dt_s)
-                self._owed -= dt_s
-                self.t = len(self._track) / CAMERA_HZ
-                self._track.append((self.t, *self.xy, self.heading_deg))
-                self._record()
+        self._owed += max(0.0, float(seconds))
+        while self._owed >= dt_s - 1e-9:
+            self._advance(dt_s)
+            self._owed -= dt_s
+            self.t = len(self._track) / CAMERA_HZ
+            self._track.append((self.t, *self.xy, self.heading_deg))
+            self._record()
         for hook in self.on_sleep:
             hook()
 
@@ -144,19 +140,17 @@ class Twin:
                               "pose": pose_tag(pose)})
 
     def pose(self, t: float | None = None) -> Pose | None:
-        with self._lock:
-            t = self.t if t is None else float(t)
-            track = self._track
-            if t >= track[-1][0]:
-                return self._pose_at_track(t, *track[-1][1:])
-            i = max(0, min(len(track) - 2, int(t * CAMERA_HZ)))
-            (t0, x0, y0, h0), (t1, x1, y1, h1) = track[i], track[i + 1]
-            w = min(max((t - t0) / (t1 - t0), 0.0), 1.0)
-            return self._pose_at_track(t, x0 + (x1 - x0) * w, y0 + (y1 - y0) * w, h1 if w >= 0.5 else h0)
+        t = self.t if t is None else float(t)
+        track = self._track
+        if t >= track[-1][0]:
+            return self._pose_at_track(t, *track[-1][1:])
+        i = max(0, min(len(track) - 2, int(t * CAMERA_HZ)))
+        (t0, x0, y0, h0), (t1, x1, y1, h1) = track[i], track[i + 1]
+        w = min(max((t - t0) / (t1 - t0), 0.0), 1.0)
+        return self._pose_at_track(t, x0 + (x1 - x0) * w, y0 + (y1 - y0) * w, h1 if w >= 0.5 else h0)
 
     def index(self, since: int | None = None) -> list[dict[str, Any]]:
-        with self._lock:
-            return [dict(r) for r in self.rows if since is None or r["log_time"] >= since]
+        return [dict(r) for r in self.rows if since is None or r["log_time"] >= since]
 
     def frame(self, seq: int):
         """``(jpeg, t_host, log_time, seq, tag)``: the frame rendered off the
@@ -165,8 +159,7 @@ class Twin:
 
         from benchmarks.flight.nav_track import tag_pose  # noqa: PLC0415
 
-        with self._lock:
-            row = dict(self.rows[seq]) if 0 <= seq < len(self.rows) else None
+        row = dict(self.rows[seq]) if 0 <= seq < len(self.rows) else None
         if row is None:
             self.last_error = f"no frame {seq} in the ring"
             return None
