@@ -46,6 +46,14 @@ applies, so a seed and a limit select the same episodes on every run.
 its root. `--dry-run` prints the selection and launches nothing.
 `CITYNAV_BENCH_CONFIG` names the config (default `configs/citynav.yaml`).
 
+A run holds its root for its lifetime (`.bench.lock`); a second run into it
+is refused. Startup refuses a selection whose blocks lack their bake files or
+raster pair, naming the files. An exception the method raises lands as a
+scored miss: status `ok` with its `error` and `traceback` and no metrics.
+Only an infrastructure fault (a serve or segmenter outage, a runner that died)
+lands `infra`; such an episode flies again, up to `--max-infra-attempts` (3)
+attempts, and past that is reported as persistent infra with its errors.
+
 A run root holds:
 
 | Path | Contents |
