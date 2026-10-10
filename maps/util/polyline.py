@@ -82,8 +82,9 @@ def simplify_ring(loop, *, tolerance: float, max_points: int) -> list:
     return [[p[0], p[1]] for p in thin[:-1]]
 
 
-def _clip_segment(p0, p1, box):
-    """Liang-Barsky: the part of segment p0->p1 inside ``box``, or None."""
+def clip_t(p0, p1, box):
+    """Liang-Barsky: the ``(t_enter, t_exit)`` of segment p0->p1 inside
+    ``box`` = ``(x0, y0, x1, y1)``, or None."""
     x0, y0 = p0
     x1, y1 = p1
     bx0, by0, bx1, by1 = box
@@ -106,7 +107,17 @@ def _clip_segment(p0, p1, box):
             t1 = min(t1, r)
     if t0 > t1:
         return None
-    return ((x0 + t0 * dx, y0 + t0 * dy), (x0 + t1 * dx, y0 + t1 * dy))
+    return t0, t1
+
+
+def _clip_segment(p0, p1, box):
+    """The part of segment p0->p1 inside ``box``, or None."""
+    t = clip_t(p0, p1, box)
+    if t is None:
+        return None
+    (x0, y0), (x1, y1) = p0, p1
+    dx, dy = x1 - x0, y1 - y0
+    return ((x0 + t[0] * dx, y0 + t[0] * dy), (x0 + t[1] * dx, y0 + t[1] * dy))
 
 
 def clip_ring_to_box(loop, box) -> list:

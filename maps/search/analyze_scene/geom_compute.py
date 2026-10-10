@@ -36,6 +36,8 @@ import math
 
 import numpy as np
 
+from maps.util.polyline import clip_t
+
 # 8-point compass wedges over compass bearing (0=N, clockwise).
 _COMPASS8 = (
     (22.5, "north"), (67.5, "northeast"), (112.5, "east"), (157.5, "southeast"),
@@ -989,27 +991,6 @@ def clip_chains_to_box(chains, box) -> list:
     def inside(p):
         return x0 <= p[0] <= x1 and y0 <= p[1] <= y1
 
-    def cut(a, b):
-        """Liang-Barsky: the ``(t_enter, t_exit)`` of a->b inside the box."""
-        dx, dy = b[0] - a[0], b[1] - a[1]
-        t0, t1 = 0.0, 1.0
-        for p, q in ((-dx, a[0] - x0), (dx, x1 - a[0]),
-                     (-dy, a[1] - y0), (dy, y1 - a[1])):
-            if p == 0:
-                if q < 0:
-                    return None
-                continue
-            t = q / p
-            if p < 0:
-                if t > t1:
-                    return None
-                t0 = max(t0, t)
-            else:
-                if t < t0:
-                    return None
-                t1 = min(t1, t)
-        return (t0, t1) if t0 <= t1 else None
-
     def at(a, b, t):
         # The endpoints come back verbatim: interpolation is not
         # bit-identical, and :func:`chain_component_labels` partitions on
@@ -1032,7 +1013,7 @@ def clip_chains_to_box(chains, box) -> list:
             continue
         run: list = []
         for a, b in zip(pts, pts[1:]):
-            seg = cut(a, b)
+            seg = clip_t(a, b, (x0, y0, x1, y1))
             if seg is None:
                 if run:
                     out.append(run)
