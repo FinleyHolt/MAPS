@@ -303,10 +303,10 @@ FILTER_OPS = ("eq", "ne", "lt", "le", "gt", "ge", "truthy", "on_side",
 # the reference straddles the row, or none of it lies abreast) and drops one
 # it places on the other side (negative). ``gt 0`` would drop both.
 
-# _color_of reads a color token from a class label; _node_color prefers the
+# _color_of reads a color token from a class label; _color_fields prefers the
 # perceived color on semantic_attributes and falls back to it. A row without
 # a perceived color carries no color_<word> column.
-_COLOR_WORDS = ("white", "black", "gray", "gray", "silver", "red", "blue", "green",
+_COLOR_WORDS = ("white", "black", "gray", "silver", "red", "blue", "green",
                 "yellow", "orange", "brown", "tan", "beige", "gold", "maroon", "purple")
 
 
@@ -317,78 +317,11 @@ def _color_of(label: str) -> str:
     return ""
 
 
-def _node_color(n) -> str:
-    """Perception-derived color for a node. Reads the enriched ``color`` attribute
-    off ``semantic_attributes`` ({key: {value: count}}; top-count value wins) -- the
-    structured attribute the perception color-enrichment populates over the BARE-NOUN
-    mask. Falls back to a color token in the class_name label (legacy color-qualified
-    concepts / prior nodes). This is NOT cue-language processing: it labels what the
-    object LOOKS like (like the SAM class), and the agent matches the instruction's
-    color word to it by reasoning (color is also surfaced per-candidate in the
-    selection listing for the fuzzy cases -- silver vs gray -- a filter can't settle)."""
-    sa = getattr(n, "semantic_attributes", None) or {}
-    cc = sa.get("color") or {}
-    if isinstance(cc, dict) and cc:
-        return str(max(cc.items(), key=lambda kv: kv[1])[0])
-    if isinstance(cc, str) and cc:
-        return cc
-    return _color_of(str(getattr(n, "class_name", "") or ""))
-
-
-def _node_color_conf(n):
-    """Perception's CONFIDENCE in this node's perceived ``color`` in [0,1], or None.
-
-    Reads the ``color_conf`` bucket off ``semantic_attributes`` (stored by
-    perception._set_color_attr as a stringified float, accumulated as {value:count}
-    like every attribute) and returns the modal bucket parsed to float -- with the
-    measured single-observation reality (one color vote per car node) this IS the
-    per-detection confidence. Returns None when ABSENT (the offline tile-REBUILD graph
-    carries no semantic_attributes) so the surface row OMITS color_conf and a color
-    column falls back to its conf=None family-soft number -- byte-parity with the
-    pre-change offline-rebuild path (the same parity boundary _node_color already
-    lives on)."""
-    sa = getattr(n, "semantic_attributes", None) or {}
-    cc = sa.get("color_conf") or sa.get("color_conf") or {}
-    raw = None
-    if isinstance(cc, dict) and cc:
-        raw = max(cc.items(), key=lambda kv: kv[1])[0]
-    elif isinstance(cc, (str, int, float)) and cc != "":
-        raw = cc
-    if raw is None:
-        return None
-    try:
-        return round(float(raw), 3)
-    except (TypeError, ValueError):
-        return None
-
-
-def _node_color_shade(n):
-    """M6's value-axis shade tag ``dk``|``mid``|``lt`` off ``semantic_attributes``, or
-    None when absent (offline tile-rebuild rows, or a legacy single-word color). Drives
-    the compact ``col`` cell's dk/lt prefix + enables the ``/word2`` mixture component
-    (a color-name posterior; the palette mixture's 2nd component is glass/shadow
-    noise, so its absence correctly suppresses ``/word2``)."""
-    sa = getattr(n, "semantic_attributes", None) or {}
-    cc = sa.get("color_shade") or {}
-    if isinstance(cc, dict) and cc:
-        return str(max(cc.items(), key=lambda kv: kv[1])[0])
-    if isinstance(cc, str) and cc:
-        return cc
-    return None
-
-
-def _node_color_flag(n):
-    """M6's uncertainty flag off ``semantic_attributes`` — ``'look'`` when the chroma
-    sits in the ambiguous achromatic/chromatic band (resolve with a viewpoint), else
-    ``''``/None for a confident read (which ``_color_fields`` drops via ``if flag:`` so
-    only ``'look'`` ever reaches a row). Renders the compact ``col`` cell's ``?``."""
-    sa = getattr(n, "semantic_attributes", None) or {}
-    cc = sa.get("color_flag") or {}
-    if isinstance(cc, dict) and cc:
-        return str(max(cc.items(), key=lambda kv: kv[1])[0])
-    if isinstance(cc, str) and cc:
-        return cc
-    return None
+def _modal_attr(n, key):
+    """The modal value of ``key`` on the node's ``semantic_attributes``
+    ({value: count} buckets), or None."""
+    cc = (getattr(n, "semantic_attributes", None) or {}).get(key)
+    return max(cc.items(), key=lambda kv: kv[1])[0] if cc else None
 
 
 # Tag keys withheld from the model-facing tags (search text + rendered tags):
@@ -461,16 +394,22 @@ class _Args(dict):
 
 def _color_fields(n) -> dict:
     """``{"color": ...}`` plus ``color_conf``/``color_shade``/``color_flag``
-    only when perception set them (omitted, never None, otherwise)."""
-    fields = {"color": _node_color(n)}
-    conf = _node_color_conf(n)
+    only when perception set them (omitted, never None, otherwise). The color
+    is the perceived one, else a color token in the class label."""
+    color = _modal_attr(n, "color")
+    fields = {"color": color if color is not None
+              else _color_of(str(getattr(n, "class_name", "") or ""))}
+    conf = _modal_attr(n, "color_conf")
     if conf is not None:
-        fields["color_conf"] = conf
+        try:
+            fields["color_conf"] = round(float(conf), 3)
+        except ValueError:
+            pass
     # _mask_noise_color folds shade/flag into the ``col`` cell.
-    shade = _node_color_shade(n)
+    shade = _modal_attr(n, "color_shade")
     if shade is not None:
         fields["color_shade"] = shade
-    flag = _node_color_flag(n)
+    flag = _modal_attr(n, "color_flag")
     if flag:
         fields["color_flag"] = flag
     return fields
