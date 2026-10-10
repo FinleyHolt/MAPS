@@ -408,12 +408,6 @@ def _set_color_attr(attrs: dict, rgb, region) -> None:
         attrs["color_conf"] = f"{col[2]:.3f}"
 
 
-
-
-
-
-
-
 # Per-instance mask split. SAM 3.x emits ONE mask per DETR query with NO
 # instance separation / NO NMS / NO connected-component split (paper §3
 # arXiv 2511.16719; HF post_process applies none). For tiny, dense objects a

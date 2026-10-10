@@ -126,8 +126,6 @@ class SensorSpec:
     in ``_REGISTRY`` populates this field."""
 
 
-
-
     def to_dict(self) -> dict[str, Any]:
         """Flat JSON-safe serialization (used in episode.json)."""
         return {
