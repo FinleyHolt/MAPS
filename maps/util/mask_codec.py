@@ -1,8 +1,7 @@
 """Bbox-cropped, bit-packed, deflated pixel-mask records.
 
 One encoding for every pixel mask that crosses a process boundary: the SAM
-server's detection wire and the per-step audit record the dashboard renders
-from. A mask is stored as its bounding-box crop, bit-packed one bit per pixel,
+server's detection wire and the per-step detection record. A mask is stored as its bounding-box crop, bit-packed one bit per pixel,
 then deflated::
 
     {

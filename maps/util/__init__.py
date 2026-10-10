@@ -1,7 +1,5 @@
-"""Cross-cutting plumbing any layer may call.
-
-Home for utilities not tied to one domain package. Currently the detection
-mask codec (``mask_codec``), the one wire format for masks between the SAM
-server, the render daemon and the runtime. Consumers import the submodule
-directly (``from maps.util.mask_codec import ...``).
+"""Utilities any layer may call: the mask record codec (``mask_codec``), the
+mask crop plus its box (``mask_region``), ring simplification and clipping
+(``polyline``), the ``[x, y]`` point token (``xy_token``) and the node content
+fingerprint (``node_fingerprint``). Consumers import the submodule directly.
 """

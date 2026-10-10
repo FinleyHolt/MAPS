@@ -1,23 +1,13 @@
 """Does this graph node still hold what it held before?
 
-One hash of a node's whole content, used wherever the answer "nothing about
-this node changed" is worth more than the work it saves:
+One hash of a node's whole content; the analyze surface
+(``analyze_scene.geom_program``) reuses a row while its node's fingerprint is
+unchanged.
 
-  * the analyze surface reuses a row rather than rebuilding it
-    (``analyze_scene.geom_program``).
-
-CONTENT, never identity. Both callers sit downstream of a snapshot round trip
-that rebuilds every node object with the same values, so ``is`` answers "new
-object" on nodes that are byte-for-byte what they were. And never a
-hand-maintained dirty list either: that has to be right about every mutation
-path in the tree forever, and the first one anyone forgets is a stale answer
-with nothing saying so.
-
-The WHOLE ``__dict__`` is hashed, not the fields a caller happens to read
-today. Enumerating them would be faster and would rot -- a new ``MapObject``
-field would be invisible to the key, and the caller would go on serving
-answers computed before it existed. That is the same defect class the ingest
-client's ``IngestServerStale`` guard exists for.
+Content, never identity: a node rebuilt with the same values is unchanged,
+and no hand-maintained dirty list has to know every mutation path. The whole
+``__dict__`` is hashed rather than the fields a caller reads, so a new
+``MapObject`` field cannot be invisible to the key.
 """
 
 from __future__ import annotations

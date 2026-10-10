@@ -1,21 +1,11 @@
 """A detection mask as what it is: a crop, and where it sits in the frame.
 
-The SAM wire carries a bbox crop. The decode path used to paste that crop onto
-a full frame-sized canvas, at which point the mask's location was no longer
-carried anywhere — so every downstream stage rediscovered it by scanning the
-whole frame. Projection, colour, component labelling and the area count each
-paid for the same rediscovery, per detection, and the cost scaled with the
-SENSOR's resolution rather than with the object.
-
-Passing ``(crop, bbox)`` as two arguments fixes the cost and introduces a
-worse hazard: nothing checks that the box actually bounds the mask. A stale or
-mismatched box does not raise. It silently narrows a scan, so the detection
-keeps a plausible ``world_xy`` a few metres off with every count still
-matching — the failure this codebase has repeatedly paid for.
-
-``MaskRegion`` makes that state unrepresentable. The crop and its box are
-constructed together and validated against each other, so a function taking a
-region cannot be handed a box belonging to a different mask.
+The SAM wire carries a bbox crop, and keeping it as a crop lets projection,
+colour, component labelling and the area count scale with the object rather
+than with the sensor's resolution. A crop passed beside a separate box can be
+paired with the wrong box, which silently narrows a scan and leaves a
+plausible ``world_xy`` a few metres off. ``MaskRegion`` constructs the crop
+and its box together and validates them against each other.
 
 ``frame_shape`` is carried because it is genuinely needed and not derivable
 from a crop: the ortho projectors normalise pixel coordinates by the FRAME
