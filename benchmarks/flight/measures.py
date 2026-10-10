@@ -50,13 +50,14 @@ from bisect import bisect_left
 from pathlib import Path
 
 from benchmarks.citynav.analysis.rows import is_infra_abort
+from maps.perception.geometry.sensor_spec import resolve_sensor
 from typing import Any
 
 FT_PER_M = 1.0 / 0.3048
 #: The success radius: CityNav's 20 m.
 SUCCESS_RADIUS_M = 20.0
-#: The C-12 camera's horizontal field of view, the width OSR reads.
-C12_HFOV_DEG = 16.09
+#: The C-12's camera, whose horizontal field of view is the width OSR reads.
+C12_SENSOR = "oryx_orx32_25mm_nadir"
 #: A committed area is trusted only when the commit lies inside it or this close to its centroid.
 AREA_MATCH_M = 1.0
 #: A gap between fixes longer than this is a hole in the recording.
@@ -319,13 +320,13 @@ def closest_approach(path, p) -> tuple[float, dict[str, Any]]:
     return _seg_dist(p, pts[i], pts[i + 1]), path[i] if math.dist(pts[i], p) <= math.dist(pts[i + 1], p) else path[i + 1]
 
 
-def track_coverage(track, t0: float, t1: float) -> tuple[float, float]:
-    """The share of ``[t0, t1]`` the recording holds, and its longest hole in seconds."""
+def track_coverage(track, t0: float, t1: float) -> float:
+    """The share of ``[t0, t1]`` the recording holds."""
     if t1 <= t0:
-        return 0.0, 0.0
+        return 0.0
     ts = [t0] + [f["t_unix"] for f in _window(track, t0, t1)] + [t1]
     gaps = [b - a for a, b in zip(ts, ts[1:])]
-    return round(sum(g for g in gaps if g <= TRACK_GAP_S) / (t1 - t0), 3), round(max(gaps), 1)
+    return round(sum(g for g in gaps if g <= TRACK_GAP_S) / (t1 - t0), 3)
 
 
 def last_pass(track, xy, t0: float, t1: float, within_m: float) -> tuple[float, float] | None:
@@ -383,25 +384,24 @@ def first_leg_m(p, h: float, q, r: float) -> float | None:
     return best
 
 
-def return_leg_m(track, t: float, q, r: float) -> tuple[float, str]:
+def return_leg_m(track, t: float, q, r: float) -> float:
     """The way from the aircraft at ``t`` to ``q`` as a crew flies it at ``r``:
     the shorter of one turn and the straight, and a teardrop (two turns the
     opposite ways, a straight or none between), arrival heading free."""
     i = min(range(len(track)), key=lambda k: abs(track[k]["t_unix"] - t))
     xy = _at(track, t) or (track[i]["x"], track[i]["y"])
     heading = float(track[i].get("track_deg") or 0.0)
-    got = first_leg_m(xy, heading, q, r)
-    best = None if got is None else (got, "one turn and a straight")
+    best = first_leg_m(xy, heading, q, r)
     eps = math.radians(ARC_EPS_DEG) * r
     for h in range(0, 360):
         kind, (length, a0, _m, a1) = solve(xy, heading, q, float(h), r)
         s0, _sm, s1 = SENSES[kind]
         turns = [s for s, d in ((s0, a0), (_sm, _m), (s1, a1)) if s != 0 and d > eps]
-        if len(turns) == 2 and turns[0] != turns[1] and (best is None or length < best[0]):
-            best = (length, "a teardrop (two turns)")
+        if len(turns) == 2 and turns[0] != turns[1] and (best is None or length < best):
+            best = length
     if best is None:
         h = min(range(0, 360, 5), key=lambda a: solve(xy, heading, q, float(a), r)[1][0])
-        best = (solve(xy, heading, q, float(h), r)[1][0], "turned round")
+        best = solve(xy, heading, q, float(h), r)[1][0]
     return best
 
 
@@ -538,7 +538,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     success = bool(out["success_area"])
     if not success:
         out["spl"] = 0.0
-    out["track_coverage"], _hole = track_coverage(track, t_start, t_end_run)
+    out["track_coverage"] = track_coverage(track, t_start, t_end_run)
     flown = _window(track, t_start, t_end_run) if track else []
     # The keyframes carry the live navigation's pose: beside a thin
     # recording they can still show the aircraft came within the width.
@@ -554,7 +554,8 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     out["closest_approach_ft"] = round(d * FT_PER_M, 1)
     agl, out["agl_source"] = _agl(nearest, bases, events)
     if agl is not None:
-        width = 2.0 * agl * math.tan(math.radians(C12_HFOV_DEG) / 2.0)
+        hfov_deg = resolve_sensor(C12_SENSOR).intrinsics.hfov_deg
+        width = 2.0 * agl * math.tan(math.radians(hfov_deg) / 2.0)
         out["hfov_width_ft"] = round(width * FT_PER_M, 1)
         out["oracle_success"] = d <= width
     if out["oracle_success"] is False and thin:
@@ -569,7 +570,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     leg = 0.0
     at = _at(track, t_end_run)
     if xy is not None and (at is None or math.dist(at, xy) > (out["hfov_width_ft"] or 0.0) / FT_PER_M / 2.0):
-        leg, _how = return_leg_m(track, t_end_run, xy, turn_radius_m)
+        leg = return_leg_m(track, t_end_run, xy, turn_radius_m)
     p = sum(math.dist((a["x"], a["y"]), (b["x"], b["y"])) for a, b in zip(_window(track, p0, t_end_run),
                                                                          _window(track, p0, t_end_run)[1:]))
     shortest = math.dist(origin, target)
@@ -642,11 +643,10 @@ def check(rows: list[dict[str, Any]], master: Path) -> list[str]:
     out = [f"{k}: in the master table, not read" for k in sorted(set(want) - set(have))]
     out += [f"{k}: read, not in the master table" for k in sorted(set(have) - set(want))]
     for k in sorted(set(want) & set(have)):
-        for ours, theirs in (("success_area", "success_area"), ("success_radius", "success_radius"),
-                             ("oracle_success", "oracle_success")):
-            a, b = have[k][ours], want[k][theirs]
+        for key in ("success_area", "success_radius", "oracle_success"):
+            a, b = have[k][key], want[k][key]
             if ("" if a is None else str(a)) != b:
-                out.append(f"{k} {ours}: {a!r} here, {b!r} in the master table")
+                out.append(f"{k} {key}: {a!r} here, {b!r} in the master table")
     return out
 
 
