@@ -63,6 +63,8 @@ def _driver(tmp_path: Path) -> bf.Driver:
     d.allowlist_path = None
     d.replay_source = None
     d.loop = False
+    d.max_infra_attempts = 3
+    d._infra_errors = {}
     d._split_size = 0
     d._t_start = 0.0
     return d
@@ -260,35 +262,6 @@ def test_the_run_exits_nonzero_and_the_summary_says_why(
     assert n_rows < 60, f"the run did not stop early ({n_rows} rows)"
 
 
-def test_an_aborted_run_does_not_sleep_out_its_retry_budget(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Every worker still in flight when the gate trips would otherwise
-    sleep a full jittered backoff per remaining retry before noticing —
-    on an exclusive node, minutes of nothing."""
-    d = _driver(tmp_path)
-    d.max_oom_retries = 3
-    d.remote_results = False
-    d._abort = "already doomed"
-    monkeypatch.setattr(
-        d, "_run_attempt",
-        lambda w, e, r: ({**_infra_row(0), "elapsed_s": 1.0}, True),
-    )
-
-    def no_sleep(_s: float) -> None:
-        raise AssertionError("an aborted run slept out a retry backoff")
-
-    monkeypatch.setattr(bf.time, "sleep", no_sleep)
-    d.run_one(0, "ep0", None)
-    rows = [json.loads(ln) for ln in d.episodes_file.read_text().splitlines()]
-    assert len(rows) == 1, "the give-up path wrote the wrong number of rows"
-    assert rows[0]["oom_retries"] == 0, (
-        f"the audit row claims retries it never spent: {rows[0]['error']}"
-    )
-    assert rows[0]["status"] == "infra"
-    assert bf._done_qualify(rows[0]) is None, "the aborted episode counts as done"
-
-
 def test_a_spawn_failure_reads_the_childs_own_log(tmp_path: Path) -> None:
     """The warm runner's stderr is the only record of why it died.
 
@@ -302,7 +275,6 @@ def test_a_spawn_failure_reads_the_childs_own_log(tmp_path: Path) -> None:
     banner reads ``w<id>/server.log`` for a row without one.
     """
     d = _driver(tmp_path)
-    d.max_oom_retries = 0
     server_log = tmp_path / "w0" / "server.log"
     server_log.parent.mkdir()
     server_log.write_text(
@@ -325,10 +297,9 @@ def test_a_spawn_failure_reads_the_childs_own_log(tmp_path: Path) -> None:
 
     runner = _DeadRunner()
     runner.server_log = server_log
-    row, retryable = d._run_attempt(0, "ep0", runner)
+    row = d._run_attempt(0, "ep0", runner)
 
     assert row["status"] == "infra" and "workdir" not in row, row
-    assert retryable, "a closed pipe is transient; the child is respawned"
     assert bf._infra_casualty(row), "a spawn failure must stay an infra casualty"
 
     for i in range(bf.ABORT_WINDOW):
@@ -411,6 +382,37 @@ def test_a_landed_crash_row_is_scored_not_infra(tmp_path: Path, monkeypatch) -> 
             return False
 
     monkeypatch.setattr(d, "_wait_for_exit", lambda runner, seq, t: "exited")
-    row, retryable = d._run_attempt(0, "ep0", _Runner())
+    row = d._run_attempt(0, "ep0", _Runner())
     assert row["status"] == "ok" and row["error"] == "RuntimeError: boom"
-    assert not retryable and not bf._infra_casualty(row)
+    assert not bf._infra_casualty(row)
+
+
+def test_an_episode_infra_at_every_capped_attempt_is_not_claimed_again(tmp_path: Path) -> None:
+    d = _driver(tmp_path)
+    d._selection = ["ep0"]
+    for _ in range(d.max_infra_attempts):
+        assert d._next_claimed_episode(0) == "ep0"
+        d._append_result(_infra_row(0, cause="SamServerOutage"))
+        d._in_flight.discard("ep0")
+    assert d._next_claimed_episode(0) is None, "a capped infra episode was re-flown"
+
+
+def test_persistent_infra_is_reported_with_its_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from benchmarks.citynav import episodes
+    from benchmarks.citynav import run_manifest as rm
+
+    monkeypatch.setattr(rm, "build_manifest", lambda **kw: {})
+    monkeypatch.setattr(rm, "emit_or_verify", lambda *a, **k: None)
+    for cause in ("A", "A", "B"):
+        episodes.append_row(tmp_path, _infra_row(0, cause=cause))
+    d = _driver(tmp_path)
+    monkeypatch.setattr(d, "_select_episodes", lambda: ["ep0"])
+    flown: list[int] = []
+    monkeypatch.setattr(d, "worker_loop", flown.append)
+    d.max_wall_s, d._deadline = 5, time.monotonic() + 5  # bounds a driver that re-flies
+    assert d.run() == 0
+    assert not flown, "a capped infra episode was handed to a worker"
+    for text in (d.summary_file.read_text(), d.driver_log.read_text()):
+        assert "persistent infra: 1 episode(s)" in text and "A=2, B=1" in text, text

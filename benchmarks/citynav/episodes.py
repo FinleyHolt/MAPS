@@ -8,8 +8,7 @@
 
 ``episode.json`` holds what the runner knows once the attempt lands: ``ok``
 or ``infra``. A ledger row is that row plus what only the owner knows --
-``workdir`` relative to the ledger's directory, ``worker_id``,
-``oom_retries`` -- and the owner overrides ``status`` on its own kill paths
+``workdir`` relative to the ledger's directory, ``worker_id`` -- and the owner overrides ``status`` on its own kill paths
 (``timed_out``, ``infra``). A driver-killed attempt leaves no
 ``episode.json``; the ledger row is the verdict.
 """

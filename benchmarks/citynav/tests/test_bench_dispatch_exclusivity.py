@@ -42,8 +42,11 @@ class _Dispatch:
         # so this stub exercises the real code, healthy.
         self._recent = deque(maxlen=ABORT_WINDOW)
         self._abort = None
+        self.max_infra_attempts = 3
+        self._infra_errors = {}
 
     _next_claimed_episode = Driver._next_claimed_episode
+    _infra_attempts = Driver._infra_attempts
     _append_result = Driver._append_result
     # The result-write surface now includes the mass-instant-failure gate:
     # every row the writer takes feeds it, and the claim path reads its

@@ -132,16 +132,12 @@ POLL_INTERVAL_S = 5.0
 # run re-flew 10/300 episodes when the discard of the in-flight hold
 # outran this TTL), so the TTL bounds re-parse cost only.
 _DONE_CACHE_TTL_S = 20.0
-# Full redos of an episode that died on a retryable infra fault before
-# the row is left ``infra`` for the next resume.
-MAX_OOM_RETRIES = int(os.environ.get("CITYNAV_BENCH_MAX_OOM_RETRIES", "1"))
+# Infra attempts an episode gets before the run leaves it out and reports
+# it as persistent infra with its errors (``--max-infra-attempts``).
+MAX_INFRA_ATTEMPTS = 3
 # Wall-time budget for a continuous run (0 = unlimited; run until the
 # selection / run-count budget is exhausted).
 DEFAULT_MAX_WALL_S = int(os.environ.get("CITYNAV_BENCH_MAX_WALL_S", "0"))
-# Base for the OOM-retry backoff sleep (base*attempt + U[0,30]). On the
-# fleet a retry only recovers if it lands in a cooler pool, so the
-# launcher can lengthen this without a redeploy.
-OOM_BACKOFF_BASE_S = float(os.environ.get("CITYNAV_BENCH_OOM_BACKOFF_BASE_S", "90"))
 # Mass-instant-failure abort. A tree deployed without its tile bake fails
 # EVERY episode in seconds. The driver recognizes the shape
 # (``no_prediction_unclassified``), but a warning line in the END-OF-RUN
@@ -684,7 +680,11 @@ class Driver:
         if getattr(args, "sample_seed", None) is not None:
             os.environ["CITYNAV_BENCH_SAMPLE_SEED"] = str(args.sample_seed)
         self.episode_timeout_s = int(args.episode_timeout_s)
-        self.max_oom_retries = int(args.max_oom_retries)
+        self.max_infra_attempts = max(1, int(args.max_infra_attempts))
+        # episode_id -> its infra attempts' errors, counted; read from the
+        # ledger at each pass start and kept current by _append_result.
+        # Guarded by _dispatch_lock.
+        self._infra_errors: dict[str, Counter] = {}
         self.loop = bool(args.loop)
         self.out_root = Path(args.out_root)
         if not self.out_root.is_absolute():
@@ -768,9 +768,12 @@ class Driver:
         # the episode. Infra rows do not qualify and stay re-claimable
         # (_done_qualify is the one shared predicate).
         eid = _done_qualify(row)
-        if eid is not None:
-            with self._dispatch_lock:
+        with self._dispatch_lock:
+            if eid is not None:
                 self._done_cache.add(eid)
+            elif _infra_casualty(row) and isinstance(row.get("episode_id"), str):
+                self._infra_errors.setdefault(row["episode_id"], Counter())[
+                    _infra_cause(row)] += 1
         self._check_mass_infra(row)
 
     @staticmethod
@@ -794,18 +797,14 @@ class Driver:
         spent. The window counts only rows the done-set EXCLUDES (the
         shared ``_infra_casualty`` predicate), so an episode timeout — the
         algorithm failing to answer, a legitimate miss — can never fill it,
-        and a healthy run's occasional OOM retry cannot either: the gate
+        and a healthy run's occasional infra attempt cannot either: the gate
         needs ABORT_FRACTION of a FULL window.
 
         Nothing is written and nothing is scored. Every counted row was
         already excluded + re-queued, so a resume after the fix re-flies
         exactly these episodes.
         """
-        cause = (
-            _infra_cause(row).split(" after ")[0]
-            if _infra_casualty(row)
-            else None
-        )
+        cause = _infra_cause(row) if _infra_casualty(row) else None
         # The log that explains the row: the attempt's own run.log, or the
         # worker's server.log for an attempt that never got a workdir.
         wd = row.get("workdir")
@@ -883,7 +882,11 @@ class Driver:
                 eid = self._selection[self._cursor % n]
                 self._cursor += 1
                 scanned += 1
-                if eid in done or eid in self._in_flight:
+                if (
+                    eid in done
+                    or eid in self._in_flight
+                    or self._infra_attempts(eid) >= self.max_infra_attempts
+                ):
                     continue
                 self._in_flight.add(eid)
                 return eid
@@ -891,6 +894,28 @@ class Driver:
             # is done or running on this process's own workers, and a
             # sibling finishing its episode leaves nothing new to take.
             return None
+
+    def _infra_attempts(self, eid: str) -> int:
+        return self._infra_errors.get(eid, Counter()).total()
+
+    def _persistent_infra(self, episodes_: list[str]) -> str:
+        """The line naming the selected episodes left out after
+        ``max_infra_attempts`` infra attempts each, with their errors
+        counted, or "" when there are none."""
+        with self._dispatch_lock:
+            stuck = [e for e in episodes_ if e not in self._done_cache
+                     and self._infra_attempts(e) >= self.max_infra_attempts]
+            errors: Counter = Counter()
+            for e in stuck:
+                errors.update(self._infra_errors[e])
+        if not stuck:
+            return ""
+        hist = ", ".join(f"{k}={v}" for k, v in errors.most_common())
+        return (
+            f"persistent infra: {len(stuck)} episode(s) after "
+            f"{self.max_infra_attempts} infra attempts each ({hist}); "
+            f"--max-infra-attempts above {self.max_infra_attempts} flies them again"
+        )
 
     # -- health gate -------------------------------------------------------
 
@@ -975,8 +1000,8 @@ class Driver:
 
     def _run_attempt(
         self, worker_id: int, episode_id: str, runner: "_WarmRunner"
-    ) -> tuple[dict, bool]:
-        """One attempt: its ledger row, and whether a retry is worth it.
+    ) -> dict:
+        """One attempt: its ledger row.
 
         The row is the runner's own ``episode.json`` plus what only this
         driver knows (``worker_id``, ``workdir`` relative to the out-root,
@@ -997,10 +1022,8 @@ class Driver:
         )
         try:
             # Respawn-on-dead: a crashed / OOM-killed / vLLM-dead-killed
-            # runner is replaced with a fresh process (fresh CUDA
-            # context). This re-pays cold start exactly once, then
-            # amortizes again — the same per-episode cost the old
-            # per-process model paid for that one episode.
+            # runner is replaced with a fresh process. This re-pays cold
+            # start exactly once, then amortizes again.
             if not runner.alive():
                 runner.clear_lockfile()
                 runner.spawn()
@@ -1014,19 +1037,6 @@ class Driver:
             # re-queued. No ``workdir``: an episode that never started has
             # none, and the child's own stderr (``w<id>/server.log``) is
             # the only record of why -- ``_check_mass_infra`` reads it there.
-            #
-            # Retryable only for transient causes. FileNotFoundError /
-            # ImportError / ModuleNotFoundError / PermissionError are
-            # permanent (misconfigured SEARCH_AGENTIC_PYTHON, broken
-            # import in the launcher, wrong-perm serve script); retrying
-            # them burns ~OOM_BACKOFF_BASE_S × max_oom_retries of wall
-            # per doomed episode for a fault that will not clear.
-            permanent_excs = (
-                FileNotFoundError,
-                ImportError,
-                ModuleNotFoundError,
-                PermissionError,
-            )
             return {
                 "episode_id": episode_id,
                 "worker_id": worker_id,
@@ -1034,7 +1044,7 @@ class Driver:
                 "error": f"warm-runner spawn/dispatch: {type(exc).__name__}: {exc}",
                 "elapsed_s": round(time.monotonic() - t0, 1),
                 "ts": round(time.time(), 1),
-            }, not isinstance(exc, permanent_excs)
+            }
         workdir = Path(handle["workdir"])
         status = self._wait_for_exit(runner, seq, self.episode_timeout_s)
         elapsed = time.monotonic() - t0
@@ -1057,14 +1067,14 @@ class Driver:
                 f"{elapsed:.0f}s; killing + re-queueing (not scored)"
             )
             runner.kill()
-            return {**killed, "error": "vllm_down_midrun"}, False
+            return {**killed, "error": "vllm_down_midrun"}
         if status == "crashed":
             # The runner process died mid-episode (SIGKILL from the Slurm
             # cgroup OOM-killer, or a non-Exception escape) WITHOUT
             # emitting a done for this seq. It never reached a decision —
             # its episode.json is absent. An infra casualty, NOT an algorithm miss:
             # excluded from SR + the done-set and re-queued for a full redo
-            # (capped by max_oom_retries), never scored on an un-flown
+            # (up to max_infra_attempts), never scored on an un-flown
             # binding. runner.kill() is a safe no-op here (the process is
             # already dead; kill() returns immediately when poll() != None).
             runner.kill()
@@ -1072,7 +1082,7 @@ class Driver:
                 f"[w{worker_id}] CRASHED mid-episode {episode_id} after "
                 f"{elapsed:.0f}s; killing + re-queueing (not scored)"
             )
-            return {**killed, "error": "killed_midrun"}, True
+            return {**killed, "error": "killed_midrun"}
         if status == "timeout":
             self.log(
                 f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killing"
@@ -1088,7 +1098,6 @@ class Driver:
             "ts": round(time.time(), 1),
             "workdir": str(workdir.relative_to(self.out_root)),
         }
-        retryable = False
         if landed is None and status == "exited":
             # Fail-closed floor: a runner that exits clean with NO record is
             # not a completion but an unrecognized instant failure (a missing
@@ -1096,9 +1105,8 @@ class Driver:
             # from SR and re-queued.
             row["status"] = episodes.STATUS_INFRA
             row["error"] = "no_prediction_unclassified"
-            retryable = True
         elif row.get("status") == episodes.STATUS_INFRA:
-            retryable = status == "exited" and not row.get("metrics")
+            pass
         elif status == "timeout":
             # The wall-clock cap is the binding bound under an unbounded step
             # budget, so readers count these beside SR. An algorithm failure
@@ -1122,55 +1130,21 @@ class Driver:
                 f"served={runner._episodes_since_spawn})"
             )
             runner.kill()
-        return row, retryable
+        return row
 
     def run_one(self, worker_id: int, episode_id: str, runner: "_WarmRunner") -> None:
+        """Fly one attempt and land its row. An infra attempt is flown again
+        by a later claim, up to ``max_infra_attempts``."""
         self.log(f"[w{worker_id}] START {episode_id}")
-        attempt = 0
-        while True:
-            attempt += 1
-            row, retryable = self._run_attempt(worker_id, episode_id, runner)
-            # self._abort: the run is already known doomed, so every
-            # remaining worker would otherwise sleep out a full backoff
-            # before noticing. Stop retrying and record the row it has.
-            if not retryable or attempt > self.max_oom_retries or self._abort:
-                if retryable:
-                    # A retryable failure (mid-flight SIGKILL / CUDA-CuPy
-                    # OOM / shared-server fault) that did not recover across
-                    # max_oom_retries full redos. It stays ``infra`` so the
-                    # done-set + SR layers drop it and the next resume gives
-                    # it another full redo, as if the run never started.
-                    # attempt - 1 is the retries actually spent, which is
-                    # max_oom_retries on the normal give-up and fewer when
-                    # the run aborted mid-budget. The audit string must
-                    # state what happened, not what the budget allowed.
-                    _cause = row.get("error") or "infra"
-                    row["error"] = f"{_cause} after {attempt - 1} retries"
-                    self.log(
-                        f"[w{worker_id}] INFRA-GIVEUP {episode_id} after "
-                        f"{attempt - 1} retries ({_cause}; excluded + re-queued for "
-                        f"full redo)"
-                    )
-                row["oom_retries"] = attempt - 1
-                m = row.get("metrics") or {}
-                summary = f"NE={m.get('NE')} SR={m.get('SR')}" if m else "MISSING"
-                self.log(
-                    f"[w{worker_id}] END {episode_id} status={row['status']} "
-                    f"elapsed={row['elapsed_s']:.0f}s retries={attempt - 1} {summary}"
-                )
-                self._append_result(row)
-                self._write_summary()
-                return
-            backoff = OOM_BACKOFF_BASE_S * attempt + random.uniform(0, 30)
-            # Log the actual cause from the row so the retry message
-            # carries the real failure: warm-runner spawn error, cuda_oom
-            # token, shared-server fault, or the log-derived preflight OOM.
-            cause = row.get("error") or "preflight CUDA OOM"
-            self.log(
-                f"[w{worker_id}] INFRA-RETRY {episode_id} attempt {attempt}/"
-                f"{self.max_oom_retries}; backoff {backoff:.0f}s ({cause})"
-            )
-            time.sleep(backoff)
+        row = self._run_attempt(worker_id, episode_id, runner)
+        m = row.get("metrics") or {}
+        summary = f"NE={m.get('NE')} SR={m.get('SR')}" if m else "MISSING"
+        self.log(
+            f"[w{worker_id}] END {episode_id} status={row['status']} "
+            f"elapsed={row['elapsed_s']:.0f}s {summary}"
+        )
+        self._append_result(row)
+        self._write_summary()
 
     # -- aggregate / summary ----------------------------------------------
 
@@ -1195,7 +1169,7 @@ class Driver:
         infra_causes: dict[str, int] = {}
         for _r in _rows.iter_json_rows(self.episodes_file):
             if _r.get("status") == episodes.STATUS_INFRA:
-                _c = str(_r.get("error") or "?").split(" after ")[0]
+                _c = str(_r.get("error") or "?")
                 infra_causes[_c] = infra_causes.get(_c, 0) + 1
         n = len(rows)
         sr = [
@@ -1244,6 +1218,7 @@ class Driver:
             "failures excluded — investigate before trusting coverage"
             if infra_causes.get("no_prediction_unclassified", 0) > max(2, n // 50)
             else "",
+            self._persistent_infra(self._selection),
             f"!! ABORTED: {self._abort}" if self._abort else "",
             f"SR_eff:     {n_succ}/{n} = {n_succ / n:.4f}" if n else "SR_eff: -",
             f"SR(w/pred): {n_succ}/{n_pred} = {n_succ / n_pred:.4f}"
@@ -1424,14 +1399,23 @@ class Driver:
             self._cursor = 0
             self._done_cache = self._resume_done()
             self._done_cache_ts = time.monotonic()
-            pending = [e for e in episodes if e not in self._done_cache]
+            self._infra_errors = {}
+            for r in _rows.iter_json_rows(self.episodes_file):
+                if _infra_casualty(r) and isinstance(r.get("episode_id"), str):
+                    self._infra_errors.setdefault(r["episode_id"], Counter())[
+                        _infra_cause(r)] += 1
+            pending = [e for e in episodes if e not in self._done_cache
+                       and self._infra_attempts(e) < self.max_infra_attempts]
             self.log(
                 f"pass {pass_idx}: split={self.split} selection={len(episodes)} "
                 f"done={len(self._done_cache & sel_set)} pending={len(pending)} "
                 f"workers={self.workers}"
             )
+            persistent = self._persistent_infra(episodes)
+            if persistent:
+                self.log(persistent)
             if not pending:
-                self.log(f"full coverage reached: {len(episodes)} episodes")
+                self.log(f"nothing left to fly: {len(episodes)} episodes selected")
                 self._write_summary()
                 if not self.loop:
                     return 0
@@ -1493,10 +1477,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "episodes finish and results are retained.",
     )
     p.add_argument(
-        "--max-oom-retries",
+        "--max-infra-attempts",
         type=int,
-        default=MAX_OOM_RETRIES,
-        help=f"preflight-OOM retries (default {MAX_OOM_RETRIES})",
+        default=MAX_INFRA_ATTEMPTS,
+        help="infra attempts an episode gets before the run leaves it out and "
+        f"reports it as persistent infra (default {MAX_INFRA_ATTEMPTS})",
     )
     p.add_argument(
         "--limit",

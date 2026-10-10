@@ -13,6 +13,7 @@ wants a split, a GPU and a live vLLM, none of which is what broke.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 
@@ -23,6 +24,8 @@ class _Summary:
     """The surface ``_write_summary`` touches, and nothing else."""
 
     _write_summary = Driver._write_summary
+    _persistent_infra = Driver._persistent_infra
+    _infra_attempts = Driver._infra_attempts
 
     def __init__(self, tmp_path: Path, *, split_size: int = 10):
         self.out_root = tmp_path
@@ -39,6 +42,11 @@ class _Summary:
         # A healthy run: the summary names the mass-instant-failure abort
         # only when one fired.
         self._abort = None
+        self._selection: list[str] = []
+        self._done_cache: set[str] = set()
+        self._infra_errors: dict = {}
+        self.max_infra_attempts = 3
+        self._dispatch_lock = threading.Lock()
 
     def write(self, *rows: dict) -> str:
         self.episodes_file.write_text("".join(json.dumps(r) + "\n" for r in rows))
@@ -50,7 +58,7 @@ def _row(eid: str, stamp: str, sr: int, *, status: str = "ok", **extra) -> dict:
     slug = eid.replace("::", "__").replace("#", "_")
     row = {
         "episode_id": eid, "worker_id": 0, "status": status, "elapsed_s": 1.0,
-        "workdir": f"w0/maps_{stamp}_citynav_{slug}", "oom_retries": 0,
+        "workdir": f"w0/maps_{stamp}_citynav_{slug}",
         "metrics": {"episode_id": eid, "SR": sr, "OSR": sr, "NE": 10.0},
     }
     row.update(extra)
@@ -105,7 +113,7 @@ def test_infra_rows_stay_audited_and_out_of_the_denominator(tmp_path):
         _row("gone::2#2", "20260725_110100", 0, status="infra",
              error="vllm_down_midrun"),
         _row("gone::3#3", "20260725_110200", 0, status="infra",
-             error="killed_midrun after 1 retries"),
+             error="killed_midrun"),
     )
     assert "infra (re-queued, not scored): 2" in out
     assert "vllm_down_midrun:1" in out
@@ -122,8 +130,7 @@ def test_a_timed_out_no_commit_miss_keeps_its_coverage_slot(tmp_path):
     out = s.write(
         _row("e::1#1", "20260725_110000", 1),
         {"episode_id": "e::2#2", "worker_id": 1, "status": "timed_out",
-         "elapsed_s": 3.0, "workdir": "w1/maps_20260725_110100_citynav_e__2_2",
-         "oom_retries": 0},
+         "elapsed_s": 3.0, "workdir": "w1/maps_20260725_110100_citynav_e__2_2"},
     )
     assert "coverage:   2 / 2 episodes" in out
     assert "with pred:  1   no pred: 1" in out
