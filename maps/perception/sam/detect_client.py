@@ -53,17 +53,30 @@ _SAM_INPUT_SIZE = 1008
 class SamServerOutage(RuntimeError):
     """The SAM ``/segment`` server was UNREACHABLE for a whole detect call.
 
-    OUTAGE SENTINEL (real-stack pivot, blocker V5-F2). A raised
-    ``SamServerOutage`` means the segment server gave NO valid response at
-    all — a transport fault, a 5xx, or a terminal ``None`` after the client
-    exhausted its replica × retry budget (``_post_segment_avoid_stale_pool``
-    returns ``None``). It is DISTINCT from a valid ``200`` carrying zero
-    detections (a genuinely empty frame), which stays an empty list and is
-    never an outage. The flight-path caller escalates this to the same
-    infra-exclusion the compile/ingest outages use
-    (``run_benchmark._exc_is_sam_infra`` → ``CITYNAV_EPISODE_INFRA_ABORT``),
-    so the episode RE-QUEUES instead of silently scoring a false SR=0.
+    A raised ``SamServerOutage`` means the segment server gave NO valid
+    response at all — a transport fault, a 5xx, a 408 or 429, ending in a
+    terminal ``None`` after the client exhausted its replica × retry budget
+    (``_post_segment_avoid_stale_pool`` returns ``None``). It is DISTINCT from
+    a valid ``200`` carrying zero detections (a genuinely empty frame), which
+    stays an empty list and is never an outage. Raised outside the model's
+    code (``error_taxonomy._exc_is_sam_infra``) it ends the episode as infra,
+    which a resume flies again; raised inside a mission run block it is served
+    to the model as that line's error, like any other exception there.
     """
+
+
+class SamRequestRefused(RuntimeError):
+    """The segmenter refused the request this client built: a 4xx other than
+    the serve's weather (408, 429). Every replica refuses the same request
+    the same way, so it is raised at once and is the method's failure, never
+    a :class:`SamServerOutage`.
+    """
+
+
+#: 4xx statuses that are the serve's weather, not a request built wrong: a
+#: request timeout and a rate limit. They move the call to another replica
+#: like a 5xx.
+_SAM_TRANSIENT_CLIENT_STATUSES = (408, 429)
 
 
 def _endpoints() -> list[str]:
@@ -145,9 +158,10 @@ def _post_segment_avoid_stale_pool(*, picker, json_body) -> dict | None:
 
     On top of that, ``Retry`` is configured to retry POST (``urllib3``'s
     default ``allowed_methods`` excludes POST, which is what causes the
-    3-retry loop above to fail identically across attempts). 4xx surfaces
-    immediately (client bug); transport errors and 5xx fail over to a
-    fresh replica via ``picker()``.
+    3-retry loop above to fail identically across attempts). A 4xx other
+    than 408 or 429 raises :class:`SamRequestRefused` at once (the request
+    the client built, refused); transport errors, 5xx, 408 and 429 fail over
+    to a fresh replica via ``picker()``.
 
     Returns the parsed JSON payload, or ``None`` on terminal failure.
     """
@@ -180,13 +194,14 @@ def _post_segment_avoid_stale_pool(*, picker, json_body) -> dict | None:
                 s.mount("https://", adapter)
                 resp = s.post(url, json=json_body, headers=headers,
                               timeout=(SEGMENT_CONNECT_TIMEOUT_S, SEGMENT_READ_TIMEOUT_S))
-                if 400 <= resp.status_code < 500:
-                    print(
-                        f"[sam] /segment 4xx at {url}: "
-                        f"{resp.status_code} {resp.text[:200]}",
-                        flush=True,
+                if (
+                    400 <= resp.status_code < 500
+                    and resp.status_code not in _SAM_TRANSIENT_CLIENT_STATUSES
+                ):
+                    raise SamRequestRefused(
+                        f"/segment refused the request: HTTP {resp.status_code} at {url}: "
+                        f"{resp.text[:200]}"
                     )
-                    return None
                 resp.raise_for_status()
                 return resp.json()
         except requests.exceptions.RequestException as e:
@@ -935,8 +950,8 @@ class SamDetectClient:
             # returned ``None`` after retries). That is a whole-frame SAM
             # outage, not a partial-blind frame with real detections elsewhere,
             # and not a clean empty frame (a 200-with-zero-detections tile does
-            # NOT count toward ``n_failed``). Escalate so the episode re-queues
-            # instead of scoring a false SR=0 (blocker V5-F2). A PARTIAL failure
+            # NOT count toward ``n_failed``), so it raises the outage rather
+            # than reading as an empty frame. A PARTIAL failure
             # (0 < n_failed < len(bounds)) still surfaces loudly below and keeps
             # the real detections from the tiles that DID answer.
             raise SamServerOutage(
@@ -1030,18 +1045,15 @@ class SamDetectClient:
         payload = _post_segment_avoid_stale_pool(picker=_pick_url, json_body=json_body)
         if payload is None:
             # OUTAGE, not a clean empty frame. ``None`` means the poster
-            # exhausted its replica × retry budget (transport fault / 5xx) or
-            # hit a client-side 4xx — the server gave NO usable answer. A
-            # genuinely empty frame returns a ``{"detections": []}`` payload
-            # (not ``None``), so this branch is unambiguously an outage.
-            # Returning ``[]`` here would score the episode a false SR=0 that
-            # is indistinguishable from a real no-detections frame; instead we
-            # raise the OUTAGE SENTINEL so the flight-path caller re-queues the
-            # episode (blocker V5-F2).
+            # exhausted its replica × retry budget (transport fault / 5xx /
+            # 408 / 429) — the server gave NO usable answer. A genuinely empty
+            # frame returns a ``{"detections": []}`` payload (not ``None``), so
+            # this branch is unambiguously an outage; returning ``[]`` would
+            # read as a real no-detections frame.
             raise SamServerOutage(
                 "SAM /segment returned no usable response (transport fault / "
-                "5xx / 4xx after retries) — whole-frame outage, not an empty "
-                "detection set"
+                "5xx / 408 / 429 after retries) — whole-frame outage, not an "
+                "empty detection set"
             )
         return self._decode_payload_to_detections(
             payload,
