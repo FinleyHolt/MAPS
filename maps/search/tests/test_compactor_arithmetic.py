@@ -28,7 +28,6 @@ from maps.llm.endpoint_spec import EndpointSpec
 from maps.search.analyze_scene import compactor as C
 from maps.search.analyze_scene.compactor import (
     CompactionError,
-    CompactionEvent,
     CompactionInfeasible,
     compact_transcript,
 )
@@ -205,28 +204,24 @@ def test_cheap_gate_identity_below_msg_count(monkeypatch):
     # Estimate would report WAY over budget, but the <=4-msg cheap gate
     # short-circuits before it is ever consulted.
     monkeypatch.setattr(C, "_estimate_input_tokens", _const(10**9))
-    events: list[CompactionEvent] = []
     msgs = [
         {"role": "system", "content": "s"},
         {"role": "user", "content": "a"},
         {"role": "assistant", "content": "b"},
         {"role": "user", "content": "c"},
     ]
-    out = compact_transcript(msgs, target_input_tokens=10, model="qwen",
-                             log_fn=events.append)
+    out = compact_transcript(msgs, target_input_tokens=10, model="qwen")
     assert out is msgs       # same object: byte-identical APC preserved
-    assert events == []      # cheap gate never logs an event
 
 
 # --------------------------------------------------------------------------- #
-# Below budget: identity (same id) + a fired=False headroom event             #
+# Below budget: identity (same id)                                             #
 # --------------------------------------------------------------------------- #
 
 
-def test_below_budget_identity_and_headroom_event(monkeypatch):
+def test_below_budget_identity(monkeypatch):
     monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     monkeypatch.setattr(C, "_estimate_input_tokens", _const(50))
-    events: list[CompactionEvent] = []
     msgs = [
         {"role": "system", "content": "s"},
         {"role": "user", "content": "a"},
@@ -235,14 +230,8 @@ def test_below_budget_identity_and_headroom_event(monkeypatch):
         {"role": "assistant", "content": "d"},
     ]
     out = compact_transcript(msgs, target_input_tokens=1000, model="qwen",
-                             site="reasoner.step", log_fn=events.append)
+                             site="reasoner.step")
     assert out is msgs
-    assert len(events) == 1
-    ev = events[0]
-    assert ev.fired is False and ev.infeasible is False
-    assert ev.input_tokens == 50
-    assert ev.target_input_tokens == 1000
-    assert ev.site == "reasoner.step"
 
 
 # --------------------------------------------------------------------------- #
@@ -253,7 +242,6 @@ def test_below_budget_identity_and_headroom_event(monkeypatch):
 def test_tier1_clears_stale_dumps_keeps_color_live_verbatim(monkeypatch):
     monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
-    events: list[CompactionEvent] = []
     # 3 nested-shape analyze dumps, each with a big verbose rows render. Clearing
     # the 2 STALE ones (rows -> fids+census+colors) fits under 8000; the live
     # (last) dump stays verbatim.
@@ -263,7 +251,7 @@ def test_tier1_clears_stale_dumps_keeps_color_live_verbatim(monkeypatch):
     input_est = _charcount(msgs, model="qwen")
     assert input_est > 8000  # sanity: over budget
     out = compact_transcript(msgs, target_input_tokens=8000, model="qwen",
-                             site="reasoner.step_tool_call", log_fn=events.append)
+                             site="reasoner.step_tool_call")
 
     # A NEW list is returned when fired; message count/order/roles/links frozen.
     assert out is not msgs
@@ -290,15 +278,7 @@ def test_tier1_clears_stale_dumps_keeps_color_live_verbatim(monkeypatch):
     # LIVE (last) analyze dump untouched — byte-identical to input.
     assert out[live_idx]["content"] == msgs[live_idx]["content"]
 
-    assert len(events) == 1
-    ev = events[0]
-    assert ev.fired is True and ev.infeasible is False
-    assert ev.cleared_dumps == 2
-    assert ev.color_tables_kept == 2       # tier 2 not reached: both kept
-    assert ev.degraded_dumps == 0           # tier 3 not reached
-    assert ev.input_tokens == input_est
-    assert ev.target_input_tokens == 8000
-    assert ev.output_tokens <= 8000
+    assert _charcount(out, model="qwen") <= 8000
 
 
 # --------------------------------------------------------------------------- #
@@ -309,7 +289,6 @@ def test_tier1_clears_stale_dumps_keeps_color_live_verbatim(monkeypatch):
 def test_tier2_strips_color_tables_when_still_over(monkeypatch):
     monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
-    events: list[CompactionEvent] = []
     # Two STALE dumps whose bulk IS the color table (50 fids each, no filler),
     # plus a small live dump. Clearing to fids+census+colors (tier 1) still
     # overflows target=700, so the oldest color table must be stripped (tier 2);
@@ -319,30 +298,24 @@ def test_tier2_strips_color_tables_when_still_over(monkeypatch):
              for i in range(2)]
     live = _analyze_dump("tL", ["z0"], [("z0", "green", "0.9")])
     msgs = _transcript(stale + [live])
-    out = compact_transcript(msgs, target_input_tokens=700, model="qwen",
-                             log_fn=events.append)
+    out = compact_transcript(msgs, target_input_tokens=700, model="qwen")
 
     assert out is not msgs
     assert _roles(out) == _roles(msgs)
     assert _tool_call_ids(out) == _tool_call_ids(msgs)
 
-    ev = events[0]
-    assert ev.fired is True and ev.infeasible is False
-    assert ev.cleared_dumps == 2
-    # A color table was stripped: kept count strictly decreased, no tier-3 hit.
-    assert ev.color_tables_kept < ev.cleared_dumps
-    assert ev.color_tables_kept == 1
-    assert ev.degraded_dumps == 0
-    assert ev.output_tokens <= 700
+    assert _charcount(out, model="qwen") <= 700
 
-    # The surviving-with-colors stub count matches color_tables_kept exactly;
-    # the OLDEST stale stub is the one that lost its colors.
+    # Exactly one color table survives, and the OLDEST stale stub is the one
+    # that lost its colors; the live dump is untouched (no tier-3 hit).
     stale_idxs = _analyze_indices(out)[:-1]
     with_colors = [
         i for i in stale_idxs
         if "colors" in json.loads(out[i]["content"])["results"]["r0"]
     ]
-    assert len(with_colors) == ev.color_tables_kept
+    assert len(with_colors) == 1
+    live_idx = _analyze_indices(out)[-1]
+    assert out[live_idx]["content"] == msgs[live_idx]["content"]
     oldest = stale_idxs[0]
     assert "colors" not in json.loads(out[oldest]["content"])["results"]["r0"]
     # Every stale stub still lost its rows regardless of color fate.
@@ -360,7 +333,6 @@ def test_tier2_strips_color_tables_when_still_over(monkeypatch):
 def test_tier3_degrades_live_dump_when_still_over(monkeypatch):
     monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
-    events: list[CompactionEvent] = []
     # Two small stale dumps + one LIVE dump with a monster rows render. Clearing
     # + color-stripping the stale dumps can't help (the live dump dominates), so
     # the live dump itself must be degraded (tier 3).
@@ -368,18 +340,13 @@ def test_tier3_degrades_live_dump_when_still_over(monkeypatch):
     stale = [_analyze_dump(f"t{i}", ["a0", "a1"], small_cr) for i in range(2)]
     live = _analyze_dump("tL", ["z0"], [("z0", "green", "0.9")], filler=32000)
     msgs = _transcript(stale + [live])
-    out = compact_transcript(msgs, target_input_tokens=500, model="qwen",
-                             log_fn=events.append)
+    out = compact_transcript(msgs, target_input_tokens=500, model="qwen")
 
     assert out is not msgs
     assert _roles(out) == _roles(msgs)
     assert _tool_call_ids(out) == _tool_call_ids(msgs)
 
-    ev = events[0]
-    assert ev.fired is True and ev.infeasible is False
-    assert ev.cleared_dumps == 2
-    assert ev.degraded_dumps >= 1           # the live dump was degraded
-    assert ev.output_tokens <= 500
+    assert _charcount(out, model="qwen") <= 500
 
     # The LIVE dump lost its rows (degraded to plain fids+census) but kept fids.
     live_idx = _analyze_indices(out)[-1]
@@ -389,14 +356,13 @@ def test_tier3_degrades_live_dump_when_still_over(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# TIER 4: nothing clearable -> CompactionInfeasible + an infeasible event      #
+# TIER 4: nothing clearable -> CompactionInfeasible                            #
 # --------------------------------------------------------------------------- #
 
 
 def test_tier4_infeasible_when_nothing_clearable(monkeypatch):
     monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
-    events: list[CompactionEvent] = []
     # Over budget but NO analyze dumps (and no trimmable tool dumps at all): the
     # residue is head/prose mass the design deliberately never touches, so tiers
     # 1-3 clear/degrade nothing and the call aborts infeasible.
@@ -408,16 +374,8 @@ def test_tier4_infeasible_when_nothing_clearable(monkeypatch):
         {"role": "assistant", "content": "B" * 4000},
         {"role": "user", "content": "done"},
     ]
-    input_est = _charcount(msgs, model="qwen")
     with pytest.raises(CompactionInfeasible) as ei:
         compact_transcript(msgs, target_input_tokens=100, model="qwen",
-                           site="reasoner.step", log_fn=events.append)
+                           site="reasoner.step")
     assert "still exceeds" in str(ei.value)
     assert "cleared 0" in str(ei.value) and "degraded 0" in str(ei.value)
-
-    assert len(events) == 1
-    ev = events[0]
-    assert ev.infeasible is True and ev.fired is False
-    assert ev.reason and "still exceeds" in ev.reason
-    assert ev.input_tokens == input_est
-    assert ev.target_input_tokens == 100

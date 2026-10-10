@@ -90,8 +90,6 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass
-from typing import Callable
 
 from maps.llm.tokenizer import _tokenizer
 from maps.llm.vision_content import image_tokens_in, image_tokens_of
@@ -131,35 +129,6 @@ class CompactionInvariantError(CompactionError):
     """Post-compaction sweep found a tool_call_id without its counterpart:
     a result with no earlier call, or a call with no result."""
 
-
-@dataclass(frozen=True)
-class CompactionEvent:
-    """One compaction event for logging / dashboards.
-
-    Three shapes share this record: a below-budget check (``fired=False,
-    infeasible=False`` — the headroom signal), a successful fire
-    (``fired=True``), and an infeasible abort (``infeasible=True``, emitted
-    just before the ``CompactionInfeasible`` raise so the sink sees the
-    token arithmetic that made the transcript uncompactable).
-
-    Step counters: ``folded_turns`` (step 1: spent turns folded into a script
-    block, the only step that changes message count), ``cleared_dumps``
-    (step 2: stale dumps stubbed), ``color_tables_kept`` (how many stubs kept
-    their per-fid color table after the step-3 strip) and ``degraded_dumps``
-    (step 4: remaining dumps — the live one included — degraded plain)."""
-
-    site: str
-    fired: bool
-    input_tokens: int
-    output_tokens: int
-    latency_s: float
-    target_input_tokens: int = -1
-    infeasible: bool = False
-    reason: str = ""
-    degraded_dumps: int = 0
-    cleared_dumps: int = 0
-    color_tables_kept: int = 0
-    folded_turns: int = 0
 
 # Fixed-size stand-in for an OpenAI ``image_url`` content part in the
 # transcript-COMPACTION path (token estimate + summarizer serialization). A
@@ -894,7 +863,6 @@ def compact_transcript(
     model: str,
     tools: list[dict] | None = None,
     site: str = "unknown",
-    log_fn: Callable[[CompactionEvent], None] | None = None,
 ) -> list[dict]:
     """Return a possibly-compacted view of ``messages`` whose
     chat-templated input-token count is <= ``target_input_tokens``.
@@ -928,36 +896,7 @@ def compact_transcript(
 
     # 3. Budget check.
     if input_tokens <= target_input_tokens:
-        if log_fn is not None:
-            log_fn(
-                CompactionEvent(
-                    site=site,
-                    fired=False,
-                    input_tokens=input_tokens,
-                    output_tokens=input_tokens,
-                    latency_s=0.0,
-                    target_input_tokens=target_input_tokens,
-                )
-            )
         return messages
-
-    def _infeasible(reason: str, *, output_tokens: int = -1,
-                    latency_s: float = 0.0) -> CompactionInfeasible:
-        """Record the abort in the event sink, then hand back the raise."""
-        if log_fn is not None:
-            log_fn(
-                CompactionEvent(
-                    site=site,
-                    fired=False,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    latency_s=latency_s,
-                    target_input_tokens=target_input_tokens,
-                    infeasible=True,
-                    reason=reason,
-                )
-            )
-        return CompactionInfeasible(reason)
 
     t0 = time.time()
 
@@ -1176,48 +1115,29 @@ def compact_transcript(
             for b, i, role, name in sizes
             for head in [str(out[i].get("content") or "")[:60]]
         )
-        raise _infeasible(
+        raise CompactionInfeasible(
             f"cleared {len(cleared)} stale dump(s), degraded "
             f"{degraded_dumps} dump(s), folded {folded_turns} spent turn(s), "
             f"evicted {n_evicted} stale crop(s) AND thinned {evicted_current} "
             f"current-turn crop(s); tokens={output_tokens} still exceeds "
             f"target={target_input_tokens} (site={site}, "
-            f"input_tokens={input_tokens}); largest: {anatomy}",
-            output_tokens=output_tokens,
-            latency_s=latency,
-        )
+            f"input_tokens={input_tokens}); largest: {anatomy}")
 
     # 11. Invariant validation: closure AND coverage.
     _validate_invariants(out)
 
-    if log_fn is not None:
-        log_fn(
-            CompactionEvent(
-                site=site,
-                fired=True,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                latency_s=latency,
-                target_input_tokens=target_input_tokens,
-                degraded_dumps=degraded_dumps,
-                cleared_dumps=len(cleared),
-                color_tables_kept=color_tables_kept,
-                folded_turns=folded_turns,
-            )
-        )
-    else:
-        log.info(
-            "[compactor] fired site=%s input_tokens=%d output_tokens=%d "
-            "cleared_dumps=%d color_tables_kept=%d degraded_dumps=%d "
-            "latency_s=%.2f",
-            site,
-            input_tokens,
-            output_tokens,
-            len(cleared),
-            color_tables_kept,
-            degraded_dumps,
-            latency,
-        )
+    log.info(
+        "[compactor] fired site=%s input_tokens=%d output_tokens=%d "
+        "cleared_dumps=%d color_tables_kept=%d degraded_dumps=%d "
+        "latency_s=%.2f",
+        site,
+        input_tokens,
+        output_tokens,
+        len(cleared),
+        color_tables_kept,
+        degraded_dumps,
+        latency,
+    )
     return out
 
 
@@ -1225,6 +1145,5 @@ __all__ = [
     "CompactionError",
     "CompactionInfeasible",
     "CompactionInvariantError",
-    "CompactionEvent",
     "compact_transcript",
 ]
