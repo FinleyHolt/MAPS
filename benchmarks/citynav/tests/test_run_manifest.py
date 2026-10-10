@@ -140,6 +140,11 @@ def test_write_once_resume_and_refusal(stub_run, tmp_path):
     drifted["endpoints"]["model_id"] = "other-model"
     with pytest.raises(run_manifest.ManifestIdentityError):
         run_manifest.emit_or_verify(tmp_path, drifted, log=lambda *_: None)
+    # A resume under another arm flag (here the reasoning effort) is another arm.
+    other_arm = json.loads(json.dumps(stub_run))
+    other_arm["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] = "0.1"
+    with pytest.raises(run_manifest.ManifestIdentityError, match="search_env_flags"):
+        run_manifest.emit_or_verify(tmp_path, other_arm, log=lambda *_: None)
 
 
 def test_a_direct_run_emits_a_manifest_the_reader_finds(

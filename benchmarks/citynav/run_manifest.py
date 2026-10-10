@@ -194,7 +194,7 @@ IDENTITY_KEYS = (
     ("selection", "sample_offset"),
     ("selection", "selection_sha"),
     ("endpoints", "model_id"),
-    ("search_env_flags", "SEARCH_CITYNAV_TILES"),
+    ("search_env_flags",),
 )
 
 class ManifestIdentityError(RuntimeError):
