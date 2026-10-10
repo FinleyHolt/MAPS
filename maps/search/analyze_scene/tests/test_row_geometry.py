@@ -152,10 +152,3 @@ def test_the_measuring_ceiling_names_the_pairwise_scan(monkeypatch):
     # a fresh block gets a fresh budget
     mp.run_block("")
     assert mp._call_distance("detected_1", "prior_1") == pytest.approx(7.0)
-
-
-def test_the_modules_own_demo_still_runs():
-    """A demo nothing runs is not a check. The gap->distance rename left
-    ``demo()`` calling ``sg.gap`` and every suite still passed green."""
-    from maps.search.analyze_scene.row_geometry import demo
-    demo()

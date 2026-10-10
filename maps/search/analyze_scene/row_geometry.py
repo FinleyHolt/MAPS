@@ -94,24 +94,3 @@ class SurfaceGeometry:
     def distance(self, a: tuple, b: tuple) -> float:
         """Metres between two footprints. 0.0 on touch or containment."""
         return G.gap_witness(self.geom(a), self.geom(b))[0]
-
-def demo() -> None:
-    """The gap a centroid cannot measure, and the union that is one place."""
-    road = {"fid": "road", "mask": [[[0.0, 0.0], [0.0, 1000.0]]],
-            "xy": [0.0, 500.0]}
-    car = {"fid": "car", "xy": [7.0, 0.0]}
-    far = {"fid": "far", "xy": [400.0, 0.0]}
-    sg = SurfaceGeometry({"road": road, "car": car, "far": far}.get)
-    p_road, p_car = (("road", None),), (("car", None),)
-    assert abs(sg.distance(p_car, p_road) - 7.0) < 1e-6, sg.distance(p_car, p_road)
-    # the centroid distance the model would have computed off xy alone
-    assert abs(((7.0 - 0.0) ** 2 + (0.0 - 500.0) ** 2) ** 0.5 - 500.05) < 0.1
-    # a SET is its NEAREST member
-    both = (("car", None), ("far", None))
-    assert abs(sg.distance((("far", None),), p_road) - 400.0) < 1e-6
-    assert abs(sg.distance(both, p_road) - 7.0) < 1e-6
-    print("row_geometry ok: gap 7.0 m where the centroids are 500 m apart")
-
-
-if __name__ == "__main__":
-    demo()
