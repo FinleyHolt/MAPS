@@ -18,6 +18,8 @@ dependencies = [
     "httpx",
     "pyyaml",
     "transformers",
+    # The compactor counts tokens through transformers' chat template, which renders with jinja2.
+    "jinja2",
     "rasterio>=1.3",
     "opencv-python-headless>=4.8",
     "shapely>=2.0",
