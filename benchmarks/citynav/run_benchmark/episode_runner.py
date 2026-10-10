@@ -262,18 +262,6 @@ def run_episode(
 
     search_loop: SearchLoop | None = None
     if compiler is not None:
-        # Operator marker mean-xy (admissible CityNav input, ~25 m from the
-        # target; NOT the withheld GT). The mission engine resolves the
-        # ``marked_region`` viewpoint token against it.
-        _marker_positions = episode.marker_positions or []
-        _marker_xy = (
-            (
-                float(sum(p[0] for p in _marker_positions) / len(_marker_positions)),
-                float(sum(p[1] for p in _marker_positions) / len(_marker_positions)),
-            )
-            if _marker_positions
-            else None
-        )
         search_loop = SearchLoop(
             world_state,
             tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
@@ -286,7 +274,6 @@ def run_episode(
             # Upstream raster dir for the ``look`` tool's crop renderer,
             # passed as a str so maps.search stays benchmark-agnostic.
             rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
-            marker_xy=_marker_xy,
         )
         search_loop.start(prebake_graph=graph, runtime_graph=graph)
 

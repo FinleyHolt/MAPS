@@ -28,7 +28,6 @@ from typing import Any
 
 import numpy as np
 
-from maps.search.io.atomic import atomic_write_json
 from maps.search.parse_compile.compiler import MapsCompiler
 from maps.search.pose import RobotPose
 from maps.util.mask_codec import encode_mask_record
@@ -108,7 +107,6 @@ class SearchLoop:
         sam_watchlist_setter: Callable[[list[str]], None] | None = None,
         ortho_ground_z_m: float | None = None,
         rgbd_dir: str,
-        marker_xy: tuple[float, float] | None = None,
     ):
         self._world_state = world_state
         self._tile_origin_xy = (
@@ -140,15 +138,6 @@ class SearchLoop:
         #: ``look`` crops instead of the bake's raster. None is the bench,
         #: whose camera is the raster.
         self.look_imagery = None
-        # Operator marker mean-xy (admissible CityNav ``marker_positions``
-        # input, NOT the GT target). Threaded onto ``CompilerInput`` as
-        # ``fallback_marker_xy`` and consumed ONLY by the compiler's
-        # fallback-tour installer when round 0 exhausts its retries with no
-        # committable plan. ``None`` -> the installer falls back to the start
-        # pose (robot_pose).
-        self._marker_xy = (
-            (float(marker_xy[0]), float(marker_xy[1])) if marker_xy else None
-        )
         # World-space tracker (UCMCTrack-core, constant-position). Assigns
         # a stable cross-frame ``track_id`` to per-frame detections so
         # ``_find_track``'s primary exact-id match collapses duplicates,
@@ -180,14 +169,6 @@ class SearchLoop:
     ) -> None:
         self._graph = prebake_graph
         self._state = _State(runtime_graph=runtime_graph)
-        # One ByteTrack over BOTH ingest paths: stash the episode's world
-        # tracker on the shared graph so the compile-time union ingest
-        # (``parse_compile``/``llm.tools``) routes its detections through the
-        # SAME tracker the runtime per-stop ingest uses. Same physical object
-        # (union vs runtime, or runtime cross-frame) → one stable track_id →
-        # one node; ByteTrack is the sole dedup.
-        if runtime_graph is not None and hasattr(runtime_graph, "__dict__"):
-            runtime_graph.__dict__["_world_tracker"] = self._world_tracker
 
     # ------------------------------------------------------------------ #
     # Grid frame conversions
@@ -195,27 +176,9 @@ class SearchLoop:
 
     @property
     def _cell_size_m(self) -> float:
-        """Tile-grid cell size in meters, sourced from ``maps.sws.grid_domain``.
-
-        This is the single source of truth for the
-        ``centroid_grid → world_xy`` conversion used by lock fire,
-        tour synthesis, and tool-context construction. The WorldState
-        the engine is constructed with always carries a populated
-        ``grid_domain`` (see ``benchmarks.citynav.run_benchmark``), so a
-        missing ``grid_domain`` indicates a programming error rather
-        than a runtime state to silently absorb. The legacy
-        ``getattr(self._world_state, "cell_size_m", 5.0)`` form had
-        the silent fallback that produced 2.5× off ``confirmed_target_xy``
-        on the 2 m CityNav tiles.
-        """
-        gd = getattr(self._world_state, "grid_domain", None)
-        if gd is None:
-            raise AttributeError(
-                "SearchLoop._world_state.grid_domain is None; cannot "
-                "resolve cell_size_m. Construct WorldState with a "
-                "populated GridDomain."
-            )
-        return float(gd.cell_size_m)
+        """Tile-grid cell size in meters: the one source for every
+        grid-to-world conversion."""
+        return float(self._world_state.grid_domain.cell_size_m)
 
     def _grid_centroid_to_world_xy(
         self, centroid: object
@@ -526,21 +489,6 @@ class SearchLoop:
         nodes = getattr(self.state.runtime_graph, "nodes", None)
         node = nodes.get(fid) if (nodes is not None and hasattr(nodes, "get")) else None
         return bool(node is not None and getattr(node, "provenance", "") == "detected")
-
-    @staticmethod
-    def _atomic_write_json(path: Path, payload: dict) -> None:
-        """Telemetry write: atomic, and never raises into the round.
-
-        Delegates to the shared writer -- which mints its tempfile with
-        ``mkstemp`` rather than a fixed ``.json.tmp`` suffix, so two of the
-        concurrent stop rounds writing under one workdir cannot clobber each
-        other's partial file. A telemetry write that fails is logged, not
-        raised: it must not take the episode down.
-        """
-        try:
-            atomic_write_json(path, payload)
-        except OSError as e:
-            log.warning("telemetry write failed at %s: %s", path, e)
 
     @property
     def state(self) -> _State:
