@@ -1,0 +1,687 @@
+"""The closed-loop measures of each run, from its records: SR, OSR, NE, time to identification, SPL.
+
+    python -m benchmarks.flight.measures --root <sortie>... --truth <adjudications dir> [<split.json>]
+        [--json] [--check runs_all.csv]
+
+A root is a flown sortie (``episodes.jsonl`` beside ``flight_track.jsonl``)
+or a replay's (:mod:`benchmarks.flight.replay`, its sortie folder named for
+the recorded one, so the same truth scores both). Per run, from three things
+the record holds:
+
+* **The commit**: the target of the run's last flight (``commit_xy``, else
+  the last visited point), named by the flight that resolved there (the
+  ground station's ``mission.json`` where one was kept, else the run's
+  ``flight/tour_cursor.json``), and its area: a map feature's outline
+  (``prior_<i>`` is row ``i`` of the bake's ``calcity_features.json``) or the
+  detection's outline off the run's ``detections.jsonl``, kept only when the
+  commit lies inside it or on its centroid.
+* **The truth**: the analyst's hand-drawn mask (``<sortie>.json`` in a truth
+  directory, ``{episode_id: {"target_mask", "excluded", "intel_quality"}}``),
+  else the tasking set's footprint (a split JSON given as a truth path). Its
+  area centroid is the target centroid.
+* **The path**: the aircraft's GNSS track beside the sortie
+  (``flight_track.jsonl``, 1 Hz), else the keyframes' poses.
+
+SR is read two ways: the committed area contains the centroid
+(``success_area``), and the commit lies within 20 m of it
+(``success_radius``). NE is the committed area's centroid (the commit
+where no area is recovered) to the target centroid. OSR: the path came within
+one camera HFOV ground width of the centroid, at the height above ground at
+the closest approach. Time to identification runs from the tasking to the
+determination. SPL is ``S * l / max(p, l)``: ``p`` the GNSS path from the
+crew's last pass of the loiter waypoint before the first leg to the
+determination, plus the way back to the commit a crew flies (one turn and a
+straight, or a teardrop, at the median radius the crews turned on routed
+legs), ``l`` the straight from the loiter waypoint to the target; undefined
+for a success the recording holds under 95% of. A run with an ``excluded``
+reason is out of every rate.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import datetime as dt
+import json
+import math
+import statistics
+import sys
+from bisect import bisect_left
+from pathlib import Path
+from typing import Any
+
+FT_PER_M = 1.0 / 0.3048
+#: The success radius: CityNav's 20 m.
+SUCCESS_RADIUS_M = 20.0
+#: The C-12 camera's horizontal field of view, the width OSR reads.
+C12_HFOV_DEG = 16.09
+#: A committed area is trusted only when the commit lies inside it or this close to its centroid.
+AREA_MATCH_M = 1.0
+#: A gap between fixes longer than this is a hole in the recording.
+TRACK_GAP_S = 3.0
+#: A success's SPL needs the recording to hold this share of its run.
+SPL_MIN_COVERAGE = 0.95
+#: A pass of the loiter waypoint counts within this distance of it.
+LOITER_PASS_M = 1000.0
+#: A sustained turn on a routed leg: the ground track turning faster than this
+#: for at least ``TURN_MIN_S`` one way, at flying speed; one sweeping
+#: ``ORBIT_DEG`` or more is an orbit and is left out.
+TURN_RATE_DEG_S = 1.5
+TURN_MIN_S = 10
+FLYING_MPS = 50.0
+ORBIT_DEG = 300.0
+#: The radius the way back is turned at when no turn was read.
+TURN_RADIUS_FALLBACK_M = 1500.0
+#: Crew ends that are not runs of the model.
+NOT_A_RUN = ("stopped", "abort", "dropped")
+
+
+def _rows(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def _utc(t: float | None) -> str:
+    return "" if t is None else dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")[:-5] + "Z"
+
+
+def centroid(ring: list[list[float]]) -> tuple[float, float]:
+    """Area centroid of a polygon ring (shoelace); the vertex mean when degenerate."""
+    a = cx = cy = 0.0
+    n = len(ring)
+    for i in range(n):
+        x0, y0 = ring[i][0], ring[i][1]
+        x1, y1 = ring[(i + 1) % n][0], ring[(i + 1) % n][1]
+        cross = x0 * y1 - x1 * y0
+        a += cross
+        cx += (x0 + x1) * cross
+        cy += (y0 + y1) * cross
+    if abs(a) < 1e-9:
+        return sum(p[0] for p in ring) / n, sum(p[1] for p in ring) / n
+    return cx / (3.0 * a), cy / (3.0 * a)
+
+
+def inside(pt: tuple[float, float], ring: list[list[float]]) -> bool:
+    """Even-odd point in polygon."""
+    x, y = pt
+    hit = False
+    n = len(ring)
+    for i in range(n):
+        x0, y0 = ring[i][0], ring[i][1]
+        x1, y1 = ring[(i + 1) % n][0], ring[(i + 1) % n][1]
+        if (y0 > y) != (y1 > y) and x < (x1 - x0) * (y - y0) / (y1 - y0) + x0:
+            hit = not hit
+    return hit
+
+
+# -- the truth -------------------------------------------------------------------
+
+
+class Truth:
+    """The analyst's entries by sortie name (a directory of ``<sortie>.json``)
+    and the tasking set's footprints by episode id (split JSONs)."""
+
+    def __init__(self, paths: list[Path]) -> None:
+        self.dirs = [p for p in paths if p.is_dir()]
+        self.masks: dict[str, list[list[float]]] = {}
+        for p in paths:
+            if p.is_file():
+                from benchmarks.citynav.adapter import parse_episode  # noqa: PLC0415
+
+                for i, r in enumerate(json.loads(p.read_text())):
+                    ep = parse_episode(r, row_index=i)
+                    if ep.target_mask:
+                        self.masks[ep.episode_id] = [[float(x), float(y)] for x, y in ep.target_mask]
+
+    def entries(self, sortie: str) -> dict[str, dict[str, Any]]:
+        for d in self.dirs:
+            if (d / f"{sortie}.json").is_file():
+                return json.loads((d / f"{sortie}.json").read_text())
+        return {}
+
+    def ring(self, entry: dict[str, Any], episode_id: str) -> tuple[list[list[float]] | None, str | None]:
+        ring = entry.get("target_mask") or []
+        if len(ring) >= 3:
+            return [[float(p[0]), float(p[1])] for p in ring], "hand-drawn"
+        mask = self.masks.get(episode_id)
+        return (mask, "tasking set") if mask else (None, None)
+
+
+# -- the commit ------------------------------------------------------------------
+
+
+def judged_xy(row: dict[str, Any]) -> tuple[float, float] | None:
+    """The commit: ``commit_xy``, else the last visited point; None when nothing flew."""
+    commit = row.get("commit_xy") or (row.get("metrics") or {}).get("committed_xy")
+    if commit:
+        return float(commit[0]), float(commit[1])
+    visited = row.get("visited_xy") or []
+    if len(visited) < 2:
+        return None
+    return float(visited[-1][0]), float(visited[-1][1])
+
+
+def flights_named(bases: list[Path]) -> list[tuple[str, tuple[float, float]]]:
+    """Every flight as ``(target, xy)``: the ground's ``mission.json`` where one
+    was kept, else the run's ``flight/tour_cursor.json``."""
+    for b in bases[1:]:
+        try:
+            doc = json.loads((b / "mission.json").read_text())
+        except (OSError, ValueError):
+            continue
+        out = [(str(f.get("target")), (float(xy[0]), float(xy[1]))) for f in doc.get("flights") or []
+               if (xy := f.get("resolved_xy") or f.get("pose_xy"))]
+        if out:
+            return out
+    try:
+        cursor = json.loads((bases[0] / "flight" / "tour_cursor.json").read_text())
+    except (OSError, ValueError, IndexError):
+        return []
+    return [(str(s.get("stop_id") or ""), (float(s["xy"][0]), float(s["xy"][1])))
+            for s in cursor.get("stops_visited") or [] if s.get("xy")]
+
+
+def commit_fid(bases: list[Path], xy: tuple[float, float] | None) -> str | None:
+    """The target of the last flight that resolved to the commit."""
+    if xy is None:
+        return None
+    named = [f for f, p in flights_named(bases) if abs(p[0] - xy[0]) < 1.0 and abs(p[1] - xy[1]) < 1.0]
+    return named[-1] if named else None
+
+
+def committed_area(bases: list[Path], fid: str | None, xy, prior: list[dict[str, Any]]) -> list[list[float]] | None:
+    """The committed feature's outline in map metres, kept only when the commit lies inside it or on its centroid."""
+    if not fid or xy is None:
+        return None
+    ring = None
+    if fid.startswith("prior_"):
+        try:
+            ring = prior[int(fid[len("prior_"):])].get("world_contour")
+        except (ValueError, IndexError):
+            ring = None
+    elif fid.startswith("detected_"):
+        for b in bases:
+            near = [(math.dist(centroid(c), xy), c) for d in _rows(b / "detections.jsonl")
+                    if (c := (d.get("metadata") or {}).get("world_contour")) and len(c) >= 3]
+            if near:
+                ring = min(near, key=lambda t: t[0])[1]
+                break
+    if not ring or len(ring) < 3 or not (inside(xy, ring) or math.dist(centroid(ring), xy) <= AREA_MATCH_M):
+        return None
+    return [[float(p[0]), float(p[1])] for p in ring]
+
+
+# -- the way back: Dubins paths at one turn radius -------------------------------
+# Tile metres, heading 0 = north, clockwise; sense +1 a right turn, -1 a left.
+
+#: An arc shorter than this is no turn: the aircraft is on heading.
+ARC_EPS_DEG = 1.0
+#: Each Dubins word's three senses, in flying order.
+SENSES = {"LSL": (-1, 0, -1), "RSR": (1, 0, 1), "LSR": (-1, 0, 1), "RSL": (1, 0, -1),
+          "LRL": (-1, 1, -1), "RLR": (1, -1, 1)}
+
+
+def bearing_deg(a, b) -> float:
+    return math.degrees(math.atan2(b[0] - a[0], b[1] - a[1]))
+
+
+def turn_centre(p, heading_deg: float, sense: int, r: float) -> tuple[float, float]:
+    psi = math.radians(heading_deg)
+    return p[0] + sense * r * math.cos(psi), p[1] - sense * r * math.sin(psi)
+
+
+def _arc(x: float) -> float:
+    a = x % (2.0 * math.pi)
+    return 0.0 if a > 2.0 * math.pi - 1e-9 else a
+
+
+def _csc(a0, a1, s0, s1, cx0, cy0, cx1, cy1, r):
+    dx, dy = cx1 - cx0, cy1 - cy0
+    gap = math.hypot(dx, dy)
+    if s0 == s1:
+        theta, straight = (math.atan2(dx, dy) if gap > 1e-9 else a0), gap
+    else:
+        if gap < 2.0 * r or gap < 1e-9:
+            return None
+        theta = math.atan2(dx, dy) + s0 * math.asin(2.0 * r / gap)
+        straight = math.sqrt(gap * gap - 4.0 * r * r)
+    arc0, arc1 = _arc(s0 * (theta - a0)), _arc(s1 * (a1 - theta))
+    return (arc0 + arc1) * r + straight, arc0 * r, straight, arc1 * r
+
+
+def _ccc(a0, a1, s, cx0, cy0, cx1, cy1, r):
+    dx, dy = cx1 - cx0, cy1 - cy0
+    gap = math.hypot(dx, dy)
+    if gap > 4.0 * r or gap < 1e-9:
+        return None
+    h = math.sqrt(4.0 * r * r - 0.25 * gap * gap) / gap
+    mx, my = cx0 + 0.5 * dx + s * h * dy, cy0 + 0.5 * dy - s * h * dx
+    t0 = math.atan2(mx - cx0, my - cy0) + s * math.pi / 2.0
+    t1 = math.atan2(mx - cx1, my - cy1) + s * math.pi / 2.0
+    arc0, arcm, arc1 = _arc(s * (t0 - a0)), _arc(-s * (t1 - t0)), _arc(s * (a1 - t1))
+    return (arc0 + arcm + arc1) * r, arc0 * r, arcm * r, arc1 * r
+
+
+def solve(p0, h0: float, p1, h1: float, r: float) -> tuple[str, tuple[float, float, float, float]]:
+    """The shortest Dubins word from pose ``(p0, h0)`` to ``(p1, h1)`` and its ``(length, first_m, middle_m, last_m)``."""
+    a0, a1 = math.radians(h0), math.radians(h1)
+    rc0, lc0 = turn_centre(p0, h0, 1, r), turn_centre(p0, h0, -1, r)
+    rc1, lc1 = turn_centre(p1, h1, 1, r), turn_centre(p1, h1, -1, r)
+    words = {"RSR": _csc(a0, a1, 1, 1, *rc0, *rc1, r), "LSL": _csc(a0, a1, -1, -1, *lc0, *lc1, r),
+             "RSL": _csc(a0, a1, 1, -1, *rc0, *lc1, r), "LSR": _csc(a0, a1, -1, 1, *lc0, *rc1, r),
+             "RLR": _ccc(a0, a1, 1, *rc0, *rc1, r), "LRL": _ccc(a0, a1, -1, *lc0, *lc1, r)}
+    kind = min((k for k, v in words.items() if v is not None), key=lambda k: words[k][0])
+    return kind, words[kind]
+
+
+# -- the path --------------------------------------------------------------------
+
+
+def _window(track, t0: float, t1: float):
+    ts = [r["t_unix"] for r in track]
+    return track[bisect_left(ts, t0):bisect_left(ts, t1 + 1e-6)]
+
+
+def _at(track, t: float) -> tuple[float, float] | None:
+    """The track's position at ``t``, interpolated between fixes; None outside it."""
+    if not track or t < track[0]["t_unix"] or t > track[-1]["t_unix"]:
+        return None
+    i = bisect_left([r["t_unix"] for r in track], t)
+    b = track[i]
+    if i == 0 or b["t_unix"] == t:
+        return b["x"], b["y"]
+    a = track[i - 1]
+    w = (t - a["t_unix"]) / (b["t_unix"] - a["t_unix"])
+    return a["x"] + w * (b["x"] - a["x"]), a["y"] + w * (b["y"] - a["y"])
+
+
+def _seg_dist(p, a, b) -> float:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    n = dx * dx + dy * dy
+    t = 0.0 if n == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / n))
+    return math.dist(p, (a[0] + t * dx, a[1] + t * dy))
+
+
+def closest_approach(path, p) -> tuple[float, dict[str, Any]]:
+    """Distance from ``p`` to the path between its fixes, and the fix nearest it."""
+    pts = [(f["x"], f["y"]) for f in path]
+    if len(pts) == 1:
+        return math.dist(pts[0], p), path[0]
+    i = min(range(len(pts) - 1), key=lambda k: _seg_dist(p, pts[k], pts[k + 1]))
+    return _seg_dist(p, pts[i], pts[i + 1]), path[i] if math.dist(pts[i], p) <= math.dist(pts[i + 1], p) else path[i + 1]
+
+
+def track_coverage(track, t0: float, t1: float) -> tuple[float, float]:
+    """The share of ``[t0, t1]`` the recording holds, and its longest hole in seconds."""
+    if t1 <= t0:
+        return 0.0, 0.0
+    ts = [t0] + [f["t_unix"] for f in _window(track, t0, t1)] + [t1]
+    gaps = [b - a for a, b in zip(ts, ts[1:])]
+    return round(sum(g for g in gaps if g <= TRACK_GAP_S) / (t1 - t0), 3), round(max(gaps), 1)
+
+
+def last_pass(track, xy, t0: float, t1: float, within_m: float) -> tuple[float, float] | None:
+    """The last local minimum of distance to ``xy`` in ``[t0, t1]`` within ``within_m``: ``(t, distance)``."""
+    w = _window(track, t0, t1)
+    d = [math.dist((f["x"], f["y"]), xy) for f in w]
+    best = None
+    for i, di in enumerate(d):
+        if (i == 0 or di < d[i - 1]) and (i == len(d) - 1 or di <= d[i + 1]) and di <= within_m:
+            best = (w[i]["t_unix"], di)
+    return best
+
+
+def keyframe_poses(bases: list[Path], t0: float, t1: float) -> list[dict[str, Any]]:
+    """The live navigation's pose at each keyframe the run captured, as track fixes."""
+    for b in bases:
+        out = []
+        for f in _rows(b / "frames.jsonl"):
+            xy, utc = f.get("pose_xy"), f.get("utc")
+            if xy and utc:
+                t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
+                if t0 <= t <= t1:
+                    out.append({"t_unix": t, "x": float(xy[0]), "y": float(xy[1]), "alt_agl_m": f.get("altitude_m")})
+        if out:
+            return sorted(out, key=lambda f: f["t_unix"])
+    return []
+
+
+def _agl(fix, bases: list[Path], events) -> tuple[float | None, str | None]:
+    """Height above ground at ``fix``: the track's, else the keyframes', else the waypoints' commanded."""
+    if fix.get("alt_agl_m") is not None:
+        return float(fix["alt_agl_m"]), "GNSS track"
+    alts = [float(f["altitude_m"]) for b in bases for f in _rows(b / "frames.jsonl") if f.get("altitude_m") is not None]
+    if alts:
+        return statistics.median(alts), "keyframes"
+    asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]
+    return (statistics.median(asked), "waypoint altitude") if asked else (None, None)
+
+
+def first_leg_m(p, h: float, q, r: float) -> float | None:
+    """The length of one turn at ``r`` and the straight to ``q`` from pose ``(p, h)``, the shorter side; None inside both circles."""
+    best = None
+    for sense in (1, -1):
+        c = turn_centre(p, h, sense, r)
+        d = math.dist(c, q)
+        if d <= r:
+            continue
+        phi = bearing_deg(c, q) - sense * math.degrees(math.acos(r / d))
+        arc = (sense * (phi - (h - sense * 90.0))) % 360.0
+        if arc > 360.0 - ARC_EPS_DEG:
+            arc = 0.0
+        length = math.radians(arc) * r + math.sqrt(d * d - r * r)
+        best = length if best is None else min(best, length)
+    return best
+
+
+def return_leg_m(track, t: float, q, r: float) -> tuple[float, str]:
+    """The way from the aircraft at ``t`` to ``q`` as a crew flies it at ``r``:
+    the shorter of one turn and the straight, and a teardrop (two turns the
+    opposite ways, a straight or none between), arrival heading free."""
+    i = min(range(len(track)), key=lambda k: abs(track[k]["t_unix"] - t))
+    xy = _at(track, t) or (track[i]["x"], track[i]["y"])
+    heading = float(track[i].get("track_deg") or 0.0)
+    got = first_leg_m(xy, heading, q, r)
+    best = None if got is None else (got, "one turn and a straight")
+    eps = math.radians(ARC_EPS_DEG) * r
+    for h in range(0, 360):
+        kind, (length, a0, _m, a1) = solve(xy, heading, q, float(h), r)
+        s0, _sm, s1 = SENSES[kind]
+        turns = [s for s, d in ((s0, a0), (_sm, _m), (s1, a1)) if s != 0 and d > eps]
+        if len(turns) == 2 and turns[0] != turns[1] and (best is None or length < best[0]):
+            best = (length, "a teardrop (two turns)")
+    if best is None:
+        h = min(range(0, 360, 5), key=lambda a: solve(xy, heading, q, float(a), r)[1][0])
+        best = (solve(xy, heading, q, float(h), r)[1][0], "turned round")
+    return best
+
+
+def routed_windows(root: Path) -> list[tuple[float, float]]:
+    """When the crews flew to a waypoint: from each waypoint handed to the next leg line, per run."""
+    out = []
+    for row in _rows(root / "episodes.jsonl"):
+        t0 = row.get("started_at_utc")
+        if not t0 or not row.get("workdir"):
+            continue
+        handed = None
+        for e in _conversation(_bases(root, row)):
+            t = float(t0) + float(e.get("t_s") or 0.0)
+            if e.get("kind") == "waypoint" and handed is None:
+                handed = t
+            elif e.get("kind") == "leg" and handed is not None:
+                out.append((handed, t))
+                handed = None
+    return out
+
+
+def flown_turn_radius_m(tracks, windows) -> tuple[float | None, int]:
+    """The median radius the crews turned at on a routed leg (groundspeed over
+    ground-track rate, per sustained turn, orbits out), and how many turns it read."""
+    radii = []
+    for track, wins in zip(tracks, windows):
+        cur: list[tuple[float, float]] = []
+
+        def flush() -> None:
+            if len(cur) >= TURN_MIN_S and sum(abs(w) for _, w in cur) < ORBIT_DEG:
+                radii.append(statistics.median(r for r, _ in cur))
+            cur.clear()
+
+        for a, b, c in zip(track, track[1:], track[2:]):
+            dt_s = c["t_unix"] - a["t_unix"]
+            v = float(b.get("ground_speed_mps") or 0.0)
+            if (not any(w0 <= b["t_unix"] <= w1 for w0, w1 in wins) or dt_s > 2.5 or v < FLYING_MPS
+                    or a.get("track_deg") is None or c.get("track_deg") is None):
+                flush()
+                continue
+            rate = ((c["track_deg"] - a["track_deg"] + 540.0) % 360.0 - 180.0) / dt_s
+            if abs(rate) < TURN_RATE_DEG_S or (cur and (rate > 0) != (cur[-1][1] > 0)):
+                flush()
+                if abs(rate) < TURN_RATE_DEG_S:
+                    continue
+            cur.append((v / math.radians(abs(rate)), rate * dt_s / 2.0))
+        flush()
+    return (round(statistics.median(radii), 1) if radii else None), len(radii)
+
+
+# -- one run -------------------------------------------------------------------
+
+
+def _bases(root: Path, row: dict[str, Any]) -> list[Path]:
+    wd = str(row.get("workdir") or "")
+    return [root / wd, root.parent / f"{root.name}_grnd" / root.name / wd] if wd else []
+
+
+def _conversation(bases: list[Path]) -> list[dict[str, Any]]:
+    return next((_rows(b / "conversation.jsonl") for b in bases if (b / "conversation.jsonl").is_file()), [])
+
+
+def ended(row: dict[str, Any]) -> str:
+    """``reply`` (the model's report, the one end that scores), ``stopped`` (the crew's stop), else ``no run``."""
+    if row.get("status") != "ok":
+        return "no run"
+    if row.get("ended_by") in NOT_A_RUN:
+        return "stopped"
+    return "reply" if row.get("ended_by") == "reply" else "no run"
+
+
+def tokens(bases: list[Path]) -> dict[str, Any]:
+    """The run's reasoner use off its transcript (``maps.llm.flight_summary``)."""
+    from maps.llm.flight_summary import summarize  # noqa: PLC0415
+
+    flight = next((b / "flight" for b in bases if (b / "flight" / "llm" / "transcript.jsonl").is_file()), None)
+    llm = summarize(flight) if flight else {}
+    keys = ("prompt_tokens", "completion_tokens", "reasoning_tokens", "total_tokens")
+    if not llm.get("requests"):
+        return {k: None for k in (*keys, "reasoner_calls")}
+    return {**{k: int(llm.get(k) or 0) for k in keys},
+            "reasoner_calls": int(llm.get("requests") or 0) - int(llm.get("unanswered") or 0)}
+
+
+def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], truth: Truth, track,
+                 prior: list[dict[str, Any]], turn_radius_m: float, radius_m: float = SUCCESS_RADIUS_M) -> dict[str, Any]:
+    bases = _bases(root, row)
+    events = _conversation(bases)
+    end = ended(row)
+    xy = judged_xy(row)
+    fid = commit_fid(bases, xy) if bases else None
+    area = committed_area(bases, fid, xy, prior)
+    determined = end == "reply" and xy is not None
+    reason = entry.get("excluded")
+    params = next((r.get("params") or {} for b in bases for r in _rows(b / "flight" / "llm" / "transcript.jsonl")
+                   if r.get("kind") == "params"), {})
+    ring, truth_source = truth.ring(entry, str(row.get("episode_id") or ""))
+    target = centroid(ring) if ring else None
+    t_end = next((float(e["t_s"]) for e in events if e.get("kind") == "mission_end"), None)
+    if t_end is None and row.get("elapsed_s"):
+        t_end = float(row["elapsed_s"])
+    t_start = float(row["started_at_utc"]) if row.get("started_at_utc") else None
+    t_stop = None if t_start is None or t_end is None else t_start + t_end
+    quality = list(entry.get("intel_quality") or [None])
+    out: dict[str, Any] = {
+        "sortie": root.name, "run_no": row.get("run_no"), "episode_id": row.get("episode_id"),
+        "replay_of": row.get("replay_of"), "model": params.get("model"),
+        "reasoning_effort": params.get("reasoning_effort"), "intel_quality": quality[0],
+        "end": end, "excluded": " ".join(str(reason).split()) or None if reason else None,
+        "determination": determined, "commit_fid": fid,
+        "commit_xy": None if xy is None else [round(xy[0], 2), round(xy[1], 2)],
+        "truth_xy": None if target is None else [round(target[0], 2), round(target[1], 2)],
+        "truth_source": truth_source, "flights": row.get("flights_flown"), "turns": row.get("turns_used"),
+        "success_area": None, "success_radius": None, "ne_ft": None, "ne_from": None, "oracle_success": None,
+        "closest_approach_ft": None, "hfov_width_ft": None, "agl_source": None, "track_source": None,
+        "track_coverage": None, "time_to_id_s": round(t_stop - t_start, 1) if determined and t_stop else None,
+        "spl": None, "spl_note": None, "path_ft": None, "final_leg_ft": None, "shortest_ft": None,
+        "start_utc": _utc(t_start), "stop_utc": _utc(t_stop), **tokens(bases),
+    }
+    if target is None:
+        return out
+    if determined:
+        point = centroid(area) if area else xy
+        out["ne_from"] = "committed area centroid" if area else "commit point"
+        out["ne_ft"] = round(math.dist(point, target) * FT_PER_M, 1)
+        out["success_area"] = bool(area and inside(target, area))
+        out["success_radius"] = math.dist(xy, target) <= radius_m
+    else:
+        out["success_area"] = out["success_radius"] = False
+    if t_start is None:
+        return out
+    t_end_run = t_stop if t_stop is not None else t_start + float(row.get("elapsed_s") or 0.0)
+    success = bool(out["success_area"])
+    if not success:
+        out["spl"] = 0.0
+    out["track_coverage"], _hole = track_coverage(track, t_start, t_end_run)
+    flown = _window(track, t_start, t_end_run) if track else []
+    out["track_source"] = "GNSS track"
+    if not flown:
+        # The recorder was not writing: the keyframes carry the live
+        # navigation's pose, enough for OSR when a pose is inside the width.
+        flown = keyframe_poses(bases, t_start, t_end_run)
+        out["track_source"] = "keyframe poses" if flown else "none"
+        if success:
+            out["spl_note"] = "undefined: the recording does not cover the run"
+        if not flown:
+            return out
+    d, nearest = closest_approach(flown, target)
+    out["closest_approach_ft"] = round(d * FT_PER_M, 1)
+    agl, out["agl_source"] = _agl(nearest, bases, events)
+    if agl is not None:
+        width = 2.0 * agl * math.tan(math.radians(C12_HFOV_DEG) / 2.0)
+        out["hfov_width_ft"] = round(width * FT_PER_M, 1)
+        out["oracle_success"] = d <= width
+    if out["oracle_success"] is False and out["track_source"] != "GNSS track":
+        out["oracle_success"] = None  # sparse poses cannot show the aircraft never came near
+    if out["track_source"] != "GNSS track" or len(flown) < 2:
+        return out
+    loiter = row.get("start_xy") or (row.get("visited_xy") or [None])[0]
+    first = next((t_start + float(e["t_s"]) for e in events if e.get("kind") == "leg"), t_end_run)
+    passed = last_pass(track, (float(loiter[0]), float(loiter[1])), t_start, first, LOITER_PASS_M) if loiter else None
+    p0 = passed[0] if passed else t_start
+    origin = tuple(map(float, loiter)) if loiter else _at(track, p0)
+    leg = 0.0
+    at = _at(track, t_end_run)
+    if xy is not None and (at is None or math.dist(at, xy) > (out["hfov_width_ft"] or 0.0) / FT_PER_M / 2.0):
+        leg, _how = return_leg_m(track, t_end_run, xy, turn_radius_m)
+    p = sum(math.dist((a["x"], a["y"]), (b["x"], b["y"])) for a, b in zip(_window(track, p0, t_end_run),
+                                                                         _window(track, p0, t_end_run)[1:]))
+    shortest = math.dist(origin, target)
+    out["path_ft"], out["final_leg_ft"] = round(p * FT_PER_M, 1), round(leg * FT_PER_M, 1)
+    out["shortest_ft"] = round(shortest * FT_PER_M, 1)
+    if success:
+        if out["track_coverage"] < SPL_MIN_COVERAGE:
+            out["spl_note"] = f"undefined: the recording holds {out['track_coverage']:.0%} of the run"
+        else:
+            out["spl"] = round(shortest / max(p + leg, shortest), 4) if max(p + leg, shortest) > 0 else None
+    return out
+
+
+def collect(roots: list[Path], truth: Truth, *, tiles_dir: Path) -> tuple[list[dict[str, Any]], float, int]:
+    """Every run under ``roots``, with the crews' turn radius over them all."""
+    prior_path = Path(tiles_dir) / "calcity_features.json"
+    prior = json.loads(prior_path.read_text())["prior"] if prior_path.is_file() else []
+    tracks = [sorted(_rows(r / "flight_track.jsonl"), key=lambda f: f["t_unix"]) for r in roots]
+    radius, turns = flown_turn_radius_m(tracks, [routed_windows(r) for r in roots])
+    radius = radius or TURN_RADIUS_FALLBACK_M
+    out = []
+    for root, track in zip(roots, tracks):
+        entries = truth.entries(root.name)
+        for row in _rows(root / "episodes.jsonl"):
+            out.append(run_measures(root, row, entry=entries.get(str(row.get("episode_id") or "")) or {},
+                                    truth=truth, track=track, prior=prior, turn_radius_m=radius))
+    out.sort(key=lambda r: (r["sortie"], int(r["run_no"] or 0)))
+    return out, radius, turns
+
+
+def _rate(rows, key: str) -> dict[str, Any]:
+    vals = [r[key] for r in rows if r[key] is not None]
+    k = sum(1 for v in vals if v)
+    return {"k": k, "n": len(vals), "pct": round(100.0 * k / len(vals), 1) if vals else None}
+
+
+def _median(vals) -> float | None:
+    vals = [v for v in vals if v is not None]
+    return round(statistics.median(vals), 1) if vals else None
+
+
+def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """The rates over the runs kept that carry a truth; times and tokens over the runs kept."""
+    kept = [r for r in rows if not r["excluded"]]
+    scored = [r for r in kept if r["truth_xy"] is not None]
+    spl = [r["spl"] for r in scored if r["spl"] is not None]
+    return {"runs": len(rows), "kept": len(kept), "scored": len(scored),
+            "sr_area": _rate(scored, "success_area"), "sr_20m": _rate(scored, "success_radius"),
+            "osr": _rate(scored, "oracle_success"),
+            "ne_median_ft": _median(r["ne_ft"] for r in scored),
+            "time_to_id_median_s": _median(r["time_to_id_s"] for r in kept),
+            "spl_pct": round(100.0 * statistics.fmean(spl), 1) if spl else None, "spl_n": len(spl),
+            "total_tokens_median": _median(r["total_tokens"] for r in kept)}
+
+
+def by(rows, key: str) -> dict[str, dict[str, Any]]:
+    return {str(v): summarize([r for r in rows if str(r[key]) == str(v)])
+            for v in sorted({str(r[key]) for r in rows})}
+
+
+def check(rows: list[dict[str, Any]], master: Path) -> list[str]:
+    """Where these rows disagree with a master table's real rows on SR (both readings) and OSR, by (sortie, run_no)."""
+    want = {(r["sortie"], int(r["run_no"])): r for r in csv.DictReader(master.open()) if r["environment"] == "real"}
+    have = {(r["sortie"], int(r["run_no"] or 0)): r for r in rows}
+    out = [f"{k}: in the master table, not read" for k in sorted(set(want) - set(have))]
+    out += [f"{k}: read, not in the master table" for k in sorted(set(have) - set(want))]
+    for k in sorted(set(want) & set(have)):
+        for ours, theirs in (("success_area", "success_area"), ("success_radius", "success_radius"),
+                             ("oracle_success", "oracle_success")):
+            a, b = have[k][ours], want[k][theirs]
+            if ("" if a is None else str(a)) != b:
+                out.append(f"{k} {ours}: {a!r} here, {b!r} in the master table")
+    return out
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--root", type=Path, nargs="+", required=True, help="flown or replay sortie roots")
+    ap.add_argument("--truth", type=Path, nargs="+", required=True,
+                    help="a directory of <sortie>.json analyst entries, and/or the tasking set's split JSON")
+    ap.add_argument("--tiles", type=Path, default=None, help="the bake whose features a prior_<i> commit names "
+                                                              "(default: SEARCH_CALCITY_TILES)")
+    ap.add_argument("--check", type=Path, default=None, help="a master table to compare SR and OSR against")
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+    if args.tiles is None:
+        from benchmarks.calcity.paths import TILES_DIR  # noqa: PLC0415
+
+        args.tiles = TILES_DIR
+    roots = sorted(r for r in args.root if (r / "episodes.jsonl").is_file())
+    rows, radius, turns = collect(roots, Truth(args.truth), tiles_dir=args.tiles)
+    doc = {"turn_radius_m": radius, "turns_read": turns, "summary": summarize(rows),
+           "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "reasoning_effort"), "runs": rows}
+    if args.check is not None:
+        doc["check"] = check(rows, args.check)
+    if args.json:
+        json.dump(doc, sys.stdout, indent=1)
+        print()
+    else:
+        def line(name: str, s: dict[str, Any]) -> str:
+            return (f"{name:14s} runs {s['runs']:3d} scored {s['scored']:3d}  SR area {s['sr_area']['k']}/{s['sr_area']['n']}"
+                    f"  SR 20 m {s['sr_20m']['k']}/{s['sr_20m']['n']}  OSR {s['osr']['k']}/{s['osr']['n']}"
+                    f"  NE med {s['ne_median_ft']} ft  time to ID med {s['time_to_id_median_s']} s"
+                    f"  SPL {s['spl_pct']}% (n {s['spl_n']})  tokens med {s['total_tokens_median']}")
+        print(line("all", doc["summary"]))
+        for k, v in doc["by_intel_quality"].items():
+            print(line(f"intel {k}", v))
+        for k, v in doc["by_effort"].items():
+            print(line(f"effort {k}", v))
+        print(f"turn radius flown (median) {radius} m over {turns} turns")
+        for r in rows:
+            print(f"  {r['sortie']} run {r['run_no']}: {r['end']}, commit {r['commit_fid']}, SR area {r['success_area']}, "
+                  f"SR 20 m {r['success_radius']}, OSR {r['oracle_success']}, NE {r['ne_ft']} ft, "
+                  f"time to ID {r['time_to_id_s']} s, {r['flights']} flights / {r['turns']} turns, SPL {r['spl']}"
+                  + (f", excluded: {r['excluded']}" if r["excluded"] else ""))
+        if args.check is not None:
+            print(f"against {args.check}: {'agrees on every row' if not doc['check'] else 'DISAGREES'}")
+            for d in doc["check"]:
+                print(f"  {d}")
+    return 1 if args.check is not None and doc["check"] else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

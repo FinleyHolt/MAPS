@@ -1,0 +1,64 @@
+"""The closed-loop measures on a synthetic sortie: SR both ways, OSR, NE, time to identification, the excluded run."""
+
+from __future__ import annotations
+
+import csv
+import json
+
+from benchmarks.flight import measures as Q
+
+T0 = 1_800_000_000.0
+TARGET = [[90.0, 90.0], [110.0, 90.0], [110.0, 110.0], [90.0, 110.0]]
+
+
+def _run(root, wd, *, commit, reply=True, t_s=600.0):
+    run = root / wd
+    (run / "flight" / "llm").mkdir(parents=True)
+    (run / "flight" / "tour_cursor.json").write_text(json.dumps({"stops_visited": [{"stop_id": commit[0],
+                                                                                     "xy": commit[1]}]}))
+    (run / "flight" / "llm" / "transcript.jsonl").write_text(
+        json.dumps({"kind": "params", "params": {"model": "m", "reasoning_effort": "0.9"}}) + "\n")
+    (run / "conversation.jsonl").write_text(json.dumps({"kind": "leg", "said": "arrived", "t_s": 100.0}) + "\n")
+    return {"episode_id": f"calcity::{wd}", "run_no": int(wd[-1]), "workdir": wd, "status": "ok",
+            "ended_by": "reply" if reply else "stopped", "started_at_utc": T0, "elapsed_s": t_s,
+            "start_xy": [0.0, -2000.0], "visited_xy": [[0.0, -2000.0], commit[1]], "flights_flown": 1, "turns_used": 4}
+
+
+def test_the_measures_score_the_commit_against_the_truth_and_the_track_against_the_hfov(tmp_path):
+    root, truth, tiles = tmp_path / "20260101T000000Z", tmp_path / "truth", tmp_path / "tiles"
+    tiles.mkdir()
+    (tiles / "calcity_features.json").write_text(json.dumps({"prior": [{"world_contour": TARGET}]}))
+    rows = [_run(root, "run1", commit=("prior_0", [101.0, 99.0])),
+            _run(root, "run2", commit=("prior_9", [400.0, 100.0])),
+            _run(root, "run3", commit=("prior_0", [101.0, 99.0]), reply=False)]
+    (root / "episodes.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    # North along x = 0 at 100 m/s, 600 m above the ground: the target lies 100 m off the line.
+    (root / "flight_track.jsonl").write_text("".join(
+        json.dumps({"t_unix": T0 + k, "x": 0.0, "y": -2000.0 + 100.0 * k, "alt_agl_m": 600.0, "track_deg": 0.0,
+                    "ground_speed_mps": 100.0}) + "\n" for k in range(700)))
+    truth.mkdir()
+    (truth / f"{root.name}.json").write_text(json.dumps({
+        "calcity::run1": {"target_mask": TARGET, "intel_quality": ["G"]},
+        "calcity::run2": {"target_mask": TARGET, "intel_quality": ["M"]},
+        "calcity::run3": {"target_mask": TARGET, "excluded": "crew stopped it"}}))
+    got, radius, _turns = Q.collect([root], Q.Truth([truth]), tiles_dir=tiles)
+    one, two, three = got
+    assert (one["success_area"], one["success_radius"], one["oracle_success"]) == (True, True, True)
+    assert one["ne_from"] == "committed area centroid" and one["ne_ft"] == 0.0 and one["time_to_id_s"] == 600.0
+    assert one["spl"] is not None and 0.0 < one["spl"] <= 1.0
+    assert (two["success_area"], two["success_radius"], two["spl"]) == (False, False, 0.0)
+    assert two["ne_from"] == "commit point" and round(two["ne_ft"] / Q.FT_PER_M) == 300
+    assert three["excluded"] == "crew stopped it" and three["end"] == "stopped" and three["time_to_id_s"] is None
+    s = Q.summarize(got)
+    assert (s["sr_area"]["k"], s["sr_area"]["n"], s["osr"]["n"]) == (1, 2, 2)
+    master = tmp_path / "runs_all.csv"
+    with master.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, ["environment", "sortie", "run_no", "success_area", "success_radius", "oracle_success"])
+        w.writeheader()
+        for r in got:
+            w.writerow({"environment": "real", "sortie": r["sortie"], "run_no": r["run_no"],
+                        **{k: "" if r[k] is None else str(r[k]) for k in ("success_area", "success_radius",
+                                                                          "oracle_success")}})
+    assert Q.check(got, master) == []
+    one["success_area"] = False
+    assert Q.check(got, master) == [f"('{root.name}', 1) success_area: False here, 'True' in the master table"]
