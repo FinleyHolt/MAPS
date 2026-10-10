@@ -9,7 +9,8 @@ attempts, so an arm's SR and its price come from one attempt selection.
 An arm is identified from its own run manifest, never from its directory
 name: ``served_model`` is the model the endpoint reported serving, ``split``
 the split, and ``search_env_flags.SEARCH_SAMPLING_REASONING_EFFORT`` the
-effort its requests carried. A root with no manifest is listed as unmatched.
+effort its requests carried. A root whose manifest names no ``served_model``
+is listed as unmatched.
 
 A ring-scored row and a shape-scored row share no success key, so every
 record carries its criterion and the figure draws one split at a time.
@@ -79,7 +80,7 @@ def effort_value(raw: object) -> object:
 
 
 def read_root(root: Path) -> dict | None:
-    """One arm's record, or None when the root carries no run manifest."""
+    """One arm's record, or None when its run manifest names no served_model."""
     man = read_manifest(root)
     model = man.get("served_model")
     if not model:
@@ -138,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(text)
     if data["unmatched_roots"]:
-        print(f"note: {len(data['unmatched_roots'])} root(s) carry no run manifest",
+        print(f"note: {len(data['unmatched_roots'])} root(s) carry no served_model in their run manifest",
               file=sys.stderr)
     return 0
 
