@@ -100,7 +100,7 @@ _MOVED_TO_METHOD = {
 _FORBIDDEN_NAMES = frozenset({
     "exec", "eval", "compile", "open", "globals", "locals", "vars",
     "getattr", "setattr", "delattr", "breakpoint", "input", "exit",
-    "quit", "help", "__import__"})
+    "quit", "help"})
 
 _SAFE_BUILTINS = {n: getattr(builtins, n)
                   for n in ("len", "min", "max", "sorted", "sum", "abs",
@@ -187,7 +187,6 @@ class MissionNamespace(dict):
     mp: "MissionPython | None" = None
 
     def __missing__(self, k):
-        from maps.search.parse_compile.code_surface import _fid_like
         mp = self.mp
         if _fid_like(k):
             row = mp.env.row_of_fid(k) if mp and mp.env.row_of_fid else None
@@ -1276,7 +1275,7 @@ class MissionPython:
             else:
                 out[k] = v
 
-    def _slot(self, v, call: str, extra: dict):
+    def _slot(self, v, extra: dict):
         """A Python value -> the arg shape the compiler reads.
 
         Rows/Row ride as their (registered) name so the served columns
@@ -1298,7 +1297,7 @@ class MissionPython:
                 and any(isinstance(x, (Row, Rows)) for x in v):
             # a LIST of things -- order_by(nearest=[roadA, roadB]) -- maps
             # element-wise, so a Row rides as its fid, never as an object.
-            return [self._slot(x, call, extra) for x in v]
+            return [self._slot(x, extra) for x in v]
         return v
 
     def _materialize(self, sliced: "Rows") -> "Rows":
@@ -1343,20 +1342,20 @@ class MissionPython:
                     near = _v[0]
         _refuse_metres_in_within(within)
         extra: dict = {}
-        kw = {"nearest": ([self._slot(a, "nearest=", extra) for a in nearest]
+        kw = {"nearest": ([self._slot(a, extra) for a in nearest]
                           if isinstance(nearest, (list, tuple))
                           and not _is_point(nearest)
-                          else self._slot(nearest, "nearest=", extra)
+                          else self._slot(nearest, extra)
                           if nearest is not None else None),
-              "near": (self._slot(near, "near=", extra)
+              "near": (self._slot(near, extra)
                        if near is not None else None),
-              "within": (self._slot(within, "within=", extra)
+              "within": (self._slot(within, extra)
                          if within is not None else None),
               "dwithin": dwithin,
               "color": color, "name": name}
         for d, a in (("north", north_of), ("south", south_of),
                      ("east", east_of), ("west", west_of)):
-            kw[f"{d}_of"] = (self._slot(a, f"{d}_of=", extra)
+            kw[f"{d}_of"] = (self._slot(a, extra)
                              if a is not None else None)
         st = self._step("find", [str(query)] if query != "" else [], kw)
         self._dispatch([st], f"find({query!r})", extra)
@@ -1423,39 +1422,34 @@ class MissionPython:
         if isinstance(near, (list, tuple)) and not _is_point(near):
             # nearest=[A, B] is a SET -- one place, its nearest member --
             # not two keys to average.
-            near = [self._slot(a, "nearest=", extra) for a in near]
+            near = [self._slot(a, extra) for a in near]
         elif near is not None:
-            near = self._slot(near, "nearest=", extra)
-        st = self._step("order", [self._slot(items, "order", extra)],
+            near = self._slot(near, extra)
+        st = self._step("order", [self._slot(items, extra)],
                         {"nearest": near, "color": color})
         self._dispatch([st], label, extra)
         return Rows(st["_ref"], self)
 
     def _rows_filter(self, items, label, *, within=None, near=None,
                      dwithin=None, facing=None, direction=None, **cards):
-        # WHICH-ARG validation lives in ONE place -- ``code_surface``'s
-        # filter branch -- so the two refusals cannot drift apart. This
-        # passes the slots through and the compiler says what is missing.
-        # The one check that CANNOT wait for the compiler is the swapped
-        # within=/dwithin= pair: _slot() turns a bare 25 into a slot dict,
-        # so by the time the compiler sees it the type evidence is gone.
-        # Every caller has already refused a kwarg outside the set.
+        # Which-arg validation lives in code_surface's filter branch; every
+        # caller has already refused a kwarg outside the set.
         _refuse_metres_in_within(within)
         extra: dict = {}
         st = self._step(
-            "filter", [self._slot(items, "filter", extra)],
-            {"within": (self._slot(within, "within=", extra)
+            "filter", [self._slot(items, extra)],
+            {"within": (self._slot(within, extra)
                         if within is not None else None),
-             "near": (self._slot(near, "near=", extra)
+             "near": (self._slot(near, extra)
                       if near is not None else None),
              "dwithin": dwithin,
              # facing= is a PLACE and rides the slot resolver; direction=
              # is the compass WORD and rides verbatim, which is the whole
              # point of keeping the word out of the kwarg name.
-             "facing": (self._slot(facing, "facing=", extra)
+             "facing": (self._slot(facing, extra)
                         if facing is not None else None),
              "direction": direction,
-             **{d: (self._slot(v, f"{d}=", extra) if v is not None else None)
+             **{d: (self._slot(v, extra) if v is not None else None)
                 for d, v in cards.items()}})
         self._dispatch([st], label, extra)
         return Rows(st["_ref"], self)
@@ -1463,14 +1457,14 @@ class MissionPython:
     def _call_intersection(self, a, b):
         extra: dict = {}
         st = self._step("intersection",
-                        [self._slot(a, "intersection", extra),
-                         self._slot(b, "intersection", extra)])
+                        [self._slot(a, extra),
+                         self._slot(b, extra)])
         self._dispatch([st], "intersection(...)", extra)
         return Rows(st["_ref"], self)
 
     def _call_ends_of(self, x):
         extra: dict = {}
-        st = self._step("ends_of", [self._slot(x, "ends_of", extra)])
+        st = self._step("ends_of", [self._slot(x, extra)])
         self._dispatch([st], "ends_of(...)", extra)
         return Rows(st["_ref"], self)
 
@@ -1519,7 +1513,7 @@ class MissionPython:
         # badges. Naming them is the model stating what it is looking FOR.
         _mk = None
         if marks is not None:
-            _mk = [self._slot(m, "marks=", extra)
+            _mk = [self._slot(m, extra)
                    for m in (marks if isinstance(marks, (list, tuple))
                              else [marks])]
         if isinstance(x, Rows) and x.spec:
@@ -1530,7 +1524,7 @@ class MissionPython:
             look = self._step("look", ["__w0"], {"marks": _mk})
             self._dispatch([win, look], "look(...)", extra)
             return None
-        st = self._step("look", [self._slot(x, "look", extra)],
+        st = self._step("look", [self._slot(x, extra)],
                         {"marks": _mk})
         self._dispatch([st], "look(...)", extra)
         return None
@@ -1547,7 +1541,7 @@ class MissionPython:
                 "point to centre on.)")
         st = self._step(
             "show_map", [],
-            {"around": (self._slot(around, "around=", extra)
+            {"around": (self._slot(around, extra)
                         if around is not None else None)})
         self._dispatch([st], "show_map(...)", extra)
         return None
@@ -1561,7 +1555,7 @@ class MissionPython:
         extra: dict = {}
         st = self._step(
             "look_for", [str(c) for c in classes],
-            {"at": (self._slot(at, "at=", extra)
+            {"at": (self._slot(at, extra)
                     if at is not None else None)})
         self._dispatch([st], "look_for(...)", extra)
         return None
@@ -1572,8 +1566,8 @@ class MissionPython:
             raise CodeError("at= takes ONE place and a set has no one "
                             "point to stand at. Index it -- at=rows[0].")
         st = {"call": "stand", "target": None,
-              "args": {"at": self._slot(at, "at=", extra),
-                       "facing": (self._slot(facing, "facing=", extra)
+              "args": {"at": self._slot(at, extra),
+                       "facing": (self._slot(facing, extra)
                                   if not isinstance(facing, str)
                                   else facing)}}
         self._dispatch([st], "stand(...)", extra)
@@ -1633,7 +1627,7 @@ class MissionPython:
                 f"map, and {call}() takes a thing. A stance is for "
                 "looking -- its sides ride every find row. To move, "
                 f"{call}() a row: r1[0], or a fid off one.")
-        st = self._step(call, [self._slot(x, call, extra)], act=True)
+        st = self._step(call, [self._slot(x, extra)], act=True)
         self._dispatch([st], f"{call}(...)", extra)
         # The arrivals: a flight minted a handle over the rows it added,
         # so `r = explore(x)` binds them (45 NoneType errors on the first
@@ -1670,7 +1664,6 @@ class MissionPython:
                 # Key the envelope by the MODEL's spelling ("r1[0:5]"),
                 # not the executor's ref the window compiled onto.
                 self._shown[st["_ref"]] = label
-                self._block_shown.add(st["_ref"])
         elif isinstance(value, Row) and value.src \
                 and not re.fullmatch(r"\w+", label):
             # Render the ROW: a one-row window keeps the ordering
@@ -1682,7 +1675,6 @@ class MissionPython:
             self._dispatch([st], label, {ref: ref})
             if st.get("_ref"):
                 self._shown[st["_ref"]] = label
-                self._block_shown.add(st["_ref"])
         elif isinstance(value, Row):
             self._out.setdefault("shown", {})[label] = value.bind
         else:
