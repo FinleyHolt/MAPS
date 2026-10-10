@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite it as below, and cite the CityNav
+  benchmark it evaluates on.
+title: "MAPS"
+abstract: "MAPS: Multimodal Agentic Planning and Search"
+type: software
+version: 0.1.0
+license: MIT
+repository-code: "https://github.com/FinleyHolt/MAPS"
+authors:
+  - family-names: Holt
+    given-names: Finley R.
+references:
+  - type: conference-paper
+    title: "CityNav: A Large-Scale Dataset for Real-World Aerial Navigation"
+    authors:
+      - family-names: Lee
+        given-names: Jungdae
+      - family-names: Miyanishi
+        given-names: Taiki
+      - family-names: Kurita
+        given-names: Shuhei
+      - family-names: Sakamoto
+        given-names: Koya
+      - family-names: Azuma
+        given-names: Daichi
+      - family-names: Matsuo
+        given-names: Yutaka
+      - family-names: Inoue
+        given-names: Nakamasa
+    collection-title: "Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)"
+    year: 2025
+    url: "https://arxiv.org/abs/2406.14240"
