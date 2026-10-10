@@ -28,14 +28,11 @@ from maps.search import (
 )
 from maps.sws import GridDomain
 from maps.search.withhold import withheld
-from maps.sws.graph import build_object_graph
+from maps.sws.graph import build_object_graph, load_graph
 import math
 import os
 import time
-from benchmarks.citynav.run_benchmark.assets import (
-    load_episode_assets,
-    load_episode_graph,
-)
+from benchmarks.citynav.run_benchmark.assets import load_episode_assets
 from benchmarks.citynav.run_benchmark.mission_engine import run_mission_episode
 from benchmarks.citynav.run_benchmark.perception import make_perception
 from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
@@ -84,7 +81,7 @@ def _episode_graph(stem: str, assets):
     if withheld("prior"):
         return build_object_graph({}, cell_size_m=float(assets.cell_size_m))
     try:
-        return load_episode_graph(stem)
+        return load_graph(stem)
     except FileNotFoundError:
         log.warning("  %s: no baked graph, building on the fly", stem)
         return build_object_graph(
@@ -179,12 +176,6 @@ def run_episode(
         raise ValueError(
             f"unknown spawn mode {cfg.spawn!r} — expected 'episode' or 'uniform'"
         )
-    start_xy = episode.start_xy
-    if os.environ.get("CITYNAV_START_CENTER") == "1":
-        start_xy = (
-            0.5 * (float(assets.bounds.x_min) + float(assets.bounds.x_max)),
-            0.5 * (float(assets.bounds.y_min) + float(assets.bounds.y_max)),
-        )
     # The start pose's altitude and the block's ground datum. The datum is
     # threaded to the orthographic viewpoint picker so it sizes the view
     # square from the same scalar the crop uses (``side = 2 * (alt -
@@ -207,7 +198,7 @@ def run_episode(
         episode.episode_id,
     )
     state = EpisodeState(
-        pose_xy=start_xy,
+        pose_xy=episode.start_xy,
         altitude_m=start_alt_m,
         graph=graph,
     )

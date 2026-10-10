@@ -9,7 +9,6 @@ from benchmarks.citynav.paths import (
 )
 from dataclasses import dataclass
 from pathlib import Path
-from maps.sws.graph import load_graph
 import json
 import logging
 
@@ -66,7 +65,8 @@ def _assert_descriptions_wall(features: object, source_path: str) -> None:
     _walk(features, "")
 
 
-def _load_block_assets(map_name: str, cell_size_m: float) -> BlockAssets:
+def load_episode_assets(map_name: str, cell_size_m: float) -> BlockAssets:
+    """Load the episode's per-block bakes."""
     stem = tile_stem(map_name)
     meta_path = Path(f"{stem}_meta.json")
     if not meta_path.exists():
@@ -83,22 +83,9 @@ def _load_block_assets(map_name: str, cell_size_m: float) -> BlockAssets:
     H, W = meta["grid_shape"]
     grid_shape = (int(H), int(W))
 
-    # The tile's baked cell_size_m is authoritative — bounds + grid_shape
-    # in the meta are computed against it, so any cfg-supplied value that
-    # disagrees is a bug (would scale cell→world by the wrong factor and
-    # send the planner off-tile). Prefer meta; fall back to the cfg arg
-    # only when meta is missing the field (older bakes).
-    meta_cell_size = meta.get("cell_size_m")
-    if meta_cell_size is not None:
-        meta_cell_size = float(meta_cell_size)
-        if abs(meta_cell_size - cell_size_m) > 1e-6:
-            log.warning(
-                "  %s: meta cell_size_m=%.3f overrides cfg cell_size_m=%.3f",
-                map_name,
-                meta_cell_size,
-                cell_size_m,
-            )
-        cell_size_m = meta_cell_size
+    # The tile's baked cell_size_m is authoritative: bounds + grid_shape in
+    # the meta are computed against it.
+    cell_size_m = float(meta.get("cell_size_m", cell_size_m))
 
     # The features dict is the OSM bake's sidecar, never rebuilt from
     # objects.json (that would hand the reasoner ground-truth geometry).
@@ -119,25 +106,3 @@ def _load_block_assets(map_name: str, cell_size_m: float) -> BlockAssets:
         grid_shape=grid_shape,
         base_features=base_features,
     )
-
-
-def city_root_from_map_name(map_name: str) -> str:
-    """``"birmingham_block_3"`` -> ``"birmingham"``.
-
-    Episode JSONs name the block; the city-wide bake stems are the bare
-    city. A map_name that is already a city stem (no ``_block_``) returns
-    unchanged.
-    """
-    if "_block_" in map_name:
-        return map_name.split("_block_")[0]
-    return map_name
-
-
-def load_episode_assets(map_name: str, cell_size_m: float) -> BlockAssets:
-    """Load the episode's per-block bakes."""
-    return _load_block_assets(map_name, cell_size_m)
-
-
-def load_episode_graph(stem: str):
-    """Load the ObjectGraph for the episode's block: ``load_graph(<block>)``."""
-    return load_graph(stem)

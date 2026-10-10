@@ -12,9 +12,7 @@ the console entry point) depend on.
 
 from benchmarks.citynav.run_benchmark.assets import (
     BlockAssets,
-    city_root_from_map_name,
     load_episode_assets,
-    load_episode_graph,
 )
 from benchmarks.citynav.run_benchmark.cli import main
 from benchmarks.citynav.run_benchmark.config import RunConfig, load_config
@@ -27,8 +25,6 @@ __all__ = [
     "RunConfig",
     "main",
     "load_config",
-    "city_root_from_map_name",
     "load_episode_assets",
-    "load_episode_graph",
     "synthesize_compliant_trajectory",
 ]

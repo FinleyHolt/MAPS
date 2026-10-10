@@ -156,7 +156,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
     """Assets, perception and the belief engine for one mission, exactly as the bench builds them."""
     from benchmarks.citynav.episode import EpisodeState  # noqa: PLC0415
     from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, tile_stem  # noqa: PLC0415
-    from benchmarks.citynav.run_benchmark import load_config, load_episode_assets, load_episode_graph  # noqa: PLC0415
+    from benchmarks.citynav.run_benchmark import load_config, load_episode_assets  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.perception import make_perception  # noqa: PLC0415
@@ -165,6 +165,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
     from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider  # noqa: PLC0415
     from maps.search import MapsCompiler, SearchLoop  # noqa: PLC0415
     from maps.sws import GridDomain  # noqa: PLC0415
+    from maps.sws.graph import load_graph  # noqa: PLC0415
 
     cfg = load_config(str(config))
     assert_flight_config(cfg)
@@ -178,7 +179,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
         sam_concept_setter = cp.set_concepts
 
     try:
-        graph = load_episode_graph(tile_stem(episode.map_name))
+        graph = load_graph(tile_stem(episode.map_name))
     except FileNotFoundError:
         from maps.sws.graph import build_object_graph  # noqa: PLC0415
 

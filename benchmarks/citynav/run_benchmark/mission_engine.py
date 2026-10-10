@@ -419,8 +419,7 @@ def fly_one(
         else None
     )
     _built: dict | None = None
-    _enrich_enabled = hasattr(search_loop, "upsert_prior_percept")
-    if _enrich_enabled and obs is not None and obs.rgb is not None:
+    if obs is not None and obs.rgb is not None:
         _built = _build_frame_enrich(
             obs=obs,
             step_idx=step_idx,
