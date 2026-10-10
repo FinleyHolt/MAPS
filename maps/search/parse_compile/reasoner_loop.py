@@ -72,7 +72,6 @@ from maps.search.analyze_scene.geom_program import (
     _grid_cell,
     _is_color_column_key,
     compact_results as _compact_results,
-    compare_columns as _compare_columns,
     join_hints,
     run_program as _run_program,
 )
@@ -432,104 +431,6 @@ _CARRY_RE = re.compile(rf"\b{CARRY_WORD}\b")
 # is a rule about the COMMIT -- do not invent one where nothing flew -- and
 # asking again is not inventing.
 NO_FLIGHT_ABSTAIN_STREAK = 3
-
-
-# ---------------------------------------------------------------------------
-# Persistent reasoner per-stop rounds
-# ---------------------------------------------------------------------------
-#
-# The persistent ``Reasoner`` instance stays alive across the whole
-# episode. At each tour-stop arrival the runtime hands it a
-# stop_decision packet (rendered by ``prompts.build_stop_decision_packet``,
-# with the RE2 cue echo at its tail) and one tool-call round;
-# ``advance_reasoner_one_round`` is that round. The reasoner can:
-#
-#   - call ``analyze(program)`` to search the world-state + compute
-#     relations over it (the round continues),
-#   - call ``act{select{fid}}`` — the decision: the
-#     round ends and the fid is recorded as the candidate list's rank-0
-#     (+ the last ordering op's tail),
-#   - call ``act{viewpoints{add}}`` — the ReAct terminal: the round
-#     ends, the tour extends, and the model re-decides after perceiving,
-#   - call ``act{sam_concepts}`` — re-declare the segmenter watchlist,
-#   - reply CARRY (or fall silent twice) — the prior candidate list stays.
-#
-# The recorded list is sanitised against the caller's grounded-fid set.
-
-
-@dataclass(frozen=True)
-class CandidateBelief:
-    """One ranked candidate the per-stop round records (rank 0 best).
-
-    ``rank=0`` is the reasoner's current best guess (its select); higher
-    ranks are progressively weaker alternatives — the
-    analyze_scene program's ordering-tail rank order (the think span
-    carries the per-stop reasoning)."""
-
-    target_fid: str
-    rank: int
-    prose_belief: str
-
-
-@dataclass(frozen=True)
-class StopEvidenceReply:
-    """One per-stop reasoner round's verdict.
-
-    The round loops native tool calls; the DECISION is the ``select`` TOOL —
-    calling it ends the round (selecting = deciding). The binding table:
-
-      select                  -> the LATEST recorded select always owns:
-                                 ``candidates`` = [select.fid]
-                                 + the last ordering op's admissible tail,
-                                 deduped;
-      request_viewpoints only -> carry + the viewpoints fly (re-decide next);
-      no terminal call        -> carry (CARRY reply / silence / cap /
-                                 transient).
-
-    ``terminal`` is the acted-vs-carried bit (a terminal act ended the
-    round). There is no ``reasoning_witness`` (the think span IS the witness
-    — trace dumps read ``reasoning_content``), and no
-    deferred/deferred_named tier."""
-
-    candidates: tuple[CandidateBelief, ...]
-    # The round's select decision (empty when no select call landed).
-    select_fid: str = ""
-    note: str = ""
-    # Telemetry ONLY: True when the round's select.fid differs from EVERY
-    # detected fid the model named in the select turn's THINK span (the
-    # valid-typo class: the reasoning argued detected_54, the typed select
-    # says detected_45). search_loop folds it into
-    # react_stats.pick_witness_mismatch + the one-shot mismatch notice; never
-    # read by the commit. False when no select or no fid named in the span.
-    pick_witness_mismatch: bool = field(default=False, compare=False)
-    # The select.fid's rank in the round's last ordering op admissible
-    # output (-1 when no select / not in that ordering). SERVER-computed;
-    # reshuffle-audit telemetry (the latest select owns — no guard reads it).
-    pick_rank_in_program: int = field(default=-1, compare=False)
-    # Protocol telemetry: prose turns that called no tool this
-    # round, and whether the round ended as a carry-by-silence (two
-    # consecutive no-call turns after the one repair nudge).
-    no_call_turns: int = field(default=0, compare=False)
-    carry_by_silence: bool = field(default=False, compare=False)
-    # Protocol telemetry: >1 valid select landed in ONE turn
-    # (the LAST was honored; every call id was answered).
-    multi_select_turn: bool = field(default=False, compare=False)
-    # The LAST select fid the HARNESS layer rejected this
-    # round (grounded / target-role / class gate veto on a surface-valid fid)
-    # The commit reads it ONLY when no select was
-    # ever recorded, to bind the model's nearest grounded equivalent instead
-    # of an arbitrary observed-list head. ("" , ()) when no harness
-    # rejection happened.
-    rejected_select_fid: str = field(default="", compare=False)
-    # The round's LATEST act.sam_concepts declaration ({class, role}
-    # entries, latest-wins): the caller re-arms the segmenter union /
-    # roles / target spec from it. () = no declaration this round.
-    sam_concepts: tuple = ()
-    # True iff a terminal act ended this round (select / viewpoints /
-    # sam_concepts recorded); False = carry (CARRY reply, silence, turn
-    # cap, transient, compaction-infeasible).
-    terminal: bool = False
-    kind: str = field(default="stop_evidence", init=False)
 
 
 # ---------------------------------------------------------------------------
@@ -962,99 +863,6 @@ def _terminal_fid_of_geom_result(out: dict) -> str | None:
     return terminal_fid
 
 
-
-
-def _ordered_fids_of_geom_result_value(v) -> list[str]:
-    """The fid-bearing items of ONE op result, IN RANK ORDER.
-
-    Reads a RAW result (a list of row dicts — the commit path reads the raw
-    results so the served census+head envelope cap can never truncate the
-    commit's ranked list) as well as the compacted shapes: a compacted list
-    result carries its fid-bearing rows as an ordered ``fids`` list (the rows
-    render as a grid string; NOTE the served ``fids`` are head-capped), and a
-    legacy ``{"len": N, "items": [...]}`` payload is still read for older
-    archives. A single fid-bearing dict (``pick``) yields ``[fid]``; a
-    scalar / fid-less dict (a constructed-geometry result) yields ``[]``."""
-    if isinstance(v, list):
-        out_raw: list[str] = []
-        for it in v:
-            if isinstance(it, dict):
-                fid = it.get("fid")
-                if isinstance(fid, str) and fid:
-                    out_raw.append(fid)
-        return out_raw
-    if isinstance(v, dict):
-        seq = v.get("items") if isinstance(v.get("items"), list) else None
-        if seq is not None:
-            out: list[str] = []
-            for it in seq:
-                if isinstance(it, dict):
-                    fid = it.get("fid")
-                    if isinstance(fid, str) and fid:
-                        out.append(fid)
-            return out
-        # A compacted list/compare result carries its fid-bearing rows as an
-        # ordered ``fids`` list (the rows themselves render as a grid string).
-        # compare is an ATTACH (input order preserved, never a sort) — the
-        # executor's terminal warning tells the model to end in rank_by/score_by.
-        fids = v.get("fids")
-        if isinstance(fids, list) and all(isinstance(f, str) for f in fids):
-            return [f for f in fids if f]
-        fid = v.get("fid")
-        if isinstance(fid, str) and fid:
-            return [fid]
-    return []
-
-
-# (No select CLASS-CONSISTENCY veto exists. A ``_head_noun`` tokens[-1]
-# heuristic would read the RELATUM's noun in relational phrases ("gray car
-# parked ... residential BUILDING" -> 'building') and so veto the model's
-# CORRECT-class decisions in 59/268 pinned gt_pop loss episodes; the vetoed
-# pick was closer than the eventual commit 19/24 (within-20m 8/24 vs 0/24,
-# median 26m vs 77m). Doctrine: perceived class is noisy perception exactly
-# like color — CLASS INFORMS THE REASONING AS A COLUMN, IT NEVER GATES THE
-# DECISION (the model reads the class column before it selects; a deliberate
-# cross-class bind is its reasoned call). The grounded-fid and anchor-role
-# checks below are validity/interface contracts, not reasoning constraints.)
-
-
-def _ordering_tail(out: dict, program: dict | None,
-                   admissible: Callable[[str], bool]) -> list[str]:
-    """The LAST ordering op's (score_by) admissible fids, rank order,
-    order-stable deduped — the tail appended to a select decision's commit
-    candidates (``candidates = [select.fid] + this tail``), so
-    the ground-walk keeps a deep ranked list behind the model's own pick.
-    Reads the RAW results map (op order preserved) so the served census+head
-    envelope cap never truncates the commit's ranked depth. [] when the
-    program ran no ordering op or none of its output is admissible."""
-    results = (out or {}).get("results")
-    if not isinstance(results, dict):
-        return []
-    ops_by_ref = {
-        op.get("ref"): op.get("op")
-        for op in ((program or {}).get("ops") or [])
-        if isinstance(op, dict)
-    }
-    for ref in reversed(list(results)):
-        if ops_by_ref.get(ref) not in _REAL_ORDERING_TERMINALS:
-            continue
-        seen: dict[str, None] = {}
-        for f in _ordered_fids_of_geom_result_value(results[ref]):
-            if f not in seen and admissible(f):
-                seen[f] = None
-        if seen:
-            return list(seen)
-    return []
-
-
-# Terminal ops that produce a REAL cue-decided ordering. A terminal that is NOT
-# one of these (a bare find/compare/filter_items/
-# partition_rows, or a pick that never followed a sort) leaves rank-0 =
-# build_surface's fid-lexicographic head -- a silent detected_0 passthrough,
-# NOT a cue pick. Post explore->compare cutover the ordering terminals are
-# score_by is THE ordering; register indexing (rN[k]) reads an ordering it
-# does not create, so only a real ordering terminal counts as sorted.
-_REAL_ORDERING_TERMINALS = frozenset({"score_by"})
 
 
 # One factual line on a PREFLIGHT color-column request that attached to no
@@ -1615,16 +1423,6 @@ def advance_reasoner_one_round(
     if gate_streak is not None:
         gate_streak.clear()
 
-    # Terminal admissibility: BINDABILITY only — can the fid ground in the
-    # live world state. Role never gates anywhere (it orders the commit
-    # walk's own fallback tiers; the agent's discernment owns what commits).
-    # Feeds the commit binding.
-    def _admissible(f: str) -> bool:
-        # Bindability is the WHOLE admissibility contract: the agent
-        # chooses what to bind; the harness only checks it CAN bind (no
-        # anchor-role arm, no select veto).
-        return f in grounded_fids
-
     # Text-only round: the reasoner reasons over the structured world-state
     # (SAM detections + perceived attributes on the runtime graph) via
     # analyze_scene alone (the ONE query tool). No images are attached.
@@ -1647,10 +1445,6 @@ def advance_reasoner_one_round(
     # (cands, anchors) surface (``compute_namespace``), so the live path and any
     # offline replay serve byte-for-byte the same surface. Retrieval folds INTO
     # the program (the find op).
-    # The LAST groundable (non-errored) program + its compacted output.
-    # ``diag`` gets the zero-regression sel_geom_* observer stamps;
-    # None -> pure no-op.
-    last_geom: dict = {"program": None, "out": None, "compare_cols": {}}
     # The fid's LATEST result-enriched row across the round's successful
     # programs (a compare/sort output carries the attached columns) — the
     # rejection-escalation surface census reads it to state live facts.
@@ -1668,17 +1462,6 @@ def advance_reasoner_one_round(
     _programs_seen: dict[str, tuple] = {}
     _surface_version = [0]
 
-    # The round's SELECT decision (the terminal tool call that passed BOTH
-    # validation layers; within one turn the LAST valid select wins).
-    round_select: dict = {"fid": "", "think_fids": ()}
-    # The LAST surface-valid select the HARNESS layer vetoed this round
-    # (grounded/role/class gate) + its surface xy — the commit's
-    # nearest-grounded-equivalent routing reads it when no select was ever
-    # recorded.
-    round_rejected: dict = {"fid": "", "xy": ()}
-    requested_viewpoints: list[dict] = []
-    # The round's latest act.sam_concepts declaration (latest-wins).
-    round_sam_concepts: list[dict] = []
     # Protocol telemetry.
     no_call_turns = 0
     no_call_streak = 0
@@ -1692,7 +1475,6 @@ def advance_reasoner_one_round(
     # Its own counter rather than the no-call streak: that one counts channel
     # misses, and this reply is on the right channel and is a legal ending.
     no_flight_streak = 0
-    multi_select_turn = False
 
     # Surface rows for the fid∈surface parity check (the same rows the
     # programs read). On the mission path a flight steps the world
@@ -2874,28 +2656,6 @@ def advance_reasoner_one_round(
                             len(_op_history))
                         _op_history.append(_op)
                         _op_reads.append(_refs_read(_op))
-            last_geom["program"] = (a or {}).get("program")
-            # P3 program_terminal COMMIT input reads ``last_geom["out"]`` --
-            # the program's OWN result order (the agent owns every ordering;
-            # nothing is harness-reordered anywhere between the surface, the
-            # crop feed and the commit input). The commit reads the RAW
-            # results (pre-compaction) so the served census+head envelope
-            # cap never truncates the ranked depth the ground-walk keeps.
-            last_geom["out"] = {**out,
-                                "results": _raw_sink.get("results")
-                                or out.get("results") or {}}
-            # The model's OWN compare evidence ({fid: {d_col: val}}) from the
-            # raw (pre-compaction) results — kept for the offline trace
-            # dump. MERGED across the round's programs
-            # (a follow-up compare-less refinement must not erase an earlier
-            # compare's columns; the namespace is fixed per round, so the
-            # distances cannot go stale).
-            try:
-                for _fid, _cols in _compare_columns(
-                        _raw_sink.get("results") or {}).items():
-                    last_geom["compare_cols"].setdefault(_fid, {}).update(_cols)
-            except Exception:  # noqa: BLE001 — evidence plumbing never perturbs the round
-                pass
             # Latest enriched row per fid (raw, pre-compaction) — the
             # rejection-escalation surface census reads it.
             try:
@@ -2921,118 +2681,6 @@ def advance_reasoner_one_round(
     # bring back, not a verdict on the run, so the loop holds its turn
     # until the reasoner answers or the operator presses Stop.
     MAX_ROUND_TRANSIENT = 6
-
-    def _carry_reply(note: str, *, by_silence: bool = False) -> StopEvidenceReply:
-        """Carry: leave the reasoner's prior candidate list in place."""
-        return StopEvidenceReply(
-            candidates=(), note=note,
-            no_call_turns=no_call_turns,
-            carry_by_silence=by_silence,
-            multi_select_turn=multi_select_turn,
-            rejected_select_fid=round_rejected["fid"],
-            sam_concepts=tuple(round_sam_concepts),
-        )
-
-    def _terminal_reply(turn_idx: int, think_span: str,
-                        note: str = "") -> StopEvidenceReply:
-        """Build the round's reply after a terminal turn (a valid select
-        and/or a request_viewpoints call). Select present -> the binding
-        table's record path (the LATEST select owns; ``confirmed`` is
-        telemetry); viewpoints-only -> carry semantics + the
-        viewpoints fly."""
-        sel = round_select if round_select["fid"] else None
-        tail: list[str] = []
-        ordered_decision: list[str] = []
-        if sel:
-            # Commit candidate assembly: [select.fid] + the last
-            # ordering op's admissible tail, order-stable deduped -- the
-            # ground-walk keeps a deep ranked list behind the model's own
-            # pick. The tail passes the same admissibility gate
-            # (the select fid already passed it at validation; belt-and-braces).
-            tail = _ordering_tail(last_geom["out"], last_geom["program"], _admissible)
-            _seen_d: dict[str, None] = {}
-            for f in ([sel["fid"]] + tail):
-                if f and f not in _seen_d and _admissible(f):
-                    _seen_d[f] = None
-            ordered_decision = list(_seen_d)
-            if not ordered_decision:
-                # Defensive only: the validation layer checked the select fid
-                # against the SAME admissibility gate, so this cannot fire on
-                # the live path; a stale-injection caller gets a carry.
-                log.warning("%s select %s no longer admissible at terminal -> "
-                            "carry", rid_tag, sel["fid"])
-                return _carry_reply("select_inadmissible_at_terminal")
-
-        candidates = tuple(
-            CandidateBelief(
-                target_fid=fid,
-                rank=i,
-                prose_belief=(
-                    (think_span or "")[:300] if i == 0
-                    else "ranked by the analyze program"
-                ),
-            )
-            for i, fid in enumerate(ordered_decision)
-        )
-        # Reshuffle audit: did the model's select move off the last ordering
-        # op's rank-0? ``tail`` is the program's own ordered admissible
-        # output; a select of a deeper row is the deliberate re-rank the
-        # decision terminal exists for -- logged so the rate + which-rank
-        # stays analysable. pick_rank_in_program is SERVER-computed
-        # (telemetry; the displacement guards that read it are deleted).
-        pick_rank_in_program = (
-            tail.index(sel["fid"]) if (sel and sel["fid"] in tail) else -1
-        )
-        reshuffled = bool(sel and tail and sel["fid"] != tail[0])
-        if reshuffled:
-            log.info(
-                "%s RESHUFFLE: select %s (rank %d in the ordering tail) over "
-                "tail rank-0 %s",
-                rid_tag, sel["fid"], pick_rank_in_program, tail[0],
-            )
-        # Telemetry: the select.fid vs the detected fids the select turn's
-        # THINK span named. A mismatch is the valid-typo class free-string
-        # fids introduce (reasoning argued detected_54, the typed select says
-        # detected_45). Counted into react_stats.pick_witness_mismatch + the
-        # one-shot mismatch notice by search_loop's finalize; never read by the
-        # commit.
-        pick_witness_mismatch = bool(
-            sel and sel["think_fids"] and sel["fid"] not in sel["think_fids"]
-        )
-        if pick_witness_mismatch:
-            log.info(
-                "%s PICK_WITNESS_MISMATCH: select %s but the think span names %s",
-                rid_tag, sel["fid"], list(sel["think_fids"]),
-            )
-        if transcript is not None:
-            transcript.append({
-                "stage": "round", "kind": "stop_evidence",
-                "n_candidates": len(candidates), "note": note,
-                "select_fid": (sel["fid"] if sel else ""),
-                "n_requested_viewpoints": len(requested_viewpoints),
-                "turn_idx": turn_idx,
-                # the last ordering op's admissible output + where the select
-                # sat in it (the re-rank audit trail).
-                "ordering_tail": list(tail)[:30],
-                "n_ordering_tail": len(tail),
-                "picked_target": (sel["fid"] if sel else ""),
-                "reshuffled": reshuffled,
-                "pick_rank_in_program": pick_rank_in_program,
-                "no_call_turns": no_call_turns,
-                "multi_select_turn": multi_select_turn,
-            })
-        return StopEvidenceReply(
-            candidates=candidates,
-            select_fid=(sel["fid"] if sel else ""),
-            note=note,
-            pick_witness_mismatch=pick_witness_mismatch,
-            pick_rank_in_program=int(pick_rank_in_program),
-            no_call_turns=no_call_turns,
-            multi_select_turn=multi_select_turn,
-            rejected_select_fid=round_rejected["fid"],
-            sam_concepts=tuple(round_sam_concepts),
-            terminal=True,
-        )
 
     # Mission-path local state + the ONE mission-end constructor. The
     # mission's model-owned ending is the plain reply; everything else here
@@ -3394,11 +3042,6 @@ def advance_reasoner_one_round(
                     if _m is not None:
                         _report["new_rows"] = _m[1]
                 preflight = False
-                _g_nodes = getattr(getattr(ctx, "graph", None), "nodes",
-                                   None)
-                if live_grounded_pred is None and _g_nodes is not None:
-                    grounded_fids.clear()
-                    grounded_fids.update(str(k) for k in _g_nodes)
             _reports.append(_report)
         if cover is not None:
             return _cover_ack(cover, _reports, _cover_before, _item_errors)
@@ -4790,11 +4433,6 @@ def advance_reasoner_one_round(
 
         # Tool-call turn: dispatch each call IN ORDER, answering EVERY call
         # id (the compactor's id-closure sweep requires a result per id).
-        # ACT↔VIEW COORDINATION: the WHOLE turn processes — a view
-        # after an act still executes (terminal_fired is only read after the
-        # sweep), so a same-turn boost attaches to the stops the act queued.
-        select_rejected_this_turn = False
-        terminal_fired = False
         for tc in r["tool_calls"]:
             name = (tc.get("function") or {}).get("name") or ""
             cid = tc.get("id") or ""
@@ -4854,20 +4492,3 @@ def advance_reasoner_one_round(
         for _vtext, _vjpegs in pending_vision:
             reasoner.append_vision_user(_vtext, _vjpegs)
         pending_vision.clear()
-        if terminal_fired:
-            # A compound select+request_viewpoints binds BOTH — the
-            # select records, the viewpoints extend the tour. Either alone
-            # also ends the round. Edge case:
-            # a REJECTED select + valid viewpoints in one turn terminates
-            # viewpoints-only — deliberate ReAct semantics (the look flies,
-            # the model re-selects next round with MORE evidence, not against
-            # the same evidence it just failed on) — tagged in the note so
-            # the rate stays measurable.
-            note = ""
-            if select_rejected_this_turn and not round_select["fid"]:
-                note = "viewpoints_after_rejected_select"
-                log.info("%s terminal: viewpoints fly, select was rejected -- "
-                         "re-decide next round", rid_tag)
-            return _terminal_reply(turn_idx, str(r.get("reasoning") or ""),
-                                   note=note)
-
