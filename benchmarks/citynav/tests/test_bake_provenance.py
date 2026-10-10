@@ -19,9 +19,8 @@ def _seed_meta(tmp_path, block="birmingham_block_0"):
         "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 40.0, "y_max": 40.0},
         "grid_shape": [20, 20],
         "cell_size_m": 2.0,
-        # A stale claim from a previous cityrefer bake: must NOT survive.
-        "provenance": {"prior": "cityrefer"},
-        "cityrefer_landmark_priors": True,
+        # A stale claim from a previous bake: must NOT survive.
+        "provenance": {"prior": "stale"},
     }
     (tmp_path / f"{block}_meta.json").write_text(json.dumps(meta))
     return block
@@ -59,15 +58,13 @@ def test_osm_bake_stamps_provenance(tmp_path):
     # The bake adds WHO/WHEN on top of the source identity.
     assert prov["baked_at_utc"]
     assert "bake_git_sha" in prov
-    # The stale cityrefer claims from the seed meta are gone.
-    assert "cityrefer_landmark_priors" not in meta
 
 
-def test_mode_switch_cannot_inherit_stale_provenance(tmp_path):
+def test_a_rebake_cannot_inherit_stale_provenance(tmp_path):
     block = _seed_meta(tmp_path)
     bake_osm_blocks("birmingham", _records(), tiles_dir=tmp_path,
                     provenance={"prior": "osm"})
     meta = json.loads((tmp_path / f"{block}_meta.json").read_text())
     assert meta["provenance"]["prior"] == "osm", (
-        "the seed meta's cityrefer provenance leaked through the rebake"
+        "the seed meta's stale provenance leaked through the rebake"
     )

@@ -62,22 +62,20 @@ def test_caller_georef_survives_the_bake(tmp_path):
 
 def test_a_stale_flag_is_still_stripped(tmp_path):
     """Vacuity floor. Emptying _STALE_BAKE_FLAGS would also make the test
-    above pass, and would silently re-inherit provenance across a mode
-    switch — the thing the set exists to prevent."""
+    above pass, and would silently re-inherit provenance across a
+    re-bake — the thing the set exists to prevent."""
     out = _bake(
         tmp_path,
         {
             "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 20.0, "y_max": 20.0},
             "cell_size_m": 2.0,
-            "cityrefer_landmark_priors": 999,
             "bake_counts": {"named_kept": 999},
-            "provenance": {"prior": "cityrefer"},
+            "provenance": {"prior": "stale"},
         },
     )
-    assert "cityrefer_landmark_priors" not in out
     assert out["bake_counts"] == {"named_kept": 1}, "re-asserted, not inherited"
     # provenance is re-asserted per bake, never inherited.
-    assert out.get("provenance", {}).get("prior") != "cityrefer"
+    assert out.get("provenance", {}).get("prior") != "stale"
     assert _STALE_BAKE_FLAGS, "the stale-flag set must not be empty"
 
 

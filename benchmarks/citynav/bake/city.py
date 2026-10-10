@@ -11,19 +11,13 @@ transform into CityNav XY. Every bake stamps ``meta.json``
 fetch time + record census, georef residuals, bake time + git sha) so the
 data always says what it is and where it came from.
 
-The ALTERNATE prior — diagnostic only, behind ``--cityrefer-landmarks`` — is
-the upstream CityNav landmark set: named CityRefer landmarks with dataset
-IDs, descriptions, target annotations, vehicles, street furniture, height
-fields, SAM outputs, and satellite segmentation stripped before graph
-construction.
-
 OSM modes:
 
 - ``--dump-osm-cache out.geojson --georef g.json [--city c]``: fetch OSM once
   (network) and write a GeoJSON cache in CityNav local XY, with the georef
   residual summary embedded, so the bake itself can run offline.
-- ``--osm-blocks --city c (--osm-cache f | --fetch-osm --georef g)``: fetch or
-  load the city-frame records ONCE, then rasterize them into EVERY
+- ``--osm-blocks --city c --osm-cache f``: load the city-frame records
+  ONCE, then rasterize them into EVERY
   ``<city>_block_*`` window (block bounds are windows of the shared city
   frame) and write per-block sidecars with ``source_mode="osm_blocks"``.
 
@@ -82,7 +76,7 @@ from typing import Any
 import numpy as np
 
 from benchmarks.citynav.eval import WorldBounds
-from benchmarks.citynav.paths import OBJECTS_JSON, TILES_DIR
+from benchmarks.citynav.paths import TILES_DIR
 from maps.sws.graph import build_object_graph, save_graph
 
 log = logging.getLogger("bake_city")
@@ -110,10 +104,6 @@ _PRIVILEGED_KEYS = {
     "target_position",
     "target_positions",
 }
-# Anti-cheat exclusion for the CityRefer bake modes: targets exist only
-# through live perception, so movable-target annotation types never become
-# priors. This is the target wall, not a semantic retrieval table.
-_DISALLOWED_CITYREFER_LANDMARK_TYPES = {"Car", "Bike", "StreetFurniture"}
 
 
 class BakeError(RuntimeError):
@@ -656,7 +646,7 @@ def _record_sort_key(record: tuple[dict[str, Any], dict[str, Any]]) -> tuple[Any
     text = json.dumps(first, sort_keys=True)
     return (
         # _safe_text, not raw str(): a pandas-NaN name (unnamed feature on
-        # the --fetch-osm gdf path) must sort as "" exactly like the cache
+        # the fetch's gdf path) must sort as "" exactly like the cache
         # path, where _tag_value already dropped it — otherwise the two
         # bake modes order rows differently and the positional fids diverge.
         _safe_text(props.get("name")) or "",
@@ -744,11 +734,8 @@ def _features_from_records(
         kind = _geometry_kind(geometry)
         kind_counts[kind] = kind_counts.get(kind, 0) + 1
         source_id = _safe_text(props.get("osm_id") or props.get("@id"))
-        # True polygon geometry rides ONLY on OSM records (config B, contract
-        # C2). CityRefer records (source="cityrefer_landmark"/"cityrefer_
-        # unnamed") stay cells-only: their contours are loose annotation
-        # hulls (median 3.41x the object dims for cars), exactly the corrupt
-        # geometry the OSM-direct pivot removes.
+        # True polygon geometry rides ONLY on records whose source is OSM
+        # (config B, contract C2).
         source = _safe_text(props.get("source")) or "osm"
         world_contour = (
             _world_contour_from_geometry(geometry) if source == "osm" else None
@@ -810,174 +797,6 @@ def _features_from_records(
             "named_off_raster": sorted(named_off_raster, key=lambda p: (-p[1], p[0])),
         }
     return {PRIOR_KEY: entries} if entries else {}
-
-
-def _load_cityrefer_objects(path: Path) -> dict[str, list[dict[str, Any]]]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise BakeError(f"{path} is not a CityRefer objects.json dict")
-    out: dict[str, list[dict[str, Any]]] = {}
-    for map_name, entries in raw.items():
-        values = entries.values() if isinstance(entries, dict) else entries
-        out[str(map_name)] = [dict(obj) for obj in values if isinstance(obj, dict)]
-    return out
-
-
-def _cityrefer_area(obj: dict[str, Any]) -> float:
-    contour = obj.get("contour") or []
-    if isinstance(contour, list) and len(contour) >= 3:
-        area = 0.0
-        pts = [(float(p[0]), float(p[1])) for p in contour]
-        for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1]):
-            area += x0 * y1 - x1 * y0
-        return abs(area) * 0.5
-    dim = obj.get("dimension") or [0.0, 0.0]
-    try:
-        return abs(float(dim[0]) * float(dim[1]))
-    except (TypeError, ValueError, IndexError):
-        return 0.0
-
-
-def _cityrefer_geometry(obj: dict[str, Any]) -> dict[str, Any] | None:
-    contour = obj.get("contour") or []
-    if isinstance(contour, list) and len(contour) >= 3:
-        ring = [[float(p[0]), float(p[1])] for p in contour]
-        if ring[0] != ring[-1]:
-            ring.append(ring[0])
-        return {"type": "Polygon", "coordinates": [ring]}
-    pos = obj.get("position") or []
-    dim = obj.get("dimension") or []
-    try:
-        cx, cy = float(pos[0]), float(pos[1])
-        dx, dy = float(dim[0]), float(dim[1])
-    except (TypeError, ValueError, IndexError):
-        return None
-    x0, x1 = cx - dx / 2.0, cx + dx / 2.0
-    y0, y1 = cy - dy / 2.0, cy + dy / 2.0
-    return {
-        "type": "Polygon",
-        "coordinates": [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]],
-    }
-
-
-def _cityrefer_landmarks(objects: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    by_name: dict[str, dict[str, Any]] = {}
-    for obj in objects:
-        name = _safe_text(obj.get("name"))
-        if not name:
-            continue
-        object_type = str(obj.get("object_type") or obj.get("type") or "")
-        if object_type in _DISALLOWED_CITYREFER_LANDMARK_TYPES:
-            continue
-        key = name.casefold()
-        current = by_name.get(key)
-        if current is None or _cityrefer_area(current) < _cityrefer_area(obj):
-            by_name[key] = obj
-    return sorted(
-        by_name.values(),
-        key=lambda obj: str(obj.get("name") or "").casefold(),
-    )
-
-
-def _cityrefer_unnamed(
-    objects: Sequence[dict[str, Any]],
-    *,
-    drop_counts: dict[str, int] | None = None,
-) -> list[dict[str, Any]]:
-    """Unnamed CityRefer entities admissible as prior anchors.
-
-    Anti-cheat types (Car/Bike/StreetFurniture) stay excluded — targets
-    exist only through live perception. Entities are returned in stable
-    ``id``-sorted order so bakes of the same objects.json order identically.
-    """
-    kept: list[dict[str, Any]] = []
-    for obj in objects:
-        if _safe_text(obj.get("name")):
-            continue
-        object_type = str(obj.get("object_type") or obj.get("type") or "")
-        if object_type in _DISALLOWED_CITYREFER_LANDMARK_TYPES:
-            if drop_counts is not None:
-                drop_counts[f"anticheat:{object_type}"] = (
-                    drop_counts.get(f"anticheat:{object_type}", 0) + 1
-                )
-            continue
-        if _cityrefer_geometry(obj) is None:
-            if drop_counts is not None:
-                drop_counts[f"no_geometry:{object_type}"] = (
-                    drop_counts.get(f"no_geometry:{object_type}", 0) + 1
-                )
-            continue
-        kept.append(obj)
-    kept.sort(key=lambda obj: str(obj.get("id") or ""))
-    return kept
-
-
-def _features_from_cityrefer_landmarks(
-    objects: Sequence[dict[str, Any]],
-    *,
-    bounds: WorldBounds,
-    grid_shape: tuple[int, int],
-    cell_size_m: float,
-    dedupe_names: bool = True,
-    include_unnamed: bool = True,
-    bake_counts: dict[str, Any] | None = None,
-    coverage: np.ndarray | None = None,
-) -> dict[str, list[dict[str, Any]]]:
-    landmark_objects = _cityrefer_landmarks(objects) if dedupe_names else list(objects)
-    records: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    n_named = 0
-    for obj in landmark_objects:
-        geometry = _cityrefer_geometry(obj)
-        if geometry is None:
-            continue
-        n_named += 1
-        records.append(
-            (
-                {
-                    "name": str(obj.get("name") or "").strip(),
-                    "object_type": str(obj.get("object_type") or obj.get("type") or ""),
-                    "source": "cityrefer_landmark",
-                },
-                geometry,
-            )
-        )
-
-    n_unnamed = 0
-    drop_counts: dict[str, int] = {}
-    if include_unnamed:
-        for obj in _cityrefer_unnamed(objects, drop_counts=drop_counts):
-            geometry = _cityrefer_geometry(obj)
-            assert geometry is not None  # _cityrefer_unnamed already filtered
-            n_unnamed += 1
-            records.append(
-                (
-                    {
-                        "object_type": str(
-                            obj.get("object_type") or obj.get("type") or ""
-                        ),
-                        "source": "cityrefer_unnamed",
-                    },
-                    geometry,
-                )
-            )
-
-    if bake_counts is not None:
-        bake_counts["unnamed_dropped"] = drop_counts
-    log.info(
-        "cityrefer features: named=%d unnamed=%d dropped=%s",
-        n_named,
-        n_unnamed,
-        drop_counts or "{}",
-    )
-    return _features_from_records(
-        records,
-        bounds=bounds,
-        grid_shape=grid_shape,
-        cell_size_m=cell_size_m,
-        line_buffer_m=max(cell_size_m * 0.5, 1.0),
-        bake_counts=bake_counts,
-        coverage=coverage,
-    )
 
 
 def _read_geojson_cache(
@@ -1191,7 +1010,7 @@ def _fetch_osm_records(georef: dict[str, Any]) -> list[tuple[dict[str, Any], dic
         from pyproj import Transformer
     except ImportError as exc:  # pragma: no cover - depends on optional env
         raise BakeError(
-            "--fetch-osm requires the geo extra "
+            "--dump-osm-cache requires the geo extra "
             "(osmnx/geopandas/pyproj/shapely/rasterio)"
         ) from exc
 
@@ -1285,8 +1104,7 @@ def dump_osm_cache(
 
 
 # Flag keys a previous bake may have written into meta.json. Stripped before
-# re-writing so a mode switch (cityrefer -> osm_blocks, ...) cannot inherit a
-# stale provenance claim; the current bake re-asserts its own flags.
+# re-writing so a re-bake cannot inherit a stale provenance claim; the current bake re-asserts its own flags.
 #
 # EVERY member must be one this baker re-asserts through ``flags``. A key only
 # an upstream caller writes is not a stale claim to drop — it is that caller's
@@ -1297,8 +1115,6 @@ def dump_osm_cache(
 # tour_to_tasking --coords global had nothing to read on any Cal City tile.
 _STALE_BAKE_FLAGS = frozenset(
     {
-        "cityrefer_landmark_priors",
-        "cityrefer_unnamed_priors",
         "bake_counts",
         "osm_only",
         "provenance",
@@ -1411,7 +1227,6 @@ def bake_city_from_cache(
     osm_cache: str | Path,
     *,
     tiles_dir: str | Path = TILES_DIR,
-    line_buffer_m: float | None = None,
 ) -> dict[str, Any]:
     """Bake one CityNav city from an OSM cache in CityNav local XY."""
     tiles_path = Path(tiles_dir).expanduser().resolve()
@@ -1424,7 +1239,7 @@ def bake_city_from_cache(
         bounds=bounds,
         grid_shape=grid_shape,
         cell_size_m=cell_size_m,
-        line_buffer_m=float(line_buffer_m or max(cell_size_m * 0.5, 1.0)),
+        line_buffer_m=max(cell_size_m * 0.5, 1.0),
         bake_counts=bake_counts,
         coverage=coverage,
     )
@@ -1437,41 +1252,6 @@ def bake_city_from_cache(
         cell_size_m,
         source_mode="osm_cache",
         flags={"osm_only": True, "bake_counts": bake_counts},
-    )
-
-
-def bake_city_from_georef_fetch(
-    city: str,
-    georef_path: str | Path,
-    *,
-    tiles_dir: str | Path = TILES_DIR,
-    line_buffer_m: float | None = None,
-) -> dict[str, Any]:
-    """Fetch OSM using an explicit registration and bake one CityNav city."""
-    tiles_path = Path(tiles_dir).expanduser().resolve()
-    meta, bounds, grid_shape, cell_size_m = _load_city_meta(city, tiles_path)
-    coverage = _cell_coverage(city, meta, bounds, grid_shape, cell_size_m)
-    georef = _validate_georef(Path(georef_path).expanduser().resolve())
-    records = _fetch_osm_records(georef)
-    bake_counts: dict[str, Any] = {}
-    features = _features_from_records(
-        records,
-        bounds=bounds,
-        grid_shape=grid_shape,
-        cell_size_m=cell_size_m,
-        line_buffer_m=float(line_buffer_m or max(cell_size_m * 0.5, 1.0)),
-        bake_counts=bake_counts,
-        coverage=coverage,
-    )
-    return _write_outputs(
-        city,
-        tiles_path,
-        meta,
-        features,
-        grid_shape,
-        cell_size_m,
-        source_mode="fetch_osm_georef",
-        flags={"osm_only": True},
     )
 
 
@@ -1515,7 +1295,6 @@ def bake_osm_blocks(
     records: list[tuple[dict[str, Any], dict[str, Any]]],
     *,
     tiles_dir: str | Path = TILES_DIR,
-    line_buffer_m: float | None = None,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Rasterize city-frame OSM records into every ``<city>_block_*`` window.
@@ -1535,7 +1314,7 @@ def bake_osm_blocks(
     for block in blocks:
         meta, bounds, grid_shape, cell_size_m = _load_city_meta(block, tiles_path)
         coverage = _cell_coverage(block, meta, bounds, grid_shape, cell_size_m)
-        buffer_m = float(line_buffer_m or max(cell_size_m * 0.5, 1.0))
+        buffer_m = max(cell_size_m * 0.5, 1.0)
         pad = max(buffer_m, cell_size_m)
         subset = [
             rec
@@ -1588,7 +1367,6 @@ def bake_osm_blocks_from_cache(
     osm_cache: str | Path,
     *,
     tiles_dir: str | Path = TILES_DIR,
-    line_buffer_m: float | None = None,
 ) -> dict[str, Any]:
     """Per-block OSM bake from a cache already in CityNav local XY."""
     cache_path = Path(osm_cache).expanduser().resolve()
@@ -1603,7 +1381,6 @@ def bake_osm_blocks_from_cache(
         city,
         records,
         tiles_dir=tiles_dir,
-        line_buffer_m=line_buffer_m,
         provenance={
             "prior": "osm",
             "osm_cache": cache_path.name,
@@ -1616,160 +1393,16 @@ def bake_osm_blocks_from_cache(
     )
 
 
-def bake_osm_blocks_from_georef_fetch(
-    city: str,
-    georef_path: str | Path,
-    *,
-    tiles_dir: str | Path = TILES_DIR,
-    line_buffer_m: float | None = None,
-) -> dict[str, Any]:
-    """Per-block OSM bake with an in-process fetch (needs network egress)."""
-    georef_file = Path(georef_path).expanduser().resolve()
-    georef = _validate_georef(georef_file)
-    records = _fetch_osm_records(georef)
-    return bake_osm_blocks(
-        city,
-        records,
-        tiles_dir=tiles_dir,
-        line_buffer_m=line_buffer_m,
-        provenance={
-            "prior": "osm",
-            "osm_cache": None,
-            "fetched_at_utc": datetime.now(timezone.utc).isoformat(
-                timespec="seconds"
-            ),
-            "records": len(records),
-            "georef": _georef_provenance(georef_file),
-        },
-    )
-
-
-def bake_cityrefer_landmarks(
-    *,
-    maps: Sequence[str] | None = None,
-    objects_json: str | Path = OBJECTS_JSON,
-    tiles_dir: str | Path = TILES_DIR,
-    include_city_aggregates: bool = True,
-) -> dict[str, Any]:
-    """Bake sidecars from the full CityRefer prior set (named + unnamed).
-
-    Named entries follow the upstream CityNav landmark policy (non-empty
-    ``name``, duplicate names collapsed to the largest contour per block,
-    ``source="cityrefer_landmark"``). Unnamed structural entities are ALSO
-    baked, nameless, with ``source="cityrefer_unnamed"`` and their
-    ``object_type`` riding as a tag. Anti-cheat types
-    (Car/Bike/StreetFurniture) stay excluded: targets exist only through live
-    perception. CityRefer IDs, descriptions, target positions, object IDs,
-    and height annotations are stripped as before. Kept/dropped counts land
-    in ``meta.json`` under ``flags.bake_counts``.
-    """
-    tiles_path = Path(tiles_dir).expanduser().resolve()
-    objs_by_map = _load_cityrefer_objects(Path(objects_json).expanduser().resolve())
-    targets = list(maps) if maps is not None else sorted(objs_by_map)
-    unknown = [name for name in targets if name not in objs_by_map]
-    if unknown:
-        raise BakeError(f"unknown CityRefer map(s): {', '.join(unknown)}")
-
-    excluded = [
-        "CityRefer object IDs",
-        "target IDs",
-        "target positions",
-        "marker positions",
-        "object descriptions",
-        "SAM outputs",
-        "satellite segmentation",
-        "vehicle, bike, and street-furniture object priors",
-        "height and altitude annotations",
-    ]
-    total = {"maps": 0, "features": 0, "nodes": 0}
-
-    def write_one(name: str, objects: Sequence[dict[str, Any]], *, dedupe_names: bool) -> None:
-        meta, bounds, grid_shape, cell_size_m = _load_city_meta(name, tiles_path)
-        coverage = _cell_coverage(name, meta, bounds, grid_shape, cell_size_m)
-        bake_counts: dict[str, Any] = {}
-        features = _features_from_cityrefer_landmarks(
-            objects,
-            bounds=bounds,
-            grid_shape=grid_shape,
-            cell_size_m=cell_size_m,
-            dedupe_names=dedupe_names,
-            bake_counts=bake_counts,
-            coverage=coverage,
-        )
-        log.info("%s: bake counts %s", name, bake_counts)
-        stats = _write_outputs(
-            name,
-            tiles_path,
-            meta,
-            features,
-            grid_shape,
-            cell_size_m,
-            source_mode="cityrefer_all",
-            source="cityrefer_priors",
-            flags={
-                "cityrefer_landmark_priors": True,
-                "cityrefer_unnamed_priors": True,
-                "bake_counts": bake_counts,
-                "provenance": {
-                    "prior": "cityrefer",
-                    "objects_json": Path(objects_json).name,
-                    **_bake_provenance(),
-                },
-            },
-            excluded=excluded,
-        )
-        total["maps"] += 1
-        total["features"] += int(stats["features"])
-        total["nodes"] += int(stats["nodes"])
-
-    for map_name in targets:
-        write_one(map_name, objs_by_map[map_name], dedupe_names=True)
-
-    if include_city_aggregates:
-        target_set = set(targets)
-        cities = sorted({m.split("_block_")[0] for m in targets if "_block_" in m})
-        for city in cities:
-            city_blocks = sorted(m for m in objs_by_map if m.startswith(f"{city}_block_"))
-            if not city_blocks or not set(city_blocks).issubset(target_set):
-                continue
-            city_objects: list[dict[str, Any]] = []
-            for block in city_blocks:
-                city_objects.extend(_cityrefer_landmarks(objs_by_map[block]))
-            if city_objects:
-                write_one(city, city_objects, dedupe_names=False)
-
-    return total
-
-
 def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=(
-            "Bake CityNav sidecars from defensible priors. The production "
-            "prior is OSM: --dump-osm-cache to fetch, --osm-blocks "
-            "--osm-cache to bake offline. --cityrefer-landmarks is the "
-            "diagnostic alternate (upstream landmark subset)."
+            "Bake CityNav sidecars from the OSM prior: --dump-osm-cache to "
+            "fetch, --osm-blocks --osm-cache to bake offline."
         )
     )
     ap.add_argument("--city", choices=_CITY_CHOICES, default=None)
-    ap.add_argument(
-        "--cityrefer-landmarks",
-        action="store_true",
-        help=(
-            "Bake named CityRefer landmarks only. Drops descriptions, IDs, "
-            "target positions, vehicles, street furniture, and height fields."
-        ),
-    )
-    ap.add_argument(
-        "--map",
-        action="append",
-        default=None,
-        help="Specific CityNav block(s) for --cityrefer-landmarks. Repeatable.",
-    )
-    ap.add_argument("--objects-json", type=Path, default=OBJECTS_JSON)
-    ap.add_argument("--skip-city-aggregate", action="store_true")
     ap.add_argument("--osm-cache", type=Path, default=None)
     ap.add_argument("--georef", type=Path, default=None)
-    ap.add_argument("--fetch-osm", action="store_true")
     ap.add_argument(
         "--osm-blocks",
         action="store_true",
@@ -1790,7 +1423,6 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     ap.add_argument("--tiles-dir", type=Path, default=TILES_DIR)
-    ap.add_argument("--line-buffer-m", type=float, default=None)
     return ap
 
 
@@ -1804,7 +1436,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     if args.dump_osm_cache is not None:
-        if args.cityrefer_landmarks or args.osm_blocks or args.osm_cache is not None or args.fetch_osm:
+        if args.osm_blocks or args.osm_cache is not None:
             ap.error("--dump-osm-cache combines only with --georef (and optionally --city); the fetch is implied")
         if args.georef is None:
             ap.error("--dump-osm-cache requires --georef")
@@ -1814,61 +1446,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             ap.error(str(exc))
         return 0
 
-    if args.cityrefer_landmarks:
-        if args.osm_cache is not None or args.fetch_osm or args.georef is not None or args.osm_blocks:
-            ap.error("--cityrefer-landmarks cannot be combined with OSM cache/fetch options")
-        maps = args.map
-        if args.city is not None and maps is None:
-            objs_by_map = _load_cityrefer_objects(args.objects_json)
-            maps = sorted(m for m in objs_by_map if m.startswith(f"{args.city}_block_"))
-            if not maps:
-                ap.error(f"no CityRefer maps found for city {args.city!r}")
-        try:
-            bake_cityrefer_landmarks(
-                maps=maps,
-                objects_json=args.objects_json,
-                tiles_dir=args.tiles_dir,
-                include_city_aggregates=not args.skip_city_aggregate,
-            )
-        except BakeError as exc:
-            ap.error(str(exc))
-        return 0
-
-    if args.city is None:
-        ap.error("--city is required for OSM cache/fetch modes")
-    if args.map is not None:
-        ap.error("--map is only used with --cityrefer-landmarks")
-    if args.skip_city_aggregate:
-        ap.error("--skip-city-aggregate is only used with --cityrefer-landmarks")
-    if args.objects_json != OBJECTS_JSON:
-        ap.error("--objects-json is only used with --cityrefer-landmarks")
-    if args.osm_cache is not None and args.fetch_osm:
-        ap.error("--osm-cache and --fetch-osm are mutually exclusive")
-    if args.fetch_osm and args.georef is None:
-        ap.error("--fetch-osm requires --georef because CityNav TIFFs have crs=None")
-    if args.georef is not None and not args.fetch_osm:
-        ap.error("--georef is only used with --fetch-osm")
-    if args.osm_cache is None and not args.fetch_osm:
-        ap.error("provide --osm-cache, or provide --georef with --fetch-osm")
-
+    if args.city is None or args.osm_cache is None:
+        ap.error("--city and --osm-cache are required to bake")
+    if args.georef is not None:
+        ap.error("--georef is only used with --dump-osm-cache")
+    bake = bake_osm_blocks_from_cache if args.osm_blocks else bake_city_from_cache
     try:
-        if args.fetch_osm:
-            _validate_georef(args.georef)
-            bake = bake_osm_blocks_from_georef_fetch if args.osm_blocks else bake_city_from_georef_fetch
-            bake(
-                args.city,
-                args.georef,
-                tiles_dir=args.tiles_dir,
-                line_buffer_m=args.line_buffer_m,
-            )
-        else:
-            bake = bake_osm_blocks_from_cache if args.osm_blocks else bake_city_from_cache
-            bake(
-                args.city,
-                args.osm_cache,
-                tiles_dir=args.tiles_dir,
-                line_buffer_m=args.line_buffer_m,
-            )
+        bake(args.city, args.osm_cache, tiles_dir=args.tiles_dir)
     except BakeError as exc:
         ap.error(str(exc))
     return 0
