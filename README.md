@@ -325,7 +325,7 @@ repository's harness, at three tiers:
 | Command | Answers each flight with | Shows |
 |---|---|---|
 | `replay <run>` | The recorded observations that hold the leg's area (`--bank week`: every run under the sorties root), with your reasoner and segmenter. | How the method decides on the ground the aircraft actually saw. |
-| `replay <run> --forced` | The recorded reasoner responses, observations and detections, with every request body diffed against the recording. | Whether this harness sends the flown requests turn for turn. |
+| `replay <run> --forced` | The recorded reasoner responses, observations and detections. Every request's text is diffed against the recording; differing pictures are counted (`pictures_differ`). | Whether this harness sends the flown request text turn for turn. |
 | `replay <run> --frames <sensors.mcap> --boresight <chain.json> --raster <raster dir>` | Observations re-fused from the camera recording through the live chain. | The flight-side observation chain on the real frames. |
 
 The station registered frames against NAIP 2024 imagery: the `calcity.png`

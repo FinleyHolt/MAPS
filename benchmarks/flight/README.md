@@ -64,9 +64,8 @@ class Vehicle(Protocol):
 `post` never blocks on the aircraft flying the leg. `index` returns
 `{"seq", "log_time", "t_host", "pose"}` rows with no pixels; `frame` returns
 one frame's JPEG and its pose tag. The vehicle owns the clock the harness
-waits on. Three implementations exist: the C-12 station's (aircraft side,
-outside this repository), the twin (`twin.py`), and a camera recording read
-back (`recorded_ring.py`).
+waits on. Two implementations exist: the twin (`twin.py`) and a camera
+recording read back (`recorded_ring.py`).
 
 ## Fly the twin
 
@@ -91,13 +90,13 @@ python -m benchmarks.flight.replay <sortie>/<run dir> --frames <sensors.mcap> --
 | Tier | What answers a flight | What it proves |
 |---|---|---|
 | Observation bank (default) | The recorded observations holding the leg's area (`--bank run`: the run's own; `--bank week`: every run under the sorties root). Your reasoner and segmenter answer; the recorded taskings are spoken after each report. | How the method decides over the ground the aircraft actually saw. |
-| Forced (`--forced`) | The recorded reasoner responses, observations and detections. Every request body is diffed against the recording into `replay_diff.json`; a divergence exits non-zero. No endpoint is contacted. | That this harness sends the flown requests turn for turn. |
+| Forced (`--forced`) | The recorded reasoner responses, observations and detections. Every request's text is diffed against the recording into `replay_diff.json`; differing pictures are counted (`pictures_differ`); a text divergence exits non-zero. No endpoint is contacted. | That this harness sends the flown request text turn for turn. |
 | Frames (`--frames`) | The camera recording as the aircraft's ring, re-fused through the live chain at every waypoint. Needs the `recording` extra. | The observation chain on the real frames. |
 
 The station registered frames against NAIP 2024 imagery (the `calcity.png`
 of the v5 Cal City data release beside the flown bake); pass its directory as
-`--raster`. A replay writes the records a flown run carries, and its ledger
-row names the run it replays (`replay_of`). The recordings are not
+`--raster`. A replay's ledger row names the run it replays (`replay_of`) and
+is scored by `measures`, not by the bench reader. The recordings are not
 distributed.
 
 ## Closed-loop measures
