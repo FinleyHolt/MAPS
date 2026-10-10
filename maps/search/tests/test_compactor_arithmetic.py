@@ -200,7 +200,6 @@ def test_sizing_a_prompt_raises_on_a_render_failure(monkeypatch):
 
 
 def test_cheap_gate_identity_below_msg_count(monkeypatch):
-    monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     # Estimate would report WAY over budget, but the <=4-msg cheap gate
     # short-circuits before it is ever consulted.
     monkeypatch.setattr(C, "_estimate_input_tokens", _const(10**9))
@@ -220,7 +219,6 @@ def test_cheap_gate_identity_below_msg_count(monkeypatch):
 
 
 def test_below_budget_identity(monkeypatch):
-    monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     monkeypatch.setattr(C, "_estimate_input_tokens", _const(50))
     msgs = [
         {"role": "system", "content": "s"},
@@ -240,7 +238,6 @@ def test_below_budget_identity(monkeypatch):
 
 
 def test_tier1_clears_stale_dumps_keeps_color_live_verbatim(monkeypatch):
-    monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
     # 3 nested-shape analyze dumps, each with a big verbose rows render. Clearing
     # the 2 STALE ones (rows -> fids+census+colors) fits under 8000; the live
@@ -287,7 +284,6 @@ def test_tier1_clears_stale_dumps_keeps_color_live_verbatim(monkeypatch):
 
 
 def test_tier2_strips_color_tables_when_still_over(monkeypatch):
-    monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
     # Two STALE dumps whose bulk IS the color table (50 fids each, no filler),
     # plus a small live dump. Clearing to fids+census+colors (tier 1) still
@@ -331,7 +327,6 @@ def test_tier2_strips_color_tables_when_still_over(monkeypatch):
 
 
 def test_tier3_degrades_live_dump_when_still_over(monkeypatch):
-    monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
     # Two small stale dumps + one LIVE dump with a monster rows render. Clearing
     # + color-stripping the stale dumps can't help (the live dump dominates), so
@@ -361,7 +356,6 @@ def test_tier3_degrades_live_dump_when_still_over(monkeypatch):
 
 
 def test_tier4_infeasible_when_nothing_clearable(monkeypatch):
-    monkeypatch.setenv("SEARCH_COMPACT_ENABLE", "1")
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
     # Over budget but NO analyze dumps (and no trimmable tool dumps at all): the
     # residue is head/prose mass the design deliberately never touches, so tiers

@@ -60,10 +60,10 @@ def _scan() -> dict[str, list[str]]:
 
 def test_every_identity_env_read_is_declared() -> None:
     found = _scan()
-    # Vacuity floor: the scan saw the run path (over 55 names),
-    # and two load-bearing reads are pinned by name so a regex or layout
-    # change cannot hollow the scan out silently.
-    assert len(found) >= 30, f"scan found only {len(found)} names — broken scan?"
+    # Vacuity floor: the scan saw the run path, and load-bearing reads are
+    # pinned by name so a regex or layout change cannot hollow the scan out
+    # silently.
+    assert len(found) >= 25, f"scan found only {len(found)} names — broken scan?"
     for pin in (
         "CITYNAV_BENCH_CONFIG",
         "SEARCH_STOP_AFTER",

@@ -65,10 +65,6 @@ flight_model:
 # descends it to landing_altitude_m.
 descend_to_land: false
 landing_altitude_m: 5.0
-# Compaction budgets derive from the served window discovered off the live
-# endpoint's /v1/models at startup (maps.llm.endpoint_spec).
-compact:
-  enable: true
 # Bench-only ablation withholds over the flown engine (maps.search.withhold):
 # prior, look_for, look, images, mission_map, system_turn. Empty serves the
 # flown text exactly; the flight mission refuses any.

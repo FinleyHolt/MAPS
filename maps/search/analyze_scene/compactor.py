@@ -76,9 +76,8 @@ load or its chat template cannot render the transcript) raises: sending
 it unmeasured against a discovered window is the overflow that produces
 a server-side 400.
 
-Environment overrides (read at call time):
+Environment override (read at call time):
 
-  ``SEARCH_COMPACT_ENABLE``              "1" / "0" — global on/off (default on)
   ``SEARCH_COMPACT_TOKENIZER_NAME``      HF tokenizer name (default mapped from
                                          the model alias; falls back to
                                          "Qwen/Qwen3.6-35B-A3B")
@@ -88,7 +87,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 
 from maps.llm.tokenizer import _tokenizer
@@ -298,31 +296,6 @@ def _protected_head(messages: list[dict]) -> int:
 _KEEP_TAIL_UNITS = 2
 
 
-def _keep_tail_units() -> int:
-    """How many recent turn units the fold leaves verbatim.
-
-    An ARM, from ``SEARCH_COMPACT_KEEP_TAIL``. How much recent history survives
-    a fold is the one knob that trades context against tokens without changing
-    anything else, so it has to be settable per run to be measurable at all --
-    and the ``SEARCH_COMPACT_`` prefix is already in ``ARM_ENV_PREFIXES``, so a
-    run that sets it stamps it on the row without further wiring.
-
-    Malformed raises rather than falling back: a silently-defaulted arm is an
-    arm that measured the control and said otherwise.
-    """
-    raw = os.environ.get("SEARCH_COMPACT_KEEP_TAIL", "").strip()
-    if not raw:
-        return _KEEP_TAIL_UNITS
-    value = int(raw)   # loud on garbage, deliberately
-    if value < 1:
-        raise ValueError(
-            f"SEARCH_COMPACT_KEEP_TAIL={raw!r} must be >= 1: folding the "
-            f"current turn is what step 7 is for, and doing it here would "
-            f"take the crops the turn was just handed"
-        )
-    return value
-
-
 def _run_code_of(message: dict) -> list[str]:
     """The code an assistant turn ran, verbatim, one entry per tool call.
 
@@ -488,10 +461,9 @@ def _drop_spent_turns(
         (a, b) for (a, b) in units
         if a >= head and not _is_script_block(messages[a])
     ]
-    keep_tail = _keep_tail_units()
-    if len(droppable) <= keep_tail:
+    if len(droppable) <= _KEEP_TAIL_UNITS:
         return messages, 0, 0
-    candidates = droppable[:-keep_tail]
+    candidates = droppable[:-_KEEP_TAIL_UNITS]
 
     before = _estimate_input_tokens(messages, model=model, tools=tools)
 
@@ -661,11 +633,6 @@ def _validate_invariants(messages: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
-
-
-def _enabled() -> bool:
-    raw = os.environ.get("SEARCH_COMPACT_ENABLE", "1").strip().lower()
-    return raw not in ("0", "false", "no", "off")
 
 
 # Verbose per-row RENDER keys in an analyze-op tool-result (geom_program._c /
@@ -884,9 +851,6 @@ def compact_transcript(
     ``CompactionInvariantError`` if the post-clear sweep finds a
     tool-protocol violation.
     """
-    if not _enabled():
-        return messages
-
     # 1. Cheap gate.
     if len(messages) <= _CHEAP_GATE_MSG_COUNT:
         return messages

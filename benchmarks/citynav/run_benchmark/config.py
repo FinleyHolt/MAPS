@@ -78,9 +78,6 @@ _SCHEMA: dict[str, Any] = {
         "sahi_overlap": (_NUM, ((lambda v: 0 <= v < 1), "in [0, 1)")),
         "sahi_nms_iou": (_NUM, ((lambda v: 0 < v <= 1), "in (0, 1]")),
     },
-    "compact": {
-        "enable": (bool, _ANY),
-    },
     "withhold": (list, (
         lambda v: len(set(v)) == len(v) and all(n in WITHHOLDS for n in v),
         f"a list of distinct names from {sorted(WITHHOLDS)}")),
@@ -120,7 +117,6 @@ class RunConfig:
     sensor: str | dict
     flight_model: FlightModelConfig
     sam: dict
-    compact: dict
     # Bench-only ablation withholds (maps.search.withhold); empty serves the
     # flown text exactly.
     withhold: list
@@ -130,13 +126,6 @@ class RunConfig:
     resume_turn: int | None = None
     # The resolved top-level YAML path, written by ``load_config``.
     source_path: str | None = None
-
-
-def _export_compact_env(compact: dict) -> None:
-    """``compact.enable`` -> ``SEARCH_COMPACT_ENABLE``; a value already in the
-    environment wins."""
-    if os.environ.get("SEARCH_COMPACT_ENABLE") is None:
-        os.environ["SEARCH_COMPACT_ENABLE"] = "1" if compact["enable"] else "0"
 
 
 def export_withhold(cfg: RunConfig) -> None:

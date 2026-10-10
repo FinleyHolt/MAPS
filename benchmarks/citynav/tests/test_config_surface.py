@@ -58,11 +58,8 @@ FLAT_SHA256 = {
 }
 # Keys nothing read.
 DEAD_TOP = ("descent_step_m", "altitude_tolerance_m", "landing_xy_tolerance_m", "perception",
-            "fov_m", "rgb_upscale_px")
+            "fov_m", "rgb_upscale_px", "compact")
 DEAD_SAM = ("device", "dtype")
-DEAD_COMPACT = ("stage1_budget", "stage2_3_budget", "teacher_budget", "grader_budget",
-                "concept_union_budget", "subagent_budget", "router_budget",
-                "examiner_budget")
 # Where a flat file left a key out, the value the code used (the RunConfig,
 # SamDetectClient and FlightModelConfig defaults; an
 # absent color_palette ran "citynav" in run_benchmark/perception.py).
@@ -88,7 +85,6 @@ def _expected(flat: dict) -> dict:
     out["flight_model"] = {**ABSENT_MEANT_FLIGHT, **out["flight_model"]}
     out["sam"] = {k: v for k, v in {**ABSENT_MEANT_SAM, **out["sam"]}.items()
                   if k not in DEAD_SAM}
-    out["compact"] = {k: v for k, v in out["compact"].items() if k not in DEAD_COMPACT}
     return out
 
 

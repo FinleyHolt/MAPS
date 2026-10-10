@@ -10,7 +10,6 @@ from __future__ import annotations
 from benchmarks.citynav.adapter import load_objects, load_split, parse_episode
 from benchmarks.citynav.paths import OBJECTS_JSON, assert_available, split_path
 from benchmarks.citynav.run_benchmark.config import (
-    _export_compact_env,
     export_withhold,
     load_config,
 )
@@ -161,7 +160,6 @@ def main(
 
     assert_available()
     cfg = load_config(args.config)
-    _export_compact_env(cfg.compact)
     export_withhold(cfg)
     # Row provenance reads the run facts only this process's argv knows:
     # the config the runner actually loaded and the row cap.

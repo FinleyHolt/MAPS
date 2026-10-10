@@ -183,33 +183,6 @@ def test_code_containing_the_findings_separator_survives_the_strip() -> None:
     )
 
 
-def test_keep_tail_is_an_env_arm(monkeypatch) -> None:
-    """SEARCH_COMPACT_KEEP_TAIL, so how much recent history survives a fold is
-    measurable per run rather than a constant nobody can vary. The
-    SEARCH_COMPACT_ prefix is already in ARM_ENV_PREFIXES, so setting it stamps
-    the arm on the row with no further wiring."""
-    from maps.search.analyze_scene.compactor import _keep_tail_units
-
-    monkeypatch.delenv("SEARCH_COMPACT_KEEP_TAIL", raising=False)
-    assert _keep_tail_units() == C._KEEP_TAIL_UNITS
-
-    monkeypatch.setenv("SEARCH_COMPACT_KEEP_TAIL", "5")
-    assert _keep_tail_units() == 5
-    msgs = _transcript(12)
-    kept5, folded5, _ = _drop_spent_turns(msgs, shed_tokens=10**6, model="m")
-    monkeypatch.setenv("SEARCH_COMPACT_KEEP_TAIL", "2")
-    _, folded2, _ = _drop_spent_turns(msgs, shed_tokens=10**6, model="m")
-    assert folded5 < folded2, "keeping more tail must fold fewer turns"
-
-    # Loud on garbage: a silently-defaulted arm measured the control.
-    monkeypatch.setenv("SEARCH_COMPACT_KEEP_TAIL", "0")
-    with pytest.raises(ValueError):
-        _keep_tail_units()
-    monkeypatch.setenv("SEARCH_COMPACT_KEEP_TAIL", "banana")
-    with pytest.raises(ValueError):
-        _keep_tail_units()
-
-
 def test_the_text_steps_still_work_on_a_post_fold_list() -> None:
     """Steps 2-4 on a list the fold has already rewritten.
 
