@@ -116,7 +116,7 @@ def authored_episode(episode_id: str, start_xy: tuple[float, float]):
     return CityNavEpisode(
         map_name=episode_id.split("::")[0], episode_id=episode_id, description="",
         start_xy=(float(start_xy[0]), float(start_xy[1])), start_z=None, target_xy=None,
-        target_object_ids=[], target_mask=None, marker_positions=[], raw={},
+        target_object_ids=[], target_mask=None, marker_positions=[],
     )
 
 
