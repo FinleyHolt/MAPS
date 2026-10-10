@@ -14,8 +14,7 @@ WHICH FILE OWNS WHICH NUMBER — one source per quantity, never two:
 
   TRANSCRIPT owns turns, requests, tokens, and everything the model
     emitted (tool calls, program ops, op args) plus the DECLARED
-    vocabulary each ``params`` record carries. It covers cache-replay
-    calls, which is why it and not the meter owns the counts.
+    vocabulary each ``params`` record carries.
 
   NET METER owns ``reasoning_tokens``. Whether it rides the wire is a
     backend fact, not a constant: measured over the pulled tree, 1055 of
@@ -25,8 +24,7 @@ WHICH FILE OWNS WHICH NUMBER — one source per quantity, never two:
     wire value where it exists and re-tokenizes ``message.reasoning``
     where it does not, so the meter is a strict superset of the
     transcript — which is why summing the transcript's copy here would be
-    the wrong number on half the fleet. It is skipped on the cache-replay
-    path, so it reads 0 on a ``--replay-llm`` run while the counts do not.
+    the wrong number on half the fleet.
 
     ``reasoning_tokens`` is a SLICE of ``completion_tokens``, not an
     addition — the two overlap by design.

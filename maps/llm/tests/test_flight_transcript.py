@@ -21,8 +21,6 @@ from maps.llm import http as llm_http
 TRANSPORT = {
     "transport_kind": "resolver",
     "transport_subagent_id": None,
-    "transport_clause_id": None,
-    "transport_agent_idx": None,
 }
 
 
@@ -39,8 +37,7 @@ def _reconstruct(records: list[dict]) -> dict[str, list]:
         if rec.get("kind") != "request":
             continue
         t = rec.get("transport") or {}
-        key = (t.get("kind"), t.get("subagent_id"), t.get("clause_id"),
-               t.get("agent_idx"))
+        key = (t.get("kind"), t.get("subagent_id"))
         prev = threads.get(key) or []
         msgs = prev[: rec["n_prefix"]] + list(rec["new_messages"])
         threads[key] = msgs

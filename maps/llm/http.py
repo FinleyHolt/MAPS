@@ -13,13 +13,6 @@ honouring `Retry-After`) — hosted endpoints rate-limit routinely, and
 spending the transient budget on that would end an episode mid-compile.
 Every other 4xx is a malformed-request bug and is surfaced immediately.
 
-A content-addressed request/response cache (record + replay modes) lets
-benchmarks and CI gate a full episode without a live vLLM. Configure
-via `set_cache_mode(...)` (the runner's `--record-llm` / `--replay-llm`
-flags). In replay mode a cache
-miss raises `CacheMissError` immediately; there is no silent fall-back
-to a network call.
-
 A call that carries a ``cancel_event`` negotiates an SSE stream from
 vLLM rather than a blocking POST. When the event fires the call's TCP
 socket is shut down, so a read blocked on a silent serve returns at once
@@ -32,7 +25,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import copy
 import hashlib
 import json
 import logging
@@ -187,55 +179,7 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Request/response cache
-# ---------------------------------------------------------------------------
-
-
-class CacheMissError(RuntimeError):
-    """Raised when replay mode cannot find a cached response for a request."""
-
-
-_CACHE_MODE: str = "off"  # "off" | "record" | "replay"
-_CACHE_DIR: Path | None = None
-
-
-def set_cache_mode(mode: str, directory: str | Path | None = None) -> None:
-    """Switch the cache between off, record, and replay.
-
-    In ``record`` mode every real HTTP response is written to
-    ``<directory>/<hash>.json`` as ``{"request": body, "response":
-    raw_json}``. In ``replay`` mode the cached response is returned
-    directly and a missing key raises ``CacheMissError`` — there is no
-    live fall-back.
-    """
-    global _CACHE_MODE, _CACHE_DIR
-    if mode not in ("off", "record", "replay"):
-        raise ValueError(f"cache mode must be off|record|replay, got {mode!r}")
-    if mode != "off" and directory is None:
-        raise ValueError(f"cache mode {mode!r} requires a directory")
-    _CACHE_MODE = mode
-    _CACHE_DIR = Path(directory) if directory is not None else None
-    if _CACHE_DIR is not None and mode == "record":
-        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _resolved_cache_mode() -> tuple[str, Path | None]:
-    """The effective cache mode, as ``set_cache_mode`` last left it."""
-    return _CACHE_MODE, _CACHE_DIR
-
-
-def _cache_key(body: dict) -> str:
-    """Content-address a request body to a 16-char hex digest."""
-    raw = json.dumps(body, sort_keys=True, default=str).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()[:16]
-
-
-def _cache_path(directory: Path, key: str) -> Path:
-    return directory / f"{key}.json"
-
-
-# ---------------------------------------------------------------------------
-# Dashboard flight log
+# Flight log
 # ---------------------------------------------------------------------------
 
 
@@ -245,25 +189,13 @@ def _resolved_flight_log_dir() -> Path | None:
     Every chat-completions round-trip is mirrored into
     ``transcript.jsonl`` there -- an append-only record stream that stores
     the conversation ONCE (per-call message deltas + params dedup + image
-    parts as sha refs) instead of a full re-serialization per call, and
-    captures direct-HTTP and cache-replay calls alike so a reader works
-    regardless of how the response was obtained. It is what the dashboard
-    replay and nearly every reader under ``benchmarks/citynav/analysis/``
-    actually read.
+    parts as sha refs) instead of a full re-serialization per call. It is
+    what nearly every reader under ``benchmarks/citynav/analysis/`` reads.
 
-    RECORDING IS NOT OPTIONAL, and there is no environment variable that
-    turns it off. There used to be: the flight log only ran when
-    ``SEARCH_LLM_FLIGHT_LOG`` named a directory, five callers set it, and
-    the sixth -- the FTE station -- did not. Twenty missions flew and left
-    no reasoning and no tool output behind, with nothing to recover them
-    from, because the switch defaulted to off and a mission that records
-    nothing looks exactly like one that has nothing to say. A run's own
-    record is not a feature a caller opts into.
-
-    The one thing still configurable is WHERE a mission writes, and that
-    has a single name already: ``SEARCH_COMPILE_WORKDIR``, which every
-    caller that flies anything sets, and which all five of the deleted
-    ``SEARCH_LLM_FLIGHT_LOG`` assignments were derived from verbatim.
+    RECORDING IS NOT OPTIONAL, and no environment variable turns it off: a
+    mission that records nothing looks exactly like one that has nothing
+    to say. The one thing configurable is WHERE a mission writes:
+    ``SEARCH_COMPILE_WORKDIR``, which every caller that flies anything sets.
 
     No workdir means no mission -- a bare transport in a unit test, not a
     flight -- so there is nothing to record and nowhere to put it. That
@@ -290,29 +222,17 @@ def _resolved_flight_log_dir() -> Path | None:
 _WARNED_NO_WORKDIR = False
 
 
-# Diagnostic-only kwargs mirrored into the flight-log transcript. They never
-# enter the HTTP body or the cache key.
-#
-# The quadruple is DEAD FLEXIBILITY, kept only because the transcript's
-# delta encoding keys its threads on it. There is one reasoner on a ReAct
-# loop and no subagents of any kind, so every request a run writes carries
-# the same tuple — measured: 292 of 292 requests tagged `reasoner`. Reading
-# it as "which agent asked" describes an architecture this build does not
-# have.
-_TRANSPORT_META_KEYS = (
-    "transport_kind",
-    "transport_subagent_id",
-    "transport_clause_id",
-    "transport_agent_idx",
-)
+# Diagnostic-only kwargs mirrored into the flight-log transcript; they never
+# enter the HTTP body. The transcript's delta encoding keys its threads on
+# them.
+_TRANSPORT_META_KEYS = ("transport_kind", "transport_subagent_id")
 
-# The transcript is a SINGLE-PROCESS append stream: the reasoner and the
-# cache-replay path both write from the runner process, so one module lock
-# serializes lines. A second process appending to the same file would
+# The transcript is a SINGLE-PROCESS append stream: every call writes from
+# the runner process, so one module lock serializes lines. A second process appending to the same file would
 # interleave records undetected — if a multi-process runner ever appears,
 # the transcript needs a per-process file + a merge, not a bigger lock.
 _FLIGHT_LOCK = threading.Lock()
-# (flight_dir, transport quadruple) -> the previous request's scrubbed-message
+# (flight_dir, transport kind, subagent id) -> the previous request's scrubbed-message
 # digests, for write-time delta encoding. Keyed by dir so sequential episodes
 # in one process cannot cross-contaminate.
 _FLIGHT_THREAD_DIGESTS: dict[tuple, list[str]] = {}
@@ -328,7 +248,7 @@ def _scrub_image_parts(messages: list) -> list:
     sha is of the DECODED bytes and matches the look manifest's per-crop
     ``sha256``, so a transcript image part resolves to its crop record (and
     re-renders) by hash. Non-data URLs pass through. Never mutates the input
-    — the HTTP body and the cache key see the original."""
+    — the HTTP body sees the original."""
     out: list = []
     for msg in messages:
         content = msg.get("content") if isinstance(msg, dict) else None
@@ -368,8 +288,8 @@ def _append_flight_record(directory: Path, record: dict) -> None:
     """Append one record line to ``<directory>/transcript.jsonl``.
 
     Filesystem errors are logged at warning and swallowed: flight-log writes
-    must never fail an LLM call. The flush makes each line visible to the
-    dashboard's per-request reader immediately."""
+    must never fail an LLM call. The flush makes each line visible to a
+    live reader immediately."""
     try:
         directory.mkdir(parents=True, exist_ok=True)
         with (directory / "transcript.jsonl").open(
@@ -389,7 +309,7 @@ def _flight_request_record(
 ) -> None:
     """Append the params (if new) + request records for one dispatch.
 
-    The flight log's "pending" pre-write: the dashboard sees the round the
+    The flight log's "pending" pre-write: a reader sees the round the
     moment the call fires, before the response lands. ``new_messages`` is
     the delta against the same thread's previous call (write-time LCP over
     scrubbed-message digests); the reader reconstructs the full request as
@@ -404,8 +324,6 @@ def _flight_request_record(
                 if transport_meta else "",
                 "subagent_id": (transport_meta or {}).get(
                     "transport_subagent_id"),
-                "clause_id": (transport_meta or {}).get("transport_clause_id"),
-                "agent_idx": (transport_meta or {}).get("transport_agent_idx"),
             }
             params = {
                 k: v for k, v in body.items()
@@ -429,10 +347,7 @@ def _flight_request_record(
                 ).hexdigest()[:16]
                 for m in scrubbed
             ]
-            thread_key = (
-                str(directory), meta["kind"], meta["subagent_id"],
-                meta["clause_id"], meta["agent_idx"],
-            )
+            thread_key = (str(directory), meta["kind"], meta["subagent_id"])
             prev = _FLIGHT_THREAD_DIGESTS.get(thread_key) or []
             n_prefix = 0
             for a, b in zip(prev, digests):
@@ -556,7 +471,7 @@ def _stream_chat_completions(
 
     Reassembles the SSE deltas into the same ``{"choices": [...],
     "usage": {...}}`` shape vLLM returns for non-streaming calls so
-    every downstream consumer (cache, parser, _RawResponse) is
+    every downstream consumer (parser, _RawResponse) is
     unaffected. Streaming exists for CANCELLATION (the per-chunk hook
     that tears down the TCP socket), not for logging — the flight
     transcript records the request at dispatch and the response when it
@@ -762,61 +677,21 @@ def _chat_completions_raw(
     transient-fault budget; each wait honours `Retry-After` when present.
     Every other 4xx is surfaced immediately; it indicates a malformed request
     that retrying would not fix.
-
-    Honors the cache mode set via :func:`set_cache_mode`:
-    ``replay`` returns a cached
-    response without touching the network; ``record`` makes the real
-    call and writes the response to the cache directory.
     """
     transport_meta = {k: kwargs.pop(k, None) for k in _TRANSPORT_META_KEYS}
     body = {k: v for k, v in kwargs.items() if v is not None}
-    # Content-address the request on this canonical body so record and
-    # replay agree on the cache hash regardless of transport.
-    _pristine_body = copy.deepcopy(body)
-    mode, directory = _resolved_cache_mode()
     flight_dir = _resolved_flight_log_dir()
+    url = base_url.rstrip("/") + "/chat/completions"
+    headers = _request_headers(api_key)
 
-    if mode == "replay":
-        assert directory is not None
-        key = _cache_key(_pristine_body)
-        path = _cache_path(directory, key)
-        if not path.exists():
-            raise CacheMissError(
-                f"no cached response for request hash {key} at {path}. "
-                f"Re-record the fixture or run without --replay-llm."
-            )
-        entry = json.loads(path.read_text())
-        if flight_dir is not None:
-            replay_rid = uuid.uuid4().hex
-            _flight_request_record(
-                flight_dir, replay_rid, _pristine_body, transport_meta
-            )
-            _flight_response_record(flight_dir, replay_rid, entry["response"])
-        return _RawResponse(entry["response"])
-
-    eff_base_url = base_url
-    eff_api_key = api_key
-    url = eff_base_url.rstrip("/") + "/chat/completions"
-    headers = _request_headers(eff_api_key)
-
-    # Layer 1: append the request record so the dashboard sees a "pending"
-    # round the moment the call fires, not after the response lands.
+    # The request record lands the moment the call fires, so a call that
+    # never returns stays a pending round in the transcript.
     request_id = uuid.uuid4().hex
     if flight_dir is not None:
         _flight_request_record(flight_dir, request_id, body, transport_meta)
 
-    # Layer 3: opt into SSE streaming when the env gate is set, gated by
-    # an optional process-wide semaphore. Failed semaphore acquirers
-    # fall back to the blocking POST so the run never stalls.
-    #
-    # A ``cancel_event`` argument also forces streaming on: the SSE
-    # iterator gives us a per-chunk cancellation hook that actually
-    # tears down the TCP socket when the event fires. The non-streaming
-    # ``httpx.post`` path holds the read open until the server replies
-    # or the read timeout expires — ``Client.close()`` releases the
-    # pool but does not abort active reads — so cancellation there
-    # wouldn't release vLLM's KV-cache slot until the request finished
-    # anyway, defeating the whole point.
+    # A ``cancel_event`` streams: the SSE path is where the cancel watch
+    # shuts the socket down (see ``_stream_chat_completions``).
     use_stream = cancel_event is not None
 
     # Ask the server to emit the final ``usage`` block on streaming
@@ -881,9 +756,7 @@ def _chat_completions_raw(
                     # URL with a different model surfaces here. Re-check
                     # the served ids and abort naming the mismatch
                     # instead of churning silent per-call 404s.
-                    _raise_on_served_model_mismatch(
-                        eff_base_url, body, r, eff_api_key
-                    )
+                    _raise_on_served_model_mismatch(base_url, body, r, api_key)
                 r.raise_for_status()
                 response_json = r.json()
             if cancel_event is not None and cancel_event.is_set():
@@ -903,21 +776,6 @@ def _chat_completions_raw(
             )
             if flight_dir is not None:
                 _flight_response_record(flight_dir, request_id, response_json)
-            if mode == "record":
-                assert directory is not None
-                # Key + write the pristine body so the cache hash
-                # is stable regardless of in-flight body mutation.
-                key = _cache_key(_pristine_body)
-                path = _cache_path(directory, key)
-                path.write_text(
-                    json.dumps(
-                        {
-                            "request": _pristine_body,
-                            "response": response_json,
-                        },
-                        default=str,
-                    )
-                )
             return _RawResponse(response_json)
         except CallCanceled:
             # Surface immediately; cancellation is intentional and
