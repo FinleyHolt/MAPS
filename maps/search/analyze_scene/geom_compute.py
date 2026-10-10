@@ -638,8 +638,7 @@ def frame(pts, reference, frame_type="relative", side=None) -> dict:
       look at ``toward`` (a point, or a compass word).
     - ``"auto"`` — the pool's own measured axis, east-default sign.
 
-    Returns ``{frame:{...}, reference_op?, pts:[{fid?, xy, op_x, op_y, class?,
-    color?}]}``.
+    Returns ``{frame:{...}, pts:[{fid?, xy, op_x, op_y, class?, color?}]}``.
     """
     ft = str(frame_type or "relative").strip().lower()
     if ft == "auto":
@@ -671,10 +670,7 @@ def _frame_auto(pts) -> dict:
         return {"error": "frame needs a non-empty pts list", "pts": []}
     cx = sum(p[0] for p in xys) / len(xys)
     cy = sum(p[1] for p in xys) / len(xys)
-    if len(xys) == 1:
-        u, conf, src = (1.0, 0.0), 0.0, "single-point"
-    else:
-        u, conf, src = _row_axis_direction(xys)
+    u = (1.0, 0.0) if len(xys) == 1 else _row_axis_direction(xys)[0]
     # Deterministic default handedness: +right = the axis direction nearer
     # east ((1,0) in world xy); exact tie -> +y. Stated, never silent.
     if u[0] < 0 or (u[0] == 0 and u[1] < 0):
@@ -687,8 +683,6 @@ def _frame_auto(pts) -> dict:
             "right_unit": [round(right_unit[0], 3), round(right_unit[1], 3)],
             "up_unit": [round(up_unit[0], 3), round(up_unit[1], 3)],
             "origin": [round(cx, 2), round(cy, 2)],
-            "axis_source": f"auto ({src}, conf {conf:.2f})",
-            "side": "east-default (+right = measured pool axis, east-ward)",
             "frame_type": "auto",
         },
         "pts": out,
@@ -726,11 +720,9 @@ def _frame_viewer(pts, reference) -> dict:
                              f"use one of {'|'.join(COMPASS_UNIT)} or a point",
                     "pts": []}
         up_unit = COMPASS_UNIT[word]
-        src = f"compass ({word})"
         # no meaningful vantage: coords stay pool-centered for reading spread
         cx = sum(p[0] for p in xys) / len(xys)
         cy = sum(p[1] for p in xys) / len(xys)
-        origin_src = "pool centroid"
     else:
         fx, fy = (float(from_xy[0]), float(from_xy[1]))
         tx, ty = (float(toward[0]), float(toward[1]))
@@ -739,12 +731,10 @@ def _frame_viewer(pts, reference) -> dict:
             return {"error": "viewer 'from' and 'toward' coincide -- no look "
                              "direction", "pts": []}
         up_unit = ((tx - fx) / span, (ty - fy) / span)
-        src = "look ray (from->toward)"
         # origin = the VIEWER: vy_ = meters ahead along the look, vx_ =
         # lateral offset from the ray ("between from and toward" = vy_ in
         # [0, span_m] AND |vx_| small).
         cx, cy = fx, fy
-        origin_src = "the viewer (from)"
     # Viewer's RIGHT in the y-up (north-up) aerial view is the CLOCKWISE
     # quarter-turn of forward: looking north (0,1) -> right = east (1,0);
     # looking east (1,0) -> right = south (0,-1).
@@ -754,8 +744,6 @@ def _frame_viewer(pts, reference) -> dict:
         "right_unit": [round(right_unit[0], 3), round(right_unit[1], 3)],
         "up_unit": [round(up_unit[0], 3), round(up_unit[1], 3)],
         "origin": [round(cx, 2), round(cy, 2)],
-        "axis_source": f"viewer {src}; origin = {origin_src}",
-        "side": "+vy = the look direction (forward); +vx = the viewer's right",
         "frame_type": "viewer",
     }
     if span is not None:
@@ -814,8 +802,8 @@ def _frame_relative(pts, reference, side) -> dict:
     named viewpoint, NOT the map default — so a position read in this frame
     lands on the row and the end the instruction means.
 
-    Returns ``{frame:{right_unit, up_unit, origin, axis_source, side},
-    reference_op, pts:[{fid?, xy, op_x, op_y, class?, color?}]}``. Do the row
+    Returns ``{frame:{right_unit, up_unit, origin, frame_type},
+    pts:[{fid?, xy, op_x, op_y, class?, color?}]}``. Do the row
     pick / ordinal over the returned ``op_x`` / ``op_y`` — do NOT re-rotate.
     """
     items = list(pts or [])
@@ -833,7 +821,6 @@ def _frame_relative(pts, reference, side) -> dict:
     # A reference AT the pool center carries no direction: fall back to the
     # deterministic east axis (the caller's receipt discloses the weak side).
     ref_dir = _u(_d) if math.hypot(*_d) > 1e-9 else (1.0, 0.0)
-    axis_source = "normal"
     # Screen basis in world coordinates (x = east, y = north). In this y-up
     # frame ``_ccw`` / ``_cw`` ARE the visual counter-/clockwise
     # quarter-turns, so the basis below is a PROPER ROTATION of the aerial
@@ -880,17 +867,13 @@ def _frame_relative(pts, reference, side) -> dict:
                     rec[_k] = it[_k]
         out.append(rec)
     out.sort(key=lambda r: (-r["op_y"], -r["op_x"]))
-    rox, roy = _op(refpt)
     return {
         "frame": {
             "right_unit": [round(right_unit[0], 3), round(right_unit[1], 3)],
             "up_unit": [round(up_unit[0], 3), round(up_unit[1], 3)],
             "origin": [round(cx, 2), round(cy, 2)],
-            "axis_source": axis_source,
-            "side": side_key,
             "frame_type": "relative",
         },
-        "reference_op": [rox, roy],
         "pts": out,
     }
 
