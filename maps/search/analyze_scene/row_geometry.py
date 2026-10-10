@@ -1,33 +1,18 @@
 """Footprint geometry between served rows: the measurements ``xy`` cannot make.
 
-A served row carries ONE point. Every distance computed off that point is
-wrong for an extended feature, and the bake is mostly extended features:
-Poppy Boulevard way 5 is 1,198 m long, and the gap from it to the car parked
-against it is 7.0 m where the centroid-to-centroid distance is 408.4 m. So
-distance on this surface is FOOTPRINT GAP, mask to mask, measured here over
-the geometry the live surface holds by fid --
-:func:`geom_compute.gap_witness`, the exact quantity the executor's
-``distance to <ref>`` column has always carried.
+A served row carries ONE point, and every distance computed off it is wrong
+for an extended feature. Distance on this surface is FOOTPRINT GAP, mask to
+mask, over the geometry the live surface holds by fid
+(:func:`geom_compute.gap_witness`, the quantity the executor's ``distance to
+<ref>`` column carries).
 
-A SET IS ONE PLACE AND MEANS ITS NEAREST MEMBER. The union's chains are one
-geometry, so the gap from a house to a set of pools is the gap to whichever
-pool is closest. That rule was true inside the executor and served nowhere,
-and it is the single measured cause of the calcity::200#198 miss.
-
-The cardinal relation is NOT served here. Which side of an extended feature a
-point lies on is an ANCHORED question and it is answered by the ``<dir>_of=``
-cut and the signed ``<dir> of <ref>`` column that rides with it
-(:mod:`cardinal_side` through the compare op), not by a free measuring call:
-ordering is global and cuts are anchored, so a free ``side(a, b, dir)`` was
-the wrong arity for either job. It also could not do the one thing that would
-have justified it -- an abstention returns ``None``, so using it as a sort key
-raised inside the sort.
+A SET IS ONE PLACE AND MEANS ITS NEAREST MEMBER: the union's chains are one
+geometry, so the gap from a house to a set of pools is the gap to the
+closest pool.
 
 Geometry is resolved BY FID off the live surface, because op OUTPUT rows
-strip the mask fields (``geom_program._MODEL_HIDDEN_ROW_FIELDS``): a carried
-row that kept only its own point would silently degrade every gap to a
-centroid distance, which is the defect this module exists to make
-impossible.
+strip the mask fields (``geom_program._MODEL_HIDDEN_ROW_FIELDS``) and a row
+holding only its point would degrade every gap to a centroid distance.
 """
 
 from __future__ import annotations
@@ -35,18 +20,15 @@ from __future__ import annotations
 from maps.search.analyze_scene import geom_compute as G
 from maps.util.xy_token import is_xy
 
-# A place, resolved: ``(fid | None, (x, y) | None)``. Both halves ride
-# because a fid is the only way to reach a mask and the point is the only
-# thing a computed row (a crossing, a terminus) has.
+# A place, resolved: ``(fid | None, (x, y) | None)``. A fid reaches a mask;
+# the point is all a computed row (a crossing, a terminus) has.
 Place = tuple
 
 
 def chains_of(row) -> list:
     """One surface row's footprint as mask chains.
 
-    Its mask when the surface holds one, else its own point -- a point's
-    position IS its whole footprint. ``geom_program._row_geom_center``'s law,
-    reached from the surface side.
+    Its mask when the surface holds one, else its own point.
     """
     if not isinstance(row, dict):
         return []
@@ -64,10 +46,9 @@ class SurfaceGeometry:
 
     ``row_of_fid`` reads one row of the surface as it stands NOW, so a
     detection a flight just folded in measures like any prior. The cache is
-    keyed by the whole place tuple: a union of 64 ways is ONE
+    keyed by the whole place tuple: a union of many ways is ONE
     :func:`geom_compute.mask_geom`, built once and reused down every
-    candidate, which is what keeps ``[gap(h, road) for h in houses]``
-    linear in the houses rather than quadratic in the ways.
+    candidate.
     """
 
     def __init__(self, row_of_fid):

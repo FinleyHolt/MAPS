@@ -6,22 +6,13 @@ occupies. ``sws.graph.io`` derives the centerline from them on load and
 primary record and the reductions are views of it.
 
 This module answers ONE question: which cells does a row occupy? A row is one
-OSM way, and a named road is routinely several of them (75 rows carry
-"California City Boulevard" on the calcity bake) — the road is the SET those
-rows form, which ``find`` names with ``.exact`` and ``explore`` covers in one
-pass. Nothing here folds them: a fid addresses one way, in this mesh and in
-the runtime graph alike, so ``node_coverage_stops`` walks the same ground the
-row describes.
+OSM way; a named road is the SET of rows carrying its name. A fid addresses
+one way, in this mesh and in the runtime graph alike.
 
 SPATIAL MATH DOES NOT LIVE HERE. Distance and intersection run on the EXACT
 geometry each node was given (``geom_compute.gap_witness`` and
 ``polyline_crossings`` over the ``world_contour`` chains), not on the cell
-raster: every node persists its own vertices now — a ring, a way, or a single
-point — and measuring them at 2 m throws that away. A cell-set intersection
-was measured against the crossings op over all 397 road pairs the model asked
-for and agreed on only 85.0% of sentences, missing crossings whose cells fall
-a cell short and splitting single crossings whose shared band fragments. The
-cells are what a feature COVERS; the chain is what it IS.
+raster. The cells are what a feature COVERS; the chain is what it IS.
 """
 
 from __future__ import annotations

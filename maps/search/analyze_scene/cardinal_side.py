@@ -1,51 +1,28 @@
 """Which side of an extended feature a point is on, in map-fixed cardinals.
 
-"East of Neuralia Road" has to be decidable when the reference is a 64-way
-merged feature with 8,849 cells spanning kilometres. The three cheap answers
-all fail on this bake's real shapes:
+"East of Neuralia Road" has to be decidable when the reference is a merged
+feature of many ways spanning kilometres. A nearest-point bearing inverts on
+a self-approaching shape (a road that loops back past you), a baked
+centerline describes one way of many, and a principal axis collapses a bent
+road to one direction.
 
-* **Nearest-point bearing** (``brg_gap_<ref>``) reads the min-gap vector. It
-  is local, so it survives curvature and multi-part merges, and it is right
-  93.2% of the time on the corpus -- but it inverts on a self-approaching
-  shape. A road runs north-south, you are west of it, and just past you it
-  loops back east: the nearest piece is now the loop, which lies west of
-  you, so min-gap says EAST where a person says WEST. Measured, its ten
-  misses concentrate on exactly those shapes (three on a 15,492-cell
-  concave lake, one on a golf course at a 0.9 m gap where the sign is
-  noise).
-* **A baked centerline** describes ONE way. A large road is many ways, so a
-  centerline route would answer about the way the phrase happened to hit
-  rather than about the road — passing on short single-way roads in testing
-  and failing silently on the ones that matter.
-* **A principal axis** collapses a bent road to one straight direction.
-  Measured at 90.5%, beaten by the rule below.
-
-THE RULE: a cardinal is an ABSOLUTE axis, so the only real question is how
-to aggregate over the reference's extent. Restrict the reference to the
-cells lying within a band of the query point on the axis ORTHOGONAL to the
-cardinal, then compare along the cardinal. "East of the road" becomes "east
-of the road WHERE THE ROAD IS, at my latitude" -- which is what a person
-means, and which needs no centerline, no skeleton, and no bounding box.
+THE RULE: a cardinal is an ABSOLUTE axis, so the only question is how to
+aggregate over the reference's extent. Restrict the reference to the cells
+lying within a band of the query point on the axis ORTHOGONAL to the
+cardinal, then compare along the cardinal: "east of the road WHERE THE ROAD
+IS, at my latitude".
 
 It ABSTAINS rather than guessing, in the two cases where there is no side:
 
 * the reference straddles the point inside the band (a loop closing around
   it, a cul-de-sac bulb, a road crossing the band twice), and
 * the band holds no reference cells at all (asking "east of" a road that
-  runs exactly east-west). That is genuine ambiguity, not imprecision.
+  runs exactly east-west).
 
-Abstention is a ``None`` return, which is the executor's existing
-missing-value idiom: the column is simply absent on that row and
-``score_by`` treats it as the neutral. Nothing is dropped and no side is
-invented.
+Abstention is a ``None`` return, the executor's missing-value idiom: the
+column is absent on that row and ``score_by`` treats it as the neutral.
 
-Measured over the 147 cue compass-mentions that resolve to a bake feature
-(``benchmarks.citynav.analysis.cardinal_frame``): correct on 129 of the 130
-it decides, abstaining on 17. Stable from a +-50 m band to a +-1000 m one
-(97.7-99.2%), so the width is not a tuned knob.
-
-Cells, never boxes: a road's minimum bounding rectangle is 50% road at the
-median and 2.9% at p10 on this bake, so the box describes the empty corner
+Cells, never boxes: a road's bounding rectangle describes its empty corners
 as confidently as the road.
 """
 
@@ -55,27 +32,17 @@ import numpy as np
 
 from maps.search.analyze_scene import geom_compute as _gc
 
-# Compass word -> unit vector in the engine's one frame (x = east, y = NORTH;
-# see the geom_compute docstring -- row 0 of every repo grid is the SOUTH
-# edge). DERIVED from the one table rather than copied, so this module can
-# never disagree with it about which way north points.
-#
-# Only the four axis-aligned cardinals: a diagonal ("northeast of") has no
-# single orthogonal axis to band on, so it is not offered rather than
-# answered badly. The corpus says that costs nothing -- of its 150
-# conjunctive cues, 95 read "the <diag> corner of A and B" and 17 more are a
-# diagonal of an intersection or of a street's end, every one a quadrant of a
-# POINT, where the conjunction of two cardinal cuts is exact rather than an
-# approximation. Only ~14 ask a diagonal of an extended feature.
+# Compass word -> unit vector in the engine's one frame (x = east, y = NORTH),
+# derived from geom_compute's table. Only the four axis-aligned cardinals: a
+# diagonal ("northeast of") has no single orthogonal axis to band on; a
+# diagonal of a POINT is the conjunction of two cardinal cuts.
 CARDINALS: dict[str, tuple[float, float]] = {
     w: _gc.COMPASS_UNIT[w] for w in sorted(_gc.CARDINALS)
 }
 
-# Half-width of the band, in metres. Wide enough that a block-scale target
-# still sees the road it is being related to, narrow enough that a distant
-# limb of the same name does not vote. The sweep says the exact value does
-# not matter (+-50 m through +-1000 m all land within 1.5 points), so this
-# is a readable round number rather than a fitted one.
+# Half-width of the band, in metres: wide enough that a block-scale target
+# still sees the road, narrow enough that a distant limb of the same name
+# does not vote. A round number, not a fitted one.
 DEFAULT_BAND_M = 150.0
 
 
@@ -123,17 +90,10 @@ def cardinal_offset(cells_xy, at_xy, direction: str,
 def densify_segments(seg_a, seg_b, step: float = 2.0):
     """Segment endpoints -> a point cloud at the bake's own 2 m pitch.
 
-    The executor measures on the exact ``mask`` rather than on the cell
-    raster (a cell-set intersection agreed with the mask on only 85% of the
-    road pairs the model asked for), so the runtime column is computed from
-    mask segments while the review measured cells. Sampling the segments at
-    the cell pitch makes the two the SAME answer: over the 138 corpus
-    mentions where both decide, the sign agrees 138/138 and the abstain sets
-    are identical.
-
-    Sampling is what makes that true. A road running a kilometre north-south
-    may be TWO vertices, and a band around a point halfway along it would
-    contain neither of them and abstain on a road that is plainly there.
+    The executor measures on the exact ``mask`` segments; sampling them at
+    the cell pitch gives the band rule points to see. A road running a
+    kilometre north-south may be TWO vertices, and a band around a point
+    halfway along would otherwise contain neither.
     """
     a = np.asarray(seg_a, dtype=float)
     b = np.asarray(seg_b, dtype=float)
@@ -153,11 +113,8 @@ def densify_segments(seg_a, seg_b, step: float = 2.0):
 def points_from_geoms(geoms):
     """One or more ``mask_geom`` dicts -> the sampled point cloud, or None.
 
-    The op layer holds no numpy (geometry lives here and in geom_compute),
-    so the assembly is on this side of the seam. A merged feature arrives as
-    a list of member geoms and contributes every member's segments, which is
-    what makes "east of Neuralia Road" a question about all 64 ways rather
-    than about the largest one.
+    A merged feature arrives as a list of member geoms and contributes every
+    member's segments, so "east of Neuralia Road" asks about all its ways.
     """
     out = []
     for g in geoms:
@@ -166,11 +123,7 @@ def points_from_geoms(geoms):
         if len(g.get("A", ())):
             out.append(densify_segments(g["A"], g["B"]))
         elif len(g.get("V", ())):
-            # A POINT reference has vertices and no segments, and "north of
-            # that corner" is the simplest cardinal there is -- a band around
-            # one point, compared along the axis. Without this the column was
-            # never written and the model got a loud "nothing orders by
-            # 'north of 5284_700'"; it wrote exactly that 9 times on 25713024
-            # before the fallback existed.
+            # A POINT reference has vertices and no segments: "north of that
+            # corner" is a band around one point.
             out.append(np.asarray(g["V"], dtype=float))
     return np.vstack(out) if out else None
