@@ -25,7 +25,6 @@ def _ledger(eid: str, stamp: str, sr: int | None = None, *, status: str = "ok",
     row: dict = {
         "episode_id": eid, "worker_id": worker, "status": status, "error": None,
         "elapsed_s": 1.0, "workdir": f"{worker}/maps_{stamp}_citynav_{slug}",
-        "oom_retries": 0,
     }
     if sr is not None:
         row["metrics"] = {"episode_id": eid, "SR": sr, "OSR": sr, "NE": 10.0}

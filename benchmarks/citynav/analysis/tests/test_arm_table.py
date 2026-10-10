@@ -21,7 +21,7 @@ def _ledger(eid: str, stamp: str, sr: int, criterion: str = "shape",
     slug = eid.replace("::", "__").replace("#", "_")
     return {
         "episode_id": eid, "worker_id": "w0", "status": "ok", "elapsed_s": 1.0,
-        "workdir": f"w0/calcity_{stamp}_{slug}", "oom_retries": 0,
+        "workdir": f"w0/calcity_{stamp}_{slug}",
         "metrics": {
             "episode_id": eid, "SR": sr, "NE": ne,
             "success_criterion": criterion,
