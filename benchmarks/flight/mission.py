@@ -750,7 +750,7 @@ class Mission:
             session = build_mission_session(
                 cfg=h.cfg, state=h.state, assets=h.assets, episode=h.episode, sensor=h.sensor,
                 tile_frame=h.tile_frame, perception=h.perception,
-                search_loop=h.search_loop, recorder=self._recorder, osm_ctx=None, t_start=time.monotonic(),
+                search_loop=h.search_loop, recorder=self._recorder, t_start=time.monotonic(),
                 observe=observe,
             )
             self.flights = session.flights

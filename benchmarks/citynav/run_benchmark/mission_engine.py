@@ -15,10 +15,7 @@ from benchmarks.citynav.live_recorder import LiveRecorder
 from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
 from benchmarks.citynav.run_benchmark.assets import BlockAssets
 from benchmarks.citynav.run_benchmark.config import RunConfig
-from benchmarks.citynav.run_benchmark.osm_prior import (
-    _OsmPriorCtx,
-    _build_frame_enrich,
-)
+from benchmarks.citynav.run_benchmark.osm_prior import _build_frame_enrich
 from benchmarks.citynav.run_benchmark.tour_cursor import _write_tour_cursor
 from maps.search.withhold import withheld
 from dataclasses import dataclass
@@ -277,7 +274,6 @@ def fly_one(
     perception,
     search_loop: SearchLoop,
     recorder: "LiveRecorder | None",
-    osm_ctx: "_OsmPriorCtx | None",
     t_start: float,
     observe=None,
 ) -> dict:
@@ -430,8 +426,7 @@ def fly_one(
             step_idx=step_idx,
             view_corners=view_corners,
             assets=assets,
-            osm_ctx=osm_ctx,
-            build_prior=not withheld("prior"),
+                build_prior=not withheld("prior"),
         )
         for pfid, pattrs, ppx in _built["prior"]:
             search_loop.upsert_prior_percept(pfid, pattrs, px=ppx)
@@ -559,7 +554,6 @@ def build_mission_session(
     perception,
     search_loop: SearchLoop,
     recorder: "LiveRecorder | None",
-    osm_ctx: "_OsmPriorCtx | None",
     t_start: float,
     observe=None,
 ) -> MissionSession:
@@ -622,7 +616,6 @@ def build_mission_session(
         perception=perception,
         search_loop=search_loop,
         recorder=recorder,
-        osm_ctx=osm_ctx,
         t_start=t_start,
     )
 
@@ -703,7 +696,6 @@ def run_mission_episode(
     perception,
     search_loop: SearchLoop,
     recorder: "LiveRecorder | None",
-    osm_ctx: "_OsmPriorCtx | None",
     compiler: MapsCompiler,
     t_start: float,
 ) -> dict:
@@ -726,7 +718,6 @@ def run_mission_episode(
         perception=perception,
         search_loop=search_loop,
         recorder=recorder,
-        osm_ctx=osm_ctx,
         t_start=t_start,
     )
     ctx = session.ctx

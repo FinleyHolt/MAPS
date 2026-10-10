@@ -1,8 +1,8 @@
 """Prior-enrich build/apply seam: the pure per-frame BUILD returns exactly
-the items the serial inline pass would have applied — remap through
-graph_fid_by_fid, empty-fid / missing-mask / empty-mix filters — and a
-build failure is CARRIED (not raised), so the flight body's apply can replay
-the serial partial-apply + rate-limited warn semantics.
+the items the serial inline pass would have applied — empty-fid /
+missing-mask / empty-mix filters — and a build failure is CARRIED (not
+raised), so the flight body's apply can replay the serial partial-apply +
+rate-limited warn semantics.
 """
 
 from __future__ import annotations
@@ -27,14 +27,7 @@ def _obs():
     return SimpleNamespace(rgb=np.zeros((8, 8, 3), dtype=np.uint8))
 
 
-def _ctx():
-    return SimpleNamespace(
-        graph_fid_by_fid={"cityref_9": "building_3"},
-        meta_by_fid={},
-    )
-
-
-def test_build_items_remap_and_filters(monkeypatch):
+def test_build_items_filters(monkeypatch):
     m_ok, m_empty_mix = _mask(4), _mask(6)
     monkeypatch.setattr(osm_prior, "_prior_fids_in_view", lambda *a, **k: ["f1"])
     monkeypatch.setattr(
@@ -42,7 +35,7 @@ def test_build_items_remap_and_filters(monkeypatch):
         "_maybe_build_prior_polys",
         lambda **k: (
             [
-                {"fid": "cityref_9", "mask": m_ok},  # remapped + kept
+                {"fid": "building_3", "mask": m_ok},  # kept
                 {"fid": "", "mask": m_ok},  # empty fid -> dropped
                 {"fid": "f2", "mask": None},  # no mask -> dropped
                 {"fid": "f3", "mask": m_empty_mix},  # empty mix -> dropped
@@ -70,12 +63,10 @@ def test_build_items_remap_and_filters(monkeypatch):
         step_idx=0,
         view_corners=((0, 1), (1, 1), (1, 0), (0, 0)),
         assets=SimpleNamespace(),
-        osm_ctx=_ctx(),
         build_prior=True,
     )
 
-    # vacuity floors: the filters really dropped 3 of 4 prior polys, and the
-    # remap really rewrote the fid.
+    # vacuity floor: the filters really dropped 3 of 4 prior polys.
     assert out["prior"] == [
         (
             "building_3",
@@ -104,7 +95,6 @@ def test_build_failure_is_carried(monkeypatch):
         step_idx=3,
         view_corners=None,
         assets=SimpleNamespace(),
-        osm_ctx=_ctx(),
         build_prior=True,
     )
 

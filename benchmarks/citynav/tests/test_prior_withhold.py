@@ -50,7 +50,7 @@ def test_the_prior_withhold_builds_no_prior_colour(monkeypatch):
                                grid_shape=(10, 10)),
         episode=SimpleNamespace(map_name="calcity", description="d"),
         sensor=None, tile_frame=None, perception=None, search_loop=loop,
-        recorder=None, osm_ctx=None, t_start=0.0, observe=lambda: frame)
+        recorder=None, t_start=0.0, observe=lambda: frame)
     monkeypatch.delenv("SEARCH_WITHHOLD", raising=False)
     me.fly_one({"target_fid": "building_7"}, **common)
     monkeypatch.setenv("SEARCH_WITHHOLD", "prior")

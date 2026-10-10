@@ -37,10 +37,6 @@ from benchmarks.citynav.run_benchmark.assets import (
     load_episode_graph,
 )
 from benchmarks.citynav.run_benchmark.mission_engine import run_mission_episode
-from benchmarks.citynav.run_benchmark.osm_prior import (
-    _OsmPriorCtx,
-    _build_osm_prior_ctx_from_graph,
-)
 from benchmarks.citynav.run_benchmark.perception import make_perception
 from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 from benchmarks.citynav.run_benchmark.reasoner_warmup import (
@@ -268,68 +264,6 @@ def run_episode(
         cell_size_m=float(assets.cell_size_m),
         grid_shape=tuple(assets.grid_shape),
     )
-    # Per-frame OSM↔SAM registration state (the ortho prior-enrichment ctx).
-    osm_ctx: _OsmPriorCtx | None = None
-    # The ortho backend gets an OSM prior-contour context so the per-frame
-    # prior-color enrichment hook can PROJECT each in-view OSM prior footprint
-    # onto the frame (build_prior_polys_ortho, via
-    # _maybe_build_prior_polys). Without it osm_ctx stays None and enrichment
-    # is silently inert.
-    #
-    # SPEC §5c LEAK L1 FIX — the ortho backend sources the context
-    # CityRefer-FREE from the baked OSM ``world_contour`` graph priors (identity
-    # fid map), so objects.json GT geometry NEVER steers which prior is enriched
-    # or the color-sampling footprint. z is unused in the ortho top-down
-    # projection, so the 2-D OSM contours (z padded 0) are exact. The all-osm
-    # capture goes to the side store; ONLY the
-    # named subset graph_fid_by_fid maps is upserted onto the graph (headline
-    # contract held).
-    # Sourced from the baked OSM world_contour priors; None (no contour on
-    # any prior) disables enrichment. objects.json is never read here.
-    osm_ctx = _build_osm_prior_ctx_from_graph(graph)
-    if osm_ctx is None:
-        log.warning(
-            "prior-enrichment: no OSM world_contour on graph priors for %s "
-            "— enrichment DISABLED",
-            episode.map_name,
-        )
-    # TARGET-TYPE WALL (config B, PRIOR_CONTRACT.md): unnamed baked CityRefer
-    # priors of the EPISODE'S TARGET annotation type pre-load the annotation's
-    # target geometry, so build_surface_from_graph drops them (the vehicle
-    # anti-cheat rule generalized — the target must always require live
-    # perception). The wall value is the RAW CityRefer ``object_type`` (the
-    # tag the bake stamps on cityrefer_unnamed rows); no label mapping sits on
-    # the serving path.
-    # Set-or-UNSET every episode: worker processes recycle across episodes and
-    # a stale walled type from the previous episode must be impossible. The
-    # env key is process-local per-episode state, read at the ONE graph→surface
-    # seam; it is not a behavior A/B flag.
-    #
-    # SPEC §5c LEAK L1: this reads the target type only from a CITYREF-keyed
-    # ``osm_ctx``. The ctx built above is the graph-sourced identity map
-    # (``cityref_id`` absent), so the lookup returns nothing and the wall
-    # UNSETS — which is correct: the tile bake never rasterizes objects.json
-    # target geometry into a prior (base_features are OSM), so there is no
-    # annotation-geometry prior to wall, and skipping the GT-class read
-    # tightens C1. The wall fires for any CITYREF-keyed ctx.
-    os.environ.pop("SEARCH_WALLED_UNNAMED_TYPE", None)
-    try:
-        _tids = set(episode.target_object_ids or [])
-        _wall_type = None
-        if _tids and osm_ctx is not None:
-            for _tid in _tids:
-                _m = osm_ctx.meta_by_fid.get(f"cityref_{_tid}")
-                if _m and _m.get("class_name"):
-                    _wall_type = str(_m["class_name"])
-                    break
-        if _wall_type:
-            os.environ["SEARCH_WALLED_UNNAMED_TYPE"] = _wall_type
-            log.info(
-                "target-type wall: unnamed '%s' priors dropped from the "
-                "surface this episode", _wall_type,
-            )
-    except Exception as exc:  # noqa: BLE001
-        log.warning("target-type wall: resolution failed (%s); wall unset", exc)
     # Resolve the per-episode SensorSpec (a registered name or an inline
     # sensor override; resolve_sensor).
     sensor = resolve_sensor(cfg.sensor) if cfg.sensor else None
@@ -514,7 +448,6 @@ def run_episode(
             perception=perception,
             search_loop=search_loop,
             recorder=recorder,
-            osm_ctx=osm_ctx,
             compiler=compiler,
             t_start=t_start,
         )
