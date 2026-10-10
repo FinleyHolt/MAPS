@@ -34,7 +34,6 @@ PRODUCER = "maps/search/parse_compile/compiler.py"
 CONSUMERS = (
     "maps/search/search_loop.py",
     "benchmarks/citynav/run_benchmark/episode_runner.py",
-    "benchmarks/citynav/run_benchmark/record.py",
 )
 
 # Consumer variable name -> the producer payload it holds. ``""`` is the

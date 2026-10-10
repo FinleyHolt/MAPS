@@ -54,7 +54,6 @@ from benchmarks.citynav.run_benchmark.osm_prior import (
     _write_osm_percepts_sidecar,
 )
 from benchmarks.citynav.run_benchmark.perception import make_perception
-from benchmarks.citynav.run_benchmark.record import _build_provisional_rec
 from benchmarks.citynav.run_benchmark.resume import hydrate_resume_artifacts
 from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 from benchmarks.citynav.run_benchmark.reasoner_warmup import (
@@ -163,7 +162,6 @@ def run_episode(
     cfg: RunConfig,
     recorder: LiveRecorder | None = None,
     row_index: int | None = None,
-    provisional_sink: Callable[[dict], None] | None = None,
 ) -> dict | None:
     episode = parse_episode(row, row_index=row_index)
     objs_for_map = objects_by_map.get(episode.map_name, [])
@@ -664,30 +662,6 @@ def run_episode(
         if os.environ.get("SEARCH_STOP_AFTER", "").strip().lower() == "ingest":
             log.info("SEARCH_STOP_AFTER=ingest: exiting after the graph seed.")
             return None
-
-    # Never-None floor: write a scored provisional row before the mission
-    # flies. If the runner is SIGKILLed mid-flight (Slurm cgroup OOM), this
-    # row is what the attempt's episode.json holds instead of nothing; the
-    # landed row overwrites it at episode end. Best-effort — a failure here
-    # must never abort the flight.
-    if provisional_sink is not None:
-        try:
-            _prov_criterion, _prov_mask = _success_mask(cfg, episode, objects_by_map)
-            provisional_sink(
-                _build_provisional_rec(
-                    episode=episode,
-                    cfg=cfg,
-                    snap=state.belief_snapshot,
-                    feature_tour=None,
-                    start_xy=state.pose_xy,
-                    criterion=_prov_criterion,
-                    mask=_prov_mask,
-                    bounds=bounds_xyxy,
-                    sensor=sensor,
-                )
-            )
-        except Exception as exc:  # noqa: BLE001
-            log.warning("provisional prediction write failed (non-fatal): %s", exc)
 
     # Mission branch: the episode is ONE reasoner conversation over the
     # seeded prior graph — requested viewpoints fly the moment they land,

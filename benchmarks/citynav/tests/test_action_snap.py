@@ -11,7 +11,6 @@ Covers the benchmark-side surface in two slices:
 
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 
@@ -22,7 +21,6 @@ from benchmarks.citynav.flight_model import (
     DiscreteFlightSimulator,
     FlightModelConfig,
 )
-from benchmarks.citynav.live_recorder import LiveRecorder
 
 ALLOWED_ACTIONS = {
     "move_forward",
@@ -140,47 +138,6 @@ def test_discrete_sim_determinism():
         return out
 
     assert collect() == collect()
-
-
-def test_live_recorder_records_discrete_action(tmp_path: Path):
-    rec = LiveRecorder(tmp_path, episode_id="ep0", split="val_seen")
-    rec.write_step(
-        step=0,
-        pose_xy=(0.0, 0.0),
-        altitude_m=50.0,
-        heading_deg=0.0,
-        visited_xy=[(0.0, 0.0)],
-        fov_corners_xy=None,
-        detections=[],
-        compile_info=None,
-        wall_t_monotonic=0.0,
-        discrete_action="move_forward",
-        discrete_steps_emitted=1,
-    )
-    rec.stop()
-    payload = json.loads((tmp_path / "steps.jsonl").read_text())
-    assert payload["discrete_action"] == "move_forward"
-    assert payload["discrete_steps_emitted"] == 1
-
-
-def test_live_recorder_back_compat_when_discrete_omitted(tmp_path: Path):
-    """Legacy callers (continuous mode) get nulls without erroring."""
-    rec = LiveRecorder(tmp_path, episode_id="ep0", split="val_seen")
-    rec.write_step(
-        step=0,
-        pose_xy=(0.0, 0.0),
-        altitude_m=50.0,
-        heading_deg=0.0,
-        visited_xy=[(0.0, 0.0)],
-        fov_corners_xy=None,
-        detections=[],
-        compile_info=None,
-        wall_t_monotonic=0.0,
-    )
-    rec.stop()
-    payload = json.loads((tmp_path / "steps.jsonl").read_text())
-    assert payload["discrete_action"] is None
-    assert payload["discrete_steps_emitted"] == 0
 
 
 def test_discrete_sim_translate_then_descend_ordering():

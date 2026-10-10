@@ -67,9 +67,7 @@ def _episode_server_loop(
     Reads newline-delimited JSON commands on stdin and runs one episode
     per ``{"cmd":"run",...}`` through the SAME ``_dispatch_one`` /
     ``run_episode`` path the batch loop uses, reproducing launch.py's
-    per-episode workdir + ``.in_flight.json`` + heartbeat so the SPA's
-    recursive ``/api/runs`` discovery resolves the run unchanged.
-    stdout carries ONLY the protocol JSON; logging stays on the
+    per-episode workdir + ``.in_flight.json``. stdout carries ONLY the protocol JSON; logging stays on the
     per-episode ``run.log``.
     """
     from benchmarks.citynav.launch import (
@@ -132,8 +130,6 @@ def _episode_server_loop(
                 run_root,
                 episode_id=episode_id,
                 map_name=resolve_map(episode_id),
-                split=split,
-                config_path=args.config,
             )
             workdir = ep.dir
             log_path = workdir / RUN_LOG
@@ -182,7 +178,6 @@ def _episode_server_loop(
                     episode_dir=workdir,
                     per_episode=[],
                 )
-                recorder.set_status("finished")
                 # The verdict is in <workdir>/episode.json; the driver
                 # reads it there and writes the ledger row.
                 emit(

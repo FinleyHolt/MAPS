@@ -136,11 +136,6 @@ def _dispatch_one(
             "ts": round(time.time(), 1),
         }
 
-    def _provisional_sink(rec_provisional: dict) -> None:
-        # The pre-flight floor, on disk before takeoff so a SIGKILL between
-        # here and the commit still leaves a scored row.
-        write_episode_json(episode_dir, _stamp(rec_provisional))
-
     try:
         rec = run_episode(
             row,
@@ -149,7 +144,6 @@ def _dispatch_one(
             cfg,
             recorder=recorder,
             row_index=orig_idx,
-            provisional_sink=_provisional_sink,
         )
     except Exception as e:
         # exc_info lands the traceback in run.log through the root

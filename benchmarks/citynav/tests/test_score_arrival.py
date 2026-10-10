@@ -123,14 +123,11 @@ def test_no_writer_can_emit_a_row_that_mixes_the_two_masks():
     """
     import inspect
 
-    from benchmarks.citynav.run_benchmark import episode_runner, record
+    from benchmarks.citynav.run_benchmark import episode_runner
 
-    sources = (
-        inspect.getsource(episode_runner),
-        inspect.getsource(record),
-    )
+    sources = (inspect.getsource(episode_runner),)
     calls = sum(src.count("score_arrival(") for src in sources)
-    assert calls >= 3, (
+    assert calls >= 2, (
         f"only {calls} score_arrival call sites -- a writer stopped routing "
         "through the one scorer and this scan no longer covers it"
     )
@@ -147,46 +144,3 @@ def test_no_writer_can_emit_a_row_that_mixes_the_two_masks():
             f"{criterion} row carries {'both' if has_ring else 'neither'} "
             f"family: {sorted(row)}"
         )
-
-
-def test_the_provisional_writer_emits_the_same_shape_under_each_mask():
-    """One of the three writers, driven for real -- no LLM, no SAM.
-
-    ``_build_provisional_rec`` is the crash floor: the ``flying`` row the
-    attempt's episode.json holds when a SIGKILL lands mid-flight. It is the
-    writer most likely to
-    drift, because it is the one nobody looks at until something has already
-    gone wrong, and a floor scored on a different mask from the run around it
-    is worse than no floor.
-    """
-    from types import SimpleNamespace
-
-    from benchmarks.citynav.run_benchmark.record import _build_provisional_rec
-
-    episode = SimpleNamespace(
-        episode_id="calcity::1#1", map_name="calcity",
-        description="the parking lot", start_xy=(0.0, 0.0),
-        target_xy=CENTRE, target_object_ids=[], target_mask=SHAPE,
-        success_radius_m=20.0,
-    )
-    cfg = SimpleNamespace(success_radius_m=20.0)
-    mask = {"gt_polygon": SHAPE, "radius_m": 20.0,
-            "tolerance_m": 0.0, "floor_radius_m": 0.0}
-
-    for criterion in ("ring", "shape"):
-        rec = _build_provisional_rec(
-            episode=episode, cfg=cfg, snap=None, feature_tour=None,
-            start_xy=RING_YES_SHAPE_NO, criterion=criterion, mask=mask,
-            bounds=(0.0, 0.0, 100.0, 100.0),
-        )
-        m = rec["metrics"]
-        assert rec["provisional"] is True
-        assert rec["status"] == "flying"
-        assert rec["bounds"] == [0.0, 0.0, 100.0, 100.0] and rec["sensor"] is None
-        assert m["success_criterion"] == criterion
-        assert "SR_precise" not in m
-        # The floor binds to the start pose here (no snapshot, no tour), and
-        # that pose is inside the ring and outside the shape -- so the two
-        # criteria disagree on the SAME row, which is what makes this able
-        # to fail rather than merely run.
-        assert m["SR"] == (1 if criterion == "ring" else 0)

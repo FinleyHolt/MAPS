@@ -456,30 +456,6 @@ def spawn_runner(
     workdir.mkdir(parents=True, exist_ok=True)
     log_path = workdir / RUN_LOG
 
-    # Pre-write the episode row at status flying + heartbeat before the
-    # runner starts.
-    try:
-        from benchmarks.citynav.bake.episode_state import prewrite_episode_state
-
-        prewrite_episode_state(
-            workdir=workdir,
-            episode_id=episode_id,
-            split=split,
-            config_path=config,
-            write_heartbeat=True,
-        )
-    except ModuleNotFoundError as exc:  # pragma: no cover - non-fatal
-        if exc.name != "numpy":
-            print(
-                f"[launch] episode-state prewrite failed (non-fatal): {exc}",
-                file=sys.stderr,
-            )
-    except Exception as exc:  # pragma: no cover - non-fatal
-        print(
-            f"[launch] episode-state prewrite failed (non-fatal): {exc}",
-            file=sys.stderr,
-        )
-
     py = sys.executable
     cmd = [
         py,

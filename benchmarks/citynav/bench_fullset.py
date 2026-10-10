@@ -261,8 +261,7 @@ class _WarmRunner:
     pipes (newline-delimited JSON): a SIGKILL of the bench driver
     auto-closes the pipe and the child is reaped with its process group,
     so there is no orphaned GPU holder. The child reproduces launch.py's
-    per-episode workdir + ``.in_flight.json`` + heartbeat, so the SPA's
-    recursive ``/api/runs`` discovery resolves warm-path runs unchanged.
+    per-episode workdir.
     """
 
     def __init__(self, run_root: Path, split: str) -> None:
@@ -551,19 +550,13 @@ def _done_qualify(row: dict) -> str | None:
     and the dispatch server apply byte-identical logic.
 
     An episode counts as done once it has a row with a string
-    ``episode_id`` whose status is neither ``infra`` (the attempt never
-    got a fair run: the next pass re-attempts it) nor ``flying`` (an
-    un-flown pre-flight binding; no owner appends one, and the guard
-    keeps a full flown redo ahead of it if one ever lands). Excluded rows
-    stay as an audit trail. Returns the episode_id when the row
+    ``episode_id`` whose status is not ``infra`` (the attempt never got a
+    fair run: the next pass re-attempts it). Excluded rows stay as an
+    audit trail. Returns the episode_id when the row
     qualifies, else ``None``.
     """
     eid = row.get("episode_id")
-    if (
-        isinstance(eid, str)
-        and not _infra_casualty(row)
-        and not _rows.is_provisional(row)
-    ):
+    if isinstance(eid, str) and not _infra_casualty(row):
         return eid
     return None
 
@@ -1066,14 +1059,8 @@ class Driver:
 
     @staticmethod
     def _landed_row(workdir: Path) -> dict | None:
-        """The attempt's own ``episode.json`` once it has landed, else None.
-
-        A ``flying`` row is the pre-flight floor the runner writes before
-        takeoff: an episode killed before it lands is a full-redo casualty,
-        never scored on its un-flown binding (not CityNav-compliant).
-        """
-        row = episodes.read_episode_json(workdir)
-        return None if row is None or _rows.is_provisional(row) else row
+        """The attempt's own ``episode.json`` once it has landed, else None."""
+        return episodes.read_episode_json(workdir)
 
     def _run_attempt(
         self, worker_id: int, episode_id: str, runner: "_WarmRunner"
@@ -1165,8 +1152,7 @@ class Driver:
             # The runner process died mid-episode (SIGKILL from the Slurm
             # cgroup OOM-killer, or a non-Exception escape) WITHOUT
             # emitting a done for this seq. It never reached a decision —
-            # its episode.json is absent or still the provisional
-            # pre-flight row. An infra casualty, NOT an algorithm miss:
+            # its episode.json is absent. An infra casualty, NOT an algorithm miss:
             # excluded from SR + the done-set and re-queued for a full redo
             # (capped by max_oom_retries), never scored on an un-flown
             # binding. runner.kill() is a safe no-op here (the process is

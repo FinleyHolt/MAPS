@@ -222,9 +222,9 @@ def main() -> int:
             "then read newline-delimited JSON run commands from stdin and "
             "execute one episode per command through the same run_episode "
             "path the batch loop uses, reproducing launch.py's per-episode "
-            "workdir + .in_flight.json + heartbeat contract. stdout carries "
+            "workdir + .in_flight.json contract. stdout carries "
             "ONLY the protocol JSON; all logging stays on the per-episode "
-            "run.log. Not for manual use; the manual/SPA path is "
+            "run.log. Not for manual use; the manual path is "
             f"python -m {LAUNCH_MODULE}."
         ),
     )
@@ -422,8 +422,6 @@ def main() -> int:
             out_root,
             episode_id=ep_meta.episode_id,
             map_name=ep_meta.map_name,
-            split=args.split,
-            config_path=args.config,
             # A --workdir run's root IS the attempt's directory, so its
             # ledger row points at ".".
             workdir=out_root if args.workdir else None,
@@ -448,7 +446,6 @@ def main() -> int:
             result["workdir"] = str(ep.dir.relative_to(out_root))
             episodes.append_row(out_root, result)
         finally:
-            ep.recorder.set_status("finished")
             ep.close()
 
     wall_s = time.monotonic() - wall_t0

@@ -35,9 +35,7 @@ happened to run fastest.
 / oversize_rejection are the algorithm spending its own budget and stay
 ``ok``), ``timed_out`` (scored, in the denominator, counted apart),
 ``infra`` (never a fair run: serve death, OOM, ingest or SAM outage,
-spawn failure, crash; dropped at read time), ``flying`` (the pre-flight
-floor -- lives only in an ``episode.json``, and no owner appends one to
-a ledger).
+spawn failure, crash; dropped at read time).
 
 Fallbacks for an episode with no complete attempt, in order: the LAST
 attempt carrying metrics (an all-failure episode still reports, and a
@@ -100,14 +98,6 @@ def final_xy(row: dict) -> tuple[float, float] | None:
     return None
 
 
-def is_provisional(row: dict) -> bool:
-    """True for the pre-flight floor the runner writes to ``episode.json``
-    before takeoff -- a stand-in for an episode whose flight then dies, not
-    a result. It never lands in a ledger; the driver's landed-row read
-    asks this."""
-    return row.get("status") == "flying"
-
-
 def is_infra_abort(row: dict) -> bool:
     """True when the attempt never got a fair run.
 
@@ -143,8 +133,7 @@ def is_infra_abort(row: dict) -> bool:
 def is_complete(row: dict, m: dict | None = None) -> bool:
     """Did this attempt produce a real scored record?
 
-    It carries metrics, it is not the pre-flight floor, and its ``status``
-    is ``ok``. A ``timed_out`` row that did commit before the kill carries
+    It carries metrics and its ``status`` is ``ok``. A ``timed_out`` row that did commit before the kill carries
     metrics but is NOT complete: it loses to any clean attempt of the same
     episode regardless of start order, and represents its episode only
     through the metrics-bearing fallback. Fully complete means the driver
@@ -152,7 +141,7 @@ def is_complete(row: dict, m: dict | None = None) -> bool:
     """
     if m is None:
         m = metrics(row)
-    return bool(m) and not is_provisional(row) and row.get("status") == "ok"
+    return bool(m) and row.get("status") == "ok"
 
 
 # ---------------------------------------------------------------------------

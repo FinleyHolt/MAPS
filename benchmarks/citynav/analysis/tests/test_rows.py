@@ -87,11 +87,8 @@ def test_status_is_the_one_verdict():
     assert rows.is_complete({"status": "ok", "metrics": m})
     assert not rows.is_complete({"status": "timed_out", "metrics": m})
     assert not rows.is_complete({"status": "infra", "metrics": m})
-    assert not rows.is_complete({"status": "flying", "metrics": m})
     assert not rows.is_complete({"metrics": m})
     assert not rows.is_complete({"status": "ok"})
-    assert rows.is_provisional({"status": "flying"})
-    assert not rows.is_provisional({"status": "ok", "provisional": True})
 
 
 # --------------------------------------------------------------------------

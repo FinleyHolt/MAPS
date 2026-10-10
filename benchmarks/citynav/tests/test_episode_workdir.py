@@ -32,17 +32,12 @@ def bake(tmp_path, monkeypatch):
     from benchmarks.citynav import paths
 
     monkeypatch.setattr(paths, "tile_stem", lambda m: str(tmp_path / "bake" / m))
-    # The prewrite loads the split; a stub keeps this test off the dataset.
-    monkeypatch.setattr(
-        "benchmarks.citynav.bake.episode_state.prewrite_episode_state",
-        lambda **kw: None,
-    )
     return features
 
 
 def test_the_directory_is_named_by_stamp_benchmark_and_slug(tmp_path, bake, monkeypatch):
     monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
-    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7", split="val_seen")
+    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7")
     try:
         assert ep.dir.parent == tmp_path
         assert re.fullmatch(r"maps_\d{8}_\d{6}_calcity_block_7__0_3", ep.dir.name), ep.dir.name
@@ -93,7 +88,7 @@ def test_a_process_that_declares_nothing_refuses(tmp_path, monkeypatch):
 
 
 def test_map_prior_is_the_bake_file_byte_for_byte(tmp_path, bake):
-    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7", split="val_seen")
+    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7")
     try:
         assert (ep.dir / "map_prior.json").read_bytes() == bake.read_bytes()
     finally:
@@ -104,7 +99,7 @@ def test_the_env_is_assigned_over_a_stale_value(tmp_path, bake, monkeypatch):
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", "/stale/previous/episode")
     monkeypatch.setenv("NET_METER_LOG", "/stale/net_meter.jsonl")
     monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "previous::9#9")
-    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7", split="val_seen")
+    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7")
     try:
         assert os.environ["SEARCH_COMPILE_WORKDIR"] == str(ep.dir)
         assert os.environ["NET_METER_LOG"] == str(ep.dir / "flight" / "net_meter.jsonl")
@@ -117,7 +112,7 @@ def test_run_log_receives_the_loggers_and_close_detaches_it(tmp_path, bake, capl
     caplog.set_level(logging.INFO)  # the runner's basicConfig level; pytest's root sits at WARNING
     root = logging.getLogger()
     before = list(root.handlers)
-    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7", split="val_seen")
+    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7")
     logging.getLogger("belief.some.tree").info("hello from the tree")
     ep.close()
     assert root.handlers == before
@@ -127,29 +122,11 @@ def test_run_log_receives_the_loggers_and_close_detaches_it(tmp_path, bake, capl
     assert "after close" not in (ep.dir / "run.log").read_text()
 
 
-def test_a_callers_own_split_file_reaches_the_prewrite(tmp_path, monkeypatch):
-    """The station's mission sets live beside the station, where the bench's
-    split_path cannot name them; the file itself travels through."""
-    from benchmarks.citynav import paths
-
-    monkeypatch.setattr(paths, "tile_stem", lambda m: str(tmp_path / "bake" / m))
-    seen = {}
-    monkeypatch.setattr("benchmarks.citynav.bake.episode_state.prewrite_episode_state",
-                        lambda **kw: seen.update(kw))
-    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7",
-                             split="calcity_demo", split_file=tmp_path / "calcity_demo.json")
-    try:
-        assert seen["split"] == "calcity_demo"
-        assert seen["split_file"] == tmp_path / "calcity_demo.json"
-    finally:
-        ep.close()
-
-
 def test_a_launched_child_attaches_no_handler(tmp_path, bake):
     root = logging.getLogger()
     before = list(root.handlers)
     wd = tmp_path / "maps_20260101_000000_citynav_block_7__0_3"
-    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7", split="val_seen",
+    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7",
                              workdir=wd, run_log=False)
     try:
         assert ep.dir == wd and root.handlers == before
@@ -195,7 +172,7 @@ def test_the_run_number_reaches_the_directory_through_open_episode_dir(tmp_path,
     """``open_episode_dir`` is the one place a directory is set up, so the
     number has to survive the call rather than only the mint."""
     ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", map_name="block_7",
-                             split="val_seen", run_no=7)
+                             run_no=7)
     try:
         assert "_run07_" in ep.dir.name, ep.dir.name
         assert ep.dir.is_dir()

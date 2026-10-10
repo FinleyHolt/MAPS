@@ -20,10 +20,6 @@ from benchmarks.citynav.run_benchmark.osm_prior import (
     _build_frame_enrich,
     _merge_osm_percept,
 )
-from benchmarks.citynav.run_benchmark.record import (
-    _build_write_step_kwargs,
-    _obs_class_histogram,
-)
 from benchmarks.citynav.run_benchmark.tour_cursor import _write_tour_cursor
 from maps.search.withhold import withheld
 from dataclasses import dataclass
@@ -464,29 +460,23 @@ def fly_one(
 
     if recorder is not None and obs is not None:
         try:
-            obs_class_hist = _obs_class_histogram(obs.semantic, obs.alpha, obs.height)
             recorder.write_step(
-                **_build_write_step_kwargs(
-                    state=state,
-                    cfg=cfg,
-                    step=step_idx,
-                    t_start=t_start,
-                    step_detections=step_detections,
-                    frame_px=(int(obs.rgb.shape[0]) if obs.rgb is not None else None),
-                    sensor_name=(obs.sensor.name if obs.sensor is not None else None),
-                    fov_corners_xy=(
-                        [tuple(c) for c in obs.ortho_view_corners_xy]
-                        if obs.ortho_view_corners_xy is not None
-                        else None
-                    ),
-                    obs_class_hist=obs_class_hist,
-                    compile_info=None,
-                    planned_route=[],
-                    replan_triggered=False,
-                    graph_payload=None,
-                    discrete_action=None,
-                    discrete_steps_emitted=0,
-                )
+                step=step_idx,
+                pose_xy=state.pose_xy,
+                altitude_m=state.altitude_m,
+                heading_deg=state.heading_deg,
+                visited_xy=list(state.visited_xy),
+                # The observation's own crop corners: the frame IS the ground
+                # footprint, so the map draws what was cropped.
+                fov_corners_xy=(
+                    [tuple(c) for c in obs.ortho_view_corners_xy]
+                    if obs.ortho_view_corners_xy is not None
+                    else None
+                ),
+                detections=step_detections,
+                wall_t_monotonic=time.monotonic() - t_start,
+                frame_px=(int(obs.rgb.shape[0]) if obs.rgb is not None else None),
+                sensor=(obs.sensor.name if obs.sensor is not None else None),
             )
         except Exception as exc:  # noqa: BLE001
             log.warning("mission step write failed step=%d: %s", step_idx, exc)

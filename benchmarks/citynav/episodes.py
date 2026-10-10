@@ -6,14 +6,12 @@
     <run>/[w<id>/]<episode>/episode.json    the runner's row for that attempt,
                                             overwritten atomically as it moves
 
-``episode.json`` holds what the runner knows: ``status`` is ``flying`` from
-the moment the directory opens (the pre-flight floor carries ``provisional:
-true``) until the attempt lands as ``ok`` or ``infra``. A ledger row is that
-row plus what only the owner knows -- ``workdir`` relative to the ledger's
-directory, ``worker_id``, ``oom_retries`` -- and the owner overrides
-``status`` on its own kill paths (``timed_out``, ``infra``). A driver-killed
-attempt leaves its ``episode.json`` at ``flying``; the ledger row is the
-verdict.
+``episode.json`` holds what the runner knows once the attempt lands: ``ok``
+or ``infra``. A ledger row is that row plus what only the owner knows --
+``workdir`` relative to the ledger's directory, ``worker_id``,
+``oom_retries`` -- and the owner overrides ``status`` on its own kill paths
+(``timed_out``, ``infra``). A driver-killed attempt leaves no
+``episode.json``; the ledger row is the verdict.
 """
 
 from __future__ import annotations
@@ -28,7 +26,6 @@ from typing import Any
 EPISODES_JSONL = "episodes.jsonl"
 EPISODE_JSON = "episode.json"
 
-STATUS_FLYING = "flying"
 STATUS_OK = "ok"
 STATUS_TIMED_OUT = "timed_out"
 STATUS_INFRA = "infra"

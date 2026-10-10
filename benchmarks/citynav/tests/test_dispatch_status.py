@@ -104,24 +104,6 @@ def test_a_scored_record_is_ok_and_on_disk(tmp_path, light, monkeypatch):
     assert episodes.read_episode_json(tmp_path) == row
 
 
-def test_the_floor_is_flying_until_the_record_lands(tmp_path, light, monkeypatch):
-    seen: dict = {}
-
-    def fly(*a, provisional_sink=None, **k):
-        provisional_sink({
-            "episode_id": "b::1#0", "provisional": True,
-            "status": episodes.STATUS_FLYING, "metrics": {"SR": 0},
-        })
-        seen["floor"] = episodes.read_episode_json(tmp_path)
-        return _rec()
-
-    monkeypatch.setattr(dispatch, "run_episode", fly)
-    _dispatch(tmp_path)
-    assert seen["floor"]["status"] == episodes.STATUS_FLYING
-    assert seen["floor"]["provenance"] == {"commit": "abc"}
-    assert episodes.read_episode_json(tmp_path)["status"] == episodes.STATUS_OK
-
-
 def test_append_row_from_two_threads_writes_intact_lines(tmp_path):
     n = 200
 

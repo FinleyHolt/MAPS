@@ -1,7 +1,7 @@
 """One function opens an episode's directory; everything the episode writes lands under it.
 
     <root>/maps_<YYYYmmdd_HHMMSS>[_run<NN>]_<benchmark>_<slug>/  one ATTEMPT of one episode
-        episode.json       the runner's row: status flying -> ok | infra
+        episode.json       the runner's row once the attempt lands: ok | infra
         run.log            this process's log while the episode runs
         map_prior.json     the survey features the episode was handed, byte-for-byte
         conversation.jsonl the mission's event trace
@@ -9,8 +9,7 @@
         detections.jsonl   one line per detection, stamped with its step
         frames/            every jpeg the model was shown, by sha256
         flight/            the engine's working files: llm/transcript.jsonl (the wire
-                           log), look/ (the look audit), heartbeat.json, manifest.json,
-                           net_meter.jsonl, commit_decision.json, the audit JSONLs
+                           log), look/ (the look audit), net_meter.jsonl, tour_cursor.json
 
 The launcher (``launch.spawn_runner``), the warm runner (``episode_server``)
 and the batch loop (``cli.main``) each carried their own copy of this setup
@@ -114,11 +113,8 @@ def open_episode_dir(
     *,
     episode_id: str,
     map_name: str,
-    split: str,
-    config_path: Path | str | None = None,
     workdir: Path | str | None = None,
     run_log: bool = True,
-    split_file: Path | str | None = None,
     run_no: int | None = None,
 ) -> OpenEpisode:
     """Create the attempt's directory and point this process at it.
@@ -127,15 +123,14 @@ def open_episode_dir(
     in-flight handle for it before spawning); otherwise one is minted under
     ``root``. ``run_log=False`` is for that launched child, whose stdout and
     stderr the launcher already redirects into ``<workdir>/run.log``: a
-    second handler would print every line twice. ``split_file`` is the
-    split's own JSON for a caller whose splits the bench does not name.
+    second handler would print every line twice.
 
     ``run_no`` is the run's number in its sortie; it rides the directory name
     so a folder and a run row find each other (:func:`mint_workdir`). A bench
     attempt carries none.
 
-    ``close()`` stops the recorder's heartbeat and detaches the log handler,
-    so a warm runner's next episode does not bleed into this one's file.
+    ``close()`` detaches the log handler, so a warm runner's next episode
+    does not bleed into this one's file.
     """
     # numpy at import; the launcher imports this module and must stay light.
     from benchmarks.citynav.live_recorder import LiveRecorder
@@ -167,28 +162,9 @@ def open_episode_dir(
 
     _copy_map_prior(d, map_name)
 
-    recorder = LiveRecorder(d, episode_id=episode_id, split=split)
-    recorder.set_run_meta(compliant_parallel=True, planner="tour")
-
-    # The dashboard's Scenario panel reads inputs.json and the flight
-    # sidecars before the runner has imported torch. Non-fatal: the episode
-    # still scores, the panels stay blank until the recorder catches up.
-    try:
-        from benchmarks.citynav.bake.episode_state import prewrite_episode_state
-
-        prewrite_episode_state(
-            workdir=d,
-            episode_id=episode_id,
-            split=split,
-            config_path=Path(config_path) if config_path else None,
-            write_heartbeat=True,
-            split_file=Path(split_file) if split_file else None,
-        )
-    except Exception as exc:  # noqa: BLE001
-        log.warning("episode-state prewrite failed (non-fatal): %s", exc)
+    recorder = LiveRecorder(d, episode_id=episode_id)
 
     def close() -> None:
-        recorder.stop()
         if handler is not None:
             logging.getLogger().removeHandler(handler)
             try:

@@ -21,7 +21,7 @@ from maps.util.mask_codec import encode_mask_record
 
 
 def _bootstrap(tmp_path: Path) -> LiveRecorder:
-    return LiveRecorder(tmp_path, episode_id="ep0", split="val_seen")
+    return LiveRecorder(tmp_path, episode_id="ep0")
 
 
 def _kwargs(step: int, **over) -> dict:
@@ -34,9 +34,7 @@ def _kwargs(step: int, **over) -> dict:
         visited_xy=[],
         fov_corners_xy=None,
         detections=[],
-        compile_info=None,
         wall_t_monotonic=0.0,
-        obs_class_histogram=[],
     )
     base.update(over)
     return base
@@ -69,23 +67,19 @@ def test_both_jsonl_files_exist_before_the_first_step(tmp_path: Path) -> None:
 
 def test_recorder_writes_no_images(tmp_path: Path) -> None:
     """The whole point: a step is text. A stray PNG or JPG means a per-step
-    image bundle has come back; anything beyond the two JSONLs and ``flight/``
-    means a per-episode artifact has re-grown."""
+    image bundle has come back; anything beyond the two JSONLs means a
+    per-episode artifact has re-grown."""
     rec = _bootstrap(tmp_path)
     rec.write_step(**_kwargs(0))
     rec.write_step(**_kwargs(1, detections=[{"label": "car", "confidence": 0.5,
                                              "world_xy": [1.0, 2.0]}]))
 
     assert sorted(p.name for p in tmp_path.iterdir()) == [
-        "detections.jsonl", "flight", "steps.jsonl",
+        "detections.jsonl", "steps.jsonl",
     ]
     assert not list(tmp_path.rglob("*.png"))
     assert not list(tmp_path.rglob("*.jpg"))
     assert [s["step"] for s in _rows(tmp_path / "steps.jsonl")] == [0, 1]
-    flight = tmp_path / "flight"
-    assert (flight / "heartbeat.json").is_file()
-    assert json.loads((flight / "manifest.json").read_text())["episodes"] == ["ep0"]
-    assert json.loads((flight / ".advance_state.json").read_text())["episode_id"] == "ep0"
 
 
 def test_masks_ride_in_the_detection_row_in_frame_px_space(tmp_path: Path) -> None:
