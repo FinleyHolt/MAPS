@@ -57,15 +57,15 @@ class Twin:
     """The aircraft flown kinematically, its frames rendered off ``ortho``.
 
     ``start_xy`` is where it starts in the tile frame, heading north at
-    ``agl_m`` over the map's floor; ``sensor`` is the camera its frames are
-    rendered through, ``ground`` the height under a point in the map's MSL.
+    ``agl_m`` over the ground; ``sensor`` is the camera its frames are
+    rendered through, ``terrain`` the map's surface (flat at its floor without one).
     """
 
     def __init__(self, *, tiles_dir, map_name: str, ortho, sensor, start_xy: tuple[float, float], agl_m: float,
-                 ground=None) -> None:
+                 terrain=None) -> None:
         self.tiles_dir, self.map_name, self.sensor = Path(tiles_dir), map_name, sensor
         self.floor_msl_m = FLOOR_MSL_M[map_name]
-        self.ground = ground or (lambda xy: self.floor_msl_m)
+        self.terrain = terrain
         self.agl_m = float(agl_m)
         self._render = map_render.renderer(ortho)
         self._lock = threading.Lock()
@@ -84,6 +84,9 @@ class Twin:
         self._track: list[tuple[float, float, float, float]] = [(0.0, *self.xy, 0.0)]
         self.last_error = ""
         self._record()
+
+    def ground(self, xy) -> float:
+        return map_render.ground_msl(self.terrain, self.floor_msl_m, xy)
 
     def post(self, leg: Leg) -> None:
         with self._lock:
@@ -223,11 +226,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"no {map_name} raster under {args.ortho}", file=sys.stderr)
         return 2
     start_alt, ground_z = start_altitude_m(cfg, map_name, episode.episode_id)
-    terrain = map_render.terrain(map_name, str(TILES_DIR))
-    ground = None if terrain is None else (
-        lambda xy: float(terrain.elevation(np.asarray([xy[0]]), np.asarray([xy[1]]))[0]))
     twin = Twin(tiles_dir=TILES_DIR, map_name=map_name, ortho=ortho, sensor=sensor, start_xy=episode.start_xy,
-                agl_m=start_alt - ground_z, ground=ground)
+                agl_m=start_alt - ground_z, terrain=map_render.terrain(map_name, str(TILES_DIR)))
     live = open_live(vehicle=twin, tiles_dir=TILES_DIR, map_name=map_name, sensor=sensor,
                      boresight_path=args.boresight, register_raster=args.register)
 

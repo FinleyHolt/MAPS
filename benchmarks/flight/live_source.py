@@ -281,10 +281,7 @@ class Registration:
     terrain: object | None = None
 
     def ground_at(self, xy) -> float:
-        if self.terrain is None:
-            return float(self.floor_msl_m)
-        return float(self.terrain.elevation(np.asarray([xy[0]], dtype=np.float64),
-                                            np.asarray([xy[1]], dtype=np.float64))[0])
+        return map_render.ground_msl(self.terrain, self.floor_msl_m, xy)
 
 
 def fused_registration(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -409,6 +406,8 @@ class LiveSource:
         self.tile = tile
         self.tile_ground_z = float(tile_ground_z)
         self.floor_msl_m = float(floor_msl_m)
+        #: The map's bare-earth surface, None where it carries none (:func:`map_render.terrain`).
+        self.terrain = map_render.terrain(map_name, str(self.tiles_dir))
         self.last_refusal = ""
         #: The ring's index as :meth:`coverage_of_each` has read it, and the
         #: newest log time, so each later read asks for the frames since.
@@ -479,12 +478,7 @@ class LiveSource:
     def ground_tile_z(self, pose_xy) -> float:
         """The ground under ``pose_xy`` in the tile frame: the map's surface
         over its floor where the map carries one, else the tile's floor."""
-        surface = map_render.terrain(self.map_name, str(self.tiles_dir))
-        if surface is None:
-            return self.tile_ground_z
-        z = float(surface.elevation(np.asarray([pose_xy[0]], dtype=np.float64),
-                                    np.asarray([pose_xy[1]], dtype=np.float64))[0])
-        return self.tile_ground_z + (z - self.floor_msl_m)
+        return self.tile_ground_z + (map_render.ground_msl(self.terrain, self.floor_msl_m, pose_xy) - self.floor_msl_m)
 
     def correct(self, got: tuple[bytes, float, int, int, dict]) -> dict[str, Any] | None:
         """Register one recorded frame into the pose graph, posed by the

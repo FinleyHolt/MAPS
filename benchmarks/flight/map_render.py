@@ -69,6 +69,13 @@ def terrain(map_name: str, tiles_dir: str) -> Terrain | None:
     return Terrain(grid=grid, x_min=float(bounds.x_min), y_min=float(bounds.y_min), cell_m=cell)
 
 
+def ground_msl(terrain: Terrain | None, floor_msl_m: float, xy) -> float:
+    """The ground under ``xy`` in the map's MSL: the map's ``terrain`` where it carries one, else its floor."""
+    if terrain is None:
+        return float(floor_msl_m)
+    return float(terrain.elevation(np.asarray([xy[0]], dtype=np.float64), np.asarray([xy[1]], dtype=np.float64))[0])
+
+
 def window_render(window: tuple[float, float, float, float], shape: tuple[int, int], ortho) -> np.ndarray | None:
     """The map north-up over ``window`` (``(x0, y0, x1, y1)`` bake-local metres)
     at ``shape`` (rows, cols), row 0 the window's north edge; None where the
