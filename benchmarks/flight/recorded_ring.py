@@ -189,9 +189,7 @@ def _extrapolate(fix: dict, dt_s: float) -> dict:
     lat = float(fix["lat"])
     out["lat"] = lat + vn * dt_s / M_PER_DEG_LAT
     out["lon"] = float(fix["lon"]) + ve * dt_s / (M_PER_DEG_LAT * max(math.cos(math.radians(lat)), 1e-6))
-    climb = float(fix["climbMps"]) * dt_s
-    out["altitudeMslMeters"] = float(fix["altitudeMslMeters"]) + climb
-    out["altitudeHaeMeters"] = float(fix["altitudeHaeMeters"]) + climb
+    out["altitudeMslMeters"] = float(fix["altitudeMslMeters"]) + float(fix["climbMps"]) * dt_s
     return out
 
 
@@ -259,10 +257,9 @@ class NavTrack:
                 roll = math.degrees(math.atan(float(fix["speedMps"]) * math.radians(rate) / G_MPS2))
                 attitude = "estimated"
         return Pose(t=t, lat=float(fix["lat"]), lon=float(fix["lon"]), alt_msl_m=float(fix["altitudeMslMeters"]),
-                    alt_hae_m=float(fix["altitudeHaeMeters"]), track_deg=float(fix["trackDeg"]) % 360.0,
-                    speed_mps=float(fix["speedMps"]), h_acc_m=float(fix["accuracyMeters"]), gap_s=gap,
+                    track_deg=float(fix["trackDeg"]) % 360.0, speed_mps=float(fix["speedMps"]), gap_s=gap,
                     utc=str(fix.get("timestamp", "")), heading_deg=heading % 360.0, roll_deg=roll, pitch_deg=pitch,
-                    attitude=attitude, climb_mps=float(fix.get("climbMps") or 0.0))
+                    attitude=attitude)
 
     def _turn_rate(self, t: float) -> float | None:
         """The track's rate about ``t``, degrees a second clockwise: the least-squares slope over the window."""
