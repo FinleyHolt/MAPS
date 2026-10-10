@@ -7,6 +7,7 @@ four readers of the same rows came to disagree about the same run.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -286,3 +287,38 @@ def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_pa
     row = arm_table.arm_row(root)
     assert (row["n"], row["SR_n"], row["SR"]) == (4, 1, 0.25)
     assert ab_report._sr_by_episode(root)["e3"] == 0
+
+
+def _partial_run(tmp_path: Path, episodes_n: int) -> Path:
+    """Three selected episodes: one scored, one only ever infra, one never landed."""
+    root = _run(
+        tmp_path,
+        _ledger("e1", "20260101_000001", 1),
+        _ledger("e2", "20260101_000002", status="infra", error="serve_down"),
+        name=f"selected_{episodes_n}",
+    )
+    (root / "run_manifest.json").write_text(json.dumps({"selection": {"episodes_n": episodes_n}}))
+    return root
+
+
+def test_every_reader_refuses_a_partial_root_naming_the_shortfall(tmp_path, capsys):
+    from benchmarks.citynav.analysis import ab_report, arm_table, run_report
+
+    root = _partial_run(tmp_path, 3)
+    want = "scores 1 of the 3 episodes its manifest selects (1 only ever infrastructure casualties, 1 never landed a row)"
+    for read in (lambda: run_report.main(["run_report", str(root)]),
+                 lambda: arm_table.main([str(root)]),
+                 lambda: ab_report._sr_by_episode(root)):
+        with pytest.raises(SystemExit, match=re.escape(want)):
+            read()
+    assert run_report.main(["run_report", str(root), "--allow-partial"]) == 0
+    assert arm_table.main(["--allow-partial", str(root)]) == 0
+    assert ab_report._sr_by_episode(root, allow_partial=True) == {"e1": 1}
+    assert f"*** PARTIAL (--allow-partial): {root}: {want} ***" in capsys.readouterr().err
+
+
+def test_a_sortie_root_selecting_no_episodes_reads_whole(tmp_path):
+    """A sortie's manifest selects nothing up front (episodes_n 0): its
+    missions are flown one at a time, so no count bounds the read."""
+    picked, _ = rows.load_attempts(_partial_run(tmp_path, 0))
+    assert set(picked) == {"e1"}

@@ -51,8 +51,10 @@ can both depend on it without a cycle. Deliberately NOT folded into
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Iterator, Sequence
@@ -261,6 +263,8 @@ class ReadStats:
     # COUNTED here because an episode that silently leaves the
     # denominator is the same silent miss in the other direction.
     infra: int
+    # The episodes an ``infra`` row names: the ones a resume re-queues.
+    infra_episodes: frozenset[str]
 
 
 def iter_json_rows(path: Path) -> Iterator[dict]:
@@ -300,19 +304,22 @@ def read_attempts(
     """
     attempts: list[Attempt] = []
     rows = no_metrics = timed_out = infra = 0
+    infra_episodes: set[str] = set()
     seq = 0
     for source in files:
         for row in iter_json_rows(source):
             rows += 1
             if row.get("status") == "timed_out":
                 timed_out += 1
+            m = metrics(row)
+            eid = episode_id(row, m)
             if is_infra_abort(row):
                 infra += 1
+                if eid:
+                    infra_episodes.add(eid)
                 continue
-            m = metrics(row)
             if not m:
                 no_metrics += 1
-            eid = episode_id(row, m)
             if not eid:
                 continue
             attempts.append(
@@ -335,6 +342,7 @@ def read_attempts(
         no_metrics=no_metrics,
         timed_out=timed_out,
         infra=infra,
+        infra_episodes=frozenset(infra_episodes),
     )
 
 
@@ -361,11 +369,72 @@ def pick_attempts(attempts: Iterable[Attempt]) -> dict[str, Attempt]:
     return picked
 
 
-def load_attempts(root: Path) -> tuple[dict[str, Attempt], ReadStats]:
-    """The one canonical read of a run root: episode -> its result."""
+def read_manifest(root: Path) -> dict:
+    """The run's receipt, searched shallowest-first.
+
+    Three depths, because three shapes emit one. A fleet root carries it
+    at the top; a lane/coord root nests it one down; a DIRECT run
+    (``run_benchmark`` invoked straight — the smoke gate, ``launch``, a
+    hand-run arm) writes it into its own ``<out>/<split>/<stamp>/`` dir,
+    two down. Shallowest wins, so a fleet root still answers with the
+    manifest describing the whole fleet rather than one shard's.
+    """
+    for p in (
+        root / "run_manifest.json",
+        *sorted(root.glob("*/run_manifest.json")),
+        *sorted(root.glob("*/*/run_manifest.json")),
+    ):
+        try:
+            return json.loads(p.read_text())
+        except (OSError, ValueError):
+            continue
+    return {}
+
+
+def _shortfall(root: Path, picked: dict[str, Attempt], stats: ReadStats) -> str | None:
+    """Why the picked episodes are fewer than the manifest selected, else
+    ``None``. A sortie's manifest selects no episodes up front
+    (``episodes_n`` 0), so nothing bounds its read."""
+    selected = (read_manifest(root).get("selection") or {}).get("episodes_n")
+    if not selected or len(picked) >= selected:
+        return None
+    infra_only = len(stats.infra_episodes - picked.keys())
+    return (
+        f"{root}: scores {len(picked)} of the {selected} episodes its manifest selects "
+        f"({infra_only} only ever infrastructure casualties, "
+        f"{max(selected - len(picked) - infra_only, 0)} never landed a row)"
+    )
+
+
+def load_attempts(
+    root: Path, *, allow_partial: bool = False
+) -> tuple[dict[str, Attempt], ReadStats]:
+    """The one canonical read of a run root: episode -> its result.
+
+    A root that picks fewer episodes than its manifest selected is refused,
+    naming the shortfall, unless ``allow_partial`` (``--allow-partial``);
+    the shortfall is then printed to stderr beside the reader's numbers.
+    """
     files, tier = result_files(root)
     attempts, stats = read_attempts(files, tier)
-    return pick_attempts(attempts), stats
+    picked = pick_attempts(attempts)
+    shortfall = _shortfall(root, picked, stats)
+    if shortfall and not allow_partial:
+        raise SystemExit(
+            f"{shortfall}. Resume the run into the same root to finish it, or pass "
+            "--allow-partial to read it as it stands."
+        )
+    if shortfall:
+        print(f"*** PARTIAL (--allow-partial): {shortfall} ***", file=sys.stderr)
+    return picked, stats
+
+
+def add_allow_partial(ap: argparse.ArgumentParser) -> None:
+    """``--allow-partial``: read a root that scores fewer episodes than it
+    selected."""
+    ap.add_argument("--allow-partial", action="store_true",
+                    help="read a run that scores fewer episodes than its manifest "
+                         "selected (the shortfall is printed to stderr)")
 
 
 def scored_metrics(picked: dict[str, Attempt]) -> dict[str, dict]:

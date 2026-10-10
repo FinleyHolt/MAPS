@@ -26,6 +26,7 @@ import math
 import sys
 from pathlib import Path
 
+from benchmarks.citynav.analysis import rows as _rows
 from figures.capability_effort_arms import build
 
 W, H = 940, 540
@@ -237,9 +238,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cost", choices=sorted(COST_KEY), default="completion")
     ap.add_argument("--out-dir", type=Path, default=Path("output/figures"))
     ap.add_argument("--stem", default=None)
+    _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)
 
-    data = build([r for r in args.roots if r.is_dir()])
+    data = build([r for r in args.roots if r.is_dir()], allow_partial=args.allow_partial)
     splits = sorted({str(r["split"]) for r in data["records"]})
     if args.split not in splits:
         print(f"plot_capability_effort: no root carries split {args.split!r}; the roots carry {splits}",

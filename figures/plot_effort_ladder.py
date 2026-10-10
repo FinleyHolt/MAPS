@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 from benchmarks.citynav.analysis import arm_table
-from benchmarks.citynav.analysis.run_report import read_manifest
+from benchmarks.citynav.analysis import rows as _rows
 from figures.capability_effort_arms import effort_value
 from figures.plot_capability_effort import bench_label, esc
 
@@ -199,7 +199,7 @@ def render(rows: list[dict], theme: str, title: str, subtitle: str) -> str:
 
 def heading(rows: list[dict]) -> tuple[str, str]:
     """(title, subtitle) off the arms' own run manifests."""
-    mans = [read_manifest(Path(r["root"])) for r in rows]
+    mans = [_rows.read_manifest(Path(r["root"])) for r in rows]
     models = sorted({str(m.get("served_model") or "unrecorded model").rstrip("/").rsplit("/", 1)[-1]
                      for m in mans})
     splits = sorted({str(m.get("split") or "") for m in mans} - {""})
@@ -217,10 +217,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("roots", nargs="+", type=Path, help="run roots, one per arm")
     ap.add_argument("--out-dir", type=Path, default=Path("output/figures"))
     ap.add_argument("--stem", default="effort_ladder")
+    _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)
 
     rows = []
-    for r in arm_table.table(args.roots):
+    for r in arm_table.table(args.roots, allow_partial=args.allow_partial):
         effort = effort_value(r["effort"])
         if isinstance(effort, float):
             rows.append({**r, "effort": effort})

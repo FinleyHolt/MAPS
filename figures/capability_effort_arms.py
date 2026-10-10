@@ -31,7 +31,7 @@ from pathlib import Path
 from benchmarks.citynav.analysis import rows as _rows
 from benchmarks.citynav.analysis.ab_report import wilson_ci
 from benchmarks.citynav.analysis.arm_table import arm_row
-from benchmarks.citynav.analysis.run_report import bake_line, read_manifest
+from benchmarks.citynav.analysis.run_report import bake_line
 
 
 def _median(values: list[float]) -> float | None:
@@ -42,9 +42,9 @@ def _mean(values: list[float]) -> float | None:
     return round(statistics.fmean(values), 1) if values else None
 
 
-def _cost(root: Path) -> dict:
+def _cost(root: Path, *, allow_partial: bool = False) -> dict:
     """Price the SAME attempts arm_row scored."""
-    picked, _ = _rows.load_attempts(root)
+    picked, _ = _rows.load_attempts(root, allow_partial=allow_partial)
     keys = ("completion_tokens", "total_tokens", "reasoning_tokens", "turns")
     seen: dict[str, list[float]] = {k: [] for k in keys}
     wall: list[float] = []
@@ -79,13 +79,13 @@ def effort_value(raw: object) -> object:
         return str(raw)
 
 
-def read_root(root: Path) -> dict | None:
+def read_root(root: Path, *, allow_partial: bool = False) -> dict | None:
     """One arm's record, or None when its run manifest names no served_model."""
-    man = read_manifest(root)
+    man = _rows.read_manifest(root)
     model = man.get("served_model")
     if not model:
         return None
-    row = arm_row(root)
+    row = arm_row(root, allow_partial=allow_partial)
     n, k = row["n"], row["SR_n"]
     rec = {
         "model": str(model).rstrip("/").rsplit("/", 1)[-1],
@@ -99,7 +99,7 @@ def read_root(root: Path) -> dict | None:
         "timed_out": row["timed_out"], "infra": row["infra"],
         "root": str(root),
         "sr_lo": None, "sr_hi": None,
-        **_cost(root),
+        **_cost(root, allow_partial=allow_partial),
     }
     if n and isinstance(k, int):
         lo, hi = wilson_ci(k, n)
@@ -107,10 +107,10 @@ def read_root(root: Path) -> dict | None:
     return rec
 
 
-def build(roots: list[Path]) -> dict:
+def build(roots: list[Path], *, allow_partial: bool = False) -> dict:
     records, unmatched = [], []
     for root in roots:
-        rec = read_root(root)
+        rec = read_root(root, allow_partial=allow_partial)
         if rec is None:
             unmatched.append(str(root))
         else:
@@ -129,9 +129,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("roots", nargs="+", type=Path, help="run roots, one per arm")
     ap.add_argument("--out", type=Path, help="write JSON here instead of stdout")
+    _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)
 
-    data = build([r for r in args.roots if r.is_dir()])
+    data = build([r for r in args.roots if r.is_dir()], allow_partial=args.allow_partial)
     text = json.dumps(data, indent=2)
     if args.out:
         args.out.write_text(text)

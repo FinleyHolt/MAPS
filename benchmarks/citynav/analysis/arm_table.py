@@ -32,7 +32,7 @@ from pathlib import Path
 
 from benchmarks.citynav import eval as _eval
 from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.analysis.run_report import read_manifest, run_criterion
+from benchmarks.citynav.analysis.run_report import run_criterion
 
 #: (json key, header, format). ``None`` values print as ``--`` rather than 0:
 #: a metric this bench does not resolve is absent, not zero.
@@ -72,16 +72,16 @@ _AGG_KEYS = (
 _METRIC_KEYS = (*_AGG_KEYS, "SR_n", "NE_mean", "NE_med")
 
 
-def arm_row(root: Path) -> dict:
+def arm_row(root: Path, *, allow_partial: bool = False) -> dict:
     """One arm's summary, or a row saying plainly that it has no result.
 
     A root with zero scored episodes is REPORTED, not skipped and not
     raised on: in a ladder, an arm whose serve died is the finding, and
     dropping its row would leave a table that looks complete.
     """
-    picked, stats = _rows.load_attempts(root)
+    picked, stats = _rows.load_attempts(root, allow_partial=allow_partial)
     scored = list(_rows.scored_metrics(picked).values())
-    manifest = read_manifest(root)
+    manifest = _rows.read_manifest(root)
     withhold = list(manifest.get("withhold") or [])
     row: dict = {
         "root": str(root),
@@ -119,9 +119,9 @@ def _sort_key(row: dict) -> tuple[int, float, str]:
         return (1, 0.0, row["label"])
 
 
-def table(roots: list[Path]) -> list[dict]:
+def table(roots: list[Path], *, allow_partial: bool = False) -> list[dict]:
     """Every arm's row, criterion-checked across the whole set."""
-    rows = [arm_row(r) for r in roots]
+    rows = [arm_row(r, allow_partial=allow_partial) for r in roots]
     seen = {r["criterion"] for r in rows if r["criterion"] is not None}
     if len(seen) > 1:
         raise SystemExit(
@@ -161,8 +161,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument(
         "--json", action="store_true", help="emit the rows as JSON instead of a table"
     )
+    _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)
-    rows = table(args.roots)
+    rows = table(args.roots, allow_partial=args.allow_partial)
     if args.json:
         json.dump(rows, sys.stdout, indent=2, sort_keys=True)
         print()

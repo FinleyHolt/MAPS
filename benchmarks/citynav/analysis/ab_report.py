@@ -231,7 +231,7 @@ def _row_metrics(r: dict) -> tuple[str | None, dict]:
     return (str(eid) if eid is not None else None), (r.get("metrics") or {})
 
 
-def _sr_by_episode(run_root: Path, key: str = "SR") -> dict[str, int]:
+def _sr_by_episode(run_root: Path, key: str = "SR", *, allow_partial: bool = False) -> dict[str, int]:
     """Binary metric bit per episode via the CANONICAL pick
     (rows.load_attempts: first fully complete attempt by start time). The
     prior last-row-wins walk here disagreed with every other reader on
@@ -241,13 +241,13 @@ def _sr_by_episode(run_root: Path, key: str = "SR") -> dict[str, int]:
     never recomputed from pred_xy vs target_xy."""
     from benchmarks.citynav.analysis.run_report import load_run
 
-    scored, _ = load_run(run_root)
+    scored, _ = load_run(run_root, allow_partial=allow_partial)
     if not any(key in m for m in scored.values()):
         raise SystemExit(f"--metric {key}: no scored row of {run_root} carries {key}")
     return {eid: int(bool(m.get(key))) for eid, m in scored.items()}
 
 
-def _continuous_by_episode(run_root: Path, key: str) -> dict[str, float]:
+def _continuous_by_episode(run_root: Path, key: str, *, allow_partial: bool = False) -> dict[str, float]:
     """Served continuous metric per episode, same canonical pick.
 
     Episodes whose pick carries no value for ``key`` are ABSENT rather
@@ -255,7 +255,7 @@ def _continuous_by_episode(run_root: Path, key: str) -> dict[str, float]:
     landing."""
     from benchmarks.citynav.analysis.run_report import load_run
 
-    scored, _ = load_run(run_root)
+    scored, _ = load_run(run_root, allow_partial=allow_partial)
     return {eid: float(m[key]) for eid, m in scored.items()
             if m.get(key) is not None}
 
@@ -424,10 +424,11 @@ def main() -> None:
                          "target_object_type (the authoritative CityRefer "
                          "class stamped in metrics; referent_bucket is a "
                          "noisy text proxy and is never used)")
+    _rows.add_allow_partial(ap)
     args = ap.parse_args()
 
-    a = _sr_by_episode(Path(args.run_a), args.metric)
-    b = _sr_by_episode(Path(args.run_b), args.metric)
+    a = _sr_by_episode(Path(args.run_a), args.metric, allow_partial=args.allow_partial)
+    b = _sr_by_episode(Path(args.run_b), args.metric, allow_partial=args.allow_partial)
     shared = sorted(set(a) & set(b))
     if not shared:
         raise SystemExit("no shared scored episodes between the two runs")
@@ -488,8 +489,8 @@ def main() -> None:
     print(render(st))
     print(extra)
     if args.continuous:
-        ca = _continuous_by_episode(Path(args.run_a), args.continuous)
-        cb = _continuous_by_episode(Path(args.run_b), args.continuous)
+        ca = _continuous_by_episode(Path(args.run_a), args.continuous, allow_partial=args.allow_partial)
+        cb = _continuous_by_episode(Path(args.run_b), args.continuous, allow_partial=args.allow_partial)
         ids = [e for e in shared if e in ca and e in cb]
         if len(ids) < 0.9 * len(shared):
             raise SystemExit(

@@ -20,20 +20,23 @@ denominator is never quietly inflated, and never quietly deflated either.
 Usage:
     python -m benchmarks.citynav.analysis.run_report output/run_a
     python -m benchmarks.citynav.analysis.run_report output/run_a output/run_b  # paired
+
+A root that scores fewer episodes than its manifest selected is refused
+unless ``--allow-partial`` (``rows.load_attempts``).
 """
 
 from __future__ import annotations
 
-import json
 import statistics
 import sys
 from collections import Counter
 from pathlib import Path, PurePosixPath
 
 from benchmarks.citynav.analysis import rows as _rows
+from benchmarks.citynav.analysis.rows import read_manifest
 
 
-def load_run(root: Path) -> tuple[dict[str, dict], int]:
+def load_run(root: Path, *, allow_partial: bool = False) -> tuple[dict[str, dict], int]:
     """Return (episode_id -> that episode's scored metrics, no_metrics rows).
 
     Selection is the shared rule (``rows.pick_attempts``): each episode's
@@ -49,7 +52,7 @@ def load_run(root: Path) -> tuple[dict[str, dict], int]:
     An episode whose pick carries no metrics (it never committed) scores
     as a miss (``rows.scored_metrics``).
     """
-    picked, stats = _rows.load_attempts(root)
+    picked, stats = _rows.load_attempts(root, allow_partial=allow_partial)
     return _rows.scored_metrics(picked), stats.no_metrics
 
 
@@ -136,28 +139,6 @@ def print_precise(metrics: list[dict], n: int) -> bool:
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def read_manifest(root: Path) -> dict:
-    """The run's receipt, searched shallowest-first.
-
-    Three depths, because three shapes emit one. A fleet root carries it
-    at the top; a lane/coord root nests it one down; a DIRECT run
-    (``run_benchmark`` invoked straight — the smoke gate, ``launch``, a
-    hand-run arm) writes it into its own ``<out>/<split>/<stamp>/`` dir,
-    two down. Shallowest wins, so a fleet root still answers with the
-    manifest describing the whole fleet rather than one shard's.
-    """
-    for p in (
-        root / "run_manifest.json",
-        *sorted(root.glob("*/run_manifest.json")),
-        *sorted(root.glob("*/*/run_manifest.json")),
-    ):
-        try:
-            return json.loads(p.read_text())
-        except (OSError, ValueError):
-            continue
-    return {}
-
-
 def _local_bake_dir(resolved: str | None) -> Path | None:
     """This machine's copy of the tiles dir a run recorded flying.
 
@@ -220,8 +201,8 @@ def bake_line(root: Path) -> str:
     )
 
 
-def report(root: Path) -> dict[str, dict]:
-    picked, stats = _rows.load_attempts(root)
+def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
+    picked, stats = _rows.load_attempts(root, allow_partial=allow_partial)
     scored = _rows.scored_metrics(picked)
     n = len(scored)
     if n == 0:
@@ -350,7 +331,7 @@ def _label(name: str, suc: int, tot: int) -> str:
     return f"{name}:{suc}/{tot}({100 * suc / tot:.0f}%)" if tot else f"{name}:0"
 
 
-def paired(root_a: Path, root_b: Path) -> None:
+def paired(root_a: Path, root_b: Path, *, allow_partial: bool = False) -> None:
     """Paired SR on the shared scored episode set (apples-to-apples).
 
     UNDER THE SAME CRITERION THE HEADLINE USES -- now by construction
@@ -360,8 +341,8 @@ def paired(root_a: Path, root_b: Path) -> None:
     one has to infer which question moved, and a pairing ACROSS criteria
     refuses: it would difference two different questions.
     """
-    a, _ = load_run(root_a)
-    b, _ = load_run(root_b)
+    a, _ = load_run(root_a, allow_partial=allow_partial)
+    b, _ = load_run(root_b, allow_partial=allow_partial)
     shared = sorted(set(a) & set(b))
     crit_a = run_criterion([a[e] for e in shared])
     crit_b = run_criterion([b[e] for e in shared])
@@ -395,14 +376,15 @@ def paired(root_a: Path, root_b: Path) -> None:
 
 
 def main(argv: list[str]) -> int:
-    args = [Path(a) for a in argv[1:]]
+    allow_partial = "--allow-partial" in argv[1:]
+    args = [Path(a) for a in argv[1:] if a != "--allow-partial"]
     if not args:
         print(__doc__)
         return 2
     for root in args:
-        report(root)
+        report(root, allow_partial=allow_partial)
     if len(args) == 2:
-        paired(args[0], args[1])
+        paired(args[0], args[1], allow_partial=allow_partial)
     return 0
 
 
