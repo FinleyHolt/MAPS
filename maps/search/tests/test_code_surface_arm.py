@@ -1445,13 +1445,16 @@ def test_a_failed_step_does_not_unbind_what_the_program_already_bound():
     A plan that failed BEFORE its program ran has nothing to keep, and the
     analyze envelope is the witness of which case it is.
     """
+    def _broken(_reqs):
+        raise RuntimeError("renderer down")
+
     reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\nlook(r1)\n')],       # no renderer wired
+        [_run('r1 = find("car")\nlook(r1)\n')],
         [_run("go_to(r1[0])\n")],
         "done",
-    ])
+    ], look_renderer=_broken)
     out = _tool_results(fr)
-    assert "crop rendering is not available" in (out[0].get("error") or "")
+    assert "crop render failed" in (out[0].get("error") or "")
     assert out[0]["handles"] == ["r1"], out[0]
     assert "error" not in out[1], out[1]
     # ...and a grounding miss binds nothing: its program never ran.

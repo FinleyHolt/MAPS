@@ -106,7 +106,7 @@ _CANDS = [
 
 
 def _drive(script, *, fly=None, declare=None, flight_budget=8, turn_cap=48,
-           transcript=None, cands=None, retask=None):
+           transcript=None, cands=None, retask=None, look_renderer=None):
     flights: list[dict] = []
 
     def _fly(item):
@@ -139,6 +139,7 @@ def _drive(script, *, fly=None, declare=None, flight_budget=8, turn_cap=48,
                                  flight_budget=flight_budget,
                                  turn_cap=turn_cap),
         retask=retask,
+        look_renderer=look_renderer,
     )
     assert isinstance(reply, MissionReply)
     return reply, fr, flights, declared

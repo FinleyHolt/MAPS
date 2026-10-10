@@ -37,7 +37,7 @@ import re
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -508,8 +508,6 @@ class MissionReply:
     turns_used: int = 0
     flights_flown: int = 0
     no_call_turns: int = 0
-    sam_concepts: tuple = ()
-    kind: str = field(default="mission", init=False)
 
 
 def _served_flight(report: dict) -> dict:
@@ -1434,14 +1432,8 @@ def advance_reasoner_one_round(
 
     _rebuild_ns_rows()
 
-    # ---- view{crops}: the look-crop path -----------------------------------
-    # ``look_renderer is None`` when the ortho crop renderer is not
-    # wired -> the crops-less view tool is served (watchlist/boost still
-    # work) so the system prompt's no-crops fact, the tools array, and the
-    # executor state ONE fact; the unavailability rebuff below STAYS, so a
-    # crops emission reaching an unwired renderer fails loud instead of
-    # silently rendering nothing. When wired, each
-    # crop item resolves its fid to the surface xy (+ footprint/label for
+    # ---- look: the crop path ----------------------------------------------
+    # Each crop item resolves its fid to the surface xy (+ footprint/label for
     # the mark overlay) from THIS round's ``_ns_rows``, clamps to the
     # server's 16-image budget, and hands fully-resolved crop specs to
     # ``look_renderer``. Non-terminal: the rendered crops ride a USER turn
@@ -2735,8 +2727,7 @@ def advance_reasoner_one_round(
                 # 20260911T201524Z run 3, six requests for one row).
                 #
                 # A PASS RENDERS ONCE, not once a stop — see ``cover``.
-                if (look_renderer is not None and _report.get("pose_xy")
-                        and cover is None):
+                if _report.get("pose_xy") and cover is None:
                     _tfid = str(_item.get("target_fid") or "")
                     _trow = _ns_rows.get(_tfid)
                     _tout = look_outline(_trow)
@@ -3201,11 +3192,6 @@ def advance_reasoner_one_round(
 
     def _crops_of(fid, cid: str, marks: list | None = None,
                    preamble: str = "") -> dict:
-        if look_renderer is None:
-            return {"delivered": 0, "error": (
-                "crop rendering is not available on this run/backend: "
-                "the world-state rows are the perception evidence -- "
-                "decide from those.")}
         # A LIST asks for one crop PER ROW -- each its own subject, each at
         # the single-look scale where a distinction is resolvable. A bare
         # fid keeps the one-crop form (and its marks) unchanged.
@@ -3359,11 +3345,6 @@ def advance_reasoner_one_round(
         return ack
 
     def _map_of(fid: str, cid: str, mark_fids: list | None = None) -> dict:
-        if look_renderer is None:
-            return {"delivered": 0, "error": (
-                "map rendering is not available on this run/backend: "
-                "the world-state rows are the evidence -- decide from "
-                "those.")}
         _req: dict = {"around": fid}
         if mark_fids:
             _req["mark_fids"] = list(mark_fids)
@@ -3690,7 +3671,7 @@ def advance_reasoner_one_round(
                     # is what vision is actually needed for" -- capped so
                     # the model's own later looks keep room.
                     _h = _flight_minted[0]
-                    if _h and look_renderer is not None:
+                    if _h:
                         _catch = [r for r in (carry_results.get(_h) or [])
                                   if isinstance(r, dict)
                                   and r.get("fid")][:_CATCH_CROPS]
@@ -3910,7 +3891,6 @@ def advance_reasoner_one_round(
         return MissionReply(
             ended_by=ended_by, reply_text=reply_text, turns_used=int(turns),
             flights_flown=mission_flights, no_call_turns=no_call_turns,
-            sam_concepts=tuple(mission_sam),
         )
 
     if thread_infeasible:
