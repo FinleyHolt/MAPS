@@ -91,7 +91,7 @@ def test_a_refused_request_or_a_quoted_phrase_is_not_infra(exc):
     assert _exc_is_transient_infra(exc) is False
 
 
-@pytest.mark.parametrize("code", [408, 429, 500, 503])
+@pytest.mark.parametrize("code", [402, 408, 429, 500, 503])
 def test_a_status_the_serve_may_clear_is_infra(code):
     from benchmarks.citynav.run_benchmark.error_taxonomy import _exc_is_transient_infra
 

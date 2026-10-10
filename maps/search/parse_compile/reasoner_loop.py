@@ -43,7 +43,7 @@ from typing import Callable
 
 import httpx
 
-from maps.llm.http import CallCanceled, DegenerateCompletion
+from maps.llm.http import TRANSIENT_CLIENT_STATUS, CallCanceled, DegenerateCompletion
 from maps.llm.net_meter import stage as net_meter_stage
 from maps.search.analyze_scene.compactor import (
     CompactionInfeasible,
@@ -134,13 +134,15 @@ def _is_oversize_rejection(exc: BaseException) -> bool:
 
 
 def _is_refused_request(exc: BaseException) -> bool:
-    """Did the serve refuse what was sent (a 4xx other than 408/429)?
+    """Did the serve refuse what was sent (a 4xx outside
+    ``TRANSIENT_CLIENT_STATUS``)?
 
-    A timeout or a rate limit is the serve's weather; any other 4xx is a
-    request the method built wrong, and re-sending it fails the same way."""
+    A timeout, a rate limit or a spent quota is the serve's weather; any
+    other 4xx is a request the method built wrong, and re-sending it fails
+    the same way."""
     return (isinstance(exc, httpx.HTTPStatusError)
             and 400 <= exc.response.status_code < 500
-            and exc.response.status_code not in (408, 429))
+            and exc.response.status_code not in TRANSIENT_CLIENT_STATUS)
 
 
 def _summarise_exc(exc: BaseException) -> str:

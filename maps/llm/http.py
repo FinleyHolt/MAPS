@@ -54,6 +54,9 @@ from .net_meter import (
 # earns. A self-hosted vLLM emits neither; a hosted endpoint emits 429
 # routinely under the compile's parallel fan-out.
 _RATE_LIMIT_STATUS = frozenset({402, 429})
+# Every 4xx a serve may clear on its own: the rate limit and quota checks,
+# and 408 request timeout. Any other 4xx is a request the caller built wrong.
+TRANSIENT_CLIENT_STATUS = _RATE_LIMIT_STATUS | {408}
 
 # Timeouts that are NOT retried: the server already has the request and is
 # still working on it, so a re-send duplicates the work instead of replacing

@@ -114,10 +114,10 @@ def _status(code: int) -> httpx.HTTPStatusError:
 
 @pytest.mark.parametrize("code, ended_by", [
     (400, "request_refused"), (422, "request_refused"),
-    (408, "transient_failures"), (429, "transient_failures"),
-    (503, "transient_failures")])
+    (402, "transient_failures"), (408, "transient_failures"),
+    (429, "transient_failures"), (503, "transient_failures")])
 def test_a_refused_request_is_the_methods_failure(monkeypatch, code, ended_by):
-    """A 4xx other than 408/429 is the serve refusing what was sent: the
+    """A 4xx other than 402/408/429 is the serve refusing what was sent: the
     budget still retries it, and when it runs out the mission ends
     ``request_refused``, which is scored, not ``transient_failures``."""
     reply = _round(monkeypatch, faults=6, fault=_status(code))

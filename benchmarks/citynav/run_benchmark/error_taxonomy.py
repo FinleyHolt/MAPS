@@ -7,6 +7,7 @@ walking the full ``__cause__`` / ``__context__`` chain.
 
 from __future__ import annotations
 
+from maps.llm.http import TRANSIENT_CLIENT_STATUS
 from maps.perception.sam.detect_client import SamServerOutage
 
 
@@ -39,15 +40,12 @@ def _exc_is_sam_infra(exc: BaseException) -> bool:
 # algorithm or file code, and misclassifying one as infra would drop a real
 # CityNav failure from SR.
 _HTTP_CLIENT_MODULES = ("httpx", "httpcore", "requests", "urllib3", "aiohttp")
-# 4xx statuses a serve may clear on its own (request timeout, rate limit).
-# Every other status below 500 is the request's own fault.
-_TRANSIENT_CLIENT_STATUSES = (408, 429)
 
 
 def _exc_is_transient_infra(exc: BaseException) -> bool:
     """True iff a link in the chain is a transport fault to a shared
     inference server: its type is from an HTTP-client module, and it carries
-    no HTTP status below 500 other than ``_TRANSIENT_CLIENT_STATUSES``."""
+    no HTTP status below 500 outside ``TRANSIENT_CLIENT_STATUS``."""
     for cur in _chain(exc):
         if (type(cur).__module__ or "").split(".", 1)[0] not in _HTTP_CLIENT_MODULES:
             continue
@@ -55,6 +53,6 @@ def _exc_is_transient_infra(exc: BaseException) -> bool:
         return not (
             isinstance(status, int)
             and status < 500
-            and status not in _TRANSIENT_CLIENT_STATUSES
+            and status not in TRANSIENT_CLIENT_STATUS
         )
     return False
