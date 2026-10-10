@@ -252,6 +252,14 @@ def _enumerate_split(split: str) -> list[str]:
 _RUNNER_EOF = object()
 
 
+def _success_criterion() -> str:
+    """The criterion SR is scored on, read at call time: the bench's bridge
+    rebinds it (ring for CityNav, shape for Cal City)."""
+    from benchmarks.citynav import paths  # noqa: PLC0415
+
+    return paths.SUCCESS_CRITERION
+
+
 class _WarmRunner:
     """One persistent ``run_benchmark --episode-server`` per bench worker.
 
@@ -1266,8 +1274,8 @@ class Driver:
                     _cause = row.get("error") or "infra"
                     row["error"] = f"{_cause} after {attempt - 1} retries"
                     self.log(
-                        f"[w{worker_id}] OOM-GIVEUP {episode_id} after "
-                        f"{attempt - 1} retries (excluded + re-queued for "
+                        f"[w{worker_id}] INFRA-GIVEUP {episode_id} after "
+                        f"{attempt - 1} retries ({_cause}; excluded + re-queued for "
                         f"full redo)"
                     )
                 row["oom_retries"] = attempt - 1
@@ -1286,7 +1294,7 @@ class Driver:
             # token, shared-server fault, or the log-derived preflight OOM.
             cause = row.get("error") or "preflight CUDA OOM"
             self.log(
-                f"[w{worker_id}] OOM-RETRY {episode_id} attempt {attempt}/"
+                f"[w{worker_id}] INFRA-RETRY {episode_id} attempt {attempt}/"
                 f"{self.max_oom_retries}; backoff {backoff:.0f}s ({cause})"
             )
             time.sleep(backoff)
@@ -1339,8 +1347,9 @@ class Driver:
         n_pred = len(sr)
         elapsed_h = (time.monotonic() - self._t_start) / 3600.0
         lines = [
-            "CityNav full-set continuous benchmark",
+            "full-set continuous benchmark",
             f"updated: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"criterion: {_success_criterion()}",
             f"split: {self.split}   workers: {self.workers}   "
             f"episode_cap: {self.episode_timeout_s}s",
             f"wall budget: {self.max_wall_s}s "

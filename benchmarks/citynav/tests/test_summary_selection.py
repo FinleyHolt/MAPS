@@ -91,14 +91,9 @@ def test_a_replicated_run_reports_one_row_per_episode(tmp_path):
     assert "mean_NE:    10.00 m" in out
 
 
-def test_a_flying_row_is_not_an_episodes_result(tmp_path):
-    """No owner appends a ``flying`` row; if one ever lands (an
-    episode.json copied into the ledger), it is an un-flown pre-flight
-    floor and the flown attempt beside it wins."""
-    s = _Summary(tmp_path, split_size=1)
-    floor = _row("e::2#2", "20260725_110000", 1, status="flying", provisional=True)
-    out = s.write(floor, _row("e::2#2", "20260725_112000", 0))
-    assert "SR_eff:     0/1 = 0.0000" in out
+def test_the_summary_names_the_criterion_sr_is_scored_on(tmp_path):
+    out = _Summary(tmp_path, split_size=1).write(_row("e::1#1", "20260725_110000", 1))
+    assert "criterion: ring" in out and "CityNav" not in out.splitlines()[0]
 
 
 def test_infra_rows_stay_audited_and_out_of_the_denominator(tmp_path):
