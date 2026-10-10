@@ -828,8 +828,8 @@ _COVER_SET_MAX_STOPS = 1000
 # keep room; the note pages the rest.
 _CATCH_CROPS = 8
 # What a look and a pass's catch say under the ``images`` withhold.
-_PICTURE_WITHHELD = ("the crop rendered and is not served: no picture "
-                     "reaches you on this run")
+_PICTURE_WITHHELD = ("the crop's caption follows in the next message; "
+                     "its picture is not served on this run")
 
 
 def _mission_sanitize_moves(raw, staged) -> tuple[list[dict], list[dict]]:
@@ -3305,7 +3305,7 @@ def advance_reasoner_one_round(
                 #
                 # A PASS RENDERS ONCE, not once a stop — see ``cover``.
                 if (look_renderer is not None and _report.get("pose_xy")
-                        and cover is None and not withheld("images")):
+                        and cover is None):
                     _tfid = str(_item.get("target_fid") or "")
                     _trow = _ns_rows.get(_tfid)
                     _tout = look_outline(_trow)
@@ -3330,17 +3330,21 @@ def advance_reasoner_one_round(
                            if isinstance(c, dict) and c.get("jpeg")]
                     if _fj:
                         _fv_text = _look_vision_text(_fv)
-                        _deliver_frames(_fj, _block_frames)
-                        pending_vision.append((_fv_text, _fj))
+                        _shown = not withheld("images")
+                        _fv_note = ("the view follows." if _shown else
+                                    "the view's caption follows.")
+                        if _shown:
+                            _deliver_frames(_fj, _block_frames)
+                        pending_vision.append((_fv_text, _fj if _shown else []))
                         _report["note"] = (
-                            f"{_report['note']} the view follows."
-                            if _report.get("note") else "the view follows.")
+                            f"{_report['note']} {_fv_note}"
+                            if _report.get("note") else _fv_note)
                         # AUDIT: a flight view is a picture the model was
                         # SHOWN, so it is persisted like any other: a
                         # caption cannot state a mark's footprint, and a
                         # detected_* mark's mask lives in the runtime object
                         # graph and nowhere on disk.
-                        if look_audit_dir:
+                        if look_audit_dir and _shown:
                             _persist_look_audit(
                                 audit_dir=look_audit_dir, stop_id=stop_id,
                                 step_idx=step_idx, rid_tag=rid_tag,
@@ -3829,6 +3833,7 @@ def advance_reasoner_one_round(
         if jpegs and withheld("images"):
             ack["delivered"] = 0
             ack["note"] = _PICTURE_WITHHELD
+            pending_vision.append((vis_text, []))
         elif jpegs:
             ack["note"] = "the crop follows in the next message"
             _deliver_frames(jpegs, _block_frames)

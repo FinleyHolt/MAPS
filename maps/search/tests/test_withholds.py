@@ -132,12 +132,12 @@ def test_a_look_for_withhold_takes_its_remedies(monkeypatch):
     assert "look_for" not in act_needs_a_thing(name="go_to", got="1, 2")
 
 
-def test_an_images_withhold_delivers_no_picture(ortho_dir, monkeypatch):  # noqa: F811
+def test_an_images_withhold_delivers_the_looks_caption(ortho_dir, monkeypatch):  # noqa: F811
     monkeypatch.setenv(W.ENV, "images")
     results, reqs, _recs, vision = _fly(
         [[_run('a = find("car")')], [_run("look(a)")], "over"], _cars(3), ortho_dir)
     assert reqs, "the look rendered"
-    assert vision == []
+    assert len(vision) == 1
     assert _PICTURE_WITHHELD in json.dumps(results)
 
 
@@ -147,7 +147,7 @@ def test_an_unknown_withhold_is_refused(monkeypatch):
         W.active()
 
 
-def _map_mission(script, monkeypatch, names=""):
+def _map_mission(script, monkeypatch, names="", renderer=None, finds=1):
     """``script`` driven over two surveyed buildings, each flight adding a
     car; returns (tool results, the (text, pictures) of every vision turn)."""
     import numpy as np
@@ -176,13 +176,13 @@ def _map_mission(script, monkeypatch, names=""):
         n.tags = {"building": "yes"}
 
     def _fly(item):
-        fid = f"detected_{len(graph.nodes)}"
-        node = fx._Node((34.0, 34.0), "car")
-        node.cells = np.asarray([[34, 34]], dtype=np.int32)
-        node.tags = {}
-        graph.nodes[fid] = node
+        for _ in range(finds):
+            node = fx._Node((34.0, 34.0), "car")
+            node.cells = np.asarray([[34, 34]], dtype=np.int32)
+            node.tags = {}
+            graph.nodes[f"detected_{len(graph.nodes)}"] = node
         return {"stop_id": "stop_001", "target": item["target_fid"], "pose_xy": [30.0, 30.0],
-                "alt_m": 100.0, "new_detections": 1, "cue": "the cue"}
+                "alt_m": 100.0, "new_detections": finds, "cue": "the cue"}
 
     cands, anchors = build_surface_from_graph(graph.nodes.items(), (0.0, 0.0), 1.0)
     fr = _Vision([[fx._run(c)] for c in script] + ["done"])
@@ -192,10 +192,16 @@ def _map_mission(script, monkeypatch, names=""):
                             grid_shape=(100, 100), robot_pose=None),
         grounded_fids=set(), rid_tag="m0", transcript=[],
         compute_namespace={"cands": cands, "anchors": anchors, "cell_m": 1.0},
-        diag={}, look_renderer=lambda reqs: [],
+        diag={}, look_renderer=renderer or (lambda reqs: []),
         mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: {"declared": []}))
     results = [json.loads(m["content"]) for m in fr.messages if m.get("role") == "tool"]
     return results, fr.vision
+
+
+def _crops(reqs):
+    return [{"jpeg": b"x", "center_fid": r.get("center_fid") or "", "legend": [],
+             "context_m": 30.0, "world_window": [0, 0, 60, 60], "marks_dropped": 0,
+             "marks_out_of_view": [], "marks_unbadged_in_frame": []} for r in reqs]
 
 
 def test_a_look_withhold_map_caption_says_fly_alone(monkeypatch):
@@ -203,3 +209,30 @@ def test_a_look_withhold_map_caption_says_fly_alone(monkeypatch):
     assert "fly and look: the camera" in vision[0][0]
     _, vision = _map_mission(["show_map(around=prior_7)"], monkeypatch, "look")
     assert "fly: the camera" in vision[0][0] and "fly and look" not in vision[0][0]
+
+
+_PICTURE_CALLS = {"show_map(around=prior_7)": "World-state maps",
+                  "go_to(prior_7)": "Overhead crops",
+                  "a = explore(prior_1)": "The pass's catch",
+                  "look(prior_7)": "Overhead crops"}
+
+
+@pytest.mark.parametrize("call", sorted(_PICTURE_CALLS))
+def test_an_images_withhold_serves_each_picture_as_its_caption(call, monkeypatch):
+    _, vision = _map_mission([call], monkeypatch, renderer=_crops)
+    assert [len(j) for _, j in vision] == [1]
+    _, vision = _map_mission([call], monkeypatch, "images", renderer=_crops)
+    assert [len(j) for _, j in vision] == [0], vision
+    assert vision[0][0].startswith(_PICTURE_CALLS[call])
+
+
+def test_a_look_for_withhold_serves_no_watchlist(monkeypatch):
+    script = ["go_to(prior_7)", "a = explore(prior_1)", "show_map(around=prior_7)"]
+    for finds in (1, 0):
+        results, _ = _map_mission(script, monkeypatch, renderer=_crops, finds=finds)
+        assert "watching" in json.dumps(results)
+        results, _ = _map_mission(script, monkeypatch, "look_for", renderer=_crops,
+                                  finds=finds)
+        served = json.dumps(results)
+        assert all("error" not in r for r in results), served
+        assert "watching" not in served and "look_for" not in served, served
