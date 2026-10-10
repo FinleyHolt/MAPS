@@ -20,12 +20,9 @@ import re
 
 from maps.search.analyze_scene.cardinal_side import CARDINALS as _GEOM_CARDINALS
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
+from maps.search.analyze_scene.geom_program import _BROAD_HEAD_ROWS, _sanitize_token
 from maps.util.xy_token import format_xy_token, parse_xy_token
 from maps.search.withhold import withheld
-
-# The executor's helpers are imported INSIDE the functions that use them.
-# reasoner_loop imports this module, so a module-level maps import closes
-# a cycle -- and a parser has no business needing the executor to load.
 
 # The four map-fixed directions, in the order their kwargs are read. Taken
 # from the executor's own table so the surface can never offer a direction
@@ -164,9 +161,8 @@ def _add_color(emphasis: list, args: dict) -> None:
         emphasis.append({"key": f"color_{args['color']}", "w": 1})
 
 
-def compile_steps(steps: list[dict], rn: int = 0,
-                  known: dict | None = None,
-                  seen: dict | None = None) -> tuple[dict, dict, int]:
+def compile_steps(steps: list[dict], rn: int, known: dict,
+                  seen: dict) -> tuple[dict, dict, int]:
     """``(program, handles, next_rn)``.
 
     ``handles`` maps each code name to the op ref that holds its rows, so a
@@ -184,7 +180,7 @@ def compile_steps(steps: list[dict], rn: int = 0,
     # segment computes its ordering key from a name it cannot resolve while
     # the ref itself gets substituted later -- the label and the column then
     # disagree and score_by finds nothing to order by.
-    handles: dict = dict(known or {})
+    handles: dict = dict(known)
     # THE TWO NAMESPACES ARE KEPT DISJOINT. The executor's refs are rN and
     # so are the model's handles, and an `as` label rides IN the op's args
     # where the executor's cycle detector reads every string as a possible
@@ -362,13 +358,11 @@ def compile_steps(steps: list[dict], rn: int = 0,
         string-joining the raw name names a column that does not exist and
         score_by refuses it. One law, called rather than copied.
         """
-        from maps.search.analyze_scene.geom_program import _sanitize_token
         r = ref_of(anchor)
         lbl = r["as"] if isinstance(r, dict) and "as" in r else r
         return f"distance to {_sanitize_token(lbl)}"
 
     def _label_of(anchor):
-        from maps.search.analyze_scene.geom_program import _sanitize_token
         r = ref_of(anchor)
         lbl = r["as"] if isinstance(r, dict) and "as" in r else r
         return _sanitize_token(lbl)
@@ -409,41 +403,6 @@ def compile_steps(steps: list[dict], rn: int = 0,
     for st in steps:
         call, args = st["call"], st["args"]
         pos = args.get("_pos") or []
-        if call == "show":
-            # A DISPLAY IS AN OP. A `r1` or `r1[0]` line returns its rows:
-            # the legend promises it shows them, and the did-not-bind note
-            # tells the model to "Show it first, then index it".
-            of, label = args["of"], args["label"]
-            name = (of.get("row_of") or of["win_of"]
-                    if isinstance(of, dict) else of)
-            got = handles.get(name)
-            st["_label"] = label
-            st["_ref"] = None
-            if isinstance(got, str) and re.fullmatch(r"r\d+", got):
-                # A WINDOW, never an [i]: an int index yields the bare row
-                # dict and the ordering attribute does not survive it, so
-                # the envelope downgrades to census + len and the model
-                # asked to SEE a row and was handed a count of one. A
-                # window keeps its source's order (the executor re-attaches
-                # it) and renders the row.
-                st["_ref"] = window(
-                    got, "" if not isinstance(of, dict)
-                    else of["spec"] if "win_of" in of
-                    else f"[{of['i']}:{of['i'] + 1}]")
-            elif got is not None and not isinstance(of, dict):  # a ROW
-                # A handle standing for ONE ROW -- a fid or a point -- names
-                # no result to window; the binding IS what there is to show.
-                st["_row"] = got
-            elif got is not None:
-                raise CodeError(
-                    f"{name} is one row ({got}), so {label} indexes a row "
-                    f"rather than a set: say {name} to see it, or index the "
-                    "set it came out of")
-            else:
-                raise CodeError(
-                    f"{label} shows nothing: {name} is not bound. Bind it "
-                    f"first -- {name} = find(...) -- or name a handle that is.")
-            continue
         if call == "stratum":
             # THE MATCH TIER AS A SET: r1.exact / r1.tagged / r1.fuzzy
             # compile to the executor's own stratum op -- a view over a
@@ -461,10 +420,7 @@ def compile_steps(steps: list[dict], rn: int = 0,
             ops.append({"ref": ref, "op": "stratum",
                         "args": {"items": got, "tier": args["tier"]}})
             st["_ref"] = ref
-            if st.get("target"):
-                handles[st["target"]] = ref
-            if not st.get("target") or st["target"].startswith("_"):
-                st["_label"] = f"{src}.{args['tier']}"
+            st["_label"] = f"{src}.{args['tier']}"
             continue
         if call == "window":
             # THE TOP-N SLICE. `look(r2[0:20], "...")` is what the model
@@ -487,39 +443,8 @@ def compile_steps(steps: list[dict], rn: int = 0,
             if not st.get("target") or st["target"].startswith("_"):
                 st["_label"] = f"{src}{args['spec']}"
             continue
-        if call == "bind":
-            # A literal binds like a selection resolves: the value IS the
-            # handle, and nothing runs.
-            handles[st["target"]] = args["value"]
-            continue
-        if call == "alias":
-            # THE SAME RESULT UNDER A SECOND NAME. Nothing runs and no ref
-            # is minted: both names resolve to the one the source already
-            # holds, so `tanbark_segments.order(...)` and
-            # `r1.order(...)` are the same program.
-            _of = args["of"]
-            if _of not in handles:
-                raise CodeError(
-                    f"{st['target']} = {_of} names nothing: {_of} is not "
-                    f"bound here. Bind it first -- {_of} = find(...) -- or "
-                    "name a handle that is.")
-            handles[st["target"]] = handles[_of]
-            continue
-        if st.get("act") or call in ("fly", "look", "show_map", "look_for",
-                                     "stand"):
+        if st.get("act") or call in ("look", "show_map", "look_for", "stand"):
             continue                       # an ACT is a plan step, not an op
-        if call == "row_of":
-            # A SELECTION IS A SEQUENCING POINT, never an op. Both callers
-            # split the block at one (split_at_selections) and resolve it
-            # against rows that exist, so reaching the compiler means the
-            # split was skipped -- and the {"select": ...} marker that used
-            # to be emitted here went to the executor raw: "compare refs
-            # object element must be {ref: ...}; got keys ['select']", 12
-            # blocks on calcity_code_200.
-            raise CodeError(f"{st['target']} = {args['row_of']}"
-                            f"[{args['i']}] is a selection, and a selection "
-                            "is resolved between programs rather than "
-                            "compiled into one")
         if call == "ends_of":
             # THE TWO ENDS OF A LINE, as rows. end0_xy/end1_xy were already
             # SERVED on every linear row and the only thing the model could
@@ -539,7 +464,7 @@ def compile_steps(steps: list[dict], rn: int = 0,
                         "args": {"refs": [ref_of(p) for p in pos]}})
         elif call == "find":
             ref = mint()
-            _fargs = {"query": pos[0] if pos else args.get("query", "")}
+            _fargs = {"query": pos[0] if pos else ""}
             if args.get("name") is not None:
                 _fargs["name"] = args["name"]
             ops.append({"ref": ref, "op": "find", "args": _fargs})
@@ -613,7 +538,6 @@ def compile_steps(steps: list[dict], rn: int = 0,
             if args.get("within") is not None:
                 # within= CUTS: 0 m contact is a measured geometric fact, and
                 # it stays its own compare + filter ahead of every ordering.
-                _refuse_metres_in_within(args["within"])
                 anchor = args["within"]
                 cmp_ref = mint()
                 ops.append({"ref": cmp_ref, "op": "compare",
@@ -771,7 +695,7 @@ def compile_steps(steps: list[dict], rn: int = 0,
                             "args": {"items": ref, "emphasis": emphasis}})
                 ref = out
         elif call == "order":
-            items = items_of(pos[0] if pos else args["items"])
+            items = items_of(pos[0])
             emphasis = []
             anchor = args.get("nearest")
             if anchor is not None:
@@ -810,9 +734,7 @@ def compile_steps(steps: list[dict], rn: int = 0,
                     + (f"one row ({got})" if got is not None
                        else "not bound")
                     + ". Name a handle a find or an ordering left.")
-            from maps.search.analyze_scene.geom_program import (
-                _BROAD_HEAD_ROWS)
-            lo = _BROAD_HEAD_ROWS + int((seen or {}).get(got) or 0)
+            lo = _BROAD_HEAD_ROWS + int(seen.get(got) or 0)
             ref = window(got, f"[{lo}:{lo + _BROAD_HEAD_ROWS}]")
             st["_page"] = (got, lo)
             if not st.get("target"):
@@ -822,9 +744,8 @@ def compile_steps(steps: list[dict], rn: int = 0,
                 # whole set.
                 st["_label"] = f"more_of({src})"
         elif call == "filter":
-            items = items_of(pos[0] if pos else args["items"])
+            items = items_of(pos[0])
             within = args.get("within")
-            _refuse_metres_in_within(within)
             near = args.get("near")
             dwithin = args.get("dwithin")
             # A CARDINAL IS A CUT and rides the on_side op find already
@@ -990,12 +911,6 @@ def compile_steps(steps: list[dict], rn: int = 0,
                         "args": {"items": cmp_ref,
                                  "key": key_for(anchor),
                                  "op": "le", "value": value}})
-        elif call == "compare":
-            items = items_of(pos[0] if pos else args["items"])
-            ref = mint()
-            ops.append({"ref": ref, "op": "compare",
-                        "args": {"items": items,
-                                 "refs": [ref_of(args["to"])]}})
         else:
             raise CodeError(f"there is no {call}()")
         st["_ref"] = ref
@@ -1036,7 +951,6 @@ def bind_row(row: dict):
     lost 17 points. Binding to the POINT needs no registry at all, and it
     is the path a crossing already flies at 96.8%.
     """
-    from maps.util.xy_token import parse_xy_token
     fid = row.get("fid")
     if isinstance(fid, str) and fid.startswith("end_"):
         xy = row.get("xy")
@@ -1139,7 +1053,6 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
         emits: `facing <ref>` serves all eight. The crop rotation takes any
         unit vector, so four was never the geometry's limit.
         """
-        from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
         if isinstance(arg, str) and arg.strip().lower() in COMPASS_UNIT:
             return arg.strip().lower()
         return _site(arg, "facing")
@@ -1285,8 +1198,7 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
                 step["mark_fids"] = [_site(m, "marks") for m in _marks]
             plan_steps.append(step)
         elif st["call"] == "show_map":
-            around = st["args"].get("around") or (
-                st["args"].get("_pos") or [None])[0]
+            around = st["args"].get("around")
             plan_steps.append({"do": "map", "around": _site(around, "map")})
         elif st["call"] == "look_for":
             # THE SEGMENTER CHANNEL, and it is what arms perception at
@@ -1345,22 +1257,13 @@ def _plan_of(steps: list[dict], said: str, rn_start: int, bound: dict,
         if isinstance(got, str) and re.fullmatch(r"r\d+", got):
             last = got
             break
-    return {"_code_binds": {k: v for k, v in handles.items()
-                            if isinstance(v, (str, list))},
-            "_code_shows": {st["_label"]: (st.get("_ref")
-                                           or st.get("_row"))
+    return {"_code_shows": {st["_label"]: st.get("_ref")
                             for st in steps if st.get("_label")},
-            "said": said, "groundings": groundings,
+            "said": said, "groundings": groundings, "steps": plan_steps,
             # WHAT THIS SEGMENT ORDERED BY, so the loop can say when the
-            # ordering did not separate anything. `binds_it` stays False --
-            # that is the sentence surface's discourse binding of "it" and
-            # this surface has handles instead -- but the ORDERING KEY is
-            # the same fact rule R reads, and without it a tie is served
-            # silently here while the say surface says so out loud.
-            "steps": plan_steps, "binds_it": False,
-            "_code_order": _order_key, "bind_key": None,
-            "bind_w": None, "new_anchor": None, "new_anchor_el": None,
-            "last_ref": last, "crossings": {},
+            # ordering did not separate anything.
+            "_code_order": _order_key,
+            "last_ref": last,
             "widened": {st["_page"][0]: st["_page"][1] for st in steps
                         if "_page" in st},
             "rn_end": rn}, rn
