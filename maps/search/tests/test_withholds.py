@@ -21,7 +21,7 @@ from maps.search.parse_compile import python_surface as ps
 from maps.search.parse_compile import reasoner_agent as ra
 from maps.search.parse_compile.code_surface import act_needs_a_thing
 from maps.search.parse_compile.reasoner_loop import _PICTURE_WITHHELD
-from maps.search.tests.test_look_set_frame import _cars, _fly, _run, ortho_dir  # noqa: F401
+from maps.search.tests.test_look_set_frame import _cars, _fly, _ortho_root, _run, ortho_dir  # noqa: F401
 
 FLOWN_SHA256 = {
     "oryx_orx32_25mm_nadir": "32c45644985a346c96f4a6748d5b74c0c6c48120369404e04030233765e48115",

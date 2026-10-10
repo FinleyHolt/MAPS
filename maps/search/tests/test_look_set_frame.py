@@ -27,6 +27,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from maps.search.tests.ortho_fixture import write_ortho
 
 from maps.search.parse_compile.reasoner_loop import (
     MissionSpec,
@@ -50,30 +51,21 @@ MAP = "unit_test_set_frame_block"
 GROUND_Z = 10.0
 
 
-@pytest.fixture
-def ortho_dir(tmp_path, monkeypatch):
+@pytest.fixture(scope="module")
+def _ortho_root(tmp_path_factory):
     """A 200 m x 200 m synthetic ortho at the native 0.1 m/px."""
+    return write_ortho(tmp_path_factory.mktemp("ortho"), MAP, n=2000, ground_z=GROUND_Z, ramp=True)
+
+
+@pytest.fixture
+def ortho_dir(_ortho_root, monkeypatch):
     from maps.perception.ortho import camera_model
     from maps.perception.ortho.ground_level import GROUND_LEVEL
 
-    n = 2000
-    rgb = np.zeros((n, n, 3), dtype=np.uint8)
-    rgb[..., 0] = (np.arange(n, dtype=np.uint32)[:, None] % 256).astype(np.uint8)
-    rgb[..., 1] = (np.arange(n, dtype=np.uint32)[None, :] % 256).astype(np.uint8)
-    rgb[..., 2] = 96
-    out = tmp_path / "ortho"
-    out.mkdir()
-    np.savez(
-        out / f"{MAP}_ortho_m0.1.npz",
-        rgb=rgb,
-        height=np.full((n, n), GROUND_Z + 5.0, dtype=np.float32),
-        alpha=np.full((n, n), 255, dtype=np.uint8),
-        x_min=np.float64(0.0), y_min=np.float64(0.0),
-        px_per_m=np.float64(10.0),
-    )
     monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
     camera_model._ORTHO_RASTER_CACHE.clear()
-    return tmp_path
+    root = _ortho_root
+    return root
 
 
 def _cars(n: int, step_m: float = 6.0) -> list[dict]:

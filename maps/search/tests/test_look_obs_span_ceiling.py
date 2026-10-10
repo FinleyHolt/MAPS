@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from maps.search.tests.ortho_fixture import write_ortho
 
 from maps.search.render.look_render import (
     LOOK_PIXEL_BUDGET_PX,
@@ -34,33 +35,25 @@ MAP = "unit_test_obs_span_block"
 GROUND_Z = 10.0
 
 
+@pytest.fixture(scope="module")
+def _ortho_root(tmp_path_factory):
+    """A 280 m x 280 m synthetic ortho at the native 0.1 m/px: every window
+    below sits inside it (the lattice centre is 260 m)."""
+    return write_ortho(tmp_path_factory.mktemp("ortho"), MAP, n=2800, ground_z=GROUND_Z, ramp=True)
+
+
 @pytest.fixture
-def ortho_dir(tmp_path, monkeypatch):
-    """A 600 m x 600 m synthetic ortho at the native 0.1 m/px."""
+def ortho_dir(_ortho_root, monkeypatch):
     from maps.perception.ortho import camera_model
     from maps.perception.ortho.ground_level import GROUND_LEVEL
 
-    n = 6000
-    rgb = np.zeros((n, n, 3), dtype=np.uint8)
-    rgb[..., 0] = (np.arange(n, dtype=np.uint32)[:, None] % 256).astype(np.uint8)
-    rgb[..., 1] = (np.arange(n, dtype=np.uint32)[None, :] % 256).astype(np.uint8)
-    rgb[..., 2] = 96
-    out = tmp_path / "ortho"
-    out.mkdir()
-    np.savez(
-        out / f"{MAP}_ortho_m0.1.npz",
-        rgb=rgb,
-        height=np.full((n, n), GROUND_Z + 5.0, dtype=np.float32),
-        alpha=np.full((n, n), 255, dtype=np.uint8),
-        x_min=np.float64(0.0), y_min=np.float64(0.0),
-        px_per_m=np.float64(10.0),
-    )
     monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
     camera_model._ORTHO_RASTER_CACHE.clear()
-    return str(tmp_path)
+    root = _ortho_root
+    return str(root)
 
 
-def _lattice(n: int, span_m: float, cx: float = 300.0, cy: float = 300.0):
+def _lattice(n: int, span_m: float, cx: float = 260.0, cy: float = 260.0):
     """``n`` marks on a square lattice whose bbox side is ``span_m``."""
     side = int(n ** 0.5) + 1
     step = span_m / max(1, side - 1)
