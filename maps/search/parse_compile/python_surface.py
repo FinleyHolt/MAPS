@@ -510,6 +510,9 @@ def _refuse_filter_kwargs(names) -> None:
             + _diagonal_remedy(bad))
 
 
+_MISSING = object()
+
+
 class Row:
     """One selected row: what ``rows[i]`` binds, AND its served columns.
 
@@ -613,6 +616,15 @@ class Row:
             return xy[0 if k == "x" else 1]
         return None
 
+    def _column(self, k):
+        """What ``r.k``, ``r[k]`` and ``r.get(k)`` read: the served column
+        the spelling names, else r.x / r.y; ``_MISSING`` when neither."""
+        rk = self._resolve_key(k)
+        if rk is not None:
+            return object.__getattribute__(self, "_row")[rk]
+        d = self._derived(k)
+        return _MISSING if d is None else d
+
     def _miss(self, k) -> str:
         """Why this key is not here, and what writes it.
 
@@ -652,36 +664,25 @@ class Row:
             f"{place}' rides a cardinal cut on the same place.")
 
     def __getattr__(self, k: str):
-        rk = self._resolve_key(k)
-        if rk is not None:
-            return object.__getattribute__(self, "_row")[rk]
-        d = self._derived(k)
-        if d is not None:
-            return d
-        raise AttributeError(self._miss(k))
+        v = self._column(k)
+        if v is _MISSING:
+            raise AttributeError(self._miss(k))
+        return v
 
     def __getitem__(self, k):
-        row = object.__getattribute__(self, "_row")
         if isinstance(k, int) and k in (0, -1):
             return self                  # one row indexes as itself
         if isinstance(k, slice):
             return [self]
-        rk = self._resolve_key(k)
-        if rk is not None:
-            return row[rk]
-        d = self._derived(k)
-        if d is not None:
-            return d
-        raise KeyError(self._miss(k))
+        v = self._column(k)
+        if v is _MISSING:
+            raise KeyError(self._miss(k))
+        return v
 
     def get(self, k: str, default=None):
-        row = object.__getattribute__(self, "_row")
-        rk = self._resolve_key(k)
-        if rk is not None:
-            return row[rk]
-        d = self._derived(k)
-        if d is not None:
-            return d
+        v = self._column(k)
+        if v is not _MISSING:
+            return v
         # .get keeps its contract (a true miss returns the default,
         # silently) -- but a miss that NEAR-matches a real column is a
         # misremembered name feeding a sentinel into real logic
