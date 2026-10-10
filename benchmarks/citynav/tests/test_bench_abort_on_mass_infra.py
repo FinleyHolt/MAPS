@@ -450,3 +450,37 @@ def test_a_second_run_into_a_held_root_is_refused(
         holder.kill()
         holder.wait()
     assert os.path.exists(tmp_path / ".bench.lock")
+
+
+def test_a_ledger_the_worker_cannot_write_stops_the_run_loudly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A worker whose row cannot land would die with its thread and leave
+    the run one worker short, saying nothing in driver.log."""
+    from benchmarks.citynav import episodes
+
+    d = _driver(tmp_path)
+    d._selection = ["ep0"]
+
+    def full(root, row):
+        raise OSError(28, "No space left on device")
+
+    def boom(worker_id, eid, runner):
+        raise RuntimeError("the attempt failed")
+
+    monkeypatch.setattr(episodes, "append_row", full)
+    monkeypatch.setattr(d, "_wait_for_vllm", lambda: None)
+    monkeypatch.setattr(d, "run_one", boom)
+    d.worker_loop(0)
+    assert d._abort and "No space left on device" in d._abort
+    assert "No space left on device" in d.driver_log.read_text()
+    assert d._next_claimed_episode(1) is None
+
+
+def test_the_abort_counts_a_scored_miss_as_scored(tmp_path: Path) -> None:
+    d = _driver(tmp_path)
+    d._append_result({"episode_id": "ep100", "status": "ok", "error": "RuntimeError: x"})
+    for i in range(bf.ABORT_WINDOW):
+        d._append_result(_infra_row(i))
+    text = d.driver_log.read_text()
+    assert "1 attempt(s) were scored" in text and "cannot produce results" not in text

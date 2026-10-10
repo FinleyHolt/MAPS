@@ -847,7 +847,7 @@ class Driver:
                 f"mass instant failure: {len(bad)} of the last "
                 f"{ABORT_WINDOW} attempts produced no prediction and were "
                 f"excluded as infra casualties (dominant cause {top!r}, "
-                f"{k}x). This run cannot produce results; stopping instead "
+                f"{k}x). This run is not producing results; stopping instead "
                 f"of spending the rest of the allocation on it."
             )
         # Logged OUTSIDE the lock (self.log takes its own) and at detection
@@ -857,7 +857,7 @@ class Driver:
         self.log(f"!! representative worker log: {log_path or '(none recorded)'}")
         self.log(self._log_excerpt(log_path))
         scored = sum(1 for r in _rows.iter_json_rows(self.episodes_file)
-                     if r.get("status") == episodes.STATUS_OK and _rows.metrics(r))
+                     if not _infra_casualty(r))
         self.log(
             ("!! nothing was scored" if not scored else f"!! {scored} attempt(s) were scored")
             + f"; the {len(bad)} infra attempts are excluded and re-queued, so a "
@@ -1291,22 +1291,30 @@ class Driver:
                         "already written this run; dropping claim"
                     )
                     continue
-                fail_reason: str | None = None
                 try:
                     self._wait_for_vllm()
                     self.run_one(worker_id, eid, runner)
                 except Exception as exc:  # noqa: BLE001
                     self.log(f"[w{worker_id}] FAIL {eid}: {type(exc).__name__}: {exc}")
-                    fail_reason = f"{type(exc).__name__}: {exc}"
-                    self._append_result(
-                        {
-                            "episode_id": eid,
-                            "worker_id": worker_id,
-                            "status": episodes.STATUS_INFRA,
-                            "error": fail_reason,
-                            "ts": round(time.time(), 1),
-                        }
-                    )
+                    try:
+                        self._append_result(
+                            {
+                                "episode_id": eid,
+                                "worker_id": worker_id,
+                                "status": episodes.STATUS_INFRA,
+                                "error": f"{type(exc).__name__}: {exc}",
+                                "ts": round(time.time(), 1),
+                            }
+                        )
+                    except OSError as werr:
+                        # The ledger itself cannot take a row: no worker can
+                        # land a result, so the run stops, loudly.
+                        with self._dispatch_lock:
+                            self._abort = self._abort or (
+                                f"[w{worker_id}] cannot write {self.episodes_file}: {werr}"
+                            )
+                        self.log(f"!! ABORTING RUN — {self._abort}")
+                        return
                 finally:
                     # The episode is no longer running here, however it
                     # ended. _append_result already added its qualifying
