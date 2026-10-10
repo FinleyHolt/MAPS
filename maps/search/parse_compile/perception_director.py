@@ -64,8 +64,10 @@ log = logging.getLogger(__name__)
 BOOST_MATCH_RADIUS_M: float = 50.0
 
 
-def _canon(s: str) -> str:
-    return " ".join(str(s or "").split()).strip().lower()
+def canon_concept(s) -> str:
+    """A concept phrase's one canonical form: case-folded, whitespace
+    collapsed; empty input returns ``""``."""
+    return " ".join(str(s or "").lower().split())
 
 
 def _dedup_concepts(seq) -> list[str]:
@@ -73,7 +75,7 @@ def _dedup_concepts(seq) -> list[str]:
     out: list[str] = []
     for s in seq or []:
         raw = str(s or "").strip()
-        key = _canon(raw)
+        key = canon_concept(raw)
         if not key or key in seen:
             continue
         seen.add(key)
@@ -145,13 +147,13 @@ class PerceptionDirector:
         actually reached the LIVE segment channel (``live``), so the ack can
         never claim a live effect the push did not deliver."""
         add = _dedup_concepts(add)
-        remove_keys = {_canon(s) for s in (remove or []) if _canon(s)}
-        removed = [w for w in self.watchlist if _canon(w) in remove_keys]
+        remove_keys = {canon_concept(s) for s in (remove or []) if canon_concept(s)}
+        removed = [w for w in self.watchlist if canon_concept(w) in remove_keys]
         unknown_removes = sorted(
-            remove_keys - {_canon(w) for w in self.watchlist})
-        kept = [w for w in self.watchlist if _canon(w) not in remove_keys]
-        existing = {_canon(w) for w in kept}
-        added = [a for a in add if _canon(a) not in existing]
+            remove_keys - {canon_concept(w) for w in self.watchlist})
+        kept = [w for w in self.watchlist if canon_concept(w) not in remove_keys]
+        existing = {canon_concept(w) for w in kept}
+        added = [a for a in add if canon_concept(a) not in existing]
         self.watchlist = kept + added
         push_status = self._push_live()
         out = {

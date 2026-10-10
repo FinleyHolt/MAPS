@@ -16,24 +16,13 @@ import time
 from pathlib import Path
 
 from maps.llm.endpoint_spec import spec
-from maps.search.parse_compile.perception_director import WATCH_ROLES
+from maps.search.parse_compile.perception_director import (
+    WATCH_ROLES,
+    canon_concept,
+)
 
 
 _NULL_CONCEPT_TOKENS = frozenset({"none", "null", "n/a", "na"})
-
-
-def _is_null_token(s: str) -> bool:
-    return s.strip().lower() in _NULL_CONCEPT_TOKENS
-
-
-def _normalize_concept_phrase(s: str) -> str:
-    """Lowercase, strip, and collapse internal whitespace.
-
-    The case-fold normalization the union builder later assumes:
-    case variants of the same phrase map to one canonical form.
-    Collapsing internal whitespace handles double-spaced modifiers.
-    """
-    return " ".join((s or "").strip().lower().split())
 
 
 def _extract_reasoner_concepts(plan: dict) -> list[tuple[str, str]]:
@@ -62,10 +51,10 @@ def _extract_reasoner_concepts(plan: dict) -> list[tuple[str, str]]:
             raw_role = "target"
         else:
             continue
-        if not isinstance(raw_class, str) or _is_null_token(raw_class):
+        if not isinstance(raw_class, str):
             continue
-        s = _normalize_concept_phrase(raw_class)
-        if not s:
+        s = canon_concept(raw_class)
+        if not s or s in _NULL_CONCEPT_TOKENS:
             continue
         role = str(raw_role).strip().lower()
         if role not in WATCH_ROLES:
@@ -76,6 +65,22 @@ def _extract_reasoner_concepts(plan: dict) -> list[tuple[str, str]]:
         seen.add(key)
         out.append(key)
     return out
+
+
+def concept_union(
+    specs: list[tuple[str, str]],
+) -> tuple[list[str], list[dict]]:
+    """The SAM class union of ``(class, role)`` specs (as
+    ``_extract_reasoner_concepts`` returns them): ``union`` is the classes in
+    first-seen order, the set SAM segments (SAM reads no roles);
+    ``union_specs`` is ``[{"class": c, "roles": [...]}]`` in the same order,
+    each class's roles merged in first-seen order."""
+    roles: dict[str, list[str]] = {}
+    for cls, role in specs:
+        merged = roles.setdefault(cls, [])
+        if role not in merged:
+            merged.append(role)
+    return list(roles), [{"class": c, "roles": r} for c, r in roles.items()]
 
 
 class MapsCompiler:

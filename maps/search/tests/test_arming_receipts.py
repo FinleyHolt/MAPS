@@ -102,3 +102,20 @@ def test_near_form_arms_the_standing_watchlist():
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_concept_union_keeps_first_seen_order_and_merges_roles():
+    from maps.search.parse_compile.compiler import (
+        _extract_reasoner_concepts,
+        concept_union,
+    )
+    specs = _extract_reasoner_concepts({"sam_concepts": [
+        {"class": "Red  Car", "role": "target"}, "tree", "None",
+        {"class": "red car", "role": "anchor"},
+        {"class": "tree", "role": "bogus"},
+    ]})
+    assert concept_union(specs) == (
+        ["red car", "tree"],
+        [{"class": "red car", "roles": ["target", "anchor"]},
+         {"class": "tree", "roles": ["target"]}],
+    )
