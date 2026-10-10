@@ -107,9 +107,6 @@ class MapObject:
     # 1 + lambda * field). Populated at runtime by the reasoner's scoring.
     is_target_confidence: float = 0.0
     embedding: list[float] | None = None  # optional vector for dedup / re-id
-    evidence_refs: list[str] = field(
-        default_factory=list
-    )  # stable EvidenceItem.id back-links
     semantic_attributes: dict[str, dict[str, int]] = field(default_factory=dict)
     # Tracker-assigned stable identity across frames. None for prebake nodes
     # and for untracked point detections; set by the world tracker (or any

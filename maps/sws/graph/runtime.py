@@ -195,7 +195,7 @@ def upsert_detected_centroid_only(
     *,
     now: float | None = None,
     step_index: int | None = None,
-    evidence_id: str | None = None,
+    evidence_id: str | None = None,  # ponytail: unread; the search loop still passes it
 ) -> str:
     """Off-canonical insurance: mint a bare detected node with NO mask/dedup
     machinery. Returns the new ``detected_<N>`` id.
@@ -218,8 +218,6 @@ def upsert_detected_centroid_only(
     node.first_seen_t = now
     node.last_seen_t = now
     node.observation_count = 1
-    if evidence_id is not None and evidence_id not in node.evidence_refs:
-        node.evidence_refs.append(evidence_id)
     graph.nodes[fid] = node
     if graph.objects_by_class:
         graph.objects_by_class.setdefault(node.class_name, {})[fid] = node
@@ -284,8 +282,9 @@ def upsert_tracked_detected(
     rows: np.ndarray,
     cols: np.ndarray,
     confidence: float,
-    frame_idx: int,
     now: float | None = None,
+    # ponytail: frame_idx and evidence_id are unread; the search loop still passes both.
+    frame_idx: int | None = None,
     evidence_id: str | None = None,
 ) -> str:
     """Upsert a tracked detection from its projected ground cells.
@@ -348,8 +347,6 @@ def upsert_tracked_detected(
         base_node.observation_count = 1
         base_node.first_seen_t = now
         base_node.last_seen_t = now
-        if evidence_id is not None and evidence_id not in base_node.evidence_refs:
-            base_node.evidence_refs.append(evidence_id)
         base_node.tags["dedup"] = _DEDUP_NEW
 
         graph.nodes[fid] = base_node
@@ -395,8 +392,6 @@ def upsert_tracked_detected(
         else float(confidence)
     )
     node.last_seen_t = now
-    if evidence_id is not None and evidence_id not in node.evidence_refs:
-        node.evidence_refs.append(evidence_id)
     node.tags["dedup"] = _DEDUP_TRACK
 
     return existing_fid

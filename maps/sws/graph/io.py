@@ -72,8 +72,6 @@ def _node_to_dict(node: MapObject) -> dict:
         nd["is_target_confidence"] = node.is_target_confidence
     if node.embedding is not None:
         nd["embedding"] = list(node.embedding)
-    if node.evidence_refs:
-        nd["evidence_refs"] = list(node.evidence_refs)
     if node.descriptions:
         nd["descriptions"] = list(node.descriptions)
     if node.semantic_attributes:
@@ -125,7 +123,6 @@ def _dict_to_node(nd: dict) -> MapObject:
         confidence=nd.get("confidence", 1.0),
         is_target_confidence=nd.get("is_target_confidence", 0.0),
         embedding=list(embedding_raw) if embedding_raw else None,
-        evidence_refs=list(nd.get("evidence_refs", [])),
         descriptions=list(nd.get("descriptions", [])),
         semantic_attributes={
             k: {str(val): int(cnt) for val, cnt in counts.items()}

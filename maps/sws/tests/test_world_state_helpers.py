@@ -68,7 +68,7 @@ def test_objectgraph_step_index_round_trip(tmp_path):
     assert restored.tau == 123.456
 
 
-def test_upsert_detected_centroid_only_sets_step_index_and_evidence_refs():
+def test_upsert_detected_centroid_only_sets_step_index():
     graph = ObjectGraph(nodes={}, cell_size_m=5.0, objects_by_class={})
     det = MapObject(
         id="detected_pending",
@@ -81,7 +81,7 @@ def test_upsert_detected_centroid_only_sets_step_index_and_evidence_refs():
         orientation=None,
         provenance="detected",
     )
-    fid = upsert_detected_centroid_only(graph, det, now=100.0, step_index=3, evidence_id="evid-a")
+    fid = upsert_detected_centroid_only(graph, det, now=100.0, step_index=3)
     assert graph.step_index == 3
     assert graph.tau == 100.0
-    assert graph.nodes[fid].evidence_refs == ["evid-a"]
+    assert graph.nodes[fid].observation_count == 1
