@@ -28,7 +28,7 @@ def calcity(tmp_path, monkeypatch):
     from benchmarks.calcity._citynav_bridge import _replacements, compat_env
     from benchmarks.calcity.data_prep import bake_tiles
     from benchmarks.citynav import paths as shared_paths
-    from maps.perception.ortho.ground_level import GROUND_LEVEL, MAP_BOUNDS
+    from maps.perception.ortho.ground_level import GROUND_LEVEL
 
     x0, y0 = TARGET[0] - 20, TARGET[1] - 20
     church = Polygon([(x0, y0), (x0 + 40, y0), (x0 + 40, y0 + 40), (x0, y0 + 40)])
@@ -72,7 +72,6 @@ def calcity(tmp_path, monkeypatch):
         monkeypatch.setenv(name, "")
     monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
     monkeypatch.setitem(GROUND_LEVEL, "calcity", 0.0)
-    monkeypatch.setitem(MAP_BOUNDS, "calcity", MAP_BOUNDS.get("calcity"))
     return SimpleNamespace(root=root, tiles=tiles, rgbd=rgbd)
 
 

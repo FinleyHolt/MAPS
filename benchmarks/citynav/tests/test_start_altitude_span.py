@@ -9,8 +9,7 @@ wrong in the tree: a comment recorded a 25.8 m median span, which is
 ``2 * (cfg.altitude_m - ground)`` — the inert non-ortho fallback, not the
 per-episode band sample the runner actually flies. On the CityNav splits
 the real ceiling is 112-291 m and never binds (the pixel-budget
-ceiling, 100 m on a 0.1 m/px ortho, is what clamps the window); on the stanford field configs, which
-fly a fixed low cruise, it binds at 66.5 m and is the point.
+ceiling, 100 m on a 0.1 m/px ortho, is what clamps the window).
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.search.render.look_render import look_window_bounds_m
 
-# Every CityNav / stanford block is a 0.1 m/px ortho.
+# Every CityNav block is a 0.1 m/px ortho.
 _, _BUDGET_M = look_window_bounds_m(0.1)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -99,18 +98,3 @@ def test_the_observation_ceiling_never_binds_on_the_citynav_splits():
     assert len(spans) >= 2000, len(spans)
     assert min(spans) > _BUDGET_M, (min(spans), _BUDGET_M)
     assert 150.0 < statistics.median(spans) < 250.0, statistics.median(spans)
-
-
-def test_a_datum_above_the_altitude_cap_yields_no_ceiling_at_all():
-    # The Edwards blocks sit at 695-880 m AMSL, above altitude_cap_m, so
-    # the clamp puts the start pose BELOW ground and 2*(alt - ground)
-    # goes negative. look_render reads that as "no observation
-    # measurement" (its ``_span > 0`` guard), not as a 0 m window — the
-    # case test_look_obs_span_ceiling.test_a_nonpositive_span_is_not_a_
-    # ceiling pins on the renderer side. Latent: no run config in the
-    # tree names an Edwards split.
-    cfg = _cfg()
-    edwards = [m for m in GROUND_LEVEL if m.startswith("edwards_block_")]
-    assert len(edwards) >= 5, edwards          # VACUITY FLOOR
-    for mn in edwards:
-        assert _span(cfg, mn, f"{mn}::0#0") < 0.0, mn

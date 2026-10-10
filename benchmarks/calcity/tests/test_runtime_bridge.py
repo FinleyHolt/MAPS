@@ -88,7 +88,7 @@ def test_bridge_installs_calcity_contract(
     restores_compat_env, restores_shared_paths, synthetic_bake
 ):
     from benchmarks.citynav import paths as shared_paths
-    from maps.perception.ortho.ground_level import GROUND_LEVEL, MAP_BOUNDS
+    from maps.perception.ortho.ground_level import GROUND_LEVEL
 
     # The rebound names are put back by ``restores_shared_paths``, which
     # derives them from ``_replacements()``. A list here would be a second
@@ -107,16 +107,11 @@ def test_bridge_installs_calcity_contract(
         assert shared_paths.split_path("calcity") == paths.split_path(
             "calcity"
         )
-        # The frame the BAKE declares, not a constant this module carries.
-        b = synthetic_bake["bounds"]
-        assert tuple(MAP_BOUNDS[synthetic_bake["map_name"]]) == (
-            b["x_min"], b["y_min"], b["x_max"], b["y_max"]
-        )
+        # The map the BAKE declares, not a constant this module carries.
         assert GROUND_LEVEL[synthetic_bake["map_name"]] == 0.0
     finally:
         for map_name in (synthetic_bake["map_name"],):
             GROUND_LEVEL.pop(map_name, None)
-            MAP_BOUNDS.pop(map_name, None)
 
 
 def test_map_bounds_refuses_a_bake_with_no_meta(tmp_path, monkeypatch):

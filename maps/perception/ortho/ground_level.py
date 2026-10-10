@@ -1,13 +1,9 @@
-# Per-block ground level (meters) + world bounds — the single source for both
-# the nadir ortho view-square sizing (``side = 2*(altitude - GROUND_LEVEL[map])``,
-# ``observation.crop_ortho_observation``) and the FPV above-ground-level used by
-# the voxel-LOD / splat-point-size selectors. The CityNav block values are the
-# lowest-point-percentile ground extraction from each SensatUrban PLY, from
-# water-cookie/citynav ``gsamllavanav/mapdata.py`` (MIT, Copyright (c) 2024);
-# the local (fieldsite) blocks below are additive.
-from typing import NamedTuple
-
-
+# Per-block ground level (meters): the nadir ortho view-square sizing
+# (``side = 2*(altitude - GROUND_LEVEL[map])``, ``observation.crop_observation``).
+# The CityNav block values are the lowest-point-percentile ground extraction
+# from each SensatUrban PLY, from water-cookie/citynav
+# ``gsamllavanav/mapdata.py`` (MIT, Copyright (c) 2024); the Cal City bridge
+# adds its map at activation (``benchmarks/calcity/_citynav_bridge.py``).
 GROUND_LEVEL = {
     'birmingham_block_8': 9.767633576781428,
     'birmingham_block_5': 9.035724612581797,
@@ -50,86 +46,3 @@ GROUND_LEVEL = {
     'birmingham_block_2': 7.0204973115052995,
     'cambridge_block_23': 34.436207572934606
 }
-
-class Bounds(NamedTuple):
-    x_min: float
-    y_min: float
-    x_max: float
-    y_max: float
-
-MAP_BOUNDS = {
-    "birmingham_block_8": Bounds(799.95, 399.91874999999993, 1200.0500000000002, 800.01875),
-    "birmingham_block_5": Bounds(399.95, 799.9187499999999, 800.05, 1200.01875),
-    "cambridge_block_4": Bounds(113.3875, 1599.96875, 400.0875, 1802.26875),
-    "cambridge_block_32": Bounds(1999.95, 1059.1499999999999, 2068.85, 1200.05),
-    "cambridge_block_2": Bounds(-0.05, 799.9499999999999, 400.05, 1200.05),
-    "birmingham_block_10": Bounds(799.95, 1199.9125, 1200.0500000000002, 1285.1125),
-    "birmingham_block_4": Bounds(399.95, 399.91874999999993, 800.05, 800.01875),
-    "cambridge_block_12": Bounds(799.95, 22.349999999999966, 1200.0500000000002, 400.05),
-    "cambridge_block_14": Bounds(799.95, 799.9499999999999, 1200.0500000000002, 1200.05),
-    "birmingham_block_9": Bounds(799.95, 799.9187499999999, 1200.0500000000002, 1200.01875),
-    "cambridge_block_25": Bounds(1599.95, 512.4499999999999, 1817.3500000000001, 800.05),
-    "cambridge_block_9": Bounds(399.95, 1199.9499999999998, 800.05, 1600.05),
-    "cambridge_block_17": Bounds(799.95, 1999.9562500000002, 1200.0500000000002, 2136.95625),
-    "cambridge_block_27": Bounds(1599.95, 1199.9499999999998, 2000.0500000000002, 1600.05),
-    "cambridge_block_8": Bounds(399.95, 799.9499999999999, 800.05, 1200.05),
-    "cambridge_block_28": Bounds(1599.95, 1599.9499999999998, 2000.0500000000002, 1918.05),
-    "birmingham_block_3": Bounds(399.95, -0.08125000000001137, 800.05, 400.01875),
-    "birmingham_block_6": Bounds(414.0125, 1199.8999999999999, 800.0125, 1306.8),
-    "birmingham_block_1": Bounds(15.2, 399.91874999999993, 400.0, 800.01875),
-    "cambridge_block_18": Bounds(1199.95, 146.35, 1490.0500000000002, 400.05),
-    "cambridge_block_26": Bounds(1599.95, 799.9499999999999, 2000.0500000000002, 1200.05),
-    "cambridge_block_33": Bounds(1999.95, 1199.9499999999998, 2152.95, 1600.05),
-    "cambridge_block_10": Bounds(399.95, 1599.9499999999998, 800.05, 2013.55),
-    "cambridge_block_21": Bounds(1199.95, 1199.9499999999998, 1600.0500000000002, 1600.05),
-    "birmingham_block_0": Bounds(256.66875, 55.91874999999999, 400.06875, 400.01875),
-    "cambridge_block_22": Bounds(1199.95, 1599.9499999999998, 1600.0500000000002, 2000.05),
-    "cambridge_block_16": Bounds(799.95, 1599.9499999999998, 1200.0500000000002, 2000.05),
-    "birmingham_block_12": Bounds(1199.95, 799.9187499999999, 1273.25, 1200.01875),
-    "birmingham_block_13": Bounds(1199.95, 1199.90625, 1273.75, 1261.70625),
-    "birmingham_block_11": Bounds(1199.95, 620.4187499999999, 1265.55, 800.01875),
-    "birmingham_block_7": Bounds(799.95, 226.61875, 1119.65, 400.01875),
-    "cambridge_block_19": Bounds(1199.95, 399.94999999999993, 1600.0500000000002, 800.05),
-    "cambridge_block_13": Bounds(799.95, 399.94999999999993, 1200.0500000000002, 800.05),
-    "cambridge_block_7": Bounds(399.95, 399.94999999999993, 800.05, 800.05),
-    "cambridge_block_20": Bounds(1199.95, 799.9499999999999, 1600.0500000000002, 1200.05),
-    "cambridge_block_6": Bounds(399.95, -0.05000000000001137, 800.05, 400.05),
-    "cambridge_block_15": Bounds(799.95, 1199.9499999999998, 1200.0500000000002, 1600.05),
-    "cambridge_block_3": Bounds(10.95, 1199.9499999999998, 400.05, 1600.05),
-    "birmingham_block_2": Bounds(-0.05, 799.9499999999999, 400.05, 1099.55),
-    "cambridge_block_23": Bounds(1199.95, 1999.9906250000001, 1456.3500000000001, 2107.690625),
-}
-
-# --------------------------------------------------------------------------
-# Local (non-upstream) tiles. Additive only: the upstream GROUND_LEVEL /
-# MAP_BOUNDS literals above stay byte-identical to water-cookie/citynav.
-# These map names are not SensatUrban blocks — they are built from OSM + SCC
-# 2025. Values are in the tile's local UTM-minus-
-# origin frame (meters) with a NAVD88 vertical datum, copied from each tile
-# build's cache/ground_level.json.
-# --------------------------------------------------------------------------
-# Edwards AFB blocks (NAIP + 3DEP, see benchmark/edwards). Ground levels are
-# NAVD88 meters -- placeholder MSL estimates per area; refresh each from the
-# build's cache/<map>_ground_level.json after build_rgbd_ortho runs. Bounds are
-# exact (deterministic from the block bbox via aoi.build_local_frame).
-_LOCAL_GROUND_LEVEL: dict[str, float] = {
-    "stanford_block_0": 16.740608,
-    "roble_block_0": 34.849851,
-    "edwards_block_0": 694.959717,  # main flightline (measured from DSM)
-    "edwards_block_1": 825.0,  # Rosamond
-    "edwards_block_2": 880.0,  # North Edwards
-    "edwards_block_3": 720.0,  # California City
-    "edwards_block_4": 760.0,  # Boron
-}
-_LOCAL_MAP_BOUNDS: dict[str, Bounds] = {
-    "stanford_block_0": Bounds(0.0, 0.0, 1561.6342, 1167.6591),
-    "roble_block_0": Bounds(0.0, 0.0, 1567.3106, 1167.4155),
-    "edwards_block_0": Bounds(0.0, 0.0, 5068.6797, 5034.7509),
-    "edwards_block_1": Bounds(0.0, 0.0, 5085.4703, 5048.8911),
-    "edwards_block_2": Bounds(0.0, 0.0, 5059.3143, 5032.1122),
-    "edwards_block_3": Bounds(0.0, 0.0, 5060.5415, 5040.1348),
-    "edwards_block_4": Bounds(0.0, 0.0, 5051.1500, 5022.9763),
-}
-
-GROUND_LEVEL.update(_LOCAL_GROUND_LEVEL)
-MAP_BOUNDS.update(_LOCAL_MAP_BOUNDS)

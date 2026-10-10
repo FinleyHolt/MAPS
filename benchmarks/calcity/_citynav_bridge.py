@@ -94,11 +94,4 @@ def activate(*, geometry: bool = True) -> None:
         return
 
     from maps.perception.ortho import ground_level
-    bounds = map_bounds()
-    ground_level.GROUND_LEVEL.update({map_name: 0.0 for map_name in bounds})
-    ground_level.MAP_BOUNDS.update(
-        {
-            map_name: ground_level.Bounds(*value)
-            for map_name, value in bounds.items()
-        }
-    )
+    ground_level.GROUND_LEVEL.update({map_name: 0.0 for map_name in map_bounds()})

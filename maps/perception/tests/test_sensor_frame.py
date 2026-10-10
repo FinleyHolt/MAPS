@@ -10,12 +10,12 @@ coordinate -- no dataset, no fixtures.
 from __future__ import annotations
 
 import math
+from typing import NamedTuple
 
 import numpy as np
 import pytest
 
 from maps.perception.geometry.sensor_spec import resolve_sensor
-from maps.perception.ortho.ground_level import Bounds
 from maps.perception.ortho.sensor_frame import (
     footprint_corners_xy,
     footprint_m,
@@ -23,6 +23,13 @@ from maps.perception.ortho.sensor_frame import (
 )
 
 ORYX = resolve_sensor("oryx_orx32_25mm_nadir")
+
+
+class Bounds(NamedTuple):
+    x_min: float
+    y_min: float
+    x_max: float
+    y_max: float
 
 
 def test_footprint_is_two_agl_tan_half_fov():
