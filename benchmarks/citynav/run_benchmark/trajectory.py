@@ -5,6 +5,7 @@ scores).
 
 from __future__ import annotations
 
+from benchmarks.citynav.action_snap import ARRIVAL_BOUND_M
 from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.citynav.episode import EpisodeState
 from maps.search.parse_compile.tour_state import FeatureTour
@@ -119,8 +120,10 @@ def synthesize_compliant_trajectory(
         budget: int | None = None,
     ) -> bool:
         """Fly one leg. Returns True when the leg was TRUNCATED by the
-        action budget short of its target (False on arrival or on an
-        honest no-progress stop below the budget)."""
+        action budget short of its target (False on arrival within
+        ``ARRIVAL_BOUND_M``, the lattice's closest point to a target no
+        heading aligns with, or on an honest no-progress stop below the
+        budget)."""
         nonlocal steps
         limit = max_frames if budget is None else min(int(budget), max_frames)
         while steps < limit:
@@ -140,7 +143,7 @@ def synthesize_compliant_trajectory(
                 break
         dx = float(state.pose_xy[0]) - float(target_xy[0])
         dy = float(state.pose_xy[1]) - float(target_xy[1])
-        return steps >= limit and math.hypot(dx, dy) > snap_xy_tol_m
+        return steps >= limit and math.hypot(dx, dy) > ARRIVAL_BOUND_M
 
     # Budget reserve: replaying the flown stops must NOT consume the
     # discrete-action budget needed for the final leg to the committed target —

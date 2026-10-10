@@ -126,8 +126,13 @@ ALIGN_TOL_DEG: float = 15.0
 #: and forward down the whole leg.
 CRUISE_TOL_DEG: float = 29.0
 #: Distance to the target inside which a leg aligns at :data:`ALIGN_TOL_DEG`
-#: again, so it ends within ``xy_tol_m / cos(ALIGN_TOL_DEG)`` of the target.
+#: again, so it ends within :data:`ARRIVAL_BOUND_M` of the target.
 NEAR_M: float = 10.0
+#: How close to a leg's target counts as arrived: within
+#: :data:`SNAP_XY_TOL_M`, or at the action lattice's closest point to a
+#: target no 30-degree heading aligns with, which the final approach leaves
+#: within ``SNAP_XY_TOL_M / cos(ALIGN_TOL_DEG)``.
+ARRIVAL_BOUND_M: float = SNAP_XY_TOL_M / math.cos(math.radians(ALIGN_TOL_DEG))
 
 
 def snap_to_actions(
@@ -158,28 +163,41 @@ def snap_to_actions(
         return True
 
     target_xy = (end.x, end.y)
+    # Set when the leg has come as close as the action set reaches: a target
+    # within one forward step at a bearing no 30-degree heading aligns with
+    # would otherwise be paced around until the runaway guard.
+    xy_stuck = False
     while len(actions) < max_actions:
         dx = target_xy[0] - pose.x
         dy = target_xy[1] - pose.y
         xy_err = math.hypot(dx, dy)
         alt_err = end.altitude_m - pose.altitude_m
+        xy_open = xy_err > xy_tol_m and not xy_stuck
         bearing = (
             bearing_deg((pose.x, pose.y), target_xy)
-            if xy_err > xy_tol_m
+            if xy_open
             else pose.heading_deg
         )
         heading_err = _wrap_signed(bearing - pose.heading_deg)
 
-        if xy_err <= xy_tol_m and abs(alt_err) <= alt_tol_m:
+        if not xy_open and abs(alt_err) <= alt_tol_m:
             break
         heading_tol_deg = CRUISE_TOL_DEG if moved and xy_err > NEAR_M else ALIGN_TOL_DEG
-        if xy_err > xy_tol_m and abs(heading_err) > heading_tol_deg:
+        if xy_open and abs(heading_err) > heading_tol_deg:
             if not _emit(
                 CityNavAction.TURN_LEFT if heading_err < 0 else CityNavAction.TURN_RIGHT
             ):
                 break
             continue
-        if xy_err > xy_tol_m:
+        if xy_open:
+            h = math.radians(pose.heading_deg)
+            after = math.hypot(
+                target_xy[0] - (pose.x + FORWARD_STEP_M * math.sin(h)),
+                target_xy[1] - (pose.y + FORWARD_STEP_M * math.cos(h)),
+            )
+            if after >= xy_err:
+                xy_stuck = True
+                continue
             if not _emit(CityNavAction.FORWARD):
                 break
             moved = True
@@ -197,6 +215,7 @@ def snap_to_actions(
 
 __all__ = [
     "ALTITUDE_STEP_M",
+    "ARRIVAL_BOUND_M",
     "FORWARD_STEP_M",
     "TURN_STEP_DEG",
     "CityNavAction",
