@@ -516,7 +516,8 @@ class LiveSource:
         _xy, record = register_frame(self.register, posed.rgb, posed.pose_xy, posed.alt_msl, posed.yaw,
                                      posed.roll, posed.pitch_proj, posed.sensor)
         record.update(seq=seq, ring=True)
-        est = self.graph.estimate(t) if self.graph is not None else None
+        with self._correcting:
+            est = self.graph.estimate(t) if self.graph is not None else None
         if record["applied"] and est is not None:
             far = math.hypot(record["shift_e_m"] - est["e_m"], record["shift_n_m"] - est["n_m"])
             if far > INNOVATION_CAP_M:

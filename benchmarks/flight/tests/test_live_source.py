@@ -127,3 +127,21 @@ def test_a_simulated_vehicle_corrects_every_frame_up_to_its_clock_in_order(built
         assert seen == [r["seq"] for r in twin.rows]
     finally:
         live.close()
+
+
+def test_a_ring_frame_reads_the_graph_under_the_corrector_s_lock(built, make_twin, make_live):
+    from benchmarks.flight.nav_track import tag_pose
+
+    twin = make_twin()
+    live = make_live(twin, register=True)
+    _fly_over(twin, (600.0, 600.0), 2.0)
+    for seq in range(len(twin.rows)):
+        live.correct(twin.frame(seq))
+    seq = len(twin.rows) - 1
+    jpeg, t_host, _log, _seq, tag = twin.frame(seq)
+    posed = live._posed(jpeg, t_host, pose=tag_pose(tag, t_host))
+    estimates = []
+    real = live.graph.estimate
+    live.graph.estimate = lambda t: estimates.append(live._correcting.locked()) or real(t)
+    live._register_ring(seq, posed, t_host)
+    assert estimates == [True]
