@@ -189,27 +189,10 @@ def attempt_stamp(row: dict) -> str:
 # Where the attempts are recorded
 # ---------------------------------------------------------------------------
 
-# Read order; the FIRST non-empty tier answers and tiers are never mixed
-# -- mixing would count one attempt twice, inflating both no_metrics and
-# the denominator.
-RESULT_TIERS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    # The run's own ledger: one row per attempt, carrying status / workdir.
-    ("ledger", (EPISODES_JSONL,)),
-)
-
-
 def result_files(root: Path) -> tuple[list[Path], str]:
-    """(files, tier name) for a run root -- the canonical read order."""
-    for tier, patterns in RESULT_TIERS:
-        found: set[Path] = set()
-        for pattern in patterns:
-            try:
-                found.update(root.glob(pattern))
-            except OSError:
-                continue
-        if found:
-            return sorted(found), tier
-    return [], "none"
+    """(files, tier name) for a run root: its ledger, else nothing."""
+    ledger = root / EPISODES_JSONL
+    return ([ledger], "ledger") if ledger.exists() else ([], "none")
 
 
 # ---------------------------------------------------------------------------

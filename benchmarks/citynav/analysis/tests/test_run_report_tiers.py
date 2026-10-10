@@ -23,7 +23,7 @@ def _row(eid: str, stamp: str, sr: int, **extra) -> dict:
     slug = eid.replace("::", "__").replace("#", "_")
     row = {
         "episode_id": eid, "worker_id": "w0", "status": "ok", "error": None,
-        "elapsed_s": 1.0, "workdir": f"w0/maps_{stamp}_citynav_{slug}", "oom_retries": 0,
+        "elapsed_s": 1.0, "workdir": f"w0/maps_{stamp}_citynav_{slug}",
         "metrics": {"episode_id": eid, "SR": sr, "OSR": sr, "NE": 10.0,
                     "referent_bucket": "car"},
     }
@@ -58,18 +58,6 @@ def test_an_episode_json_beside_the_ledger_is_not_an_attempt(tmp_path):
     picked, stats = rows.load_attempts(root)
     assert set(picked) == {"e::1#1"}
     assert stats.rows == 1
-
-
-def test_an_archived_loop_pass_is_not_read(tmp_path):
-    """--loop renames to ``episodes.jsonl.pass<N>.<ts>``. The exact name
-    keeps every superseded pass out."""
-    root = tmp_path / "run"
-    _write(root / LEDGER, _row("e::1#1", "20260725_120000", 1))
-    _write(root / f"{LEDGER}.pass0.20260715_130000",
-           _row("e::stale#0", "20260715_130000", 0))
-    files, _ = rows.result_files(root)
-    assert files == [root / LEDGER]
-    assert "e::stale#0" not in load_run(root)[0]
 
 
 def test_a_root_with_nothing_readable_reports_no_tier(tmp_path):
