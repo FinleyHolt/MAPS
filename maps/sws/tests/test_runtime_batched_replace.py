@@ -249,3 +249,26 @@ def test_batch_with_only_fresh_tracks_falls_through_to_single():
     assert len(fids) == 3
     assert len(set(fids)) == 3
     assert all(f in g.nodes for f in fids)
+
+
+def test_batch_keeps_ids_aligned_when_a_repeat_has_no_cells():
+    """A repeat sighting with an empty footprint keeps its own id in the
+    batch result, the same id the single path returns for it."""
+    grid = (32, 32)
+    g = _make_seed_graph(grid=grid)
+
+    def rep(tid, rows, cols):
+        return {
+            "track_id": tid,
+            "base_node": _make_tracked_node(tid, 0.9),
+            "rows": np.array(rows, dtype=np.int32),
+            "cols": np.array(cols, dtype=np.int32),
+            "confidence": 0.9,
+            "frame_idx": 1,
+            "now": 1.0,
+        }
+
+    a = upsert_tracked_detected(g, **rep("wt_a", [5, 5], [5, 6]))
+    b = upsert_tracked_detected(g, **rep("wt_b", [9, 9], [9, 10]))
+    out = upsert_tracked_detected_batch(g, [rep("wt_a", [], []), rep("wt_b", [10], [10])])
+    assert out == [a, b]
