@@ -663,8 +663,8 @@ class Mission:
         row = {"log_time": last.get("log_time"), "seq": last.get("seq"), "t_host": last.get("t_host"),
                "utc": last.get("utc"), "age_s": last.get("age_s"), "attitude": last.get("attitude"),
                "pose_xy": [float(obs.pose_xy[0]), float(obs.pose_xy[1])], "altitude_m": float(obs.altitude_m),
-               "corners_xy": last.get("corners_xy"), "footprint_xy": last.get("footprint_xy"),
-               "boresight": last.get("boresight"), "off_nadir_deg": last.get("off_nadir_deg"),
+               "corners_xy": last.get("corners_xy"), "boresight": last.get("boresight"),
+               "off_nadir_deg": last.get("off_nadir_deg"),
                "registration": last.get("registration"), "mosaic": last.get("mosaic"),
                "observation": last.get("observation"), "flight": len(self.flights)}
         try:

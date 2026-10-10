@@ -748,16 +748,13 @@ class LiveSource:
             "boresight": self.boresight.path.name if self.boresight.path else "datasheet",
             "registration": fused_registration(records) if self.register is not None else None,
             "corners_xy": [(x0, y1), (x1, y1), (x1, y0), (x0, y0)],
-            "footprint_xy": [(x0, y1), (x1, y1), (x1, y0), (x0, y0)],
             "mosaic": {"placed": n, "asked": len(want), "ranked": ranked, "gsd_m": round(gsd_m, 3),
                        "fetch_failed": unfetched, "fit": fit, "seqs": [f.seq for f in placed],
                        "off_nadir_deg": [round(f.angle, 2) for f in placed],
-                       "extent_local_m": [x0, y0, x1, y1],
                        "registrations": [{k: r.get(k) for k in ("seq", "applied", "source", "why", "shift_e_m",
                                                                  "shift_n_m", "shift_yaw_deg", "heading_deg",
                                                                  "track_deg", "attitude")} for r in records]},
             "off_nadir_deg": round(min(f.angle for f in placed), 2),
-            "ranked": ranked,
         }
         self.last_refusal = ""
         return ortho_observation(rgb, alpha, (x0, y0, x1, y1), camera_z, tile_ground_z=self.tile_ground_z,

@@ -338,8 +338,7 @@ class BankSource:
         frame = h.frame
         boresight = frame.get("boresight")
         self.last = {**{k: frame.get(k) for k in ("log_time", "seq", "t_host", "utc", "age_s", "attitude",
-                                                   "corners_xy", "footprint_xy", "off_nadir_deg",
-                                                   "registration", "mosaic")},
+                                                   "corners_xy", "off_nadir_deg", "registration", "mosaic")},
                      "boresight": Path(str(boresight)).name if boresight else None,
                      "coverage": {"fraction": round(sum(held) / len(held), 3), "points": len(held),
                                   "held": sum(held), "seqs": [frame.get("seq")]},
