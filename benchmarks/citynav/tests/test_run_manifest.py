@@ -168,7 +168,7 @@ def test_a_direct_run_emits_a_manifest_the_reader_finds(
     run_manifest.emit_or_verify(run_dir, stub_run, log=lambda *a: None)
 
     # the root a reader is handed is the out root, not the run dir
-    assert run_report._manifest(tmp_path / "out") == stub_run
+    assert run_report.read_manifest(tmp_path / "out") == stub_run
     line = run_report.bake_line(tmp_path / "out")
     assert line.startswith("bake: verified"), line
     assert "UNVERIFIED" not in line
@@ -176,7 +176,7 @@ def test_a_direct_run_emits_a_manifest_the_reader_finds(
     # VACUITY FLOOR: the reader really needs the extra depth -- a search
     # that stopped one level up would return {} here and this test would
     # be asserting nothing.
-    assert run_report._manifest(tmp_path / "out" / "train_seen") == stub_run
+    assert run_report.read_manifest(tmp_path / "out" / "train_seen") == stub_run
     assert not (tmp_path / "out" / "run_manifest.json").exists()
 
 
@@ -201,7 +201,7 @@ def test_the_fleet_root_still_wins_over_a_nested_run_dir(
     run_manifest.emit_or_verify(
         root / "train_seen" / "20260830_120000", shard, log=lambda *a: None
     )
-    assert run_report._manifest(root)["run_id"] == "the-fleet"
+    assert run_report.read_manifest(root)["run_id"] == "the-fleet"
 
 
 def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tmp_path, bake):

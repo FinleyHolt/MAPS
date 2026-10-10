@@ -19,8 +19,8 @@ Usage:
     python -m benchmarks.citynav.analysis.arm_table --json <root> [...]
 
 An arm's label is the withholds its run manifest records (an ablation arm),
-else its ``arm.json`` ``label`` (the ladder writes one), else the root's
-basename.
+else the root's basename. Its effort is the reasoning effort the manifest
+records (``SEARCH_SAMPLING_REASONING_EFFORT``), as written.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from pathlib import Path
 
 from benchmarks.citynav import eval as _eval
 from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.analysis.run_report import run_criterion
+from benchmarks.citynav.analysis.run_report import read_manifest, run_criterion
 
 #: (json key, header, format). ``None`` values print as ``--`` rather than 0:
 #: a metric this bench does not resolve is absent, not zero.
@@ -43,6 +43,7 @@ COLUMNS = (
     ("n", "n", "{:>5}"),
     ("SR_pct", "SR%", "{:>6}"),
     ("SR_n", "SR", "{:>9}"),
+    ("OSR_pct", "OSR%", "{:>6}"),
     ("SR_by_shape_pct", "shape%", "{:>7}"),
     ("SR_by_radius_pct", "radius%", "{:>8}"),
     ("precise_shape_n", "shape_n", "{:>8}"),
@@ -59,6 +60,8 @@ COLUMNS = (
 _AGG_KEYS = (
     "SR",
     "SR_pct",
+    "OSR",
+    "OSR_pct",
     "SR_by_shape",
     "SR_by_shape_pct",
     "SR_by_radius",
@@ -79,13 +82,13 @@ def arm_row(root: Path) -> dict:
     """
     picked, stats = _rows.load_attempts(root)
     scored = [a.metrics for a in picked.values() if a.metrics]
-    meta = _arm_meta(root)
-    withhold = _withhold(root)
+    manifest = read_manifest(root)
+    withhold = list(manifest.get("withhold") or [])
     row: dict = {
         "root": str(root),
-        "label": (f"withhold={','.join(withhold)}" if withhold
-                  else meta.get("label") or root.name),
-        "effort": meta.get("effort"),
+        "label": f"withhold={','.join(withhold)}" if withhold else root.name,
+        "effort": (manifest.get("search_env_flags") or {}).get(
+            "SEARCH_SAMPLING_REASONING_EFFORT"),
         "criterion": run_criterion(scored) if scored else None,
         "n": len(scored),
         "no_metrics": stats.no_metrics,
@@ -106,24 +109,6 @@ def arm_row(root: Path) -> dict:
     row["NE_mean"] = agg.get("NE")
     row.update({k: agg.get(k) for k in _AGG_KEYS})
     return row
-
-
-def _arm_meta(root: Path) -> dict:
-    """The ladder's own receipt for this arm, if it wrote one."""
-    try:
-        meta = json.loads((root / "arm.json").read_text())
-    except (OSError, ValueError):
-        return {}
-    return meta if isinstance(meta, dict) else {}
-
-
-def _withhold(root: Path) -> list:
-    """The withholds the run manifest records, or none."""
-    try:
-        manifest = json.loads((root / "run_manifest.json").read_text())
-    except (OSError, ValueError):
-        return []
-    return list(manifest.get("withhold") or []) if isinstance(manifest, dict) else []
 
 
 def _sort_key(row: dict) -> tuple[int, float, str]:

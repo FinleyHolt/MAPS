@@ -140,7 +140,7 @@ def print_precise(metrics: list[dict], n: int) -> bool:
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def _manifest(root: Path) -> dict:
+def read_manifest(root: Path) -> dict:
     """The run's receipt, searched shallowest-first.
 
     Three depths, because three shapes emit one. A fleet root carries it
@@ -200,7 +200,7 @@ def bake_line(root: Path) -> str:
     """
     from benchmarks.citynav import paths
 
-    perception = _manifest(root).get("perception") or {}
+    perception = read_manifest(root).get("perception") or {}
     stamped = perception.get("bake_sha256")
     local = _local_bake_dir(perception.get("tiles_dir_resolved")) or paths.TILES_DIR
 

@@ -39,9 +39,8 @@ def _arm(tmp_path: Path, name: str, *ledger_rows: dict,
         "".join(json.dumps(r) + "\n" for r in ledger_rows)
     )
     if effort is not None:
-        (root / "arm.json").write_text(
-            json.dumps({"label": f"e{effort}", "effort": effort})
-        )
+        (root / "run_manifest.json").write_text(json.dumps(
+            {"search_env_flags": {"SEARCH_SAMPLING_REASONING_EFFORT": str(effort)}}))
     return root
 
 
@@ -65,7 +64,8 @@ def test_one_row_per_arm_with_the_arm_s_own_sr_and_ne(tmp_path):
     assert len(rows) == 2
     assert all(r["n"] == 2 for r in rows)
 
-    assert [r["label"] for r in rows] == ["e0.0", "e0.9"]   # sorted by effort
+    assert [r["label"] for r in rows] == ["low", "high"]    # sorted by effort
+    assert [r["effort"] for r in rows] == ["0.0", "0.9"]
     assert [r["SR_n"] for r in rows] == [1, 2]
     assert rows[0]["SR_pct"] == 50.0
     assert rows[1]["SR_pct"] == 100.0
@@ -82,7 +82,7 @@ def test_a_dead_arm_is_reported_not_dropped(tmp_path):
 
     rows = arm_table.table([live, dead])
     assert len(rows) == 2
-    assert rows[1]["label"] == "e0.6"
+    assert rows[1]["label"] == "dead"
     assert rows[1]["n"] == 0
     assert rows[1]["SR_pct"] is None      # never a zero standing in for absent
     arm_table.render(rows)                 # must not raise on the empty row
@@ -95,6 +95,15 @@ def test_mixing_criteria_refuses_rather_than_pooling(tmp_path):
                 _ledger("n::1#0", "20260827_100000", 1, criterion="ring"))
     with pytest.raises(SystemExit, match="mix success criteria"):
         arm_table.table([shape, ring])
+
+
+def test_osr_rides_a_ring_row_and_is_absent_from_a_shape_row(tmp_path):
+    ring_row = _ledger("n::1#0", "20260827_100000", 1, criterion="ring")
+    ring_row["metrics"]["OSR"] = 1
+    (ring,) = arm_table.table([_arm(tmp_path, "ring", ring_row)])
+    assert ring["OSR_pct"] == 100.0
+    (shape,) = arm_table.table([_arm(tmp_path, "shape", _ledger("c::1#0", "20260827_100000", 1))])
+    assert shape["OSR_pct"] is None
 
 
 def test_label_falls_back_to_the_root_name(tmp_path):
@@ -112,4 +121,4 @@ def test_an_ablation_arm_is_labelled_by_its_withholds(tmp_path):
     assert row["label"] == "withhold=look,images"
     (root / "run_manifest.json").write_text(json.dumps({"withhold": []}))
     (row,) = arm_table.table([root])
-    assert row["label"] == "e1.0"
+    assert row["label"] == "ablate"
