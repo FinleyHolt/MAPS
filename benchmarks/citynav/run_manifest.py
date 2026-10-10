@@ -65,13 +65,6 @@ ARM_ENV_FLAGS = (
     # program's own map -- share a bake and a split and differ on exactly
     # this. Set-only: a CityNav row never carries it.
     "SEARCH_CITYNAV_RGBD_DIR",
-    # The schematic's delivered size. It sets what the model can READ off
-    # the map -- chip glyphs are absolute pixels, so a smaller canvas makes
-    # them relatively larger while fitting fewer of them -- and it sets the
-    # per-map image-token bill directly (1 token per 1024 px, no
-    # max_pixels bound on the serve). A row flown at a different value is a
-    # different arm and has to say so.
-    "SEARCH_MAP_MAX_PX",
     "SEARCH_LOOK_TOOL",
     # Per-k resample roots differ only by their pinned seed base.
     "SEARCH_SEED_BASE",

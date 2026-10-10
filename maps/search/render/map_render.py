@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 import re
 
 log = logging.getLogger(__name__)
@@ -44,12 +43,9 @@ log = logging.getLogger(__name__)
 # constraint a map does not have. Contours, strokes
 # and chips are all drawn at CANVAS resolution, so the budget is the only
 # real limit and spending it is free of artefacts.
-# Env-overridable so the delivered size can be SWEPT against accuracy and
-# token cost without a code change. It is a real knob: the serve applies no
-# max_pixels bound, and image tokens scale linearly at 1 per 1024 px
-# (measured 512/768/1024/1280 -> 256/576/1024/1600), so this constant sets
-# the per-map token bill directly.
-MAP_MAX_PX = int(os.environ.get("SEARCH_MAP_MAX_PX", "1024"))
+# The serve applies no max_pixels bound and image tokens scale at 1 per
+# 1024 px, so this constant sets the per-map token bill directly.
+MAP_MAX_PX = 1024
 
 _BG_BGR = (28, 28, 28)          # unrecorded space -- dark, honest nothing
 
@@ -135,21 +131,6 @@ def _n_cells(f) -> int:
     return 0 if cells is None else len(cells)
 
 
-def _cells_of(f):
-    """A feature's cells as an ``(N, 2)`` int array.
-
-    The live loop hands the node's own array through untouched and the
-    analysis readers hand a list; converting 3.9 M cells to a list and back
-    per map was the map's whole cost on the Cal City bake.
-    """
-    import numpy as np  # noqa: PLC0415
-
-    cells = f.get("cells")
-    if cells is None or len(cells) == 0:
-        return np.zeros((0, 2), dtype=np.int64)
-    return np.asarray(cells, dtype=np.int64).reshape(-1, 2)
-
-
 def features_window_paint(features, *, tile_origin_xy, cell_size_m,
                           grid_shape, window):
     """Paint the window's grid-cell RGB from plain feature dicts.
@@ -167,6 +148,7 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
     """
     import numpy as np  # noqa: PLC0415
     from maps.perception.viz.osm_palette import paint_color  # noqa: PLC0415
+    from maps.search.analyze_scene.cell_mesh import cells_of  # noqa: PLC0415
 
     x0, y0, x1, y1 = (float(v) for v in window)
     cs = float(cell_size_m)
@@ -196,7 +178,7 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
         # every feature on the map cost a show_map 3 s on the Cal City bake
         # (3.9 M cells) whatever the window held; a feature's cells all take
         # the one colour, so the order they land in is not a fact.
-        a = _cells_of(f)
+        a = cells_of(f)
         if len(a) == 0:
             return 0
         r, c = a[:, 0], a[:, 1]
@@ -249,6 +231,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         paint_color,
         paint_word,
     )
+    from maps.search.analyze_scene.cell_mesh import cells_of  # noqa: PLC0415
     from maps.search.render.look_render import (  # noqa: PLC0415
         frame_up_angle_deg,
         up_bearing_deg,
@@ -371,7 +354,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                 toy = float(tile_origin_xy[1])
                 pts = [(tox + (int(c) + 0.5) * cs_,
                         toy + (int(r) + 0.5) * cs_)
-                       for r, c in _cells_of(f)]
+                       for r, c in cells_of(f)]
             inw = [p for p in pts if x0 <= p[0] <= x1 and y0 <= p[1] <= y1]
             m = re.search(r"(\d+)$", str(f.get("fid") or ""))
             if inw and m:
@@ -418,7 +401,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
             cv2.fillPoly(bmask, [np.array([[_w2p(*p)] for p in ring],
                                           np.int32)], 1)
         else:
-            for r, c in _cells_of(f):
+            for r, c in cells_of(f):
                 cv2.fillPoly(bmask, [_cell_quad(r, c)], 1)
 
     # Detections, gathered first: their ink bboxes decide which prior chips
@@ -430,7 +413,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     for f in features:
         if str(f.get("provenance") or "") != "detected":
             continue
-        cells_inw = [(int(r), int(c)) for r, c in _cells_of(f)
+        cells_inw = [(int(r), int(c)) for r, c in cells_of(f)
                      if x0 <= tox + (int(c) + 0.5) * cs_ <= x1
                      and y0 <= toy + (int(r) + 0.5) * cs_ <= y1]
         if not cells_inw:
