@@ -45,17 +45,13 @@ def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
 
 def _bootstrap_ci(
     diffs: list[float], *, iters: int = 10000, seed: int = 12345, alpha: float = 0.05,
-    stat: str = "mean",
 ) -> tuple[float, float]:
-    """Percentile bootstrap CI for the mean (or median) of per-episode (b - a).
+    """Percentile bootstrap CI for the mean of per-episode (b - a).
 
     Deterministic (seeded) so a re-run reproduces the interval. Pure stdlib:
-    a small LCG-free resampler via random.Random. ``stat="median"`` is for
-    the continuous metrics (NE), whose tail of 1 km misses drags a mean
-    far off the typical episode.
+    a small LCG-free resampler via random.Random.
     """
     import random
-    import statistics
 
     n = len(diffs)
     if n == 0:
@@ -64,7 +60,7 @@ def _bootstrap_ci(
     means = []
     for _ in range(iters):
         draw = [diffs[rng.randrange(n)] for _ in range(n)]
-        means.append(statistics.median(draw) if stat == "median" else sum(draw) / n)
+        means.append(sum(draw) / n)
     means.sort()
     lo = means[int((alpha / 2) * iters)]
     hi = means[min(iters - 1, int((1 - alpha / 2) * iters))]
@@ -96,19 +92,8 @@ def _mcnemar(pairs: list[tuple[int, int]]) -> dict:
             "chi2": round(chi2, 3), "method": "chi2_1df"}
 
 
-def ab_stats(
-    pairs: list[tuple[int, int]],
-    *,
-    label: str = "",
-    metric: str = "SR",
-) -> dict:
-    """Paired statistics over (a, b) in {0,1}. The shared-set core.
-
-    ``metric`` names WHICH bit was paired (SR, OSR, ...). It is a label
-    only -- the arithmetic is identical -- but an OSR delta printed under
-    an ``SR_a=`` heading is the kind of mislabel that outlives the session
-    that made it. The dict keys stay ``SR_a``/``SR_b`` so every stored
-    ledger column and its readers keep parsing."""
+def ab_stats(pairs: list[tuple[int, int]], *, label: str = "") -> dict:
+    """Paired SR statistics over (a, b) in {0,1}. The shared-set core."""
     n = len(pairs)
     sr_a = sum(a for a, _ in pairs) / n if n else float("nan")
     sr_b = sum(b for _, b in pairs) / n if n else float("nan")
@@ -117,7 +102,6 @@ def ab_stats(
     mc = _mcnemar(pairs)
     return {
         "label": label,
-        "metric": metric,
         "n": n,
         "SR_a": round(sr_a, 4),
         "SR_b": round(sr_b, 4),
@@ -130,83 +114,12 @@ def ab_stats(
     }
 
 
-def paired_continuous(
-    pairs: list[tuple[float, float]],
-    *,
-    label: str = "",
-    metric: str = "",
-    boot_seed: int = 12345,
-) -> dict:
-    """Paired Wilcoxon signed-rank on a CONTINUOUS metric (e.g. ``NE``).
-
-    WHY: a 20 m success cut throws away most of a distance's information,
-    so a run can move the distribution while SR barely moves. The
-    default-frame arm shifted mean NE 47.6 -> 44.4 m against +0.7 SR
-    points; only the continuous read can say whether that is real.
-
-    The MEDIAN of the per-episode difference is the reported point (the
-    statistic Wilcoxon actually tests is the symmetry of the signed
-    ranks, and the mean is dragged by a handful of 1 km misses). Its CI
-    is the same seeded percentile bootstrap the SR delta uses, so the
-    two intervals are constructed the same way. scipy supplies only the
-    exact/normal signed-rank p."""
-    import statistics
-
-    from scipy.stats import wilcoxon
-
-    n = len(pairs)
-    diffs = [float(b - a) for a, b in pairs]
-    nz = [d for d in diffs if d != 0.0]
-    med_lo, med_hi = _bootstrap_ci(diffs, seed=boot_seed, stat="median")
-    # The MEAN gets an interval too. A bare mean delta beside an
-    # interval-bearing median reads as the solid number and is the
-    # opposite: -3.21 m on the default-frame arm looked like a real gain
-    # until its own CI came back [-8.61,+2.00]. Never print one naked.
-    mean_lo, mean_hi = _bootstrap_ci(diffs, seed=boot_seed)
-    p = float(wilcoxon(diffs).pvalue) if nz else float("nan")
-    med = statistics.median(diffs) if n else float("nan")
-    return {
-        "label": label,
-        "metric": metric,
-        "n": n,
-        "mean_a": round(sum(a for a, _ in pairs) / n, 4) if n else float("nan"),
-        "mean_b": round(sum(b for _, b in pairs) / n, 4) if n else float("nan"),
-        "median_delta": round(med, 4),
-        "median_delta_ci95": [round(med_lo, 4), round(med_hi, 4)],
-        "mean_delta": round(sum(diffs) / n, 4) if n else float("nan"),
-        "mean_delta_ci95": [round(mean_lo, 4), round(mean_hi, 4)],
-        "n_nonzero": len(nz),
-        "n_improved": sum(1 for d in nz if d < 0),
-        "n_worsened": sum(1 for d in nz if d > 0),
-        "wilcoxon_p": p,
-        "significant_95": bool(p < 0.05),
-    }
-
-
-def render_continuous(st: dict) -> str:
-    ci = st["median_delta_ci95"]
-    mci = st["mean_delta_ci95"]
-    sig = "SIGNIFICANT" if st["significant_95"] else "not significant"
-    return (
-        f"paired {st['metric']} ({st['label']}): n={st['n']}  "
-        f"mean_a={st['mean_a']:.2f}  mean_b={st['mean_b']:.2f}\n"
-        f"  mean   Δ={st['mean_delta']:+.2f}  "
-        f"95%CI[{mci[0]:+.2f},{mci[1]:+.2f}]\n"
-        f"  median Δ={st['median_delta']:+.2f}  "
-        f"95%CI[{ci[0]:+.2f},{ci[1]:+.2f}]  "
-        f"improved={st['n_improved']}  worsened={st['n_worsened']}  "
-        f"ties={st['n'] - st['n_nonzero']}\n"
-        f"  Wilcoxon signed-rank p={st['wilcoxon_p']:.4g} -> {sig}"
-    )
-
-
 def render(st: dict) -> str:
     ci = st["delta_ci95"]
     sig = "SIGNIFICANT" if st["significant_95"] else "not significant"
-    m = st.get("metric", "SR")
     return (
         f"A/B paired ({st['label']}): n={st['n']}  "
-        f"{m}_a={st['SR_a']:.3f}  {m}_b={st['SR_b']:.3f}  "
+        f"SR_a={st['SR_a']:.3f}  SR_b={st['SR_b']:.3f}  "
         f"Δ={st['delta']:+.3f}  95%CI[{ci[0]:+.3f},{ci[1]:+.3f}]\n"
         f"  wins(fail->success)={st['wins_fail_to_success']}  "
         f"losses(success->fail)={st['losses_success_to_fail']}  "
@@ -225,53 +138,14 @@ def _iter_rows(run_root: Path):
             yield f, r
 
 
-def _row_metrics(r: dict) -> tuple[str | None, dict]:
-    """``(episode_id, metrics)`` off a ledger row."""
-    eid = r.get("episode_id")
-    return (str(eid) if eid is not None else None), (r.get("metrics") or {})
-
-
-def _sr_by_episode(run_root: Path, key: str = "SR", *, allow_partial: bool = False) -> dict[str, int]:
-    """Binary metric bit per episode via the CANONICAL pick
-    (rows.load_attempts: first fully complete attempt by start time). The
-    prior last-row-wins walk here disagreed with every other reader on
-    duplicated episodes — on the oraclec matrix it flipped 2 episodes and
-    moved a pair's McNemar across 0.05 (2026-08-02 adversarial
-    verification). ``key`` selects which served bit (SR, OSR); it is
+def _sr_by_episode(run_root: Path, *, allow_partial: bool = False) -> dict[str, int]:
+    """The served SR bit per episode via the CANONICAL pick
+    (rows.load_attempts: first fully complete attempt by start time); it is
     never recomputed from pred_xy vs target_xy."""
     from benchmarks.citynav.analysis.run_report import load_run
 
     scored, _ = load_run(run_root, allow_partial=allow_partial)
-    if not any(key in m for m in scored.values()):
-        raise SystemExit(f"--metric {key}: no scored row of {run_root} carries {key}")
-    return {eid: int(bool(m.get(key))) for eid, m in scored.items()}
-
-
-def _continuous_by_episode(run_root: Path, key: str, *, allow_partial: bool = False) -> dict[str, float]:
-    """Served continuous metric per episode, same canonical pick.
-
-    Episodes whose pick carries no value for ``key`` are ABSENT rather
-    than defaulted -- a 0.0 fill on a distance metric reads as a perfect
-    landing."""
-    from benchmarks.citynav.analysis.run_report import load_run
-
-    scored, _ = load_run(run_root, allow_partial=allow_partial)
-    return {eid: float(m[key]) for eid, m in scored.items()
-            if m.get(key) is not None}
-
-
-def _cue_type_by_episode(run_root: Path) -> dict[str, str]:
-    """episode_id -> ``target_object_type``, the AUTHORITATIVE CityRefer class
-    of the GT target (stamped by episode_runner into metrics).
-    ``referent_bucket`` is a text-regex proxy that mislabels ~23% of building
-    targets -- never group on it."""
-    out: dict[str, str] = {}
-    for _f, r in _iter_rows(run_root):
-        eid, m = _row_metrics(r)
-        ct = m.get("target_object_type")
-        if eid is not None and ct:
-            out[eid] = str(ct)
-    return out
+    return {eid: int(bool(m.get("SR"))) for eid, m in scored.items()}
 
 
 def _run_provenance(run_root: Path) -> dict:
@@ -397,38 +271,11 @@ def main() -> None:
     ap.add_argument("--allow-low-overlap", action="store_true")
     ap.add_argument("--allow-provenance-mismatch", action="store_true",
                     help="permit comparing runs with different code/config/model (NOT a valid A/B)")
-    ap.add_argument("--dump-flips", default=None, metavar="FILE",
-                    help="write the paired flip lists as JSON: "
-                         "{wins: [episode_id...], losses: [...]} — wins are "
-                         "fail(A)->success(B), losses success(A)->fail(B). "
-                         "The forensics entry point: every trace-level "
-                         "mechanism hunt starts from these ids.")
-    ap.add_argument("--subset", default=None, metavar="FILE",
-                    help="episode-id list file (one per line): pair and "
-                         "test ONLY these episodes, reported alongside the "
-                         "full-set headline")
-    ap.add_argument("--metric", default="SR", metavar="KEY",
-                    help="which SERVED binary metric to pair on (SR, OSR). "
-                         "OSR answers a different question than SR -- "
-                         "'did the flight path ever pass within R' vs 'did "
-                         "the commit land there' -- and an arm can move "
-                         "them in opposite directions.")
-    ap.add_argument("--continuous", default=None, metavar="KEY",
-                    help="ALSO run a paired Wilcoxon signed-rank on a "
-                         "continuous served metric (ne_pos_to_goal). A 20 m "
-                         "cut discards most of a distance's information, so "
-                         "the continuous read can resolve what the binary "
-                         "one cannot.")
-    ap.add_argument("--by-cue-type", action="store_true",
-                    help="also break the paired stats down by "
-                         "target_object_type (the authoritative CityRefer "
-                         "class stamped in metrics; referent_bucket is a "
-                         "noisy text proxy and is never used)")
     _rows.add_allow_partial(ap)
     args = ap.parse_args()
 
-    a = _sr_by_episode(Path(args.run_a), args.metric, allow_partial=args.allow_partial)
-    b = _sr_by_episode(Path(args.run_b), args.metric, allow_partial=args.allow_partial)
+    a = _sr_by_episode(Path(args.run_a), allow_partial=args.allow_partial)
+    b = _sr_by_episode(Path(args.run_b), allow_partial=args.allow_partial)
     shared = sorted(set(a) & set(b))
     if not shared:
         raise SystemExit("no shared scored episodes between the two runs")
@@ -453,9 +300,7 @@ def main() -> None:
         )
 
     # Guard: a low shared/total overlap means episodes were stolen (shared
-    # coord-root) or the seed/limit differed, not noise. Assessed on the FULL
-    # pairing, before any --subset narrowing: the subset is deliberate, so its
-    # size says nothing about coord-root or seed health.
+    # coord-root) or the seed/limit differed, not noise.
     min_n = min(len(a), len(b)) or 1
     if len(shared) < args.min_overlap_frac * min_n and not args.allow_low_overlap:
         raise SystemExit(
@@ -464,56 +309,10 @@ def main() -> None:
             "suspected; pass --allow-low-overlap to override"
         )
 
-    if args.subset:
-        want = {ln.strip() for ln in Path(args.subset).read_text().splitlines()
-                if ln.strip()}
-        n_before = len(shared)
-        shared = [e for e in shared if e in want]
-        print(f"subset filter: {len(shared)}/{n_before} shared episodes "
-              f"(subset file lists {len(want)})")
-        if not shared:
-            raise SystemExit("no shared scored episodes inside --subset")
-
     pairs = [(a[e], b[e]) for e in shared]
-    st = ab_stats(pairs, label=args.label, metric=args.metric)
-    if args.dump_flips:
-        flips = {
-            "wins": [e for e in shared if a[e] == 0 and b[e] == 1],
-            "losses": [e for e in shared if a[e] == 1 and b[e] == 0],
-        }
-        Path(args.dump_flips).write_text(json.dumps(flips, indent=1))
-        print(f"-> flips dumped to {args.dump_flips} "
-              f"(wins={len(flips['wins'])} losses={len(flips['losses'])})")
-    extra = (f"shared={len(shared)}  only_a={len(set(a) - set(b))}  "
-             f"only_b={len(set(b) - set(a))}")
-    print(render(st))
-    print(extra)
-    if args.continuous:
-        ca = _continuous_by_episode(Path(args.run_a), args.continuous, allow_partial=args.allow_partial)
-        cb = _continuous_by_episode(Path(args.run_b), args.continuous, allow_partial=args.allow_partial)
-        ids = [e for e in shared if e in ca and e in cb]
-        if len(ids) < 0.9 * len(shared):
-            raise SystemExit(
-                f"--continuous {args.continuous}: only {len(ids)}/{len(shared)} "
-                "shared episodes carry the key on BOTH sides — a paired test "
-                "over a silently shrunken set is not the test that was asked for"
-            )
-        print(render_continuous(paired_continuous(
-            [(ca[e], cb[e]) for e in ids],
-            label=args.label, metric=args.continuous)))
-    if args.by_cue_type:
-        # Treatment stamps the type; older baselines may predate it, so B
-        # fills first and A backfills. Both arms score the same GT object, so
-        # a disagreement is impossible and order is only about coverage.
-        ct = {**_cue_type_by_episode(Path(args.run_a)),
-              **_cue_type_by_episode(Path(args.run_b))}
-        groups: dict[str, list[str]] = {}
-        for e in shared:
-            groups.setdefault(ct.get(e, "unstamped"), []).append(e)
-        for cue in sorted(groups, key=lambda k: -len(groups[k])):
-            eps = groups[cue]
-            print(render(ab_stats([(a[e], b[e]) for e in eps],
-                                  label=f"{args.label}/{cue}")))
+    print(render(ab_stats(pairs, label=args.label)))
+    print(f"shared={len(shared)}  only_a={len(set(a) - set(b))}  "
+          f"only_b={len(set(b) - set(a))}")
     if arm and args.allow_provenance_mismatch:
         print("WARNING comparing non-comparable runs (override active):\n  - "
               + "\n  - ".join(arm))
