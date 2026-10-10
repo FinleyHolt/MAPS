@@ -3947,7 +3947,7 @@ def advance_reasoner_one_round(
             preamble=(asking
                       + "One crop per row, in order, each badged with the "
                       "row it shows. "))
-        if len(rows) > int(ack.get("delivered") or 0):
+        if not withheld("images") and len(rows) > int(ack.get("delivered") or 0):
             ack.setdefault("ref_notes", []).append(
                 f"{len(rows)} rows in {handle}: this call shows the first "
                 f"{ack.get('delivered')} in the standing order; slice the "
