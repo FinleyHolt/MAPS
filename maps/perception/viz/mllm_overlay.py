@@ -1,130 +1,43 @@
-"""White-outline object overlay for MLLM calls (priors AND runtime pegs).
+"""Look-crop overlay: mark objects on a photograph without covering them.
 
-Renders object polygons onto the raw camera crop and returns JPEG bytes. One
-renderer serves the per-stop unified-vision crops the single persistent MAPS
-Reasoner reads in its own context (catalog priors via
-``build_prior_polys_ortho``) and the holes/pegs Set-of-Mark (prior +
-runtime-detection pegs via ``build_peg_polys_ortho``). The polygons are drawn
-as solid white outlines (no fill — a white wash desaturated the roof/facade
-color the reasoner reads), with the label placed just above each mask's top
-edge so it never covers the candidate's pixels. The anchor target gets a
-thicker outline and a ``TARGET `` label prefix so the MLLM can tell which
-polygon a given candidate is.
-
-There is no SAM layer here. SAM populates the one runtime world-state
-ObjectGraph upstream (image-mode `/segment` -> geolocate -> world_tracker ->
-track_id upsert); the reasoner's view of the world is the raw stop crop plus
-this overlay attached into its own context, and the VLM reads dynamic objects
-from raw pixels — its visual reading IS the evidence.
-See ``maps/perception/README.md`` for the SAM pipeline contract and the
-descriptions wall.
+``render_look_overlay`` draws each marked object's recorded footprint as an
+achromatic outline (white stroke over a dark halo, no fill, so the colour the
+reasoner reads stays untouched), binds a numbered badge to every mark, adds
+optional named-place labels, and returns JPEG bytes. The look and map
+renderers (``maps/search/render``) are its callers; the digit -> fid legend
+lives in their tool text.
 """
 
 from __future__ import annotations
 
-import math
-import re
-from typing import Any, Mapping, Sequence
+from typing import Sequence
 
+import cv2
 import numpy as np
-
-try:
-    import cv2
-except ImportError as exc:
-    raise ImportError(
-        "perception.mllm_overlay requires opencv-python. "
-        "Install opencv-python-headless."
-    ) from exc
 
 __all__ = [
     "render_look_overlay",
 ]
 
 
-_OUTLINE_BGR: tuple[int, int, int] = (255, 255, 255)  # white
-_FILL_BGR: tuple[int, int, int] = (255, 255, 255)  # white
-# Candidate fill OFF (was 0.20): the white wash desaturated the roof/facade/
-# material color the reasoner reads, mislabeling correct buildings (e.g.
-# a brown roof reading as gray). The outline marks the candidate without
-# touching its pixels. Flip back to 0.20 to restore the old behavior.
-_FILL_ALPHA: float = 0.0
-# Slightly thicker outlines compensate for the removed fill's saliency.
-_OUTLINE_THICKNESS_TARGET: int = 4
-_OUTLINE_THICKNESS_DEFAULT: int = 2
-_LABEL_FONT_SCALE: float = 0.7
 _LABEL_FONT = cv2.FONT_HERSHEY_SIMPLEX
 
-# Color / appearance tokens that mark a concept as MORE SPECIFIC than its bare
-# class (``bright red car`` over ``car``). Picks which concept's label survives
-# when several SAM concepts segment the
-# same physical object. Not an exhaustive palette -- just enough to break ties
-# toward the concept the reasoner can actually color-read against.
-_ATTRIBUTE_WORDS: frozenset[str] = frozenset(
-    {
-        "red", "orange", "yellow", "green", "blue", "purple", "pink", "brown",
-        "black", "white", "gray", "gray", "silver", "gold", "tan", "beige",
-        "maroon", "navy", "teal", "cyan", "magenta", "bright", "dark", "light",
-        "pale", "shiny", "metallic",
-    }
-)
-
-
-
-
-
-
-
-
-
-
-# ---------------------------------------------------------------------------
-# ``look`` tool: fid<->car identification WITHOUT occluding the car's pixels.
-#
-# The look crop is centered on ONE candidate fid (one crop per fid). A neutral
-# crop is clean but gives the model no way to know WHICH car is that fid, while
-# labelling every object stacks long labels + white outlines into an illegible
-# smear right over the cars (color is
-# the discriminator, so covering the car defeats the look). This renderer is the
-# well-designed middle: mark the fid car with corner brackets that sit in the
-# gap AROUND the footprint (never over the body), put ALL text in a top MARGIN
-# band (never over pixels), and keep neighbors to a faint ring.
-#
-# ACHROMATIC by design: the markers are WHITE, not colored. Car COLOR is the
-# discriminator the reasoner leans on, and a colored marker (magenta/orange)
-# competes with / biases that cue — white is neutral. The three roles are told
-# apart by SHAPE/THICKNESS, not hue: center fid = white corner brackets, the
-# relational target = THICKER white corner brackets, other candidates = a thin
-# white ring. Every stroke carries a black halo (drawn under it), which doubles
-# as the contrast outline so white markers stay legible over gray road AND over
-# a white car. (Lit + adversarial verified: EPIC-Bench/CRG say marks help 2026
-# open models; achromatic is the safe form.)
-#
-_LOOK_CENTER_BGR: tuple[int, int, int] = (255, 255, 255)  # white — the fid car
-_LOOK_TARGET_BGR: tuple[int, int, int] = (255, 255, 255)  # white — target (thicker brackets)
-_LOOK_NEIGH_BGR: tuple[int, int, int] = (255, 255, 255)   # white — other candidates (thin ring)
-_LOOK_BAND_BGR: tuple[int, int, int] = (28, 28, 28)       # dark margin strip
+_LOOK_BAND_BGR: tuple[int, int, int] = (28, 28, 28)  # dark margin strip
 # The ring a MASKLESS mark gets, so its badge points at something instead of
 # at bare ground. Frozen in delivered pixels like the badge glyph: a mark
 # with no footprint is a position, and the ring must never read as extent.
 _POINT_RING_PX: int = 6
 
 
-
-
-
-
 def render_look_overlay(
     rgb: np.ndarray,
     *,
     center_px: tuple[float, float],
-    center_label: str,
     center_poly_px: Sequence[tuple[float, float]] | None = None,
     target_px: tuple[float, float] | None = None,
-    target_label: str = "",
     target_poly_px: Sequence[tuple[float, float]] | None = None,
     neighbor_px: Sequence[tuple[float, float]] | None = None,
     neighbor_polys_px: Sequence[Sequence[tuple[float, float]] | None] | None = None,
-    px_per_m: float = 10.0,
     jpeg_quality: int = 85,
     band_text: str = "N up",
     neighbor_digit_start: int = 3,
@@ -137,19 +50,16 @@ def render_look_overlay(
     """Identify the center fid car (and optionally a target / neighbors) on a
     look crop WITHOUT occluding any car's pixels, and return JPEG bytes.
 
-    V3 DESIGN (owner directive 2026-07-28: the agent is shown the LASSO
-    around the object's actual segmentation mask, never a proxy shape —
-    every circle/ellipse heuristic deleted; badge + legend mechanics keep
-    their V2 lit grounding — OmniParser 2408.00203 digit-badge + text
-    legend +23.3pp; STVG-R1 2602.11730 digits >> mixed ids; 2604.12371
-    Qwen glyph floor ~10-12 px):
+    The agent is shown the LASSO around the object's actual segmentation
+    mask, never a proxy shape (badge + legend grounding: OmniParser
+    2408.00203 digit-badge + text legend +23.3pp; STVG-R1 2602.11730
+    digits >> mixed ids; 2604.12371 Qwen glyph floor ~10-12 px):
     - TRUE MASK OUTLINE, achromatic (white stroke + dark halo), NO fill —
       the mark IS the object's recorded footprint polygon (the fine
       SAM-derived world_contour where one exists, else the mask's boundary
       loop as ingested), clipped to the frame and drawn as open arcs so a
       shape larger than its window shows the part you can see and nothing
       along the cut. Center = 3 px, target = 2 px, neighbors = 1 px.
-      No circles, no corner brackets, no filled masks.
     - A mark whose object carries NO mask polygon gets its numbered badge,
       a leader line, and a small fixed-radius RING at the point — no
       outline. The absence of a footprint stays visibly absent (the ring
@@ -168,8 +78,8 @@ def render_look_overlay(
       and a digit sitting in the shape binds tighter than one hanging off
       it. Photo crops keep the outside placement — occluding the object
       the crop exists to show is never worth the tighter binding.
-    - The margin band carries ONLY the tiny "N up" strip — all naming moved
-      to the tool-text legend.
+    - The margin band carries ONLY the tiny "N up" strip; all naming lives
+      in the tool-text legend.
     ``rgb`` is (H, W, 3) uint8 RGB; the returned JPEG is BGR-encoded.
     """
     if rgb is None or rgb.ndim != 3 or rgb.shape[2] != 3:
@@ -185,7 +95,7 @@ def render_look_overlay(
     canvas = cv2.cvtColor(np.ascontiguousarray(rgb_u8), cv2.COLOR_RGB2BGR)
     h, w = canvas.shape[:2]
 
-    # V3 marks: mask outlines + digit badges (see docstring). Draw neighbors
+    # Marks: mask outlines + digit badges (see docstring). Draw neighbors
     # first, then target, then center on top (most salient); badges placed
     # with collision avoidance against everything already drawn.
     placed: list[tuple[float, float, float, float]] = []  # occupied px boxes
@@ -248,8 +158,6 @@ def render_look_overlay(
                     (255, 255, 255), th, cv2.LINE_AA)
         placed.append(bb)
 
-    # neighbors: thin outlines, digits 3.. in caller order.
-    pm = max(float(px_per_m), 1.0)
     # MARK GEOMETRY: the mark IS the object's
     # recorded mask polygon — ALWAYS, however coarse. A stair-stepped 2 m
     # grid loop is the honest realisation of what the system knows about

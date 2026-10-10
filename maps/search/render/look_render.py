@@ -902,11 +902,8 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         jp = render_look_overlay(
             rgb,
             center_px=center_px,
-            center_label=center_label,
             center_poly_px=_proj_poly(req.get("center_boundary")),
-            px_per_m=float(W) / max(x1 - x0, 1e-6),
             target_px=target_px,
-            target_label=target_label,
             target_poly_px=target_poly_px,
             neighbor_polys_px=neighbor_polys_px,
             neighbor_px=neighbor_px,
