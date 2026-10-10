@@ -150,7 +150,8 @@ def _reasoner_timeout_s() -> float:
     """Per-call transport timeout, from ``SEARCH_REASONER_TIMEOUT_S``.
 
     Unset or blank takes the default. Anything else must be a positive
-    number: a malformed or zero value raises rather than falling back,
+    number of seconds no larger than ``threading.TIMEOUT_MAX``: a
+    malformed, zero, NaN or unbounded value raises rather than falling back,
     because a silent fallback is exactly what this read was written to end
     (the env was exported by two run scripts and documented in
     ``maps/search/README.md`` while nothing read it, so a slow call died
@@ -160,10 +161,11 @@ def _reasoner_timeout_s() -> float:
     if not raw:
         return _REASONER_TIMEOUT_DEFAULT_S
     value = float(raw)   # loud on garbage, deliberately
-    if value <= 0:
+    if not 0 < value <= threading.TIMEOUT_MAX:
         raise ValueError(
             f"SEARCH_REASONER_TIMEOUT_S={raw!r} is not a positive number of "
-            f"seconds; httpx reads 0 as 'time out immediately', never 'no limit'"
+            f"seconds at most threading.TIMEOUT_MAX; httpx reads 0 as 'time out "
+            f"immediately', never 'no limit', and a socket refuses a longer wait"
         )
     return value
 

@@ -39,7 +39,7 @@ def test_surrounding_whitespace_survives_the_shell(monkeypatch):
     assert _reasoner_timeout_s() == 900.0
 
 
-@pytest.mark.parametrize("bad", ["nine hundred", "900s", "0", "-1"])
+@pytest.mark.parametrize("bad", ["nine hundred", "900s", "0", "-1", "nan", "inf", "1e12"])
 def test_a_value_that_cannot_apply_is_loud(monkeypatch, bad):
     """A typo must not revert to the default -- that is the original bug.
 
