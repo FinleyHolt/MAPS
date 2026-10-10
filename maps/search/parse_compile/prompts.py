@@ -454,8 +454,11 @@ before it ran and stands. Names persist for the whole mission.
 # written.
 _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
     "look_for": [
-        ("sub", '  look_for("pool", "house")\n  explore("Mill Lane")\n',
-         '  explore("Mill Lane")\n'),
+        ("sub", '  look_for("pool", "house")\n  explore("Mill Lane")\n'
+                '  pools = find("pool")\n'
+                '  r1 = find("house", nearest=pools, color="white")\n',
+         '  explore("Mill Lane")\n'
+         '  r1 = find("house", nearest="Mill Lane", color="white")\n'),
         ("cut", "\nEach line runs the moment it is reached", "\nTHE MAP"),
         ("drop", "  find reads ONE set of rows"),
         ("drop", '  look_for("pool", "house")   what the segmenter'),
@@ -480,7 +483,16 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
                 " thing -- a lot is found by its cars, a helipad by its H, and"
                 " what stands on a thing is often the stronger detection --"
                 " explore the named place so the candidates become rows, then"
-                " look at them and choose by what the crops show.", ""),
+                " look at them and choose by what the crops show.",
+         " look_for the classes the cue names AND what stands on the"
+         " thing -- a lot is found by its cars, a helipad by its H, and what"
+         " stands on a thing is often the stronger detection -- explore the"
+         " named place so the candidates become rows, then choose by what"
+         " the pass's catch shows."),
+        ("sub", "points RELATE and LOOK, they do not move you.",
+         "points RELATE, they do not move you."),
+        ("sub", "is a place to look and relate near", "is a place to relate near"),
+        ("sub", "loop to LOOK, then move once", "loop to READ, then move once"),
     ],
 }
 _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
@@ -504,6 +516,7 @@ _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
         ("sub", " An attribute in NO column is settled by look(), not by"
                 " rank.", ""),
         ("drop", "- WHAT NO COLUMN CARRIES IS IN THE PIXELS"),
+        ("sub", "Points RELATE and LOOK (near=", "Points RELATE (near="),
     ],
     "mission_map": [
         ("cut", "=== MISSION MAP ===", "=== WORLD CONVENTIONS ==="),

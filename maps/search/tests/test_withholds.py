@@ -65,12 +65,14 @@ CASES = {
     "images": ((), (), (0, 0), (0, 0), (0, 0)),
     "look_for": (("SYSTEM", "TOOLS", "SURFACE"),
                  ("look_for", "watched classes", "segmenting your", "ARM EVERY CLASS",
-                  "WHAT YOU SEE BECOMES ROWS", "The flight folds"),
-                 (23, 10), (19, 2), (1, 0)),
+                  "WHAT YOU SEE BECOMES ROWS", "The flight folds", "SAM segments roads",
+                  "pools = find("),
+                 (23, 10), (21, 3), (1, 0)),
     "look": (("SYSTEM", "TOOLS", "SURFACE"),
              ("look(", "a CLOSE look", "known only from a look",
-              "WHAT NO COLUMN CARRIES IS IN THE PIXELS", "look at them"),
-             (12, 5), (5, 2), (1, 0)),
+              "WHAT NO COLUMN CARRIES IS IN THE PIXELS", "look at them",
+              "RELATE and LOOK", "look and relate", "loop to LOOK"),
+             (13, 6), (8, 5), (1, 0)),
     "mission_map": (("SYSTEM",), ("=== MISSION MAP ===", "You are the reasoner"),
                     (40, 0), (0, 0), (0, 0)),
 }
@@ -93,7 +95,7 @@ def test_each_withhold_takes_exactly_its_part(monkeypatch, name):
     got_surface = got["SURFACE"].split("\n", 1)[1]
     assert _diff(base_surface, got_surface) == surface
     served = (prompts.served_system_prompt() + prompts.served_doc()
-              + "\n".join(contract.surface_lines()))
+              + "\n".join(contract.surface_lines()) + got["SYSTEM"])
     for m in markers:
         assert m in base["SYSTEM"] + base["TOOLS"] + base_surface, m
         assert m not in served, m
