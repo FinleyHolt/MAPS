@@ -60,10 +60,6 @@ class ToolContext:
     tile_origin_xy: tuple[float, float] = (0.0, 0.0)
     cell_size_m: float = 0.0  # required; caller passes the tile's true value
     view_frame_by_id: dict[str, ViewFrame] = field(default_factory=dict, repr=False)
-    satellite_view: object | None = None  # benchmarks.citynav.satellite_view
-    # SatelliteView; opaque so this module stays CityNav-agnostic. Read by
-    # the dashboard / runtime projectors; the pre-flight SAM union pass
-    # that historically segmented this RGB has been removed.
     tool_result_cache: dict | None = field(default=None, repr=False)
     # Per-episode memo of (tile_name, tool_name, canonicalized_args_json)
     # -> already-serialized JSON return string for tools that read only

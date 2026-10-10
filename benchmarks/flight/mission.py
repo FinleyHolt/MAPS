@@ -198,7 +198,6 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
         base_features=assets.base_features,
         compiler=compiler,
         sam_concept_setter=sam_concept_setter,
-        satellite_view=assets.satellite_view,
         # The block's ground datum: the mission's observation span is
         # ``2 * (alt - ground)`` off it, and without it every explore answers
         # "no footprint to cover".

@@ -61,12 +61,6 @@ class CompilerInput:
     cell_size_m: float | None = None  # grid cell size in meters; per-tile
     # value from the tile's ``_meta.json`` (also stored on
     # ``ObjectGraph.cell_size_m``).
-    satellite_view: object | None = None
-    # Top-down RGB of the tile (a benchmarks.citynav.satellite_view
-    # SatelliteView). Opaque at the protocol layer so maps.search stays
-    # CityNav-agnostic; the compiler hands it to the Stage-1.5 union
-    # pre-segment, which runs SAM 3.1 once per turn over the canonical
-    # concept union. None disables segmentation.
     step_idx: int = 0
     # Flight-step index of this compile turn. Used by the compiler's
     # run-checkpoint store to partition on-disk artifacts under

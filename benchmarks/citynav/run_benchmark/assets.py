@@ -32,10 +32,6 @@ class BlockAssets:
     grid_shape: tuple[int, int]
     base_features: dict  # Prebaked features dict, loaded once per block.
     raster: BlockObservation
-    satellite_view: object | None = None  # SatelliteView from _satellite.npz
-    # if the bake produced one; the union pre-segment in the parse-first
-    # compiler reads it once per turn. None disables segmentation for
-    # this tile.
     # Per-block ground elevation lookup for AGL-aware FPV LOD selection.
     # Subtile mode wires a constant; full mode uses a (city, bbox) → z
     # lookup that walks the per-block roster. ``None`` falls back to the
@@ -43,60 +39,6 @@ class BlockAssets:
     ground_z_for_pose: object = (
         None  # Optional[Callable[[tuple[float, float]], float | None]]
     )
-
-
-def _assert_view_matches_meta(
-    *,
-    map_name: str,
-    view: object,
-    meta_grid_shape: tuple[int, int],
-    meta_bounds: WorldBounds,
-    meta_cell_size_m: float,
-) -> None:
-    """Hard invariant: SatelliteView's grid_shape + ground extent + cell
-    size must match the tile meta.json. Stale satellite npz files (e.g.
-    baked at 5 m/cell while the meta has migrated to 2 m/cell) silently
-    drop SAM detections at projection by clipping cells against the
-    view's stored grid_shape. We trip on that early instead of letting
-    runs proceed with empty perception in the upper portion of the tile.
-    """
-    view_shape = getattr(view, "grid_shape", None)
-    if view_shape is None or tuple(int(v) for v in view_shape) != tuple(
-        int(v) for v in meta_grid_shape
-    ):
-        raise RuntimeError(
-            f"satellite view / meta mismatch on {map_name!r}: "
-            f"view.grid_shape={view_shape} vs meta.grid_shape={meta_grid_shape}. "
-            f"Re-bake the _satellite.npz at the current cell_size_m: "
-            f'`python -c "from benchmarks.citynav.bake.satellite import bake_block; '
-            f"bake_block('{map_name}')\"`."
-        )
-    p2w = getattr(view, "pixel_to_world", None)
-    if p2w is not None and len(p2w) >= 4:
-        ground_w_m = float(p2w[2])
-        ground_h_m = float(p2w[3])
-        meta_w = float(meta_bounds.x_max - meta_bounds.x_min)
-        meta_h = float(meta_bounds.y_max - meta_bounds.y_min)
-        # Allow up to 5 m absolute tolerance — render_from_ply pads the
-        # ground extent slightly. We just want to catch the 5x scale bug
-        # (view = 245 vs meta = 240 is fine; view = 445 vs meta = 240 is not).
-        if abs(ground_w_m - meta_w) > 5.0 or abs(ground_h_m - meta_h) > 5.0:
-            raise RuntimeError(
-                f"satellite view / meta ground-extent mismatch on {map_name!r}: "
-                f"view ground=({ground_w_m}, {ground_h_m}) vs "
-                f"meta ground=({meta_w}, {meta_h}). Re-bake the _satellite.npz."
-            )
-    # Sanity-check view-derived cell size against meta's cell_size_m. A
-    # stale 5 m bake on a 2 m meta would have ground_h_m/grid_height ≈ 5,
-    # not 2. Tolerance is loose because of the ground-extent padding.
-    if p2w is not None and len(p2w) >= 4 and meta_grid_shape[0] > 0:
-        view_cell_h = float(p2w[3]) / float(meta_grid_shape[0])
-        if abs(view_cell_h - meta_cell_size_m) > 0.5:
-            raise RuntimeError(
-                f"satellite view cell size disagrees with meta on {map_name!r}: "
-                f"view-derived {view_cell_h:.2f} m/cell vs meta "
-                f"{meta_cell_size_m:.2f} m/cell. Re-bake the _satellite.npz."
-            )
 
 
 def _assert_descriptions_wall(features: object, source_path: str) -> None:
@@ -245,24 +187,6 @@ def _load_block_assets(
         px_per_m=raster_px_per_m,
         grid_shape=grid_shape,
     )
-    sat_path = Path(f"{stem}_satellite.npz")
-    satellite_view: object | None = None
-    if sat_path.exists():
-        try:
-            from benchmarks.citynav.satellite_view import load_satellite_view
-
-            satellite_view = load_satellite_view(sat_path)
-        except Exception as exc:
-            log.warning("  %s: failed to load satellite view: %s", map_name, exc)
-        else:
-            _assert_view_matches_meta(
-                map_name=map_name,
-                view=satellite_view,
-                meta_grid_shape=grid_shape,
-                meta_bounds=bounds,
-                meta_cell_size_m=cell_size_m,
-            )
-
     from maps.perception.ortho.ground_level import GROUND_LEVEL
 
     block_ground_z = GROUND_LEVEL.get(map_name)
@@ -277,7 +201,6 @@ def _load_block_assets(
         grid_shape=grid_shape,
         base_features=base_features,
         raster=raster,
-        satellite_view=satellite_view,
         ground_z_for_pose=_ground_z_subtile,
     )
 

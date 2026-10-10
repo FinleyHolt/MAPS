@@ -503,7 +503,6 @@ class SearchLoop:
         compiler: MapsCompiler,
         sam_concept_setter: Callable[[list[str]], None] | None = None,
         sam_watchlist_setter: Callable[[list[str]], None] | None = None,
-        satellite_view: object | None = None,
         ortho_ground_z_m: float | None = None,
         rgbd_dir: str | None = None,
         marker_xy: tuple[float, float] | None = None,
@@ -525,7 +524,6 @@ class SearchLoop:
         # actually reach the per-stop /segment calls (``set_concepts`` is
         # frozen after preflight and would silently no-op them).
         self._sam_watchlist_setter = sam_watchlist_setter
-        self._satellite_view = satellite_view
         # Observation backend the runtime crops frames through. Drives
         # viewpoint-picker dispatch (perception.viewpoint).
         # Per-block upstream ground datum for the orthographic picker's

@@ -323,7 +323,6 @@ def run_episode(
             compiler=compiler,
             sam_concept_setter=sam_concept_setter,
             sam_watchlist_setter=sam_watchlist_setter,
-            satellite_view=assets.satellite_view,
             ortho_ground_z_m=ortho_ground_z_m,
             # Upstream raster dir for the opt-in ``look`` tool's crop
             # renderer. Passed as a str so maps.search stays

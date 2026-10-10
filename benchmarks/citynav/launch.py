@@ -204,10 +204,6 @@ def preflight_artifacts(
 
     repo = repo_root or Path(__file__).resolve().parents[2]
     stem = Path(tile_stem(map_name))
-    # ``_satellite.npz`` is deliberately NOT required: it backs only the
-    # satellite overlay, and ``run_benchmark`` already tolerates a missing one
-    # (``satellite_view=None``). Requiring it blocked headless smoke runs on
-    # tiles whose satellite was never baked (no raw PLY ortho).
     tile_suffixes = (
         "_meta.json",
         "_features.json",
