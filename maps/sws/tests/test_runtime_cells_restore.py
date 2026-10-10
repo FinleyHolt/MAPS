@@ -1,10 +1,7 @@
-"""Per-detection SAM mask-tracking restore (2026-07-03).
-
-A tracked detection now stores its projected footprint on ``node.cells`` — the
-SAME ``(N, 2) int32`` format prebake nodes carry — derived from the projected
-``rows``/``cols`` cells and re-stamped every frame. Re-identification stays EXACTLY
-``track_id`` (ByteTrack): same track_id folds onto its node, a different track_id
-mints a new one. There is no mask-overlap / IoU re-id (that stays deleted).
+"""A tracked detection stores its projected footprint on ``node.cells``, the
+``(N, 2) int32`` format prebake nodes carry, re-stamped every frame.
+Re-identification is the exact ``track_id``: the same id folds onto its node,
+a different id mints a new one.
 """
 
 from __future__ import annotations

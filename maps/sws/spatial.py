@@ -1,12 +1,5 @@
-"""Shared spatial primitives for drone autonomy.
-
-Pure geometric functions used by reasoning engine (tools.py), renderer,
-feature enrichment, and case generation. No domain-specific imports —
-only numpy and scipy (lazy-loaded).
-
-Key references:
-    - Elongation / Orientation: PCA eigenvalue decomposition for shape
-"""
+"""Grid geometry primitives: PCA orientation of a cell set and the
+cell-to-world mapping. numpy only."""
 
 from __future__ import annotations
 

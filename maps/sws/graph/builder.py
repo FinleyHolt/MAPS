@@ -96,19 +96,15 @@ def _mask_centerline(
     Returns ``(centerline_rc, arc_m, length_m, residual_m, method)`` or
     ``None`` when the mask is too small / degenerate to admit an axis.
 
-    The centerline is the mask's medial line sampled at the grid resolution
-    along its PCA principal axis: project every cell onto the axis, bin by the
-    integer projection step (data-driven — the grid's own resolution, no
-    tunable bin count), and take the lateral mask-midpoint (mean cell
-    position) per bin. Everything is in the ``(row, col)`` grid frame (same as
-    ``centroid``/``cells``); the meter scalars are frame-invariant. No compass
-    bearing or signed side is computed here — those are frame-sensitive and are
-    derived at the tool boundary (see the frame-convention geometry in
-    maps.search ``geom_compute``), never baked.
+    The centerline is the mask's medial line along its PCA principal axis:
+    every cell is projected onto the axis, binned by the integer projection
+    step (the grid's own resolution), and each bin contributes its mean cell
+    position. Vertices are in the ``(row, col)`` grid frame; the meter scalars
+    are frame-invariant.
 
     ``residual_m`` is the max perpendicular distance (meters) of any mask cell
-    to the straight PCA line — a curvature/fit beacon (≈ half-width for a
-    straight mask, inflated by curvature; the visualizer is authoritative).
+    to the straight PCA line: about half the width for a straight mask, more
+    for a curved one.
     """
     if arr is None or len(arr) < 2:
         return None
@@ -126,10 +122,8 @@ def _mask_centerline(
     s = centered @ e1  # signed projection along the principal axis (cells)
     lat = centered @ e2  # signed lateral offset (cells)
     residual_m = float(np.abs(lat).max()) * float(cell_size_m)
-    # Deterministic axis orientation (a labeling convention, NOT a threshold):
-    # orient +e1 to have a non-negative row component (tie-break: non-negative
-    # col), so the vertex order is reproducible. Exposed via vertex order only;
-    # tools never assume "forward" from it — they orient relative to the anchor.
+    # Orient +e1 to a non-negative row component (tie: non-negative col) so the
+    # vertex order is reproducible; tools orient relative to the anchor.
     if (e1[0] < 0) or (e1[0] == 0 and e1[1] < 0):
         s = -s
     bins = np.round(s).astype(int)
@@ -173,8 +167,7 @@ def _build_node(
         centroid = (int(round(arr[:, 0].mean())), int(round(arr[:, 1].mean())))
 
     angle, confidence = _compute_orientation(arr[:, 0], arr[:, 1])
-    # Raw per-node geometry: the mask centerline + arc + curvature beacon,
-    # computed generically for every node (no class special-casing).
+    # The mask centerline family, the same for every class.
     _geom = _mask_centerline(arr, cell_size_m=cell_size_m)
     if _geom is not None:
         _centerline, _arc_m, _axis_len_m, _axis_resid_m, _cl_method = _geom
@@ -185,13 +178,9 @@ def _build_node(
         _axis_resid_m = 0.0
         _cl_method = ""
 
-    # The feature's EXACT world-meter vertex chain from the bake — a ring, a
-    # way, or a node's single vertex (benchmarks/citynav/bake/city.py).
-    # Stamped verbatim onto MapObject.world_contour; build_surface prefers it
-    # over the 2 m cell-quantized boundary and computes the shape scalars
-    # from it (same substrate a SAM detection's pixel-mask contour uses).
-    # NO length floor: a >= 3 floor is a footprint assumption, and it dropped
-    # every way and every node the bake now hands over.
+    # The bake's exact world-meter vertex chain (a ring, a way, or a node's
+    # single vertex), stamped verbatim; no length floor, since a way or a
+    # single node is a whole contour too.
     wc_raw = feat.get("world_contour")
     world_contour: list[list[float]] | None = None
     if isinstance(wc_raw, list) and wc_raw:
@@ -276,7 +265,6 @@ def build_object_graph(
             if node is not None:
                 nodes[fid] = node
 
-    # Per-class object sets O_n^{(c)}.
     objects_by_class: dict[str, dict[str, MapObject]] = {}
     for fid, node in nodes.items():
         objects_by_class.setdefault(node.class_name, {})[fid] = node

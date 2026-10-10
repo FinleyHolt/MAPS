@@ -15,28 +15,15 @@ import numpy as np
 from maps.sws.graph.model import ObjectGraph, MapObject
 
 
-# The centerline family (centerline / centerline_arc_m / axis_length_m /
-# axis_residual_m / centerline_method) is a DETERMINISTIC reduction of the
-# persisted ``cells``, so it is DERIVED (``derive_centerlines`` below, called by
-# the loader AND by the runtime upsert) rather than separately persisted. A
-# field re-derived from its source can never drift from it, and a version bump
-# for it would hard-refuse every existing tile for nothing. RULE: bump this
-# version ONLY for a genuinely persisted-and-read atom, NEVER for a derived
-# geometry. The schema_version field + the load-refusal gate are the machinery
-# for that case.
-#
-# v3 is that case. ``world_contour`` holds a feature's EXACT vertex chain for
-# every node — a ring, a way or a single point — and states its own closure by
-# returning to its first vertex (``geom_compute.is_closed_chain``). A v2 ring
-# carries no closing vertex, so read under v3 it becomes an OPEN chain: no
-# enclosed area, no containment, and a missing closing edge, all silently.
-# That is precisely the "persisted-and-read atom changed format" case, so the
-# loader refuses a v2 tile instead of reading it wrong.
+# Bumped only when a persisted field that is read changes format; the loader
+# refuses any other version. v3: ``world_contour`` states a ring's closure by
+# repeating its first vertex (``geom_compute.is_closed_chain``), so a ring
+# without it would read as an open chain.
 GRAPH_SCHEMA_VERSION = 3
 
 
 # ---------------------------------------------------------------------------
-# Node <-> dict (shared by JSON + binary formats)
+# Node <-> dict
 # ---------------------------------------------------------------------------
 
 
@@ -78,7 +65,7 @@ def _node_to_dict(node: MapObject) -> dict:
         nd["world_contour"] = [[float(x), float(y)] for x, y in node.world_contour]
     if node.world_xy is not None:
         nd["world_xy"] = [float(node.world_xy[0]), float(node.world_xy[1])]
-    # Raw per-node spatial geometry (grid frame; see MapObject docstring).
+    # Mask-derived geometry, grid frame (see MapObject).
     if node.centerline is not None:
         nd["centerline"] = [[float(r), float(c)] for r, c in node.centerline]
     if node.centerline_arc_m is not None:
@@ -171,38 +158,22 @@ def save_graph_binary(graph: ObjectGraph, path_stem: str) -> None:
 
 
 def derive_centerlines(nodes: dict, cell_size_m: float) -> None:
-    """Derive the per-node centerline family from each node's ``cells``.
+    """Derive the centerline family from ``cells`` on every node that has
+    cells but no centerline.
 
-    The centerline (``centerline`` / ``centerline_arc_m`` / ``axis_length_m`` /
-    ``axis_residual_m`` / ``centerline_method``) is a parameter-free PCA reduction
-    of the mask cells, NOT an independent atom -- so it is derived via the SAME
-    ``builder._mask_centerline`` the bake uses, so a loaded graph and a baked
-    one carry the same centerline by construction.
+    The family (``centerline`` / ``centerline_arc_m`` / ``axis_length_m`` /
+    ``axis_residual_m`` / ``centerline_method``) is the bake's own
+    ``builder._mask_centerline`` reduction of the cells. Two callers share this
+    one function: ``load_graph_binary``, before the ObjectGraph is built, and
+    ``runtime._stamp_cells``, as a detected node's cells are written, so a
+    detected node and a loaded one carry the same centerline. The geom ops
+    resolve a fid with a centerline as a line and one without as a point
+    (``analyze_scene/geom_program.py`` ``_cl`` / ``_axis_q``).
 
-    ``cell_size_m`` is the graph's cell size (read from the npz by the load
-    caller -- it is required there). Only nodes that carry ``cells`` but no
-    ``centerline`` are touched (a tile baked before the field existed); a node
-    that already has one is kept as-is.
-
-    TWO callers, and they must stay ONE function. ``load_graph_binary`` runs it
-    before the ObjectGraph is constructed, so the mutated nodes are the ones the
-    graph serves. ``runtime`` runs it on a detected node as it stamps that
-    node's ``cells``, because a graph that is never SAVED is never LOADED: the
-    world-state ingest server hands its graph back through ``save_graph`` ->
-    ``load_graph`` and its detected nodes arrive carrying a centerline, while
-    the in-process upsert produced the same nodes without one. Those are the two
-    branches of ``search_loop._upsert_detections``, and the geom ops read
-    ``node.centerline`` to decide whether a fid resolves as a LINE reference or
-    a point (``analyze_scene/geom_program.py`` ``_cl`` / ``_axis_q``), so the
-    difference reached answers. A second copy of this reduction in runtime.py is
-    how the two paths would silently drift apart again.
-
-    ponytail: derive-if-absent, so a detected node's centerline stays its FIRST
-    frame's footprint while its ``cells`` are re-stamped every frame. That
-    staleness is the incumbent behaviour on the server path and is matched here
-    deliberately -- correcting it changes the geom surface for detected fids and
-    needs a paired SR read, not a plumbing commit. Re-derive on every re-stamp
-    when someone pays for that read.
+    ponytail: derive-if-absent, so a detected node's centerline stays its
+    first frame's footprint while its ``cells`` are re-stamped every frame.
+    Re-deriving on every re-stamp changes the geom surface for detected fids
+    and needs a paired SR read.
     """
     from maps.sws.graph.builder import _mask_centerline  # local: avoid import cycle
 
@@ -222,9 +193,9 @@ def derive_centerlines(nodes: dict, cell_size_m: float) -> None:
 def load_graph_binary(path_stem: str) -> ObjectGraph:
     """Read ``{stem}_graph.npz`` + ``{stem}_nodes.json`` into an ObjectGraph.
 
-    Nodes only. Packed edge columns (``src``/``dst``/``relation``/…) an
-    older npz carries are never read, and an npz loads an array only when it
-    is accessed, so they never reach RAM.
+    Nodes only. Packed edge columns (``src``/``dst``/``relation``/…) an npz
+    may carry are never read, and an npz loads an array only when it is
+    accessed, so they never reach RAM.
     """
     npz_path = f"{path_stem}_graph.npz"
     nodes_path = f"{path_stem}_nodes.json"
@@ -235,10 +206,6 @@ def load_graph_binary(path_stem: str) -> ObjectGraph:
     fids = [str(x) for x in data["fids"]]
     nodes: dict[str, MapObject] = {fid: _dict_to_node(nodes_doc[fid]) for fid in fids}
 
-    # Schema version is required and must match the current build. Every
-    # tile is rebaked when the schema bumps, and the loader refuses a
-    # mismatched tile rather than guess a compatibility read.
-    # ``./benchmarks/citynav/data_prep/bake_tiles.sh`` is the recipe.
     file_schema = int(data["schema_version"]) if "schema_version" in data.files else 0
     if file_schema != GRAPH_SCHEMA_VERSION:
         raise ValueError(
@@ -252,9 +219,7 @@ def load_graph_binary(path_stem: str) -> ObjectGraph:
             "benchmarks/citynav/data_prep/bake_tiles.sh."
         )
     cell_size_m_val = float(np.asarray(data["cell_size_m"]).item())
-    # Centerlines are a deterministic reduction of `cells`, derived on load (not
-    # persisted) so the served surface can never drift from the trained one. Must
-    # precede the ObjectGraph build so the derived nodes are the ones it serves.
+    # Before the ObjectGraph build, so the graph serves the derived nodes.
     derive_centerlines(nodes, cell_size_m_val)
     graph = ObjectGraph(nodes=nodes, cell_size_m=cell_size_m_val)
     step_index = int(data["step_index"]) if "step_index" in data.files else 0

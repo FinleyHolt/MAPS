@@ -5,12 +5,10 @@
 - ``save_graph`` / ``load_graph`` round-trip ``semantic_attributes`` through
   the nodes JSON, which is where str/int coercion at the wire layer would show.
 - ``save_graph`` / ``load_graph`` preserve ``cells``, ``tags['height_m']`` and
-  ``world_contour`` -- the last one against a measured 2026-07-04 loss.
+  ``world_contour``.
 """
 
 from __future__ import annotations
-
-
 
 from maps.sws import MapObject, ObjectGraph
 from maps.sws.graph.io import load_graph, save_graph
@@ -91,11 +89,8 @@ def test_find_track_exact_track_id_only():
 
 
 # ---------------------------------------------------------------------------
-# Prebake nodes carry ``cells`` so the visibility-driven pose resolver
-# (``tour_synth._candidate_target_cells``) can read a real target mask off
-# the runtime graph. Detected nodes already carry ``cells`` via
-# ``_detection_to_mapobject``; prebake nodes used to leave it ``None``,
-# which silently broke every side-view resolution against a prebake fid.
+# Prebake nodes carry ``cells``, so a reader can take a real target mask off
+# the runtime graph for a prebake fid as for a detected one.
 # ---------------------------------------------------------------------------
 
 
