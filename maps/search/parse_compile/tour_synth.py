@@ -17,11 +17,9 @@ camera poses.
 
 from __future__ import annotations
 
-import json
 import logging
 import math
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Literal, Mapping, Sequence, cast
 
 import numpy as np
@@ -30,9 +28,6 @@ from maps.sws.spatial import grid_to_world_xy
 from maps.util.xy_token import parse_xy_token
 
 log = logging.getLogger(__name__)
-
-TOUR_SCHEMA_VERSION = "1.0"
-TOUR_SYNTHESIZER_VERSION = "1.0"
 
 # Grounding-free view-position sentinels. A requested viewpoint whose
 # ``target_fid`` is one of these needs NO grounded prior node: the compiler
@@ -83,59 +78,6 @@ _VIEW_FACE_BEARING_DEG: dict[str, float] = {
     "south": 180.0,
     "west": 270.0,
 }
-
-
-def rasterise_height_map(runtime_graph: Any, grid_shape: tuple[int, int]) -> np.ndarray:
-    """``(H, W) float32`` height-above-ground stamped from the graph.
-
-    Iterates every ``MapObject`` on ``runtime_graph.nodes``; reads its
-    ``tags["height_m"]`` (or ``tags["height"]``); rasterizes that height
-    onto the node's ``cells`` (``(N, 2) int32`` row/col list) via a
-    per-cell ``max`` so taller buildings dominate overlapping
-    footprints. Nodes with no height tag or no cells are skipped.
-
-    Used by the visibility-driven pose resolver to threshold an
-    obstacle grid at a flight altitude. Pure NumPy, no GPU.
-    """
-    H, W = int(grid_shape[0]), int(grid_shape[1])
-    height_map = np.zeros((H, W), dtype=np.float32)
-    nodes = getattr(runtime_graph, "nodes", None)
-    if not isinstance(nodes, dict):
-        return height_map
-    for node in nodes.values():
-        tags = getattr(node, "tags", None)
-        if not isinstance(tags, dict):
-            continue
-        raw = tags.get("height_m")
-        if raw is None:
-            raw = tags.get("height")
-        if raw is None:
-            continue
-        try:
-            h = float(raw)
-        except (TypeError, ValueError):
-            continue
-        if not (h > 0.0):
-            continue
-        cells = getattr(node, "cells", None)
-        if cells is None:
-            continue
-        try:
-            cells_arr = np.asarray(cells, dtype=np.int64).reshape(-1, 2)
-        except (TypeError, ValueError):
-            continue
-        if cells_arr.size == 0:
-            continue
-        rs = cells_arr[:, 0]
-        cs = cells_arr[:, 1]
-        in_bounds = (rs >= 0) & (rs < H) & (cs >= 0) & (cs < W)
-        if not in_bounds.any():
-            continue
-        rs = rs[in_bounds]
-        cs = cs[in_bounds]
-        # np.maximum.at is the right primitive: scattered max-stamp.
-        np.maximum.at(height_map, (rs, cs), np.float32(h))
-    return height_map
 
 
 @dataclass
@@ -1496,102 +1438,10 @@ def _dict_to_aim_target(payload: dict) -> dict:
     }
 
 
-def tour_stop_to_dict(stop: TourStop) -> dict:
-    x, y, alt_m, heading = stop.pose
-    out: dict = {
-        "stop_id": stop.stop_id,
-        "pose": {
-            "x": float(x),
-            "y": float(y),
-            "alt_m": float(alt_m),
-            "heading_deg": float(heading),
-        },
-        "observe_radius_m": float(stop.observe_radius_m),
-        "observations": [_observation_to_dict(o) for o in stop.observations],
-        "contributing_reasoners": list(stop.contributing_reasoners),
-        "aim_targets": [_aim_target_to_dict(a) for a in stop.aim_targets],
-        "leaves": [dict(leaf) for leaf in stop.leaves],
-    }
-    if stop.pose_picker_diag is not None:
-        out["pose_picker_diag"] = dict(stop.pose_picker_diag)
-    return out
-
-
-def tour_stop_from_dict(payload: dict) -> TourStop:
-    pose = payload["pose"]
-    if "aim_targets" not in payload and "anchors" in payload:
-        raise RuntimeError(
-            "pre-rename tour.json artifact: this stop carries the legacy "
-            "'anchors' wire key; the runtime reads 'aim_targets'. Re-bake "
-            "the tour with current code (a frozen tour is only resumable "
-            "on the code that baked it)."
-        )
-    aim_payload = payload.get("aim_targets") or []
-    aim_targets: list[dict] = []
-    if isinstance(aim_payload, list):
-        for entry in aim_payload:
-            cleaned = _dict_to_aim_target(entry if isinstance(entry, dict) else {})
-            if cleaned:
-                aim_targets.append(cleaned)
-    leaves_payload = payload.get("leaves") or []
-    leaves: list[dict] = [
-        dict(leaf) for leaf in leaves_payload if isinstance(leaf, dict)
-    ]
-    diag_payload = payload.get("pose_picker_diag")
-    return TourStop(
-        stop_id=str(payload["stop_id"]),
-        pose=(
-            float(pose["x"]),
-            float(pose["y"]),
-            float(pose["alt_m"]),
-            float(pose["heading_deg"]),
-        ),
-        observe_radius_m=float(payload.get("observe_radius_m", 15.0)),
-        observations=[
-            _dict_to_observation(o) for o in payload.get("observations") or []
-        ],
-        contributing_reasoners=list(payload.get("contributing_reasoners") or []),
-        aim_targets=aim_targets,
-        leaves=leaves,
-        pose_picker_diag=dict(diag_payload) if isinstance(diag_payload, dict) else None,
-    )
-
-
-
-
-
-
-def write_tour_json(stops: list[TourStop], path: Path, header: dict) -> None:
-    """Atomically write the per-turn tour artifact.
-
-    ``header`` carries the schema-level metadata (turn, operator_text,
-    intel_text, utility_text, spatial_scope, altitude_m, ordering_policy,
-    fallback_mode). The function fills in ``schema_version`` and
-    ``synthesizer_version`` for the caller.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "schema_version": TOUR_SCHEMA_VERSION,
-        "synthesizer_version": TOUR_SYNTHESIZER_VERSION,
-        **header,
-        "stops": [tour_stop_to_dict(s) for s in stops],
-    }
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True))
-    tmp.replace(path)
-
-
-
-
 __all__ = [
-    "TOUR_SCHEMA_VERSION",
-    "TOUR_SYNTHESIZER_VERSION",
     "Observation",
     "TourStop",
     "TourSynthesizerConfig",
     "build_initial_tour_from_viewpoints",
     "synthesize_extension",
-    "tour_stop_from_dict",
-    "tour_stop_to_dict",
-    "write_tour_json",
 ]

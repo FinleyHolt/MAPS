@@ -29,13 +29,6 @@ class BlockAssets:
     grid_shape: tuple[int, int]
     base_features: dict  # Prebaked features dict, loaded once per block.
     raster: BlockObservation
-    # Per-block ground elevation lookup for AGL-aware FPV LOD selection.
-    # Subtile mode wires a constant; full mode uses a (city, bbox) → z
-    # lookup that walks the per-block roster. ``None`` falls back to the
-    # FPV path's default constant.
-    ground_z_for_pose: object = (
-        None  # Optional[Callable[[tuple[float, float]], float | None]]
-    )
 
 
 def _assert_descriptions_wall(features: object, source_path: str) -> None:
@@ -168,13 +161,6 @@ def _load_block_assets(map_name: str, cell_size_m: float) -> BlockAssets:
         px_per_m=raster_px_per_m,
         grid_shape=grid_shape,
     )
-    from maps.perception.ortho.ground_level import GROUND_LEVEL
-
-    block_ground_z = GROUND_LEVEL.get(map_name)
-
-    def _ground_z_subtile(_pose_xy: tuple[float, float]) -> float | None:
-        return block_ground_z
-
     return BlockAssets(
         map_name=map_name,
         bounds=bounds,
@@ -182,7 +168,6 @@ def _load_block_assets(map_name: str, cell_size_m: float) -> BlockAssets:
         grid_shape=grid_shape,
         base_features=base_features,
         raster=raster,
-        ground_z_for_pose=_ground_z_subtile,
     )
 
 

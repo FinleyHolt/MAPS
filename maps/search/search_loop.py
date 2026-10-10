@@ -1444,8 +1444,6 @@ class SearchLoop:
             tile_name=self._tile_name,
             tile_origin_xy=self._tile_origin_xy,
             cell_size_m=cell_size_m,
-            tool_result_cache=None,
-            tool_cache_counters=None,
         )
 
     def snapshot(self) -> SearchSnapshot:

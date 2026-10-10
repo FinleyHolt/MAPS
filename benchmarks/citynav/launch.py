@@ -188,10 +188,6 @@ def resolve_split(episode_id: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _city_root_from_map_name(map_name: str) -> str:
-    return map_name.split("_block_", 1)[0] if "_block_" in map_name else map_name
-
-
 def preflight_artifacts(
     *,
     map_name: str,

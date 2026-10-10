@@ -60,18 +60,6 @@ BLOCKS: dict[str, tuple[float, float, float, float]] = {
 
 AREA = "calcity"
 
-# The runtime world frame, stated once. Every artifact that stores local
-# metres declares this, and every reader of stored metres refuses anything
-# else: a bake, a tile meta, or an annotation row authored to the retired
-# y-south frame reads as a normal row while every northing is mirrored.
-# Prefer lon/lat for hand-authored points, which carry no frame at all.
-RUNTIME_FRAME: dict[str, str] = {
-    "x_axis": "east",
-    "y_axis": "north",
-    "origin": "southwest",
-}
-
-
 # Fetch extent for the world bundle. The ~130 m padding covers
 # the UTM grid-convergence bulge at the map edges; fetching only the map bbox
 # leaves black pixels along parts of the projected canvas.
@@ -103,23 +91,12 @@ DEFAULT_ROOT = Path.home() / "datasets" / "calcity"
 # ``SEARCH_CALCITY_SPLITS`` here and ``SEARCH_CALCITY_TILES`` at its ``tiles/``.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BENCHMARK_ROOT = REPO_ROOT / "benchmarks" / "calcity"
-BENCH_DIR = BENCHMARK_ROOT / "data"
 BENCH_TILES_DIR = BENCHMARK_ROOT / "tiles"
 
 
 def bundle_root() -> Path:
     """The world bundle directory (``CALCITY_BUNDLE`` env override)."""
     return Path(os.environ.get("CALCITY_BUNDLE", str(DEFAULT_ROOT / "bundle"))).expanduser()
-
-
-def block_bbox(map_name: str) -> tuple[float, float, float, float]:
-    """Return the WGS84 ``(w, s, e, n)`` bbox for ``map_name`` (loud on typo)."""
-    try:
-        return BLOCKS[map_name]
-    except KeyError as exc:
-        raise KeyError(
-            f"unknown calcity block {map_name!r}; known: {sorted(BLOCKS)}"
-        ) from exc
 
 
 @dataclass(frozen=True)
@@ -136,16 +113,6 @@ class LocalFrame:
     def bounds_local(self) -> tuple[float, float, float, float]:
         """(x_min, y_min, x_max, y_max) of the AOI in the local frame."""
         return (0.0, 0.0, self.width_m, self.height_m)
-
-    @property
-    def utm_bounds(self) -> tuple[float, float, float, float]:
-        """(west, south, east, north) of the AOI in UTM meters."""
-        return (
-            self.origin_e,
-            self.origin_n,
-            self.origin_e + self.width_m,
-            self.origin_n + self.height_m,
-        )
 
     def utm_to_runtime(self, easting, northing):
         """Map UTM coordinates to runtime ``(x east, y north)`` meters.

@@ -1,7 +1,7 @@
 """Feature graph data structures for spatial relationship modeling.
 
 Core types:
-  MapObject  — a spatial feature with geometry, metadata, and descriptors
+  MapObject  — a spatial feature with geometry and metadata
   ObjectGraph — dict-backed spatial graph with per-class object sets O_n^{(c)}
   GridDomain   — raster grid X = {1..H} × {1..W} per heater_notes.tex
   WorldState   — W_n snapshot carrying (I, V_n, {M_n^c, O_n^c}_c) pieces
@@ -35,11 +35,8 @@ class GridDomain:
 class MapObject:
     """A feature in the spatial graph.
 
-    Formal object tuple o = (M_o, μ_o, A_o, c_o) per heater_notes.tex:
-      μ_o   — ``centroid`` (row, col)
-      A_o   — ``area_m2`` (derived from cell_count × cell_size_m²)
-      M_o   — materialized on demand from ``cells``/``boundary``
-      c_o   — ``descriptors`` (eastmost, nearest road, riverside, …)
+    Its mask is materialized on demand from ``cells``/``boundary``; its
+    centroid is ``centroid`` (row, col).
 
     Runtime fields (``provenance="detected"``) carry per-observation metadata
     so the orchestrator can trust-weight and age detected nodes independently
@@ -58,8 +55,6 @@ class MapObject:
     orientation_confidence: float = 0.0  # 0=round/ambiguous, 1=clearly linear
     geo: tuple[float, float] | None = None  # (lat, lon) WGS84 centroid
     boundary: list[list[float]] | None = None  # [[row, col, nr, nc], ...]
-    area_m2: float = 0.0  # A_o; bake stamps cell_count × graph.cell_size_m²
-    descriptors: list[str] = field(default_factory=list)  # c_o
     # Natural-language descriptions of this object (CityRefer ships ~4-6 per
     # object, e.g. "this is a building with a gray roof and red walls...").
     # Prebaked datasets without per-object NL leave this empty.
@@ -235,9 +230,7 @@ class WorldState:
     """W_n snapshot assembling the formal pieces in a single object."""
 
     grid_domain: GridDomain
-    height_map: np.ndarray | None = None
     object_graph: ObjectGraph | None = None
-    utility_prompt: str | None = None  # U_n
     step_index: int = 0  # n
     tau: float | None = None  # τ_n
 

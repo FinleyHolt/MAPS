@@ -48,10 +48,6 @@ class CompilerInput:
     # caller via ``upsert_detected``. One graph; nodes carry ``provenance``
     # so prior, runtime, and confirmed features are distinguishable without
     # a second instance. Skips O(n^2) build when supplied.
-    sensor_config: dict | str | None = None
-    world_state: Union["WorldState", None] = (
-        None  # W_n snapshot; preferred over loose fields
-    )
     robot_pose: RobotPose | None = None  # current drone pose; what the
     # body-frame projection of each prior-graph node is computed from
     # (the per-turn sidecar in ``analyze_scene.tools.ToolContext``)
@@ -84,8 +80,3 @@ class CompilerInput:
     # Altitude hint for the orthographic picker (ortho).
     # Caller passes the current runtime altitude_m so the picker emits
     # poses at the in-band altitude the drone is already flying at.
-    ortho_ground_z_m: float | None = None
-    # Per-block upstream ground datum (``GROUND_LEVEL[map]``) for the
-    # orthographic picker (ortho). The picker sizes the
-    # altitude-driven view square as ``2 * (alt - ground)`` from this
-    # scalar, so it reads no per-object height prior.

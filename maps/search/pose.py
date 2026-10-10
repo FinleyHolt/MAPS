@@ -4,7 +4,7 @@ Carried on ``CompilerInput.robot_pose`` and threaded through to the
 ``ExtendedExecutor`` so view-relative transforms (left/right/front/behind)
 can resolve their direction at query time.
 
-Convention matches ``maps.sws.geometry``:
+Convention:
 - World x is east-positive meters, y is north-positive meters, z is altitude.
 - ``yaw_deg`` 0 = facing north (+y), 90 = facing east (+x), increasing
   clockwise viewed from above.

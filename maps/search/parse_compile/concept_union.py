@@ -62,34 +62,6 @@ class ConceptUnionResult:
             },
         }
 
-    @classmethod
-    def from_dict(cls, payload: dict) -> "ConceptUnionResult":
-        union = [str(u) for u in (payload.get("union") or [])]
-        raw_specs = payload.get("union_specs")
-        if raw_specs:
-            union_specs = [
-                {
-                    "class": str(s.get("class") or ""),
-                    "roles": [str(r) for r in (s.get("roles") or [])],
-                }
-                for s in raw_specs
-                if isinstance(s, dict) and s.get("class")
-            ]
-        else:
-            # Legacy checkpoint without role tags — assume target.
-            union_specs = [{"class": c, "roles": ["target"]} for c in union]
-        return cls(
-            union=union,
-            union_specs=union_specs,
-            mutations={
-                str(tid): {str(k): str(v) for k, v in (per or {}).items()}
-                for tid, per in (payload.get("mutations") or {}).items()
-            },
-            raw_to_canonical={
-                str(k): str(v)
-                for k, v in (payload.get("raw_to_canonical") or {}).items()
-            },
-        )
 
 def _normalize_concept(raw: str) -> str:
     """Case-fold and collapse whitespace; empty input returns ``""``."""

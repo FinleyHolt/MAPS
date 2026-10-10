@@ -43,22 +43,3 @@ class CompileTurnResult:
     raw: dict
 
 
-def build_compile_info(
-    *,
-    result: dict,
-    instruction: str,
-    wall_s: float,
-) -> dict:
-    """Assemble the ``info`` dict from a compiler ``result``.
-
-    Centralised so the engine and any out-of-loop tooling agree on the
-    dashboard-facing shape.
-    """
-    return {
-        "wall_s": round(float(wall_s), 3),
-        "parsed_instruction": extract_program_summary(result),
-        "instruction": instruction,
-        "alive_rids": list(result.get("alive_rids") or []),
-        "broken_rids": list(result.get("broken_rids") or []),
-        "timing_ms": result.get("timing_ms") or {},
-    }

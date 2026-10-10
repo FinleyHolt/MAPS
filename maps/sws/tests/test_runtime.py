@@ -1,4 +1,4 @@
-"""Runtime graph: re-identification, serdes, and view-frame geometry.
+"""Runtime graph: re-identification and serdes.
 
 - ``_find_track`` re-identifies by exact ByteTrack ``track_id`` and nothing
   else; a different id mints a distinct node even on an identical footprint.
@@ -6,18 +6,14 @@
   through JSON, which is where str/int coercion at the wire layer would show.
 - ``save_graph`` / ``load_graph`` preserve ``cells``, ``tags['height_m']`` and
   ``world_contour`` -- the last one against a measured 2026-07-04 loss.
-- ``compute_view_frames`` puts each grid quadrant in the matching body-frame
-  quadrant for a north-facing drone.
 """
 
 from __future__ import annotations
 
 import json
-import math
 
 
 from maps.sws import MapObject, ObjectGraph
-from maps.sws.geometry import compute_view_frames
 from maps.sws.graph.io import deserialize_graph, serialize_graph
 from maps.sws.graph.runtime import _find_track
 
@@ -64,37 +60,6 @@ def test_semantic_attributes_round_trip_via_json():
         for value, count in counts.items():
             assert isinstance(value, str)
             assert isinstance(count, int)
-
-
-def test_compute_view_frames_quadrants_against_north_facing_drone():
-    # 10x10 grid, 5 m cells, tile origin at world (0, 0). The drone sits at
-    # the tile's center facing north, so a node placed in each grid quadrant
-    # should land in the matching body-frame quadrant.
-    H, W = 10, 10
-    cell = 5.0
-    drone_x = (W / 2) * cell  # 25 m east of x_min
-    drone_y = (H / 2) * cell  # 25 m north of y_min
-
-    # Row 0 = south = y_min, row H-1 = north = y_max (bake convention).
-    # row 7, col 2 — north-west of drone (forward, left)
-    # row 7, col 7 — north-east of drone (forward, right)
-    # row 2, col 2 — south-west of drone (back, left)
-    # row 2, col 7 — south-east of drone (back, right)
-    centroids = [(7, 2), (7, 7), (2, 2), (2, 7)]
-    frames = compute_view_frames(
-        centroids,
-        drone_x_m=drone_x,
-        drone_y_m=drone_y,
-        yaw_deg=0.0,
-        tile_origin_xy=(0.0, 0.0),
-        cell_size_m=cell,
-        grid_height=H,
-    )
-    quadrants = [vf.quadrant for vf in frames]
-    assert quadrants == ["front-left", "front-right", "back-left", "back-right"]
-    # Range is symmetric across the four corners.
-    ranges = [vf.range_m for vf in frames]
-    assert max(ranges) - min(ranges) < 1e-3
 
 
 def test_find_track_exact_track_id_only():

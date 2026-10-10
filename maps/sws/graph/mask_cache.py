@@ -144,12 +144,10 @@ class MaskCache:
         *,
         centroid: tuple[float, float] | None = None,
         cell_count: int | None = None,
-        dilated: np.ndarray | None = None,
     ) -> None:
         """Record one node in the ledger. Idempotent on duplicate fid. The
-        ``mask``/``dilated`` arguments are accepted for call-site
-        compatibility and only used to derive centroid/cell_count when those
-        are not supplied — nothing is stored from them."""
+        ``mask`` derives centroid/cell_count when those are not supplied —
+        nothing is stored from it."""
         if fid in self._fid_to_idx:
             return
         self._insert_row(fid, mask, centroid=centroid, cell_count=cell_count)
@@ -161,7 +159,6 @@ class MaskCache:
         *,
         centroid: tuple[float, float] | None = None,
         cell_count: int | None = None,
-        dilated: np.ndarray | None = None,
     ) -> None:
         """Update an existing node's centroid/cell_count in place (inserting if
         new). The row index stays stable."""

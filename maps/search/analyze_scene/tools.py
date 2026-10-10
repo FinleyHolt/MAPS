@@ -9,10 +9,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from maps.sws.geometry import ViewFrame, compute_view_frames
 from maps.sws.graph.model import ObjectGraph
 from maps.sws.graph import build_object_graph
-from maps.sws.graph.provenance import build_confirmed_set
 
 # ---------------------------------------------------------------------------
 # OpenAI function-calling format conversion
@@ -49,31 +47,10 @@ class ToolContext:
     _feature_index: dict = field(default_factory=dict, repr=False)
     graph: ObjectGraph | None = field(default=None, repr=False)
     # The one world-state graph: prebake seed plus every in-flight detection.
-    # Nodes carry ``provenance`` ("prebaked" / "detected"); the derived
-    # PRIOR / PRIOR_CONFIRMED / RUNTIME state is computed via
-    # ``maps.sws.graph.provenance`` against ``_prebake_confirmed`` below.
-    _prebake_confirmed: set[str] = field(default_factory=set, repr=False)
-    # Prebake ids that >= 1 detected node has matched (``matched_prebake_id``
-    # inversion). Computed once in __post_init__; tools read it to tag each
-    # result PRIOR vs PRIOR_CONFIRMED without rescanning the graph per call.
+    # Nodes carry ``provenance`` ("prebaked" / "detected").
     robot_pose: object | None = None  # RobotPose; None when no pose available
     tile_origin_xy: tuple[float, float] = (0.0, 0.0)
     cell_size_m: float = 0.0  # required; caller passes the tile's true value
-    view_frame_by_id: dict[str, ViewFrame] = field(default_factory=dict, repr=False)
-    tool_result_cache: dict | None = field(default=None, repr=False)
-    # Per-episode memo of (tile_name, tool_name, canonicalized_args_json)
-    # -> already-serialized JSON return string for tools that read only
-    # the prebake graph. ``None`` disables caching. Owned by the
-    # ``MapsCompiler`` and shared across all reasoners in a turn;
-    # safe to mutate on the single compile worker thread.
-    tool_cache_counters: dict | None = field(default=None, repr=False)
-    # ``{"hits": int, "misses": int}`` shared with the compiler so the
-    # per-turn aggregate covers every reasoner. ``None`` when caching
-    # is off.
-    # Per-turn sidecar holding the body-frame projection of each prior-graph
-    # node. Populated lazily in __post_init__ when ``robot_pose`` is set;
-    # invalidated implicitly because a new ToolContext is built per compile()
-    # call. Keeps the ``ObjectGraph`` itself frozen — annotations live here.
 
     def __post_init__(self) -> None:
         self._feature_index = _build_feature_index(self.features)
@@ -96,48 +73,6 @@ class ToolContext:
         # feature index so text/id lookups and the compiler's feature-index
         # resolution reach them alongside prebake features.
         _augment_index_with_detected(self._feature_index, self.graph)
-        # Invert ``matched_prebake_id`` once so every tool can tag a node
-        # PRIOR vs PRIOR_CONFIRMED without rescanning the graph per call.
-        self._prebake_confirmed = build_confirmed_set(self.graph)
-        # Auto-populate view-frame annotations for every graph node.
-        # Empty when no drone pose is available; recomputed each turn since a
-        # fresh ToolContext is built per compile() call.
-        if self.robot_pose is not None and self.graph is not None:
-            self.view_frame_by_id = _build_view_frame_index(
-                self.graph,
-                robot_pose=self.robot_pose,
-                tile_origin_xy=self.tile_origin_xy,
-                cell_size_m=self.cell_size_m,
-                grid_height=int(self.grid_shape[0]),
-            )
-
-
-def _build_view_frame_index(
-    graph: ObjectGraph,
-    *,
-    robot_pose: object,
-    tile_origin_xy: tuple[float, float],
-    cell_size_m: float,
-    grid_height: int,
-) -> dict[str, ViewFrame]:
-    """Project every node centroid into the drone's body frame."""
-    fids = list(graph.nodes.keys())
-    if not fids:
-        return {}
-    centroids = [graph.nodes[fid].centroid for fid in fids]
-    drone_x = float(getattr(robot_pose, "x", 0.0))
-    drone_y = float(getattr(robot_pose, "y", 0.0))
-    yaw = float(getattr(robot_pose, "yaw_deg", 0.0))
-    frames = compute_view_frames(
-        centroids,
-        drone_x_m=drone_x,
-        drone_y_m=drone_y,
-        yaw_deg=yaw,
-        tile_origin_xy=tile_origin_xy,
-        cell_size_m=cell_size_m,
-        grid_height=grid_height,
-    )
-    return dict(zip(fids, frames))
 
 
 # ---------------------------------------------------------------------------

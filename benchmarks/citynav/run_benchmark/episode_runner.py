@@ -314,9 +314,6 @@ def run_episode(
             marker_xy=_marker_xy,
         )
         search_loop.start(prebake_graph=graph, runtime_graph=graph)
-        # Expose the engine on the EpisodeState so log/record surfaces can
-        # read autonomy state without it leaking through the harness.
-        state._engine_ref = search_loop
 
     tile_frame = TileFrame(
         x_min=float(assets.bounds.x_min),
@@ -390,9 +387,6 @@ def run_episode(
     # sensor override; resolve_sensor).
     episode_ply_path = None
     sensor = resolve_sensor(cfg.sensor) if cfg.sensor else None
-    state.sensor_spec = sensor
-    if search_loop is not None:
-        search_loop.state.sensor_spec = sensor
     # ---- RETROSPECTIVE PERCEPTION executor (spec C4) --------------------
     # The ortho ortho render is DETERMINISTIC over the static
     # raster, so an already-visited pose's observation is permanently

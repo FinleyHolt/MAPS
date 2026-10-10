@@ -59,6 +59,3 @@ def fingerprint_node(n):
     return tuple(sorted((k, fingerprint_value(v)) for k, v in d.items()))
 
 
-def fingerprint_nodes(nodes) -> dict:
-    """``{fid: fingerprint}`` over a ``{fid: node}`` mapping."""
-    return {str(f): fingerprint_node(n) for f, n in nodes.items()}

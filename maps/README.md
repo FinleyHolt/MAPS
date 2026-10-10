@@ -30,7 +30,7 @@ detections into the graph) and returns the flight report the model reads.
 | The `look` crop and the `show_map` schematic | `search/render/look_render.py`, `search/render/map_render.py` |
 | The bench ablation withholds | `search/withhold.py` |
 | The world-state graph: features, relations, detected-node upsert, provenance | `sws/graph/` |
-| Spatial primitives and labelled regions | `sws/spatial.py`, `sws/scene.py`, `sws/geometry.py` |
+| Spatial primitives and labelled regions | `sws/spatial.py`, `sws/scene.py` |
 | The orthographic observation: a pose to a cropped window of the raster | `perception/observation.py`, `perception/ortho/` |
 | Sensor specs (the C-12 Oryx, the CityNav nadir camera) and pixel-to-world projection | `perception/geometry/` |
 | The SAM 3.1 client and the classes it is asked for | `perception/sam/detect_client.py`, `perception/sam/concept_provider.py`, `perception/sam/class_hint.py` |

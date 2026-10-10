@@ -234,7 +234,6 @@ def _build_node(
         orientation=angle,
         orientation_confidence=confidence,
         geo=geo,
-        area_m2=float(len(cells)) * float(cell_size_m) * float(cell_size_m),
         descriptions=descriptions,
         cells=arr.astype(np.int32, copy=False),
         world_contour=world_contour,

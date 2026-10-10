@@ -166,14 +166,6 @@ class MapsCompiler:
             env_workdir = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip()
             workdir = Path(env_workdir) if env_workdir else None
         self.workdir: Path | None = workdir
-        # Per-episode caches. Allocated on the first compile() call when
-        # SEARCH_COMPILE_CACHE != "0"; cleared when ``inp.tile_name`` changes
-        # (proxy for episode boundary). All mutations happen on the single
-        # compile worker thread under ``SearchLoop._lock``; no extra
-        # locking required.
-        self._tool_result_cache: dict | None = None
-        self._tool_cache_counters: dict | None = None
-        self._last_tile_name: str | None = None
 
 
 

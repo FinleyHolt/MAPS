@@ -72,7 +72,7 @@ class Observation:
 
     pose_xy: tuple[float, float]
     altitude_m: float
-    yaw_deg: float  # body heading, 0=N, CW-positive; matches maps.sws.geometry
+    yaw_deg: float  # body heading, 0=N, CW-positive
     semantic: np.ndarray  # (h, w) int
     height: np.ndarray | None  # (h, w) float (None if no height raster)
     fov_m: float

@@ -205,11 +205,9 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
         rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
     )
     search_loop.start(prebake_graph=graph, runtime_graph=graph)
-    search_loop.state.sensor_spec = sensor
 
     state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m, graph=graph)
     state.record_visit()
-    state._engine_ref = search_loop
 
     tile_frame = TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
                            cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape))

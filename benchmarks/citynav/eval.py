@@ -49,21 +49,6 @@ class WorldBounds:
         return self.y_max - self.y_min
 
 
-def world_to_grid(
-    xy: tuple[float, float],
-    bounds: WorldBounds,
-    grid_shape: tuple[int, int],
-    cell_size_m: float,
-) -> tuple[int, int]:
-    """Snap a world (x, y) to (row, col), clipped to grid extent."""
-    H, W = grid_shape
-    col = int((xy[0] - bounds.x_min) / cell_size_m)
-    row = int((xy[1] - bounds.y_min) / cell_size_m)
-    row = max(0, min(row, H - 1))
-    col = max(0, min(col, W - 1))
-    return row, col
-
-
 def path_length_m(path: list[tuple[float, float]] | None) -> float:
     """Sum of Euclidean distances along a pose sequence.
 

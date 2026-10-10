@@ -2020,8 +2020,7 @@ def mask_shape_features(cells, cell_m):
     or a list of pairs) at ``cell_m`` meters per cell. Returns a dict of two
     opt-in row columns, or ``None`` when the footprint is empty:
 
-      * ``footprint_area_m2`` — occupied area = (#unique cells) x cell_m**2 (the
-        SAME formula the prebake builder stamps into ``area_m2``).
+      * ``footprint_area_m2`` — occupied area = (#unique cells) x cell_m**2.
       * ``aspect_ratio`` — minimum-area rectangle LONG / SHORT side, ``>= 1.0``
         (``~1`` for a square/round blob, large for an elongated van / truck /
         road). A single-cell footprint is 1x1 -> ``1.0``.
