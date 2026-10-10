@@ -228,3 +228,17 @@ def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tm
     m = run_manifest.build_manifest(**common, mission={**stamp, "reasoning_effort": None})
     assert m["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.99"
     assert "mission" not in run_manifest.build_manifest(**common)
+
+
+def test_a_resume_is_refused_under_another_window_or_bake_but_not_another_path(stub_run):
+    """The served window and the bake's content are identity; the path the
+    bake sits at is the host's (``perception.bake_sha256`` names the bake)."""
+    def drift(edit):
+        m = json.loads(json.dumps(stub_run))
+        edit(m)
+        return run_manifest.identity_drift(stub_run, m)
+
+    assert drift(lambda m: m["endpoints"].update(max_model_len=8192))
+    assert drift(lambda m: m["perception"].update(bake_sha256="0" * 64))
+    assert not drift(lambda m: m["search_env_flags"].update(
+        SEARCH_CITYNAV_TILES="/elsewhere/tiles"))

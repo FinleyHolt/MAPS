@@ -192,8 +192,13 @@ IDENTITY_KEYS = (
     ("selection", "sample_offset"),
     ("selection", "selection_sha"),
     ("endpoints", "model_id"),
+    ("endpoints", "max_model_len"),
+    ("perception", "bake_sha256"),
     ("search_env_flags",),
 )
+# Arm flags that name a host path, not the arm: one bake at two paths is one
+# arm, and ``perception.bake_sha256`` is its identity.
+_HOST_ARM_FLAGS = ("SEARCH_CITYNAV_TILES",)
 
 class ManifestIdentityError(RuntimeError):
     """A re-entering run's resolution contradicts the stored manifest."""
@@ -357,13 +362,20 @@ def _get(d: dict, keypath: tuple) -> object:
     return cur
 
 
+def _identity(d: dict, keypath: tuple) -> object:
+    v = _get(d, keypath)
+    if keypath == ("search_env_flags",) and isinstance(v, dict):
+        return {k: x for k, x in v.items() if k not in _HOST_ARM_FLAGS}
+    return v
+
+
 def identity_drift(prior: dict, current: dict) -> list[str]:
     """The IDENTITY_KEYS on which two manifests disagree, named for the
     refusal message. Empty = same run identity."""
     return [
         f"{'.'.join(kp)}: manifest={_get(prior, kp)!r} now={_get(current, kp)!r}"
         for kp in IDENTITY_KEYS
-        if _get(prior, kp) != _get(current, kp)
+        if _identity(prior, kp) != _identity(current, kp)
     ]
 
 
