@@ -1883,7 +1883,7 @@ def _monitor_tool() -> int:
         if _MON_TOOL[0] is None:
             tid = next(i for i in (3, 4, 5, 2, 1, 0)
                        if _MON.get_tool(i) is None)
-            _MON.use_tool_id(tid, "worlds-block-ceilings")
+            _MON.use_tool_id(tid, "maps-block-ceilings")
             _MON.register_callback(tid, _MON.events.LINE, _on_line)
             _MON_TOOL[0] = tid
         return _MON_TOOL[0]
