@@ -53,9 +53,9 @@ from maps.search.render.look_render import (
     look_label,
     look_outline,
     look_xy,
+    up_bearing_deg,
 )
-from maps.util.xy_token import (
-    XY_TOKEN_RE, format_xy_token, parse_xy_token)
+from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
 from maps.search.analyze_scene.tools import ToolContext
 from maps.search.withhold import withheld
 from maps.search.analyze_scene.text_match import (
@@ -512,6 +512,38 @@ def _served_flight(report: dict) -> dict:
     return {k: v for k, v in report.items() if k not in ("pose_xy", "alt_m")}
 
 
+def _legend_line(entries: list[dict]) -> str:
+    return " ; ".join(
+        f"{e['digit']} = {e['label']} ({e['role']})" for e in entries)
+
+
+def _window_caption(c: dict) -> str:
+    """One rendered image's window: span, orientation and world extent."""
+    # ORIENTATION, per image and derived, never assumed: a rotated image
+    # states its true up (bearing + the frame note); only a genuinely
+    # unrotated one says north-up. The header claims nothing -- the
+    # hardcoded "north-up" there captioned 1,129 rotated crops in 327
+    # episodes of flygoal_1000.
+    _fu = c.get("frame_up")
+    if isinstance(_fu, (list, tuple)) and len(_fu) == 2:
+        _fn = str(c.get("frame_note") or "").strip()
+        _up = (f"up {round(up_bearing_deg(_fu)) % 360} deg"
+               + (f" -- {_fn}" if _fn else ""))
+    else:
+        _up = "north-up"
+    _cm = c.get("context_m")
+    _span = (f" ({_cm:g} m window; {_up})"
+             if isinstance(_cm, (int, float)) else f" ({_up})")
+    # The numeric extent makes a pixel position back-projectable — an
+    # edge-shifted window silently breaks the centred-window assumption
+    # otherwise.
+    _ww = c.get("world_window")
+    if isinstance(_ww, (list, tuple)) and len(_ww) == 4:
+        _span += (f" [x {_ww[0]:g}..{_ww[2]:g}, "
+                  f"y {_ww[1]:g}..{_ww[3]:g}]")
+    return _span
+
+
 def _look_vision_text(crops: list[dict]) -> str:
     # Thin white ellipses + numbered badges on the image; the digit ->
     # fid binding lives HERE in the text legend (the strongest measured
@@ -521,7 +553,6 @@ def _look_vision_text(crops: list[dict]) -> str:
     # frame can never silently imply a close look.
     from maps.search.render.look_render import (  # noqa: PLC0415
         LOOK_MAX_BADGES,
-        up_bearing_deg,
     )
     # THE CAPTION NAMES WHAT THE PICTURE IS OF. center_fid is a STOP id on a
     # flight view and absent on some crops, so this line read
@@ -569,20 +600,8 @@ def _look_vision_text(crops: list[dict]) -> str:
         entries = c.get("legend") or []
         if not entries:
             continue
-        line = " ; ".join(
-            f"{e['digit']} = {e['label']} ({e['role']})" for e in entries)
-        # ORIENTATION, per crop and derived, never assumed: a rotated
-        # crop states its true up (bearing + the frame note); only a
-        # genuinely unrotated crop says north-up. The header claims
-        # nothing -- the hardcoded "north-up" there captioned 1,129
-        # rotated crops in 327 episodes of flygoal_1000.
-        _fu = c.get("frame_up")
-        if isinstance(_fu, (list, tuple)) and len(_fu) == 2:
-            _fn = str(c.get("frame_note") or "").strip()
-            _up = (f"up {round(up_bearing_deg(_fu)) % 360} deg"
-                   + (f" -- {_fn}" if _fn else ""))
-        else:
-            _up = "north-up"
+        line = _legend_line(entries)
+        _span = _window_caption(c)
         # THE PIXEL GRID, per image, because it is not constant: a crop's
         # upscale is clamp(round(450/native), 1, 3) and a map's side is
         # clamp(span/0.35, 320, 1024). Stating it lets the model convert
@@ -590,16 +609,6 @@ def _look_vision_text(crops: list[dict]) -> str:
         # -- "300 of 1000 down" or "three tenths down" both land on the
         # same metre once the grid and the window are both named.
         _px = c.get("side_px") or c.get("width_px")
-        _cm = c.get("context_m")
-        _span = (f" ({_cm:g} m window; {_up})"
-                 if isinstance(_cm, (int, float)) else f" ({_up})")
-        # The numeric extent makes a pixel position back-projectable —
-        # an edge-shifted window silently breaks the centred-window
-        # assumption otherwise.
-        _ww = c.get("world_window")
-        if isinstance(_ww, (list, tuple)) and len(_ww) == 4:
-            _span += (f" [x {_ww[0]:g}..{_ww[2]:g}, "
-                      f"y {_ww[1]:g}..{_ww[3]:g}]")
         if _px:
             _span += f" ({int(_px)}x{int(_px)} px)"
         base += f"\n  crop {k + 1}{_span}: {line}"
@@ -742,8 +751,6 @@ def _mission_sanitize_moves(raw, staged) -> tuple[list[dict], list[dict]]:
     era's target_fid-XOR-target_xy item is retired with the XOR error
     class it needed.
     """
-    from maps.util.xy_token import format_xy_token
-
     items = raw if isinstance(raw, list) else []
     accepted: list[dict] = []
     errors: list[dict] = []
@@ -1051,13 +1058,6 @@ def _is_handle_token(token) -> bool:
     return bool(_HANDLE_BASE_RE.match(base)) or base in _HANDLE_WORDS
 
 
-# An [x,y]-literal target arrives as its string form ("[1530, 1378]") —
-# accepted wherever a fid is (select, viewpoint targets, crop centers/
-# marks). ONE grammar (maps.util.xy_token) so accept and bind sites
-# never drift.
-_XY_TARGET_RE = XY_TOKEN_RE
-
-
 def _crop_token_of(row: dict, live: bool) -> str:
     """A crops token for one carried row: its fid, except a DERIVED end
     row (``end_N`` — the ``ends`` op's mint, never on the live surface)
@@ -1070,12 +1070,15 @@ def _crop_token_of(row: dict, live: bool) -> str:
     holds."""
     fid = str(row.get("fid"))
     xy = row.get("xy")
-    if (not live and re.fullmatch(r"end_\d+", fid)
-            and isinstance(xy, (list, tuple)) and len(xy) == 2
-            and all(isinstance(v, (int, float))
-                    and not isinstance(v, bool) for v in xy)):
+    if not live and re.fullmatch(r"end_\d+", fid) and is_xy(xy):
         return format_xy_token(float(xy[0]), float(xy[1]))
     return fid
+
+def _rounded_xy(token) -> list[float] | None:
+    """An ``[x, y]`` token -> the point at centimetre precision, else None."""
+    p = parse_xy_token(token)
+    return [round(p[0], 2), round(p[1], 2)] if p else None
+
 
 def _pose_xy_of_ctx(ctx) -> tuple[float, float] | None:
     """The current pose carried on a ToolContext (None when absent)."""
@@ -1481,10 +1484,7 @@ def advance_reasoner_one_round(
                 # the handle namespace was half-wired — 6 inner errors)
                 return [round(float(sv["from_xy"][0]), 2),
                         round(float(sv["from_xy"][1]), 2)]
-            m = _XY_TARGET_RE.match(tok.strip())
-            if m:
-                return [round(float(m.group(1)), 2),
-                        round(float(m.group(2)), 2)]
+            return _rounded_xy(tok)
         return None
 
     def _stage_apply(items: list) -> dict:
@@ -1493,7 +1493,6 @@ def advance_reasoner_one_round(
         on; a re-stage is one more item. Bumps the surface version — a
         program re-run under a new stance can say something new."""
         from maps.search.analyze_scene.geom_compute import COMPASS_UNIT  # noqa: PLC0415
-        from maps.search.render.look_render import up_bearing_deg  # noqa: PLC0415
         staged_acks: list[dict] = []
         errors: list[dict] = []
         for i, it in enumerate(items):
@@ -1657,10 +1656,7 @@ def advance_reasoner_one_round(
                     if xy is None:
                         # an [x,y] mark token marks that world point (a
                         # derived crossing/terminus) — no row needed.
-                        _mp = _XY_TARGET_RE.match(mf)
-                        if _mp:
-                            xy = [round(float(_mp.group(1)), 2),
-                                  round(float(_mp.group(2)), 2)]
+                        xy = _rounded_xy(mf)
                     if xy is None:
                         skipped.append(mf)
                         continue
@@ -1676,10 +1672,7 @@ def advance_reasoner_one_round(
             xy = look_xy(row)
             if xy is None:
                 # an [x,y] center token crops that world point directly.
-                _cp = _XY_TARGET_RE.match(f)
-                if _cp:
-                    xy = [round(float(_cp.group(1)), 2),
-                          round(float(_cp.group(2)), 2)]
+                xy = _rounded_xy(f)
             if xy is None:
                 skipped.append(f)
                 continue
@@ -1942,7 +1935,6 @@ def advance_reasoner_one_round(
         """The map message's text: what the picture IS (world state, no
         imagery), each map's window + orientation + badge legend, and the
         class->color legend the digest palette needs."""
-        from maps.search.render.look_render import up_bearing_deg  # noqa: PLC0415
         order = ", ".join(str(m.get("center_fid") or "map") for m in maps)
         # WHAT THE MAP IS, AND WHAT IT IS NOT. It is the PRIOR -- a survey,
         # drawn from OSM, filled by class -- not a picture of the world as
@@ -1977,23 +1969,8 @@ def advance_reasoner_one_round(
                 f"order: [{order}]. Numbered badges; per-map legend:")
         for k, m in enumerate(maps):
             entries = m.get("legend") or []
-            line = " ; ".join(
-                f"{e['digit']} = {e['label']} ({e['role']})"
-                for e in entries)
-            _fu = m.get("frame_up")
-            if isinstance(_fu, (list, tuple)) and len(_fu) == 2:
-                _fn = str(m.get("frame_note") or "").strip()
-                _up = (f"up {round(up_bearing_deg(_fu)) % 360} deg"
-                       + (f" -- {_fn}" if _fn else ""))
-            else:
-                _up = "north-up"
-            _cm = m.get("context_m")
-            _span = (f" ({_cm:g} m window; {_up})"
-                     if isinstance(_cm, (int, float)) else f" ({_up})")
-            _ww = m.get("world_window")
-            if isinstance(_ww, (list, tuple)) and len(_ww) == 4:
-                _span += (f" [x {_ww[0]:g}..{_ww[2]:g}, "
-                          f"y {_ww[1]:g}..{_ww[3]:g}]")
+            line = _legend_line(entries)
+            _span = _window_caption(m)
             base += f"\n  map {k + 1}{_span}: {line}" if line else \
                 f"\n  map {k + 1}{_span}:"
             _cls = m.get("classes") or []
@@ -2044,22 +2021,14 @@ def advance_reasoner_one_round(
         def _cap(fids: list[str]) -> str:
             return f"{fids[:8]}" + (
                 f" (+{len(fids) - 8} more)" if len(fids) > 8 else "")
-        c_fids = [str(r["fid"]) for r in (_ns.get("cands") or [])
-                  if isinstance(r, dict) and r.get("fid")]
-        a_fids = [str(r["fid"]) for r in (_ns.get("anchors") or [])
-                  if isinstance(r, dict) and r.get("fid")]
-        cols = sorted({k for _row in row_latest.values()
-                       if isinstance(_row, dict)
-                       for k, _v in _row.items()
-                       if k not in MODEL_UNSERVED_COLUMNS
-                       and _v not in (None, "")})
+        c_n, a_n, cols = _surface_census_counts(_ns)
         parts = [
             f" This error class has now occurred {_n}x.",
             # Counts only: the first-8-alphabetical fid sample was always
             # ['prior_0', 'prior_1', ...] regardless of relevance -- pure
             # token noise on every 2nd serve (measured 199 payloads).
-            f" Live surface: {len(c_fids)} detection fid(s);"
-            f" {len(a_fids)} prior map row fid(s).",
+            f" Live surface: {c_n} detection fid(s);"
+            f" {a_n} prior map row fid(s).",
         ]
         if cols:
             parts.append(
@@ -2858,6 +2827,38 @@ def advance_reasoner_one_round(
         # it and committed [0].
         return _ack
 
+    # HALF THE OBSERVATION'S LONG SIDE: a pass's stop spacing.
+    # ``observation_extent_m`` returns the sensor footprint's LONG side
+    # (320.82 m on this bake; the short side is 240.77), so half of it sits
+    # under the short side for any sensor below 2:1 -- which is what lets a
+    # ONE-DIMENSIONAL walk cover a shape that is not one: consecutive stops
+    # overlap on the minor axis too. The number is the run's own, never a
+    # constant here: a bake or an altitude change moves it.
+    _cover_spacing = (float(obs_span_m) / 2.0
+                      if isinstance(obs_span_m, (int, float))
+                      and obs_span_m > 0 else None)
+
+    def _coverage_stops(_tok: str):
+        """The engine's stops over one fid's footprint; None for a point,
+        a fid with no cells, or a run without an observation extent."""
+        if (parse_xy_token(_tok) is None and _cover_spacing is not None
+                and mission_spec.coverage_stops is not None):
+            return mission_spec.coverage_stops(_tok, _cover_spacing)
+        return None
+
+    def _uncovered_segments(_nm: str) -> str:
+        """`` '<name>' has N more segment(s) no pass has covered (...).``,
+        or "" when every segment bearing the name is covered."""
+        _sibs = sorted(f for f, r in _ns_rows.items()
+                       if isinstance(r, dict) and r.get("name") == _nm
+                       and f not in _covered_fids)
+        if not _sibs:
+            return ""
+        _head = ", ".join(_sibs[:6])
+        _more = f", +{len(_sibs) - 6} more" if len(_sibs) > 6 else ""
+        return (f" {_nm!r} has {len(_sibs)} more segment(s) no pass has "
+                f"covered ({_head}{_more}).")
+
     def _cover_items(_accepted_items: list, _said=None):
         """One explore -> ``(move items, note, subject, segments)``.
 
@@ -2881,26 +2882,12 @@ def advance_reasoner_one_round(
         thing flies a line. The single-member path below is byte-for-byte
         the pass it always was.
         """
-        from maps.util.xy_token import format_xy_token
         if len(_accepted_items) > 1:
             return _cover_set_items(_accepted_items, _said)
         _item = _accepted_items[0]
         _tok = str(_item.get("target_fid") or "")
-        _pt = parse_xy_token(_tok)
-        # HALF THE OBSERVATION'S LONG SIDE. ``observation_extent_m`` returns
-        # the sensor footprint's LONG side (320.82 m on this bake; the short
-        # side is 240.77), so half of it sits under the short side for any
-        # sensor below 2:1 -- which is what lets a ONE-DIMENSIONAL walk cover
-        # a shape that is not one: consecutive stops overlap on the minor
-        # axis too. The number is the run's own, never a constant here: a
-        # bake or an altitude change moves it.
-        _span = (float(obs_span_m) / 2.0
-                 if isinstance(obs_span_m, (int, float))
-                 and obs_span_m > 0 else None)
-        _stops = None
-        if _pt is None and _span is not None \
-                and mission_spec.coverage_stops is not None:
-            _stops = mission_spec.coverage_stops(_tok, _span)
+        _span = _cover_spacing
+        _stops = _coverage_stops(_tok)
         _note = ""
         if _stops:
             _walk = sum(math.dist(a, b) for a, b in zip(_stops, _stops[1:]))
@@ -2939,16 +2926,7 @@ def advance_reasoner_one_round(
         _covered_fids.add(str(_tok))
         _nm = (_ns_rows.get(str(_tok)) or {}).get("name")
         if _nm:
-            _sibs = sorted(f for f, r in _ns_rows.items()
-                           if isinstance(r, dict) and r.get("name") == _nm
-                           and f not in _covered_fids)
-            if _sibs:
-                _head = ", ".join(_sibs[:6])
-                _more = (f", +{len(_sibs) - 6} more"
-                         if len(_sibs) > 6 else "")
-                _note = (f"{_note} {_nm!r} has {len(_sibs)} more "
-                         f"segment(s) no pass has covered "
-                         f"({_head}{_more}).")
+            _note += _uncovered_segments(_nm)
         return _items, _note, _tok, 1
 
     def _cover_set_items(_accepted_items: list, _said):
@@ -2965,18 +2943,12 @@ def advance_reasoner_one_round(
         """
         # ponytail: O(n*m) greedy chaining; a TSP is not worth it under a
         # 24-stop pass.
-        from maps.util.xy_token import format_xy_token
-        _span = (float(obs_span_m) / 2.0
-                 if isinstance(obs_span_m, (int, float))
-                 and obs_span_m > 0 else None)
+        _span = _cover_spacing
         _members: list[dict] = []
         for _it in _accepted_items:
             _tok = str(_it.get("target_fid") or "")
             _pt = parse_xy_token(_tok)
-            _stops = None
-            if _pt is None and _span is not None \
-                    and mission_spec.coverage_stops is not None:
-                _stops = mission_spec.coverage_stops(_tok, _span)
+            _stops = _coverage_stops(_tok)
             if _stops:
                 _pts = [[float(p[0]), float(p[1])] for p in _stops]
                 _members.append({
@@ -3079,16 +3051,7 @@ def advance_reasoner_one_round(
         _names.discard(None)
         _names.discard("")
         for _nm in sorted(_names):
-            _sibs = sorted(_f for _f, _r in _ns_rows.items()
-                           if isinstance(_r, dict) and _r.get("name") == _nm
-                           and _f not in _covered_fids)
-            if _sibs:
-                _head = ", ".join(_sibs[:6])
-                _more = (f", +{len(_sibs) - 6} more"
-                         if len(_sibs) > 6 else "")
-                _note = (f"{_note} {_nm!r} has {len(_sibs)} more "
-                         f"segment(s) no pass has covered "
-                         f"({_head}{_more}).")
+            _note += _uncovered_segments(_nm)
         return ([_mv for _, _mv in _flat], _note, _subject, len(_chained))
 
     def _sub_anchors(prog: dict, ties: dict) -> dict:
@@ -3396,6 +3359,18 @@ def advance_reasoner_one_round(
         bypassed it."""
         return {**ack, "error": _loop_broken_error(str(msg))}
 
+    def _flown_stop(tok: str) -> tuple[str, str | None]:
+        """A flown stop id flies its recorded point; an unflown stop id is
+        refused, naming the stops that have flown. ``(token, error)``."""
+        _sp = _plan_stops.get(tok.strip().lower())
+        if _sp is not None:
+            return format_xy_token(_sp[0], _sp[1]), None
+        if re.fullmatch(r"stop_[0-9]{1,4}", tok.strip().lower()):
+            _known = ", ".join(sorted(_plan_stops)) or "none yet"
+            return tok, (f"{tok} has not been flown; the flown stops are: "
+                         f"{_known}")
+        return tok, None
+
     def _closest_names(what: str) -> str:
         """Rule N's retry-fuel killer: the nearest NAMED rows to a
         grounding that matched nothing (fuzzy, top 3)."""
@@ -3537,7 +3512,6 @@ def advance_reasoner_one_round(
                 # two bare numbers in a place slot = a world point,
                 # spoken ("go to 700 300."); the canonical token flies
                 # through the ordinary snap path
-                from maps.util.xy_token import format_xy_token
                 return format_xy_token(val[0], val[1])
             return str(val)  # "lit" (a spoken fid) / "it"
 
@@ -3580,7 +3554,6 @@ def advance_reasoner_one_round(
                     # top tie group, a result handle's fid-bearing rows, a
                     # compiled list -- all expanded where slot_ties and the
                     # live handles are.
-                    from maps.util.xy_token import format_xy_token
                     _to = step["to"]
                     _raw_members: list = []
                     _empty_handle = None
@@ -3592,17 +3565,10 @@ def advance_reasoner_one_round(
                             continue
                         _t = _refval(_s)
                         if isinstance(_t, str):
-                            _sp2 = _plan_stops.get(_t.strip().lower())
-                            if _sp2 is not None:
-                                _t = format_xy_token(_sp2[0], _sp2[1])
-                            elif re.fullmatch(r"stop_[0-9]{1,4}",
-                                              _t.strip().lower()):
-                                _known = (", ".join(sorted(_plan_stops))
-                                          or "none yet")
-                                return _plan_err(ack, (
-                                    f"{_t} has not been flown; the flown "
-                                    f"stops are: {_known}"))
-                            elif _is_handle_token(_t):
+                            _t, _stop_err = _flown_stop(_t)
+                            if _stop_err:
+                                return _plan_err(ack, _stop_err)
+                            if _is_handle_token(_t):
                                 _hr = [str(r["fid"]) for r in
                                        (_carry_read(_t) or [])
                                        if isinstance(r, dict)
@@ -3691,21 +3657,13 @@ def advance_reasoner_one_round(
                                     mv["catch"] = {"note": _PICTURE_WITHHELD}
                     continue
                 tok = _refval(step["to"])
-                _sp = (_plan_stops.get(str(tok).strip().lower())
-                       if isinstance(tok, str) else None)
-                if _sp is not None:
+                if isinstance(tok, str):
                     # a flown stop is a place: fly its recorded point
                     # (the xy→fid snap keeps a row's identity if one
                     # stands there)
-                    from maps.util.xy_token import format_xy_token
-                    tok = format_xy_token(_sp[0], _sp[1])
-                elif (isinstance(tok, str)
-                      and re.fullmatch(r"stop_[0-9]{1,4}",
-                                       tok.strip().lower())):
-                    _known = ", ".join(sorted(_plan_stops)) or "none yet"
-                    return _plan_err(ack, (
-                        f"{tok} has not been flown; the flown stops are: "
-                        f"{_known}"))
+                    tok, _stop_err = _flown_stop(tok)
+                    if _stop_err:
+                        return _plan_err(ack, _stop_err)
                 _accepted, _item_errors = _mission_sanitize_moves(
                     [tok], staged_viewpoints)
                 mv = _fly_moves(_accepted, _item_errors)

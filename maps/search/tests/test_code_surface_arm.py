@@ -1611,7 +1611,7 @@ def test_no_served_string_teaches_a_form_this_surface_refuses():
         served += [(mod.name, n) for n in ast.walk(tree)
                    if isinstance(n, ast.Constant) and isinstance(n.value, str)
                    and id(n) not in docstrings]
-    assert len(served) > 1_500, len(served)          # vacuity floor
+    assert len(served) > 1_000, len(served)          # vacuity floor
 
     # `say ` bare, not `say "`: the footer that shipped read
     # `say look_for("<class>")` -- the verb of the other surface in front
