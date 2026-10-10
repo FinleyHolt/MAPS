@@ -113,7 +113,7 @@ lists the exact commands.
 
 ## Install
 
-MAPS needs Python 3.11 or later. With [uv](https://docs.astral.sh/uv/):
+MAPS needs Python 3.12 or later. With [uv](https://docs.astral.sh/uv/):
 
 ```sh
 uv venv .venv --python 3.12

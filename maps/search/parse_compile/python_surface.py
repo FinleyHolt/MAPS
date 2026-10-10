@@ -1621,11 +1621,9 @@ class MissionPython:
 #
 # ``sys.monitoring`` delivers LINE events for exactly the block's code
 # objects, so the executor beneath the block runs untraced (a global
-# ``sys.settrace`` slowed one find from 1.26 s to 17.2 s). The trace function
-# serves a Python without ``sys.monitoring`` (< 3.12): a slow executor beats
-# an unbounded one.
+# ``sys.settrace`` slowed one find from 1.26 s to 17.2 s).
 
-_MON = getattr(sys, "monitoring", None)
+_MON = sys.monitoring
 _MON_LOCK = threading.Lock()
 _MON_TOOL: list = [None]          # the tool id, once claimed
 _MON_ACTIVE: dict = {}            # id(code object) -> the MissionPython running it
@@ -1661,18 +1659,6 @@ def _monitor_tool() -> int:
 @contextlib.contextmanager
 def _block_ceilings(mp: "MissionPython", compiled):
     """Charge ``mp._tick`` for every line of ``compiled`` while it runs."""
-    if _MON is None:
-        def _tracer(frame, event, arg):
-            if frame.f_code.co_filename != BLOCK_FILENAME:
-                return None
-            mp._tick()
-            return _tracer
-        sys.settrace(_tracer)
-        try:
-            yield
-        finally:
-            sys.settrace(None)
-        return
     tid = _monitor_tool()
     codes = _code_objects(compiled)
     with _MON_LOCK:
