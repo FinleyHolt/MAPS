@@ -129,3 +129,15 @@ def test_an_unknown_episode_is_refused_by_name(monkeypatch):
     monkeypatch.setattr(adapter, "load_split", lambda path: [])
     with pytest.raises(ValueError, match="calcity holds no episode calcity::9#9"):
         mission.resolve_episode("calcity::9#9", "calcity")
+
+
+def test_the_flight_refuses_a_config_that_withholds_a_part(tmp_path):
+    import pytest
+
+    from benchmarks.flight import mission
+
+    repo = __import__("pathlib").Path(__file__).resolve().parents[3]
+    arm = tmp_path / "arm.yaml"
+    arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nwithhold: [images]\n")
+    with pytest.raises(ValueError, match="bench ablation"):
+        mission.hydrate(episode_id="calcity::0#0", split="calcity", config=str(arm), workdir=tmp_path)

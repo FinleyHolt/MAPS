@@ -152,6 +152,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
     from benchmarks.citynav.episode import EpisodeState  # noqa: PLC0415
     from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, tile_stem  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark import load_config, load_episode_assets, load_episode_graph  # noqa: PLC0415
+    from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.perception import make_perception  # noqa: PLC0415
     from maps.perception.geometry.geolocate import TileFrame  # noqa: PLC0415
@@ -161,6 +162,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
     from maps.sws import GridDomain, WorldState  # noqa: PLC0415
 
     cfg = load_config(str(config))
+    assert_flight_config(cfg)
     episode = resolve_episode(episode_id, split, start_xy)
     assets = load_episode_assets(episode.map_name, cfg.cell_size_m)
 
