@@ -617,9 +617,11 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "total_tokens_median": _median(r["total_tokens"] for r in kept)}
 
 
-def by(rows, key: str) -> dict[str, dict[str, Any]]:
-    return {str(v): summarize([r for r in rows if str(r[key]) == str(v)])
-            for v in sorted({str(r[key]) for r in rows})}
+def by(rows, *keys: str) -> dict[str, dict[str, Any]]:
+    """The summary per value of ``keys`` (joined by a space)."""
+    def name(r) -> str:
+        return " ".join(str(r[k]) for k in keys)
+    return {v: summarize([r for r in rows if name(r) == v]) for v in sorted({name(r) for r in rows})}
 
 
 def check(rows: list[dict[str, Any]], master: Path) -> list[str]:
@@ -654,7 +656,7 @@ def main(argv: list[str] | None = None) -> int:
     roots = sorted(r for r in args.root if (r / "episodes.jsonl").is_file())
     rows, radius, turns = collect(roots, Truth(args.truth), tiles_dir=args.tiles)
     doc = {"turn_radius_m": radius, "turns_read": turns, "summary": summarize(rows),
-           "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "reasoning_effort"), "runs": rows}
+           "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "model", "reasoning_effort"), "runs": rows}
     if args.check is not None:
         doc["check"] = check(rows, args.check)
     if args.json:

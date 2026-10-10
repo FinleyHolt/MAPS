@@ -49,6 +49,7 @@ def test_the_measures_score_the_commit_against_the_truth_and_the_track_against_t
     assert (two["success_area"], two["success_radius"], two["spl"]) == (False, False, 0.0)
     assert two["ne_from"] == "commit point" and round(two["ne_ft"] / Q.FT_PER_M) == 300
     assert three["excluded"] == "crew stopped it" and three["end"] == "stopped" and three["time_to_id_s"] is None
+    assert list(Q.by(got, "model", "reasoning_effort")) == ["m 0.9"]
     s = Q.summarize(got)
     assert (s["sr_area"]["k"], s["sr_area"]["n"], s["osr"]["n"]) == (1, 2, 2)
     master = tmp_path / "runs_all.csv"
