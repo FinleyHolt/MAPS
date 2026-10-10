@@ -318,10 +318,13 @@ _SCRIPT_BLOCK_HEADER = "[script so far]"
 #: because two places must agree on it: the writer and the step that strips it.
 _FINDINGS_SEP = "\nwhat those turns found:\n"
 
-#: Turns at the head that are never droppable: the system prompt and the
-#: operator instruction. The instruction is the ONE user message a bench episode
-#: has (CLAUDE.md), so losing it loses the task.
-_PROTECTED_HEAD = 2
+def _protected_head(messages: list[dict]) -> int:
+    """How many head messages are never droppable: through the operator
+    instruction, the first user message (after the system prompt when one is
+    served). The instruction is the ONE user message a bench episode has, so
+    losing it loses the task."""
+    first_user = next((i for i, m in enumerate(messages) if m.get("role") == "user"), 0)
+    return first_user + 1
 
 #: Turn units kept verbatim at the tail. The model is mid-derivation there, and
 #: SelfCompact (arXiv 2606.23525) names discarding partial results mid-search as
@@ -514,9 +517,10 @@ def _drop_spent_turns(
     entire defect this module exists to stop causing.
     """
     units = _turn_units(messages)
+    head = _protected_head(messages)
     droppable = [
         (a, b) for (a, b) in units
-        if a >= _PROTECTED_HEAD and not _is_script_block(messages[a])
+        if a >= head and not _is_script_block(messages[a])
     ]
     keep_tail = _keep_tail_units()
     if len(droppable) <= keep_tail:

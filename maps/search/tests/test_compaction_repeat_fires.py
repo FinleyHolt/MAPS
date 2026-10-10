@@ -213,13 +213,8 @@ def test_keep_tail_is_an_env_arm(monkeypatch) -> None:
 def test_the_text_steps_still_work_on_a_post_fold_list() -> None:
     """Steps 2-4 had NO coverage on a list the fold had already rewritten.
 
-    Every fixture in test_compactor_arithmetic.py omits the operator
-    instruction, so its first turn unit starts at index 1, _PROTECTED_HEAD
-    excludes it, and the fold never fires in that whole file. Its
-    ``_roles(out) == _roles(msgs)`` assertion passes for that reason -- it is
-    the retired pre-fold invariant.
-
-    That left a real regression window: step 3 reads ``base[i]`` because the
+    The fixtures in test_compactor_arithmetic.py are sized so the fold does
+    not fire there. That left a real regression window: step 3 reads ``base[i]`` because the
     fold shifts indices, and reverting it to ``messages[i]`` broke no test.
     This drives a fold and THEN forces the text steps, asserting every
     surviving tool result still carries its own call's fids -- which is what an
@@ -248,3 +243,23 @@ def test_the_text_steps_still_work_on_a_post_fold_list() -> None:
             f"{tcid}'s result no longer carries its own fid {fid}; a step "
             f"rewrote it from the wrong source index"
         )
+
+
+def test_without_a_system_turn_the_head_ends_at_the_instruction() -> None:
+    """The system_turn withhold serves no system message: the protected head
+    is the instruction, and the first code turn folds like any other."""
+    msgs = _transcript(12)[1:]                      # no system message
+    out, folded, _ = _drop_spent_turns(msgs, shed_tokens=10**6, model="m")
+    assert folded and out[0] == msgs[0]
+    assert _is_script_block(out[1]), out[1]
+
+
+def test_the_default_path_folds_byte_for_byte_as_with_a_fixed_head_of_two(monkeypatch) -> None:
+    msgs = _transcript(12)
+    assert C._protected_head(msgs) == 2
+    fold = _drop_spent_turns(msgs, shed_tokens=10**6, model="m")
+    full = compact_transcript(msgs, target_input_tokens=3000, model="m")
+    monkeypatch.setattr(C, "_protected_head", lambda messages: 2)
+    assert _drop_spent_turns(msgs, shed_tokens=10**6, model="m") == fold
+    assert compact_transcript(msgs, target_input_tokens=3000, model="m") == full
+    assert json.dumps(full) != json.dumps(msgs), "vacuity: the transcript did overflow"
