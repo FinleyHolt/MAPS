@@ -232,6 +232,7 @@ def test_the_run_exits_nonzero_and_the_summary_says_why(
     opens carries the reason."""
     from benchmarks.citynav import run_manifest as rm
 
+    monkeypatch.setattr(bf, "_missing_block_assets", lambda eps: [])
     monkeypatch.setattr(rm, "build_manifest", lambda **kw: {})
     monkeypatch.setattr(rm, "emit_or_verify", lambda *a, **k: None)
     d = _driver(tmp_path)
@@ -403,6 +404,7 @@ def test_persistent_infra_is_reported_with_its_errors(
     from benchmarks.citynav import episodes
     from benchmarks.citynav import run_manifest as rm
 
+    monkeypatch.setattr(bf, "_missing_block_assets", lambda eps: [])
     monkeypatch.setattr(rm, "build_manifest", lambda **kw: {})
     monkeypatch.setattr(rm, "emit_or_verify", lambda *a, **k: None)
     for cause in ("A", "A", "B"):
@@ -484,3 +486,39 @@ def test_the_abort_counts_a_scored_miss_as_scored(tmp_path: Path) -> None:
         d._append_result(_infra_row(i))
     text = d.driver_log.read_text()
     assert "1 attempt(s) were scored" in text and "cannot produce results" not in text
+
+
+def test_a_selection_whose_block_assets_are_missing_fails_before_flying(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A block with no bake or no raster fails every episode on it; the run
+    names the missing files at startup instead of spending a window of
+    infra attempts to find out."""
+    from benchmarks.citynav import paths
+    from benchmarks.citynav import run_manifest as rm
+
+    tiles, rgbd = tmp_path / "tiles", tmp_path / "rgbd"
+    tiles.mkdir()
+    rgbd.mkdir()
+    for suffix in paths.BAKE_OUTPUT_SUFFIXES:
+        (tiles / f"blk{suffix}").write_text("{}")
+    (rgbd / "blk.tif").write_bytes(b"")
+    monkeypatch.setattr(paths, "TILES_DIR", tiles)
+    monkeypatch.setattr(paths, "CITYNAV_NATIVE_RGBD_DIR", rgbd)
+    manifests: list[dict] = []
+    monkeypatch.setattr(rm, "build_manifest", lambda **kw: manifests.append(kw) or {})
+    monkeypatch.setattr(rm, "emit_or_verify", lambda *a, **k: None)
+    root = tmp_path / "run"
+    root.mkdir()
+    d = _driver(root)
+    monkeypatch.setattr(d, "_select_episodes", lambda: ["blk::1#0"])
+    monkeypatch.setattr(d, "worker_loop", lambda w: None)
+
+    d.max_wall_s, d._deadline = 1, time.monotonic() + 1  # bounds a driver that flies on
+    assert d.run() == 2 and not manifests
+    assert str(rgbd / "blk_rgb.tif") in d.driver_log.read_text()
+
+    (rgbd / "blk.png").write_bytes(b"")  # the CityNav raster pair
+    d.max_wall_s, d._deadline = 1, time.monotonic() + 1
+    d.run()
+    assert manifests, "a complete raster pair was refused"

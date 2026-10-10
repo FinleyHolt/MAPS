@@ -270,7 +270,7 @@ def assert_current_tile_schema(features: dict, source: str) -> None:
 
 
 #: The per-block files the bake writes, the content :func:`bake_sha256` hashes.
-_BAKE_OUTPUT_SUFFIXES = ("_meta.json", "_features.json", "_graph.npz", "_nodes.json")
+BAKE_OUTPUT_SUFFIXES = ("_meta.json", "_features.json", "_graph.npz", "_nodes.json")
 #: When and from which commit a block was baked: provenance, not content.
 _BAKE_WHEN_WHO = ("baked_at_utc", "bake_git_sha")
 
@@ -289,7 +289,7 @@ def _bake_content(f: Path) -> bytes:
 
 def bake_sha256(tiles_dir: Path | None = None) -> str | None:
     """Content identity of a tile bake: one hash over the name and content
-    of every per-block file the bake writes (``_BAKE_OUTPUT_SUFFIXES``).
+    of every per-block file the bake writes (``BAKE_OUTPUT_SUFFIXES``).
 
     ``assert_current_tile_schema`` refuses retired SHAPES; this pins the
     retired CONTENT that shares a shape. Two bakes of the same block set
@@ -309,7 +309,7 @@ def bake_sha256(tiles_dir: Path | None = None) -> str | None:
         return None
     h = hashlib.sha256()
     for f in sorted(p for p in root.iterdir()
-                    if p.is_file() and p.name.endswith(_BAKE_OUTPUT_SUFFIXES)):
+                    if p.is_file() and p.name.endswith(BAKE_OUTPUT_SUFFIXES)):
         h.update(f.name.encode())
         h.update(b"\0")
         h.update(hashlib.sha256(_bake_content(f)).digest())

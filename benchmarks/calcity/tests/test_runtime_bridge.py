@@ -127,6 +127,8 @@ def test_map_bounds_refuses_a_bake_with_no_meta(tmp_path, monkeypatch):
 _BENCHMARK_INDEPENDENT = {
     # The checkout root; the same tree runs both benchmarks.
     "REPO_ROOT",
+    # The per-block file suffixes every bake writes, both benchmarks alike.
+    "BAKE_OUTPUT_SUFFIXES",
     # Pure content validator: takes an already-loaded features payload and
     # checks its SHAPE (tags-only prior rows). Cal City's bake emits the same
     # shape (test_bake_tiles), so the guard applies to both benchmarks as-is.

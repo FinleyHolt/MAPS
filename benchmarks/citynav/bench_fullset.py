@@ -684,6 +684,27 @@ class _IncrementalDoneIndex:
             return out
 
 
+def _missing_block_assets(episode_ids: list[str]) -> list[Path]:
+    """The files the selected episodes' blocks need and do not have: the
+    bake's per-block files, and the raster pair the ortho reads --
+    ``<map>.tif`` beside ``<map>_rgb.tif`` (a georeferenced map) or
+    ``<map>.png`` (CityNav's rasterized one). Read off ``paths`` at call
+    time, which the bench's bridge rebinds."""
+    from benchmarks.citynav import paths  # noqa: PLC0415
+
+    missing: list[Path] = []
+    for map_name in sorted({e.split("::", 1)[0] for e in episode_ids}):
+        stem = paths.tile_stem(map_name)
+        missing += [p for p in (Path(f"{stem}{s}") for s in paths.BAKE_OUTPUT_SUFFIXES)
+                    if not p.exists()]
+        rgbd = Path(paths.CITYNAV_NATIVE_RGBD_DIR)
+        if not (rgbd / f"{map_name}.tif").exists():
+            missing.append(rgbd / f"{map_name}.tif")
+        if not any((rgbd / f"{map_name}{s}").exists() for s in ("_rgb.tif", ".png")):
+            missing.append(rgbd / f"{map_name}_rgb.tif")
+    return missing
+
+
 class Driver:
     def __init__(self, args: argparse.Namespace) -> None:
         self.workers = max(1, int(args.workers))
@@ -1395,6 +1416,19 @@ class Driver:
         episodes = self._select_episodes()
         self._selection = episodes
         self._split_size = len(episodes)
+        missing = _missing_block_assets(episodes)
+        if missing:
+            self.log(
+                "FATAL: block assets missing for the selection (every episode on "
+                "these blocks would land infra):\n"
+                + "".join(f"  {p}\n" for p in missing)
+                + "  tiles: benchmarks/citynav/data_prep/bake_tiles.sh, or python -m "
+                "benchmarks.calcity.data_prep.bake_tiles\n"
+                "  rasters: benchmarks/citynav/data_prep/rasterize_citynav_native.sh, "
+                "or python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster "
+                "<calcity_rgb.tif>"
+            )
+            return 2
         # The run's ONE machine-written record, emitted with everything
         # resolved and nothing flown: measured endpoint identity,
         # inlined config, tiered env. Re-entry into this out_root (a resume)
