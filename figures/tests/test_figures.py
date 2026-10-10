@@ -27,7 +27,7 @@ def _arm(tmp_path: Path, name: str, model: str, effort: str | None, srs: list[in
             "workdir": f"w0/maps_20261001_1000{i:02d}_citynav_m__{i}_0",
             "metrics": {"episode_id": eid, "SR": sr, "OSR": 1, "NE": 5.0 + 10 * (1 - sr),
                         "success_criterion": criterion,
-                        "llm": {"completion_tokens": tokens, "total_tokens": 4 * tokens,
+                        "llm": {"requests": 8, "completion_tokens": tokens, "total_tokens": 4 * tokens,
                                 "reasoning_tokens": tokens // 2, "turns": 8}},
         })
     (root / "episodes.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
@@ -50,6 +50,20 @@ def test_the_model_is_the_manifest_s_whatever_it_is(tmp_path):
     bare = tmp_path / "bare"
     bare.mkdir()
     assert capability_effort_arms.build([root, bare])["unmatched_roots"] == [str(bare)]
+
+
+def test_an_episode_with_no_transcript_prices_nothing(tmp_path):
+    from maps.llm.flight_summary import blank
+
+    root = _arm(tmp_path, "q", "qwen36-35b-a3b", "0.9", [1, 0])
+    with (root / "episodes.jsonl").open("a") as fh:
+        fh.write(json.dumps({
+            "episode_id": "m::9#0", "worker_id": "w0", "status": "ok", "elapsed_s": 10.0,
+            "workdir": "w0/maps_20261001_100099_citynav_m__9_0",
+            "metrics": {"episode_id": "m::9#0", "SR": 0, "success_criterion": "ring", "llm": blank()},
+        }) + "\n")
+    rec = capability_effort_arms.read_root(root)
+    assert rec["n"] == 3 and rec["completion_tok_mean"] == 1000.0
 
 
 def test_spread_separates_and_keeps_order():

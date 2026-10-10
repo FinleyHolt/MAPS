@@ -53,6 +53,8 @@ def _cost(root: Path) -> dict:
         if isinstance(att.row.get("elapsed_s"), (int, float)):
             wall.append(float(att.row["elapsed_s"]))
         llm = att.metrics.get("llm") or {}
+        if not llm.get("requests"):
+            continue  # no transcript: flight_summary.blank() zeros, not a price
         for key in keys:
             if isinstance(llm.get(key), (int, float)):
                 seen[key].append(float(llm[key]))
