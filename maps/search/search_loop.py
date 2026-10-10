@@ -803,38 +803,6 @@ class SearchLoop:
         with self._lock:
             return self._cells_xy_locked(target_fid)
 
-    def _contour_xy_locked(self, target_fid: str) -> list[list[float]] | None:
-        """This fid's exact vertex chain in world metres
-        (``MapObject.world_contour``); None off both graphs or without one.
-        Under the lock."""
-        node = self._node_for_fid_locked(target_fid)
-        contour = getattr(node, "world_contour", None) if node is not None else None
-        # The same numpy TRUTHINESS TRAP `_cells_xy_locked` documents: a
-        # contour can arrive as an array, where bool(arr) raises. Length is
-        # the honest test.
-        if contour is None or len(contour) == 0:
-            return None
-        return contour
-
-    def node_contour_xy(self, target_fid: str) -> list[list[float]] | None:
-        """The shape this fid IS, as its own vertices in world metres: what
-        the station lassoes a commit with (``station.commit_lasso``), off the
-        graph this mission already holds. None off both graphs or without a
-        contour."""
-        with self._lock:
-            return self._contour_xy_locked(target_fid)
-
-    def node_first_seen_t(self, target_fid: str) -> float | None:
-        """When this fid was first folded into the graph, wall-clock seconds
-        (``MapObject.first_seen_t``): the stop whose observation minted it,
-        which is the picture the model reasoned over when it named the thing
-        (``station.commit_lasso``). None off both graphs, and None for a
-        bake's own node, which no observation minted."""
-        with self._lock:
-            node = self._node_for_fid_locked(target_fid)
-            t = getattr(node, "first_seen_t", None) if node is not None else None
-            return None if t is None else float(t)
-
     def node_coverage_stops(self, target_fid: str, spacing_m: float,
                             max_stops: int = _COVER_MAX_STOPS,
                             minor_spacing_m: float | None = None
