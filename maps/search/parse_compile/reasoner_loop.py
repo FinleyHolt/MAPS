@@ -80,25 +80,20 @@ from maps.search.parse_compile.discourse import (
 )
 from maps.search.parse_compile import python_surface as _py_surface
 
-# Transient LLM-side errors. Treated as retry rounds rather than
-# reasoner kills:
-#   - HTTPStatusError: vLLM returned a non-2xx (typically 400 from
-#     xgrammar refusing a malformed args envelope, or 429 backpressure).
+# Transient LLM-side errors: a retry, never the end of the reasoner.
+#   - HTTPStatusError: the serve returned a non-2xx (a grammar refusal of
+#     a malformed args envelope, or 429 backpressure).
 #   - ConnectError / ReadError / TimeoutException (connect, read, write,
-#     pool): tunnel flap, SSH drop, VPN cookie expiry, vLLM worker
-#     restart. These are the bulk of retriable failures; retrying after
-#     a short backoff lets the reasoner recover instead of marking it
-#     unresolved. A ConnectTimeout is the shape a dead relay port takes,
-#     so it rides with the rest.
+#     pool, and the ConnectTimeout of a dead relay port): a link fault the
+#     reasoner recovers from after a short backoff.
 _RETRIABLE_LLM_ERRORS: tuple[type[BaseException], ...] = (
     httpx.HTTPStatusError,
     httpx.ConnectError,
     httpx.ReadError,
     httpx.TimeoutException,
     httpx.RemoteProtocolError,
-    # A collapsed completion: the serve's sampler returned a repeated-token
-    # run with no content and no call. NAMED rather than left to ride its
-    # ValueError base, so tightening that base later cannot silently drop it.
+    # A collapsed completion: a repeated-token run with no content and no
+    # call. Named, so it does not depend on its ValueError base.
     DegenerateCompletion,
     # ValueError covers a transport-level decode failure (empty body /
     # non-JSON response). A fresh generation usually sticks.
@@ -108,17 +103,11 @@ _RETRIABLE_LLM_ERRORS: tuple[type[BaseException], ...] = (
 #: What a serve says when it rejects a request for its SIZE. Lowercased
 #: substrings, matched against the response body.
 #:
-#: A 4xx above is retriable because a grammar rejection turns on what the
-#: model GENERATED, and a fresh generation differs. An oversize rejection
-#: turns on what we SENT, and the retry re-sends the same bytes: the loop
-#: burned six identical 66,644-token requests per occurrence, then ended the
-#: episode `transient_failures`. On the reasoning-effort ladder that hit 7 of
-#: 32 episodes on the max-effort arm and ZERO on the other two, so the defect
-#: landed entirely on one arm of a three-arm comparison.
-#:
-#: Prose matching, and safe as prose matching goes: a spelling this misses
-#: falls through to the retry path, which is exactly today's behaviour. It can
-#: cost a wasted retry; it cannot turn a retriable error permanent.
+#: A grammar rejection turns on what the model GENERATED, and a fresh
+#: generation differs; an oversize rejection turns on what was SENT, and a
+#: retry re-sends the same bytes. A spelling this misses falls through to
+#: the retry path: it can cost a wasted retry, never turn a retriable error
+#: permanent.
 _OVERSIZE_REJECTION = (
     "maximum context length",
     "context length of",
@@ -143,6 +132,7 @@ def _is_oversize_rejection(exc: BaseException) -> bool:
         return False
     return any(s in body for s in _OVERSIZE_REJECTION)
 
+
 def _is_refused_request(exc: BaseException) -> bool:
     """Did the serve refuse what was sent (a 4xx other than 408/429)?
 
@@ -166,10 +156,9 @@ def _dedup_ref_norm(ops: object) -> dict:
     """``{normalized label -> the ref as WRITTEN}``, by emission index.
 
     THE correspondence :func:`_program_dedup_key` judges identity on, read
-    from one place by both the key and the alias that repairs a dedup hit
-    (``_alias_deduped_refs``). Two copies would let an alias mean something
-    the identity did not, which is the whole defect class the alias exists
-    to close.
+    by both the key and the alias that repairs a dedup hit
+    (``_alias_deduped_refs``), so the alias cannot mean something the
+    identity did not.
     """
     if not isinstance(ops, list):
         return {}
@@ -185,14 +174,12 @@ def _program_dedup_key(program: object, carry_refs: object = ()) -> str | None:
     """Canonical identity of a SELF-CONTAINED program, or ``None`` when it
     reads carry state and is therefore never deduped.
 
-    Within one per-stop round the (cands, anchors) surface is frozen, so an
-    identical self-contained program is a pure re-render — its result cannot
-    change. Identity is judged on the program's SHAPE with ref LABELS
-    normalized out (each rN-grammar ref renamed to its emission index, rN
-    tokens inside args strings rewritten to match): an incrementing ``rN``
-    defeated the byte-identity guard entirely (356/357 identical calls, 0
-    firings, measured). Emission-order permutations stay distinct — order
-    freedom is a feature, not a rename. Programs that read a handle they do
+    While the surface version holds, an identical self-contained program is
+    a pure re-render — its result cannot change. Identity is judged on the
+    program's SHAPE with ref LABELS normalized out (each rN-grammar ref
+    renamed to its emission index, rN tokens inside args strings rewritten
+    to match), so an incrementing ``rN`` does not defeat it. Emission-order
+    permutations stay distinct. Programs that read a handle they do
     not define — a bare ``rN``, the ``last``/``prev`` tokens, or ANY live
     carry ref (which covers off-grammar ref names another call may have
     stored) — resolve against the round's ACCUMULATED results and stay
@@ -263,26 +250,16 @@ def _program_dedup_key(program: object, carry_refs: object = ()) -> str | None:
         return None
 
 
-# The dedup hit serves a one-line REFERENCE, never a fresh payload: the full
-# re-render was measured pure loop fuel (~1,750 tokens per identical result,
-# consumed without breaking any loop ×1,298). {turn} = the turn the original
-# ran on this round. The note carries NO echo of the submitted program:
-# echoing it back served raw op-JSON on the say channel (48 times over 47
-# episodes of saydialect_1000) -- the one register that surface must never
-# read -- and the identity fact ("turn {turn}") already names the call.
+# The dedup hit serves a one-line REFERENCE, never a fresh payload (a full
+# re-render of an identical result is loop fuel). {turn} = the turn the
+# original ran on. The note echoes nothing of the submitted program: the
+# identity fact ("turn {turn}") already names the call.
 #
-# IT LEADS WITH THE WORLD, NOT WITH THE SUBMISSION. The firing condition is
-# `_prev[0] == _surface_version[0]` -- the surface has not moved since that
-# turn -- and that is a strictly stronger fact than "your program was
-# identical": it says NO program would answer differently, so re-asking
-# anything is the wrong move and only changing the world is not. Leading with
-# "identical to the program you ran" described the submission and invited the
-# reading that the executor was declining to work, which is the one thing
-# that is not happening. Every path that can mint a row bumps the version (a
-# flight, a perceive, a retro boost, a stance, an anchor), so "nothing has
-# entered the world" is exactly true whenever this fires -- and a re-flight
-# is NOT what this is about: a flight bumps the version, so an act never
-# reaches here.
+# IT LEADS WITH THE WORLD, NOT WITH THE SUBMISSION. It fires when the
+# surface has not moved since that turn, which says NO program would answer
+# differently, so only changing the world helps. Every path that can mint a
+# row bumps the version (a flight, a perceive, a retro boost, a stance), so
+# "nothing has entered the world" is exactly true whenever this fires.
 _DEDUP_NOTE = (
     "no new information since turn {turn}: nothing has entered the world "
     "since then -- no flight, no perceive -- so every program returns what "
@@ -299,8 +276,7 @@ _DEDUP_REPEAT_NOTE = (
 
 
 def _ordinal(n: int) -> str:
-    """1 -> 1st, 2 -> 2nd, 3 -> 3rd, 11..13 -> th (the served dedup note
-    said "a 2th time" 146 times in framestage_1000)."""
+    """1 -> 1st, 2 -> 2nd, 3 -> 3rd, 11..13 -> th."""
     n = int(n)
     if 10 <= n % 100 <= 13:
         return f"{n}th"
@@ -312,11 +288,9 @@ def _persist_look_audit(
     annotate: bool, tool_ack: dict, vision_text: str, crops: list[dict],
 ) -> None:
     """Persist EXACTLY what one ``look`` call delivered to the model, so a
-    completed run can be audited on WHAT each tool call provided in TEXT and
-    IMAGES (load-bearing for diagnosing vision SR: a neutral/negative result is
-    first suspected as a BAD crop — mis-centered, GT not in frame, wrong
-    candidate, unreadable — not "vision doesn't help", and that is only checkable
-    by SEEING what the model saw).
+    completed run can be audited on what each tool call provided in text and
+    images (a bad crop -- mis-centred, target out of frame, unreadable -- is
+    only checkable by seeing what the model saw).
 
     Writes ``manifest.json`` under ``<audit_dir>/<stop_id>/<cid>/`` (keyed by
     stop_id + the tool-call id): the
@@ -350,9 +324,8 @@ def _persist_look_audit(
         tmp.write_text(json.dumps(manifest, default=str, indent=2))
         os.replace(tmp, d / "manifest.json")
     except Exception:  # noqa: BLE001 — audit persistence never perturbs the round
-        # WARNING (not debug): the look audit is load-bearing for vision
-        # diagnosis ([[feedback_vision_helps_prior_audit_payload]]) — a
-        # persist failure must be visible in the runner log.
+        # WARNING, not debug: a persist failure must be visible in the
+        # runner log.
         log.warning("look audit persist failed at %s", audit_dir, exc_info=True)
 
 
@@ -399,23 +372,12 @@ ENVELOPE_RESIDUE = ("<tool_call", "</tool_call", "<function")
 
 # Consecutive replies carrying ZERO flights that end the mission: the first
 # two draw NO_FLIGHT_REPLY_NUDGE, the third is a CONFIDENT ABSTAIN and ends
-# it. Three, because the turns are not free -- an episode arguing about
-# whether to fly is not searching, against a 100-turn cap -- and because the
-# sibling empty-turn nudge measures 84% next-turn recovery, so a second ask
-# collects most of what the first leaves. A tenth would fire only on a model
-# stuck for some other reason, where repetition is not the fix and the
-# streak itself is the signal worth reading.
+# it. Turns are not free, and a second ask collects most of what the first
+# leaves.
 #
 # It is a STREAK: anything the model EXECUTES between two replies resets it
-# (see the tool-call site), so a find that turns up nothing still counts as
-# working and only replies with nothing between them accumulate. That is
-# what stops a nudge loop without a magic number -- a model doing real work
-# can never be cornered by this, and one doing nothing reaches the abstain
-# in three turns.
-#
-# The harness still never picks a target. "Zero flights is an honest zero"
-# is a rule about the COMMIT -- do not invent one where nothing flew -- and
-# asking again is not inventing.
+# (see the tool-call site), so a model doing real work is never cornered by
+# it. The harness still never picks a target: zero flights commits nothing.
 NO_FLIGHT_ABSTAIN_STREAK = 3
 
 
@@ -506,9 +468,8 @@ def _served_flight(report: dict) -> dict:
     """A flight's report as the model reads it: what it asked for and what
     the flight found, never where the aircraft was. ``pose_xy`` and
     ``alt_m`` stay on the report for the engine -- the flight view, a stop
-    flown again, the cover walk -- and leave here. Served, they were read
-    as a placement to critique and a reason to fly the same row again
-    (sortie 20260911T201524Z run 3, six requests for one row)."""
+    flown again, the cover walk -- and leave here: served, they read as a
+    placement to critique and a reason to fly the same row again."""
     return {k: v for k, v in report.items() if k not in ("pose_xy", "alt_m")}
 
 
@@ -521,9 +482,7 @@ def _window_caption(c: dict) -> str:
     """One rendered image's window: span, orientation and world extent."""
     # ORIENTATION, per image and derived, never assumed: a rotated image
     # states its true up (bearing + the frame note); only a genuinely
-    # unrotated one says north-up. The header claims nothing -- the
-    # hardcoded "north-up" there captioned 1,129 rotated crops in 327
-    # episodes of flygoal_1000.
+    # unrotated one says north-up. The header claims nothing.
     _fu = c.get("frame_up")
     if isinstance(_fu, (list, tuple)) and len(_fu) == 2:
         _fn = str(c.get("frame_note") or "").strip()
@@ -545,21 +504,16 @@ def _window_caption(c: dict) -> str:
 
 
 def _look_vision_text(crops: list[dict]) -> str:
-    # Thin white ellipses + numbered badges on the image; the digit ->
-    # fid binding lives HERE in the text legend (the strongest measured
-    # lever for mark binding). Color is deliberately
-    # NOT stated -- the model reads it from the unobscured pixels.
-    # Each crop line states its delivered span, so a wide relational
-    # frame can never silently imply a close look.
+    # Thin white ellipses + numbered badges on the image; the digit -> fid
+    # binding lives HERE in the text legend. Color is not stated: the model
+    # reads it from the unobscured pixels. Each crop line states its
+    # delivered span, so a wide frame never implies a close look.
     from maps.search.render.look_render import (  # noqa: PLC0415
         LOOK_MAX_BADGES,
     )
     # THE CAPTION NAMES WHAT THE PICTURE IS OF. center_fid is a STOP id on a
-    # flight view and absent on some crops, so this line read
-    # "one per fid in order: [?]" on the majority of served captions -- the
-    # one place a picture says which row it shows, saying nothing. The
-    # legend's own center entry is the subject the renderer actually drew,
-    # so it is the fallback.
+    # flight view and absent on some crops; the legend's own center entry is
+    # the subject the renderer actually drew, so it is the fallback.
     def _subject(c):
         f = c.get("center_fid")
         if f and not str(f).startswith("stop_"):
@@ -579,13 +533,9 @@ def _look_vision_text(crops: list[dict]) -> str:
             else f"{min(_gsds):.2f}-{max(_gsds):.2f} m/px" if _gsds
             else "m/px unknown")
     # HOW SHARP THE PICTURE ACTUALLY IS, not how many pixels it has. The
-    # delivered GSD above is grid spacing divided by a Lanczos upscale, and
-    # on this bake the grid is finer than the camera: 0.3 m/px over 0.6 m
-    # optical NAIP, upscaled up to 3x, captioned "0.10 m/px" — six times
-    # sharper than anything the sensor saw. The comment above already
-    # forbids telling the model a sharper picture than it was given; this
-    # is what keeps it true. Resampling adds pixels and tokens, never
-    # detail, and 54% of episodes said out loud they could not see.
+    # delivered GSD is grid spacing divided by an upscale, and the grid can
+    # be finer than the camera; resampling adds pixels, never detail, so
+    # the source imagery's GSD bounds what the caption may claim.
     _src = max((float(c["source_gsd_m"]) for c in crops
                 if c.get("source_gsd_m")), default=0.0)
     _detail = (f"{_gsd}; detail limited by {_src:.2f} m source imagery"
@@ -602,12 +552,9 @@ def _look_vision_text(crops: list[dict]) -> str:
             continue
         line = _legend_line(entries)
         _span = _window_caption(c)
-        # THE PIXEL GRID, per image, because it is not constant: a crop's
-        # upscale is clamp(round(450/native), 1, 3) and a map's side is
-        # clamp(span/0.35, 320, 1024). Stating it lets the model convert
-        # what it SEES into a world point by whichever route it reasons in
-        # -- "300 of 1000 down" or "three tenths down" both land on the
-        # same metre once the grid and the window are both named.
+        # THE PIXEL GRID, per image, because it is not constant. With the
+        # grid and the window both named, what the model SEES converts into
+        # a world point.
         _px = c.get("side_px") or c.get("width_px")
         if _px:
             _span += f" ({int(_px)}x{int(_px)} px)"
@@ -650,11 +597,9 @@ def _look_vision_text(crops: list[dict]) -> str:
                      "dark object; the raster holds no pixels for "
                      "this subject, so its color/shape cannot be "
                      "read from this image.")
-        # The subject is IN frame and still bigger than the frame. None of
-        # the cases above fires here, and the badge alone then binds its
-        # digit to whichever fragment of the edge happens to cross the
-        # window -- a reader cannot tell a whole 80 m building from a
-        # 2.6 km landuse relation. State the size and say the ink is cut.
+        # The subject is IN frame and still bigger than the frame: the badge
+        # alone binds its digit to whichever fragment of the edge crosses
+        # the window, so state the size and say the ink is cut.
         _ext = c.get("subject_extent_m")
         if c.get("subject_outline_cut") and isinstance(_ext, (list, tuple)):
             base += (f" ; note: this fid's footprint is {_ext[0]:g} x "
@@ -705,9 +650,7 @@ def _named_feature_note(classes: list[str], names: set[str]) -> str | None:
     Class-blind name membership, nothing else: the watchlist takes a
     visual class, and a proper noun there ('airway boulevard') buys a
     segmenter pass for a thing the world state already carries as a row.
-    The note DESCRIBES; the arm stands exactly as said -- no filter, no
-    rewrite, no gate (a colour-style cut here could drop a legitimate
-    open-vocab class the same way a colour cut can drop ground truth).
+    The note DESCRIBES; the arm stands exactly as said.
     """
     named = [c for c in classes if c.strip().lower() in names]
     if not named:
@@ -747,9 +690,7 @@ def _mission_sanitize_moves(raw, staged) -> tuple[list[dict], list[dict]]:
     consumer keeps reading the ONE wire grammar; a
     vN-resolved item carries ``via`` so the flight report can echo the
     handle. Returns ``(accepted_items, item_errors)`` — per-entry errors
-    carry the entry's list index so valid siblings still fly. The round
-    era's target_fid-XOR-target_xy item is retired with the XOR error
-    class it needed.
+    carry the entry's list index so valid siblings still fly.
     """
     items = raw if isinstance(raw, list) else []
     accepted: list[dict] = []
@@ -800,8 +741,7 @@ def _single_fid_of_geom_result_value(v) -> str | None:
         return fid if isinstance(fid, str) and fid else None
     # Compacted list shape: a len-1 list whose single row carries a fid counts
     # as the program isolating one object. A list result carries its ordered
-    # fids as ``fids`` (the rows render as a grid string); an ``items`` list is
-    # also read, for older payloads. A
+    # fids as ``fids`` (the rows render as a grid string) or ``items``. A
     # ``compare`` result (which has ``refs``) is an ATTACH, never an isolation.
     if isinstance(v, dict) and v.get("len") == 1 and "refs" not in v:
         items = v.get("items")
@@ -842,8 +782,6 @@ def _terminal_fid_of_geom_result(out: dict) -> str | None:
     return terminal_fid
 
 
-
-
 # One factual line on a PREFLIGHT color-column request that attached to no
 # row: before landing the prior surface carries no perceived color, so no
 # color_<word> column attaches anywhere -- a fact about WHEN color exists,
@@ -857,8 +795,7 @@ _PREFLIGHT_COLOR_NOTE = (
 
 # One factual line on a PREFLIGHT runtime-surface retrieval: the detection
 # surface is empty before takeoff -- a fact about WHEN detections exist,
-# stated on the result the agent actually reads (the same fact the
-# round-0 viewpoint machinery states on its own surface).
+# stated on the result the agent actually reads.
 _PREFLIGHT_RUNTIME_NOTE = (
     "no runtime detections exist before takeoff; the detection surface "
     "populates per flown stop."
@@ -906,16 +843,14 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
     """Dispatch one ``analyze_scene(program)`` call — the ONE geometry channel.
 
     Runs the model's typed op-program through the SHARED
-    :func:`maps.search.analyze_scene.geom_program.run_program` over the round's
+    :func:`maps.search.analyze_scene.geom_program.run_program` over the
     ``(cands, anchors)`` surface (``_surface_from_ctx``), then truncates list
     results with ``compact_results``.
 
-    ``raw_sink`` (harness-side evidence plumbing, never model-facing): when
-    given, receives the PRE-compaction results under ``raw_sink["results"]`` so
-    the round can fold the model's own ``compare`` columns + latest enriched
-    rows in (``geom_program.compare_columns``) without re-deriving them.
-    ``geometry_sink`` is its dashboard-audit sibling: the resolved compare
-    geometry under ``sink["ops"]`` (see :func:`run_program`), never model-facing.
+    ``raw_sink`` (harness-side, never model-facing): when given, receives the
+    PRE-compaction results under ``raw_sink["results"]`` for the carry store
+    and the latest enriched rows. ``geometry_sink`` is its audit sibling: the
+    resolved compare geometry under ``sink["ops"]`` (see :func:`run_program`).
 
     The namespace's ``staged``/``standing`` thread through to
     :func:`run_program` (the staged-viewpoint side columns ride every find
@@ -947,20 +882,13 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
         return {"error": _err}
     except Exception as exc:  # noqa: BLE001  — surface the failure to the agent, don't crash the round
         return {"error": f"program failed: {exc}"}
-    # The agent owns the order: the surface, the crop feed and the P3
-    # program-terminal commit input all read the program's OWN result order
-    # (score_by fuses exactly the columns the agent's emphasis weights;
-    # nothing is harness-reordered).
+    # The agent owns the order: everything downstream reads the program's
+    # OWN result order; nothing is harness-reordered.
     _raw_results = out["results"]
     if raw_sink is not None:
         raw_sink["results"] = _raw_results
-    # The widening form is the SAY channel's; the round-era surface has its
-    # own slice syntax in its own system prompt and must not be handed a
-    # sentence it cannot spell.
-    # ``answer_ref`` is the SAY channel's: a sentence asks one question, so
-    # its return is one table and the other ops' hints ride it. The round-era
-    # surface writes its own op-programs and reads every rN it named, so it
-    # passes none and keeps them all.
+    # ``answer_ref`` names the one table a plan returns; the other ops' hints
+    # ride it.
     out["results"] = _compact_results(_raw_results,
                                       widen_form='"more of <rN>."',
                                       answer_ref=answer_ref)
@@ -1000,11 +928,9 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
 
 def _surface_from_ctx(ctx) -> dict:
     """Build the ``analyze_scene`` ``{cands, anchors, cell_m}`` surface from a
-    :class:`ToolContext`'s unified graph — the round-0 entry to the
-    ``build_surface_from_graph`` path every round reaches. Round 0 has no
-    detections yet, so
-    ``cands`` is typically empty and ``anchors`` are the prebaked priors; the
-    reasoner can still ground named-landmark geometry (corners, projections)."""
+    :class:`ToolContext`'s unified graph (``build_surface_from_graph``).
+    Before the first flight ``cands`` is typically empty and ``anchors`` are
+    the prebaked priors."""
     from maps.search.analyze_scene.geom_program import build_surface_from_graph
 
     cell_m = float(getattr(ctx, "cell_size_m", 0.0) or 0.0)
@@ -1045,10 +971,9 @@ _HANDLE_WORDS = ("last", "prev", "previous", "ref")
 def _is_handle_token(token) -> bool:
     """True when ``token`` is a result handle — bare ``rN`` / ``rN[i]`` /
     ``rN[a:b]`` or a reserved previous-result word (``last``). Handles are
-    REFUSED wherever a literal fid/[x,y] is wanted (select targets,
-    viewpoint targets — the fan-out forms are retired). A ``$``-prefixed
-    form still matches (typo absorption). A literal fid or a view-position
-    sentinel returns False."""
+    REFUSED wherever a literal fid/[x,y] is wanted (move targets). A
+    ``$``-prefixed form still matches (typo absorption). A literal fid or a
+    view-position sentinel returns False."""
     if not isinstance(token, str):
         return False
     m = _VP_TOKEN_RE.match(token.strip().lstrip("$"))
@@ -1061,10 +986,8 @@ def _is_handle_token(token) -> bool:
 def _crop_token_of(row: dict, live: bool) -> str:
     """A crops token for one carried row: its fid, except a DERIVED end
     row (``end_N`` — the ``ends`` op's mint, never on the live surface)
-    crops its own ``[x, y]``: serving "end_0 is not on the live surface"
-    was the whole look(ends_of(...)) kickback family, and the xy-token
-    form is the one ``_build_crop_requests`` already crops directly.
-    ONLY that family coerces — a once-live fid gone from the surface
+    crops its own ``[x, y]``, the xy-token form ``_build_crop_requests``
+    crops directly. ONLY that family coerces — a once-live fid gone from the surface
     (an evicted detection) must stay on the skip path, because cropping
     its stale carried xy would report a row the surface no longer
     holds."""
@@ -1073,6 +996,7 @@ def _crop_token_of(row: dict, live: bool) -> str:
     if not live and re.fullmatch(r"end_\d+", fid) and is_xy(xy):
         return format_xy_token(float(xy[0]), float(xy[1]))
     return fid
+
 
 def _rounded_xy(token) -> list[float] | None:
     """An ``[x, y]`` token -> the point at centimetre precision, else None."""
@@ -1107,9 +1031,8 @@ def _tool_call_args(tc: dict) -> dict:
 
 def _envelope_residue(text: str) -> bool:
     """True when a PROSE turn carries tool-call envelope residue — a parser
-    miss (vLLM #39056-style: the envelope swallowed into content/reasoning) or
-    the model writing the XML by hand. This is a malformed-envelope
-    repair, NEVER a carry."""
+    miss (the envelope swallowed into content/reasoning) or the model
+    writing the XML by hand: a malformed-envelope repair."""
     t = str(text or "")
     return any(m in t for m in ENVELOPE_RESIDUE)
 
@@ -1146,11 +1069,8 @@ def _code_reply(text: str) -> bool:
     """True when the whole reply is a BLOCK of the surface -- the model
     wrote its next call into the reply channel.
 
-    The CODE arm's twin of ``_language_reply``, and the failure it catches
-    is the larger one: a fleet ended 51% of its episodes on a sentence
-    written into the reply channel, mid-search, most of them a `go to`. A
-    block written there ends the mission the same silent way -- short,
-    with the flights it was about to make never made.
+    A block written there would end the mission silently, short, with the
+    flights it was about to make never made.
 
     Both halves are load-bearing, and each kills a false positive the
     other lets through: prose that narrates a call ("I flew to the church
@@ -1161,8 +1081,6 @@ def _code_reply(text: str) -> bool:
     """
     t = _CODE_FENCE_RE.sub("", str(text or "").strip()).strip()
     return bool(t) and _py_surface.looks_like_code(t)
-
-
 
 
 def run_mission(
@@ -1194,9 +1112,9 @@ def run_mission(
     Builds the mission Reasoner (live mission system prompt + tools),
     appends the operator's instruction verbatim as the ONE user message,
     and runs the conversation until the model replies with no tool call
-    (or a liveness bound fires). ``act.viewpoints`` flies through
-    ``mission_spec.fly`` the moment it lands; the analyze surface is
-    re-derived from ``ctx``'s live graph after every flight. The commit is
+    (or a liveness bound fires). A move flies through ``mission_spec.fly``
+    the moment it lands; the surface is re-derived from ``ctx``'s live
+    graph after every flight. The commit is
     the ENGINE's job — it executed every flight and knows the last target;
     this returns the conversation facts plus the Reasoner (for transcript
     persistence, and for :func:`continue_mission`).
@@ -1204,13 +1122,8 @@ def run_mission(
     ``retask`` is the FIELD console's channel and the bench passes none:
     a callable yielding operator text typed since the last turn, drained
     at the top of each turn. With it unset the instruction is the single
-    user message, exactly as measured.
+    user message.
     """
-    # THE ARM SERVES ONE SURFACE IN BOTH CHANNELS. Serving the sentence
-    # prompt beside the code tool served two contradictory surfaces at
-    # once: the prompt taught sentences the parser refuses, and every
-    # footer named a form the arm does not have.
-    #
     # ponytail: the code prompt states the crops capability unconditionally
     # rather than carrying reasoner_agent's `_NO_CROPS_FACT` needle for the
     # swap, because SEARCH_LOOK_TOOL=0 is a wiring no config or run script
@@ -1344,26 +1257,22 @@ def advance_reasoner_one_round(
 
     Harness-owned endings, none of which the model hears about:
     ``turn_cap``, ``oversize_rejection``, ``transient_failures``,
-    ``compaction_infeasible``. ``MissionSpec.flight_budget`` and
+    ``request_refused``, ``compaction_infeasible``. ``MissionSpec.flight_budget`` and
     ``deadline_epoch`` stop flights, not the conversation.
 
     ``retask`` is the FIELD console's channel, drained at the top of each
     turn; the bench passes none, so the instruction is the single user
-    message exactly as measured.
+    message.
 
     When ``diag`` is provided, ``diag["turns_used"]`` is stamped each turn
     (failure-mode diagnostics; survives every return path).
     """
-    # Text-only round: the reasoner reasons over the structured world-state
-    # (SAM detections + perceived attributes on the runtime graph) via
-    # analyze_scene alone (the ONE query tool). No images are attached.
     # A thread the compactor has declared infeasible stays so for the rest
     # of the episode (the residual head/prose mass it cannot touch only
-    # grows), so don't grow it further with a packet no dispatch will read.
+    # grows), so don't grow it further with a message no dispatch will read.
     thread_infeasible = bool(getattr(reasoner, "compaction_infeasible", False))
-    # Episode-scoped union of every evidence-column name the round's programs
-    # attach, kept on the immortal reasoner across stops. Instrument only —
-    # nothing served reads it.
+    # Episode-scoped union of every evidence-column name the programs attach,
+    # kept on the reasoner. Instrument only — nothing served reads it.
     evidence_columns: set = getattr(reasoner, "evidence_columns", None)
     if evidence_columns is None:
         evidence_columns = set()
@@ -1371,24 +1280,18 @@ def advance_reasoner_one_round(
     if not thread_infeasible:
         reasoner.append_user(user_message)
 
-    # THE canonical in-flight surface (flagless): ``analyze_scene`` — a typed
-    # op-program run through the SHARED ``run_program`` over this round's
-    # (cands, anchors) surface (``compute_namespace``), so the live path and any
-    # offline replay serve byte-for-byte the same surface. Retrieval folds INTO
-    # the program (the find op).
-    # The fid's LATEST result-enriched row across the round's successful
-    # programs (a compare/sort output carries the attached columns) — the
+    # Programs run through the SHARED ``run_program`` over the (cands,
+    # anchors) surface in ``compute_namespace``, so the live path and any
+    # offline replay serve byte-for-byte the same surface.
+    # The fid's LATEST result-enriched row across the successful programs (a
+    # compare/sort output carries the attached columns) — the
     # rejection-escalation surface census reads it to state live facts.
     row_latest: dict[str, dict] = {}
-    # Anti-spiral result reuse: successful SELF-CONTAINED programs seen this
-    # round, keyed by canonical ops JSON (``_program_dedup_key``) ->
-    # ``(surface_version, compacted_out)``. A repeat RE-RENDERS the stored
-    # compacted envelope with the dedup fact — the surface is frozen within a
-    # stop, so the re-run cannot say anything new (the #18493-class spiral
-    # re-issued one program 18x and blew the compaction budget), but the
-    # agent can always re-read its own answer (never a lockout after a
-    # summarized/compacted-away result). A ``view`` call can mutate the
-    # round's evidence (retro boost ingest), so it bumps the version and
+    # Anti-spiral result reuse: successful SELF-CONTAINED programs, keyed by
+    # canonical ops JSON (``_program_dedup_key``) -> ``(surface_version,
+    # out, turn, ops)``. A repeat under the same surface version gets the
+    # one-line dedup note: the re-run cannot say anything new. Anything that
+    # changes the world (a flight, a boost, a stance) bumps the version and
     # re-arms every program.
     _programs_seen: dict[str, tuple] = {}
     _surface_version = [0]
@@ -1396,28 +1299,21 @@ def advance_reasoner_one_round(
     # Protocol telemetry.
     no_call_turns = 0
     no_call_streak = 0
-    # CONSECUTIVE replies that arrived with ZERO flights behind them. A
-    # STREAK, not a total: doing something between two replies -- a find, a
-    # look, anything that executes -- resets it at the tool-call site below,
-    # because a model that is working and has not yet flown is not the model
-    # this counts. Three in a row with nothing in between is a confident
-    # abstain and the mission ends on it.
-    #
-    # Its own counter rather than the no-call streak: that one counts channel
-    # misses, and this reply is on the right channel and is a legal ending.
+    # CONSECUTIVE replies with ZERO flights behind them (see
+    # NO_FLIGHT_ABSTAIN_STREAK). Its own counter rather than the no-call
+    # streak: that one counts channel misses, and this reply is on the right
+    # channel and is a legal ending.
     no_flight_streak = 0
 
-    # Surface rows for the fid∈surface parity check (the same rows the
-    # programs read). On the mission path a flight steps the world
-    # mid-conversation and the act arm REBUILDS this after every fly — a
-    # frozen snapshot made every runtime detection invisible to
-    # crops/frames/marks (measured: 186 crop skips over 73/101 episodes).
+    # Surface rows by fid (the same rows the programs read). A flight steps
+    # the world mid-conversation, so this is REBUILT after every flight and
+    # boost; a frozen snapshot would hide every runtime detection from
+    # crops and marks.
     _ns_rows: dict[str, dict] = {}
 
     def _rebuild_ns_rows() -> None:
-        # Mutated in place: the crop/frame/nearest closures read this dict.
-        # cands win on fid collision (setdefault, cands first) — the same
-        # precedence the original one-shot build had.
+        # Mutated in place: the closures read this dict. cands win on fid
+        # collision (setdefault, cands first).
         _ns_rows.clear()
         for _key in ("cands", "anchors"):
             for _r in (compute_namespace or {}).get(_key) or []:
@@ -1428,11 +1324,10 @@ def advance_reasoner_one_round(
 
     # ---- look: the crop path ----------------------------------------------
     # Each crop item resolves its fid to the surface xy (+ footprint/label for
-    # the mark overlay) from THIS round's ``_ns_rows``, clamps to the
-    # server's 16-image budget, and hands fully-resolved crop specs to
-    # ``look_renderer``. Non-terminal: the rendered crops ride a USER turn
-    # appended AFTER the turn's tool results (so tool-result id-closure stays
-    # contiguous) and the round continues.
+    # the mark overlay) from ``_ns_rows``, clamps to the server's 16-image
+    # budget, and hands fully-resolved crop specs to ``look_renderer``. The
+    # rendered crops ride a USER turn appended AFTER the turn's tool results
+    # (so tool-result id-closure stays contiguous).
     # ONE served tool: `run`, carrying a block of Python.
     #
     # AND NO DECODER MASK. Python is not EBNF-able here: `run` is
@@ -1445,15 +1340,14 @@ def advance_reasoner_one_round(
     pending_vision: list[tuple[str, list[bytes]]] = []
     _block_frames: list[str] = []
     _LOOK_MAX_CROPS = 16
-    # How many of a set's rows a MAP badges. The map shares the crop
-    # renderer's digit->fid legend contract, and the SoM probe measured
-    # ordering over a badged set flat to 25 badges, so the ceiling is the
-    # one look_render already enforces.
+    # How many of a set's rows a MAP badges: the map shares the crop
+    # renderer's digit->fid legend contract, so the ceiling is the one
+    # look_render already enforces.
     from maps.search.render.look_render import (  # noqa: PLC0415
         LOOK_MAX_BADGES as _MAP_MAX_MARKS,
     )
 
-    # ---- act{stage}: the staged ground viewpoints (mission path) -----------
+    # ---- stand: the staged ground viewpoints -------------------------------
     # {handle: {"handle", "from_xy", "up_unit", "at", "facing",
     # "bearing_deg"}}; the LATEST stage is the STANDING viewpoint. One
     # state, three readers: the analyze namespace (executor staged/standing
@@ -1462,8 +1356,7 @@ def advance_reasoner_one_round(
     staged_viewpoints: dict[str, dict] = {}
     standing_handle: list = [None]
     # The mission's flown stops, {stop_id: [x, y]} — a stop id the flight
-    # reports serve is a sayable place (stand at it, fly to it, map it);
-    # pilot-2 measured 59 attempts at unsayable stop references.
+    # reports serve is a sayable place (stand at it, fly to it, map it).
     _plan_stops: dict[str, list] = {}
 
     def _resolve_stage_point(tok) -> list[float] | None:
@@ -1479,16 +1372,15 @@ def advance_reasoner_one_round(
                 return [round(sp[0], 2), round(sp[1], 2)]
             sv = staged_viewpoints.get(tok.strip().lower())
             if sv is not None:
-                # a staged handle IS a point: "show me v1." maps around
-                # it, "from v1, looking east:" re-stands there (pilot-3:
-                # the handle namespace was half-wired — 6 inner errors)
+                # a staged handle IS a point: a map centres on it, a stance
+                # re-stands there
                 return [round(float(sv["from_xy"][0]), 2),
                         round(float(sv["from_xy"][1]), 2)]
             return _rounded_xy(tok)
         return None
 
     def _stage_apply(items: list) -> dict:
-        """act.stage: mint vN handles; the latest staged becomes STANDING.
+        """stand(): mint vN handles; the latest staged becomes STANDING.
         The receipt states the columns/refs/render facts the stance turns
         on; a re-stage is one more item. Bumps the surface version — a
         program re-run under a new stance can say something new."""
@@ -1574,7 +1466,7 @@ def advance_reasoner_one_round(
 
     def _build_crop_requests(
             items: list) -> tuple[list[dict], list[str], list[str]]:
-        """Resolve one ``view.crops`` list into per-crop specs off ``_ns_rows``.
+        """Resolve one look's items into per-crop specs off ``_ns_rows``.
 
         Each item ``{fid, mark_fids?, target_fid?}`` yields one request
         ``{center_fid, center_xy, annotate, marks}`` where ``marks`` are that
@@ -1582,8 +1474,8 @@ def advance_reasoner_one_round(
         renderer clips each mark to its own frame); providing mark_fids /
         target_fid on an item is what turns its relational overlay on (the
         center identification is unconditional). Centers clamp to the
-        16-image server budget; a fid absent from this round's surface is
-        skipped (never a hand-rolled cells->pixel). Returns
+        16-image server budget; a fid absent from the surface is skipped
+        (never a hand-rolled cells->pixel). Returns
         ``(requests, skipped_fids, ref_notes)``."""
         skipped: list[str] = []
         requests: list[dict] = []
@@ -1607,10 +1499,9 @@ def advance_reasoner_one_round(
             if not isinstance(it, dict):
                 continue
             if len(requests) >= _LOOK_MAX_CROPS:
-                # The server's per-request image cap. Stated WHEN IT BITES,
-                # never as prompt-time advice: a limit the agent has not hit
-                # costs context on every round to teach, while a silent drop
-                # of the tail would read as "these fids rendered nothing".
+                # The server's per-request image cap, stated WHEN IT BITES: a
+                # silent drop of the tail would read as "these fids rendered
+                # nothing".
                 ref_notes.append(
                     f"only the first {_LOOK_MAX_CROPS} crops of this call "
                     f"rendered ({len(items) - _i} item(s) dropped); the "
@@ -1630,12 +1521,10 @@ def advance_reasoner_one_round(
                 if target_fid:
                     mark_fids = mark_fids + [target_fid]
                 # A HANDLE IS A LEGAL MARK, because the thing a candidate
-                # is supposed to be ON is a SET: a street is its ways, and
-                # marks=poppy[0] would put back the arbitrary-piece index
-                # the surface exists to prevent. The renderer drops marks
-                # whose footprint never reached the pixels BEFORE the badge
-                # cap, so naming a 64-way road costs the crop only the ways
-                # actually in its window.
+                # is supposed to be ON is a SET: a street is its ways. The
+                # renderer drops marks whose footprint never reached the
+                # pixels BEFORE the badge cap, so naming a many-way road
+                # costs the crop only the ways actually in its window.
                 _mfx: list[str] = []
                 for _mf in mark_fids:
                     if re.fullmatch(r"r\d+", _mf):
@@ -1679,9 +1568,9 @@ def advance_reasoner_one_round(
             if not _covered(xy):
                 uncovered.append(f)
                 continue
-            # The crop is centered on this fid; hand the renderer the fid's own
-            # label + footprint so it can bracket-and-label the CENTER car (the
-            # fid<->car identification) without occluding it.
+            # The crop is centred on this fid; the renderer gets the fid's own
+            # label + footprint to bracket-and-label the CENTER subject
+            # without occluding it.
             frame_up = None
             frame_note = ""
             if standing_handle[0] is not None:
@@ -1702,35 +1591,12 @@ def advance_reasoner_one_round(
                 "annotate": annotate,
                 "marks": marks,
                 # The observation extent — the renderer's window ceiling (a
-                # crop selects less of what was captured, never more).
-                # ONE value per mission because the mission flies ONE
-                # cruise altitude: mission_engine's fly_one holds
-                # state.altitude_m through min(max(alt, ground+1), cap),
-                # which the start altitude already satisfies, so the
-                # pre-mission value IS the current-pose value at every
-                # crop. Measured end to end on the birmingham_block_1::0#0
-                # smoke: 4 flights, all at 141.3 m, obs_span_m 262.6 m at
-                # each. The round/field path (search_loop) passes its own
-                # per-stop alt_m, which DOES vary — a real drone's frustum.
-                # On the CityNav splits this ceiling never binds. The
-                # start altitude is a per-episode sample of the 100-150 m
-                # AMSL band (episode_runner.start_altitude_m), so
-                # 2*(alt - ground) is 112.4-291.0 m (median 192) across all
-                # 29,811 episodes of train_seen/val_seen/test_unseen —
-                # always above the pixel-budget ceiling (100 m on these
-                # 0.1 m/px orthos), which is what
-                # actually clamps the window. 16,910 pulled look manifests
-                # agree: not ONE crop record was clamped by obs_span_m.
-                # An earlier note here recorded a 25.8 m median: that read
-                # cfg.altitude_m (50 m), the inert fallback the runner
-                # overwrites, and no episode has ever flown it.
-                # It DOES bind where the frustum is small, which is why it
-                # exists: the stanford car field test flies a fixed 50 m
-                # AMSL over a 16.74 m datum, 33 m AGL, and a nadir sensor
-                # there really does see only 66.5 m across.
-                # maps/search/tests/test_look_obs_span_ceiling.py and
-                # benchmarks/citynav/tests/test_start_altitude_span.py pin
-                # all of it.
+                # crop selects less of what was captured, never more). ONE
+                # value per mission because the mission flies ONE cruise
+                # altitude. On the CityNav orthos the pixel-budget ceiling
+                # binds first; this one binds where the frustum is small (a
+                # low AGL). test_look_obs_span_ceiling.py and
+                # test_start_altitude_span.py pin it.
                 "obs_span_m": obs_span_m,
             })
         if uncovered:
@@ -1744,7 +1610,7 @@ def advance_reasoner_one_round(
                 "covers it, then look.")
         return requests, skipped, ref_notes
 
-    # ---- perceive{map}: the world-state map path ---------------------------
+    # ---- show_map: the world-state map path --------------------------------
     def _map_features_from_ctx() -> list[dict]:
         """Flatten the live graph to the map painter's plain feature dicts
         (label from raw OSM tags via the one label rule; a detection's
@@ -1762,9 +1628,8 @@ def advance_reasoner_one_round(
         _cs = float(getattr(ctx, "cell_size_m", 0.0) or 2.0)
 
         def _grid_to_world(pts):
-            # int() truncates toward zero and so does astype; the same
-            # ox + (c + 0.5) * cs, in the same order, so the doubles match
-            # the per-vertex form this replaces (1 s over 1,922 roads).
+            # astype truncates toward zero, like int(): ox + (c + 0.5) * cs
+            # per vertex, vectorised.
             a = np.asarray(pts, dtype=float).reshape(-1, 2).astype(np.int64)
             return np.stack([float(_ox) + (a[:, 1] + 0.5) * _cs,
                              float(_oy) + (a[:, 0] + 0.5) * _cs],
@@ -1773,8 +1638,8 @@ def advance_reasoner_one_round(
         feats: list[dict] = []
         for fid, node in nodes.copy().items():
             # The node's own (N, 2) int array rides as is: the painter takes
-            # an array or a list, and converting 3.9 M cells to a list per
-            # show_map was the map's whole cost on the Cal City bake.
+            # an array or a list, and converting millions of cells to a list
+            # per map would be the map's whole cost.
             cells = getattr(node, "cells", None)
             if cells is None or len(cells) == 0:
                 c = getattr(node, "centroid", None)
@@ -1797,8 +1662,7 @@ def advance_reasoner_one_round(
             # The NAME rides beside the class label. `label` is the OSM
             # CLASS ("residential") because that is what the palette and
             # the legend word key off; the name is what the CUE is written
-            # in, and dropping it here is why every street drew as an
-            # anonymous gray line.
+            # in.
             _nm = tags.get("name") if isinstance(tags, dict) else None
             if _nm:
                 feat["name"] = str(_nm)
@@ -1831,10 +1695,10 @@ def advance_reasoner_one_round(
 
     def _build_map_requests(
             items: list) -> tuple[list[dict], list[str], list[str]]:
-        """Resolve one ``perceive.map`` list into render specs. Each item
-        ``{around?, radius_m?, mark_fids?}`` centers one map (around
-        absent = the whole tile); marks resolve off ``_ns_rows`` exactly
-        like crops. Returns ``(specs, skipped_fids, ref_notes)``."""
+        """Resolve show_map items into render specs. Each item
+        ``{around?, mark_fids?}`` centres one map (around absent = the whole
+        tile); marks resolve off ``_ns_rows`` exactly like crops. Returns
+        ``(specs, skipped_fids, ref_notes)``."""
         specs: list[dict] = []
         skipped: list[str] = []
         notes: list[str] = []
@@ -1871,7 +1735,7 @@ def advance_reasoner_one_round(
             _mm_raw = _look_strs(it.get("mark_fids"))
             for mf in _mm_raw:
                 if mf in _seen_mm:
-                    continue  # a degenerate emission repeated one fid 675x
+                    continue
                 _seen_mm.add(mf)
                 row = _ns_rows.get(mf)
                 xy = look_xy(row)
@@ -1883,16 +1747,9 @@ def advance_reasoner_one_round(
                               "label": look_label(mf, row,
                                                    is_target=False),
                               "is_target": False})
-            # THE FRAME FOLLOWS THE REQUEST. The span was a fixed radius or
-            # the whole tile, whatever the map was OF: the default is 6576 m
-            # at 1024 px, so a 15 m house renders 2.3 px and a 2 m road
-            # 0.31 px -- and this verb runs in 94.5% of episodes at 1.5 per
-            # episode. The marks were resolved and badged and then ignored
-            # by the framing, so narrowing to three houses and asking to see
-            # them returned the whole tile.
-            # Framing to what was asked about is 8-18x linear resolution on
-            # it (a block-sized set puts a house at ~43 px), and it needs no
-            # numeral in the language: the extent derives the zoom.
+            # THE FRAME FOLLOWS THE REQUEST: the marks' and the centre's
+            # extent derives the zoom, so a narrowed set renders at a scale
+            # that resolves it instead of as a few pixels of the whole tile.
             _cb = (look_outline(_ns_rows.get(center_fid))
                    if center_fid else None)
             _fpts: list = [m["xy"] for m in marks if m.get("xy")]
@@ -1901,10 +1758,8 @@ def advance_reasoner_one_round(
                     if isinstance(_b, (list, tuple)) and len(_b) >= 2:
                         _fpts.append([float(_b[0]), float(_b[1])])
             if not _fpts and around is not None:
-                # `show me the map near 2830 3600.` is an unambiguously
-                # LOCAL ask with nothing to frame from, and it fell through
-                # to the 6576 m tile — 7-10% of map requests across two
-                # runs. A named point gets the same floor a framed set does.
+                # A map around a bare point is a LOCAL ask with nothing to
+                # frame from: it gets the same floor a framed set does.
                 span = _MAP_FRAME_MIN_M
             elif _fpts:
                 _fx = [float(p[0]) for p in _fpts]
@@ -1937,15 +1792,10 @@ def advance_reasoner_one_round(
         class->color legend the digest palette needs."""
         order = ", ".join(str(m.get("center_fid") or "map") for m in maps)
         # WHAT THE MAP IS, AND WHAT IT IS NOT. It is the PRIOR -- a survey,
-        # drawn from OSM, filled by class -- not a picture of the world as
-        # it is now. It carries footprints, road runs, landuse and names.
-        # It does not carry the shape of a cul-de-sac bulb, a driveway, a
-        # pool, a parked car, or anything built since the survey, and no
-        # zoom will make those appear because they were never recorded.
-        # A log read found the model retreating to this instrument when
-        # crops were unreadable and then guessing an end-shape off a
-        # schematic that structurally cannot show one. The camera is the
-        # live check, and a flight is how it is taken.
+        # drawn from OSM, filled by class -- plus the detections, not a
+        # picture of the world as it is now: no zoom shows what the survey
+        # never recorded. The camera is the live check, and a flight is how
+        # it is taken.
         base = (f"World-state maps -- the survey plus everything detected "
                 f"so far, not a photograph: light-gray lines are roads, "
                 f"tan shapes are surveyed buildings, muted regions are "
@@ -1993,28 +1843,19 @@ def advance_reasoner_one_round(
                          f"outside this map's window and are NOT drawn")
         return base
 
-    # Identical-error loop breaker, ESCALATING: after 2 same-class
-    # ProgramError / select rejections in one round, the error text
-    # additionally states the repetition + the live surface facts (fids
-    # present, columns computed this round) — the census vehicle carries the
-    # full state ONCE. From the 3rd CONSECUTIVE same-class rejection the
-    # harness stops re-issuing the remedy+census bytes verbatim: measured
-    # (armC7 episode 7181), the identical color-as-filter rejection was
-    # re-served 195x consecutively (69MB served, 205 turns) and broke
-    # nothing — a repeated identical byte-string is the one served form
-    # measured NOT to break a rejection loop. The escalated form serves the
-    # repetition FACT (consecutive + round counts), the rejection's
-    # identifying clause, where the full remedy/census already sit, and the
-    # compact live-state counts. Facts-only, no forcing, no lockout, no turn
-    # caps — the agent stays free to emit anything, including the same call
-    # again (it then reads the incremented fact, never the same bytes).
+    # Identical-error loop breaker, ESCALATING: from the 2nd same-class
+    # rejection the error text also states the repetition + the live surface
+    # facts (fid counts, columns computed so far), ONCE. From the 3rd
+    # CONSECUTIVE one the remedy+census bytes are not re-issued verbatim (a
+    # repeated identical byte-string does not break a rejection loop): the
+    # escalated form serves the repetition FACT, the rejection's identifying
+    # clause, where the full remedy/census already sit, and the compact
+    # live-state counts. Facts only, no forcing, no lockout.
     _err_class_counts: dict[str, int] = {}
     _err_streak: dict = {"sig": None, "n": 0}
-    # Consecutive identical-dedup streak — the dedup path's own escalation
-    # (measured: 348 dedup notes, streaks to 15; a byte-identical note is
-    # the served form measured NOT to break a repeat loop, so from the 2nd
-    # consecutive hit the note escalates to the changing live-state facts,
-    # exactly as _loop_broken_error does for rejections).
+    # Consecutive identical-dedup streak — the dedup path's own escalation:
+    # from the 2nd consecutive hit the note escalates to the changing
+    # live-state facts, as _loop_broken_error does for rejections.
     _dedup_streak: dict = {"key": None, "n": 0}
 
     def _loop_breaker_facts(_ns, _n: int) -> str:
@@ -2024,9 +1865,7 @@ def advance_reasoner_one_round(
         c_n, a_n, cols = _surface_census_counts(_ns)
         parts = [
             f" This error class has now occurred {_n}x.",
-            # Counts only: the first-8-alphabetical fid sample was always
-            # ['prior_0', 'prior_1', ...] regardless of relevance -- pure
-            # token noise on every 2nd serve (measured 199 payloads).
+            # Counts only: a fid sample is noise.
             f" Live surface: {c_n} detection fid(s);"
             f" {a_n} prior map row fid(s).",
         ]
@@ -2043,8 +1882,8 @@ def advance_reasoner_one_round(
         return s[:100]
 
     def _surface_census_counts(_ns) -> tuple[int, int, list[str]]:
-        """Compact live-state counts (n detections, n priors, computed
-        columns) — the same facts ``_loop_breaker_facts`` serves in full."""
+        """Compact live-state counts: n detections, n priors, computed
+        columns."""
         c_n = sum(1 for r in (_ns.get("cands") or [])
                   if isinstance(r, dict) and r.get("fid"))
         a_n = sum(1 for r in (_ns.get("anchors") or [])
@@ -2058,14 +1897,11 @@ def advance_reasoner_one_round(
 
     def _repeated_rejection_state(err: str, _n: int, _consec: int) -> str:
         """The Nth-consecutive-identical-rejection FACT, served INSTEAD of
-        the verbatim remedy+census re-issue (which each rejection >=3 would
-        otherwise repeat byte-for-byte but for the count digit). States: the
-        consecutive + per-round counts, the rejection's identifying first
-        clause, where the full remedy text and the live-surface census were
-        already served (rejections 1 and 2 — both still in this
-        conversation), the executor-determinism fact, and the round's live
-        alternatives as compact counts + the computed-column names. All
-        facts the harness knows; no command, no candidate gate."""
+        the verbatim remedy+census re-issue: the consecutive + total counts,
+        the rejection's identifying first clause, where the full remedy text
+        and the live-surface census were already served, the
+        executor-determinism fact, and the live counts + computed-column
+        names. No command, no candidate gate."""
         _first = str(err).split(". ", 1)[0].strip().rstrip(".")
         c_n, a_n, cols = _surface_census_counts(compute_namespace or {})
         _cols_s = f"{cols[:12]}" + (
@@ -2087,18 +1923,15 @@ def advance_reasoner_one_round(
 
         1st serve: the error verbatim. 2nd: + the surface census (fid
         COUNTS + the computed column names — the fix material for an
-        absent column; the old first-8-alphabetical fid sample was
-        noise), served ONCE in full. 3rd consecutive
-        onward: the repetition fact + compact state
-        (``_repeated_rejection_state``) replaces the verbatim remedy+census
-        re-issue. A successful program resets the CONSECUTIVE streak (the
-        next same-class error gets the full text again); the per-round
-        class count keeps accumulating. A structural op-SHAPE error
-        (unknown top-level key / bad op / missing ref / a handle used where
-        a literal fid is required / a syntax error, whose echoed offending
-        line is its own fix material) repeats for program-shape reasons, and
-        an inventory of fids is pure token noise there (gt_mi first-dozen
-        audit S6, 11 observed) — those get only the count."""
+        absent column), served ONCE in full. 3rd consecutive onward: the
+        repetition fact + compact state (``_repeated_rejection_state``)
+        replaces the verbatim remedy+census re-issue. A successful program
+        resets the CONSECUTIVE streak; the class count keeps accumulating.
+        A structural op-SHAPE error (unknown top-level key / bad op /
+        missing ref / a handle used where a literal fid is required / a
+        syntax error, whose echoed offending line is its own fix material)
+        repeats for program-shape reasons, and a fid inventory is noise
+        there — those get only the count."""
         _sig = _err_class_sig(err)
         _n = _err_class_counts[_sig] = _err_class_counts.get(_sig, 0) + 1
         if _err_streak["sig"] == _sig:
@@ -2110,8 +1943,7 @@ def advance_reasoner_one_round(
         if _n < 2:
             return err
         # A syntax error is a code-shape fact too: the echoed offending
-        # line (scan_block serves it with a caret) is the fix material,
-        # and a fid inventory is pure token noise beside it.
+        # line (scan_block serves it with a caret) is the fix material.
         _SHAPE_MARKERS = ("top-level key(s)", "not a known op",
                           "lacks its required 'ref'", "unknown ref",
                           "unknown handle", "is a result handle",
@@ -2122,9 +1954,9 @@ def advance_reasoner_one_round(
             return _repeated_rejection_state(err, _n, _consec)
         return err + _loop_breaker_facts(compute_namespace or {}, _n)
 
-    # Cross-call ref persistence (S4): raw results of every successful
-    # program this round, keyed by ref — later calls resolve earlier $rN
-    # from it (resolution-only; never re-rendered).
+    # Cross-call ref persistence: raw results of every successful program,
+    # keyed by ref — later calls resolve earlier rN from it (never
+    # re-rendered).
     carry_results: dict = {}
 
     # A HANDLE IS A QUERY, NOT A SNAPSHOT. Every op the mission has run,
@@ -2133,32 +1965,22 @@ def advance_reasoner_one_round(
     # against the world the flight folded, so a handle cannot answer about
     # ground that had not been covered when it was bound.
     #
-    # calcity::200#198 is the cost of the snapshot: the model bound
-    # red_cars = find("car", color="red", near=poppy) BEFORE flying the
-    # ground the target sat on, explored three more houses, and committed
-    # out of that frozen list -- while the ground-truth car, folded five
-    # times at conf 0.88 and 1.5 m from truth, was never in any row it
-    # could see.
-    #
     # Ops are pure reads over (cands, anchors), so replaying them is safe
     # and order-correct by construction: the history IS the dependency
     # order. A replay that raises leaves the old rows standing, because a
     # stale handle beats no handle.
     #
-    # THE REPLAY IS PER HANDLE, ON READ. Replaying the whole history at
-    # once cost a flight the whole mission so far: every compare the mission
-    # had run, over every row of the flown surface, before the block that
-    # flew could finish -- 32 s on the Cal City surface with 60 blocks of
-    # history, and growing with every block. A read of one handle re-derives
-    # that handle and the ops it reads, and nothing else; the ops are pure,
-    # so the rows come out the same as a full replay would have made them.
+    # THE REPLAY IS PER HANDLE, ON READ: a read of one handle re-derives
+    # that handle and the ops it reads, and nothing else (a whole-history
+    # replay per flight grows with every block). The ops are pure, so the
+    # rows come out the same as a full replay would have made them.
     _op_history: list = []           # every op, in execution order
     _op_reads: list = []             # per op: the handle bases its args name
     _producers: dict = {}            # ref -> indices into _op_history
     # The surface version the carry is ARMED for: the first read under a new
     # version claims it and clears the fresh set, and every read after that
     # re-derives what it reads. Before that first read a handle answers with
-    # the rows it held, the same as before.
+    # the rows it held.
     _carry_version = [0]
     _fresh: set = set()              # refs re-derived, or written, under it
     # A FLIGHT-MINTED handle is not a query. It records the rows ONE
@@ -2231,11 +2053,7 @@ def advance_reasoner_one_round(
             # SEED EVERYTHING ELSE. A flight-minted handle is produced by
             # no op -- it is written straight into carry_results -- so a
             # replay that does not seed it raises "unknown ref" the moment
-            # an op reads one, and the surface INVITES that: the flight ack
-            # advertises rN[0] and order_by(rN, ...), and the catch note
-            # advertises look(rN[a:b]). Measured: 34% of basket episodes ran
-            # such an op, and every one of them froze this replay for the
-            # rest of the mission.
+            # an op reads one, and the flight ack invites exactly that.
             _out = run_geom_program_tool(
                 {"program": {"ops": [
                     op for op in _op_history if str(op.get("ref")) in need]}},
@@ -2245,8 +2063,7 @@ def advance_reasoner_one_round(
             if isinstance(_out, dict) and _out.get("error"):
                 # An executor refusal is a failed replay too: the handles
                 # keep their last rows and stay UNCLAIMED, so the next read
-                # tries again. Accepting it as success marked stale rows
-                # fresh for the rest of the mission, silently.
+                # tries again.
                 log.debug("carry refresh refused; handles keep their last "
                           "rows: %s", str(_out["error"])[:200])
                 return
@@ -2293,18 +2110,12 @@ def advance_reasoner_one_round(
             # only the re-render is defunded.
             #
             # THE DEDUP OWES THIS EMISSION ITS OWN LABELS. Identity is judged
-            # with ref labels NORMALIZED OUT (an incrementing rN defeated the
-            # byte-identity guard entirely, 356/357 calls), so the re-issue's
-            # labels are not the ones the first run stored under. A caller
-            # that resolves a slot from `carry_results[<its own ref>]` then
-            # finds nothing — and reports it as nothing, which is not the
-            # same fact. Measured on calcity_v3base: `go to the intersection
-            # of A and B.` answered "0 distinct crossings" for two roads the
-            # SAME episode had just resolved with `find the intersection of A
-            # and B.`, 49 says over 47 episodes, the prior success being the
-            # precondition. Alias by the key's own emission-index
-            # correspondence so a deduped program is indistinguishable from a
-            # re-run to everything downstream of it.
+            # with ref labels NORMALIZED OUT, so the re-issue's labels are not
+            # the ones the first run stored under, and a caller resolving a
+            # slot from `carry_results[<its own ref>]` would find nothing.
+            # Alias by the key's own emission-index correspondence so a
+            # deduped program is indistinguishable from a re-run to
+            # everything downstream of it.
             _alias_deduped_refs(_prev[3], (a or {}).get("program"))
             if _dedup_streak["key"] == _key:
                 _dedup_streak["n"] += 1
@@ -2319,7 +2130,6 @@ def advance_reasoner_one_round(
                     n=_ordinal(_dedup_streak["n"]), c_n=_c_n, a_n=_a_n,
                     cols=_cols_s)}
             # name the live handles so the reference is actionable
-            # (pilot-4: 11 dedup returns showed the model nothing at all)
             _prev_out = _prev[1] if isinstance(_prev[1], dict) else {}
             _hs = sorted((k for k in {**_prev_out,
                                       **(_prev_out.get("result") or {}
@@ -2414,31 +2224,26 @@ def advance_reasoner_one_round(
     mission_sam: list[dict] = []
 
     # ONE discourse dict for the mission (what set is in scope, how far
-    # past a handle's head the agent has asked) and the mission-global rN
+    # past a handle's head the model has asked) and the mission-global rN
     # chain that carry_results resolves against.
     discourse: dict = _new_discourse()
     plan_rn: list = [0]
-    # THE EPISODE'S SCRIPT, append-only. Each accepted block is recorded in
-    # order and nothing already executed is ever re-run: re-running turn 1's
-    # find on turn 6 would re-mint handles and diverge from what the model
-    # was shown. The artifact is a record to READ -- one program per episode
-    # instead of tens of disconnected calls -- and its map half is a pure
-    # function of the bake, so the analysis half re-reads deterministically.
+    # THE EPISODE'S SCRIPT, append-only: each accepted block in order;
+    # nothing already executed is ever re-run (that would re-mint handles
+    # and diverge from what the model was shown).
     _episode_script: list = []
     # EVERY rN THE CODE SURFACE HAS IN PLAY: the handles earlier blocks
-    # bound, plus every rN the block now running spells. There are two
-    # writers into the rN namespace -- the compiler (which already skips
-    # these) and the flight mint below -- and only one of them was reading
-    # the model's names. The dispatcher refreshes it per block; the say
-    # channel leaves it empty and the mint behaves as it always did.
+    # bound, plus every rN the block now running spells. Both writers into
+    # the rN namespace -- the compiler and the flight mint below -- skip
+    # them. The dispatcher refreshes it per block.
     _code_names: set = set()
     # The handles flights minted DURING the block being dispatched, so the
     # code scope can bind them: the flight's report names the handle, and a
     # name the surface serves has to be a name the surface can resolve.
     _code_minted: list = []
-    # The handle the LAST flight of this sentence minted over its own new
-    # rows, applied to the discourse AFTER update_discourse so the flight —
-    # the most recent thing that happened — owns "those".
+    # The handle the LAST flight of this plan minted over its own new rows,
+    # applied to the discourse AFTER update_discourse so the flight — the
+    # most recent thing that happened — owns "those".
     _flight_minted: list = [None]
     # The fids explore passes have covered this mission, for the named-
     # feature coverage note below.
@@ -2467,19 +2272,14 @@ def advance_reasoner_one_round(
         """The rows a flight or a pass ADDED -> an ordinary rN handle.
 
         ``(handle, the note that names it)``, or ``None`` when nothing was
-        added. ZERO new rows mints NOTHING and leaves "those" standing --
-        a live-looking empty handle is this repo's named hazard, and rule
-        T's own "non-empty only" rule says the same.
+        added. ZERO new rows mints NOTHING and leaves "those" standing: a
+        live-looking empty handle would read as a real empty answer.
         """
         if not _new_fids:
             return None
-        # THE MINT SKIPS THE NAMES IN PLAY. The compiler already refuses to
-        # mint an rN a model name spells (the two namespaces are disjoint
-        # by construction); this writer did not, so a flight could take
-        # `r3` while the model held r3 for something else -- and the report
-        # then told it "r3 names the rows this flight added" while r3 still
-        # resolved to what the model bound. A wrong commit, with nothing
-        # anywhere saying so.
+        # THE MINT SKIPS THE NAMES IN PLAY, as the compiler does: a flight
+        # taking `r3` while the model holds r3 for something else would name
+        # one handle for two sets.
         while f"r{plan_rn[0]}" in _code_names:
             plan_rn[0] += 1
         _h = f"r{plan_rn[0]}"
@@ -2500,26 +2300,20 @@ def advance_reasoner_one_round(
 
     def _fly_moves(_accepted: list, _item_errors: list,
                    cover: str | None = None) -> dict:
-        """The act.move core — each entry FLIES the moment it lands, in
-        order; after every successful flight the analyze surface
-        re-derives from the live graph, and the rows the flight ADDED are
-        minted as an ordinary rN result handle. (The retired mission-act
-        branch's body, plus the mint; the sentence channel is its one
-        caller.)
+        """The move core — each entry FLIES the moment it lands, in order;
+        after every successful flight the surface re-derives from the live
+        graph, and the rows the flight ADDED are minted as an ordinary rN
+        result handle.
 
         ``cover`` names the place an ``explore`` is covering, and turns the
         SAME loop into ONE pass over it. Every entry is a stop and the pass
-        ends on the last of them. Three things change, and they are the
-        three that make a pass one act rather than N flights:
+        ends on the last of them. Three things make a pass one act rather
+        than N flights:
 
-          * ONE picture, not one per stop. A per-stop view would put a
-            dozen images into a single turn and spend, in one act, a large
-            share of the token budget the rest of the mission has to fit
-            inside. The pass gets one wide frame with its stops badged on
-            it, and close looking stays what ``look()`` is for.
-          * ONE handle, over everything the whole pass folded. Minting per
-            stop hands the model a name for stop 5's rows and calls it the
-            explore's product.
+          * NO per-stop view: a dozen images in one turn would spend a large
+            share of the mission's token budget. The pass shows its catch
+            instead (see the explore branch of ``_run_plan``).
+          * ONE handle, over everything the whole pass folded.
           * ONE ack. The pass is an act; N flight reports are its
             mechanism, not its result.
         """
@@ -2556,15 +2350,14 @@ def advance_reasoner_one_round(
             if cover is not None:
                 # THE REST OF THE PASS RIDES EVERY STOP, for the crew: the
                 # station posts each leg with the stops behind it, so the
-                # whole pass is on the tablet from its first leg and the
-                # C-12 flies it in one go instead of a waypoint at a time.
-                # The bench's fly reads ``target_fid`` alone, and nothing
-                # of this reaches the model.
+                # whole pass can be flown in one go. The bench's fly reads
+                # ``target_fid`` alone, and nothing of this reaches the
+                # model.
                 _item["pass_ahead"] = [[float(_xy[0]), float(_xy[1])]
                                        for _xy in map(_stop_xy, _queue) if _xy]
             if mission_flights >= mission_spec.flight_budget:
                 # The backstop fires without a NUMBER: the model never
-                # hears a budget fact (CLAUDE.md law); the count logs.
+                # hears a budget fact; the count logs.
                 log.warning("%s flight backstop hit (%d flights)",
                             rid_tag, mission_spec.flight_budget)
                 _item_errors.append({"target_fid": _item["target_fid"],
@@ -2572,15 +2365,9 @@ def advance_reasoner_one_round(
                 continue
             if (mission_spec.deadline_epoch is not None
                     and time.time() >= mission_spec.deadline_epoch):
-                # THE SAME BACKSTOP, IN THE UNIT THAT KILLS. A count of
-                # stops cannot bound a count of seconds: per-stop cost
+                # THE SAME BACKSTOP, IN THE UNIT THAT KILLS: per-stop cost
                 # moves with tile density, watchlist width and the serving
-                # plane's health, so the flight arm above is ~11 h of wall
-                # at one rate and minutes at another. calcity::6#6 and
-                # ::250#248 flew 262 and 264 stops of ONE explore at ~40 s
-                # each, hit the harness's 4 h SIGKILL, and were the only
-                # two episodes of 209 to record no prediction row at all --
-                # while the flight arm sat 738 flights away from firing.
+                # plane's health, so a count of stops cannot bound seconds.
                 #
                 # Stopping the FLYING is the whole of it: the model keeps
                 # its remaining turns and ends the mission with its own
@@ -2633,60 +2420,30 @@ def advance_reasoner_one_round(
             if "error" not in _report:
                 if (not _report.get("new_detections") and not mission_sam
                         and not withheld("look_for")):
-                    # the watchlist gate is mechanical and invisible:
-                    # pilot-3 measured 240 zero-detection flights, 99%
-                    # with an empty watchlist, and 388 altitude
-                    # misdiagnoses with no exit. State the mechanism.
+                    # the watchlist gate is mechanical and invisible, so
+                    # state the mechanism.
                     _wl_note = ('the watchlist is empty -- nothing is '
                                 'segmented on any flight; call '
                                 'look_for("<class>") to see detections')
                     _report["note"] = (f"{_report['note']} {_wl_note}"
                                        if _report.get("note")
                                        else _wl_note)
-                # THE FLIGHT SHOWS WHAT IT SAW. The harness already
-                # renders this exact view to segment it and then throws the
-                # pixels away, handing back a COUNT of the classes it was
-                # told to watch. That count is what makes "0 detections"
-                # read as absence when it means "nothing you asked for":
-                # a log study over 146 reached-then-missed episodes found
-                # the model trusting it and leaving a target it was
-                # standing on. And the model pays to undo it -- 45% of
-                # 4,691 flights were followed immediately by a look or map
-                # call asking to see where it had just gone, ~2 turns an
-                # episode spent re-requesting a picture that existed.
-                # Serving the view costs no render the harness did not
-                # already do, and the caption carries the world window, so
-                # what the model sees converts straight into a point it can
-                # fly to.
-                #
-                # AND THE THING IT FLEW TO IS OUTLINED ON IT. This is the
-                # only picture that reaches the model BEFORE its next aim
-                # without costing a turn — tool results within a turn all
-                # arrive together, so a `look at` cannot inform an aim in the
-                # same turn — and its caption already names the world window
-                # in metres. Drawing the target's footprint on it is what
-                # makes the free picture the pointing instrument: the shape,
-                # the frame and the metres land on ONE image at the moment
-                # the model decides whether the point it named was the part
-                # it meant. Measured on the aimed commits of one arm, the
-                # model's own point beat the fid's centroid 47.0% to 31.2%
-                # while the best point on that same mask scored 65.8% — it
-                # picks the right thing and the wrong part of it.
+                # THE FLIGHT SHOWS WHAT IT SAW. A count of the watched
+                # classes reads "0 detections" as absence when it means
+                # "nothing you asked for"; the view the flight saw is the
+                # evidence. Its caption carries the world window, so what
+                # the model sees converts straight into a point.
                 #
                 # THE VIEW IS THE TARGET'S OWN LOOK: centred on the row the
-                # flight asked for, its footprint the boundary, so what the
-                # model reads after a flight is the thing it asked to see
-                # and nothing about where the aircraft was. A shape too big
-                # for its window still rides: ``_proj_poly`` CLIPS it and
-                # draws the in-frame arcs, and the caption's own
-                # ``subject_outline_cut`` says the footprint runs past the
-                # frame. A target that is not a row (a stop flown again)
-                # centres on the stop's point under the token it was asked
-                # for. Badged with where the flight put the aircraft, the
-                # picture was read as a placement to critique (sortie
-                # 20260911T201524Z run 3, six requests for one row).
+                # flight asked for, its footprint outlined, and nothing
+                # about where the aircraft was. It is the one picture that
+                # reaches the model before its next aim without costing a
+                # turn. A shape too big for its window is clipped to the
+                # in-frame arcs (the caption's ``subject_outline_cut``). A
+                # target that is not a row (a stop flown again) centres on
+                # the stop's point under the token it was asked for.
                 #
-                # A PASS RENDERS ONCE, not once a stop — see ``cover``.
+                # A pass renders no per-stop view — see ``cover``.
                 if _report.get("pose_xy") and cover is None:
                     _tfid = str(_item.get("target_fid") or "")
                     _trow = _ns_rows.get(_tfid)
@@ -2749,16 +2506,11 @@ def advance_reasoner_one_round(
                 _surface_version[0] += 1
                 # A VIEW MINTS THE SET IT SHOWS. The flight's own new rows
                 # become an ordinary rN handle, so order_by(rN, ...) and
-                # look(rN) reach them while the drone is
-                # still standing over them. Without it the flight returned a
-                # COUNT and no address, and the model had to re-issue
-                # find("<noun>") over the whole accumulated world and hope
-                # the new rows ranked in (measured on pilot-10: 126 of 300 episodes
-                # reason explicitly about a handle the flight never named).
-                # The surface diff, not the engine's detection count: those
-                # differ (a re-sighting merges into a row that already
-                # exists) and the addressable rows are the truth here. A
-                # PASS mints once, around the whole of itself.
+                # look(rN) reach them while the drone is still standing over
+                # them. The surface diff, not the engine's detection count:
+                # a re-sighting merges into a row that already exists, and
+                # the addressable rows are the truth here. A PASS mints
+                # once, around the whole of itself.
                 if cover is None:
                     _m = _mint_rows([_f for _f in _ns_rows
                                      if _f not in _fids_before], "flight")
@@ -2816,24 +2568,18 @@ def advance_reasoner_one_round(
         if not _ok:
             return {"error": (_errs[0] if _errs
                               else f"nothing of {cover} could be flown")}
-        # A PASS SHOWS ITS CATCH, not its coverage. A wide frame of the
-        # whole pass is the wrong picture for the question a pass is asked
-        # (three pools kilometres apart are a few pixels each), so no
-        # coverage frame is drawn HERE; the move branch instead serves one
-        # crop per row the pass ADDED (_CATCH_CROPS of them, pass order) --
-        # the image budget spent on the rows the coverage found, which is
-        # what vision is actually needed for. The 140#138 reflies measured
-        # the alternative: the model paged look(rows) by hand or skipped
-        # it and committed [0].
+        # A PASS SHOWS ITS CATCH, not its coverage: a wide frame of the
+        # whole pass resolves nothing, so no coverage frame is drawn HERE;
+        # the explore branch serves one crop per row the pass ADDED
+        # (_CATCH_CROPS of them, pass order).
         return _ack
 
     # HALF THE OBSERVATION'S LONG SIDE: a pass's stop spacing.
-    # ``observation_extent_m`` returns the sensor footprint's LONG side
-    # (320.82 m on this bake; the short side is 240.77), so half of it sits
-    # under the short side for any sensor below 2:1 -- which is what lets a
-    # ONE-DIMENSIONAL walk cover a shape that is not one: consecutive stops
-    # overlap on the minor axis too. The number is the run's own, never a
-    # constant here: a bake or an altitude change moves it.
+    # ``observation_extent_m`` returns the sensor footprint's LONG side, so
+    # half of it sits under the short side for any sensor below 2:1 -- which
+    # is what lets a ONE-DIMENSIONAL walk cover a shape that is not one:
+    # consecutive stops overlap on the minor axis too. The number is the
+    # run's own: a bake or an altitude change moves it.
     _cover_spacing = (float(obs_span_m) / 2.0
                       if isinstance(obs_span_m, (int, float))
                       and obs_span_m > 0 else None)
@@ -2868,8 +2614,7 @@ def advance_reasoner_one_round(
         stop -- which is the honest cost of covering something, paid in
         where you end and undone by naming the row you meant and going to
         it. A return leg would spend a flight putting the drone somewhere
-        that is not an answer either (smoke 25712881's pre-explore pose was
-        the episode start, 4 km from the target).
+        that is not an answer either.
 
         The note carries HOW MUCH of the shape the stops reached. The
         stops run end to end along the shape, so the walk's own length is
@@ -2879,8 +2624,7 @@ def advance_reasoner_one_round(
 
         A SET is one place to cover: many members become ONE pass over
         their union, per-member walks chained end to end so the whole
-        thing flies a line. The single-member path below is byte-for-byte
-        the pass it always was.
+        thing flies a line.
         """
         if len(_accepted_items) > 1:
             return _cover_set_items(_accepted_items, _said)
@@ -2917,12 +2661,9 @@ def advance_reasoner_one_round(
                      "the one stop it is.")
             _items = [dict(_item)]
         # A NAMED FEATURE IS OFTEN MANY SEGMENTS, and a pass covers ONE.
-        # 147#145's method-correct retry explored 2 of 85th Street's 10
-        # fragments, committed on the covered stretch, and missed by
-        # 573 m -- the target sat two segments further on. Which
-        # fragments no pass has covered is world-state, so the pass note
-        # says it; the model decides whether to keep covering. Computed
-        # HERE, before the flight refreshes the surface views.
+        # Which segments no pass has covered is world-state, so the pass
+        # note says it; the model decides whether to keep covering.
+        # Computed HERE, before the flight refreshes the surface views.
         _covered_fids.add(str(_tok))
         _nm = (_ns_rows.get(str(_tok)) or {}).get("name")
         if _nm:
@@ -2941,8 +2682,8 @@ def advance_reasoner_one_round(
         half a stop-spacing of one already kept are dropped -- that is the
         shared endpoint of consecutive street segments, seen twice.
         """
-        # ponytail: O(n*m) greedy chaining; a TSP is not worth it under a
-        # 24-stop pass.
+        # ponytail: O(n*m) greedy chaining, not a TSP; order the members
+        # optimally if a pass's flown length ever matters.
         _span = _cover_spacing
         _members: list[dict] = []
         for _it in _accepted_items:
@@ -3020,12 +2761,9 @@ def advance_reasoner_one_round(
                     if _total and _span else 1.0)
         _subject = str(_said) if _said else f"{len(_chained)} places"
         if _reached >= 1.0:
-            # A MEMBER SMALLER THAN ONE OBSERVATION WALKS ZERO METRES, so a
-            # pass over five houses summed to 0 and reported "covered 0 m of
-            # r4 across 5 segments in 3 stops" -- the one receipt on the
-            # behaviour being installed, reading as a null result. Measured:
-            # 40 of 340 explore acks in the basket said it. Length is the
-            # wrong fact for a set of footprints; the count is the right one.
+            # A MEMBER SMALLER THAN ONE OBSERVATION WALKS ZERO METRES, so
+            # length is the wrong fact for a set of footprints; the count is
+            # the right one.
             _note = (
                 (f"covered {len(_chained)} places in {_n_stops} stops; each "
                  f"fits inside one observation.")
@@ -3077,11 +2815,10 @@ def advance_reasoner_one_round(
         return out
 
     def _watch_apply(step: dict) -> dict:
-        """`look for` — the ONE segmenter channel (latest declaration of a
-        class wins), reached by the bare form directly and by the
-        near-form on its way to the boost. The watchlist only GROWS:
-        `stop watching for` was said 5 times in 3,044 episodes, and a
-        removal buys a cheaper segmenter pass, never an answer."""
+        """look_for() — the ONE segmenter channel (latest declaration of a
+        class wins), reached by the bare form directly and by the placed
+        form on its way to the boost. The watchlist only GROWS: a removal
+        buys a cheaper segmenter pass, never an answer."""
         adds = [dict(e) for e in step.get("add") or []]
         for _e in adds:
             mission_sam[:] = [c for c in mission_sam
@@ -3112,19 +2849,11 @@ def advance_reasoner_one_round(
                 "watchlist is active at every later flight.")}
         res = boost_queue(list(step.get("concepts") or []), where) or {}
         if "error" not in res and res.get("queued"):
-            # THE NEAR-FORM MEANS WHAT A PLANNER MEANS: standing attention
-            # on the class, with localized emphasis where it was asked.
-            # One verb, one semantics. Before this, `look for X near Y.`
-            # was a one-shot that left the standing watchlist EMPTY -- 40
-            # of the facing family's 49 never-armed episodes used ONLY
-            # this form and read its receipt as an arm
-            # (f40088a:calcity_full_replyrepair, arming read), and both
-            # corrective notes measured behavior-flat on matched episodes
-            # (schema form n=419: boost-dark 35 vs 38). An affordance
-            # mismatch is fixed in the tool, not narrated around: the
-            # model's own sentence names the class, so arming it IS the
-            # sentence's meaning -- nothing arms that the model did not
-            # say.
+            # THE PLACED FORM MEANS WHAT A PLANNER MEANS: standing attention
+            # on the class, with localized emphasis where it was asked. One
+            # verb, one semantics: the model's own call names the class, so
+            # arming it is the call's meaning -- nothing arms that the model
+            # did not say.
             _adds = [{"class": str(c), "role": "target"}
                      for c in step.get("concepts") or [] if c]
             if _adds:
@@ -3137,8 +2866,7 @@ def advance_reasoner_one_round(
         if "error" not in res:
             # a retro boost ingests detections NOW: refresh the retrieval
             # surface like a flight does, or the new fids are findable
-            # only after the next flight (measured on the pilot: 514 new
-            # detections a following find could not see).
+            # only after the next flight.
             (compute_namespace or {}).update(_surface_from_ctx(ctx))
             _rebuild_ns_rows()
             _surface_version[0] += 1
@@ -3147,14 +2875,11 @@ def advance_reasoner_one_round(
     def _crops_of(fid, cid: str, marks: list | None = None,
                    preamble: str = "") -> dict:
         # A LIST asks for one crop PER ROW -- each its own subject, each at
-        # the single-look scale where a distinction is resolvable. A bare
-        # fid keeps the one-crop form (and its marks) unchanged.
+        # the single-look scale where a distinction is resolvable.
         _fids = [str(f) for f in fid] if isinstance(fid, (list, tuple)) \
             else [str(fid)]
-        # MARKS RIDE EVERY CROP. The gate was len(_fids) == 1, so the
-        # multi-row look -- the one the worked example teaches and the one
-        # a candidate set is read through -- silently dropped them. What
-        # marks= is FOR is telling ten candidate crops apart.
+        # MARKS RIDE EVERY CROP: what marks= is FOR is telling candidate
+        # crops apart.
         reqs, skipped, ref_notes = _build_crop_requests(
             [{"fid": f, "target_fid": f,
               **({"mark_fids": list(marks)} if marks else {})}
@@ -3196,26 +2921,16 @@ def advance_reasoner_one_round(
             pending_vision.append((vis_text, jpegs))
             if marks:
                 # DRAWN, not requested, and only on a crop that SHIPPED.
-                # The renderer frames the hull of the request's points and
-                # then CLIPS at the window: a mark outside the delivered
-                # frame is named in the legend text and no badge is drawn
-                # for it. The legend (truthful) and a caller counting its
-                # own request (not) served the same turn on pilot-10 -- 463
-                # rows claimed badged, 215 drawn. The legend IS the drawn
-                # set, so count it and let no caller report the ask as the
-                # delivery.
+                # The renderer CLIPS at the window: a mark outside the
+                # delivered frame is named in the legend text and no badge
+                # is drawn for it. The legend IS the drawn set, so count it.
                 ack["badged"] = sum(
                     len(c.get("legend") or []) for c in crops
                     if isinstance(c, dict) and c.get("jpeg"))
                 # A requested mark goes undrawn for FOUR different reasons
-                # and only ONE of them is distance. Serve the renderer's own
-                # out-of-frame list rather than a residual: a caller
-                # subtracting badged from requested attributes a surface
-                # eviction (``skipped``, already on this ack), a
-                # footprint-in-frame centroid-out mark, and a badge-cap drop
-                # all to "further away than one frame reaches" -- a row 6 m
-                # from the subject in a 30 m frame gets called distant, and
-                # the legend the note points at does not name it.
+                # and only ONE of them is distance, so serve the renderer's
+                # own out-of-frame list rather than requested-minus-badged
+                # (a surface eviction is ``skipped``, already on this ack).
                 ack["not_drawn"] = [
                     str(f) for c in crops
                     if isinstance(c, dict) and c.get("jpeg")
@@ -3232,63 +2947,30 @@ def advance_reasoner_one_round(
         return ack
 
     def _crops_set(handle: str, cid: str, marks: list | None = None) -> dict:
-        """"look at them." — ONE frame centred on the SET in scope, badging
-        the rows that fall inside it.
+        """look(rows) — one crop per row of the handle, in the handle's own
+        order, each badged with the row it shows.
 
-        The frame and the result table are the SAME object: the marks are
-        the handle's rows, in the handle's own order, so every badge is a
-        row the model can still name afterwards (its fid rides the legend
-        text, and the handle reaches the whole set again). That
-        correspondence is SERVED, on the message the pixels are in — not
-        left to be inferred from a picture. Any handle qualifies, so a set
-        minted by something other than a find badges the same way.
-
-        The rank-0 row is the frame's subject (the standing order's own
-        answer, and the row the renderer's recenter cap keeps in frame).
-        EVERY ROW IS NOT AN INVARIANT: the window fits the set's hull only
-        up to the observation and pixel ceilings, and a set spread wider
-        than the one that binds is clipped to rank 0's neighbourhood — so
-        the note counts what the renderer DREW (``badged``) and names the
-        rows the renderer itself reports OUT OF FRAME (``not_drawn``).
-        Never a residual of requested-minus-drawn: a row can also be gone
-        from the surface (``skipped``, served on this same ack), be in
-        frame with its centroid outside it, or lose its badge to the cap,
-        and calling any of those "further away than one frame reaches" is
-        the same false-precision the drawn count was added to remove. Every
-        budget is stated only WHEN IT BITES — the same doctrine the 16-crop
-        cap follows: a limit the model has not hit costs context every
-        round to teach, and a silent drop would read as "those rows are not
-        there"."""
+        Every badge is a row the model can still name afterwards (its fid
+        rides the legend text, and the handle reaches the whole set again);
+        that correspondence is SERVED on the message the pixels are in. Any
+        handle qualifies, so a set minted by something other than a find
+        looks the same way. The crop budget is stated only WHEN IT BITES:
+        a silent drop would read as "those rows are not there"."""
         rows = [r for r in (_carry_read(handle) or [])
                 if isinstance(r, dict) and r.get("fid")]
         if not rows:
             return {"error": (f"{handle} holds no rows to look at; name a "
                               "handle that has some, or find() one first")}
-        # ONE CROP PER ROW, not one frame over the set. The set frame was
-        # served at MAP SCALE and could not resolve what these cues turn on:
-        # median 300 m window, 70% of them 300 m or wider, the widest
-        # 37,243 m at 36.37 m/px. A single-row look is a median 78.6 m at
-        # 0.15 m/px. So the only form that named more than one row could not
-        # tell them apart, and the only form that could resolve a difference
-        # named exactly the row already picked -- which is why the run flew
-        # 2,224 times against 304 looks: a flight was the only way to get a
-        # sharp picture of a candidate, and flying to one makes it the
-        # answer.
-        #
-        # This is not new capability. It is the crop every flight already
-        # ships, without the flight. One badge per image makes badge->fid
-        # unambiguous by construction rather than by a legend that got it
-        # wrong 33.8% of the time, and the answer to "which one has a pool?"
-        # becomes a fid that is live on the surface.
+        # ONE CROP PER ROW, not one frame over the set: a frame over a
+        # spread set renders at map scale and resolves nothing, while a
+        # single-row crop is the one every flight ships. One badge per
+        # image makes badge->fid unambiguous by construction.
         fids = [_crop_token_of(r, str(r["fid"]) in _ns_rows) for r in rows]
         ack = _crops_of(
             fids, cid, marks=marks,
-            # NO SPELLING IS INVITED HERE. This said "of {handle}, …", which
-            # is sentence-surface phrasing AND names the EXECUTOR's ref: the
-            # receipt rename maps that ref back to the model's own label
-            # everywhere else, so a code-surface model was being invited to
-            # say a handle it never bound. Each crop names its own row, and
-            # naming a row is what the next call needs.
+            # The preamble names no handle: ``handle`` is the EXECUTOR's
+            # ref, which the model may never have bound. Each crop names its
+            # own row, and naming a row is what the next call needs.
             preamble=("One crop per row, in order, each badged with the "
                       "row it shows. "))
         if not withheld("images") and len(rows) > int(ack.get("delivered") or 0):
@@ -3353,10 +3035,8 @@ def advance_reasoner_one_round(
         return ack
 
     def _plan_err(ack: dict, msg: str) -> dict:
-        """A say error result, routed through the SAME escalating loop
-        breaker the analyze path uses — pilot-2 measured sentences
-        repeated 23x with the guard never firing because say errors
-        bypassed it."""
+        """A plan error result, routed through the SAME escalating loop
+        breaker the analyze path uses."""
         return {**ack, "error": _loop_broken_error(str(msg))}
 
     def _flown_stop(tok: str) -> tuple[str, str | None]:
@@ -3372,8 +3052,8 @@ def advance_reasoner_one_round(
         return tok, None
 
     def _closest_names(what: str) -> str:
-        """Rule N's retry-fuel killer: the nearest NAMED rows to a
-        grounding that matched nothing (fuzzy, top 3)."""
+        """The nearest NAMED rows to a grounding that matched nothing
+        (fuzzy, top 3)."""
         names: dict[str, tuple] = {}
         for _key in ("cands", "anchors"):
             for _r in (compute_namespace or {}).get(_key) or []:
@@ -3390,26 +3070,19 @@ def advance_reasoner_one_round(
             f"\"{names[c][1]}\" ({names[c][0]})" for c in close)
 
     def _run_plan(plan: dict, text: str) -> dict:
-        """Execute a compiled plan and echo it. THE shared body: the say
-        surface and the code surface differ only in what produced the
-        plan, so everything mission law lives in -- grounding under the
+        """Execute a compiled plan and echo it: grounding under the
         name-match floor, the analyze execution, flights, the watchlist,
-        the discourse writes -- is reached by both and duplicated by
-        neither."""
+        the discourse writes."""
         ack: dict = {"said": text}
-        # `more of rN.` with nothing left to page. compile_sentence sees the
-        # parse node, the discourse dict and rn_start and nothing else — no
-        # row count reaches it — so the length check lives HERE, where the
-        # rows are. plan["widened"][h] IS the window's start index (the
-        # compiler writes seen + _BROAD_HEAD_ROWS, which is exactly `lo`).
-        # A refusal returns before _update_discourse, so the handle's counter
-        # does not move and a repeat gets the same stable answer. An unknown
-        # handle (_held == 0) falls through to the resolver's own error.
-        # Two ways to have nothing left: the window walked past the end, or
-        # the handle was never truncated at all — the serve law renders a
-        # result of _BROAD_DUMP_SOFT_ROWS rows or fewer WHOLE, so `more of`
-        # there would re-serve rows already on screen as if new (207 of 451
-        # flown calls were exactly that).
+        # Paging a handle with nothing left to page. No row count reaches
+        # the compiler, so the length check lives HERE, where the rows are.
+        # plan["widened"][h] IS the window's start index. A refusal returns
+        # before _update_discourse, so the handle's counter does not move
+        # and a repeat gets the same answer. An unknown handle (_held == 0)
+        # falls through to the resolver's own error. Two ways to have
+        # nothing left: the window walked past the end, or the handle was
+        # never truncated at all (a result of _BROAD_DUMP_SOFT_ROWS rows or
+        # fewer renders WHOLE).
         for _h, _lo in (plan.get("widened") or {}).items():
             _held = len(_carry_read(_h) or [])
             if _held and (_held <= _BROAD_DUMP_SOFT_ROWS or _lo >= _held):
@@ -3444,9 +3117,7 @@ def advance_reasoner_one_round(
                 rows = [r for r in (g_res.get(f"r{i}") or [])
                         if isinstance(r, dict) and r.get("fid")]
                 # the same floor the find head's retrieval uses: a
-                # below-threshold "best match" is a guess, and pilot-3
-                # measured 5 silent mis-flights (to 193 m) plus 527-row
-                # "matches" of junk queries riding rank-0
+                # below-threshold "best match" is a guess
                 rows = [r for r in rows
                         if r.get("name_match") is None
                         or float(r["name_match"]) >= _FUZZY_FLOOR]
@@ -3458,17 +3129,14 @@ def advance_reasoner_one_round(
                         "differently, say a fid off a served row, or "
                         "perceive more first"))
                 # every slot keeps only the TOP name_match tie group
-                # (anchors: the labeled union; the whole fuzzy set
-                # walled compare with 199-instance fan-outs on pilot-1)
+                # (anchors: the labeled union)
                 _top = rows[0].get("name_match")
                 ties = [str(r["fid"]) for r in rows
                         if r.get("name_match") == _top] \
                     or [str(rows[0]["fid"])]
                 slot_ties[g["slot"]] = ties
                 if g["why"] == "stage" and len(ties) > 1:
-                    # rule F refuses only a genuine TOP-MATCH tie (the
-                    # pilot-2 form refused any multi-row name — 31
-                    # refusals, one naming 219 places)
+                    # rule F refuses only a genuine TOP-MATCH tie
                     _f = ", ".join(ties[:4])
                     return _plan_err(ack, (
                         f"rule F: a viewpoint is one point; "
@@ -3477,13 +3145,9 @@ def advance_reasoner_one_round(
                         "works"))
                 slot_fid[g["slot"]] = str(rows[0]["fid"])
                 # A token NO matched row carries -- the same note the
-                # query find serves, on the grounding path. Without it,
-                # glue landing in a GROUNDING ("go to <name>", "show
-                # me <place>", "from <site>, looking …", an anchor)
-                # rides the top name_match tie and binds silently, and
-                # episodes carrying glue score lower. A NOTE,
-                # never an error and never a filter: the match stays
-                # untouched because a real query often names an attribute
+                # query find serves, on the grounding path, so glue in a
+                # grounding does not bind silently. A NOTE, never an error
+                # and never a filter: a real query often names an attribute
                 # no row spells.
                 _dead = _unmatched_query_tokens(g["query"] or "", rows)
                 if _dead:
@@ -3509,14 +3173,13 @@ def advance_reasoner_one_round(
             if kind == "fid":
                 return slot_fid[val]
             if kind == "xy":
-                # two bare numbers in a place slot = a world point,
-                # spoken ("go to 700 300."); the canonical token flies
-                # through the ordinary snap path
+                # a world point; the canonical token flies through the
+                # ordinary snap path
                 return format_xy_token(val[0], val[1])
-            return str(val)  # "lit" (a spoken fid) / "it"
+            return str(val)  # "lit" (a literal fid) / "it"
 
         final_rows = None
-        _flight_minted[0] = None   # this sentence's flight only
+        _flight_minted[0] = None   # this plan's flight only
         for step in plan["steps"]:
             do = step["do"]
             if do == "stage":
@@ -3536,9 +3199,8 @@ def advance_reasoner_one_round(
                 out = _dispatch_analyze_scene(
                     {"program": prog}, answer_ref=str(plan["last_ref"] or ""))
                 if isinstance(out, dict) and "error" in out:
-                    # in-register: keep the mechanical fact, drop the
-                    # op-signature tail (it teaches op names the language
-                    # cannot say — measured register break on the pilot)
+                    # keep the mechanical fact, drop the op-signature tail
+                    # (it teaches op names this surface cannot spell)
                     _e = str(out["error"]).split("; signature: ")[0]
                     return {**ack, "error": _e}
                 ack["result"] = out
@@ -3606,27 +3268,18 @@ def advance_reasoner_one_round(
                     if _segs > 1:
                         mv["segments"] = _segs
                     # A TRUNCATED PASS READS AS TRUNCATED. ``_cov_note`` is
-                    # built from the stops the pass PLANNED, so a pass a
-                    # backstop cut short would report the whole walk's reach
-                    # and read as "that is all there was" -- the same defect
-                    # ``_cover_items`` already names for its own stop bound.
-                    # ``_cover_ack`` counts the stops actually flown, so the
-                    # short case says what happened instead of over-claiming.
+                    # built from the stops the pass PLANNED; ``_cover_ack``
+                    # counts the stops actually flown, so a pass a backstop
+                    # cut short says what happened instead of over-claiming.
                     if mv.get("stops", len(_accepted)) < len(_accepted):
                         _cov_note = (f"the pass ended after "
                                      f"{mv.get('stops', 0)} of its stops.")
                     if _cov_note:
                         mv["note"] = (f"{_cov_note} {mv['note']}"
                                       if mv.get("note") else _cov_note)
-                    # THE PASS SHOWS ITS CATCH. You swept a street for a
-                    # class; the sweep hands you the pictures of what it
-                    # found, in the pass's own (spatial) order, one badge
-                    # per crop -- choosing among contenders becomes a
-                    # reaction to what is already in front of you rather
-                    # than a discipline to summon. This is the image
-                    # budget spent on "the rows the coverage found, which
-                    # is what vision is actually needed for" -- capped so
-                    # the model's own later looks keep room.
+                    # THE PASS SHOWS ITS CATCH: one crop per row it added, in
+                    # the pass's own (spatial) order, capped at
+                    # _CATCH_CROPS so the model's own later looks keep room.
                     _h = _flight_minted[0]
                     if _h:
                         _catch = [r for r in (carry_results.get(_h) or [])
@@ -3671,10 +3324,8 @@ def advance_reasoner_one_round(
                 _ok = [r for r in mv.get("flown") or []
                        if isinstance(r, dict) and "error" not in r]
                 if not (_ok and _accepted):
-                    # nothing flew: the failure is THE result, top-level
-                    # (pilot-3: 'go to stop_003.' returned a
-                    # flight-shaped envelope that never flew, invisible
-                    # to the error count)
+                    # nothing flew: the failure is THE result, top-level,
+                    # never a flight-shaped envelope that never flew
                     _msg = next(
                         (str(r.get("error"))
                          for r in mv.get("flown") or []
@@ -3701,7 +3352,7 @@ def advance_reasoner_one_round(
                 # RESOLVE THE MARK SLOTS. The compiler writes each mark as
                 # a grounding slot -- ('fid', 'g1') -- exactly as it writes
                 # the crop's own subject, and _look_strs downstream keeps
-                # only strings, so an unresolved slot vanished silently.
+                # only strings.
                 _mk = [_refval(m) for m in (step.get("mark_fids") or [])]
                 _mk = [m for m in _mk if isinstance(m, str) and m.strip()]
                 ack["crop"] = (
@@ -3714,11 +3365,8 @@ def advance_reasoner_one_round(
             elif do == "map":
                 # THE MAP BADGES THE SET IN SCOPE. Unmarked, every detection
                 # paints as one white class (map_render's _DETECTION_RGB), so
-                # the picture cannot answer "which of these rows is it" -- the
-                # one question a narrowed set is asking. The marks path
-                # already exists and resolves off the same rows crops use;
-                # nothing passed any. Measured: `show me the map.` runs in
-                # 94.5% of episodes at 1.5 per episode.
+                # the picture could not answer "which of these rows is it" --
+                # the one question a narrowed set is asking.
                 _h = discourse.get("those")
                 _mrows = [r for r in (_carry_read(_h) or [])
                           if isinstance(r, dict) and r.get("fid")] if _h else []
@@ -3736,14 +3384,10 @@ def advance_reasoner_one_round(
                         and not ack["map"].get("delivered")):
                     return _plan_err(ack, str(ack["map"]["error"]))
         # AN ORDERING THAT DID NOT ORDER ANYTHING. A big prior is a big
-        # relation: Neuralia Road is 64 merged ways and 8,849 cells, so
-        # every pool along four kilometres of it is 0 m away and
-        # find("pool", near=<that road>) hands back a sort in which rank 0
-        # means nothing. The model read rank 0 and committed 2.8 km from
-        # the answer, and nothing in the result said the sort was empty.
-        # It is a FACT, not advice: how many rows tie, and on what column.
-        # Narrowing further -- another anchor, a containment, or looking at
-        # the candidates -- is the model's to choose.
+        # relation: every row along a many-way road is 0 m from it, so
+        # find("pool", near=<that road>) can hand back a sort in which rank 0
+        # means nothing. It is a FACT, not advice: how many rows tie, and on
+        # what column; narrowing further is the model's to choose.
         _ok_key = (plan.get("_code_order") or [None, 1])[0]
         if _ok_key:
             _rows = [r for r in (final_rows or []) if isinstance(r, dict)]
@@ -3763,22 +3407,19 @@ def advance_reasoner_one_round(
         if ground_notes:
             ack["note"] = (f"{ack['note']}\n" if ack.get("note")
                            else "") + "; ".join(ground_notes)
-        # a sentence that executed ends the consecutive-rejection streak
-        # (mirror of the analyze path's reset; the next same-class error
-        # serves its full text again)
+        # a plan that executed ends the consecutive-rejection streak (mirror
+        # of the analyze path's reset)
         _err_streak["sig"] = None
         _err_streak["n"] = 0
         _update_discourse(plan, final_rows, discourse)
         if _flight_minted[0] is not None:
-            # AFTER the plan's own discourse writes: a sentence that both
-            # builds a set and flies ("go to the intersection of A and B.")
-            # ends standing over what the flight revealed, so the flight's
-            # set is the one in scope. The set the sentence built keeps its
-            # own handle and stays reachable by name.
+            # AFTER the plan's own discourse writes: a plan that both
+            # builds a set and flies ends standing over what the flight
+            # revealed, so the flight's set is the one in scope. The set the
+            # plan built keeps its own handle and stays reachable by name.
             discourse["those"] = _flight_minted[0]
             _flight_minted[0] = None
         return _echo(plan, ack)
-
 
     _mission_py: list = [None]
 
@@ -3787,11 +3428,10 @@ def advance_reasoner_one_round(
         machinery.
 
         The block runs in ONE persistent namespace -- a variable an
-        earlier turn bound is still bound -- and every mission call
-        builds the same parsed step the retired parser produced, so what
-        executes underneath (grounding, programs, flights, serving) is
-        the measured path. An error costs the line it is on: everything
-        the block ran before it stands, receipts included.
+        earlier turn bound is still bound -- and every library call
+        compiles onto a plan that ``_run_plan`` executes. An error costs
+        the line it is on: everything the block ran before it stands,
+        receipts included.
         """
         code = (args or {}).get("code")
         if not isinstance(code, str) or not code.strip():
@@ -3799,13 +3439,11 @@ def advance_reasoner_one_round(
         if _mission_py[0] is None:
             _mission_py[0] = _py_surface.MissionPython(_py_surface.MissionEnv(
                 run_plan=_run_plan,
-                # THE CODE ARM READS THE FLOWN WORLD TOO. Python
-                # evaluates go_to(red_cars[0])'s subscript BEFORE go_to
-                # dispatches, so without this the commit target comes out
-                # of the pre-flight world -- and len(), print() and
-                # iteration read it the same way.
-                # compute_namespace is updated IN PLACE after every flight
-                # (_surface_from_ctx), so it is always the flown world.
+                # THE CODE ARM READS THE FLOWN WORLD. Python evaluates
+                # go_to(red_cars[0])'s subscript BEFORE go_to dispatches,
+                # and len(), print() and iteration read rows the same way,
+                # so a read re-derives the handle against the current
+                # surface first.
                 rows_of_ref=lambda ref: (
                     _ensure_fresh([ref]),
                     [r for r in (carry_results.get(ref) or [])
@@ -3843,15 +3481,13 @@ def advance_reasoner_one_round(
         )
 
     if thread_infeasible:
-        # Terminal carry, no dispatch: re-scanning a known-infeasible thread
-        # costs a full-transcript tokenize per stop and re-raises every time
-        # (measured: 17 s x every remaining tour stop). The tour keeps
-        # flying; the commit binds the candidates accumulated so far.
+        # No dispatch: re-scanning a known-infeasible thread costs a
+        # full-transcript tokenize and re-raises every time.
         return _mission_end("compaction_infeasible")
 
     for turn_idx in itertools.count():
-        # Failure-mode diagnostics: stamp turns-used each iteration so it survives
-        # whichever return point fires (terminal / carry / cap / transient).
+        # Failure-mode diagnostics: stamp turns-used each iteration so it
+        # survives whichever return point fires.
         if diag is not None:
             diag["turns_used"] = turn_idx + 1
         # THE OPERATOR'S CHANNEL INTO A FLYING MISSION. A field console
@@ -3862,9 +3498,8 @@ def advance_reasoner_one_round(
         # their results. The transcript row is the console's, written when
         # the operator spoke, not when the loop heard them.
         #
-        # The bench passes nothing. ``retask is None`` appends not one
-        # byte, which is what keeps "the operator instruction is the single
-        # user message" literally true on the measured path.
+        # The bench passes nothing: ``retask is None`` appends not one
+        # byte, so the operator instruction stays the single user message.
         if retask is not None:
             while (operator_turn := retask()) is not None:
                 log.info("%s operator re-task at turn %d (%d chars)",
@@ -3881,16 +3516,12 @@ def advance_reasoner_one_round(
             with net_meter_stage("mission"):
                 r = reasoner.step_tool_call(stop_tools)
         except (CompactionInfeasible, CompactionInvariantError) as exc:
-            # CompactionInvariantError shares this handler rather than
-            # escaping uncaught. It is a sibling of Infeasible, not a
-            # subclass, so it had none -- a compacted list that broke tool
-            # closure killed the PROCESS where an uncompactable one ends
-            # the episode. Both mean the same thing to a caller: this
-            # conversation cannot be served, so end it the same way.
-            # Terminal for the EPISODE, not just this round: nothing removes
-            # the residue the compactor cannot touch, so flag the thread
-            # (later rounds carry instantly, above) and drop this round's
-            # packet — dead weight no dispatch will ever read.
+            # CompactionInvariantError is a sibling of Infeasible, not a
+            # subclass; both mean this conversation cannot be served, so
+            # both end it the same way. Terminal for the EPISODE: nothing
+            # removes the residue the compactor cannot touch, so flag the
+            # thread (a later turn on it returns at once, above) and drop
+            # this turn's message, which no dispatch will ever read.
             reasoner.compaction_infeasible = True
             msgs = getattr(reasoner, "messages", None)
             if (turn_idx == 0 and msgs
@@ -3951,7 +3582,7 @@ def advance_reasoner_one_round(
             content = str(r.get("content") or "")
             # Malformed-envelope repair: ANY tool-call residue in a prose
             # turn is a parser miss / hand-written envelope — repair it,
-            # NEVER carry on it.
+            # never end on it.
             if _envelope_residue(content) or _envelope_residue(
                     str(r.get("reasoning") or "")):
                 log.info("%s MALFORMED_ENVELOPE at turn %d -> repair",
@@ -3964,14 +3595,10 @@ def advance_reasoner_one_round(
                 continue
             if not content.strip():
                 # An EMPTY assistant turn is not a reply: every real
-                # ending carries text (520/520 across two fleets), and
-                # 28/28 no-commit episodes were THIS shape -- the serve's
-                # tool-grammar patch dropping a header/payload name
-                # mismatch, the think span ending mid-plan ("let's fly to
-                # prior_293") with nothing on either channel. Repair once
-                # (measured 84% next-turn recovery where the round path's
-                # nudge fires); a second consecutive empty still ends the
-                # mission -- the ending stays model-owned.
+                # ending carries text, and an empty turn is a dropped
+                # message (a call lost between the think span and either
+                # channel). Repair once; a second consecutive empty still
+                # ends the mission -- the ending stays model-owned.
                 no_call_turns += 1
                 no_call_streak += 1
                 if transcript is not None:
@@ -3988,14 +3615,9 @@ def advance_reasoner_one_round(
                          rid_tag, turn_idx)
             elif _code_reply(content):
                 # The model wrote a BLOCK into the reply channel -- a
-                # dropped message, not an ending (51% of a fleet's
-                # episodes ended this way on the say surface,
-                # mid-search, most of them on a `go to`; a block
-                # written here ends the mission the same silent way,
-                # short, with the flights it was about to make never
-                # made). Repair once; the streak is shared with the
-                # empty turn, so a repeated not-a-reply still ends and
-                # the ending stays model-owned.
+                # dropped message, not an ending. Repair once; the streak
+                # is shared with the empty turn, so a repeated
+                # not-a-reply still ends and the ending stays model-owned.
                 no_call_turns += 1
                 no_call_streak += 1
                 if transcript is not None:
@@ -4012,21 +3634,14 @@ def advance_reasoner_one_round(
                          "mission ends", rid_tag, turn_idx)
             else:
                 no_call_streak = 0
-            # A REPLY BEFORE ANY FLIGHT answers with the start pose, so
-            # say so ONCE and hand the turn back (NO_FLIGHT_REPLY_NUDGE).
-            # Its own streak, because this is not a channel miss: the
-            # reply arrived on the right channel and is a legal ending,
-            # it just has nothing behind it. A second one ends the
-            # mission unchanged, which is what keeps the ending
-            # model-owned rather than harness-owned.
+            # A REPLY BEFORE ANY FLIGHT answers nothing, so say so and
+            # hand the turn back (NO_FLIGHT_REPLY_NUDGE), up to
+            # NO_FLIGHT_ABSTAIN_STREAK; the ending stays model-owned.
             #
             # ONLY A CLEAN PROSE REPLY. The empty turn and the
             # code-shaped reply fall through to this same ending after
             # their own repair, and neither is the model saying "this is
-            # my answer" -- one is a dropped message and the other is a
-            # block on the wrong channel. Nudging those about not having
-            # flown answers a question they did not ask, and it costs the
-            # turn their own repair already spent.
+            # my answer".
             if no_call_streak == 0 and mission_flights == 0:
                 no_flight_streak += 1
                 if transcript is not None:
@@ -4044,18 +3659,14 @@ def advance_reasoner_one_round(
                          "%d -- abstain", rid_tag, turn_idx,
                          no_flight_streak)
             # The mission contract's ONE model-owned ending: a clean
-            # PROSE reply. (Envelope residue and a reply that IS
-            # a reply that IS a block of the surface are channel
-            # misses, repaired above -- a dropped message is not an
-            # ending.)
+            # PROSE reply. (Envelope residue and a reply that IS a block
+            # of the surface are channel misses, repaired above.)
             log.info("%s mission ended by reply at turn %d (%d flights)",
                      rid_tag, turn_idx, mission_flights)
             return _mission_end("reply", reply_text=content,
                                 turns=turn_idx + 1)
         no_call_streak = 0
-        # THE MODEL DID SOMETHING, so the abstain streak restarts. A find
-        # that turns up nothing is still work; only replies with nothing
-        # between them accumulate toward the abstain.
+        # THE MODEL DID SOMETHING, so the abstain streak restarts.
         no_flight_streak = 0
 
         # Tool-call turn: dispatch each call IN ORDER, answering EVERY call
@@ -4064,13 +3675,6 @@ def advance_reasoner_one_round(
             name = (tc.get("function") or {}).get("name") or ""
             cid = tc.get("id") or ""
             args = _tool_call_args(tc)
-            # analyze is a ROUND-ERA verb: the mission surface declares
-            # [say] only, so a mission-era analyze call is an undeclared
-            # name and falls through to the id-closure answer below --
-            # never into _dispatch_analyze_scene, whose errors and hints
-            # render round-era op-JSON. Only an unmasked serve can emit
-            # one (the tool tag pins declared names), but that route was
-            # the one way round-era text could land in a bench transcript.
             if name == "run":
                 out = _dispatch_run(args, cid)
                 if isinstance(out, dict) and not withheld("look_for"):
@@ -4084,10 +3688,7 @@ def advance_reasoner_one_round(
                         "stage": _tr_stage, "kind": "run",
                         "turn_idx": turn_idx,
                         # The model's own reasoning-channel text, ahead of
-                        # the code it decided on -- round-tripped on `r`
-                        # from step_tool_call, already computed for the
-                        # envelope-residue check above; a viewer reads
-                        # "why" a turn's code looks the way it does.
+                        # the code it decided on.
                         "reasoning": str(r.get("reasoning") or "")[:4000],
                         "said": str((args or {}).get("code") or "")[:400],
                         # print()'d text from running the block -- already
@@ -4105,17 +3706,12 @@ def advance_reasoner_one_round(
                 _block_frames.clear()
             else:
                 # A mangled/unknown function name still gets its id answered
-                # (id-closure) with an actionable error; never executed.
-                #
-                # IT NAMES THE TOOL THAT IS SERVED. The one message sent
-                # when the model has already lost the tool name must not
-                # hand it one the surface refuses: a surface that refuses a form must
-                # not still teach it.
+                # (id-closure) with an error naming the tool that IS served;
+                # never executed.
                 reasoner.append_tool_result(cid, name or "unknown", {
                     "error": f"unknown tool {name!r}; available: run"})
-        # Two-message look delivery: append the crop images as a USER turn AFTER
-        # the turn's tool results (keeps tool-result id-closure contiguous). Look
-        # is non-terminal, so the crops sit in context for the next turn / stop.
+        # Two-message look delivery: the images ride a USER turn AFTER the
+        # turn's tool results (keeps tool-result id-closure contiguous).
         for _vtext, _vjpegs in pending_vision:
             reasoner.append_vision_user(_vtext, _vjpegs)
         pending_vision.clear()
