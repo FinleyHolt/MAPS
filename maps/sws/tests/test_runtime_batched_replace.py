@@ -1,17 +1,10 @@
-"""Parity tests for batched tracked-replace vs sequential single-replace.
-
-The batched path must produce the same final node/ledger state as looping
-``upsert_tracked_detected`` one track at a time.
-"""
+"""The tracked upsert: one node per track_id, whatever the footprint."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from maps.sws.graph import (
-    upsert_tracked_detected,
-    upsert_tracked_detected_batch,
-)
+from maps.sws.graph import upsert_tracked_detected
 from maps.sws.graph.builder import build_object_graph
 
 
@@ -63,17 +56,6 @@ def _make_tracked_node(track_id: str, confidence: float):
         last_seen_t=0.0,
         observation_count=0,
     )
-
-
-def _random_mask(rng, grid, cells: int):
-    H, W = grid
-    side = max(3, int(np.ceil(np.sqrt(cells * 1.5))))
-    side = min(side, min(H, W) - 1)
-    r0 = int(rng.integers(0, H - side))
-    c0 = int(rng.integers(0, W - side))
-    mask = np.zeros(grid, dtype=bool)
-    mask[r0 : r0 + side, c0 : c0 + side] = True
-    return mask
 
 
 def _mask_cells_list(mask):
@@ -174,73 +156,8 @@ def test_car_and_gray_car_stay_separate_layers_single_path():
     assert counts["gray car"] == 1
 
 
-def test_car_and_gray_car_stay_separate_layers_batch_path():
-    """Same two-layer contract through ``upsert_tracked_detected_batch`` —
-    both masks delivered in one batched call still resolve to two distinct
-    nodes."""
-    grid = (32, 32)
-    graph = _make_seed_graph(grid=grid)
-    mask = _square_mask(grid, 10, 10, 6)
-    cells = _mask_cells_list(mask)
-
-    replaces = [
-        {
-            "track_id": "t1",
-            "base_node": _make_classed_tracked_node("t1", "car", cells, 0.8),
-            **_sparse(mask),
-            "confidence": 0.8,
-            "now": 0.0,
-        },
-        {
-            "track_id": "t2",
-            "base_node": _make_classed_tracked_node("t2", "gray car", cells, 0.8),
-            **_sparse(mask),
-            "confidence": 0.8,
-            "now": 1.0,
-        },
-    ]
-    out = upsert_tracked_detected_batch(graph, replaces)
-
-    assert len(out) == 2
-    assert len(set(out)) == 2
-    assert {graph.nodes[out[0]].class_name, graph.nodes[out[1]].class_name} == {
-        "car",
-        "gray car",
-    }
-    assert "car" in graph.objects_by_class and "gray car" in graph.objects_by_class
-    counts = _detected_class_counts(graph)
-    assert counts["car"] == 1 and counts["gray car"] == 1
-
-
-def test_batch_with_only_fresh_tracks_falls_through_to_single():
-    """Fresh tracks should be inserted via the single-path loop; the
-    batched optimization is only for repeat-sights. No crash, each track
-    gets a fid."""
-    grid = (16, 16)
-    g = _make_seed_graph(grid=grid)
-    rng = np.random.default_rng(3)
-    replaces = []
-    for i in range(3):
-        tid = f"fresh_{i}"
-        m = _random_mask(rng, grid, cells=8)
-        replaces.append(
-            {
-                "track_id": tid,
-                "base_node": _make_tracked_node(tid, 0.8),
-                **_sparse(m),
-                "confidence": 0.8,
-                "now": 0.0,
-            }
-        )
-    fids = upsert_tracked_detected_batch(g, replaces)
-    assert len(fids) == 3
-    assert len(set(fids)) == 3
-    assert all(f in g.nodes for f in fids)
-
-
-def test_batch_keeps_ids_aligned_when_a_repeat_has_no_cells():
-    """A repeat sighting with an empty footprint keeps its own id in the
-    batch result, the same id the single path returns for it."""
+def test_a_repeat_with_no_cells_returns_its_own_id():
+    """A repeat sighting with an empty footprint returns its track's node id."""
     grid = (32, 32)
     g = _make_seed_graph(grid=grid)
 
@@ -256,5 +173,5 @@ def test_batch_keeps_ids_aligned_when_a_repeat_has_no_cells():
 
     a = upsert_tracked_detected(g, **rep("wt_a", [5, 5], [5, 6]))
     b = upsert_tracked_detected(g, **rep("wt_b", [9, 9], [9, 10]))
-    out = upsert_tracked_detected_batch(g, [rep("wt_a", [], []), rep("wt_b", [10], [10])])
-    assert out == [a, b]
+    assert upsert_tracked_detected(g, **rep("wt_a", [], [])) == a
+    assert upsert_tracked_detected(g, **rep("wt_b", [10], [10])) == b

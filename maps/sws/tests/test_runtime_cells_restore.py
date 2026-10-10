@@ -8,10 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.sws.graph import (
-    upsert_tracked_detected,
-    upsert_tracked_detected_batch,
-)
+from maps.sws.graph import upsert_tracked_detected
 from maps.sws.graph.builder import build_object_graph
 from maps.sws.graph.model import MapObject
 
@@ -107,21 +104,3 @@ def test_distinct_track_ids_mint_distinct_nodes_each_with_cells():
     assert g.nodes[f1].cells is not None and g.nodes[f2].cells is not None
     assert _cells_of(m1) == {(int(r), int(c)) for r, c in g.nodes[f1].cells}
     assert _cells_of(m2) == {(int(r), int(c)) for r, c in g.nodes[f2].cells}
-
-
-def test_batch_repeat_path_restamps_cells():
-    grid = (32, 32)
-    g = _seed_graph()
-    m0 = _square_mask(grid, 8, 8, 3)
-    fid = upsert_tracked_detected(
-        g, track_id="t1", base_node=_det_node("t1"), **_sparse(m0),
-        confidence=0.8, now=0.0,
-    )
-    # A repeat sighting through the BATCH path (exercises the batched repeat loop).
-    m1 = _square_mask(grid, 9, 9, 4)
-    out = upsert_tracked_detected_batch(g, [{
-        "track_id": "t1", "base_node": _det_node("t1"), **_sparse(m1),
-        "confidence": 0.8, "now": 1.0,
-    }])
-    assert out == [fid]                                    # folded onto the same node
-    assert _cells_of(m1) == {(int(r), int(c)) for r, c in g.nodes[fid].cells}

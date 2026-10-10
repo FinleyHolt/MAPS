@@ -1364,7 +1364,7 @@ class SearchLoop:
         """Project + upsert detections and resolve unresolved anchors."""
         from maps.sws.graph import (
             upsert_detected_centroid_only,
-            upsert_tracked_detected_batch,
+            upsert_tracked_detected,
         )
 
         s = self.state
@@ -1410,10 +1410,9 @@ class SearchLoop:
                     }
                 )
                 batch_index_map.append(i)
-            fids_out = upsert_tracked_detected_batch(
-                s.runtime_graph,
-                batch_replaces,
-            )
+            fids_out = [
+                upsert_tracked_detected(s.runtime_graph, **r) for r in batch_replaces
+            ]
             upsert_ids.update(zip(batch_index_map, fids_out))
             s.runtime_graph.step_index = step
             s.runtime_graph.tau = now
@@ -1517,9 +1516,7 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
     # WORLD_CONTOUR substrate: fine world-meter footprint polygon stamped by
     # the perceiving side (gt_perfect exact CityRefer contour, tightness-gated;
     # or the real-SAM ortho path via geolocate.world_contour_from_pixel_mask).
-    # Carried onto the base_node so BOTH ingest paths (in-process
-    # upsert_tracked_detected_batch and the pickled-payload ingest server)
-    # deliver it to the graph node; upsert re-stamps it on repeat sightings.
+    # Carried onto the base_node; the upsert re-stamps it on repeat sightings.
     raw_contour = meta.get("world_contour")
     world_contour: list[list[float]] | None = None
     if raw_contour is not None:

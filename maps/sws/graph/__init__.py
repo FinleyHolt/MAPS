@@ -11,7 +11,6 @@ from maps.sws.graph.model import (
 from maps.sws.graph.runtime import (
     upsert_detected_centroid_only,
     upsert_tracked_detected,
-    upsert_tracked_detected_batch,
 )
 
 __all__ = [
@@ -22,7 +21,6 @@ __all__ = [
     "save_graph",
     "upsert_detected_centroid_only",
     "upsert_tracked_detected",
-    "upsert_tracked_detected_batch",
 ]
 
 

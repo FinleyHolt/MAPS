@@ -300,12 +300,3 @@ def _find_track(graph: ObjectGraph, track_id: str) -> str | None:
         if node.provenance == "detected" and node.track_id == track_id:
             return fid
     return None
-
-
-def upsert_tracked_detected_batch(
-    graph: ObjectGraph,
-    replaces: list[dict],
-) -> list[str]:
-    """Apply :func:`upsert_tracked_detected` to each replace dict in order;
-    the node ids in input order."""
-    return [upsert_tracked_detected(graph, **r) for r in replaces]
