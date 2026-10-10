@@ -54,7 +54,6 @@ def _duck(setter):
     class _S:
         sam_class_to_roles: dict = {}
         last_target_spec = None
-        last_intel_text = "find the house"
         perception_director = director
 
     class _Duck:

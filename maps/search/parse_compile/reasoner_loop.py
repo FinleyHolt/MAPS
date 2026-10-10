@@ -39,7 +39,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any as _Any, Callable
+from typing import Callable
 
 import httpx
 
@@ -68,7 +68,6 @@ from maps.search.analyze_scene.geom_compute import normalize_color as _normalize
 from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
     MODEL_UNSERVED_COLUMNS,
-    OP_VOCAB as _OP_VOCAB,
     ProgramError as _ProgramError,
     _grid_cell,
     _is_color_column_key,
@@ -86,9 +85,6 @@ from maps.search.parse_compile.discourse import (
     echo as _echo,
     new_discourse as _new_discourse,
     update_discourse as _update_discourse,
-)
-from maps.search.parse_compile.code_surface import (
-    CodeError as _CodeError,
 )
 from maps.search.parse_compile import python_surface as _py_surface
 from maps.search.parse_compile.tour_synth import VIEW_POSITION_SENTINELS
@@ -155,45 +151,6 @@ def _is_oversize_rejection(exc: BaseException) -> bool:
     except Exception:
         return False
     return any(s in body for s in _OVERSIZE_REJECTION)
-
-def _coerce_json_container_arg(v):
-    """Tolerate an escaped-JSON STRING where a native array/object is expected.
-
-    The model sometimes emits ``view``'s ``crops`` / ``watchlist`` / ``boost``
-    as a JSON *string* (``"[{...}]"`` / ``"{...}"``) instead of a native array/
-    object, and the downstream ``isinstance(v, list/dict)`` gate then rejects
-    the whole call ("view needs at least one of ..." — 168 rejections / 80-ep
-    sample, the vision path is the biggest SR lift). Same tolerance class as the
-    ``$cands`` / malformed-args brace-completion repair already on the tool-args
-    path.
-
-    Returns ``(value, error)``:
-      * ``v`` is not a string  -> ``(v, None)`` (native value, unchanged).
-      * ``v`` is empty/blank   -> ``(None, None)`` (field treated as absent).
-      * ``v`` is a string that json-parses (with the truncation brace-completion
-        fallback) to a list/dict -> ``(parsed, None)``.
-      * ``v`` is a NON-EMPTY string that does NOT parse to a list/dict ->
-        ``(None, reason)`` — surface it (never swallow a genuinely-malformed
-        arg silently)."""
-    if not isinstance(v, str):
-        return v, None
-    s = v.strip()
-    if not s:
-        return None, None
-    parsed = None
-    try:
-        parsed = json.loads(s)
-    except (TypeError, ValueError):
-        repaired = _complete_json_brackets(s)
-        if repaired is not None:
-            try:
-                parsed = json.loads(repaired)
-            except (TypeError, ValueError):
-                parsed = None
-    if isinstance(parsed, (list, dict)):
-        return parsed, None
-    return None, f"did not parse as JSON (tail: ...{s[-60:]!r})"
-
 
 def _summarise_exc(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"
@@ -445,10 +402,6 @@ ENVELOPE_RESIDUE = ("<tool_call", "</tool_call", "<function")
 CARRY_WORD = "CARRY"
 _CARRY_RE = re.compile(rf"\b{CARRY_WORD}\b")
 
-# Consecutive no-call prose turns that end the round as a carry: the first
-# draws the repair nudge, the second is silence.
-CARRY_BY_SILENCE_STREAK = 2
-
 # Consecutive replies carrying ZERO flights that end the mission: the first
 # two draw NO_FLIGHT_REPLY_NUDGE, the third is a CONFIDENT ABSTAIN and ends
 # it. Three, because the turns are not free -- an episode arguing about
@@ -521,8 +474,7 @@ class StopEvidenceReply:
                                  deduped;
       request_viewpoints only -> carry + the viewpoints fly (re-decide next);
       no terminal call        -> carry (CARRY reply / silence / cap /
-                                 transient), incl. the zone-preserving
-                                 ``program_rank0`` salvage.
+                                 transient).
 
     ``terminal`` is the acted-vs-carried bit (a terminal act ended the
     round). There is no ``reasoning_witness`` (the think span IS the witness
@@ -532,25 +484,7 @@ class StopEvidenceReply:
     candidates: tuple[CandidateBelief, ...]
     # The round's select decision (empty when no select call landed).
     select_fid: str = ""
-    # ReAct loop: additional viewpoints the reasoner wants the executor to FLY +
-    # PERCEIVE before the commit (a closer / different-angle look to disambiguate a
-    # candidate). Each is a {target_fid} dict — the shape
-    # tour_synth.synthesize_extension consumes (its perspective-backend
-    # view fields stay internal; the nadir build aims at places, not
-    # faces). Empty () = evidence sufficient (the
-    # behavior-neutral default; carry emits ()). The sweep batches these across a
-    # round's stops, extends the tour, flies+perceives, then re-decides (perceive ->
-    # think -> act). ADDITIVE only (the full tour is always flown) so it can only add
-    # perception coverage, never skip it.
-    requested_viewpoints: tuple = ()
     note: str = ""
-    # The LAST analyze_scene program's grounded target-role rank-0 order,
-    # populated on the zone-preserving publish gate (sorted OR narrowed) on
-    # EVERY path. The commit stashes the latest non-empty one per reasoner and
-    # binds it AHEAD of the arbitrary fid-first observed-walk, so the agent's
-    # own program pick is honored even when it recorded no candidate. Not read
-    # on the select path (``candidates`` wins).
-    program_rank0: tuple[str, ...] = ()
     # Telemetry ONLY: True when the round's select.fid differs from EVERY
     # detected fid the model named in the select turn's THINK span (the
     # valid-typo class: the reasoning argued detected_54, the typed select
@@ -558,10 +492,6 @@ class StopEvidenceReply:
     # react_stats.pick_witness_mismatch + the one-shot mismatch notice; never
     # read by the commit. False when no select or no fid named in the span.
     pick_witness_mismatch: bool = field(default=False, compare=False)
-    # The detected fids the select turn's think span named — the evidence
-    # side of ``pick_witness_mismatch`` (search_loop renders them into the
-    # one-shot mismatch notice). () when no select / no think fids.
-    select_think_fids: tuple[str, ...] = field(default=(), compare=False)
     # The select.fid's rank in the round's last ordering op admissible
     # output (-1 when no select / not in that ordering). SERVER-computed;
     # reshuffle-audit telemetry (the latest select owns — no guard reads it).
@@ -576,12 +506,11 @@ class StopEvidenceReply:
     multi_select_turn: bool = field(default=False, compare=False)
     # The LAST select fid the HARNESS layer rejected this
     # round (grounded / target-role / class gate veto on a surface-valid fid)
-    # + that fid's surface xy. The commit reads it ONLY when no select was
+    # The commit reads it ONLY when no select was
     # ever recorded, to bind the model's nearest grounded equivalent instead
     # of an arbitrary observed-list head. ("" , ()) when no harness
     # rejection happened.
     rejected_select_fid: str = field(default="", compare=False)
-    rejected_select_xy: tuple = field(default=(), compare=False)
     # The round's LATEST act.sam_concepts declaration ({class, role}
     # entries, latest-wins): the caller re-arms the segmenter union /
     # roles / target spec from it. () = no declaration this round.
@@ -1066,52 +995,6 @@ def _ordered_fids_of_geom_result_value(v) -> list[str]:
     return []
 
 
-def _program_answer(
-    out: dict, program: dict | None
-) -> tuple[list[str], str | None, str | None]:
-    """The program's TERMINAL ranked answer + its provenance.
-
-    ``run_program`` inserts each op's result into ``results`` in execution order,
-    so the program's "answer" is the LAST op that reduced to >=1 fid-bearing
-    item. Walks ``results`` in reverse and returns ``(ranked_fids, terminal_ref,
-    terminal_op_name)`` for that op (rank order preserved), or ``([], None,
-    None)`` if no op produced a fid (a scaffold-then-prose program)."""
-    results = (out or {}).get("results")
-    if not isinstance(results, dict):
-        return [], None, None
-    ops_by_ref = {
-        op.get("ref"): op.get("op")
-        for op in ((program or {}).get("ops") or [])
-        if isinstance(op, dict)
-    }
-    for ref in reversed(list(results)):
-        fids = _ordered_fids_of_geom_result_value(results[ref])
-        if fids:
-            return fids, ref, ops_by_ref.get(ref)
-    return [], None, None
-
-
-def _program_ranked_admissible(
-    out: dict, program: dict | None, admissible: Callable[[str], bool]
-) -> list[str]:
-    """The program's terminal ranked answer filtered to ``admissible`` fids —
-    rank order + order-stable de-dup preserved. rank-0 == element 0.
-
-    This REPLACES the union-of-everything-surfaced enum
-    (:func:`_collect_surfaced_fids`): the commit binds to the program's own
-    ranking, never a free pick over the union. ``admissible`` is the
-    groundable/bindable gate ONLY — a prior or named landmark CAN be
-    admissible, bind, and commit (a landmark the agent discerned can BE the
-    answer; the target/anchor split orders the commit walk's own fallback
-    tiers, never vetoes)."""
-    fids, _, _ = _program_answer(out, program)
-    seen: dict[str, None] = {}
-    for f in fids:
-        if f not in seen and admissible(f):
-            seen[f] = None
-    return list(seen)
-
-
 # (No select CLASS-CONSISTENCY veto exists. A ``_head_noun`` tokens[-1]
 # heuristic would read the RELATUM's noun in relational phrases ("gray car
 # parked ... residential BUILDING" -> 'building') and so veto the model's
@@ -1161,15 +1044,6 @@ def _ordering_tail(out: dict, program: dict | None,
 # score_by is THE ordering; register indexing (rN[k]) reads an ordering it
 # does not create, so only a real ordering terminal counts as sorted.
 _REAL_ORDERING_TERMINALS = frozenset({"score_by"})
-
-
-def _terminal_is_sorted(out: dict, program: dict | None) -> bool:
-    """True iff the program's fid-producing TERMINAL actually ordered the pool:
-    a real ordering op. Used to gate the program_terminal COMMIT
-    fallback so it only ever honors a real-sorted rank-0 (the contract's
-    'sort, then decide' made executable)."""
-    _f, _r, op = _program_answer(out, program)
-    return op in _REAL_ORDERING_TERMINALS
 
 
 # One factual line on a PREFLIGHT color-column request that attached to no
@@ -1262,10 +1136,8 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
 
     Runs the model's typed op-program through the SHARED
     :func:`maps.search.analyze_scene.geom_program.run_program` over the round's
-    ``(cands, anchors)`` surface (built by ``search_loop._build_compute_namespace``
-    via the same ``geom_program.build_surface`` the offline teacher uses), then
-    truncates list results with the SAME ``compact_results`` the offline CLI
-    applies — so the served payload is byte-identical to the trained one.
+    ``(cands, anchors)`` surface (``_surface_from_ctx``), then truncates list
+    results with ``compact_results``.
 
     ``raw_sink`` (harness-side evidence plumbing, never model-facing): when
     given, receives the PRE-compaction results under ``raw_sink["results"]`` so
@@ -1366,8 +1238,8 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
 def _surface_from_ctx(ctx) -> dict:
     """Build the ``analyze_scene`` ``{cands, anchors, cell_m}`` surface from a
     :class:`ToolContext`'s unified graph — the round-0 entry to the
-    SAME ``build_surface_from_graph`` path the in-flight round reaches via
-    ``search_loop._build_compute_namespace``. Round 0 has no detections yet, so
+    ``build_surface_from_graph`` path every round reaches. Round 0 has no
+    detections yet, so
     ``cands`` is typically empty and ``anchors`` are the prebaked priors; the
     reasoner can still ground named-landmark geometry (corners, projections)."""
     from maps.search.analyze_scene.geom_program import build_surface_from_graph
@@ -1421,22 +1293,6 @@ def _is_handle_token(token) -> bool:
         return False
     base = _ref_key(m.group("base"))
     return bool(_HANDLE_BASE_RE.match(base)) or base in _HANDLE_WORDS
-
-
-def _sanitize_requested_viewpoints(raw) -> list[dict]:
-    """Keep only well-formed requested-viewpoint items (non-empty
-    ``target_fid``). Same shape ``synthesize_extension`` consumes."""
-    out: list[dict] = []
-    if not isinstance(raw, list):
-        return out
-    for v in raw:
-        if not isinstance(v, dict):
-            continue
-        fid = str(v.get("target_fid") or "").strip()
-        if not fid:
-            continue
-        out.append({"target_fid": fid})
-    return out
 
 
 # An [x,y]-literal target arrives as its string form ("[1530, 1378]") —
@@ -1574,37 +1430,6 @@ PROSE_ACT_CALL_RE = re.compile(r"\b(act|select|view|analyze)\s*\(")
 PROSE_ACT_KEY_RE = re.compile(
     r'"(?:select|viewpoints|sam_concepts)"\s*:')
 
-
-def _prose_act_residue(text: str) -> bool:
-    """True when a no-call PROSE turn carries a decision payload written as
-    text: an ``act(...)`` / ``select(...)`` call-shape, or an act field
-    named as a JSON key (``"select":`` / ``"viewpoints":`` /
-    ``"sam_concepts":``). Detects the format the model repeats after it
-    once wrote a decision as prose, so the second turn does not fall
-    through to carry-by-silence with the decision silently dropped."""
-    t = str(text or "")
-    return bool(PROSE_ACT_CALL_RE.search(t)) or bool(
-        PROSE_ACT_KEY_RE.search(t))
-
-
-def _carry_dominant(text: str) -> bool:
-    """True only when the prose turn IS the carry word — bare ``CARRY`` (any
-    surrounding whitespace) or a turn that is nothing else once the word is
-    removed. A prose act that merely mentions CARRY is NOT a carry."""
-    t = str(text or "").strip()
-    if not t:
-        return False
-    if t == CARRY_WORD:
-        return True
-    remainder = _CARRY_RE.sub("", t).strip()
-    return _CARRY_RE.search(t) is not None and len(remainder) <= 12
-
-
-NO_CALL_NUDGE = (
-    "Your reply carried no tool call. Legal acts: view / analyze / act "
-    "(native tool calls), or the single word CARRY (keeps your previous "
-    "ranking and ends the round)."
-)
 
 EMPTY_TURN_NUDGE = (
     "Your last turn arrived empty -- no tool call and no text, so nothing "
@@ -1870,8 +1695,7 @@ def advance_reasoner_one_round(
     # Terminal admissibility: BINDABILITY only — can the fid ground in the
     # live world state. Role never gates anywhere (it orders the commit
     # walk's own fallback tiers; the agent's discernment owns what commits).
-    # Feeds the select validation, the commit binding, and the salvage so the
-    # three stay consistent.
+    # Feeds the commit binding.
     def _admissible(f: str) -> bool:
         # Bindability is the WHOLE admissibility contract: the agent
         # chooses what to bind; the harness only checks it CAN bind (no
@@ -1900,24 +1724,14 @@ def advance_reasoner_one_round(
     # (cands, anchors) surface (``compute_namespace``), so the student is served
     # byte-for-byte the surface its offline teacher (distill/gen/geom_exec) was
     # trained on. Retrieval folds INTO the program (the find op).
-    # The LAST groundable (non-errored) program + its compacted output: the
-    # zone-preserving salvage publishes ITS ranked admissible answer
-    # (_program_ranked_admissible), the same binding the commit uses for
-    # rank-0. ``diag`` gets the zero-regression sel_geom_* observer stamps;
+    # The LAST groundable (non-errored) program + its compacted output.
+    # ``diag`` gets the zero-regression sel_geom_* observer stamps;
     # None -> pure no-op.
     last_geom: dict = {"program": None, "out": None, "compare_cols": {}}
     # The fid's LATEST result-enriched row across the round's successful
     # programs (a compare/sort output carries the attached columns) — the
     # rejection-escalation surface census reads it to state live facts.
     row_latest: dict[str, dict] = {}
-    # ZONE-PRESERVING round state: the admissible size
-    # of the FULL candidate pool (so an unsorted-but-NARROWED last result can
-    # still publish -- an arbitrary order inside the correct zone beats the
-    # whole-map fid-first walk / prior fallback).
-    _full_admissible_count = sum(
-        1 for _r in (compute_namespace or {}).get("cands") or []
-        if isinstance(_r, dict) and _r.get("fid")
-        and _admissible(str(_r["fid"])))
     # Anti-spiral result reuse: successful SELF-CONTAINED programs seen this
     # round, keyed by canonical ops JSON (``_program_dedup_key``) ->
     # ``(surface_version, compacted_out)``. A repeat RE-RENDERS the stored
@@ -2740,89 +2554,6 @@ def advance_reasoner_one_round(
         return f"nearest fids on this surface: {near}" if near else \
             "this surface has no fids"
 
-    def _select_error(args: dict) -> str:
-        """The select validation, hosted on the tool result. It HARD-gates
-        the FID and ONLY the fid — the fid is the decision: the
-        executor-parity layer (fid ∈ surface, $rN refused) then the
-        harness BINDABILITY check (grounded live-first — judged on harness
-        state the parity-shared executor must never see; perceived CLASS
-        and ANCHOR-role never gate). Returns '' when the select passes,
-        else the actionable error text returned as the call's tool-role
-        result (self-recovery — the model reads it and retries)."""
-        if isinstance(args, dict) and args.get("__args_parse_error"):
-            return ("select arguments did not parse as JSON "
-                    f"({args['__args_parse_error']}); re-emit the call.")
-        fid = str(args.get("fid") or "").strip()
-        if not fid:
-            return ("select needs a non-empty 'fid' string -- a literal fid "
-                    "read off your program's returned rows.")
-        if _is_handle_token(fid):
-            return (f"select fid {fid!r} is a result handle; a handle is "
-                    "program-internal -- select takes a literal fid from a "
-                    "returned row.")
-        if fid not in _ns_rows:
-            return (f"select fid {fid!r} is not a fid on this surface; "
-                    f"{_nearest_fids(fid)}.")
-        # ---- harness layer: BINDABILITY only. A validation here may reject
-        # only a fid that CANNOT bind (no world position anywhere); it must
-        # never veto a bindable fid over what the model REASONED (class, role,
-        # color...). There is no class-consistency veto (it would
-        # discard correct decisions in 59/268 pinned gt_pop losses) and no
-        # anchor-role veto — the agent chooses what to bind.
-        if fid not in grounded_fids:
-            # LIVE-FIRST grounding: the round's frozen grounded set is only
-            # the fast path — a fid it lacks is re-checked against the LIVE
-            # world-state (``live_grounded_pred``) IMMEDIATELY, not after 2
-            # rejections. A 3-strike recheck valve would make the model burn
-            # 2+ rejection round-trips (reject-loops to 19 calls measured on
-            # the pinned traces) to bind an object the graph already held.
-            # A fid the live world-state grounds is a valid decision, first
-            # try; the veto below fires only for fids that genuinely cannot
-            # bind (no world position anywhere — e.g. a hallucinated name).
-            if live_grounded_pred is not None and live_grounded_pred(fid):
-                log.info(
-                    "%s GATE_LIVE: %s accepted (the live world-state grounds "
-                    "it; round-scoped set lagged)", rid_tag, fid,
-                )
-                if gate_streak is not None:
-                    gate_streak.clear()
-                # The fid is grounded for the REST of this round too (the
-                # local set), so the terminal candidate assembly's
-                # admissibility gate agrees with the accept.
-                grounded_fids.add(fid)
-            else:
-                if gate_streak is not None:
-                    gate_streak["count"] = (
-                        int(gate_streak.get("count") or 0) + 1
-                    )
-                    # The LAST-rejected fid (telemetry only; the count is
-                    # fid-agnostic by design).
-                    gate_streak["fid"] = fid
-                # The mechanical fact of what WOULD make the fid bindable —
-                # a fact, not a procedure. Point the model at the nearest
-                # COMMIT-ELIGIBLE fids, restricted to grounded_fids -- NOT
-                # the raw surface (a raw
-                # _nearest_fids would re-suggest an ungroundable fid and re-loop
-                # the rejection). Empty string when nothing is commit-eligible
-                # this round, so the message degrades cleanly.
-                _near_grounded = _nearest_in(fid, grounded_fids)
-                _grounded_hint = (
-                    f" Commit-eligible fids nearest your pick: {_near_grounded}"
-                    " -- select one if it is your target."
-                    if _near_grounded else "")
-                return (
-                    f"select rejected (harness-side): {fid} is not a GROUNDED "
-                    "candidate -- it was never observed/bound on "
-                    "this surface as commit-eligible. A fid becomes "
-                    "commit-eligible once a flown viewpoint has targeted it "
-                    "or it is a runtime detection the graph holds; "
-                    f"act{{viewpoints:{{add:[{{target_fid:'{fid}'}}]}}}} "
-                    "queues that viewpoint -- it flies, is perceived, and "
-                    "you re-decide with it eligible."
-                    + _grounded_hint
-                )
-        return ""
-
     # Identical-error loop breaker, ESCALATING: after 2 same-class
     # ProgramError / select rejections in one round, the error text
     # additionally states the repetition + the live surface facts (fids
@@ -3268,44 +2999,13 @@ def advance_reasoner_one_round(
     MAX_ROUND_TRANSIENT = 6
 
     def _carry_reply(note: str, *, by_silence: bool = False) -> StopEvidenceReply:
-        """Carry: leave the reasoner's prior candidate list in place, still
-        PUBLISHING the last successful program's grounded rank-0 as the
-        commit's fallback tier (``program_terminal``) per the ZONE-PRESERVING
-        gate: a REAL-sorted terminal publishes; an UNSORTED result ALSO
-        publishes when the program successfully NARROWED (a non-empty strict
-        subset of the admissible pool) -- an arbitrary order inside the CORRECT
-        zone beats the whole-map fid-first observed walk / prior-building
-        fallback. A whole-pool unsorted result stays unpublished
-        (fid-lexicographic junk). Binds the agent's OWN program output, never
-        prose, never a detection index."""
-        program_rank0: tuple[str, ...] = ()
-        salv = _program_ranked_admissible(
-            last_geom["out"], last_geom["program"], _admissible
-        )
-        _sorted_ok = _terminal_is_sorted(last_geom["out"], last_geom["program"])
-        # Narrowed-publish gates on OP TYPE, not on count: find now returns
-        # its match set, so a bare query-find terminal is a strict subset by
-        # construction — publishing it into the program_terminal commit tier
-        # would be a silent behavior change (a separate A/B, not this one).
-        _term_op = _program_answer(last_geom["out"], last_geom["program"])[2]
-        _narrowed_ok = (bool(salv) and len(salv) < _full_admissible_count
-                        and _term_op != "find")
-        if salv and (_sorted_ok or _narrowed_ok):
-            program_rank0 = tuple(salv)
-            log.info(
-                "%s carry: publish last program rank-0=%s (%d%s) as the "
-                "program_terminal fallback -> %s",
-                rid_tag, salv[0], len(salv),
-                "" if _sorted_ok else ", unsorted-but-narrowed", note)
+        """Carry: leave the reasoner's prior candidate list in place."""
         return StopEvidenceReply(
             candidates=(), note=note,
-            requested_viewpoints=tuple(requested_viewpoints),
-            program_rank0=program_rank0,
             no_call_turns=no_call_turns,
             carry_by_silence=by_silence,
             multi_select_turn=multi_select_turn,
             rejected_select_fid=round_rejected["fid"],
-            rejected_select_xy=tuple(round_rejected["xy"] or ()),
             sam_concepts=tuple(round_sam_concepts),
         )
 
@@ -3350,32 +3050,6 @@ def advance_reasoner_one_round(
             )
             for i, fid in enumerate(ordered_decision)
         )
-        # program_rank0 (the program_terminal commit tier): select round ->
-        # the decision assembly when the round's last program REAL-sorted its
-        # pool; viewpoints-only round -> the zone-preserving publish gate
-        # (sorted OR narrowed), exactly the carry path's.
-        if sel:
-            program_rank0 = (
-                tuple(ordered_decision)
-                if _terminal_is_sorted(last_geom["out"], last_geom["program"])
-                else ()
-            )
-        else:
-            _ranked_last = _program_ranked_admissible(
-                last_geom["out"], last_geom["program"], _admissible
-            )
-            # Same op-type gate as the carry path: a narrowed find terminal
-            # never publishes (find narrows by construction now).
-            _vp_term_op = _program_answer(
-                last_geom["out"], last_geom["program"])[2]
-            program_rank0 = (
-                tuple(_ranked_last)
-                if (_ranked_last
-                    and (_terminal_is_sorted(last_geom["out"], last_geom["program"])
-                         or (len(_ranked_last) < _full_admissible_count
-                             and _vp_term_op != "find")))
-                else ()
-            )
         # Reshuffle audit: did the model's select move off the last ordering
         # op's rank-0? ``tail`` is the program's own ordered admissible
         # output; a select of a deeper row is the deliberate re-rank the
@@ -3426,16 +3100,12 @@ def advance_reasoner_one_round(
         return StopEvidenceReply(
             candidates=candidates,
             select_fid=(sel["fid"] if sel else ""),
-            requested_viewpoints=tuple(requested_viewpoints),
             note=note,
             pick_witness_mismatch=pick_witness_mismatch,
-            select_think_fids=(tuple(sel["think_fids"]) if sel else ()),
             pick_rank_in_program=int(pick_rank_in_program),
-            program_rank0=program_rank0,
             no_call_turns=no_call_turns,
             multi_select_turn=multi_select_turn,
             rejected_select_fid=round_rejected["fid"],
-            rejected_select_xy=tuple(round_rejected["xy"] or ()),
             sam_concepts=tuple(round_sam_concepts),
             terminal=True,
         )
@@ -5197,7 +4867,6 @@ def advance_reasoner_one_round(
         # ACT↔VIEW COORDINATION: the WHOLE turn processes — a view
         # after an act still executes (terminal_fired is only read after the
         # sweep), so a same-turn boost attaches to the stops the act queued.
-        select_calls_this_turn = 0   # ALL act.select emissions (valid or rejected)
         select_rejected_this_turn = False
         terminal_fired = False
         for tc in r["tool_calls"]:

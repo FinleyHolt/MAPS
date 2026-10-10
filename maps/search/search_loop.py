@@ -31,16 +31,12 @@ from typing import Any
 
 import numpy as np
 
-from maps.search.compile_info import CompileTurnResult, build_compile_info
+from maps.search.compile_info import CompileTurnResult
 from maps.search.io.atomic import atomic_write_json
 from maps.search.evidence import EvidenceItem
 from maps.search.parse_compile.compiler import MapsCompiler
-from maps.search.parse_compile.errors import CompileInfraError
 from maps.search.pose import RobotPose
 from maps.search.protocol import CompilerInput
-from maps.perception.observation import (
-    observation_extent_m as _observation_extent_m,
-)
 from maps.util.mask_codec import encode_mask_record
 
 
@@ -116,16 +112,6 @@ def _class_to_roles_from_specs(
     return {cls: tuple(sorted(roles)) for cls, roles in out.items()}
 
 
-def _node_class_name(node: object) -> str:
-    return str(
-        getattr(node, "class_name", None)
-        or getattr(node, "class_label", None)
-        or getattr(node, "label", None)
-        or getattr(node, "category", None)
-        or ""
-    )
-
-
 log = logging.getLogger(__name__)
 
 # THE RUNAWAY BACKSTOP, and nothing else. A footprint runs to 418k cells
@@ -144,7 +130,6 @@ log = logging.getLogger(__name__)
 # more pools that might not be in the prior map". SR is the goal; a longer
 # pass is the price of an ambiguous cue, not a fault to be capped.
 _COVER_MAX_STOPS = 1000
-
 
 
 @dataclass
@@ -183,28 +168,6 @@ class SearchLoopConfig:
                 _parse_bool,
             ),
         )
-
-
-@dataclass(frozen=True)
-class StopPrep:
-    """Immutable per-stop prep output produced once by
-    built once per stop and read by every consumer of that stop.
-
-    Frozen so the producer/consumer split cannot accidentally mutate a
-    stop's shared inputs. ``observations_with_verdicts`` is a list whose
-    elements are only ever read downstream (never appended/mutated), so
-    the list identity is safe to share across the concurrent per-rid
-    consumer threads. ``ctx`` is the per-stop reasoner round's
-    ``ToolContext`` snapshot.
-    """
-
-    stop_id: str
-    step_idx: int
-    pose_xy: tuple[float, float]
-    alt_m: float
-    heading_deg: float
-    observations_with_verdicts: list[dict]
-    ctx: object
 
 
 @dataclass(frozen=True)
@@ -280,12 +243,6 @@ class _State:
     live on ``EpisodeState``."""
 
     runtime_graph: object  # ObjectGraph
-    # Last instruction string the engine saw. Compares against the next
-    # call's instruction so a re-read of the same intel can
-    # cold-start (uniform prior, zeta=1) instead of fusing against its
-    # own previous output, which would leak the prior turn's painter
-    # shape back in as a "donut" residual.
-    last_intel_text: str | None = None
     # {fid, class, xy} for the detections the LAST update_perception
     # folded -- the flight report serves them so acting on a fresh
     # detection is one step, not an analyze away: most observed-and-
@@ -302,12 +259,6 @@ class _State:
     last_target_spec: object | None = None
     # Monotonic turn counter. Collapsed turns do not bump it.
     compile_seq: int = 0
-    # Back-pressure flags. ``_active_compile`` is defense-in-depth
-    # against an overlapping compile worker; the primary gate is
-    # ``should_compile`` (operator-NL change), but a re-entrant call
-    # that survives the runtime gate still drops here without
-    # overlapping the running pass.
-    _active_compile: bool = False
     # Per-track prebake-attribution lifecycle. Populated by
     # ``_apply_attribution_lifecycle`` after each ``upsert_tracked_detected_batch``.
     # Keyed by raw SAM track id (the same id world_state passes through
@@ -339,10 +290,6 @@ class _State:
     # already seen. Used as a defensive idempotency check so the same
     # reasoner never sees the same stop_id twice in one episode.
     reasoner_stop_history: dict[int, list[str]] = field(default_factory=dict)
-    # The finalized reasoner dicts the compiler produced this turn.
-    # Keyed by reasoner_id; the value is the raw finalized dict the
-    # runtime per-stop round and the resume/restore path read back.
-    reasoner_finalized: dict[int, dict] = field(default_factory=dict)
     # Preflight target/anchor separation, lowercased class -> role tuple
     # (e.g. {"parking lot": ("target",), "road": ("anchor",), "car":
     # ("anchor","target")}). Built from the Stage-1 sam_concepts union
@@ -356,36 +303,6 @@ class _State:
     # degenerate ``_forced_preflight_choice`` fallback, and the
     # workdir dump. Broken reasoners are not entered here.
     reasoner_alive_rids: set[int] = field(default_factory=set)
-    # Per-reasoner observation list authored at Stage 2. Initialized
-    # from each finalized's ``tour_plan_observations`` at compile
-    # commit; read-only thereafter.
-    reasoner_observations: dict[int, list[dict]] = field(default_factory=dict)
-    # The model's LATEST recorded select always owns. No hardcoded judgment
-    # overrides the newest decision (0 fires in the gt_mi audit).
-    # pick_witness_mismatch is a react COUNTER only — the harness never tells
-    # the model its select "differs from every fid your reasoning named",
-    # which would argue with its decision.
-    # Step 3b: the latest NON-EMPTY analyze_scene program-terminal rank-0 order
-    # per reasoner (published on select AND carry paths). The commit binds this
-    # ahead of the arbitrary fid-first observed-walk, honoring the agent's own
-    # program pick when it recorded no candidate.
-    reasoner_last_program_rank0: dict[int, list[str]] = field(default_factory=dict)
-    # True once ANY per-stop round recorded a valid select this episode. The
-    # commit's no-select fallback tiers (region-anchor centroid,
-    # rejected-select nearest-grounded-equivalent) fire only while this is
-    # False — a recorded select always owns the ladder above them.
-    any_select_recorded: bool = False
-    # The LAST harness-gate-vetoed select ``{"fid": str, "xy": (x, y) | ()}``
-    # from a round that recorded no select. Read at commit ONLY when
-    # ``any_select_recorded`` is False.
-    last_rejected_select: dict = field(default_factory=dict)
-    # Per-rid grounded-gate rejection count ``{"count": int, "fid": str}``,
-    # counted per STOP-ROUND across ALL fids (the round clears it at entry
-    # and mutates it in place; an accepted re-check or any valid select
-    # resets). A rolling total >=3 within one round triggers the live
-    # re-check on the CURRENT fid, so an alternating-fid reject loop still
-    # trips the valve that a same-fid streak would miss.
-    reasoner_select_gate_streak: dict[int, dict] = field(default_factory=dict)
     # C4 three-verb surface: the per-episode PerceptionDirector — the live
     # SAM watchlist (initial = the round-0 sam_concepts union), the
     # queued/active boosts, and the addressable pending-stop registry
@@ -395,76 +312,12 @@ class _State:
     # Which path bound the final commit (instrument). The mission binds
     # ``final_flight``; a run that flew nothing leaves it None.
     commit_bind_phase: str | None = None
-    # The union of evidence-column names the reasoner's programs attached this
-    # episode, recorded on every commit path (including the fallbacks — a miss
-    # is exactly where the offline read looks).
-    commit_evidence_columns: tuple[str, ...] = ()
-    # Selection-round invocation counter for the CRN seed pin
-    # (SEARCH_SEL_SEED_PIN): vote/defer re-invocations get distinct seeds.
-    sel_round_invocations: int = 0
     # First pose seen this episode (probe-parity start_xy for the
     # clean-room selection message). Set once by update_perception.
     episode_start_xy: tuple[float, float] | None = None
-    # Per-reasoner Question forest authored at Stage 2 and frozen
-    # for the runtime. Keyed by ``reasoner_index -> list[Question]``.
-    # Ids are reasoner-prefixed (``r{i}::``) so the runtime addresses
-    # every node globally. The sweep and the per-stop decision packet
-    # resolve leaves through this index.
-    reasoner_questions: dict[int, list[dict]] = field(default_factory=dict)
-    # Cross-pollination sweep records produced by the LLM-free
-    # ``cross_pollinate.cross_pollinate_evidence`` sweep at each tour stop. Each record
-    # carries (stop_id, frame_idx, candidate_fid, question_id,
-    # question_text, parent_id, attribute_axis, referent_fid,
-    # match_score, visibility, evidence_summary, evidence_mask_fids,
-    # source="sweep"). Grows monotonically; the next stop's
-    # reasoner-agent decision packet renders sweep rows alongside
-    # MLLM rows when both reference the same leaf question.
-    cross_pollinate_records: list[dict] = field(default_factory=list)
     # Prior-color enrichment frames that raised this episode; the warning
     # prints on the first and every 50th.
     prior_enrich_fails: int = 0
-
-
-# ---------------------------------------------------------------------------
-# Per-stop reply serialization for the SPA + post-mortem audit trail.
-# ---------------------------------------------------------------------------
-
-
-def _stop_reply_to_dict(reply: Any) -> dict:
-    """Serialize one :class:`StopEvidenceReply` for persistence + the SPA."""
-    from maps.search.parse_compile.reasoner_loop import StopEvidenceReply
-
-    if isinstance(reply, StopEvidenceReply):
-        return {
-            "kind": "stop_evidence",
-            "note": reply.note,
-            "candidates": [_candidate_belief_to_dict(c) for c in reply.candidates],
-            # The round's DECISION (the ``select`` TOOL): the selected fid.
-            # Empty when no select call landed (a carry / viewpoints-only
-            # round). There is no reasoning_witness — the think span is the
-            # witness (trace dumps carry it under ``think_span``).
-            "select_fid": str(getattr(reply, "select_fid", "") or ""),
-            "no_call_turns": int(getattr(reply, "no_call_turns", 0)),
-            "carry_by_silence": bool(getattr(reply, "carry_by_silence", False)),
-            "multi_select_turn": bool(getattr(reply, "multi_select_turn", False)),
-            # Observability: the round's harness-gate-vetoed select
-            # (empty when none).
-            "rejected_select_fid": str(
-                getattr(reply, "rejected_select_fid", "") or ""),
-        }
-    return {"kind": "unknown", "repr": repr(reply)}
-
-
-def _candidate_belief_to_dict(c: Any) -> dict:
-    """Serialize a CandidateBelief for persistence + the SPA + the
-    commit-state dump. Single source of truth so the shape matches
-    every consumer.
-    """
-    return {
-        "target_fid": c.target_fid,
-        "rank": int(c.rank),
-        "prose_belief": c.prose_belief,
-    }
 
 
 class SearchLoop:
@@ -559,22 +412,6 @@ class SearchLoop:
         # data races. ``RLock`` because some methods call others that also
         # take the lock (e.g. a snapshot taken inside a commit path).
         self._lock = threading.RLock()
-        # Per-reasoner gate. Each ``Reasoner`` carries its own conversation
-        # history, so the lock serializes turns against the SAME reasoner
-        # while letting DIFFERENT reasoners interleave freely
-        # because their transcripts are independent. The dict is lazily
-        # populated by ``_get_per_reasoner_lock``; the meta-lock guards
-        # the dict mutation only. Non-reentrant per-rid locks so
-        # accidental nested entry on the same thread surfaces as a
-        # deadlock at the call site rather than silently corrupting
-        # state.
-        self._stop_round_per_reasoner_locks: dict[int, threading.Lock] = {}
-        self._stop_round_locks_meta = threading.Lock()
-        # Turn-window bookkeeping. A turn is one compile call. The boundary
-        # snapshot of detected ids + wall-clock t lets the compiler diff
-        # this turn's additions against the prior graph.
-        self._turn_start_detected_ids: set[str] | None = None
-        self._turn_start_t: float | None = None
 
     # ------------------------------------------------------------------ #
     # Lifecycle
@@ -899,56 +736,6 @@ class SearchLoop:
                     on_it.append(q)
             return on_it
 
-    @staticmethod
-    def _perceived_color_locked(node: Any) -> str:
-        """The node's perceived M6 color — the top-count value of the
-        ``color`` axis on ``semantic_attributes`` — mirroring
-        ``geom_program._node_color`` so the final-decision pool shows the
-        SAME color the analyze surface does. Empty string when perception
-        never wrote one (rendered as ``?``). Caller holds ``self._lock``.
-        """
-        if node is None:
-            return ""
-        sa = getattr(node, "semantic_attributes", None) or {}
-        cc = sa.get("color") or sa.get("color") or {}
-        if isinstance(cc, dict) and cc:
-            return str(max(cc.items(), key=lambda kv: kv[1])[0])
-        if isinstance(cc, str) and cc:
-            return cc
-        return ""
-
-
-    def _build_compute_namespace(self, rid: int, cand_info: list[dict]) -> dict:
-        """The ``{cands, anchors, cell_m}`` surface for the ``analyze_scene``
-        tool — the WHOLE runtime graph, built by the SHARED
-        :func:`maps.search.analyze_scene.geom_program.build_surface` that the offline
-        teacher (``distill/gen/geom_exec``) calls. ONE builder ⇒ the served
-        surface is byte-identical to the trained one (CANONICALIZE_PLAN.md drift
-        fixes #1-#8): identical xy source (cell-center of the int centroid),
-        centerline policy (detections = points/no centerline; priors = baked
-        centerline), class/color extraction, 2dp rounding, and fid sort order.
-
-        ``cands`` = runtime SAM detections (``provenance == "detected"``);
-        ``anchors`` = prebaked priors (named landmarks + roads). GEOMETRY ONLY —
-        ``build_surface`` copies fid / xy / centerline / class_name / name, never
-        the CityRefer ``descriptions`` (the catalog wall). ``rid`` / ``cand_info``
-        are unused (the surface is the graph, not a per-round shortlist) but kept
-        so existing call sites need not change."""
-        import itertools
-
-        from maps.search.analyze_scene.geom_program import build_surface_from_graph
-
-        with self._lock:
-            nodes = itertools.chain.from_iterable(
-                g.nodes.items()
-                for g in (getattr(self.state, "runtime_graph", None), self._graph)
-                if g is not None and hasattr(g, "nodes")
-            )
-            cands, anchors = build_surface_from_graph(
-                nodes, self._tile_origin_xy, float(self._cell_size_m)
-            )
-        return {"cands": cands, "anchors": anchors, "cell_m": float(self._cell_size_m)}
-
     def _render_candidate_crops(self, requests: list[dict]) -> list[dict]:
         """The ``look`` renderer (ortho only), handed to the per-stop
         round as ``look_renderer`` when ``self._look_tool_enabled`` — the
@@ -1000,9 +787,6 @@ class SearchLoop:
         return str(Path(wd) / "flight" / "look")
 
 
-
-
-
     def _fid_is_detected(self, fid: str) -> bool:
         """True if the candidate is a runtime SAM detection (provenance
         ``detected``) rather than a prebake catalog prior. At a stop the
@@ -1013,28 +797,6 @@ class SearchLoop:
         nodes = getattr(self.state.runtime_graph, "nodes", None)
         node = nodes.get(fid) if (nodes is not None and hasattr(nodes, "get")) else None
         return bool(node is not None and getattr(node, "provenance", "") == "detected")
-
-    def _record_evidence_columns(self) -> list[str]:
-        """Every evidence-column name the episode's programs attached.
-
-        Recorded on the state and returned for the commit artifact. It lives
-        on the persistent reasoners; this reads it once at commit, when the
-        flight is done growing it. Never call it holding ``self._lock``.
-        """
-        columns = sorted({
-            str(c)
-            for r in self.state.reasoners.values()
-            for c in getattr(r, "evidence_columns", None) or ()
-        })
-        with self._lock:
-            self.state.commit_evidence_columns = tuple(columns)
-        return columns
-
-
-
-
-
-
 
     @staticmethod
     def _atomic_write_json(path: Path, payload: dict) -> None:
@@ -1061,7 +823,7 @@ class SearchLoop:
         """Rebuild engine state from a prior run's on-disk checkpoint.
 
         Reads the canonical on-disk artifacts of a prior run and overlays
-        them onto the live state, so the next call to ``begin_turn`` /
+        them onto the live state, so the next call to
         ``update_perception`` proceeds as if the engine had run up through
         ``turn`` already. ``start``
         must be called first so the runtime graph and the
@@ -1073,9 +835,6 @@ class SearchLoop:
           rebuild (``state.last_target_spec``, the SAM concept provider
           via the ``sam_concept_setter`` injected at construction, the
           per-class roles)
-        - ``state.last_intel_text`` is set to the caller's ``instruction``
-          (the live operator NL); ``should_compile`` then returns False
-          for the same instruction and skips a redundant compile.
         - ``state.compile_seq = turn + 1``
 
         ``turn`` defaults to the highest ``compile/turn_<NNNN>/`` that
@@ -1210,7 +969,6 @@ class SearchLoop:
         )
 
         s = self._state
-        s.last_intel_text = instruction
         s.compile_seq = max(s.compile_seq, turn + 1)
         s.sam_class_to_roles = _class_to_roles_from_specs(union_specs)
         restored_finalized: dict[int, dict] = {}
@@ -1222,28 +980,11 @@ class SearchLoop:
             if not _record_restorable(d):
                 continue
             restored_finalized[int(d["reasoner_id"])] = dict(d)
-        s.reasoner_finalized = restored_finalized
         s.reasoner_alive_rids = set(restored_finalized)
-        s.reasoner_observations = {
-            rid: [
-                dict(o)
-                for o in (d.get("tour_plan_observations") or [])
-                if isinstance(o, dict)
-            ]
-            for rid, d in restored_finalized.items()
-        }
-        s.reasoner_questions = {
-            rid: [
-                dict(q)
-                for q in (d.get("questions") or [])
-                if isinstance(q, dict)
-            ]
-            for rid, d in restored_finalized.items()
-        }
 
         # Reasoner re-arm: ``s.reasoners`` holds in-memory LLM sessions that
         # are NEVER serialized (a restore strips ``_persistent_reasoner``),
-        # so a restore that only rehydrates ``reasoner_finalized`` leaves
+        # so a restore that only rehydrates the finalized records leaves
         # ``s.reasoners`` empty and the runtime reasoning path is never
         # exercised on resume. Rebuild a live ``Reasoner`` per restored rid.
         #
@@ -1377,7 +1118,6 @@ class SearchLoop:
             return d.boost_queue(concepts, where)
 
 
-
     def set_retro_perceiver(self, fn) -> None:
         """Install the RETROSPECTIVE-perception executor: the
         runtime closure that re-renders a flown stop's recorded pose,
@@ -1488,23 +1228,6 @@ class SearchLoop:
     # ------------------------------------------------------------------ #
     # Turn boundary
     # ------------------------------------------------------------------ #
-
-    def begin_turn(self, *, t_s: float | None = None) -> None:
-        """Snapshot the boundary state for the next compile window.
-
-        Call this at the start of each compile-tick step so the compiler
-        sees the pre-turn detected-id snapshot + wall-clock boundary
-        time, regardless of how many perception frames accumulated
-        inside the window.
-        """
-        with self._lock:
-            s = self.state
-            self._turn_start_detected_ids = {
-                nid
-                for nid, node in s.runtime_graph.nodes.items()
-                if getattr(node, "provenance", "prebaked") == "detected"
-            }
-            self._turn_start_t = float(t_s) if t_s is not None else time.time()
 
     # ------------------------------------------------------------------ #
     # Per-frame perception (graph upsert, target evidence accumulation)
@@ -1660,13 +1383,9 @@ class SearchLoop:
     # ------------------------------------------------------------------ #
 
 
-
-
     # ------------------------------------------------------------------ #
     # Termination
     # ------------------------------------------------------------------ #
-
-
 
 
     def upsert_prior_percept(self, fid: str, attrs: dict, *, px: int = 0) -> bool:
@@ -1697,23 +1416,6 @@ class SearchLoop:
             log.debug("upsert_prior_percept failed for %s", fid, exc_info=True)
             return False
 
-
-
-
-    def _get_per_reasoner_lock(self, rid: int) -> threading.Lock:
-        """Lazily create + return the non-reentrant ``threading.Lock``
-        guarding rid's ``Reasoner`` transcript. Two concurrent
-        stop-round threads for the same rid serialize through this
-        lock; different rids proceed in parallel. The meta-lock guards
-        the dict mutation only and is released before the returned
-        lock is acquired."""
-        key = int(rid)
-        with self._stop_round_locks_meta:
-            lock = self._stop_round_per_reasoner_locks.get(key)
-            if lock is None:
-                lock = threading.Lock()
-                self._stop_round_per_reasoner_locks[key] = lock
-        return lock
 
     def _tool_ctx_for_examiner(self):
         """Build a :class:`ToolContext` the runtime reasoner rounds run against.
@@ -2197,9 +1899,6 @@ class SearchLoop:
                     committed_match += 1
 
         return target_evidence, {"committed": committed_match}
-
-
-
 
 
     def _arm_roles_and_spec(

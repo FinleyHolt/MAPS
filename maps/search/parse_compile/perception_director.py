@@ -25,28 +25,9 @@ mutates and the ``act`` tool coordinates with:
     boost returns to pending so it stays attached to its queued stop until
     that stop flies. ``where`` entries address a pending stop by its
     ``qstop_N``/``stop_NNN`` id, a fid, or an ``[x, y]`` literal.
-  * the PENDING-STOP registry — every ``act{viewpoints}`` item is registered
-    at accept time with a minted ``qstop_N`` id (full intent tuple kept),
-    making the queue ADDRESSABLE: the act result / stop packet
-    name the pending stops, later ``view{boost}`` calls target them before
-    they fly, and ``act{cancel}`` removes them. (Registering a BAKED tour's
-    own stops was a round-era runtime hook and retired with it: the mission
-    flies each viewpoint the moment it lands, so nothing is ever pending.)
-  * CANCELLATION — ``cancel_stops`` removes
-    PENDING (unflown) stops: agent-queued qstops AND unflown baked tour
-    stops. Only pending stops are cancellable; a flown/unknown id is
-    rejected with a factual error while the valid ids in the same call
-    still apply. Boosts attached ONLY to a canceled stop retire with it
-    (stated in the result); the runtime filters canceled intents out of
-    the tour extension and skips canceled baked stops.
-
-ROUND-ERA ARM, left in place: ``register_tour_stops`` / ``is_stop_canceled`` /
-``canceled_intent_filter`` / ``mark_intents_absorbed`` / ``dedup_exempt`` were
-consulted only by the retired Phase A-D executor and now have no caller. They
-are NOT deleted because ``cancel_stops`` is still reached from the round path
-and its result text is served to the model verbatim; re-shaping its branches to
-drop the baked-tour arm would edit bytes the quarantine freezes. Agent-queued
-qstop cancellation is live; the baked-tour half of it never fires.
+  * the PENDING-STOP registry — ``pending_stops``, which the watchlist and
+    boost results report. The mission flies each viewpoint the moment it
+    lands, so nothing registers there and it stays empty.
 
 The dedup-bypass contract (C4, NARROWED by retrospective perception): a
 boost never re-flies anything on its own; an EXPLICIT ``act{viewpoints}``
@@ -109,15 +90,6 @@ def _xy_of(v) -> tuple[float, float] | None:
     return None
 
 
-def _intent_key(it: dict) -> tuple:
-    return (
-        str(it.get("target_fid") or "").strip() or None,
-        it.get("view_intent"),
-        it.get("view_face"),
-        it.get("view_from_fid"),
-    )
-
-
 @dataclass
 class _Boost:
     concepts: list[str]
@@ -149,32 +121,13 @@ class PerceptionDirector:
     watchlist: list[str] = field(default_factory=list)
     boosts: list[_Boost] = field(default_factory=list)
     # stop id -> {"target_fid": str, "xy": (x, y) | None, "flown": bool,
-    #             "canceled": bool, "intent": tuple | None,
-    #             "source": "agent" | "tour", "note": str}
-    # Agent-queued stops mint ``qstop_N`` ids; baked/synthesized tour stops
-    # register under their own ``stop_NNN`` ids (the whole
-    # remaining tour is addressable + cancellable while pending).
+    #             "canceled": bool}; empty under the mission (see above).
     pending_stops: dict[str, dict] = field(default_factory=dict)
-    # Canceled intent tuples — the runtime filters the round's aggregated
-    # viewpoint requests through these before synthesis.
-    canceled_intents: set = field(default_factory=set)
-    # Canceled baked/synthesized tour stop ids — the runtime skips them.
-    canceled_tour_stops: set = field(default_factory=set)
     # Flown-observation log (appended by retire_after_round): each entry
     # {"pose_xy": (x, y), "alt_m": float|None, "stop_id": str|None,
     #  "target_fids": [str, ...]} — the RETROSPECTIVE address space (an
     # already-visited pose is permanently re-analyzable).
     flown_log: list[dict] = field(default_factory=list)
-    _qstop_seq: int = 0
-    # Fired-subset telemetry (folded into react_stats by the caller).
-    counters: dict = field(default_factory=lambda: {
-        "watchlist_mutations": 0,
-        "boost_queued": 0,
-        "boost_retro_fired": 0,
-        "boost_activated_rounds": 0,
-        "boost_dedup_bypass": 0,
-        "canceled_stops": 0,
-    })
 
     # ------------------------------------------------------------------
     # Watchlist
@@ -200,7 +153,6 @@ class PerceptionDirector:
         existing = {_canon(w) for w in kept}
         added = [a for a in add if _canon(a) not in existing]
         self.watchlist = kept + added
-        self.counters["watchlist_mutations"] += 1
         push_status = self._push_live()
         out = {
             "watchlist": list(self.watchlist),
@@ -233,60 +185,6 @@ class PerceptionDirector:
     # Pending-stop registry (the addressable queue)
     # ------------------------------------------------------------------
 
-    def register_viewpoints(self, items, rows_by_fid=None) -> list[dict]:
-        """Register accepted ``act{viewpoints}`` items; mint ``qstop_N`` ids.
-
-        Returns one ``{"stop", "target_fid", "xy"}`` record per item, in
-        order — the names the act result states so later view/cancel calls
-        can target the queue before it flies."""
-        out: list[dict] = []
-        rows_by_fid = rows_by_fid or {}
-        for it in items or []:
-            if not isinstance(it, dict):
-                continue
-            fid = str(it.get("target_fid") or "").strip()
-            if not fid:
-                continue
-            self._qstop_seq += 1
-            qid = f"qstop_{self._qstop_seq}"
-            row = rows_by_fid.get(fid)
-            xy = _xy_of(row.get("xy")) if isinstance(row, dict) else None
-            if xy is None:
-                # an "[x, y]"-literal target: the coordinate IS the stop's
-                # position — register it so boost/cancel addressing and the
-                # queued ack read the real point (a None here made a point
-                # target read "queued" with no location).
-                xy = parse_xy_token(fid)
-            self.pending_stops[qid] = {
-                "target_fid": fid, "xy": xy, "flown": False,
-                "canceled": False, "intent": _intent_key(it),
-                "source": "agent", "note": "",
-            }
-            rec: dict = {"stop": qid, "target_fid": fid}
-            if xy is not None:
-                rec["xy"] = [round(xy[0], 1), round(xy[1], 1)]
-            out.append(rec)
-        return out
-
-    def register_tour_stops(self, stops) -> None:
-        """Register the baked/synthesized tour's own stops under their
-        ``stop_NNN`` ids (the remaining tour is addressable
-        + cancellable while pending). ``stops``: iterable of
-        ``{"stop_id", "target_fid"?, "xy"?}``; re-registration of a known id
-        is a no-op (keeps flown/canceled state)."""
-        for st in stops or []:
-            if not isinstance(st, dict):
-                continue
-            sid = str(st.get("stop_id") or "").strip()
-            if not sid or sid in self.pending_stops:
-                continue
-            self.pending_stops[sid] = {
-                "target_fid": str(st.get("target_fid") or "").strip(),
-                "xy": _xy_of(st.get("xy")),
-                "flown": False, "canceled": False, "intent": None,
-                "source": "tour", "note": "",
-            }
-
     def pending_unflown_count(self) -> int:
         return sum(1 for p in self.pending_stops.values()
                    if not p["flown"] and not p["canceled"])
@@ -295,119 +193,9 @@ class PerceptionDirector:
         return [sid for sid, p in self.pending_stops.items()
                 if not p["flown"] and not p["canceled"]]
 
-    def remaining_tour_line(self) -> str:
-        """One fact line for the stop decision packet: the remaining
-        (pending, uncanceled) stops with their targets + attached boosts —
-        the addressability surface. '' when nothing pends."""
-        parts: list[str] = []
-        for sid, p in self.pending_stops.items():
-            if p["flown"] or p["canceled"]:
-                continue
-            tag = p["target_fid"] or (
-                f"({p['xy'][0]:.0f}, {p['xy'][1]:.0f})" if p["xy"] else "?")
-            battached = [b.label() for b in self.boosts
-                         if any(w.get("stop") == sid for w in b.where)]
-            if battached:
-                tag += f", {'+'.join(battached)} boost"
-            parts.append(f"{sid} ({tag})")
-        return ", ".join(parts)
-
     # ------------------------------------------------------------------
     # Cancellation
     # ------------------------------------------------------------------
-
-    def cancel_stops(self, ids) -> dict:
-        """``act{cancel}``: cancel PENDING stops (agent qstops + unflown
-        baked tour stops). Valid ids apply even when others are rejected
-        (never partial-silent); each rejected id gets its factual reason;
-        boosts attached ONLY to canceled stops retire with them."""
-        canceled: list[str] = []
-        canceled_intents: list[tuple] = []
-        rejected: dict[str, str] = {}
-        for raw in ids or []:
-            sid = str(raw or "").strip()
-            if not sid:
-                continue
-            p = self.pending_stops.get(sid)
-            if p is None:
-                rejected[sid] = "unknown stop id"
-                continue
-            if p["canceled"]:
-                rejected[sid] = "already canceled"
-                continue
-            if p["flown"]:
-                rejected[sid] = "already flown (only pending stops cancel)"
-                continue
-            p["canceled"] = True
-            canceled.append(sid)
-            if p["intent"] is not None:
-                self.canceled_intents.add(p["intent"])
-                canceled_intents.append(p["intent"])
-            if p["source"] == "tour":
-                self.canceled_tour_stops.add(sid)
-        # Retire boosts attached to the canceled stops: drop the canceled
-        # where entries; a boost whose wheres ALL canceled retires outright
-        # (it must NOT degrade to a where-less next-flown boost).
-        retired_boosts: list[str] = []
-        if canceled:
-            survivors: list[_Boost] = []
-            gone = set(canceled)
-            for b in self.boosts:
-                if not b.where:
-                    survivors.append(b)
-                    continue
-                keep_where = [w for w in b.where if w.get("stop") not in gone]
-                if keep_where:
-                    b.where = keep_where
-                    survivors.append(b)
-                else:
-                    retired_boosts.append(b.label())
-            self.boosts = survivors
-            self.counters["canceled_stops"] += len(canceled)
-        return {
-            "canceled": canceled,
-            "retired_boosts": retired_boosts,
-            "rejected": rejected,
-            "pending": self.pending_stop_ids(),
-            # For the round's LOCAL requested-viewpoints filter (a remove of
-            # a stop queued earlier in the same round must also strip it
-            # from the reply the runtime consumes). Tuples, not model text.
-            "canceled_intents": canceled_intents,
-        }
-
-    def mark_intents_absorbed(self, vps) -> int:
-        """Reconcile the registry after synthesis: a queued agent stop whose request was ABSORBED (deduped
-        against an already-flown pose with no boost pending, or its pose
-        never resolved) will never fly — mark it so it leaves the pending
-        counts / remaining-tour line instead of stranding forever.
-        Deliberately does NOT touch ``canceled_intents``: absorption is a
-        runtime fact, not an agent cancellation — an identical future
-        request must still be schedulable. Returns the number marked."""
-        keys = {_intent_key(vp) for vp in vps or [] if isinstance(vp, dict)}
-        n = 0
-        for p in self.pending_stops.values():
-            if (p["source"] == "agent" and not p["flown"]
-                    and not p["canceled"] and p["intent"] in keys):
-                p["canceled"] = True
-                p["note"] = "absorbed at synthesis (deduped/unresolvable)"
-                n += 1
-        if n:
-            log.info("pending-stop registry: %d absorbed request(s) retired",
-                     n)
-        return n
-
-    def canceled_intent_filter(self, vps) -> list[dict]:
-        """Filter a viewpoint-request list down to the non-canceled ones
-        (the runtime applies this to the round's aggregated requests before
-        ``synthesize_extension``)."""
-        return [
-            vp for vp in (vps or [])
-            if isinstance(vp, dict)
-            and _intent_key(vp) not in self.canceled_intents
-        ]
-
-    def is_stop_canceled(self, stop_id: str) -> bool:
-        return str(stop_id or "").strip() in self.canceled_tour_stops
 
     # ------------------------------------------------------------------
     # Boosts (queue + RETROSPECTIVE execution)
@@ -534,15 +322,12 @@ class PerceptionDirector:
                 rec.update(res)
             else:
                 rec["error"] = "retrospective re-segmentation returned nothing"
-            if "error" not in rec:
-                self.counters["boost_retro_fired"] += 1
             retro_results.append(rec)
         ack: dict = {"queued": [], "where": []}
         if queue_where or not (where or []):
             # Queue when targets remain pending OR the boost is where-less
             # (next flown stops). A purely-retro boost queues NOTHING.
             self.boosts.append(_Boost(concepts=concepts, where=queue_where))
-            self.counters["boost_queued"] += 1
             ack["queued"] = concepts
             ack["where"] = [
                 (w["stop"] if w["kind"] == "stop"
@@ -588,7 +373,6 @@ class PerceptionDirector:
                 "%d boost(s) stay pending for the next round", len(pending),
             )
             return []
-        self.counters["boost_activated_rounds"] += 1
         return _dedup_concepts([c for b in pending for c in b.concepts])
 
     def _where_matches_flown(self, w: dict, flown: list[dict]) -> bool:
@@ -688,17 +472,14 @@ class PerceptionDirector:
                 # A where-less outstanding boost applies to every
                 # subsequently-flown stop: an explicit re-flight perceives
                 # with new vocabulary.
-                self.counters["boost_dedup_bypass"] += 1
                 return True
             for w in b.where:
                 if fid and w.get("fid") == fid:
-                    self.counters["boost_dedup_bypass"] += 1
                     return True
                 wxy = w.get("xy")
                 if wxy is not None and pxy is not None and (
                     math.hypot(wxy[0] - pxy[0], wxy[1] - pxy[1])
                     <= BOOST_MATCH_RADIUS_M
                 ):
-                    self.counters["boost_dedup_bypass"] += 1
                     return True
         return False

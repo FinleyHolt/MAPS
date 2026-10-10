@@ -595,7 +595,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=_resume_workdir_type,
         help=(
             "Resume from a prior run's workdir. The runner restores "
-            "target_spec, last_intel_text, SAM video concepts, and "
+            "target_spec, SAM video concepts, and "
             "compile_seq from the source's on-disk compile artifacts "
             "and skips pre-flight compile."
         ),

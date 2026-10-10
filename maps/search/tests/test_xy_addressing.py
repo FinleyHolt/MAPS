@@ -70,21 +70,3 @@ def test_xy_viewpoint_target_synthesizes_a_stop_at_the_point():
     # the picker may grid-snap; the pose is OVER the point, not elsewhere
     assert abs(stops[0].pose[0] - 6.0) <= 2.0, stops[0].pose
     assert abs(stops[0].pose[1] - 7.0) <= 2.0, stops[0].pose
-
-
-def test_xy_viewpoint_registers_with_its_coordinate():
-    from maps.search.parse_compile.perception_director import (
-        PerceptionDirector,
-    )
-
-    pd = PerceptionDirector()
-    out = pd.register_viewpoints(
-        [{"target_fid": "[1530, 1378]"}, {"target_fid": "prior_9"}],
-        rows_by_fid={"prior_9": {"xy": [4.0, 5.0]}})
-    # the point target's queued record carries ITS coordinate (a None here
-    # made a point target read "queued" with no location).
-    assert out[0]["target_fid"] == "[1530, 1378]"
-    assert out[0]["xy"] == [1530.0, 1378.0]
-    assert out[1]["xy"] == [4.0, 5.0]
-
-
