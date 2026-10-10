@@ -79,20 +79,21 @@ class SamRequestRefused(RuntimeError):
 _SAM_TRANSIENT_CLIENT_STATUSES = (408, 429)
 
 
-def _endpoints() -> list[str]:
-    """SAM video endpoint list.
+def sam_endpoints() -> list[str]:
+    """The segmenter's replica base URLs, the one resolver the client and
+    endpoint discovery read.
 
-    ``SAM_VIDEO_SERVER_URL`` wins when set, otherwise video calls reuse
-    ``SAM_SERVER_URL``. A comma-separated value spreads stateless
-    ``/segment`` calls across replicas.
+    ``SAM_VIDEO_SERVER_URL`` wins when set, otherwise ``SAM_SERVER_URL``,
+    otherwise the default replica. A comma-separated value spreads stateless
+    ``/segment`` calls across replicas. A set but blank value raises
+    ``ValueError``: only an unset variable means the default.
     """
-    raw = (
-        os.environ.get("SAM_VIDEO_SERVER_URL")
-        or os.environ.get("SAM_SERVER_URL")
-        or DEFAULT_SAM_VIDEO_SERVER_URL
-    )
+    name = "SAM_VIDEO_SERVER_URL" if os.environ.get("SAM_VIDEO_SERVER_URL") else "SAM_SERVER_URL"
+    raw = os.environ.get(name, DEFAULT_SAM_VIDEO_SERVER_URL)
     eps = [u.strip().rstrip("/") for u in raw.split(",") if u.strip()]
-    return eps or [DEFAULT_SAM_VIDEO_SERVER_URL]
+    if not eps:
+        raise ValueError(f"{name} is empty")
+    return eps
 
 
 _rr = itertools.count()
@@ -113,7 +114,7 @@ def _pick_url() -> str:
     ``next`` on an ``itertools.count`` is atomic, so concurrent tiles get
     distinct indices without a lock.
     """
-    eps = _endpoints()
+    eps = sam_endpoints()
     return eps[next(_rr) % len(eps)]
 
 
@@ -136,7 +137,7 @@ def tile_pool_width(n_tiles: int, configured: int | None) -> int:
     tile order and per-tile wire order are the same at any width. A pinned
     ``1`` is still serial semantics, the triage knob.
     """
-    width = configured or max(len(_endpoints()) + 1, n_tiles)
+    width = configured or max(len(sam_endpoints()) + 1, n_tiles)
     return max(1, min(int(width), n_tiles or 1))
 
 

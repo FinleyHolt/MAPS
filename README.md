@@ -186,7 +186,7 @@ window.
 | `SEARCH_SAMPLING_REASONING_EFFORT` | client | The arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`); discovery refuses a value the served model's card does not take. Unset sends none. |
 | `SEARCH_SAMPLING_TEMPERATURE`, `SEARCH_SAMPLING_PRESENCE_PENALTY` | client | Replace the envelope's temperature, or add a presence penalty. |
 | `SEARCH_COMPACT_TOKENIZER_NAME` | client | The HF tokenizer repo, replacing the model card's. |
-| `SAM_SERVER_URL` | client | The SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772`. |
+| `SAM_SERVER_URL` | client | The SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset; a set but blank value is refused. |
 | `SAM_VIDEO_SERVER_URL` | client | A separate URL for video calls. Default `SAM_SERVER_URL`. |
 | `SAM_PORT`, `SAM_MODEL_ID`, `SAM_DEVICE`, `SAM_DTYPE` | serve | Port (8772), checkpoint id (`facebook/sam3.1`), device, dtype (`bfloat16`). |
 | `SAM3_CHECKPOINT` | serve | A local checkpoint file. |

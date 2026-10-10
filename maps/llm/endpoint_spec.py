@@ -481,11 +481,17 @@ def discover_from_env() -> EndpointSpec:
     ``SEARCH_ENDPOINT_OFFLINE`` / ``SEARCH_ENDPOINT_SPEC_OVERRIDE`` escape
     hatches."""
 
+    from maps.perception.sam.detect_client import sam_endpoints  # noqa: PLC0415
+
     override_raw = os.environ.get("SEARCH_ENDPOINT_SPEC_OVERRIDE", "").strip()
+    try:
+        sam_url = ",".join(sam_endpoints())  # the replicas the run posts to
+    except ValueError as exc:
+        raise EndpointDiscoveryError(str(exc)) from exc
     return discover(
         os.environ.get("SEARCH_REASONER_URL", "http://127.0.0.1:8001/v1"),
         {
-            "sam": os.environ.get("SAM_SERVER_URL", ""),
+            "sam": sam_url,
             "sam_video": os.environ.get("SAM_VIDEO_SERVER_URL", ""),
         },
         offline=os.environ.get("SEARCH_ENDPOINT_OFFLINE", "").strip() == "1",
