@@ -420,15 +420,11 @@ def save_ortho(
 
 _ORTHO_CACHE: dict[tuple[str, float], dict] = {}
 
-# A flight crops one map, so two entries cover it. An audit browses across
-# maps, and a miss costs a full rebake — 4.3 s measured on the 0.1 m/px
-# rasters — so the render daemon raises this via ``WORLDS_ORTHO_CACHE_BLOCKS``.
-# Entry size scales with the map: rgb u8 + height f32 + alpha u8 runs
-# ~130 MB for a SensatUrban block and ~3.6 GB for the ~460 MP unified
-# calcity map (which only ever occupies one slot).
-_ORTHO_CACHE_MAX_ENTRIES = max(
-    1, int(os.environ.get("WORLDS_ORTHO_CACHE_BLOCKS", "2"))
-)
+# A flight crops one map, so two entries cover it. Entry size scales with
+# the map: rgb u8 + height f32 + alpha u8 runs ~130 MB for a SensatUrban
+# block and ~3.6 GB for the ~460 MP unified calcity map (which only ever
+# occupies one slot).
+_ORTHO_CACHE_MAX_ENTRIES = 2
 
 
 def load_ortho(ply_path, m_per_px: float = 0.10) -> dict | None:
