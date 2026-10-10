@@ -1200,7 +1200,6 @@ class SamDetectClient:
                 region,
                 depth=obs.depth,
                 view_corners_xy=obs.ortho_view_corners_xy,
-                return_xy_cloud=True,
                 tile=obs.tile,
             )
             if projected is None:
@@ -1222,7 +1221,6 @@ class SamDetectClient:
                 "track_id": track_id,
                 "pixel_bbox": [r0, c0, r1, c1],
                 "pixel_area": area,
-                "world_xy_cloud": projected.world_xy_cloud,
                 "mask_pixel_count": int(projected.n_valid_pixels),
                 "model_id": self.model_id,
                 "frame_index": frame_index,

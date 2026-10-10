@@ -1598,34 +1598,6 @@ class SearchLoop:
             raw_id = self._detection_id(det)
             if raw_id and isinstance(upserted_id, str):
                 s._raw_to_detected[raw_id] = upserted_id
-            # Persist this detection's depth-projected world (x, y)
-            # cloud onto the runtime graph keyed by ``detected_<N>`` so
-            # the dashboard briefer can render a pixel-fidelity outline
-            # at the location the drone actually saw — not where the
-            # pre-flight satellite SAM thought the object was. The
-            # latest observation wins; per-frame multi-wedge sees the
-            # same id and overwrites in order. Layering: the engine
-            # stays CityNav-agnostic, the cloud is in world meters; the
-            # compiler does the world -> satellite-pixel projection at
-            # briefer time.
-            md = det.metadata or {}
-            cloud = md.get("world_xy_cloud") if isinstance(md, dict) else None
-            if cloud is not None and isinstance(upserted_id, str):
-                bucket = s.runtime_graph.__dict__.setdefault(
-                    "_detected_world_clouds", {}
-                )
-                try:
-                    arr = np.asarray(cloud, dtype=np.float32)
-                    if arr.ndim == 2 and arr.shape[1] >= 2 and arr.shape[0] > 0:
-                        bucket[upserted_id] = arr[:, :2]
-                except (TypeError, ValueError):
-                    pass
-            # ``world_xy_cloud`` is a numpy array — drop it before the
-            # per-step JSON sidecar, which is read by the dashboard and
-            # has no use for the raw per-pixel cloud.
-            md_for_json = {
-                k: v for k, v in (det.metadata or {}).items() if k != "world_xy_cloud"
-            }
             det_record = {
                 "world_xy": list(det.world_xy),
                 "label": det.label,
@@ -1634,7 +1606,7 @@ class SearchLoop:
                 "source_tier": det.source_tier,
                 "description": det.description,
                 "attributes": dict(det.attributes or {}),
-                "metadata": {k: _json_safe(v) for k, v in md_for_json.items()},
+                "metadata": {k: _json_safe(v) for k, v in (det.metadata or {}).items()},
             }
             if det.mask is not None:
                 mask_record = encode_mask_record(

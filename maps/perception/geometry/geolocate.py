@@ -60,13 +60,6 @@ class ProjectedMask:
 
     world_xy: tuple[float, float]
     n_valid_pixels: int
-    # Per-valid-mask-pixel world (x, y) — shape ``(n_valid_pixels, 2)``,
-    # float32. Used by callers that need to re-project the mask through
-    # a different 2D frame (e.g. the satellite ortho) for visualization
-    # at pixel fidelity. None means the caller asked the adapter to
-    # skip computing it (default in the runtime hot path, where the
-    # centroid + tile_cells are all the re-id matcher needs).
-    world_xy_cloud: np.ndarray | None = None
     # Tile-grid (row, col) cells the mask rasterizes into, ``(N, 2)
     # int32``. Populated only when the projector received a ``tile``.
     tile_cells: np.ndarray | None = None
@@ -421,7 +414,6 @@ def project_mask_to_world_ortho(
     depth: np.ndarray | None,
     view_corners_xy: tuple,
     min_valid_depth_pixels: int | None = None,
-    return_xy_cloud: bool = False,
     tile: TileFrame | None = None,
 ) -> ProjectedMask | None:
     """Project a mask to a world centroid through the view-square affine.
@@ -446,7 +438,7 @@ def project_mask_to_world_ortho(
     nearest-neighbor rather than requiring equal shapes.
 
     Returns a ``ProjectedMask`` (``world_xy``, ``n_valid_pixels``, optional
-    ``world_xy_cloud`` / ``tile_cells``), or ``None`` when ``depth`` is
+    ``tile_cells``), or ``None`` when ``depth`` is
     absent or fewer than ``min_valid_depth_pixels`` mask pixels have
     finite, positive depth. There is no ``max_range_m`` gate (no sensor in
     the orthographic path).
@@ -500,9 +492,6 @@ def project_mask_to_world_ortho(
     xs = xs[finite]
     ys = ys[finite]
     world_xy = (float(xs.mean()), float(ys.mean()))
-    cloud: np.ndarray | None = None
-    if return_xy_cloud:
-        cloud = np.stack([xs, ys], axis=1).astype(np.float32, copy=False)
     tile_cells: np.ndarray | None = None
     if tile is not None:
         H, W = tile.grid_shape
@@ -520,6 +509,5 @@ def project_mask_to_world_ortho(
     return ProjectedMask(
         world_xy=world_xy,
         n_valid_pixels=n_valid,
-        world_xy_cloud=cloud,
         tile_cells=tile_cells,
     )
