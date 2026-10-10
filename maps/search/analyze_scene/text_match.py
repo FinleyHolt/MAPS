@@ -1,17 +1,13 @@
-"""Pure text-matching kernel for the ``analyze_scene`` ``find`` op — search by name.
+"""Pure text-matching kernel for the ``find`` op: search by name.
 
-This is the SEARCH/EXPLORE half of the single ``analyze_scene`` tool: fuzzy
-free-text matching (token coverage, plural and abbreviation tolerant) over
-each row's ``search_text`` — a prior's name + raw OSM tag keys and values, a
-detection's detector class. Matching is strictly LEXICAL (token overlap,
-plural stripping, abbreviation expansion); there is
-no semantic English-noun -> OSM-value mapping here. The one CORPUS-level
-widening lives in :func:`tag_family_keys`, which the ``find`` branch applies
-over the searched set: a query that is an exact tag VALUE somewhere reaches
-that tag's KEY family, below every exact tier. Where a query's vocabulary
-diverges from the tag vocabulary in any other way, the agent-side remedy is
-the tag census (served on misses and in the mission packet's tile overview),
-not a lookup table.
+Fuzzy free-text matching (token coverage, plural and abbreviation tolerant)
+over each row's ``search_text``: a prior's name + raw OSM tag keys and
+values, a detection's detector class. Matching is strictly LEXICAL; there
+is no semantic English-noun -> OSM-value mapping. The one CORPUS-level
+widening is :func:`tag_family_keys`: a query that is an exact tag VALUE
+somewhere reaches that tag's KEY family, below every exact tier. Where a
+query's vocabulary diverges from the tags in any other way, the remedy is
+the tag census served on misses, not a lookup table.
 
 Scoring is TIERED so lexical EXACTNESS is visible in the ordering (a
 bag-of-tokens hit can cover every query token without the query phrase
@@ -34,13 +30,11 @@ match):
                  query equals ONE tag key or ONE tag value (the tag-family
                  token hit: 'parking' on an amenity=parking row);
   (0, 0.75]      token-bag / abbreviation fuzz (capped at
-                 ``_TOKEN_BAG_CEIL``) — including any query token(s) merely
+                 ``_TOKEN_BAG_CEIL``), including query tokens merely
                  mentioned INSIDE a longer proper name. Token COVERAGE is the
-                 whole band: the substring and edit-distance paths were
-                 measured to add zero ground truth over the corpus and were
-                 deleted (see :func:`fuzzy_match_score`). Coverage is IDF-
-                 WEIGHTED over the words some row could cover, so the
-                 corpus's commonest word cannot carry a match alone.
+                 whole band, IDF-WEIGHTED over the words some row could
+                 cover, so the corpus's commonest word cannot carry a match
+                 alone.
 
 Query grammar (ONE canonical form each):
   * ``key=value`` — '=' is a token separator, so the pair also token-matches
@@ -52,28 +46,18 @@ Query grammar (ONE canonical form each):
   * the literal standalone token ``OR`` (uppercase) separates alternatives;
     the score is the MAX over the OR-clauses.
 
-It is the pure, stdlib-only counterpart to the geometry
-kernel in :mod:`maps.search.analyze_scene.geom_compute`, and like it is imported by
-the live executor (:mod:`maps.search.analyze_scene.geom_program`).
+It is the stdlib-only counterpart to the geometry kernel
+(:mod:`maps.search.analyze_scene.geom_compute`), imported by the executor
+(:mod:`maps.search.analyze_scene.geom_program`).
 
-Design contract (load-bearing):
-
-- **Pure + data-in-args.** No graph, no I/O, no ``ctx``; ``re`` and ``math``
-  only. Every matcher takes plain strings / prepared query tuples (and, for the
-  fuzz band, the corpus token weights :func:`token_idf` mints from the searched
-  rows) and returns scores. This is what lets ``find`` run inside
-  ``run_program(cands, anchors, program)`` with no
-  signature change and no heavy-dependency import into the teacher.
-- **The descriptions WALL lives upstream.** This module only scores whatever
-  ``search_text`` the surface builder put on a row. The builder
-  (:func:`geom_program.build_surface`) is responsible for NEVER putting the
-  CityRefer ``MapObject.descriptions`` (the GT-label catalog) into that text —
-  see the wall note there. Matching an operator's instruction against
-  the catalog's descriptions would turn search into a GT oracle.
-
-The scoring functions (:func:`fuzzy_prepare_query` / :func:`fuzzy_match_score`)
-are byte-identical to the ``search_features`` fuzzy ranker, so the ``find`` op
-resolves names identically to the offline/teacher grounding path.
+- **Pure + data-in-args.** No graph, no I/O; ``re`` and ``math`` only. Every
+  matcher takes plain strings / prepared query tuples (and, for the fuzz
+  band, the corpus token weights :func:`token_idf` mints from the searched
+  rows) and returns scores.
+- **The description WALL lives upstream.** This module scores whatever
+  ``search_text`` the surface builder put on a row; the builder keeps the
+  CityRefer ``description`` tags (the catalog the instruction was sampled
+  from) out of it (``geom_program._SEARCH_TAG_DENYLIST``).
 """
 
 from __future__ import annotations
@@ -139,31 +123,22 @@ _TOKEN_BAG_CEIL = 0.75
 _KV_TIER_BASE = 0.80
 _NAME_PHRASE_TIER_BASE = 0.90
 # The boundary the render's head label gates on: at or above it the head
-# matched as a NAME; below it, as a tag/class/bag hit. Public because
-# "Best:" is an endorsement and only a name-tier head has earned it.
+# matched as a NAME; below it, as a tag/class/bag hit.
 NAME_TIER_FLOOR = _NAME_PHRASE_TIER_BASE
 
-# What reaching a query's own tag FAMILY is worth (see
-# :func:`tag_family_keys`). Above FUZZY_THRESHOLD so the family is
-# RETRIEVED, below every exact tier so the exact hits keep the head of the
-# find order. Anything strictly inside those two bounds gives the same
-# retrieved set in the same order.
+# What reaching a query's own tag FAMILY is worth (:func:`tag_family_keys`):
+# above FUZZY_THRESHOLD so the family is retrieved, below every exact tier so
+# the exact hits keep the head of the find order.
 TAG_FAMILY_SCORE = 0.5
 
 
 def tag_family_keys(q_data: tuple, rows) -> frozenset:
     """The tag KEYS a query is an exact VALUE of, anywhere on ``rows``.
 
-    A CORPUS fact, which is why it does not live in :func:`find_score`: that
-    sees one row at a time, and whether ``house`` is a value of ``building``
-    somewhere on the surface is not answerable from a ``building=yes`` row.
-
-    ``house`` is the value of ``building=house`` on 41 of 5,257 calcity rows
-    while 3,345 ``building=yes`` rows score 0.0, so the commonest noun a cue
-    writes retrieves 1.2% of the buildings and a downstream 24-row budget
-    never binds. Reaching the KEY family at :data:`TAG_FAMILY_SCORE` puts
-    the other 3,373 in the match set BELOW the exact hits — a widening, and
-    never a drop: no row that matched before stops matching.
+    A CORPUS fact, so it does not live in :func:`find_score`, which sees one
+    row at a time. Reaching the KEY family at :data:`TAG_FAMILY_SCORE` puts
+    the family's other rows (``building=yes`` for a ``house`` query) in the
+    match set BELOW the exact hits: a widening, never a drop.
     """
     want = {cl[0] for cl in q_data if cl[0]}
     if not want:
@@ -184,22 +159,14 @@ def tag_family_keys(q_data: tuple, rows) -> frozenset:
 def token_idf(rows) -> dict[str, float]:
     """``idf(t) = ln(1 + N/(1+df(t)))`` over the searched rows' vocabulary.
 
-    A CORPUS fact, for the same reason :func:`tag_family_keys` is one: whether
-    ``way`` is a near-stopword of this bake is not answerable from the one row
-    :func:`fuzzy_match_score` sees. Same shape as that function — rows in
-    args, pure, stdlib — so it stays callable from the teacher and the
-    analysis readers with no dependency.
+    A CORPUS fact, like :func:`tag_family_keys`. ``df`` counts ROWS, over
+    :func:`_fuzzy_expand_tokens` of the row's ``search_text`` and ``name``,
+    the two texts the fuzz band scores against.
 
-    ``df`` counts ROWS, over :func:`_fuzzy_expand_tokens` of the row's
-    ``search_text`` and its ``name`` — the two texts the fuzz band actually
-    scores against, so the weights describe the haystack being searched and
-    not some other one.
-
-    A token absent from the returned map has ``df == 0``: it is UNSATISFIABLE,
-    no row can ever cover it. That is the distinction the fuzz band's
-    denominator turns on, and it is why this returns the map rather than the
-    weights alone. Every present token has a strictly positive weight (df <= N
-    gives idf >= ln 2), so a zero lookup means absent and nothing else.
+    A token absent from the returned map has ``df == 0``: UNSATISFIABLE, no
+    row can cover it, which is what the fuzz band's denominator turns on.
+    Every present token has a strictly positive weight (idf >= ln 2), so a
+    zero lookup means absent and nothing else.
     """
     df: dict[str, int] = {}
     n = 0
@@ -214,9 +181,9 @@ def token_idf(rows) -> dict[str, float]:
 
 
 def _fuzzy_normalize(text: str) -> str:
-    """Lowercase, strip punctuation, expand abbreviations. ``=`` joins the
-    token-separator set so a ``key=value`` query tokenizes to [key, value]
-    and matches tag keys AND values (the census's own taught idiom)."""
+    """Lowercase, strip punctuation, expand abbreviations. ``=`` is a token
+    separator, so a ``key=value`` query tokenizes to [key, value] and matches
+    tag keys AND values."""
     text = text.lower()
     text = re.sub(r"[_\-/=]", " ", text)
     text = re.sub(r"[^\w\s]", "", text)
@@ -224,7 +191,7 @@ def _fuzzy_normalize(text: str) -> str:
 
 
 def _singularize(word: str) -> str:
-    """Simple English plural suffix stripping — the ONE best guess."""
+    """Simple English plural suffix stripping: the one best guess."""
     if word.endswith("ies") and len(word) > 4:
         return word[:-3] + "y"
     if word.endswith(("ches", "shes", "ses", "xes")):
@@ -237,13 +204,8 @@ def _singularize(word: str) -> str:
 def _singular_forms(word: str) -> set[str]:
     """EVERY plausible singular of a word, because one guess is not enough.
 
-    ``-ses`` is genuinely ambiguous: "buses" is "bus"+es and "houses" is
-    "house"+s, and no suffix rule separates them. :func:`_singularize` picks
-    the first, so ``houses`` became ``hous`` and never matched a
-    ``building=house`` row on the token path at all -- the edit-distance
-    fuzz was silently covering for it (``hous``/``house`` is one edit), and
-    deleting that path is what exposed it. Emitting BOTH forms costs one set
-    entry and a spurious form matches nothing.
+    ``-ses`` is ambiguous ("buses" is "bus"+es, "houses" is "house"+s), so
+    both forms are emitted; a spurious form matches nothing.
     """
     out = {word, _singularize(word)}
     if word.endswith("ses") and len(word) > 3:
@@ -261,17 +223,15 @@ def _word_forms(text: str) -> tuple:
     """One frozenset of spellings PER WORD of the text.
 
     The coverage ratio asks how many of the query's WORDS were found, so the
-    forms of one word have to stay grouped: flattening them made the
-    denominator grow with the number of spellings and a plural query harder
-    to satisfy than a singular one.
+    forms of one word stay grouped and a plural query is exactly as
+    satisfiable as its singular.
     """
     return tuple(frozenset(_singular_forms(t))
                  for t in dict.fromkeys(_fuzzy_normalize(text).split()))
 
 
-# The perceived-colour palette. Mirrors ``geom_compute.COLOR_ENUM``, which
-# this STDLIB-PURE module cannot import (geom_compute pulls numpy, and the
-# analysis readers re-parse on a bare interpreter).
+# The perceived-colour palette: ``geom_compute.COLOR_ENUM``, which this
+# stdlib-only module cannot import (geom_compute pulls numpy).
 COLORS = frozenset((
     "white", "gray", "black", "red", "blue", "green", "yellow", "orange",
     "brown", "purple"))
@@ -294,10 +254,7 @@ def _colors_read(rows) -> set:
     component and the uncertainty mark all fall out.
 
     ``color`` is the signal because the ``color_<word>`` columns exist only
-    where a query NAMED a word — the grounding path names none, so a column
-    test would see nothing on half the call sites — and because
-    ``color_conf`` is omitted on offline tile-rebuild rows that still carry
-    a colour.
+    where a query named a word.
     """
     return COLORS & set(re.findall(r"[a-z]+", " ".join(
         r["color"].lower() for r in rows
@@ -308,33 +265,14 @@ def unmatched_query_tokens(query: str, rows, min_len: int = 3):
     """Query tokens carried by NO row in the match set, longest first.
 
     A junk token DILUTES ``find_score``'s token-bag ratio and never
-    disqualifies, so a query the model never meant to write still binds:
-    "car withcolor blue" strips ``blue`` into find{color}, leaving
-    {car, withcolor}, whose ratio 1/2 = 0.5 clears FUZZY_THRESHOLD 0.45
-    on every car row. Pilot-7 measured exactly that shape returning 520
-    rows with no error and no note -- and the same shape carries every
-    residual glue token the mask still admits ("onBeche", "atalt",
-    "aremagenta"). Naming the token nothing carries is the loud signal;
-    the match itself is untouched, because a real query often names an
-    attribute no row spells.
+    disqualifies, so "car withcolor" still binds every car row at 1/2.
+    Naming the token nothing carries is the loud signal; the match itself is
+    untouched, because a real query often names an attribute no row spells.
 
     ``rows`` are the matched row dicts, not their texts, because a palette
-    word the rows were PERCEIVED as is not dead vocabulary. The note reads
-    the row's TEXT and a perceived colour is not in it -- it is on the
-    ``color_<word>`` columns -- so pilot-9 served "no matched row carries
-    'gray'" over a 465-row grid reading gray, lt gray, dk black (10 of 57
-    token-claims flagged a palette word, against 0 of 191 on pilot-8, after
-    857f5022 stopped stripping the colour out of a head noun phrase). The
-    model OBEYS the note 90% of the time, so a false claim teaches it to
-    drop a word that was working.
-
-    Suppression is per WORD, not per row set: "no matched row carries
-    'purple'" over rows that all read red is true in both channels and is
-    the most useful thing the note can say, and a palette word inside a
-    proper name that missed ("Green Street", 24 of 1784 tile names carry
-    one) has to stay loud or a wrong bind goes silent. It is exact-word,
-    never the prefix relation ``is_carried`` uses, so "greenhouse" is still
-    glue.
+    word the rows were PERCEIVED as (their ``color``) is not dead vocabulary.
+    Suppression is per exact WORD: a palette word no matched row reads
+    ("purple" over red rows) stays loud, and "greenhouse" is still glue.
     """
     qt = {t for t in _fuzzy_expand_tokens(query) if len(t) >= min_len}
     if not qt:
@@ -355,12 +293,8 @@ def unmatched_query_tokens(query: str, rows, min_len: int = 3):
 
     def is_carried(tok: str) -> bool:
         # PREFIX relation, either direction: the singularizer is lossy
-        # ("houses" -> "hous"), so a literal miss flagged every plural of
-        # a word the rows plainly carry -- pilot-8 measured 14 of 40
-        # flags as exactly that (cars, houses, buildings). A shared
-        # prefix is the cheap two-way test, and it leaves the glue this
-        # exists to catch untouched ("oncastle" shares no prefix with
-        # "castle").
+        # ("houses" -> "hous"), and glue ("oncastle") shares no prefix with
+        # the word it hides ("castle").
         return any(tok.startswith(c) or c.startswith(tok) for c in carried)
 
     # One word per prefix family: the expansion yields both "lots" and
@@ -373,18 +307,9 @@ def unmatched_query_tokens(query: str, rows, min_len: int = 3):
 
 
 def _edit_distance(a: str, b: str) -> int:
-    """Levenshtein edit distance.
-
-    RETRIEVAL no longer uses this. The typo path scored 0 of the 17 corpus
-    episodes where fuzz adds the ground truth, while reaching 48
-    ``crossing_markings`` rows for ``parking``, ``highway=track`` for
-    ``truck`` and ``leisure=pitch`` for ``patch``. What survives is the
-    MISS-TIME TAG CENSUS (:func:`geom_program._query_matched_census`), which
-    lists near tag vocabulary as COUNTS and retrieves nothing -- the
-    agent-side remedy this module's docstring names for a
-    divergent-vocabulary query. Telling a model that wrote ``truck`` that
-    the bake says ``highway=track`` is the useful half; serving it the track
-    rows as matches was the harmful one.
+    """Levenshtein edit distance, for the miss-time tag census
+    (:func:`geom_program._query_matched_census`), which lists near tag
+    vocabulary as counts and retrieves nothing.
     """
     if len(a) < len(b):
         return _edit_distance(b, a)
@@ -407,14 +332,11 @@ def _extract_kv_pairs(clause: str) -> tuple:
     sides (``landuse=grass``); its VALUE is that token's tail plus each
     extension by the bare (non-``=``) tokens that follow it, up to the next
     pair. Each group is a tuple of candidate ``(key, value)`` forms and
-    counts as matched when ANY form equals a row tag — so a MULTI-WORD tag
+    counts as matched when ANY form equals a row tag, so a MULTI-WORD tag
     value matches whole: 'addr_street=Castle Street building=yes' yields
     the groups (addr street, castle)/(addr street, castle street) and
-    (building, yes). Measured (armC7 gate B4, episode 7872): the
-    whitespace-truncated value 'castle' matched no row tag, so the
-    discriminating pair contributed nothing and rows carrying BOTH tags
-    scored byte-identically to rows carrying only building=yes. Purely
-    lexical — the groups feed the exact-tag tier's coverage fraction."""
+    (building, yes). The groups feed the exact-tag tier's coverage
+    fraction."""
     toks = clause.split()
     groups = []
     for i, tok in enumerate(toks):
@@ -440,9 +362,9 @@ def _extract_kv_pairs(clause: str) -> tuple:
 def fuzzy_prepare_query(query: str) -> tuple:
     """Pre-normalize a query once for re-use across many candidate scorings.
 
-    The literal standalone token ``OR`` (uppercase) separates alternatives —
-    the ONE alternation form; scores take the MAX over clauses. Returns a
-    tuple of clause tuples ``(q_norm, qt, qw, kv_pairs)``:
+    The literal standalone token ``OR`` (uppercase) separates alternatives;
+    scores take the MAX over clauses. Returns a tuple of clause tuples
+    ``(q_norm, qt, qw, kv_pairs)``:
       - ``q_norm``: normalized clause string
       - ``qt``: expanded token set (with singularised variants), for MATCHING
       - ``qw``: one frozenset of spellings PER WORD, so coverage counts
@@ -451,16 +373,8 @@ def fuzzy_prepare_query(query: str) -> tuple:
         (each a tuple of value-extension candidate forms; see
         :func:`_extract_kv_pairs`)
 
-    ``qt_long`` is gone with the edit-distance phase it existed for.
-
-    ``qw`` is separate from ``qt`` deliberately. A singular variant
-    is an ALTERNATE SPELLING of a word, not a second word, and dividing by
-    the expanded set made a plural query harder to satisfy than a singular
-    one: "sports field" expands to {sports, sport, field}, so matching
-    "field" scored 1/3 = 0.33 and fell under the 0.45 floor while "pool"
-    scored 1/1. The substring path used to mask this by matching the name
-    anyway; with it gone the denominator has to be right. Measured: this is
-    what keeps ``find("sports field")`` returning its 16 rows.
+    ``qw`` is separate from ``qt`` because a singular variant is an alternate
+    SPELLING, not a second word: "sports field" is two words, not three.
     """
     clauses = [c for c in re.split(r"\s+OR\s+", query or "") if c.strip()] \
         or [query or ""]
@@ -482,76 +396,22 @@ def fuzzy_match_score(clause: tuple, candidate: str, idf: dict) -> float:
     and never enters the k=v / name-phrase tier bands ``find_score``
     documents.
 
-    TOKEN COVERAGE IS THE WHOLE FUZZ BAND, and it earns its place: it asks
-    how much of the QUERY was found, so ``pool`` scores 0.75 against a row
-    reading ``leisure swimming pool building yes``. ``find pool.`` returns
-    zero rows without it on a bake holding three ``leisure=swimming_pool``
-    ones, and ``pool`` is the third-commonest query real flights write (120
-    uses over 2,700 stored missions). Measured over the corpus, this path
-    carries ALL 17 of the episodes where fuzz adds the ground truth
-    (2.01% [1.18, 3.08], 16W/0L paired, p=3.05e-5).
+    TOKEN COVERAGE IS THE WHOLE FUZZ BAND: it asks how much of the QUERY was
+    found, so ``pool`` scores 0.75 against a row reading ``leisure swimming
+    pool building yes``.
 
-    COVERAGE IS IDF-WEIGHTED, OVER SATISFIABLE WORDS ONLY. Counting words
-    equally let the corpus's commonest word carry a match on its own:
-    ``hugo way`` covered one of two words on 4,733 of 5,257 rows and served
-    65-98 tied fuzz rows ahead of the one the query named, so 49.0% of
-    named-feature query uses put the queried row outside a 24-row crop once
-    ``near=<anchor>`` re-sorted by distance and threw the exact tier's
-    ordering away. Weighting by ``idf`` prices ``hugo`` far above ``way`` and
-    the tie collapses.
-
-    A word NO row can cover is dropped from the denominator, and that rule is
-    load-bearing rather than a refinement: plain IDF takes ``parking lot`` to
-    ZERO rows, because ``lot`` has zero df, therefore maximum idf, and it
-    vetoes the word that does match. Dropping unsatisfiable words fixes that
-    -- but ON ITS OWN it re-opens the flood, because any absent rare word
-    leaves the common one as the whole denominator (``smith way`` back to
-    4,733). It is safe only because the surface builder already withheld the
-    bake's provenance keys from ``search_text``
-    (``geom_program._SEARCH_PROVENANCE_DROP``), which is what makes ``way``
-    and ``road`` ordinary words again. The two halves are ONE change; neither
-    works alone, and that was measured as a 2x2.
+    COVERAGE IS IDF-WEIGHTED, OVER SATISFIABLE WORDS ONLY. Weighting by
+    ``idf`` keeps the corpus's commonest word (``way`` in ``hugo way``) from
+    carrying a match on its own. A word NO row can cover is dropped from the
+    denominator, or its maximal idf would veto the word that does match
+    (``parking lot`` with ``lot`` absent). Dropping it is safe only because
+    the surface builder withholds the bake's provenance keys from
+    ``search_text`` (``geom_program._SEARCH_PROVENANCE_DROP``), which makes
+    ``way`` and ``road`` ordinary words; the two halves work only together.
 
     A word's weight is the idf of its most-covering spelling (the lowest idf
-    among the forms present, i.e. the highest df) -- the same form the
-    satisfiability test turns on, so a word cannot be priced by a spelling
-    that satisfies nothing.
-
-    TWO PATHS WERE DELETED because they were measured to add nothing:
-
-    * **edit distance / typo** contributed 0 of those 17 and produced the
-      junk: ``parking`` reached 48 ``crossing_markings`` rows at 2 edits in
-      8 characters, ``truck`` reached ``highway=track``, ``patch`` reached
-      ``leisure=pitch``, ``home`` reached ``Hume Avenue``. Re-running every
-      ground-truth number with only this path removed was byte-identical to
-      shipped.
-    * **substring** contributed 0 of those 17. It also scored a short query
-      by the HAYSTACK's length -- ``pool`` scored 0.44, under the 0.45
-      floor, purely because the row carried a second tag -- which is the
-      regression the token bag was added to fix. Nothing now depends on it.
-
-    Measured on the calcity surface (5,257 prior rows, served retrieval),
-    as the 2x2 of provenance-drop x weighting. The two halves fix DIFFERENT
-    populations, which is why shipping either alone leaves a flood standing:
-
-        query          none     idf    drop    both
-        hugo way       4733       1       7       7
-        smith way      4733    4733       7       7
-        neuralia road   810       1       5       5
-        85th street      99       1      99       1
-        sports field     17       1      17       1
-        road            810     810     270     270
-        parking lot      75      75      75      75
-
-    The drop alone cannot touch ``85th street`` or ``sports field``: nothing
-    provenance-borne is inflating those, an ordinary word is. The weighting
-    alone cannot touch ``smith way`` or ``road``: ``smith`` is absent from
-    this bake, so it leaves the denominator and ``way`` -- still on all 5,257
-    rows via ``osm_id`` -- becomes the whole of it.
-
-    ``pool`` holds at its 3 ``leisure=swimming_pool`` rows, ``swimming pool``
-    at 34 and ``house`` at 3,414: a single satisfiable word is its own whole
-    denominator, and the corpus widening is untouched.
+    among the forms present), the same form the satisfiability test turns
+    on.
     """
     q_norm, qt, qw = clause[0], clause[1], clause[2]
     c = _fuzzy_normalize(candidate)
@@ -562,10 +422,9 @@ def fuzzy_match_score(clause: tuple, candidate: str, idf: dict) -> float:
     if not qt:
         return 0.0
     ct = {f for t in c.split() for f in _singular_forms(t)}
-    # How much of the query's IDF MASS was found -- a word counts once however
-    # many spellings of it exist (which is what keeps a plural query exactly
-    # as satisfiable as its singular), weighted by how rare it is, and only
-    # if some row could have covered it at all.
+    # How much of the query's IDF MASS was found: a word counts once however
+    # many spellings it has, weighted by its rarity, and only if some row
+    # could cover it.
     num = den = 0.0
     for forms in qw:
         w = min((idf[f] for f in forms if f in idf), default=0.0)
@@ -585,29 +444,17 @@ def find_score(q_data: tuple, search_text: str, name: str | None = None,
     over a row's ``search_text``, its ``name``, and its raw ``tags``.
 
     ``idf`` is the corpus token weighting (:func:`token_idf` over the SAME
-    rows being scored) the fuzz band divides by. It is required and
-    keyword-only: it is a property of the haystack, not of the row, and a
-    default would silently score one corpus's rows against another's
-    weights -- or against none.
+    rows being scored), required and keyword-only: it is a property of the
+    haystack, not of the row.
 
     Per clause (max over OR-clauses): exact name equality -> 1.0; the full
     MULTI-WORD clause phrase word-bounded inside the name ->
-    0.90+0.09*(length ratio) — a single-word clause never enters the
-    name-phrase tier (a generic head noun inside a longer proper name is a
-    lexical mention, not a semantic hit; it reaches names only through the
-    fuzz band, so its exact tag hit outranks it); the clause's ``key=value``
-    pair groups exactly matching row tags (any value-extension form — a
-    multi-word tag value matches whole) ->
-    0.80+0.09*(pairs matched / pairs given) — the COVERAGE fraction, so a
-    row matching both pairs of a two-pair query outranks a row matching
-    one; the whole clause exactly equal
+    0.90+0.09*(length ratio) (a single-word clause never enters this tier);
+    the clause's ``key=value`` pair groups exactly matching row tags ->
+    0.80+0.09*(pairs matched / pairs given); the whole clause exactly equal
     to ONE tag key or ONE tag value (a TAG-FAMILY token hit: 'parking' on an
-    amenity=parking row) -> 0.80 — an exact lexical hit on the tag
-    vocabulary, tiered WITH the k=v band so it outranks any proper-name
-    SUBSTRING / token-bag fuzz (both capped at 0.75); else the capped
-    token-bag / typo fuzz over search_text and name. Exactness is thereby
-    visible in the ordering — a saturated bag hit ranks below any exact
-    tier."""
+    amenity=parking row) -> 0.80; else the capped token-bag fuzz over
+    search_text and name. A saturated bag hit ranks below any exact tier."""
     name_norm = _fuzzy_normalize(name) if name else ""
     tag_pairs = None  # normalized lazily, once, only when a clause has k=v
     tag_tokens = None  # normalized whole keys/values, lazily, once
@@ -629,19 +476,15 @@ def find_score(q_data: tuple, search_text: str, name: str | None = None,
                     (_fuzzy_normalize(str(k)), _fuzzy_normalize(str(v)))
                     for k, v in tags.items()}
             # each GROUP counts when ANY of its value-extension forms equals
-            # a row tag (multi-word values match whole); the tier scores the
-            # COVERAGE fraction — a row matching both pairs of a two-pair
-            # query outranks a row matching one.
+            # a row tag; the tier scores the coverage fraction.
             matched = sum(
                 1 for grp in kv if any(p in tag_pairs for p in grp))
             if matched:
                 s = max(s, _KV_TIER_BASE + 0.09 * (matched / len(kv)))
         if s < _KV_TIER_BASE and q_norm and tags:
             # TAG-FAMILY token hit: the whole normalized clause equals a
-            # whole tag key or value. Strictly lexical whole-token equality
-            # — a token INSIDE a multi-word proper-name value ('parking'
-            # inside 'Parking End Cottages') does NOT qualify and stays in
-            # the fuzz band below.
+            # whole tag key or value ('parking' inside 'Parking End
+            # Cottages' does not qualify).
             if tag_tokens is None:
                 tag_tokens = set()
                 for k, v in tags.items():
