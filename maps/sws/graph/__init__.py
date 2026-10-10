@@ -9,7 +9,6 @@ from maps.sws.graph.model import (
     MapObject,
 )
 from maps.sws.graph.runtime import (
-    revoke_track_contribution,
     upsert_detected_centroid_only,
     upsert_tracked_detected,
     upsert_tracked_detected_batch,
@@ -20,7 +19,6 @@ __all__ = [
     "ObjectGraph",
     "build_object_graph",
     "load_graph",
-    "revoke_track_contribution",
     "save_graph",
     "upsert_detected_centroid_only",
     "upsert_tracked_detected",

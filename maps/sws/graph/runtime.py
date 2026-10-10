@@ -13,25 +13,10 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Iterable
 
 import numpy as np
 
 from maps.sws.graph.model import MapObject, ObjectGraph
-
-
-def revoke_track_contribution(
-    graph: ObjectGraph,
-    track_id: str,
-    *,
-    only_fids: Iterable[str] | None = None,
-) -> list[str]:
-    """The prebake fids ``track_id``'s fold was revoked from: always empty,
-    since a detection mints its own node and never folds onto a prebake.
-
-    ponytail: kept only for the attribution lifecycle in search_loop, which
-    still imports it; delete with that caller."""
-    return []
 
 
 # The color attrs of one best-view read, overwritten together.

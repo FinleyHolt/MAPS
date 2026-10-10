@@ -201,41 +201,6 @@ class SearchSnapshot:
     # The offline read of what the agent actually acquired.
 
 
-# Lifecycle parameters for the per-track prebake attribution state machine.
-# δ is the margin a competitor's per-frame score must exceed the held
-# attribution's EMA-smoothed score by before counting against the streak;
-# K is the consecutive-frame streak length that triggers a switch; α is
-# the EMA weight on the held attribution's accumulated score
-# (accumulated_score <- α * accumulated_score + (1 - α) * frame_score).
-# Starting values picked from intuition.
-_ATTRIBUTION_DELTA: float = 0.2  # TODO(calibrate)
-_ATTRIBUTION_K: int = 3  # TODO(calibrate)
-_ATTRIBUTION_ALPHA: float = 0.7  # TODO(calibrate)
-
-
-@dataclass
-class AttributionState:
-    """One track's prebake-attribution lifecycle, owned by ``_State``.
-
-    The matcher in ``maps.sws.graph.runtime`` decides per-frame which
-    prebake (or prebakes, under the covers rule) a SAM mask attributes
-    to and folds geometric truth onto each. This dataclass records the
-    soft commitment: which prebake the track is currently "stamped as"
-    and how strongly the recent frames have supported that commitment.
-    The strengthen / hold / switch / detach decisions in
-    :meth:`SearchLoop._apply_attribution_lifecycle` consult and update
-    this state.
-    """
-
-    matched_fid: str | None = None
-    last_frame_score: float = 0.0
-    accumulated_score: float = 0.0
-    frames_held: int = 0
-    competitor_fid: str | None = None
-    competitor_streak: int = 0
-    competitor_accumulated: float = 0.0
-
-
 @dataclass
 class _State:
     """Mutable internal state. Mirrors the autonomy fields that used to
@@ -257,21 +222,6 @@ class _State:
     termination_decisions: list[dict] = field(default_factory=list)
     # Monotonic turn counter. Collapsed turns do not bump it.
     compile_seq: int = 0
-    # Per-track prebake-attribution lifecycle. Populated by
-    # ``_apply_attribution_lifecycle`` after each ``upsert_tracked_detected_batch``.
-    # Keyed by raw SAM track id (the same id world_state passes through
-    # the upsert path); the state carries the held attribution, the EMA
-    # score, the leading competitor's streak, and the prior frame's
-    # folded-onto fids so revokes can be exact.
-    _track_attribution: dict[str, AttributionState] = field(default_factory=dict)
-    # Per-frame raw_sam_id -> detected_<N> map populated by the upsert in
-    # ``_upsert_detections``. The world tracker's exact ByteTrack
-    # ``track_id`` collapses cross-frame re-identifications inside
-    # ``upsert_tracked_detected``, so this map carries only the current
-    # frame's raw SAM ids back to the stable ``detected_<N>`` they
-    # resolved to. Every downstream cache keys off ``detected_<N>``
-    # directly.
-    _raw_to_detected: dict[str, str] = field(default_factory=dict)
     # ----------------------------------------------------------------
     # Persistent reasoner state (per-stop conversations).
     # ----------------------------------------------------------------
@@ -1480,11 +1430,6 @@ class SearchLoop:
         # on whatever detections arrive (image-mode SAM, video, or
         # synthetic) — it is situation-agnostic.
         self._world_tracker.update(detections)
-        # Reset per-frame raw-id -> detected_<N> map. With the world
-        # tracker on, the raw id is the stable 'wt_<n>'; this map is the
-        # by-product so downstream scout code can resolve ``det`` ->
-        # runtime-graph id without re-running the match.
-        s._raw_to_detected = {}
         # Pass the world-tracker ``track_id`` straight through to the
         # world-state upsert. That ByteTrack id is the sole re-id signal:
         # ``_find_track`` resolves it by exact match, so cross-frame re-ID
@@ -1524,77 +1469,35 @@ class SearchLoop:
                     }
                 )
                 batch_index_map.append(i)
-            # Reset the per-graph dedup sidecar before this batch so any
-            # records the matcher writes belong to this frame's detections.
-            s.runtime_graph.__dict__["_dedup_by_track_id"] = {}
             fids_out = upsert_tracked_detected_batch(
                 s.runtime_graph,
                 batch_replaces,
             )
-            dedup_sidecar = s.runtime_graph.__dict__.get("_dedup_by_track_id", {})
             for src_i, fid in zip(batch_index_map, fids_out):
                 upsert_ids[src_i] = fid
-                # Copy the matcher's dedup record back onto the
-                # DetectedObject metadata. Detected nodes carry the
-                # record in ``node.tags['dedup']``; prebake attributions
-                # carry it in the per-graph sidecar (the prebake itself
-                # is immutable, so tags can't be stamped on it).
-                track_id = (detections[src_i].metadata or {}).get("track_id")
-                dedup_payload = None
+                # Copy the node's dedup record onto the detection metadata.
                 node = s.runtime_graph.nodes.get(fid)
                 if node is not None and "dedup" in node.tags:
                     try:
                         dedup_payload = json.loads(node.tags["dedup"])
                     except Exception:
                         dedup_payload = node.tags["dedup"]
-                elif track_id and track_id in dedup_sidecar:
-                    dedup_payload = dedup_sidecar[track_id]
-                if dedup_payload is not None:
                     detections[src_i].metadata["dedup"] = dedup_payload
-            # Materialise dedup records also from detected-node tags so the
-            # lifecycle state machine sees every track this frame, not only
-            # those that landed in the per-graph sidecar (prebake-attributed
-            # path). Detected-node folds stamp tags["dedup"] which the per-
-            # graph sidecar does not see, so without this we'd miss the
-            # detect→detect re-id case.
-            lifecycle_sidecar: dict = dict(dedup_sidecar)
-            for src_i, fid in zip(batch_index_map, fids_out):
-                track_id = (detections[src_i].metadata or {}).get("track_id")
-                if not track_id or track_id in lifecycle_sidecar:
-                    continue
-                node = s.runtime_graph.nodes.get(fid)
-                if node is None or "dedup" not in node.tags:
-                    continue
-                try:
-                    parsed = json.loads(node.tags["dedup"])
-                except Exception:
-                    continue
-                if isinstance(parsed, dict):
-                    lifecycle_sidecar[track_id] = parsed
-            self._apply_attribution_lifecycle(dedup_sidecar=lifecycle_sidecar)
             s.runtime_graph.step_index = step
             s.runtime_graph.tau = now
 
         step_detections: list[dict] = []
         for i, det in enumerate(detections):
             ev = evidence_by_idx[i]
-            if i in upsert_ids:
-                upserted_id = upsert_ids[i]
-            else:
+            if i not in upsert_ids:
                 node = _detection_to_mapobject(det, bounds_min, cell_size_m, now)
-                upserted_id = upsert_detected_centroid_only(
+                upsert_detected_centroid_only(
                     s.runtime_graph,
                     node,
                     now=now,
                     step_index=step,
                     evidence_id=ev.id,
                 )
-            # Per-frame raw_sam_id -> detected_<N> map. Every downstream
-            # scout cache (votes, verdicts, snapshots, dispatch count) keys
-            # off detected_<N> directly.
-            raw_id = self._detection_id(det)
-            if raw_id and isinstance(upserted_id, str):
-                s._raw_to_detected[raw_id] = upserted_id
             det_record = {
                 "world_xy": list(det.world_xy),
                 "label": det.label,
@@ -1613,183 +1516,6 @@ class SearchLoop:
             step_detections.append(det_record)
 
         return upsert_ids, evidence_by_idx, step_detections
-
-    def _apply_attribution_lifecycle(self, *, dedup_sidecar: dict) -> None:
-        """Strengthen / hold / switch / detach the per-track prebake commitment.
-
-        Reads the matcher's top-3 candidates from the dedup sidecar for
-        each track this frame, consults :attr:`_State._track_attribution`,
-        and updates it. On ``switch`` and ``detach`` the lifecycle calls
-        :func:`maps.sws.graph.revoke_track_contribution` so the
-        previous frames' folds onto the now-abandoned prebake(s) are
-        subtracted from the aggregate evidence ledger; on ``detach`` the
-        detected node's ``matched_prebake_id`` stamp is cleared so the
-        planner stops treating the node as anchored to a stale prebake.
-
-        Per the eager-commit posture, the matcher has already folded
-        this frame's geometric truth onto whichever prebake(s) the
-        coverage rule selected. The lifecycle never undoes the current
-        frame's fold; it only revokes prior frames' folds when the held
-        commitment is broken.
-        """
-        from maps.sws.graph import revoke_track_contribution
-
-        s = self.state
-
-        for track_id, rec in dedup_sidecar.items():
-            if not isinstance(rec, dict):
-                continue
-            top3 = rec.get("top3") or []
-            match_block = rec.get("match") or {}
-            primary = match_block.get("fid")
-            match_score = float(rec.get("match_score", 0.0))
-            if top3:
-                top1 = top3[0]
-                top1_fid = top1.get("fid")
-                top1_frac_in = float(top1.get("frac_in_sam", 0.0))
-                top1_frac_of = float(top1.get("frac_of_prebake", 0.0))
-                top1_score = max(top1_frac_in, top1_frac_of)
-                top1_passed = bool(top1.get("gate_passed"))
-            else:
-                top1 = None
-                top1_fid = None
-                top1_score = 0.0
-                top1_passed = False
-
-            prev = s._track_attribution.get(track_id)
-
-            # Lifecycle branches decouple the per-frame fold gate from the
-            # commitment decision:
-            #
-            #   - top3 empty            -> detach   (no SAM candidates at all)
-            #   - top1 == matched_fid   -> strengthen if gate passed, else
-            #                              hold_subgate (commitment still
-            #                              geometrically consistent; this
-            #                              frame just dipped under the gate)
-            #   - top1 != matched_fid   -> switch streak when margin > δ AND
-            #                              the competitor cleared the gate;
-            #                              hold_competitor otherwise.
-            #
-            # The per-frame matcher gate (frac_in or frac_of ≥ threshold)
-            # only governs whether to FOLD this frame's evidence onto the
-            # ledger; it does not govern the commitment stamp. Conflating
-            # the two caused a single sub-gate frame to revoke an entire
-            # multi-frame attribution history.
-            if prev is None or prev.matched_fid is None:
-                if primary is not None and top1_passed:
-                    s._track_attribution[track_id] = AttributionState(
-                        matched_fid=primary,
-                        last_frame_score=match_score or top1_score,
-                        accumulated_score=match_score or top1_score,
-                        frames_held=1,
-                    )
-                else:
-                    # No prior commitment, and no candidate cleared the
-                    # gate this frame either: nothing to hold.
-                    continue
-            elif top1 is None:
-                # Truly absent: matcher returned no candidates for this
-                # track this frame (z-gap filtered all of them out, or
-                # the voxel set was empty). Revoke the held commitment
-                # from the prebake's ledger.
-                revoke_track_contribution(
-                    s.runtime_graph,
-                    track_id,
-                    only_fids=[prev.matched_fid],
-                )
-                self._clear_matched_prebake_stamp_for_track(track_id)
-                s._track_attribution.pop(track_id, None)
-            elif top1_fid == prev.matched_fid:
-                if top1_passed:
-                    new_acc = (
-                        _ATTRIBUTION_ALPHA * prev.accumulated_score
-                        + (1.0 - _ATTRIBUTION_ALPHA) * top1_score
-                    )
-                    s._track_attribution[track_id] = AttributionState(
-                        matched_fid=prev.matched_fid,
-                        last_frame_score=top1_score,
-                        accumulated_score=new_acc,
-                        frames_held=prev.frames_held + 1,
-                        competitor_fid=None,
-                        competitor_streak=0,
-                        competitor_accumulated=0.0,
-                    )
-                else:
-                    # Same prebake is still #1 by geometric overlap, but
-                    # the per-frame gate just barely missed. Hold the
-                    # commitment; let the EMA decay so a prolonged sub-
-                    # gate drift will eventually be overtaken by a
-                    # competitor.
-                    s._track_attribution[track_id] = AttributionState(
-                        matched_fid=prev.matched_fid,
-                        last_frame_score=top1_score,
-                        accumulated_score=_ATTRIBUTION_ALPHA * prev.accumulated_score,
-                        frames_held=prev.frames_held + 1,
-                        competitor_fid=None,
-                        competitor_streak=0,
-                        competitor_accumulated=0.0,
-                    )
-            else:
-                margin = top1_score - prev.accumulated_score
-                if margin > _ATTRIBUTION_DELTA and top1_passed:
-                    if prev.competitor_fid == top1_fid:
-                        new_streak = prev.competitor_streak + 1
-                        new_comp_acc = (
-                            _ATTRIBUTION_ALPHA * prev.competitor_accumulated
-                            + (1.0 - _ATTRIBUTION_ALPHA) * top1_score
-                        )
-                    else:
-                        new_streak = 1
-                        new_comp_acc = top1_score
-                    if new_streak >= _ATTRIBUTION_K:
-                        revoke_track_contribution(
-                            s.runtime_graph,
-                            track_id,
-                            only_fids=[prev.matched_fid],
-                        )
-                        s._track_attribution[track_id] = AttributionState(
-                            matched_fid=top1_fid,
-                            last_frame_score=top1_score,
-                            accumulated_score=new_comp_acc,
-                            frames_held=1,
-                        )
-                    else:
-                        s._track_attribution[track_id] = AttributionState(
-                            matched_fid=prev.matched_fid,
-                            last_frame_score=prev.last_frame_score,
-                            accumulated_score=prev.accumulated_score,
-                            frames_held=prev.frames_held + 1,
-                            competitor_fid=top1_fid,
-                            competitor_streak=new_streak,
-                            competitor_accumulated=new_comp_acc,
-                        )
-                else:
-                    # Competitor is #1 this frame but either the margin
-                    # isn't decisive or the competitor itself didn't pass
-                    # the gate. Hold the commitment; decay the EMA.
-                    s._track_attribution[track_id] = AttributionState(
-                        matched_fid=prev.matched_fid,
-                        last_frame_score=prev.last_frame_score,
-                        accumulated_score=_ATTRIBUTION_ALPHA * prev.accumulated_score,
-                        frames_held=prev.frames_held + 1,
-                        competitor_fid=None,
-                        competitor_streak=0,
-                        competitor_accumulated=0.0,
-                    )
-
-    def _clear_matched_prebake_stamp_for_track(self, track_id: str) -> None:
-        """On detach, clear ``matched_prebake_id`` on any detected node carrying this track.
-
-        The stamp is "current best near-miss", so when the lifecycle
-        revokes the held attribution the node should no longer advertise
-        the now-abandoned prebake to the planner. Next frame the matcher
-        can re-attribute cleanly.
-        """
-        graph = self.state.runtime_graph
-        for fid, node in getattr(graph, "nodes", {}).items():
-            if getattr(node, "track_id", None) == track_id:
-                if getattr(node, "matched_prebake_id", None) is not None:
-                    node.matched_prebake_id = None
 
     @staticmethod
     def _detection_id(det) -> str:
