@@ -177,3 +177,22 @@ def test_the_ring_reads_a_recording_at_the_spill_rate_posed_by_its_own_fixes_and
     assert jpeg == jpegs[10] and seq == 10 and log_time == t0 + 10**9 + 1
     assert tag["lat"] == pytest.approx(35.0 + 80.0 / 111_320.0, abs=1e-9) and tag["heading_deg"] == 0.0
     assert ring.frame(11) is None and ring.last_error
+
+
+def test_the_recorded_reasoner_settings_stand_only_in_a_forced_replay(monkeypatch):
+    from types import SimpleNamespace
+
+    flags = {"SEARCH_COMPACT_TOKENIZER_NAME": "recorded/tok", "SEARCH_SAMPLING_REASONING_EFFORT": "0.9",
+             "SEARCH_MAP_MAX_PX": "1024", "SEARCH_CALCITY_TILES": "/aircraft/tiles"}
+    rec = SimpleNamespace(row={"search_env_flags": flags})
+    for k in flags:
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("SEARCH_COMPACT_TOKENIZER_NAME", "mine/tok")
+    R._arm_env(rec, forced=False)
+    import os
+    assert os.environ["SEARCH_COMPACT_TOKENIZER_NAME"] == "mine/tok"
+    assert "SEARCH_SAMPLING_REASONING_EFFORT" not in os.environ
+    assert os.environ["SEARCH_MAP_MAX_PX"] == "1024" and "SEARCH_CALCITY_TILES" not in os.environ
+    R._arm_env(rec, forced=True)
+    assert os.environ["SEARCH_COMPACT_TOKENIZER_NAME"] == "recorded/tok"
+    assert os.environ["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.9"

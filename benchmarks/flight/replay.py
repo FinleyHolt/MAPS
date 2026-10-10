@@ -525,11 +525,17 @@ def diff(rec: Recording, replay_dir: Path) -> dict[str, Any]:
 # -- the driver ----------------------------------------------------------------
 
 
-def _arm_env(rec: Recording) -> None:
+#: The recorded reasoner's own settings: a forced replay speaks as it did, any
+#: other replay uses the reasoner the caller brings.
+_REASONER_FLAGS = ("SEARCH_COMPACT_TOKENIZER_NAME", "SEARCH_SAMPLING_REASONING_EFFORT")
+
+
+def _arm_env(rec: Recording, *, forced: bool) -> None:
     """The recorded arm's environment flags, the aircraft's paths excepted."""
     for k, v in (rec.row.get("search_env_flags") or {}).items():
-        if not _PATH_FLAG.search(k) and v is not None:
-            os.environ[k] = str(v)
+        if _PATH_FLAG.search(k) or v is None or (k in _REASONER_FLAGS and not forced):
+            continue
+        os.environ[k] = str(v)
 
 
 def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | None = None, live=None,
@@ -537,7 +543,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         reasoning_effort: str | None = None) -> tuple[ReplayMission, Path]:
     """Fly ``rec`` again under ``out/<sortie>/``; ``live`` is a live source (the
     frame tier), else the bank answers. Returns the mission, ended, and its folder."""
-    _arm_env(rec)
+    _arm_env(rec, forced=forced)
     os.environ["SEARCH_BENCHMARK_NAME"] = "calcity"
     from benchmarks.calcity._citynav_bridge import activate  # noqa: PLC0415
 
