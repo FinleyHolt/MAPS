@@ -9,7 +9,6 @@ from __future__ import annotations
 import numpy as np
 
 from maps.sws.graph import (
-    attach_mask_cache,
     upsert_tracked_detected,
     upsert_tracked_detected_batch,
 )
@@ -42,7 +41,6 @@ def _make_features(n_prebake: int = 4, grid=(32, 32)) -> dict:
 def _make_seed_graph(grid=(32, 32)):
     features = _make_features(n_prebake=4, grid=grid)
     graph = build_object_graph(features, cell_size_m=5.0)
-    attach_mask_cache(graph, grid, features=features)
     return graph
 
 
@@ -211,7 +209,7 @@ def test_car_and_gray_car_stay_separate_layers_batch_path(monkeypatch):
             "evidence_id": None,
         },
     ]
-    out = upsert_tracked_detected_batch(graph, replaces, grid_shape=grid)
+    out = upsert_tracked_detected_batch(graph, replaces)
 
     assert len(out) == 2
     assert len(set(out)) == 2

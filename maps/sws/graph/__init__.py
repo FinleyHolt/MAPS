@@ -4,12 +4,6 @@ from maps.sws.graph.io import (
     load_graph,
     save_graph,
 )
-from maps.sws.graph.mask_cache import (
-    MaskCache,
-    attach_mask_cache,
-    build_mask_cache,
-    get_mask_cache,
-)
 from maps.sws.graph.model import (
     ObjectGraph,
     MapObject,
@@ -25,15 +19,11 @@ from maps.sws.graph.runtime import (
 )
 
 __all__ = [
-    "MaskCache",
     "MapObject",
     "ObjectGraph",
     "PrebakeEvidence",
     "TrackContribution",
-    "attach_mask_cache",
-    "build_mask_cache",
     "build_object_graph",
-    "get_mask_cache",
     "get_prebake_evidence",
     "load_graph",
     "revoke_track_contribution",

@@ -11,8 +11,7 @@ aggregates).
 The graph is nodes-only: it carries no spatial edges. The reasoner reasons
 over the ``analyze_scene`` surface, which grounds via ``node.centroid``, and
 every spatial relation is computed geometrically from node xy/cells by the
-geom_compute ops. ``ObjectGraph._mask_cache`` is a thin scalar ledger
-(fid → centroid/cell_count, ``mask_cache.MaskCache``).
+geom_compute ops.
 ``upsert_detected_centroid_only`` is the off-canonical insurance mint.
 """
 
@@ -29,12 +28,6 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-from maps.sws.graph.mask_cache import (
-    MaskCache,
-    attach_mask_cache,
-    get_mask_cache,
-    infer_grid_shape,
-)
 from maps.sws.graph.model import MapObject, ObjectGraph
 
 
@@ -283,24 +276,6 @@ def upsert_prior_percept(
     return True
 
 
-def _ensure_mask_cache(
-    graph: ObjectGraph, *, grid_shape: tuple[int, int] | None
-) -> MaskCache:
-    """Return the graph's mask cache, building one lazily if missing.
-
-    The runner and bake should call ``attach_mask_cache`` with the exact
-    ``grid_shape`` and ``features`` dict. Tests and tools without those
-    in hand fall through to a bbox-inferred cache: correct for point
-    detections and good enough for approximate overlap against prebake
-    bboxes.
-    """
-    cache = get_mask_cache(graph)
-    if cache is not None:
-        return cache
-    shape = grid_shape if grid_shape is not None else infer_grid_shape(graph)
-    return attach_mask_cache(graph, shape)
-
-
 def _next_detected_id(graph: ObjectGraph) -> str:
     """Return the next ``detected_<idx>`` id for ``graph``.
 
@@ -347,8 +322,7 @@ def upsert_detected_centroid_only(
     detection (the world tracker) and routes through
     :func:`upsert_tracked_detected_batch`; this handles only a track_id-less
     detection, which the world-state cleanout reduced to a centroid-only node
-    (``cells``/``embedding`` are already None from the producer; the mask
-    cache is a scalar ledger). ByteTrack is
+    (``cells``/``embedding`` are already None from the producer). ByteTrack is
     the sole re-id signal, so a detection without a ``track_id`` mints its own
     node — there is deliberately no IoU/centroid/embedding dedup fallback.
     """
@@ -367,15 +341,6 @@ def upsert_detected_centroid_only(
     graph.nodes[fid] = node
     if graph.objects_by_class:
         graph.objects_by_class.setdefault(node.class_name, {})[fid] = node
-    # Keep the scalar ledger consistent with graph.nodes (so `fid in cache` /
-    # len(cache) count this node), if a cache is attached.
-    cache = get_mask_cache(graph)
-    if cache is not None:
-        cache.add(
-            fid,
-            centroid=(float(node.centroid[0]), float(node.centroid[1])),
-            cell_count=int(node.cell_count),
-        )
     if step_index is not None:
         graph.step_index = step_index
     graph.tau = now
@@ -496,24 +461,6 @@ def _stamp_cells(
     derive_centerlines({node.id: node}, float(cell_size_m))
 
 
-def _assert_cells_in_grid(
-    rows: np.ndarray, cols: np.ndarray, grid_shape: tuple[int, int]
-) -> None:
-    """Reject cells projected against a different grid than the cache's.
-
-    The guard a dense ``(H, W)`` mask used to give for free via its shape:
-    cells built at the wrong tile resolution land silently inside a larger
-    grid and corrupt every centroid and mask-cache row derived from them.
-    """
-    H, W = grid_shape
-    if rows.size == 0:
-        return
-    if int(rows.min()) < 0 or int(rows.max()) >= H:
-        raise ValueError(f"projected rows outside cache grid {(H, W)}")
-    if int(cols.min()) < 0 or int(cols.max()) >= W:
-        raise ValueError(f"projected cols outside cache grid {(H, W)}")
-
-
 def upsert_tracked_detected(
     graph: ObjectGraph,
     *,
@@ -525,20 +472,17 @@ def upsert_tracked_detected(
     frame_idx: int,
     now: float | None = None,
     evidence_id: str | None = None,
-    grid_shape: tuple[int, int] | None = None,
 ) -> str:
     """Upsert a tracked detection from its projected ground cells.
 
     ``rows`` / ``cols`` are the deduplicated occupied cells of the
-    detection's footprint on the cache grid, in row-major order
+    detection's footprint on the tile grid, in row-major order
     (``TileProjectedMask.rows`` / ``.cols``).
 
-    First sighting of ``track_id`` allocates a new ``detected_*`` node and
-    pushes the mask into the ``MaskCache``.
+    First sighting of ``track_id`` allocates a new ``detected_*`` node.
 
     Repeat sightings look up the existing node by ``track_id`` (ByteTrack
-    is the sole dedup) and replace the node attrs + ``MaskCache`` row in
-    place.
+    is the sole dedup) and replace the node attrs in place.
 
     ``base_node`` carries the class/tags/label/embedding for fresh
     inserts; its centroid and footprint are overwritten from the cells so
@@ -549,13 +493,10 @@ def upsert_tracked_detected(
             "upsert_tracked_detected only accepts provenance='detected' nodes"
         )
 
-    cache = _ensure_mask_cache(graph, grid_shape=grid_shape)
     now = now if now is not None else time.time()
-    H, W = cache.grid_shape
 
     hm_rows = np.asarray(rows)
     hm_cols = np.asarray(cols)
-    _assert_cells_in_grid(hm_rows, hm_cols, (H, W))
 
     existing_fid = _find_track(graph, track_id)
 
@@ -609,13 +550,6 @@ def upsert_tracked_detected(
         graph.nodes[fid] = base_node
         if graph.objects_by_class:
             graph.objects_by_class.setdefault(base_node.class_name, {})[fid] = base_node
-
-        # Keep the mask-cache ledger row consistent with graph.nodes.
-        cache.add(
-            fid,
-            centroid=(float(centroid_rc[0]), float(centroid_rc[1])),
-            cell_count=cell_count,
-        )
         return fid
 
     # Repeat sighting: update the existing node in place.
@@ -665,12 +599,6 @@ def upsert_tracked_detected(
         prebake_info=None,
     )
 
-    cache.replace(
-        existing_fid,
-        centroid=(float(centroid_rc[0]), float(centroid_rc[1])),
-        cell_count=cell_count,
-    )
-
     return existing_fid
 
 
@@ -692,9 +620,7 @@ def _find_track(graph: ObjectGraph, track_id: str) -> str | None:
 def upsert_tracked_detected_batch(
     graph: ObjectGraph,
     replaces: list[dict],
-    *,
-    grid_shape: tuple[int, int] | None = None,
 ) -> list[str]:
     """Apply :func:`upsert_tracked_detected` to each replace dict in order;
     the node ids in input order."""
-    return [upsert_tracked_detected(graph, **r, grid_shape=grid_shape) for r in replaces]
+    return [upsert_tracked_detected(graph, **r) for r in replaces]

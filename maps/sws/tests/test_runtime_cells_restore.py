@@ -12,7 +12,6 @@ from __future__ import annotations
 import numpy as np
 
 from maps.sws.graph import (
-    attach_mask_cache,
     upsert_tracked_detected,
     upsert_tracked_detected_batch,
 )
@@ -20,14 +19,13 @@ from maps.sws.graph.builder import build_object_graph
 from maps.sws.graph.model import MapObject
 
 
-def _seed_graph(grid=(32, 32)):
+def _seed_graph():
     feats = {"buildings": [{
         "name": "bldg_0",
         "cells": [[r, c] for r in range(5, 9) for c in range(5, 9)],
         "centroid_row": 7, "centroid_col": 7,
     }]}
     g = build_object_graph(feats, cell_size_m=2.0)
-    attach_mask_cache(g, grid, features=feats)
     return g
 
 
@@ -59,7 +57,7 @@ def _sparse(mask):
 
 def test_fresh_detection_stores_cells_matching_projection():
     grid = (32, 32)
-    g = _seed_graph(grid)
+    g = _seed_graph()
     mask = _square_mask(grid, 10, 12, 3)
     fid = upsert_tracked_detected(
         g, track_id="t1", base_node=_det_node("t1"), **_sparse(mask),
@@ -77,7 +75,7 @@ def test_fresh_detection_stores_cells_matching_projection():
 
 def test_repeat_sighting_restamps_cells_and_keeps_one_node():
     grid = (32, 32)
-    g = _seed_graph(grid)
+    g = _seed_graph()
     m0 = _square_mask(grid, 10, 12, 3)
     fid0 = upsert_tracked_detected(
         g, track_id="t1", base_node=_det_node("t1"), **_sparse(m0),
@@ -97,7 +95,7 @@ def test_repeat_sighting_restamps_cells_and_keeps_one_node():
 
 def test_distinct_track_ids_mint_distinct_nodes_each_with_cells():
     grid = (32, 32)
-    g = _seed_graph(grid)
+    g = _seed_graph()
     m1 = _square_mask(grid, 5, 5, 2)
     m2 = _square_mask(grid, 20, 20, 3)
     f1 = upsert_tracked_detected(
@@ -116,7 +114,7 @@ def test_distinct_track_ids_mint_distinct_nodes_each_with_cells():
 
 def test_batch_repeat_path_restamps_cells():
     grid = (32, 32)
-    g = _seed_graph(grid)
+    g = _seed_graph()
     m0 = _square_mask(grid, 8, 8, 3)
     fid = upsert_tracked_detected(
         g, track_id="t1", base_node=_det_node("t1"), **_sparse(m0),
@@ -128,6 +126,6 @@ def test_batch_repeat_path_restamps_cells():
         "track_id": "t1", "base_node": _det_node("t1"), **_sparse(m1),
         "confidence": 0.8, "frame_idx": 1, "now": 1.0,
         "evidence_id": None,
-    }], grid_shape=grid)
+    }])
     assert out == [fid]                                    # folded onto the same node
     assert _cells_of(m1) == {(int(r), int(c)) for r, c in g.nodes[fid].cells}

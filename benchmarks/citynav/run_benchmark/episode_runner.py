@@ -29,7 +29,7 @@ from maps.search import (
 )
 from maps.sws import GridDomain, WorldState
 from maps.search.withhold import withheld
-from maps.sws.graph import attach_mask_cache, build_object_graph
+from maps.sws.graph import build_object_graph
 import math
 import numpy as np
 import os
@@ -162,15 +162,6 @@ def run_episode(
     graph_stem = tile_stem(episode.map_name)
     log.info("tile_stem=%s map_name=%s", graph_stem, episode.map_name)
     graph, prior_features = _episode_graph(graph_stem, assets)
-
-    # Attach a mask cache so runtime upserts keep the fid ledger consistent
-    # with graph.nodes. Seeded from the per-tile features.json so prebake
-    # masks use their precise cell lists; detected nodes extend it row by row.
-    #
-    # World-state cleanout: the mask cache is a trivial scalar ledger
-    # (fid -> centroid/cell_count) rebuilt from graph.nodes in ~ms — there is
-    # no dense disk twin to resume and no shared-tile_stem concurrent clobber.
-    attach_mask_cache(graph, assets.grid_shape, features=prior_features)
 
     if cfg.spawn == "uniform":
         # Seeded uniform spawn over the tile (run_benchmark.spawn). The
