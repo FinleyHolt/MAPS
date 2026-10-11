@@ -1,9 +1,8 @@
 """Sensor parameterization for the perception + planner path.
 
 One dataclass (`SensorSpec`) carries every piece of geometry a downstream
-consumer needs: camera intrinsics, mount pitch, range limits, world-fixed
-yaw, depth-integration subsample, and body-frame mount offsets. One
-registry (`_REGISTRY`) and one constructor (`resolve_sensor`) turn a
+consumer needs: camera intrinsics, mount angles, range limit and world-fixed
+yaw. One registry (`_REGISTRY`) and one constructor (`resolve_sensor`) turn a
 string name or inline dict into a fully-populated spec.
 
 Two yaws, and they compose at different points. ``world_yaw_deg`` is the
@@ -128,49 +127,22 @@ class SensorSpec:
     """Per-sensor geometry. Immutable.
 
     ``mount_pitch_deg`` is positive-down in the body frame (+90 = nadir).
-    Range and body-offset fields carry defaults for a short-range oblique
-    stereo mount; the nadir entries override them.
+    The ``max_range_m`` default is a short-range stereo envelope; both
+    registered sensors set it infinite.
     """
 
     name: str
     intrinsics: CameraIntrinsics
     mount_pitch_deg: float
     max_range_m: float = 30.0
-    min_range_m: float = 0.3
     world_yaw_deg: float = 0.0
     mount_roll_deg: float = 0.0
     mount_yaw_deg: float = 0.0
-    depth_subsample: int = 4
-    body_offset_x: float = 0.12
-    body_offset_y: float = 0.0
-    body_offset_z: float = -0.05
     description: str = ""
     """Operator-readable summary of what this rig observes and what it
     does NOT observe. Patched into the reasoner's system prompt so it does
     not request SAM segmentations the geometry cannot confirm. Every entry
     in ``_REGISTRY`` populates this field."""
-
-
-    def to_dict(self) -> dict[str, Any]:
-        """Flat JSON-safe serialization (used in episode.json)."""
-        return {
-            "name": self.name,
-            "hfov_deg": float(self.intrinsics.hfov_deg),
-            "vfov_deg": float(self.intrinsics.vfov_deg),
-            "image_width": int(self.intrinsics.image_width),
-            "image_height": int(self.intrinsics.image_height),
-            "mount_pitch_deg": float(self.mount_pitch_deg),
-            "max_range_m": float(self.max_range_m),
-            "min_range_m": float(self.min_range_m),
-            "world_yaw_deg": float(self.world_yaw_deg),
-            "mount_yaw_deg": float(self.mount_yaw_deg),
-            "mount_roll_deg": float(self.mount_roll_deg),
-            "depth_subsample": int(self.depth_subsample),
-            "body_offset_x": float(self.body_offset_x),
-            "body_offset_y": float(self.body_offset_y),
-            "body_offset_z": float(self.body_offset_z),
-            "description": str(self.description),
-        }
 
 
 # Teledyne FLIR Oryx ORX-10GS-32S4C (3.2 MP, 2048x1536, Sony IMX252: a
@@ -249,12 +221,7 @@ _REGISTRY: dict[str, SensorSpec] = {
         # carries no sensor), live on the field DEM path.
         mount_pitch_deg=90.0,
         max_range_m=float("inf"),
-        min_range_m=0.3,
         world_yaw_deg=0.0,
-        depth_subsample=1,
-        body_offset_x=0.0,
-        body_offset_y=0.0,
-        body_offset_z=0.0,
         description=_NADIR_1008_90_DESCRIPTION,
     ),
     "oryx_orx32_25mm_nadir": SensorSpec(
@@ -264,7 +231,6 @@ _REGISTRY: dict[str, SensorSpec] = {
         # Depth is DSM-raycast (no stereo); 8 km march cap lives in the
         # renderer, so the sensor envelope is effectively infinite.
         max_range_m=float("inf"),
-        min_range_m=0.3,
         # Belly-mounted on the C-12, roughly under the CG, and installed
         # facing AFT: the frame's top is the tail, not the nose. The frames
         # say so with no map at all: the ground moves UP the frame on both
@@ -273,9 +239,6 @@ _REGISTRY: dict[str, SensorSpec] = {
         # forward mount sees it move down. A heading-sign error would swap
         # which way between the two headings; a mount reads the same on both.
         mount_yaw_deg=180.0,
-        body_offset_x=0.0,
-        body_offset_y=0.0,
-        body_offset_z=-0.5,
         description=_ORYX_ORX32_25MM_NADIR_DESCRIPTION,
     ),
 }
@@ -304,9 +267,11 @@ def list_sensors() -> list[str]:
     return sorted(_REGISTRY.keys())
 
 
-# What an inline override may name: a registered base and SensorSpec.to_dict's keys.
-_INLINE_KEYS = frozenset({"base", *_REGISTRY["nadir_1008_90"].to_dict()})
 _INTRINSIC_KEYS = tuple(f.name for f in fields(CameraIntrinsics))
+# Keys the flown boresight chains carry in their inline sensor that nothing reads.
+_IGNORED_KEYS = frozenset({"min_range_m", "depth_subsample", "body_offset_x", "body_offset_y", "body_offset_z"})
+# What an inline override may name: a registered base, the intrinsics, and SensorSpec's other fields.
+_INLINE_KEYS = frozenset({"base", *_INTRINSIC_KEYS, *(f.name for f in fields(SensorSpec)), *_IGNORED_KEYS}) - {"intrinsics"}
 
 
 def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
@@ -340,7 +305,7 @@ def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
     base = _REGISTRY[str(base_name)] if base_name is not None else _REGISTRY["nadir_1008_90"]
     over = {}
     for k, v in spec.items():
-        if k not in ("base", "name"):
+        if k not in ("base", "name", *_IGNORED_KEYS):
             held = base.intrinsics if k in _INTRINSIC_KEYS else base
             over[k] = type(getattr(held, k))(v)  # the type the base value carries
     intr = replace(base.intrinsics, **{k: over.pop(k) for k in _INTRINSIC_KEYS if k in over})
