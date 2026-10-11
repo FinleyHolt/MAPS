@@ -1,4 +1,4 @@
-"""Differential battery for the frame/handedness laws — shapely as oracle."""
+"""Differential battery for the chart/compass laws — shapely as oracle."""
 from __future__ import annotations
 
 import math
@@ -8,8 +8,6 @@ from shapely.geometry import LineString, Point, Polygon
 
 from maps.search.analyze_scene.geom_compute import (
     COMPASS_UNIT,
-    _frame_relative,
-    _frame_viewer,
     bearing,
     cardinal,
     contour_shape_features,
@@ -112,71 +110,6 @@ def test_bearing_and_cardinal_pin_compass_convention():
 def _rot(theta: float, p: list[float]) -> list[float]:
     c, s = math.cos(theta), math.sin(theta)
     return [c * p[0] - s * p[1], s * p[0] + c * p[1]]
-
-
-def test_view_frames_are_rotation_equivariant():
-    # A PROPER rotation of the whole scene (pool + reference) leaves
-    # op_x/op_y invariant. A reflection hiding anywhere in the basis
-    # derivation breaks this for generic angles.
-    r = _rng(7)
-    checked = 0
-    for _ in range(60):
-        theta = r.uniform(0.1, 2 * math.pi)
-        pool = [{"fid": f"p{i}", "xy": [r.uniform(-40, 40), r.uniform(-40, 40)]}
-                for i in range(5)]
-        ref = [r.uniform(-60, 60), r.uniform(-60, 60)]
-        side = r.choice(["right", "left", "top", "bottom"])
-        base = _frame_relative([dict(p) for p in pool], ref, side)
-        rot = _frame_relative(
-            [{"fid": p["fid"], "xy": _rot(theta, p["xy"])} for p in pool],
-            _rot(theta, ref), side)
-        if "error" in base or "error" in rot:
-            continue
-        for rb, rr in zip(base["pts"], rot["pts"]):
-            assert abs(rb["op_x"] - rr["op_x"]) < 0.05, (side, theta)
-            assert abs(rb["op_y"] - rr["op_y"]) < 0.05, (side, theta)
-        checked += 1
-        # The viewer form, same property (from/toward rotate together).
-        frm = [r.uniform(-60, 60), r.uniform(-60, 60)]
-        tow = [r.uniform(-60, 60), r.uniform(-60, 60)]
-        vb = _frame_viewer([dict(p) for p in pool], (frm, tow))
-        vr = _frame_viewer(
-            [{"fid": p["fid"], "xy": _rot(theta, p["xy"])} for p in pool],
-            (_rot(theta, frm), _rot(theta, tow)))
-        if "error" in vb or "error" in vr:
-            continue
-        for rb, rr in zip(vb["pts"], vr["pts"]):
-            assert abs(rb["op_x"] - rr["op_x"]) < 0.05, theta
-            assert abs(rb["op_y"] - rr["op_y"]) < 0.05, theta
-    assert checked >= 40, checked
-
-
-def test_viewer_right_is_the_clockwise_half_plane():
-    # Semantic pin against the azimuth law (not the helper): a candidate
-    # whose azimuth from the viewer is cw of the look azimuth by (0, 180)
-    # reads +vx (viewer-RIGHT).
-    r = _rng(55)
-    judged = rights = 0
-    for _ in range(_N):
-        frm = [r.uniform(-50, 50), r.uniform(-50, 50)]
-        tow = [r.uniform(-50, 50), r.uniform(-50, 50)]
-        if math.hypot(tow[0] - frm[0], tow[1] - frm[1]) < 1.0:
-            continue
-        cand = [r.uniform(-60, 60), r.uniform(-60, 60)]
-        out = _frame_viewer([{"fid": "c", "xy": cand}], (frm, tow))
-        if "error" in out:
-            continue
-        vx = out["pts"][0]["op_x"]
-        if abs(vx) < 0.5:
-            continue
-        az_look = _az(tow[0] - frm[0], tow[1] - frm[1])
-        az_cand = _az(cand[0] - frm[0], cand[1] - frm[1])
-        expected_right = 0.0 < (az_cand - az_look) % 360.0 < 180.0
-        assert (vx > 0) == expected_right, (frm, tow, cand, vx)
-        judged += 1
-        rights += int(expected_right)
-    assert judged >= _N // 2, judged
-    assert 10 <= rights <= judged - 10, rights
 
 
 def test_a_closed_ring_yields_area_and_an_open_way_yields_nothing():

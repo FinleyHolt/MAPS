@@ -20,14 +20,9 @@ Design contract (load-bearing):
   y-up frame). Grid-vs-world is an affine map with positive scale, so
   world-xy results equal grid ``(col, row)`` results in meters.
 
-- **Composable primitives, never prompt-specific solvers.** The agent
-  composes ``frame`` / ``frame_polyline`` / ``bearing`` into the relation the
-  instruction states.
-
-- **View is orientation only.** The pool's own axis is measured once
-  (:func:`_row_axis_direction` for the auto frame; arc-length / lateral
-  offset along a polyline reference). A declared frame only signs the view
-  coords; it never bands anything.
+- **Composable primitives, never prompt-specific solvers.** The executor
+  composes ``gap_witness`` / ``frame_polyline`` / ``bearing`` into the
+  relation the instruction states.
 """
 
 from __future__ import annotations
@@ -45,9 +40,8 @@ _COMPASS8 = (
 )
 
 # THE compass-word unit vectors, world frame (x east, y north): eight winds,
-# the same words :func:`_compass8` emits. Every consumer (frame ops here, the
-# crop rotation in reasoner_loop, the band rule in cardinal_side) reads this
-# one table.
+# the same words :func:`_compass8` emits. Every consumer (the crop rotation
+# in reasoner_loop, the band rule in cardinal_side) reads this one table.
 _SQRT_HALF = math.sqrt(0.5)
 COMPASS_UNIT = {
     "north": (0.0, 1.0), "northeast": (_SQRT_HALF, _SQRT_HALF),
@@ -62,15 +56,10 @@ COMPASS_UNIT = {
 CARDINALS = frozenset({"north", "south", "east", "west"})
 
 
-def ccw(v):
-    """Counter-clockwise quarter-turn in the y-up world frame, the
-    handedness law every left/right consumer shares. A viewer's RIGHT is
-    ``cw(forward)``: looking north (0,1) -> right = east (1,0)."""
-    return (-v[1], v[0])
-
-
 def cw(v):
-    """Clockwise quarter-turn in the y-up world frame (see :func:`ccw`)."""
+    """Clockwise quarter-turn in the y-up world frame, the handedness law
+    every left/right consumer shares. A viewer's RIGHT is ``cw(forward)``:
+    looking north (0,1) -> right = east (1,0)."""
     return (v[1], -v[0])
 
 
@@ -374,381 +363,13 @@ def score_by(items, keys, weights=None, abs_keys=()) -> list[dict]:
     return out
 
 
-# Axial concentration above which the NN row axis is taken as measured fact
-# rather than re-scored against PCA. 1.0 is a perfectly aligned local lattice.
-_NN_AXIS_TRUST: float = 0.7
-
-
-def _row_partition_tightness(P, u_world, min_row_gap_m=4.0, gap_factor=2.5):
-    """How TIGHT the rows are when ``P`` (world xy) is split across the
-    direction ``u_world``: every point projects to its across-axis offset,
-    the offsets gap-split into rows, and the result is the size-weighted mean
-    within-row RMS spread (meters). LOW means the axis carves clean rows;
-    HIGH means it cuts diagonally across them."""
-    ux, uy = u_world
-    nrm = math.hypot(ux, uy) or 1.0
-    ux, uy = ux / nrm, uy / nrm
-    cx = sum(p[0] for p in P) / len(P)
-    cy = sum(p[1] for p in P) / len(P)
-    perps = sorted((p[0] - cx) * (-uy) + (p[1] - cy) * ux for p in P)
-    if len(perps) < 2:
-        return 0.0
-    gaps = [perps[i + 1] - perps[i] for i in range(len(perps) - 1)]
-    med = sorted(gaps)[len(gaps) // 2] or 1.0
-    thr = max(float(min_row_gap_m), float(gap_factor) * med)
-    rows = [[perps[0]]]
-    for i in range(1, len(perps)):
-        if perps[i] - perps[i - 1] > thr:
-            rows.append([])
-        rows[-1].append(perps[i])
-    tot = wt = 0.0
-    for r in rows:
-        if len(r) < 2:
-            continue
-        mu = sum(r) / len(r)
-        # Bessel's n-1, so a partition into more, smaller bands does not
-        # score tighter for the same jitter.
-        rms = math.sqrt(sum((v - mu) ** 2 for v in r) / (len(r) - 1))
-        tot += rms * len(r)
-        wt += len(r)
-    return tot / wt if wt else 1e9
-
-
-def _row_axis_direction(P, nn_radius_m=9.0):
-    """Robust row-running unit direction for a (possibly multi-row, near-square)
-    cluster, in WORLD xy. Returns ``(u_world, confidence, source)`` — ``u_world`` is a
-    unit ``(ex, ey)`` along the recovered row direction, ``source`` in
-    {``"nn"``, ``"pca"``}.
-
-    A global PCA over a near-square block is ill-conditioned (nearly equal
-    eigenvalues put the major axis on a row-crossing diagonal), so the
-    orientation comes from LOCAL structure: each point's bearing to its
-    nearest neighbor within ``nn_radius_m``, combined as AXIAL data
-    (angle-doubled, distance-weighted circular mean). The resultant length is
-    a [0,1] confidence.
-
-    Unless that NN axis is confident (``_NN_AXIS_TRUST``), the NN axis and a
-    whole-cluster PCA axis are scored by :func:`_row_partition_tightness` and
-    the tighter rows win, which both resolves the NN axis's 90 deg ambiguity
-    and falls back to PCA when the lot has no clean local lattice."""
-    XY = [_xy(p) for p in P]
-    n = len(XY)
-    C = S = W = 0.0
-    used = 0
-    for i in range(n):
-        best = None
-        for j in range(n):
-            if i == j:
-                continue
-            dx, dy = XY[j][0] - XY[i][0], XY[j][1] - XY[i][1]
-            d = math.hypot(dx, dy)
-            if d < 1e-6:
-                continue
-            if best is None or d < best[0]:
-                best = (d, dx, dy)
-        if best is None or best[0] > nn_radius_m:
-            continue
-        d, dx, dy = best
-        th = math.atan2(dx, dy)            # compass bearing: atan2(d_east, d_north)
-        w = 1.0 / d                        # tighter pairs (more trustworthy) weigh more
-        C += w * math.cos(2.0 * th)
-        S += w * math.sin(2.0 * th)
-        W += w
-        used += 1
-    pca = _pca_direction(P)
-    conf = 0.0
-    cand = []
-    if W > 0 and used >= max(3, n // 6):
-        phi = 0.5 * math.atan2(S, C)
-        conf = math.hypot(C, S) / W
-        u_world = (math.sin(phi), math.cos(phi))  # unit dir matching atan2(dx, dy)
-        cand.append((u_world, "nn"))
-    cand.append((pca, "pca"))
-    # Seed from NN, so a tie (a regular lot scores exactly 0.0 both ways)
-    # falls to the local lattice rather than to PCA's larger-variance axis.
-    best_u, best_src = cand[0]
-    best_score = _row_partition_tightness(P, best_u)
-    # A confident NN axis stands: on a grid both partitions are equally tight,
-    # and what separates a row from a column is spacing, which the spread
-    # score cannot see.
-    if not (best_src == "nn" and conf >= _NN_AXIS_TRUST):
-        for u, src in cand[1:]:
-            sc = _row_partition_tightness(P, u)
-            if sc < best_score - 1e-6:
-                best_u, best_src, best_score = u, src, sc
-    nrm = math.hypot(*best_u) or 1.0
-    # The confidence is the NN concentration only when the NN axis won; a
-    # PCA axis reports 0.
-    out_conf = conf if best_src == "nn" else 0.0
-    return (best_u[0] / nrm, best_u[1] / nrm), round(out_conf, 3), best_src
-
-
-def _pca_direction(P):
-    """Closed-form principal eigenvector of the cluster's covariance: the
-    fallback row axis. Returns a unit ``(ex, ey)`` in world xy."""
-    n = len(P)
-    mx = sum(p[0] for p in P) / n
-    my = sum(p[1] for p in P) / n
-    sxx = sum((p[0] - mx) ** 2 for p in P) / n
-    syy = sum((p[1] - my) ** 2 for p in P) / n
-    sxy = sum((p[0] - mx) * (p[1] - my) for p in P) / n
-    tr = sxx + syy
-    det = sxx * syy - sxy * sxy
-    lam = tr / 2.0 + math.sqrt(max(0.0, tr * tr / 4.0 - det))
-    if abs(sxy) > 1e-12:
-        ex, ey = lam - syy, sxy
-    elif sxx >= syy:
-        ex, ey = 1.0, 0.0
-    else:
-        ex, ey = 0.0, 1.0
-    nrm = math.hypot(ex, ey) or 1.0
-    return ex / nrm, ey / nrm
-
-
-def _u(v):
-    n = math.hypot(v[0], v[1]) or 1.0
-    return (v[0] / n, v[1] / n)
-
-
-# Side word -> which screen edge the NAMED reference sits on. 'front/near' read as
-# 'bottom' and 'back/far/behind' as 'top' (the reference defines the near/far edge).
-_FRAME_SIDE = {
-    "right": "right", "left": "left",
-    "top": "top", "above": "top", "back": "top", "behind": "top", "rear": "top", "far": "top",
-    "bottom": "bottom", "below": "bottom", "front": "bottom", "near": "bottom", "nearest": "bottom",
-}
-
-
-def frame(pts, reference, frame_type="relative", side=None) -> dict:
-    """Reproject candidates into the DECLARED view so a view-relative cue
-    becomes a coordinate look-up. ORIENTATION ONLY: a declared frame changes
-    signs and coordinates, never any banding.
-
-    - ``"relative"`` — orient the view so the NAMED ``reference`` (a landmark
-      POINT ``[x, y]``) sits at ``side`` (right|left|top|bottom; aliases
-      above/below/front/back/near/far). ``op_x`` = +RIGHT, ``op_y`` = +UP in
-      that view. A POLYLINE reference is the curvilinear chart
-      (:func:`frame_polyline`).
-    - ``"viewer"`` — ``reference = (from_xy, toward)``: stand at ``from``,
-      look at ``toward`` (a point, or a compass word).
-    - ``"auto"`` — the pool's own measured axis, east-default sign.
-
-    Returns ``{frame:{...}, pts:[{fid?, xy, op_x, op_y, class?, color?}]}``.
-    """
-    ft = str(frame_type or "relative").strip().lower()
-    if ft == "auto":
-        return _frame_auto(pts)
-    if ft == "viewer":
-        return _frame_viewer(pts, reference)
-    if ft != "relative":
-        return {"error": f"frame_type {frame_type!r} not understood; use "
-                         "relative|viewer|auto", "pts": []}
-    if side is None or str(side).strip() == "":
-        return {"error": "frame_type='relative' needs a side word "
-                         "(right|left|top|bottom)", "pts": []}
-    if reference is None:
-        return {"error": "frame_type='relative' needs a reference point "
-                         "([x, y], or a landmark fid resolved to one)", "pts": []}
-    return _frame_relative(pts, reference, side)
-
-
-def _frame_auto(pts) -> dict:
-    """The pool's OWN frame: +right = the measured row axis
-    (:func:`_row_axis_direction`), signed to point east-ward. Origin = pool
-    centroid; ``op_x`` = +right, ``op_y`` = +up = ccw(right)."""
-    items = list(pts or [])
-    xys = [_xy(it) for it in items]
-    if not xys:
-        return {"error": "frame needs a non-empty pts list", "pts": []}
-    cx = sum(p[0] for p in xys) / len(xys)
-    cy = sum(p[1] for p in xys) / len(xys)
-    u = (1.0, 0.0) if len(xys) == 1 else _row_axis_direction(xys)[0]
-    # +right = the axis direction nearer east; an exact tie takes +y.
-    if u[0] < 0 or (u[0] == 0 and u[1] < 0):
-        u = (-u[0], -u[1])
-    right_unit = u
-    up_unit = (-u[1], u[0])
-    out = _project_frame_rows(items, xys, (cx, cy), right_unit, up_unit)
-    return {
-        "frame": {
-            "right_unit": [round(right_unit[0], 3), round(right_unit[1], 3)],
-            "up_unit": [round(up_unit[0], 3), round(up_unit[1], 3)],
-            "origin": [round(cx, 2), round(cy, 2)],
-            "frame_type": "auto",
-        },
-        "pts": out,
-    }
-
-
-def _frame_viewer(pts, reference) -> dict:
-    """The VIEWER frame: ``reference = (from_xy, toward)``: stand at ``from``,
-    look at ``toward``; +vy (up) is the LOOK direction, +vx (right) is the
-    viewer's right hand (cw of forward). ``toward`` may be a point OR a
-    compass word (then the origin is the pool centroid). With a point the
-    origin is the viewer.
-
-    "left of X looking at Y from Z" = frame{from:Z, toward:Y}, then vx_ of
-    the candidate vs vx_ of X (refs project into the same frame).
-    "between A and B" = frame{from:A, toward:B}: |vx_| small AND vy_ within
-    the stated span. "north of X" = frame{toward:'north'} + the X ref row.
-    """
-    items = list(pts or [])
-    xys = [_xy(it) for it in items]
-    if not xys:
-        return {"error": "frame needs a non-empty pts list", "pts": []}
-    try:
-        from_xy, toward = reference
-    except (TypeError, ValueError):
-        return {"error": "viewer frame needs (from_xy, toward)", "pts": []}
-    span = None
-    if isinstance(toward, str):
-        word = toward.strip().lower()
-        if word not in COMPASS_UNIT:
-            return {"error": f"viewer 'toward' word {toward!r} not understood; "
-                             f"use one of {'|'.join(COMPASS_UNIT)} or a point",
-                    "pts": []}
-        up_unit = COMPASS_UNIT[word]
-        cx = sum(p[0] for p in xys) / len(xys)
-        cy = sum(p[1] for p in xys) / len(xys)
-    else:
-        fx, fy = (float(from_xy[0]), float(from_xy[1]))
-        tx, ty = (float(toward[0]), float(toward[1]))
-        span = math.hypot(tx - fx, ty - fy)
-        if span < 1e-6:
-            return {"error": "viewer 'from' and 'toward' coincide -- no look "
-                             "direction", "pts": []}
-        up_unit = ((tx - fx) / span, (ty - fy) / span)
-        # origin = the VIEWER: vy_ = meters ahead along the look, vx_ =
-        # lateral offset from the ray ("between from and toward" = vy_ in
-        # [0, span_m] AND |vx_| small).
-        cx, cy = fx, fy
-    # Viewer's RIGHT is the clockwise quarter-turn of forward: looking north
-    # -> right = east; looking east -> right = south.
-    right_unit = cw(up_unit)
-    out = _project_frame_rows(items, xys, (cx, cy), right_unit, up_unit)
-    frame_meta = {
-        "right_unit": [round(right_unit[0], 3), round(right_unit[1], 3)],
-        "up_unit": [round(up_unit[0], 3), round(up_unit[1], 3)],
-        "origin": [round(cx, 2), round(cy, 2)],
-        "frame_type": "viewer",
-    }
-    if span is not None:
-        frame_meta["span_m"] = round(span, 1)
-    return {"frame": frame_meta, "pts": out}
-
-
-def _project_frame_rows(items, xys, origin, right_unit, up_unit) -> list:
-    """Row projection for the auto and viewer frames: op_x/op_y per item with
-    fid/class/color and earlier sortable evidence carried through."""
-    cx, cy = origin
-    out = []
-    for it, xy in zip(items, xys):
-        dx, dy = xy[0] - cx, xy[1] - cy
-        rec = {"xy": [round(xy[0], 2), round(xy[1], 2)],
-               "op_x": round(dx * right_unit[0] + dy * right_unit[1], 2),
-               "op_y": round(dx * up_unit[0] + dy * up_unit[1], 2)}
-        if isinstance(it, dict):
-            if it.get("fid") is not None:
-                rec["fid"] = it["fid"]
-            if it.get("class"):
-                rec["class"] = it["class"]
-            if it.get("color"):
-                rec["color"] = it["color"]
-            if it.get("color_conf") is not None:
-                rec["color_conf"] = it["color_conf"]
-            for _k in ("dist_m", *(k2 for k2 in it if k2 in COLOR_COLUMNS)):
-                if it.get(_k) is not None:
-                    rec[_k] = it[_k]
-        out.append(rec)
-    out.sort(key=lambda r: (-r["op_y"], -r["op_x"]))
-    return out
-
-
-def _frame_relative(pts, reference, side) -> dict:
-    """Reorient candidates into the view the instruction NAMES, so the
-    relational read is a coordinate look-up.
-
-    ``reference`` is a single point ``[x, y]`` (the view orients along the
-    pool->reference direction) and ``side`` the word that fixes the view
-    ('with <X> to the right/left', 'the near/front row'). Each candidate comes
-    back in SCREEN coordinates: ``op_x`` = +RIGHT, ``op_y`` = +UP. 'front /
-    near row' = MIN ``op_y``; 'back / far row' = MAX ``op_y``; 'Nth from the
-    right' = the Nth by DESCENDING ``op_x``. ``pts`` is ``[x, y]`` or cand
-    dicts (``fid`` / ``class`` / ``color`` carried through).
-
-    Returns ``{frame:{right_unit, up_unit, origin, frame_type},
-    pts:[{fid?, xy, op_x, op_y, class?, color?}]}``. Do the row
-    pick / ordinal over the returned ``op_x`` / ``op_y`` — do NOT re-rotate.
-    """
-    items = list(pts or [])
-    xys = [_xy(it) for it in items]
-    if not xys:
-        return {"error": "frame needs a non-empty pts list", "pts": []}
-    cx = sum(p[0] for p in xys) / len(xys)
-    cy = sum(p[1] for p in xys) / len(xys)
-    side_key = _FRAME_SIDE.get(str(side or "").strip().lower())
-    if side_key is None:
-        return {"error": f"side {side!r} not understood; use right|left|top|bottom "
-                         "(aliases: above/below/front/back/near/far)", "pts": []}
-    refpt = (float(reference[0]), float(reference[1]))
-    _d = (refpt[0] - cx, refpt[1] - cy)
-    # A reference AT the pool center carries no direction: east.
-    ref_dir = _u(_d) if math.hypot(*_d) > 1e-9 else (1.0, 0.0)
-    # Screen basis in world coordinates: a PROPER ROTATION of the aerial view,
-    # never a reflection. For 'reference to the right' +right points TOWARD
-    # the reference and up = ccw(right); for top/bottom the reference fixes
-    # +up and right = cw(up). Sign-locked by test_frame_aspect.py.
-    if side_key in ("right", "left"):
-        right_unit = ref_dir if side_key == "right" else (-ref_dir[0], -ref_dir[1])
-        up_unit = ccw(right_unit)
-    else:  # top / bottom: the reference fixes the up axis
-        up_unit = ref_dir if side_key == "top" else (-ref_dir[0], -ref_dir[1])
-        right_unit = cw(up_unit)
-
-    def _op(p):
-        dx, dy = p[0] - cx, p[1] - cy
-        return (round(dx * right_unit[0] + dy * right_unit[1], 2),
-                round(dx * up_unit[0] + dy * up_unit[1], 2))
-
-    out = []
-    for it, xy in zip(items, xys):
-        ox, oy = _op(xy)
-        rec = {"xy": [round(xy[0], 2), round(xy[1], 2)], "op_x": ox, "op_y": oy}
-        if isinstance(it, dict):
-            if it.get("fid") is not None:
-                rec["fid"] = it["fid"]
-            if it.get("class"):
-                rec["class"] = it["class"]
-            if it.get("color"):
-                rec["color"] = it["color"]
-            if it.get("color_conf"):
-                rec["color_conf"] = it["color_conf"]
-            # Carry the sortable evidence an earlier op attached (a color
-            # column's 0.0 is a valid score, hence is-not-None); op_x/op_y
-            # are computed fresh for this reference.
-            for _k in ("dist_m", *(k2 for k2 in it if k2 in COLOR_COLUMNS)):
-                if it.get(_k) is not None:
-                    rec[_k] = it[_k]
-        out.append(rec)
-    out.sort(key=lambda r: (-r["op_y"], -r["op_x"]))
-    return {
-        "frame": {
-            "right_unit": [round(right_unit[0], 3), round(right_unit[1], 3)],
-            "up_unit": [round(up_unit[0], 3), round(up_unit[1], 3)],
-            "origin": [round(cx, 2), round(cy, 2)],
-            "frame_type": "relative",
-        },
-        "pts": out,
-    }
-
-
 def _poly_chart_one(poly, arc_v, pt):
     """Project one point onto a world-meter polyline:
     ``(along_m, off_m, foot_xy)``. ``foot_xy`` is the point on the chart
     ``off`` was signed against, the basis a compass reading of that sign
     uses (not :func:`polyline_nearest_point`'s foot, which clamps at the
-    ends). ``off`` is SIGNED with + = the RIGHT of travel, the handedness of
-    :func:`_frame_viewer`: cross(tangent, to_point) > 0 is the LEFT side.
+    ends). ``off`` is SIGNED with + = the RIGHT of travel (right =
+    :func:`cw` of forward): cross(tangent, to_point) > 0 is the LEFT side.
     UN-CLAMPED at the ends: a point beyond an end reports its arc coordinate
     on the end segment's extension (``along`` < 0 before the start, > the
     total length past the end) and its offset from that extension."""
@@ -779,46 +400,6 @@ def _poly_chart_one(poly, arc_v, pt):
         return None
     _perp, arc, off, foot = best
     return round(arc, 2), round(off, 2), foot
-
-
-def polyline_nearest_point(poly, pt):
-    """The nearest point ON the polyline to ``pt`` (exact per-segment
-    projection): the vantage of a describer standing "on Main St", never the
-    road's area centroid."""
-    px, py = _xy(pt)
-    best, best_d2 = None, None
-    for i in range(len(poly) - 1):
-        ax, ay = float(poly[i][0]), float(poly[i][1])
-        bx, by = float(poly[i + 1][0]), float(poly[i + 1][1])
-        vx, vy = bx - ax, by - ay
-        L2 = vx * vx + vy * vy
-        t = 0.0 if L2 <= 0 else max(0.0, min(1.0, ((px - ax) * vx + (py - ay) * vy) / L2))
-        qx, qy = ax + t * vx, ay + t * vy
-        d2 = (px - qx) ** 2 + (py - qy) ** 2
-        if best_d2 is None or d2 < best_d2:
-            best, best_d2 = [qx, qy], d2
-    return best
-
-
-def orient_polyline_toward(poly, toward):
-    """Polyline orientation for a DECLARED travel direction; the chart's
-    ``+off = right of travel`` sign follows it. ``toward`` is a point (reverse
-    iff the first vertex sits nearer it than the last) or a compass word
-    (reverse iff the net first->last displacement opposes it). Returns
-    ``(poly, reversed)``; exact ties keep the stored orientation."""
-    P = [[float(q[0]), float(q[1])] for q in poly]
-    if isinstance(toward, str):
-        u = COMPASS_UNIT.get(toward.strip().lower())
-        if u is None:
-            return P, False
-        net = (P[-1][0] - P[0][0], P[-1][1] - P[0][1])
-        rev = net[0] * u[0] + net[1] * u[1] < 0
-    else:
-        tx, ty = _xy(toward)
-        d0 = math.hypot(P[0][0] - tx, P[0][1] - ty)
-        d1 = math.hypot(P[-1][0] - tx, P[-1][1] - ty)
-        rev = d0 < d1
-    return (P[::-1], True) if rev else (P, False)
 
 
 def frame_polyline(pts, poly):
