@@ -19,20 +19,6 @@ from maps.search.analyze_scene.geom_program import (
 )
 
 
-def _served_gap(rows, name, probe_xy):
-    """The distance the surface actually serves, from the EXACT mask loops.
-
-    Not a cell-raster measurement: this is `gap_witness` over the same mask
-    realisation the compare op resolves, so the tests pin the served number.
-    """
-    row = next(r for r in rows if r["name"] == name)
-    probe = [[[probe_xy[0] - 0.5, probe_xy[1] - 0.5],
-              [probe_xy[0] + 0.5, probe_xy[1] - 0.5],
-              [probe_xy[0] + 0.5, probe_xy[1] + 0.5],
-              [probe_xy[0] - 0.5, probe_xy[1] + 0.5]]]
-    return G.gap_witness(G.mask_geom(row["mask"]), G.mask_geom(probe))[0]
-
-
 class _Way:
     """The bit of MapObject the surface builder reads."""
 
