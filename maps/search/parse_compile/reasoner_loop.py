@@ -2690,7 +2690,7 @@ def advance_reasoner_one_round(
         g_out = run_geom_program_tool(
             {"program": {"ops": [
                 {"ref": f"r{i}", "op": "find",
-                 "args": {"provenance": "any", "query": q.lower()}}
+                 "args": {"query": q.lower()}}
                 for i, q in enumerate(names)]}},
             namespace=(compute_namespace or {}),
             raw_sink=_sink, preflight=preflight)
