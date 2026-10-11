@@ -2798,7 +2798,7 @@ def _compare_specs(cx, refs):
                                 f"{_UNION_MAX_MEMBERS}: measuring to "
                                 f"the nearest of that many is a "
                                 f"whole-map scan per row. Narrow it "
-                                f"first (inside=, a cardinal, or a "
+                                f"first (within=, a cardinal, or a "
                                 f"tighter query), then measure to "
                                 f"what is left.{cx.sig()}")
                         _members.extend(_got)

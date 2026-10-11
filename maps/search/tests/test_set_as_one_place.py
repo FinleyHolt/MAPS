@@ -166,5 +166,6 @@ def test_a_union_over_a_whole_class_is_capped_rather_than_slow():
     ops = ops_of_block('everything = find("house")\n'
                        'r1 = find("house", nearest=everything)\n')
     many = [_house(f"h{i:04d}", float(i)) for i in range(gp._UNION_MAX_MEMBERS + 5)]
-    with pytest.raises(gp.ProgramError, match="folds at most"):
+    with pytest.raises(gp.ProgramError,
+                       match=r"folds at most.*first \(within=, a cardinal"):
         gp.run_program([], many, {"ops": ops})
