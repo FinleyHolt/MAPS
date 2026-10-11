@@ -26,7 +26,7 @@ import logging
 log = logging.getLogger("run_benchmark")
 
 
-def _build_compiler(cfg: RunConfig) -> MapsCompiler:
+def build_compiler(cfg: RunConfig) -> MapsCompiler:
     """Construct the MapsCompiler (sensor-patched system prompts).
 
     Extracted verbatim from the inline ctor so the persistent

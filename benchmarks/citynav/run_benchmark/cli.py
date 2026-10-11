@@ -22,7 +22,7 @@ import os
 import signal
 import sys
 from benchmarks.citynav.run_benchmark.dispatch import (
-    _build_compiler,
+    build_compiler,
     _dispatch_one,
     set_run_context,
 )
@@ -216,7 +216,7 @@ def main(
 
     if args.attempt_root:
         ((orig_idx, row),) = indexed_rows
-        compiler = _build_compiler(cfg)
+        compiler = build_compiler(cfg)
         ep = open_episode_dir(args.attempt_root, episode_id=args.episode_id)
         print(ep.dir, flush=True)
         try:
@@ -249,7 +249,7 @@ def main(
 
     # The active sensor's description is patched into the reasoner's system
     # prompt, constraining ``sam_concepts`` to surfaces the rig can observe.
-    compiler = _build_compiler(cfg)
+    compiler = build_compiler(cfg)
 
     for i, (orig_idx, row) in enumerate(indexed_rows):
         try:
