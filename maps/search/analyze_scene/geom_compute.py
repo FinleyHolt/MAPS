@@ -21,7 +21,7 @@ Design contract (load-bearing):
   world-xy results equal grid ``(col, row)`` results in meters.
 
 - **Composable primitives, never prompt-specific solvers.** The executor
-  composes ``gap_witness`` / ``frame_polyline`` / ``bearing`` into the
+  composes ``gap_witness`` / ``bearing`` into the
   relation the instruction states.
 """
 
@@ -361,92 +361,6 @@ def score_by(items, keys, weights=None, abs_keys=()) -> list[dict]:
         nit["score"] = round(s, dp) + 0.0
     out.sort(key=lambda r: r["score"], reverse=True)
     return out
-
-
-def _poly_chart_one(poly, arc_v, pt):
-    """Project one point onto a world-meter polyline:
-    ``(along_m, off_m, foot_xy)``. ``foot_xy`` is the point on the chart
-    ``off`` was signed against, the basis a compass reading of that sign
-    uses (not :func:`polyline_nearest_point`'s foot, which clamps at the
-    ends). ``off`` is SIGNED with + = the RIGHT of travel (right =
-    :func:`cw` of forward): cross(tangent, to_point) > 0 is the LEFT side.
-    UN-CLAMPED at the ends: a point beyond an end reports its arc coordinate
-    on the end segment's extension (``along`` < 0 before the start, > the
-    total length past the end) and its offset from that extension."""
-    px, py = _xy(pt)
-    best = None
-    n_edges = len(poly) - 1
-    for i in range(n_edges):
-        ax, ay = float(poly[i][0]), float(poly[i][1])
-        ex, ey = float(poly[i + 1][0]) - ax, float(poly[i + 1][1]) - ay
-        seg2 = ex * ex + ey * ey
-        if seg2 <= 0:
-            continue
-        t = ((px - ax) * ex + (py - ay) * ey) / seg2
-        tc = max(0.0, min(1.0, t))
-        fx, fy = ax + tc * ex, ay + tc * ey
-        perp = math.hypot(px - fx, py - fy)  # nearest-segment argmin: clamped
-        if best is None or perp < best[0]:
-            # the chart coordinate extends past the terminal segments' ends
-            te = t if ((i == 0 and t < 0.0)
-                       or (i == n_edges - 1 and t > 1.0)) else tc
-            gx, gy = ax + te * ex, ay + te * ey
-            dx, dy = px - gx, py - gy
-            cross = ex * dy - ey * dx  # + = ccw(tangent) side = viewer-LEFT
-            off = math.hypot(dx, dy) if cross <= 0 else -math.hypot(dx, dy)
-            arc = arc_v[i] + te * math.sqrt(seg2)
-            best = (perp, arc, off, [gx, gy])
-    if best is None:
-        return None
-    _perp, arc, off, foot = best
-    return round(arc, 2), round(off, 2), foot
-
-
-def frame_polyline(pts, poly):
-    """The CURVILINEAR chart: project the pool ALONG a polyline (a road
-    centerline, or an ``[[x, y], ...]`` literal): arc-length + signed lateral
-    offset, exact on bends.
-
-    Every input row gains ``along`` (meters along the polyline, un-clamped)
-    and ``off`` (signed lateral meters, + = right of travel; see
-    :func:`_poly_chart_one`). Returns ``(rows, receipt)``; a degenerate
-    polyline returns ``([], {"error": ...})`` for the caller to raise."""
-    items = list(pts or [])
-    receipt: dict = {"n": len(items)}
-    if not items:
-        receipt["error"] = "frame needs a non-empty pts list"
-        return [], receipt
-    P2 = [[float(q[0]), float(q[1])] for q in poly or []]
-    if len(P2) < 2:
-        receipt["error"] = "a polyline reference needs >= 2 [x,y] vertices"
-        return [], receipt
-    for i in range(len(P2) - 1):
-        if math.hypot(P2[i + 1][0] - P2[i][0], P2[i + 1][1] - P2[i][1]) < 1e-9:
-            receipt["error"] = ("polyline vertices {} and {} coincide -- no "
-                                "travel direction there".format(i, i + 1))
-            return [], receipt
-    arc_v = _arc_lengths(P2)
-
-    rows: list = []
-    for it in items:
-        xy = _xy(it)
-        along, off, _foot = _poly_chart_one(P2, arc_v, xy)
-        rec = {"xy": [round(xy[0], 2), round(xy[1], 2)],
-               "along": along, "off": off}
-        if isinstance(it, dict):
-            if it.get("fid") is not None:
-                rec["fid"] = it["fid"]
-            if it.get("class"):
-                rec["class"] = it["class"]
-            if it.get("color"):
-                rec["color"] = it["color"]
-            if it.get("color_conf") is not None:
-                rec["color_conf"] = it["color_conf"]
-            for _k in ("dist_m", *(k2 for k2 in it if k2 in COLOR_COLUMNS)):
-                if it.get(_k) is not None:
-                    rec[_k] = it[_k]
-        rows.append(rec)
-    return rows, receipt
 
 
 # --- exact-mask geometry (the `compare` op's distance substrate) --------------
