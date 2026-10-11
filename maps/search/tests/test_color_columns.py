@@ -166,15 +166,12 @@ def test_a_missing_name_match_is_still_strictly_worst():
     assert [r["fid"] for r in down] == ["strong", "absent"], down
 
 
-# --- RETIRED-NAME: color_score is gone; the error names the new idiom -------
-
-
-def test_retired_color_score_key_redirects_to_the_named_columns():
+def test_an_off_palette_color_key_names_the_palette():
     _expect_error([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
             {"key": "color_score", "w": 1}]}},
-    ], "color_<word>")
+    ], "'score' is not a color on the closed palette")
 
 
 # --- ONE-VOCABULARY guard: the palette IS the M6 emitted vocabulary ---------

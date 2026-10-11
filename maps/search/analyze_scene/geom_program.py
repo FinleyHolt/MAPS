@@ -31,25 +31,11 @@ from maps.util.node_fingerprint import fingerprint_node
 from maps.util.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld
 
-# Column names that are not columns -> the redirect the error teaches.
-_RENAMED_KEYS = {
-    "color_score": ("the named color columns color_<word> (word on the "
-                    "closed palette, e.g. color_blue); naming one anywhere "
-                    "a column key is accepted attaches it"),
-}
-
 
 def _quote(v, cap: int = 120) -> str:
     """A user value as a refusal quotes it: its repr, cut to ``cap`` chars."""
     s = repr(v)
     return s if len(s) <= cap else s[:cap] + "..."
-
-
-def _reject_renamed_key(key):
-    if key in _RENAMED_KEYS:
-        raise ProgramError(
-            f"{_quote(key)} is not a column; it was replaced by "
-            f"{_RENAMED_KEYS[key]}.")
 
 
 # --- the named color-column family: color_<word> ---------------------------
@@ -2542,7 +2528,6 @@ def _score_by(cx, a):
     _sb_notes: list = []
     emphasis: dict = {}
     for _el in a["emphasis"]:
-        _reject_renamed_key(_el["key"])
         _k = _el["key"]
         if _is_color_column_key(_k):
             # THE WORD RIDES IN THE KEY: the emphasis reads the canonical
