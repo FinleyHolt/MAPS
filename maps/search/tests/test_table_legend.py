@@ -3,7 +3,6 @@ from __future__ import annotations
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import (
     _TABLE_LEGEND,
-    build_surface_from_graph,
     compact_results,
     run_program,
 )
@@ -71,23 +70,9 @@ def test_legend_claims_are_the_executors_own_facts():
              "args": {"items": "r0",
                       "refs": [{"ref": "b1", "as": "wall"}]}}]})
     assert out["results"]["r1"][0]["distance to wall"] == 0.0
-    # 'along' reads from the end0_xy end, and end0_xy IS the centerline's
-    # first vertex (test_universal_relations' law, re-pinned here because
-    # the legend quotes the column by name).
-    assert "end0_xy" in _TABLE_LEGEND
 
-    class _N:
-        def __init__(self, **kw):
-            self.__dict__.update(kw)
 
-        def __getattr__(self, k):
-            return None
-
-    road = _N(name="Main Street", provenance="prebaked",
-              world_xy=[50.0, 0.0],
-              centerline=[[0.0, 0.0], [60.0, 0.0], [100.0, 4.0]],
-              tags={"highway": "residential"})
-    _, anchors = build_surface_from_graph([("road_1", road)], (0.0, 0.0), 2.0)
-    row = {a["fid"]: a for a in anchors}["road_1"]
-    cl = row["centerline"]
-    assert row["end0_xy"] == [round(cl[0][0], 2), round(cl[0][1], 2)], row
+def test_legend_quotes_no_line_chart_column():
+    # compare attaches no chart of a line, so the legend explains none.
+    assert "along" not in _TABLE_LEGEND
+    assert "LINE" not in _TABLE_LEGEND

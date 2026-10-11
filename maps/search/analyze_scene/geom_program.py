@@ -1233,21 +1233,17 @@ _RENDER_CHAR_BUDGET = 12_000
 #   xy       build_surface._xy: a detection's measured world_xy, else a
 #            point ON the row's own geometry (representative_point); the
 #            same point act.move flies.
-#   distance G.gap_witness min edge gap, 0.0 on contact; line refs:
-#            _poly_chart_one unsigned lateral
-#   along    arc m from the end0_xy end
+#   distance G.gap_witness min edge gap, 0.0 on contact
 #   bearing  G.bearing: 0 = north = +y, 90 = east = +x, clockwise
 _TABLE_LEGEND = (
     "reading these tables: xy = [east_m, north_m] world meters, +y is "
     "north (xy is the row's recorded point -- not always its footprint "
     "centroid, and never promised to be a line's midpoint); "
     "'distance to <name>' = meters between nearest edges, 0.0 = "
-    "touching, and against a LINE it is the unsigned offset off the "
-    "line, the same either side; 'facing <name>' = a compass WORD for "
+    "touching; 'facing <name>' = a compass WORD for "
     "which way that row faces that place; '<dir> of <name>' = signed "
     "meters the row lies that way of it, blank where the geometry "
-    "declines to say; 'along <name>' = meters along the "
-    "line from its end0_xy end; bearings are compass degrees, 0 = "
+    "declines to say; bearings are compass degrees, 0 = "
     "north, 90 = east, clockwise."
 )
 
