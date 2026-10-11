@@ -750,7 +750,7 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     meta["window_valid_frac"] = round(
         float((validity > 0).mean()), 3) if validity.size else 0.0
     _spx = int(min(max((true_x - x0) / sx * _Wv, 0.0), _Wv - 1))
-    _spy = int(min(max((true_y - y0) / sy * _Hv, 0.0), _Hv - 1))
+    _spy = int(min(max((y1 - true_y) / sy * _Hv, 0.0), _Hv - 1))
     meta["subject_on_data"] = (
         bool(validity0[_spy, _spx] > 0) if (_cin and validity0.size)
         else None)

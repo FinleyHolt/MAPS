@@ -129,3 +129,27 @@ def test_a_bake_crops_source_detail_is_the_configured_rasters_own_cell(monkeypat
         dst.write(np.zeros((3, 6, 8), np.uint8))
     crops = look_render.render_candidate_crops(req, map_name=map_name, rgbd_dir=str(pair_dir))
     assert crops[0]["source_gsd_m"] == pytest.approx(0.15)
+
+
+def test_subject_on_data_samples_the_north_up_row(monkeypatch):
+    """Row 0 of the crop is the window's north edge, so a subject north of the
+    window centre is read from the top half of the validity mask."""
+    from maps.perception import observation
+
+    def north_half_imaged(**kw):
+        px, py = kw["pose_xy"]
+        half = kw["altitude_m"] - kw["ground_z"]
+        v = np.zeros((100, 100), np.uint8)
+        v[:50] = 255
+        return {"rgb": np.full((100, 100, 3), 128, np.uint8), "validity": v,
+                "world_window": (px - half, py - half, px + half, py + half)}
+
+    monkeypatch.setattr(observation, "crop_ortho_observation", north_half_imaged)
+    run = _Imagery()
+    spec = {"map_name": next(iter(GROUND_LEVEL)), "center_fid": "b1",
+            "pose_xy": [0.0, 0.0], "context_m": 60.0}
+    north = look_render.render_look_from_spec({**spec, "world_xy": [0.0, 20.0]},
+                                              rgbd_dir="/nowhere", imagery=run)
+    south = look_render.render_look_from_spec({**spec, "world_xy": [0.0, -20.0]},
+                                              rgbd_dir="/nowhere", imagery=run)
+    assert (north["subject_on_data"], south["subject_on_data"]) == (True, False)
