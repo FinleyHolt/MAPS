@@ -97,7 +97,7 @@ _OP_SIGNATURE = {
                 "thing), tagged (the tag-carriers), or fuzzy (the "
                 "word-sharers). A view: input order kept, nothing else "
                 "dropped, the full set stays live behind its handle."),
-    "find": ("find([query], [color], [provenance]) -- SEARCH the world-state: "
+    "find": ("find([query]) -- SEARCH the world-state: "
              "query=fuzzy free text over each row's name + tags (priors) or "
              "detector class (detections); returns THE MATCH SET best-first "
              "(len = the match count; sub-threshold rows stay out -- a "
@@ -115,11 +115,7 @@ _OP_SIGNATURE = {
              "in, and it does not subscript, because ties have no first. "
              "list() freezes it. A key=value "
              "query matches tag keys AND values; the literal UPPERCASE token OR "
-             "separates alternatives (scored as the max over them). "
-             "color=perceptual "
-             "(attaches the named color column color_<word> on every "
-             "color-carrying row, drops none), "
-             "provenance=any|prior|runtime"),
+             "separates alternatives (scored as the max over them)."),
     "crossings": ("crossings(refs) -- CONSTRUCT the places two features MEET. "
                   "refs is EXACTLY TWO elements, each a bare fid, an 'rN', a "
                   "[fid,...] list (one road is routinely several ways -- pass "

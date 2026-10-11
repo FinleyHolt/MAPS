@@ -1,10 +1,13 @@
 """``find``'s text matching is strictly LEXICAL — no semantic lookup table."""
 from __future__ import annotations
 
+import pytest
+
 from maps.search.analyze_scene import text_match as T
 from maps.search.analyze_scene.geom_program import (
     _BroadRows,
     _EmptyFindMiss,
+    ProgramError,
     run_program,
 )
 
@@ -349,3 +352,11 @@ def test_find_query_no_match_returns_empty_miss_affordance():
     rows = out["results"]["r0"]
     assert isinstance(rows, _EmptyFindMiss), type(rows)
     assert len(rows) == 0, rows
+
+
+def test_a_find_refusal_advertises_only_the_args_find_reads():
+    with pytest.raises(ProgramError) as e:
+        run_program([], [{"fid": "a0", "xy": [0.0, 0.0], "name": "x"}],
+                    {"ops": [{"ref": "r0", "op": "find",
+                              "args": {"query": "a;b"}}]})
+    assert "color=" not in str(e.value) and "provenance" not in str(e.value)
