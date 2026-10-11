@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +26,8 @@ from benchmarks.calcity.data_prep.aoi import (
     bundle_root,
 )
 from benchmarks.calcity.data_prep.bundle import load_features_local
-from benchmarks.citynav.bake.city import bake_city_from_cache
+from benchmarks.citynav.bake import city
+from benchmarks.citynav.bake.city import _normalise_props
 
 
 def _write_meta(map_name: str, tiles_dir: Path) -> Path:
@@ -63,8 +63,8 @@ def _write_meta(map_name: str, tiles_dir: Path) -> Path:
     return path
 
 
-def local_osm_cache(bundle: Path, map_name: str) -> dict[str, Any]:
-    """The bundle's OSM as a GeoJSON cache in the map's local metric frame.
+def local_osm_records(bundle: Path, map_name: str) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """The bundle's OSM as baker records in the map's local metric frame.
 
     The ONLY transform is the reprojection. Tags ride verbatim, every geometry
     kind survives as itself (a road stays a LineString), and no feature is
@@ -77,43 +77,25 @@ def local_osm_cache(bundle: Path, map_name: str) -> dict[str, Any]:
     """
     from shapely.geometry import mapping
 
-    lf = build_local_frame(BLOCKS[map_name])
-    records = load_features_local(bundle, lf)
-    features: list[dict[str, Any]] = []
-    for rec in records:
+    records: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for rec in load_features_local(bundle, build_local_frame(BLOCKS[map_name])):
         geom = rec.get("geom")
         if geom is None or geom.is_empty:
             continue
-        props = {str(k): v for k, v in (rec.get("tags") or {}).items()}
-        props["worldkit_layer"] = rec.get("layer")
-        features.append(
-            {
-                "type": "Feature",
-                "id": rec.get("osm_id"),
-                "properties": props,
-                "geometry": mapping(geom),
-            }
-        )
-    return {
-        "type": "FeatureCollection",
-        "features": features,
-        "citynav_osm_cache": {
-            "source": "calcity worldkit bundle OSM",
-            "records": len(features),
-            "map_name": map_name,
-        },
-    }
+        tags = {str(k): v for k, v in (rec.get("tags") or {}).items()}
+        props = _normalise_props({**tags, "worldkit_layer": rec.get("layer")})
+        if rec.get("osm_id") is not None:
+            props.setdefault("osm_id", rec["osm_id"])
+        records.append((props, mapping(geom)))
+    return records
 
 
 def bake_block(bundle: Path, tiles_dir: Path, map_name: str) -> dict[str, Any]:
-    cache = local_osm_cache(bundle, map_name)
-    if not cache["features"]:
+    records = local_osm_records(bundle, map_name)
+    if not records:
         raise ValueError(f"{bundle} carries no OSM features over {map_name!r}")
     _write_meta(map_name, tiles_dir)
-    with tempfile.TemporaryDirectory(prefix=f"{map_name}_osm_") as tmp:
-        cache_path = Path(tmp) / f"{map_name}_osm_local.geojson"
-        cache_path.write_text(json.dumps(cache), encoding="utf-8")
-        return bake_city_from_cache(map_name, cache_path, tiles_dir=tiles_dir, imagery=False)
+    return city.bake_block(map_name, records, tiles_dir, imagery=False)
 
 
 def main(argv: list[str] | None = None) -> int:

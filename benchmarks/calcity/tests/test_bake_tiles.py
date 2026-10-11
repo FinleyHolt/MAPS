@@ -178,9 +178,8 @@ def test_the_bake_reads_no_citynav_raster_and_keeps_the_bounds_rectangle(tmp_pat
     monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", empty)
     reaching = tmp_path / "reaching"
     bake_tiles._write_meta("calcity", reaching)
-    cache = tmp_path / "calcity_osm_local.geojson"
-    cache.write_text(json.dumps(bake_tiles.local_osm_cache(tmp_path / "bundle", "calcity")))
-    city.bake_city_from_cache("calcity", cache, tiles_dir=reaching, imagery=True)
+    city.bake_block("calcity", bake_tiles.local_osm_records(tmp_path / "bundle", "calcity"),
+                    reaching, imagery=True)
 
     class Untouchable:
         def __fspath__(self):
