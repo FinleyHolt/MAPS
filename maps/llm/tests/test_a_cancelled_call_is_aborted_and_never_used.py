@@ -42,3 +42,17 @@ def test_an_answer_that_lands_as_the_cancel_is_set_is_never_used(monkeypatch, tm
     kinds = [json.loads(line)["kind"]
              for line in (tmp_path / "flight" / "llm" / "transcript.jsonl").read_text().splitlines()]
     assert "response" not in kinds and "request" in kinds
+
+
+def test_a_cancel_during_a_retry_backoff_ends_the_wait(monkeypatch):
+    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
+    monkeypatch.setattr(http, "_BACKOFF_S", 30.0)
+    cancel = threading.Event()
+    threading.Timer(0.3, cancel.set).start()
+    t0 = time.monotonic()
+    with ChatServe([(503, {"error": "boom"}, {})]) as serve:
+        with pytest.raises(http.CallCanceled):
+            http._chat_completions_raw(f"{serve.url}/v1", None, timeout=60.0, cancel_event=cancel,
+                                       model="m", messages=[{"role": "user", "content": "x"}])
+        assert len(serve.bodies) == 1
+    assert time.monotonic() - t0 < 2.0

@@ -87,6 +87,15 @@ def _retry_after_delay(headers: object, default_s: float) -> float:
     return min(_RATE_LIMIT_MAX_BACKOFF_S, default_s)
 
 
+def _backoff(delay: float, cancel_event: threading.Event | None) -> None:
+    """Wait out one retry backoff; a cancel ends the wait, and the loop's
+    pre-dispatch check then raises."""
+    if cancel_event is None:
+        time.sleep(delay)
+    else:
+        cancel_event.wait(delay)
+
+
 class CallCanceled(Exception):
     """Raised when a request is aborted via its ``cancel_event``.
 
@@ -705,7 +714,7 @@ def _chat_completions_raw(
                     _MAX_RATE_LIMIT_RETRIES,
                     delay,
                 )
-                time.sleep(delay)
+                _backoff(delay, cancel_event)
                 continue
             if status == 404:
                 # Same-URL hot-swap guard: startup discovery is probe-once,
@@ -737,5 +746,5 @@ def _chat_completions_raw(
                 e,
                 _BACKOFF_S * (2**attempt),
             )
-            time.sleep(_BACKOFF_S * (2**attempt))
+            _backoff(_BACKOFF_S * (2**attempt), cancel_event)
             attempt += 1
