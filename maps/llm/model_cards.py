@@ -13,100 +13,46 @@ declares a presence penalty, so no request carries one.
 
 from __future__ import annotations
 
-from typing import Any, NotRequired, TypedDict
+from typing import Any
 
-
-class ModelCard(TypedDict):
-    tokenizer: str
-    top_p: float
-    top_k: int
-    # The ``reasoning_effort`` values the chat template takes: its named
-    # rungs, and whether it also takes a number in [0, 0.99]. A card that
-    # names no rungs takes any rung below or any such number.
-    efforts: NotRequired[tuple[str, ...]]
-    effort_numbers: NotRequired[bool]
-
-
-# Gemma 4, the family envelope (top_p 0.95, top_k 64, no penalty term) on
-# every size. Each served alias needs its own row: card_for() and
-# tokenizer.py both take an EXACT alias hit only. The tokenizer repo is the
-# SERVED weights', because a quantized repo ships its own tokenizer and
-# prompt sizing has to be measured against what is serving.
-#
-# `-it` throughout. The base checkpoints (`google/gemma-4-E4B`, and its
-# siblings) carry no chat template and no tool-call surface: a reasoner
-# pointed at one cannot hold the mission conversation at all.
-_GEMMA_26B_A4B_NVFP4 = ModelCard(
-    tokenizer="nvidia/Gemma-4-26B-A4B-NVFP4",
-    top_p=0.95,
-    top_k=64,
-)
-
-# The same weights served from GGUF by llama.cpp, on its own alias (flown
-# aboard). The alias exists because a serve is not a model, and a run has to
-# be able to name which one it got.
-_GEMMA_26B_A4B_GGUF = ModelCard(
-    tokenizer="google/gemma-4-26B-A4B-it",
-    top_p=0.95,
-    top_k=64,
-)
-
-_GEMMA_E2B = ModelCard(
-    tokenizer="google/gemma-4-E2B-it",
-    top_p=0.95,
-    top_k=64,
-)
-
-_GEMMA_E4B = ModelCard(
-    tokenizer="google/gemma-4-E4B-it",
-    top_p=0.95,
-    top_k=64,
-)
-
-# Thinking Machines publishes no sampling recommendation for Inkling — no
-# generation_config.json in the BF16 or the NVFP4 repo, nothing in the
-# model card. This is a permissive envelope, not a card-derived one.
-#
-# Response length is governed separately by the chat template's
-# `reasoning_effort` request field ({none:0.0, minimal:0.1, low:0.2,
-# medium:0.7, high:0.9, max:0.99}, or a raw float in [0.0, 0.99]), which
-# DEFAULTS TO 0.9 when the request omits it — the expensive end.
-_INKLING = ModelCard(
-    tokenizer="thinkingmachines/Inkling-Small-NVFP4",
-    top_p=0.95,
-    top_k=64,
-    efforts=("none", "minimal", "low", "medium", "high", "max"),
-    effort_numbers=True,
-)
-
-# Qwen3.8-Flash-Next NVFP4 — the Qwen4 preview architecture (hybrid
-# GatedDeltaNet + Qwen Sparse Attention, n-gram PLE, one MTP layer). Its
-# generation_config.json states exactly three terms — temperature 1.0,
-# top_p 0.95, top_k 20 — and nothing else; temperature is the caller's
-# argument, so the two stated here are the whole envelope. The tokenizer is
-# the served NVFP4 repo, which ships its own tokenizer and chat template.
-#
-# Response length here is governed by the chat template's `reasoning_effort`
-# field (xhigh | medium | low), which DEFAULTS TO xhigh — the expensive end.
-_QWEN38_FLASH_NEXT_NVFP4 = ModelCard(
-    tokenizer="RadixArk/Qwen3.8-Flash-Next-NVFP4",
-    top_p=0.95,
-    top_k=20,
-    efforts=("xhigh", "medium", "low"),
-    # The serve's --tool-call-parser qwen3_coder owns enforcement.
-)
-
-CARDS: dict[str, ModelCard] = {
-    "inkling-small": _INKLING,
-    "qwen38-flash-next-nvfp4": _QWEN38_FLASH_NEXT_NVFP4,
-    "gemma4-26b-a4b-nvfp4": _GEMMA_26B_A4B_NVFP4,
-    "gemma4-26b-a4b-gguf": _GEMMA_26B_A4B_GGUF,
-    "gemma4-e4b": _GEMMA_E4B,
-    "gemma4-e2b": _GEMMA_E2B,
+#: alias -> {tokenizer, top_p, top_k[, efforts][, effort_numbers]}.
+#: ``efforts`` are the ``reasoning_effort`` rungs the chat template takes and
+#: ``effort_numbers`` whether it also takes a number in [0, 0.99]; a card that
+#: names no rungs takes any rung of ``_EFFORT_RUNGS`` or any such number.
+#: Each served alias needs its own row (card_for and tokenizer.py take an
+#: EXACT alias hit only). The tokenizer repo is the SERVED weights', because a
+#: quantized repo ships its own tokenizer and prompt sizing has to be measured
+#: against what is serving.
+CARDS: dict[str, dict[str, Any]] = {
+    # Thinking Machines publishes no sampling recommendation for Inkling (no
+    # generation_config.json in the BF16 or the NVFP4 repo, nothing in the
+    # model card): a permissive envelope, not a card-derived one. The
+    # template's `reasoning_effort` ({none:0.0, minimal:0.1, low:0.2,
+    # medium:0.7, high:0.9, max:0.99}, or a raw float in [0.0, 0.99])
+    # DEFAULTS TO 0.9 when the request omits it — the expensive end.
+    "inkling-small": {"tokenizer": "thinkingmachines/Inkling-Small-NVFP4", "top_p": 0.95, "top_k": 64,
+                      "efforts": ("none", "minimal", "low", "medium", "high", "max"), "effort_numbers": True},
+    # Qwen3.8-Flash-Next NVFP4, the Qwen4 preview architecture (hybrid
+    # GatedDeltaNet + Qwen Sparse Attention, n-gram PLE, one MTP layer). Its
+    # generation_config.json states temperature 1.0, top_p 0.95, top_k 20 and
+    # nothing else; temperature is the caller's argument. The template's
+    # `reasoning_effort` DEFAULTS TO xhigh — the expensive end. The serve's
+    # --tool-call-parser qwen3_coder owns enforcement.
+    "qwen38-flash-next-nvfp4": {"tokenizer": "RadixArk/Qwen3.8-Flash-Next-NVFP4", "top_p": 0.95, "top_k": 20,
+                                "efforts": ("xhigh", "medium", "low")},
+    # Gemma 4, the family envelope (top_p 0.95, top_k 64, no penalty term) on
+    # every size, `-it` throughout: the base checkpoints carry no chat
+    # template and no tool-call surface. The GGUF alias is the same weights
+    # served by llama.cpp (flown aboard); a serve is not a model, and a run
+    # has to be able to name which one it got.
+    "gemma4-26b-a4b-nvfp4": {"tokenizer": "nvidia/Gemma-4-26B-A4B-NVFP4", "top_p": 0.95, "top_k": 64},
+    "gemma4-26b-a4b-gguf": {"tokenizer": "google/gemma-4-26B-A4B-it", "top_p": 0.95, "top_k": 64},
+    "gemma4-e4b": {"tokenizer": "google/gemma-4-E4B-it", "top_p": 0.95, "top_k": 64},
+    "gemma4-e2b": {"tokenizer": "google/gemma-4-E2B-it", "top_p": 0.95, "top_k": 64},
 }
 
 
-def card_for(model_id: str | None) -> ModelCard:
+def card_for(model_id: str | None) -> dict[str, Any]:
     """The card for a served alias, by exact name. A name the table does not
     carry is refused: a near name would draw another model's envelope."""
     alias = (model_id or "").strip().lower()
