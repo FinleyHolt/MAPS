@@ -51,6 +51,7 @@ from pathlib import Path
 
 from benchmarks.citynav.analysis.rows import is_infra_abort
 from maps.perception.geometry.sensor_spec import resolve_sensor
+from maps.search.analyze_scene.geom_compute import point_in_polygon
 from typing import Any
 
 FT_PER_M = 1.0 / 0.3048
@@ -103,19 +104,6 @@ def centroid(ring: list[list[float]]) -> tuple[float, float]:
     if abs(a) < 1e-9:
         return sum(p[0] for p in ring) / n, sum(p[1] for p in ring) / n
     return cx / (3.0 * a), cy / (3.0 * a)
-
-
-def inside(pt: tuple[float, float], ring: list[list[float]]) -> bool:
-    """Even-odd point in polygon."""
-    x, y = pt
-    hit = False
-    n = len(ring)
-    for i in range(n):
-        x0, y0 = ring[i][0], ring[i][1]
-        x1, y1 = ring[(i + 1) % n][0], ring[(i + 1) % n][1]
-        if (y0 > y) != (y1 > y) and x < (x1 - x0) * (y - y0) / (y1 - y0) + x0:
-            hit = not hit
-    return hit
 
 
 # -- the truth -------------------------------------------------------------------
@@ -215,7 +203,7 @@ def committed_area(bases: list[Path], fid: str | None, xy, prior: list[dict[str,
             if near:
                 ring = min(near, key=lambda t: t[0])[1]
                 break
-    if not ring or len(ring) < 3 or not (inside(xy, ring) or math.dist(centroid(ring), xy) <= AREA_MATCH_M):
+    if not ring or len(ring) < 3 or not (point_in_polygon(xy, ring) or math.dist(centroid(ring), xy) <= AREA_MATCH_M):
         return None
     return [[float(p[0]), float(p[1])] for p in ring]
 
@@ -528,7 +516,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         point = centroid(area) if area else xy
         out["ne_from"] = "committed area centroid" if area else "commit point"
         out["ne_ft"] = round(math.dist(point, target) * FT_PER_M, 1)
-        out["success_area"] = bool(area and inside(target, area))
+        out["success_area"] = bool(area and point_in_polygon(target, area))
         out["success_radius"] = math.dist(xy, target) <= radius_m
     else:
         out["success_area"] = out["success_radius"] = False
