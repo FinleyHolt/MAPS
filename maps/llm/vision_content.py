@@ -10,45 +10,18 @@ import binascii
 import io
 import math
 
-#: Pixels per vision token, and a flat per-image surcharge. AN UPPER BOUND ON
-#: THE SERVER'S BILL, deliberately, not a reproduction of its tokenizer.
-#:
-#: Measured against the served build by differencing the client's own estimate
-#: from the server's reported input count: 2,607 tok/megapixel by OLS over 207
-#: real requests, with single-image checks at 400 px -> 427 tokens and
-#: 1024 px -> 2,632. Those two points do NOT lie on one pixels-per-token line
-#: (they imply 19.3 and 20.0 px per token side), and Inkling's own config
-#: gives ``vision_config.patch_size 40`` with an ``hmlp`` encoder, so the true
-#: law involves a resize this does not model. The surcharge covers the
-#: per-image framing the grid does not -- the checkpoint declares an
-#: ``image_bos_token`` -- and the pair brackets both measurements from ABOVE
-#: (400 px -> 449 vs 427; 1024 px -> 2,763 vs 2,632).
-#:
-#: Erring high is the whole point. Under-counting is the defect this exists to
-#: end: it sends a request the window cannot hold and the episode dies on a
-#: 400. Over-counting fires compaction a little early, which costs a crop the
-#: model was probably done with. When the exact law is wanted, take it from the
-#: served model's image processor rather than refitting these constants.
-#:
-#: PER-MODEL. These belong to Inkling. Re-measure for any other served model:
-#: send one crop of known size and difference the reported prompt tokens
-#: against an otherwise identical text-only call.
+#: Pixels per vision token and a flat per-image surcharge: an upper bound on
+#: Inkling's bill, not its tokenizer. Under-counting sends a request the window
+#: cannot hold; over-counting only compacts a little early.
+#: ponytail: fitted for Inkling only; another served model needs its own pair
+#: (or its image processor's exact law).
 _PIXELS_PER_VISION_TOKEN = 384
 _VISION_TOKENS_PER_IMAGE = 32
 
 
 def image_tokens_of(part: object) -> int:
-    """What the SERVER will bill for one ``image_url`` content part.
-
-    Zero for anything that is not an image part, so a caller can map this
-    over a mixed parts list.
-
-    Reads the dimensions out of the JPEG header (``PIL`` opens lazily and
-    decodes no pixels), because the cost is set by the pixel count and
-    nothing else on the wire reports it. An undecodable part reads 0 rather
-    than raising: an estimate that dies on a malformed crop is worse than
-    one that under-counts a crop the server will reject anyway.
-    """
+    """The server's bill for one ``image_url`` part, from the JPEG header's
+    dimensions; 0 for any other part or an undecodable one."""
     if not isinstance(part, dict) or part.get("type") != "image_url":
         return 0
     url = (part.get("image_url") or {}).get("url")
@@ -69,27 +42,8 @@ def image_tokens_of(part: object) -> int:
 
 
 def image_tokens_in(messages: list[dict]) -> int:
-    """The server's vision-token bill for a whole message list.
-
-    THE CLIENT USED TO COUNT THIS AS ZERO. Every image part collapsed to
-    the literal ``"[image crop]"`` (about 3 tokens) before tokenization, on
-    the stated theory that the server's vision budget was governed
-    separately by a per-request image cap. It is not, twice over. A count
-    cap does not bill tokens -- they land in the same context window as the
-    text -- and no cap is declared anyway: the sglang flag is
-    ``--limit-mm-data-per-request`` (``--limit-mm-per-prompt`` is vLLM's
-    spelling), no card or script in this tree passes either, and the serves
-    report ``limit_mm_data_per_request=None``. A 1024 px map cost the
-    server 2,632 tokens and the client 3,
-    so a conversation carrying sixteen of them was 42,112 tokens -- 87% of
-    the input budget -- into a window the client believed was empty.
-
-    Measured consequence: on a reasoning-effort ladder the max-effort arm
-    sent twelve requests 1,049-4,582 tokens past its own declared budget,
-    the server 400'd every one, and 130,095 uncounted tokens over 136
-    images is the entire gap. The two lower-effort arms never took enough
-    turns to reach the window, which is why it read as an effort effect.
-    """
+    """The server's vision-token bill for a whole message list: image tokens
+    land in the same window as the text."""
     total = 0
     for message in messages:
         content = message.get("content")

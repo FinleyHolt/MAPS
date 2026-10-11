@@ -1,39 +1,24 @@
-"""HuggingFace tokenizer factory keyed by vLLM model alias.
-
-Process-wide cache, lazy load, override via
-``SEARCH_COMPACT_TOKENIZER_NAME`` env var. Consumed by the autocompact
-prompt sizer (``maps.search.analyze_scene.compactor``) and by the
-transcript's reasoning-token count (``maps.llm.flight_summary``).
-"""
+"""The served model's HuggingFace tokenizer, cached per process, for prompt
+sizing (the compactor) and reasoning-token counts (``flight_summary``)."""
 
 from __future__ import annotations
 
 import os
 from typing import Any
 
-# Eager import to dodge a thread race in transformers v5.x's ``_LazyModule``.
-# ``_tokenizer()`` is called from the concurrent per-stop round threads.
-# When several
-# threads enter ``from transformers import AutoTokenizer`` concurrently the
-# lazy module hook races and some threads raise
-# ``ImportError: cannot import name 'AutoTokenizer' from 'transformers'``.
-# Importing eagerly at module load resolves the lazy attribute once, before
-# any worker thread exists.
+# Imported at module load: transformers' lazy module races when several
+# threads first import AutoTokenizer at once.
 from transformers import AutoTokenizer
 
 from maps.llm.model_cards import CARDS
 
 
-# Process-wide tokenizer cache, keyed by HF name.
 _TOKENIZER_CACHE: dict[str, Any] = {}
 
 
 def _hf_tokenizer_name(model: str) -> str:
-    """Resolve the HF tokenizer repo for a served model alias.
-
-    Order: ``SEARCH_COMPACT_TOKENIZER_NAME`` env var > the model card
-    (``maps.llm.model_cards``, exact-alias hit only) > ``model`` itself.
-    """
+    """The tokenizer repo for a served alias: ``SEARCH_COMPACT_TOKENIZER_NAME``,
+    else the model card's, else ``model`` itself."""
     env = os.environ.get("SEARCH_COMPACT_TOKENIZER_NAME", "").strip()
     if env:
         return env
@@ -44,13 +29,8 @@ def _hf_tokenizer_name(model: str) -> str:
 
 
 def _tokenizer(model: str):
-    """Return the cached HuggingFace tokenizer for ``model``.
-
-    Lazy-loaded on first call. A repo that cannot be loaded raises
-    ``RuntimeError`` naming it: discovery (``endpoint_spec.discover``)
-    refuses to start a run on that, and nothing sizes a prompt without a
-    tokenizer.
-    """
+    """The cached tokenizer for ``model``, loaded on first call; a repo that
+    cannot load raises ``RuntimeError`` naming it."""
     hf_name = _hf_tokenizer_name(model)
     cached = _TOKENIZER_CACHE.get(hf_name)
     if cached is not None:

@@ -1,15 +1,7 @@
-"""Client-side model cards, keyed by the discovered served alias.
-
-One row per served model: the HF tokenizer repo (prompt sizing and
-response metering), the card-recommended thinking-mode sampling envelope,
-and the ``reasoning_effort`` values its chat template takes. The
-serve-side half of a model's facts (model path, parsers, TP, spec-decode
-composition) belongs to whoever runs the serve — serve and client run on
-different boxes, so each layer carries only the fields it consumes.
-
-Resolution: exact served-alias match; any other name is refused. No card
-declares a presence penalty, so no request carries one.
-"""
+"""Client-side model cards, keyed by the exact discovered served alias: the
+tokenizer repo, the thinking-mode sampling envelope and the
+``reasoning_effort`` values each chat template takes. Any other name is
+refused."""
 
 from __future__ import annotations
 
@@ -18,22 +10,12 @@ from typing import Any
 
 #: alias -> {tokenizer, top_p, top_k[, efforts][, effort_numbers]}, or for a
 #: hosted OpenAI model {tokenizer, wire: "openai", efforts[, max_images]}.
-#: ``efforts`` are the ``reasoning_effort`` rungs the chat template takes and
-#: ``effort_numbers`` whether it also takes a number in [0, 0.99]; a card that
-#: names no rungs takes any rung of ``_EFFORT_RUNGS`` or any such number.
-#: Each served alias needs its own row (card_for and tokenizer.py take an
-#: EXACT alias hit only). The tokenizer repo is the SERVED weights', because a
-#: quantized repo ships its own tokenizer and prompt sizing has to be measured
-#: against what is serving.
-#:
-#: ``wire: "openai"`` marks a model behind OpenAI's own chat-completions
-#: contract rather than a chat template (``maps.llm.openai_wire``): the
-#: request carries no sampling envelope, template kwargs or seed, caps output
-#: with ``max_completion_tokens``, and sends each message with only the
-#: fields that contract names. The thinking span never comes back, so the
-#: reasoning count is the provider's ``usage`` meter. ``max_images`` is the
-#: endpoint's per-request image limit; the reasoner evicts the oldest crops
-#: past it.
+#: ``efforts`` are the rungs the chat template takes and ``effort_numbers``
+#: whether it also takes a number in [0, 0.99]; a card naming no rungs takes
+#: any rung of ``_EFFORT_RUNGS`` or any such number. The tokenizer repo is the
+#: served weights' (a quantized repo ships its own). ``wire: "openai"`` marks
+#: OpenAI's own chat-completions contract (``maps.llm.openai_wire``);
+#: ``max_images`` is a per-request image limit the reasoner evicts crops to.
 CARDS: dict[str, dict[str, Any]] = {
     # Thinking Machines publishes no sampling recommendation for Inkling (no
     # generation_config.json in the BF16 or the NVFP4 repo, nothing in the

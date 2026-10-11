@@ -1,23 +1,8 @@
-"""One episode's LLM activity, reduced to a row-sized block.
+"""One episode's LLM activity, reduced to a block that rides its row.
 
-The flight dir's ``llm/transcript.jsonl`` records every round-trip
-(:mod:`maps.llm.http` writes it). It does not survive a rows-only telemetry
-pull, and it costs a file walk per episode to read, so the population view
-that wants "tokens and turns across 1000 episodes" could not have it.
-
-:func:`summarize` collapses it into ~10 scalars plus a call histogram and
-the declared tools, cheap enough to ride the row into ``episodes.jsonl``:
-turns, requests, tokens, the tool calls the model emitted, and the DECLARED
-tools each ``params`` record carries.
-
-``reasoning_tokens`` is not summed off ``usage``: whether
-``usage.reasoning_tokens`` rides the wire is a backend fact (1055 of 1761
-pulled episodes carry it, from sglang; vLLM 0.21 leaves it unset and rolls
-the span into ``completion_tokens``). :func:`reasoning_tokens_of` takes the
-wire value where it exists and re-tokenizes the response's thinking span
-where it does not; a hosted OpenAI model returns no span, so its count is
-the provider's ``usage`` meter. It is a SLICE of ``completion_tokens``, not
-an addition.
+:func:`summarize` folds the flight dir's ``llm/transcript.jsonl`` into turns,
+requests, token sums, latency, a histogram of the tool calls the model emitted
+and the tools each ``params`` record declared.
 """
 
 from __future__ import annotations
@@ -33,12 +18,8 @@ from .tokenizer import _tokenizer
 
 log = logging.getLogger(__name__)
 
-#: A tool name the model generated rather than selected. Measured once in
-#: 12,679 calls on one sglang serve: a name 163 characters long carrying
-#: leaked prose ("act...`. Let me fix this. Actually, looking at the previous
-#: successful call…"). Real data, not a parse failure — but binning it
-#: verbatim puts a paragraph in the axis, and dropping it hides a generation
-#: failure worth counting. It gets its own bucket.
+#: The histogram bucket of a tool name the model generated rather than
+#: selected (leaked prose), counted rather than binned verbatim.
 MALFORMED = "«malformed»"
 
 _TOOL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,39}\Z")
@@ -50,14 +31,8 @@ def _tool_name(raw: Any) -> str:
 
 
 def _as_dict(v: Any) -> dict:
-    """Model-emitted JSON is untrusted in SHAPE, not just in presence.
-
-    ``x.get(k) or {}`` guards a missing or null field and nothing else: a
-    field declared as an object arrives as a string often enough to matter,
-    and the next ``.get`` on it raises. This runs inside the episode,
-    behind a catch-all, so an unguarded raise would return the zero shape
-    and lose that episode's telemetry.
-    """
+    """``v`` if it is a dict, else ``{}``: model-emitted JSON is untrusted in
+    shape (an object field can arrive as a string)."""
     return v if isinstance(v, dict) else {}
 
 
@@ -74,15 +49,13 @@ def _bump(d: dict, k: Any) -> None:
 
 
 def blank() -> dict:
-    """The zero shape. Written verbatim when the episode kept no transcript,
-    so a reader never has to distinguish "no block" from "empty block"."""
+    """The zero shape, written when the episode kept no transcript."""
     return {
         "turns": 0,
         "requests": 0,
         "unanswered": 0,
         "prompt_tokens": 0,
-        # Largest single-request prompt — peak context occupancy. The sums
-        # above measure spend; this measures how full the window ever got.
+        # the largest single prompt: how full the window ever got
         "prompt_tokens_max": 0,
         "completion_tokens": 0,
         "total_tokens": 0,
@@ -95,42 +68,15 @@ def blank() -> dict:
 
 
 def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int:
-    """Extract the reasoning-span token count from a chat-completions response.
+    """The reasoning-span token count of one response, a slice of
+    ``usage.completion_tokens``.
 
-    ``model`` is the requested model. On an OpenAI-wire card
-    (``maps.llm.model_cards``) the span never comes back by design, so the
-    rule below would read every response as zero thinking: the count there
-    is ``usage.completion_tokens_details.reasoning_tokens``, the provider's
-    own meter of the tokens it billed as reasoning.
-
-    A reasoning serve routes the thinking span into
-    ``choices[i].message.reasoning_content`` (or ``reasoning`` on some
-    SDKs) and rolls its tokens into ``usage.completion_tokens``. Some
-    serves also report ``usage.reasoning_tokens``; where they do, it is
-    the exact count and beats tokenizing the text.
-
-    **THE SPAN DECIDES, NOT THE USAGE FIELD.** A response carrying no
-    thinking span reads 0 here whatever ``usage`` claims, and the order
-    is that way round because the claim is not reliable: sglang 0.6.17
-    serving Inkling reports ``reasoning_tokens = completion_tokens - 1``
-    on a response whose ``reasoning_content`` is ``null`` — not zero, not
-    absent, but one short of the entire generation. Measured on the
-    effort ladder, where the arm served ``reasoning_effort=0.0`` produced
-    341 responses, ZERO of them carrying a span, and 339 of them claiming
-    to be almost entirely thinking. Preferring the field made the
-    least-thinking arm read as the most-thinking one, and did it
-    monotonically across the whole ladder, which is the shape that gets
-    believed.
-
-    Order of resolution:
-      1. no ``reasoning`` / ``reasoning_content`` on any choice → 0.
-      2. ``usage.reasoning_tokens`` when the serve reports one.
-      3. tokenize the span with the same HF tokenizer the compactor
-         uses, keyed off the response's ``model`` alias.
-      4. 0 (no tokenizer available).
-
-    The count is a slice of ``usage.completion_tokens``, which includes
-    the reasoning tokens; the two overlap by design.
+    For an OpenAI-wire ``model`` (no span comes back) it is the provider's
+    ``usage.completion_tokens_details.reasoning_tokens``. Otherwise the span
+    decides, because a serve's ``usage.reasoning_tokens`` can claim thinking
+    on a response that carries none: no ``reasoning``/``reasoning_content``
+    reads 0; else ``usage.reasoning_tokens`` when positive; else the span
+    tokenized with the response ``model``'s tokenizer; else 0.
     """
     usage = _as_dict(response_json.get("usage"))
     wire = speaks_openai(model)
@@ -173,25 +119,18 @@ def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int
 
 
 def _scan_transcript(path: Path, out: dict) -> None:
-    """Fold one transcript into ``out``.
-
-    A raw line scan: it never reconstructs a request's full message list
-    from the deltas. Only ``params``
-    (the declared vocabulary), ``request`` (timestamps, for latency and
-    the unanswered count) and ``response`` matter.
-    """
+    """Fold one transcript into ``out`` in a raw line scan (no request is
+    rebuilt): ``params`` for the declared tools, ``request`` for timestamps,
+    ``response`` for the rest."""
     started: dict[str, float] = {}
     model: str | None = None
     with path.open(errors="replace") as fh:
         for line in fh:
-            # Cheap reject before the JSON parse.
             if '"kind":' not in line:
                 continue
             try:
                 rec = json.loads(line)
-            except ValueError:
-                # A truncated final line is a live writer mid-append, not
-                # an error.
+            except ValueError:  # a live writer's truncated last line
                 continue
             rec = _as_dict(rec)
             kind = rec.get("kind")
@@ -242,19 +181,13 @@ def _scan_transcript(path: Path, out: dict) -> None:
                 fn = _as_dict(_as_dict(tc).get("function"))
                 _bump(out["calls"], _tool_name(fn.get("name")))
 
-    # Requests still open at EOF never got a response — a crash, a timeout,
-    # or a run killed mid-call. Counting them is why ``requests`` is read at
-    # all: ``turns`` alone cannot tell a clean episode from a truncated one.
+    # requests never answered: a crash, a timeout or a kill mid-call
     out["unanswered"] = len(started)
 
 
 def summarize(flight_dir: Path) -> dict:
-    """One episode's LLM activity from its flight dir.
-
-    Returns :func:`blank` when the episode kept no transcript. NEVER
-    raises: this runs on the episode's way out, and a summary is not
-    worth losing a flown episode over.
-    """
+    """One episode's LLM activity from its flight dir; :func:`blank` when it
+    kept no transcript. Never raises: it runs on the episode's way out."""
     out = blank()
     transcript = Path(flight_dir) / "llm" / "transcript.jsonl"
     try:
