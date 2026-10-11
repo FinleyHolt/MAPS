@@ -1,40 +1,17 @@
 """The run's ONE machine-written record: ``run_manifest.json`` at the run root.
 
-A config authored before a run is a promise; this manifest is evidence. It is
-emitted at flight start — after argv, endpoint discovery, and episode
-selection have all resolved, before the first episode flies — and its
-identity fields are MEASURED, not copied from declarations: the served model
-and window come off ``/v1/models`` (the installed endpoint spec), the bake
-identity off the tile files' own bytes. The record is self-contained (the
-config YAML is inlined, every path resolved), so an appendix cites
-``(manifest, git sha)`` and a reader chases nothing.
+Emitted after argv, endpoint discovery and episode selection resolve, before
+the first episode flies. Identity fields are measured (the served model and
+window off the installed endpoint spec, the bake off the tile files' bytes)
+and the config is inlined, so the record is self-contained. The field station
+writes one at the sortie root and one per mission workdir (``mission=``),
+carrying the sampling that mission flew under.
 
-This module also owns the run-identity env inventory:
-
-- ``ARM_ENV_FLAGS`` — the experiment-arm flags dispatch stamps onto every
-  predictions row (``arm_env_stamp``); the ledger pairs and ``ab_report``
-  refuses on these.
-- ``AUDITED_ENV`` — every ambient var read between entry and first episode
-  that can change what runs or where it runs. Set keys are recorded; unset
-  keys are absent. Secrets never appear — an unverifiable field is a place
-  the appendix can lie, a secret is a leak.
-
-The field station writes it at two grains. The sortie's manifest sits at
-the sortie root, written by the first mission that flies and describing the
-arm as that mission found it. Each mission then writes its own into its
-workdir (``mission=``), one deeper, carrying the sampling THAT mission flew
-under: the reasoning effort the console named, or the arm's when it named
-none. A reader chasing a row walks up from the mission's artifacts and lands
-on the mission's record first (``analysis.provenance.resolve``), so a
-per-mission fact is never read off the sortie's arm-wide stamp.
-
-Write-once semantics (the commit_state "first dump wins" idiom): the first
-emit writes the file; every re-entry into the same run root (a resume)
-verifies the current resolution against it and REFUSES on
-identity drift — a resumed run under a different bake/model/config/selection
-is two runs wearing one run id. Git-sha drift on resume is recorded (a
-``resumes`` entry), not refused: mid-campaign code fixes are routine and the
-entry makes them visible.
+Write-once: the first emit writes the file; a re-entry into the same root (a
+resume) verifies its resolution against it and REFUSES on identity drift
+(``IDENTITY_KEYS``): a resume under another bake/model/config/selection is
+two runs wearing one run id. Git-sha drift is recorded as a ``resumes``
+entry, not refused.
 """
 
 from __future__ import annotations
@@ -52,46 +29,33 @@ from benchmarks.citynav.episodes import EPISODES_JSONL
 SCHEMA = "maps.run_manifest/v1"
 MANIFEST_NAME = "run_manifest.json"
 
-# A/B arm auditability: the load-bearing launcher pins must be readable off
-# the results row itself, not inferred from side-effect artifacts. Set-only
-# (an unset flag stays absent), except the tile bake, which is resolved —
-# see ``arm_env_stamp``. Readers: run_benchmark.dispatch (row stamp),
-# analysis.ab_report (pairing refusal).
+# The experiment-arm flags every row carries (``arm_env_stamp``: dispatch
+# stamps rows with it, ab_report refuses to pair across it). Set-only, except
+# the tile bake, which is resolved.
 ARM_ENV_FLAGS = (
     "SEARCH_CITYNAV_TILES",
-    # The imagery raster the ortho crops read. The Cal City bridge resolves
-    # SEARCH_CALCITY_RGBD_DIR onto this name, default and override alike,
-    # so two arms over two rasters of one block -- the NAIP release and the
-    # program's own map -- share a bake and a split and differ on exactly
-    # this. Set-only: a CityNav row never carries it.
+    # The imagery raster the ortho crops read (the Cal City bridge resolves
+    # SEARCH_CALCITY_RGBD_DIR onto it): two arms over two rasters of one
+    # block share a bake and a split and differ on exactly this.
     "SEARCH_CITYNAV_RGBD_DIR",
-    # Per-k resample roots differ only by their pinned seed base.
     "SEARCH_SEED_BASE",
-    # The envelope sweep's two knobs (maps/llm/sampling.py). Reasoner turns
-    # sample at temperature 1.0, so these move the score directly. They are
-    # read through a helper that takes the key as a parameter, which hides
-    # them from the env-inventory scan, so they are listed here by name.
-    # An arm flown at a different temperature is not a null.
+    # The envelope sweep's knobs (maps/llm/sampling.py); reasoner turns
+    # sample at temperature 1.0, so these move the score directly.
     "SEARCH_SAMPLING_TEMPERATURE",
     "SEARCH_SAMPLING_PRESENCE_PENALTY",
-    # How hard the model was asked to think, per request. It moves decode
-    # tokens per episode and the score with them, and an unset arm inherits
-    # whatever the served chat template defaults to — so a row that carries
-    # no effort is a row flown at the SERVE's value, and two rows differing
-    # only here are two arms.
+    # Unset sends none and flies at the serve's default: a row without it
+    # and a row with it are two arms.
     "SEARCH_SAMPLING_REASONING_EFFORT",
 )
 # Set keys under these prefixes join the stamp the same way (compaction
 # budgets change reasoning behavior).
 ARM_ENV_PREFIXES = ("SEARCH_COMPACT_",)
 
-# The audited ambient-env inventory: vars that select WHAT runs (config,
-# data roots, bridge/runner, seeds), toggle an arm, fabricate endpoint
-# facts, or place the work. The manifest records every SET key;
-# argv-selected facts (split/seed/limit/workers) are explicit
-# manifest fields and do not ride this map.
-AUDITED_ENV = (
-    # selects what runs
+# The audited ambient env: the arm flags, plus the vars that select what runs
+# (config, data roots, bridge/runner) and the endpoints (the two override
+# vars fabricate served-model facts without probing). The manifest records
+# every SET key; argv facts (split/seed/limit/workers) are explicit fields.
+AUDITED_ENV = ARM_ENV_FLAGS + (
     "BENCH_SAMPLE_SEED",
     "CITYNAV_BENCH_CONFIG",
     "CITYNAV_ROOT",
@@ -99,52 +63,16 @@ AUDITED_ENV = (
     "SEARCH_BENCHMARK_NAME",
     "SEARCH_BENCHMARK_RUNNER_MODULE",
     "SEARCH_CITYNAV_DATA",
-    "SEARCH_CITYNAV_RGBD_DIR",
     "SEARCH_CITYNAV_SPLITS",
-    "SEARCH_CITYNAV_TILES",
-    "SEARCH_SEED_BASE",
-    # arm toggles
-    "SEARCH_SAMPLING_PRESENCE_PENALTY",
-    "SEARCH_SAMPLING_REASONING_EFFORT",
-    "SEARCH_SAMPLING_TEMPERATURE",
-    # endpoint identity (the two override vars FABRICATE served-model facts
-    # without probing — they must be on the record whenever set)
     "SAM_SERVER_URL",
     "SAM_VIDEO_SERVER_URL",
     "SEARCH_ENDPOINT_OFFLINE",
     "SEARCH_ENDPOINT_SPEC_OVERRIDE",
     "SEARCH_REASONER_URL",
 )
-AUDITED_ENV_PREFIXES = (
-    "SEARCH_COMPACT_",
-    "SEARCH_CALCITY_",
-)
+AUDITED_ENV_PREFIXES = ARM_ENV_PREFIXES + ("SEARCH_CALCITY_",)
 # Never recorded, ever. `.env` is the only home for secrets.
 SECRET_ENV = ("SEARCH_REASONER_API_KEY",)
-
-# Declared-but-not-recorded classes. Every identity-prefixed env read in the
-# run path must belong to SOME class here (test_env_inventory.py enforces
-# it), so a knob added without classifying itself fails a test the day it is
-# written. When unsure, a new var goes in AUDITED_ENV — recording is free,
-# an invisible knob is not.
-#
-# MECHANICS: wall clock, placement gates, retries, coordination transport —
-# never what is measured. Ambient by design; not worth a manifest line each.
-MECHANICS_ENV = (
-    "SEARCH_LLM_ROUTING_KEY_HEADER",
-    "SEARCH_REASONER_TIMEOUT_S",
-    "SEARCH_REASONER_WARMUP_TOTAL_S",
-)
-# DERIVED: written by the harness itself mid-run (driver→worker and
-# runner→wire-log transport). An ambient value is meaningless; the facts
-# they carry land in the manifest as explicit fields (split, seed, run id).
-DERIVED_ENV = (
-    "CITYNAV_BENCH_PARENT_PID",
-    "CITYNAV_BENCH_SAMPLE_SEED",
-    "CITYNAV_BENCH_SPLIT",
-    "SEARCH_COMPILE_WORKDIR",
-    "SEARCH_LLM_ROUTING_KEY",
-)
 
 # Drift in any of these between the stored manifest and a re-entering
 # process refuses the re-entry. Dotted paths into the manifest dict.
@@ -168,22 +96,12 @@ class ManifestIdentityError(RuntimeError):
 
 
 def arm_env_stamp() -> dict:
-    """The set arm flags, plus the ONE resolution the ledger's fatal
-    comparability class stands on: the tile bake. An unset
-    SEARCH_CITYNAV_TILES resolves to ``paths.TILES_DIR`` and the stamp
-    records that RESOLUTION — a default-bake run must prove its bake on
-    the row, not read as "unrecorded" (a 255-episode arm paired against
-    nothing tonight for exactly this)."""
-    stamp = {
-        k: os.environ[k] for k in ARM_ENV_FLAGS if os.environ.get(k, "") != ""
-    }
-    stamp.update(
-        {
-            k: v
-            for k, v in os.environ.items()
-            if k.startswith(ARM_ENV_PREFIXES) and v != ""
-        }
-    )
+    """The set arm flags, plus the tile bake resolved: an unset
+    SEARCH_CITYNAV_TILES records ``paths.TILES_DIR``, so a default-bake row
+    proves its bake instead of reading as unrecorded."""
+    stamp = {k: os.environ[k] for k in ARM_ENV_FLAGS if os.environ.get(k, "") != ""}
+    stamp.update({k: v for k, v in os.environ.items()
+                  if k.startswith(ARM_ENV_PREFIXES) and v != ""})
     if "SEARCH_CITYNAV_TILES" not in stamp:
         from benchmarks.citynav import paths
 
@@ -214,16 +132,8 @@ def settle_effort(model_id: str) -> None:
 
 
 def _audited_env() -> dict:
-    keys = {k for k in AUDITED_ENV}
-    keys.update(
-        k for k in os.environ if k.startswith(AUDITED_ENV_PREFIXES)
-    )
-    out: dict = {}
-    for k in sorted(keys - set(SECRET_ENV)):
-        v = os.environ.get(k)
-        if v is not None:
-            out[k] = v
-    return out
+    keys = set(AUDITED_ENV) | {k for k in os.environ if k.startswith(AUDITED_ENV_PREFIXES)}
+    return {k: os.environ[k] for k in sorted(keys - set(SECRET_ENV)) if k in os.environ}
 
 
 def _endpoint_section() -> dict:
