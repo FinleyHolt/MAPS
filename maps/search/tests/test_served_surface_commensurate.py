@@ -24,7 +24,7 @@ import re
 from maps.search.parse_compile import prompts
 from maps.search.parse_compile import reasoner_agent as ra
 from maps.search.parse_compile import reasoner_loop as rl
-from maps.search.tests.test_mission_loop import FakeReasoner, _ctx
+from maps.search.tests.fakes import FakeReasoner, bare_ctx
 
 # Word-boundary matches, case-insensitive except CARRY (the uppercase word
 # was the round protocol's token; lowercase "carry" is ordinary English).
@@ -115,7 +115,10 @@ def test_every_quoted_call_names_a_library_call():
     ordinary Python builtin the sandbox exposes.
     """
     from maps.search.parse_compile.python_surface import (
-        _LIBRARY_CALLS, _MOVE_CALLS, _SAFE_BUILTINS)
+        _LIBRARY_CALLS,
+        _MOVE_CALLS,
+        _SAFE_BUILTINS,
+    )
 
     known = set(_LIBRARY_CALLS) | set(_MOVE_CALLS) | set(_SAFE_BUILTINS)
     # row/handle methods and the display verb, reached as attributes or by
@@ -172,7 +175,7 @@ def test_dynamic_mission_output_is_commensurate():
     reply = rl.advance_reasoner_one_round(
         reasoner=fr,
         user_message="instruction",
-        ctx=_ctx(),
+        ctx=bare_ctx(),
         rid_tag="m0",
         transcript=[],
         compute_namespace={
@@ -212,7 +215,7 @@ def test_the_transcript_says_what_json_says():
     tr: list[dict] = []
     fr = FakeReasoner([[("run", {"code": 'look_for("car")'})], "over"])
     rl.advance_reasoner_one_round(
-        reasoner=fr, user_message="i", ctx=_ctx(),
+        reasoner=fr, user_message="i", ctx=bare_ctx(),
         rid_tag="m0", transcript=tr,
         compute_namespace={"cands": [], "anchors": [], "cell_m": 1.0},
         diag={},

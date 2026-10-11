@@ -23,6 +23,7 @@ from maps.search.render.map_render import (
     features_window_paint,
     render_map_from_spec,
 )
+from maps.search.tests.fakes import map_mission
 
 # A 10x10-cell tile at 2 m/cell, origin (0, 0): a landuse block in the
 # SOUTH-WEST corner, a detection cell in the NORTH-EAST corner.
@@ -153,8 +154,9 @@ def test_the_centre_carries_no_competing_numeral():
     # NO glyph: its digit is withheld at draw time.
     centre = [e for e in rec["legend"] if e.get("role") == "center"]
     assert len(centre) == 1
-    from maps.perception.viz import mllm_overlay
     import inspect
+
+    from maps.perception.viz import mllm_overlay
     sig = inspect.signature(mllm_overlay.render_look_overlay)
     assert "draw_digits" in sig.parameters, "the suppression knob is gone"
     src = inspect.getsource(
@@ -508,64 +510,11 @@ def test_a_map_after_a_flight_paints_the_flight_and_a_repeat_paints_the_same():
     """The map flatten is built once per surface version. A flight moves
     the version, so the next map carries the detections it folded; a second
     map under the same version is the same bytes."""
-    import json
-    from types import SimpleNamespace
-
-    from maps.search.parse_compile.reasoner_loop import (
-        MissionSpec, advance_reasoner_one_round)
-    from maps.search.tests import test_flight_mints_a_handle as fx
-    from maps.search.tests.test_mission_loop import FakeReasoner
-
-    class _Vision(FakeReasoner):
-        def __init__(self, turns):
-            super().__init__(turns)
-            self.maps: list[tuple[str, list]] = []
-
-        def append_vision_user(self, text, jpegs):
-            self.maps.append((text, list(jpegs)))
-            super().append_vision_user(text, jpegs)
-
-    graph = fx._Graph({**fx._PRIORS,
-                       "prior_9": fx._Node((20.0, 20.0), "house",
-                                           provenance="prebaked")})
-    for n in graph.nodes.values():
-        n.cells = np.asarray([[int(n.world_xy[1]), int(n.world_xy[0])]],
-                             dtype=np.int32)
-        n.tags = {"building": "yes"}
-    added = []
-
-    def _fly(item):
-        fid = f"detected_{len(added)}"
-        node = fx._Node((30.0 + 4.0 * len(added), 34.0), "car")
-        node.cells = np.asarray([[34, 30 + 4 * len(added)]], dtype=np.int32)
-        node.tags = {}
-        graph.nodes[fid] = node
-        added.append(fid)
-        return {"stop_id": f"stop_{len(added):03d}", "target": item["target_fid"],
-                "pose_xy": [30.0, 30.0], "alt_m": 100.0, "new_detections": 1,
-                "cue": "the cue"}
-
-    from maps.search.analyze_scene.geom_program import build_surface_from_graph
-    cands, anchors = build_surface_from_graph(graph.nodes.items(), (0.0, 0.0), 1.0)
-    fr = _Vision([[fx._run('show_map(around=prior_7)')],
-                  [fx._run('go_to(prior_7)')],
-                  [fx._run('show_map(around=prior_7)')],
-                  [fx._run('show_map(around=prior_7)')], "done"])
-    advance_reasoner_one_round(
-        reasoner=fr, user_message="Find the car.",
-        ctx=SimpleNamespace(graph=graph, cell_size_m=1.0,
-                            tile_origin_xy=(0.0, 0.0), grid_shape=(100, 100),
-                            robot_pose=None),
-        rid_tag="m0", transcript=[],
-        compute_namespace={"cands": cands, "anchors": anchors, "cell_m": 1.0},
-        diag={}, look_renderer=lambda reqs: [],
-        mission_spec=MissionSpec(fly=_fly,
-                                 declare_concepts=lambda i: {"declared": []}))
-    results = [json.loads(m["content"]) for m in fr.messages
-               if m.get("role") == "tool"]
+    results, maps = map_mission(["show_map(around=prior_7)", "go_to(prior_7)",
+                                 "show_map(around=prior_7)", "show_map(around=prior_7)"])
     assert all("error" not in r for r in results[:4]), results
-    assert len(fr.maps) == 3 and all(len(j) == 1 for _, j in fr.maps)
-    before, after, again = (j[0] for _, j in fr.maps)
+    assert len(maps) == 3 and all(len(j) == 1 for _, j in maps)
+    before, after, again = (j[0] for _, j in maps)
     assert before != after, "the map after the flight did not change"
     assert after == again, "a repeat under one version is not the same bytes"
-    assert "car=" in fr.maps[1][0] and "car=" not in fr.maps[0][0]
+    assert "car=" in maps[1][0] and "car=" not in maps[0][0]

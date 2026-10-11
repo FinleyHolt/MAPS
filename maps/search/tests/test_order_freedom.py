@@ -33,7 +33,6 @@ Pure (no GPU / tile / vLLM). Run via pytest:
 """
 from __future__ import annotations
 
-from maps.llm.endpoint_spec import EndpointSpec
 from maps.search.analyze_scene.geom_program import (
     ProgramError,
     _grouped_keys,
@@ -47,6 +46,7 @@ from maps.search.parse_compile.reasoner_loop import (
     advance_reasoner_one_round,
     run_geom_program_tool,
 )
+from maps.search.tests.fakes import TEST_SPEC, bare_ctx
 
 # Three cars strung along a road with a stored centerline, plus a plain
 # building anchor (no centerline) and a landmark the cars are away from.
@@ -358,23 +358,10 @@ def test_per_stop_round_serves_no_phase_note():
 # VIEW-PER-FIELD: each failed field gets its own entry; siblings apply         #
 # --------------------------------------------------------------------------- #
 
-_TEST_SPEC = EndpointSpec(
-    base_url="http://unused",
-    model_id="inkling-small",
-    max_model_len=262144,
-    tokenizer_name="qwen",
-    output_reserve=40000,
-)
-
-
-class _DummyCtx:
-    observation_backend = "ortho"
-
-
 def _view_ack_for(view_args: dict) -> dict:
     """Drive ONE view call through the real per-stop handler (mock reasoner,
     scripted turns: the view, then an explicit CARRY) and return its ack."""
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
     turns = iter([
         {"kind": "tool_call", "content": "", "reasoning": "",
          "tool_calls": [{"id": "c0", "type": "function",
@@ -394,7 +381,7 @@ def _view_ack_for(view_args: dict) -> dict:
     advance_reasoner_one_round(
         reasoner=r,
         user_message="find the car",
-        ctx=_DummyCtx(),
+        ctx=bare_ctx(),
         compute_namespace={"cands": [dict(c) for c in _CANDS],
                            "anchors": []},
         rid_tag="h0",

@@ -16,16 +16,16 @@ import io
 
 import numpy as np
 import pytest
-from maps.search.tests.ortho_fixture import write_ortho, write_rasters
 
 from maps.search.render.look_render import (
     LOOK_CAR_MARGIN_M,
     LOOK_CTX_BUDGET_PX,
     LOOK_MAX_BADGES,
     LOOK_TARGET_PX,
-    render_candidate_crops,
     look_window_bounds_m,
+    render_candidate_crops,
 )
+from maps.search.tests.ortho_fixture import write_rasters
 
 # The bounds are pixel counts; the fixture ortho below is 0.1 m/px.
 _MIN_M, _BUDGET_M = look_window_bounds_m(0.1)
@@ -34,21 +34,6 @@ MAP = "unit_test_look_block"
 GROUND_Z = 10.0
 
 
-@pytest.fixture(scope="module")
-def _ortho_root(tmp_path_factory):
-    """A 200 m x 200 m synthetic ortho — big enough for a budget-wide window."""
-    return write_ortho(tmp_path_factory.mktemp("ortho"), MAP, n=2000, ground_z=GROUND_Z, ramp=True)
-
-
-@pytest.fixture
-def ortho_dir(_ortho_root, monkeypatch):
-    from maps.perception.ortho import camera_model
-    from maps.perception.ortho.ground_level import GROUND_LEVEL
-
-    monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
-    camera_model._ORTHO_RASTER_CACHE.clear()
-    root = _ortho_root
-    return root
 
 
 def _req(center_xy, marks_xy=(), target_xy=None, fid="c0"):

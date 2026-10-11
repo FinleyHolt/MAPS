@@ -20,11 +20,7 @@ from __future__ import annotations
 import re
 import time
 
-from maps.search.tests.test_code_surface_arm import (
-    _STOPS,
-    _explore_drive,
-    _run,
-)
+from maps.search.tests.fakes import STOPS, explore_drive, run
 
 
 def test_a_pass_already_past_its_deadline_flies_nothing():
@@ -35,8 +31,8 @@ def test_a_pass_already_past_its_deadline_flies_nothing():
     did not happen and gets its turn straight back, which is the whole
     point: a turn back is a commit, a SIGKILL is a MISSING row.
     """
-    _reply, out, flights, _asked, _rend = _explore_drive(
-        [[_run('explore("prior_7")\n')], "done"],
+    _reply, out, flights, _asked, _rend = explore_drive(
+        [[run('explore("prior_7")\n')], "done"],
         deadline_epoch=time.time() - 60.0,
     )
     assert flights == [], flights
@@ -50,12 +46,12 @@ def test_no_deadline_flies_the_whole_pass():
     as the crew is flying, and a timer that stopped it would be a bug with a
     aircraft in the air. ``None`` is the default for exactly that reason.
     """
-    _reply, out, flights, _asked, _rend = _explore_drive(
-        [[_run('explore("prior_7")\n')], "done"],
+    _reply, out, flights, _asked, _rend = explore_drive(
+        [[run('explore("prior_7")\n')], "done"],
         deadline_epoch=None,
     )
-    assert len(flights) == len(_STOPS), flights
-    assert out[0]["explored"]["stops"] == len(_STOPS)
+    assert len(flights) == len(STOPS), flights
+    assert out[0]["explored"]["stops"] == len(STOPS)
 
 
 def test_a_pass_cut_midway_flies_what_it_had_and_reads_as_truncated():
@@ -79,8 +75,8 @@ def test_a_pass_cut_midway_flies_what_it_had_and_reads_as_truncated():
     orig = rl.time.time
     rl.time.time = lambda: clock["now"]
     try:
-        _reply, out, flights, _asked, _rend = _explore_drive(
-            [[_run('explore("prior_7")\n')], "done"],
+        _reply, out, flights, _asked, _rend = explore_drive(
+            [[run('explore("prior_7")\n')], "done"],
             deadline_epoch=clock["now"] + 150.0,
             on_fly=_advance,
         )
@@ -108,8 +104,8 @@ def test_the_backstop_serves_no_budget_and_no_clock():
     inherits the same contract, so the ONLY thing a cut pass tells the model
     is which stops were not flown.
     """
-    _reply, out, _flights, _asked, _rend = _explore_drive(
-        [[_run('explore("prior_7")\n')], "done"],
+    _reply, out, _flights, _asked, _rend = explore_drive(
+        [[run('explore("prior_7")\n')], "done"],
         deadline_epoch=time.time() - 60.0,
     )
     blob = repr(out[0])
@@ -126,8 +122,8 @@ def test_the_flight_arm_still_fires_on_its_own():
     Vacuity floor for this file: if the stop bound stopped working the three
     tests above would still pass, because they never let a pass reach it.
     """
-    _reply, out, flights, _asked, _rend = _explore_drive(
-        [[_run('explore("prior_7")\n')], "done"],
+    _reply, out, flights, _asked, _rend = explore_drive(
+        [[run('explore("prior_7")\n')], "done"],
         stops=[[float(x), 200.0] for x in range(100, 100 + 40 * 5, 5)],
     )
     # flight_budget is 32 in this fixture; the walk asks for 40 stops.

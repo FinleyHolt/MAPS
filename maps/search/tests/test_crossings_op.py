@@ -28,6 +28,7 @@ import pytest
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import ProgramError, run_program
+from maps.search.tests.fakes import plan_of_block
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
@@ -412,6 +413,7 @@ def test_a_road_ends_are_rows_you_can_go_to():
 
 def test_a_footprint_has_no_ends_and_says_so():
     import pytest
+
     from maps.search.analyze_scene.geom_program import ProgramError
     anchors = [{"fid": "prior_9", "xy": [0.0, 0.0], "name": "A Shed",
                 "mask": [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
@@ -435,7 +437,6 @@ def test_a_terminus_FLIES_without_needing_a_registry():
     """
     from maps.search.parse_compile.code_surface import bind_row
     from maps.search.parse_compile.python_surface import Row
-    from maps.search.tests.test_code_surface_arm import plan_of_block
     assert bind_row({"fid": "end_0", "xy": [177.0, 5273.0]}) == [177.0, 5273.0]
     assert bind_row({"fid": "prior_31", "xy": [1.0, 2.0]}) == "prior_31"
     # `t = ends_of(road)[0]` binds the ROW, and what a slot reads off it is
@@ -451,6 +452,7 @@ def test_a_sibling_segment_that_crosses_is_named():
     pair, and never reached the same-named sibling that crosses
     (22-block miss, calcity::363#361)."""
     import pytest
+
     from maps.search.analyze_scene.geom_program import ProgramError
     anchors = [_road("prior_1", [[0, 0], [100, 0]], "Airway Boulevard"),
                _road("prior_2", [[0, 84], [100, 84]], "Lime Avenue"),

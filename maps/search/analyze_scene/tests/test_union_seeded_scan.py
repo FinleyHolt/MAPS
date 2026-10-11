@@ -12,10 +12,7 @@ import numpy as np
 import pytest
 
 from maps.search.analyze_scene import geom_compute as G
-
-
-def _ring(x, y, w, h):
-    return [[(x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y)]]
+from maps.search.tests.fakes import ring
 
 
 def _plain(members, item):
@@ -56,10 +53,10 @@ def _seeded(members, item):
 
 def test_the_seeded_scan_matches_the_plain_one_on_a_class_sized_reference():
     rng = np.random.default_rng(19)
-    members = [G.mask_geom(_ring(rng.uniform(0, 3000), rng.uniform(0, 3000),
+    members = [G.mask_geom(ring(rng.uniform(0, 3000), rng.uniform(0, 3000),
                                  rng.uniform(4, 40), rng.uniform(4, 40)))
                for _ in range(400)]
-    items = [G.mask_geom(_ring(rng.uniform(0, 3000), rng.uniform(0, 3000),
+    items = [G.mask_geom(ring(rng.uniform(0, 3000), rng.uniform(0, 3000),
                                rng.uniform(4, 40), rng.uniform(4, 40)))
              for _ in range(60)]
     total_calls = 0
@@ -78,9 +75,9 @@ def test_the_seeded_scan_matches_the_plain_one_on_a_class_sized_reference():
 def test_the_seed_does_not_move_a_tie():
     """Two members that tie exactly: the earlier one must still be recorded,
     even when the seed evaluates the later one first."""
-    item = G.mask_geom(_ring(0, 0, 10, 10))
-    left = G.mask_geom(_ring(-30, 0, 10, 10))
-    right = G.mask_geom(_ring(30, 0, 10, 10))
+    item = G.mask_geom(ring(0, 0, 10, 10))
+    left = G.mask_geom(ring(-30, 0, 10, 10))
+    right = G.mask_geom(ring(30, 0, 10, 10))
     for members in ([left, right], [right, left]):
         want = _plain(members, item)
         got, _calls = _seeded(members, item)
@@ -94,10 +91,10 @@ def test_a_bound_an_ulp_above_its_own_gap_still_evaluates_the_member():
     skipped and the scan returns nothing at all -- the exact pair that failed
     is rebuilt here so a future tightening of BOUND_SLACK_M fails loudly."""
     rng = np.random.default_rng(19)
-    members = [G.mask_geom(_ring(rng.uniform(0, 3000), rng.uniform(0, 3000),
+    members = [G.mask_geom(ring(rng.uniform(0, 3000), rng.uniform(0, 3000),
                                  rng.uniform(4, 40), rng.uniform(4, 40)))
                for _ in range(400)]
-    items = [G.mask_geom(_ring(rng.uniform(0, 3000), rng.uniform(0, 3000),
+    items = [G.mask_geom(ring(rng.uniform(0, 3000), rng.uniform(0, 3000),
                                rng.uniform(4, 40), rng.uniform(4, 40)))
              for _ in range(60)]
     item = items[6]
@@ -112,19 +109,19 @@ def test_a_bound_an_ulp_above_its_own_gap_still_evaluates_the_member():
 
 def test_bbox_bounds_matches_bbox_gap_member_for_member():
     rng = np.random.default_rng(4)
-    members = [G.mask_geom(_ring(rng.uniform(0, 900), rng.uniform(0, 900),
+    members = [G.mask_geom(ring(rng.uniform(0, 900), rng.uniform(0, 900),
                                  rng.uniform(2, 30), rng.uniform(2, 30)))
                for _ in range(120)]
-    item = G.mask_geom(_ring(400, 400, 20, 20))
+    item = G.mask_geom(ring(400, 400, 20, 20))
     vec = G.bbox_bounds(G.stack_bboxes(members), item)
     one = np.asarray([G.bbox_gap(g, item) for g in members])
     assert np.allclose(vec, one)
 
 
 def test_an_unknown_box_prunes_nothing():
-    item = G.mask_geom(_ring(0, 0, 10, 10))
+    item = G.mask_geom(ring(0, 0, 10, 10))
     empty = G.mask_geom([])
-    real = G.mask_geom(_ring(500, 500, 10, 10))
+    real = G.mask_geom(ring(500, 500, 10, 10))
     bounds = G.bbox_bounds(G.stack_bboxes([empty, real]), item)
     assert bounds[0] == 0.0, "an unknown box must not claim distance"
     assert bounds[1] > 100.0

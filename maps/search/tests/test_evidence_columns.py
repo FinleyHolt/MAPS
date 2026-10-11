@@ -13,18 +13,12 @@ set exists.
 """
 from __future__ import annotations
 
-from maps.llm.endpoint_spec import EndpointSpec
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.reasoner_loop import (
-    MissionSpec, advance_reasoner_one_round)
-
-_TEST_SPEC = EndpointSpec(
-    base_url="http://unused",
-    model_id="inkling-small",
-    max_model_len=262144,
-    tokenizer_name="qwen",
-    output_reserve=40000,
+    MissionSpec,
+    advance_reasoner_one_round,
 )
+from maps.search.tests.fakes import TEST_SPEC, bare_ctx
 
 _CANDS = [
     {"fid": "d0", "xy": [0.0, 0.0], "class": "building", "rk": 3.0,
@@ -39,10 +33,6 @@ _RANK_BLOCK = ('a = find("building")\n'
                'b = a.order("rk")\n'
                'go_to(b[0])')
 _REPLY = "the middle building is b[0]."
-
-
-class _DummyCtx:
-    pass
 
 
 def _turn(name, args):
@@ -61,7 +51,7 @@ def _round(r, turns):
     return advance_reasoner_one_round(
         reasoner=r,
         user_message="the middle building",
-        ctx=_DummyCtx(),
+        ctx=bare_ctx(),
         compute_namespace={"cands": [dict(c) for c in _CANDS], "anchors": []},
         rid_tag="h0",
         mission_spec=MissionSpec(
@@ -74,14 +64,14 @@ def _round(r, turns):
 
 
 def test_a_blocks_columns_reach_the_episode_union():
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
     _round(r, [_turn("run", {"code": _RANK_BLOCK}),
                {"kind": "text", "content": _REPLY, "reasoning": ""}])
     assert "rk" in r.evidence_columns, sorted(r.evidence_columns)
 
 
 def test_the_union_is_episode_scoped_and_survives_the_next_turn():
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
     _round(r, [_turn("run", {"code": _RANK_BLOCK}),
                {"kind": "text", "content": _REPLY, "reasoning": ""}])
     first = set(r.evidence_columns)
@@ -93,7 +83,7 @@ def test_the_union_is_episode_scoped_and_survives_the_next_turn():
 
 
 def test_a_mission_that_ran_no_program_leaves_an_empty_union_not_an_error():
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
     _round(r, [_turn("run", {"code": 'go_to("d0")'}),
                {"kind": "text", "content": _REPLY, "reasoning": ""}])
     assert r.evidence_columns == set(), r.evidence_columns

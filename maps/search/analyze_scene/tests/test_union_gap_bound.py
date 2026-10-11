@@ -15,10 +15,7 @@ import numpy as np
 import pytest
 
 from maps.search.analyze_scene import geom_compute as G
-
-
-def _ring(x, y, w, h):
-    return [[(x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y)]]
+from maps.search.tests.fakes import ring
 
 
 def _pt(x, y):
@@ -29,9 +26,9 @@ def test_the_bound_never_exceeds_the_true_gap():
     rng = np.random.default_rng(11)
     checked = 0
     for _ in range(400):
-        a = G.mask_geom(_ring(rng.uniform(-500, 500), rng.uniform(-500, 500),
+        a = G.mask_geom(ring(rng.uniform(-500, 500), rng.uniform(-500, 500),
                               rng.uniform(1, 80), rng.uniform(1, 80)))
-        b = G.mask_geom(_ring(rng.uniform(-500, 500), rng.uniform(-500, 500),
+        b = G.mask_geom(ring(rng.uniform(-500, 500), rng.uniform(-500, 500),
                               rng.uniform(1, 80), rng.uniform(1, 80)))
         true_gap, _wa, _wb = G.gap_witness(a, b)
         bound = G.bbox_gap(a, b)
@@ -41,10 +38,10 @@ def test_the_bound_never_exceeds_the_true_gap():
 
 
 def test_the_bound_holds_for_containment_touch_and_points():
-    outer = G.mask_geom(_ring(0, 0, 100, 100))
-    inner = G.mask_geom(_ring(10, 10, 5, 5))
-    touching = G.mask_geom(_ring(100, 0, 10, 10))
-    far = G.mask_geom(_ring(1000, 1000, 10, 10))
+    outer = G.mask_geom(ring(0, 0, 100, 100))
+    inner = G.mask_geom(ring(10, 10, 5, 5))
+    touching = G.mask_geom(ring(100, 0, 10, 10))
+    far = G.mask_geom(ring(1000, 1000, 10, 10))
     point_in = G.mask_geom(_pt(50, 50))
     for a, b in ((outer, inner), (outer, touching), (outer, far),
                  (outer, point_in), (inner, far), (point_in, far)):
@@ -56,8 +53,8 @@ def test_the_bound_holds_for_containment_touch_and_points():
 
 
 def test_the_bound_is_symmetric_and_cached():
-    a = G.mask_geom(_ring(0, 0, 10, 10))
-    b = G.mask_geom(_ring(50, 50, 10, 10))
+    a = G.mask_geom(ring(0, 0, 10, 10))
+    b = G.mask_geom(ring(50, 50, 10, 10))
     assert G.bbox_gap(a, b) == pytest.approx(G.bbox_gap(b, a))
     assert G.geom_bbox(a) == (0.0, 0.0, 10.0, 10.0)
     assert a["BB"] == (0.0, 0.0, 10.0, 10.0)  # cached on the geom
@@ -69,10 +66,10 @@ def test_the_bound_is_symmetric_and_cached():
 def test_the_pruned_union_min_equals_the_unpruned_one():
     """The loop the bound serves, both ways, on a class-sized reference."""
     rng = np.random.default_rng(5)
-    members = [G.mask_geom(_ring(rng.uniform(0, 2000), rng.uniform(0, 2000),
+    members = [G.mask_geom(ring(rng.uniform(0, 2000), rng.uniform(0, 2000),
                                  rng.uniform(4, 40), rng.uniform(4, 40)))
                for _ in range(300)]
-    items = [G.mask_geom(_ring(rng.uniform(0, 2000), rng.uniform(0, 2000),
+    items = [G.mask_geom(ring(rng.uniform(0, 2000), rng.uniform(0, 2000),
                                rng.uniform(4, 40), rng.uniform(4, 40)))
              for _ in range(40)]
     saved = 0
@@ -106,9 +103,9 @@ def test_the_pruned_union_min_equals_the_unpruned_one():
 def test_a_zero_gap_stops_the_scan_without_changing_the_answer():
     """Containment gives 0, and nothing can beat 0 -- but the break must not
     change WHICH witness is kept when an earlier member already tied."""
-    a = G.mask_geom(_ring(0, 0, 10, 10))
-    overlapping = G.mask_geom(_ring(5, 5, 10, 10))
-    also = G.mask_geom(_ring(6, 6, 10, 10))
+    a = G.mask_geom(ring(0, 0, 10, 10))
+    overlapping = G.mask_geom(ring(5, 5, 10, 10))
+    also = G.mask_geom(ring(6, 6, 10, 10))
     members = [overlapping, also]
     d = wr = None
     for g in members:
@@ -123,6 +120,6 @@ def test_a_zero_gap_stops_the_scan_without_changing_the_answer():
 
 
 def test_math_bound_matches_a_hand_computed_separation():
-    a = G.mask_geom(_ring(0, 0, 10, 10))
-    b = G.mask_geom(_ring(30, 40, 10, 10))
+    a = G.mask_geom(ring(0, 0, 10, 10))
+    b = G.mask_geom(ring(30, 40, 10, 10))
     assert G.bbox_gap(a, b) == pytest.approx(math.hypot(20.0, 30.0))

@@ -21,16 +21,8 @@ from __future__ import annotations
 import hashlib
 import json
 
-from maps.llm.endpoint_spec import EndpointSpec
 from maps.search.parse_compile.reasoner_agent import Reasoner
-
-_TEST_SPEC = EndpointSpec(
-    base_url="http://unused",
-    model_id="inkling-small",
-    max_model_len=262144,
-    tokenizer_name="qwen",
-    output_reserve=40000,
-)
+from maps.search.tests.fakes import TEST_SPEC
 
 # Enough deliveries to pass any cap anyone would plausibly reintroduce. The
 # retired one was 16, and it first bit on the 17th image.
@@ -55,7 +47,7 @@ def _jpeg(n: int) -> bytes:
 
 
 def test_appending_a_crop_leaves_every_earlier_message_byte_identical():
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
     for i in range(_DELIVERIES):
         before = _digests(r.messages)
         r.append_vision_user(f"look {i}", [_jpeg(i)])
@@ -69,7 +61,7 @@ def test_appending_a_crop_leaves_every_earlier_message_byte_identical():
 
 def test_every_delivered_crop_survives_the_whole_episode():
     """No image part is ever replaced by a placeholder, at any depth."""
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
     for i in range(_DELIVERIES):
         r.append_vision_user(f"look {i}", [_jpeg(i)])
     images = [
@@ -85,7 +77,7 @@ def test_every_delivered_crop_survives_the_whole_episode():
 def test_a_text_turn_between_crops_does_not_disturb_them():
     """Interleaving is the real shape: analyze results and repairs land
     between deliveries, and the digest check has to hold across them."""
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
     for i in range(_DELIVERIES):
         r.append_vision_user(f"look {i}", [_jpeg(i)])
         before = _digests(r.messages)

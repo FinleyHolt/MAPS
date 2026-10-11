@@ -11,10 +11,7 @@ import math
 import numpy as np
 
 from maps.search.analyze_scene import geom_compute as G
-
-
-def _ring(x, y, w, h):
-    return [[(x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y)]]
+from maps.search.tests.fakes import ring
 
 
 def _way(x, y, dx, dy):
@@ -63,7 +60,7 @@ def test_the_gated_gap_is_the_ungated_gap_on_every_pair_shape():
         x, y = rng.uniform(-300, 300), rng.uniform(-300, 300)
         kind = rng.integers(0, 3)
         if kind == 0:
-            geoms.append(G.mask_geom(_ring(x, y, rng.uniform(1, 60),
+            geoms.append(G.mask_geom(ring(x, y, rng.uniform(1, 60),
                                            rng.uniform(1, 60))))
         elif kind == 1:
             geoms.append(G.mask_geom(_way(x, y, rng.uniform(-80, 80),
@@ -71,11 +68,11 @@ def test_the_gated_gap_is_the_ungated_gap_on_every_pair_shape():
         else:
             geoms.append(G.mask_geom([[(x, y)]]))
     # nested, touching and crossing pairs, on purpose
-    geoms.append(G.mask_geom(_ring(0, 0, 100, 100)))
-    geoms.append(G.mask_geom(_ring(10, 10, 5, 5)))
-    geoms.append(G.mask_geom(_ring(100, 0, 10, 10)))
+    geoms.append(G.mask_geom(ring(0, 0, 100, 100)))
+    geoms.append(G.mask_geom(ring(10, 10, 5, 5)))
+    geoms.append(G.mask_geom(ring(100, 0, 10, 10)))
     geoms.append(G.mask_geom(_way(-50, 50, 200, 0)))
-    geoms.append(G.mask_geom(_ring(20, -20, 10, 300)))
+    geoms.append(G.mask_geom(ring(20, -20, 10, 300)))
     checked = disjoint = 0
     for i in range(len(geoms)):
         for j in range(i, len(geoms)):

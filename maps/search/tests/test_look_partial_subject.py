@@ -11,30 +11,14 @@ nothing saying the thing continues.
 
 from __future__ import annotations
 
-import numpy as np
-import pytest
-from maps.search.tests.ortho_fixture import write_ortho
-
 from maps.search.render.look_render import render_candidate_crops
 
 MAP = "unit_test_partial_block"
 GROUND_Z = 10.0
 
 
-@pytest.fixture(scope="module")
-def _ortho_root(tmp_path_factory):
-    return write_ortho(tmp_path_factory.mktemp("ortho"), MAP, n=2400, ground_z=GROUND_Z, ramp=False)  # 240 m: both windows fit
-
-
-@pytest.fixture
-def ortho_dir(_ortho_root, monkeypatch):
-    from maps.perception.ortho import camera_model
-    from maps.perception.ortho.ground_level import GROUND_LEVEL
-
-    monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
-    camera_model._ORTHO_RASTER_CACHE.clear()
-    root = _ortho_root
-    return root
+ORTHO_N = 2400
+ORTHO_RAMP = False
 
 
 def _crop(ortho_dir, boundary):

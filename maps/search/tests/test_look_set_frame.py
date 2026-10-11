@@ -22,105 +22,19 @@ existed, and the renderer is a pure function of its request.
 
 from __future__ import annotations
 
-import json
-from types import SimpleNamespace
-
-import numpy as np
-import pytest
-from maps.search.tests.ortho_fixture import write_ortho
-
-from maps.search.parse_compile.reasoner_loop import (
-    MissionSpec,
-    advance_reasoner_one_round,
-)
 from maps.search.render.look_render import (
     LOOK_MAX_BADGES,
-    render_candidate_crops,
     look_window_bounds_m,
 )
-from maps.search.tests.test_mission_loop import FakeReasoner
-
-
-def _run(code: str):
-    return ("run", {"code": code})
+from maps.search.tests.fakes import cars, look_drive, run
 
 # The bounds are pixel counts; the fixture ortho below is 0.1 m/px.
 _MIN_M, _BUDGET_M = look_window_bounds_m(0.1)
 
-MAP = "unit_test_set_frame_block"
-GROUND_Z = 10.0
-
-
-@pytest.fixture(scope="module")
-def _ortho_root(tmp_path_factory):
-    """A 200 m x 200 m synthetic ortho at the native 0.1 m/px."""
-    return write_ortho(tmp_path_factory.mktemp("ortho"), MAP, n=2000, ground_z=GROUND_Z, ramp=True)
-
-
-@pytest.fixture
-def ortho_dir(_ortho_root, monkeypatch):
-    from maps.perception.ortho import camera_model
-    from maps.perception.ortho.ground_level import GROUND_LEVEL
-
-    monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
-    camera_model._ORTHO_RASTER_CACHE.clear()
-    root = _ortho_root
-    return root
-
-
-def _cars(n: int, step_m: float = 6.0) -> list[dict]:
-    """``n`` cars on a square lattice centred near (100, 100)."""
-    side = int(n ** 0.5) + 1
-    out = []
-    for i in range(n):
-        out.append({"fid": f"detected_{i}",
-                    "xy": [100.0 + step_m * (i % side - side / 2.0),
-                           100.0 + step_m * (i // side - side / 2.0)],
-                    "class": "car", "search_text": "car"})
-    return out
-
-
-def _fly(script, cands, ortho_dir):
-    """Drive one mission with the REAL look renderer; return
-    (tool results, the requests the renderer saw, the rendered records,
-    the vision messages the model would read)."""
-    seen_reqs: list[list[dict]] = []
-    seen_recs: list[list[dict]] = []
-
-    def renderer(reqs):
-        seen_reqs.append(reqs)
-        recs = render_candidate_crops(reqs, map_name=MAP, rgbd_dir=ortho_dir)
-        seen_recs.append(recs)
-        return recs
-
-    fr = FakeReasoner(script)
-    advance_reasoner_one_round(
-        reasoner=fr,
-        user_message="find the car",
-        ctx=SimpleNamespace(graph=None, cell_size_m=1.0,
-                            tile_origin_xy=(0.0, 0.0), grid_shape=(10, 10),
-                            robot_pose=None),
-        rid_tag="m0",
-        transcript=[],
-        compute_namespace={"cands": list(cands), "anchors": [],
-                           "cell_m": 1.0},
-        diag={},
-        look_renderer=renderer,
-        mission_spec=MissionSpec(fly=lambda i: {"error": "unused"},
-                                 declare_concepts=lambda i: {"declared": []}),
-    )
-    results = [json.loads(m["content"]) for m in fr.messages
-               if m.get("role") == "tool"]
-    vision = [str(m.get("content")) for m in fr.messages
-              if m.get("role") == "user" and "badge legend" in
-              str(m.get("content"))]
-    return results, seen_reqs, seen_recs, vision
-
-
 def test_the_set_look_delivers_one_crop_per_row(ortho_dir):
-    cands = _cars(6)
-    results, reqs, recs, vision = _fly(
-        [[_run('a = find("car")')], [_run("look(a)")], "over"],
+    cands = cars(6)
+    results, reqs, recs, vision = look_drive(
+        [[run('a = find("car")')], [run("look(a)")], "over"],
         cands, ortho_dir)
 
     # ONE frame, not one crop per row: the set look is a relational read.
@@ -190,9 +104,9 @@ def test_over_budget_is_a_served_fact_not_a_silent_truncation(ortho_dir):
     # the standing order, the count is stated, and nothing renders as if
     # the rest were absent from the set.
     n = LOOK_MAX_BADGES + 11
-    results, reqs, recs, vision = _fly(
-        [[_run('a = find("car")')], [_run("look(a)")], "over"],
-        _cars(n), ortho_dir)
+    results, reqs, recs, vision = look_drive(
+        [[run('a = find("car")')], [run("look(a)")], "over"],
+        cars(n), ortho_dir)
     # the cap that bites is the per-call CROP budget, not the badge cap
     assert len(reqs[0]) == 16, len(reqs[0])
     # one record PER ROW now; the first is rank 0's own crop
@@ -220,8 +134,8 @@ def test_a_spread_set_gets_a_crop_each_at_single_look_scale(
     """
     cands = [{"fid": f"detected_{i}", "xy": [12.5 + 400.0 * i, 12.5],
               "class": "car", "search_text": "car"} for i in range(4)]
-    results, reqs, recs, _vis = _fly(
-        [[_run('a = find("car")')], [_run("look(a)")], "over"],
+    results, reqs, recs, _vis = look_drive(
+        [[run('a = find("car")')], [run("look(a)")], "over"],
         cands, ortho_dir)
     assert len(reqs[0]) == len(cands), reqs
     for rec in recs[0]:
@@ -236,8 +150,8 @@ def test_the_one_id_look_is_the_request_it_always_was(ortho_dir):
     # single-item request with its own fid as the target and no mark set,
     # and render_candidate_crops is a pure function of that request — so
     # the delivered bytes are the ones it delivered before.
-    results, reqs, recs, vision = _fly(
-        [[_run('look("detected_1")')], "over"], _cars(6), ortho_dir)
+    results, reqs, recs, vision = look_drive(
+        [[run('look("detected_1")')], "over"], cars(6), ortho_dir)
     (req,) = reqs[0]
     assert req["center_fid"] == "detected_1"
     assert req["annotate"] is True
@@ -260,8 +174,8 @@ def test_a_set_look_with_no_set_says_so_in_register(ortho_dir):
     with the name itself, which is strictly more actionable -- the model can
     see WHICH of its names it never bound.
     """
-    results, reqs, _recs, _vision = _fly(
-        [[_run("look(a)")], "over"], _cars(3), ortho_dir)
+    results, reqs, _recs, _vision = look_drive(
+        [[run("look(a)")], "over"], cars(3), ortho_dir)
     assert reqs == [], reqs           # nothing rendered
     err = str(results[0].get("error"))
     assert "NameError" in err and "'a'" in err, results[0]

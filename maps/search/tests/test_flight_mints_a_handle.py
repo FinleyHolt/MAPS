@@ -14,129 +14,9 @@ it as the set in scope, and ``look at them.`` frames it.
 
 from __future__ import annotations
 
-import json
 import re
-from types import SimpleNamespace
 
-from maps.search.analyze_scene.geom_program import build_surface_from_graph
-from maps.search.parse_compile.reasoner_loop import (
-    MissionSpec,
-    advance_reasoner_one_round,
-)
-from maps.search.tests.test_mission_loop import FakeReasoner
-
-
-def _run(code: str):
-    return ("run", {"code": code})
-
-
-class _Node:
-    """The attributes ``build_surface`` reads off a graph node."""
-
-    def __init__(self, xy, class_name, provenance="detected"):
-        self.world_xy = [float(xy[0]), float(xy[1])]
-        self.centroid = (int(xy[1]), int(xy[0]))
-        self.centerline = None
-        self.class_name = class_name
-        self.name = None
-        self.provenance = provenance
-
-
-class _Road(_Node):
-    """A prior with a baked centerline, so ``crossings`` can construct a
-    place from two of them (cell -> world is the cell CENTRE at cell_m 1)."""
-
-    def __init__(self, cells, name):
-        (r0, c0) = cells[len(cells) // 2]
-        super().__init__((c0 + 0.5, r0 + 0.5), "road", provenance="prebaked")
-        self.centerline = list(cells)
-        self.name = name
-        self.axis_length_m = float(len(cells))
-
-
-class _Graph:
-    def __init__(self, nodes):
-        self.nodes = dict(nodes)
-
-
-_PRIORS = {
-    "prior_7": _Node((30.0, 30.0), "depot", provenance="prebaked"),
-    "prior_1": _Node((80.0, 80.0), "gate", provenance="prebaked"),
-}
-
-# Two roads that MEET at one place — the only sentence shape that both
-# builds a set and flies in the same plan.
-_ROADS = {
-    "road_1": _Road([(100, c) for c in range(80, 121)], "Long Road"),
-    "road_2": _Road([(r, 100) for r in range(80, 121)], "Cross Street"),
-}
-
-
-def _drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
-           extra_priors=None):
-    """One mission over a graph the flight GROWS. Returns
-    (tool results, the graph, the fids each flight added).
-
-    ``evict_on_flight`` = {flight_index: [fid, ...]} deletes those nodes
-    from the graph on that flight, so the surface refresh drops them while
-    an earlier handle still holds them."""
-    graph = _Graph({**_PRIORS, **(extra_priors or {})})
-    added: list[list[str]] = []
-
-    def _fly(item):
-        for _dead in (evict_on_flight or {}).get(len(added)) or []:
-            graph.nodes.pop(_dead, None)
-        new: list[str] = []
-        if flights_add:
-            base = len(graph.nodes)
-            for i in range(per_flight):
-                fid = f"detected_{base + i}"
-                # one black, the rest white — so a colour follow-up over the
-                # minted set has something to separate. Each flight lays its
-                # rows on its OWN line: build_surface drops a co-located
-                # duplicate, so a second flight over the same points would
-                # add no rows at all.
-                graph.nodes[fid] = _Node(
-                    (100.0 + 6.0 * i, 100.0 + 20.0 * len(added)),
-                    "black car" if i == 0 else "white car")
-                new.append(fid)
-        added.append(new)
-        return {"stop_id": f"stop_{len(added) - 1:03d}",
-                "target": item["target_fid"], "pose_xy": [100.0, 100.0],
-                "alt_m": 144.8, "new_detections": len(new), "cue": "the cue"}
-
-    cands, anchors = build_surface_from_graph(
-        graph.nodes.items(), (0.0, 0.0), 1.0)
-    fr = FakeReasoner(script)
-    advance_reasoner_one_round(
-        reasoner=fr,
-        user_message="Find the goal object.",
-        ctx=SimpleNamespace(graph=graph, cell_size_m=1.0,
-                            tile_origin_xy=(0.0, 0.0), grid_shape=(10, 10),
-                            robot_pose=None),
-        rid_tag="m0",
-        transcript=[],
-        compute_namespace={"cands": cands, "anchors": anchors,
-                           "cell_m": 1.0},
-        diag={},
-        look_renderer=lambda reqs: [
-            {"jpeg": b"x", "center_fid": r["center_fid"], "legend": [
-                {"digit": 1, "fid": r["center_fid"], "label": "car",
-                 "role": "center"}] + [
-                {"digit": 3 + i, "fid": m["fid"], "label": "car",
-                 "role": "context"}
-                for i, m in enumerate(r["marks"])
-                if m["fid"] != r["center_fid"]],
-             "context_m": 30.0, "world_window": [0, 0, 200, 200],
-             "marks_dropped": 0, "marks_out_of_view": [],
-             "marks_unbadged_in_frame": []}
-            for r in reqs],
-        mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: {
-            "declared": []}),
-    )
-    results = [json.loads(m["content"]) for m in fr.messages
-               if m.get("role") == "tool"]
-    return results, graph, added
+from maps.search.tests.fakes import ROADS, grow_drive, run
 
 
 def _flown(result: dict) -> dict:
@@ -151,7 +31,7 @@ def _minted_handle(script, *, nth=0, **kw) -> str:
     an analyze before flying gets a higher one. Tests learn it the way the
     model does -- off the flight's own report -- instead of assuming r0.
     """
-    probe, _g, _a = _drive(list(script) + ["done"], **kw)
+    probe, _g, _a = grow_drive(list(script) + ["done"], **kw)
     flown = [r for r in probe if isinstance(r, dict) and "flown" in r]
     return _flown(flown[nth])["new_rows"].split(" ")[0]
 
@@ -175,8 +55,8 @@ def _shown_fids(result: dict) -> list[str]:
 
 
 def test_the_flight_names_the_rows_it_added(_n=3):
-    results, _graph, added = _drive(
-        [[_run('go_to("prior_7")')], "done"], per_flight=_n)
+    results, _graph, added = grow_drive(
+        [[run('go_to("prior_7")')], "done"], per_flight=_n)
     rep = _flown(results[0])
     assert added[0] and len(added[0]) == _n, added
     # the count was always there; the ADDRESS is what was missing
@@ -193,10 +73,10 @@ def test_the_flight_names_the_rows_it_added(_n=3):
 def test_the_minted_handle_is_bound_for_the_next_block():
     # The flight's own rows are reachable by NAME in the very next block,
     # with no intervening find — the thing the model could not do before.
-    handle = _minted_handle([[_run('go_to("prior_7")')]])
-    results, _graph, added = _drive(
-        [[_run('go_to("prior_7")')],
-         [_run(f'b = {handle}.order(color="black")\nb')],
+    handle = _minted_handle([[run('go_to("prior_7")')]])
+    results, _graph, added = grow_drive(
+        [[run('go_to("prior_7")')],
+         [run(f'b = {handle}.order(color="black")\nb')],
          "done"])
     rep = _flown(results[0])
     assert rep["new_rows"].split(" ")[0] == handle, rep
@@ -209,8 +89,8 @@ def test_the_minted_handle_is_bound_for_the_next_block():
 
 
 def test_the_minted_handle_gets_a_crop_per_row(_n=4):
-    results, _graph, added = _drive(
-        [[_run('go_to("prior_7")')], [_run("look(r0)")], "done"],
+    results, _graph, added = grow_drive(
+        [[run('go_to("prior_7")')], [run("look(r0)")], "done"],
         per_flight=_n)
     crop = results[1]["crop"]
     assert "error" not in crop, crop
@@ -228,8 +108,8 @@ def test_a_flight_that_adds_nothing_mints_nothing():
     # An empty handle that reads as live is this repo's named hazard, and
     # rule T's own rule is non-empty-only: a zero-detection flight leaves
     # the scope exactly where it was.
-    results, _graph, added = _drive(
-        [[_run('go_to("prior_7")')], [_run("look(r0)")], "done"],
+    results, _graph, added = grow_drive(
+        [[run('go_to("prior_7")')], [run("look(r0)")], "done"],
         flights_add=False)
     rep = _flown(results[0])
     assert added == [[]], added
@@ -246,9 +126,9 @@ def test_a_row_gone_from_the_surface_is_not_reported_as_out_of_frame():
     # it, and it may be metres from the subject. A requested-minus-drawn
     # residual would report it as "outside the frame" -- the same false
     # precision the drawn count was added to remove.
-    results, _graph, added = _drive(
-        [[_run('go_to("prior_7")')], [_run('go_to("prior_1")')],
-         [_run("look(r0)")], "done"],
+    results, _graph, added = grow_drive(
+        [[run('go_to("prior_7")')], [run('go_to("prior_1")')],
+         [run("look(r0)")], "done"],
         evict_on_flight={1: ["detected_3"]})   # rank 1 of r0, evicted
     crop = results[2]["crop"]
     # VACUITY FLOOR: the eviction must actually have reached the crop path.
@@ -272,12 +152,12 @@ def test_a_block_that_both_builds_a_set_and_flies_ends_on_the_flight():
     # the flight is the most recent thing that happened, so it takes the
     # scope back. Without the re-apply the next block works over crossings,
     # which carry no colour, and refuses.
-    handle = _minted_handle([[_run(_XING_BLOCK)]], extra_priors=_ROADS)
-    results, _graph, added = _drive(
-        [[_run(_XING_BLOCK)],
-         [_run(f'b = {handle}.order(color="black")\nb')],
+    handle = _minted_handle([[run(_XING_BLOCK)]], extra_priors=ROADS)
+    results, _graph, added = grow_drive(
+        [[run(_XING_BLOCK)],
+         [run(f'b = {handle}.order(color="black")\nb')],
          "done"],
-        extra_priors=_ROADS)
+        extra_priors=ROADS)
     # VACUITY FLOOR: the sentence must really have built a set AND flown,
     # or the re-apply is not on this path at all.
     assert "result" in results[0] and "flown" in results[0], results[0]
@@ -293,9 +173,9 @@ def test_a_block_that_both_builds_a_set_and_flies_ends_on_the_flight():
     assert "error" not in out, out
     assert _shown_fids(out) == added[0], (out, added[0])
     # the crossings set is not lost -- it keeps its own handle
-    results2, _g2, _a2 = _drive(
-        [[_run(_XING_BLOCK)], [_run("look(x)")], "done"],
-        extra_priors=_ROADS)
+    results2, _g2, _a2 = grow_drive(
+        [[run(_XING_BLOCK)], [run("look(x)")], "done"],
+        extra_priors=ROADS)
     assert "error" not in results2[1], results2[1]
     assert results2[1]["crop"]["delivered"] == 1, results2[1]
 
@@ -304,11 +184,11 @@ def test_the_latest_flight_owns_the_scope():
     # The flight is the most recent thing that happened, so it takes
     # "those" from whatever held it — an earlier find over the whole world,
     # or an earlier flight. Both older sets keep their own handles.
-    _prefix = [[_run('go_to("prior_7")')], [_run('find("car")')],
-               [_run('go_to("prior_1")')]]
+    _prefix = [[run('go_to("prior_7")')], [run('find("car")')],
+               [run('go_to("prior_1")')]]
     second_handle = _minted_handle(_prefix, nth=1)
-    results, _graph, added = _drive(
-        _prefix + [[_run(f'b = {second_handle}.order(color="black")\nb')],
+    results, _graph, added = grow_drive(
+        _prefix + [[run(f'b = {second_handle}.order(color="black")\nb')],
                    "done"])
     first, second = added[0], added[1]
     # vacuity floor: two DISTINCT flight sets, and the find in between held
@@ -323,10 +203,10 @@ def test_the_latest_flight_owns_the_scope():
     # this replaced is what let calcity::200#198 commit out of a red-car
     # list bound before the ground the target sat on had been flown.
     find_handle = list(results[1]["result"]["results"])[-1]
-    results2, _g2, added2 = _drive(
-        [[_run('go_to("prior_7")')], [_run('find("car")')],
-         [_run('go_to("prior_1")')],
-         [_run(f'b = {find_handle}.order(color="black")\nb')], "done"])
+    results2, _g2, added2 = grow_drive(
+        [[run('go_to("prior_7")')], [run('find("car")')],
+         [run('go_to("prior_1")')],
+         [run(f'b = {find_handle}.order(color="black")\nb')], "done"])
     got = set(_fids(results2[3]))
     assert got >= set(added2[0]), (got, added2[0])
     # ...and it reaches the SECOND flight's rows, which the snapshot could

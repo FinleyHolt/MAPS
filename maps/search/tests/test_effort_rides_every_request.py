@@ -20,19 +20,11 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from maps.llm.endpoint_spec import EndpointSpec
 from maps.llm.http import _RawResponse
 from maps.search.parse_compile import reasoner_agent
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.reasoner_loop import MissionReply, run_mission
-
-_TEST_SPEC = EndpointSpec(
-    base_url="http://unused",
-    model_id="inkling-small",
-    max_model_len=262144,
-    tokenizer_name="qwen",
-    output_reserve=40000,
-)
+from maps.search.tests.fakes import TEST_SPEC
 
 
 def _serve(monkeypatch) -> list[dict]:
@@ -57,7 +49,7 @@ def test_the_missions_word_rides_every_request_and_the_arms_does_not(monkeypatch
     mission's word as a top-level string."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC,
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
                  reasoning_effort="0.3")
     r.append_user("find the truck")
     r.step_tool_call([])
@@ -72,7 +64,7 @@ def test_off_is_a_word_like_any_other(monkeypatch):
     would fall through to the arm's, which is the opposite request."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC,
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
                  reasoning_effort="0.0")
     r.append_user("find the truck")
     r.step_tool_call([])
@@ -84,7 +76,7 @@ def test_a_reasoner_with_no_word_sends_the_arms(monkeypatch):
     time, so a rig select mid-day reaches a mission that named none."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.9")
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
     r.append_user("find the truck")
     r.step_tool_call([])
     assert sent[0]["reasoning_effort"] == "0.9"
@@ -96,7 +88,7 @@ def test_the_effort_reaches_no_served_byte(monkeypatch):
     the model reads -- not the system prompt, not the tools, not a turn."""
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC,
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
                  reasoning_effort="0.3")
     r.append_user("find the truck")
     r.step_tool_call([{"type": "function", "function": {"name": "run"}}])
@@ -119,7 +111,7 @@ def test_run_mission_hands_the_word_to_the_reasoner_it_builds(monkeypatch):
     _reply, reasoner = run_mission(
         instruction="find the truck",
         reasoner_url="http://unused",
-        endpoint_spec=_TEST_SPEC,
+        endpoint_spec=TEST_SPEC,
         ctx=SimpleNamespace(),
         mission_spec=None,
         look_enabled=True,

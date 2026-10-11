@@ -12,22 +12,14 @@ from __future__ import annotations
 
 import json
 
-from maps.llm.endpoint_spec import EndpointSpec
 from maps.search.parse_compile.reasoner_agent import Reasoner
+from maps.search.tests.fakes import TEST_SPEC
+
 
 # Offline stand-in for the server-discovered endpoint authority.
-_TEST_SPEC = EndpointSpec(
-    base_url="http://unused",
-    model_id="inkling-small",
-    max_model_len=262144,
-    tokenizer_name="qwen",
-    output_reserve=40000,
-)
-
-
 def _mk() -> Reasoner:
     # Cheap: __post_init__ only seeds the system prompt — no network.
-    return Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    return Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
 
 
 # --------------------------------------------------------------------------- #

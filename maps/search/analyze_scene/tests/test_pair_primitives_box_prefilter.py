@@ -10,6 +10,7 @@ point, and every point's parity -- is the unfiltered one.
 import numpy as np
 
 from maps.search.analyze_scene import geom_compute as G
+from maps.search.tests.fakes import ring
 
 
 def _cross_unfiltered(A1, B1, A2, B2):
@@ -65,17 +66,13 @@ def _inside_unfiltered(P, A, B):
     return out
 
 
-def _ring(x, y, w, h):
-    return [[(x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y)]]
-
-
 def _shapes(rng, n):
     out = []
     for _ in range(n):
         x, y = rng.uniform(-200, 200), rng.uniform(-200, 200)
         k = rng.integers(0, 3)
         if k == 0:
-            out.append(G.mask_geom(_ring(x, y, rng.uniform(1, 50),
+            out.append(G.mask_geom(ring(x, y, rng.uniform(1, 50),
                                          rng.uniform(1, 50))))
         elif k == 1:
             out.append(G.mask_geom([[(x, y), (x + rng.uniform(-90, 90),
@@ -83,8 +80,8 @@ def _shapes(rng, n):
         else:
             out.append(G.mask_geom([[(x, y)]]))
     # a big ring with a hole, a touching ring, a long way across everything
-    out.append(G.mask_geom(_ring(-100, -100, 200, 200) + _ring(-20, -20, 40, 40)))
-    out.append(G.mask_geom(_ring(100, -100, 30, 30)))
+    out.append(G.mask_geom(ring(-100, -100, 200, 200) + ring(-20, -20, 40, 40)))
+    out.append(G.mask_geom(ring(100, -100, 30, 30)))
     out.append(G.mask_geom([[(-300, 0), (300, 0)]]))
     return out
 

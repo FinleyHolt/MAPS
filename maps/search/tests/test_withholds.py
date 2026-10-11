@@ -21,7 +21,14 @@ from maps.search.parse_compile import python_surface as ps
 from maps.search.parse_compile import reasoner_agent as ra
 from maps.search.parse_compile.code_surface import act_needs_a_thing
 from maps.search.parse_compile.reasoner_loop import _PICTURE_WITHHELD
-from maps.search.tests.test_look_set_frame import _cars, _fly, _ortho_root, _run, ortho_dir  # noqa: F401
+from maps.search.tests.fakes import (
+    cars,
+    drive,
+    look_drive,
+    map_mission,
+    run,
+    tool_results,
+)
 
 FLOWN_SHA256 = {
     "oryx_orx32_25mm_nadir": "32c45644985a346c96f4a6748d5b74c0c6c48120369404e04030233765e48115",
@@ -138,10 +145,10 @@ def test_a_look_for_withhold_takes_its_remedies(monkeypatch):
     assert "look_for" not in act_needs_a_thing(name="go_to", got="1, 2")
 
 
-def test_an_images_withhold_delivers_the_looks_caption(ortho_dir, monkeypatch):  # noqa: F811
+def test_an_images_withhold_delivers_the_looks_caption(ortho_dir, monkeypatch):
     monkeypatch.setenv(W.ENV, "images")
-    results, reqs, _recs, vision = _fly(
-        [[_run('a = find("car")')], [_run("look(a)")], "over"], _cars(3), ortho_dir)
+    results, reqs, _recs, vision = look_drive(
+        [[run('a = find("car")')], [run("look(a)")], "over"], cars(3), ortho_dir)
     assert reqs, "the look rendered"
     assert len(vision) == 1
     assert "slice the handle" not in json.dumps(results), results
@@ -155,54 +162,9 @@ def test_an_unknown_withhold_is_refused(monkeypatch):
 
 
 def _map_mission(script, monkeypatch, names="", renderer=None, finds=1):
-    """``script`` driven over two surveyed buildings, each flight adding a
-    car; returns (tool results, the (text, pictures) of every vision turn)."""
-    import numpy as np
-    from types import SimpleNamespace
-
-    from maps.search.analyze_scene.geom_program import build_surface_from_graph
-    from maps.search.parse_compile.reasoner_loop import MissionSpec, advance_reasoner_one_round
-    from maps.search.tests import test_flight_mints_a_handle as fx
-    from maps.search.tests.test_mission_loop import FakeReasoner
-
     pytest.importorskip("cv2")
     monkeypatch.setenv(W.ENV, names)
-
-    class _Vision(FakeReasoner):
-        def __init__(self, turns):
-            super().__init__(turns)
-            self.vision: list[tuple[str, list]] = []
-
-        def append_vision_user(self, text, jpegs):
-            self.vision.append((text, list(jpegs)))
-            super().append_vision_user(text, jpegs)
-
-    graph = fx._Graph(dict(fx._PRIORS))
-    for n in graph.nodes.values():
-        n.cells = np.asarray([[int(n.world_xy[1]), int(n.world_xy[0])]], dtype=np.int32)
-        n.tags = {"building": "yes"}
-
-    def _fly(item):
-        for _ in range(finds):
-            node = fx._Node((34.0, 34.0), "car")
-            node.cells = np.asarray([[34, 34]], dtype=np.int32)
-            node.tags = {}
-            graph.nodes[f"detected_{len(graph.nodes)}"] = node
-        return {"stop_id": "stop_001", "target": item["target_fid"], "pose_xy": [30.0, 30.0],
-                "alt_m": 100.0, "new_detections": finds, "cue": "the cue"}
-
-    cands, anchors = build_surface_from_graph(graph.nodes.items(), (0.0, 0.0), 1.0)
-    fr = _Vision([[fx._run(c)] for c in script] + ["done"])
-    advance_reasoner_one_round(
-        reasoner=fr, user_message="Find the car.",
-        ctx=SimpleNamespace(graph=graph, cell_size_m=1.0, tile_origin_xy=(0.0, 0.0),
-                            grid_shape=(100, 100), robot_pose=None),
-        rid_tag="m0", transcript=[],
-        compute_namespace={"cands": cands, "anchors": anchors, "cell_m": 1.0},
-        diag={}, look_renderer=renderer or (lambda reqs: []),
-        mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: {"declared": []}))
-    results = [json.loads(m["content"]) for m in fr.messages if m.get("role") == "tool"]
-    return results, fr.vision
+    return map_mission(script, renderer=renderer, finds=finds)
 
 
 def _crops(reqs):
@@ -246,18 +208,12 @@ def test_a_look_for_withhold_serves_no_watchlist(monkeypatch):
 
 
 def test_a_prior_withhold_flies_to_a_point_and_serves_no_prior_row(monkeypatch):
-    from maps.search.tests.test_mission_loop import _drive, _tool_results
-
-    script = [[_run_code('go_to([30, 30])\nexplore([40, 40])\ngo_to("[50, 50]")\n')], "done"]
-    _reply, fr, flights, _d = _drive(script, cands=[])
-    assert "takes a THING" in (_tool_results(fr)[0].get("error") or "")
+    script = [[run('go_to([30, 30])\nexplore([40, 40])\ngo_to("[50, 50]")\n')], "done"]
+    _reply, fr, flights, _d = drive(script, cands=[])
+    assert "takes a THING" in (tool_results(fr)[0].get("error") or "")
     assert not flights
     monkeypatch.setenv(W.ENV, "prior")
-    _reply, fr, flights, _d = _drive(script, cands=[])
-    served = json.dumps(_tool_results(fr))
+    _reply, fr, flights, _d = drive(script, cands=[])
+    served = json.dumps(tool_results(fr))
     assert "error" not in served and "prior_" not in served, served
     assert [f["target_fid"] for f in flights] == ["[30, 30]", "[40, 40]", "[50, 50]"], flights
-
-
-def _run_code(code):
-    return ("run", {"code": code})

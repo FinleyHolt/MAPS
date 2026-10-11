@@ -33,7 +33,7 @@ from __future__ import annotations
 import pytest
 
 from maps.search.parse_compile.python_surface import CodeError
-from maps.search.tests.test_code_surface_arm import raising_ops_of_block
+from maps.search.tests.fakes import raising_ops_of_block
 
 
 def _ops(src: str) -> list[dict]:
@@ -309,7 +309,7 @@ def test_a_row_serves_no_second_point_to_subtract():
     ``show_map(around=[x, y])``) and removing it would cost real capability
     to close a hazard the census can watch instead.
     """
-    from maps.search.parse_compile.python_surface import Row, _ROW_HIDDEN
+    from maps.search.parse_compile.python_surface import _ROW_HIDDEN, Row
 
     assert "mask_centroid" in _ROW_HIDDEN
     r = Row({"fid": "detected_1", "xy": [10.0, 20.0],

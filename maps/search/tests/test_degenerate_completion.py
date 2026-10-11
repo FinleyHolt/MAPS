@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import pytest
 
-from maps.llm.endpoint_spec import EndpointSpec
 from maps.llm.http import DegenerateCompletion, _RawResponse
 from maps.search.parse_compile import reasoner_agent
 from maps.search.parse_compile.reasoner_agent import Reasoner
@@ -43,14 +42,7 @@ from maps.search.parse_compile.reasoner_loop import (
     MissionSpec,
     advance_reasoner_one_round,
 )
-
-_TEST_SPEC = EndpointSpec(
-    base_url="http://unused",
-    model_id="inkling-small",
-    max_model_len=262144,
-    tokenizer_name="qwen",
-    output_reserve=40000,
-)
+from maps.search.tests.fakes import TEST_SPEC
 
 
 def _serve(monkeypatch, *, content="", reasoning="", finish_reason="stop",
@@ -71,7 +63,7 @@ def _serve(monkeypatch, *, content="", reasoning="", finish_reason="stop",
 
 
 def _reasoner() -> Reasoner:
-    return Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    return Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
 
 
 def test_collapse_in_reasoning_raises_and_leaves_history_clean(monkeypatch):

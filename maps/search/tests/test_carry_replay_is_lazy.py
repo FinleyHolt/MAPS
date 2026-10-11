@@ -15,7 +15,7 @@ from __future__ import annotations
 import ast
 
 from maps.search.parse_compile import reasoner_loop as rl
-from maps.search.tests.test_flight_mints_a_handle import _drive, _run
+from maps.search.tests.fakes import grow_drive, run
 
 
 def _programs_run(monkeypatch) -> list[list[dict]]:
@@ -39,15 +39,15 @@ def _printed_fids(result: dict) -> list[str]:
 def test_a_read_after_a_flight_replays_its_own_closure_and_nothing_else(
         monkeypatch):
     seen = _programs_run(monkeypatch)
-    results, _graph, added = _drive([
-        [_run('cars = find("car")')],
-        [_run('go_to(prior_7)')],
-        [_run('near = cars.filter(near=prior_7, dwithin=500)')],
-        [_run('gate = find("prior_1")')],
-        [_run('gate_by = gate.order(nearest=prior_7)')],   # never read again
-        [_run('go_to(prior_7)')],
-        [_run('print(sorted(r.fid for r in near))')],     # the read after it
-        [_run('fresh = find("car").filter(near=prior_7, dwithin=500)\n'
+    results, _graph, added = grow_drive([
+        [run('cars = find("car")')],
+        [run('go_to(prior_7)')],
+        [run('near = cars.filter(near=prior_7, dwithin=500)')],
+        [run('gate = find("prior_1")')],
+        [run('gate_by = gate.order(nearest=prior_7)')],   # never read again
+        [run('go_to(prior_7)')],
+        [run('print(sorted(r.fid for r in near))')],     # the read after it
+        [run('fresh = find("car").filter(near=prior_7, dwithin=500)\n'
               'print(sorted(r.fid for r in fresh))')],
         "done",
     ])
@@ -77,11 +77,11 @@ def test_a_handle_never_read_between_two_flights_is_replayed_once(
     """The replay is charged to the READ, not to the flight: two flights and
     then one read pay for one re-derivation, not two."""
     seen = _programs_run(monkeypatch)
-    results, _graph, added = _drive([
-        [_run('cars = find("car")')],
-        [_run('go_to(prior_7)')],
-        [_run('go_to(prior_7)')],
-        [_run('print(sorted(r.fid for r in cars))')],
+    results, _graph, added = grow_drive([
+        [run('cars = find("car")')],
+        [run('go_to(prior_7)')],
+        [run('go_to(prior_7)')],
+        [run('print(sorted(r.fid for r in cars))')],
         "done",
     ])
     shown = _printed_fids(results[3])
@@ -115,12 +115,12 @@ def test_a_replay_the_executor_refuses_leaves_the_handle_stale_and_unclaimed(
         return orig(args, **kw)
 
     monkeypatch.setattr(rl, "run_geom_program_tool", _refusing)
-    results, _graph, added = _drive([
-        [_run('cars = find("car")')],
-        [_run('go_to(prior_7)')],
-        [_run('print(sorted(r.fid for r in cars))')],   # refused: stale
-        [_run('print(sorted(r.fid for r in cars))')],   # refused again
-        [_run('print(sorted(r.fid for r in cars))')],   # replays: fresh
+    results, _graph, added = grow_drive([
+        [run('cars = find("car")')],
+        [run('go_to(prior_7)')],
+        [run('print(sorted(r.fid for r in cars))')],   # refused: stale
+        [run('print(sorted(r.fid for r in cars))')],   # refused again
+        [run('print(sorted(r.fid for r in cars))')],   # replays: fresh
         "done",
     ])
     assert refused[0] == 2

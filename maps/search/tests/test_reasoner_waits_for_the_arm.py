@@ -16,7 +16,6 @@ import threading
 import httpx
 import pytest
 
-from maps.llm.endpoint_spec import EndpointSpec
 from maps.llm.http import CallCanceled
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.reasoner_loop import (
@@ -25,14 +24,7 @@ from maps.search.parse_compile.reasoner_loop import (
     MissionSpec,
     advance_reasoner_one_round,
 )
-
-_TEST_SPEC = EndpointSpec(
-    base_url="http://unused",
-    model_id="inkling-small",
-    max_model_len=262144,
-    tokenizer_name="qwen",
-    output_reserve=40000,
-)
+from maps.search.tests.fakes import TEST_SPEC
 
 _REPLY = {"kind": "text", "content": "the goal is the flown object",
           "reasoning": ""}
@@ -65,7 +57,7 @@ def _round(monkeypatch, faults: int, *, cancel_event=None, transcript=None,
             raise nxt
         return nxt
 
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC,
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
                  cancel_event=cancel_event)
     r.step_tool_call = _step
 

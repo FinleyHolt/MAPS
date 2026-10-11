@@ -24,7 +24,7 @@ import pytest
 from maps.search.analyze_scene import geom_program as gp
 from maps.search.analyze_scene.geom_program import compact_results
 from maps.search.parse_compile.code_surface import CodeError
-from maps.search.tests.test_code_surface_arm import ops_of_block, plan_of_block
+from maps.search.tests.fakes import drive, ops_of_block, plan_of_block, tool_results
 
 
 def _house(fid, x, name=None):
@@ -164,7 +164,6 @@ def test_the_whole_chain_survives_the_reasoner_loop():
     the plan is split at selections, dispatched step by step and rendered
     back. So drive it.
     """
-    from maps.search.tests.test_mission_loop import _drive, _tool_results
 
     cands = [
         {"fid": "house_1", "xy": [0.0, 0.0], "class": "house",
@@ -176,14 +175,14 @@ def test_the_whole_chain_survives_the_reasoner_loop():
         {"fid": "pool_1", "xy": [100.0, 8.0], "class": "pool",
          "search_text": "pool"},
     ]
-    _reply, fr, _flights, _d = _drive([
+    _reply, fr, _flights, _d = drive([
         [("run", {"code": 'look_for("pool")\n'
                           'pools = find("pool")\n'
                           'houses = find("house", nearest=pools)\n'
                           'houses\n'})],
         "done",
     ], cands=cands)
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     rows = next(iter(out["result"]["results"].values()))["rows"]
     fids = [ln.strip().strip("|").split("|")[0].strip()

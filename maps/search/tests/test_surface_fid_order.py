@@ -12,6 +12,7 @@ from __future__ import annotations
 import numpy as np
 
 from maps.search.analyze_scene.geom_program import build_surface_from_graph
+from maps.search.tests.fakes import plan_of_block
 
 
 class _Node:
@@ -49,7 +50,11 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
     to warn about a table this no longer serves.
     """
     from maps.search.analyze_scene.geom_program import (
-        _NAME_SET_SHAPE_ROWS, build_surface, compact_results, run_program)
+        _NAME_SET_SHAPE_ROWS,
+        build_surface,
+        compact_results,
+        run_program,
+    )
 
     class _Way:
         def __init__(self, name, cells):
@@ -106,7 +111,6 @@ def _crops_of(src: str) -> list:
     The surface has no parser: a block becomes steps only by EXECUTING,
     so the plan is captured off a recording ``MissionEnv``.
     """
-    from maps.search.tests.test_code_surface_arm import plan_of_block
 
     plan = plan_of_block(src)
     return [st for p in plan.get("plans", [plan])

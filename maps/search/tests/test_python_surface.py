@@ -11,10 +11,20 @@ from __future__ import annotations
 import pytest
 
 from maps.search.parse_compile.python_surface import (
-    _AUTOATTACH_PREFIXES, CodeError, Row, looks_like_code, scan_block)
-from maps.search.tests.test_code_surface_arm import _explore_drive, _run
-from maps.search.tests.test_mission_loop import _drive, _tool_results
-
+    _AUTOATTACH_PREFIXES,
+    CodeError,
+    Row,
+    looks_like_code,
+    scan_block,
+)
+from maps.search.tests.fakes import (
+    FakeReasoner,
+    drive,
+    explore_drive,
+    grow_drive,
+    run,
+    tool_results,
+)
 
 # --------------------------------------------------------------------------
 # The 147#145 block: an error costs its line, never the look_for before it
@@ -31,13 +41,13 @@ def test_the_147_145_block_arms_the_watch_despite_the_map_refusal():
     ITS line: the watch is armed, the street is bound, and the error
     still says exactly what it always said.
     """
-    reply, fr, _flights, declared = _drive([
-        [_run('look_for("house", "pool")\n'
+    reply, fr, _flights, declared = drive([
+        [run('look_for("house", "pool")\n'
               'street = find("car")\n'
               'show_map(around=street)\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "around= takes ONE place" in (out.get("error") or ""), out
     # The two lines before the refusal RAN: the watch is armed (with its
     # runtime detection count riding the trailer) and the handle is bound.
@@ -53,8 +63,8 @@ def test_a_block_flies_and_then_queries_what_the_pass_found():
     """Eager source order, end to end: the find AFTER the explore reads
     the rows that pass just detected -- the shape the fold-order surface
     refused and the legend now teaches."""
-    reply, out, flights, _asked, _rend = _explore_drive([
-        [_run('look_for("pool")\n'
+    reply, out, flights, _asked, _rend = explore_drive([
+        [run('look_for("pool")\n'
               'explore("prior_160")\n'
               'r2 = find("pool")\n'
               'r2\n')],
@@ -71,14 +81,14 @@ def test_a_block_flies_and_then_queries_what_the_pass_found():
 
 
 def test_print_len_and_fstrings_come_back_in_the_receipt():
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\n'
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
               'print(f"got {len(r1)} cars")\n'
               'n = len(r1) + 1\n'
               'n\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     assert "got 2 cars" in (out.get("printed") or ""), out
     assert "n = 3" in (out.get("printed") or ""), out
@@ -88,8 +98,8 @@ def test_a_row_is_data_the_python_way():
     """r.xy, r["class"], r.get, print(r): the first pysurface fleet drew
     150+ AttributeErrors over 69 episodes from a fid-only Row -- a row IS
     its served columns to a Python reader."""
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\n'
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
               'r = r1[0]\n'
               'print(r.xy, r["class"], r.get("nope", "-"))\n'
               'print(hasattr(r, "xy"), sorted(r.keys())[:2])\n'
@@ -98,7 +108,7 @@ def test_a_row_is_data_the_python_way():
               'print(r)\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     printed = out.get("printed") or ""
     assert "[20.0, 20.0] car -" in printed, printed
@@ -107,35 +117,35 @@ def test_a_row_is_data_the_python_way():
 
 
 def test_find_refuses_two_queries_with_the_remedy():
-    reply, fr, _f, _d = _drive([
-        [_run('find("89th Street", "Fuchsia Avenue")\n')],
+    reply, fr, _f, _d = drive([
+        [run('find("89th Street", "Fuchsia Avenue")\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "find takes ONE query" in (out.get("error") or ""), out
     assert "intersection(" in out["error"], out
 
 
 def test_a_conditional_runs_and_a_loop_may_look():
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\n'
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
               'if len(r1) > 1:\n'
               '    fids = [r.fid for r in r1]\n'
               'print(fids)\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     assert "car_1" in (out.get("printed") or ""), out
 
 
 def test_a_python_error_keeps_what_already_ran():
     """NameError at line 2; the find at line 1 stands, envelope included."""
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\nnope + 1\n')],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nnope + 1\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "line 2: NameError" in (out.get("error") or ""), out
     assert "r1" in (out.get("handles") or []), out
     assert out.get("result"), out
@@ -176,11 +186,11 @@ def test_the_prescan_refusals():
 
 
 def test_a_runaway_loop_dies_on_the_line_ceiling():
-    reply, fr, _f, _d = _drive([
-        [_run("n = 0\nwhile True:\n    n = n + 1\n")],
+    reply, fr, _f, _d = drive([
+        [run("n = 0\nwhile True:\n    n = n + 1\n")],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "unbounded loop" in (out.get("error") or ""), out
 
 
@@ -194,11 +204,11 @@ def test_the_code_reply_detector_reads_python():
 def test_a_bare_fid_name_is_that_fid():
     """go_to(detected_192) unquoted: 541 NameErrors over 149 episodes on
     the first fleet. A served fid reads as a binding."""
-    reply, fr, flights, _d = _drive([
-        [_run("go_to(prior_7)\n")],
+    reply, fr, flights, _d = drive([
+        [run("go_to(prior_7)\n")],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     assert flights and flights[0]["target_fid"] == "prior_7", flights
 
@@ -207,11 +217,11 @@ def test_printing_a_whole_city_is_capped_like_a_notebook():
     """One episode printed 3,414 rows, blew the context, and died with
     zero flights. The printed channel serves head + tail + a suppression
     note, notebook-style."""
-    reply, fr, _f, _d = _drive([
-        [_run('for i in range(500):\n    print(f"row {i}")\n')],
+    reply, fr, _f, _d = drive([
+        [run('for i in range(500):\n    print(f"row {i}")\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     printed = out.get("printed") or ""
     assert "row 0" in printed and "row 499" in printed, printed[:200]
     assert "printed lines suppressed" in printed, printed[:200]
@@ -219,10 +229,9 @@ def test_printing_a_whole_city_is_capped_like_a_notebook():
 
 
 def test_a_move_returns_the_rows_it_arrived_over():
-    from maps.search.tests.test_code_surface_arm import _fly_drive
-    results, _g, added = _fly_drive([
-        [_run('look_for("car")\n')],
-        [_run('arrivals = go_to("prior_7")\n'
+    results, _g, added = grow_drive([
+        [run('look_for("car")\n')],
+        [run('arrivals = go_to("prior_7")\n'
               'print(len(arrivals) if arrivals else "none")\n')],
         "done",
     ])
@@ -242,13 +251,13 @@ def test_math_is_loaded_and_import_math_works():
     Euclidean distance ("without math module", the model's own comment)
     with a mangled exponent. The pure deterministic stdlib is loaded, and
     importing it is a no-op rather than a refusal."""
-    reply, fr, _f, _d = _drive([
-        [_run('import math\n'
+    reply, fr, _f, _d = drive([
+        [run('import math\n'
               'print(math.dist([0, 0], [3, 4]))\n'
               'print(math.sqrt(16))\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     printed = out.get("printed") or ""
     assert "5.0" in printed and "4.0" in printed, printed
@@ -269,20 +278,20 @@ def test_a_compile_stage_syntax_error_reaches_the_model():
     with pytest.raises(CodeError) as e:
         scan_block('r = find("car", near="a", near="b")\n')
     assert "keyword argument repeated" in str(e.value)
-    reply, fr, _f, _d = _drive([
-        [_run('r = find("car", near="a", near="b")\n')],
+    reply, fr, _f, _d = drive([
+        [run('r = find("car", near="a", near="b")\n')],
         "done",
     ])
-    err = _tool_results(fr)[0].get("error") or ""
+    err = tool_results(fr)[0].get("error") or ""
     assert "keyword argument repeated" in err, err
 
 
 def test_an_unknown_call_gets_a_did_you_mean():
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\nnarow(r1, within="the depot")\n')],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nnarow(r1, within="the depot")\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     err = out.get("error") or ""
     assert "did you mean" in err and "narrow" in err, out
     assert "r1" in (out.get("handles") or []), out
@@ -292,8 +301,8 @@ def test_try_except_is_ordinary_python():
     """`except Exception:` raised NameError on the first pysurface3
     fleet (113#112 b32): the standard exception names ride the
     builtins like the rest of the language."""
-    reply, fr, _f, _d = _drive([
-        [_run('try:\n'
+    reply, fr, _f, _d = drive([
+        [run('try:\n'
               '    x = [1][9]\n'
               'except IndexError:\n'
               '    x = "caught"\n'
@@ -304,7 +313,7 @@ def test_try_except_is_ordinary_python():
               'print(x, y)\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     assert "caught caught too" in (out.get("printed") or ""), out
 
@@ -313,33 +322,33 @@ def test_show_is_the_bare_expression_renderer():
     """show(r1) was reached 25x on arm 1 and only earned an error; the
     model's own display verb now renders exactly what `r1` on its own
     line does."""
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\nshow(r1)\n')],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nshow(r1)\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     assert "r1" in ((out.get("result") or {}).get("results") or {}), out
 
 
 def test_an_unbound_name_says_why_it_is_gone():
-    reply, fr, _f, _d = _drive([
-        [_run('r3 = find("car")[99]\n')],
-        [_run('go_to(r3)\n')],
+    reply, fr, _f, _d = drive([
+        [run('r3 = find("car")[99]\n')],
+        [run('go_to(r3)\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "did not bind" in (out[0].get("error") or ""), out[0]
     err = out[1].get("error") or ""
     assert "r3 is unbound" in err and "re-derive" in err, out[1]
 
 
 def test_kwarg_typeerrors_name_the_call_not_the_internals():
-    reply, fr, _f, _d = _drive([
-        [_run('find("car", fid="car_1")\n')],
+    reply, fr, _f, _d = drive([
+        [run('find("car", fid="car_1")\n')],
         "done",
     ])
-    err = (_tool_results(fr)[0].get("error") or "")
+    err = (tool_results(fr)[0].get("error") or "")
     assert "find()" in err and "'fid'" in err, err
     assert "find keywords:" in err and "near=" in err, err
     assert "_call_" not in err, err
@@ -349,11 +358,11 @@ def test_a_bare_fid_reads_as_its_row_and_still_flies():
     """detected_192.xy was the 'str' object AttributeError family: a bare
     fid name now resolves to a Row view of the live row, and a slot still
     takes it (the flight target is the fid verbatim)."""
-    reply, fr, flights, _d = _drive([
-        [_run('print(prior_7.xy)\ngo_to(prior_7)\n')],
+    reply, fr, flights, _d = drive([
+        [run('print(prior_7.xy)\ngo_to(prior_7)\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     assert "[" in (out.get("printed") or ""), out
     assert flights and flights[0]["target_fid"] == "prior_7", flights
@@ -424,12 +433,12 @@ def test_an_ambiguous_column_spelling_resolves_to_nothing():
 def test_builtins_survive_the_did_you_mean():
     """LOAD_GLOBAL falls through to __builtins__ only on a plain
     KeyError: review found `list` did-you-meant `bisect` and died."""
-    reply, fr, _f, _d = _drive([
-        [_run('print(list((1, 2)), dict(a=1)["a"], sorted({3, 1}), '
+    reply, fr, _f, _d = drive([
+        [run('print(list((1, 2)), dict(a=1)["a"], sorted({3, 1}), '
               'repr(set()))\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     assert "[1, 2] 1 [1, 3] set()" in (out.get("printed") or ""), out
 
@@ -438,15 +447,15 @@ def test_bare_fid_rows_compare_by_value():
     """Two references to the same bare fid mint two Row views; model
     dedup (`if cand not in seen`) must compare the PLACE, not the
     object identity -- and a Row equals its own fid string."""
-    reply, fr, _f, _d = _drive([
-        [_run('print(prior_7 == prior_7)\n'
+    reply, fr, _f, _d = drive([
+        [run('print(prior_7 == prior_7)\n'
               'print(prior_7 in [prior_7])\n'
               'print(prior_7 == "prior_7")\n'
               'seen = {prior_7, prior_7}\n'
               'print(len(seen))\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     printed = out.get("printed") or ""
     assert printed.splitlines() == ["True", "True", "True", "1"], printed
@@ -466,13 +475,13 @@ def test_the_caret_lands_right_under_tabs():
 
 
 def test_a_failed_unpack_unbinds_every_target():
-    reply, fr, _f, _d = _drive([
-        [_run('a, b = 1, 2\n')],
-        [_run('a, b = [1, 2, 3][99], 5\n')],
-        [_run('print(a)\n')],
+    reply, fr, _f, _d = drive([
+        [run('a, b = 1, 2\n')],
+        [run('a, b = [1, 2, 3][99], 5\n')],
+        [run('print(a)\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "IndexError" in (out[1].get("error") or ""), out[1]
     assert "a is unbound" in (out[2].get("error") or ""), out[2]
 
@@ -501,11 +510,11 @@ def test_a_far_anchored_find_says_nothing_is_near():
          "class": "road", "centerline": [[0.0, -50.0], [0.0, 50.0]],
          "search_text": "mill lane"},
     ]
-    reply, fr, _f, _d = _drive([
-        [_run('pools = find("pool", nearest="Mill Lane")\n')],
+    reply, fr, _f, _d = drive([
+        [run('pools = find("pool", nearest="Mill Lane")\n')],
         "done",
     ], cands=far)
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "lies near" in (out.get("note") or ""), out
     assert "only when a flight covers it" in out["note"], out["note"]
 
@@ -514,13 +523,13 @@ def test_order_by_fuses_two_anchors_like_find_near():
     """houses.order(nearest=[A, B]) was refused on the first fleets;
     the executor fuses the two normalized distances exactly as
     find(nearest=[A, B]) does, so the other spelling now compiles too."""
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\n'
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
               'r2 = r1.order(nearest=["the depot", "the gate"])\n'
               'r2\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     rows = out["result"]["results"]["r2"]["rows"]
     assert "distance to the_depot" in rows and \
@@ -528,8 +537,8 @@ def test_order_by_fuses_two_anchors_like_find_near():
 
 
 def test_a_slice_rides_slots_and_slices_again():
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\n'
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
               'head = r1[0:2]\n'
               'sub = head[0:1]\n'
               'print(len(sub), sub[0].fid)\n'
@@ -537,7 +546,7 @@ def test_a_slice_rides_slots_and_slices_again():
               'near_head\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     assert "1 car_1" in (out.get("printed") or ""), out
 
@@ -548,9 +557,11 @@ def test_an_explore_names_the_uncovered_sibling_segments():
     explored 2 of 10 segments and missed by 573 m)."""
     import json as _json
     from types import SimpleNamespace
+
     from maps.search.parse_compile.reasoner_loop import (
-        MissionSpec, advance_reasoner_one_round)
-    from maps.search.tests.test_mission_loop import FakeReasoner
+        MissionSpec,
+        advance_reasoner_one_round,
+    )
 
     cands = [
         {"fid": "prior_1", "name": "85th Street", "xy": [0.0, 0.0],
@@ -597,11 +608,11 @@ def test_an_explore_names_the_uncovered_sibling_segments():
 def test_a_near_miss_fid_names_the_correction():
     """go_to(detect_59) got a bare NameError while detected_59 sat in the
     previous block's own print (284#282 b8)."""
-    reply, fr, _f, _d = _drive([
-        [_run('go_to(prio_7)\n')],
+    reply, fr, _f, _d = drive([
+        [run('go_to(prio_7)\n')],
         "done",
     ])
-    err = (_tool_results(fr)[0].get("error") or "")
+    err = (tool_results(fr)[0].get("error") or "")
     assert "no prio_7 on this surface" in err and "prior_7" in err, err
 
 
@@ -609,13 +620,13 @@ def test_a_get_near_miss_notes_the_real_column():
     """.get keeps returning the default on a miss, and the receipt names
     the near column the spelling missed (363#361 burned three blocks on
     'distance to Airway Boulevard' vs the served 'along airway')."""
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car", nearest="the depot")\n'
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car", nearest="the depot")\n'
               'v = r1[0].get("distance_to_depot", 9999)\n'
               'print(v)\n')],
         "done",
     ])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert "error" not in out, out
     assert "9999" in (out.get("printed") or ""), out
     note = out.get("note") or ""
@@ -623,11 +634,11 @@ def test_a_get_near_miss_notes_the_real_column():
 
 
 def test_rows_repr_names_its_rows():
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\nprint(r1)\n')],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nprint(r1)\n')],
         "done",
     ])
-    printed = (_tool_results(fr)[0].get("printed") or "")
+    printed = (tool_results(fr)[0].get("printed") or "")
     assert "car_1 [" in printed and "row(s):" in printed, printed
 
 
@@ -635,11 +646,11 @@ def test_a_bound_handle_beats_a_coincidental_fid_suggestion():
     """corner_5 typo'd from a bound corner_4 must suggest the model's own
     handle, never a coincidental prior_5 -- the fid correction fires only
     when the PREFIX near-misses a fid family (detect_59 -> detected_59)."""
-    reply, fr, _f, _d = _drive([
-        [_run('corner_4 = [10, 20]\nprint(corner_5)\n')],
+    reply, fr, _f, _d = drive([
+        [run('corner_4 = [10, 20]\nprint(corner_5)\n')],
         "done",
     ])
-    err = (_tool_results(fr)[0].get("error") or "")
+    err = (tool_results(fr)[0].get("error") or "")
     assert "corner_4" in err, err
     assert "prior_5" not in err, err
 
@@ -658,7 +669,11 @@ def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
     order it, materialise it. Only the arbitrary pick is unsayable.
     """
     from maps.search.parse_compile.python_surface import (
-        CodeError, MissionEnv, MissionPython, Rows)
+        CodeError,
+        MissionEnv,
+        MissionPython,
+        Rows,
+    )
 
     rows = [{"fid": f"prior_{i}", "name": "Neuralia Road"} for i in range(12)]
     env = MissionEnv(
@@ -686,8 +701,7 @@ def test_an_ordered_result_stays_subscriptable():
     meaningful row -- refusing it would delete the ranking the agent just
     asked for.
     """
-    from maps.search.parse_compile.python_surface import (
-        MissionEnv, MissionPython, Rows)
+    from maps.search.parse_compile.python_surface import MissionEnv, MissionPython, Rows
 
     rows = [{"fid": f"detected_{i}", "class": "car"} for i in range(6)]
     env = MissionEnv(
@@ -709,8 +723,7 @@ def test_a_tied_views_repr_shows_its_shape_and_leaks_no_point():
     coordinate off it and flew go_to([2242.27, 3048.07]) -- one way of a
     64-way road, reached by a point the surface had refused to serve.
     """
-    from maps.search.parse_compile.python_surface import (
-        MissionEnv, MissionPython, Rows)
+    from maps.search.parse_compile.python_surface import MissionEnv, MissionPython, Rows
 
     rows = [{"fid": f"prior_{5775 + i}", "name": "Neuralia Road",
              "xy": [2242.27 + i, 3048.07 + i]} for i in range(64)]
@@ -796,30 +809,30 @@ def test_the_prefix_table_has_one_home():
 
 def test_a_non_callable_predicate_teaches_the_method_the_surface_serves():
     for call in ("r1.filter(5)", "r1.order(5)"):
-        _reply, fr, _f, _d = _drive([[_run(f'r1 = find("car")\n{call}\n')], "done"])
-        err = _tool_results(fr)[0].get("error") or ""
+        _reply, fr, _f, _d = drive([[run(f'r1 = find("car")\n{call}\n')], "done"])
+        err = tool_results(fr)[0].get("error") or ""
         assert "r.distance(x)" in err and "gap(" not in err, err
 
 
 def test_every_filter_refuses_an_unknown_kwarg_in_one_text():
     errs = []
     for rows in ("r1", "r1[0]", "r1.filter(lambda r: True)"):
-        _reply, fr, _f, _d = _drive([[_run(f'r1 = find("car")\n{rows}.filter(toward=1)\n')],
+        _reply, fr, _f, _d = drive([[run(f'r1 = find("car")\n{rows}.filter(toward=1)\n')],
                                      "done"])
-        errs.append(_tool_results(fr)[0].get("error") or "")
+        errs.append(tool_results(fr)[0].get("error") or "")
     assert errs[0] == errs[1] == errs[2] and "toward=" in errs[0], errs
 
 
 def test_every_filter_refuses_a_colour_cut():
     for rows in ("r1", "r1[0]", "r1.filter(lambda r: True)"):
-        _reply, fr, _f, _d = _drive([[_run(f'r1 = find("car")\n{rows}.filter(color="red")\n')],
+        _reply, fr, _f, _d = drive([[run(f'r1 = find("car")\n{rows}.filter(color="red")\n')],
                                      "done"])
-        assert "colour never CUTS" in (_tool_results(fr)[0].get("error") or ""), rows
+        assert "colour never CUTS" in (tool_results(fr)[0].get("error") or ""), rows
 
 
 def test_a_list_plus_rows_is_a_rowlist_either_way_round():
-    _reply, fr, _f, _d = _drive([[_run('r1 = find("car")\n'
+    _reply, fr, _f, _d = drive([[run('r1 = find("car")\n'
                                        'print(hasattr(r1 + [], "filter"),'
                                        ' hasattr([] + r1, "filter"))\n')], "done"])
-    out = _tool_results(fr)[0]
+    out = tool_results(fr)[0]
     assert (out.get("printed") or "").strip() == "True True", out

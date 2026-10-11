@@ -13,8 +13,7 @@ import pytest
 
 from maps.search.analyze_scene import geom_program as gp
 from maps.search.parse_compile.code_surface import CodeError
-from maps.search.tests.test_code_surface_arm import (
-    ops_of_block, plan_of_block, raising_ops_of_block)
+from maps.search.tests.fakes import ops_of_block, plan_of_block, raising_ops_of_block
 
 
 def _road(x, y0=-400.0, y1=400.0, n=9):
@@ -209,7 +208,6 @@ def test_a_corner_is_two_cuts_against_one_crossing():
     op, ONE deduped ref for the anchor named twice, and the two cuts chained
     so each says what it dropped.
     """
-    from maps.search.tests.test_code_surface_arm import raising_ops_of_block
 
     ops = raising_ops_of_block(
         'corner = intersection("86th Street", "Jacaranda Avenue")\n'
@@ -237,9 +235,12 @@ def test_a_diagonal_kwarg_refuses_and_names_the_conjunction():
     quadrant of a POINT it is exact rather than an approximation, which is
     why cardinal_side offers four winds and the refusal names the pairing.
     """
-    from maps.search.parse_compile.python_surface import (
-        _CARDINAL_KWARGS, _diagonal_remedy, _split_diagonal)
     from maps.search.analyze_scene.geom_compute import CARDINALS, COMPASS_UNIT
+    from maps.search.parse_compile.python_surface import (
+        _CARDINAL_KWARGS,
+        _diagonal_remedy,
+        _split_diagonal,
+    )
 
     # the kwarg set IS the declared four-subset -- no fifth spelling
     assert _CARDINAL_KWARGS == {f"{w}_of" for w in CARDINALS}
@@ -265,7 +266,12 @@ def test_an_unknown_filter_kwarg_is_refused_never_dropped():
     one funnel all three filter paths reach.
     """
     from maps.search.parse_compile.python_surface import (
-        CodeError, MissionEnv, MissionPython, Row, RowList)
+        CodeError,
+        MissionEnv,
+        MissionPython,
+        Row,
+        RowList,
+    )
 
     mp = MissionPython(MissionEnv(
         run_plan=lambda plan, said: {}, rows_of_ref=lambda ref: [],
@@ -686,8 +692,7 @@ def test_a_direction_COMPOSES_so_southwest_faces_south_and_west():
     against one, and chaining the two cardinals of a diagonal takes the
     precision back -- which is the surface's own law that filters compose.
     """
-    from maps.search.parse_compile.code_surface import (
-        _winds_holding, _wind_parts)
+    from maps.search.parse_compile.code_surface import _wind_parts, _winds_holding
 
     # derived from the wind's spelling, never tabulated
     assert _wind_parts("southwest") == {"south", "west"}
@@ -746,8 +751,7 @@ def test_a_direction_ORDERS_globally_and_takes_no_anchor():
     per run at 82% success. It is here so a global question is spelled
     globally, on the method a cut and a sort already live on.
     """
-    from maps.search.parse_compile.python_surface import (
-        Row, RowList, _direction_key)
+    from maps.search.parse_compile.python_surface import Row, RowList, _direction_key
 
     rows = RowList([Row({"fid": f, "xy": list(xy), "class": "pool"}, None)
                     for f, xy in (("p_n", [0.0, 500.0]),

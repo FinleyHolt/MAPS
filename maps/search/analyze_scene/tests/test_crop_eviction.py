@@ -17,32 +17,22 @@ these pin this step's own behaviour once it is reached.
 
 from __future__ import annotations
 
-import io
-
-import pytest
-
 from maps.llm.vision_content import (
     build_image_part,
     image_tokens_in,
     image_tokens_of,
 )
 from maps.search.analyze_scene.compactor import (
-    _evict_current_turn_crops,
     _EVICTED_CROP_TEXT,
+    _evict_current_turn_crops,
     _evict_oldest_crops,
 )
-
-
-def _jpeg(side: int = 512) -> bytes:
-    Image = pytest.importorskip("PIL.Image")
-    buf = io.BytesIO()
-    Image.new("RGB", (side, side), (90, 90, 90)).save(buf, format="JPEG")
-    return buf.getvalue()
+from maps.search.tests.fakes import jpeg
 
 
 def _vision_turn(text: str, n_images: int, side: int = 512) -> dict:
     parts: list[dict] = [{"type": "text", "text": text}]
-    parts += [build_image_part(_jpeg(side)) for _ in range(n_images)]
+    parts += [build_image_part(jpeg(side)) for _ in range(n_images)]
     return {"role": "user", "content": parts}
 
 
@@ -58,7 +48,7 @@ def _n_live_crops(messages: list[dict]) -> int:
 
 def test_it_shes_enough_and_stops() -> None:
     msgs = [_vision_turn(f"turn {i}", 2) for i in range(5)]
-    one = image_tokens_of(build_image_part(_jpeg()))
+    one = image_tokens_of(build_image_part(jpeg(512)))
 
     out, evicted, freed = _evict_oldest_crops(msgs, shed_tokens=one * 3)
 
@@ -81,7 +71,7 @@ def test_the_current_turn_s_crops_are_never_evicted() -> None:
 
 def test_oldest_first() -> None:
     msgs = [_vision_turn("a", 1), _vision_turn("b", 1), _vision_turn("c", 1)]
-    one = image_tokens_of(build_image_part(_jpeg()))
+    one = image_tokens_of(build_image_part(jpeg(512)))
     out, evicted, _ = _evict_oldest_crops(msgs, shed_tokens=one)
     assert evicted == 1
     assert _n_live_crops([out[0]]) == 0, "it took a newer crop before an older"
@@ -132,7 +122,7 @@ def test_the_current_turn_is_thinned_only_as_a_last_resort() -> None:
     episodes died 2,500 tokens over with one 314 KB user message holding
     every image in the transcript."""
     msgs = [_vision_turn("only turn", 6)]
-    one = image_tokens_of(build_image_part(_jpeg()))
+    one = image_tokens_of(build_image_part(jpeg(512)))
 
     out, evicted, freed = _evict_current_turn_crops(msgs, shed_tokens=one * 2)
     assert evicted >= 2, "the turn that could not fit was left untouched"

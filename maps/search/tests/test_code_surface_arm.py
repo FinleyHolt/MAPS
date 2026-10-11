@@ -10,115 +10,18 @@ from __future__ import annotations
 import json
 import re
 
-from maps.search.tests.test_mission_loop import (
-    _CANDS, _drive, _tool_results,
+from maps.search.tests.fakes import (
+    CANDS,
+    START,
+    STOPS,
+    drive,
+    explore_drive,
+    grow_drive,
+    ops_of_block,
+    plan_of_block,
+    run,
+    tool_results,
 )
-
-
-def _run(code: str):
-    return ("run", {"code": code})
-
-
-def _record_block(code: str, bound: dict | None = None, rn: int = 0,
-                  discourse: dict | None = None) -> tuple[list[dict], dict]:
-    """Run ONE block against a recording env: (its plans, its ack).
-
-    The surface has no parser: a block becomes steps only by EXECUTING,
-    so a compile-shape test captures its plans off a ``MissionEnv`` whose
-    ``run_plan`` records them and acknowledges nothing. ``bound`` seeds the
-    namespace the way an earlier block would have left it -- ``rN`` binds
-    a result handle, any other string a row's fid, an ``[x, y]`` a point
-    -- so a block that names an earlier handle resolves exactly as it
-    does mid-mission.
-    """
-    import re
-
-    from maps.search.parse_compile import python_surface as ps
-
-    seen: list[dict] = []
-
-    counter = [rn]
-
-    def _run_plan(plan, said):
-        seen.append(plan)
-        # the loop's own advance: a later call in the same block must not
-        # re-mint the refs the earlier one took
-        counter[0] = max(counter[0], int(plan.get("rn_end") or 0))
-        return {}
-
-    env = ps.MissionEnv(
-        run_plan=_run_plan, rows_of_ref=lambda ref: [], plan_rn=counter,
-        discourse=discourse if discourse is not None else {},
-        minted=[], say_err=lambda ack, msg: {**ack, "error": msg},
-        row_of_fid=lambda fid: None)
-    mp = ps.MissionPython(env)
-    for name, held in (bound or {}).items():
-        if isinstance(held, str) and re.fullmatch(r"r\d+", held):
-            mp.ns[name] = ps.Rows(held, mp)
-        elif isinstance(held, str):
-            mp.ns[name] = ps.Row({"fid": held}, mp=mp)
-        else:
-            mp.ns[name] = held
-    return seen, mp.run_block(code)
-
-
-def plan_of_block(code: str, bound: dict | None = None, rn: int = 0,
-                  discourse: dict | None = None) -> dict:
-    """The plan ONE block compiles to, without flying anything."""
-    from maps.search.parse_compile import python_surface as ps
-
-    seen, out = _record_block(code, bound, rn, discourse)
-    if "error" in out and not seen:
-        raise ps.CodeError(str(out["error"]))
-    if not seen:
-        raise AssertionError(f"{code!r} compiled no plan: {out}")
-    return seen[-1] if len(seen) == 1 else {"plans": seen, **seen[-1]}
-
-
-def raising_ops_of_block(code: str, bound: dict | None = None,
-                         rn: int = 0) -> list[dict]:
-    """Every op ONE block compiles -- raising the block's OWN refusal.
-
-    ``plan_of_block`` reports a refusal only when nothing compiled before
-    it, because an error stops a block at its line and everything before
-    it ran and stands -- the mission's real semantics. A test about what
-    a call REFUSES wants the refusal even when a ``find`` on the line
-    above already compiled its plan.
-    """
-    from maps.search.parse_compile import python_surface as ps
-
-    seen, out = _record_block(code, bound, rn)
-    if "error" in out:
-        raise ps.CodeError(str(out["error"]))
-    return [op for p in seen for st in p["steps"]
-            if st.get("do") == "analyze" for op in st["program"]["ops"]]
-
-
-def ops_of_block(code: str, bound: dict | None = None,
-                 rn: int = 0) -> list[dict]:
-    """Every op ONE block compiles, across all its plans, in order.
-
-    python_surface dispatches one plan PER CALL, so a two-call block is
-    two programs -- but they share the executor's ref counter, so the
-    concatenation is the single program the block adds up to and it runs
-    under ``geom_program.run_program`` exactly as the block does.
-    """
-    plan = plan_of_block(code, bound=bound, rn=rn)
-    return [op for p in plan.get("plans", [plan])
-            for st in p["steps"] if st.get("do") == "analyze"
-            for op in st["program"]["ops"]]
-
-
-def _fly_drive(script):
-    """The mission over a graph the flight actually GROWS.
-
-    ``test_mission_loop._drive`` holds the surface still, so no flight
-    there ever mints a handle. The mint is the second writer into the rN
-    namespace, and every test about it needs a world that changes.
-    """
-    from maps.search.tests.test_flight_mints_a_handle import (
-        _drive as _grow)
-    return _grow(script)
 
 
 def test_a_block_grounds_finds_orders_and_flies():
@@ -128,15 +31,15 @@ def test_a_block_grounds_finds_orders_and_flies():
     thing the say surface needs four separate sentences and a transcribed
     fid to reach.
     """
-    reply, fr, flights, _declared = _drive([
-        [_run('r1 = find("car", nearest="the depot")\n'
+    reply, fr, flights, _declared = drive([
+        [run('r1 = find("car", nearest="the depot")\n'
               'r2 = r1.order(nearest="the depot")\n'
               'r3 = r2[0]\n')],
-        [_run('go_to(r3)\n')],
+        [run('go_to(r3)\n')],
         "The house by the depot.",
     ])
     assert reply.ended_by == "reply"
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" not in out[0], out[0]
     # The block is recorded, append-only, and counted.
     assert out[0]["script_lines"] == 3
@@ -154,16 +57,16 @@ def test_the_whole_vocabulary_in_one_episode():
     This is the transcript the arm exists to produce: the multi-hop form
     the sentence surface reached in 0 of 200 flown episodes.
     """
-    reply, fr, flights, _d = _drive([
-        [_run('look_at = 0\n')],           # ordinary Python, a silent bind
-        [_run('r1 = find("car")\n'
+    reply, fr, flights, _d = drive([
+        [run('look_at = 0\n')],           # ordinary Python, a silent bind
+        [run('r1 = find("car")\n'
               'r2 = r1.filter(within="the depot")\n'
               'r3 = r1.order(nearest="the depot")\n'
               'r4 = r3[0]\n')],
-        [_run('go_to(r4)\n')],
+        [run('go_to(r4)\n')],
         "the nearest car",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" not in out[0], out[0]
     assert "error" not in out[1], out[1]
     assert out[1]["handles"] == ["r1", "r2", "r3", "r4"], out[1]
@@ -178,109 +81,28 @@ def test_the_watchlist_and_the_loud_errors_are_the_same_ones():
     """A code arm inherits mission law rather than restating it: an
     ungroundable name is the SAME rule N refusal, and the watchlist state
     rides every result."""
-    reply, fr, _flights, _d = _drive([
-        [_run('r1 = find("car", nearest="nowhere at all")\n')],
+    reply, fr, _flights, _d = drive([
+        [run('r1 = find("car", nearest="nowhere at all")\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" in out[0] and "rule N" in out[0]["error"], out[0]
     assert out[0]["watching"], out[0]
 
 
 def test_a_loop_that_flies_is_refused_before_anything_runs():
     """The one structural cut, at the surface the model actually writes to."""
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\nfor c in r1:\n    go_to(c)\n')],
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\nfor c in r1:\n    go_to(c)\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" in out[0]
     assert "cannot go inside a loop" in out[0]["error"], out[0]["error"]
     assert flights == [], flights
 
 
 # --- explore: the covering pass, and the return leg that makes it free ----
-
-# The stops a fake footprint hands back — a 300 m thing walked at the
-# spacing the driver's observation extent implies.
-_STOPS = [[100.0, 200.0], [200.0, 200.0], [300.0, 200.0]]
-_START = (7.0, 9.0)
-
-
-def _explore_drive(script, *, stops=_STOPS, obs_span_m=200.0, cands=None,
-                   obs_minor_m=None, with_renderer=False,
-                   deadline_epoch=None, on_fly=None, held_now=None):
-    """The mission with an engine that can report a footprint's stops.
-
-    The stub flight reports each item's OWN point as its pose, because the
-    one thing every explore test has to be able to see is WHERE THE DRONE
-    ENDED — the fixture that always answers the same pose cannot tell a
-    pass that came home from one that did not.
-
-    ``stops`` may be a dict keyed by fid — the per-member shapes a SET
-    pass walks — or the one list every fid answers, as the single-pass
-    tests always had it.
-    """
-    import json as _json
-    from types import SimpleNamespace
-    from maps.search.parse_compile.reasoner_loop import (
-        MissionSpec, advance_reasoner_one_round)
-    from maps.search.tests.test_mission_loop import FakeReasoner
-    from maps.util.xy_token import parse_xy_token
-
-    flights: list[dict] = []
-
-    def _fly(item):
-        flights.append(item)
-        # ``on_fly`` lets a test advance a fake clock BY THE STOP rather
-        # than by wall time — the wall-clock backstop cannot be crossed
-        # mid-pass otherwise without sleeping.
-        if on_fly is not None:
-            on_fly(item)
-        _pt = parse_xy_token(item["target_fid"]) or (1.0, 2.0)
-        return {"stop_id": f"stop_{len(flights) - 1:03d}",
-                "target": item["target_fid"],
-                "pose_xy": [float(_pt[0]), float(_pt[1])],
-                "new_detections": 1, "cue": "the cue"}
-
-    asked: list[tuple] = []
-
-    def _stops(fid, spacing_m):
-        asked.append((fid, spacing_m))
-        got = stops.get(fid) if isinstance(stops, dict) else stops
-        return [list(p) for p in got] if got else None
-
-    rendered: list = []
-
-    def _renderer(reqs):
-        rendered.append(list(reqs))
-        return [{"jpeg": b"x", "center_fid": r["center_fid"],
-                 "legend": [{"digit": 1, "fid": r["center_fid"],
-                             "label": "car", "role": "center"}],
-                 "context_m": 30.0, "world_window": [0, 0, 200, 200]}
-                for r in reqs]
-
-    fr = FakeReasoner(script)
-    ctx = SimpleNamespace(graph=None, cell_size_m=1.0,
-                          tile_origin_xy=(0.0, 0.0), grid_shape=(10, 10),
-                          robot_pose=SimpleNamespace(x=_START[0], y=_START[1]))
-    reply = advance_reasoner_one_round(
-        reasoner=fr, user_message="Find the goal object.", ctx=ctx,
-        rid_tag="m0",
-        compute_namespace={"cands": list(_CANDS if cands is None else cands),
-                           "anchors": [], "cell_m": 1.0},
-        diag={}, obs_span_m=obs_span_m,
-        obs_minor_m=obs_minor_m,
-        look_renderer=_renderer if with_renderer else None,
-        mission_spec=MissionSpec(held_now=held_now,
-            fly=_fly, declare_concepts=lambda i: {"declared": []},
-            coverage_stops=_stops, flight_budget=32, turn_cap=48,
-            deadline_epoch=deadline_epoch),
-    )
-    out = [_json.loads(m["content"]) for m in fr.messages
-           if m.get("role") == "tool"]
-    return reply, out, flights, asked, rendered
-
 
 def test_an_explore_flies_the_stops_and_ends_on_the_last_one():
     """A pass covers the thing and STAYS where it finished.
@@ -292,26 +114,26 @@ def test_an_explore_flies_the_stops_and_ends_on_the_last_one():
     ack rather than left to be deduced: a standing answer the model cannot
     read is how a scouting point becomes a commit by accident.
     """
-    reply, out, flights, asked, _rend = _explore_drive([
-        [_run('explore("prior_7")\n')],
+    reply, out, flights, asked, _rend = explore_drive([
+        [run('explore("prior_7")\n')],
         "done",
     ])
     assert "error" not in out[0], out[0]
     # the stops of the thing, and NOTHING after them
-    assert len(flights) == len(_STOPS), flights
-    assert reply.flights_flown == len(_STOPS)
+    assert len(flights) == len(STOPS), flights
+    assert reply.flights_flown == len(STOPS)
     from maps.util.xy_token import parse_xy_token
     flown = [list(parse_xy_token(f["target_fid"])) for f in flights]
-    assert flown == _STOPS, flown
+    assert flown == STOPS, flown
     ack = out[0]["explored"]
-    assert ack["stops"] == len(_STOPS), ack
+    assert ack["stops"] == len(STOPS), ack
     # No coordinate is served for where the walk ended: the answer standing
     # is named as the pass's last stop over the thing explored.
     assert "ended_at" not in ack, ack
     assert ack["answer_if_you_reply_now"].startswith(
         f"the last stop of the pass over {ack['explored']}"), ack
     # it did NOT go home
-    assert list(_START) not in flown, flown
+    assert list(START) not in flown, flown
 
 
 def test_an_explore_spends_half_an_observation_of_the_run_per_stop():
@@ -323,8 +145,8 @@ def test_an_explore_spends_half_an_observation_of_the_run_per_stop():
     bake or an altitude change moves that number, and a second copy of it
     would go stale on one side.
     """
-    _r, _o, _f, asked, _rend = _explore_drive([
-        [_run('explore("prior_7")\n')],
+    _r, _o, _f, asked, _rend = explore_drive([
+        [run('explore("prior_7")\n')],
         "done",
     ], obs_span_m=320.82)
     assert asked == [("prior_7", 320.82 / 2.0)], asked
@@ -338,14 +160,14 @@ def test_an_explore_serves_ONE_picture_and_ONE_handle():
     the mission had seen. Per-stop mints would hand the model a name for
     stop 5's rows and call it the explore's product.
     """
-    reply, out, flights, _a, _rend = _explore_drive([
-        [_run('explore("prior_7")\n')],
+    reply, out, flights, _a, _rend = explore_drive([
+        [run('explore("prior_7")\n')],
         "done",
     ])
     ack = out[0]["explored"]
     # ONE ack, not a list of flight reports
     assert "flown" not in out[0], out[0]
-    assert ack["new_detections"] == len(_STOPS), ack
+    assert ack["new_detections"] == len(STOPS), ack
     # the pass mints at most one handle, over the whole of itself
     assert len([k for k in out[0].get("handles") or [] if k]) >= 0
     assert isinstance(ack.get("stops"), int)
@@ -354,8 +176,8 @@ def test_an_explore_serves_ONE_picture_and_ONE_handle():
 def test_an_explore_of_a_thing_with_no_footprint_is_the_one_stop_it_is():
     """A fid carrying no cells: there is nothing to cover, and the pass
     says so rather than reporting a cover it did not fly."""
-    reply, out, flights, _a, _rend = _explore_drive([
-        [_run('explore("prior_7")\n')],
+    reply, out, flights, _a, _rend = explore_drive([
+        [run('explore("prior_7")\n')],
         "done",
     ], stops=None)
     assert "error" not in out[0], out[0]
@@ -374,12 +196,12 @@ def test_a_call_indexed_inside_an_argument_is_its_own_dispatch():
     the first produced. That is where the model actually writes it -- one
     live episode spent three blocks on the two spellings.
     """
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\n'
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
               'r2 = r1.filter(within=find("gate")[0])\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" not in out[0], out[0]
     # the inner find ran as its own dispatch, and the row it yielded is
     # what the narrow measured against -- by fid, never by name.
@@ -453,6 +275,7 @@ def test_an_alias_gives_a_result_a_second_name():
     so it binds and nothing runs, exactly as a selection binds.
     """
     import pytest
+
     from maps.search.parse_compile.code_surface import CodeError
     # BOTH NAMES REACH THE SAME ROWS: the alias is the same Rows object
     # under a second name, so it mints nothing and re-runs nothing -- the
@@ -533,6 +356,7 @@ def test_the_moving_calls_refuse_a_coordinate_in_every_spelling():
     the call takes one argument, so two numbers are an arity refusal.)
     """
     import pytest
+
     from maps.search.parse_compile.code_surface import CodeError
     for bad in ("go_to([3411, 1468])\n",
                 "explore([3411, 1468])\n",
@@ -556,8 +380,8 @@ def test_the_moving_calls_refuse_a_coordinate_in_every_spelling():
 
 def test_a_go_to_still_leaves_the_drone_where_it_flew():
     """The other half of the pair, and the reason the pair is two calls."""
-    reply, out, flights, _a, _rend = _explore_drive([
-        [_run('go_to("prior_7")\n')],
+    reply, out, flights, _a, _rend = explore_drive([
+        [run('go_to("prior_7")\n')],
         "done",
     ])
     assert len(flights) == 1 and flights[0]["target_fid"] == "prior_7"
@@ -573,12 +397,12 @@ def test_the_inline_selection_a_live_reasoner_actually_writes():
     normalised into a pick rather than refused, and the pick resolves from
     rows an earlier block already has, so the move carries a real fid.
     """
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\n')],
-        [_run('go_to(r1[0])\n')],
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\n')],
+        [run('go_to(r1[0])\n')],
         "the car",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" not in out[1], out[1]
     assert reply.flights_flown == 1
     assert flights and flights[0]["target_fid"] == "car_1", flights
@@ -601,11 +425,11 @@ def test_the_two_silent_defects_the_live_smoke_exposed():
     still pinned: the constraint must never vanish silently. It now either
     GATES by name or fails loud.
     """
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("church", name="Desert Song Foursquare Church")\n')],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("church", name="Desert Song Foursquare Church")\n')],
         "done",
     ])
-    err = _tool_results(fr)[0].get("error") or ""
+    err = tool_results(fr)[0].get("error") or ""
     # never silently dropped: either it gates, or it says nothing bears
     # that name. What it must NEVER do is succeed while ignoring it.
     assert "NAMED" in err and "Desert Song" in err, err
@@ -618,18 +442,18 @@ def test_the_two_silent_defects_the_live_smoke_exposed():
     # is the whole of "the house with a pool in the backyard". What the
     # type system still refuses is a set where a POINT has to be (stand at,
     # face, centre a map on) -- there is no one point in a union.
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\n')],
-        [_run('r2 = find("car", nearest=r1)\n')],   # r1 is a SET from turn 1
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\n')],
+        [run('r2 = find("car", nearest=r1)\n')],   # r1 is a SET from turn 1
         "done",
     ])
-    assert "error" not in _tool_results(fr)[1], _tool_results(fr)[1]
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\n')],
-        [_run('show_map(around=r1)\n')],
+    assert "error" not in tool_results(fr)[1], tool_results(fr)[1]
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\n')],
+        [run('show_map(around=r1)\n')],
         "done",
     ])
-    err = _tool_results(fr)[1].get("error") or ""
+    err = tool_results(fr)[1].get("error") or ""
     assert "around= takes ONE place" in err, err
     assert flights == []
 
@@ -643,6 +467,7 @@ def test_the_vision_calls_are_the_sentence_surface_s_own_steps():
     confounded by what was missing rather than by the shape.
     """
     import pytest
+
     from maps.search.parse_compile.code_surface import CodeError
     bound = {"r1": "r7"}
     plan = plan_of_block("look(r1)\n", bound=bound)
@@ -674,6 +499,7 @@ def test_no_argument_is_dropped_on_the_floor():
     beside within= -- is honoured rather than refused.
     """
     import pytest
+
     from maps.search.parse_compile.code_surface import CodeError
 
     # find("road", query="Sherwood Avenue") -- the positional won and the
@@ -723,13 +549,13 @@ def test_any_earlier_handle_stays_indexable_not_just_the_newest():
     with "unknown fid '_p0'" -- 31 blocks over 18 episodes on
     calcity_code_200. carry_results is keyed by ref and holds them all.
     """
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\n')],
-        [_run('r2 = find("tower")\n')],       # r1 is no longer the newest
-        [_run('go_to(r1[0])\n')],
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\n')],
+        [run('r2 = find("tower")\n')],       # r1 is no longer the newest
+        [run('go_to(r1[0])\n')],
         "the car",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" not in out[2], out[2]
     assert reply.flights_flown == 1
     assert flights and flights[0]["target_fid"] == "car_1", flights
@@ -749,13 +575,13 @@ def test_a_pick_never_inherits_the_previous_block_s_row():
     Here the third block indexes a handle that was never bound. The right
     answer is a loud failure; the defect answers with block 2's car.
     """
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\n')],
-        [_run('go_to(r1[0])\n')],                # binds the internal _p0
-        [_run('go_to(r9[0])\n')],                # r9 is not a handle
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\n')],
+        [run('go_to(r1[0])\n')],                # binds the internal _p0
+        [run('go_to(r9[0])\n')],                # r9 is not a handle
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert flights and flights[0]["target_fid"] == "car_1", flights
     # The unbound pick resolves to NOTHING -- never to the row the last
     # block's `_p0` happened to hold.
@@ -775,14 +601,14 @@ def test_a_pick_is_usable_in_the_block_that_made_it():
     ("'r4' is a result handle; move takes ... a literal fid"). The block
     now splits at each selection: run, resolve, compile the rest.
     """
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car", nearest="the depot")\n'
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car", nearest="the depot")\n'
               'r2 = r1[0]\n'
               'r3 = find("gate", nearest=r2)\n'
               'go_to(r2)\n')],
         "the car by the depot",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" not in out[0], out[0]
     # ONE BLOCK, ONE TABLE: the block's last result keeps its rows and the
     # earlier find folds to its hint, attributed to the model's name.
@@ -809,15 +635,15 @@ def test_a_selected_crossing_can_anchor_the_next_call():
     assert bind_row({"fid": "prior_9"}) == "prior_9"   # every other row type
 
     xing = [{"fid": "[10, 20]", "xy": [10.0, 20.0], "class": "crossing",
-             "search_text": "the crossing"}] + list(_CANDS)
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("the crossing")\n'
+             "search_text": "the crossing"}] + list(CANDS)
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("the crossing")\n'
               'r2 = r1[0]\n'
               'r3 = find("car", nearest=r2)\n')],
-        [_run("go_to(r2)\n")],
+        [run("go_to(r2)\n")],
         "done",
     ], cands=xing)
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" not in out[0], out[0]      # not `nothing named "[10, 20]"`
     assert "error" not in out[1], out[1]
     assert flights and flights[0]["target_fid"] == "[10, 20]", flights
@@ -853,14 +679,14 @@ def test_only_the_model_s_own_names_are_served_back():
     name rode the `handles` list -- `["_p0", "r1", "r2"]` -- after which a
     reasoner wrote a bare `go_to(_p0)`.
     """
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\n'
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\n'
               'r2 = find("gate", nearest="the depot")\n')],
-        [_run("go_to(r1[0])\n")],               # mints an internal _p0
-        [_run('r3 = find("tower")\n')],
+        [run("go_to(r1[0])\n")],               # mints an internal _p0
+        [run('r3 = find("tower")\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     # The receipt is keyed by what the MODEL called it. r2's op chain is
     # find -> compare -> score_by, so the executor's own name for it is r3.
     assert list(out[0]["result"]["results"]) == ["r2"], \
@@ -879,11 +705,11 @@ def test_an_unbindable_inline_pick_names_what_the_model_wrote():
     it is this block's private wiring, and a refusal that spells it is how
     the model learned to write `go_to(_p0)` in the first place.
     """
-    reply, fr, flights, _d = _drive([
-        [_run("go_to(r9[0])\n")],
+    reply, fr, flights, _d = drive([
+        [run("go_to(r9[0])\n")],
         "done",
     ])
-    err = _tool_results(fr)[0].get("error") or ""
+    err = tool_results(fr)[0].get("error") or ""
     assert "name 'r9' is not defined" in err, err
     assert "_p" not in err, err
     assert flights == [], flights
@@ -900,6 +726,7 @@ def test_a_ref_is_told_from_a_name_by_shape_not_by_first_letter():
     handle that does not exist.
     """
     import pytest
+
     from maps.search.parse_compile.code_surface import CodeError
     src = 'r3 = find("gate", nearest=r2)\n'
     held = {"r1": "r0", "r2": "car_1"}
@@ -946,12 +773,12 @@ def test_the_items_slot_takes_a_bare_ref_and_the_place_slots_a_labelled_one():
         ops = ops_of_block(src, {"r2": "car_1"})
         assert ops[0]["args"]["items"] == "car_1", (src, ops)
         assert ops[0]["args"]["refs"][0]["as"] == "the depot", (src, ops)
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\nr2 = r1[0]\n')],
-        [_run('r9 = r2.order(nearest="the depot")\n')],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nr2 = r1[0]\n')],
+        [run('r9 = r2.order(nearest="the depot")\n')],
         "done",
     ])
-    assert "error" not in _tool_results(fr)[1], _tool_results(fr)[1]
+    assert "error" not in tool_results(fr)[1], tool_results(fr)[1]
 
 
 def test_the_executor_never_mints_a_ref_the_model_already_uses():
@@ -977,12 +804,12 @@ def test_the_executor_never_mints_a_ref_the_model_already_uses():
     assert "r3" not in refs and "r4" not in refs, refs
     assert refs == ["r2", "r5", "r6"], refs   # r3/r4 are the model's
     # ...and the whole chain runs rather than tripping the cycle detector.
-    reply, fr, _f, _d = _drive([
-        [_run("r1 = find('car')\nr2 = r1[0]\n")],
-        [_run("r3 = r1[1]\nr4 = find('gate', nearest=r3)\n")],
+    reply, fr, _f, _d = drive([
+        [run("r1 = find('car')\nr2 = r1[0]\n")],
+        [run("r3 = r1[1]\nr4 = find('gate', nearest=r3)\n")],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" not in out[1], out[1]
     assert "distance to r3" in str(out[1]["result"]["results"]), out[1]
 
@@ -998,8 +825,8 @@ def test_a_call_compiles_from_the_counter_the_flight_moved():
     name -- while the flight's own report told the model `"of rN, ..."
     names them`. Every call reads ``env.plan_rn`` afresh, so it cannot.
     """
-    results, _g, added = _fly_drive([
-        [_run('go_to("prior_7")\n'          # flies, and mints over its rows
+    results, _g, added = grow_drive([
+        [run('go_to("prior_7")\n'          # flies, and mints over its rows
               'c3 = find("gate")\n')],      # ...must not land on that ref
         "done",
     ])
@@ -1028,11 +855,11 @@ def test_the_receipt_rename_never_serves_one_handle_under_another_s_name():
     `r1` -- the model's cars vanish and it is served a gate under the name
     it bound to the cars. An unhelpful name beats a false one.
     """
-    reply, fr, _f, _d = _drive([
-        [_run("r1 = find('car')\nr2 = r1[0]\nfind('gate')\n")],
+    reply, fr, _f, _d = drive([
+        [run("r1 = find('car')\nr2 = r1[0]\nfind('gate')\n")],
         "done",
     ])
-    res = _tool_results(fr)[0]["result"]["results"]
+    res = tool_results(fr)[0]["result"]["results"]
     got = {k: v.get("fids") for k, v in res.items()}
     # The unassigned find is the block's shown answer and is keyed by the
     # model's own spelling; r1's envelope folds to its attributed hint --
@@ -1050,13 +877,13 @@ def test_a_rebind_that_failed_unbinds_the_name():
     told r3 did not bind, was still shown r3 in `handles`, and the next
     go_to(r3) committed to the previous block's row.
     """
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\nr3 = r1[0]\n')],
-        [_run('r2 = find("gate")\nr3 = r2[99]\n')],      # r3 fails to re-bind
-        [_run("go_to(r3)\n")],
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\nr3 = r1[0]\n')],
+        [run('r2 = find("gate")\nr3 = r2[99]\n')],      # r3 fails to re-bind
+        [run("go_to(r3)\n")],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "did not bind" in (out[1].get("error") or ""), out[1]
     assert "r3" not in out[1]["handles"], out[1]["handles"]
     assert "car_1" not in [f["target_fid"] for f in flights], flights
@@ -1069,13 +896,13 @@ def test_a_later_segment_s_refusal_keeps_the_earlier_bindings():
     refuses. The refusal is the result -- and r1 and r2 stay bound, because
     re-finding them would re-mint what the model was already shown.
     """
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\n'
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
               'r2 = r1[0]\n'
               'r3 = r1.filter()\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "filter needs what to cut against" in (out[0].get("error") or ""), \
         out[0]
     assert out[0]["handles"] == ["r1", "r2"], out[0]
@@ -1090,10 +917,10 @@ def test_a_flight_never_mints_a_handle_the_model_is_already_using():
     the model "r1 -- the N rows this flight added" while `r1[0]` still
     resolved to the depot rows it bound. A wrong commit, silently.
     """
-    results, _g, added = _fly_drive([
-        [_run('go_to("prior_7")\n')],              # mints r0; counter -> 1
-        [_run('r1 = find("black car")\n')],      # skips r1, mints r2 -> 3
-        [_run("r3 = r1[0]\ngo_to(r3)\n")],         # the mint lands on r3
+    results, _g, added = grow_drive([
+        [run('go_to("prior_7")\n')],              # mints r0; counter -> 1
+        [run('r1 = find("black car")\n')],      # skips r1, mints r2 -> 3
+        [run("r3 = r1[0]\ngo_to(r3)\n")],         # the mint lands on r3
         "done",
     ])
     (rep,) = results[2]["flown"]["flown"]
@@ -1118,13 +945,13 @@ def test_a_bare_display_line_shows_the_rows_it_promises():
     because a display binds no handle and would otherwise come back as
     "(unnamed N)" after the model asked for it by name.
     """
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\nr1\n')],
-        [_run("r1[1]\n")],
-        [_run("r9\n")],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nr1\n')],
+        [run("r1[1]\n")],
+        [run("r9\n")],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     whole = out[0]["result"]["results"]["r1"]
     assert whole["fids"] == ["car_1", "car_2"], whole
     assert "car_1 | car" in whole["rows"], whole
@@ -1145,11 +972,11 @@ def test_showing_a_one_row_handle_serves_the_row_it_stands_for():
     'car_1'"), so the display serves the binding itself rather than
     compiling an op that cannot run.
     """
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\nr2 = r1[0]\nr2\n')],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nr2 = r1[0]\nr2\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert out[0]["shown"] == {"r2": "car_1"}, out[0]
 
 
@@ -1164,12 +991,12 @@ def test_a_pick_says_which_row_it_got():
     xing = [{"fid": "prior_9", "xy": [1.0, 1.0], "class": "church",
              "name": "Desert Song Foursquare Church",
              "search_text": "church desert song foursquare church"}]
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\nr2 = r1[1]\n')],
-        [_run('r3 = find("church")\nr4 = r3[0]\ngo_to(r4)\n')],
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\nr2 = r1[1]\n')],
+        [run('r3 = find("church")\nr4 = r3[0]\ngo_to(r4)\n')],
         "done",
-    ], cands=list(_CANDS) + xing)
-    out = _tool_results(fr)
+    ], cands=list(CANDS) + xing)
+    out = tool_results(fr)
     assert out[0]["picked"] == {"r2": {"fid": "car_2"}}, out[0]
     # ...and the NAME rides it when the row has one, which is the whole
     # difference between "r4 is bound" and "r4 is the church you meant".
@@ -1179,12 +1006,12 @@ def test_a_pick_says_which_row_it_got():
     # The inline pick's internal name is never receipted: it is this
     # block's private wiring and naming it teaches a handle the model
     # never made.
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\n')],
-        [_run("go_to(r1[0])\n")],
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\n')],
+        [run("go_to(r1[0])\n")],
         "done",
     ])
-    assert "picked" not in _tool_results(fr)[1], _tool_results(fr)[1]
+    assert "picked" not in tool_results(fr)[1], tool_results(fr)[1]
 
 
 def test_look_for_arms_the_segmenter_the_footer_already_advertises():
@@ -1200,12 +1027,12 @@ def test_look_for_arms_the_segmenter_the_footer_already_advertises():
     It is FREE -- it directs the sensors and moves nothing -- so unlike
     moving it is legal inside a loop.
     """
-    reply, fr, _f, declared = _drive([
-        [_run('look_for("pool")\n')],
-        [_run('look_for("car", "parking lot")\n')],
+    reply, fr, _f, declared = drive([
+        [run('look_for("pool")\n')],
+        [run('look_for("car", "parking lot")\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert out[0]["watching"] == {"now": ["pool (target)"]}, out[0]
     assert out[1]["watching"]["now"] == [
         "pool (target)", "car (target)", "parking lot (target)"], out[1]
@@ -1245,8 +1072,8 @@ def test_the_near_form_is_the_targeted_boost_and_a_place_is_grounded():
     held = plan_of_block("go_to(r2)\n", bound={"r2": "car_1"})
     assert held["steps"] == [{"do": "move", "to": ("lit", "car_1")}], held
     # ...and end to end: the name reaches the flight as the row it named.
-    reply, fr, flights, _d = _drive([
-        [_run('go_to("the depot")\n')],
+    reply, fr, flights, _d = drive([
+        [run('go_to("the depot")\n')],
         "done",
     ])
     assert flights == [{"target_fid": "prior_7"}], flights
@@ -1267,6 +1094,7 @@ def test_there_is_no_aim_and_no_refusal_may_invent_one():
     surface no longer has.
     """
     import pytest
+
     from maps.search.parse_compile.code_surface import CodeError
     for bad in ('go_to("prior_160", at=(4623, 2981))\n',
                 'explore("prior_160", at=(4623, 2981))\n'):
@@ -1283,8 +1111,7 @@ def test_there_is_no_aim_and_no_refusal_may_invent_one():
     # AND NOTHING SERVED SPELLS ONE. A legend that teaches a form the parser
     # refuses is the failure this arm was built after -- 30 blocks in 22% of
     # episodes were exactly that.
-    from maps.search.parse_compile.prompts import (
-        CODE_DOC, CODE_SYSTEM_PROMPT)
+    from maps.search.parse_compile.prompts import CODE_DOC, CODE_SYSTEM_PROMPT
     for blob in (CODE_DOC, CODE_SYSTEM_PROMPT):
         assert "at=(" not in blob.replace("stand(at=", ""), blob
         assert " at <x>" not in blob, blob
@@ -1299,13 +1126,13 @@ def test_stand_adopts_the_viewpoint_and_its_columns_ride_the_rows():
     which is why it can be a PREFIX -- the block that stands and then
     finds means the find under that stance whichever line came first.
     """
-    reply, fr, flights, _d = _drive([
-        [_run('stand(at="prior_7", facing="north")\nr1 = find("car")\n')],
-        [_run('stand(at="the gate", facing="prior_2")\n')],
-        [_run('go_to("v1")\n')],
+    reply, fr, flights, _d = drive([
+        [run('stand(at="prior_7", facing="north")\nr1 = find("car")\n')],
+        [run('stand(at="the gate", facing="prior_2")\n')],
+        [run('go_to("v1")\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert out[0]["stance"]["staged"][0]["handle"] == "v1", out[0]
     assert "left of v1" in out[0]["result"]["results"]["r1"]["rows"], out[0]
     # ...a compass word and a PLACE are both headings, and a place is
@@ -1320,6 +1147,7 @@ def test_stand_adopts_the_viewpoint_and_its_columns_ride_the_rows():
     assert flights == [], flights
 
     import pytest
+
     from maps.search.parse_compile.code_surface import CodeError
     from maps.search.parse_compile.python_surface import scan_block
     plan = plan_of_block('stand(at="the church", facing="the gate")\n')
@@ -1345,14 +1173,14 @@ def test_more_of_pages_a_long_result_and_stops_at_the_end():
     from maps.search.analyze_scene.geom_program import _BROAD_HEAD_ROWS as H
     wide = [{"fid": f"car_{i:03d}", "xy": [float(i), 0.0], "class": "car",
              "search_text": "car"} for i in range(3 * H)]
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\n')],
-        [_run("more_of(r1)\n")],
-        [_run("more_of(r1)\n")],
-        [_run("more_of(r1)\n")],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n')],
+        [run("more_of(r1)\n")],
+        [run("more_of(r1)\n")],
+        [run("more_of(r1)\n")],
         "done",
     ], cands=wide)
-    out = _tool_results(fr)
+    out = tool_results(fr)
     served = [out[0]["result"]["results"]["r1"]["fids"]]
     for r in (out[1], out[2]):
         assert r.get("error") is None, r
@@ -1366,6 +1194,7 @@ def test_more_of_pages_a_long_result_and_stops_at_the_end():
     assert "already served" in (out[3].get("error") or ""), out[3]
 
     import pytest
+
     from maps.search.parse_compile.code_surface import CodeError
     with pytest.raises(CodeError, match="name 'r9' is not defined"):
         plan_of_block("more_of(r9)\n")
@@ -1404,19 +1233,19 @@ def test_three_ordinary_python_forms_that_were_refused_outright():
 
     # 2. indexing a call result (36) -- the call runs, the index picks a
     #    row of it, and a refusal names what the MODEL wrote.
-    reply, fr, flights, _d = _drive([
-        [_run('t = find("car")[0]\ngo_to(t)\n')],
+    reply, fr, flights, _d = drive([
+        [run('t = find("car")[0]\ngo_to(t)\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert flights == [{"target_fid": "car_1"}], flights
     assert out[0]["picked"] == {"t": {"fid": "car_1"}}, out[0]
     assert "_c" not in json.dumps(out[0]), out[0]
-    reply, fr, flights, _d = _drive([
-        [_run('t = find("nothing at all")[0]\n')],
+    reply, fr, flights, _d = drive([
+        [run('t = find("nothing at all")[0]\n')],
         "done",
     ])
-    err = _tool_results(fr)[0].get("error") or ""
+    err = tool_results(fr)[0].get("error") or ""
     assert "find('nothing at all')[0] did not bind" in err, err
 
     # 3. one level of nesting (38): the inner call is its own dispatch and
@@ -1448,21 +1277,21 @@ def test_a_failed_step_does_not_unbind_what_the_program_already_bound():
     def _broken(_reqs):
         raise RuntimeError("renderer down")
 
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\nlook(r1)\n')],
-        [_run("go_to(r1[0])\n")],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nlook(r1)\n')],
+        [run("go_to(r1[0])\n")],
         "done",
     ], look_renderer=_broken)
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "crop render failed" in (out[0].get("error") or "")
     assert out[0]["handles"] == ["r1"], out[0]
     assert "error" not in out[1], out[1]
     # ...and a grounding miss binds nothing: its program never ran.
-    reply, fr, _f, _d = _drive([
-        [_run('r2 = find("car", nearest="nowhere at all")\n')],
+    reply, fr, _f, _d = drive([
+        [run('r2 = find("car", nearest="nowhere at all")\n')],
         "done",
     ])
-    assert "handles" not in _tool_results(fr)[0], _tool_results(fr)[0]
+    assert "handles" not in tool_results(fr)[0], tool_results(fr)[0]
 
 
 def test_a_slice_frames_the_head_of_an_ordering():
@@ -1478,6 +1307,7 @@ def test_a_slice_frames_the_head_of_an_ordering():
     given, so a wider slice is legal and frames its head.
     """
     import pytest
+
     from maps.search.parse_compile.code_surface import CodeError
     plan = plan_of_block('look(r2[0:20])\n', bound={"r2": "r7"})
     (op,) = plan["steps"][0]["program"]["ops"]
@@ -1502,11 +1332,11 @@ def test_a_slice_frames_the_head_of_an_ordering():
     from maps.search.analyze_scene.geom_program import _BROAD_HEAD_ROWS as H
     wide = [{"fid": f"car_{i:03d}", "xy": [float(i), 0.0], "class": "car",
              "search_text": "car"} for i in range(3 * H)]
-    reply, fr, _f, _d = _drive([
-        [_run('r1 = find("car")\nr1[0:5]\n')],
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nr1[0:5]\n')],
         "done",
     ], cands=wide)
-    env = _tool_results(fr)[0]["result"]["results"]["r1[0:5]"]
+    env = tool_results(fr)[0]["result"]["results"]["r1[0:5]"]
     assert env["fids"] == [f"car_{i:03d}" for i in range(5)], env
 
 
@@ -1522,7 +1352,10 @@ def test_the_legend_documents_every_call_the_surface_serves():
 
     from maps.search.parse_compile.prompts import CODE_DOC
     from maps.search.parse_compile.python_surface import (
-        MissionPython, Rows, served_calls)
+        MissionPython,
+        Rows,
+        served_calls,
+    )
 
     names = served_calls()
     assert len(names) >= 9, names                    # vacuity floor
@@ -1636,10 +1469,10 @@ def test_a_block_written_into_the_reply_channel_is_repaired_not_an_ending():
     One repair; the streak is shared with the empty turn, so the ending
     stays model-owned.
     """
-    reply, fr, flights, _d = _drive([
+    reply, fr, flights, _d = drive([
         'r1 = find("car")\ngo_to(r1[0])',       # the dropped block
-        [_run('r1 = find("car")\n')],          # re-sent through the tool
-        [_run("go_to(r1[0])\n")],
+        [run('r1 = find("car")\n')],          # re-sent through the tool
+        [run("go_to(r1[0])\n")],
         "the car by the depot.",
     ])
     assert reply.ended_by == "reply"
@@ -1653,7 +1486,7 @@ def test_a_block_written_into_the_reply_channel_is_repaired_not_an_ending():
 
 def test_a_second_block_in_the_reply_channel_still_ends_the_mission():
     """A stuck emitter cannot loop the mission on nudges."""
-    reply, fr, flights, _d = _drive(['go_to(r1[0])', 'go_to(r1[0])'])
+    reply, fr, flights, _d = drive(['go_to(r1[0])', 'go_to(r1[0])'])
     assert reply.ended_by == "reply"
     assert reply.flights_flown == 0
     assert reply.turns_used == 2
@@ -1795,9 +1628,10 @@ def test_an_explore_of_a_NAME_covers_every_segment_bearing_it():
     match" note has nothing true to say and is not served.
     """
     import json as _json
+
     from maps.util.xy_token import parse_xy_token
-    reply, out, flights, asked, _rend = _explore_drive([
-        [_run('explore("Willow Avenue")\n')],
+    reply, out, flights, asked, _rend = explore_drive([
+        [run('explore("Willow Avenue")\n')],
         "done",
     ], stops=_WILLOW_STOPS, cands=_WILLOW_CANDS)
     assert "error" not in out[0], out[0]
@@ -1816,9 +1650,9 @@ def test_an_explore_of_a_handle_chains_members_and_reverses_a_far_end():
     """A member whose FAR end is nearer the chain tail flies reversed, so
     consecutive members join where they touch and the pass stays a line."""
     from maps.util.xy_token import parse_xy_token
-    reply, out, flights, _a, _rend = _explore_drive([
-        [_run('r1 = find("car")\n')],
-        [_run('explore(r1)\n')],
+    reply, out, flights, _a, _rend = explore_drive([
+        [run('r1 = find("car")\n')],
+        [run('explore(r1)\n')],
         "done",
     ], stops={"car_1": [[100.0, 200.0], [200.0, 200.0]],
               "car_2": [[500.0, 200.0], [300.0, 200.0]]})
@@ -1843,8 +1677,8 @@ def test_a_set_pass_covers_a_long_street_rather_than_husbanding_stops():
         "w1": [[float(x), 0.0] for x in range(0, 1200, 100)],
         "w2": [[float(x), 0.0] for x in range(1200, 2400, 100)],
         "w3": [[float(x), 0.0] for x in range(2400, 3600, 100)]}
-    reply, out, flights, _a, _rend = _explore_drive([
-        [_run('explore("Willow Avenue")\n')],
+    reply, out, flights, _a, _rend = explore_drive([
+        [run('explore("Willow Avenue")\n')],
         "done",
     ], stops=long_stops, cands=_WILLOW_CANDS)
     assert "error" not in out[0], out[0]
@@ -1867,8 +1701,8 @@ def test_a_set_pass_covers_a_long_street_rather_than_husbanding_stops():
 def test_a_set_pass_dedupes_the_shared_endpoint_of_touching_members():
     """Two segments that join share a stop; the pass flies it once."""
     from maps.util.xy_token import parse_xy_token
-    reply, out, flights, _a, _rend = _explore_drive([
-        [_run('explore("Willow Avenue")\n')],
+    reply, out, flights, _a, _rend = explore_drive([
+        [run('explore("Willow Avenue")\n')],
         "done",
     ], stops={"w1": [[0.0, 0.0], [100.0, 0.0]],
               "w2": [[110.0, 0.0], [210.0, 0.0]],
@@ -1882,20 +1716,20 @@ def test_a_set_pass_dedupes_the_shared_endpoint_of_touching_members():
 
 def test_go_to_of_a_set_is_refused_toward_explore():
     """go_to still lands on ONE thing; the remedy names the set form."""
-    reply, fr, flights, _d = _drive([
-        [_run('r1 = find("car")\ngo_to(r1)\n')],
+    reply, fr, flights, _d = drive([
+        [run('r1 = find("car")\ngo_to(r1)\n')],
         "done",
     ])
-    out = _tool_results(fr)
+    out = tool_results(fr)
     assert "error" in out[0], out[0]
     assert "explore(r1) to cover the whole set" in out[0]["error"], out[0]
     assert flights == [], flights
 
 
 def test_an_explore_of_a_LIST_of_rows_covers_their_union():
-    reply, out, flights, _a, _rend = _explore_drive([
-        [_run('r1 = find("car")\n')],
-        [_run('explore([r1[0], r1[1]])\n')],
+    reply, out, flights, _a, _rend = explore_drive([
+        [run('r1 = find("car")\n')],
+        [run('explore([r1[0], r1[1]])\n')],
         "done",
     ], stops={"car_1": [[100.0, 200.0], [200.0, 200.0]],
               "car_2": [[500.0, 200.0], [300.0, 200.0]]})
@@ -1918,8 +1752,8 @@ def test_a_look_before_any_flight_refuses_toward_explore():
     """The sensor holds no imagery before a flight: a pre-flight look
     renders nothing and the note names the verb that earns pixels."""
     import json as _json
-    reply, out, flights, _a, rendered = _explore_drive([
-        [_run('r1 = find("car")\nlook(r1[0])\n')],
+    reply, out, flights, _a, rendered = explore_drive([
+        [run('r1 = find("car")\nlook(r1[0])\n')],
         "done",
     ], cands=_GATE_CANDS, obs_minor_m=100.0, with_renderer=True)
     assert flights == [], flights
@@ -1935,10 +1769,10 @@ def test_a_pass_earns_exactly_the_pixels_it_covered():
     carries no graph and the post-flight surface rebuild empties the
     injected rows -- the gate itself is row/point-agnostic."""
     import json as _json
-    reply, out, flights, _a, rendered = _explore_drive([
-        [_run('explore("prior_7")\n')],
-        [_run('look([110, 205])\n')],  # 11 m from the pass's first stop
-        [_run('look([500, 900])\n')],  # no stop near
+    reply, out, flights, _a, rendered = explore_drive([
+        [run('explore("prior_7")\n')],
+        [run('look([110, 205])\n')],  # 11 m from the pass's first stop
+        [run('look([500, 900])\n')],  # no stop near
         "done",
     ], cands=_GATE_CANDS, obs_minor_m=100.0, with_renderer=True)
     served = [r for reqs in rendered for r in reqs]
@@ -1950,8 +1784,8 @@ def test_a_pass_earns_exactly_the_pixels_it_covered():
 def test_without_a_stated_footprint_the_gate_stays_off():
     """Sensorless runs state no short side, and a gate keyed on an
     invented number would refuse what the engine could serve."""
-    reply, out, flights, _a, rendered = _explore_drive([
-        [_run('r1 = find("car")\nlook(r1[0])\n')],
+    reply, out, flights, _a, rendered = explore_drive([
+        [run('r1 = find("car")\nlook(r1[0])\n')],
         "done",
     ], cands=_GATE_CANDS, obs_minor_m=None, with_renderer=True)
     served = [r for reqs in rendered for r in reqs]
@@ -1972,8 +1806,8 @@ def test_strata_are_live_views_and_the_census_says_so():
     """r1.exact / r1.tagged split the find's own tiers; the receipt's
     census names them as structure, not a float column."""
     import json as _json
-    reply, out, flights, _a, _r = _explore_drive([
-        [_run('parks = find("parking")\n'
+    reply, out, flights, _a, _r = explore_drive([
+        [run('parks = find("parking")\n'
               'print(len(parks), len(parks.exact), len(parks.tagged))\n')],
         "done",
     ], cands=_TIER_CANDS)
@@ -1986,8 +1820,8 @@ def test_explore_of_a_stratum_covers_exactly_its_rows():
     """explore(parks.exact) is the workflow's own spelling: the pass walks
     the rows that ARE the thing and none of the tag-carriers."""
     stops = {f"d{i}": [[float(100 * i), 0.0]] for i in range(3)}
-    reply, out, flights, asked, _r = _explore_drive([
-        [_run('parks = find("parking")\nexplore(parks.exact)\n')],
+    reply, out, flights, asked, _r = explore_drive([
+        [run('parks = find("parking")\nexplore(parks.exact)\n')],
         "done",
     ], cands=_TIER_CANDS, stops=stops)
     assert "error" not in out[0], out[0]
@@ -1998,8 +1832,8 @@ def test_explore_of_a_stratum_covers_exactly_its_rows():
 def test_a_stratum_of_tierless_rows_refuses_with_the_teaching():
     """A browse carries no match tiers; the refusal says where strata
     come from instead of serving a silent empty set."""
-    reply, out, flights, _a, _r = _explore_drive([
-        [_run('everything = find()\nprint(len(everything.exact))\n')],
+    reply, out, flights, _a, _r = explore_drive([
+        [run('everything = find()\nprint(len(everything.exact))\n')],
         "done",
     ], cands=_TIER_CANDS)
     assert "error" in out[0], out[0]
@@ -2011,8 +1845,8 @@ def test_a_stratum_of_tierless_rows_refuses_with_the_teaching():
 def test_a_pass_serves_its_catch_as_crops():
     """The sweep hands back pictures of what it found: one crop per row
     the pass added, on the pass's own ack."""
-    results, _graph, added = _fly_drive([
-        [_run('explore("prior_7")\n')],
+    results, _graph, added = grow_drive([
+        [run('explore("prior_7")\n')],
         "done",
     ])
     ex = results[0].get("explored") or {}
@@ -2043,8 +1877,8 @@ def test_a_looks_marks_reach_the_renderer_on_every_crop_of_a_set():
         {"fid": "lamp_1", "xy": [114.0, 207.0], "class": "lamp",
          "search_text": "lamp"},
     ]
-    reply, out, flights, _a, rendered = _explore_drive([
-        [_run('r1 = find("car")\nm = find("lamp")\n'
+    reply, out, flights, _a, rendered = explore_drive([
+        [run('r1 = find("car")\nm = find("lamp")\n'
               'look(r1[0:2], marks=m[0])\n')],
         "done",
     ], cands=_close, obs_minor_m=None, with_renderer=True)
@@ -2063,8 +1897,8 @@ def test_a_looks_marks_reach_the_renderer_on_every_crop_of_a_set():
 
     # VACUITY FLOOR: the same look WITHOUT marks= must carry none, or a
     # renderer that marks everything would pass the assertion above.
-    _r2, _o2, _f2, _a2, rendered2 = _explore_drive([
-        [_run('r1 = find("car")\nlook(r1[0:2])\n')],
+    _r2, _o2, _f2, _a2, rendered2 = explore_drive([
+        [run('r1 = find("car")\nlook(r1[0:2])\n')],
         "done",
     ], cands=_close, obs_minor_m=None, with_renderer=True)
     served2 = [r for reqs in rendered2 for r in reqs]
@@ -2078,15 +1912,15 @@ def test_a_pass_hands_every_stop_the_stops_behind_it():
     still has to fly after it, so the station can post the whole pass to
     the crew from the first leg. The last stop carries none, and a
     ``go_to`` carries the key not at all: the bench's fly never reads it."""
-    _r, _o, flights, _a, _rend = _explore_drive([
-        [_run('explore("prior_7")\n')],
+    _r, _o, flights, _a, _rend = explore_drive([
+        [run('explore("prior_7")\n')],
         "done",
     ])
-    assert len(flights) == len(_STOPS) > 1
+    assert len(flights) == len(STOPS) > 1
     for k, f in enumerate(flights):
-        assert f["pass_ahead"] == _STOPS[k + 1:], (k, f)
-    _r, _o, flights, _a, _rend = _explore_drive([
-        [_run('go_to("prior_7")\n')],
+        assert f["pass_ahead"] == STOPS[k + 1:], (k, f)
+    _r, _o, flights, _a, _rend = explore_drive([
+        [run('go_to("prior_7")\n')],
         "done",
     ])
     assert flights and all("pass_ahead" not in f for f in flights), flights
@@ -2103,13 +1937,13 @@ def test_a_pass_takes_a_stop_the_recording_holds_first():
 
     def held_now(stops):
         asked.append([list(xy) for _, xy in stops])
-        return [list(xy) == _STOPS[2] for _, xy in stops]
+        return [list(xy) == STOPS[2] for _, xy in stops]
 
-    _r, _o, flights, _a, _rend = _explore_drive([
-        [_run('explore("prior_7")\n')],
+    _r, _o, flights, _a, _rend = explore_drive([
+        [run('explore("prior_7")\n')],
         "done",
     ], held_now=held_now)
     flown = [list(parse_xy_token(f["target_fid"])) for f in flights]
-    assert flown == [_STOPS[2], _STOPS[0], _STOPS[1]]
-    assert [f["pass_ahead"] for f in flights] == [[_STOPS[0], _STOPS[1]], [_STOPS[1]], []]
-    assert asked == [[_STOPS[0], _STOPS[1], _STOPS[2]], [_STOPS[0], _STOPS[1]]]
+    assert flown == [STOPS[2], STOPS[0], STOPS[1]]
+    assert [f["pass_ahead"] for f in flights] == [[STOPS[0], STOPS[1]], [STOPS[1]], []]
+    assert asked == [[STOPS[0], STOPS[1], STOPS[2]], [STOPS[0], STOPS[1]]]

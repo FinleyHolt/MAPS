@@ -15,10 +15,7 @@ image cap was for.
 """
 from __future__ import annotations
 
-import io
 import json
-
-import pytest
 
 from maps.llm.vision_content import build_image_part
 from maps.search.analyze_scene import compactor as C
@@ -26,6 +23,7 @@ from maps.search.analyze_scene.compactor import (
     _EVICTED_CROP_TEXT,
     compact_transcript,
 )
+from maps.search.tests.fakes import jpeg
 
 
 def _content_str(m: dict) -> str:
@@ -37,16 +35,9 @@ def _charcount(messages, *, model, tools=None):
     return sum(len(_content_str(m)) // 4 for m in messages)
 
 
-def _jpeg(side: int = 256) -> bytes:
-    Image = pytest.importorskip("PIL.Image")
-    buf = io.BytesIO()
-    Image.new("RGB", (side, side), (90, 90, 90)).save(buf, format="JPEG")
-    return buf.getvalue()
-
-
 def _vision_turn(n_images: int) -> dict:
     parts: list[dict] = [{"type": "text", "text": "crops"}]
-    parts += [build_image_part(_jpeg()) for _ in range(n_images)]
+    parts += [build_image_part(jpeg()) for _ in range(n_images)]
     return {"role": "user", "content": parts}
 
 

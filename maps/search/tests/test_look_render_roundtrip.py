@@ -14,10 +14,6 @@ from __future__ import annotations
 
 import hashlib
 
-import numpy as np
-import pytest
-from maps.search.tests.ortho_fixture import write_ortho
-
 from maps.search.render.look_render import (
     LOOK_RENDERER_VERSION,
     render_candidate_crops,
@@ -36,23 +32,6 @@ SPEC_KEYS = (
 VERIFY_KEYS = ("sha256", "renderer_version", "renderer_env")
 
 
-@pytest.fixture(scope="module")
-def _ortho_root(tmp_path_factory):
-    """A 200 m x 200 m synthetic ortho (same bake as the adaptive-window
-    tests) with non-uniform pixels, so an off-by-one window shift changes
-    bytes."""
-    return write_ortho(tmp_path_factory.mktemp("ortho"), MAP, n=2000, ground_z=GROUND_Z, ramp=True)
-
-
-@pytest.fixture
-def ortho_dir(_ortho_root, monkeypatch):
-    from maps.perception.ortho import camera_model
-    from maps.perception.ortho.ground_level import GROUND_LEVEL
-
-    monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
-    camera_model._ORTHO_RASTER_CACHE.clear()
-    root = _ortho_root
-    return root
 
 
 def _requests() -> list[dict]:
@@ -139,6 +118,7 @@ def test_frame_up_angle_sign_lock():
     # The cv2 matrix at +90 really sends the east screen-vector to
     # screen-up — the round-trip oracle below is the load-bearing check.
     import cv2
+
     from maps.search.render.look_render import frame_up_angle_deg
     assert abs(frame_up_angle_deg(0.0, 1.0)) < 1e-9
     assert abs(abs(frame_up_angle_deg(0.0, -1.0)) - 180.0) < 1e-9

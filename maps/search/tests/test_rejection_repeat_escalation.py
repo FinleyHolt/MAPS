@@ -22,18 +22,12 @@ lacked. Tested here is what the surface does; the gate is a separate fix.
 """
 from __future__ import annotations
 
-from maps.llm.endpoint_spec import EndpointSpec
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.reasoner_loop import (
-    MissionSpec, advance_reasoner_one_round)
-
-_TEST_SPEC = EndpointSpec(
-    base_url="http://unused",
-    model_id="inkling-small",
-    max_model_len=262144,
-    tokenizer_name="qwen",
-    output_reserve=40000,
+    MissionSpec,
+    advance_reasoner_one_round,
 )
+from maps.search.tests.fakes import TEST_SPEC, bare_ctx
 
 # Colour never cuts, so this block is refused every time it is served.
 _COLOR_FILTER_BLOCK = ('a = find("car")\n'
@@ -52,10 +46,6 @@ _CANDS = [
 ]
 
 
-class _DummyCtx:
-    pass
-
-
 def _run_turn(i: int, code: str) -> dict:
     return {"kind": "tool_call", "content": "", "reasoning": "",
             "tool_calls": [{"id": f"c{i}", "type": "function",
@@ -66,7 +56,7 @@ def _run_turn(i: int, code: str) -> dict:
 def drive_blocks(blocks: list[str]) -> list[dict]:
     """Run one REAL mission issuing ``blocks`` in order; return the served
     ``run`` tool-result payloads in order."""
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=_TEST_SPEC)
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
     turns = iter([_run_turn(i, b) for i, b in enumerate(blocks)]
                  # A reply with no flight behind it is nudged rather than
                  # accepted, so the tail has to outlast the abstain streak.
@@ -84,7 +74,7 @@ def drive_blocks(blocks: list[str]) -> list[dict]:
     advance_reasoner_one_round(
         reasoner=r,
         user_message="the gray car",
-        ctx=_DummyCtx(),
+        ctx=bare_ctx(),
         compute_namespace={"cands": [dict(c) for c in _CANDS],
                            "anchors": []},
         rid_tag="h0",

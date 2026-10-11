@@ -19,13 +19,11 @@ actually clamps — needs ``benchmarks`` and lives in
 from __future__ import annotations
 
 import numpy as np
-import pytest
-from maps.search.tests.ortho_fixture import write_ortho
 
 from maps.search.render.look_render import (
     LOOK_PIXEL_BUDGET_PX,
-    render_candidate_crops,
     look_window_bounds_m,
+    render_candidate_crops,
 )
 
 # The bounds are pixel counts; the fixture ortho below is 0.1 m/px.
@@ -35,22 +33,7 @@ MAP = "unit_test_obs_span_block"
 GROUND_Z = 10.0
 
 
-@pytest.fixture(scope="module")
-def _ortho_root(tmp_path_factory):
-    """A 280 m x 280 m synthetic ortho at the native 0.1 m/px: every window
-    below sits inside it (the lattice centre is 260 m)."""
-    return write_ortho(tmp_path_factory.mktemp("ortho"), MAP, n=2800, ground_z=GROUND_Z, ramp=True)
-
-
-@pytest.fixture
-def ortho_dir(_ortho_root, monkeypatch):
-    from maps.perception.ortho import camera_model
-    from maps.perception.ortho.ground_level import GROUND_LEVEL
-
-    monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
-    camera_model._ORTHO_RASTER_CACHE.clear()
-    root = _ortho_root
-    return str(root)
+ORTHO_N = 2800
 
 
 def _lattice(n: int, span_m: float, cx: float = 260.0, cy: float = 260.0):
