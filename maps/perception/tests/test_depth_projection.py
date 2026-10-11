@@ -12,9 +12,8 @@ import math
 
 import numpy as np
 
-from maps.perception.geometry.sensor_spec import CameraIntrinsics
 from maps.perception.geometry.geolocate import project_pixels_to_world
-from maps.perception.geometry.sensor_spec import SensorSpec
+from maps.perception.geometry.sensor_spec import CameraIntrinsics, SensorSpec
 
 
 def _sensor(*, mount_pitch_deg: float, max_range_m: float = 200.0) -> SensorSpec:

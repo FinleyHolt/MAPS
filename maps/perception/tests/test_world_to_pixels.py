@@ -16,8 +16,7 @@ from maps.perception.geometry.geolocate import (
     project_pixels_to_world,
     project_world_to_pixels,
 )
-from maps.perception.geometry.sensor_spec import SensorSpec, resolve_sensor
-from maps.perception.geometry.sensor_spec import CameraIntrinsics
+from maps.perception.geometry.sensor_spec import CameraIntrinsics, SensorSpec, resolve_sensor
 
 
 def _sensor(*, max_range_m: float = float("inf")) -> SensorSpec:

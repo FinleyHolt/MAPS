@@ -115,15 +115,8 @@ def test_an_unwritable_destination_costs_the_build_not_the_run(tmp_path):
 
 
 def test_concurrent_cold_cache_builds_once_under_the_lock(tmp_path, monkeypatch):
-    """Two threads reaching a cold cache at once build ONE ortho, not two.
-
-    The camera pane and the look/observation path both call this in one
-    process; unlocked they both built and both wrote the same PID-keyed tmp
-    dir, so one thread's ``os.replace(tmp, d)`` pulled the dir out from under
-    the other's ``np.save`` and a reader's mmap outlived a writer's ``rmtree``
-    -- the SIGSEGV that killed the station mid-flight. The build lock plus a
-    re-check inside it must serialize them to a single build.
-    """
+    """Two threads reaching a cold cache at once build ONE ortho: unlocked they
+    would share one PID-keyed tmp dir and tear each other's write."""
     import threading
     import time
 
