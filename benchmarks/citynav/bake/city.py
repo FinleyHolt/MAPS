@@ -1,59 +1,29 @@
 #!/usr/bin/env python3
-"""Bake CityNav sidecars from non-target prior information.
+"""Bake per-block prior sidecars from OpenStreetMap (PRIOR_CONTRACT.md config B).
 
-THE production prior is OSM (PRIOR_CONTRACT.md config B): raw OpenStreetMap
-pulled from the internet, tags verbatim, rasterized per block. CityNav RGBD
-TIFFs are in the dataset's local metric frame and are not georeferenced, so
-OSM fetches require either a cache already transformed into CityNav local XY
-or an explicit georef file that defines the WGS84 query bounds and the
-transform into CityNav XY. Every bake stamps ``meta.json``
-``bake.mode`` + ``provenance`` (prior kind, source cache name + sha256 +
-fetch time + record census, georef residuals, bake time + git sha) so the
-data always says what it is and where it came from.
+A prior is exactly what OSM gives: the realised mask (area -> cells inside the
+polygon, way -> buffered polyline, node -> its cell) clipped to the cells the
+block imagery covers, ALL raw tags verbatim, the ``name`` when present, the
+``osm_id``, and ``world_contour``: the source geometry's exact vertices in
+CityNav local meters at 2 dp (a polygon's exterior ring closed, a way open, a
+node's one vertex), which ``build_surface`` serves as the row ``mask``. Nothing
+is classified, named or dropped beyond "rasterizes to no covered cell".
+Every bake stamps ``meta.json`` ``bake.mode`` (and, per block, ``provenance``:
+cache name + sha256, fetch time, record census, georef residuals, bake time +
+git sha).
 
-OSM modes:
-
-- ``--dump-osm-cache out.geojson --georef g.json [--city c]``: fetch OSM once
-  (network) and write a GeoJSON cache in CityNav local XY, with the georef
-  residual summary embedded, so the bake itself can run offline.
-- ``--osm-blocks --city c --osm-cache f``: load the city-frame records
-  ONCE, then rasterize them into EVERY
-  ``<city>_block_*`` window (block bounds are windows of the shared city
-  frame) and write per-block sidecars with ``source_mode="osm_blocks"``.
-
-A prior is exactly what OSM gives us: the realised mask (area -> area mask,
-way -> polyline, node -> point), ALL raw OSM tags verbatim, the OSM ``name``
-when one exists, and the ``osm_id``. No classification happens at bake time —
-no class table, no drop-gates beyond "the geometry rasterizes to no covered
-cell in this window", no synthesized names. Covered means the cell has
-imagery pixels (the block ortho's filled alpha): masks are clipped to the
-imagery, so nothing the observation could never show becomes a prior the
-agent can request a viewpoint on. Semantics are pulled at runtime by the
-agent from the tags themselves.
-
-Every OSM feature row carries ``world_contour``: the EXACT vertices its
-source geometry was given, in CityNav local meters (the georef affine is
-applied at fetch/cache time), verbatim at 2 dp. A polygon's exterior ring
-CLOSED, a way's vertices open, a node's single vertex — one representation,
-and nothing here asks which kind of feature it belongs to. The graph builder
-stamps the row's chain onto ``MapObject.world_contour`` so ``build_surface``
-serves it as the row ``mask`` + shape scalars (PRIOR_CONTRACT.md config B,
-contract C2).
-
-Canonical config-B bake, cache-first (offline; covers every block of the
-city, e.g. ``cambridge_block_23``). The tiles dir must already hold the
-``<city>_block_*_meta.json`` sidecars (bounds/grid/cell size), e.g. seeded
-from the existing bake::
+CityNav rasters are not georeferenced, so the fetch goes through a georef file
+(WGS84 query bounds + the affine into CityNav XY) and writes a cache in local
+XY; the bake runs offline from it. The tiles dir must already hold the
+``<city>_block_*_meta.json`` sidecars::
 
     # once, on a box with network egress:
     python -m benchmarks.citynav.bake.city \
         --dump-osm-cache tiles/osm_cache/cambridge_osm_local.geojson \
-        --georef benchmarks/citynav/georef/cambridge_georef.json \
-        --city cambridge
+        --georef benchmarks/citynav/georef/cambridge_georef.json --city cambridge
 
     # offline bake of every cambridge block from the cache:
-    python -m benchmarks.citynav.bake.city \
-        --osm-blocks --city cambridge \
+    python -m benchmarks.citynav.bake.city --osm-blocks --city cambridge \
         --osm-cache tiles/osm_cache/cambridge_osm_local.geojson \
         --tiles-dir tiles/citynav_2m_osmv3
 """
@@ -137,13 +107,10 @@ def _load_city_meta(city: str, tiles_dir: Path, *, imagery: bool = True
                     ) -> tuple[dict[str, Any], WorldBounds, tuple[int, int], float]:
     """Meta + the geometry a block bakes over.
 
-    Bounds come from the block's RASTER, not from the sidecar. The sidecar's
-    box runs ~50 m past the imagery on every side, and OSM covers the
-    planet, so bounds off the sidecar fill that ring with candidates nothing
-    can observe (42.7% of all graph nodes, measured). The imagery is the
-    block, so the imagery sets the bounds and the grid is sized to match. Only when
-    no raster is readable, or the block has no CityNav imagery
-    (``imagery=False``), does the sidecar's box stand.
+    Bounds come from the block's RASTER: the sidecar's box runs ~50 m past the
+    imagery on every side, a ring of candidates nothing can observe (42.7% of
+    all graph nodes, measured). The sidecar's box stands only when no raster
+    is readable or the block has no CityNav imagery (``imagery=False``).
     """
     meta_path = tiles_dir / f"{city}_meta.json"
     if not meta_path.is_file():
@@ -193,19 +160,14 @@ def _cell_coverage(
 ) -> np.ndarray | None:
     """Boolean ``grid_shape`` mask of where the block's IMAGERY has pixels.
 
-    The bounds rectangle over-admits: the PLY footprint is tighter than the
-    nominal bounds, so up to a third of a block rectangle is no-data a prior
-    could sit over unseen. Coverage comes from the canonical filled ortho
-    (``load_ortho_or_rasters``): after interior-hole fill, ``alpha == 0`` is
-    exactly the frame-connected no-data the runtime observation treats as
-    invalid, so a cell is covered iff any of its ortho pixels carry imagery.
-    Ortho rows run north-down (row 0 at ``y_max``); bake cell rows run
-    south-up (row 0 at ``y_min``, ``_cell_for_xy``), so the alpha is flipped
-    vertically before the block reduce. Returns ``None`` — and stamps
-    ``meta["coverage_source"]`` accordingly — when no ortho resolves or its
-    geometry disagrees with the block bounds (fieldsite and city-aggregate
-    bakes keep the rectangle rule). A block with no CityNav imagery
-    (``imagery=False``, Cal City) takes the rectangle as its rule.
+    Up to a third of a block's bounds rectangle is no-data a prior could sit
+    over unseen. A cell is covered iff any pixel of the filled ortho
+    (``load_ortho_or_rasters``) under it has ``alpha > 0``, the same no-data
+    rule the runtime observation uses. Ortho rows run north-down, cell rows
+    south-up, so the alpha is flipped before the reduce. ``None`` (stamped in
+    ``meta["coverage_source"]``) when no ortho resolves, its geometry
+    disagrees with the block bounds, or the block has no CityNav imagery
+    (``imagery=False``, Cal City): the rectangle is then the rule.
     """
     meta["coverage_source"] = "bounds rectangle"
     if not imagery:
@@ -333,28 +295,15 @@ def _chain_extent(chain: Sequence[tuple[float, float]]) -> float:
 
 
 def _world_contour_from_geometry(geometry: dict[str, Any]) -> list[list[float]] | None:
-    """The feature's EXACT vertex chain in world meters, or ``None``.
+    """The feature's EXACT vertex chain in world meters at 2 dp, or ``None``.
 
-    Whatever OSM gives, taken as given: a Polygon's exterior ring CLOSED (it
-    ends on the vertex it began, which is how a reader tells a ring from a
-    way — ``geom_compute.is_closed_chain``), a LineString's vertices open, a
-    Point's single vertex. A multi-part geometry contributes its largest part
-    by ``_chain_extent``. Rounded to 2 dp — the format
-    ``MapObject.world_contour`` / ``build_surface`` consume.
-
-    Nothing here asks what the feature IS: a road's centerline is served
-    from its own vertices, as a building's ring is.
-
-    The chain is kept whole. ``_mask_fields`` prefers it over the cell
-    boundary, so it IS the footprint for every areal prior, and
-    ``footprint_area_m2`` is a column the model can score_by and filter on.
-    Measured over the 3,963 polygon rings in the Cal City bundle, a 16-vertex
-    uniform stride would cost a median 13.4% of the area on the 2.3% of rings
-    past 16 vertices, and at worst 99.1%.
-
-    The detection side still decimates (``perception.synthetic``), and should:
-    a contour derived from a pixel mask is a measurement whose vertex budget is
-    a rendering choice. This one is the map itself.
+    A Polygon's exterior ring CLOSED (how a reader tells a ring from a way,
+    ``geom_compute.is_closed_chain``), a LineString's vertices open, a Point's
+    single vertex; a multi-part geometry contributes its largest part by
+    ``_chain_extent``. The chain is kept whole: ``_mask_fields`` prefers it
+    over the cell boundary, so it IS the footprint (``footprint_area_m2``) of
+    every areal prior. A 16-vertex stride would cost a median 13.4% of the
+    area on the 2.3% of Cal City rings past 16 vertices, at worst 99.1%.
     """
     best: list[tuple[float, float]] | None = None
     best_extent = -1.0
@@ -842,12 +791,9 @@ def _georef_provenance(georef_path: Path) -> dict[str, Any]:
 def _apply_affine_geometry(
     geometry: dict[str, Any], affine: Sequence[float]
 ) -> dict[str, Any]:
-    """Apply the 6-number georef affine to every coordinate of a GeoJSON
-    geometry dict: ``x' = a*x + b*y + c``, ``y' = d*x + e*y + f`` (any z
-    passes through). This is the ONE explicit registration of OSM source-CRS
-    coordinates into CityNav local XY — pure so the fetch-record ->
-    features.json -> ``MapObject.world_contour`` chain is testable without
-    osmnx/shapely (T-UNIT georef round-trip)."""
+    """The 6-number georef affine on every coordinate of a GeoJSON geometry:
+    ``x' = a*x + b*y + c``, ``y' = d*x + e*y + f`` (any z passes through), the
+    ONE registration of OSM source-CRS coordinates into CityNav local XY."""
     a, b, c, d, e, f = [float(v) for v in affine]
 
     def _pt(pt: Sequence[float]) -> list[float]:
@@ -877,13 +823,9 @@ _OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 
 def _overpass_all_elements_query(bbox_wgs84: Sequence[float]) -> str:
-    """The unrestricted Overpass query for a WGS84 window: EVERY element
-    (``nwr`` with NO tag filter), recursed down (``(._;>;)``) so way and
-    relation geometries are buildable from their member nodes. The bake
-    ingests exactly what OSM gives us — there is no tag-key allowlist at the
-    fetch; the only exclusion anywhere in the bake is geometric
-    (no-geometry-in-window). Pure string builder so the query shape is
-    testable without network or osmnx."""
+    """The Overpass query for EVERY element in a WGS84 window (``nwr``, no tag
+    filter), recursed down (``(._;>;)``) so ways and relations are buildable
+    from their member nodes."""
     left, bottom, right, top = [float(v) for v in bbox_wgs84]
     return (
         "[out:xml][timeout:300];"
@@ -893,9 +835,8 @@ def _overpass_all_elements_query(bbox_wgs84: Sequence[float]) -> str:
 
 
 def _fetch_overpass_xml(query: str) -> str:
-    """POST an Overpass query with plain bounded retry/backoff (429/504 are
-    routine on the shared public server). Volume is handled by the generous
-    server-side timeout and the retry loop — never by narrowing the query."""
+    """POST an Overpass query with bounded retry/backoff (429/504 are routine
+    on the shared public server)."""
     import ssl
     import time
     import urllib.error
@@ -929,12 +870,9 @@ def _fetch_overpass_xml(query: str) -> str:
 
 
 def _fetch_osm_records(georef: dict[str, Any]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
-    """Fetch ALL tagged OSM features with geometry in the georef window.
-
-    One unrestricted Overpass request (``_overpass_all_elements_query``), then
-    ``osmnx.features_from_xml`` builds geometries for every tagged element —
-    no tag filter anywhere (``tags=None`` skips osmnx's tag filtering; the
-    bbox polygon keeps the fetch's geometric window)."""
+    """Every tagged OSM feature with geometry in the georef window, in CityNav
+    local XY: one unrestricted Overpass request, geometries built by
+    ``osmnx.features_from_xml`` with no tag filter."""
     try:
         import osmnx as ox
         from osmnx import utils_geo
@@ -978,12 +916,9 @@ def dump_osm_cache(
     *,
     city: str | None = None,
 ) -> dict[str, Any]:
-    """Fetch OSM via a georef and write a GeoJSON cache in CityNav local XY.
-
-    Lets the network fetch run on a box with egress while the bake runs
-    offline from the cache. The georef residual summary is
-    embedded so the offline bake still records registration provenance.
-    """
+    """Fetch OSM via a georef and write a GeoJSON cache in CityNav local XY,
+    with the georef residual summary embedded for the offline bake's
+    provenance."""
     georef_file = Path(georef_path).expanduser().resolve()
     georef = _validate_georef(georef_file)
     records = _fetch_osm_records(georef)
@@ -1033,13 +968,7 @@ def dump_osm_cache(
 # re-writing so a re-bake cannot inherit a stale provenance claim; ``bake_block``
 # re-asserts its own. A key an upstream caller writes (the Cal City baker's
 # ``georef`` block) is that caller's contribution and passes through.
-_STALE_BAKE_FLAGS = frozenset(
-    {
-        "bake_counts",
-        "osm_only",
-        "provenance",
-    }
-)
+_STALE_BAKE_FLAGS = frozenset({"bake_counts", "osm_only", "provenance"})
 
 
 def _bake_provenance() -> dict[str, Any]:
