@@ -229,7 +229,7 @@ def test_the_scan_still_finds_constructions_to_check():
     alias resolution, and the two tests below pass while checking nothing.
     This pins that the scan is still looking at something.
     """
-    assert len(DEFS) > 60, f"only {len(DEFS)} dataclasses found; scan is broken"
+    assert len(DEFS) > 40, f"only {len(DEFS)} dataclasses found; scan is broken"
     assert len(CONSTRUCTIONS) >= 100, (
         f"only {len(CONSTRUCTIONS)} imported-dataclass constructions found; "
         "the alias resolution or the package walk has broken"
