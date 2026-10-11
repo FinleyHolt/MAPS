@@ -175,14 +175,6 @@ def test_a_run_root_name_is_not_an_attempt_stamp():
         {"workdir": "w0/maps_20260725_110000_citynav_e__1_1"}) == "20260725_110000"
 
 
-def test_the_ledger_name_matches_the_producer():
-    """The producer (``episodes``) must not import a reader, so the literal
-    is duplicated and this keeps the two honest."""
-    from benchmarks.citynav import episodes
-
-    assert rows.EPISODES_JSONL == episodes.EPISODES_JSONL
-
-
 # --------------------------------------------------------------------------
 # Row shapes
 # --------------------------------------------------------------------------

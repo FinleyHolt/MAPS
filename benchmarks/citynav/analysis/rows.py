@@ -18,8 +18,8 @@ attempt: the LAST attempt carrying metrics, then the LAST attempt at all
 or window, or a refused request, stays ``ok``), ``timed_out`` (scored,
 counted apart), ``infra`` (never a fair run; dropped at read time).
 
-Stdlib only and importing nothing from this repo, so the benchmark driver
-and the report CLIs both depend on it without a cycle.
+Stdlib only but for the ledger name ``episodes`` owns, so the benchmark
+driver and the report CLIs both depend on it without a cycle.
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Iterator
 
-#: The run's ledger; tests/test_rows.py pins it equal to ``episodes.EPISODES_JSONL``.
-EPISODES_JSONL = "episodes.jsonl"
+from benchmarks.citynav.episodes import EPISODES_JSONL
+
 
 def metrics(row: dict) -> dict:
     """This row's scored metrics dict, or ``{}``."""
@@ -47,15 +47,6 @@ def episode_id(row: dict, m: dict | None = None) -> str | None:
         m = metrics(row)
     eid = m.get("episode_id") or row.get("episode_id")
     return str(eid) if eid else None
-
-
-def final_xy(row: dict) -> tuple[float, float] | None:
-    """Where the flight ended, the point ``SR`` was scored from, else ``None``."""
-    for key in ("pred_xy", "final_pos_xy"):
-        xy = row.get(key)
-        if isinstance(xy, (list, tuple)) and len(xy) >= 2:
-            return (float(xy[0]), float(xy[1]))
-    return None
 
 
 #: A mission the serve failed out from under.

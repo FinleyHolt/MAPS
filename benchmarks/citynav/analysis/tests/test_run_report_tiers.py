@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from benchmarks.citynav.analysis import rows
-from benchmarks.citynav.analysis.run_report import load_run, paired, report
+from benchmarks.citynav.analysis.run_report import load_run, report
 from benchmarks.citynav.analysis.tests.ledger import ledger_row, write_ledger
 
 
@@ -49,17 +49,14 @@ def test_a_root_without_a_ledger_reads_empty(tmp_path):
 # --------------------------------------------------------------------------
 
 
-def test_report_and_paired_still_run(tmp_path, capsys):
-    a, b = tmp_path / "a", tmp_path / "b"
+def test_report_runs(tmp_path, capsys):
+    a = tmp_path / "a"
     write_ledger(a, ledger_row("e::1#1", "20260725_110000", 1))
-    write_ledger(b, ledger_row("e::1#1", "20260725_110000", 0))
     report(a)
-    paired(a, b)
     out = capsys.readouterr().out
     assert "SR = 1/1 (100.0%)" in out
     assert "NE median = 10.0 m  mean = 10.0 m (n=1)" in out
     assert "tier" not in out
-    assert "PAIRED on 1 shared episodes" in out
 
 
 def test_the_report_prints_the_route_term(tmp_path, capsys):
@@ -167,30 +164,6 @@ def test_an_unstamped_run_refuses_to_elect_a_headline(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "criterion: UNRECORDED" in out, out
     assert "quote neither" in out, out
-
-
-def test_paired_refuses_across_criteria(tmp_path, capsys):
-    """An A/B is exactly where a criterion mismatch gets believed. Two runs
-    scored on different masks answer different questions, so there is no
-    delta to take."""
-    a, b = tmp_path / "a", tmp_path / "b"
-    write_ledger(a, *_scored([1] * 4, success_criterion="shape"))
-    write_ledger(b, *_scored([0] * 4, success_criterion="ring"))
-    with pytest.raises(SystemExit) as exc:
-        paired(a, b)
-    assert "INVALID pairing" in str(exc.value), exc.value
-
-
-def test_paired_names_the_criterion_it_counted(tmp_path, capsys):
-    """The vacuity floor for the refusal above: a matched pair must still
-    pair, and must say which question moved."""
-    a, b = tmp_path / "a", tmp_path / "b"
-    write_ledger(a, *_scored([1] * 4, success_criterion="shape", precise_target="shape"))
-    write_ledger(b, *_scored([0] * 4, success_criterion="shape", precise_target="shape"))
-    paired(a, b)
-    out = capsys.readouterr().out
-    assert "the target's own shape" in out, out
-    assert "4/4" in out and "0/4" in out, out
 
 
 def test_failed_tiles_are_reported_beside_the_sr(tmp_path, capsys):

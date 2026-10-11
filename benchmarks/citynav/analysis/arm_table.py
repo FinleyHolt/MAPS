@@ -114,7 +114,7 @@ def render(rows: list[dict]) -> None:
     label_w = max([10] + [len(str(r["label"])) for r in rows])
     seen = {r["criterion"] for r in rows if r["criterion"] is not None}
     criterion = seen.pop() if seen else None
-    print(f"criterion: {criterion or 'UNRECORDED (pre-cutover runs)'}   arms: {len(rows)}")
+    print(f"criterion: {criterion or 'UNRECORDED'}   arms: {len(rows)}")
     if criterion == "shape":
         print("OSR is ring-basis and absent from every shape-scored row.")
     columns = [(k, h, f"{{:<{label_w}}}" if k == "label" else fmt) for k, h, fmt in COLUMNS]

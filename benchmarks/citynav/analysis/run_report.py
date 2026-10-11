@@ -1,4 +1,4 @@
-"""Single-run and paired SR report for a run root.
+"""SR report for a run root.
 
 The per-episode record is the ledger row's ``metrics`` dict, picked by
 ``analysis.rows``; ``metrics.SR`` is the success bit, never recomputed from
@@ -6,8 +6,7 @@ The per-episode record is the ledger row's ``metrics`` dict, picked by
 as ``no_metrics``.
 
 Usage:
-    python -m benchmarks.citynav.analysis.run_report output/run_a
-    python -m benchmarks.citynav.analysis.run_report output/run_a output/run_b  # paired
+    python -m benchmarks.citynav.analysis.run_report output/run_a [output/run_b ...]
 
 A root that scores fewer episodes than its manifest selected is refused
 unless ``--allow-partial`` (``rows.load_attempts``).
@@ -39,7 +38,7 @@ def _pct(num: int, den: int) -> str:
 _CRITERION_LABEL = {
     "ring": "the 20 m disc",
     "shape": "the target's own shape",
-    None: "UNRECORDED (pre-cutover run)",
+    None: "UNRECORDED",
 }
 
 
@@ -174,7 +173,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     if _criterion is None:
         # Unstamped rows: neither reading is the headline, and the note names
         # the shape line only when one printed.
-        print("  ^ this run predates the criterion stamp: the SR above is the "
+        print("  ^ these rows carry no criterion stamp: the SR above is the "
               "20 m disc"
               + (", and the shape line beside it is the other reading. Which "
                  "one this bench is scored on is NOT recorded"
@@ -230,43 +229,6 @@ def _label(name: str, suc: int, tot: int) -> str:
     return f"{name}:{suc}/{tot}({100 * suc / tot:.0f}%)" if tot else f"{name}:0"
 
 
-def paired(root_a: Path, root_b: Path, *, allow_partial: bool = False) -> None:
-    """Paired SR on the shared scored episodes, the criterion named in the
-    header; two runs scored under different criteria refuse to pair."""
-    a, _ = load_run(root_a, allow_partial=allow_partial)
-    b, _ = load_run(root_b, allow_partial=allow_partial)
-    shared = sorted(set(a) & set(b))
-    crit_a = run_criterion([a[e] for e in shared])
-    crit_b = run_criterion([b[e] for e in shared])
-    if crit_a != crit_b:
-        raise SystemExit(
-            f"INVALID pairing -- {root_a.name} is scored on "
-            f"{_CRITERION_LABEL.get(crit_a, crit_a)} and {root_b.name} on "
-            f"{_CRITERION_LABEL.get(crit_b, crit_b)}. The two numbers answer "
-            "different questions."
-        )
-    _key = "SR"
-    print(
-        f"\n=== PAIRED on {len(shared)} shared episodes, "
-        f"{_CRITERION_LABEL.get(crit_a, crit_a)} "
-        f"({root_a.name} vs {root_b.name}) ==="
-    )
-    for name, D in ((root_a.name, a), (root_b.name, b)):
-        bt: Counter = Counter()
-        bs: Counter = Counter()
-        for eid in shared:
-            m = D[eid]
-            bk = m.get("referent_bucket") or "?"
-            bt["all"] += 1
-            bs["all"] += bool(m.get(_key))
-            bt[bk] += 1
-            bs[bk] += bool(m.get(_key))
-        line = "   ".join(
-            _label(k, bs[k], bt[k]) for k in ("all", *_BUCKETS) if bt[k]
-        )
-        print(f"{name:18s} {line}")
-
-
 def main(argv: list[str]) -> int:
     allow_partial = "--allow-partial" in argv[1:]
     args = [Path(a) for a in argv[1:] if a != "--allow-partial"]
@@ -275,8 +237,6 @@ def main(argv: list[str]) -> int:
         return 2
     for root in args:
         report(root, allow_partial=allow_partial)
-    if len(args) == 2:
-        paired(args[0], args[1], allow_partial=allow_partial)
     return 0
 
 
