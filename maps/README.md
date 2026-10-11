@@ -37,7 +37,7 @@ detections into the graph) and returns the flight report the model reads.
 | Seen colour of a detection | `perception/viz/color.py` |
 | Catalog-prior footprints projected onto the ortho crop | `perception/viewpoint/` |
 | Endpoint discovery: served model, window, output reserve | `llm/endpoint_spec.py` |
-| Per-model sampling envelopes and the reasoning effort | `llm/model_cards.py`, `llm/sampling.py` |
+| Per-model sampling envelopes and the reasoning effort | `llm/model_cards.py` |
 | The chat-completions transport and its flight log | `llm/http.py` |
 | The request shape a hosted OpenAI model takes | `llm/openai_wire.py` |
 | Two reasoner turns per effort against the configured endpoint, before a run | `llm/endpoint_preflight.py` |
