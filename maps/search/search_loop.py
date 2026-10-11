@@ -399,7 +399,7 @@ class SearchLoop:
         with a projected footprint through the tracked upsert, the rest
         centroid-only. Returns the per-step detection records the recorder
         writes."""
-        from maps.sws.graph import (  # noqa: PLC0415
+        from maps.sws.graph.runtime import (  # noqa: PLC0415
             upsert_detected_centroid_only,
             upsert_tracked_detected,
         )

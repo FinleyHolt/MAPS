@@ -39,7 +39,8 @@ import numpy as np
 
 from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import TILES_DIR
-from maps.sws.graph import build_object_graph, save_graph
+from maps.sws.graph.builder import build_object_graph
+from maps.sws.graph.io import save_graph
 
 log = logging.getLogger("bake_city")
 

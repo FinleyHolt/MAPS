@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.sws.graph import upsert_tracked_detected
 from maps.sws.graph.builder import build_object_graph
 from maps.sws.graph.model import MapObject
+from maps.sws.graph.runtime import upsert_tracked_detected
 
 GRID = (32, 32)
 

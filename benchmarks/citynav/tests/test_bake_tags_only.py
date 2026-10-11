@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 
 from benchmarks.citynav.bake.city import bake_block
-from maps.sws.graph import load_graph
+from maps.sws.graph.io import load_graph
 
 
 def _poly(x0, y0, x1, y1):

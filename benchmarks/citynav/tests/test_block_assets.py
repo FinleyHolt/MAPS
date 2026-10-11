@@ -25,7 +25,7 @@ needs_block_bake = pytest.mark.skipif(
 
 @needs_block_bake
 def test_per_block_graph_has_no_cross_block_leakage():
-    from maps.sws.graph import load_graph
+    from maps.sws.graph.io import load_graph
 
     graph = load_graph(tile_stem("birmingham_block_0"))
     ids = list(graph.nodes.keys())

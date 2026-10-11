@@ -16,6 +16,7 @@ import time
 
 import numpy as np
 
+from maps.sws.graph.builder import _mask_centerline
 from maps.sws.graph.model import MapObject, ObjectGraph
 
 
@@ -188,8 +189,6 @@ def _stamp_cells(
     Re-deriving on every re-stamp changes the geom surface for detected fids
     and needs a paired SR read.
     """
-    from maps.sws.graph.builder import _mask_centerline  # local: avoid import cycle
-
     node.cells = _cells_from_mask(hm_rows, hm_cols)
     if node.centerline is not None or len(node.cells) < 2:
         return

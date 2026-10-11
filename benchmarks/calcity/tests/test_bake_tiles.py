@@ -14,7 +14,7 @@ import pytest
 from benchmarks.calcity.data_prep import bake_tiles
 from benchmarks.calcity.data_prep.aoi import AOI_BBOX
 from benchmarks.calcity.data_prep.bake_tiles import bake_block
-from maps.sws.graph import load_graph
+from maps.sws.graph.io import load_graph
 
 # A metre or two east of the AOI's south-west corner, so anything built here
 # lands inside the bake window, whatever box the AOI declares.

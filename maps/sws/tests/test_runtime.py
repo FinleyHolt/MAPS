@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from maps.sws import MapObject, ObjectGraph
+from maps.sws.graph.model import MapObject, ObjectGraph
 from maps.sws.graph.io import load_graph, save_graph
 
 
@@ -66,7 +66,6 @@ def test_build_object_graph_populates_cells_and_height_tag():
     import pathlib
     import tempfile
 
-    from maps.sws.graph import load_graph, save_graph
     from maps.sws.graph.builder import build_object_graph
 
     features = {
@@ -115,7 +114,6 @@ def test_save_load_graph_preserves_world_contour_on_prior_and_detected():
     import pathlib
     import tempfile
 
-    from maps.sws.graph import load_graph, save_graph
 
     prior_contour = [[10.0, 20.0], [11.0, 20.0], [11.0, 21.0], [10.0, 21.0]]
     det_contour = [[30.5, 40.5], [31.0, 40.0], [31.5, 41.0]]
