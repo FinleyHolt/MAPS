@@ -398,8 +398,6 @@ class MissionSession:
         _ph.at("segment")
         step_detections = perceive(h, obs, detections, step_idx, mark=_ph.at)
         _ph.at("fold")
-        state.belief_snapshot = loop.snapshot()
-        _ph.at("snapshot")
 
         if self.recorder is not None and obs is not None:
             try:
@@ -501,9 +499,9 @@ class MissionSession:
 
 def run_mission_episode(session: MissionSession):
     """Drive the bench's one conversation and bind the last flight's target
-    as the commit onto the engine state the trajectory replay and metrics
-    read (``confirmed_target_xy`` / ``lock_step``). Returns the reply; zero
-    flights leaves the engine state unbound, the honest zero."""
+    as the commit (``state.confirmed_target_xy``) the trajectory replay
+    reads. Returns the reply; zero flights leaves it unbound, the honest
+    zero."""
     h = session.h
     workdir = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip() or None
     transcript = ConversationLog(Path(workdir) / CONVERSATION_JSONL if workdir else None)
@@ -512,11 +510,7 @@ def run_mission_episode(session: MissionSession):
     flights = session.flights
     if flights:
         last = flights[-1]
-        with h.search_loop._lock:
-            s2 = h.search_loop.state
-            s2.confirmed_target_xy = (float(last["resolved_xy"][0]), float(last["resolved_xy"][1]))
-            s2.lock_step = int(last["step_idx"])
-        h.state.belief_snapshot = h.search_loop.snapshot()
+        h.state.confirmed_target_xy = (float(last["resolved_xy"][0]), float(last["resolved_xy"][1]))
         log.info(
             "mission commit: fid=%s xy=%s flights=%d ended_by=%s",
             last["target"],

@@ -12,7 +12,7 @@ def _replay(commit_xy, max_steps=60):
     from maps.search.parse_compile.tour_state import FeatureTour, TourViewpoint
 
     state = EpisodeState(pose_xy=(0.0, 0.0), altitude_m=50.0, graph=None)
-    state.belief_snapshot = SimpleNamespace(confirmed_target_xy=commit_xy)
+    state.confirmed_target_xy = commit_xy
     tour = FeatureTour()
     tour.viewpoints.append(TourViewpoint(fid="far", xy=(0.0, 200.0), altitude_m=50.0))
     steps = synthesize_compliant_trajectory(

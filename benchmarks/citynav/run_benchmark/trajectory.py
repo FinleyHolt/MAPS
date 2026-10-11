@@ -34,7 +34,7 @@ def synthesize_compliant_trajectory(
     start_alt: float,
 ) -> int:
     """Replay the mission's flown stops (``feature_tour``) and its commit
-    (``state.belief_snapshot.confirmed_target_xy``) through the six-action
+    (``state.confirmed_target_xy``) through the six-action
     snap under the ``cfg.max_steps`` budget, writing the submittable
     ``state.visited_xy`` and final pose. Returns the action count.
 
@@ -56,8 +56,7 @@ def synthesize_compliant_trajectory(
                  for vp in feature_tour.viewpoints]
     tour_fids = [str(vp.fid) for vp in feature_tour.viewpoints]
 
-    snap = state.belief_snapshot
-    descent_xy = getattr(snap, "confirmed_target_xy", None) if snap is not None else None
+    descent_xy = state.confirmed_target_xy
     if descent_xy is not None:
         descent_xy = (float(descent_xy[0]), float(descent_xy[1]))
 

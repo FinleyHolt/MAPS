@@ -47,15 +47,6 @@ _COVER_MAX_STOPS = 1000
 _NULL_CONCEPTS = frozenset({"none", "null", "n/a", "na"})
 
 
-@dataclass(frozen=True)
-class SearchSnapshot:
-    """The bound commit, as the trajectory replay and the row read it."""
-
-    confirmed_target_xy: tuple[float, float] | None
-    # Flight step the commit bound at. ``None`` = nothing flew.
-    lock_step: int | None
-
-
 @dataclass
 class _State:
     """Mutable internal state, read and written under ``SearchLoop._lock``."""
@@ -66,9 +57,6 @@ class _State:
     # detection is one step, not an analyze away: most observed-and-
     # zero-row episodes never analyze after acquisition.
     last_flight_detections: list[dict] = field(default_factory=list)
-    confirmed_target_xy: tuple[float, float] | None = None
-    # Flight step the commit bound at. ``None`` = nothing flew.
-    lock_step: int | None = None
     # The per-episode PerceptionDirector: the live SAM watchlist, the
     # queued/active boosts, and the addressable pending-stop registry
     # (qstop_N). None until the first concept declaration arms it.
@@ -695,14 +683,6 @@ class SearchLoop:
             cell_size_m=self._cell_size_m,
         )
 
-    def snapshot(self) -> SearchSnapshot:
-        with self._lock:
-            s = self.state
-            return SearchSnapshot(
-                confirmed_target_xy=s.confirmed_target_xy,
-                lock_step=s.lock_step,
-            )
-
 
     # ------------------------------------------------------------------ #
     # Internal phase helpers
@@ -944,5 +924,4 @@ def _json_safe(v):
 
 __all__ = [
     "SearchLoop",
-    "SearchSnapshot",
 ]

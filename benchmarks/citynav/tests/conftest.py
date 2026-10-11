@@ -70,7 +70,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
             world_xy_for_node=lambda fid: STUB_GRAPH[fid][0] if fid in STUB_GRAPH else None,
             _fid_is_detected=lambda fid: STUB_GRAPH[fid][1] == "detected",
             activate_pending_boosts=lambda: None, update_perception=lambda **kw: [],
-            snapshot=lambda: None, retire_boosts_after_round=lambda rounds: None,
+            retire_boosts_after_round=lambda rounds: None,
             last_flight_detections=lambda: [], upsert_prior_percept=lambda *a, **k: None,
         )
         for k, v in loop_overrides.items():

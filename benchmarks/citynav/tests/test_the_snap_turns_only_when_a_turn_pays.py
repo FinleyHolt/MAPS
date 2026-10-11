@@ -89,7 +89,7 @@ def test_a_leg_never_orbits_its_target(monkeypatch, tmp_path):
         pose_xy = (0.0, 0.0)
         altitude_m = 100.0
         heading_deg = 180.0
-        belief_snapshot = None
+        confirmed_target_xy = None
 
         def __init__(self):
             self.visited_xy = []
