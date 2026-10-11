@@ -246,14 +246,13 @@ class MissionSession:
             self.ctx = loop._tool_ctx_for_examiner()
         state = h.state
         self.ctx.pose_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
-        ground = loop._ortho_ground_z_m
+        ground = float(loop._ortho_ground_z_m)
         alt = float(state.altitude_m)
-        obs_span_m = observation_extent_m(alt, float(ground), h.sensor) if ground is not None else None
+        obs_span_m = observation_extent_m(alt, ground, h.sensor)
         # The footprint's SHORT side: the row pitch an explore's serpentine
         # can rely on whichever way the footprint is turned, and the look
         # coverage gate (a crop on ground no flight covered refuses).
-        self.obs_minor_m = (observation_minor_extent_m(alt, float(ground), h.sensor)
-                            if ground is not None else None)
+        self.obs_minor_m = observation_minor_extent_m(alt, ground, h.sensor)
         self.mission_spec = MissionSpec(
             fly=self.fly,
             declare_concepts=loop.declare_mission_concepts,
@@ -298,16 +297,9 @@ class MissionSession:
         return self.h.search_loop.node_coverage_stops(
             fid, spacing_m, max_stops=MISSION_FLIGHT_BUDGET, minor_spacing_m=self.obs_minor_m)
 
-    def _node_xy(self, fid: str):
-        loop = self.h.search_loop
-        xy = loop.world_xy_for_node(fid)
-        if xy is None:
-            return None
-        return ((float(xy[0]), float(xy[1])), "detected" if loop._fid_is_detected(fid) else "prior")
-
     def resolve(self, token: str) -> dict:
         """``token`` as :func:`resolve_flight_target` resolves it over the live graph."""
-        return resolve_flight_target(token, node_xy=self._node_xy, pose_xy=self.h.state.pose_xy,
+        return resolve_flight_target(token, node_xy=self.h.search_loop.node_xy, pose_xy=self.h.state.pose_xy,
                                      marker_xy=self.marker_xy)
 
     def fly(self, item: dict) -> dict:

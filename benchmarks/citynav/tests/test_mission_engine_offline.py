@@ -86,8 +86,7 @@ def _bare_loop():
     loop._lock = threading.RLock()
     loop._state = sl._State(runtime_graph=None)
     pushes: list[list] = []
-    loop._sam_concept_setter = pushes.append
-    loop._sam_watchlist_setter = None
+    loop._sam_setter = pushes.append
     return loop, pushes
 
 

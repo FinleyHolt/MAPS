@@ -166,14 +166,12 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
     state.record_visit()
     # Looked up at call time: the flight's forced replay swaps it.
     perception = _perception.make_perception(cfg)
-    set_concepts = perception.concept_provider.set_concepts
     grid_h, grid_w = assets.grid_shape
     search_loop = SearchLoop(
         GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
-        tile_name=f"citynav::{assets.map_name}",
-        sam_concept_setter=set_concepts,
-        sam_watchlist_setter=set_concepts,
+        map_name=assets.map_name,
+        sam_setter=perception.concept_provider.set_concepts,
         # The mission's observation span is ``2 * (alt - ground)`` off it.
         ortho_ground_z_m=ground,
         # The look tool's crop raster (a live run crops its own imagery).

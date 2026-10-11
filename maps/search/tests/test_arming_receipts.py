@@ -49,7 +49,7 @@ def _duck(setter):
     class _Duck:
         state = _S()
         _lock = threading.Lock()
-        _sam_concept_setter = staticmethod(setter)
+        _sam_setter = staticmethod(setter)
 
     return _Duck()
 

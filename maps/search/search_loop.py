@@ -27,23 +27,6 @@ from maps.util.mask_codec import encode_mask_record
 
 log = logging.getLogger(__name__)
 
-# THE RUNAWAY BACKSTOP, and nothing else. A footprint runs to 418k cells
-# here, so a pass needs SOME bound or a degenerate shape walks forever --
-# but the bound is a guard against broken looping, never a budget the pass
-# is supposed to husband. The caller passes its own liveness limit (the
-# mission passes its flight budget); this default only covers a caller
-# that states none.
-#
-# It was 12, an eighth of the mission's 96 flights, and that is what a cap
-# costs: covering Neuralia Road takes ~111 stops at the observation's own
-# spacing, so the pass truncated to 12, reported itself SAMPLED, and told
-# the model to narrow and explore a part instead. The model then settled
-# for a prior pool 1,790 m off the road -- having reasoned, in its own
-# words, that it should "explore the area around Neuralia Road to detect
-# more pools that might not be in the prior map". SR is the goal; a longer
-# pass is the price of an ambiguous cue, not a fault to be capped.
-_COVER_MAX_STOPS = 1000
-
 _NULL_CONCEPTS = frozenset({"none", "null", "n/a", "na"})
 
 
@@ -74,10 +57,9 @@ class SearchLoop:
         grid: GridDomain,
         *,
         tile_origin_xy: tuple[float, float],
-        tile_name: str,
-        sam_concept_setter: Callable[[list[str]], None] | None = None,
-        sam_watchlist_setter: Callable[[list[str]], None] | None = None,
-        ortho_ground_z_m: float | None = None,
+        map_name: str,
+        sam_setter: Callable[[list[str]], None] | None,
+        ortho_ground_z_m: float,
         rgbd_dir: str,
     ):
         self._grid = grid
@@ -85,12 +67,10 @@ class SearchLoop:
             float(tile_origin_xy[0]),
             float(tile_origin_xy[1]),
         )
-        self._tile_name = tile_name
-        self._sam_concept_setter = sam_concept_setter
-        # The agent-owned watchlist channel: the PerceptionDirector pushes the
-        # live watchlist (+ active boost concepts) through it so mid-flight
-        # ``view{watchlist}`` mutations reach the per-stop /segment calls.
-        self._sam_watchlist_setter = sam_watchlist_setter
+        self._map_name = map_name
+        # The segmenter's concept list: the declared union and the director's
+        # watchlist both write it whole.
+        self._sam_setter = sam_setter
         # Per-block upstream ground datum: the mission's observation span is
         # measured off it.
         self._ortho_ground_z_m = ortho_ground_z_m
@@ -217,10 +197,16 @@ class SearchLoop:
             return served
         return self._grid_centroid_to_world_xy(getattr(node, "centroid", None))
 
-    def world_xy_for_node(self, target_fid: str) -> tuple[float, float] | None:
-        """Thread-safe public wrapper for :meth:`_world_xy_for_node_locked`."""
+    def node_xy(self, fid: str) -> tuple[tuple[float, float], str] | None:
+        """``((x, y), "detected" | "prior")`` for a fid on the graph, the
+        position as :meth:`_world_xy_for_node_locked` resolves it; None off
+        the graph or without a position."""
         with self._lock:
-            return self._world_xy_for_node_locked(target_fid)
+            xy = self._world_xy_for_node_locked(fid)
+            if xy is None:
+                return None
+            node = self._node_for_fid_locked(fid)
+            return xy, ("detected" if node.provenance == "detected" else "prior")
 
     def _node_for_fid_locked(self, fid: str):
         """The graph node for ``fid``, or ``None``. Caller MUST hold
@@ -253,37 +239,20 @@ class SearchLoop:
         with self._lock:
             return self._cells_xy_locked(target_fid)
 
-    def node_coverage_stops(self, target_fid: str, spacing_m: float,
-                            max_stops: int = _COVER_MAX_STOPS,
-                            minor_spacing_m: float | None = None
-                            ) -> list | None:
-        """Points ON this fid's footprint, in world metres, walking the
-        shape along its length — the stops an ``explore`` flies.
+    def node_coverage_stops(self, target_fid: str, spacing_m: float, *,
+                            max_stops: int, minor_spacing_m: float) -> list | None:
+        """Points on this fid's cells, in world metres, rounded: the stops an
+        ``explore`` flies, in shape order; None off the graph or without
+        cells. The stops come off the cells, never the box (a road fills
+        half its box at the median) or the unclipped OSM ring.
 
-        ``None`` when the fid is off the graph or carries no cells.
-        Flying to the centroid alone lands within 20 m of the target on
-        65.6% of the calcity set; a point anywhere in this footprint does
-        on 97.6%. That 32-point gap used to be reached by the model naming
-        a coordinate, which it cannot do (probed with crops and the world
-        window it returned the crop's CENTER on 20/21 replies, midpoint
-        arithmetic with no visual pointing in it). It is reached HERE
-        instead: covering the shape at the sensor's own footprint puts a
-        detection on the part that matters, and the model flies to that
-        row.
-
-        ``spacing_m`` is how much of the shape's length one stop is
-        credited with covering. The caller passes it from the run's own
-        observation extent rather than a constant here, because a bake or
-        an altitude change moves it and a number written down twice goes
-        stale on one side. ``minor_spacing_m`` is the footprint's SHORT
-        side from the same source; passing it arms the serpentine tiling
-        for shapes wider than it in both axes, and leaving it ``None``
-        keeps the 1-D walk everywhere.
-
-        A BOX IS NOT SERVED and never was worth serving. A shape does not
-        fill its box: a road's is 50% road at the median over this bake and
-        2.9% at p10, so the box describes the empty corner as confidently
-        as the road. The stops come off the CELLS.
+        ``spacing_m`` is the length one stop covers and ``minor_spacing_m``
+        the footprint's short side, both from the run's observation extent.
+        A shape wider than ``minor_spacing_m`` on both axes tiles serpentine:
+        rows along the dominant axis at that pitch, alternating direction so
+        the pass stays one line. Any other shape is walked along its dominant
+        axis, ends included, and one shorter than a stop is covered from its
+        middle cell. Over ``max_stops`` the stops thin even-stride, ends kept.
         """
         with self._lock:
             points = self._cells_xy_locked(target_fid)
@@ -295,43 +264,8 @@ class SearchLoop:
             half = cell / 2.0
             x0, y0 = min(xs) - half, min(ys) - half
             x1, y1 = max(xs) + half, max(ys) + half
-            # ONE REPRESENTATION: THE CELLS. Every prior carries them —
-            # 6188 of 6188 on this bake — because the bake rasterizes
-            # everything into the same 2D form: a polygon fills, a
-            # LineString inflates to one cell of width (roads measure 1.00
-            # cells per unit of length at the median), a node is one cell.
-            # So the shape is already uniform and there is nothing to
-            # special-case.
-            #
-            # The vector world_contour is NOT that form and must not be
-            # mixed in. It exists for 64% of rows, and it is the UNCLIPPED
-            # OSM ring while cells are CLIPPED to imagery coverage — a
-            # feature straddling the block window keeps its whole ring and
-            # loses the cells beneath part of it, so ring vertices named
-            # points that were not on the thing at all, on 19% of contour
-            # priors, one of them 2.4 km off its own mask. The aid and the
-            # offset both come off the CELLS, so they cannot disagree.
-            #
-            # The stops walk the shape ALONG ITS LENGTH, its two extremes on
-            # that axis first, ordered and deduped. Ordered because an
-            # explore is a PASS: stops in shape order fly a line, stops in
-            # any other order fly a scribble over the same ground for the
-            # same money.
-            #
-            # The 1-D walk covers any shape whose minor extent fits inside
-            # one observation, which is every building and every road on
-            # this bake. A thing wider than the footprint's SHORT side in
-            # BOTH axes (a whole block, an open field) tiles SERPENTINE
-            # instead when the caller passes that side as
-            # ``minor_spacing_m``: rows along the dominant axis at that
-            # pitch on the minor axis, row direction alternating so
-            # consecutive rows join at the near end and the pass stays one
-            # line. Without ``minor_spacing_m`` the 1-D walk stands and
-            # the caller's report says how much of the shape was reached.
             span = max(1.0, float(spacing_m))
-            if (minor_spacing_m is not None
-                    and (x1 - x0) > float(minor_spacing_m)
-                    and (y1 - y0) > float(minor_spacing_m)):
+            if (x1 - x0) > float(minor_spacing_m) and (y1 - y0) > float(minor_spacing_m):
                 pitch = max(1.0, float(minor_spacing_m))
                 x_major = (x1 - x0) >= (y1 - y0)
                 _maj = (lambda p: p[0]) if x_major else (lambda p: p[1])
@@ -398,7 +332,7 @@ class SearchLoop:
 
         return render_candidate_crops(
             requests,
-            map_name=str(self._tile_name).split("::")[-1],
+            map_name=self._map_name,
             rgbd_dir=self._rgbd_dir,
             imagery=self.look_imagery,
         )
@@ -410,16 +344,6 @@ class SearchLoop:
         if not wd:
             return None
         return str(Path(wd) / "flight" / "look")
-
-    def _fid_is_detected(self, fid: str) -> bool:
-        """True if the candidate is a runtime SAM detection (provenance
-        ``detected``) rather than a prebake catalog prior. At a stop the
-        drone actually reached, the perceived instance sits on the physical
-        object while a prior CityRefer node can be ~20-50m offset, so the
-        detection is the more precise commit. Missing node / unknown
-        provenance -> False (treated as non-detected)."""
-        node = self._node_for_fid_locked(fid)
-        return node is not None and node.provenance == "detected"
 
     @property
     def state(self) -> _State:
@@ -439,13 +363,13 @@ class SearchLoop:
             PerceptionDirector,
         )
 
-        if self._sam_watchlist_setter is None:
+        if self._sam_setter is None:
             log.info(
                 "PerceptionDirector armed WITHOUT a live watchlist channel "
                 "(no sam_watchlist_setter): view{watchlist}/boost mutate "
                 "engine state only"
             )
-        director = PerceptionDirector(push=self._sam_watchlist_setter)
+        director = PerceptionDirector(push=self._sam_setter)
         director.retro_perceiver = getattr(self, "_retro_perceiver_fn", None)
         director.init_watchlist([str(c) for c in (concepts or [])])
         self.state.perception_director = director
@@ -515,9 +439,9 @@ class SearchLoop:
             if c and c not in _NULL_CONCEPTS))
         setter_err: str | None = None
         with self._lock:
-            if self._sam_concept_setter is not None:
+            if self._sam_setter is not None:
                 try:
-                    self._sam_concept_setter(union)
+                    self._sam_setter(union)
                 except Exception as e:  # noqa: BLE001
                     # NEVER swallowed into a clean receipt: a declaration
                     # whose ack reads armed while the segmenter kept its

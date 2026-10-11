@@ -65,10 +65,9 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
     def make(*, markers=(), pose_xy=(10.0, 20.0), rgb=None, **loop_overrides) -> me.MissionSession:
         loop = SimpleNamespace(
             declare_mission_concepts=lambda cleaned: {}, _lock=threading.RLock(),
-            _tool_ctx_for_examiner=SimpleNamespace, _ortho_ground_z_m=None,
+            _tool_ctx_for_examiner=SimpleNamespace, _ortho_ground_z_m=0.0,
             _render_candidate_crops=None, _look_audit_dir=lambda: None, _boost_queue_cb=None,
-            world_xy_for_node=lambda fid: STUB_GRAPH[fid][0] if fid in STUB_GRAPH else None,
-            _fid_is_detected=lambda fid: STUB_GRAPH[fid][1] == "detected",
+            node_xy=lambda fid: STUB_GRAPH.get(fid),
             activate_pending_boosts=lambda: None, update_perception=lambda **kw: [],
             retire_boosts_after_round=lambda rounds: None,
             last_flight_detections=lambda: [], upsert_prior_percept=lambda *a, **k: None,

@@ -33,6 +33,7 @@ class _Way:
         self.class_name = ""
         self.world_contour = contour
         self.cell_count = len(self.cells)
+        self.provenance = "prebaked"
 
 
 def _row(cells_cols, row=10):
@@ -197,8 +198,7 @@ def test_the_flown_pose_is_the_row_s_served_xy():
     _c, anchors = build_surface([], ways, (0.0, 0.0), 2.0)
     assert anchors, "fixture built no rows"
     for r in anchors:
-        flown = loop.world_xy_for_node(r["fid"])
-        assert flown is not None, r["fid"]
+        flown = loop.node_xy(r["fid"])[0]
         assert (round(flown[0], 2), round(flown[1], 2)) == (
             round(r["xy"][0], 2), round(r["xy"][1], 2)), (r["fid"], flown, r["xy"])
 
