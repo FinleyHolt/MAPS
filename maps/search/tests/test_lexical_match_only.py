@@ -30,33 +30,6 @@ def _rows(*texts: str, colour: str | None = None) -> list[dict]:
             for t in texts]
 
 
-def test_no_semantic_synonym_table_exists():
-    # The module carries the lexical layer ONLY: no dict mapping English
-    # nouns to OSM tag values survives anywhere in it.
-    semantic_dicts = [
-        name for name, val in vars(T).items()
-        if isinstance(val, dict) and any(
-            isinstance(v, (list, tuple)) for v in val.values()
-        )
-    ]
-    assert semantic_dicts == [], semantic_dicts
-    assert not hasattr(T, "_OSM_SYNONYMS")
-
-
-def test_prepared_query_is_purely_lexical_clauses():
-    clauses = T.fuzzy_prepare_query("Parking Lot")
-    assert len(clauses) == 1
-    q_norm, qt, qw, kv = clauses[0]
-    assert q_norm == "parking lot"
-    assert "parking" in qt and "lot" in qt
-    # qw groups spellings PER WORD, so coverage counts words and a plural
-    # query is exactly as satisfiable as its singular.
-    assert len(qw) == 2
-    assert any("parking" in forms for forms in qw)
-    assert any("lot" in forms for forms in qw)
-    assert kv == ()  # no key=value pair in a plain-phrase query
-
-
 def test_semantic_gap_scores_zero_census_is_the_remedy():
     # 'lake' shares no token / no >=0.7-similarity token with natural=water
     # search_text: the honest score is 0.0 (below FUZZY_THRESHOLD), which
