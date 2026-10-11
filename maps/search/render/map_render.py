@@ -222,7 +222,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     px_per_m = float(W) / max(span, 1e-6)
     road_w = int(min(9, max(2, round(2.5 * px_per_m))))
     win_pad = 2.0 * cell_size_m  # a cell of slack: strokes clip at the edge
-    n_chips = 0
     prior_chip_cands: list[tuple[float, float, str, float, float]] = []
     for f in features:
         kind = str(f.get("kind") or "area")
@@ -315,7 +314,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         allpts = np.concatenate(quads)
         m = re.search(r"(\d+)$", str(f.get("fid") or ""))
         det_entries.append({
-            "fid": str(f.get("fid") or ""),
             "label": str(f.get("label") or "detection"),
             "quads": quads,
             "chip": (f"d{m.group(1)}" if m else f"d{len(det_entries) + 1}"),
@@ -441,7 +439,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     n_prior_chips = 0
     n_prior_unchipped = 0
     n_stacked = 0
-    prior_chips_drawn: list[dict] = []
     prior_chip_cands.sort(
         key=lambda t: (t[0] - W / 2.0) ** 2 + (t[1] - H / 2.0) ** 2)
     for cx_, cy_, digits, bw, bh, pfid in prior_chip_cands:
@@ -458,9 +455,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                 n_prior_unchipped += 1  # one stack slot per detection
             else:
                 de["stacked"].append(digits)
-                prior_chips_drawn.append(
-                    {"fid": pfid, "chip": digits, "stacked_under":
-                     de["chip"]})
                 n_stacked += 1
             continue
         _fits = not (pw > bw + 4 or ph > bh + 4)
@@ -485,9 +479,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                      paint_color("", kind="building"), 1, cv2.LINE_AA)
         _chip(bx0, by0, pw, ph, digits, th,
               paint_color("", kind="building"), tag_=("prior", str(pfid)))
-        prior_chips_drawn.append(
-            {"fid": pfid, "chip": digits,
-             **({"leader": True} if _lead is not None else {})})
         n_prior_chips += 1
 
     # Detections LAST: canvas-resolution cell fill (building fills can bury
@@ -496,7 +487,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     # the dN chip, and the stacked prior-fid pill beneath it.
     _tan = paint_color("", kind="building")
     stripe = ((np.add.outer(np.arange(H), np.arange(W)) // 4) % 3 == 0)
-    n_hatched = 0
     for de in det_entries:
         det_color = paint_color(de["label"], detected=True)
         cv2.fillPoly(rgb, de["quads"], det_color)
@@ -505,16 +495,13 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         overlap = (dmask > 0) & (bmask > 0)
         if overlap.any():
             rgb[overlap & stripe] = _tan
-            n_hatched += 1
-        n_chips += 1
         cpx, cpy = _w2p(de["cx"], de["cy"])
         chip = de["chip"]
         (tw, th), _ = cv2.getTextSize(chip, cv2.FONT_HERSHEY_SIMPLEX,
                                       _CHIP_FS, _CHIP_TH)
         bx0 = int(min(max(cpx - (tw + 8) / 2.0, 1), W - tw - 9))
         by0 = int(min(max(cpy - (th + 8) / 2.0, 1), H - th - 9))
-        _chip(bx0, by0, tw + 8, th + 8, chip, th, det_color,
-              tag_=("det", str(de["fid"])))
+        _chip(bx0, by0, tw + 8, th + 8, chip, th, det_color)
         for digits in de["stacked"]:
             (tw2, th2), _ = cv2.getTextSize(digits, cv2.FONT_HERSHEY_SIMPLEX,
                                             _CHIP_FS, _CHIP_TH)
@@ -662,22 +649,9 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         "sha256": hashlib.sha256(jp).hexdigest(),
         "kind": "map",
         "features_painted": int(sum(e["cells"] for e in counts.values())),
-        "detections_chipped": int(n_chips) - sum(
-            1 for t in _undrawn if t[0] == "det"),
-        "priors_chipped": int(n_prior_chips + n_stacked) - sum(
-            1 for t in _undrawn if t[0] == "prior"),
+        # a glyph the placement could not fit is counted out
+        "priors_chipped": int(n_prior_chips + n_stacked) - len(_undrawn),
         "priors_unchipped": int(n_prior_unchipped),
-        "chips_stacked": int(n_stacked),
-        "coresident_hatched": int(n_hatched),
-        # the ids actually READABLE off this image: a glyph the placement
-        # could not fit is counted out.
-        "prior_chips": [c for c in prior_chips_drawn
-                        if ("prior", str(c["fid"])) not in _undrawn],
-        "detection_chips": [
-            {"fid": de["fid"], "chip": de["chip"],
-             "xy": [round(de["cx"], 2), round(de["cy"], 2)]}
-            for de in det_entries
-            if ("det", str(de["fid"])) not in _undrawn],
         "renderer_version": MAP_RENDERER_VERSION,
         # what the caller handed over, so the record reads back as the
         # request that made it
@@ -688,9 +662,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         "center_xy": [round(cx, 2), round(cy, 2)],
         "context_m": round(span, 2),
         "world_window": [round(v, 2) for v in (x0, y0, x1, y1)],
-        "gsd_m_per_px": round(span / max(W, 1), 4),
-        # the delivered pixel grid
-        "side_px": int(W),
         "legend": legend,
         "classes": classes[:10],
         "marks_out_of_view": marks_out_of_view,

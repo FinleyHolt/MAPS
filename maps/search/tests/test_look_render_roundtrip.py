@@ -17,7 +17,7 @@ GROUND_Z = 10.0
 # the dashboard route (spec + verification), pinned by name.
 SPEC_KEYS = (
     "map_name", "center_fid", "center_label", "center_boundary", "marks",
-    "world_xy", "intended_xy", "pose_xy", "context_m",
+    "world_xy", "pose_xy", "context_m",
 )
 VERIFY_KEYS = ("sha256", "renderer_version", "renderer_env")
 

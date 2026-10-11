@@ -291,10 +291,10 @@ def render_candidate_crops(
     Returns one RECORD per crop (rank order), clamped to the 16-image server
     budget: ``{"jpeg": bytes}`` plus the resolved spec
     (``map_name/center_fid/center_label/center_boundary/marks/world_xy/
-    intended_xy/pose_xy/context_m``) plus the derived audit fields
-    (``sha256``, ``renderer_version``, ``edge_shift_m``, ``alt_m``,
-    ``upscale``, ``gsd_m_per_px``, ``world_window``, ``marked``,
-    ``identified``, ``outlined``, ``legend``, ``subject_in_window``,
+    pose_xy/context_m``) plus the derived audit fields
+    (``sha256``, ``renderer_version``,
+    ``gsd_m_per_px``, ``world_window``,
+    ``legend``, ``subject_in_window``,
     ``subject_centroid_in_window``, ``subject_on_data``,
     ``window_valid_frac``, ``marks_dropped``, ``marks_out_of_view``,
     ``marks_unbadged_in_frame``). The record minus ``jpeg`` IS the persisted
@@ -407,7 +407,6 @@ def render_candidate_crops(
             "center_boundary": req.get("center_boundary"),
             "marks": req.get("marks") or [],
             "world_xy": [round(true_x, 2), round(true_y, 2)],
-            "intended_xy": [round(ctr_x, 2), round(ctr_y, 2)],
             "pose_xy": [round(pose_x, 2), round(pose_y, 2)],
             "context_m": _ctx,
             **({"frame_up": req["frame_up"],
@@ -433,7 +432,7 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     / ``renderer_env`` say what a differing hash moved.
 
     Consumes ``{map_name, center_fid, center_label, center_boundary, marks,
-    world_xy, intended_xy, pose_xy, context_m}``; extra keys (a full manifest
+    world_xy, pose_xy, context_m}``; extra keys (a full manifest
     record) are ignored and every derived field is recomputed. Returns the
     full crop record ``{"jpeg": bytes, ...}`` or None (logged) on a
     validation/render failure."""
@@ -466,11 +465,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         return None
     true_x, true_y = float(wxy[0]), float(wxy[1])
     pose_x, pose_y = float(pxy[0]), float(pxy[1])
-    ixy = spec.get("intended_xy")
-    ctr_x, ctr_y = (
-        (float(ixy[0]), float(ixy[1]))
-        if isinstance(ixy, (list, tuple)) and len(ixy) == 2
-        else (pose_x, pose_y))
     half_ctx = _ctx / 2.0
     center_fid = str(spec.get("center_fid") or "")
     req = spec  # the mark/boundary reads below consume the spec directly
@@ -536,14 +530,8 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         "renderer_env": {"cv2": str(cv2.__version__),
                          "numpy": str(np.__version__)},
         "world_xy": [round(true_x, 2), round(true_y, 2)],
-        "intended_xy": [round(ctr_x, 2), round(ctr_y, 2)],
         "pose_xy": [round(pose_x, 2), round(pose_y, 2)],
-        # how far the edge-clamp moved the crop off its INTENDED center
-        "edge_shift_m": round(float(np.hypot(pose_x - ctr_x,
-                                             pose_y - ctr_y)), 2),
-        "alt_m": round(ground + half_ctx, 2),
         "context_m": _ctx,
-        "upscale": _up,
         "gsd_m_per_px": round((x1 - x0) / max(W, 1), 4),
         # the delivered pixel grid (it varies with the upscale)
         "side_px": int(W),
@@ -555,8 +543,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         # whose pixels: this run's own captures, or the bake's raster (the bench's camera)
         "source": "run" if imagery is not None else "bake",
         "world_window": [round(float(v), 2) for v in (x0, y0, x1, y1)],
-        "marked": False,
-        "outlined": [],
     }
     if spec.get("frame_up") is not None:
         meta["frame_up"] = [round(float(spec["frame_up"][0]), 4),
@@ -588,8 +574,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     target_px: tuple[float, float] | None = None
     target_label = ""
     neighbor_px: list[tuple[float, float]] = []
-    # ONLY the marks whose footprint actually reached the pixels.
-    outlined: list[dict] = []
 
     def _proj_poly(boundary):
         """World boundary verts -> the OPEN crop-px arcs that lie in frame.
@@ -660,9 +644,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
             target_px = (px, py)
             target_label = str(mk.get("label") or mfid)
             target_poly_px = _proj_poly(mk.get("boundary"))
-            if target_poly_px:
-                outlined.append({"fid": mfid, "label": target_label,
-                                 "is_target": True})
             legend.append({"digit": 2, "fid": mfid,
                            "label": target_label, "role": "target"})
         else:
@@ -672,10 +653,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
             neighbor_px.append((px, py))
             _neighbor_digits.append(None if _named_road else 0)
             neighbor_polys_px.append(_proj_poly(mk.get("boundary")))
-            if neighbor_polys_px[-1]:
-                outlined.append({"fid": mfid,
-                                 "label": str(mk.get("label") or ""),
-                                 "is_target": False})
             legend.append({"digit": 2 + len(neighbor_px),
                            "fid": mfid,
                            "label": str(mk.get("label") or mfid),
@@ -754,9 +731,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     meta["subject_on_data"] = (
         bool(validity0[_spy, _spx] > 0) if (_cin and validity0.size)
         else None)
-    meta["marked"] = bool(marks)
-    meta["identified"] = True
-    meta["outlined"] = outlined
     meta["legend"] = legend
     meta["marks_dropped"] = _dropped_marks
     meta["marks_out_of_view"] = _marks_out_of_view

@@ -60,7 +60,7 @@ def test_many_ids_fit_one_frame(ortho_dir):
     assert rec["marks_unbadged_in_frame"] == [], rec
     assert rec["marks_dropped"] == 0, rec
     assert len(rec["legend"]) == 5, rec["legend"]  # center + 4 context marks
-    assert rec["upscale"] == 1, rec  # 660 px native ships native
+    assert rec["side_px"] == 660, rec  # 660 px native ships native
 
 
 def test_a_window_that_covers_the_hull_frames_every_requested_point(ortho_dir):
@@ -110,7 +110,6 @@ def test_single_id_keeps_the_tight_crop(ortho_dir):
     # The identity workflow survives untouched: MIN window, x3, 450 px.
     rec = _render_one(ortho_dir, _req((100.0, 100.0)))
     assert rec["context_m"] == _MIN_M, rec["context_m"]
-    assert rec["upscale"] == 3, rec
     assert _img_side(rec) == LOOK_TARGET_PX, rec
     assert rec["legend"] == [{"digit": 1, "fid": "c0", "label": "car c0",
                               "role": "center"}], rec["legend"]
@@ -122,7 +121,6 @@ def test_mid_span_upscale_is_derived_not_moded(ortho_dir):
     rec = _render_one(ortho_dir, _req(
         (100.0, 100.0), marks_xy=[(88.0, 100.0), (112.0, 100.0)]))
     assert rec["context_m"] == 30.0, rec["context_m"]
-    assert rec["upscale"] == 2, rec
     assert _img_side(rec) == 600, rec
 
 
@@ -134,7 +132,6 @@ def test_budget_clamps_and_the_far_anchor_falls_off(ortho_dir):
     assert rec["context_m"] == _BUDGET_M, rec["context_m"]
     assert rec["marks_out_of_view"] == ["m0"], rec
     assert rec["subject_in_window"] is True, rec
-    assert rec["upscale"] == 1, rec
     assert _img_side(rec) == round(_BUDGET_M * 10), rec
 
 
@@ -188,7 +185,6 @@ def test_a_coarser_grid_buys_a_wider_window_for_the_same_pixels(
     wide = _render_one(coarse_ortho_dir, _req(
         (90.0, 100.0), marks_xy=[(540.0, 100.0)]))
     assert wide["context_m"] == budget_m, wide["context_m"]
-    assert wide["upscale"] == 1, wide
     assert _img_side(wide) == round(_BUDGET_M * 10), wide  # same pixels
     assert wide["subject_in_window"] is True, wide
 
@@ -199,15 +195,21 @@ def test_a_coarser_grid_buys_a_wider_window_for_the_same_pixels(
     assert _img_side(tight) == LOOK_TARGET_PX, tight
 
 
-def test_a_shape_too_big_for_the_frame_is_not_drawn_on_it(ortho_dir):
+def test_a_shape_too_big_for_the_frame_is_not_drawn_on_it(ortho_dir, monkeypatch):
     """The renderer half of the outline contract (the loop hands every footprint over;
     ``test_mission_loop`` pins that half)."""
+    from maps.perception.viz import mllm_overlay
+
+    seen = []
+    real = mllm_overlay.render_look_overlay
+    monkeypatch.setattr(mllm_overlay, "render_look_overlay",
+                        lambda *a, **kw: seen.append(kw) or real(*a, **kw))
     # A target whose footprint runs 80 m past the window on every side.
     req = _req((100.0, 100.0), target_xy=(104.0, 100.0))
     req["marks"][-1]["boundary"] = [[20.0, 20.0], [180.0, 20.0],
                                     [180.0, 180.0], [20.0, 180.0]]
     huge = _render_one(ortho_dir, req)
-    assert huge["outlined"] == [], huge["outlined"]
+    assert seen.pop()["target_poly_px"] is None
     # ...and it keeps its badge: the model is still told WHICH thing.
     assert [e["role"] for e in huge["legend"]] == ["center", "target"], huge
 
@@ -215,5 +217,5 @@ def test_a_shape_too_big_for_the_frame_is_not_drawn_on_it(ortho_dir):
     # or the assertion above passes on a renderer that outlines nothing.
     req["marks"][-1]["boundary"] = [[102.0, 98.0], [106.0, 98.0],
                                     [106.0, 102.0], [102.0, 102.0]]
-    fits = _render_one(ortho_dir, req)
-    assert [o["fid"] for o in fits["outlined"]] == ["tgt"], fits["outlined"]
+    _render_one(ortho_dir, req)
+    assert seen.pop()["target_poly_px"]

@@ -104,7 +104,6 @@ def test_the_budget_window_stays_inside_the_pixel_budget(ortho_dir):
     # ceiling, is what sized this window.
     assert rec["context_m"] == _BUDGET_M, rec["context_m"]
     w, h = _delivered_px(rec)
-    assert rec["upscale"] == 1, rec["upscale"]
     assert w * h <= LOOK_PIXEL_BUDGET_PX, (w, h, w * h)
     over_side = int(round((_BUDGET_M + 2.0) * 10))
     assert over_side * (over_side + 20) > LOOK_PIXEL_BUDGET_PX, over_side

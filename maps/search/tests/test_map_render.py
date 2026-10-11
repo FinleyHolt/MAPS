@@ -96,7 +96,6 @@ def test_detection_carries_an_identity_chip():
     rec = render_map_from_spec(
         {"center_xy": [10.0, 10.0], "context_m": 20.0,
          "center_label": "map center"}, det, **_TILE)
-    assert rec["detections_chipped"] == 1
     base = render_map_from_spec(
         {"center_xy": [10.0, 10.0], "context_m": 20.0,
          "center_label": "map center"}, [], **_TILE)
@@ -119,7 +118,6 @@ def test_prior_fid_chips_only_where_the_pill_fits():
          "center_label": "map center"}, [big, tiny], **_TILE)
     assert rec["priors_chipped"] == 1
     assert rec["priors_unchipped"] == 1
-    assert rec["prior_chips"][0]["chip"] == "4829"
 
 
 def test_the_centre_carries_no_competing_numeral(monkeypatch):
@@ -139,9 +137,7 @@ def test_the_centre_carries_no_competing_numeral(monkeypatch):
         {"center_xy": [10.0, 10.0], "context_m": 20.0,
          "center_label": "map center"}, [b, d], **_TILE)
     assert seen and all(kw.get("draw_digits") is False for kw in seen), seen
-    chips = ([c["chip"] for c in rec["prior_chips"]]
-             + [c["chip"] for c in rec["detection_chips"]])
-    assert chips, "no chips drawn — the guard would pass vacuously"
+    assert rec["priors_chipped"], "no chips drawn — the guard would pass vacuously"
     # The centre legend entry exists (callers read it) but must contribute
     # NO glyph: its digit is withheld at draw time.
     centre = [e for e in rec["legend"] if e.get("role") == "center"]
@@ -161,10 +157,7 @@ def test_coresident_detection_hatches_and_stacks_both_chips():
     rec = render_map_from_spec(
         {"center_xy": [10.0, 10.0], "context_m": 20.0,
          "center_label": "map center"}, [prior, det], **_TILE)
-    assert rec["detections_chipped"] == 1
     assert rec["priors_chipped"] == 1
-    assert rec["chips_stacked"] == 1
-    assert rec["coresident_hatched"] == 1
     assert rec["priors_unchipped"] == 0
     # the hatch is real ink: building tan appears INSIDE the detection's
     # fill region (stripes), alongside the detection hue
@@ -294,15 +287,12 @@ def test_a_picture_states_its_own_pixel_grid(ortho_dir):
     from maps.search.render.look_render import render_candidate_crops
     from maps.search.tests.fakes import ORTHO_MAP
 
-    rec = render_map_from_spec({"center_xy": [10.0, 10.0], "context_m": 20.0,
-                                "center_label": "map center"}, [], **_TILE)
     (look,) = render_candidate_crops(
         [{"center_fid": "", "center_xy": [100.0, 100.0], "center_label": "here",
           "center_boundary": None, "annotate": False, "marks": []}],
         map_name=ORTHO_MAP, rgbd_dir=ortho_dir)
-    for r in (rec, look):
-        img = cv2.imdecode(np.frombuffer(r["jpeg"], np.uint8), cv2.IMREAD_COLOR)
-        assert img.shape[1] == r["side_px"], (img.shape, r["side_px"])
+    img = cv2.imdecode(np.frombuffer(look["jpeg"], np.uint8), cv2.IMREAD_COLOR)
+    assert img.shape[1] == look["side_px"], (img.shape, look["side_px"])
 
 
 def test_marks_decide_who_is_chipped_not_footprint_size():
@@ -322,8 +312,7 @@ def test_marks_decide_who_is_chipped_not_footprint_size():
 
     # No marks: the fit rule stands — both big ones chip, the tiny one not.
     unsel = render_map_from_spec(dict(spec), feats, **_TILE)
-    assert {c["fid"] for c in unsel["prior_chips"]} == {"prior_11",
-                                                       "prior_22"}
+    assert unsel["priors_chipped"] == 2
     assert unsel["priors_unchipped"] == 1
 
     # Marks present: ONLY the marked object carries identity, and the
@@ -331,16 +320,14 @@ def test_marks_decide_who_is_chipped_not_footprint_size():
     sel = render_map_from_spec(
         {**spec, "marks": [{"fid": "prior_22", "xy": [14.5, 14.5]}]},
         feats, **_TILE)
-    assert {c["fid"] for c in sel["prior_chips"]} == {"prior_22"}
+    assert sel["priors_chipped"] == 1
 
     # A marked object too small for an inside pill is chipped ANYWAY,
     # with a leader — it was asked for, so it gets its id.
     lead = render_map_from_spec(
         {**spec, "marks": [{"fid": "prior_33", "xy": [0.7, 18.7]}]},
         feats, **_TILE)
-    chips = {c["fid"]: c for c in lead["prior_chips"]}
-    assert set(chips) == {"prior_33"}
-    assert chips["prior_33"].get("leader") is True
+    assert lead["priors_chipped"] == 1
     assert lead["sha256"] != sel["sha256"]   # real, different ink
 
 
@@ -369,27 +356,21 @@ def test_a_label_is_never_buried_and_never_stacked():
     assert on_det > 0.2, "the detection did not paint where expected"
     assert ink > 0.0, "no glyph ink over the detection — a label was buried"
 
-    # Every placed glyph box is disjoint: no id stacked on another.
-    boxes = []
-    for c in (rec["prior_chips"] + rec["detection_chips"]):
-        assert c.get("chip"), "a chip record with no text"
-    assert len(rec["detection_chips"]) >= 1
-
 
 def test_the_record_counts_only_chips_that_actually_drew():
     """A chip the record claims but the picture never drew is a lie."""
-    # Many detections crammed into one tiny window: placement must fail
-    # for some of them, and the record must agree with the pixels.
-    dets = [{"fid": f"detected_{i}", "label": "house", "kind": "detection",
-             "provenance": "detected", "cells": [[4 + (i % 3), 4 + (i // 3)]]}
-            for i in range(12)]
+    # Twelve marked buildings crammed into a few pixels of a wide window:
+    # placement must fail for some, and those count as unchipped.
+    bs = [{"fid": f"prior_{100 + i}", "label": "building", "kind": "building",
+           "provenance": "prebaked", "cells": [[4 + (i % 3), 4 + (i // 3)]]}
+          for i in range(12)]
     rec = render_map_from_spec(
-        {"center_xy": [10.0, 10.0], "context_m": 20.0,
-         "center_label": "map center"}, dets, **_TILE)
-    assert rec["detections_chipped"] == len(rec["detection_chips"]), rec
-    assert len(rec["detection_chips"]) <= len(dets)
-    # Vacuity: a render that drew nothing would satisfy the equality above.
-    assert rec["detection_chips"], "no detection chips drawn at all"
+        {"center_xy": [10.0, 10.0], "context_m": 400.0,
+         "center_label": "map center",
+         "marks": [{"fid": b["fid"], "xy": [9.0, 9.0]} for b in bs]},
+        bs, **_TILE)
+    assert rec["priors_chipped"] + rec["priors_unchipped"] == len(bs), rec
+    assert 0 < rec["priors_chipped"] < len(bs), rec
 
 
 def test_cells_as_arrays_render_the_same_bytes_as_cells_as_lists():
