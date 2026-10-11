@@ -39,7 +39,8 @@ re-flies exactly those episodes once the cause is fixed.
 Outputs (under ``--out-root``, default ``output/citynav_fullset``):
     episodes.jsonl  one row per attempt (status ok | timed_out | infra;
                     ``workdir`` relative to this directory)
-    summary.txt     live human-readable aggregate (SR, coverage, ETA)
+    summary.txt     ``analysis.run_report`` over the root, refreshed after
+                    every attempt, under the driver's infra lines
     driver.log      orchestrator log
     w<id>/          per-worker run-root: server.log (the warm child's
                     stderr), and one
@@ -51,6 +52,8 @@ from __future__ import annotations
 
 
 import argparse
+import contextlib
+import io
 import json
 import logging
 import os
@@ -175,14 +178,6 @@ def _enumerate_split(split: str) -> list[str]:
 # Sentinel pushed onto a runner's stdout queue when its stdout closes
 # (the child process exited). Distinct from queue-empty (still running).
 _RUNNER_EOF = object()
-
-
-def _success_criterion() -> str:
-    """The criterion SR is scored on, read at call time: the bench's bridge
-    rebinds it (ring for CityNav, shape for Cal City)."""
-    from benchmarks.citynav import paths  # noqa: PLC0415
-
-    return paths.SUCCESS_CRITERION
 
 
 # The native thread pools a warm runner starts: one thread each for BLAS
@@ -556,10 +551,6 @@ class Driver:
         self._recent: deque[tuple[str | None, str]] = deque(maxlen=ABORT_WINDOW)
         self._abort: str | None = None
         self._t_start = time.monotonic()
-        # Rows THIS driver session appended — the only honest numerator
-        # for the session-throughput line (all-time count over session
-        # elapsed once read 458 ep/h on a resumed run).
-        self._session_done = 0
         # Wall-time budget: a continuous run's standard stop condition.
         # 0 = run until the selection is exhausted (or --limit's
         # run-count budget). >0 = stop claiming new episodes once this
@@ -570,7 +561,6 @@ class Driver:
         self._deadline = (
             self._t_start + self.max_wall_s if self.max_wall_s > 0 else None
         )
-        self._split_size = 0
         self.log(f"split={self.split} sample_seed={self.sample_seed}")
 
     # -- logging / results -------------------------------------------------
@@ -584,7 +574,6 @@ class Driver:
 
     def _append_result(self, row: dict) -> None:
         episodes.append_row(self.out_root, row)
-        self._session_done += 1
         # Dispatch-time invariant: a claim must never return an episode
         # whose qualifying row has been written this run. The write and
         # the done-cache add are one step from a claimer's view (claims
@@ -976,98 +965,33 @@ class Driver:
     # -- aggregate / summary ----------------------------------------------
 
     def _write_summary(self) -> None:
-        # Selection is the SHARED rule (analysis.rows.pick_attempts): an
-        # episode's result is its FIRST fully complete attempt, ordered by
-        # attempt START time. Last-row-wins scored whichever replicate
-        # FINISHED last -- episodes.jsonl appends on completion, and under
-        # the pre-f22e8fd dispatch which replicate that was came down to
-        # how long each one happened to fly. This is the line that moved
-        # citynav_train_seen_2026-07-15_12-45-54 from SR_eff 2/10 to 3/10.
-        #
-        # Infra rows are not real attempts: the episode never got a fair
-        # run, so it is re-queued. The reader drops them from the scored
-        # set -- an infra casualty must not depress SR_eff as a false zero
-        # -- and the audit counts come off the same parse.
-        attempts, stats = _rows.read_attempts([self.episodes_file], tier="ledger")
-        rows = [a.row for a in _rows.pick_attempts(attempts).values()]
-        # Audit count, not a score: break the excluded set down by cause so
-        # a systematic instant-failure (which shrinks the SR denominator
-        # while stalling coverage) is loud instead of a quiet exclusion.
-        infra_causes: dict[str, int] = {}
-        for _r in _rows.iter_json_rows(self.episodes_file):
-            if _r.get("status") == episodes.STATUS_INFRA:
-                _c = str(_r.get("error") or "?")
-                infra_causes[_c] = infra_causes.get(_c, 0) + 1
-        n = len(rows)
-        sr = [
-            float(m["SR"])
-            for r in rows
-            for m in [_rows.metrics(r)]
-            if isinstance(m.get("SR"), (int, float))
-        ]
-        osr = [
-            float(m["OSR"])
-            for r in rows
-            for m in [_rows.metrics(r)]
-            if isinstance(m.get("OSR"), (int, float))
-        ]
-        ne = [
-            float(m["NE"])
-            for r in rows
-            for m in [_rows.metrics(r)]
-            if isinstance(m.get("NE"), (int, float))
-        ]
-        n_succ = sum(1 for x in sr if x >= 1)
-        n_pred = len(sr)
-        elapsed_h = (time.monotonic() - self._t_start) / 3600.0
+        """``summary.txt``: the driver's own lines (infra by cause, persistent
+        infra, an abort) above ``analysis.run_report.report`` over the root,
+        so the live view scores by the readers' one SR rule."""
+        from benchmarks.citynav.analysis import run_report  # noqa: PLC0415
+
+        infra = Counter(str(r.get("error") or "?")
+                        for r in _rows.iter_json_rows(self.episodes_file)
+                        if r.get("status") == episodes.STATUS_INFRA)
         lines = [
-            "full-set continuous benchmark",
-            f"updated: {time.strftime('%Y-%m-%d %H:%M:%S')}",
-            f"criterion: {_success_criterion()}",
             f"split: {self.split}   workers: {self.workers}   "
             f"episode_cap: {self.episode_timeout_s}s",
-            f"wall budget: {self.max_wall_s}s "
-            f"(elapsed {time.monotonic() - self._t_start:.0f}s)"
-            if self.max_wall_s > 0
-            else "",
-            "",
-            f"coverage:   {n} / {self._split_size} episodes "
-            f"({100 * n / self._split_size:.1f}%)"
-            if self._split_size
-            else f"coverage: {n}",
-            f"with pred:  {n_pred}   no pred: {n - n_pred}",
-            f"infra (re-queued, not scored): {stats.infra}",
-            "  by cause: "
-            + ", ".join(f"{c}:{k}" for c, k in sorted(infra_causes.items(), key=lambda x: -x[1]))
-            if infra_causes
-            else "",
-            f"!! {infra_causes.get('no_prediction_unclassified', 0)} unrecognized instant "
-            "failures excluded — investigate before trusting coverage"
-            if infra_causes.get("no_prediction_unclassified", 0) > max(2, n // 50)
-            else "",
+            f"infra (re-queued, not scored): {infra.total()}"
+            + ("  by cause: " + ", ".join(f"{c}:{k}" for c, k in infra.most_common())
+               if infra else ""),
             self._persistent_infra(self._selection),
             f"!! ABORTED: {self._abort}" if self._abort else "",
-            f"SR_eff:     {n_succ}/{n} = {n_succ / n:.4f}" if n else "SR_eff: -",
-            f"SR(w/pred): {n_succ}/{n_pred} = {n_succ / n_pred:.4f}"
-            if n_pred
-            else "SR(w/pred): -",
-            f"OSR:        {sum(osr) / len(osr):.4f}" if osr else "OSR: -",
-            f"mean_NE:    {sum(ne) / len(ne):.2f} m "
-            f"(straight line from the final commit to the goal; no path term)"
-            if ne
-            else "mean_NE: -",
-            f"throughput: {self._session_done / elapsed_h:.2f} ep/h "
-            f"(this driver session: {self._session_done} rows)"
-            if elapsed_h > 0
-            else "",
         ]
-        if self._split_size and n < self._split_size and n > 0 and elapsed_h > 0:
-            eta_h = (self._split_size - n) / (n / elapsed_h)
-            lines.append(
-                f"ETA to full coverage: ~{eta_h:.1f} h "
-                f"({(self._split_size - n)} episodes left)"
-            )
-        self.summary_file.write_text("\n".join(x for x in lines if x != "") + "\n")
+        buf = io.StringIO()
+        # Under the log lock: redirect_stdout is process-wide, and log() is
+        # the driver's only other stdout writer.
+        with _log_lock, contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            try:
+                run_report.report(self.out_root, allow_partial=True)
+            except SystemExit as exc:  # no scored row yet
+                print(exc)
+        text = "\n".join(x for x in lines if x) + "\n" + buf.getvalue().lstrip("\n")
+        self.summary_file.write_text(text)
 
     # -- main loop ---------------------------------------------------------
 
@@ -1182,7 +1106,6 @@ class Driver:
     def _run(self) -> int:
         episodes = self._select_episodes()
         self._selection = episodes
-        self._split_size = len(episodes)
         missing = _missing_block_assets(episodes)
         if missing:
             self.log(

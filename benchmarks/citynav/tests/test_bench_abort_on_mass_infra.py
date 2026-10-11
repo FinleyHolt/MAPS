@@ -75,7 +75,7 @@ def test_a_healthy_run_never_aborts(driver) -> None:
     d = driver()
     for i in range(200):
         d._append_result(_infra_row(i) if i % 8 == 0 else _scored_row(i))
-    assert d._session_done == 200, "the fixture stopped appending"
+    assert len(d.episodes_file.read_text().splitlines()) == 200
     assert d._abort is None, f"a healthy run aborted: {d._abort}"
     assert d._next_claimed_episode(0) is not None
 
@@ -85,7 +85,6 @@ def test_episode_timeouts_are_never_mistaken_for_infra(driver) -> None:
     d = driver()
     for i in range(bf.ABORT_WINDOW * 3):
         d._append_result(_timeout_row(i))
-    assert d._session_done == bf.ABORT_WINDOW * 3
     assert not any(bf._infra_casualty(r) for r in [_timeout_row(0)])
     assert d._abort is None, f"an all-timeout run was aborted as infra: {d._abort}"
 

@@ -23,7 +23,6 @@ def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         d.episodes_file = root / "episodes.jsonl"
         d.driver_log = root / "driver.log"
         d.summary_file = root / "summary.txt"
-        d._session_done = 0
         d._dispatch_lock = threading.Lock()
         d._done_cache = set()
         d._in_flight = set()
@@ -41,7 +40,6 @@ def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         d.allowlist_path = None
         d.max_infra_attempts = 3
         d._infra_errors = {}
-        d._split_size = 0
         d._t_start = time.monotonic()
         return d
 
