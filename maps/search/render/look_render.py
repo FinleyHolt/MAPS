@@ -608,9 +608,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     _dropped_marks = 0
     _marks_out_of_view: list[str] = []
     _marks_unbadged_in_frame: list[str] = []
-    _place_labels: list = []
-    _seen_lab: set = set()
-    _neighbor_digits: list = []
     for mk in (marks or []):
         mxy = mk.get("xy") if isinstance(mk, dict) else None
         if not (isinstance(mxy, (list, tuple)) and len(mxy) == 2):
@@ -630,14 +627,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
                     _marks_out_of_view.append(_mof)
             continue
         mfid = str(mk.get("fid") or "")
-        # Named places on the photograph: ROADS only (a label on a building
-        # would cover the evidence pixels), one label per NAME.
-        _lab = str(mk.get("label") or "").strip()
-        _named_road = (str(mk.get("kind") or "") == "road" and _lab
-                       and _lab != mfid)
-        if _named_road and _lab not in _seen_lab:
-            _seen_lab.add(_lab)
-            _place_labels.append((float(px), float(py), _lab))
         if mfid and mfid == center_fid:
             continue  # the center is already the star of this crop
         if bool(mk.get("is_target")) and target_px is None:
@@ -651,29 +640,11 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
                 _dropped_marks += 1
                 continue
             neighbor_px.append((px, py))
-            _neighbor_digits.append(None if _named_road else 0)
             neighbor_polys_px.append(_proj_poly(mk.get("boundary")))
             legend.append({"digit": 2 + len(neighbor_px),
                            "fid": mfid,
                            "label": str(mk.get("label") or mfid),
                            "role": "context"})
-    # Resolve the ordinal sequence: named roads take None, everything else
-    # takes the next digit, so the legend and the drawn badges count the
-    # same way. Neighbours start at 3 (1 = centre, 2 = target), as the
-    # overlay counts.
-    _seq = 2
-    _ctx_rows = [_le for _le in legend if _le.get("role") == "context"]
-    for _i, _slot in enumerate(_neighbor_digits):
-        _le = _ctx_rows[_i] if _i < len(_ctx_rows) else None
-        if _slot is None:
-            # Identified by NAME: no ordinal drawn or listed.
-            if _le is not None:
-                _le["digit"] = None
-            continue
-        _seq += 1
-        _neighbor_digits[_i] = _seq
-        if _le is not None:
-            _le["digit"] = _seq
 
     try:
         jp = render_look_overlay(
@@ -688,9 +659,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
             # the pixels really are north-up.
             band_text=("N up" if _rotM is None
                        else f"up {round(up_bearing_deg(_fup)) % 360} deg"),
-            # a named road is identified by its name, so it takes no ordinal
-            neighbor_digits=_neighbor_digits,
-            place_labels=_place_labels,
         )
     except Exception as exc:  # noqa: BLE001
         # A crop whose subject cannot be identified is worse than no crop,

@@ -2,8 +2,8 @@
 
 ``render_look_overlay`` draws each marked object's recorded footprint as an
 achromatic outline (white stroke over a dark halo, no fill, so the colour the
-reasoner reads stays untouched), binds a numbered badge to every mark, adds
-optional named-place labels, and returns JPEG bytes. The look and map
+reasoner reads stays untouched), binds a numbered badge to every mark, and
+returns JPEG bytes. The look and map
 renderers (``maps/search/render``) are its callers; the digit -> fid legend
 lives in their tool text.
 """
@@ -41,8 +41,6 @@ def render_look_overlay(
     band_text: str = "N up",
     draw_digits: bool = True,
     outline_marks: bool = True,
-    place_labels: "Sequence[tuple[float, float, str]] | None" = None,
-    neighbor_digits: "Sequence[int | None] | None" = None,
 ) -> bytes:
     """Identify the center fid car (and optionally a target / neighbors) on a
     look crop WITHOUT occluding any car's pixels, and return JPEG bytes.
@@ -220,20 +218,12 @@ def render_look_overlay(
     _digit = 3
     for _i, nb in enumerate(neighbor_px or []):
         if isinstance(nb, (tuple, list)) and len(nb) == 2:
-            # An explicit None means this mark is identified some OTHER
-            # way -- a named road carries its name -- so it takes no
-            # ordinal. Two identity glyphs on one object compete: the
-            # centre badge beat the fid chip on 17 of 18 probe items.
-            _d = (neighbor_digits[_i]
-                  if neighbor_digits is not None and _i < len(neighbor_digits)
-                  else _digit)
             specs.append({"x": float(nb[0]), "y": float(nb[1]),
                           "poly": _nb_polys[_i] if _i < len(_nb_polys)
                           else None,
                           "thick": 1,
-                          "digit": _d if draw_digits else None})
-            if _d is not None:
-                _digit = int(_d) + 1
+                          "digit": _digit if draw_digits else None})
+            _digit += 1
     # draw lowest-priority first so the center lands on top; badges after
     # all outlines so leader/crowding sees every mark.
     for sp in reversed(specs):
@@ -280,51 +270,6 @@ def render_look_overlay(
             continue
         ax_, ay_ = sp["anchor"][2], sp["anchor"][3]
         _badge(sp["anchor"][0], sp["anchor"][1], ax_, ay_, sp["digit"])
-
-    # NAMED PLACES, drawn on the photograph. The cue is written in street
-    # names -- "the house on Quezon Avenue, east of 85th Street" -- and a
-    # crop that carries only ordinal badges makes the model leave the
-    # image for the row table to find out WHICH road it is looking at. A
-    # road label occludes nothing the lasso exists to protect: the
-    # evidence being examined is the building, not the asphalt.
-    #
-    # Placed after the marks so a name never covers an id, and skipped on
-    # collision rather than stacked -- an unnamed road is still findable
-    # by position, an unreadable badge names nothing.
-    for _lx, _ly, _ltxt in (place_labels or []):
-        _t = str(_ltxt)[:22]
-        (_tw, _tht), _ = cv2.getTextSize(_t, _LABEL_FONT, 0.6, 1)
-        _pw, _ph = _tw + 8, _tht + 8
-        # A road's own BADGE already sits on this point, so the label has
-        # to step off it -- centred, it collided every time and no name
-        # ever drew. Same least-crowded search the badge uses, along the
-        # road's own directions first.
-        _best = None
-        for _ox, _oy in ((0, 0), (0, 34), (0, -34), (70, 0), (-70, 0),
-                         (0, 60), (0, -60), (120, 0), (-120, 0)):
-            _cx0 = int(min(max(_lx + _ox - _pw / 2.0, 1), w - _pw - 1))
-            _cy0 = int(min(max(_ly + _oy - _ph / 2.0, 1), h - _ph - 1))
-            _cbb = (_cx0, _cy0, _cx0 + _pw, _cy0 + _ph)
-            _crowd = 0.0
-            for ob in placed:
-                _ix = max(0, min(_cbb[2], ob[2]) - max(_cbb[0], ob[0]))
-                _iy = max(0, min(_cbb[3], ob[3]) - max(_cbb[1], ob[1]))
-                _crowd += _ix * _iy
-            if _best is None or _crowd < _best[0]:
-                _best = (_crowd, _cbb)
-            if _crowd == 0:
-                break
-        if _best is None or _best[0] > 0:
-            continue                      # genuinely no room: skip, never stack
-        _bb = _best[1]
-        _x0, _y0 = _bb[0], _bb[1]
-        placed.append(_bb)
-        cv2.rectangle(canvas, (_x0, _y0), (_x0 + _pw, _y0 + _ph),
-                      (250, 250, 250), -1)
-        cv2.rectangle(canvas, (_x0, _y0), (_x0 + _pw, _y0 + _ph),
-                      (0, 0, 0), 1, cv2.LINE_AA)
-        cv2.putText(canvas, _t, (_x0 + 4, _y0 + _tht + 4), _LABEL_FONT,
-                    0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
     # Minimal band: ONLY the tiny orientation strip ("N up", or the
     # caller's true frame-up when the image is rotated) — all naming lives
