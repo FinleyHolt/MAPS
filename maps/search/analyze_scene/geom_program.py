@@ -86,129 +86,32 @@ def _attach_color_column(items, canon):
     return out
 
 
-# Per-op signatures appended to an op's ProgramError (``; signature: ...``).
-# The analyze path cuts each error at that marker, but the marker still
-# decides where the repeated-error escalation's appended facts are cut, and
-# a grounding find's error is served whole, so the suffix bytes stay.
-_OP_SIGNATURE = {
-    "stratum": ("stratum{items, tier} -- a find's own match tier served as "
-                "a set: tier is exact (the rows that ARE the queried "
-                "thing), tagged (the tag-carriers), or fuzzy (the "
-                "word-sharers). A view: input order kept, nothing else "
-                "dropped, the full set stays live behind its handle."),
-    "find": ("find([query]) -- SEARCH the world-state: "
-             "query=fuzzy free text over each row's name + tags (priors) or "
-             "detector class (detections); returns THE MATCH SET best-first "
-             "(len = the match count; sub-threshold rows stay out -- a "
-             "query-less find browses the full surface). Match quality is "
-             "tiered-lexical, best-first: an exact name, then the full "
-             "MULTI-WORD query phrase word-bounded inside the name, then "
-             "an exact tag hit (a key=value pair, or the whole query equal "
-             "to one tag key/value), then token/typo fuzz -- a single-word "
-             "query scores names only through the fuzz band (the word "
-             "inside a longer proper name is a mention, not a hit), so its "
-             "exact tag hit outranks any name mention. A NAME that hits "
-             "answers alone: the lesser tiers are cut, and the set of its "
-             "ways IS the street -- a VIEW of them, like dict.keys(): it "
-             "re-reads the world, so len() grows as flights fold ground "
-             "in, and it does not subscript, because ties have no first. "
-             "list() freezes it. A key=value "
-             "query matches tag keys AND values; the literal UPPERCASE token OR "
-             "separates alternatives (scored as the max over them)."),
-    "crossings": ("crossings(refs) -- CONSTRUCT the places two features MEET. "
-                  "refs is EXACTLY TWO elements, each a bare fid, an 'rN', a "
-                  "[fid,...] list (one road is routinely several ways -- pass "
-                  "them all), or {ref:..., as:'label'}. Returns ONE ROW PER "
-                  "DISTINCT CROSSING, each carrying its own fid (its [x, y] "
-                  "token) and its own xy, ordered west-to-east; chain "
-                  "compare/score_by/filter_items on them like any rows. Two "
-                  "features MEET where their shapes TOUCH, and two touches "
-                  "at two places are two crossings. Never a "
-                  "centroid over several -- a centre between crossings is at "
-                  "none of them. If they never meet the op ERRORS with their "
-                  "measured nearest approach"),
-    "compare": ("compare(items, [refs], [frame]) -- items a candidate LIST (a "
-                "narrowed rN); at least one of refs/frame present. "
-                "refs: a LIST whose elements are each a bare fid, an 'rN' that "
-                "resolved to ONE row, an [x,y] literal, {ref:..., as:'label'}, "
-                "or {ref:[fid,...], as:'label'} = the union of the named "
-                "masks as ONE ref ('distance to <label>' = the gap to the "
-                "nearest member; center/bearing from the union's "
-                "area-weighted centroid). "
-                "ATTACHES each ref's SHAPE-natural columns onto every item "
-                "row (input fields PASS THROUGH). A POINT/POLYGON ref, four "
-                "columns: 'distance to <ref>' = the "
-                "FOOTPRINT GAP item-mask to ref-mask (0.0 = overlap OR touch -- "
-                "contact, not necessarily 'inside'; a footprint-less mask "
-                "measures from its centroid); 'facing <ref>' = a compass "
-                "WORD (north, southeast) for the direction item->ref along "
-                "that min-gap vector -- which way the row FACES the ref, "
-                "already inverted, no arithmetic to do (ABSENT on contact -- "
-                "no local direction exists); 'center distance to "
-                "<ref>' = center-to-center; 'bearing from <ref>' = centroid->"
-                "centroid compass bearing ref->item (defined on contact too; "
-                "absent only when the centroids coincide). A ref that is "
-                "SEVERAL DISJOINT PLACES under one name serves the two gap "
-                "columns and NEITHER center column -- a centre over two ways "
-                "at opposite ends of the map is at neither of them. "
-                "A LINE ref "
-                "(a fid with a stored centerline, or an [[x,y],...] polyline "
-                "literal), TWO columns: 'along <ref>' (arc m from its "
-                "end0_xy end) + 'distance to <ref>' (unsigned lateral m off "
-                "that chart) -- its own chart, not hull-gap columns. A ref whose "
-                "mask contains the whole surface window serves the ONE "
-                "containment fact instead of stamping zero distance on every "
-                "row (center distance / bearing still attach per-row). "
-                "Bearings in compass degrees, 0=N, clockwise. Column label per "
-                "ref: a bare fid keeps that fid ('distance to prior_3'); an "
-                "rN resolving to ONE surface row uses that row's FID (never "
-                "r0); a bare "
-                "[x,y] literal labels the family 'xy' ('distance to xy') "
-                "and {ref:[x,y], as:'label'} names those "
-                "columns 'distance to <label>'/... instead (TWO bare [x,y] "
-                "literals in "
-                "one compare is an error -- label each); an rN holding "
-                "constructed geometry (a fitted axis, a corner point) keeps "
-                "its handle token (r0 -> 'distance to r0'); your as:'label' "
-                "always "
-                "overrides. "
-                "frame takes EXACTLY ONE form: reference:'auto' (no declared view -- "
-                "the pool's own axis), {along:<line fid|[[x,y],...]>, [toward:<fid|"
-                "[x,y]|compass>]} (THE CHART: travel the line; 'along <ref>' + the "
-                "side columns follow the travel), or {toward:<fid|[x,y]|compass>} "
-                "(the viewer look: stand at the pool center, look at toward). "
-                "as:'label' names the columns."
-                " Every geometry slot is CLASS-BLIND; toward also takes "
-                "north|south|east|west. The chart attaches 'along <ref>' "
-                "(arc meters, exact on bends) + 'left of/right of <ref>' "
-                "(lateral meters on that side of the travel; toward "
-                "declares it, else undeclared) + 'distance to <ref>' "
-                "(either side); the viewer look attaches each ref's own "
-                "left/right/ahead/behind of the view center. "
-                "Columns (label rule as refs): 'left of/right of/ahead "
-                "of/behind <ref>' meters — the column PRESENT names the "
-                "side (0.0 on-axis lands right/ahead). Read the "
-                "one-line frame receipt (the view "
-                "check) before counting. An ATTACH, not a sort (input order "
-                "preserved)"),
-    "score_by": ("score_by(items, emphasis) -- items a LIST of dicts; THE sort: "
-                 "orders by EXACTLY the columns you weight. emphasis is a "
-                 "REQUIRED non-empty list [{key:<column>, w:<signed number>}] "
-                 "naming EVERY discriminator that should count and its sign "
-                 "(NEGATIVE=lower-raw-is-better e.g. a distance, POSITIVE="
-                 "higher-raw-is-better e.g. a color_<word> column); nothing is "
-                 "auto-added. The composite is the w-weighted sum of each "
-                 "key's normalized value (spatial keys min-max to [0,1] over "
-                 "the rows carrying them; color_<word>/name_match centered on "
-                 "their 0.5 neutral; a missing/flat key contributes its "
-                 "neutral) and rank-0 is the LARGEST composite -- w>0 ranks "
-                 "larger raw values first, w<0 ranks smaller raw values "
-                 "first. Single-key sort: emphasis=[{key:<k>, w:-1|1}]; "
-                 "abs:true on an element reads |value| (a SIGNED column's "
-                 "magnitude: sort 'distance to <ref>' -- nearest-the-"
-                 "axis-first is {key:'distance to <ref>', w:-1})."),
-    "filter_items": "filter_items(items, key, [op], [value]) -- items a LIST, key a SCALAR field",
-}
+# An op's ProgramError ends with "; signature: <op>": the analyze path cuts
+# the error there, dropping anything appended after it (the repeated-error
+# escalation's live-surface facts), and the op name keeps one op's errors
+# their own repeated-error class. A grounding find's error is served whole,
+# so find's marker carries its text.
+_FIND_SIGNATURE = ("find([query]) -- SEARCH the world-state: "
+                   "query=fuzzy free text over each row's name + tags (priors) or "
+                   "detector class (detections); returns THE MATCH SET best-first "
+                   "(len = the match count; sub-threshold rows stay out -- a "
+                   "query-less find browses the full surface). Match quality is "
+                   "tiered-lexical, best-first: an exact name, then the full "
+                   "MULTI-WORD query phrase word-bounded inside the name, then "
+                   "an exact tag hit (a key=value pair, or the whole query equal "
+                   "to one tag key/value), then token/typo fuzz -- a single-word "
+                   "query scores names only through the fuzz band (the word "
+                   "inside a longer proper name is a mention, not a hit), so its "
+                   "exact tag hit outranks any name mention. A NAME that hits "
+                   "answers alone: the lesser tiers are cut, and the set of its "
+                   "ways IS the street -- a VIEW of them, like dict.keys(): it "
+                   "re-reads the world, so len() grows as flights fold ground "
+                   "in, and it does not subscript, because ties have no first. "
+                   "list() freezes it. A key=value "
+                   "query matches tag keys AND values; the literal UPPERCASE token OR "
+                   "separates alternatives (scored as the max over them).")
+_SIGNED_OPS = ("stratum", "crossings", "compare", "score_by", "filter_items")
+
 
 # _color_of reads a color token from a class label; _color_fields prefers the
 # perceived color on semantic_attributes and falls back to it. A row without
@@ -1576,8 +1479,9 @@ class _Run:
         self.op = None
 
     def sig(self) -> str:
-        sig = _OP_SIGNATURE.get(self.op)
-        return f"; signature: {sig}" if sig else ""
+        if self.op == "find":
+            return f"; signature: {_FIND_SIGNATURE}"
+        return f"; signature: {self.op}" if self.op in _SIGNED_OPS else ""
 
     def avail(self, kind: str) -> str:
         """The run's live fid census (bounded) for an error, keyed by the

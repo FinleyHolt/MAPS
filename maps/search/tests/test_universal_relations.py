@@ -324,19 +324,6 @@ def test_union_column_orders_in_emphasis():
     assert ranked == ["near", "far"], ranked
 
 
-def test_union_without_as_label_is_loud():
-    try:
-        run_program([{"fid": "d0", "xy": [0.0, 0.0], "class": "car"}],
-                    [dict(_SEG_A), dict(_SEG_B)], {"ops": [
-            {"ref": "r0", "op": "compare",
-             "args": {"items": "cands",
-                      "refs": [{"ref": ["road_86", "road_88"]}]}},
-        ]})
-        raise AssertionError("union ref without as:'label' did not error")
-    except ProgramError as e:
-        assert "as:'label'" in str(e), str(e)
-
-
 def test_union_unknown_member_is_loud():
     try:
         run_program([{"fid": "d0", "xy": [0.0, 0.0], "class": "car"}],

@@ -4,7 +4,6 @@ from __future__ import annotations
 import pytest
 
 from maps.search.analyze_scene.geom_program import (
-    _OP_SIGNATURE,
     compact_results,
     run_program,
 )
@@ -81,15 +80,6 @@ def test_labeled_xy_literal_is_the_named_columns_path():
     row = out["results"]["r1"][0]
     assert "distance to gate" in row and "distance to corner" in row
     assert "distance to xy" not in row
-
-
-# ---------------------------------------------------------------------------
-# F5: emphasis sign semantics served everywhere, matching the executor
-# ---------------------------------------------------------------------------
-
-def test_sign_semantics_sentence_on_every_scored_surface():
-    assert "rank-0 is the LARGEST composite" in _OP_SIGNATURE["score_by"]
-    assert "w>0 ranks larger raw values first" in _OP_SIGNATURE["score_by"]
 
 
 # ---------------------------------------------------------------------------
