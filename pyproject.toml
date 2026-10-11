@@ -27,8 +27,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The CityNav OSM prior bake (benchmarks.citynav.bake.city).
-bake = ["osmnx", "geopandas", "certifi"]
 # Reading a camera recording (benchmarks.flight.recorded_ring).
 recording = ["mcap"]
 dev = ["pytest==9.1.1", "ruff==0.17.0", "mcap"]

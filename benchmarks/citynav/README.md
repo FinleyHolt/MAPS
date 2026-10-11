@@ -23,7 +23,7 @@ PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh
 |---|---|---|
 | `fetch_data.sh` | `$CITYNAV_ROOT/data/citynav/*.json`, `$CITYNAV_ROOT/data/cityrefer/objects.json` | Clones `water-cookie/citynav-arxiv` and runs its downloader. The 34 SensatUrban block PLYs are placed by hand under `$CITYNAV_ROOT/raw_ply/`; the script prints where to get them. |
 | `rasterize_citynav_native.sh [--blocks <block>...]` | `$CITYNAV_ROOT/data/rgbd_upstream/<block>.{png,tif}` | Runs upstream's `rasterize.py` (vendored as `data_prep/_vendor_citynav_rasterize.py`) in an environment with `pdal`, `rasterio` and `pillow`; `RASTERIZE_PYTHON` names its interpreter. |
-| `bake_tiles.sh` | `tiles/citynav_2m_osmv3/`, `tiles/osm_cache/` | Fetches OpenStreetMap once per city into the cache, then bakes every block offline. Needs the `bake` extra. |
+| `bake_tiles.sh` | `tiles/citynav_2m_osmv3/` | Bakes every block from the city's shipped OpenStreetMap cache, `tiles/osm_cache/<city>_osm_local.geojson` (already in CityNav local XY). |
 
 | Variable | Default | Names |
 |---|---|---|
@@ -91,4 +91,3 @@ and every value is checked by type and range at load
 | `action_snap.py` | The six-action alphabet a flight is replayed in. |
 | `bake/city.py` | The OSM prior bake. |
 | `run_manifest.py` | The run manifest and the audited environment. |
-| `georef/` | Each city's OSM-to-CityNav alignment, used by the bake. |

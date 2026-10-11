@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bake per-block prior sidecars from OpenStreetMap (PRIOR_CONTRACT.md config B).
+"""Bake per-block prior sidecars from OpenStreetMap.
 
 A prior is exactly what OSM gives: the realised mask (area -> cells inside the
 polygon, way -> buffered polyline, node -> its cell) clipped to the cells the
@@ -9,21 +9,14 @@ CityNav local meters at 2 dp (a polygon's exterior ring closed, a way open, a
 node's one vertex), which ``build_surface`` serves as the row ``mask``. Nothing
 is classified, named or dropped beyond "rasterizes to no covered cell".
 Every bake stamps ``meta.json`` ``bake.mode`` (and, per block, ``provenance``:
-cache name + sha256, fetch time, record census, georef residuals, bake time +
+cache name + sha256, record count, the cache's georef residuals, bake time +
 git sha).
 
-CityNav rasters are not georeferenced, so the fetch goes through a georef file
-(WGS84 query bounds + the affine into CityNav XY) and writes a cache in local
-XY; the bake runs offline from it. The tiles dir must already hold the
+The source is the shipped OSM cache per city (``tiles/osm_cache``), already
+registered into CityNav local XY. The tiles dir must already hold the
 ``<city>_block_*_meta.json`` sidecars::
 
-    # once, on a box with network egress:
-    python -m benchmarks.citynav.bake.city \
-        --dump-osm-cache tiles/osm_cache/cambridge_osm_local.geojson \
-        --georef benchmarks/citynav/georef/cambridge_georef.json --city cambridge
-
-    # offline bake of every cambridge block from the cache:
-    python -m benchmarks.citynav.bake.city --osm-blocks --city cambridge \
+    python -m benchmarks.citynav.bake.city --city cambridge \
         --osm-cache tiles/osm_cache/cambridge_osm_local.geojson \
         --tiles-dir tiles/citynav_2m_osmv3
 """
@@ -37,7 +30,6 @@ import logging
 import math
 import os
 import subprocess
-import tempfile
 from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -227,8 +219,7 @@ def _normalise_props(raw: dict[str, Any] | None) -> dict[str, Any]:
             continue
         if clean == "source":
             # OSM's own `source` tag (imagery/survey provenance, e.g. "Bing")
-            # must not collide with the bake's `source` channel, which the
-            # config-B audit requires to be exactly "osm" for OSM entries.
+            # rides as `source_tag`: `source` is the bake's channel, "osm".
             clean = "source_tag"
         props[clean] = value
     return props
@@ -531,7 +522,7 @@ def _feature_entry(
         "cells": ordered_cells,
         "centroid_row": round(cr, 1),
         "centroid_col": round(cc, 1),
-        "source": _safe_text(props.get("source")) or "osm",
+        "source": "osm",
     }
     name = _safe_text(props.get("name"))
     if name:
@@ -556,10 +547,6 @@ def _record_sort_key(record: tuple[dict[str, Any], dict[str, Any]]) -> tuple[Any
     first = coords[0][1] if coords else []
     text = json.dumps(first, sort_keys=True)
     return (
-        # _safe_text, not raw str(): a pandas-NaN name (unnamed feature on
-        # the fetch's gdf path) must sort as "" exactly like the cache
-        # path, where _tag_value already dropped it — otherwise the two
-        # bake modes order rows differently and the positional fids diverge.
         _safe_text(props.get("name")) or "",
         _safe_text(props.get("osm_id")) or _safe_text(props.get("@id")) or "",
         text,
@@ -648,18 +635,11 @@ def _features_from_records(
         kind = _geometry_kind(geometry)
         kind_counts[kind] = kind_counts.get(kind, 0) + 1
         source_id = _safe_text(props.get("osm_id") or props.get("@id"))
-        # True polygon geometry rides ONLY on records whose source is OSM
-        # (config B, contract C2).
-        source = _safe_text(props.get("source")) or "osm"
-        world_contour = (
-            _world_contour_from_geometry(geometry) if source == "osm" else None
-        )
-        entry = _feature_entry(props, cells, source_id, world_contour, coverage)
+        entry = _feature_entry(props, cells, source_id,
+                               _world_contour_from_geometry(geometry), coverage)
         # Raster-coverage honesty: a named prior whose TRUE geometry centroid
         # sits over no imagery (outside the raster window, or inside it on
-        # no-data) is SAM-invisible. Flag those rows + tally per-block
-        # coverage so the T-REG gate is not silently read on the favorable
-        # on-imagery subset.
+        # no-data) is SAM-invisible. Flag those rows and tally them per block.
         if raw_name:
             named_priors_total += 1
             cx = 0.5 * (bbox[0] + bbox[2])
@@ -684,7 +664,7 @@ def _features_from_records(
     if named_off_raster:
         log.warning(
             "%s named prior(s) of %d sit over NO imagery "
-            "(frac=%.3f, SAM-invisible); T-REG gate should exclude them: %s",
+            "(frac=%.3f, SAM-invisible): %s",
             len(named_off_raster),
             named_priors_total,
             off_frac,
@@ -714,9 +694,9 @@ def _features_from_records(
 def _read_geojson_cache(
     path: Path,
 ) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], dict[str, Any] | None]:
-    """Read a GeoJSON cache; also return the ``citynav_osm_cache`` metadata
-    block that ``dump_osm_cache`` embeds (georef + residual provenance).
-    Every feature with a geometry is kept — no classification, no drop-gate."""
+    """Read a GeoJSON cache and its ``citynav_osm_cache`` metadata block (the
+    georef it was registered with and its residuals). Every feature with a
+    geometry is kept: no classification, no drop-gate."""
     if not path.is_file():
         raise BakeError(f"missing OSM cache {path}")
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -738,232 +718,6 @@ def _read_geojson_cache(
     return records, cache_meta if isinstance(cache_meta, dict) else None
 
 
-def _validate_georef(path: Path) -> dict[str, Any]:
-    try:
-        georef = json.loads(path.read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise BakeError(f"unable to read georef {path}: {exc}") from exc
-    required = {"query_bbox_wgs84", "osm_crs", "citynav_from_osm_affine"}
-    missing = sorted(required - set(georef))
-    if missing:
-        raise BakeError(f"{path} missing required georef field(s): {', '.join(missing)}")
-    affine = georef["citynav_from_osm_affine"]
-    bbox = georef["query_bbox_wgs84"]
-    if not isinstance(affine, list) or len(affine) != 6:
-        raise BakeError(f"{path} citynav_from_osm_affine must be a 6-number list")
-    if not isinstance(bbox, list) or len(bbox) != 4:
-        raise BakeError(f"{path} query_bbox_wgs84 must be [west, south, east, north]")
-    return georef
-
-
-def _georef_provenance(georef_path: Path) -> dict[str, Any]:
-    """Residual summary from the sibling ``<stem>_report.json`` (the
-    committed acceptance report of the per-city georeference fit).
-
-    Recorded into per-block ``meta.json`` flags so every OSM bake carries the
-    registration quality it was built on. Missing report is non-fatal (the
-    georef itself already passed ``_validate_georef``).
-    """
-    report_path = georef_path.with_name(f"{georef_path.stem}_report.json")
-    prov: dict[str, Any] = {"georef_file": georef_path.name}
-    if not report_path.is_file():
-        prov["report"] = "missing"
-        return prov
-    try:
-        report = json.loads(report_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        prov["report"] = "unreadable"
-        return prov
-    fit = report.get("fit") or {}
-    prov.update(
-        {
-            "report_file": report_path.name,
-            "passed": report.get("passed"),
-            "rotation_deg": fit.get("rotation_deg"),
-            "scale": fit.get("scale"),
-            "acceptance_fraction_5m": fit.get("acceptance_fraction_5m"),
-            "loo_residual_m": fit.get("loo_residual_m"),
-        }
-    )
-    return prov
-
-
-def _apply_affine_geometry(
-    geometry: dict[str, Any], affine: Sequence[float]
-) -> dict[str, Any]:
-    """The 6-number georef affine on every coordinate of a GeoJSON geometry:
-    ``x' = a*x + b*y + c``, ``y' = d*x + e*y + f`` (any z passes through), the
-    ONE registration of OSM source-CRS coordinates into CityNav local XY."""
-    a, b, c, d, e, f = [float(v) for v in affine]
-
-    def _pt(pt: Sequence[float]) -> list[float]:
-        x, y = float(pt[0]), float(pt[1])
-        return [a * x + b * y + c, d * x + e * y + f, *pt[2:]]
-
-    def _map(coords: Any) -> Any:
-        if isinstance(coords, (list, tuple)) and coords and isinstance(
-            coords[0], (int, float)
-        ):
-            return _pt(coords)
-        return [_map(part) for part in coords]
-
-    geom_type = str(geometry.get("type") or "")
-    if geom_type == "GeometryCollection":
-        return {
-            "type": geom_type,
-            "geometries": [
-                _apply_affine_geometry(g, affine)
-                for g in geometry.get("geometries") or []
-            ],
-        }
-    return {"type": geom_type, "coordinates": _map(geometry.get("coordinates") or [])}
-
-
-_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-
-
-def _overpass_all_elements_query(bbox_wgs84: Sequence[float]) -> str:
-    """The Overpass query for EVERY element in a WGS84 window (``nwr``, no tag
-    filter), recursed down (``(._;>;)``) so ways and relations are buildable
-    from their member nodes."""
-    left, bottom, right, top = [float(v) for v in bbox_wgs84]
-    return (
-        "[out:xml][timeout:300];"
-        f"nwr({bottom:.6f},{left:.6f},{top:.6f},{right:.6f});"
-        "(._;>;);out;"
-    )
-
-
-def _fetch_overpass_xml(query: str) -> str:
-    """POST an Overpass query with bounded retry/backoff (429/504 are routine
-    on the shared public server)."""
-    import ssl
-    import time
-    import urllib.error
-    import urllib.parse
-    import urllib.request
-
-    import certifi
-
-    # Pin the trust store to certifi rather than the interpreter's default:
-    # the geo env's default CA path does not carry every chain, and the bake
-    # has to run in whichever env has osmnx.
-    ctx = ssl.create_default_context(cafile=certifi.where())
-    data = urllib.parse.urlencode({"data": query}).encode()
-    headers = {
-        # the public instance 406es the default urllib agent
-        "User-Agent": "MAPS bake_city (citynav OSM prior bake)",
-        "Content-Type": "application/x-www-form-urlencoded",
-    }
-    attempts = 4
-    last: Exception | None = None
-    for attempt in range(attempts):
-        if attempt:
-            time.sleep(10.0 * attempt)
-        try:
-            req = urllib.request.Request(_OVERPASS_URL, data=data, headers=headers)
-            with urllib.request.urlopen(req, timeout=600, context=ctx) as resp:
-                return resp.read().decode("utf-8")
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            last = exc
-    raise BakeError(f"Overpass fetch failed after {attempts} attempts: {last}")
-
-
-def _fetch_osm_records(georef: dict[str, Any]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
-    """Every tagged OSM feature with geometry in the georef window, in CityNav
-    local XY: one unrestricted Overpass request, geometries built by
-    ``osmnx.features_from_xml`` with no tag filter."""
-    try:
-        import osmnx as ox
-        from osmnx import utils_geo
-    except ImportError as exc:  # pragma: no cover - depends on optional env
-        raise BakeError(
-            "--dump-osm-cache requires the geo extra "
-            "(osmnx/geopandas/pyproj/shapely/rasterio)"
-        ) from exc
-
-    bbox_wgs84 = [float(v) for v in georef["query_bbox_wgs84"]]
-    osm_crs = str(georef["osm_crs"])
-    affine = [float(v) for v in georef["citynav_from_osm_affine"]]
-    xml_text = _fetch_overpass_xml(_overpass_all_elements_query(bbox_wgs84))
-    with tempfile.TemporaryDirectory(prefix="bake_city_osm_") as tmp_dir:
-        xml_path = Path(tmp_dir) / "overpass.osm"
-        xml_path.write_text(xml_text, encoding="utf-8")
-        gdf = ox.features_from_xml(
-            xml_path,
-            polygon=utils_geo.bbox_to_poly(tuple(bbox_wgs84)),
-        )
-    if gdf.empty:
-        return []
-    if str(gdf.crs or "EPSG:4326") != osm_crs:
-        gdf = gdf.to_crs(osm_crs)
-
-    records: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    for idx, row in gdf.iterrows():
-        geom = row.geometry
-        if geom is None or geom.is_empty:
-            continue
-        geom_local = _apply_affine_geometry(geom.__geo_interface__, affine)
-        props = _normalise_props({k: row[k] for k in row.index if k != "geometry"})
-        props.setdefault("osm_id", str(idx))
-        records.append((props, geom_local))
-    return records
-
-
-def dump_osm_cache(
-    georef_path: str | Path,
-    out_path: str | Path,
-    *,
-    city: str | None = None,
-) -> dict[str, Any]:
-    """Fetch OSM via a georef and write a GeoJSON cache in CityNav local XY,
-    with the georef residual summary embedded for the offline bake's
-    provenance."""
-    georef_file = Path(georef_path).expanduser().resolve()
-    georef = _validate_georef(georef_file)
-    records = _fetch_osm_records(georef)
-    if not records:
-        raise BakeError(f"OSM fetch for {georef_file} returned no features")
-    features: list[dict[str, Any]] = []
-    kind_counts: dict[str, int] = {}
-    for props, geometry in records:
-        kind = _geometry_kind(geometry)
-        kind_counts[kind] = kind_counts.get(kind, 0) + 1
-        props_out: dict[str, Any] = {}
-        for key, value in sorted(props.items()):
-            tag_val = _tag_value(value)
-            if tag_val is not None:
-                props_out[key] = tag_val
-        features.append(
-            {
-                "type": "Feature",
-                "id": props_out.get("osm_id"),
-                "properties": props_out,
-                "geometry": geometry,
-            }
-        )
-    payload = {
-        "type": "FeatureCollection",
-        "citynav_osm_cache": {
-            "city": city,
-            "crs_note": "coordinates are CityNav local XY (georef affine applied)",
-            "fetched_at_utc": datetime.now(timezone.utc).isoformat(
-                timespec="seconds"
-            ),
-            "records": len(features),
-            "georef": georef,
-            "georef_provenance": _georef_provenance(georef_file),
-            "kind_counts": dict(sorted(kind_counts.items())),
-        },
-        "features": features,
-    }
-    out = Path(out_path).expanduser().resolve()
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-    log.info("wrote OSM cache %s: %d records %s", out, len(features), kind_counts)
-    return {"path": str(out), "records": len(features), "kind_counts": kind_counts}
-
-
 # Keys a previous bake may have written into meta.json. Stripped before
 # re-writing so a re-bake cannot inherit a stale provenance claim; ``bake_block``
 # re-asserts its own. A key an upstream caller writes (the Cal City baker's
@@ -974,8 +728,8 @@ _STALE_BAKE_FLAGS = frozenset({"bake_counts", "osm_only", "provenance"})
 def _bake_provenance() -> dict[str, Any]:
     """WHO/WHEN stamp every bake writes into the block meta.
 
-    ``BAKE_GIT_SHA`` overrides for rsynced trees without ``.git`` (cluster
-    bakes); otherwise best-effort ``git rev-parse`` from this repo, else
+    ``BAKE_GIT_SHA`` overrides for a tree without ``.git``; otherwise
+    best-effort ``git rev-parse`` from this repo, else
     ``None`` (recorded, never guessed).
     """
     sha = os.environ.get("BAKE_GIT_SHA") or None
@@ -1065,47 +819,32 @@ def bake_block(
     return stats
 
 
-def bake_city_from_cache(
-    city: str,
-    osm_cache: str | Path,
-    *,
-    tiles_dir: str | Path = TILES_DIR,
-    imagery: bool = True,
-) -> dict[str, Any]:
-    """Bake one map from an OSM cache in its local XY."""
-    records, _cache_meta = _read_geojson_cache(Path(osm_cache).expanduser().resolve())
-    return bake_block(city, records, tiles_dir, imagery=imagery)
-
-
-def _city_block_names(city: str, tiles_dir: Path) -> list[str]:
-    suffix = "_meta.json"
-    names = [p.name[: -len(suffix)] for p in tiles_dir.glob(f"{city}_block_*{suffix}")]
-    if not names:
-        raise BakeError(f"no {city}_block_*{suffix} under {tiles_dir}")
-
-    def _key(name: str) -> tuple[int, str]:
-        tail = name.rsplit("_", 1)[-1]
-        return (int(tail) if tail.isdigit() else 1 << 30, name)
-
-    return sorted(names, key=_key)
-
-
-def bake_osm_blocks(
-    city: str,
-    records: list[tuple[dict[str, Any], dict[str, Any]]],
-    *,
-    tiles_dir: str | Path = TILES_DIR,
-    provenance: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Rasterize city-frame OSM records into every ``<city>_block_*`` window
-    (block bounds are windows of the shared city frame)."""
+def bake_city(city: str, osm_cache: str | Path, tiles_dir: str | Path = TILES_DIR) -> dict[str, Any]:
+    """Bake ``osm_cache``, city-frame records in CityNav local XY, into every
+    ``<city>_block_*`` window in ``tiles_dir`` (block bounds are windows of the
+    shared city frame)."""
     tiles_path = Path(tiles_dir).expanduser().resolve()
-    blocks = _city_block_names(city, tiles_path)
+    suffix = "_meta.json"
+    blocks = sorted(p.name[: -len(suffix)] for p in tiles_path.glob(f"{city}_block_*{suffix}"))
+    if not blocks:
+        raise BakeError(f"no {city}_block_*{suffix} under {tiles_path}")
+    cache_path = Path(osm_cache).expanduser().resolve()
+    records, cache_meta = _read_geojson_cache(cache_path)
     if not records:
         raise BakeError("no OSM records to bake")
+    cache_info = cache_meta or {}
+    provenance = {
+        "prior": "osm",
+        "osm_cache": cache_path.name,
+        "osm_cache_sha256": _file_sha256(cache_path),
+        "fetched_at_utc": cache_info.get("fetched_at_utc"),
+        "records": len(records),
+        "kind_counts": cache_info.get("kind_counts"),
+        "georef": cache_info.get("georef_provenance"),
+    }
     total = {"blocks": 0, "features": 0, "nodes": 0}
     for block in blocks:
-        stats = bake_block(block, records, tiles_path, provenance=provenance or {})
+        stats = bake_block(block, records, tiles_path, provenance=provenance)
         total["blocks"] += 1
         total["features"] += int(stats["features"])
         total["nodes"] += int(stats["nodes"])
@@ -1116,93 +855,22 @@ def bake_osm_blocks(
     return total
 
 
-def bake_osm_blocks_from_cache(
-    city: str,
-    osm_cache: str | Path,
-    *,
-    tiles_dir: str | Path = TILES_DIR,
-) -> dict[str, Any]:
-    """Per-block OSM bake from a cache already in CityNav local XY."""
-    cache_path = Path(osm_cache).expanduser().resolve()
-    records, cache_meta = _read_geojson_cache(cache_path)
-    cache_info = cache_meta or {}
-    return bake_osm_blocks(
-        city,
-        records,
-        tiles_dir=tiles_dir,
-        provenance={
-            "prior": "osm",
-            "osm_cache": cache_path.name,
-            "osm_cache_sha256": _file_sha256(cache_path),
-            "fetched_at_utc": cache_info.get("fetched_at_utc"),
-            "records": len(records),
-            "kind_counts": cache_info.get("kind_counts"),
-            "georef": cache_info.get("georef_provenance"),
-        },
-    )
-
-
-def _parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(
-        description=(
-            "Bake CityNav sidecars from the OSM prior: --dump-osm-cache to "
-            "fetch, --osm-blocks --osm-cache to bake offline."
-        )
-    )
-    ap.add_argument("--city", choices=_CITY_CHOICES, default=None)
-    ap.add_argument("--osm-cache", type=Path, default=None,
-                    help="the GeoJSON cache in CityNav local XY that --dump-osm-cache writes")
-    ap.add_argument("--georef", type=Path, default=None)
-    ap.add_argument(
-        "--osm-blocks",
-        action="store_true",
-        help=(
-            "Bake per-block OSM sidecars for --city: rasterize the city-frame "
-            "records into every <city>_block_* window in --tiles-dir."
-        ),
-    )
-    ap.add_argument(
-        "--dump-osm-cache",
-        type=Path,
-        default=None,
-        metavar="OUT_GEOJSON",
-        help=(
-            "Fetch OSM via --georef and write a GeoJSON cache in CityNav "
-            "local XY (no bake). Run where egress exists; bake offline from "
-            "the cache with --osm-cache."
-        ),
-    )
-    ap.add_argument("--tiles-dir", type=Path, default=TILES_DIR)
-    return ap
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(message)s",
         datefmt="%H:%M:%S",
     )
-    ap = _parser()
+    ap = argparse.ArgumentParser(
+        description="Bake every block of --city from its OSM cache into --tiles-dir."
+    )
+    ap.add_argument("--city", choices=_CITY_CHOICES, required=True)
+    ap.add_argument("--osm-cache", type=Path, required=True,
+                    help="the city's GeoJSON cache in CityNav local XY (tiles/osm_cache)")
+    ap.add_argument("--tiles-dir", type=Path, default=TILES_DIR)
     args = ap.parse_args(argv)
-
-    if args.dump_osm_cache is not None:
-        if args.osm_blocks or args.osm_cache is not None:
-            ap.error("--dump-osm-cache combines only with --georef (and optionally --city); the fetch is implied")
-        if args.georef is None:
-            ap.error("--dump-osm-cache requires --georef")
-        try:
-            dump_osm_cache(args.georef, args.dump_osm_cache, city=args.city)
-        except BakeError as exc:
-            ap.error(str(exc))
-        return 0
-
-    if args.city is None or args.osm_cache is None:
-        ap.error("--city and --osm-cache are required to bake")
-    if args.georef is not None:
-        ap.error("--georef is only used with --dump-osm-cache")
-    bake = bake_osm_blocks_from_cache if args.osm_blocks else bake_city_from_cache
     try:
-        bake(args.city, args.osm_cache, tiles_dir=args.tiles_dir)
+        bake_city(args.city, args.osm_cache, args.tiles_dir)
     except BakeError as exc:
         ap.error(str(exc))
     return 0

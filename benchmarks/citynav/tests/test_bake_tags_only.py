@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from benchmarks.citynav.bake.city import _overpass_all_elements_query, bake_block
+from benchmarks.citynav.bake.city import bake_block
 from maps.sws.graph import load_graph
 
 
@@ -68,20 +68,6 @@ def test_kind_census_groups_by_mask_kind_and_tag_counts(tmp_path):
     assert top["amenity=parking"] == 1, top
     assert top["power=generator"] == 1, top
     assert top["highway=residential"] == 1, top
-
-
-def test_fetch_query_is_unrestricted_nwr_no_tag_allowlist():
-    # The fetch requests EVERY element in the window: one bare ``nwr`` bbox
-    # clause with recursion, and NO tag filter of any kind — no quoted tag
-    # keys, no key=value clauses. The bake's only exclusion is geometric.
-    q = _overpass_all_elements_query([0.1052, 52.193, 0.1435, 52.2188])
-    assert "nwr(52.193000,0.105200,52.218800,0.143500);" in q
-    assert "(._;>;);out;" in q
-    # no tag filter syntax anywhere: quoted keys / regex filters / k=v
-    assert '"' not in q and "'" not in q and "~" not in q and "=" not in q
-    # exactly the settings brackets, no ["key"] filter brackets
-    assert q.startswith("[out:xml][timeout:")
-    assert q.count("[") == 2, q
 
 
 def test_a_polygon_ring_is_not_decimated():

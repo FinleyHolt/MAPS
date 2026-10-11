@@ -130,7 +130,6 @@ Extras:
 
 | Extra | For |
 |---|---|
-| `bake` | The CityNav OSM prior bake (`osmnx`, `geopandas`). |
 | `recording` | Reading a camera recording for the as-flown frame replay (`mcap`). |
 | `dev` | The test suite and linter. |
 
@@ -200,7 +199,7 @@ come from their upstream sources; this repository redistributes none of them.
 export CITYNAV_ROOT=~/datasets/citynav-arxiv
 benchmarks/citynav/data_prep/fetch_data.sh             # episodes and catalog; prints the SensatUrban steps
 benchmarks/citynav/data_prep/rasterize_citynav_native.sh   # nadir rasters from the block point clouds
-PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh   # the OSM prior, needs the bake extra
+PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh   # the OSM prior, from the shipped caches
 ```
 
 The rasterizer runs upstream's PDAL pipeline in an environment with `pdal`,
