@@ -77,7 +77,6 @@ IDENTITY_KEYS = (
     ("config_sha256",),
     ("split",),
     ("selection", "sample_seed"),
-    ("selection", "sample_offset"),
     ("selection", "selection_sha"),
     ("endpoints", "model_id"),
     ("endpoints", "max_model_len"),
@@ -175,7 +174,6 @@ def build_manifest(
     config_path: Path,
     split: str,
     sample_seed: int,
-    sample_offset: int,
     limit: int,
     workers: int,
     allowlist_path: Path | None,
@@ -227,7 +225,6 @@ def build_manifest(
         "withhold": list(resolved["withhold"]),
         "selection": {
             "sample_seed": sample_seed,
-            "sample_offset": sample_offset,
             "limit": limit,
             "workers": workers,
             "allowlist": str(allowlist_path) if allowlist_path else None,

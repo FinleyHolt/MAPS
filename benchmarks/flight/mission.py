@@ -731,7 +731,7 @@ class Mission:
         from benchmarks.citynav.run_manifest import MANIFEST_NAME, build_manifest, emit_or_verify  # noqa: PLC0415
 
         sortie = self.workdir.parent
-        common = dict(config_path=Path(self.config), split=self.split, sample_seed=None, sample_offset=None,
+        common = dict(config_path=Path(self.config), split=self.split, sample_seed=None,
                       limit=None, workers=None, allowlist_path=None)
         try:
             if not (sortie / MANIFEST_NAME).exists():

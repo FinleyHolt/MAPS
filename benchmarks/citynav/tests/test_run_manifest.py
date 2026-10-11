@@ -41,12 +41,16 @@ def stub_run(monkeypatch, tmp_path, bake):
         config_path=paths.REPO_ROOT / "configs/citynav.yaml",
         split="train_seen",
         sample_seed=1234,
-        sample_offset=0,
         limit=3,
         workers=2,
         allowlist_path=None,
         episodes=["ep_a", "ep_b", "ep_c"],
     )
+
+
+def test_the_selection_records_what_the_driver_applies(stub_run):
+    assert set(stub_run["selection"]) == {
+        "sample_seed", "limit", "workers", "allowlist", "episodes_n", "selection_sha"}
 
 
 def test_required_fields_nonempty(stub_run):
@@ -175,7 +179,7 @@ def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tm
     monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
     common = dict(out_root=tmp_path, config_path=paths.REPO_ROOT / "configs/citynav.yaml", split="calcity_tmp",
-                  sample_seed=None, sample_offset=None, limit=None, workers=None, allowlist_path=None,
+                  sample_seed=None, limit=None, workers=None, allowlist_path=None,
                   episodes=["calcity::1#1"])
     stamp = {"episode_id": "calcity::1#1", "run_id": "20260917T160207Z", "run_no": 3,
              "reasoning_effort": "0.3"}

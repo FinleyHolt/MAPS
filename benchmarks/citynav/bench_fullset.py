@@ -728,7 +728,6 @@ class Driver:
                 config_path=CONFIG,
                 split=self.split,
                 sample_seed=self.sample_seed,
-                sample_offset=0,
                 limit=self.limit,
                 workers=self.workers,
                 allowlist_path=self.allowlist_path,
