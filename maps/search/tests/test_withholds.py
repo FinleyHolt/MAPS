@@ -58,7 +58,7 @@ def _diff(a: str, b: str) -> tuple[int, int]:
 def test_no_withhold_serves_the_flown_contract(monkeypatch, sensor):
     text = _dump(monkeypatch, "", sensor)
     assert hashlib.sha256(text.encode()).hexdigest() == FLOWN_SHA256[sensor]
-    assert prompts.served_tools() is prompts.CODE_TOOLS
+    assert prompts.served_doc() == prompts.CODE_DOC
 
 
 # withhold -> (sections that change, marker strings it takes away,
@@ -110,7 +110,7 @@ def test_each_withhold_takes_exactly_its_part(monkeypatch, name):
 
 def test_the_system_turn_withhold_serves_no_system_message(monkeypatch):
     monkeypatch.setenv(W.ENV, "system_turn")
-    assert ra.served_system_text(sensor_description="RGB, nadir.") == ""
+    assert prompts.served_system_prompt("RGB, nadir.") == ""
     spec = EndpointSpec(base_url="http://unused", model_id="inkling-small", max_model_len=262144,
                         tokenizer_name="qwen", output_reserve=40000)
     r = ra.Reasoner(reasoner_url="http://unused", endpoint_spec=spec,
@@ -209,3 +209,40 @@ def test_a_prior_withhold_flies_to_a_point_and_serves_no_prior_row(monkeypatch):
     served = json.dumps(tool_results(fr))
     assert "error" not in served and "prior_" not in served, served
     assert [f["target_fid"] for f in flights] == ["[30, 30]", "[40, 40]", "[50, 50]"], flights
+
+
+def test_the_served_literals_hold_their_worked_block_and_every_edit_target():
+    """The worked block in CODE_DOC scans on the real surface and runs the
+    chain it teaches; every withhold edit names text its literal carries once."""
+    import ast
+
+    worked = "\n".join(
+        ln[2:] for ln in prompts.CODE_DOC.partition("This is one block:\n")[2]
+        .partition("\nEach line runs")[0].splitlines() if ln.startswith("  "))
+    assert worked.count("\n") >= 5, worked
+    tree = ps.scan_block(worked)
+    calls = [n.func.id for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+    assert {"look_for", "find", "look", "explore", "go_to"} <= set(calls), calls
+    assert calls.index("explore") < calls.index("go_to"), calls
+    assert "find" in calls[calls.index("explore"):], calls
+    find_kwargs = {k.arg for n in ast.walk(tree)
+                   if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                   and n.func.id == "find" for k in n.keywords}
+    assert "color" in find_kwargs, find_kwargs
+    assert find_kwargs & {"nearest", "near", "within", "east_of", "west_of",
+                          "north_of", "south_of"}, find_kwargs
+
+    for edits, text, turn in ((prompts._DOC_EDITS, prompts.CODE_DOC, False),
+                              (prompts._TURN_EDITS, prompts.CODE_SYSTEM_PROMPT, True)):
+        for name, items in edits.items():
+            assert name in W.WITHHOLDS, name
+            for e in items:
+                assert prompts._edit(text, e, turn) not in (None, text), (name, e)
+                if e[0] == "drop":
+                    n = sum(u.startswith(e[1]) for u in prompts._units(text, turn))
+                elif e[0] == "sub" and turn:
+                    n = sum(e[1] in prompts._flat(u) for u in prompts._units(text, turn))
+                else:
+                    n = 1 if e[0] == "cut" else text.count(e[1])
+                assert n == 1, (name, e)

@@ -4,7 +4,6 @@ from __future__ import annotations
 import re
 
 from maps.search.parse_compile import prompts
-from maps.search.parse_compile import reasoner_agent as ra
 from maps.search.parse_compile import reasoner_loop as rl
 from maps.search.tests.fakes import FakeReasoner, bare_ctx, unarmed_boost
 
@@ -58,8 +57,8 @@ def _schema_descriptions(node) -> list[str]:
 
 
 def _static_corpus() -> list[str]:
-    corpus: list[str] = [ra.served_system_text()]
-    for t in prompts.CODE_TOOLS:
+    corpus: list[str] = [prompts.served_system_prompt()]
+    for t in prompts.served_tools():
         corpus.append(t["function"]["description"])
         corpus.extend(_schema_descriptions(t["function"]["parameters"]))
     # The shared transport-repair nudges are served too.

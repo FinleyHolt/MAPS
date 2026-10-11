@@ -4,12 +4,12 @@ from __future__ import annotations
 import re
 
 from maps.perception.geometry.sensor_spec import resolve_sensor, served_description
-from maps.search.parse_compile import reasoner_agent as ra
+from maps.search.parse_compile.prompts import served_system_prompt
 
 
 def _served() -> str:
-    return ra.served_system_text(
-        sensor_description=served_description(resolve_sensor("oryx_orx32_25mm_nadir"), 914.4))
+    return served_system_prompt(
+        served_description(resolve_sensor("oryx_orx32_25mm_nadir"), 914.4))
 
 
 def test_the_prompt_states_no_view_square_size_of_its_own():
@@ -25,6 +25,6 @@ def test_the_prompt_states_no_view_square_size_of_its_own():
 
 def test_a_run_with_no_rig_states_no_footprint_at_all():
     """An unconfigured rig is an honest silence, not a formula."""
-    text = ra.served_system_text()
+    text = served_system_prompt()
     assert "nadir view square" in text
     assert not re.search(r"~\d+ x \d+ m", text), text

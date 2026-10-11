@@ -1,27 +1,6 @@
-"""The served surface: ONE tool, ``run``, whose argument is a block of
-ordinary Python.
-
-The bench episode is ONE mission conversation. Each call carries one block;
-``python_surface`` executes it in a namespace that persists for the whole
-mission, and ``code_surface`` compiles the library calls it made onto the
-existing op DAG (find / compare / filter_items / score_by, the flight and
-perception verbs). The mission ends on the model's plain no-tool-call
-reply, and the last flight is the answer.
-
-``CODE_DOC`` is the served description -- the language legend -- and
-``CODE_SYSTEM_PROMPT`` the mission map beside it. The worked example is
-asserted at import against the real parser, because the model copies its
-shape and an example the surface would refuse teaches a form that cannot
-run.
-
-NO DECODER MASK. Python is not EBNF-able here and the tool carries no
-``strict``: the parser's own refusals -- ordinary tool results the model
-can act on -- hold a block to the language.
-
-``tool_choice`` is ALWAYS ``"auto"`` -- never required/named -- because auto
-IS the abstain path: the plain reply that ends the mission has to stay
-emittable on every turn.
-"""
+"""The served text: the ``run`` tool's description (``CODE_DOC``), the
+system prompt (``CODE_SYSTEM_PROMPT``), and the bench withholds' edits to
+both."""
 
 from __future__ import annotations
 
@@ -39,30 +18,6 @@ CODE_DOC = (
     " any bare value come back in the receipt. The block's LAST result is"
     " served in full -- earlier assignments come back as a one-line"
     " summary, so show a set you want to read.\n"
-    # A BLOCK IS SEVERAL LINES, and the shape of the ONE worked example is
-    # the shape that comes back. The say legend's single example is a
-    # flight onto a junction and the model copies BOTH halves of it; one
-    # legend line carrying a crossing moved crossing-as-anchor 9 -> 24
-    # (2.7x, p=0.0015). Every entry below is a one-line menu item, so the
-    # example is what teaches a multi-line block.
-    #
-    # The example carries the WHOLE chain the surface exists for, ending on
-    # the one that reaches a part of a thing by measuring rather than by
-    # estimating: watch a class, narrow to the thing, COVER it so the
-    # segmenter puts a row on the part that matters, then fly to that row.
-    #
-    # THE MODEL COPIES THE EXAMPLE'S MOVES, so the narrowing must not end on
-    # `h = r2[0]` -- rank 0 by DISTANCE, taken straight after asking the
-    # picture which one had the pool. That spends the ordering on
-    # proximity, spends the discrimination on a question whose answer is
-    # then discarded, and teaches that the answer is whatever sorted first.
-    #
-    # ONE BLOCK CARRIES THE WHOLE CHAIN. Lines execute eagerly in
-    # source order -- a find AFTER an explore reads what the pass just
-    # detected -- so the worked example is the full arc: watch, cover,
-    # query what the pass found, rank on every criterion the cue names,
-    # look, fly. That eager order is the execution model; the example is
-    # how it is taught.
     "\nA block is any number of lines, run in order. This is one block:\n"
     "  look_for(\"pool\", \"house\")\n"
     "  explore(\"Mill Lane\")\n"
@@ -73,9 +28,6 @@ CODE_DOC = (
     "\nEach line runs the moment it is reached -- the find after the"
     " explore reads the rows that pass just detected.\n"
     "\nTHE MAP -- free, moves nothing\n"
-    # The link that makes look_for read as load-bearing rather than
-    # optional. find WORKS with an empty watchlist -- it returns priors --
-    # so nothing in a find receipt says the segmenter is off.
     "  find reads ONE set of rows: the PRIOR map, plus whatever flights"
     " have detected. Nothing is detected until look_for names a class, so"
     " before that the set is the prior map alone.\n"
@@ -202,9 +154,6 @@ CODE_DOC = (
     " is KNOWN, drawn as a schematic, not what is there.\n"
     "\nWHAT YOU SEE BECOMES ROWS -- the distinction the map cannot make,"
     " asked as a query instead of as a question\n"
-    # A which-of-these question about rows is a QUERY: a set slot folds to
-    # its NEAREST member, so "which house has a pool behind it" is a sort
-    # over rows the segmenter produced, and its answer binds.
     "  A thing the map does not carry -- a pool, solar panels, a shed, a"
     " parked car -- is not a row until look_for names it and a flight goes"
     " over it. Then it IS one, and it sorts and cuts like any other:\n"
@@ -264,66 +213,6 @@ CODE_DOC = (
     " explore cannot go inside a loop, because a loop would move to every"
     " row of the set -- loop to LOOK, then move once to the place you"
     " chose, or explore(the set) to cover it all in one pass.\n")
-
-# THE WORKED BLOCK IS SERVED CODE, so the surface's own scan is what says
-# whether it is right: a legend that teaches a form the surface refuses
-# teaches a form that cannot run. Read back out of the legend rather than
-# restated here -- a second copy is a second thing to go stale.
-import ast as _ast
-
-from maps.search.parse_compile.python_surface import (
-    scan_block as _scan_block)
-
-_WORKED = "\n".join(
-    ln[2:] for ln in CODE_DOC.partition("This is one block:\n")[2]
-    .partition("\nEach line runs")[0].splitlines() if ln.startswith("  "))
-assert _WORKED.count("\n") >= 5, _WORKED       # the scan found the block
-_tree = _scan_block(_WORKED)                   # the surface accepts it
-_calls = [n.func.id for n in _ast.walk(_tree)
-          if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Name)]
-# and it exercises the chain it exists to teach: watch, COVER, retrieve
-# inside the pass, rank, look, fly to what the pass put there.
-assert {"look_for", "find", "look",
-        "explore", "go_to"} <= set(_calls), _calls
-assert _calls.index("explore") < _calls.index("go_to"), _calls
-assert "find" in _calls[_calls.index("explore"):], _calls
-# ORDERING IS PINNED ON THE ARGS, not on the token `order`: the example
-# RANKS ON EVERY CRITERION THE CUE NAMED, appearance included (colour
-# ordering heads: 13 over 2 of 500 episodes without it in the example,
-# 440 over 175 of 300 with it).
-_find_kwargs = {k.arg for n in _ast.walk(_tree)
-                if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Name)
-                and n.func.id == "find" for k in n.keywords}
-assert "color" in _find_kwargs, _find_kwargs
-# nearest= is the ORDERING spelling (near= cuts and needs dwithin=),
-# so the spatial criterion the worked block must carry is either.
-assert _find_kwargs & {"nearest", "near", "within", "east_of", "west_of",
-                       "north_of", "south_of"}, _find_kwargs
-del _WORKED, _tree, _calls, _find_kwargs
-
-# NO `strict`. The schema is `{code: string}`, which every token sequence
-# satisfies, so a decode-time constraint could only pin the tool name and the
-# JSON envelope. Over 3,952 calls on arms that enforce nothing (130x
-# parameter range) ONE left the surface -- a code function called as a tool
-# -- and the unknown-tool error recovered it the next turn. Paired val_seen
-# arms differing only by the flag: 36/48 without it, 34/48 with it (exact
-# McNemar p = 0.73, 48 of 64 shared episodes).
-CODE_TOOL: dict = {
-    "type": "function",
-    "function": {
-        "name": "run",
-        "description": CODE_DOC,
-        "parameters": {
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["code"],
-            "properties": {"code": {"type": "string"}},
-        },
-    },
-}
-
-CODE_TOOLS: list = [CODE_TOOL]
-
 
 # ── the system prompt ────────────────────────────────────────────────────────
 # The mission's load-bearing facts, in this surface's notation: the last
@@ -564,32 +453,30 @@ def served_doc() -> str:
 
 
 def served_tools() -> list:
-    """The tools this run serves: ``CODE_TOOLS`` over ``served_doc()``."""
-    doc = served_doc()
-    if doc == CODE_DOC:
-        return CODE_TOOLS
-    return [{**CODE_TOOL, "function": {**CODE_TOOL["function"], "description": doc}}]
+    """The one tool this run serves, ``run``: a block of Python in ``code``."""
+    return [{"type": "function", "function": {
+        "name": "run", "description": served_doc(),
+        "parameters": {"type": "object", "additionalProperties": False,
+                       "required": ["code"],
+                       "properties": {"code": {"type": "string"}}}}}]
 
 
-def served_system_prompt() -> str:
-    """The mission prompt this run serves (``system_turn`` is
-    ``reasoner_agent.served_system_text``'s)."""
-    return _served(CODE_SYSTEM_PROMPT, _TURN_EDITS, turn=True)
-
-
-# Every edit names text the flown literals carry once, so an edit to a
-# literal that strands one fails here instead of serving the literal.
-for _edits, _text, _turn in ((_DOC_EDITS, CODE_DOC, False),
-                             (_TURN_EDITS, CODE_SYSTEM_PROMPT, True)):
-    for _name, _list in _edits.items():
-        assert _name in WITHHOLDS, _name
-        for _e in _list:
-            assert _edit(_text, _e, _turn) not in (None, _text), (_name, _e)
-            if _e[0] == "drop":
-                _n = sum(u.startswith(_e[1]) for u in _units(_text, _turn))
-            elif _e[0] == "sub" and _turn:
-                _n = sum(_e[1] in _flat(u) for u in _units(_text, _turn))
-            else:
-                _n = 1 if _e[0] == "cut" else _text.count(_e[1])
-            assert _n == 1, (_name, _e)
-del _edits, _text, _turn, _name, _list, _e, _n
+def served_system_prompt(sensor_description: str = "") -> str:
+    """The one system message this run serves, the rig's sensor block fused
+    onto its tail (the chat template takes one system turn); empty under the
+    ``system_turn`` withhold."""
+    if withheld("system_turn"):
+        return ""
+    text = _served(CODE_SYSTEM_PROMPT, _TURN_EDITS, turn=True)
+    if not sensor_description.strip():
+        return text
+    return (text + "\n\nSensor rig (active for this run):\n"
+            f"{sensor_description.strip()}\n\n"
+            "A concept this rig cannot see produces an empty SAM response."
+            + (" This run has no prior map: what SAM segments is the only thing"
+               " in the graph." if withheld("prior") else
+               " SAM covers un-cataloged / movable objects; static map features"
+               " are already in the graph as prior footprints with geometry and"
+               " raw OSM tags.")
+            + ("" if withheld("look_for") else
+               " SAM segments roads as merged blobs and over-splits buildings."))

@@ -1,7 +1,7 @@
 """Print the served LLM contract: system text + the mission tools.
 
 The audit artifact — what the model gets at THIS sha, assembled from the
-same single owners the flight path serves (``served_system_text`` and
+same single owners the flight path serves (``served_system_prompt`` and
 ``served_tools``, which serve the flown constants unless a bench arm
 withholds a part). A DERIVATION from the
 constants; the flight log records what a real run actually sent (the
@@ -30,7 +30,6 @@ import sys
 
 from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor, served_description
 from maps.search.parse_compile import prompts
-from maps.search.parse_compile import reasoner_agent as ra
 
 _SAMPLE_INSTRUCTION = "<operator cue>"
 
@@ -53,7 +52,7 @@ def assemble(sensor: str | None = None, agl_m: float | None = None) -> dict:
             description = served_description(spec, agl_m)
         except ValueError as exc:
             raise SystemExit(f"contract: {exc} (pass --agl-m)") from exc
-    system = ra.served_system_text(sensor_description=description)
+    system = prompts.served_system_prompt(description)
     return {"system": system, "tools": prompts.served_tools()}
 
 

@@ -36,39 +36,9 @@ from maps.llm.http import (
 from maps.llm.model_cards import card_for, speaks_openai
 from maps.llm.sampling import thinking_sampling_kwargs
 from maps.llm.vision_content import build_vision_user_content
+from maps.search.parse_compile.prompts import served_system_prompt
 
 log = logging.getLogger(__name__)
-
-
-# Every model-facing surface carries the minimum simplest set that is
-# SUFFICIENT and NECESSARY -- mission structure, capability facts,
-# composition grammar,
-# world conventions. No steering, no method recipes, no worked examples, no
-# imperative restatements: a fact in imperative dress is stated as its
-# mechanical consequence instead. The per-tool capability legend rides the
-# tool descriptions (``prompts.py``); this constant carries the rest.
-def served_system_text(*, sensor_description: str = "") -> str:
-    """The single system message the model is served.
-
-    One edit to the one constant prompt: the run's sensor-rig block fuses
-    onto the tail. The Qwen3 template rejects a second ``role=system`` turn,
-    so the rig block is fused here rather than appended as its own message.
-    The ``Reasoner`` and the contract dump both serve this exact string. A
-    blank ``sensor_description`` returns the constant prompt alone, no
-    trailing separator — what a run with no rig configured serves.
-
-    The ``system_turn`` withhold serves no system turn: an empty string,
-    which the ``Reasoner`` sends as no message.
-    """
-    from maps.search.parse_compile.prompts import (  # noqa: PLC0415
-        served_system_prompt)
-    from maps.search.withhold import withheld  # noqa: PLC0415
-    if withheld("system_turn"):
-        return ""
-    text = served_system_prompt()
-    if sensor_description.strip():
-        text += "\n\n" + _format_sensor_system_message(sensor_description)
-    return text
 
 
 # Crops accumulate and the compactor bounds them in TOKENS, the resource the
@@ -146,29 +116,6 @@ def _reasoner_timeout_s() -> float:
             f"immediately', never 'no limit', and a socket refuses a longer wait"
         )
     return value
-
-
-def _format_sensor_system_message(description: str) -> str:
-    """Return the per-run sensor-rig block appended to the constant reasoner
-    system prompt. vLLM's Qwen3 chat-template wrapper rejects requests
-    with more than one ``role=system`` message ("System message must be
-    at the beginning"), so this block is fused into the single system
-    message at ``Reasoner`` construction time rather than appended as
-    a second turn. Facts only (radical arm): what the rig resolves and
-    what SAM does; no segmentation directives."""
-    from maps.search.withhold import withheld  # noqa: PLC0415
-    return (
-        "Sensor rig (active for this run):\n"
-        f"{description.strip()}\n\n"
-        "A concept this rig cannot see produces an empty SAM response."
-        + (" This run has no prior map: what SAM segments is the only thing"
-           " in the graph." if withheld("prior") else
-           " SAM covers un-cataloged / movable objects; static map features"
-           " are already in the graph as prior footprints with geometry and"
-           " raw OSM tags.")
-        + ("" if withheld("look_for") else
-           " SAM segments roads as merged blobs and over-splits buildings.")
-    )
 
 
 def _normalize_tool_call_arguments(tc: dict) -> dict:
@@ -293,7 +240,7 @@ class Reasoner:
         return self.endpoint_spec.model_id
 
     def __post_init__(self) -> None:
-        system = served_system_text(sensor_description=self.sensor_description)
+        system = served_system_prompt(self.sensor_description)
         if not self.messages and system:
             self.messages.append({"role": "system", "content": system})
 

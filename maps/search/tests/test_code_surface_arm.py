@@ -909,8 +909,8 @@ def test_the_legend_documents_every_call_the_surface_serves():
     assert "known only from a look, never from rank" in CODE_SYSTEM_PROMPT
     assert "never that its head is the thing" in CODE_SYSTEM_PROMPT
     # the facing word, the cut's compass value and the axis convention
-    from maps.search.parse_compile.prompts import CODE_TOOLS
-    desc = CODE_TOOLS[0]["function"]["description"]
+    from maps.search.parse_compile.prompts import served_tools
+    desc = served_tools()[0]["function"]["description"]
     assert '"facing <place>"' in desc, desc
     assert 'filter(facing=<place>, direction="south")' in desc, desc
     assert "+x runs EAST" in desc and "+y runs NORTH" in desc

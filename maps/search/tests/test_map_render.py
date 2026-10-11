@@ -255,10 +255,10 @@ def test_the_map_frame_follows_what_was_asked_about():
 
 
 def test_the_image_axis_convention_is_stated_once_and_correctly():
-    from maps.search.parse_compile.reasoner_agent import served_system_text
+    from maps.search.parse_compile.prompts import served_system_prompt
 
     # normalized: the prompt wraps, and a line break is not a claim
-    t = " ".join(served_system_text().split())
+    t = " ".join(served_system_prompt().split())
     assert "NORTH-UP" in t
     # the direction, stated rather than implied
     assert "y DECREASES as you look down" in t

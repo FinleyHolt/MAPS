@@ -3,14 +3,12 @@
 
 from maps.perception.geometry.sensor_spec import list_sensors
 from maps.search.parse_compile import contract, prompts
-from maps.search.parse_compile import reasoner_agent as ra
 
 
 def test_the_dump_is_the_code_arm_the_flight_path_serves():
     c = contract.assemble()
-    assert c["system"] == ra.served_system_text()
     assert c["system"] == prompts.CODE_SYSTEM_PROMPT
-    assert c["tools"] is prompts.CODE_TOOLS
+    assert c["tools"] == prompts.served_tools()
     assert [t["function"]["name"] for t in c["tools"]] == ["run"]
     for t in c["tools"]:
         assert len(t["function"]["description"]) > 300
@@ -35,7 +33,7 @@ def test_sensor_block_fuses_like_a_run():
     c = contract.assemble(sensor=name)
     assert "Sensor rig (active for this run):" in c["system"]
     # Fused into the ONE system string, never a second message.
-    assert c["system"].startswith(ra.served_system_text())
+    assert c["system"].startswith(prompts.served_system_prompt())
 
 
 def test_unknown_sensor_dies_loud_naming_the_registry():
