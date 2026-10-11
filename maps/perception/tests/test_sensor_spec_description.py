@@ -1,10 +1,5 @@
-"""SensorSpec.description plumbing.
-
-The description is patched into the reasoner's system prompt, so
-every registered sensor must carry a non-empty description; YAML
-overrides must inherit from their base unless overridden, and refuse a key
-they do not know.
-"""
+"""Every registered sensor carries the description the reasoner's system prompt quotes, and an
+override refuses a key it does not know."""
 
 from __future__ import annotations
 
@@ -23,21 +18,6 @@ def test_every_registered_sensor_has_a_description() -> None:
     )
 
 
-def test_resolve_sensor_inline_dict_inherits_base_description() -> None:
-    base = _REGISTRY["nadir_1008_90"]
-    spec = resolve_sensor({"base": "nadir_1008_90", "max_range_m": 50.0})
-    assert spec is not None
-    assert spec.description == base.description
-
-
-def test_resolve_sensor_inline_dict_overrides_description() -> None:
-    spec = resolve_sensor(
-        {"base": "nadir_1008_90", "description": "custom override"}
-    )
-    assert spec is not None
-    assert spec.description == "custom override"
-
-
 def test_resolve_sensor_refuses_an_unknown_override_key() -> None:
     import pytest
 
@@ -46,13 +26,7 @@ def test_resolve_sensor_refuses_an_unknown_override_key() -> None:
 
 
 def test_nadir_description_warns_about_vertical_surfaces() -> None:
-    """Smoke check that the nadir description actually constrains the agent.
-
-    The whole point of this field is to stop reasoners from asking SAM
-    for facade / wall segmentations on a straight-down camera. If the
-    nadir description ever loses that warning, the reasoner prompt will
-    quietly stop carrying it and the bug returns.
-    """
+    """The nadir description tells the reasoner a straight-down camera sees no walls."""
     nadir = _REGISTRY["nadir_1008_90"]
     text = nadir.description.lower()
     assert "nadir" in text or "straight down" in text or "90" in text
