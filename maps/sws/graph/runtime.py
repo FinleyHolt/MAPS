@@ -116,24 +116,9 @@ def upsert_prior_percept(
 
 
 def _next_detected_id(graph: ObjectGraph) -> str:
-    """The next ``detected_<idx>`` id for ``graph``: a counter cached on the
-    graph, seeded once from the highest existing id."""
-    counter = graph.__dict__.get("_next_detected_idx")
-    if counter is None:
-        max_idx = -1
-        for nid in graph.nodes:
-            if nid.startswith("detected_"):
-                try:
-                    max_idx = max(max_idx, int(nid[len("detected_") :]))
-                except ValueError:
-                    continue
-        counter = max_idx + 1
-    fid = f"detected_{counter}"
-    while fid in graph.nodes:
-        counter += 1
-        fid = f"detected_{counter}"
-    graph.__dict__["_next_detected_idx"] = counter + 1
-    return fid
+    """The next ``detected_<i>`` id: this module mints them from 0 and nothing
+    removes a node, so the count of detected ids is the next index."""
+    return f"detected_{sum(fid.startswith('detected_') for fid in graph.nodes)}"
 
 
 def upsert_detected_centroid_only(

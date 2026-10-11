@@ -75,7 +75,7 @@ def test_car_and_gray_car_stay_separate_layers():
     mask = _square_mask(10, 10, 6)
     fid_car = _upsert(g, "t1", mask)
     fid_gray = _upsert(g, "t2", mask, class_name="gray car", now=1.0)
-    assert fid_car != fid_gray
+    assert (fid_car, fid_gray) == ("detected_0", "detected_1")
     assert g.nodes[fid_car].class_name == "car"
     assert g.nodes[fid_gray].class_name == "gray car"
     assert sorted(n.class_name for n in g.nodes.values() if n.provenance == "detected") == ["car", "gray car"]
