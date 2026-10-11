@@ -275,28 +275,13 @@ class Reasoner:
         body = f"[Repair] {message.strip()}"
         self.append_user(body)
 
-    def append_tool_result(self, tool_call_id: str, name: str, result: Any) -> None:
-        """Append a tool-result message after dispatching a tool call.
-
-        EVERY tool_call id the assistant emitted gets exactly one result
-        (the compactor's id-closure sweep requires a result per id). Dict
-        results serialize as ``json.dumps(result, default=str)``.
-        """
-        if isinstance(result, str):
-            content = result
-        else:
-            try:
-                content = json.dumps(result, default=str)
-            except (TypeError, ValueError):
-                content = str(result)
-        self.messages.append(
-            {
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "name": name,
-                "content": content,
-            }
-        )
+    def append_tool_result(self, tool_call_id: str, name: str, result: dict) -> None:
+        """Append one tool-role result, ``json.dumps(result, default=str)``.
+        Every tool_call id the assistant emitted gets exactly one (the
+        compactor's id-closure sweep requires a result per id)."""
+        self.messages.append({"role": "tool", "tool_call_id": tool_call_id,
+                              "name": name,
+                              "content": json.dumps(result, default=str)})
 
 
     # ------------------------------------------------------------------
@@ -374,11 +359,8 @@ class Reasoner:
         # hint that replays nothing a reasoning model does.
         if self.seed is not None and not wire:
             kwargs["seed"] = self.seed
-        sub_id = (
-            str(self.reasoner_index) if self.reasoner_index is not None else None
-        )
-        if sub_id is not None:
-            kwargs["transport_subagent_id"] = sub_id
+        if self.reasoner_index is not None:
+            kwargs["transport_subagent_id"] = str(self.reasoner_index)
         if self.cancel_event is not None:
             if self.cancel_event.is_set():
                 raise CallCanceled(
@@ -439,18 +421,8 @@ class Reasoner:
             )
         if calls:
             assistant_msg["tool_calls"] = calls
-            self.messages.append(assistant_msg)
-            return {
-                "kind": "tool_call",
-                "tool_calls": calls,
-                "content": text,
-                "reasoning": reasoning_text,
-                "finish_reason": finish_reason,
-            }
         self.messages.append(assistant_msg)
-        return {
-            "kind": "text",
-            "content": text,
-            "reasoning": reasoning_text,
-            "finish_reason": finish_reason,
-        }
+        return {"kind": "tool_call" if calls else "text",
+                **({"tool_calls": calls} if calls else {}),
+                "content": text, "reasoning": reasoning_text,
+                "finish_reason": finish_reason}
