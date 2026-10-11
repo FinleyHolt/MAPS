@@ -1,11 +1,9 @@
 """The stops an ``explore`` flies: ``SearchLoop.node_coverage_stops``."""
 from __future__ import annotations
 
-import threading
-
 import numpy as np
 
-from maps.search.search_loop import SearchLoop
+from maps.search.tests.fakes import search_loop
 
 _CELL_M = 2.0
 # The mission's flight budget, the stop bound it passes.
@@ -20,27 +18,13 @@ def _cover(lp, fid, spacing_m, minor_spacing_m=1e9):
 
 
 def _loop_over(cells):
-    """A SearchLoop stand-in whose one node carries these raster cells."""
+    """A SearchLoop whose one node carries these raster cells."""
     class _Node:
         pass
 
     _Node.cells = np.array(cells)
     _Node.centroid = (cells[0][0], cells[0][1])
-
-    class _Graph:
-        nodes = {"prior_9": _Node()}
-
-    class _S:
-        runtime_graph = _Graph()
-
-    class _Loop(SearchLoop):     # read-only properties on the real loop, so
-        _cell_size_m = _CELL_M   # the stand-in overrides the class
-        _tile_origin_xy = (0.0, 0.0)
-        state = _S()
-
-    lp = _Loop.__new__(_Loop)
-    lp._lock = threading.RLock()
-    return lp
+    return search_loop({"prior_9": _Node()}, cell_size_m=_CELL_M)
 
 
 def _cell_centres(cells):

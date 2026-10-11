@@ -78,16 +78,10 @@ def test_marked_region_without_a_marker_is_an_error():
 
 
 def _bare_loop():
-    import threading
+    from maps.search.tests.fakes import search_loop
 
-    from maps.search import search_loop as sl
-
-    loop = object.__new__(sl.SearchLoop)
-    loop._lock = threading.RLock()
-    loop._state = sl._State(runtime_graph=None)
     pushes: list[list] = []
-    loop._sam_setter = pushes.append
-    return loop, pushes
+    return search_loop(sam_setter=pushes.append), pushes
 
 
 def test_declare_arms_the_director_on_first_call():

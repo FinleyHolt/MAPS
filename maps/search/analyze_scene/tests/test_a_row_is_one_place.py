@@ -173,7 +173,7 @@ def test_the_real_bake_lands_every_row_on_the_map():
 
 
 def test_the_flown_pose_is_the_row_s_served_xy():
-    from maps.search.search_loop import SearchLoop
+    from maps.search.tests.fakes import search_loop
 
     ways = [("prior_1", _Way("Lime Avenue", _row(range(0, 10)))),
             ("prior_2", _Way("Lime Avenue", _row(range(10, 20)))),
@@ -183,17 +183,7 @@ def test_the_flown_pose_is_the_row_s_served_xy():
                              [[r, 40] for r in range(0, 20)]
                              + [[19, c] for c in range(40, 60)]))]
 
-    class _Graph:
-        nodes = dict(ways)
-
-    # ``_cell_size_m`` is a read-only property sourced from the loop's grid
-    # -- the single source of truth for the centroid->world conversion -- so
-    # the fixture supplies that rather than shadowing the property.
-    loop = SearchLoop.__new__(SearchLoop)
-    loop._tile_origin_xy = (0.0, 0.0)
-    loop._grid = type("D", (), {"cell_size_m": 2.0})()
-    loop._lock = __import__("threading").RLock()
-    loop._state = type("S", (), {"runtime_graph": _Graph()})()
+    loop = search_loop(dict(ways), cell_size_m=2.0)
 
     _c, anchors = build_surface([], ways, (0.0, 0.0), 2.0)
     assert anchors, "fixture built no rows"

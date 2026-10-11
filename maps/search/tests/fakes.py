@@ -78,6 +78,19 @@ def bare_ctx(graph=None, grid_shape=(10, 10), pose_xy=None):
                            pose_xy=pose_xy)
 
 
+def search_loop(nodes=None, *, cell_size_m=2.0, sam_setter=None):
+    """A started SearchLoop over a graph holding ``nodes`` (``{fid: node}``),
+    tile origin (0, 0)."""
+    from maps.search.search_loop import SearchLoop
+    from maps.sws.graph.model import GridDomain
+
+    loop = SearchLoop(GridDomain(height=10, width=10, cell_size_m=cell_size_m),
+                      tile_origin_xy=(0.0, 0.0), map_name="test", sam_setter=sam_setter,
+                      ortho_ground_z_m=0.0, rgbd_dir="")
+    loop.start(SimpleNamespace(nodes=dict(nodes or {})))
+    return loop
+
+
 def run(code: str):
     """One ``run`` tool call."""
     return ("run", {"code": code})

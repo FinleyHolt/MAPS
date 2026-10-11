@@ -44,23 +44,16 @@ def test_digest_empty_flight_serves_nothing():
 def test_state_stash_replaces_whole_each_step():
     """A step folding nothing must leave an empty list, never the previous
     flight's finds. Exercised at the state seam the loop writes."""
-    import threading
+    from maps.search.tests.fakes import search_loop
 
-    from maps.search.search_loop import SearchLoop
-
-    class _S:
-        last_flight_detections = [_det(1)]
-
-    class _Duck:
-        state = _S()
-        _lock = threading.Lock()
-
-    got = SearchLoop.last_flight_detections(_Duck())
+    loop = search_loop()
+    loop.state.last_flight_detections = [_det(1)]
+    got = loop.last_flight_detections()
     assert got == [_det(1)]
     got[0]["fid"] = "mutated"                      # accessor returns copies
-    assert _S.last_flight_detections[0]["fid"] == "detected_1"
-    _S.last_flight_detections = []
-    assert SearchLoop.last_flight_detections(_Duck()) == []
+    assert loop.state.last_flight_detections[0]["fid"] == "detected_1"
+    loop.state.last_flight_detections = []
+    assert loop.last_flight_detections() == []
 
 
 def test_every_armed_class_reaches_the_head_however_the_fold_ordered_it():

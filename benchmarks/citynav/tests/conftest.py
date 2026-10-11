@@ -52,26 +52,21 @@ STUB_GRAPH = {
 
 @pytest.fixture
 def stub_session(monkeypatch: pytest.MonkeyPatch):
-    """A ``MissionSession`` over a stubbed SearchLoop (``STUB_GRAPH``), a live
+    """A ``MissionSession`` over a SearchLoop holding ``STUB_GRAPH``, a live
     ``observe`` frame and no render: ``make(**loop_overrides, markers=,
     pose_xy=, rgb=)``."""
     from types import SimpleNamespace
 
     from benchmarks.citynav.episode import EpisodeState
     from benchmarks.citynav.run_benchmark import mission_engine as me
+    from maps.search.tests.fakes import search_loop
 
     monkeypatch.setattr(me, "_write_tour_cursor", lambda *a, **k: None)
 
     def make(*, markers=(), pose_xy=(10.0, 20.0), rgb=None, **loop_overrides) -> me.MissionSession:
-        loop = SimpleNamespace(
-            declare_mission_concepts=lambda cleaned: {}, _lock=threading.RLock(),
-            _tool_ctx_for_examiner=SimpleNamespace, _ortho_ground_z_m=0.0,
-            _render_candidate_crops=None, _look_audit_dir=lambda: None, _boost_queue_cb=None,
-            node_xy=lambda fid: STUB_GRAPH.get(fid),
-            activate_pending_boosts=lambda: None, update_perception=lambda **kw: [],
-            retire_boosts_after_round=lambda rounds: None,
-            last_flight_detections=lambda: [], upsert_prior_percept=lambda *a, **k: None,
-        )
+        loop = search_loop({
+            fid: SimpleNamespace(world_xy=xy, provenance="detected" if prov == "detected" else "prebaked")
+            for fid, (xy, prov) in STUB_GRAPH.items()})
         for k, v in loop_overrides.items():
             setattr(loop, k, v)
         frame = SimpleNamespace(pose_xy=(130.0, 240.0), altitude_m=900.0, yaw_deg=45.0, rgb=rgb,
