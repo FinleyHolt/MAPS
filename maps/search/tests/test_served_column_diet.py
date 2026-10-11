@@ -119,17 +119,17 @@ def test_score_by_grid_orders_without_a_score_column():
     assert " score " not in header, header
 
 
-def test_no_axis_heading_is_produced_at_all():
+def test_a_footprint_carries_its_area_and_no_unserved_shape_column():
     from maps.search.analyze_scene.geom_compute import (
         contour_shape_features,
         mask_shape_features,
     )
 
     cells = mask_shape_features([(0, 0), (0, 1), (1, 0), (1, 1)], 2.0)
-    assert set(cells) == {"footprint_area_m2", "aspect_ratio"}, cells
+    assert cells == {"footprint_area_m2": 16.0}, cells
     box = [[[0.0, 0.0], [8.0, 0.0], [8.0, 3.0], [0.0, 3.0], [0.0, 0.0]]]
-    contour = contour_shape_features(box)
-    assert set(contour) == {"footprint_area_m2", "aspect_ratio"}, contour
+    assert contour_shape_features(box) == {"footprint_area_m2": 24.0}
+    assert contour_shape_features([box[0][:-1]]) is None
 
 
 def test_shape_scalars_are_gone_from_the_mission_surface():

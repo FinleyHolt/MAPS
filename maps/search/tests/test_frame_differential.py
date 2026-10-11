@@ -131,7 +131,7 @@ def test_a_closed_ring_yields_area_and_an_open_way_yields_nothing():
         assert contour_shape_features([verts[:-1]]) is None
         # No axis heading is produced: orientation is a relation to the
         # feature a thing faces, never a property of its own rectangle.
-        assert set(feat) == {"footprint_area_m2", "aspect_ratio"}, feat
+        assert set(feat) == {"footprint_area_m2"}, feat
         area = Polygon(verts).area
         assert abs(feat["footprint_area_m2"] - area) < max(1.0, 0.01 * area)
         judged += 1

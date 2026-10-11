@@ -485,7 +485,7 @@ def point_in_polygon(pt, poly) -> bool:
 #   POSITION (dc_/brg_/along_/off_/vx_/vy_/frame ordinals/groups) -> the
 #       mask's AREA CENTROID (:func:`loops_area_centroid`); parked cars are
 #       ~5 m apart center-to-center but ~0.5 m edge-to-edge.
-#   SHAPE (footprint_area_m2 / aspect_ratio) -> mask_shape_features.
+#   AREA (footprint_area_m2) -> mask_shape_features.
 #
 # An object with no realised mask is a POINT-mask, and every functional
 # degrades to the point.
@@ -1192,129 +1192,22 @@ def cells_boundary_loops(cells, origin_xy, cell_m):
             for lp in loops]
 
 
-# --- mask-derived shape descriptors (area / aspect) -----------------------------
-# The same two shape columns on every node type: footprint area and
-# min-area-rectangle aspect ratio.
-
-
-def _convex_hull(points):
-    """Monotone-chain convex hull of 2D points ``(a, b)``. Returns the hull
-    vertices in CCW order with NO repeated endpoint; collinear interior points
-    are dropped. Fewer than 3 unique points return the sorted unique points."""
-    pts = sorted({(float(p[0]), float(p[1])) for p in points})
-    if len(pts) <= 2:
-        return pts
-
-    def _cross(o, a, b):
-        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
-
-    lower: list = []
-    for p in pts:
-        while len(lower) >= 2 and _cross(lower[-2], lower[-1], p) <= 0:
-            lower.pop()
-        lower.append(p)
-    upper: list = []
-    for p in reversed(pts):
-        while len(upper) >= 2 and _cross(upper[-2], upper[-1], p) <= 0:
-            upper.pop()
-        upper.append(p)
-    return lower[:-1] + upper[:-1]
-
-
-def _min_area_rect(hull):
-    """Rotating-calipers minimum-area bounding rectangle of a CONVEX hull (list
-    of ``(a, b)`` vertices in CCW order). Returns ``(long_side, short_side)``.
-    The min-area rectangle has one side collinear with a hull edge, so trying
-    every edge is exact. Degenerate hulls (0-1 points) return a zero-extent
-    rect."""
-    n = len(hull)
-    if n < 2:
-        return 0.0, 0.0
-    best = None  # (area, long_side, short_side)
-    for i in range(n):
-        ax, ay = hull[i]
-        bx, by = hull[(i + 1) % n]
-        ex, ey = bx - ax, by - ay
-        elen = math.hypot(ex, ey)
-        if elen < 1e-9:
-            continue
-        ux, uy = ex / elen, ey / elen      # edge direction (unit)
-        vx, vy = -uy, ux                    # edge normal (unit)
-        min_u = min_v = math.inf
-        max_u = max_v = -math.inf
-        for (px, py) in hull:
-            du = px * ux + py * uy
-            dv = px * vx + py * vy
-            if du < min_u:
-                min_u = du
-            if du > max_u:
-                max_u = du
-            if dv < min_v:
-                min_v = dv
-            if dv > max_v:
-                max_v = dv
-        wu, wv = max_u - min_u, max_v - min_v
-        area = wu * wv
-        if best is None or area < best[0]:
-            best = (area, wu, wv) if wu >= wv else (area, wv, wu)
-    if best is None:
-        return 0.0, 0.0
-    return best[1], best[2]
-
-
 def mask_shape_features(cells, cell_m):
-    """Shape descriptors from a rasterized footprint.
-
-    ``cells`` is an iterable of ``(row, col)`` tile-grid cells (numpy ``(N, 2)``
-    or a list of pairs) at ``cell_m`` meters per cell. Returns a dict of two
-    opt-in row columns, or ``None`` when the footprint is empty:
-
-      * ``footprint_area_m2``: (#unique cells) x cell_m**2.
-      * ``aspect_ratio``: minimum-area rectangle LONG / SHORT side, ``>= 1.0``.
-        A single-cell footprint is 1x1 -> ``1.0``.
-
-    No heading rides here: which way a thing faces is a relation to the
-    feature it faces (the compare's ``facing <ref>``). The rectangle is fit
-    over cell CORNERS, so a 1-wide footprint has a real extent."""
+    """``{"footprint_area_m2": #unique cells x cell_m**2}`` of a rasterized
+    footprint (``(row, col)`` cells), or ``None`` when it has no cells."""
     cs = {(int(rc[0]), int(rc[1])) for rc in (cells if cells is not None else [])}
     if not cs:
         return None
     m = float(cell_m)
-    area = round(len(cs) * m * m, 1)
-    corners: set = set()
-    for (r, c) in cs:
-        corners.add((r, c))
-        corners.add((r, c + 1))
-        corners.add((r + 1, c))
-        corners.add((r + 1, c + 1))
-    long_s, short_s = _min_area_rect(_convex_hull(corners))
-    aspect = round(long_s / short_s, 2) if short_s > 1e-9 else 1.0
-    return {"footprint_area_m2": area, "aspect_ratio": aspect}
+    return {"footprint_area_m2": round(len(cs) * m * m, 1)}
 
 
 def contour_shape_features(chains):
-    """Shape descriptors from a feature's exact world-meter chains (the shape
-    :func:`mask_geom` takes): the native-precision counterpart of
-    :func:`mask_shape_features`, for nodes whose 2 m cells cannot express
-    shape.
-
-    Only the CLOSED chains describe a footprint: area sums across them
-    (:func:`loops_area`) and the rectangle fits their vertices. A feature with
-    no closed chain gets ``None``: a way's "area" would be the accident of
-    closing it.
-
-    Returns the SAME two opt-in columns, or ``None`` when degenerate (no
-    closed chain, or zero area / zero-width rectangle):
-    ``footprint_area_m2`` (2 dp) and ``aspect_ratio`` (LONG / SHORT, >= 1.0,
-    via :func:`_min_area_rect`)."""
-    rings = [[(float(v[0]), float(v[1])) for v in ch] for ch in (chains or [])]
-    rings = [ch for ch in rings if is_closed_chain(ch)]
-    if not rings:
-        return None
+    """``{"footprint_area_m2": ...}`` summed over a feature's CLOSED world
+    chains (:func:`loops_area`), or ``None`` when no closed chain encloses
+    area: a way's "area" would be the accident of closing it."""
+    rings = [ch for ch in (chains or []) if is_closed_chain(ch)]
     area = loops_area(rings)
-    long_s, short_s = _min_area_rect(
-        _convex_hull([p for ch in rings for p in ch]))
-    if area <= 1e-9 or short_s <= 1e-9:
+    if area <= 1e-9:
         return None
-    return {"footprint_area_m2": round(area, 2),
-            "aspect_ratio": round(long_s / short_s, 2)}
+    return {"footprint_area_m2": round(area, 2)}
