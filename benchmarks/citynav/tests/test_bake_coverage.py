@@ -2,39 +2,31 @@
 
 The block bounds rectangle over-admits: the PLY footprint is tighter than the
 nominal bounds (a third of a block rectangle can be no-data), and a prior over
-no-data becomes a graph node the agent can request a viewpoint on — the stop
+no-data becomes a graph node the agent can request a viewpoint on: the stop
 renders an all-black crop with zero detections and returns silently. The bake
-clips every record's cells to the imagery coverage mask
-(``_cell_coverage`` -> ``_features_from_records(coverage=...)``).
+clips every record's cells to the imagery the block ortho carries.
 
-The orientation test is the load-bearing one: ortho rows run north-down while
-bake cell rows run south-up, so an unflipped reduce passes every shape check
-and silently keeps the wrong half of every block. The last test is the
-vacuity floor on the real bake: a coverage mask that silently degraded to
-all-True would drop nothing anywhere, which the real no-data fractions make
-impossible.
+Orientation is load-bearing: ortho rows run north-down while bake cell rows run
+south-up, so an unflipped reduce passes every shape check and silently keeps
+the wrong half of every block. The last test is the vacuity floor on the real
+bake: a coverage mask that silently degraded to all-True would drop nothing
+anywhere, which the real no-data fractions make impossible.
 """
 from __future__ import annotations
 
 import glob
 import json
 import os
-import sys
 
 import numpy as np
 import pytest
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
-sys.path.insert(0, _REPO)
+import benchmarks.citynav.paths as citynav_paths
+from benchmarks.citynav.bake.city import bake_block
+from maps.search.tests.ortho_fixture import write_rasters
 
-import benchmarks.citynav.paths as citynav_paths  # noqa: E402
-from benchmarks.citynav.bake.city import (  # noqa: E402
-    _cell_coverage,
-    _features_from_records,
-)
-from benchmarks.citynav.eval import WorldBounds  # noqa: E402
-from maps.search.tests.ortho_fixture import write_rasters  # noqa: E402
+_REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+BLOCK = "toy_block_0"
 
 
 def _poly(x0: float, y0: float, x1: float, y1: float) -> dict:
@@ -44,61 +36,51 @@ def _poly(x0: float, y0: float, x1: float, y1: float) -> dict:
     }
 
 
-BOUNDS = WorldBounds(x_min=0.0, y_min=0.0, x_max=8.0, y_max=8.0)
-GRID = (4, 4)
-CELL = 2.0
+RECORDS = [
+    ({"landuse": "grass", "osm_id": "w_all"}, _poly(0.1, 0.1, 7.9, 7.9)),
+    ({"building": "yes", "osm_id": "w_south"}, _poly(0.1, 0.1, 7.9, 3.9)),
+    ({"building": "yes", "osm_id": "w_straddle", "name": "Straddle House"}, _poly(0.1, 0.1, 3.9, 5.9)),
+]
 
 
-def test_cell_coverage_orientation(tmp_path, monkeypatch) -> None:
-    """North-half imagery covers the HIGH cell rows (south-up grid)."""
-    rgb = np.zeros((80, 80, 3), dtype=np.uint8)
-    rgb[:40, :] = 90  # raster row 0 is y_max: the NORTH half has imagery
-    write_rasters(tmp_path, "toy_block_0", rgb, np.zeros((80, 80), dtype=np.float32))
-    monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", tmp_path)
-    meta: dict = {}
-    cov = _cell_coverage("toy_block_0", meta, BOUNDS, GRID, CELL)
-    assert cov is not None and meta["coverage_source"] == "ortho alpha"
-    assert cov[2:, :].all(), "north imagery must cover the high cell rows"
-    assert not cov[:2, :].any(), "south no-data must stay uncovered"
+def _bake(tmp_path, monkeypatch, *, imagery_north: bool) -> tuple[dict, dict]:
+    """An 8 m x 8 m block of 2 m cells; ``imagery_north`` writes a raster whose
+    north half alone has imagery, else no raster exists."""
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    (tiles / f"{BLOCK}_meta.json").write_text(json.dumps({
+        "cell_size_m": 2.0, "grid_shape": [4, 4],
+        "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 8.0, "y_max": 8.0},
+    }))
+    if imagery_north:
+        rgb = np.zeros((80, 80, 3), dtype=np.uint8)
+        rgb[:40, :] = 90  # raster row 0 is y_max: the NORTH half has imagery
+        write_rasters(tmp_path / "rasters", BLOCK, rgb, np.zeros((80, 80), dtype=np.float32))
+    monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", tmp_path / "rasters")
+    bake_block(BLOCK, RECORDS, tiles)
+    rows = json.loads((tiles / f"{BLOCK}_features.json").read_text())["prior"]
+    return {r["osm_id"]: r for r in rows}, json.loads((tiles / f"{BLOCK}_meta.json").read_text())
 
 
-def test_cell_coverage_missing_ortho_keeps_rectangle(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", tmp_path)
-    meta: dict = {}
-    assert _cell_coverage("cambridge", meta, BOUNDS, GRID, CELL) is None
+def test_records_clip_to_the_imagery(tmp_path, monkeypatch) -> None:
+    """North imagery covers the HIGH cell rows; wholly-south records drop and
+    straddlers keep only their on-imagery cells, centroid included."""
+    rows, meta = _bake(tmp_path, monkeypatch, imagery_north=True)
+    assert meta["coverage_source"] == "ortho alpha"
+    assert sorted(rows) == ["w_all", "w_straddle"]
+    assert rows["w_all"]["cells"] == [[r, c] for r in (2, 3) for c in range(4)]
+    assert rows["w_straddle"]["cells"] == [[2, 0], [2, 1]]
+    assert rows["w_straddle"]["centroid_row"] == 2.0
+    # The straddler's true bbox center (2.0, 3.0) is over no-data: flagged.
+    assert rows["w_straddle"]["off_raster"] is True and rows["w_straddle"]["off_raster_m"] > 0
+    assert meta["bake_counts"]["raster_coverage"]["off_coverage_dropped"] == 1
+
+
+def test_no_raster_keeps_every_rasterized_cell(tmp_path, monkeypatch) -> None:
+    rows, meta = _bake(tmp_path, monkeypatch, imagery_north=False)
     assert meta["coverage_source"] == "bounds rectangle"
-
-
-def test_records_clip_to_coverage() -> None:
-    """Fully-off records drop; straddlers keep only on-imagery cells."""
-    coverage = np.zeros(GRID, dtype=bool)
-    coverage[:, 0] = True  # only the western cell column has imagery
-    records = [
-        ({"building": "yes", "osm_id": "w_off"}, _poly(4.1, 0.1, 7.9, 7.9)),
-        ({"building": "yes", "osm_id": "w_straddle", "name": "Straddle House"},
-         _poly(0.1, 0.1, 7.9, 3.9)),
-    ]
-    features = _features_from_records(
-        records, bounds=BOUNDS, grid_shape=GRID, cell_size_m=CELL,
-        line_buffer_m=1.0, coverage=coverage,
-    )
-    rows = features.get("prior", [])
-    assert [r["osm_id"] for r in rows] == ["w_straddle"]
-    assert all(coverage[r, c] for r, c in rows[0]["cells"]), rows[0]["cells"]
-    rr = int(round(rows[0]["centroid_row"]))
-    cc = int(round(rows[0]["centroid_col"]))
-    assert coverage[rr, cc], "centroid must sit over imagery"
-    # The straddler's true bbox center (4.0, 2.0) is over no-data: flagged.
-    assert rows[0].get("off_raster") is True and rows[0]["off_raster_m"] > 0
-
-
-def test_no_coverage_keeps_every_rasterized_cell() -> None:
-    records = [({"building": "yes", "osm_id": "w1"}, _poly(4.1, 0.1, 7.9, 7.9))]
-    features = _features_from_records(
-        records, bounds=BOUNDS, grid_shape=GRID, cell_size_m=CELL,
-        line_buffer_m=1.0, coverage=None,
-    )
-    assert [r["osm_id"] for r in features["prior"]] == ["w1"]
+    assert sorted(rows) == ["w_all", "w_south", "w_straddle"]
+    assert len(rows["w_all"]["cells"]) == 16
 
 
 def test_real_bake_dropped_something() -> None:

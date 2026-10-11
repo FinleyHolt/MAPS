@@ -8,23 +8,10 @@ mask kind + top tag key=value counts.
 """
 from __future__ import annotations
 
-import os
-import sys
+import json
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
-sys.path.insert(0, _REPO)
-
-from benchmarks.citynav.bake.city import (  # noqa: E402
-    PRIOR_KEY,
-    _features_from_records,
-    _overpass_all_elements_query,
-)
-from benchmarks.citynav.eval import WorldBounds  # noqa: E402
-from maps.sws.graph import build_object_graph  # noqa: E402
-
-_BOUNDS = WorldBounds(x_min=0.0, y_min=0.0, x_max=40.0, y_max=40.0)
-_GRID = (20, 20)  # 2 m cells
+from benchmarks.citynav.bake.city import _overpass_all_elements_query, bake_block
+from maps.sws.graph import load_graph
 
 
 def _poly(x0, y0, x1, y1):
@@ -45,52 +32,37 @@ _RECORDS = [
 ]
 
 
-def _bake():
-    counts: dict = {}
-    features = _features_from_records(
-        list(_RECORDS),
-        bounds=_BOUNDS,
-        grid_shape=_GRID,
-        cell_size_m=2.0,
-        line_buffer_m=1.0,
-        bake_counts=counts,
-    )
-    return features, counts
+def _bake(tmp_path):
+    """A 40 m x 40 m map of 2 m cells; returns its prior rows, meta and graph."""
+    (tmp_path / "toy_meta.json").write_text(json.dumps({
+        "cell_size_m": 2.0, "grid_shape": [20, 20],
+        "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 40.0, "y_max": 40.0},
+    }))
+    bake_block("toy", list(_RECORDS), tmp_path, imagery=False)
+    rows = json.loads((tmp_path / "toy_features.json").read_text())["prior"]
+    meta = json.loads((tmp_path / "toy_meta.json").read_text())
+    return rows, meta, load_graph(str(tmp_path / "toy"))
 
 
-def test_every_in_window_geometry_is_kept_no_class_gate():
-    features, _counts = _bake()
-    entries = features[PRIOR_KEY]
+def test_every_in_window_geometry_is_kept_with_its_tags_and_nothing_minted(tmp_path):
+    rows, _meta, graph = _bake(tmp_path)
     # 4 in-window records kept — including the classifier-orphan tags —
     # exactly 1 excluded, and ONLY for no-geometry-in-window.
-    assert len(entries) == 4, [e.get("osm_id") for e in entries]
-    ids = {e["osm_id"] for e in entries}
-    assert ids == {"w1", "w2", "w3", "n1"}, ids
-
-
-def test_entries_are_mask_tags_name_osmid_nothing_minted():
-    features, _counts = _bake()
-    by_id = {e["osm_id"]: e for e in features[PRIOR_KEY]}
+    by_id = {e["osm_id"]: e for e in rows}
+    assert set(by_id) == {"w1", "w2", "w3", "n1"}, by_id
     gen = by_id["w1"]
     assert gen["power"] == "generator"     # raw tag verbatim
     assert "name" not in gen               # no synthesized name
     assert "prior_role" not in gen         # nothing minted
     assert gen["cells"]                    # the realised mask
-    named = by_id["w3"]
-    assert named["name"] == "Elm Street"   # name when present
+    assert by_id["w3"]["name"] == "Elm Street"   # name when present
+    # fids are prior_<index>, mirroring detected_<index>
+    assert set(graph.nodes) == {f"prior_{i}" for i in range(4)}, sorted(graph.nodes)
 
 
-def test_fids_are_prior_index_mirroring_detected():
-    features, _counts = _bake()
-    graph = build_object_graph(features, cell_size_m=2.0)
-    fids = sorted(graph.nodes)
-    assert all(f.startswith("prior_") for f in fids), fids
-    assert set(fids) == {f"prior_{i}" for i in range(4)}, fids
-
-
-def test_kind_census_groups_by_mask_kind_and_tag_counts():
-    _features, counts = _bake()
-    census = counts["kind_census"]
+def test_kind_census_groups_by_mask_kind_and_tag_counts(tmp_path):
+    _rows, meta, _graph = _bake(tmp_path)
+    census = meta["bake_counts"]["kind_census"]
     assert census["mask_kinds"] == {"area": 2, "node": 1, "way": 1}, census
     top = census["top_tags"]
     assert top["amenity=parking"] == 1, top

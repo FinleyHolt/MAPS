@@ -1,17 +1,17 @@
-"""``_write_outputs`` drops only the flags this baker re-asserts.
+"""A bake keeps the meta keys its caller wrote and re-asserts its own.
 
 A top-level ``meta["georef"]`` is written by an upstream caller
 (``benchmarks.calcity.data_prep.bake_tiles._write_meta``, which stamps the
-AOI's UTM zone and local origin), never by this module, so it passes through
-``bake_city_from_cache`` to the tile a global-coords caller reads.
+AOI's UTM zone and local origin), never by the baker, so it reaches the tile a
+global-coords caller reads. A previous bake's ``bake_counts`` and
+``provenance`` never survive a re-bake.
 """
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from benchmarks.citynav.bake.city import _STALE_BAKE_FLAGS, _write_outputs
+from benchmarks.citynav.bake.city import bake_block
 
 CALCITY_GEOREF = {
     "crs_utm_epsg": 32611,
@@ -22,54 +22,25 @@ CALCITY_GEOREF = {
 }
 
 
-def _bake(tmp_path: Path, meta: dict) -> dict:
-    _write_outputs(
-        "calcity",
-        tmp_path,
-        meta,
-        {"prior": [{"name": "Road", "object_type": "TrafficRoad", "cells": [[0, 0]]}]},
-        (10, 10),
-        2.0,
-        source_mode="osm_blocks",
-        flags={"osm_only": True, "bake_counts": {"named_kept": 1}},
-    )
-    return json.loads((tmp_path / "calcity_meta.json").read_text())
-
-
-def test_caller_georef_survives_the_bake(tmp_path):
-    out = _bake(
-        tmp_path,
-        {
-            "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 20.0, "y_max": 20.0},
-            "cell_size_m": 2.0,
-            "coordinate_frame": {
-                "x_axis": "east", "y_axis": "north", "origin": "southwest",
-            },
-            "georef": CALCITY_GEOREF,
-        },
-    )
+def test_caller_meta_survives_and_stale_bake_flags_do_not(tmp_path):
+    (tmp_path / "calcity_meta.json").write_text(json.dumps({
+        "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 20.0, "y_max": 20.0},
+        "grid_shape": [10, 10],
+        "cell_size_m": 2.0,
+        "coordinate_frame": {"x_axis": "east", "y_axis": "north", "origin": "southwest"},
+        "georef": CALCITY_GEOREF,
+        "bake_counts": {"named_kept": 999},
+        "provenance": {"prior": "stale"},
+    }))
+    road = ({"name": "Road", "highway": "residential", "osm_id": "w1"},
+            {"type": "LineString", "coordinates": [[1.0, 5.0], [19.0, 5.0]]})
+    bake_block("calcity", [road], tmp_path, imagery=False)
+    out = json.loads((tmp_path / "calcity_meta.json").read_text())
     assert out["georef"] == CALCITY_GEOREF, (
-        "the caller's georef must reach the tile — tour_to_tasking --coords "
+        "the caller's georef must reach the tile: tour_to_tasking --coords "
         "global and plot_ao_osm read crs_utm_epsg/origin_e/origin_n from it"
     )
-    # It rides beside the other facts the same caller stamped.
     assert out["coordinate_frame"]["y_axis"] == "north"
-
-
-def test_a_stale_flag_is_still_stripped(tmp_path):
-    """Vacuity floor. Emptying _STALE_BAKE_FLAGS would also make the test
-    above pass, and would silently re-inherit provenance across a
-    re-bake — the thing the set exists to prevent."""
-    out = _bake(
-        tmp_path,
-        {
-            "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 20.0, "y_max": 20.0},
-            "cell_size_m": 2.0,
-            "bake_counts": {"named_kept": 999},
-            "provenance": {"prior": "stale"},
-        },
-    )
-    assert out["bake_counts"] == {"named_kept": 1}, "re-asserted, not inherited"
-    # provenance is re-asserted per bake, never inherited.
-    assert out.get("provenance", {}).get("prior") != "stale"
-    assert _STALE_BAKE_FLAGS, "the stale-flag set must not be empty"
+    assert out["bake_counts"]["named_kept"] == 1, "re-asserted, not inherited"
+    assert "provenance" not in out, "an osm_cache bake stamps no provenance"
+    assert out["bake"]["mode"] == "osm_cache"

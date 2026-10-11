@@ -303,6 +303,20 @@ def _iter_geometry_parts(geometry: dict[str, Any]) -> Iterable[tuple[str, Any]]:
             yield "Polygon", poly
 
 
+def _record_bbox(geometry: dict[str, Any]) -> tuple[float, float, float, float] | None:
+    """``(x_min, y_min, x_max, y_max)`` over every vertex of every part."""
+    points: list[tuple[float, float]] = []
+    for geom_type, coords in _iter_geometry_parts(geometry):
+        chains = [[coords]] if geom_type == "Point" else [coords] if geom_type == "LineString" else coords
+        for chain in chains:
+            points += _as_point_list(chain)
+    if not points:
+        return None
+    xs = [x for x, _y in points]
+    ys = [y for _x, y in points]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
 def _chain_extent(chain: Sequence[tuple[float, float]]) -> float:
     """How much of the world a chain covers: enclosed area if it closes, else
     path length, else 0 for a lone vertex. The one measure that ranks the
@@ -548,8 +562,8 @@ def _feature_entry(
     props: dict[str, Any],
     cells: set[tuple[int, int]],
     source_id: str | None,
-    world_contour: list[list[float]] | None = None,
-    coverage: np.ndarray | None = None,
+    world_contour: list[list[float]] | None,
+    coverage: np.ndarray | None,
 ) -> dict[str, Any]:
     """One baked prior: mask + ALL raw tags verbatim + name-when-present +
     osm_id. Nothing else is minted — no class, no role, no synthesized name.
@@ -603,9 +617,7 @@ def _record_sort_key(record: tuple[dict[str, Any], dict[str, Any]]) -> tuple[Any
     )
 
 
-def _tag_census(
-    entries: list[dict[str, Any]], *, top_n: int = 15
-) -> dict[str, int]:
+def _tag_census(entries: list[dict[str, Any]]) -> dict[str, int]:
     """Top ``key=value`` tag counts over baked entries — the world-graph
     discovery census. Facts only; geometry bookkeeping keys excluded."""
     skip = {"cells", "centroid_row", "centroid_col", "world_contour",
@@ -619,7 +631,7 @@ def _tag_census(
             for v in vals:
                 pair = f"{key}={v}"
                 counts[pair] = counts.get(pair, 0) + 1
-    top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:top_n]
+    top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:15]
     return dict(top)
 
 
@@ -629,11 +641,10 @@ def _features_from_records(
     bounds: WorldBounds,
     grid_shape: tuple[int, int],
     cell_size_m: float,
-    line_buffer_m: float,
-    bake_counts: dict[str, Any] | None = None,
-    coverage: np.ndarray | None = None,
-) -> dict[str, list[dict[str, Any]]]:
-    """Rasterize records into ``bounds``/``grid_shape`` sidecar data.
+    coverage: np.ndarray | None,
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    """Rasterize records into ``bounds``/``grid_shape`` sidecar data and its
+    ``bake_counts``.
 
     Every record whose geometry rasterizes to >= 1 COVERED cell is kept — the
     ONLY exclusion is no-geometry-over-imagery (whole-city records against a
@@ -641,9 +652,21 @@ def _features_from_records(
     imagery mask from ``_cell_coverage``; a record's cells are clipped to it,
     so a straddler keeps only its on-imagery mask and anything wholly over
     no-data never becomes a prior the agent could request a viewpoint on.
-    ``coverage=None`` (no ortho) keeps every rasterized cell. The kind census
-    (mask kinds + top tag key=value counts) lands in ``bake_counts``.
+    ``coverage=None`` (no ortho) keeps every rasterized cell. A record whose
+    bbox misses the window (grown by the line buffer) rasterizes to nothing
+    and is skipped before the work.
     """
+    line_buffer_m = max(cell_size_m * 0.5, 1.0)
+    pad = max(line_buffer_m, cell_size_m)
+    in_window = [
+        (props, geometry, bbox)
+        for props, geometry in records
+        if (bbox := _record_bbox(geometry)) is not None
+        and bbox[0] <= bounds.x_max + pad
+        and bbox[2] >= bounds.x_min - pad
+        and bbox[1] <= bounds.y_max + pad
+        and bbox[3] >= bounds.y_min - pad
+    ]
     entries: list[dict[str, Any]] = []
     named_kept = 0
     unnamed_kept = 0
@@ -659,14 +682,8 @@ def _features_from_records(
         no_data_dist_m = (
             ndimage.distance_transform_edt(~coverage) * cell_size_m
         )
-    for props, geometry in sorted(records, key=_record_sort_key):
-        cells = _cells_for_geometry(
-            geometry,
-            bounds,
-            grid_shape,
-            cell_size_m,
-            line_buffer_m,
-        )
+    for props, geometry, bbox in sorted(in_window, key=lambda r: _record_sort_key(r[:2])):
+        cells = _cells_for_geometry(geometry, bounds, grid_shape, cell_size_m, line_buffer_m)
         if coverage is not None and cells:
             covered = {c for c in cells if coverage[c]}
             if not covered:
@@ -696,21 +713,19 @@ def _features_from_records(
         # on-imagery subset.
         if raw_name:
             named_priors_total += 1
-            bbox = _record_bbox(geometry)
-            if bbox is not None:
-                cx = 0.5 * (bbox[0] + bbox[2])
-                cy = 0.5 * (bbox[1] + bbox[3])
-                cell = _cell_for_xy(cx, cy, bounds, grid_shape, cell_size_m)
-                if cell is None:
-                    off_m = _point_to_bounds_dist(cx, cy, bounds)
-                elif coverage is not None and not coverage[cell]:
-                    off_m = float(no_data_dist_m[cell])
-                else:
-                    off_m = 0.0
-                if off_m > 0.0:
-                    entry["off_raster"] = True
-                    entry["off_raster_m"] = round(off_m, 1)
-                    named_off_raster.append([raw_name, round(off_m, 1)])
+            cx = 0.5 * (bbox[0] + bbox[2])
+            cy = 0.5 * (bbox[1] + bbox[3])
+            cell = _cell_for_xy(cx, cy, bounds, grid_shape, cell_size_m)
+            if cell is None:
+                off_m = _point_to_bounds_dist(cx, cy, bounds)
+            elif coverage is not None and not coverage[cell]:
+                off_m = float(no_data_dist_m[cell])
+            else:
+                off_m = 0.0
+            if off_m > 0.0:
+                entry["off_raster"] = True
+                entry["off_raster_m"] = round(off_m, 1)
+                named_off_raster.append([raw_name, round(off_m, 1)])
         entries.append(entry)
     off_frac = (
         round(len(named_off_raster) / named_priors_total, 3)
@@ -726,25 +741,25 @@ def _features_from_records(
             off_frac,
             ", ".join(n for n, _d in sorted(named_off_raster, key=lambda p: -p[1])[:8]),
         )
-    if bake_counts is not None:
-        bake_counts["named_kept"] = named_kept
-        bake_counts["unnamed_kept"] = unnamed_kept
+    bake_counts = {
+        "named_kept": named_kept,
+        "unnamed_kept": unnamed_kept,
         # The kind census: mask kinds + top tag key=value counts.
-        bake_counts["kind_census"] = {
+        "kind_census": {
             "mask_kinds": dict(sorted(kind_counts.items())),
             "top_tags": _tag_census(entries),
-        }
-        # Per-block raster-coverage report (rides into meta.json flags):
-        # records dropped for rasterizing only over no-data, and which named
+        },
+        # Records dropped for rasterizing only over no-data, and which named
         # priors keep cells but center over no imagery.
-        bake_counts["raster_coverage"] = {
+        "raster_coverage": {
             "off_coverage_dropped": off_coverage_dropped,
             "named_priors_total": named_priors_total,
             "named_priors_off_raster": len(named_off_raster),
             "named_off_raster_frac": off_frac,
             "named_off_raster": sorted(named_off_raster, key=lambda p: (-p[1], p[0])),
-        }
-    return {PRIOR_KEY: entries} if entries else {}
+        },
+    }
+    return ({PRIOR_KEY: entries} if entries else {}), bake_counts
 
 
 def _read_geojson_cache(
@@ -753,6 +768,8 @@ def _read_geojson_cache(
     """Read a GeoJSON cache; also return the ``citynav_osm_cache`` metadata
     block that ``dump_osm_cache`` embeds (georef + residual provenance).
     Every feature with a geometry is kept — no classification, no drop-gate."""
+    if not path.is_file():
+        raise BakeError(f"missing OSM cache {path}")
     payload = json.loads(path.read_text(encoding="utf-8"))
     raw_features = payload.get("features") if isinstance(payload, dict) else None
     if not isinstance(raw_features, list):
@@ -770,12 +787,6 @@ def _read_geojson_cache(
         records.append((props, geometry))
     cache_meta = payload.get("citynav_osm_cache")
     return records, cache_meta if isinstance(cache_meta, dict) else None
-
-
-def _read_osm_cache(path: Path) -> list[tuple[dict[str, Any], dict[str, Any]]]:
-    if not path.is_file():
-        raise BakeError(f"missing OSM cache {path}")
-    return _read_geojson_cache(path)[0]
 
 
 def _validate_georef(path: Path) -> dict[str, Any]:
@@ -865,9 +876,7 @@ def _apply_affine_geometry(
 _OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 
-def _overpass_all_elements_query(
-    bbox_wgs84: Sequence[float], *, timeout_s: int = 300
-) -> str:
+def _overpass_all_elements_query(bbox_wgs84: Sequence[float]) -> str:
     """The unrestricted Overpass query for a WGS84 window: EVERY element
     (``nwr`` with NO tag filter), recursed down (``(._;>;)``) so way and
     relation geometries are buildable from their member nodes. The bake
@@ -877,13 +886,13 @@ def _overpass_all_elements_query(
     testable without network or osmnx."""
     left, bottom, right, top = [float(v) for v in bbox_wgs84]
     return (
-        f"[out:xml][timeout:{timeout_s}];"
+        "[out:xml][timeout:300];"
         f"nwr({bottom:.6f},{left:.6f},{top:.6f},{right:.6f});"
         "(._;>;);out;"
     )
 
 
-def _fetch_overpass_xml(query: str, *, attempts: int = 4) -> str:
+def _fetch_overpass_xml(query: str) -> str:
     """POST an Overpass query with plain bounded retry/backoff (429/504 are
     routine on the shared public server). Volume is handled by the generous
     server-side timeout and the retry loop — never by narrowing the query."""
@@ -905,6 +914,7 @@ def _fetch_overpass_xml(query: str, *, attempts: int = 4) -> str:
         "User-Agent": "MAPS bake_city (citynav OSM prior bake)",
         "Content-Type": "application/x-www-form-urlencoded",
     }
+    attempts = 4
     last: Exception | None = None
     for attempt in range(attempts):
         if attempt:
@@ -1019,11 +1029,10 @@ def dump_osm_cache(
     return {"path": str(out), "records": len(features), "kind_counts": kind_counts}
 
 
-# Flag keys a previous bake may have written into meta.json. Stripped before
-# re-writing so a re-bake cannot inherit a stale provenance claim; the current
-# bake re-asserts its own flags. Every member is one this baker writes through
-# ``flags``: a key an upstream caller writes (the Cal City baker's ``georef``
-# block) is that caller's contribution and passes through.
+# Keys a previous bake may have written into meta.json. Stripped before
+# re-writing so a re-bake cannot inherit a stale provenance claim; ``bake_block``
+# re-asserts its own. A key an upstream caller writes (the Cal City baker's
+# ``georef`` block) is that caller's contribution and passes through.
 _STALE_BAKE_FLAGS = frozenset(
     {
         "bake_counts",
@@ -1067,65 +1076,66 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _write_outputs(
-    city: str,
-    tiles_dir: Path,
-    meta: dict[str, Any],
-    features: dict[str, list[dict[str, Any]]],
-    grid_shape: tuple[int, int],
-    cell_size_m: float,
+_EXCLUDED = (
+    "CityRefer objects",
+    "target IDs",
+    "target positions",
+    "descriptions",
+    "SAM outputs",
+    "satellite segmentation",
+    "vehicle and bike object priors",
+)
+
+
+def bake_block(
+    name: str,
+    records: list[tuple[dict[str, Any], dict[str, Any]]],
+    tiles_dir: str | Path = TILES_DIR,
     *,
-    source_mode: str,
-    source: str = "osm_only",
-    flags: dict[str, Any] | None = None,
-    excluded: Sequence[str] = (
-        "CityRefer objects",
-        "target IDs",
-        "target positions",
-        "descriptions",
-        "SAM outputs",
-        "satellite segmentation",
-        "vehicle and bike object priors",
-    ),
+    imagery: bool = True,
+    provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    tiles_dir.mkdir(parents=True, exist_ok=True)
-    stem = tiles_dir / city
+    """Bake ``records`` into block ``name``'s window and write its sidecars.
+
+    ``imagery=False`` is a block with no CityNav raster: the meta sidecar's
+    bounds and the bounds rectangle's coverage. A ``provenance`` dict marks a
+    city-frame cache baked per block (``bake.mode`` ``osm_blocks``) and is
+    stamped with WHO/WHEN; without one the mode is ``osm_cache``.
+    """
+    tiles_path = Path(tiles_dir).expanduser().resolve()
+    meta, bounds, grid_shape, cell_size_m = _load_city_meta(name, tiles_path, imagery=imagery)
+    coverage = _cell_coverage(name, meta, bounds, grid_shape, cell_size_m, imagery=imagery)
+    features, bake_counts = _features_from_records(
+        records, bounds=bounds, grid_shape=grid_shape, cell_size_m=cell_size_m, coverage=coverage,
+    )
+    if not features:
+        log.warning("%s: no OSM records rasterized onto the block imagery", name)
+
+    tiles_path.mkdir(parents=True, exist_ok=True)
+    stem = tiles_path / name
     graph = build_object_graph(features, cell_size_m=cell_size_m)
     save_graph(graph, str(stem))
     Path(f"{stem}_features.json").write_text(
         json.dumps(features, separators=(",", ":")), encoding="utf-8"
     )
-
     out_meta = {k: v for k, v in meta.items() if k not in _STALE_BAKE_FLAGS}
-    out_meta["map_name"] = city
-    if "_block_" in city:
-        out_meta["block"] = city
-    else:
-        out_meta["city"] = city
+    out_meta["map_name"] = name
+    out_meta["block" if "_block_" in name else "city"] = name
     out_meta["grid_shape"] = [int(grid_shape[0]), int(grid_shape[1])]
     out_meta["cell_size_m"] = float(cell_size_m)
     out_meta["n_objects"] = sum(len(v) for v in features.values())
-    out_meta["source"] = source
-    for key, value in (flags or {}).items():
-        out_meta[key] = value
+    out_meta["source"] = "osm_only"
+    out_meta["osm_only"] = True
+    out_meta["bake_counts"] = bake_counts
+    if provenance is not None:
+        out_meta["provenance"] = {**provenance, **_bake_provenance()}
     out_meta["bake"] = {
-        "mode": source_mode,
-        "excluded": list(excluded),
+        "mode": "osm_cache" if provenance is None else "osm_blocks",
+        "excluded": list(_EXCLUDED),
     }
     Path(f"{stem}_meta.json").write_text(json.dumps(out_meta, indent=2), encoding="utf-8")
-
-    stats = {
-        "city": city,
-        "features": out_meta["n_objects"],
-        "nodes": len(graph.nodes),
-    }
-    log.info(
-        "wrote %s %s bake: %d features, %d nodes",
-        city,
-        source,
-        stats["features"],
-        stats["nodes"],
-    )
+    stats = {"city": name, "features": out_meta["n_objects"], "nodes": len(graph.nodes)}
+    log.info("wrote %s osm_only bake: %d features, %d nodes", name, stats["features"], stats["nodes"])
     return stats
 
 
@@ -1136,55 +1146,9 @@ def bake_city_from_cache(
     tiles_dir: str | Path = TILES_DIR,
     imagery: bool = True,
 ) -> dict[str, Any]:
-    """Bake one city from an OSM cache in its local XY. ``imagery=False`` is a
-    block with no CityNav raster: the meta sidecar's bounds and the bounds
-    rectangle's coverage."""
-    tiles_path = Path(tiles_dir).expanduser().resolve()
-    meta, bounds, grid_shape, cell_size_m = _load_city_meta(city, tiles_path, imagery=imagery)
-    coverage = _cell_coverage(city, meta, bounds, grid_shape, cell_size_m, imagery=imagery)
-    records = _read_osm_cache(Path(osm_cache).expanduser().resolve())
-    bake_counts: dict[str, Any] = {}
-    features = _features_from_records(
-        records,
-        bounds=bounds,
-        grid_shape=grid_shape,
-        cell_size_m=cell_size_m,
-        line_buffer_m=max(cell_size_m * 0.5, 1.0),
-        bake_counts=bake_counts,
-        coverage=coverage,
-    )
-    return _write_outputs(
-        city,
-        tiles_path,
-        meta,
-        features,
-        grid_shape,
-        cell_size_m,
-        source_mode="osm_cache",
-        flags={"osm_only": True, "bake_counts": bake_counts},
-    )
-
-
-def _record_bbox(geometry: dict[str, Any]) -> tuple[float, float, float, float] | None:
-    xs: list[float] = []
-    ys: list[float] = []
-    for geom_type, coords in _iter_geometry_parts(geometry):
-        if geom_type == "Point":
-            x, y, *_rest = coords
-            xs.append(float(x))
-            ys.append(float(y))
-        elif geom_type == "LineString":
-            for x, y in _as_point_list(coords):
-                xs.append(x)
-                ys.append(y)
-        elif geom_type == "Polygon":
-            for ring in coords:
-                for x, y in _as_point_list(ring):
-                    xs.append(x)
-                    ys.append(y)
-    if not xs:
-        return None
-    return min(xs), min(ys), max(xs), max(ys)
+    """Bake one map from an OSM cache in its local XY."""
+    records, _cache_meta = _read_geojson_cache(Path(osm_cache).expanduser().resolve())
+    return bake_block(city, records, tiles_dir, imagery=imagery)
 
 
 def _city_block_names(city: str, tiles_dir: Path) -> list[str]:
@@ -1207,67 +1171,21 @@ def bake_osm_blocks(
     tiles_dir: str | Path = TILES_DIR,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Rasterize city-frame OSM records into every ``<city>_block_*`` window.
-
-    Block bounds are windows of the shared city frame, so the same records
-    bake every block; a record outside a block's bounds rasterizes to no
-    cells there and is skipped. The per-record bbox pre-filter below is a
-    pure speedup on top of that invariant (34 blocks x whole-city records).
-    """
+    """Rasterize city-frame OSM records into every ``<city>_block_*`` window
+    (block bounds are windows of the shared city frame)."""
     tiles_path = Path(tiles_dir).expanduser().resolve()
     blocks = _city_block_names(city, tiles_path)
     if not records:
         raise BakeError("no OSM records to bake")
-    bboxes = [_record_bbox(geometry) for _props, geometry in records]
-
     total = {"blocks": 0, "features": 0, "nodes": 0}
     for block in blocks:
-        meta, bounds, grid_shape, cell_size_m = _load_city_meta(block, tiles_path)
-        coverage = _cell_coverage(block, meta, bounds, grid_shape, cell_size_m)
-        buffer_m = max(cell_size_m * 0.5, 1.0)
-        pad = max(buffer_m, cell_size_m)
-        subset = [
-            rec
-            for rec, bbox in zip(records, bboxes)
-            if bbox is not None
-            and bbox[0] <= bounds.x_max + pad
-            and bbox[2] >= bounds.x_min - pad
-            and bbox[1] <= bounds.y_max + pad
-            and bbox[3] >= bounds.y_min - pad
-        ]
-        bake_counts: dict[str, Any] = {}
-        features = _features_from_records(
-            subset,
-            bounds=bounds,
-            grid_shape=grid_shape,
-            cell_size_m=cell_size_m,
-            line_buffer_m=buffer_m,
-            bake_counts=bake_counts,
-            coverage=coverage,
-        )
-        if not features:
-            log.warning("%s: no OSM records rasterized onto the block imagery", block)
-        flags: dict[str, Any] = {"osm_only": True, "bake_counts": bake_counts}
-        flags["provenance"] = {**(provenance or {}), **_bake_provenance()}
-        stats = _write_outputs(
-            block,
-            tiles_path,
-            meta,
-            features,
-            grid_shape,
-            cell_size_m,
-            source_mode="osm_blocks",
-            flags=flags,
-        )
+        stats = bake_block(block, records, tiles_path, provenance=provenance or {})
         total["blocks"] += 1
         total["features"] += int(stats["features"])
         total["nodes"] += int(stats["nodes"])
     log.info(
         "%s osm_blocks bake: %d blocks, %d features, %d nodes",
-        city,
-        total["blocks"],
-        total["features"],
-        total["nodes"],
+        city, total["blocks"], total["features"], total["nodes"],
     )
     return total
 
@@ -1280,8 +1198,6 @@ def bake_osm_blocks_from_cache(
 ) -> dict[str, Any]:
     """Per-block OSM bake from a cache already in CityNav local XY."""
     cache_path = Path(osm_cache).expanduser().resolve()
-    if not cache_path.is_file():
-        raise BakeError(f"missing OSM cache {cache_path}")
     records, cache_meta = _read_geojson_cache(cache_path)
     cache_info = cache_meta or {}
     return bake_osm_blocks(
