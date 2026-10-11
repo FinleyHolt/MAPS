@@ -41,5 +41,7 @@ detections into the graph) and returns the flight report the model reads.
 | Endpoint discovery: served model, window, output reserve | `llm/endpoint_spec.py` |
 | Per-model sampling envelopes and the reasoning effort | `llm/model_cards.py`, `llm/sampling.py` |
 | The chat-completions transport and its flight log | `llm/http.py` |
+| The request shape a hosted OpenAI model takes | `llm/openai_wire.py` |
+| Two reasoner turns per effort against the configured endpoint, before a run | `llm/endpoint_preflight.py` |
 | An episode's LLM activity as one row block (`metrics.llm`) | `llm/flight_summary.py` |
 | Mask records on the wire and on disk | `util/mask_codec.py`, `util/mask_region.py` |

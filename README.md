@@ -168,11 +168,13 @@ both). The served model name selects a sampling envelope from
 [`maps/llm/model_cards.py`](maps/llm/model_cards.py) (tokenizer, `top_p`,
 `top_k`, the reasoning efforts it takes), and must be one of that table's
 keys exactly: `inkling-small`, `qwen38-flash-next-nvfp4`,
-`gemma4-26b-a4b-nvfp4` (E1 to E3), `gemma4-e4b`, `gemma4-e2b` (E2), and
-`gemma4-26b-a4b-gguf` (the llama.cpp serve flown aboard); any other name is
-refused at startup with the list. Every request runs in thinking mode at
-temperature 1.0, and `max_tokens` is the output reserve of the discovered
-window.
+`gemma4-26b-a4b-nvfp4` (E1 to E3), `gemma4-e4b`, `gemma4-e2b` (E2),
+`gemma4-26b-a4b-gguf` (the llama.cpp serve flown aboard), and
+`openai.gpt-5.6-sol` ([GPT-5.6 Sol on Amazon Bedrock](#gpt-56-sol-on-amazon-bedrock));
+any other name is refused at startup with the list. Every request runs in
+thinking mode at temperature 1.0, and `max_tokens` is the output reserve of
+the discovered window (the OpenAI-wire card below takes both in OpenAI's own
+terms).
 
 | Variable | Read by | Meaning |
 |---|---|---|
@@ -180,6 +182,7 @@ window.
 | `SEARCH_REASONER_API_KEY` | client | Bearer token for the reasoner. |
 | `SEARCH_REASONER_TIMEOUT_S` | client | Per-call transport timeout, seconds. |
 | `SEARCH_ENDPOINT_SPEC_OVERRIDE` | client | `<model_id>:<max_model_len>` for an endpoint whose `/v1/models` reports no window. |
+| `SEARCH_REASONER_MODELS_URL` | client | Where the served models are listed, for an endpoint that lists them somewhere other than `SEARCH_REASONER_URL/models`. |
 | `SEARCH_SAMPLING_REASONING_EFFORT` | client | The arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`); discovery refuses a value the served model's card does not take. Unset sends none. |
 | `SEARCH_COMPACT_TOKENIZER_NAME` | client | The HF tokenizer repo, replacing the model card's. |
 | `SAM_SERVER_URL` | client | The SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset; a set but blank value is refused. |
@@ -187,6 +190,46 @@ window.
 | `SAM_PORT`, `SAM_MODEL_ID`, `SAM_DEVICE`, `SAM_DTYPE` | serve | Port (8772), checkpoint id (`facebook/sam3.1`), device, dtype (`bfloat16`). |
 | `SAM3_CHECKPOINT` | serve | A local checkpoint file. |
 | `SAM_MAX_INFLIGHT`, `SAM_INFLIGHT_WAIT_S`, `SAM_GPU_CHUNK`, `SAM_PREWARM`, `SAM_HEALTH_MIN_FREE_GB` | serve | Admission, batching and health limits (`serving/sam_server.py`). |
+
+### GPT-5.6 Sol on Amazon Bedrock
+
+Amazon Bedrock's `bedrock-mantle` endpoint serves GPT-5.6 Sol as
+`openai.gpt-5.6-sol` under OpenAI's own chat-completions contract, not a chat
+template. Its card (`wire: "openai"` in `maps/llm/model_cards.py`) shapes the
+request to that contract (`maps/llm/openai_wire.py`): no sampling envelope or
+template kwargs, the output cap as `max_completion_tokens`, and each message
+with only the fields its role takes. OpenAI refuses a function description
+over 1,024 characters, so the `run` tool's documentation rides the system
+turn verbatim under its own heading and the tool points at it. Bedrock
+refuses a request carrying more than 100 images, so past that the reasoner
+evicts the oldest crops, down to 80. The
+thinking span never comes back, so the reasoning count is the provider's
+`usage.completion_tokens_details` meter. A Bedrock API key is the bearer
+token.
+
+```sh
+export SEARCH_REASONER_URL=https://bedrock-mantle.us-east-1.api.aws/openai/v1
+export SEARCH_REASONER_MODELS_URL=https://bedrock-mantle.us-east-1.api.aws/v1/models
+export SEARCH_REASONER_API_KEY=<Bedrock API key>
+export SEARCH_ENDPOINT_SPEC_OVERRIDE=openai.gpt-5.6-sol:262144
+export SEARCH_REASONER_TIMEOUT_S=600
+python -m maps.llm.endpoint_preflight --effort none --effort medium --effort high
+```
+
+The override pins the window Inkling Small is served with, so the compactor
+holds GPT-5.6 Sol to the same context budget as the other arms; the model's
+own window is 1,050,000 tokens. The card takes the efforts `none`, `low`,
+`medium`, `high`, `xhigh` and `max`. The preflight flies two turns per effort
+through the reasoner's request path, the second streaming and carrying the
+tool call and its result, and prints either the endpoint's refusal or each
+reply and the token meter; it starts no run. Fly an arm as any other,
+for example the reviewed Cal City episodes at one effort:
+
+```sh
+SEARCH_SAMPLING_REASONING_EFFORT=medium SEARCH_CALCITY_RGBD_DIR=<raster dir> \
+  python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_episodes.txt \
+  --out-root output/e3/gpt56-sol-medium
+```
 
 ## Data
 
