@@ -41,6 +41,8 @@ import math
 from dataclasses import dataclass, field
 from typing import Callable
 
+from maps.util.xy_token import parse_xy_token
+
 #: The two roles a watched class can carry. `target` is what the cue asks
 #: for; `anchor` is a landmark that helps find it. Both are segmented the
 #: same way -- the role orders nothing and gates nothing, it only says why
@@ -209,7 +211,7 @@ class PerceptionDirector:
         resolved: list[dict] = []
         unresolved: list = []
         for w in where or []:
-            xy = _xy_of(w)
+            xy = _xy_of(w) or parse_xy_token(w)
             if xy is not None:
                 resolved.append({"kind": "xy", "xy": xy})
                 continue

@@ -100,3 +100,13 @@ def test_concept_union_keeps_first_seen_order():
         {"class": "tree", "role": "bogus"},
     ]})
     assert concept_union(specs) == ["red car", "tree"]
+
+
+def test_a_quoted_point_boost_re_segments_the_flown_stop_it_falls_on():
+    from maps.search.parse_compile.perception_director import PerceptionDirector
+
+    d = PerceptionDirector(retro_perceiver=lambda flown, cs: {"n_dets": 1, "stop": flown["stop_id"]})
+    d.retire_after_round([{"pose_xy": (100.0, 200.0), "stop_id": "stop_000", "target_fids": ["prior_1"]}])
+    ack = d.boost_queue(["pool"], ["[110, 205]"])
+    assert ack["retro"] == [{"where": [110.0, 205.0], "n_dets": 1, "stop": "stop_000"}], ack
+    assert "queued" not in ack
