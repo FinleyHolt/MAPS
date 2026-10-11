@@ -1,17 +1,10 @@
-"""The run's ONE machine-written record: ``run_manifest.json`` at the run root.
+"""The run's record: ``run_manifest.json`` at the run root, written before the first episode flies.
 
-Emitted after argv, endpoint discovery and episode selection resolve, before
-the first episode flies. Identity fields are measured (the served model and
-window off the installed endpoint spec, the bake off the tile files' bytes)
-and the config is inlined, so the record is self-contained. The field station
-writes one at the sortie root and one per mission workdir (``mission=``),
-carrying the sampling that mission flew under.
-
-Write-once: the first emit writes the file; a re-entry into the same root (a
-resume) verifies its resolution against it and REFUSES on identity drift
-(``IDENTITY_KEYS``): a resume under another bake/model/config/selection is
-two runs wearing one run id. Git-sha drift is recorded as a ``resumes``
-entry, not refused.
+Identity fields are measured (served model and window off the installed
+endpoint spec, the bake off its bytes) and the config is inlined. The field
+station writes one at the sortie root and one per mission workdir
+(``mission=``). Write-once: a resume into the same root is refused on
+``IDENTITY_KEYS`` drift and records git drift as a ``resumes`` entry.
 """
 
 from __future__ import annotations
@@ -29,28 +22,22 @@ from benchmarks.citynav.episodes import EPISODES_JSONL
 SCHEMA = "maps.run_manifest/v1"
 MANIFEST_NAME = "run_manifest.json"
 
-# The experiment-arm flags every row carries (``arm_env_stamp``: dispatch
-# stamps rows with it, ab_report refuses to pair across it). Set-only, except
-# the tile bake, which is resolved.
+# The experiment-arm flags every row carries (``arm_env_stamp``). Set-only,
+# except the tile bake, which is resolved.
 ARM_ENV_FLAGS = (
     "SEARCH_CITYNAV_TILES",
-    # The imagery raster the ortho crops read (the Cal City bridge resolves
-    # SEARCH_CALCITY_RGBD_DIR onto it): two arms over two rasters of one
-    # block share a bake and a split and differ on exactly this.
+    # The imagery raster the ortho crops read: two rasters of one block are two arms.
     "SEARCH_CITYNAV_RGBD_DIR",
     "SEARCH_SEED_BASE",
-    # Unset sends none and flies at the serve's default: a row without it
-    # and a row with it are two arms.
+    # Unset flies at the serve's default, which is its own arm.
     "SEARCH_SAMPLING_REASONING_EFFORT",
 )
 # Set keys under these prefixes join the stamp the same way (compaction
 # budgets change reasoning behavior).
 ARM_ENV_PREFIXES = ("SEARCH_COMPACT_",)
 
-# The audited ambient env: the arm flags, plus the vars that select what runs
-# (config, data roots, bridge/runner) and the endpoints (the two override
-# vars fabricate served-model facts without probing). The manifest records
-# every SET key; argv facts (split/seed/limit/workers) are explicit fields.
+# The ambient env the manifest records when set: the arm flags, the vars that
+# select what runs, and the endpoints.
 AUDITED_ENV = ARM_ENV_FLAGS + (
     "BENCH_SAMPLE_SEED",
     "CITYNAV_BENCH_CONFIG",
@@ -111,9 +98,8 @@ _EFFORT = "SEARCH_SAMPLING_REASONING_EFFORT"
 def settle_effort(model_id: str) -> None:
     """Write the arm's reasoning effort back to ``os.environ`` as the
     requests carry it (stripped; blank is unset), after the served card's
-    check (``model_cards.check_effort``, which raises ``ValueError``), so
-    the stamp and every reader see one spelling. Called once, after
-    endpoint discovery and before any stamp or spawn."""
+    check (``model_cards.check_effort`` raises ``ValueError``). Called once,
+    after endpoint discovery and before any stamp or spawn."""
     from maps.llm.model_cards import check_effort  # noqa: PLC0415
 
     raw = os.environ.get(_EFFORT)
@@ -133,9 +119,7 @@ def _audited_env() -> dict:
 
 
 def _endpoint_section() -> dict:
-    """The installed endpoint spec: served facts as validated at startup.
-    Raises if no spec is installed — the emit point sits after discovery,
-    so an uninstalled spec is a caller bug, not a degradable state."""
+    """The installed endpoint spec's served facts; raises if none is installed."""
     from maps.llm.endpoint_spec import spec
 
     s = spec()
@@ -155,11 +139,7 @@ def _endpoint_section() -> dict:
 
 
 def _perception_section() -> dict:
-    """The tile bake this process resolves, by path and by content.
-
-    ``bake_sha256`` is the one content check, so a reader can tell two
-    same-named bakes apart after the fact.
-    """
+    """The tile bake this process resolves, by path and by content (``bake_sha256``)."""
     from benchmarks.citynav import paths
 
     return {
@@ -180,16 +160,9 @@ def build_manifest(
     episodes: list[str],
     mission: dict | None = None,
 ) -> dict:
-    """Compose the complete resolved record. Every field is committed
-    config, argv selection, runtime measurement, or derived — never a bare
-    ambient copy (ambient values appear only in the ``env`` map).
-
-    ``mission`` is the field station's per-mission grain: the mission's own
-    identity and sampling (``episode_id``, ``run_id``, ``run_no``,
-    ``reasoning_effort``), recorded whole under
-    ``mission``. A ``reasoning_effort`` it names REPLACES the arm's in
-    ``search_env_flags``, because that is what the mission's requests
-    carried; None leaves the arm's stamp standing."""
+    """The resolved record. ``mission`` is the field station's per-mission
+    stamp, recorded whole; a ``reasoning_effort`` it names replaces the arm's
+    in ``search_env_flags``, since the mission's requests carried it."""
     arm = arm_env_stamp()
     if mission is not None and mission.get("reasoning_effort") is not None:
         arm["SEARCH_SAMPLING_REASONING_EFFORT"] = str(mission["reasoning_effort"])
@@ -213,10 +186,7 @@ def build_manifest(
         "schema": SCHEMA,
         "created_ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "hostname": socket.gethostname(),
-        # A run IS the directory its ledger and this manifest sit in, so its
-        # id is that directory's name: a sortie stamp on a flight day, the
-        # run root's name on the bench, the name typed at submission on the
-        # cluster. Nothing mints a second one.
+        # A run is the directory its ledger and manifest sit in.
         "run_id": out_root.name,
         "out_root": str(out_root),
         **prov,
@@ -268,10 +238,9 @@ def identity_drift(prior: dict, current: dict) -> list[str]:
 
 
 def emit_or_verify(out_root: Path, manifest: dict, log=print) -> Path:
-    """First entry writes the manifest (write-once); re-entry into the same
-    run root verifies identity and appends a ``resumes`` entry. Raises
-    ``ManifestIdentityError`` on drift, on a manifest that does not read, and
-    on a root holding a ledger but no manifest — the caller refuses the run."""
+    """First entry writes the manifest; re-entry verifies identity and
+    appends a ``resumes`` entry. Raises ``ManifestIdentityError`` on drift, an
+    unreadable manifest, or a root holding a ledger but no manifest."""
     # Lazy: maps.search imports the engine, which no reader of this module needs.
     from maps.search.io.atomic import atomic_write_json  # noqa: PLC0415
 

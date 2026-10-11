@@ -1,19 +1,11 @@
 """The capability x effort figure's data, re-derived from run roots every call.
 
-One record per run root. It defines no metric: SR comes from
-``arm_table.arm_row`` (``rows.load_attempts`` picks each episode's result,
-``eval.aggregate`` averages), the interval from ``ab_report.wilson_ci``, the
-bake line from ``run_report.bake_line``. Cost is read off the same picked
-attempts, so an arm's SR and its price come from one attempt selection.
-
-An arm is identified from its own run manifest, never from its directory
-name: ``served_model`` is the model the endpoint reported serving, ``split``
-the split, and ``search_env_flags.SEARCH_SAMPLING_REASONING_EFFORT`` the
-effort its requests carried. A root whose manifest names no ``served_model``
-is listed as unmatched.
-
-A ring-scored row and a shape-scored row share no success key, so every
-record carries its criterion and the figure draws one split at a time.
+One record per run root, from the readers: SR from ``arm_table.arm_row``,
+the interval from ``ab_report.wilson_ci``, the bake line from
+``run_report.bake_line``, and cost off the same picked attempts. An arm is
+identified by its run manifest (``served_model``, ``split``, the effort its
+requests carried); a root naming no ``served_model`` is listed as unmatched.
+Every record carries its criterion, and a figure draws one split at a time.
 
 Usage:
     python -m figures.capability_effort_arms <root> [<root> ...]

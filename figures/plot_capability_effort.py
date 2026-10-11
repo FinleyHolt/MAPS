@@ -5,14 +5,10 @@ several efforts is a trajectory through its rungs, joined cheapest to
 dearest; a model with one arm is one open marker. Every mark carries its
 model's name, as the run manifest records it.
 
-Cost is the x axis, never effort: effort dials are not commensurable across
-models (a float on one, named rungs on another, none on a third), while
-tokens per episode are what every model spends. ``--cost completion`` reads
-mean completion tokens per episode, ``--cost total`` mean prompt plus
-completion tokens.
-
-One split per figure. A ring-scored split and a shape-scored split share no
-success key. The numbers come from ``capability_effort_arms.build``.
+Cost is the x axis, since effort dials differ across models: ``--cost
+completion`` is mean completion tokens per episode, ``--cost total`` mean
+prompt plus completion tokens. One split per figure; the numbers come from
+``capability_effort_arms.build``.
 
 Usage:
     python -m figures.plot_capability_effort --split test_unseen <root>...

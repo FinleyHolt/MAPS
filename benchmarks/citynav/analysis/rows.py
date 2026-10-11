@@ -7,12 +7,9 @@ An infra casualty is re-queued, so an episode can have several attempts.
 
 THE RULE: an episode's result is its FIRST attempt with metrics and status
 ``ok``, ordered by attempt START time (the ``maps_<YYYYmmdd>_<HHMMSS>...``
-stamp on its workdir). Not ledger order: the ledger appends on finish, so it
-ranks a fast duplicate ahead of the attempt claimed first (one train_seen
-episode's attempts sit at file positions 4, 6, 7 with start stamps 132524,
-133120, 133016), and a duplicate always starts later. With no complete
-attempt: the LAST attempt carrying metrics, then the LAST attempt at all
-(an ``ok`` miss with no metrics keeps its slot in the denominator).
+stamp on its workdir), not ledger order, which is finish order. With no
+complete attempt: the LAST attempt carrying metrics, then the LAST attempt at
+all (an ``ok`` miss with no metrics keeps its slot in the denominator).
 
 ``status`` is the producer's verdict: ``ok`` (scored; running out of turns
 or window, or a refused request, stays ``ok``), ``timed_out`` (scored,
@@ -60,13 +57,10 @@ def ended_by(row: dict) -> str | None:
 
 
 def is_infra_abort(row: dict) -> bool:
-    """True when the attempt never got a fair run: the driver, the readers and
-    the closed-loop measures share this one predicate.
-
-    The bench stamps ``status: infra`` (a serve or SAM dying under the
-    episode, a child that died without a row); a flight row carries an
-    ``ended_by`` in ``INFRA_ENDINGS``. Such a row is dropped at read time, so
-    it never represents its episode and never prices an outage as a miss.
+    """True when the attempt never got a fair run (the driver's, the readers'
+    and the closed-loop measures' one predicate): ``status: infra`` on a bench
+    row, an ``ended_by`` in ``INFRA_ENDINGS`` on a flight row. Such a row is
+    dropped at read time.
     """
     return row.get("status") == "infra" or ended_by(row) in INFRA_ENDINGS
 
@@ -79,9 +73,7 @@ def is_complete(row: dict, m: dict | None = None) -> bool:
     return bool(m) and row.get("status") == "ok"
 
 
-# The start stamp episode_workdir puts on an attempt's directory
-# (``maps_<YYYYmmdd>_<HHMMSS>[_run<NN>]_<benchmark>_<slug>``). A run root
-# (``<benchmark>_<split>_<Y-m-d>_<H-M-S>``) has no 8-digit run, so never matches.
+# The start stamp on an attempt's directory; a run root's name never matches.
 _ATTEMPT_STAMP_RE = re.compile(r"(\d{8}_\d{6})")
 
 

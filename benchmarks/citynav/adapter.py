@@ -19,11 +19,6 @@ from typing import Iterable
 import numpy as np
 
 
-# ---------------------------------------------------------------------------
-# Data schema
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class CityRefObject:
     """A single landmark / referred object from ``objects.json``."""
@@ -44,27 +39,18 @@ class CityNavEpisode:
     episode_id: str  # stable string id for logging
     description: str  # the NL instruction
     start_xy: tuple[float, float]  # first trajectory pose xy
-    #: Upstream's start altitude, the row's ``trajectory[0]`` z (absolute, as
-    #: every altitude here is); None on a mission flown under an operator's
-    #: own words.
+    #: ``trajectory[0]`` z (absolute); None on a mission flown under an operator's own words.
     start_z: float | None
-    #: Mean of target_positions (xy); None on a mission flown under an
-    #: operator's own words, which has no row and which the bench does not score.
+    #: Mean of target_positions (xy); None on an operator's mission, which has no row.
     target_xy: tuple[float, float] | None
     target_object_ids: list[int]
     target_mask: list[tuple[float, float]] | None  # hand-labeled GT polygon
     marker_positions: list[tuple[float, float, float]]
-    #: Upstream's start yaw as this tree's heading (degrees clockwise from
-    #: north, :func:`start_heading_deg`). The replay starts facing it.
+    #: Upstream's start yaw as a heading (:func:`start_heading_deg`).
     start_heading_deg: float = 0.0
     success_radius_m: float | None = None
     """The row's own fallback success radius (Cal City publishes a 20 m and a
     precise dataset); ``None`` leaves the run config's in charge."""
-
-
-# ---------------------------------------------------------------------------
-# Split + objects loading
-# ---------------------------------------------------------------------------
 
 
 def load_split(split_file: Path) -> list[dict]:

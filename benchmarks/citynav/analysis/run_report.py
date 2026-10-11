@@ -1,9 +1,4 @@
-"""SR report for a run root.
-
-The per-episode record is the ledger row's ``metrics`` dict, picked by
-``analysis.rows``; ``metrics.SR`` is the success bit, never recomputed from
-``pred_xy``. Rows without metrics (crashes, no-commit misses) are counted
-as ``no_metrics``.
+"""SR report for a run root, over the ``metrics`` of the attempts ``analysis.rows`` picks.
 
 Usage:
     python -m benchmarks.citynav.analysis.run_report output/run_a [output/run_b ...]
@@ -182,8 +177,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
                  "bench is scored on one is NOT recorded")
               + " -- quote neither as the bench's SR.")
     # OSR and the (OSR, SR) joint separate reaching the target from committing
-    # once there (conversion = SR|OSR). SR without OSR is impossible by
-    # construction, so a nonzero count means mismatched geometry. Ring rows only.
+    # once there; SR without OSR means mismatched geometry. Ring rows only.
     osr_rows = [m for m in scored.values() if "OSR" in m]
     if osr_rows:
         osr = sum(1 for m in osr_rows if m.get("OSR"))

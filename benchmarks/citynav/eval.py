@@ -50,12 +50,8 @@ def spl_pos_from_path(
     pos_trajectory: list[tuple[float, float]] | None,
     sr_pos: int,
 ) -> float | None:
-    """Anderson SPL over the flown path: ``sr_pos * L_opt / max(L_opt, L_agent)``.
-
-    ``L_opt`` is the straight line from the first flown pose to the target,
-    ``L_agent`` the flown xy path length. ``None`` under two poses, so a
-    single-pose record never fabricates SPL = SR.
-    """
+    """Anderson SPL over the flown path: ``sr_pos * L_opt / max(L_opt, L_agent)``,
+    ``L_opt`` from the first flown pose to the target; ``None`` under two poses."""
     if not pos_trajectory or len(pos_trajectory) < 2:
         return None
     pts = [tuple(p) for p in pos_trajectory]
@@ -104,10 +100,7 @@ def score_precise(
     (inside it at 0.0); without one, within a disc of ``radius_m``.
 
     ``floor_radius_m`` is the tightest target worth asking for: a shape
-    narrower than a circle of that radius is widened until one fits, so the
-    footprint still says where and the floor says how finely. Road
-    intersections run 4.1 m wide at the median while the agent's arrival on
-    episodes it gets right is 2.9 m.
+    narrower than a circle of that radius is widened until one fits.
     """
     if gt_polygon and len(gt_polygon) >= 3:
         from shapely.geometry import Point
