@@ -46,11 +46,7 @@ Query grammar (ONE canonical form each):
   * the literal standalone token ``OR`` (uppercase) separates alternatives;
     the score is the MAX over the OR-clauses.
 
-It is the stdlib-only counterpart to the geometry kernel
-(:mod:`maps.search.analyze_scene.geom_compute`), imported by the executor
-(:mod:`maps.search.analyze_scene.geom_program`).
-
-- **Pure + data-in-args.** No graph, no I/O; ``re`` and ``math`` only. Every
+- **Pure + data-in-args.** No graph, no I/O. Every
   matcher takes plain strings / prepared query tuples (and, for the fuzz
   band, the corpus token weights :func:`token_idf` mints from the searched
   rows) and returns scores.
@@ -64,6 +60,8 @@ from __future__ import annotations
 
 import math
 import re
+
+from maps.search.analyze_scene.geom_compute import COLOR_ENUM
 
 # --- lexical abbreviation expansion -----------------------------------------
 
@@ -230,11 +228,7 @@ def _word_forms(text: str) -> tuple:
                  for t in dict.fromkeys(_fuzzy_normalize(text).split()))
 
 
-# The perceived-colour palette: ``geom_compute.COLOR_ENUM``, which this
-# stdlib-only module cannot import (geom_compute pulls numpy).
-COLORS = frozenset((
-    "white", "gray", "black", "red", "blue", "green", "yellow", "orange",
-    "brown", "purple"))
+COLORS = frozenset(COLOR_ENUM)
 
 
 def _row_match_text(row) -> str:
@@ -413,14 +407,12 @@ def fuzzy_match_score(clause: tuple, candidate: str, idf: dict) -> float:
     among the forms present), the same form the satisfiability test turns
     on.
     """
-    q_norm, qt, qw = clause[0], clause[1], clause[2]
+    q_norm, qw = clause[0], clause[2]
     c = _fuzzy_normalize(candidate)
     if not q_norm or not c:
         return 0.0
     if q_norm == c:
         return 1.0
-    if not qt:
-        return 0.0
     ct = {f for t in c.split() for f in _singular_forms(t)}
     # How much of the query's IDF MASS was found: a word counts once however
     # many spellings it has, weighted by its rarity, and only if some row
