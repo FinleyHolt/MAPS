@@ -63,10 +63,7 @@ def encode_mask_record(
     a detection with no pixels carries no mask, and callers drop it rather than
     recording a zero-area record.
     """
-    arr = np.asarray(mask)
-    if arr.ndim == 3:
-        arr = arr[..., 0]
-    arr = arr.astype(bool, copy=False)
+    arr = np.asarray(mask).astype(bool, copy=False)
 
     if bbox_rcrc is None:
         ext = _extent(arr)
