@@ -83,8 +83,7 @@ def subject_window_containment(
     centroid_in = bool(wx0 <= sx <= wx1 and wy0 <= sy <= wy1)
     if centroid_in:
         return True, True
-    poly = [(float(p[0]), float(p[1])) for p in (boundary or [])
-            if isinstance(p, (list, tuple)) and len(p) == 2]
+    poly = xy_list(boundary)
     if len(poly) < 3:
         return centroid_in, centroid_in
     # Clip the footprint polygon to the window; any surviving area = overlap.
@@ -183,6 +182,63 @@ def frame_up_angle_deg(ux: float, uy: float) -> float:
     import math as _m
     n = _m.hypot(ux, uy) or 1.0
     return _m.degrees(_m.atan2(ux / n, uy / n))
+
+
+def xy_list(pts) -> list[tuple[float, float]]:
+    """The well-formed ``[x, y]`` pairs of ``pts`` as float tuples."""
+    return [(float(p[0]), float(p[1])) for p in (pts or [])
+            if isinstance(p, (list, tuple)) and len(p) == 2]
+
+
+def view_rotation(frame_up, w: int, h: int):
+    """``(matrix, band_text)`` for a declared view-up on a w x h image: the
+    cv2 matrix that turns ``frame_up`` to image-up (None when it is absent
+    or north) and the orientation stamp the margin band prints."""
+    import cv2  # noqa: PLC0415
+    if (isinstance(frame_up, (list, tuple)) and len(frame_up) == 2
+            and (float(frame_up[0]) or float(frame_up[1]))):
+        a = frame_up_angle_deg(float(frame_up[0]), float(frame_up[1]))
+        if abs(a) > 1e-9:
+            return (cv2.getRotationMatrix2D((w / 2.0, h / 2.0), a, 1.0),
+                    f"up {round(up_bearing_deg(frame_up)) % 360} deg")
+    return None, "N up"
+
+
+def pixel_mapper(x0, y1, sx, sy, w, h, rot):
+    """World -> delivered pixel for a north-up window (row 0 = max world y)
+    of ``sx`` x ``sy`` metres on a w x h image, then the view rotation."""
+    def w2p(wx, wy):
+        px = (float(wx) - x0) / sx * w
+        py = (y1 - float(wy)) / sy * h
+        if rot is not None:
+            px, py = (rot[0, 0] * px + rot[0, 1] * py + rot[0, 2],
+                      rot[1, 0] * px + rot[1, 1] * py + rot[1, 2])
+        return px, py
+    return w2p
+
+
+def frame_arcs(boundary, w2p, w: int, h: int):
+    """A world boundary as the OPEN pixel arcs that lie in frame, or None.
+
+    A footprint bigger than its window is clipped, never dropped, and no
+    edge runs along the frame edge (that would say the shape ends there).
+    Half a stroke of buffer keeps a footprint hugging the frame."""
+    from maps.util.polyline import clip_ring_to_box  # noqa: PLC0415
+    if not (isinstance(boundary, list) and len(boundary) >= 3):
+        return None
+    pts = [w2p(*p) for p in xy_list(boundary)]
+    if len(pts) < 3:
+        return None
+    return clip_ring_to_box(pts, (-2.0, -2.0, w + 2.0, h + 2.0)) or None
+
+
+def frame_echo(spec: dict) -> dict:
+    """The record's echo of a declared view (``frame_up`` + ``frame_note``)."""
+    fu = spec.get("frame_up")
+    if fu is None:
+        return {}
+    return {"frame_up": [round(float(fu[0]), 4), round(float(fu[1]), 4)],
+            "frame_note": str(spec.get("frame_note") or "")}
 
 
 # The outline thinner's tolerance and vertex budget (see ``look_outline``).
@@ -350,19 +406,15 @@ def render_candidate_crops(
             _mxy = _m.get("xy") if isinstance(_m, dict) else None
             if isinstance(_mxy, (list, tuple)) and len(_mxy) == 2:
                 pts.append((float(_mxy[0]), float(_mxy[1])))
-            for _p in ((_m.get("boundary") or []) if isinstance(_m, dict)
-                       else []):
-                if isinstance(_p, (list, tuple)) and len(_p) == 2:
-                    pts.append((float(_p[0]), float(_p[1])))
+            if isinstance(_m, dict):
+                pts += xy_list(_m.get("boundary"))
         _xs = [p[0] for p in pts]
         _ys = [p[1] for p in pts]
         _hull = max(max(_xs) - min(_xs), max(_ys) - min(_ys)) if len(pts) > 1 else 0.0
         # FLOOR scales with the SUBJECT (3x its mask bbox diagonal, never
         # below MIN).
         _diag = 0.0
-        _bpts = [(float(p[0]), float(p[1]))
-                 for p in (req.get("center_boundary") or [])
-                 if isinstance(p, (list, tuple)) and len(p) == 2]
+        _bpts = xy_list(req.get("center_boundary"))
         if len(_bpts) >= 2:
             _bdx = max(p[0] for p in _bpts) - min(p[0] for p in _bpts)
             _bdy = max(p[1] for p in _bpts) - min(p[1] for p in _bpts)
@@ -443,7 +495,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
     from maps.perception.viz.mllm_overlay import render_look_overlay  # noqa: PLC0415
     from maps.perception.observation import crop_ortho_observation  # noqa: PLC0415
-    from maps.util.polyline import clip_ring_to_box  # noqa: PLC0415
 
     map_name = str(spec.get("map_name") or "")
     if map_name not in GROUND_LEVEL:
@@ -501,21 +552,15 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     # valid fraction.
     # ponytail: whole-image warp (corners go black); a sqrt(2) over-crop
     # upgrade keeps full coverage if framed crops prove load-bearing.
-    _fup = spec.get("frame_up")
-    _rotM = None
+    _rotM, band_text = view_rotation(spec.get("frame_up"), W, H)
     validity0 = validity
-    if (isinstance(_fup, (list, tuple)) and len(_fup) == 2
-            and (float(_fup[0]) or float(_fup[1]))):
-        _a = frame_up_angle_deg(float(_fup[0]), float(_fup[1]))
-        if abs(_a) > 1e-9:
-            _rotM = cv2.getRotationMatrix2D((W / 2.0, H / 2.0), _a, 1.0)
-            rgb = cv2.warpAffine(rgb, _rotM, (W, H))
-            _Hv0, _Wv0 = validity.shape[:2]
-            _rotMv = cv2.getRotationMatrix2D((_Wv0 / 2.0, _Hv0 / 2.0),
-                                             _a, 1.0)
-            validity = cv2.warpAffine(
-                validity.astype(np.uint8), _rotMv, (_Wv0, _Hv0),
-                flags=cv2.INTER_NEAREST)
+    if _rotM is not None:
+        rgb = cv2.warpAffine(rgb, _rotM, (W, H))
+        _Hv0, _Wv0 = validity.shape[:2]
+        validity = cv2.warpAffine(
+            validity.astype(np.uint8),
+            view_rotation(spec.get("frame_up"), _Wv0, _Hv0)[0], (_Wv0, _Hv0),
+            flags=cv2.INTER_NEAREST)
     x0, y0, x1, y1 = oc["world_window"]
     # The record = the spec echoed verbatim (the re-render input) + the
     # derived audit geometry.
@@ -544,22 +589,13 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         "source": "run" if imagery is not None else "bake",
         "world_window": [round(float(v), 2) for v in (x0, y0, x1, y1)],
     }
-    if spec.get("frame_up") is not None:
-        meta["frame_up"] = [round(float(spec["frame_up"][0]), 4),
-                            round(float(spec["frame_up"][1]), 4)]
-        meta["frame_note"] = str(spec.get("frame_note") or "")
+    meta.update(frame_echo(spec))
     # World->pixel in the delivered north-up layout (image row 0 = MAX
     # world-y); marks and image share the same row mapping.
     sx = (x1 - x0) or 1.0
     sy = (y1 - y0) or 1.0
 
-    def _w2p(wx, wy, _x0=x0, _y1=y1, _sx=sx, _sy=sy, _W=W, _H=H):
-        px = (float(wx) - _x0) / _sx * _W
-        py = (_y1 - float(wy)) / _sy * _H
-        if _rotM is not None:
-            px, py = (_rotM[0, 0] * px + _rotM[0, 1] * py + _rotM[0, 2],
-                      _rotM[1, 0] * px + _rotM[1, 1] * py + _rotM[1, 2])
-        return px, py
+    _w2p = pixel_mapper(x0, y1, sx, sy, W, H, _rotM)
 
     # CENTER IDENTIFICATION (every crop): the center fid gets the
     # non-occluding mask-lasso mark (footprint outline + digit badge); its
@@ -574,27 +610,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     target_px: tuple[float, float] | None = None
     target_label = ""
     neighbor_px: list[tuple[float, float]] = []
-
-    def _proj_poly(boundary):
-        """World boundary verts -> the OPEN crop-px arcs that lie in frame.
-
-        A footprint bigger than its window is CLIPPED, never dropped: the
-        in-frame arcs draw and the crossings stay gaps. No edge ever runs
-        ALONG the frame edge (``clip_ring_to_box`` cuts edge by edge), since
-        that would say the shape ends at the window. Vertex fidelity belongs
-        to the producer (``look_outline``).
-        """
-        if not (isinstance(boundary, list) and len(boundary) >= 3):
-            return None
-        pts = []
-        for p in boundary:
-            if isinstance(p, (list, tuple)) and len(p) == 2:
-                pts.append(_w2p(p[0], p[1]))
-        if len(pts) < 3:
-            return None
-        # Half a stroke of buffer, so a footprint hugging the frame keeps
-        # its stroke.
-        return clip_ring_to_box(pts, (-2.0, -2.0, W + 2.0, H + 2.0)) or None
 
     target_poly_px = None
     neighbor_polys_px: list = []
@@ -632,7 +647,7 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         if bool(mk.get("is_target")) and target_px is None:
             target_px = (px, py)
             target_label = str(mk.get("label") or mfid)
-            target_poly_px = _proj_poly(mk.get("boundary"))
+            target_poly_px = frame_arcs(mk.get("boundary"), _w2p, W, H)
             legend.append({"digit": 2, "fid": mfid,
                            "label": target_label, "role": "target"})
         else:
@@ -640,7 +655,7 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
                 _dropped_marks += 1
                 continue
             neighbor_px.append((px, py))
-            neighbor_polys_px.append(_proj_poly(mk.get("boundary")))
+            neighbor_polys_px.append(frame_arcs(mk.get("boundary"), _w2p, W, H))
             legend.append({"digit": 2 + len(neighbor_px),
                            "fid": mfid,
                            "label": str(mk.get("label") or mfid),
@@ -650,15 +665,14 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         jp = render_look_overlay(
             rgb,
             center_px=center_px,
-            center_poly_px=_proj_poly(req.get("center_boundary")),
+            center_poly_px=frame_arcs(req.get("center_boundary"), _w2p, W, H),
             target_px=target_px,
             target_poly_px=target_poly_px,
             neighbor_polys_px=neighbor_polys_px,
             neighbor_px=neighbor_px,
             # a rotated crop's band states its TRUE up; "N up" only when
             # the pixels really are north-up.
-            band_text=("N up" if _rotM is None
-                       else f"up {round(up_bearing_deg(_fup)) % 360} deg"),
+            band_text=band_text,
         )
     except Exception as exc:  # noqa: BLE001
         # A crop whose subject cannot be identified is worse than no crop,
@@ -676,8 +690,7 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     meta["subject_centroid_in_window"] = _cin
     # HOW BIG the subject is, and whether the frame holds all of it, so the
     # caption can say a subject running past the frame is cut.
-    _cb = [(float(p[0]), float(p[1])) for p in (req.get("center_boundary") or [])
-           if isinstance(p, (list, tuple)) and len(p) == 2]
+    _cb = xy_list(req.get("center_boundary"))
     if len(_cb) >= 3:
         _bw = max(p[0] for p in _cb) - min(p[0] for p in _cb)
         _bh = max(p[1] for p in _cb) - min(p[1] for p in _cb)

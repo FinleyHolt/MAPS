@@ -148,10 +148,12 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     )
     from maps.search.analyze_scene.cell_mesh import cells_of  # noqa: PLC0415
     from maps.search.render.look_render import (  # noqa: PLC0415
-        frame_up_angle_deg,
-        up_bearing_deg,
+        frame_arcs,
+        frame_echo,
+        pixel_mapper,
+        view_rotation,
+        xy_list,
     )
-    from maps.util.polyline import clip_ring_to_box  # noqa: PLC0415
 
     cxy = spec.get("center_xy")
     try:
@@ -174,23 +176,10 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
 
     # Declared-view rotation: same law as the look crops (pixels and ink
     # rotate together; corners introduced by the warp stay background).
-    _fup = spec.get("frame_up")
-    _rotM = None
-    if (isinstance(_fup, (list, tuple)) and len(_fup) == 2
-            and (float(_fup[0]) or float(_fup[1]))):
-        _a = frame_up_angle_deg(float(_fup[0]), float(_fup[1]))
-        if abs(_a) > 1e-9:
-            _rotM = cv2.getRotationMatrix2D((W / 2.0, H / 2.0), _a, 1.0)
-            rgb = cv2.warpAffine(rgb, _rotM, (W, H),
-                                 borderValue=_BG_BGR[::-1])
-
-    def _w2p(wx, wy):
-        px = (float(wx) - x0) / span * W
-        py = (y1 - float(wy)) / span * H
-        if _rotM is not None:
-            px, py = (_rotM[0, 0] * px + _rotM[0, 1] * py + _rotM[0, 2],
-                      _rotM[1, 0] * px + _rotM[1, 1] * py + _rotM[1, 2])
-        return px, py
+    _rotM, band_text = view_rotation(spec.get("frame_up"), W, H)
+    if _rotM is not None:
+        rgb = cv2.warpAffine(rgb, _rotM, (W, H), borderValue=_BG_BGR[::-1])
+    _w2p = pixel_mapper(x0, y1, span, span, W, H, _rotM)
 
     def _pts_array(pts):
         """``[[x, y], ...]`` as an (N, 2) float array; a malformed list is
@@ -201,15 +190,20 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
             P = np.zeros((0, 2))
         return P if P.ndim == 2 and P.shape[1] == 2 else np.zeros((0, 2))
 
-    def _w2p_array(P):
-        """_w2p over every row of ``P`` at once, in the polylines' (N, 1, 2)
-        int32 shape: the same operations in the same order per vertex."""
-        px = (P[:, 0] - x0) / span * W
-        py = (y1 - P[:, 1]) / span * H
-        if _rotM is not None:
-            px, py = (_rotM[0, 0] * px + _rotM[0, 1] * py + _rotM[0, 2],
-                      _rotM[1, 0] * px + _rotM[1, 1] * py + _rotM[1, 2])
-        return np.stack([px, py], axis=1).astype(np.int32)[:, None, :]
+    def _px_ring(pts):
+        """World points -> the (N, 1, 2) int32 pixel ring cv2 draws."""
+        return np.array([[_w2p(*p)] for p in pts], dtype=np.int32)
+
+    cs_ = float(cell_size_m)
+    tox, toy = (float(tile_origin_xy[0]), float(tile_origin_xy[1]))
+
+    def _cell_centre(r, c):
+        return tox + (int(c) + 0.5) * cs_, toy + (int(r) + 0.5) * cs_
+
+    def _cell_quad(r, c):
+        wx0, wy0 = tox + int(c) * cs_, toy + int(r) * cs_
+        return _px_ring([(wx0, wy0), (wx0 + cs_, wy0),
+                         (wx0 + cs_, wy0 + cs_), (wx0, wy0 + cs_)])
 
     # --- feature ink on the delivered canvas (before the overlay, so marks
     # land on top). Roads stroke their centerline; prior buildings with a
@@ -223,39 +217,37 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     road_w = int(min(9, max(2, round(2.5 * px_per_m))))
     win_pad = 2.0 * cell_size_m  # a cell of slack: strokes clip at the edge
     prior_chip_cands: list[tuple[float, float, str, float, float]] = []
+    # Surveyed-building ink mask at canvas resolution, for the coresidency
+    # hatch below: where detection ink lands on a surveyed footprint the
+    # overlap hatches in the building tan, so the survey stays visible.
+    bmask = np.zeros((H, W), np.uint8)
     for f in features:
         kind = str(f.get("kind") or "area")
         prov = str(f.get("provenance") or "prebaked")
         if prov != "detected" and kind == "road":
-            # One array expression per road: _w2p's arithmetic per vertex,
-            # then the same int32 cast.
             P = _pts_array(f.get("centerline") or [])
             if len(P) < 2 or not (
                     (P[:, 0] >= x0 - win_pad) & (P[:, 0] <= x1 + win_pad)
                     & (P[:, 1] >= y0 - win_pad)
                     & (P[:, 1] <= y1 + win_pad)).any():
                 continue
-            arr = _w2p_array(P)
-            cv2.polylines(rgb, [arr], False,
+            cv2.polylines(rgb, [_px_ring(P)], False,
                           paint_color("", kind="road"), road_w,
                           cv2.LINE_AA)
         elif prov != "detected" and kind == "building":
-            ring = f.get("contour") or []
-            pts = [(float(p[0]), float(p[1])) for p in ring
-                   if isinstance(p, (list, tuple)) and len(p) == 2]
+            pts = xy_list(f.get("contour"))
+            if len(pts) >= 3:
+                cv2.fillPoly(bmask, [_px_ring(pts)], 1)
+            else:
+                for r, c in cells_of(f):
+                    cv2.fillPoly(bmask, [_cell_quad(r, c)], 1)
             if len(pts) >= 3 and any(
                     x0 - win_pad <= p[0] <= x1 + win_pad
                     and y0 - win_pad <= p[1] <= y1 + win_pad for p in pts):
-                arr = np.array([[_w2p(*p)] for p in pts], dtype=np.int32)
-                cv2.fillPoly(rgb, [arr],
+                cv2.fillPoly(rgb, [_px_ring(pts)],
                              paint_color("", kind="building"), cv2.LINE_AA)
             if not pts:  # cells-only building: chip geometry off its cells
-                cs_ = float(cell_size_m)
-                tox = float(tile_origin_xy[0])
-                toy = float(tile_origin_xy[1])
-                pts = [(tox + (int(c) + 0.5) * cs_,
-                        toy + (int(r) + 0.5) * cs_)
-                       for r, c in cells_of(f)]
+                pts = [_cell_centre(r, c) for r, c in cells_of(f)]
             inw = [p for p in pts if x0 <= p[0] <= x1 and y0 <= p[1] <= y1]
             m = re.search(r"(\d+)$", str(f.get("fid") or ""))
             if inw and m:
@@ -271,33 +263,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     _CHIP_FS = 0.9
     _CHIP_TH = 2
 
-    cs_ = float(cell_size_m)
-    tox, toy = (float(tile_origin_xy[0]), float(tile_origin_xy[1]))
-
-    def _cell_quad(r, c):
-        wx0, wy0 = tox + int(c) * cs_, toy + int(r) * cs_
-        return np.array(
-            [[_w2p(wx0, wy0)], [_w2p(wx0 + cs_, wy0)],
-             [_w2p(wx0 + cs_, wy0 + cs_)], [_w2p(wx0, wy0 + cs_)]],
-            dtype=np.int32)
-
-    # Surveyed-building ink mask at canvas resolution, for the coresidency
-    # hatch below: where detection ink lands on a surveyed footprint the
-    # overlap hatches in the building tan, so the survey stays visible.
-    bmask = np.zeros((H, W), np.uint8)
-    for f in features:
-        if (str(f.get("provenance") or "prebaked") == "detected"
-                or str(f.get("kind") or "area") != "building"):
-            continue
-        ring = [(float(p[0]), float(p[1])) for p in (f.get("contour") or [])
-                if isinstance(p, (list, tuple)) and len(p) == 2]
-        if len(ring) >= 3:
-            cv2.fillPoly(bmask, [np.array([[_w2p(*p)] for p in ring],
-                                          np.int32)], 1)
-        else:
-            for r, c in cells_of(f):
-                cv2.fillPoly(bmask, [_cell_quad(r, c)], 1)
-
     # Detections, gathered first: their ink bboxes decide which prior chips
     # relocate into a stack (drawn in the detection pass below). The hatch
     # and the stacked chip state co-location, nothing more.
@@ -305,22 +270,21 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     for f in features:
         if str(f.get("provenance") or "") != "detected":
             continue
-        cells_inw = [(int(r), int(c)) for r, c in cells_of(f)
-                     if x0 <= tox + (int(c) + 0.5) * cs_ <= x1
-                     and y0 <= toy + (int(r) + 0.5) * cs_ <= y1]
+        cells_inw = [(r, c) for r, c in cells_of(f)
+                     if x0 <= _cell_centre(r, c)[0] <= x1
+                     and y0 <= _cell_centre(r, c)[1] <= y1]
         if not cells_inw:
             continue
         quads = [_cell_quad(r, c) for r, c in cells_inw]
         allpts = np.concatenate(quads)
-        m = re.search(r"(\d+)$", str(f.get("fid") or ""))
+        centres = [_cell_centre(r, c) for r, c in cells_inw]
         det_entries.append({
             "label": str(f.get("label") or "detection"),
             "quads": quads,
-            "chip": (f"d{m.group(1)}" if m else f"d{len(det_entries) + 1}"),
-            "cx": float(sum(tox + (c + 0.5) * cs_ for _, c in cells_inw)
-                        / len(cells_inw)),
-            "cy": float(sum(toy + (r + 0.5) * cs_ for r, _ in cells_inw)
-                        / len(cells_inw)),
+            # graph fids end in their index: detected_17 chips as d17
+            "chip": "d" + re.search(r"(\d+)$", str(f.get("fid"))).group(1),
+            "cx": float(sum(p[0] for p in centres) / len(centres)),
+            "cy": float(sum(p[1] for p in centres) / len(centres)),
             "bbox": (float(allpts[:, 0, 0].min()),
                      float(allpts[:, 0, 1].min()),
                      float(allpts[:, 0, 0].max()),
@@ -462,15 +426,14 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         if not _fits and not _marked:
             n_prior_unchipped += 1
             continue
+        bx0 = int(min(max(cx_ - pw / 2.0, 1), W - pw - 1))
         if _fits:
-            bx0 = int(min(max(cx_ - pw / 2.0, 1), W - pw - 1))
             by0 = int(min(max(cy_ - ph / 2.0, 1), H - ph - 1))
             _lead = None
         else:
             # Outside placement + leader: the pill sits just above the
             # footprint and a line runs back to it, so the binding is drawn
             # rather than inferred from containment.
-            bx0 = int(min(max(cx_ - pw / 2.0, 1), W - pw - 1))
             by0 = int(min(max(cy_ - bh / 2.0 - ph - 4, 1), H - ph - 1))
             _lead = ((bx0 + pw // 2, by0 + ph), (int(cx_), int(cy_)))
         if _lead is not None:
@@ -511,18 +474,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
             # Queued like every other glyph, so a later fill cannot cut it.
             _chip(sx0, sy0, pw2, ph2, digits, th2, _tan)
 
-    def _proj_poly(boundary):
-        """World verts -> the OPEN in-frame arcs (``look_render._proj_poly``'s
-        contract): a footprint running past the frame shows the part in
-        frame, with gaps at the crossings."""
-        if not (isinstance(boundary, list) and len(boundary) >= 3):
-            return None
-        pts = [_w2p(p[0], p[1]) for p in boundary
-               if isinstance(p, (list, tuple)) and len(p) == 2]
-        if len(pts) < 3:
-            return None
-        return clip_ring_to_box(pts, (-2.0, -2.0, W + 2.0, H + 2.0)) or None
-
     center_fid = str(spec.get("center_fid") or "")
     center_label = str(spec.get("center_label") or center_fid or "map center")
     legend = [{"digit": 1, "fid": center_fid, "label": center_label,
@@ -549,7 +500,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         # every mark is context (a map request names no target): digits
         # are 1 = center, then the marks in caller order
         neighbor_px.append((px, py))
-        neighbor_polys.append(_proj_poly(mk.get("boundary")))
+        neighbor_polys.append(frame_arcs(mk.get("boundary"), _w2p, W, H))
         legend.append({"digit": 1 + len(neighbor_px), "fid": mfid,
                        "label": str(mk.get("label") or mfid),
                        "role": "context"})
@@ -601,15 +552,11 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                     cv2.FONT_HERSHEY_SIMPLEX, _CHIP_FS, (0, 0, 0), 1,
                     cv2.LINE_AA)
 
-    if _rotM is None:
-        band_text = "N up"
-    else:
-        band_text = f"up {round(up_bearing_deg(_fup)) % 360} deg"
     try:
         jp = render_look_overlay(
             rgb,
             center_px=_w2p(cx, cy),
-            center_poly_px=_proj_poly(spec.get("center_boundary")),
+            center_poly_px=frame_arcs(spec.get("center_boundary"), _w2p, W, H),
             neighbor_px=neighbor_px,
             neighbor_polys_px=neighbor_polys,
             band_text=band_text,
@@ -653,8 +600,5 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         "classes": classes[:10],
         "marks_out_of_view": marks_out_of_view,
     }
-    if spec.get("frame_up") is not None:
-        rec["frame_up"] = [round(float(spec["frame_up"][0]), 4),
-                           round(float(spec["frame_up"][1]), 4)]
-        rec["frame_note"] = str(spec.get("frame_note") or "")
+    rec.update(frame_echo(spec))
     return rec
