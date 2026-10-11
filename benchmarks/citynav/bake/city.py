@@ -399,152 +399,73 @@ def _cell_for_xy(
     return None
 
 
-def _cell_center(
-    row: int, col: int, bounds: WorldBounds, cell_size_m: float
-) -> tuple[float, float]:
-    return (
-        bounds.x_min + (col + 0.5) * cell_size_m,
-        bounds.y_min + (row + 0.5) * cell_size_m,
-    )
-
-
 def _point_to_bounds_dist(x: float, y: float, bounds: WorldBounds) -> float:
-    """Euclidean distance from ``(x, y)`` to the block raster rectangle;
-    ``0.0`` when the point is inside (or on the edge of) ``bounds``.
-
-    The outside-the-rectangle arm of the ``off_raster`` honesty flag (the
-    inside-on-no-data arm reads the coverage distance transform instead).
-    Coverage-honesty metadata; the world frame / affine are untouched.
-    """
+    """Distance from ``(x, y)`` to the block raster rectangle, ``0.0`` inside
+    it: the outside-the-rectangle arm of the ``off_raster`` flag."""
     dx = max(bounds.x_min - x, 0.0, x - bounds.x_max)
     dy = max(bounds.y_min - y, 0.0, y - bounds.y_max)
     return float(math.hypot(dx, dy))
 
 
-def _point_segment_distance(
-    px: float, py: float, ax: float, ay: float, bx: float, by: float
-) -> float:
-    abx = bx - ax
-    aby = by - ay
-    denom = abx * abx + aby * aby
-    if denom <= 0.0:
-        return float(math.hypot(px - ax, py - ay))
-    t = ((px - ax) * abx + (py - ay) * aby) / denom
-    t = max(0.0, min(1.0, t))
-    cx = ax + t * abx
-    cy = ay + t * aby
-    return float(math.hypot(px - cx, py - cy))
-
-
-def _point_in_ring(x: float, y: float, ring: Sequence[tuple[float, float]]) -> bool:
-    inside = False
-    j = len(ring) - 1
-    for i, (xi, yi) in enumerate(ring):
-        xj, yj = ring[j]
-        if (yi > y) != (yj > y):
-            x_cross = (xj - xi) * (y - yi) / ((yj - yi) or 1e-12) + xi
-            if x < x_cross:
-                inside = not inside
-        j = i
-    return inside
-
-
-def _point_in_polygon(
-    x: float,
-    y: float,
-    outer: Sequence[tuple[float, float]],
-    holes: Sequence[Sequence[tuple[float, float]]],
-) -> bool:
-    if not _point_in_ring(x, y, outer):
-        return False
-    return not any(_point_in_ring(x, y, hole) for hole in holes)
-
-
-def _bbox_to_cell_window(
-    xs: Sequence[float],
-    ys: Sequence[float],
+def _window_centers(
+    points: Sequence[tuple[float, float]],
     bounds: WorldBounds,
     grid_shape: tuple[int, int],
     cell_size_m: float,
     pad_m: float = 0.0,
-) -> tuple[range, range]:
+) -> tuple[int, int, np.ndarray, np.ndarray] | None:
+    """The cell window over ``points``' bbox (grown by ``pad_m``): its first
+    row and column, and the cell-centre x per column and y per row."""
     H, W = grid_shape
-    min_x, max_x = min(xs) - pad_m, max(xs) + pad_m
-    min_y, max_y = min(ys) - pad_m, max(ys) + pad_m
-    c0 = max(0, int(math.floor((min_x - bounds.x_min) / cell_size_m)))
-    c1 = min(W - 1, int(math.floor((max_x - bounds.x_min) / cell_size_m)))
-    r0 = max(0, int(math.floor((min_y - bounds.y_min) / cell_size_m)))
-    r1 = min(H - 1, int(math.floor((max_y - bounds.y_min) / cell_size_m)))
-    if c1 < c0 or r1 < r0:
-        return range(0), range(0)
-    return range(r0, r1 + 1), range(c0, c1 + 1)
-
-
-def _cells_for_point(
-    coords: Any, bounds: WorldBounds, grid_shape: tuple[int, int], cell_size_m: float
-) -> set[tuple[int, int]]:
-    x, y, *_rest = coords
-    cell = _cell_for_xy(float(x), float(y), bounds, grid_shape, cell_size_m)
-    return {cell} if cell is not None else set()
-
-
-def _cells_for_line(
-    coords: Any,
-    bounds: WorldBounds,
-    grid_shape: tuple[int, int],
-    cell_size_m: float,
-    buffer_m: float,
-) -> set[tuple[int, int]]:
-    points = _as_point_list(coords)
-    if len(points) < 2:
-        return set()
     xs = [p[0] for p in points]
     ys = [p[1] for p in points]
-    rows, cols = _bbox_to_cell_window(xs, ys, bounds, grid_shape, cell_size_m, buffer_m)
-    cells: set[tuple[int, int]] = set()
-    segments = list(zip(points[:-1], points[1:]))
-    for row in rows:
-        for col in cols:
-            cx, cy = _cell_center(row, col, bounds, cell_size_m)
-            if any(
-                _point_segment_distance(cx, cy, ax, ay, bx, by) <= buffer_m
-                for (ax, ay), (bx, by) in segments
-            ):
-                cells.add((row, col))
-    if not cells:
-        for x, y in points:
-            cell = _cell_for_xy(x, y, bounds, grid_shape, cell_size_m)
-            if cell is not None:
-                cells.add(cell)
-    return cells
+    c0 = max(0, int(math.floor((min(xs) - pad_m - bounds.x_min) / cell_size_m)))
+    c1 = min(W - 1, int(math.floor((max(xs) + pad_m - bounds.x_min) / cell_size_m)))
+    r0 = max(0, int(math.floor((min(ys) - pad_m - bounds.y_min) / cell_size_m)))
+    r1 = min(H - 1, int(math.floor((max(ys) + pad_m - bounds.y_min) / cell_size_m)))
+    if c1 < c0 or r1 < r0:
+        return None
+    cx = bounds.x_min + (np.arange(c0, c1 + 1) + 0.5) * cell_size_m
+    cy = bounds.y_min + (np.arange(r0, r1 + 1) + 0.5) * cell_size_m
+    return r0, c0, cx, cy
 
 
-def _cells_for_polygon(
-    coords: Any,
-    bounds: WorldBounds,
-    grid_shape: tuple[int, int],
-    cell_size_m: float,
-) -> set[tuple[int, int]]:
-    rings = [_as_point_list(ring) for ring in coords if ring]
-    if not rings or len(rings[0]) < 3:
-        return set()
-    outer = rings[0]
-    holes = rings[1:]
-    xs = [p[0] for p in outer]
-    ys = [p[1] for p in outer]
-    rows, cols = _bbox_to_cell_window(xs, ys, bounds, grid_shape, cell_size_m)
-    cells: set[tuple[int, int]] = set()
-    for row in rows:
-        for col in cols:
-            cx, cy = _cell_center(row, col, bounds, cell_size_m)
-            if _point_in_polygon(cx, cy, outer, holes):
-                cells.add((row, col))
-    if not cells:
-        for x, y in outer:
-            cell = _cell_for_xy(x, y, bounds, grid_shape, cell_size_m)
-            if cell is not None:
-                cells.add(cell)
-    return cells
+def _in_ring(cx: np.ndarray, cy: np.ndarray, ring: Sequence[tuple[float, float]]) -> np.ndarray:
+    """Even-odd crossing test of every (row, col) cell centre against ``ring``."""
+    inside = np.zeros((cy.size, cx.size), dtype=bool)
+    j = len(ring) - 1
+    for i, (xi, yi) in enumerate(ring):
+        xj, yj = ring[j]
+        crosses = (yi > cy) != (yj > cy)
+        x_cross = (xj - xi) * (cy - yi) / ((yj - yi) or 1e-12) + xi
+        inside ^= crosses[:, None] & (cx[None, :] < x_cross[:, None])
+        j = i
+    return inside
+
+
+def _near_polyline(
+    cx: np.ndarray, cy: np.ndarray, points: Sequence[tuple[float, float]], buffer_m: float
+) -> np.ndarray:
+    """Cells whose centre lies within ``buffer_m`` of any segment of ``points``."""
+    px, py = np.meshgrid(cx, cy)
+    near = np.zeros(px.shape, dtype=bool)
+    for (ax, ay), (bx, by) in zip(points[:-1], points[1:]):
+        abx = bx - ax
+        aby = by - ay
+        denom = abx * abx + aby * aby
+        if denom <= 0.0:
+            dx, dy = px - ax, py - ay
+        else:
+            t = ((px - ax) * abx + (py - ay) * aby) / denom
+            t = np.maximum(0.0, np.minimum(1.0, t))
+            dx, dy = px - (ax + t * abx), py - (ay + t * aby)
+        dist = np.hypot(dx, dy)
+        # ponytail: np.hypot and math.hypot differ by an ulp on ~0.6% of inputs, so
+        # math.hypot decides every cell this close to the buffer edge.
+        for k in np.flatnonzero(np.abs(dist - buffer_m) <= 1e-9 * buffer_m):
+            dist.flat[k] = math.hypot(dx.flat[k], dy.flat[k])
+        near |= dist <= buffer_m
+    return near
 
 
 def _cells_for_geometry(
@@ -554,16 +475,47 @@ def _cells_for_geometry(
     cell_size_m: float,
     line_buffer_m: float,
 ) -> set[tuple[int, int]]:
-    """The uniform mask realizer: area -> area mask, way -> buffered polyline,
-    node -> point cell. One rule per geometry kind, no per-feature policy."""
+    """The uniform mask realizer: area -> cells whose centre is inside the
+    polygon (holes excluded), way -> cells whose centre is within
+    ``line_buffer_m`` of the polyline, node -> its cell. An area or way that
+    claims no centre keeps the cells its vertices fall in."""
     cells: set[tuple[int, int]] = set()
     for geom_type, coords in _iter_geometry_parts(geometry):
         if geom_type == "Point":
-            cells.update(_cells_for_point(coords, bounds, grid_shape, cell_size_m))
-        elif geom_type == "LineString":
-            cells.update(_cells_for_line(coords, bounds, grid_shape, cell_size_m, line_buffer_m))
-        elif geom_type == "Polygon":
-            cells.update(_cells_for_polygon(coords, bounds, grid_shape, cell_size_m))
+            x, y, *_rest = coords
+            cell = _cell_for_xy(float(x), float(y), bounds, grid_shape, cell_size_m)
+            if cell is not None:
+                cells.add(cell)
+            continue
+        if geom_type == "LineString":
+            vertices = _as_point_list(coords)
+            if len(vertices) < 2:
+                continue
+            window = _window_centers(vertices, bounds, grid_shape, cell_size_m, line_buffer_m)
+            if window is not None:
+                r0, c0, cx, cy = window
+                mask = _near_polyline(cx, cy, vertices, line_buffer_m)
+        else:
+            rings = [_as_point_list(ring) for ring in coords if ring]
+            if not rings or len(rings[0]) < 3:
+                continue
+            vertices = rings[0]
+            window = _window_centers(vertices, bounds, grid_shape, cell_size_m)
+            if window is not None:
+                r0, c0, cx, cy = window
+                mask = _in_ring(cx, cy, vertices)
+                for hole in rings[1:]:
+                    mask &= ~_in_ring(cx, cy, hole)
+        part: set[tuple[int, int]] = set()
+        if window is not None:
+            rr, cc = np.nonzero(mask)
+            part = set(zip((rr + r0).tolist(), (cc + c0).tolist()))
+        if not part:
+            for x, y in vertices:
+                cell = _cell_for_xy(x, y, bounds, grid_shape, cell_size_m)
+                if cell is not None:
+                    part.add(cell)
+        cells.update(part)
     return cells
 
 
