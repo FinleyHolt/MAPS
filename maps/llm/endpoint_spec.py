@@ -1,47 +1,22 @@
-"""Server-discovered endpoint facts: one probe, one owner, fail loud.
+"""Server-discovered endpoint facts, probed once at process start.
 
-``EndpointSpec`` is THE authority for every served-LLM and
-perception-service endpoint fact — which model is served, how big its
-context window is, which service URLs answer. The facts are DISCOVERED
-from the live endpoints by :func:`discover` (``GET {url}/v1/models`` +
-per-service ``GET {url}/health``) exactly once per process, at startup,
-before any inference or perception call. Client-side guesses (a YAML
-model name, a hardcoded window constant, an env pin) do not exist; the
-only human inputs are the URLs themselves (WHERE to connect) and — for
-offline/replay or a non-vLLM endpoint — an explicit, loud pin funneled
-through the same type.
+:func:`discover` reads the served model and its window off
+``GET {url}/v1/models`` and checks each SAM replica's ``/health``; any
+divergence raises :class:`EndpointDiscoveryError` naming the URL and what was
+seen. An entry point runs ``install_spec(discover_from_env())``; the reasoner
+gets the spec injected, and other readers call :func:`spec`, which raises when
+nothing was installed.
 
-Any divergence raises :class:`EndpointDiscoveryError` at process start,
-naming the URL and exactly what was seen — never a silent per-call
-404/400 cascade minutes into episode 0.
-
-Usage at a process entry point (after the compute-profile env applies)::
-
-    from maps.llm.endpoint_spec import discover_from_env, install_spec
-    install_spec(discover_from_env())
-
-Hot-path consumers receive the spec by explicit injection (the compiler
-threads it into the reasoner); the few genuinely off-tree consumers read
-the installed singleton back via :func:`spec`, which raises when no
-install happened (a forgotten install fails loud, never defaults).
-
-Escape hatches (explicit, never inferred):
+Explicit pins:
 
   ``SEARCH_ENDPOINT_OFFLINE=1``
-      Offline / replay: no endpoint to probe. :func:`discover` then
-      REQUIRES an explicit pin (``SEARCH_ENDPOINT_SPEC_OVERRIDE``) —
-      an offline run cannot probe, so it must declare the window it
-      emulates.
+      Offline / replay: probe nothing; requires the override below.
   ``SEARCH_ENDPOINT_SPEC_OVERRIDE=<model_id>:<max_model_len>``
-      Endpoint serving several models (or omitting ``max_model_len``).
-      When the endpoint IS reachable the override's ``model_id`` is still
-      cross-checked against the served ids — the override never bypasses
-      the live check.
+      An endpoint serving several models or stating no window. A reachable
+      endpoint must still serve the pinned id.
   ``SEARCH_REASONER_MODELS_URL=<url>``
-      Where the served ids are listed, for an endpoint that lists them
-      somewhere other than ``{SEARCH_REASONER_URL}/models``: Bedrock's
-      bedrock-mantle serves GPT-5.6 under ``/openai/v1`` and its model
-      list under ``/v1/models``.
+      Where the served ids are listed when not at ``{SEARCH_REASONER_URL}/models``
+      (Bedrock's bedrock-mantle lists them under ``/v1/models``).
 """
 
 from __future__ import annotations
@@ -58,13 +33,9 @@ from dataclasses import dataclass
 log = logging.getLogger(__name__)
 
 
-# Probe timeout per URL. Discovery runs once at startup; a slow answer is
-# tolerated, a hung one is not.
 _PROBE_TIMEOUT_S = 15.0
-# A transport failure is asked again before it is a verdict: the arm's ground
-# box relays these ports over a link that re-forms when the box changes
-# networks, and one closed connection during that would otherwise fail a Fly
-# next outright.
+# A transport failure is asked again before it is a verdict: a relayed link
+# that re-forms drops one connection.
 _PROBE_TRIES = 3
 _PROBE_RETRY_S = 3.0
 
@@ -72,27 +43,21 @@ _PROBE_RETRY_S = 3.0
 # completion, ``min(cap, window // 4)``.
 _OUTPUT_RESERVE_CAP = 40000
 
-# Fixed slack between the compaction input budget and the served window,
-# absorbing client-vs-server chat-template token skew so a one-token
-# undercount never trips a server-side length 400.
+# Slack between the compaction budget and the window, for client-vs-server
+# token-count skew.
 _WINDOW_MARGIN_TOKENS = 1024
 
-# The reasoner cannot operate below this input budget (case f).
+# The reasoner cannot operate below this input budget.
 _MIN_INPUT_BUDGET = 8000
 
 
 class EndpointDiscoveryError(RuntimeError):
-    """An endpoint fact could not be discovered, or diverged from the
-    declared/derived expectation. Raised at process start; uncaught it
-    exits the process in seconds, naming the URL and what was seen."""
+    """An endpoint fact could not be discovered, or diverged from the pin."""
 
 
 @dataclass(frozen=True)
 class EndpointOverride:
-    """Explicit model pin for offline/replay or a non-vLLM endpoint.
-
-    Canonical env form: ``SEARCH_ENDPOINT_SPEC_OVERRIDE=<model_id>:<max_model_len>``
-    (parsed by :func:`parse_override`)."""
+    """``SEARCH_ENDPOINT_SPEC_OVERRIDE=<model_id>:<max_model_len>``, parsed."""
 
     model_id: str
     max_model_len: int
@@ -114,12 +79,9 @@ def parse_override(raw: str) -> EndpointOverride:
 
 @dataclass(frozen=True)
 class EndpointSpec:
-    """The discovered endpoint facts, frozen for the process lifetime.
-
-    ``base_url`` is THE OpenAI-style base (typically ending in ``/v1``)
-    discovery probed — one URL; the engine load-balances its own replicas
-    behind it. ``sam_url`` may be a comma-list of replicas, frozen verbatim
-    as probed."""
+    """The discovered endpoint facts, frozen for the process. ``base_url`` is
+    the one OpenAI-style base probed; ``sam_url`` the SAM replicas'
+    comma-list, verbatim."""
 
     base_url: str
     model_id: str
@@ -151,10 +113,9 @@ def _output_reserve_for(max_model_len: int) -> int:
 
 
 def _get_json(url: str, *, bearer: str | None = None) -> object:
-    """GET ``url`` and parse the JSON body; raise EndpointDiscoveryError on
-    transport failure, non-200, or a non-JSON body. ``bearer`` rides an
-    Authorization header — hosted OpenAI-compatible endpoints auth their
-    /v1/models route, mirroring the chat path's bearer."""
+    """GET ``url`` (``bearer`` as an Authorization header) and parse the JSON
+    body; raise EndpointDiscoveryError on transport failure, non-2xx, or a
+    non-JSON body."""
     req = urllib.request.Request(url)
     if bearer:
         req.add_header("Authorization", f"Bearer {bearer}")
@@ -184,9 +145,8 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
 
 
 def models_url(base_url: str) -> str:
-    """Where the reasoner at ``base_url`` lists its served models: discovery
-    and every later health probe ask the same URL, so a probe can never
-    fail on an endpoint discovery accepted."""
+    """Where the reasoner at ``base_url`` lists its served models, for
+    discovery and every later probe alike."""
     explicit = os.environ.get("SEARCH_REASONER_MODELS_URL", "").strip()
     if explicit:
         return explicit
@@ -256,11 +216,8 @@ def _facts_from_endpoint(
 
 
 def _probe_sam_health(urls: str) -> None:
-    """Probe every SAM replica's ``/health`` (comma-list tolerated). A payload
-    carrying a ``service`` field must name sam: a stale or foreign server
-    answering 200 on the right port aborts instead of producing a
-    silently-wrong green run. A payload without the field is
-    reachability-checked only."""
+    """Probe every SAM replica's ``/health``; a payload whose ``service``
+    field does not name sam (a foreign server on the port) raises."""
     for url in (u.strip().rstrip("/") for u in urls.split(",") if u.strip()):
         try:
             payload = _get_json(f"{url}/health")
@@ -277,9 +234,7 @@ def _probe_sam_health(urls: str) -> None:
 
 
 #: The turns and tool a Reasoner's transcript carries, in the shape the
-#: compactor sizes them (tool-call arguments parsed to a mapping): discovery
-#: renders it once, so a template that cannot render any of them is refused
-#: before a run starts.
+#: compactor sizes them; discovery renders it once.
 _TEMPLATE_PROBE = {
     "messages": [
         {"role": "system", "content": "s"},
@@ -295,13 +250,9 @@ _TEMPLATE_PROBE = {
 
 
 def _require_tokenizer(model_id: str) -> str:
-    """Load the tokenizer for ``model_id`` and render its chat template once
-    over :data:`_TEMPLATE_PROBE` (case g).
-
-    A tokenizer that cannot load, or whose chat template cannot render that
-    transcript, aborts at startup naming the repo, instead of leaving the
-    compactor unable to size a prompt. Lazy import keeps
-    ``spec()``/``install_spec()`` readers free of the transformers import."""
+    """Load the tokenizer for ``model_id`` and render its chat template over
+    :data:`_TEMPLATE_PROBE`; either failing raises naming the repo. The
+    import is local so spec readers never load transformers."""
     from maps.llm.tokenizer import _hf_tokenizer_name, _tokenizer
 
     tokenizer_name = _hf_tokenizer_name(model_id)
@@ -335,16 +286,9 @@ def discover(
 ) -> EndpointSpec:
     """Discover the endpoint facts, or raise :class:`EndpointDiscoveryError`.
 
-    ``base_url``: THE reasoner endpoint, ``SEARCH_REASONER_URL``, the one
-    legit human input. Exactly one URL: multi-GPU throughput is the
-    engine's own data parallelism behind this single endpoint, so a
-    comma-list is refused loud instead of routed client-side.
-
-    ``sam_url``: the SAM replicas the run posts to (comma-list); empty is
-    skipped, otherwise each must answer ``/health`` with a matching
-    identity.
-
-    ``offline=True`` skips all probes and REQUIRES ``override``.
+    ``base_url`` is one URL (a comma-list is refused: the engine balances its
+    own replicas); ``sam_url`` the replicas to health-check (empty skips);
+    ``offline=True`` probes nothing and requires ``override``.
     """
     url = str(base_url or "").strip().rstrip("/")
     if "," in url:
@@ -397,10 +341,6 @@ def discover(
         output_reserve=output_reserve,
         sam_url=sam_url,
     )
-    # Checked off the SPEC, never off a second spelling of the arithmetic.
-    # Recomputing the budget inline writes the property's formula twice, and
-    # the two drift the moment one of them changes. One source, so a fix
-    # cannot land in half the places that use it.
     if spec.input_budget < _MIN_INPUT_BUDGET:
         raise EndpointDiscoveryError(
             f"served window max_model_len={max_model_len} leaves "
@@ -412,12 +352,8 @@ def discover(
 
 
 def discover_from_env() -> EndpointSpec:
-    """The one canonical env -> :func:`discover` glue for process entry
-    points (``run_benchmark.main``, ``bench_fullset``, ``launch``).
-
-    Reads ``SEARCH_REASONER_URL`` + the SAM replicas, honors the explicit
-    ``SEARCH_ENDPOINT_OFFLINE`` / ``SEARCH_ENDPOINT_SPEC_OVERRIDE`` escape
-    hatches."""
+    """:func:`discover` over ``SEARCH_REASONER_URL``, the SAM replicas and
+    the ``SEARCH_ENDPOINT_OFFLINE`` / ``SEARCH_ENDPOINT_SPEC_OVERRIDE`` pins."""
 
     from maps.perception.sam.detect_client import sam_endpoints  # noqa: PLC0415
 
@@ -439,11 +375,7 @@ _SPEC_LOCK = threading.Lock()
 
 
 def install_spec(new_spec: EndpointSpec) -> EndpointSpec:
-    """Install the process-wide spec, exactly once.
-
-    A second install with identical fields is a no-op (idempotent entry
-    points); a second install with DIFFERENT fields raises — two divergent
-    reads physically cannot coexist in one process."""
+    """Install the process-wide spec; a second install must be identical."""
     global _SPEC
     with _SPEC_LOCK:
         if _SPEC is None:
@@ -466,9 +398,7 @@ def install_spec(new_spec: EndpointSpec) -> EndpointSpec:
 
 
 def spec() -> EndpointSpec:
-    """The installed spec. Raises when no install happened — a forgotten
-    ``install_spec(discover_from_env())`` at the process entry point fails
-    loud instead of silently defaulting to some model."""
+    """The installed spec; raises when nothing was installed."""
     if _SPEC is None:
         raise EndpointDiscoveryError(
             "no EndpointSpec installed: the process entry point must run "
@@ -479,6 +409,5 @@ def spec() -> EndpointSpec:
 
 
 def spec_installed() -> bool:
-    """Whether an install happened — for surfaces that legitimately run
-    LLM-free (``--no-llm``) and record the served model as absent."""
+    """Whether a spec was installed (an LLM-free run records no model)."""
     return _SPEC is not None
