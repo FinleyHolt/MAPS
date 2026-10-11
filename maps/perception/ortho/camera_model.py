@@ -75,18 +75,15 @@ class CameraIntrinsics:
         return self.image_height / 2.0
 
 
-def _res_tag(m_per_px: float) -> str:
-    return f"{m_per_px:.3f}".rstrip("0").rstrip(".")
-
-
-def _mmap_dir(rgbd_dir, map_name: str, m_per_px: float) -> Path:
+def _mmap_dir(rgbd_dir, map_name: str) -> Path:
     """Where the MAPPABLE copy of a raster bake lives.
 
     Beside the rasters it was built from, so whatever process needs it finds
     it with no second path to configure, and pointing at different rasters
-    invalidates it by construction.
+    invalidates it by construction. The ``_m0.1`` suffix names the 0.1 m/px
+    grid of the PNG-sourced bake; caches already on disk carry it.
     """
-    return Path(rgbd_dir) / "ortho" / f"{map_name}_m{_res_tag(m_per_px)}.mmap"
+    return Path(rgbd_dir) / "ortho" / f"{map_name}_m0.1.mmap"
 
 
 # The three arrays that carry the pixels. Everything else in the bake dict is
@@ -107,7 +104,7 @@ def _source_stamp(rgbd_dir, map_name: str) -> dict:
     return out
 
 
-def _read_ortho_mmap(d: Path, m_per_px: float, stamp: dict) -> dict | None:
+def _read_ortho_mmap(d: Path, stamp: dict) -> dict | None:
     """The bake, memory-mapped. ``None`` when the cache is absent, partial,
     or built from other rasters than ``stamp`` names.
 
@@ -132,7 +129,6 @@ def _read_ortho_mmap(d: Path, m_per_px: float, stamp: dict) -> dict | None:
         x_min=float(meta["x_min"]),
         y_min=float(meta["y_min"]),
         px_per_m=float(meta["px_per_m"]),
-        m_per_px=float(m_per_px),
     )
     return bake
 
@@ -272,12 +268,7 @@ def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, stamp: dict, band_rows:
         raise
 
 
-def bake_ortho_from_rasters(
-    rgbd_dir,
-    map_name: str,
-    *,
-    m_per_px: float = 0.10,
-) -> dict:
+def bake_ortho_from_rasters(rgbd_dir, map_name: str) -> dict:
     """Build the canonical filled ortho dict from a co-registered 0.1 m/px RGB
     PNG + height GeoTIFF (``<map>.png`` + ``<map>.tif`` under ``rgbd_dir``,
     the CityNav ``rgbd_upstream`` bake).
@@ -320,7 +311,6 @@ def bake_ortho_from_rasters(
         "x_min": x_min,
         "y_min": y_min,
         "px_per_m": float(px_per_m),
-        "m_per_px": float(m_per_px),
     }
 
 
@@ -356,12 +346,7 @@ _ORTHO_RASTER_BUILD_LOCK = threading.Lock()
 _ORTHO_CACHE_MAX_ENTRIES = 2
 
 
-def load_ortho_or_rasters(
-    map_name: str,
-    *,
-    rgbd_dir=None,
-    m_per_px: float = 0.10,
-) -> dict | None:
+def load_ortho_or_rasters(map_name: str, *, rgbd_dir=None) -> dict | None:
     """Return the canonical ortho dict for ``map_name`` from the rasters under
     ``rgbd_dir``: a georeferenced ``<map>_rgb.tif`` streamed as captured, else
     the 0.1 m/px PNG + GeoTIFF built and filled. This is the ONE 2D
@@ -370,7 +355,7 @@ def load_ortho_or_rasters(
     """
     if rgbd_dir is None:
         return None
-    key = (str(map_name), str(rgbd_dir), float(m_per_px))
+    key = (str(map_name), str(rgbd_dir))
     cached = _ORTHO_RASTER_CACHE.get(key)
     if cached is not None:
         return cached
@@ -393,21 +378,21 @@ def load_ortho_or_rasters(
         # publishes it under the file lock and the rest map it -- which also
         # collapses N heap copies of a ~3.6 GB map into one page-cache copy the
         # whole node shares.
-        mm = _mmap_dir(rgbd_dir, map_name, m_per_px)
+        mm = _mmap_dir(rgbd_dir, map_name)
         stamp = _source_stamp(rgbd_dir, map_name)
-        bake = _read_ortho_mmap(mm, m_per_px, stamp)
+        bake = _read_ortho_mmap(mm, stamp)
         if bake is None:
             with _build_lock(mm):
-                bake = _read_ortho_mmap(mm, m_per_px, stamp)
+                bake = _read_ortho_mmap(mm, stamp)
                 if bake is None and _geotiff_pair(rgbd_dir, map_name) is not None:
                     # Gigapixels: never in the heap. Streamed into the cache and
                     # mapped back like any other process would map it.
                     _bake_geotiff_mmap(rgbd_dir, map_name, mm, stamp)
-                    bake = _read_ortho_mmap(mm, m_per_px, stamp)
+                    bake = _read_ortho_mmap(mm, stamp)
                     if bake is None:
                         raise RuntimeError(f"{map_name}: the ortho cache at {mm} was written but does not read back")
                 elif bake is None:
-                    bake = bake_ortho_from_rasters(rgbd_dir, map_name, m_per_px=m_per_px)
+                    bake = bake_ortho_from_rasters(rgbd_dir, map_name)
                     _write_ortho_mmap(mm, bake, stamp)
         if len(_ORTHO_RASTER_CACHE) >= _ORTHO_CACHE_MAX_ENTRIES:
             _ORTHO_RASTER_CACHE.pop(next(iter(_ORTHO_RASTER_CACHE)))
@@ -415,18 +400,13 @@ def load_ortho_or_rasters(
         return bake
 
 
-def ortho_world_bounds(
-    map_name: str,
-    *,
-    rgbd_dir=None,
-    m_per_px: float = 0.10,
-) -> tuple[float, float, float, float]:
+def ortho_world_bounds(map_name: str, *, rgbd_dir=None) -> tuple[float, float, float, float]:
     """World extent ``(x_min, y_min, x_max, y_max)`` of the canonical ortho.
 
     Used by the ``look`` tool to shift a near-edge crop window in-bounds. Reads
     the same source as :func:`load_ortho_or_rasters`.
     """
-    ortho = load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir, m_per_px=m_per_px)
+    ortho = load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir)
     if ortho is None:
         raise FileNotFoundError(f"No ortho for {map_name!r} (pass rgbd_dir).")
     x_min, y_min, ppm = ortho["x_min"], ortho["y_min"], ortho["px_per_m"]
@@ -434,12 +414,7 @@ def ortho_world_bounds(
     return (float(x_min), float(y_min), float(x_min + w / ppm), float(y_min + h / ppm))
 
 
-def ortho_gsd_m(
-    map_name: str,
-    *,
-    rgbd_dir=None,
-    m_per_px: float = 0.10,
-) -> float:
+def ortho_gsd_m(map_name: str, *, rgbd_dir=None) -> float:
     """Metres per pixel of the canonical ortho GRID for ``map_name``.
 
     The divisor that turns a window in metres into delivered pixels, so a
@@ -448,7 +423,7 @@ def ortho_gsd_m(
     0.1 m/px and Cal City's is the block raster's own cell, so this says how
     many PIXELS a span costs, never how much DETAIL it holds.
     """
-    ortho = load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir, m_per_px=m_per_px)
+    ortho = load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir)
     if ortho is None:
         raise FileNotFoundError(f"No ortho for {map_name!r} (pass rgbd_dir).")
     return 1.0 / float(ortho["px_per_m"])

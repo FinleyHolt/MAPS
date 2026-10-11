@@ -47,9 +47,11 @@ def footprint_corners_xy(
     """Footprint corners ``[FL, FR, BR, BL]`` in world (x, y), image order
     ``[TL, TR, BR, BL]``.
 
-    Same heading convention as ``observation.view_square_corners_xy`` (0 = North,
-    CW-positive, ``front = (sin, cos)``, ``left = (-cos, sin)``), widened to a
-    rectangle: ``front`` spans the image height, ``left`` the image width.
+    Heading 0 = North, CW-positive, ``front = (sin, cos)``, ``left = (-cos,
+    sin)``; ``front`` spans the image height, ``left`` the image width. At
+    yaw 0 FL is the North-West corner. The CityNav view square is the case
+    ``width_m == height_m == 2·(altitude − ground)``, and this order is what
+    ``geolocate``'s ortho projectors invert.
     """
     yaw_r = math.radians(float(yaw_deg))
     sin_y, cos_y = math.sin(yaw_r), math.cos(yaw_r)

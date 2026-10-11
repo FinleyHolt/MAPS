@@ -49,7 +49,7 @@ def test_build_block_writes_the_pair_the_loader_reads_at_the_rasters_cell(tmp_pa
 
     # The pair is what the loader streams: the map's pixels on the local frame.
     cm._ORTHO_RASTER_CACHE.clear()
-    got = cm.load_ortho_or_rasters("patch", rgbd_dir=str(tif.parent), m_per_px=0.1)
+    got = cm.load_ortho_or_rasters("patch", rgbd_dir=str(tif.parent))
     cm._ORTHO_RASTER_CACHE.clear()
     assert np.array_equal(got["rgb"], rgb)
     # The grid hangs from the frame's north edge, row 0 at y_max.

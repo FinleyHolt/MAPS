@@ -419,7 +419,7 @@ def project_mask_to_world_ortho(
     ``observation.crop_ortho_observation``'s warp. The warp is a purely planar
     2-D affine (the square is a parallelogram, no z-perspective skew), so
     the bilinear map below is exact, not an approximation. See
-    ``maps/perception/tests/test_ortho_crop_geometry.py`` for
+    ``maps/perception/tests/test_sensor_frame.py`` for
     the forward geometry gate (corner/yaw invariants).
 
     Depth gates validity (a mask pixel with no finite, positive depth is

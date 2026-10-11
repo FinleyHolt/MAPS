@@ -37,7 +37,6 @@ def _bake(seed: int = 0) -> dict:
         "x_min": 1234.5,
         "y_min": -678.25,
         "px_per_m": 10.0,
-        "m_per_px": 0.1,
     }
 
 
@@ -45,13 +44,13 @@ def test_the_round_trip_is_exact(tmp_path):
     src = _bake()
     d = tmp_path / "calcity_m0.1.mmap"
     cm._write_ortho_mmap(d, src, _STAMP)
-    got = cm._read_ortho_mmap(d, 0.1, _STAMP)
+    got = cm._read_ortho_mmap(d, _STAMP)
 
     assert got is not None
     for k in ("rgb", "height", "alpha"):
         assert np.array_equal(got[k], src[k]), k
         assert got[k].dtype == src[k].dtype, k
-    for k in ("x_min", "y_min", "px_per_m", "m_per_px"):
+    for k in ("x_min", "y_min", "px_per_m"):
         assert got[k] == src[k], k
     # vacuity floor: an all-zero fixture would satisfy array_equal for free
     assert src["rgb"].any() and src["height"].any()
@@ -62,7 +61,7 @@ def test_it_is_mapped_not_loaded(tmp_path):
     ~3.6 GB map between them is the reason this exists."""
     d = tmp_path / "m.mmap"
     cm._write_ortho_mmap(d, _bake(), _STAMP)
-    got = cm._read_ortho_mmap(d, 0.1, _STAMP)
+    got = cm._read_ortho_mmap(d, _STAMP)
     assert isinstance(got["rgb"], np.memmap), type(got["rgb"])
     assert not got["rgb"].flags.writeable
 
@@ -71,17 +70,17 @@ def test_a_missing_or_partial_cache_reads_as_absent(tmp_path):
     """Absent is a build. PARTIAL must also be a build -- reading half a cache
     is the failure the atomic rename exists to prevent, and if one ever does
     appear it has to look like nothing rather than like an ortho."""
-    assert cm._read_ortho_mmap(tmp_path / "nope.mmap", 0.1, _STAMP) is None
+    assert cm._read_ortho_mmap(tmp_path / "nope.mmap", _STAMP) is None
 
     d = tmp_path / "partial.mmap"
     cm._write_ortho_mmap(d, _bake(), _STAMP)
     (d / "alpha.npy").unlink()
-    assert cm._read_ortho_mmap(d, 0.1, _STAMP) is None
+    assert cm._read_ortho_mmap(d, _STAMP) is None
 
     d2 = tmp_path / "nometa.mmap"
     cm._write_ortho_mmap(d2, _bake(), _STAMP)
     (d2 / "meta.json").unlink()
-    assert cm._read_ortho_mmap(d2, 0.1, _STAMP) is None
+    assert cm._read_ortho_mmap(d2, _STAMP) is None
 
 
 def test_a_write_leaves_no_temp_behind_and_publishes_atomically(tmp_path):
@@ -98,7 +97,7 @@ def test_a_second_write_replaces_the_first(tmp_path):
     cm._write_ortho_mmap(d, _bake(seed=1), _STAMP)
     second = _bake(seed=2)
     cm._write_ortho_mmap(d, second, _STAMP)
-    got = cm._read_ortho_mmap(d, 0.1, _STAMP)
+    got = cm._read_ortho_mmap(d, _STAMP)
     assert np.array_equal(got["rgb"], second["rgb"])
 
 
@@ -110,7 +109,7 @@ def test_an_unwritable_destination_costs_the_build_not_the_run(tmp_path):
     ro.chmod(0o500)
     try:
         cm._write_ortho_mmap(ro / "x.mmap", _bake(), _STAMP)  # must not raise
-        assert cm._read_ortho_mmap(ro / "x.mmap", 0.1, _STAMP) is None
+        assert cm._read_ortho_mmap(ro / "x.mmap", _STAMP) is None
     finally:
         ro.chmod(0o700)
 
@@ -131,7 +130,7 @@ def test_concurrent_cold_cache_builds_once_under_the_lock(tmp_path, monkeypatch)
     cm._ORTHO_RASTER_CACHE.clear()
     builds: list[str] = []
 
-    def fake_bake(rgbd_dir, map_name, *, m_per_px):
+    def fake_bake(rgbd_dir, map_name):
         builds.append(map_name)
         time.sleep(0.05)  # widen the window an unlocked race would exploit
         return {
@@ -143,7 +142,7 @@ def test_concurrent_cold_cache_builds_once_under_the_lock(tmp_path, monkeypatch)
             "px_per_m": 10.0,
         }
 
-    monkeypatch.setattr(cm, "_read_ortho_mmap", lambda d, m_per_px, stamp: None)
+    monkeypatch.setattr(cm, "_read_ortho_mmap", lambda d, stamp: None)
     monkeypatch.setattr(cm, "_source_stamp", lambda rgbd_dir, map_name: _STAMP)
     monkeypatch.setattr(cm, "bake_ortho_from_rasters", fake_bake)
     monkeypatch.setattr(cm, "_write_ortho_mmap", lambda d, bake, stamp: None)
@@ -154,7 +153,7 @@ def test_concurrent_cold_cache_builds_once_under_the_lock(tmp_path, monkeypatch)
     def worker():
         barrier.wait()
         results.append(
-            cm.load_ortho_or_rasters("calcity", rgbd_dir=str(tmp_path), m_per_px=0.1)
+            cm.load_ortho_or_rasters("calcity", rgbd_dir=str(tmp_path))
         )
 
     threads = [threading.Thread(target=worker) for _ in range(2)]
@@ -193,7 +192,7 @@ def test_a_geotiff_pair_is_streamed_into_the_cache_and_never_filled(tmp_path):
     rows at a time, and ground the aircraft did not image stays black."""
     rgb = _geotiff_pair(tmp_path)
     cm._ORTHO_RASTER_CACHE.clear()
-    got = cm.load_ortho_or_rasters("blk", rgbd_dir=str(tmp_path), m_per_px=0.1)
+    got = cm.load_ortho_or_rasters("blk", rgbd_dir=str(tmp_path))
     cm._ORTHO_RASTER_CACHE.clear()
 
     assert isinstance(got["rgb"], np.memmap) and not got["rgb"].flags.writeable
@@ -215,9 +214,9 @@ def test_the_streamed_bake_matches_the_in_heap_bake_band_for_band(tmp_path):
 
     rgb = _geotiff_pair(tmp_path, H=41)
     Image.fromarray(rgb).save(tmp_path / "blk.png")
-    heap = cm.bake_ortho_from_rasters(tmp_path, "blk", m_per_px=0.1)
+    heap = cm.bake_ortho_from_rasters(tmp_path, "blk")
     cm._bake_geotiff_mmap(tmp_path, "blk", tmp_path / "s.mmap", _STAMP, band_rows=7)
-    got = cm._read_ortho_mmap(tmp_path / "s.mmap", 0.1, _STAMP)
+    got = cm._read_ortho_mmap(tmp_path / "s.mmap", _STAMP)
     covered = rgb.max(axis=2) > 0
     for k in ("rgb", "alpha", "height"):
         assert np.array_equal(got[k][covered], heap[k][covered]), k

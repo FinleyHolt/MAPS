@@ -19,6 +19,10 @@ from pathlib import Path
 import numpy as np
 
 from maps.perception.geometry.sensor_spec import SensorSpec
+from maps.perception.ortho.sensor_frame import footprint_corners_xy, footprint_m, frame_corners_px
+
+#: The sensorless view square's output side cap, in pixels.
+_MAX_PX = 2048
 
 
 @dataclass
@@ -43,30 +47,6 @@ class Observation:
     ortho_view_corners_xy: tuple | None = None
 
 
-def view_square_corners_xy(
-    pose_xy: tuple[float, float], half_m: float, yaw_deg: float
-) -> list[np.ndarray]:
-    """The CityNav view-square corners ``[FL, FR, BR, BL]`` in world (x, y).
-
-    ``half_m = altitude - GROUND_LEVEL[map]`` (the square's half-side). Heading
-    convention: 0 = North, CW-positive, so ``front = (sin, cos)`` (east, north)
-    and ``left = (-cos, sin)``. At due north (yaw=0) FL is the North-West corner
-    ``(x - half, y + half)`` — this is what ``project_mask_to_world_ortho``
-    inverts, and the geometry-parity test pins.
-    """
-    yaw_r = np.deg2rad(float(yaw_deg))
-    sin_y, cos_y = float(np.sin(yaw_r)), float(np.cos(yaw_r))
-    front = np.array([sin_y, cos_y])
-    left = np.array([-cos_y, sin_y])
-    c = np.array([float(pose_xy[0]), float(pose_xy[1])])
-    return [
-        c + half_m * front + half_m * left,  # front-left
-        c + half_m * front - half_m * left,  # front-right
-        c - half_m * front - half_m * left,  # back-right
-        c - half_m * front + half_m * left,  # back-left
-    ]
-
-
 def crop_ortho_observation(
     *,
     map_name: str,
@@ -75,8 +55,6 @@ def crop_ortho_observation(
     yaw_deg: float,
     ground_z: float,
     rgbd_dir: Path | str | None = None,
-    m_per_px: float = 0.10,
-    max_px: int = 2048,
     sensor: "SensorSpec | None" = None,
     ortho: dict | None = None,
 ) -> dict:
@@ -97,7 +75,7 @@ def crop_ortho_observation(
 
     - ``sensor=None`` — the CityNav view square: ``side = 2*(altitude_m -
       ground_z)``, yaw-rotated, corners ``[FL,FR,BR,BL]``, output square-pixel
-      at the ortho's own resolution (capped at ``max_px``).
+      at the ortho's own resolution (capped at ``_MAX_PX``).
     - a nadir ``SensorSpec`` — the sensor's ground footprint at this AGL
       (``2·AGL·tan(fov/2)`` per axis, via :mod:`maps.perception.ortho.
       sensor_frame`), warped to the sensor's native ``image_width ×
@@ -115,7 +93,7 @@ def crop_ortho_observation(
     from maps.perception.ortho.camera_model import load_ortho_or_rasters  # noqa: PLC0415
 
     if ortho is None:
-        ortho = load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir, m_per_px=m_per_px)
+        ortho = load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir)
     if ortho is None:
         raise FileNotFoundError(f"No ortho for {map_name!r}: pass rgbd_dir (the block's rasters).")
     rgb_map, height_map, alpha_map = ortho["rgb"], ortho["height"], ortho["alpha"]
@@ -126,21 +104,12 @@ def crop_ortho_observation(
     )
     H_o = rgb_map.shape[0]
 
+    width_m, height_m = _ground_sides_m(altitude_m, ground_z, sensor)
+    corners_world = footprint_corners_xy(pose_xy, width_m, height_m, yaw_deg)
     if sensor is not None:
-        from maps.perception.ortho.sensor_frame import (  # noqa: PLC0415
-            footprint_corners_xy,
-            footprint_m,
-        )
-
-        agl = max(1.0, float(altitude_m) - float(ground_z))
-        width_m, height_m = footprint_m(sensor, agl)
-        corners_world = footprint_corners_xy(pose_xy, width_m, height_m, yaw_deg)
         out_w = int(sensor.intrinsics.image_width)
         out_h = int(sensor.intrinsics.image_height)
     else:
-        # View square: side = 2*(altitude - ground); corners [FL,FR,BR,BL].
-        half = max(1.0, float(altitude_m) - float(ground_z))
-        corners_world = view_square_corners_xy(pose_xy, half, yaw_deg)
         out_w = out_h = None  # derived from the ortho span below
 
     corners_px = np.array(
@@ -156,12 +125,8 @@ def crop_ortho_observation(
                 )
             )
         )
-        out_w = out_h = max(1, min(span, int(max_px)))
-    dst = np.array(
-        [[0, 0], [out_w - 1, 0], [out_w - 1, out_h - 1], [0, out_h - 1]],
-        dtype=np.float32,
-    )
-    M = cv2.getPerspectiveTransform(corners_px, dst)
+        out_w = out_h = max(1, min(span, _MAX_PX))
+    M = cv2.getPerspectiveTransform(corners_px, frame_corners_px(out_w, out_h))
     # Warp from the window's own neighbourhood of the map, never the whole
     # map. Cal City's raster is 34,035 x 44,853 x 3, past the 2^31 elements
     # one OpenCV Mat addresses, and a warp handed the whole of it read the
@@ -211,40 +176,34 @@ def crop_ortho_observation(
     }
 
 
+def _ground_sides_m(
+    altitude_m: float, ground_z: float, sensor: SensorSpec | None
+) -> tuple[float, float]:
+    """The observation's ground ``(width, height)`` in meters at this AGL:
+    sensorless the view square, ``2·(altitude − ground)`` a side; with a nadir
+    sensor its footprint (``2·AGL·tan(fov/2)`` per axis). The crop, the
+    mission engine and the search loop all read the footprint here, so they
+    cannot disagree about what the observation showed."""
+    agl = max(1.0, float(altitude_m) - float(ground_z))
+    if sensor is None:
+        return 2.0 * agl, 2.0 * agl
+    return footprint_m(sensor, agl)
+
+
 def observation_extent_m(
     altitude_m: float, ground_z: float, sensor: SensorSpec | None = None
 ) -> float:
-    """The observation's ground extent in meters — the crop window's honest
-    ceiling (``obs_span_m``). Sensorless, it is the view-square side
-    ``2·(altitude − ground)``; with a nadir sensor it is the footprint's long
-    side at this AGL. One function so the mission engine and the search loop
-    cannot disagree about what the observation showed.
-    """
-    agl = max(1.0, float(altitude_m) - float(ground_z))
-    if sensor is None:
-        return 2.0 * agl
-    from maps.perception.ortho.sensor_frame import footprint_m  # noqa: PLC0415
-
-    width_m, height_m = footprint_m(sensor, agl)
-    return float(max(width_m, height_m))
+    """The observation's LONG ground side in meters, the crop window's honest
+    ceiling (``obs_span_m``)."""
+    return float(max(_ground_sides_m(altitude_m, ground_z, sensor)))
 
 
 def observation_minor_extent_m(
     altitude_m: float, ground_z: float, sensor: SensorSpec | None = None
 ) -> float:
-    """The observation's SHORT ground side at this AGL — the row pitch a
-    2-D coverage tiling can rely on whichever way the footprint is turned.
-    Sensorless the view square has one side; with a nadir sensor it is
-    ``min`` where ``observation_extent_m`` is ``max``, same source, so the
-    two cannot disagree about the footprint they describe.
-    """
-    agl = max(1.0, float(altitude_m) - float(ground_z))
-    if sensor is None:
-        return 2.0 * agl
-    from maps.perception.ortho.sensor_frame import footprint_m  # noqa: PLC0415
-
-    width_m, height_m = footprint_m(sensor, agl)
-    return float(min(width_m, height_m))
+    """The observation's SHORT ground side in meters, the row pitch a 2-D
+    coverage tiling can rely on whichever way the footprint is turned."""
+    return float(min(_ground_sides_m(altitude_m, ground_z, sensor)))
 
 
 def crop_observation(
