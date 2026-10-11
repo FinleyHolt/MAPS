@@ -322,7 +322,6 @@ def render_candidate_crops(
     map_name: str,
     rgbd_dir: str,
     imagery=None,
-    max_crops: int = 16,
 ) -> list[dict]:
     """Render nadir candidate crops for the ``look`` tool.
 
@@ -344,8 +343,7 @@ def render_candidate_crops(
     through ``render_look_from_spec``, the same deterministic tail a
     re-render calls.
 
-    Returns one RECORD per crop (rank order), clamped to the 16-image server
-    budget: ``{"jpeg": bytes}`` plus the resolved spec
+    Returns one RECORD per crop (rank order): ``{"jpeg": bytes}`` plus the resolved spec
     (``map_name/center_fid/center_label/center_boundary/marks/world_xy/
     pose_xy/context_m``) plus the derived audit fields
     (``sha256``, ``renderer_version``,
@@ -361,12 +359,6 @@ def render_candidate_crops(
         ortho_gsd_m,
         ortho_world_bounds,
     )
-    from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
-
-    if map_name not in GROUND_LEVEL:
-        log.warning("look: map %r not in upstream GROUND_LEVEL; no crops",
-                    map_name)
-        return []
 
     # Raster world extent, to shift a near-edge window in-bounds (the tile
     # edge renders as a black out-of-bounds border).
@@ -393,7 +385,7 @@ def render_candidate_crops(
     _min_m, _budget_m = look_window_bounds_m(_gsd)
 
     out: list[dict] = []
-    for req in list(requests)[:max_crops]:
+    for req in requests:
         cxy = req.get("center_xy")
         if not (isinstance(cxy, (list, tuple)) and len(cxy) == 2):
             continue

@@ -73,10 +73,6 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
     x0, y0, x1, y1 = (float(v) for v in window)
     cs = float(cell_size_m)
     gh, gw = int(grid_shape[0]), int(grid_shape[1])
-    # A degenerate grid (a caller without tile metadata) does not clamp:
-    # cells are bake-grid coordinates, and the window intersection below is
-    # the real guard.
-    _clamp = gh > 0 and gw > 0
     ox, oy = (float(tile_origin_xy[0]), float(tile_origin_xy[1]))
     # window in tile-grid coords (col along x, row along y; row 0 = south)
     c0 = int(np.floor((x0 - ox) / cs))
@@ -97,9 +93,7 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
         if len(a) == 0:
             return 0
         r, c = a[:, 0], a[:, 1]
-        keep = np.ones(len(a), dtype=bool)
-        if _clamp:
-            keep &= (r >= 0) & (r < gh) & (c >= 0) & (c < gw)
+        keep = (r >= 0) & (r < gh) & (c >= 0) & (c < gw)
         rr, cc = r - r0, c - c0
         keep &= (rr >= 0) & (rr < hcells) & (cc >= 0) & (cc < wcells)
         n = int(keep.sum())

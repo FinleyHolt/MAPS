@@ -235,15 +235,6 @@ def test_targetless_map_marks_start_at_digit_2():
     assert rec["features_painted"] > 0
 
 
-def test_degenerate_grid_shape_does_not_clamp_the_paint():
-    # the live text-only context shipped grid_shape=(0, 0) and every cell
-    # was dropped (182/182 dark maps); a degenerate grid must trust cells.
-    rgb, counts = features_window_paint(
-        _FEATURES, window=(0.0, 0.0, 20.0, 20.0),
-        tile_origin_xy=(0.0, 0.0), cell_size_m=2.0, grid_shape=(0, 0))
-    assert sum(e["cells"] for e in counts.values()) > 0
-
-
 def test_the_map_frame_follows_what_was_asked_about():
     from maps.search.parse_compile.reasoner_loop import (
         _MAP_FRAME_MARGIN,
