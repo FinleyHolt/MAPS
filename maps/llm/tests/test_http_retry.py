@@ -1,12 +1,5 @@
-"""Retry behaviour of the chat-completions transport.
-
-The transport splits retries by cause: transient faults (5xx, connection
-errors) burn ``_MAX_RETRIES``; rate-limit and quota responses (429/402)
-draw on the separate ``_MAX_RATE_LIMIT_RETRIES`` budget; every other 4xx
-is a malformed request and raises at once. These tests pin that split,
-because a hosted endpoint rate-limits routinely and a single shared
-budget would end an episode mid-compile.
-"""
+"""The chat transport's retries split by cause: 5xx and connection faults burn ``_MAX_RETRIES``, 429/402
+draw on ``_MAX_RATE_LIMIT_RETRIES``, any other 4xx raises at once."""
 
 from __future__ import annotations
 
@@ -17,137 +10,50 @@ import httpx
 import pytest
 
 from maps.llm import http as http_mod
+from tests.serves import ChatServe
+
+_MESSAGES = [{"role": "user", "content": "hi"}]
 
 
-_OK_BODY = {
-    "choices": [{"message": {"role": "assistant", "content": "hi"}}],
-    "usage": {"prompt_tokens": 1, "completion_tokens": 1},
-}
-
-
-class _FakeResponse:
-    """Duck-typed stand-in for ``httpx.Response``.
-
-    ``HTTPStatusError`` stores whatever ``response`` it is handed, so the
-    transport's status/header/body reads work against this without a live
-    server.
-    """
-
-    def __init__(
-        self,
-        status_code: int,
-        body: dict | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> None:
-        self.status_code = status_code
-        self._body = body if body is not None else {"error": "boom"}
-        self.headers = headers or {}
-        self.text = json.dumps(self._body)
-
-    def json(self) -> dict:
-        return self._body
-
-    def raise_for_status(self) -> None:
-        if self.status_code >= 400:
-            raise httpx.HTTPStatusError(
-                f"HTTP {self.status_code}",
-                request=httpx.Request("POST", "http://endpoint/v1/chat/completions"),
-                response=self,  # type: ignore[arg-type]
-            )
-
-
-class _FakeClient:
-    """Yields a scripted response per ``post``, recording the call count."""
-
-    def __init__(self, script: list[_FakeResponse], calls: list[int]) -> None:
-        self._script = script
-        self._calls = calls
-        self.is_closed = False
-
-    def __enter__(self) -> "_FakeClient":
-        return self
-
-    def __exit__(self, *_exc: object) -> bool:
-        return False
-
-    def post(self, _url: str, headers=None, json=None) -> _FakeResponse:
-        idx = len(self._calls)
-        self._calls.append(idx)
-        return self._script[min(idx, len(self._script) - 1)]
-
-    def close(self) -> None:
-        self.is_closed = True
+def _err(status: int, headers: dict | None = None, payload: dict | None = None):
+    return status, payload or {"error": "boom"}, headers or {}
 
 
 @pytest.fixture
 def transport(monkeypatch):
-    """Drive ``_chat_completions_raw`` against a scripted response list.
-
-    Returns a callable taking the script and returning
-    ``(result_or_exc, calls, sleeps)``. Sleeps are captured rather than
-    taken so the rate-limit backoff is asserted without real waiting.
-    """
-    # No workdir means no mission to record -- the flight log is derived
-    # from it and there is no separate switch to unset.
+    """Run ``_chat_completions_raw`` against a ChatServe scripted with ``answers``; returns
+    ``(result_or_exc, bodies, sleeps)`` with the backoff sleeps captured, not taken."""
     monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
-
     sleeps: list[float] = []
-    monkeypatch.setattr(http_mod.time, "sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(http_mod.time, "sleep", sleeps.append)
 
-    def _run(script: list[_FakeResponse], **kwargs):
-        calls: list[int] = []
-        monkeypatch.setattr(
-            http_mod.httpx,
-            "Client",
-            lambda *a, **kw: _FakeClient(script, calls),
-        )
-        try:
-            result = http_mod._chat_completions_raw(
-                "http://endpoint/v1",
-                "key",
-                model="m",
-                messages=[{"role": "user", "content": "hi"}],
-                timeout=60.0,
-                **kwargs,
-            )
-        except Exception as exc:  # noqa: BLE001 - the test inspects it
-            result = exc
-        return result, calls, sleeps
+    def _run(answers, **kwargs):
+        with ChatServe(answers) as serve:
+            try:
+                result = http_mod._chat_completions_raw(
+                    f"{serve.url}/v1", "key", model="m", messages=_MESSAGES, timeout=60.0, **kwargs)
+            except Exception as exc:  # noqa: BLE001 - the test inspects it
+                result = exc
+        return result, serve.bodies, sleeps
 
     return _run
 
 
 def test_rate_limit_is_retried_and_honours_retry_after(transport) -> None:
-    script = [
-        _FakeResponse(429, headers={"retry-after": "3"}),
-        _FakeResponse(200, _OK_BODY),
-    ]
-    result, calls, sleeps = transport(script)
-
+    result, calls, sleeps = transport([_err(429, {"retry-after": "3"})])
     assert not isinstance(result, Exception)
     assert len(calls) == 2
     assert sleeps == [3.0]
 
 
 def test_rate_limit_wait_is_capped(transport) -> None:
-    script = [
-        _FakeResponse(429, headers={"retry-after": "9999"}),
-        _FakeResponse(200, _OK_BODY),
-    ]
-    _result, _calls, sleeps = transport(script)
-
+    _result, _calls, sleeps = transport([_err(429, {"retry-after": "9999"})])
     assert sleeps == [http_mod._RATE_LIMIT_MAX_BACKOFF_S]
 
 
 def test_rate_limit_budget_is_separate_from_transient_budget(transport) -> None:
-    """A 429 storm must not be capped by ``_MAX_RETRIES``.
-
-    With ``_MAX_RETRIES=2`` and ``_MAX_RATE_LIMIT_RETRIES=5`` a permanent
-    429 is sent 6 times (initial + 5 waits) — proof the two budgets do
-    not share a counter.
-    """
-    result, calls, sleeps = transport([_FakeResponse(429)])
-
+    """A permanent 429 is sent 1 + ``_MAX_RATE_LIMIT_RETRIES`` (5) times, past ``_MAX_RETRIES`` (2)."""
+    result, calls, sleeps = transport([_err(429)] * 10)
     assert isinstance(result, httpx.HTTPStatusError)
     assert result.response.status_code == 429
     assert len(calls) == 6
@@ -155,110 +61,56 @@ def test_rate_limit_budget_is_separate_from_transient_budget(transport) -> None:
 
 
 def test_quota_status_is_retried_too(transport) -> None:
-    result, calls, _sleeps = transport(
-        [_FakeResponse(402), _FakeResponse(200, _OK_BODY)]
-    )
-
+    result, calls, _sleeps = transport([_err(402)])
     assert not isinstance(result, Exception)
     assert len(calls) == 2
 
 
 def test_malformed_request_raises_without_retry(transport) -> None:
-    result, calls, sleeps = transport([_FakeResponse(400)])
-
+    result, calls, sleeps = transport([_err(400)])
     assert isinstance(result, httpx.HTTPStatusError)
     assert result.response.status_code == 400
     assert len(calls) == 1
     assert sleeps == []
 
 
-class _RecordingClient(_FakeClient):
-    """A ``_FakeClient`` that keeps the bodies it was handed."""
-
-    def __init__(self, script: list[_FakeResponse], calls: list[int]) -> None:
-        super().__init__(script, calls)
-        self.bodies: list[dict] = []
-
-    def post(self, _url: str, headers=None, json=None) -> _FakeResponse:
-        self.bodies.append(json or {})
-        return super().post(_url, headers=headers, json=json)
-
-
-def _posted_body(monkeypatch, **kwargs) -> dict:
+def _posted_body(transport, **kwargs) -> dict:
     """The body ``_chat_completions_raw`` actually puts on the wire."""
-    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
-    client = _RecordingClient([_FakeResponse(200, _OK_BODY)], [])
-    monkeypatch.setattr(http_mod.httpx, "Client", lambda *a, **kw: client)
-    http_mod._chat_completions_raw(
-        "http://endpoint/v1",
-        "key",
-        model="m",
-        messages=[{"role": "user", "content": "hi"}],
-        timeout=60.0,
-        **kwargs,
-    )
-    return client.bodies[0]
+    return transport([], **kwargs)[1][0]
 
 
-def test_an_arm_naming_no_effort_puts_no_effort_key_on_the_wire(
-    monkeypatch,
-) -> None:
-    """Unset carries NO key — not the key at a null, the key absent.
-
-    Every arm flying today names no effort, and their requests have to
-    stay exactly what they were: a body carrying ``reasoning_effort:
-    null`` would be a new field on the wire for a serve that never saw
-    one, and a served default would be overridden by a value no arm
-    asked for. The two bodies below differ by that single key and by
-    nothing else, which is the whole footprint of the knob.
-    """
+def test_an_arm_naming_no_effort_puts_no_effort_key_on_the_wire(monkeypatch, transport) -> None:
+    """Unset carries no key at all (not a null), and the named effort is the only difference on the wire."""
     from maps.llm.sampling import thinking_sampling_kwargs
 
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
-    quiet = _posted_body(monkeypatch, **thinking_sampling_kwargs(temperature=1.0, model_id="inkling-small"))
+    quiet = _posted_body(transport, **thinking_sampling_kwargs(temperature=1.0, model_id="inkling-small"))
     assert "reasoning_effort" not in quiet
     assert "reasoning_effort" not in json.dumps(quiet)
 
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
-    named = _posted_body(monkeypatch, **thinking_sampling_kwargs(temperature=1.0, model_id="inkling-small"))
+    named = _posted_body(transport, **thinking_sampling_kwargs(temperature=1.0, model_id="inkling-small"))
     assert named["reasoning_effort"] == "0.99"
     assert '"reasoning_effort": "0.99"' in json.dumps(named)
     assert {k: v for k, v in named.items() if k != "reasoning_effort"} == quiet
 
 
-def test_rejected_reasoning_effort_is_named_in_the_refusal(
-    transport, caplog
-) -> None:
-    """A serve whose template carries no effort field 400s on one, and
-    the log has to say which field.
-
-    The arm names an effort the card does not take: the transport raises
-    at once (a malformed request, not a capacity event — no retry, and no
-    quiet re-send without the field), and the request summary carries the
-    key and the value that caused it. Absent the key on that line the
-    operator reads a bare 400 beside a summary of five sampling fields,
-    none of them the one they changed.
-    """
+def test_rejected_reasoning_effort_is_named_in_the_refusal(transport, caplog) -> None:
+    """A 400 on an effort field raises at once, and the request summary names the key and value."""
     with caplog.at_level(logging.ERROR, logger="maps.llm.http"):
         result, calls, sleeps = transport(
-            [_FakeResponse(400, {"error": "unrecognized field reasoning_effort"})],
-            reasoning_effort="0.99",
-        )
+            [_err(400, payload={"error": "unrecognized field reasoning_effort"})], reasoning_effort="0.99")
 
     assert isinstance(result, httpx.HTTPStatusError)
     assert len(calls) == 1
     assert sleeps == []
-    summaries = [
-        r.getMessage() for r in caplog.records if "request summary" in r.getMessage()
-    ]
+    summaries = [r.getMessage() for r in caplog.records if "request summary" in r.getMessage()]
     assert len(summaries) == 1
     assert "'reasoning_effort': '0.99'" in summaries[0]
 
 
 def test_transient_5xx_still_uses_the_fault_budget(transport) -> None:
-    result, calls, sleeps = transport(
-        [_FakeResponse(503), _FakeResponse(200, _OK_BODY)]
-    )
+    result, calls, sleeps = transport([_err(503)])
 
     assert not isinstance(result, Exception)
     assert len(calls) == 2
@@ -266,7 +118,7 @@ def test_transient_5xx_still_uses_the_fault_budget(transport) -> None:
 
 
 def test_permanent_5xx_exhausts_the_fault_budget(transport) -> None:
-    result, calls, _sleeps = transport([_FakeResponse(503)])
+    result, calls, _sleeps = transport([_err(503)] * 5)
 
     assert isinstance(result, httpx.HTTPStatusError)
     assert len(calls) == 3
@@ -313,13 +165,7 @@ def _run_raising(monkeypatch, exc: Exception) -> list[int]:
 
 
 def test_read_timeout_is_dispatched_once_and_never_re_sent(monkeypatch) -> None:
-    """A read timeout must NOT be retried.
-
-    The server still holds the request (the blocking POST cannot abort it),
-    so a re-send is a duplicate queued behind the original -- and it fires
-    exactly when the server is saturated. That feedback loop is what took
-    one reasoner serve to 0% GPU at workers=128.
-    """
+    """The serve still holds a timed-out request, so a re-send would queue a duplicate behind it."""
     req = httpx.Request("POST", "http://endpoint/v1/chat/completions")
     for exc in (
         httpx.ReadTimeout("read", request=req),
@@ -330,7 +176,7 @@ def test_read_timeout_is_dispatched_once_and_never_re_sent(monkeypatch) -> None:
 
 
 def test_connect_timeout_still_burns_the_fault_budget(monkeypatch) -> None:
-    """The opposite case: nothing was accepted, so retrying duplicates no work."""
+    """Nothing was accepted, so a retry duplicates no work."""
     req = httpx.Request("POST", "http://endpoint/v1/chat/completions")
     calls = _run_raising(monkeypatch, httpx.ConnectTimeout("connect", request=req))
     assert calls == [0, 1, 2]
