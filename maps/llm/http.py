@@ -37,6 +37,8 @@ from pathlib import Path
 
 import httpx
 
+from . import endpoint_spec
+
 
 # 4xx codes that mean "not now" rather than "not ever": 429 is the
 # rate limit, 402 the credit/quota check. Both clear on their own, so
@@ -613,37 +615,23 @@ def _stream_chat_completions(
     return response_json
 
 
-def _raise_on_served_model_mismatch(
-    base_url: str, body: dict, r, api_key: str | None = None
-) -> None:
-    """On a 404 chat completion, re-probe ``{base_url}/models`` and abort
-    LOUDLY when the request's model is no longer among the served ids —
-    the server behind the URL changed since startup discovery (probe-once
-    cannot see a same-URL restart). Falls through silently (the caller
-    then raises the plain HTTP error) when the probe fails or the model
-    is still served (a 404 for some other reason)."""
-    requested = body.get("model")
+def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusal: str) -> None:
+    """On a 404 chat completion, re-probe the served ids and abort LOUDLY when
+    the request's model is no longer among them: the server behind the URL
+    changed since startup discovery (probe-once cannot see a same-URL
+    restart). Returns (the caller raises the plain HTTP error) when the probe
+    fails or the model is still served (a 404 for some other reason)."""
     if not requested:
         return
-    served: list[str] = []
     try:
-        probe = httpx.get(
-            base_url.rstrip("/") + "/models",
-            timeout=10.0,
-            headers=(
-                {"Authorization": f"Bearer {api_key}"} if api_key else None
-            ),
-        )
-        probe.raise_for_status()
-        data = probe.json().get("data") or []
-        served = [str(m.get("id")) for m in data if isinstance(m, dict)]
-    except (httpx.HTTPError, ValueError, OSError):
+        served = [str(m.get("id")) for m in endpoint_spec._probe_models(base_url)]
+    except endpoint_spec.EndpointDiscoveryError:
         return
-    if served and requested not in served:
+    if requested not in served:
         raise RuntimeError(
             f"served-model mismatch: this process discovered {requested!r} "
             f"at startup but {base_url} now serves {served} "
-            f"(chat completion returned 404: {r.text[:200]!r}). The server "
+            f"(chat completion returned 404: {refusal[:200]!r}). The server "
             f"behind the URL changed mid-run — drain and restart."
         )
 
@@ -743,7 +731,7 @@ def _chat_completions_raw(
                     # URL with a different model surfaces here. Re-check
                     # the served ids and abort naming the mismatch
                     # instead of churning silent per-call 404s.
-                    _raise_on_served_model_mismatch(base_url, body, r, api_key)
+                    _raise_on_served_model_mismatch(base_url, body.get("model"), r.text)
                 r.raise_for_status()
                 response_json = r.json()
             if cancel_event is not None and cancel_event.is_set():
