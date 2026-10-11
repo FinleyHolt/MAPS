@@ -1,24 +1,12 @@
-"""Raw HTTP client for OpenAI-compatible chat-completions.
+"""Raw HTTP client for OpenAI-compatible chat-completions, and the flight
+transcript every call is mirrored into.
 
-Every stage of the parse-first compiler goes through this client rather
-than the OpenAI SDK, so the request body is exactly what
-`maps.llm.model_cards.sampling_kwargs` builds — a flat set of top-level keys that both a
-self-hosted vLLM and a hosted endpoint honour. No LLM logic here; just
-the transport.
-
-Retries are split by cause. A 5xx or a transport error is a transient
-fault and burns the `_MAX_RETRIES` budget. A 429/402 is a capacity or
-quota event with its own, more patient budget (`_MAX_RATE_LIMIT_RETRIES`,
-honouring `Retry-After`) — hosted endpoints rate-limit routinely, and
-spending the transient budget on that would end an episode mid-compile.
-Every other 4xx is a malformed-request bug and is surfaced immediately.
-
-A call that carries a ``cancel_event`` negotiates an SSE stream from
-vLLM rather than a blocking POST. When the event fires the call's TCP
-socket is shut down, so a read blocked on a silent serve returns at once
-and the serve frees the KV-cache slot, and the call raises
-:class:`CallCanceled`. An answer that lands as the event fires is never
-handed back or recorded.
+The request body is exactly the caller's kwargs (no SDK). A 5xx or transport
+error burns ``_MAX_RETRIES``; a 429/402 draws on its own budget,
+``_MAX_RATE_LIMIT_RETRIES``, honouring ``Retry-After``; any other 4xx raises
+at once. A call with a ``cancel_event`` streams (SSE), and the event shuts its
+socket down and raises :class:`CallCanceled`; an answer that lands as the
+event fires is never handed back or recorded.
 """
 
 from __future__ import annotations
@@ -40,25 +28,17 @@ import httpx
 from . import endpoint_spec
 
 
-# 4xx codes that mean "not now" rather than "not ever": 429 is the
-# rate limit, 402 the credit/quota check. Both clear on their own, so
-# they get a re-send instead of the immediate raise every other 4xx
-# earns. A self-hosted vLLM emits neither; a hosted endpoint emits 429
-# routinely under the compile's parallel fan-out.
+# 4xx codes that mean "not now": the rate limit (429) and the quota check (402).
 _RATE_LIMIT_STATUS = frozenset({402, 429})
 # Every 4xx a serve may clear on its own: the rate limit and quota checks,
 # and 408 request timeout. Any other 4xx is a request the caller built wrong.
 TRANSIENT_CLIENT_STATUS = _RATE_LIMIT_STATUS | {408}
 
-# Timeouts that are NOT retried: the server already has the request and is
-# still working on it, so a re-send duplicates the work instead of replacing
-# it. ``ConnectTimeout`` is deliberately absent -- nothing was accepted there,
-# so retrying costs the server nothing.
+# Timeouts that are not retried: the server already holds the request, so a
+# re-send duplicates the work. A connect timeout is retried: nothing was accepted.
 _NO_RETRY_TIMEOUTS = (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout)
 
-# Ceiling on one rate-limit wait. A provider may advertise a long
-# ``Retry-After``; past this the run is better off failing loud than
-# silently parking a reasoner worker.
+# Ceiling on one rate-limit wait, however long the advertised ``Retry-After``.
 _RATE_LIMIT_MAX_BACKOFF_S = 60.0
 
 # The two retry budgets and the exponential backoff base, in seconds.
@@ -88,33 +68,14 @@ def _backoff(delay: float, cancel_event: threading.Event | None) -> None:
 
 
 class CallCanceled(Exception):
-    """Raised when a request is aborted via its ``cancel_event``.
-
-    Distinct from generic timeouts / connection errors: the caller
-    asked for the call to be torn down, and the worker should not
-    retry the request.
-    """
+    """A request aborted via its ``cancel_event``; never retried."""
 
 
 class DegenerateCompletion(ValueError):
-    """The serve returned a completion carrying no content and no tool
-    call because generation collapsed, not because the model had nothing
-    to say.
-
-    A SERVE fault, and the distinction is worth a class because the two
-    look identical on the wire. A model's own empty turn is a dropped
-    message the loop repairs and may end the mission on. A collapse is
-    the sampler reading a broken logit vector: one sm_103 serve stack
-    returned `!` (token id 0) x 40,000 on 21% of xhigh requests while the
-    same checkpoint on L40S returned 0/320, and the longest LEGITIMATE
-    completion either serve produced was ~7.3k tokens. Retrying is right
-    (a fresh generation usually sticks); repairing is not, because the
-    model was never asked anything.
-
-    ``ValueError`` so it lands in ``reasoner_loop._RETRIABLE_LLM_ERRORS``
-    without widening that tuple, alongside the transport-level decode
-    failure it is the generation-side twin of.
-    """
+    """A completion whose generation collapsed (a repeated-token run): a
+    serve fault, retried rather than repaired, since the model was never
+    asked anything. A ``ValueError`` so it is one of
+    ``reasoner_loop._RETRIABLE_LLM_ERRORS``."""
 
 
 #: How often an in-flight call's watch looks at its cancel event.
@@ -122,14 +83,10 @@ _CANCEL_POLL_S = 0.25
 
 
 class _CancelWatch:
-    """Aborts one in-flight request the moment its cancel event is set.
-
-    The request runs on a blocking socket, and closing a client from another
-    thread does not wake a blocked read. The watch takes the socket off the
-    transport's ``trace`` extension as it connects and shuts it down on
-    cancel: the read returns at once and the serve sees the connection drop
-    and frees the slot.
-    """
+    """Aborts one in-flight request the moment its cancel event is set: it
+    takes the socket off the transport's ``trace`` extension as it connects
+    and shuts it down on cancel, which wakes a blocked read (closing the
+    client from another thread does not) and frees the serve's slot."""
 
     def __init__(self, cancel_event: threading.Event) -> None:
         self._cancel = cancel_event
@@ -179,24 +136,12 @@ log = logging.getLogger(__name__)
 
 
 def _resolved_flight_log_dir() -> Path | None:
-    """Where this mission's flight log goes: ``<workdir>/flight/llm``.
+    """Where this mission's transcript goes: ``$SEARCH_COMPILE_WORKDIR/flight/llm``.
 
-    Every chat-completions round-trip is mirrored into
-    ``transcript.jsonl`` there -- an append-only record stream that stores
-    the conversation ONCE (per-call message deltas + params dedup + image
-    parts as sha refs) instead of a full re-serialization per call. It is
-    what nearly every reader under ``benchmarks/citynav/analysis/`` reads.
-
-    RECORDING IS NOT OPTIONAL, and no environment variable turns it off: a
-    mission that records nothing looks exactly like one that has nothing
-    to say. The one thing configurable is WHERE a mission writes:
-    ``SEARCH_COMPILE_WORKDIR``, which every caller that flies anything sets.
-
-    No workdir means no mission -- a bare transport in a unit test, not a
-    flight -- so there is nothing to record and nowhere to put it. That
-    case says so at warning rather than passing silently, because "no
-    mission is running" and "a mission is running unrecorded" are the two
-    readings of an empty transcript and only one of them is fine.
+    Recording is not optional. ``transcript.jsonl`` stores the conversation
+    once: per-call message deltas, params written once per distinct body,
+    image parts as sha refs. No workdir means no mission (a unit test): None,
+    said once at warning so an unrecorded mission cannot pass silently.
     """
     workdir = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip()
     if not workdir:
@@ -212,15 +157,12 @@ def _resolved_flight_log_dir() -> Path | None:
     return Path(workdir).expanduser() / "flight" / "llm"
 
 
-# Said once per process. A per-call warning would bury the run's own log
-# under one line per turn, which is how a real warning stops being read.
+# Said once per process, so the warning is not buried under one line per turn.
 _WARNED_NO_WORKDIR = False
 
 
-# The transcript is a SINGLE-PROCESS append stream: every call writes from
-# the runner process, so one module lock serializes lines. A second process appending to the same file would
-# interleave records undetected — if a multi-process runner ever appears,
-# the transcript needs a per-process file + a merge, not a bigger lock.
+# ponytail: one process appends to a transcript, so a module lock serialises
+# its lines; a multi-process runner needs a file per process and a merge.
 _FLIGHT_LOCK = threading.Lock()
 # flight_dir -> the previous request's scrubbed-message digests, for
 # write-time delta encoding. Keyed by dir so sequential episodes in one
@@ -231,14 +173,10 @@ _FLIGHT_PARAMS_SEEN: dict[str, set[str]] = {}
 
 
 def _scrub_image_parts(messages: list) -> list:
-    """Message list with every data-URL image part replaced by a sha ref.
-
-    ``{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,…"}}``
-    becomes ``{"type": "image_ref", "media_type", "sha256", "bytes"}``. The
-    sha is of the DECODED bytes and matches the look manifest's per-crop
-    ``sha256``, so a transcript image part resolves to its crop record (and
-    re-renders) by hash. Non-data URLs pass through. Never mutates the input
-    — the HTTP body sees the original."""
+    """``messages`` with every data-URL image part replaced by
+    ``{"type": "image_ref", "media_type", "sha256", "bytes"}``, the sha of the
+    decoded bytes (the look manifest's per-crop ``sha256``). The input is not
+    mutated."""
     out: list = []
     for msg in messages:
         content = msg.get("content") if isinstance(msg, dict) else None
@@ -275,11 +213,8 @@ def _scrub_image_parts(messages: list) -> list:
 
 
 def _append_flight_record(directory: Path, record: dict) -> None:
-    """Append one record line to ``<directory>/transcript.jsonl``.
-
-    Filesystem errors are logged at warning and swallowed: flight-log writes
-    must never fail an LLM call. The flush makes each line visible to a
-    live reader immediately."""
+    """Append one record line to ``<directory>/transcript.jsonl``, flushed. A
+    filesystem error is logged and swallowed: recording never fails a call."""
     try:
         directory.mkdir(parents=True, exist_ok=True)
         with (directory / "transcript.jsonl").open(
@@ -296,16 +231,10 @@ def _flight_request_record(
     request_id: str,
     body: dict,
 ) -> None:
-    """Append the params (if new) + request records for one dispatch.
-
-    The flight log's "pending" pre-write: a reader sees the round the
-    moment the call fires, before the response lands. ``new_messages`` is
-    the delta against the previous call (write-time LCP over
-    scrubbed-message digests); the reader reconstructs the full request as
-    ``history[:n_prefix] + new_messages``, exactly. ``params`` (the body
-    minus messages and transport flags — tools, response_format, sampling)
-    is written once per distinct sha, which removes the other per-call
-    re-serialization."""
+    """Append the params (if new) and request records for one dispatch, as it
+    fires. The full request is ``previous[:n_prefix] + new_messages``;
+    ``params`` (the body minus messages and stream flags) is written once per
+    distinct sha."""
     with _FLIGHT_LOCK:
         try:
             params = {
@@ -367,15 +296,9 @@ def _flight_response_record(
 
 
 def _request_headers(api_key: str | None) -> dict[str, str]:
-    """Headers for one chat-completions POST.
-
-    ``SEARCH_LLM_ROUTING_KEY`` (set per episode by the runner) rides as
-    an opaque affinity header — a key-affine router (sglang-router
-    ``--policy manual``) pins every call carrying the same key to one
-    worker, so an episode's growing context stays with its radix cache.
-    Unset = no header. Read per call: the runner rewrites the key each
-    episode.
-    """
+    """Headers for one POST. ``SEARCH_LLM_ROUTING_KEY``, read per call (the
+    runner sets one per episode), rides as an affinity header so a key-affine
+    router keeps an episode on one worker's prefix cache."""
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -397,14 +320,8 @@ def _stream_chat_completions(
     timeout: float,
     cancel_event: threading.Event | None = None,
 ) -> dict:
-    """POST with ``stream: true``, return the aggregated response.
-
-    Reassembles the SSE deltas into the same ``{"choices": [...],
-    "usage": {...}}`` shape vLLM returns for non-streaming calls.
-    Streaming exists for CANCELLATION (the per-chunk hook that tears down
-    the TCP socket), not for logging: the flight transcript stores no
-    per-token stream.
-    """
+    """POST with ``stream: true`` and reassemble the SSE deltas into the
+    non-streaming response shape. Streaming exists for cancellation."""
     aggregated_text: list[str] = []
     aggregated_reasoning: list[str] = []
     aggregated_tool_calls: dict[int, dict] = {}
@@ -417,9 +334,6 @@ def _stream_chat_completions(
     empty_chunk_count = 0
     first_empty_at: float | None = None
 
-    # The cancel watch shuts the TCP socket down when the event fires; a
-    # blocked read (the serve silent before its headers or between chunks)
-    # returns at once instead of waiting out the read timeout.
     watch = _CancelWatch(cancel_event) if cancel_event is not None else None
     try:
         with httpx.Client(timeout=timeout) as client, client.stream(
@@ -430,10 +344,7 @@ def _stream_chat_completions(
                 resp.read()  # the body is legible after the stream closes
             resp.raise_for_status()
             for raw_line in resp.iter_lines():
-                # Check cancellation per SSE chunk. The watch also
-                # shuts the socket down from the side; this check
-                # catches a chunk that arrived just before the
-                # cancel fired.
+                # a chunk that arrived just before the cancel fired
                 if cancel_event is not None and cancel_event.is_set():
                     raise CallCanceled("canceled mid-stream")
                 if not raw_line or not raw_line.startswith("data:"):
@@ -459,12 +370,7 @@ def _stream_chat_completions(
                 content_delta = delta.get("content")
                 if content_delta:
                     aggregated_text.append(content_delta)
-                # vLLM v0.21+ emits the reasoning span on streaming
-                # deltas under ``reasoning`` (PR #27752); older
-                # backends used ``reasoning_content``. Aggregate
-                # whichever shows up so the reassembled message
-                # carries the ``<think>`` text on the streaming
-                # path too (matches the non-streaming branch).
+                # vLLM 0.21 names the span ``reasoning``, older serves ``reasoning_content``.
                 reasoning_delta = delta.get("reasoning") or delta.get(
                     "reasoning_content"
                 )
@@ -535,11 +441,9 @@ def _stream_chat_completions(
 
 
 def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusal: str) -> None:
-    """On a 404 chat completion, re-probe the served ids and abort LOUDLY when
-    the request's model is no longer among them: the server behind the URL
-    changed since startup discovery (probe-once cannot see a same-URL
-    restart). Returns (the caller raises the plain HTTP error) when the probe
-    fails or the model is still served (a 404 for some other reason)."""
+    """On a 404, re-probe the served ids and raise when the request's model is
+    no longer among them (the server behind the URL changed since discovery).
+    Returns when the probe fails or the model is still served."""
     if not requested:
         return
     try:
@@ -568,49 +472,29 @@ def _chat_completions_raw(
     cancel_event: threading.Event | None = None,
     **kwargs,
 ) -> dict:
-    """Send a chat completion via raw HTTP and return the response JSON.
-
-    A 5xx or a transport error (connection refused, connect timeout) burns
-    `_MAX_RETRIES` with exponential backoff. Rate-limit and quota responses
-    (429/402) draw on a separate `_MAX_RATE_LIMIT_RETRIES` budget, each wait
-    honouring `Retry-After`. Every other 4xx is surfaced immediately; it
-    indicates a malformed request that retrying would not fix.
-    """
+    """Send one chat completion and return the response JSON, retrying as
+    the module docstring says."""
     body = kwargs
     flight_dir = _resolved_flight_log_dir()
     url = base_url.rstrip("/") + "/chat/completions"
     headers = _request_headers(api_key)
 
-    # The request record lands the moment the call fires, so a call that
-    # never returns stays a pending round in the transcript.
     request_id = uuid.uuid4().hex
     if flight_dir is not None:
         _flight_request_record(flight_dir, request_id, body)
 
-    # A ``cancel_event`` streams: the SSE path is where the cancel watch
-    # shuts the socket down (see ``_stream_chat_completions``).
     use_stream = cancel_event is not None
     if use_stream:
-        # The final ``usage`` block: without it OpenAI-compatible streams
-        # omit token counts and the transcript's response carries none.
+        # without it a stream carries no token counts
         body["stream_options"] = {"include_usage": True}
         body["stream"] = True
-        # Watch vLLM #43713 here: the qwen3_xml STREAMING tool parser can emit
-        # invalid JSON for several ``<function=...>`` blocks in one
-        # ``<tool_call>``. The reasoner's own arg-repair
-        # (``_normalize_tool_call_arguments``) is what absorbs it.
+        # vLLM's streaming qwen3_xml tool parser can emit invalid JSON for several
+        # functions in one call; the reasoner's _normalize_tool_call_arguments repairs it.
 
-    # Two independent budgets. ``attempt`` counts transient faults (5xx,
-    # connection errors); ``rate_limit_attempt`` counts 429/402 waits. A
-    # single loop counter would let a rate-limit burst spend the fault
-    # budget and end the episode on the next unrelated blip.
     attempt = 0
     rate_limit_attempt = 0
     while True:
         try:
-            # Pre-call cancellation gate: don't even dial if the
-            # caller already aborted (e.g. race deadline reached
-            # before we got CPU time).
             if cancel_event is not None and cancel_event.is_set():
                 raise CallCanceled("canceled before dispatch")
             if use_stream:
@@ -628,28 +512,10 @@ def _chat_completions_raw(
                 _flight_response_record(flight_dir, request_id, response_json)
             return response_json
         except CallCanceled:
-            # Surface immediately; cancellation is intentional and
-            # retrying would just re-dispatch the same aborted call.
             raise
         except _NO_RETRY_TIMEOUTS as e:
-            # A read/write/pool timeout means the request REACHED the server
-            # and the server is still working on it -- this path is the
-            # blocking POST (`cancel_event is None` on the bench), and as the
-            # dispatch comment above says, closing the socket does not abort
-            # the work. Re-sending is therefore not a retry, it is a SECOND
-            # copy of a multi-megabyte multi-image request queued behind the
-            # first, and it fires exactly when the server is already
-            # saturated. That is congestion collapse, and it is MEASURED: on
-            # one run at workers=128, calls timed out at the 240s
-            # default (`SEARCH_REASONER_TIMEOUT_S` unset) and were re-sent
-            # 2,253 + 1,944 times, so 128 clients held 407 requests open
-            # server-side (`http_requests_active` 407 against
-            # `num_running_reqs` 0/0/0) and mean TTFT ran 224s of which the
-            # scheduler saw 0.27s. The lane completed 23 of 151 started
-            # episodes and then nothing for 44 minutes.
-            #
-            # A CONNECT timeout is the opposite case and still retries below:
-            # no request was accepted, so no server work exists to duplicate.
+            # A re-send would queue a second copy behind the first exactly when
+            # the server is saturated (congestion collapse).
             log.error(
                 "LLM %s after %.0fs; NOT retrying (the server still holds "
                 "this request -- a re-send would duplicate it). Raise "
@@ -665,9 +531,6 @@ def _chat_completions_raw(
                 else None
             )
             if status in _RATE_LIMIT_STATUS:
-                # Capacity/quota, not a malformed body: the same request
-                # succeeds once the window resets. Both the streaming and
-                # blocking paths land here, so this covers both.
                 if rate_limit_attempt >= _MAX_RATE_LIMIT_RETRIES:
                     log.error(
                         "LLM endpoint %d after %d rate-limit retries; "
@@ -691,13 +554,8 @@ def _chat_completions_raw(
                 _backoff(delay, cancel_event)
                 continue
             if status == 404:
-                # Same-URL hot-swap guard: startup discovery is probe-once,
-                # so a server RESTARTED behind the same URL with a different
-                # model surfaces here, on either path.
                 _raise_on_served_model_mismatch(base_url, body.get("model"), e.response.text)
             if status is not None and status < 500:
-                # A <500 that is not a rate limit is a malformed-request
-                # bug, not a capacity event; surface it (retry won't fix it).
                 msgs = body.get("messages") or []
                 log.error(
                     "LLM endpoint %d response body: %s", status, e.response.text[:4000])
