@@ -72,10 +72,10 @@ class FakeReasoner:
                 "reasoning": "", "finish_reason": "tool_calls"}
 
 
-def bare_ctx(graph=None, grid_shape=(10, 10), robot_pose=None):
+def bare_ctx(graph=None, grid_shape=(10, 10), pose_xy=None):
     return SimpleNamespace(graph=graph, cell_size_m=1.0,
                            tile_origin_xy=(0.0, 0.0), grid_shape=grid_shape,
-                           robot_pose=robot_pose)
+                           pose_xy=pose_xy)
 
 
 def run(code: str):
@@ -216,7 +216,7 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
     reply = advance_reasoner_one_round(
         boost_queue=unarmed_boost,
         reasoner=fr, user_message="Find the goal object.",
-        ctx=bare_ctx(robot_pose=SimpleNamespace(x=START[0], y=START[1])),
+        ctx=bare_ctx(pose_xy=(START[0], START[1])),
         rid_tag="m0",
         compute_namespace={"cands": list(CANDS if cands is None else cands),
                            "anchors": [], "cell_m": 1.0},

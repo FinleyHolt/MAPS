@@ -117,13 +117,12 @@ def test_the_pose_echo_follows_a_flight_and_ignores_an_error():
 
     from benchmarks.citynav.run_benchmark.mission_engine import echo_pose
 
-    ctx = SimpleNamespace(robot_pose=None)
-    echo_pose(ctx, {"pose_xy": [10.0, 20.0], "alt_m": 120.0},
-              fallback_alt=100.0, heading_deg=0.0)
-    assert ctx.robot_pose is not None and ctx.robot_pose.x == 10.0
-    ctx2 = SimpleNamespace(robot_pose=None)
-    echo_pose(ctx2, {"error": "unknown fid"}, fallback_alt=100.0, heading_deg=0.0)
-    assert ctx2.robot_pose is None
+    ctx = SimpleNamespace(pose_xy=None)
+    echo_pose(ctx, {"pose_xy": [10.0, 20.0], "alt_m": 120.0})
+    assert ctx.pose_xy == (10.0, 20.0)
+    ctx2 = SimpleNamespace(pose_xy=None)
+    echo_pose(ctx2, {"error": "unknown fid"})
+    assert ctx2.pose_xy is None
 
 
 def test_the_mission_deadline_is_read_per_call_and_optional(monkeypatch):
@@ -160,7 +159,7 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):
     flights = session.flights
     assert flights[-1]["pose_xy"] == flights[-1]["resolved_xy"] == [100.0, 200.0]
     assert session.h.state.pose_xy == (100.0, 200.0)
-    assert session.ctx.robot_pose.x == 100.0, "the pose echo follows the flight"
+    assert session.ctx.pose_xy == (100.0, 200.0), "the pose echo follows the flight"
     assert "error" in session.fly({"target_fid": "nowhere"}) and len(flights) == 1
 
 

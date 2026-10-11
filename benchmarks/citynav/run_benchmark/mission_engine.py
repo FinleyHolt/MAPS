@@ -34,7 +34,6 @@ from maps.search.parse_compile.tour_state import (
     FeatureTour,
     TourViewpoint,
 )
-from maps.search.pose import RobotPose
 from maps.search.withhold import withheld
 from maps.util.xy_token import parse_xy_token
 
@@ -188,7 +187,7 @@ def detected_digest(dets: list[dict], cap: int = _DETECTED_HEAD) -> dict:
     return out
 
 
-def echo_pose(ctx, report: dict, *, fallback_alt: float, heading_deg: float) -> None:
+def echo_pose(ctx, report: dict) -> None:
     """After every successful flight the ToolContext's pose echo follows the
     drone, so the loop's surface refresh reads the folded world from where
     the drone is. The graph needs no following: the context holds the live
@@ -197,12 +196,7 @@ def echo_pose(ctx, report: dict, *, fallback_alt: float, heading_deg: float) -> 
         return
     pxy = report.get("pose_xy") or ()
     if len(pxy) == 2:
-        ctx.robot_pose = RobotPose(
-            x=float(pxy[0]), y=float(pxy[1]),
-            z=float(report.get("alt_m") or fallback_alt),
-            yaw_deg=float(heading_deg),
-            timestamp=time.time(),
-        )
+        ctx.pose_xy = (float(pxy[0]), float(pxy[1]))
 
 
 def perceive(h, obs, detections, step_idx: int, mark=lambda _phase: None) -> list[dict]:
@@ -257,10 +251,7 @@ class MissionSession:
         with loop._lock:
             self.ctx = loop._tool_ctx_for_examiner()
         state = h.state
-        self.ctx.robot_pose = RobotPose(
-            x=float(state.pose_xy[0]), y=float(state.pose_xy[1]), z=float(state.altitude_m),
-            yaw_deg=float(state.heading_deg), timestamp=time.time(),
-        )
+        self.ctx.pose_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
         ground = loop._ortho_ground_z_m
         alt = float(state.altitude_m)
         obs_span_m = observation_extent_m(alt, float(ground), h.sensor) if ground is not None else None
@@ -328,8 +319,7 @@ class MissionSession:
     def fly(self, item: dict) -> dict:
         """One flight (``MissionSpec.fly``), then the pose echo follows it."""
         report = self._fly(item)
-        echo_pose(self.ctx, report, fallback_alt=float(self.h.state.altitude_m),
-                  heading_deg=float(self.h.state.heading_deg))
+        echo_pose(self.ctx, report)
         return report
 
     def _fly(self, item: dict) -> dict:

@@ -15,6 +15,6 @@ class ToolContext:
 
     grid_shape: tuple[int, int]  # (H, W)
     graph: ObjectGraph | None = field(default=None, repr=False)
-    robot_pose: object | None = None  # RobotPose; None when no pose available
+    pose_xy: tuple[float, float] | None = None  # the drone's world x, y; None when unknown
     tile_origin_xy: tuple[float, float] = (0.0, 0.0)
     cell_size_m: float = 0.0  # required; caller passes the tile's true value

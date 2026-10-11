@@ -753,17 +753,6 @@ def _rounded_xy(token) -> list[float] | None:
     return [round(p[0], 2), round(p[1], 2)] if p else None
 
 
-def _pose_xy_of_ctx(ctx) -> tuple[float, float] | None:
-    """The current pose carried on a ToolContext (None when absent)."""
-    pose = getattr(ctx, "robot_pose", None)
-    if pose is None:
-        return None
-    try:
-        return (float(pose.x), float(pose.y))
-    except (AttributeError, TypeError, ValueError):
-        return None
-
-
 def _envelope_residue(text: str) -> bool:
     """True when a PROSE turn carries tool-call envelope residue — a parser
     miss (the envelope swallowed into content/reasoning) or the model
@@ -2336,7 +2325,7 @@ def advance_reasoner_one_round(
                 _members.append({"tok": _tok, "pts": [_p] if _p else [],
                                  "items": [dict(_it)], "walk": 0.0})
         # greedy nearest-endpoint chain, seeded from where the drone is
-        _cur = _pose_xy_of_ctx(ctx)
+        _cur = getattr(ctx, "pose_xy", None)
         _cur = [float(_cur[0]), float(_cur[1])] if _cur else None
         _chained: list[dict] = []
         _rest = list(_members)
