@@ -10,6 +10,8 @@ ORDERING-only, never a filter or gate). The w2c color lattice lives in
 where color_shade drives the dk/lt prefix on the compact surface render and
 color_flag=='look' is the uncertain '?' that routes to a viewpoint.
 Returns ``None`` on an empty/degenerate mask (never raises on the detect path).
+``m6_attributes(rgb_crop, region)`` is the same reading as the string
+attributes a detection or a prior node carries (``color_conf`` to 3 dp).
 
 Body pixels are selected by an erode plus a luminance drop, so the reported
 color comes from the object's interior rather than its edges or its shadow.
@@ -185,3 +187,17 @@ def color_from_mask_m6(rgb_crop, region) -> "dict | None":
                 _M6_FAIL_N, exc_info=True,
             )
         return None
+
+
+def m6_attributes(rgb_crop, region) -> "dict[str, str] | None":
+    """The M6 mixture as node attributes: ``color``, ``color_conf`` (3 dp),
+    ``color_shade``, ``color_flag``; ``None`` where M6 reads nothing."""
+    mix = color_from_mask_m6(rgb_crop, region)
+    if not mix:
+        return None
+    return {
+        "color": mix["color"],
+        "color_conf": f"{mix['color_conf']:.3f}",
+        "color_shade": mix["color_shade"],
+        "color_flag": mix["color_flag"],
+    }

@@ -21,7 +21,7 @@ from maps.perception.geometry.geolocate import (
     project_mask_to_tile_cells_ortho,
     world_contour_from_region,
 )
-from maps.perception.viz.color import color_from_mask_m6
+from maps.perception.viz.color import m6_attributes
 
 
 def project_and_stamp_ortho_detections(
@@ -67,12 +67,9 @@ def project_and_stamp_ortho_detections(
                 or "color_rgb" in det.attributes
             )
         ):
-            mix = color_from_mask_m6(np.asarray(rgb), region)
-            if mix:
-                det.attributes["color"] = mix["color"]
-                det.attributes["color_conf"] = f"{mix['color_conf']:.3f}"
-                det.attributes["color_shade"] = mix["color_shade"]
-                det.attributes["color_flag"] = mix["color_flag"]
+            attrs = m6_attributes(np.asarray(rgb), region)
+            if attrs:
+                det.attributes.update(attrs)
                 # transient best-view carrier (stripped to best_view_px
                 # in _detection_to_mapobject)
                 det.attributes["color_px"] = str(region.area)
