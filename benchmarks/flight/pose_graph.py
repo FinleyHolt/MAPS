@@ -1,22 +1,11 @@
 """The corrector's pose graph: the last seconds of frames placed together, each by its own registration and its ties to the frame before it.
 
-Every frame the recorder serves is registered against the map's render
-(``live_source.register_frame``, the whole frame as one mark), and one
-measurement a frame is what a lone false peak can fool and a refused frame
-goes without. Here every frame is a node in a window of the last
-:data:`WINDOW_S` seconds: its registration is an anchor weighted by its
-response, and the ties to the frame before it (:mod:`frame_ties`) hold the
-two together to a work pixel. Each new frame re-solves the window
-(:func:`tie_adjust.solve`), so a refused frame is placed by its neighbours, a
-false peak is outvoted, and a measured frame is moved by its own measurement
-and its neighbours' together. The window carries one yaw and one scale.
-
-A window holding fewer than :data:`MIN_ANCHORS` anchors places none of its
-frames. A measurement further than :data:`INNOVATION_CAP_M` from the graph's
-estimate at its time is a lock a block over and is refused. Solved nodes are
-kept :data:`NODE_AGE_S` after they leave the window, since a frame a mission
-is handed off the recorder's ring is seconds to tens of seconds old and takes
-the node nearest it in time when it is refused (:meth:`PoseGraph.estimate`).
+Every frame is a node in a window of the last :data:`WINDOW_S` seconds: its
+registration (``live_source.register_frame``) an anchor weighted by its
+response, its ties to the frame before it (:mod:`frame_ties`) holding the two
+together. Each new frame re-solves the window (:func:`tie_adjust.solve`), so a
+refused frame is placed by its neighbours and a false peak is outvoted; the
+window carries one yaw and one scale.
 """
 
 from __future__ import annotations

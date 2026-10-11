@@ -1,33 +1,14 @@
 """What the aircraft's recording holds over an area, as one observation the mission's projector reads.
 
-The live counterpart of the ortho crop the bench perceives with. The vehicle
-records frames, each tagged with the pose the aircraft had at its stamp, and
-serves the ring's index (one pose a frame and no pixels) and any frame's
-pixels by sequence (``benchmarks.flight.vehicle``). This module answers two
-questions off that:
-
-* :meth:`LiveSource.coverage`: how much of an area the recording holds, off
-  the index alone. This is the one arrival rule: a leg has arrived when the
-  pass holds the area it was flown for, whichever pass held it.
-* :meth:`LiveSource.observe_area`: the ground the pass held over the area,
-  as ONE north-up orthophoto on the map grid. The frames that saw each of
-  the area's points nearest nadir are fetched, each placed through the
-  solved boresight and its own registration (:func:`register_frame` against
-  the map's render, gated by the corrector's :class:`PoseGraph`), composited
-  (:func:`composite`), registered on the map as one similarity
-  (:func:`register_mosaic`), and handed over as an orthographic observation
-  on flat ground at the bake's floor (:func:`ortho_observation`).
-
-What the calibration solved is applied here and nowhere else: the sensor
-override from ``boresight.json``, the GNSS bias on the position, the timing
-offset on the frame's time. A station started with no boresight flies the
-datasheet camera.
-
-Every frame the vehicle records is registered as it arrives by a thread the
-live source starts (:class:`Corrector`), and the frames are placed together
-(:mod:`benchmarks.flight.pose_graph`). A frame off the ring that is older
-than the graph's window is registered on its own pixels, gated by the graph's
-node nearest it in time (:meth:`LiveSource._register_ring`).
+The live counterpart of the bench's ortho crop. :meth:`LiveSource.coverage`
+reads off the ring's index alone how much of an area the recording holds (the
+one arrival rule); :meth:`LiveSource.observe_area` fuses the frames that saw
+the area nearest nadir into ONE north-up orthophoto on the map grid. Every
+recorded frame is registered as it arrives (:class:`Corrector`) into the pose
+graph; a ring frame older than the graph's window is registered on its own
+pixels, gated by the graph's node nearest it in time. The calibration
+(``boresight.json``: sensor, GNSS bias, timing offset) is applied here and
+nowhere else; without one the datasheet camera flies.
 
 Signs: a pose carries aerospace roll and pitch (right wing down and nose up
 positive). The projector's pitch is nose down, so it is carried negated.
@@ -87,10 +68,6 @@ CORRECTOR_PERIOD_S = 0.1
 
 #: A whole-frame correlation under this is refused: the frame met structure the
 #: map does not hold there, and its peak is a false one more often than not.
-#: Read against a leg's median on a flown cut, a frame under 0.4 sat within
-#: 6 m of the leg 16% of the time, 0.4 to 0.5 45%, 0.5 and over 83%; end to
-#: end, a 0.4 floor admits forty percent more frames than 0.5 at barely worse
-#: marks each, and the graph holds the tail.
 FRAME_RESPONSE_MIN = 0.4
 
 #: How far, in degrees, a frame's pose may sit from an area's centroid and
@@ -473,16 +450,11 @@ class LiveSource:
         return record
 
     def _register_ring(self, seq: int, posed, t: float) -> dict[str, Any]:
-        """A frame off the ring, registered on its own pixels.
-
-        The frame a mission is handed at a waypoint is seconds to tens of
-        seconds old, so the graph's window has moved on and its own pixels are
-        the one measurement that belongs to it. The graph's node nearest it in
-        time is the gate: a ring measurement further from it than
-        :data:`pose_graph.INNOVATION_CAP_M` is a false lock and is refused. A
-        refused or unmeasured ring frame takes that nearest node (``nearest``);
-        without one the pose stands and the record says why.
-        """
+        """A frame off the ring, registered on its own pixels (the graph's
+        window has moved on): a measurement further than
+        :data:`pose_graph.INNOVATION_CAP_M` from the graph's node nearest it in
+        time is refused, and a refused or unmeasured frame takes that node
+        (``nearest``); without one the pose stands and the record says why."""
         pose = frame_pose(posed)
         record, _measured = register_frame(self.register, posed.rgb, pose, posed.sensor,
                                            self.ground_msl(pose.pose_xy))
@@ -547,13 +519,11 @@ class LiveSource:
         return {"x": pose_xy[0], "y": pose_xy[1], "agl_m": alt_msl - self.floor_msl_m, "utc": pose.utc}
 
     def coverage(self, points: list[tuple[float, float]]) -> dict[str, Any] | None:
-        """How much of an area the recording holds. ``points`` are the area's
-        (lon, lat) samples; ``fraction`` is the share some frame held, and
-        ``best`` per point the ``(off-nadir degrees, sequence)`` of the frame
-        that saw it nearest nadir, None for a point no frame held. Read off the
-        ring's index over every frame, through the solved camera's field of
-        view. None with ``last_refusal`` when the
-        ring cannot be asked."""
+        """How much of an area, ``points`` its (lon, lat) samples, the ring's
+        index holds through the solved camera's field of view: ``fraction`` the
+        share some frame held, ``best`` per point the ``(off-nadir degrees,
+        sequence)`` of the frame nearest nadir or None. None with
+        ``last_refusal`` when the ring cannot be asked."""
         rows = self._ring_rows(None)
         if rows is None:
             return None
@@ -614,14 +584,9 @@ class LiveSource:
         the map grid: the frames that saw each of ``points`` nearest nadir,
         fused (:meth:`_fused`). ``last["coverage"]`` says how much of the area
         was held and by which frames; a partial pass is served as the part it
-        held. None with ``last_refusal`` when no frame held any of it.
-
-        Off nadir is the rank: a flown sortie's marks binned by the angle the
-        frame saw each at read a CE50 of under a metre and a half within 2.5
-        degrees and two to thirteen metres past 7.5. Attitude is in the angle
-        already and height does not move within one pass, so nothing else
-        ranks. Only the frames that win a point are fetched, so choosing costs
-        no frame bytes.
+        held. None with ``last_refusal`` when no frame held any of it. Off
+        nadir is the one rank (attitude is in the angle already), and only the
+        frames that win a point are fetched.
         """
         cov = self.coverage(points)
         if cov is None:

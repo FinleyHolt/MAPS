@@ -30,9 +30,7 @@ EDGE_CLIP_PCT = 50
 #: A peak is unique when nothing this far from it scores as well: a road with
 #: no cross street scores the same all along its own ridge.
 UNIQUE_RADIUS = 16
-#: A tie's gate: the peak's margin over the best score ``UNIQUE_RADIUS`` away,
-#: set so that at most one percent of a null rung (each frame against the
-#: render of the frame three on) passes.
+#: A tie's gate: the peak's margin over the best score ``UNIQUE_RADIUS`` away.
 MIN_EDGE_MARGIN = 0.082
 #: The ground a pixel covers where the windows above were fitted, m/px. A frame
 #: finer than it by more than ``BIN_ABOVE`` is binned to it before it is

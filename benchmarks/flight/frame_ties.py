@@ -34,8 +34,7 @@ YAW_STEP_DEG = 0.1
 #: tie to the wrong block.
 TIE_AGREE_PX = 3.0
 TIE_AGREE_MIN = 2
-#: Templates kept a pair: past twelve the tie rows out-vote the anchors and
-#: the cap refuses its own measurements, so eight sits a step inside that.
+#: Templates kept a pair, so the tie rows never out-vote the anchors.
 TIES_PER_PAIR = 8
 #: Frames whose work grid and edge maps are kept: the pose graph's
 #: ``TIE_NEIGHBOURS`` plus two.

@@ -305,19 +305,14 @@ class Mission:
         return [local_to_lonlat(self._tiles_dir, self.map_name, float(x), float(y)) for x, y in area]
 
     def _fly_live(self, session, item: dict[str, Any]) -> dict[str, Any]:
-        """A flight on the aircraft, under the one arrival rule: a leg is flown
-        for an AREA (:func:`leg_area`) and has arrived when the recording holds
-        it, whichever pass held it. The observation is the frames that held
-        it, fused, the ONE thing a waypoint serves. An area the recording
-        holds already is answered without a leg, and only a ring that ANSWERED
-        decides that (:meth:`_coverage_before_leg`). Otherwise the leg is
-        posted, the recording is asked as it grows until it holds the area,
-        then until the point falls out of the frame (:meth:`_wait_departure`),
-        and the frames that held the area are fetched. A leg that never
-        arrives within ``ARRIVAL_TIMEOUT_S`` serves the part of the area the
-        pass did hold, and nothing when none was; the ``leg`` row says which.
-        The model is served the stop as the target it named either way: the
-        pass geometry is the crew's to fix, not the reasoner's."""
+        """A flight on the aircraft: a leg flown for an AREA (:func:`leg_area`)
+        arrives when the recording holds it, and its observation is the frames
+        that held it, fused. An area a ring that ANSWERED holds already is
+        served without a leg (:meth:`_coverage_before_leg`); otherwise the leg
+        is posted and the recording asked until it holds the area and the point
+        leaves the frame (:meth:`_wait_departure`). A leg that never arrives
+        within ``ARRIVAL_TIMEOUT_S`` serves what the pass held, the ``leg`` row
+        says which, and the model is served the stop it named either way."""
         h = session.h
         token = str(item.get("target_fid") or "")
         resolved = session.resolve(token)

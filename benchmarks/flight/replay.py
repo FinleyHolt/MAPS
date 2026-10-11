@@ -6,39 +6,24 @@
         --raster <raster dir> [--nav <sensors_nocamera.mcap>]
 
 The mission is the harness's own (:class:`benchmarks.flight.mission.Mission`),
-hydrated as the bench hydrates, under the recorded operator's words and start.
-What changes is what answers a flight:
+hydrated under the recorded operator's words and start; what changes is what
+answers a flight:
 
-* **The observation bank** (default). Each flight is answered from the
-  recorded observations (the run's own, or with ``--bank week`` every run
-  under the sorties root) that hold the leg's area under the live station's
-  coverage rule: an area point is held when it falls inside an observation's
-  window on a non-black pixel, and the observation holding the most points
-  is served, through the same ``ortho_observation`` path. None holds any
-  point: the flight has no observation, as flown. ``look`` crops the
-  observations this replay served. The reasoner is the user's endpoint
-  (``SEARCH_REASONER_URL``), the segmenter theirs (``SAM_SERVER_URL``), and
-  the recorded operator's taskings are spoken after each report, in order.
-* **Forced** (``--forced``). The recorded assistant responses are replayed in
-  order by a fake reasoner, each flight is served the observation the
-  recording served it, the segmenter answers with the recorded detections of
-  that flight, and the operator's taskings land where the recorded requests
-  carried them. Every request body is then diffed against the recorded one
-  (``replay_diff.json``): the receipts, the flights and the commit. A
-  divergence exits non-zero. No endpoint is contacted.
-* **The frame tier** (``--frames``). The camera recording is read as the
-  aircraft's ring (:class:`benchmarks.flight.recorded_ring.RecordedRing`)
-  over the recorded run's window and handed to the live source, so every
-  waypoint is re-fused, registered and observed from the real frames.
+* **The observation bank** (default): the recorded observation (the run's
+  own, or every run's with ``--bank week``) holding the most of the leg's area
+  points on non-black pixels, through ``ortho_observation``; the user's
+  reasoner and segmenter answer, and the recorded taskings follow each report.
+* **Forced** (``--forced``): the recorded responses, observations and
+  detections answer; every request body is diffed against the recorded one
+  (``replay_diff.json``) and a divergence exits non-zero. No endpoint is contacted.
+* **The frame tier** (``--frames``): the camera recording read as the
+  aircraft's ring (:class:`benchmarks.flight.recorded_ring.RecordedRing`) and
+  re-fused by the live source at every waypoint.
 
-The bank answers at the live source's seam rather than as a ``Vehicle``: a
-recorded observation is a fused north-up product already, and a vehicle
-serves raw camera frames the live source would fuse again. The harness reads
-the bank through the same five calls it reads ``LiveSource`` through, and
-nothing in it changes.
-
-Every replay writes the records a flown run carries, the ledger row naming
-the recorded run it replays (``replay_of``).
+The bank answers at the live source's seam (the five calls the harness reads
+``LiveSource`` through), since a recorded observation is fused already. Every
+replay writes the records a flown run carries, its ledger row naming the run
+it replays (``replay_of``).
 """
 
 from __future__ import annotations

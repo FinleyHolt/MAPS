@@ -2,21 +2,13 @@
 
     python -m benchmarks.flight.twin --config configs/calcity.yaml --episode <id> --ortho <raster dir>
 
-The twin implements :class:`benchmarks.flight.vehicle.Vehicle`: it flies each
-posted leg straight to its point and on through the rest of the pass at the
-C-12's speed, wings level at the mission's height, and records a frame at the
-camera's rate, each tagged with its pose. A frame's pixels are rendered on
-request from the ortho through the same camera model the bench renders with,
-at the camera pose the live source will place the frame by, so the twin's
-frames and the recording's index agree by construction.
-
-The ortho is a raster directory holding ``<map>_rgb.tif`` beside ``<map>.tif``
-on the bake's grid (``benchmarks.calcity.data_prep.build_rgbd_ortho``). The
-endpoints come from the environment as the bench's do: ``SEARCH_REASONER_URL``
-and ``SAM_SERVER_URL``. The run lands under ``--out/<UTC stamp>/`` with the
-records a flown sortie carries: ``episodes.jsonl``, and per run
-``conversation.jsonl``, ``flight/llm/transcript.jsonl``, ``frames.jsonl`` and
-``observations/``.
+The twin is a :class:`benchmarks.flight.vehicle.Vehicle`: it flies each posted
+leg straight on through the rest of the pass at the C-12's speed, wings level,
+and records a pose-tagged frame at the camera's rate, its pixels rendered on
+request off the ortho (``<map>_rgb.tif`` beside ``<map>.tif``) at the camera
+pose the live source places it by. The endpoints come from the environment as
+the bench's do; the run lands under ``--out/<UTC stamp>/`` with the records a
+flown sortie carries.
 
 ponytail: the twin's clock moves only while the harness waits on it, so the
 aircraft holds still while the model thinks; a real-time clock is the
