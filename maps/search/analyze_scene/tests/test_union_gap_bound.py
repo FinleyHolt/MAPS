@@ -1,14 +1,4 @@
-"""``bbox_gap`` must be a TRUE lower bound, or the union min it prunes is wrong.
-
-The union branch in ``geom_program.run_program`` takes the min gap over every
-member of a class-sized reference. Skipping a member is only admissible if the
-bound can never exceed the real gap: one counterexample and the reported
-minimum is silently too large, on a table the model reads.
-
-So the bound is checked against ``gap_witness`` itself over randomised pairs,
-including the cases a box bound gets wrong if it forgets a case -- overlapping
-boxes, containment, shared edges, and a point-mask degenerate.
-"""
+"""``bbox_gap`` must be a TRUE lower bound, or the union min it prunes is wrong."""
 import math
 
 import numpy as np
@@ -101,8 +91,8 @@ def test_the_pruned_union_min_equals_the_unpruned_one():
 
 
 def test_a_zero_gap_stops_the_scan_without_changing_the_answer():
-    """Containment gives 0, and nothing can beat 0 -- but the break must not
-    change WHICH witness is kept when an earlier member already tied."""
+    """Containment gives 0, and nothing can beat 0 -- but the break must not change
+    WHICH witness is kept when an earlier member already tied."""
     a = G.mask_geom(ring(0, 0, 10, 10))
     overlapping = G.mask_geom(ring(5, 5, 10, 10))
     also = G.mask_geom(ring(6, 6, 10, 10))

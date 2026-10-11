@@ -1,21 +1,5 @@
 #!/usr/bin/env python
-"""Delivering a crop never rewrites an earlier message.
-
-The reasoner history is the served prompt, and a served prompt is a radix
-prefix. Rewriting message ``i`` re-hashes every block from ``i`` on, so the
-server re-prefills the whole tail; the transcript records that as ``n_prefix``
-rolling back. A count cap used to sit in ``append_vision_user`` evicting the
-oldest crop past sixteen, which did exactly this on 8.13% of requests,
-discarding a mean of 35.2 messages each time.
-
-The cap is gone and the compactor bounds tokens instead, which is the resource
-the window actually spends. This pins the property the cap violated rather than
-the cap's absence, so it also fails if a cap returns in another shape: every
-message but the newly appended one is byte-identical across a delivery.
-
-No network. Run:
-``pytest maps/search/tests/test_vision_append_is_append_only.py``.
-"""
+"""Delivering a crop never rewrites an earlier message."""
 from __future__ import annotations
 
 import hashlib
@@ -24,14 +8,12 @@ import json
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.tests.fakes import TEST_SPEC
 
-# Enough deliveries to pass any cap anyone would plausibly reintroduce. The
-# retired one was 16, and it first bit on the 17th image.
+# Enough deliveries to pass any cap anyone would plausibly reintroduce.
 _DELIVERIES = 40
 
 
 def _digests(messages: list[dict]) -> list[str]:
-    """The same per-message digest ``maps.llm.http`` takes to compute
-    ``n_prefix``. Comparing these is comparing what the server sees."""
+    """The same per-message digest ``maps.llm.http`` takes to compute ``n_prefix``."""
     return [
         hashlib.sha256(
             json.dumps(m, sort_keys=True, default=str).encode("utf-8")
@@ -41,8 +23,8 @@ def _digests(messages: list[dict]) -> list[str]:
 
 
 def _jpeg(n: int) -> bytes:
-    """Distinct bytes per crop, so an eviction cannot hide behind two crops
-    happening to serialize the same."""
+    """Distinct bytes per crop, so an eviction cannot hide behind two crops happening to
+    serialize the same."""
     return b"\xff\xd8\xff" + bytes([n % 251]) * 32
 
 

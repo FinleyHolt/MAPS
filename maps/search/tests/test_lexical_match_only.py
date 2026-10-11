@@ -1,30 +1,10 @@
-"""``find``'s text matching is strictly LEXICAL — no semantic lookup table.
-
-Pins the boundary: the matcher owns abbreviation/punctuation/typo fuzz
-(case-fold, ``st`` <-> ``street``, plural stripping, edit-distance) and
-NOTHING semantic — there is no English-noun -> OSM-value table anywhere in
-:mod:`maps.search.analyze_scene.text_match`. A query whose vocabulary diverges from
-OSM tag vocabulary ('lake' vs natural=water) scores 0 and lands in the
-no-match census affordance; closing that gap is the AGENT's job via the tag
-census (served on misses + the mission packet's tile overview), never a hardcoded
-mapping.
-"""
+"""``find``'s text matching is strictly LEXICAL — no semantic lookup table."""
 from __future__ import annotations
 
 from maps.search.analyze_scene import text_match as T
 
 
 def _flat(*texts: str) -> dict:
-    """Token weights over a ONE-ROW corpus spelling ``texts``.
-
-    Every token then has df 1, so the IDF mass of a query word is the same
-    for every word and the fuzz band's weighted coverage reduces exactly to
-    the word COUNT these lexical pins were written against. What the flat
-    corpus does NOT flatten is satisfiability: a query word absent from the
-    row still has df 0 and still leaves the denominator, which is the rule
-    ``test_lexical_token_overlap_reaches_tag_vocabulary`` reads at full
-    strength below.
-    """
     return T.token_idf([{"search_text": " ".join(texts), "name": ""}])
 
 
@@ -35,8 +15,8 @@ def _score(query: str, candidate: str) -> float:
 
 
 def _rows(*texts: str, colour: str | None = None) -> list[dict]:
-    """Matched rows as ``unmatched_query_tokens`` reads them: the searched
-    text, plus perception's ``color`` mixture when the row carries one."""
+    """Matched rows as ``unmatched_query_tokens`` reads them: the searched text, plus
+    perception's ``color`` mixture when the row carries one."""
     return [dict({"search_text": t},
                  **({"color": colour} if colour is not None else {}))
             for t in texts]
@@ -85,12 +65,7 @@ def test_lexical_token_overlap_reaches_tag_vocabulary():
     assert _score("parking lot", "parking surface") >= T.FUZZY_THRESHOLD
     assert _score("lot", "amenity parking") == 0.0  # bare 'lot' has no token
 
-    # ON A REAL CORPUS the score is IDF MASS FOUND / IDF MASS SATISFIABLE,
-    # and 'lot' is a zero-df word on the bake -- no row spells it, so no
-    # score can ever recover it and it leaves the denominator. 'parking' is
-    # then the whole of the denominator and the row saturates the band.
-    # Keeping 'lot' in is what takes `find("parking lot")` to ZERO rows,
-    # because an absent word carries the corpus's MAXIMUM weight.
+    # 'parking' is then the whole of the denominator and the row saturates the band.
     corpus = [{"search_text": "amenity parking", "name": ""},
               {"search_text": "building yes", "name": ""}]
     idf = T.token_idf(corpus)
@@ -112,28 +87,18 @@ def test_abbreviation_expansion_is_kept():
 
 
 def test_plural_fuzz_is_kept_and_typo_fuzz_is_GONE():
-    """Plurals are lexical normalization; typos were measured to add nothing.
-
-    The edit-distance path scored 0 of the 17 corpus episodes where fuzz
-    adds the ground truth, while reaching 48 ``crossing_markings`` rows for
-    ``parking`` and ``highway=track`` for ``truck``. A near-miss word now
-    routes to the served tag census instead of retrieving the wrong rows --
-    the remedy this module's docstring already names.
-    """
     assert _score("buildings", "building yes") >= T.FUZZY_THRESHOLD
-    # ...and the -ses ambiguity does not eat the stem: houses -> house, not
-    # "hous". The typo path used to cover for that silently.
+    # ...and the -ses ambiguity does not eat the stem: houses -> house, not "hous".
     assert _score("houses", "building house") >= T.FUZZY_THRESHOLD
     assert _score("house", "building house") >= T.FUZZY_THRESHOLD
-    # a one-character typo no longer retrieves
     assert _score("librari", "library") == 0.0
 
 
 def test_containment_fuzz_never_enters_the_exact_tier_bands():
-    """A row NAME contained in the query (reverse containment — the
-    admin-boundary 'Cambridge' vs a 'Museum of Cambridge' query) is a fuzz
-    hit and must stay at or below the fuzz ceiling, never inside the
-    k=v (0.80+) or name-phrase (0.90+) bands the served docs declare."""
+    """A row NAME contained in the query (reverse containment — the admin-boundary
+    'Cambridge' vs a 'Museum of Cambridge' query) is a fuzz hit and must stay at or
+    below the fuzz ceiling, never inside the k=v (0.80+) or name-phrase (0.90+) bands
+    the served docs declare."""
     from maps.search.analyze_scene.text_match import (
         _TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query)
     q = fuzzy_prepare_query("Museum of Cambridge")
@@ -149,22 +114,10 @@ def test_containment_fuzz_never_enters_the_exact_tier_bands():
 
 
 def test_a_query_is_scored_by_what_it_found_not_by_the_haystack_length():
-    """The partial paths are alternatives; the score is the MAX over them.
-
-    The substring path divides by the LONGER string, so on its own it prices
-    a short query by how much OTHER text the row happens to carry. ``pool``
-    inside ``leisure=swimming_pool`` scored 0.467, and one more tag on the
-    same row pushed it under the 0.45 floor -- while the token bag, which
-    asks how much of the QUERY was found, reads 0.75 whatever else the row
-    says. ``find pool.`` returned ZERO rows on a bake holding three
-    ``leisure=swimming_pool`` ones, with the miss census naming them in the
-    same message; 90 of 325 calcity facing cues name a pool.
-    """
-    # ONE corpus for both readings: the haystack sets the WEIGHTS now, and
-    # this test is precisely about it not setting the SCORE. `pool` is a
-    # single satisfiable word, so it is its own whole denominator and the
-    # IDF MASS FOUND over IDF MASS SATISFIABLE saturates the band whatever
-    # else the row happens to spell.
+    """The partial paths are alternatives; the score is the MAX over them."""
+    # `pool` is a single satisfiable word, so it is its own whole denominator and the
+    # IDF MASS FOUND over IDF MASS SATISFIABLE saturates the band whatever else the row
+    # happens to spell.
     corpus = [{"search_text": "leisure swimming pool", "name": ""},
               {"search_text": "leisure swimming pool building yes "
                               "access private", "name": ""},
@@ -192,11 +145,7 @@ def test_a_query_is_scored_by_what_it_found_not_by_the_haystack_length():
 
 
 def test_single_token_generic_query_never_enters_name_phrase_tier():
-    """B-5 pin (12512): query 'building' must NOT hit 'Baker Building' in
-    the name-phrase band (>=0.90) — a generic head noun word-bounded inside
-    a proper name is an English mention, not a semantic hit. It scores names
-    only through the fuzz band (<=0.75), so the exact tag-family hit
-    building=terrace (0.80-0.89) outranks every such name mention."""
+    """Query 'building' stays out of the name-phrase band (>=0.90) for 'Baker Building'."""
     from maps.search.analyze_scene.text_match import (
         _KV_TIER_BASE, _TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query)
     q = fuzzy_prepare_query("building")
@@ -213,8 +162,7 @@ def test_single_token_generic_query_never_enters_name_phrase_tier():
 
 
 def test_multi_token_name_phrase_tier_kept():
-    """B-5 fixture pin: 'Downing Street' (2 tokens) keeps its 1.0 exact /
-    0.9x phrase-inside-name behavior."""
+    """'Downing Street' keeps its 1.0 exact / 0.9x phrase-inside-name scores."""
     from maps.search.analyze_scene.text_match import find_score, fuzzy_prepare_query
     q = fuzzy_prepare_query("Downing Street")
     idf = _flat("downing street", "little downing street")
@@ -236,12 +184,6 @@ def test_single_token_exact_name_equality_still_perfect():
 
 
 def test_7872_multiword_value_coverage_separates_compound_query():
-    """armC7 gate B4 fixture (episode 7872): 'addr_street=Castle Street
-    building=yes' must rank a row carrying BOTH tags above a row carrying
-    only building=yes. Before the value-extension fix the pair value
-    truncated at whitespace ('castle' matched no tag), both row kinds
-    scored an identical 0.845, and the served head was byte-identical to
-    the plain building=yes query."""
     from maps.search.analyze_scene.text_match import find_score, fuzzy_prepare_query
     q = fuzzy_prepare_query("addr_street=Castle Street building=yes")
     idf = _flat("castle street building yes 12", "building yes")
@@ -267,15 +209,12 @@ def test_kv_value_extension_stops_at_the_next_pair():
 
 
 def test_a_query_token_no_matched_row_carries_is_named():
-    # v9: a junk token dilutes the token-bag ratio and never disqualifies,
-    # so a glued spelling still binds. "car withcolor blue" strips 'blue'
-    # into find{color}, leaving {car, withcolor} -> ratio 0.5, over
-    # FUZZY_THRESHOLD 0.45 on every car row; pilot-7 measured that shape
-    # returning 520 rows with no error and no note.
+    # A junk token dilutes the token-bag ratio and never disqualifies, so a glued
+    # spelling still binds.
     from maps.search.analyze_scene.text_match import unmatched_query_tokens
     rows = _rows("Ford Focus car", "Vauxhall car", "car amenity parking")
     assert unmatched_query_tokens("car withcolor", rows) == ["withcolor"]
-    # the residual glue shapes pilot-7 still emitted
+    # the remaining glued spellings
     assert unmatched_query_tokens("house onBeche Road",
                                   _rows("Beche Road house")) == ["onbeche"]
     # a clean query, and an attribute the rows DO carry, stay silent
@@ -283,11 +222,7 @@ def test_a_query_token_no_matched_row_carries_is_named():
     assert unmatched_query_tokens("car parking", rows) == []
     # short tokens are never named (a/of/the carry no narrowing)
     assert unmatched_query_tokens("a car", rows) == []
-    # A PLURAL of a word the rows plainly carry is NOT a miss. The
-    # singularizer is lossy ("houses" -> "hous"), so a literal miss
-    # flagged every plural of a carried word: pilot-8 measured 14 of 40
-    # flags as exactly that, noise that teaches the model to distrust
-    # vocabulary the legend itself gave it.
+    # A PLURAL of a word the rows plainly carry is NOT a miss.
     assert unmatched_query_tokens("cars", rows) == []
     assert unmatched_query_tokens("houses", _rows("terraced house")) == []
     assert unmatched_query_tokens("buildings", _rows("building yes")) == []
@@ -302,14 +237,6 @@ def test_a_query_token_no_matched_row_carries_is_named():
 
 
 def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
-    # v10: 857f5022 left the colour word in the head-noun query text, so
-    # the note started claiming "no matched row carries 'gray'" beside a
-    # grid whose top rows read `gray` / `gray?` -- pilot-9 flagged a
-    # palette word in 10 of 57 token-claims (17.5%) against 0 of 191 on
-    # pilot-8. Perceived colour rides the color_<word> columns, never the
-    # row's text, so the claim is true of the text and false of what the
-    # model can see -- and pilot-8 measured the model OBEYING the note 90%
-    # of the time, i.e. dropping a word that was working.
     from maps.search.analyze_scene.text_match import (
         COLORS, _colors_read, unmatched_query_tokens as U)
     coloured = _rows("car", "car", colour="gray 0.55 / black 0.30")
@@ -371,10 +298,6 @@ def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
     # (the noun's plural is the separate, older is_carried case).
     assert U("grays car", coloured) == []
     assert U("gray cars", coloured) == []
-    # A palette word inside a name the row DOES spell was already silent
-    # (is_carried), colour or no colour: 382ce4fe's reading is preserved.
     assert U("Green Street", _rows("Green Street highway residential")) == []
-    # ... and inside a name that MISSED it stays loud, or a wrong bind
-    # goes silent: 24 of 1784 tile names carry a palette word.
     assert U("Green Street", _rows("Castle Street highway",
                                    colour="gray 0.55")) == ["green"]

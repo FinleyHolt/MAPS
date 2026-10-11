@@ -1,17 +1,4 @@
-"""``find <noun>`` reaches the noun's own tag FAMILY, exact hits first.
-
-The cue's commonest noun is a tag VALUE that a handful of rows spell
-(``building=house``) while the thing it names is tagged generically on the
-rest (``building=yes``). Scoring a row at a time cannot see that, so the
-retrieval returned 41 of 3,414 buildings and every downstream budget was
-served the wrong 41. The widening is the corpus fact applied over the
-searched set: a query that IS a value of some tag key reaches every row
-carrying that key.
-
-The two properties that make it a WIDENING and not a re-ranking, both
-asserted below: nothing that matched before stops matching, and every exact
-hit keeps its place ahead of the family.
-"""
+"""``find <noun>`` reaches the noun's own tag FAMILY, exact hits first."""
 from __future__ import annotations
 
 from maps.search.analyze_scene import text_match as T

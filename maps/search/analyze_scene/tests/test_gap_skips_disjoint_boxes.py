@@ -1,11 +1,4 @@
-"""The gap's containment and crossing tests are gated on box overlap, exactly.
-
-A vertex of one footprint inside the other lies in both bounding boxes,
-and two segments can only cross at a point that lies in both, so a pair
-whose boxes are disjoint can only ever reach the vertex-to-segment
-distances. The oracle here is the ungated body -- every test on every
-pair -- so the gate cannot drift into a different answer.
-"""
+"""The gap's containment and crossing tests are gated on box overlap, exactly."""
 import math
 
 import numpy as np

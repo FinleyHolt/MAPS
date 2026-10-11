@@ -1,20 +1,4 @@
-"""The crop window's OBSERVATION ceiling (``obs_span_m``) — what it clamps.
-
-``obs_span_m`` rides every crop request as the stop's view-square side
-(``2 * (altitude - ground)``) and :mod:`maps.search.render.look_render`
-clamps the window to it: a crop selects less of what the stop observed,
-never more. Nothing pinned that key before this file — it was passed
-through three layers (``search_loop`` / ``mission_engine`` ->
-``run_mission`` -> ``_build_crop_requests`` -> the renderer) and asserted
-nowhere, which is how a comment recorded a 25.8 m median span (read off
-``cfg.altitude_m``, the inert fallback) that no episode has ever flown.
-
-Real pixels through the real renderer over a synthetic ortho. The bench
-half of the contract — that this ceiling sits ABOVE
-``_BUDGET_M`` on every episode, so the pixel budget is what
-actually clamps — needs ``benchmarks`` and lives in
-``benchmarks/citynav/tests/test_start_altitude_span.py``.
-"""
+"""The crop window's OBSERVATION ceiling (``obs_span_m``) — what it clamps."""
 
 from __future__ import annotations
 
@@ -112,13 +96,9 @@ def test_a_nonpositive_span_is_not_a_ceiling(ortho_dir):
 
 
 def test_the_budget_window_stays_inside_the_pixel_budget(ortho_dir):
-    # _BUDGET_M is derived FROM LOOK_PIXEL_BUDGET_PX: at the native
-    # 0.1 m/px a 100 m window is 1000 px and the overlay adds a fixed
-    # 20 px "N up" band, so the delivered image is 1000 x 1020 =
-    # 1,020,000 px against LOOK_PIXEL_BUDGET_PX 1,048,576. Two more metres
-    # would ship 1020 x 1040 = 1,060,800 and blow it. Nothing else in the
-    # tree checks the constant against the budget it cites, and no serve
-    # path clamps an oversized crop for us — sglang sets no pixel cap.
+    # Two more metres would ship 1020 x 1040 = 1,060,800 and blow it. Nothing else in
+    # the tree checks the constant against the budget it cites, and no serve path clamps
+    # an oversized crop for us — sglang sets no pixel cap.
     rec = _render(ortho_dir, 400.0, 300.0)
     # VACUITY FLOOR: the budget, not the hull and not the observation
     # ceiling, is what sized this window.

@@ -1,28 +1,5 @@
 #!/usr/bin/env python
-"""``_degrade_tool_result_content`` — the fids+census(+color) dump stubber.
-
-The clear-to-census compactor rewrites every SUPERSEDED analyze dump to
-fids+census via ``_degrade_tool_result_content``. Three payload SHAPES are
-resolved by ``_iter_op_heads``:
-
-  * the LIVE nested ``{"results": {"rN": head}}``;
-  * a bare head ``{len, fids, rows, ...}``;
-  * a top-level ``{op_ref: head}`` map.
-
-The trim drops ONLY the verbose render keys (``_TRIM_RENDER_KEYS`` = rows /
-legend / grid), preserving every machine-readable field the commit walk reads
-(``fids`` + the census) — NO candidate ever leaves the pool.
-
-``keep_color=True`` (tier 1) additionally parses a compact per-fid ``colors``
-table out of the dropped ``rows`` grid, so the color-reliability signal (the
-color cell + its trailing ``?`` uncertainty mask + ``color_conf``) still reaches
-the model — the CLAUDE.md color-reliability fence. The color signal SURVIVES
-the trim. ``keep_color=False`` (default / the tier-2 re-stub / tier 3) drops the
-rows with NO color table.
-
-Pure functions, no network. Run:
-``pytest maps/search/tests/test_compactor_degrade.py``.
-"""
+"""``_degrade_tool_result_content`` — the fids+census(+color) dump stubber."""
 from __future__ import annotations
 
 import json
@@ -55,15 +32,14 @@ _COLOR_ROWS = [
 
 def _analyze_head() -> dict:
     """A bare analyze head — the exact ``{len, fids, rows}`` shape
-    ``geom_program.compact_results`` emits for a non-empty ORDERED list
-    result (rows render only when a real ordering exists)."""
+    ``geom_program.compact_results`` emits for a non-empty ORDERED list result (rows
+    render only when a real ordering exists)."""
     return compact_results(
         {"r0": _CueSortedRows(dict(r) for r in _COLOR_ROWS)})["r0"]
 
 
 def _nested_live_payload() -> dict:
-    """The LIVE analyze tool-result payload shape:
-    ``{"results": {"r0": head}}``."""
+    """The LIVE analyze tool-result payload shape: ``{"results": {"r0": head}}``."""
     return {"results": {"r0": _analyze_head()}}
 
 
@@ -222,9 +198,8 @@ def test_keep_color_false_drops_rows_without_colors():
 
 
 def test_rows_color_entries_parses_grid():
-    # The grid no longer renders a color_conf column (use-ranked diet), so
-    # the parsed entries are word + '?' mask alone. The parser still reads
-    # a conf column when one is present (older stored transcripts).
+    # The parser still reads a conf column when one is present (older stored
+    # transcripts).
     entries = _rows_color_entries(_analyze_head()["rows"])
     assert "d0=white" in entries
     assert "d1=red?" in entries

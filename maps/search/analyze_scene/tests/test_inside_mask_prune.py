@@ -1,15 +1,3 @@
-"""The y-prune in ``_inside_mask_arr`` must change the cost and NOTHING else.
-
-The pruned parity is compared against the unpruned one computed here, so the
-test carries its own oracle rather than trusting a stored answer: a future
-change to either side has to keep them equal.
-
-The geometry is built to land on the cases a prune gets wrong if the bound is
-off by one -- horizontal edges (``ylo == yhi``), points exactly on a vertex y,
-points on an edge's lower and upper endpoint y, and holes -- and there are
-enough edges to force more than one chunk, because the prune is per chunk and
-a single-chunk test would never exercise it.
-"""
 import numpy as np
 import pytest
 
@@ -17,8 +5,6 @@ from maps.search.analyze_scene import geom_compute as G
 
 
 def _unpruned(P, A, B):
-    """Even-odd parity over EVERY edge, the way the function read before the
-    prune. The oracle, kept deliberately naive."""
     out = np.zeros(len(P), dtype=bool)
     if len(P) == 0 or len(A) == 0:
         return out
@@ -52,8 +38,8 @@ def test_the_prune_is_exact_on_the_boundary_cases_a_bound_gets_wrong():
 
 
 def test_a_hole_still_subtracts():
-    """Parity over all loops together is the membership rule; a prune that
-    dropped one loop's edges would silently fill the hole."""
+    """Parity over all loops together is the membership rule; a prune that dropped one
+    loop's edges would silently fill the hole."""
     outer = _ring(0.0, 0.0, 100.0, 100.0)
     hole = _ring(40.0, 40.0, 20.0, 20.0)
     A, B = _arrays(outer + hole)
@@ -74,8 +60,7 @@ def test_the_degenerate_inputs_answer_the_same(n_points):
 
 
 def test_more_than_one_chunk_is_actually_exercised(monkeypatch):
-    """The prune is per chunk, so a test that fits in one chunk proves
-    nothing about it. Force a tiny chunk and re-check the identity."""
+    """The prune is per chunk, so a test that fits in one chunk proves nothing about it."""
     rng = np.random.default_rng(3)
     edges = []
     for _ in range(200):

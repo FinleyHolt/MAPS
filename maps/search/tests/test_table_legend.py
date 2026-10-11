@@ -1,12 +1,3 @@
-"""THE one-line table legend ("Beyond
-columns" item 1: the axis-sign question alone derailed ~4 episodes per pack
-in two packs). Served ONCE per response, under the FIRST envelope that
-renders rows -- and that per-response copy is LOAD-BEARING: a
-once-per-mission countdown regressed SR -0.042 (pysurface4, efb4a7a3),
-breaking exactly the axis-sign and xy-is-a-recorded-point inferences in
-legend-less tables. Every clause is the executor's own fact, re-derived
-here so legend drift from the engine fails loudly.
-"""
 from __future__ import annotations
 
 from maps.search.analyze_scene import geom_compute as G

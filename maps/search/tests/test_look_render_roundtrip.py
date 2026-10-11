@@ -1,14 +1,4 @@
-"""A persisted look-crop record re-renders to the exact bytes the model saw.
-
-The whole sha-verified audit doctrine in one test: ``render_candidate_crops``
-resolves the window and delegates the pixels to ``render_look_from_spec``;
-the record it returns (minus ``jpeg``) IS the manifest crop and IS the
-re-render spec. Feeding that record back through ``render_look_from_spec`` —
-the same function, the same env — must reproduce the jpeg byte-for-byte and
-hash to the recorded ``sha256``. If this breaks, the dashboard's "verified
-identical" badge is lying; bump ``LOOK_RENDERER_VERSION`` instead of ever
-loosening the assert.
-"""
+"""A persisted look-crop record re-renders to the exact bytes the model saw."""
 
 from __future__ import annotations
 
@@ -30,8 +20,6 @@ SPEC_KEYS = (
     "world_xy", "intended_xy", "pose_xy", "context_m",
 )
 VERIFY_KEYS = ("sha256", "renderer_version", "renderer_env")
-
-
 
 
 def _requests() -> list[dict]:
@@ -74,8 +62,6 @@ def test_records_reproduce_their_bytes_and_carry_the_contract(ortho_dir):
         assert rec["renderer_version"] == LOOK_RENDERER_VERSION
         assert rec["sha256"] == hashlib.sha256(rec["jpeg"]).hexdigest()
 
-        # The round trip: the record (what the manifest persists) back
-        # through the same renderer — byte-identical, sha-verified.
         spec = {k: v for k, v in rec.items() if k != "jpeg"}
         rerendered = render_look_from_spec(spec, rgbd_dir=ortho_dir)
         assert rerendered is not None

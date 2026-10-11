@@ -1,4 +1,5 @@
-"""Column keys group into per-relation families on the phrase spelling the executor emits."""
+"""Column keys group into per-relation families on the phrase spelling the executor
+emits."""
 
 from __future__ import annotations
 
@@ -16,8 +17,6 @@ def test_families_collapse_on_the_shipped_spelling():
 
 
 def test_longest_prefix_wins_so_no_key_prints_twice():
-    """'facing ' must not be swallowed by 'bearing from ' — the
-    law the docstring states, and the one a startswith re-scan broke."""
     keys = ([f"facing b_{i}" for i in range(5)]
             + [f"bearing from b_{i}" for i in range(5)])
     out = _grouped_keys(keys)

@@ -1,22 +1,4 @@
-"""An unchanged node is not rebuilt, and a changed one always is.
-
-The surface rebuild is a pure function of node content and tile geometry, and
-it runs once per flight over every node on the graph. An ``explore`` runs it
-once per stop: calcity::6#6 rebuilt all 6,188 Cal City rows 262 times while
-its graph gained nothing on any of those stops. Reuse is worth 2.66 s -> 0.21 s
-there.
-
-The cache keys on CONTENT because neither of the cheaper signals is sound
-here. Identity fails outright: the ingest fold rebinds ``runtime_graph`` to the
-server's snapshot, so every node object is new on every stop. A hand-kept
-dirty-fid set fails silently and later: it has to be right about every
-mutation path in the tree forever, and the first one anyone forgets serves a
-stale row with nothing saying so.
-
-These tests are the equivalence the speed rests on: cached and uncached
-surfaces must be EQUAL, including after a mutation, including after the node
-objects are replaced wholesale the way a fold replaces them.
-"""
+"""An unchanged node is not rebuilt, and a changed one always is."""
 
 from __future__ import annotations
 
@@ -77,11 +59,7 @@ def test_a_mutated_node_is_rebuilt():
 
 
 def test_replacing_every_node_object_still_hits_the_cache():
-    """What the ingest fold does: same content, all-new objects.
-
-    An identity-keyed cache would miss on all of them -- which is the whole
-    reason this one hashes content.
-    """
+    """What the ingest fold does: same content, all-new objects."""
     ref = _uncached(_graph())
     gp._ROW_CACHE.clear()
     _build(_graph())
@@ -102,9 +80,8 @@ def test_a_changed_cells_array_is_not_reused():
 
 
 def test_the_cache_does_not_leak_the_rows_it_hands_back():
-    """Callers stamp rows (``covers_window``, ``end0_xy``); the cached
-    original must stay the pre-stamp row, or the second rebuild inherits the
-    first one's stamps."""
+    """Callers stamp rows (``covers_window``, ``end0_xy``); the cached original must
+    stay the pre-stamp row, or the second rebuild inherits the first one's stamps."""
     nodes = _graph()
     first = _build(nodes)
     for row in first[1]:
@@ -116,8 +93,8 @@ def test_the_cache_does_not_leak_the_rows_it_hands_back():
 
 
 def test_geometry_is_part_of_the_key():
-    """The same node under a different origin or cell size is a different
-    row, so the geometry cannot be left out of the key."""
+    """The same node under a different origin or cell size is a different row, so the
+    geometry cannot be left out of the key."""
     nodes = _graph()
     a = gp.build_surface_from_graph(nodes.items(), (0.0, 0.0), 2.0)
     b = gp.build_surface_from_graph(nodes.items(), (1000.0, 0.0), 2.0)

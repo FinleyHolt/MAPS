@@ -1,17 +1,4 @@
-"""``cells`` on a surface row is a plain nested list of native ints.
-
-The rebuild runs ONCE PER FLIGHT, and this field is the biggest thing it
-builds: the Cal City bake carries 3.9 M cells over 6,188 nodes. Converting
-them one Python ``int()`` at a time cost 4.0 s of a 5.1 s rebuild -- 262 of
-those is 22 minutes inside a single ``explore``. ``cells_of`` already hands
-back an ``(n, 2)`` int array, so ``ndarray.tolist`` builds the identical
-nested list in C.
-
-These pin the two properties that make the fast form correct rather than
-merely fast: the values are unchanged, and they are JSON-native (a surface
-round-trips through JSON unchanged -- the offline teacher reads the same
-bytes the live tool serves, and ``numpy.int32`` is not JSON-serialisable).
-"""
+"""``cells`` on a surface row is a plain nested list of native ints."""
 
 from __future__ import annotations
 
@@ -25,8 +12,6 @@ class _Node:
     def __init__(self, cells, provenance="prebaked"):
         import numpy as np
 
-        # int32 is what the bake stores, and the dtype that made the old
-        # per-element conversion expensive -- pin the real case, not int64.
         self.cells = np.asarray(cells, dtype=np.int32)
         self.world_xy = [float(cells[0][1]) * 2.0, float(cells[0][0]) * 2.0]
         self.centroid = (int(cells[0][0]), int(cells[0][1]))
@@ -66,12 +51,6 @@ def test_cells_match_the_nodes_they_came_from():
 
 
 def test_cells_are_json_native_ints_not_numpy_scalars():
-    """The reason the type matters and not just the value.
-
-    A surface round-trips through JSON, and ``json.dumps`` refuses a
-    ``numpy.int32``. Asserting the values alone would pass on a row full of
-    numpy scalars and fail only later, in a writer.
-    """
     _nodes, rows = _rows()
     cells = [c for r in rows for c in (r.get("cells") or [])]
     assert len(cells) == 11 * 20, len(cells)

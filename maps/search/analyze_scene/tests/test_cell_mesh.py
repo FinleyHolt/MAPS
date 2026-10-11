@@ -1,10 +1,4 @@
-"""The cell mesh answers which cells a ROW occupies, and nothing else.
-
-A row is one OSM way; a named road is the SET of its rows. Spatial math is
-not here either: it runs on the exact footprint realisations, which buildings
-carry (`world_contour` on 3,413 of 3,414 calcity rows) and the 2 m raster
-would throw away.
-"""
+"""The cell mesh answers which cells a ROW occupies, and nothing else."""
 
 import numpy as np
 

@@ -1,22 +1,4 @@
-"""A row's ``mask`` is what the picture DRAWS, so it has to be a shape.
-
-An OSM POI node — a pharmacy, a bus stop, a tower — carries a
-``world_contour`` of exactly one vertex: the point it sits at. The mask
-gate tested chains for NON-EMPTINESS, so that one vertex became the row's
-whole footprint and the derivation stopped there, never reaching the cells
-branch that builds a real loop from the same node's raster.
-
-Both renderers need three vertices to draw a ring (``_proj_poly`` in
-``look_render`` and ``map_render`` alike), so such a mask draws NOTHING.
-Measured over the calcity bake: 518 of 5,257 anchor rows, ``prior_6005``
-"Rite Aid" among them — the row a live episode flew to and never saw
-outlined on the free view its own flight served.
-
-The two-vertex rows are deliberately NOT admitted here: those are
-single-segment ways, and the raster's representative point lands on a
-different component than the way's own midpoint (measured: one road's
-served xy moves 1,417 m). One cell is the bound this fix keeps.
-"""
+"""A row's ``mask`` is what the picture DRAWS, so it has to be a shape."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import build_surface
@@ -89,10 +71,6 @@ def test_a_point_feature_serves_a_mask_a_picture_can_draw():
 
 
 def test_a_real_ring_still_serves_its_exact_geometry():
-    """THE VACUITY FLOOR the fix could otherwise walk past: routing every
-    contour to the raster would 'fix' the point case by breaking the case
-    that was never broken. A way with a real ring keeps its own vertices,
-    not the 2 m cells it rasterizes to."""
     ring = [(100.0, 200.0), (140.0, 200.0), (140.0, 230.0), (100.0, 230.0)]
     row = _row(_WayNode(ring, name="A Building"))
     mask = row.get("mask")

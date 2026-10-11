@@ -1,16 +1,4 @@
-"""THE exact-mask resolution law + the mega-mask containment idiom.
-
-Every geometry op re-resolves each row's mask BY FID from the authoritative
-node registry at compute time (``_row_geom_center``), so chained, sliced,
-unioned and re-labeled rows all serve geometry byte-identical to a fresh
-compare on the same fids, and a ref compared to ITSELF reads exactly
-d_=0 / dc_=0 with both bearings absent (no direction exists).
-
-A ref whose mask contains the whole surface window (``covers_window``,
-stamped geometrically at build_surface — no tag test) serves the ONE
-containment fact instead of stamping the degenerate-constant d_/brg_gap_
-columns; dc_/brg_ stay per-row, and the fact rides the absent-key guards.
-"""
+"""THE exact-mask resolution law + the mega-mask containment idiom."""
 from __future__ import annotations
 
 import pytest
@@ -99,8 +87,6 @@ def test_chain_vs_fresh_parity_over_score_by_slice_and_filter():
 
 
 def test_self_ref_reads_zero_and_directionless():
-    # A ref compared to ITSELF: d_=0, dc_=0, both bearings absent -- through
-    # a CHAIN (the mask-stripped path that used to serve dc 0.5 / brg 90).
     prog = {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
         {"ref": "r1", "op": "score_by",
@@ -318,8 +304,6 @@ def test_tag_family_token_hit_outranks_proper_name_substring_fuzz():
     kv = find_score(fuzzy_prepare_query("amenity=parking"),
                     "amenity parking", None, {"amenity": "parking"}, idf=idf)
     assert kv > lot, (kv, lot)
-
-
 
 
 # --- ref-in-mask containment: the sub-window-but-huge container row --------

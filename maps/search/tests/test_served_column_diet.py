@@ -1,16 +1,4 @@
-"""The served-surface diet: what the renderer drops, and what it must not.
-
-These pins exist because the diet passed all 527 search tests without one of
-them noticing. Every fixture in the suite hands ``_render_grid_rows`` its own
-synthetic header, so nothing asserted the shape the LIVE renderer emits -- the
-"derived tests fail open" hazard, in its exact form. The contract below is
-stated by name so its disappearance cannot go unremarked.
-
-The cut rule is the COMPREHENSION rule: a column goes or stays by what the
-model DOES with its values, not how often it names it. A mention counter
-inverts the two most consequential calls (footprint_area_m2 and end1_xy are
-quoted by VALUE, never by name).
-"""
+"""The served-surface diet: what the renderer drops, and what it must not."""
 from __future__ import annotations
 
 import re
@@ -46,9 +34,9 @@ ROW = {
 
 
 def test_the_live_header_keeps_and_drops_by_name():
-    """The header has no idx and none of the drop set (name_match and score by
-    name), keeps the shape, colour and identity columns, and its separator and
-    body match its width."""
+    """The header has no idx and none of the drop set (name_match and score by name),
+    keeps the shape, colour and identity columns, and its separator and body match
+    its width."""
     header, sep, body = _render_grid_rows([ROW]).splitlines()[:3]
     assert header.startswith("| fid |"), header
     assert " idx " not in header
@@ -84,19 +72,13 @@ def test_dropped_tag_keys_do_not_render_and_kept_ones_do():
 
 
 def test_a_row_whose_tags_are_all_dropped_renders_the_absent_marker():
-    """Not an empty cell, which would column-break nothing but reads as a
-    tag set that exists and is blank."""
+    """Not an empty cell, which would column-break nothing but reads as a tag set that
+    exists and is blank."""
     assert _grid_cell({"osm_id": "1", "source_tag": "bing"}) == "-"
 
 
 def test_the_drop_is_a_render_cut_not_a_data_cut():
-    """The node keeps every tag, so ``find`` still reaches a dropped key.
-
-    ``_anchor_search_text`` is the fuzzy-match haystack and it walks the
-    node's OWN tags, not the rendered cell. Asserting against the builder --
-    rather than against a string this test wrote -- is what makes it fail if
-    someone ever starts building search_text from the rendered surface.
-    """
+    """The node keeps every tag, so ``find`` still reaches a dropped key."""
     from maps.search.analyze_scene.geom_program import _anchor_search_text
 
     class _Node:
@@ -110,11 +92,6 @@ def test_the_drop_is_a_render_cut_not_a_data_cut():
 
 
 def test_score_by_grid_orders_without_a_score_column():
-    """The ordering echo IS rank order + the raw discriminator columns: the
-    emphasis key the model named renders first in the budget walk, and the
-    composite ``score`` never renders (audit: inert 1/1/4/2, never decided a
-    commit as a value; on colour blocks a rendered duplicate of an in-row
-    value). The raw rows keep ``score`` -- render cut only."""
     from maps.search.analyze_scene.geom_program import (
         compact_results,
         run_program,
@@ -145,15 +122,6 @@ def test_score_by_grid_orders_without_a_score_column():
 
 
 def test_no_axis_heading_is_produced_at_all():
-    """Orientation is a RELATION to the feature a thing faces, so the
-    min-area rectangle's heading is deleted at the producer rather than cut
-    at the renderer. A render cut was not enough: the same column reached
-    the model down the Row path (1,378 served occurrences over 43 of 93
-    episodes, calcity_conj_93_72fe9987), and an undirected [0, 180) heading
-    reads identically for a north-facing and a south-facing house on one
-    street -- the exact question that family asks. Pinned at the two
-    producers and at the served-key pattern, because a drop-set entry can
-    only hide a key that something still writes."""
     from maps.search.analyze_scene.geom_compute import (
         contour_shape_features,
         mask_shape_features,
@@ -169,11 +137,7 @@ def test_no_axis_heading_is_produced_at_all():
 
 
 def test_shape_scalars_are_gone_from_the_mission_surface():
-    """Owner decision: aspect_ratio is a lossy min-rect proxy for shape -- a
-    looking question, answered by the crop channel. The render drop hides the
-    column; this drives the ONE remaining served mention (the filter_items
-    scalar-fields hint) and pins that it no longer advertises aspect_ratio
-    and steers to looking instead. The field itself stays on the node."""
+    """aspect_ratio is a lossy min-rect proxy for shape, answered by the crop channel."""
     import pytest
 
     from maps.search.analyze_scene.geom_program import (
@@ -199,19 +163,7 @@ def test_shape_scalars_are_gone_from_the_mission_surface():
 
 
 def test_the_row_path_obeys_the_same_diet_as_the_grid():
-    """A render cut is not a diet while a second render path exists.
-
-    The grid dropped ``_GRID_COL_DROP``; ``Row.keys()`` filtered only the
-    geometry blobs, and ``Row.__repr__`` is built from ``keys()``. So
-    ``print(row)`` -- which the Row docstring itself teaches as the way to
-    read a row -- handed back every column the audit cut. Measured on
-    calcity_conj_93_72fe9987 before this pin: aspect_ratio 1,315 served
-    occurrences over 49 of 93 episodes, color_conf 1,158 over 43, score 431
-    over 45, axis_length_m 192 over 36, name_match 160 over 32.
-
-    ``_RENDER_INPUT_ROW_FIELDS`` rides the same rule: color_shade and
-    color_flag are folded into the compact color cell and are not columns.
-    """
+    """A render cut is not a diet while a second render path exists."""
     from maps.search.analyze_scene.geom_program import (
         _RENDER_INPUT_ROW_FIELDS,
     )

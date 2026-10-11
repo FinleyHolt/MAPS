@@ -1,10 +1,5 @@
-"""Bench-only withholds: each takes exactly its part away, and none serves
-the flown text byte for byte.
-
-The baselines are the contract dumps of the flown engine (calcity rig,
-citynav rig, no rig), pinned here by sha256; the calcity rig's states its
-footprint at the 914.4 m AGL configs/calcity.yaml flies.
-"""
+"""Bench-only withholds: each takes exactly its part away, and none serves the flown
+text byte for byte."""
 
 from __future__ import annotations
 

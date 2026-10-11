@@ -1,16 +1,5 @@
 #!/usr/bin/env python
-"""Second and later fires, through the WHOLE ladder.
-
-Every other fold test drives ``_drop_spent_turns`` directly, and that is how a
-defect that only exists in ``compact_transcript`` stayed invisible: step 5
-stripped EVERY script block it found, including ones earlier fires had already
-served, so the prefix broke at the oldest block -- the deepest possible break,
-and the exact thing this module exists to stop causing. A unit test on the fold
-cannot see a step the fold does not call.
-
-So these call ``compact_transcript``, twice, and assert on what the second fire
-did to the first fire's bytes.
-"""
+"""Second and later fires, through the WHOLE ladder."""
 from __future__ import annotations
 
 import json
@@ -67,13 +56,6 @@ def _blocks(msgs: list[dict]) -> list[int]:
 
 
 def test_a_later_fire_never_rewrites_an_earlier_block(monkeypatch) -> None:
-    """S1. The append-only claim, checked where it can actually fail.
-
-    Forced rather than hoped for: the second fire is given a target only the
-    findings-strip can reach, so step 5 definitely runs with TWO blocks in the
-    list. Before the fix it stripped both, and the served prefix broke at the
-    first one.
-    """
     first = compact_transcript(_transcript(8), target_input_tokens=6000,
                                model="m", site="fire1")
     i1 = _blocks(first)[0]
@@ -94,10 +76,6 @@ def test_a_later_fire_never_rewrites_an_earlier_block(monkeypatch) -> None:
 
 
 def test_folding_an_already_stubbed_turn_keeps_its_fids() -> None:
-    """S2. By the second fire most spent turns have been stubbed by step 2, and
-    a stub degrades to None. Dropping those left the census empty exactly where
-    the fold is deepest -- and took step 5's only lever with it, since a block
-    with no findings has nothing to strip."""
     stub = _degrade_tool_result_content(_turn(4)[1]["content"], keep_color=True)
     assert stub and _degrade_tool_result_content(stub, keep_color=True) is None, (
         "fixture assumes an already-stubbed dump has nothing left to trim"
@@ -113,9 +91,6 @@ def test_folding_an_already_stubbed_turn_keeps_its_fids() -> None:
 
 
 def test_a_marginal_overflow_does_not_collapse_the_whole_history() -> None:
-    """S3. ``shed_tokens`` was accepted and never read, so being one token over
-    folded every spent turn. Right at the squeezed budget it was measured on,
-    wrong at the fleet's 221,120, where the first overflow is marginal."""
     msgs = _transcript(20)
     total = C._estimate_input_tokens(msgs, model="m")
     out, folded, _ = _drop_spent_turns(msgs, shed_tokens=800, model="m")
@@ -127,9 +102,6 @@ def test_a_marginal_overflow_does_not_collapse_the_whole_history() -> None:
 
 
 def test_an_assistant_whose_results_are_not_contiguous_is_not_foldable() -> None:
-    """S4. Folding such a turn drops the call and strands its results, which is
-    an orphan -- and CompactionInvariantError was a sibling of Infeasible with
-    no handler, so it killed the process rather than the episode."""
     msgs = [
         {"role": "system", "content": "S"},
         {"role": "user", "content": "go"},
@@ -145,9 +117,6 @@ def test_an_assistant_whose_results_are_not_contiguous_is_not_foldable() -> None
 
 
 def test_code_containing_the_findings_separator_survives_the_strip() -> None:
-    """S6. The strip took everything before the FIRST separator. Findings are
-    single-line json so it cannot occur inside them, but the model's own code
-    can contain anything, and truncating it there loses the artifact."""
     sneaky = f"# a comment mentioning{_FINDINGS_SEP}nothing in particular"
     msgs = [{"role": "system", "content": "S"}, {"role": "user", "content": "go"}]
     msgs += [
@@ -184,14 +153,7 @@ def test_code_containing_the_findings_separator_survives_the_strip() -> None:
 
 
 def test_the_text_steps_still_work_on_a_post_fold_list() -> None:
-    """Steps 2-4 on a list the fold has already rewritten.
-
-    The regression window: step 3 reads ``base[i]`` because the
-    fold shifts indices, and reverting it to ``messages[i]`` broke no test.
-    This drives a fold and THEN forces the text steps, asserting every
-    surviving tool result still carries its own call's fids -- which is what an
-    index skew would corrupt.
-    """
+    """Steps 2-4 on a list the fold has already rewritten."""
     msgs = _transcript(10)
     out = compact_transcript(msgs, target_input_tokens=2600, model="m",
                              site="post-fold")
@@ -218,8 +180,8 @@ def test_the_text_steps_still_work_on_a_post_fold_list() -> None:
 
 
 def test_without_a_system_turn_the_head_ends_at_the_instruction() -> None:
-    """The system_turn withhold serves no system message: the protected head
-    is the instruction, and the first code turn folds like any other."""
+    """The system_turn withhold serves no system message: the protected head is the
+    instruction, and the first code turn folds like any other."""
     msgs = _transcript(12)[1:]                      # no system message
     out, folded, _ = _drop_spent_turns(msgs, shed_tokens=10**6, model="m")
     assert folded and out[0] == msgs[0]

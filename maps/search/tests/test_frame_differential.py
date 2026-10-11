@@ -1,20 +1,4 @@
-"""Differential battery for the frame/handedness laws — shapely as oracle.
-
-The hand-picked sign locks in test_frame_aspect pin single examples; this
-battery pins the LAWS over randomized geometry against independent oracles:
-
-- shapely ``project``/``distance`` for the polyline chart's along/|off|;
-- an inline compass-azimuth half-plane law for the off SIGN (right of
-  travel = the clockwise half-plane of the tangent azimuth), written in
-  geodesy terms (az = atan2(dE, dN)) with no import from the code under
-  test's helpers;
-- rotation EQUIVARIANCE for the viewer/relative frames: a proper rotation
-  applied to the whole scene leaves view coordinates invariant, and a
-  reflection bug is exactly what breaks it.
-
-Every generator loop carries a vacuity floor: a scan that judged too few
-cases (or only one sign class) FAILS — derived tests fail open otherwise.
-"""
+"""Differential battery for the frame/handedness laws — shapely as oracle."""
 from __future__ import annotations
 
 import math

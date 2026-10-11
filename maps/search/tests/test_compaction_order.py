@@ -1,18 +1,4 @@
 #!/usr/bin/env python
-"""Text goes before pixels, and no existing test said so.
-
-Every compactor test pins ONE step in isolation, with a fixture that can only
-trigger that step. Reordering the ladder therefore changed real behaviour while
-all 50 of them stayed green -- the same shape of gap as ``n_prefix`` having no
-reader. These pin the ORDER.
-
-The order matters for two reasons that outlive the current numbers. A stubbed
-analyze dump costs a re-query, because the analyze surface re-derives from the
-world after every flight; an evicted crop costs the view of a place at a moment,
-and its pixels live only in the on-disk look audit the model cannot read. And
-crops-first would undo, one step down, exactly what removing the in-context
-image cap was for.
-"""
 from __future__ import annotations
 
 import json
@@ -74,12 +60,7 @@ def _evicted_markers(messages) -> int:
 
 
 def _transcript() -> list[dict]:
-    """A vision surface with a bulky STALE dump, two vision turns, a live dump.
-
-    TWO vision turns, not one: ``_evict_oldest_crops`` never touches the last
-    message carrying images, so a single-vision-turn fixture has no stale crop
-    to take and the step is a no-op by construction rather than by order.
-    """
+    """A vision surface with a bulky STALE dump, two vision turns, a live dump."""
     return [
         {"role": "system", "content": "SYS"},
         _assistant_call("t0"),
@@ -93,10 +74,6 @@ def _transcript() -> list[dict]:
 
 
 def test_a_clearable_dump_is_taken_and_the_crops_are_left(monkeypatch) -> None:
-    """The whole change, in one assertion. Over budget by less than the stale
-    dump is worth, so stubbing it suffices -- and the crops must survive
-    untouched. Under the old order the crop step ran first and would have
-    evicted pixels to free tokens the text was about to give up anyway."""
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
     msgs = _transcript()
     before = _live_crops(msgs)
@@ -114,10 +91,6 @@ def test_a_clearable_dump_is_taken_and_the_crops_are_left(monkeypatch) -> None:
 
 
 def test_crops_still_go_when_the_text_is_exhausted(monkeypatch) -> None:
-    """Order, not exemption. Once every stale dump is stubbed and the
-    transcript is still over, the crop step runs -- five max-effort episodes on
-    the effort ladder ran out of crops and died 1,822 tokens over, so neither
-    half of the ladder is sufficient alone."""
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
     msgs = _transcript()
 
@@ -135,8 +108,6 @@ def test_crops_still_go_when_the_text_is_exhausted(monkeypatch) -> None:
 
 
 def test_a_text_only_transcript_is_unchanged_by_the_reorder(monkeypatch) -> None:
-    """Byte-parity guard: the crop step is a no-op without list content, so a
-    text-only episode must compact exactly as it did before."""
     monkeypatch.setattr(C, "_estimate_input_tokens", _charcount)
     msgs = [
         {"role": "system", "content": "SYS"},

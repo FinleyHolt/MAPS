@@ -1,17 +1,4 @@
-"""The same-named-tie index guard: a NAME is not a PLACE.
-
-Indexing ``[0]`` into an UNORDERED set (a query-less browse, the raw
-surface) that holds several instances all sharing the same name does NOT
-resolve WHICH instance the cue means -- the position picks a tied same-named
-row arbitrarily. The guard fires loud and names the law: resolve the
-instance by the cue's OTHER refs (compare against them + score_by, or
-filter_items to one), THEN index the ordered result.
-
-An ORDERED result silences the guard: score_by output (cue_sorted) and a
-query-matched find (best-first is real; its own tie note already stated any
-within-tie arbitrariness) index freely. A genuinely-resolved head is not a
-tie either, so ``[0]`` on it is always legal.
-"""
+"""The same-named-tie index guard: a NAME is not a PLACE."""
 from __future__ import annotations
 
 import pytest
@@ -105,10 +92,6 @@ def test_query_matched_find_tied_head_is_legal_to_index():
 
 
 def test_score_by_resolved_head_is_legal_to_index():
-    # Resolve the same-named set against the cue's OTHER ref (a point the cue
-    # pins) with compare + score_by. score_by gives the instances DISTINCT
-    # scores, so the head is no longer a same-named TIE -- [0] on the scored
-    # set is legal (the guard fires ONLY on a genuine tie).
     out = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "prior", "query": "Earl Street"}},
         {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": [[10.0, 10.0]]}},

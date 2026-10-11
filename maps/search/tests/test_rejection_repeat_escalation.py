@@ -1,25 +1,4 @@
-"""A re-served rejection carries its repeat count and the live census.
-
-Corpus fact (episode birmingham_block_12__1_7181): the color-as-filter
-rejection was re-served 195x consecutively -- 69 MB served over 205 turns --
-because every serve was byte-identical, so nothing in the transcript told the
-model it was looping. The repeat machinery exists to break that: the first
-serve is the rejection verbatim, and from the second the served text carries
-how many times the class has fired plus a census of what the live surface
-actually holds (counts and computed column names, never a per-fid inventory,
-which is token noise that scales with the surface).
-
-``_loop_breaker_facts`` is reached through the REAL turn loop with a scripted
-reasoner, because the counter and the census closure both live inside
-``advance_reasoner_one_round`` and neither is importable on its own.
-
-ponytail: the third-consecutive escalation to a compact repetition-state line
-(``_repeated_rejection_state``, gated on ``_consec >= 3``) does not fire on
-this surface -- the consecutive streak resets between serves, so a spiral gets
-the full text plus a growing count forever rather than the compact form. The
-count and census still break byte-identity, which is what the 7181 loop
-lacked. Tested here is what the surface does; the gate is a separate fix.
-"""
+"""A re-served rejection carries its repeat count and the live census."""
 from __future__ import annotations
 
 from maps.search.tests.fakes import drive, run, tool_results
@@ -42,8 +21,8 @@ _CANDS = [
 
 
 def drive_blocks(blocks: list[str]) -> list[dict]:
-    """The served ``run`` results of one mission issuing ``blocks`` in order
-    (the replies outlast the no-flight abstain streak)."""
+    """The served ``run`` results of one mission issuing ``blocks`` in order (the
+    replies outlast the no-flight abstain streak)."""
     _, fr, _, _ = drive([[run(b)] for b in blocks] + ["done."] * 3, cands=_CANDS)
     return tool_results(fr)
 

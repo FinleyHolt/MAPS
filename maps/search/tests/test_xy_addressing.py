@@ -1,5 +1,5 @@
-"""The one ``[x, y]`` token grammar (``maps.util.xy_token``) every site
-that accepts a world point reads."""
+"""The one ``[x, y]`` token grammar (``maps.util.xy_token``) every site that accepts a
+world point reads."""
 from __future__ import annotations
 
 from maps.util.xy_token import parse_xy_token

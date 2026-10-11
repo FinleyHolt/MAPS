@@ -1,9 +1,3 @@
-"""geometry_sink is audit-only: the model-facing payload is identical with
-and without it, and the sink receives exactly the geometry the compare op
-resolved — chart polyline + end0 + travel, frame basis/standpoint, ref
-centroids, min-gap witness pairs — including the
-``_auto_attach`` re-entry a score_by emphasis key triggers.
-"""
 from __future__ import annotations
 
 import json

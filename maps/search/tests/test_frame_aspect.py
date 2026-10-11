@@ -1,16 +1,4 @@
-"""The compare ``frame`` aspect: view COORDINATES (SV-Frame).
-
-The frame turns the cue's view words into coordinates: vx_/vy_ signed view
-meters in a declared or viewer frame, along_/off_ on a polyline chart. The
-arrangement machinery (rows/ordinals/flanks/groups) is DELETED — zero
-filter/score ops in 1,013 audited episodes; an ordinal cue is a sort +
-index read (score_by on the axis column, then rN[k]).
-
-Sign-locks pinned here: the G1 polyline handedness (+off = right of travel
-= the CLOCKWISE side of the tangent in the y-up world frame), the v2
-point-ref rotation signs, and the receipt-content facts including the
-weak-side premortem disclosure.
-"""
+"""The compare ``frame`` aspect: view COORDINATES."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import (
@@ -38,7 +26,6 @@ _ANCHORS = [
     {"fid": "shed_1", "name": "Shed", "xy": [15.0, -30.0], "class": "building"},
 ]
 
-# The retired arrangement vocabulary: NO framed row may carry any of these.
 _RETIRED_COLS = ("row_lo", "row_hi", "row_size", "col_lo", "col_hi",
                  "ord_lr", "ord_rl", "nb_left", "nb_right", "grp", "grp_size")
 
@@ -74,9 +61,6 @@ def test_point_reference_vx_vy_signs():
 
 
 def test_frame_attaches_no_arrangement_columns():
-    # The deleted family stays deleted: a framed pool carries the view
-    # coordinates and NONE of the retired arrangement names, whichever form
-    # framed it.
     for frame in ({"reference": "shed_1", "side": "bottom"},
                   {"reference": "auto"},
                   {"along": "road_1"}):
@@ -127,7 +111,6 @@ def test_viewer_between_is_a_column_read():
     assert rows["beyond"]["ahead of pa_pb"] > 20.0, rows["beyond"]
 
 
-
 def test_viewer_left_of_ref_is_a_column_comparison():
     # viewer at pa looking at pb (look = +x world): viewer-left is -vx side.
     # 'left of mid' -> candidates with vx < the mid ref's own ref_vx.
@@ -158,7 +141,6 @@ def test_viewer_class_blind_slots():
 
 
 def test_scale_m_is_a_loud_retirement():
-    # scale_m tuned the deleted derived-scale arrangement; it errors loud.
     try:
         _frame_grid({"reference": "shed_1", "side": "bottom", "scale_m": 20.0})
         raise AssertionError("scale_m did not error")
@@ -316,7 +298,6 @@ def test_deleted_ops_teach_their_replacement():
     msg = _prog_error([{"ref": "r0", "op": "partition_rows",
                         "args": {"items": "cands"}}])
     assert msg.startswith("'partition_rows' is not an op."), msg
-    # the redirect lands on LIVE columns, never the deleted family
     assert "left of/right of" in msg and "row_lo" not in msg, msg
 
 
@@ -339,12 +320,10 @@ def test_deleted_compare_aspects_redirect_to_frame():
 
 
 def test_find_query_returns_the_match_set_best_first():
-    # A block of streets, so the head noun is COMMON and the proper name is
-    # RARE -- the shape of every real map, and the one the fuzz band's IDF
-    # weighting reads. `Earl Court` matches on the rare word and is retrieved;
-    # the fillers match only on `street`, which 5 of 7 rows spell, and stay
-    # out. (Three rows with `earl` on two of them inverted that, and made a
-    # proper name the LESS discriminating half of the query.)
+    # A block of streets, so the head noun is COMMON and the proper name is RARE -- the
+    # shape of every real map, and the one the fuzz band's IDF weighting reads. (Three
+    # rows with `earl` on two of them inverted that, and made a proper name the LESS
+    # discriminating half of the query.)
     anchors = [
         {"fid": "b_a", "name": "Earl Street", "xy": [0.0, 0.0], "class": "building"},
         {"fid": "b_b", "name": "Earl Court", "xy": [10.0, 0.0], "class": "building"},
@@ -429,9 +408,6 @@ def test_a_bare_areal_reference_declares_no_served_view():
 
 
 def test_frame_form_exclusivity_is_loud():
-    # {} names no form; {reference:<line>, toward} is now the DIRECTED
-    # chart (valid), so the exclusivity error pins the empty shape and
-    # an areal reference+toward stays loud in its own test below.
     try:
         _frame_grid({})
         raise AssertionError("{} did not error")
@@ -440,17 +416,13 @@ def test_frame_form_exclusivity_is_loud():
 
 
 # --------------------------------------------------------------------------- #
-# Directed chart + line-vantage resolution (the frame-unification cutover)     #
+# Directed chart + line-vantage resolution                                     #
 # --------------------------------------------------------------------------- #
 
 
 def test_undeclared_travel_on_a_baked_road_serves_no_side():
-    # Undirected: travel falls back to the stored end0->end1 order, which is
-    # an arbitrary property of the bake -- road_travel_intrinsic, measured
-    # 0.461 against a 0.470-0.535 chance band (lateral_convention, 926
-    # mentions, cluster CIs + block-flip + anchor shuffle). The chart still
-    # serves the arc coordinate and the lateral DISTANCE; it just does not
-    # name a side the engine had to guess.
+    # The chart still serves the arc coordinate and the lateral DISTANCE; it just does
+    # not name a side the engine had to guess.
     rows_u, _ = _frame_grid({"along": "road_1"})
     r = rows_u["c00"]
     assert "left of road_1" not in r and "right of road_1" not in r, r
@@ -460,9 +432,6 @@ def test_undeclared_travel_on_a_baked_road_serves_no_side():
 
 def test_directed_chart_flips_sign_with_declared_travel():
     # Declaring the travel is the model's own claim, so the pair comes back.
-    # Directed toward the shed (projects mid-line nearer end0): travel is
-    # west; right = cw(west) = north, so a car at y=+10 reads RIGHT, and
-    # along re-zeroes at the far end (c02 at x=20 now reads along 80, not 20).
     rows_d, _ = _frame_grid({"along": "road_1", "toward": "shed_1"})
     assert rows_d["c00"]["right of road_1"] > 0
     assert "left of road_1" not in rows_d["c00"]
@@ -490,12 +459,8 @@ def test_directed_chart_receipt_names_the_travel():
 
 
 def test_viewer_from_a_road_stands_at_nearest_centerline_point():
-    # from:road_1 (centerline y=0, x 0..100), toward:shed_1 at [15,-30]:
-    # the vantage is [15,0] (nearest centerline point to the shed), NOT
-    # the road row's xy [50,0]. Looking south (toward the shed), the
-    # viewer's right hand points WEST (right = cw(south) = -x) from x=15:
-    # c00 (x=10) reads +vx, c02 (x=20) reads -vx — with the old centroid
-    # vantage both sat one side of x=50 and one sign was WRONG.
+    # from:road_1 (centerline y=0, x 0..100), toward:shed_1 at [15,-30]: the vantage is
+    # [15,0] (nearest centerline point to the shed), NOT the road row's xy [50,0].
     rows, _ = _frame_grid({"toward": "shed_1", "from": "road_1"})
     assert rows["c00"]["right of road_1_shed_1"] > 0, rows["c00"]
     assert rows["c02"]["left of road_1_shed_1"] > 0, rows["c02"]
@@ -519,6 +484,5 @@ def test_along_misassemblies_are_loud_and_name_the_form():
     # along needs a line to travel
     with pytest.raises(ProgramError, match="centerline-carrying"):
         _frame_grid({"along": "shed_1"})
-    # the retired line-reference chart redirects to its new name
     with pytest.raises(ProgramError, match="along"):
         _frame_grid({"reference": "road_1"})

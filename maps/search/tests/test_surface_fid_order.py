@@ -1,12 +1,4 @@
-"""The served surface orders fids NUMERICALLY, never as strings.
-
-Lexicographic collation put every detected_1xx ahead of detected_2, so a
-pass that minted ~110 rows buried its earliest stops' finds past every
-served head (the 8-crop catch, the 24-row broad head, r1[0:20]) --
-140#138's GT lot sat on the surface all episode at string-index 37,
-unreachable by position. Numeric order is mint order, which for a pass
-is stop order.
-"""
+"""The served surface orders fids NUMERICALLY, never as strings."""
 from __future__ import annotations
 
 import numpy as np
@@ -37,18 +29,7 @@ def test_detected_2_serves_before_detected_100():
 
 
 def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
-    """A street's initial reply is what it IS, not an arbitrary prefix.
-
-    Every way of a name ties at the name tier, so a rendered head is N rows
-    in an order the envelope itself calls arbitrary -- and the model reads
-    row 0 as the answer (calcity::284#282 took ``street_88[0]`` and swept 1
-    of 10 segments of 88th Street).
-
-    The reply is the object: a name, a length, a len. No prose -- the
-    caller writes Python and holds the handle, so a sentence naming
-    explore() or rN[a:b] is legend, and the tie caveat only ever existed
-    to warn about a table this no longer serves.
-    """
+    """A street's initial reply is what it IS, not an arbitrary prefix."""
     from maps.search.analyze_scene.geom_program import (
         _NAME_SET_SHAPE_ROWS,
         build_surface,
@@ -106,11 +87,7 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
 
 
 def _crops_of(src: str) -> list:
-    """The crop steps one code block compiles to.
-
-    The surface has no parser: a block becomes steps only by EXECUTING,
-    so the plan is captured off a recording ``MissionEnv``.
-    """
+    """The crop steps one code block compiles to."""
 
     plan = plan_of_block(src)
     return [st for p in plan.get("plans", [plan])
@@ -118,18 +95,7 @@ def _crops_of(src: str) -> list:
 
 
 def test_look_marks_a_street_by_its_handle_not_a_piece_of_it():
-    """``marks=`` names what ELSE bears on the choice, and a street is a SET.
-
-    calcity::200#198 explored all of Poppy Boulevard, ranked its cars by
-    redness, looked at its own top ten, and committed the reddest -- 116 m
-    from Poppy and 11.9 m off Jimson Avenue. Every crop legend read
-    ``1 = TARGET car detected_N (center)`` and nothing else: the renderer
-    writes a named road's NAME on the picture, but only for a road in the
-    mark list, and a bare look supplies none.
-
-    The handle expands to its ways, because ``marks=poppy[0]`` would put
-    back the arbitrary-piece index the surface exists to prevent.
-    """
+    """``marks=`` names what ELSE bears on the choice, and a street is a SET."""
     crops = _crops_of('poppy = find("Poppy Boulevard")\n'
                       'cars = find("car")\n'
                       'look(cars[0:10], marks=poppy)\n')

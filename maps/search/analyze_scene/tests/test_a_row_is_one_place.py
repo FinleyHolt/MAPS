@@ -1,32 +1,4 @@
-"""A row names ONE PLACE, on this map, and the drone flies to where it says.
-
-Three properties that were each false, measured on one 500-episode calcity
-run:
-
-1. A NAME IS NOT A PLACE. Folding same-named ways on the name alone made
-   117 of 353 named features one row over several disconnected places.
-   "85th Street" was ten streets in a grid city; the row's position was on
-   none of them. 313 of 2,271 prior flights (13.8%) landed on such a row and
-   the 86 episodes that flew one scored 0.291 against a 0.516 run.
-
-2. THE MAP IS THE WORLD. The bake clips a feature's CELLS to its grid and
-   leaves its ``world_contour`` unclipped, so 72 of 353 named features
-   carried geometry off the tile. "Neuralia Road" reached y 23,745 on a tile
-   6,297 m tall, and because ``representative_point`` resolves several
-   chains on the LONGEST one, the road's served position was the arc
-   midpoint of a 19 km way at y 14,198 -- north of the map.
-
-3. ONE POSITION PER ROW. The row served ``representative_point``; the
-   flight took ``_grid_centroid_to_world_xy(node.centroid)``, the int
-   cell-mean of a merged feature's lead way. 17.3% of prior flights landed
-   more than 20 m from the ``xy`` their own row had just served, 11.4% more
-   than a kilometre, the worst 11,149 m.
-
-The bake itself is faithful and is not what these fix: all 64 "Neuralia
-Road" ways were checked against the live OSM API -- 0 vertex-count
-mismatches, and all 64 carry ``name=Neuralia Road`` upstream, the 24
-``service=alley`` ones included.
-"""
+"""A row names ONE PLACE, on this map, and the drone flies to where it says."""
 
 from __future__ import annotations
 
@@ -40,9 +12,6 @@ import pytest
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import build_surface
 
-# THE bake a Cal City run would use: ``SEARCH_CALCITY_TILES`` wins, else the
-# package default -- the rule ``benchmarks.calcity.paths`` applies, read off
-# the env directly because ``maps`` never imports ``benchmarks``.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", "..", ".."))
 _TILES = Path(os.environ.get("SEARCH_CALCITY_TILES")
@@ -83,8 +52,7 @@ def test_two_places_under_one_name_are_two_rows():
 
 
 def test_unnamed_features_are_never_folded_together():
-    """There is nothing to fold them ON. Folding adjacent unnamed masks
-    would put every abutting building in one row."""
+    """There is nothing to fold them ON."""
     _c, anchors = build_surface(
         [], [("prior_1", _Way(None, [[0, 0]])),
              ("prior_2", _Way("", [[0, 1]]))], (0.0, 0.0), 2.0)
@@ -95,11 +63,7 @@ def test_unnamed_features_are_never_folded_together():
 
 
 def test_geometry_is_cut_at_the_edge_of_what_the_tile_covers():
-    """A way whose contour runs off the tile keeps only its in-tile half.
-
-    The node's own CELLS are the record of what this tile kept, so they are
-    the clip: a feature wholly inside is untouched.
-    """
+    """A way whose contour runs off the tile keeps only its in-tile half."""
     contour = [[1.0, 21.0], [1.0, 4000.0]]          # runs far north
     way = _Way("Neuralia Road", _row(range(0, 1), row=10), contour=contour)
     way.cells = np.asarray([[r, 0] for r in range(0, 20)], dtype=int)
@@ -110,8 +74,8 @@ def test_geometry_is_cut_at_the_edge_of_what_the_tile_covers():
 
 
 def test_a_feature_wholly_inside_is_not_touched():
-    """VACUITY FLOOR: a clip that trims everything would pass the test above
-    while deleting the map."""
+    """VACUITY FLOOR: a clip that trims everything would pass the test above while
+    deleting the map."""
     contour = [[1.0, 1.0], [1.0, 19.0]]
     way = _Way("Rea Avenue", _row(range(0, 1)), contour=contour)
     way.cells = np.asarray([[r, 0] for r in range(0, 10)], dtype=int)
@@ -120,10 +84,7 @@ def test_a_feature_wholly_inside_is_not_touched():
 
 
 def test_clipping_preserves_exact_vertex_identity():
-    """The partition rule one module over is exact vertex identity with no
-    tolerance. Interpolating an untouched segment's own endpoints -- ``a +
-    (b-a)*1.0`` is not bit-identical to ``b`` -- cut 51 rows into "separate
-    places" whose pieces touched at a MEDIAN gap of 0.0 m."""
+    """The partition rule one module over is exact vertex identity with no tolerance."""
     box = (0.0, 0.0, 100.0, 100.0)
     chains = [[[10.0, 10.0], [30.3, 40.7], [50.0, 20.0]]]
     out = G.clip_chains_to_box(chains, box)
@@ -149,7 +110,6 @@ def test_the_served_point_is_on_the_row_it_belongs_to():
 
 @pytest.mark.skipif(not _HAS_BAKE, reason="calcity bake not present")
 def test_the_real_bake_lands_every_row_on_the_map():
-    """A rule that fires only on fixtures is a rule that fires on nothing."""
     from maps.search.analyze_scene.geom_program import build_surface_from_graph
     from maps.sws.graph.builder import build_object_graph
 
@@ -212,12 +172,6 @@ def test_the_real_bake_lands_every_row_on_the_map():
 
 
 def test_the_flown_pose_is_the_row_s_served_xy():
-    """The half nothing pinned. ``test_served_xy_is_on_its_geometry`` puts
-    the served point on the geometry; this puts the DRONE on the served
-    point. They were separate quantities from separate code paths, and over
-    one calcity run 17.3% of prior flights landed more than 20 m from what
-    their own row said, 11.4% more than a kilometre, the worst 11,149 m.
-    """
     from maps.search.search_loop import SearchLoop
 
     ways = [("prior_1", _Way("Lime Avenue", _row(range(0, 10)))),
@@ -248,8 +202,6 @@ def test_the_flown_pose_is_the_row_s_served_xy():
         assert (round(flown[0], 2), round(flown[1], 2)) == (
             round(r["xy"][0], 2), round(r["xy"][1], 2)), (r["fid"], flown, r["xy"])
 
-    # VACUITY FLOOR: the rule this replaced really did disagree, so the
-    # assertion above is not comparing a quantity to itself.
     bent = next(r for r in anchors if r["name"] == "Bent Road")
     node = dict(ways)[bent["fid"]]
     old = loop._grid_centroid_to_world_xy(node.centroid)

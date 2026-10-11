@@ -1,15 +1,4 @@
-"""A request that does not FIT is terminal; a rejected generation is not.
-
-Both arrive as an httpx 400 and the loop retried both, six times, with the
-same bytes each time. On the reasoning-effort ladder that landed on 7 of 32
-episodes of the max-effort arm and ZERO of the other two -- a defect
-attacking one arm of a three-arm comparison, and the arm with the largest
-effect.
-
-The discriminator is whether a retry changes the request. A grammar
-rejection turns on what the model GENERATED, so a fresh generation differs.
-An oversize rejection turns on what we SENT, and the retry re-sends it.
-"""
+"""A request that does not FIT is terminal; a rejected generation is not."""
 
 from __future__ import annotations
 

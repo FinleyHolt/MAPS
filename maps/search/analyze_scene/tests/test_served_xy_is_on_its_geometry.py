@@ -1,16 +1,4 @@
-"""A row's served ``xy`` is the ``act.move`` FLIGHT TARGET, so it is a place.
-
-``xy`` was the mean of a node's cells. A mean is off the elbow of a bent
-way and at none of the places a name that is several places names: 130 of
-the 5,257 calcity anchor rows served a point more than 20 m off their own
-geometry (68 several places, 62 one bent one), the worst 1,123.1 m out.
-Flying one of those goes where the feature is not.
-
-Two shapes are asserted here and the second is the vacuity floor: the served
-point is ON the geometry, AND the fixture still contains a case the mean got
-wrong. A geometry generator that drifted to convex blobs would satisfy the
-first assertion while testing nothing.
-"""
+"""A row's served ``xy`` is the ``act.move`` FLIGHT TARGET, so it is a place."""
 from __future__ import annotations
 
 import math
@@ -46,11 +34,9 @@ def _cells_of(contour):
                       dtype=int)
 
 
-# A way bent around three sides of a block. It states no closure, so it is a
-# POLYLINE and not a filled ring: its vertex mean is the middle of the block,
-# which is the one place the way is not. (A CLOSED ring is a different case
-# and not a defect -- a filled footprint contains its own centroid, which is
-# why the building below keeps it.)
+# A way bent around three sides of a block. It states no closure, so it is a POLYLINE
+# and not a filled ring: its vertex mean is the middle of the block, which is the one
+# place the way is not.
 _BENT_WAY = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]
 # An ordinary building: convex, so the mean IS on it and nothing should move
 # far.
@@ -96,9 +82,7 @@ def test_every_served_point_is_on_its_own_geometry():
 
 
 def test_a_measured_position_wins_over_a_derived_one():
-    """A detection's ``world_xy`` is where the tracker put the object,
-    sub-cell. The 2 m mesh quantizes arrangement structure away, so a
-    derived centre would erase the lattice the row columns stand on."""
+    """A detection's ``world_xy`` is where the tracker put the object, sub-cell."""
     det = ("d_car", _Node([(10.0, 10.0), (14.0, 10.0), (14.0, 12.0),
                            (10.0, 12.0), (10.0, 10.0)],
                           world_xy=(11.37, 10.94)))

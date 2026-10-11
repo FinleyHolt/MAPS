@@ -1,14 +1,4 @@
-"""The look crop fits whatever ids the request carries.
-
-The agent picks its workflow by what it passes — many ids -> one wide badged
-frame for spatial relations, one id -> a tight high-magnification crop — and
-the geometry follows the distinction the crop schema always made
-(measured: ordering is flat to 25 badges while identity wants
-magnification). Pinned
-here END-TO-END on a synthetic bake: the hull fit, the serving-budget clamp
-with the subject-keeps-its-window guarantee, the derived upscale, and the
-badge ceiling with its never-silent drop note.
-"""
+"""The look crop fits whatever ids the request carries."""
 
 from __future__ import annotations
 
@@ -34,8 +24,8 @@ GROUND_Z = 10.0
 
 
 def _req(center_xy, marks_xy=(), target_xy=None, fid="c0"):
-    """One resolved crop spec, marks in the caller's order, target LAST —
-    the same shape (and target position) ``_build_crop_requests`` emits."""
+    """One resolved crop spec, marks in the caller's order, target LAST — the same shape
+    (and target position) ``_build_crop_requests`` emits."""
     marks = [{"fid": f"m{i}", "xy": list(xy), "boundary": None,
               "label": f"car m{i}", "is_target": False}
              for i, xy in enumerate(marks_xy)]
@@ -62,7 +52,6 @@ def _img_side(rec) -> int:
 
 
 def test_many_ids_fit_one_frame(ortho_dir):
-    # The tu_a defect case: co-requested ids must be IN the frame, badged.
     rec = _render_one(ortho_dir, _req(
         (100.0, 100.0),
         marks_xy=[(70.0, 100.0), (130.0, 100.0), (100.0, 75.0), (100.0, 125.0)]))
@@ -75,12 +64,7 @@ def test_many_ids_fit_one_frame(ortho_dir):
 
 
 def test_a_window_that_covers_the_hull_frames_every_requested_point(ortho_dir):
-    """The invariant: unclamped, EVERY requested point is in frame.
-
-    Two independent ways the old centring broke it, each pinned by its own
-    case below — a symmetric lattice exercises only the second, so a test
-    built on one alone passes with the arithmetic mean still in place.
-    """
+    """The invariant: unclamped, EVERY requested point is in frame."""
     # (a) the ARITHMETIC MEAN vs the hull centre. Points bunched on one
     # side pull the mean off the hull centre; the window is SIZED off the
     # hull, so only the hull centre is guaranteed to contain it. Mean here
@@ -98,11 +82,7 @@ def test_a_window_that_covers_the_hull_frames_every_requested_point(ortho_dir):
     assert rec["marks_out_of_view"] == [], rec
     assert len(rec["legend"]) == len(row), rec["legend"]
 
-    # (b) the EUCLIDEAN keep-in-frame cap. The subject sits at a hull
-    # CORNER, so the shift to the hull centre is diagonal and a radius cap
-    # shrinks it by up to sqrt(2) — rows then fall out of a frame wide
-    # enough to hold them (measured: 16 of 24 drawn, 8 named out-of-view,
-    # window fully inside the raster).
+    # (b) the EUCLIDEAN keep-in-frame cap.
     grid = [(85.0 + 6.0 * (i % 5), 85.0 + 6.0 * (i // 5)) for i in range(24)]
     # VACUITY FLOOR, again from the POINTS: the subject-to-hull-centre shift
     # must be DIAGONAL and longer than the cap, or a radius cap and a
@@ -220,13 +200,8 @@ def test_a_coarser_grid_buys_a_wider_window_for_the_same_pixels(
 
 
 def test_a_shape_too_big_for_the_frame_is_not_drawn_on_it(ortho_dir):
-    """The renderer half of the outline contract (the loop hands every
-    footprint over; ``test_mission_loop`` pins that half).
-
-    The outline is the mask decimated to <=96 vertices: exact at the scale
-    of the whole shape, and white chords across the imagery inside a window
-    holding a fraction of it. Every vertex in frame, or no ink.
-    """
+    """The renderer half of the outline contract (the loop hands every footprint over;
+    ``test_mission_loop`` pins that half)."""
     # A target whose footprint runs 80 m past the window on every side.
     req = _req((100.0, 100.0), target_xy=(104.0, 100.0))
     req["marks"][-1]["boundary"] = [[20.0, 20.0], [180.0, 20.0],

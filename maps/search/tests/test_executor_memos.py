@@ -1,10 +1,4 @@
-"""What the executor memoises per surface serves the same bytes cold and warm.
-
-Every memo here is keyed on something the surface rebuild replaces (a mask
-list, the namespace's row lists), so the equivalence that matters is: the
-served result of a program is identical whether the memo is empty or full,
-and a memo entry never leaks a row object into a result.
-"""
+"""What the executor memoises per surface serves the same bytes cold and warm."""
 
 from __future__ import annotations
 

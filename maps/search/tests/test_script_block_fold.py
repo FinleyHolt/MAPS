@@ -1,16 +1,5 @@
 #!/usr/bin/env python
-"""Folding spent turns into the agent's own code, append-only across fires.
-
-Step 4 is the only step that changes message count, so it is the only one that
-can break the tool protocol, and the only one whose repeat behaviour decides
-whether the served prefix survives. Both are pinned here.
-
-APPEND-ONLY IS THE WHOLE POINT. Regenerating one summary would be tidier and
-would move that message's bytes on every fire, breaking the prefix at the same
-early index every time -- which is the defect this module exists to stop
-causing. Inserting a NEW block and never touching an earlier one means the
-prefix extends instead.
-"""
+"""Folding spent turns into the agent's own code, append-only across fires."""
 from __future__ import annotations
 
 import json
@@ -91,8 +80,6 @@ def test_a_turn_and_its_results_move_as_one_unit() -> None:
     msgs = _transcript(6)
     out, folded, _ = _drop_spent_turns(msgs, shed_tokens=10**6, model="m")
     assert folded >= 1
-    # The sweep now checks coverage as well as closure, so a half-dropped turn
-    # raises here rather than 400ing at the server.
     _validate_invariants(out)
 
 
@@ -114,8 +101,7 @@ def test_nothing_to_fold_is_the_identity() -> None:
 
 
 def test_run_code_survives_a_malformed_argument() -> None:
-    """An unreadable action still says one happened. A silent gap would read as
-    the agent having done nothing, which is a different and worse claim."""
+    """An unreadable action still says one happened."""
     msg = {"role": "assistant", "tool_calls": [
         {"id": "x", "function": {"name": "run", "arguments": "not json"}}]}
     assert _run_code_of(msg) == ["not json"]

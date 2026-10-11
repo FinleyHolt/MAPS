@@ -1,11 +1,4 @@
-"""The real-Python run surface: what Python buys, and the guards that stay.
-
-The seam tests live in ``test_code_surface_arm`` (a `run` block reaches the
-plan body `say` reaches). These pin what is NEW here: eager source-order
-execution, Python's own failure semantics, the ordinary-Python affordances
-(print, len, if, loops), and the pre-scan refusals -- including the block
-shape that lost calcity::147#145, verbatim.
-"""
+"""The real-Python run surface: what Python buys, and the guards that stay."""
 from __future__ import annotations
 
 import pytest
@@ -24,20 +17,11 @@ from maps.search.tests.fakes import (
 )
 
 # --------------------------------------------------------------------------
-# The 147#145 block: an error costs its line, never the look_for before it
+# An error costs its line, never the look_for before it
 # --------------------------------------------------------------------------
 
 
 def test_the_147_145_block_arms_the_watch_despite_the_map_refusal():
-    """The block that lost calcity::147#145, verbatim.
-
-    On the fold-order surface the `around=<set>` refusal fired at parse
-    time and took the whole block with it -- including the valid
-    `look_for` on line 1 -- so the first explore flew with an empty
-    watchlist and detected nothing (3,728 m miss). Here the refusal costs
-    ITS line: the watch is armed, the street is bound, and the error
-    still says exactly what it always said.
-    """
     reply, fr, _flights, declared = drive([
         [run('look_for("house", "pool")\n'
               'street = find("car")\n'
@@ -57,9 +41,6 @@ def test_the_147_145_block_arms_the_watch_despite_the_map_refusal():
 
 
 def test_a_block_flies_and_then_queries_what_the_pass_found():
-    """Eager source order, end to end: the find AFTER the explore reads
-    the rows that pass just detected -- the shape the fold-order surface
-    refused and the legend now teaches."""
     reply, out, flights, _asked, _rend = explore_drive([
         [run('look_for("pool")\n'
               'explore("prior_160")\n'
@@ -92,9 +73,6 @@ def test_print_len_and_fstrings_come_back_in_the_receipt():
 
 
 def test_a_row_is_data_the_python_way():
-    """r.xy, r["class"], r.get, print(r): the first pysurface fleet drew
-    150+ AttributeErrors over 69 episodes from a fid-only Row -- a row IS
-    its served columns to a Python reader."""
     reply, fr, _f, _d = drive([
         [run('r1 = find("car")\n'
               'r = r1[0]\n'
@@ -182,9 +160,6 @@ def test_a_runaway_loop_dies_on_the_line_ceiling():
 
 
 def test_printing_a_whole_city_is_capped_like_a_notebook():
-    """One episode printed 3,414 rows, blew the context, and died with
-    zero flights. The printed channel serves head + tail + a suppression
-    note, notebook-style."""
     reply, fr, _f, _d = drive([
         [run('for i in range(500):\n    print(f"row {i}")\n')],
         "done",
@@ -215,10 +190,6 @@ def test_binding_over_a_mission_call_is_refused():
 
 
 def test_math_is_loaded_and_import_math_works():
-    """The top kicked-back family on both fleets was hand-rolled
-    Euclidean distance ("without math module", the model's own comment)
-    with a mangled exponent. The pure deterministic stdlib is loaded, and
-    importing it is a no-op rather than a refusal."""
     reply, fr, _f, _d = drive([
         [run('import math\n'
               'print(math.dist([0, 0], [3, 4]))\n'
@@ -240,9 +211,6 @@ def test_a_syntax_error_echoes_the_offending_line():
 
 
 def test_a_compile_stage_syntax_error_reaches_the_model():
-    """A repeated keyword argument passes ast.parse and is rejected only by
-    compile(); it must come back as a tool error the model reads, not end
-    the episode as infra."""
     with pytest.raises(CodeError) as e:
         scan_block('r = find("car", near="a", near="b")\n')
     assert "keyword argument repeated" in str(e.value)
@@ -266,9 +234,6 @@ def test_an_unknown_call_gets_a_did_you_mean():
 
 
 def test_try_except_is_ordinary_python():
-    """`except Exception:` raised NameError on the first pysurface3
-    fleet (113#112 b32): the standard exception names ride the
-    builtins like the rest of the language."""
     reply, fr, _f, _d = drive([
         [run('try:\n'
               '    x = [1][9]\n'
@@ -310,9 +275,6 @@ def test_kwarg_typeerrors_name_the_call_not_the_internals():
 
 
 def test_a_bare_fid_reads_as_its_row_and_still_flies():
-    """detected_192.xy was the 'str' object AttributeError family: a bare
-    fid name now resolves to a Row view of the live row, and a slot still
-    takes it (the flight target is the fid verbatim)."""
     reply, fr, flights, _d = drive([
         [run('print(prior_7.xy)\ngo_to(prior_7)\n')],
         "done",
@@ -324,8 +286,6 @@ def test_a_bare_fid_reads_as_its_row_and_still_flies():
 
 
 def test_row_get_resolves_aliases_instead_of_defaulting():
-    """The silent hole: r.get('distance_to_p0', 9999) fed its sentinel
-    into a real filter whenever the spelling missed the spaced column."""
     from maps.search.parse_compile.python_surface import Row
 
     r = Row({"fid": "f1", "xy": [1.5, 2.5], "distance to p0": 5.0})
@@ -337,19 +297,8 @@ def test_row_get_resolves_aliases_instead_of_defaulting():
 
 
 def test_a_ref_column_is_spelled_by_its_places_real_name():
-    """The model spells a column with the name the CUE gave it; the producer
-    spells it with the name it sanitized. Those have to be one lookup.
-
-    Every ref label rides ``geom_program._sanitize_token``, so relating rows
-    to Poppy Boulevard writes ``"facing poppy_boulevard"`` -- while the
-    legend's own worked example said ``r["facing Poppy Boulevard"]``, which
-    raised KeyError. That is the largest directional family in the corpus
-    (318 of 1,023 cues carry a facing clause) reading a served example that
-    could not run.
-
-    Fixed once, in the one resolver, so all three ref column families move
-    together rather than one alias per prefix.
-    """
+    """The model spells a column with the name the CUE gave it; the producer spells it
+    with the name it sanitized."""
     from maps.search.analyze_scene.geom_program import _sanitize_token
     from maps.search.parse_compile.python_surface import Row
 
@@ -376,8 +325,8 @@ def test_a_ref_column_is_spelled_by_its_places_real_name():
 
 
 def test_an_ambiguous_column_spelling_resolves_to_nothing():
-    """Two served columns that normalise alike is a silent bind waiting to
-    happen, so this refuses rather than picking one."""
+    """Two served columns that normalise alike is a silent bind waiting to happen, so
+    this refuses rather than picking one."""
     from maps.search.parse_compile.python_surface import Row
 
     r = Row({"fid": "prior_1", "facing a_b": "north", "facing a b": "south"})
@@ -386,8 +335,6 @@ def test_an_ambiguous_column_spelling_resolves_to_nothing():
 
 
 def test_builtins_survive_the_did_you_mean():
-    """LOAD_GLOBAL falls through to __builtins__ only on a plain
-    KeyError: review found `list` did-you-meant `bisect` and died."""
     reply, fr, _f, _d = drive([
         [run('print(list((1, 2)), dict(a=1)["a"], sorted({3, 1}), '
               'repr(set()))\n')],
@@ -399,9 +346,9 @@ def test_builtins_survive_the_did_you_mean():
 
 
 def test_bare_fid_rows_compare_by_value():
-    """Two references to the same bare fid mint two Row views; model
-    dedup (`if cand not in seen`) must compare the PLACE, not the
-    object identity -- and a Row equals its own fid string."""
+    """Two references to the same bare fid mint two Row views; model dedup (`if cand not
+    in seen`) must compare the PLACE, not the object identity -- and a Row equals its
+    own fid string."""
     reply, fr, _f, _d = drive([
         [run('print(prior_7 == prior_7)\n'
               'print(prior_7 in [prior_7])\n'
@@ -417,9 +364,6 @@ def test_bare_fid_rows_compare_by_value():
 
 
 def test_the_caret_lands_right_under_tabs():
-    """The pad is measured on the tab-EXPANDED prefix: with a raw-column
-    pad the caret drifted left of the offending character on every
-    tab-indented block."""
     with pytest.raises(CodeError) as e:
         scan_block("if True:\n\td = (a - b)**2 + **(c - f)2\n")
     msg = str(e.value)
@@ -456,8 +400,6 @@ def test_a_crop_token_falls_back_to_the_rows_own_xy():
 
 
 def test_a_far_anchored_find_says_nothing_is_near():
-    """The 147#145 fact, served at the moment of the query: every match
-    kilometres from the named anchor is said in one sentence."""
     far = [
         {"fid": "prior_9", "xy": [5000.0, 5000.0], "class": "pool",
          "search_text": "pool"},
@@ -475,9 +417,6 @@ def test_a_far_anchored_find_says_nothing_is_near():
 
 
 def test_order_by_fuses_two_anchors_like_find_near():
-    """houses.order(nearest=[A, B]) was refused on the first fleets;
-    the executor fuses the two normalized distances exactly as
-    find(nearest=[A, B]) does, so the other spelling now compiles too."""
     reply, fr, _f, _d = drive([
         [run('r1 = find("car")\n'
               'r2 = r1.order(nearest=["the depot", "the gate"])\n'
@@ -507,9 +446,7 @@ def test_a_slice_rides_slots_and_slices_again():
 
 
 def test_an_explore_names_the_uncovered_sibling_segments():
-    """A named street is many fragments; a pass covers one. The ack says
-    how much of the NAME remains un-flown (147#145's method-correct retry
-    explored 2 of 10 segments and missed by 573 m)."""
+    """A named street is many fragments; a pass covers one."""
     cands = [
         {"fid": "prior_1", "name": "85th Street", "xy": [0.0, 0.0],
          "class": "road", "centerline": [[0.0, -50.0], [0.0, 50.0]],
@@ -530,8 +467,6 @@ def test_an_explore_names_the_uncovered_sibling_segments():
 
 
 def test_a_near_miss_fid_names_the_correction():
-    """go_to(detect_59) got a bare NameError while detected_59 sat in the
-    previous block's own print (284#282 b8)."""
     reply, fr, _f, _d = drive([
         [run('go_to(prio_7)\n')],
         "done",
@@ -541,9 +476,7 @@ def test_a_near_miss_fid_names_the_correction():
 
 
 def test_a_get_near_miss_notes_the_real_column():
-    """.get keeps returning the default on a miss, and the receipt names
-    the near column the spelling missed (363#361 burned three blocks on
-    'distance to Airway Boulevard' vs the served 'along airway')."""
+    """.get keeps returning the default on a miss, and the receipt names the near column."""
     reply, fr, _f, _d = drive([
         [run('r1 = find("car", nearest="the depot")\n'
               'v = r1[0].get("distance_to_depot", 9999)\n'
@@ -567,9 +500,9 @@ def test_rows_repr_names_its_rows():
 
 
 def test_a_bound_handle_beats_a_coincidental_fid_suggestion():
-    """corner_5 typo'd from a bound corner_4 must suggest the model's own
-    handle, never a coincidental prior_5 -- the fid correction fires only
-    when the PREFIX near-misses a fid family (detect_59 -> detected_59)."""
+    """corner_5 typo'd from a bound corner_4 must suggest the model's own handle, never
+    a coincidental prior_5 -- the fid correction fires only when the PREFIX
+    near-misses a fid family (detect_59 -> detected_59)."""
     reply, fr, _f, _d = drive([
         [run('corner_4 = [10, 20]\nprint(corner_5)\n')],
         "done",
@@ -580,18 +513,7 @@ def test_a_bound_handle_beats_a_coincidental_fid_suggestion():
 
 
 def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
-    """The ways of ONE name tie, so no row is its first.
-
-    Python refuses ``d.keys()[0]`` for exactly this reason -- a view over
-    something with no order -- and the model has met that refusal ten
-    thousand times. It is not a rule about care: calcity::284#282 took
-    ``street_88[0]`` and swept 1 of 10 segments, calcity::26#26 took
-    ``road[20:40]`` and covered a third of Neuralia Road, and both read as
-    a choice while being a coin flip.
-
-    Iteration and len still work, so the SET is fully usable -- explore it,
-    order it, materialise it. Only the arbitrary pick is unsayable.
-    """
+    """The ways of ONE name tie, so no row is its first."""
     from maps.search.parse_compile.python_surface import (
         CodeError,
         MissionEnv,
@@ -619,12 +541,7 @@ def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
 
 
 def test_an_ordered_result_stays_subscriptable():
-    """The refusal is about TIES, not about find results.
-
-    ``order_by`` gives a real order, and rank 0 of a real order is a
-    meaningful row -- refusing it would delete the ranking the agent just
-    asked for.
-    """
+    """The refusal is about TIES, not about find results."""
     from maps.search.parse_compile.python_surface import MissionEnv, MissionPython, Rows
 
     rows = [{"fid": f"detected_{i}", "class": "car"} for i in range(6)]
@@ -640,13 +557,7 @@ def test_an_ordered_result_stays_subscriptable():
 
 
 def test_a_tied_views_repr_shows_its_shape_and_leaks_no_point():
-    """print(road) must not hand back what the head withholds.
-
-    The name-set head serves len/name/length_m and deliberately no fids and
-    no points. The repr handed back both, and calcity::26#26 read a way's
-    coordinate off it and flew go_to([2242.27, 3048.07]) -- one way of a
-    64-way road, reached by a point the surface had refused to serve.
-    """
+    """print(road) must not hand back what the head withholds."""
     from maps.search.parse_compile.python_surface import MissionEnv, MissionPython, Rows
 
     rows = [{"fid": f"prior_{5775 + i}", "name": "Neuralia Road",
@@ -672,17 +583,7 @@ def test_a_tied_views_repr_shows_its_shape_and_leaks_no_point():
 
 
 def test_a_relation_key_names_the_relate_instead_of_a_column_list():
-    """A relation column is not MISSING, it is UNASKED-FOR.
-
-    `distance to <ref>` / `facing <ref>` / `<dir> of <ref>` exist only
-    where a compare named that ref, so a block asking for one has not
-    misspelled a column -- it has named a place these rows were never
-    related to, and the executor computes exactly that on request
-    (geom_program._auto_attach). Answering with twelve column names that
-    are not the one asked for sent the block hunting a spelling: 104
-    blocks over 77 episodes died this way across six 500-episode roots,
-    95 of them on `distance to <ref>`.
-    """
+    """A relation column is not MISSING, it is UNASKED-FOR."""
     r = Row({"fid": "prior_3213", "xy": [1.0, 2.0], "class": "house",
              "distance to poppy_boulevard": 12.0}, None)
 

@@ -1,13 +1,4 @@
-"""The crop window centers on ITS requested fid (7875 C5-gate B-3 residual).
-
-``resolve_window_center`` derives one window center per requested subject:
-the in-bounds edge-shift trims the black out-of-bounds border, but the total
-shift from the subject's own position is capped at half_ctx - car_margin/2 —
-so two DIFFERENT fids can never collapse onto one byte-identical displaced
-window that contains neither (measured 7875: finalists prior_257 and
-prior_652 both served window [385.04..400.04, 1600..1615], prior_640 a
-third displaced window; 3/5 finalists unverifiable).
-"""
+"""The crop window centers on ITS requested fid."""
 from __future__ import annotations
 
 from maps.search.render.look_render import (
@@ -19,7 +10,6 @@ from maps.search.render.look_render import (
 # cambridge_block_4 is a 0.1 m/px ortho; the bounds are pixel counts.
 _MIN_M, _ = look_window_bounds_m(0.1)
 
-# cambridge_block_4's real raster extent (the 7875 fixture).
 _BOUNDS = (113.4375, 1600.0, 400.0375, 1802.3)
 _HALF = _MIN_M / 2.0
 _KEEP = _HALF - LOOK_CAR_MARGIN_M / 2.0
@@ -84,24 +74,17 @@ def test_the_cap_is_per_axis_not_a_radius():
 
 
 def test_7875_edge_collapse_is_wider_under_the_per_axis_cap():
-    # The per-axis cap is LOOSER, so the region where the edge-clamp
-    # collapses two subjects onto one window grows from a quarter-disc of
-    # radius KEEP to its circumscribing square (x4/pi in area). Recorded,
-    # not fixed: containment -- the half of 7875 that made the finalists
-    # unverifiable -- still holds for both, and the delivered pixels still
-    # differ because each crop marks its own subject.
-    #
-    # (Two subjects that BOTH sit inside the edge-clamp band already shared
-    # a window under either rule -- ``_window((396.0, 1700.0)) ==
-    # _window((396.5, 1700.0))`` on both. What is new is the DIAGONAL pair
+    # The per-axis cap is LOOSER, so the region where the edge-clamp collapses two
+    # subjects onto one window grows from a quarter-disc of radius KEEP to its
+    # circumscribing square (x4/pi in area). (Two subjects that BOTH sit inside the
+    # edge-clamp band already shared a window under either rule -- ``_window((396.0,
+    # 1700.0)) == _window((396.5, 1700.0))`` on both. What is new is the DIAGONAL pair
     # below, which the radius cap separated.)
     a, b = (396.0, 1604.0), (396.5, 1604.5)
     wa, wb = _window(a), _window(b)
     assert wa == wb, (wa, wb)                 # the widened case, named
     for xy, w in ((a, wa), (b, wb)):
         assert w[0] <= xy[0] <= w[2] and w[1] <= xy[1] <= w[3], (xy, w)
-    # the collapsed window is the one the module docstring names as the
-    # 7875 defect -- pinned so a later widening of the cap is loud
     assert wa == (385.04, 1600.0, 400.04, 1615.0), wa
 
 

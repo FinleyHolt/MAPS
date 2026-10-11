@@ -1,15 +1,4 @@
-"""The contract dump serves the real surfaces, not a drifted copy.
-
-Vacuity floors ride each check: the dump must carry a plausible amount of
-text, exactly the one tool, the surface section, and the same objects the
-flight path serves — an empty or stubbed dump fails loudly.
-
-The say-legend checks below stay: the sentence surface's constants are
-untouched by the code arm and its lexicon law (one spelling per relation,
-no word served that the parser refuses) is what a rebuild would have to
-honour. They pin the constants, not the dump — nothing here claims the
-say tool is served.
-"""
+"""The contract dump serves the real surfaces, not a drifted copy."""
 
 
 from maps.perception.geometry.sensor_spec import list_sensors
@@ -18,13 +7,6 @@ from maps.search.parse_compile import reasoner_agent as ra
 
 
 def test_the_dump_is_the_code_arm_the_flight_path_serves():
-    """THE contract, and there is only one wiring of it.
-
-    A dump that showed the say surface while flights sent Python would be
-    the same two-contradictory-surfaces artifact the system prompt was
-    wired to end -- and this is what the lab route and a reviewer read to
-    answer "what was served at this sha".
-    """
     c = contract.assemble()
     assert c["system"] == ra.served_system_text()
     assert c["system"] == prompts.CODE_SYSTEM_PROMPT
@@ -65,27 +47,7 @@ def test_unknown_sensor_dies_loud_naming_the_registry():
         raise AssertionError("unknown sensor did not raise")
 
 
-
-
-
-
-
-
-
-
 def test_the_dump_surface_section_names_every_call_the_namespace_serves():
-    """The code arm's replacement for the LEXICON section.
-
-    Off the EXECUTING functions -- ``MissionPython._call_*`` over
-    ``_LIBRARY_CALLS`` -- because the surface has no parser tables to read:
-    what the namespace binds and what each ``_call_`` signature accepts is
-    the whole of what the model can write.
-
-    Read the SURFACE SECTION, not the whole dump: the same trap the
-    lexicon check fell into (scanning the whole dump matched ordinary
-    English in the legend, so emptying a table entirely would not have
-    failed it).
-    """
     import inspect
 
     from maps.search.parse_compile.python_surface import (
@@ -93,10 +55,7 @@ def test_the_dump_surface_section_names_every_call_the_namespace_serves():
     text = contract.dump_text()
     assert "=== SURFACE" in text
     section = text.split("=== SURFACE", 1)[1].split("=== USER TURN", 1)[0]
-    # Vacuity floor. Moved 12 -> 11 when side() was deleted: ordering is
-    # global and cuts are anchored, so a free anchored measuring call was
-    # the wrong arity for either job, and its number rides the signed
-    # `<dir> of <ref>` column instead.
+    # Vacuity floor.
     assert len(_LIBRARY_CALLS) >= 11, _LIBRARY_CALLS
     kws = 0
     for call in _LIBRARY_CALLS:

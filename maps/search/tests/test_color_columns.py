@@ -1,29 +1,5 @@
 #!/usr/bin/env python
-"""The lazy color-column family — ``color_<word>`` (the d_<ref> idiom).
-
-Pins the contract: THE PARAMETER RIDES IN THE KEY NAME. Naming a color column
-anywhere a column key is accepted IS the computation request:
-
-  * LAZY-ATTACH: a ``color_<word>`` emphasis key attaches the column with NO
-    prior ``find`` — no op-ordering ceremony.
-  * FIND-ATTACHES-THE-SAME-COLUMN: ``find{color}`` attaches the SAME named
-    column (one idiom, two entry points).
-  * COEXISTENCE: multiple color columns ride the same rows (a two-color cue
-    is ONE table/sort) and order independently.
-  * CLOSED-PALETTE: an off-palette word is a LOUD error listing the palette;
-    an open word that maps on (navy -> blue) attaches the canonical column
-    with a factual note.
-  * OMIT-ON-COLORLESS: a row without a perceived color omits the column;
-    an all-colorless pool + a color emphasis is a loud, truthful error.
-  * ORDERING-ONLY: ``filter_items`` on any color key stays a loud rejection.
-  * CALIBRATED-UNIT: color columns are centered on their 0.5 neutral, NEVER
-    min-maxed (the conf-shrink survives into the composite).
-  * RETIRED-NAME: the unparameterized ``color_score`` key is gone; the
-    unknown-key error points at the named-column idiom.
-
-Pure (no GPU / tile / vLLM). Run via pytest:
-``pytest maps/search/tests/test_color_columns.py``.
-"""
+"""The lazy color-column family ``color_<word>``."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import run_program, ProgramError
@@ -205,16 +181,7 @@ def test_color_columns_are_centered_never_minmaxed():
 
 
 def test_an_unseen_colour_is_UNKNOWN_and_ranks_between_match_and_mismatch():
-    """A missing ``color_<word>`` means nothing has LOOKED at that row yet.
-
-    A prior acquires a perceived colour only once a view passes over it
-    (``search_loop.upsert_prior_percept``), and 0 of the 5,581 cold anchors
-    on the calcity bake carry one. Scoring absence as worse-than-any-
-    measured ranked a SEEN GREY house above every UNSEEN house under
-    ``color="white"`` (0.27 against -0.6) -- a coverage ordering wearing a
-    colour's name, on a bench whose target is usually the unseen one.
-    Unknown belongs BETWEEN a match and a mismatch, which is what it is.
-    """
+    """A missing ``color_<word>`` means nothing has LOOKED at that row yet."""
     out = G.score_by([{"fid": "match", "color_red": 0.95},
                       {"fid": "unseen"},
                       {"fid": "mismatch", "color_red": 0.05}],
@@ -230,12 +197,7 @@ def test_an_unseen_colour_is_UNKNOWN_and_ranks_between_match_and_mismatch():
 
 
 def test_a_missing_name_match_is_still_strictly_worst():
-    """The other calibrated key, and its absence is the opposite fact.
-
-    Retrieval SCORED that row and it fell below threshold -- a real
-    negative, not an unobserved one -- so it must never outrank a row whose
-    read merely scored low, under either weight sign.
-    """
+    """The other calibrated key, and its absence is the opposite fact."""
     up = G.score_by([{"fid": "weak", "name_match": 0.05}, {"fid": "absent"}],
                     ["name_match"], [1.0])
     assert [r["fid"] for r in up] == ["weak", "absent"], up

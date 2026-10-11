@@ -1,20 +1,3 @@
-"""Truthful serving: the arm-C gate-inspection blocker fixes, pinned.
-
-* B1 — the lexical layer consumes the taught vocabulary: a ``key=value``
-  query tokenizes to [key, value] and retrieves; the literal token ``OR``
-  is max-over-clauses; a query miss serves the TRUTHFUL condition (the
-  scoring threshold), never a claim about the world.
-* B2 — tiered match scores: exact name phrase > exact key=value tag hit >
-  token-bag/typo fuzz (a saturated bag hit is never a 'perfect' 1.0).
-* B3 — the ONE broad-result envelope law: census + head past
-  ``_BROAD_DUMP_SOFT_ROWS`` on EVERY row list (score_by/filter included),
-  full set live in the rN; identical censuses served once per response;
-  an identical program re-issue RE-RENDERS its result (never a lockout).
-* B4 — the served strings state what the executor does (color-filter
-  remedy, color-qualified concept rejection, remaining-tour line, crops
-  legend/skip note, select-staleness law).
-* Census degrader — the miss-census is query-conditioned first.
-"""
 from __future__ import annotations
 
 from maps.search.analyze_scene import text_match as T
@@ -54,9 +37,6 @@ def _grass_world(n_pad=0):
 # ---------------------------------------------------------------------------
 
 def test_key_value_query_retrieves_the_tagged_rows():
-    # 'landuse=grass' — the exact idiom the census teaches — must retrieve
-    # the rows carrying that tag (it served FALSE empties before the '='
-    # tokenizer fix; 5x in episode 8267).
     out = run_program([], _grass_world(), {"ops": [
         {"ref": "r0", "op": "find",
          "args": {"provenance": "prior", "query": "landuse=grass"}},
@@ -125,7 +105,7 @@ def test_miss_census_is_query_conditioned_first():
 
 
 # ---------------------------------------------------------------------------
-# B2: tiered lexical precision (the 13118 'Downing Street' fixture shape)
+# B2: tiered lexical precision
 # ---------------------------------------------------------------------------
 
 def _downing_world():
@@ -149,8 +129,7 @@ def _downing_world():
 
 
 def test_exact_name_outranks_token_bag_saturation():
-    # The 'Downing Street' way was unreachable among 290 token-bag hits
-    # (root cause of the 13118 loss). Exact name > everything else.
+    # Exact name > everything else.
     out = run_program([], _downing_world(), {"ops": [
         {"ref": "r0", "op": "find",
          "args": {"provenance": "prior", "query": "Downing Street"}},
@@ -181,10 +160,6 @@ def test_exact_name_outranks_token_bag_saturation():
         _T2.fuzzy_prepare_query("Downing Street"), _nap["search_text"],
         _nap.get("name"), _nap.get("tags"), idf={}) < 1.0
     assert "prior_naptan" not in by_fid, by_fid
-    # ...and the addr rows no longer reach the match set AT ALL. They spell
-    # only `downing`, which every row here spells, against `street` on 3 of
-    # 5 -- so half the phrase stopped being half the score. This is the 13118
-    # shape itself: the exact hit is not merely first now, it is uncontested.
     assert "prior_addr1" not in by_fid, by_fid
     assert "prior_addr2" not in by_fid, by_fid
 
@@ -269,7 +244,6 @@ def test_broad_score_by_serves_census_plus_head_not_full_dump():
     assert len(env["fids"]) == _BROAD_HEAD_ROWS
     # ranked head IS the ranking's top: rank-0 nearest prior_000
     assert env["fids"][0] == "prior_000"
-    # the RAW result keeps every row (the commit reads raw; never a cap)
     assert len(out["results"]["r2"]) == n
 
 
@@ -337,12 +311,8 @@ def test_unordered_filter_serves_census_not_a_row_head():
 
 
 def test_compare_grid_joins_identity_and_relational_columns():
-    # Audit item 2: the identity dedup
-    # split a compare into two blocks the model NEVER joined — it re-derived
-    # relational values from xy (10793: hand-derived 32/38 m vs true
-    # 14.4/31.2) and trusted its own wrong arithmetic over correct served
-    # values (10426). The dedup is removed, so the relational block IS the
-    # attribute block: one joined table, identity + attached columns.
+    # The dedup is removed, so the relational block IS the attribute block: one joined
+    # table, identity + attached columns.
     out = run_program([], _wide_world(60), {"ops": [
         {"ref": "r0", "op": "find",
          "args": {"provenance": "prior", "query": "building"}},
@@ -359,8 +329,6 @@ def test_compare_grid_joins_identity_and_relational_columns():
 
 
 def test_identical_census_served_once_per_response():
-    # 3 identical census blocks rode one 32.7KB message; now the census is
-    # served once and later envelopes reference the ref that holds it.
     out = run_program([], _wide_world(120), {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
         {"ref": "r1", "op": "filter_items",
@@ -456,14 +424,10 @@ def test_color_filter_rejection_names_the_real_remedy():
 
 
 def test_dedup_note_is_a_reference_not_a_payload():
-    # The full re-render was measured pure loop fuel (~1,750 tokens per
-    # identical result, consumed ×1,298 without breaking any loop). The hit
-    # serves one line naming the original turn; the rN handles stay live in
+    # The hit serves one line naming the original turn; the rN handles stay live in
     # carry_results, so nothing is locked away — a new program slices them.
     from maps.search.parse_compile.reasoner_loop import _DEDUP_NOTE
     note = _DEDUP_NOTE.format(turn=3, handles=' (r0)')
     assert "no new information since turn 3" in note
     assert "not re-rendered" in note
-    # the note never echoes the submitted program back: the {args} echo
-    # served raw op-JSON on the say channel 48 times over 47 episodes
     assert "{args}" not in _DEDUP_NOTE and "arrived" not in note

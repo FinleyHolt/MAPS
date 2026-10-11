@@ -1,14 +1,3 @@
-"""ONE rounding rule: floats are quantized ONCE where they are stamped and
-the render serves the STORED value verbatim (B-2, episode 6367).
-
-The absence law keys on the stored value (``brg_gap_<ref>`` attaches iff the
-stored ``round(d, 2) > 0``); the old 1-dp grid re-round made the SERVED
-bytes contradict the served law (``d_prior_193=0.0`` next to
-``brg_gap_prior_193=272.4`` for a true 4 cm gap). With the verbatim render
-a sub-0.05 m gap serves as its stored ``0.04`` — never a ``0.0`` with a
-direction — and distinct stored composite scores always render distinct
-(the auditability fact; ``-0.0`` is normalized at the stamp).
-"""
 from __future__ import annotations
 
 from maps.search.analyze_scene import geom_compute as G
@@ -33,7 +22,7 @@ def test_fmt_float_serves_stored_value_verbatim():
 def test_fmt_float_widens_adaptively_past_4dp():
     # An adaptive score stamp can carry more than 4 dp; the render widens
     # exactly when 4 dp would lose the stored value (cap 10 dp) — a stored
-    # 1e-06 must never serve as '0.0' (arm-C7 F3).
+    # 1e-06 must never serve as '0.0'.
     assert _fmt_float(1e-06) == "0.000001"
     assert _fmt_float(-1e-06) == "-0.000001"
     assert _fmt_float(1.23e-08) == "0.0000000123"
@@ -102,12 +91,9 @@ def test_scores_distinct_when_stored_distinct_and_zero_unsigned():
 
 
 def test_skewed_minmax_scores_stamp_and_render_distinct():
-    # arm-C7 F3 (12658): one outlier min-max-compresses the rest of the
-    # distribution; a fixed round(s, 4) stamp collided 598 distinct raw
-    # composites into a served all-zero tie. The ADAPTIVE stamp widens
-    # until adjacent distinct raws stay distinct (cap 10 dp), so the
-    # stored scores — and therefore the served cells and the downstream
-    # tie annotation — reflect the real ordering.
+    # The ADAPTIVE stamp widens until adjacent distinct raws stay distinct (cap 10 dp),
+    # so the stored scores — and therefore the served cells and the downstream tie
+    # annotation — reflect the real ordering.
     items = [{"fid": f"a{i}", "footprint_area_m2": 65.0 + i}
              for i in range(6)]
     items.append({"fid": "outlier", "footprint_area_m2": 6.0e7})

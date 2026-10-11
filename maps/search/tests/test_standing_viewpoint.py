@@ -1,18 +1,4 @@
-"""The staged-viewpoint surface in the executor (act.stage's vN handles).
-
-Three contracts, sign-locked against the one handedness law (right =
-cw(up) in the y-up world frame):
-
-  * the STANDING viewpoint's presence-pair side columns ride every find
-    result ('left of v1' / 'right of v1' / 'ahead of v1' / 'behind v1');
-  * a side key naming ANY staged handle lazily attaches that viewpoint's
-    columns onto an existing handle (the score_by / filter_items path);
-  * a staged handle resolves as a named POINT ref (compare refs:['v1']
-    -> 'distance to v1' / 'bearing from v1').
-
-No staging (the offline-teacher default) stays byte-identical: the
-vacuity floor asserts the columns appear NOWHERE without a stage.
-"""
+"""The staged-viewpoint surface in the executor (act.stage's vN handles)."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import (
@@ -84,10 +70,6 @@ def test_side_key_naming_a_staged_handle_lazily_attaches():
 
 
 def test_staged_handle_ref_attaches_the_stance_columns():
-    # compare refs:['v1'] is the natural "score these rows against my
-    # stance" call: it attaches the stance's OWN side columns + distance
-    # (framestage_1000 measured the old point-family answer -- bearings --
-    # as unusable for the sides the model wanted).
     out = run_program(
         [dict(c) for c in _CANDS], [],
         {"ops": [
@@ -137,10 +119,6 @@ def test_find_query_naming_a_fid_returns_that_row():
 
 
 def test_side_columns_render_contiguous_in_fixed_order():
-    # Presence-pairs defeat first-seen column union: one fleet measured 523
-    # grid layouts with the pair split across foreign compare columns. The
-    # grid groups each handle's family at first appearance, in the one
-    # fixed order left/right/ahead/behind.
     from maps.search.analyze_scene.geom_program import _grid_columns
     rows = [
         {"fid": "a", "xy": [1, 2], "right of v1": 3.0, "behind v1": 1.0,

@@ -1,16 +1,4 @@
-"""The measuring call served on the Python surface: distance().
-
-A served row carries ONE point, and every distance computed off that point
-is wrong for an extended feature. These pin the four properties the surface
-now depends on:
-
-* gap is FOOTPRINT gap, not centroid distance,
-* a SET is one place and means its NEAREST member,
-* the number the model reads is the number the executor's own
-  ``distance to <ref>`` column carries, and
-* a union's geometry is built ONCE, so ``[distance(h, road) for h in houses]``
-  is linear in the houses rather than quadratic in the ways.
-"""
+"""The measuring call served on the Python surface: distance()."""
 
 import math
 
@@ -22,16 +10,12 @@ from maps.search.parse_compile.code_surface import CodeError
 from maps.search.parse_compile.python_surface import (
     MissionEnv, MissionPython, Row, Rows, _places)
 
-# The headline case, at its measured size: Poppy Boulevard way 5 is 1,198 m
-# long and the car parked against it is 7.0 m away.
 ROAD = {"fid": "prior_1", "name": "Poppy Boulevard", "class": "road",
         "mask": [[[0.0, 0.0], [0.0, 1198.0]]], "xy": [0.0, 599.0]}
 CAR = {"fid": "detected_1", "class": "car", "xy": [7.0, 0.0]}
 
 
 def _mp(surface: dict, refs: dict | None = None) -> MissionPython:
-    """A MissionPython over a fixed surface. Only the geometry hooks are
-    live: nothing here dispatches a plan."""
     refs = refs or {}
     env = MissionEnv(
         run_plan=lambda plan, said: {},
@@ -43,8 +27,8 @@ def _mp(surface: dict, refs: dict | None = None) -> MissionPython:
 
 
 def _served(row: dict) -> dict:
-    """A row as an OP OUTPUT serves it: the mask is stripped, so the fid is
-    the only way back to the geometry."""
+    """A row as an OP OUTPUT serves it: the mask is stripped, so the fid is the only way
+    back to the geometry."""
     return {k: v for k, v in row.items() if k != "mask"}
 
 
@@ -59,8 +43,8 @@ def test_distance_is_footprint_not_centroid():
 
 
 def test_a_set_is_its_nearest_member():
-    """The union's chains are ONE geometry, so the min-gap witness picks the
-    nearest member. A mean or a first-member read lands 400 m out."""
+    """The union's chains are ONE geometry, so the min-gap witness picks the nearest
+    member."""
     near = {"fid": "detected_1", "class": "pool", "xy": [7.0, 0.0]}
     far = {"fid": "detected_2", "class": "pool", "xy": [400.0, 0.0]}
     surface = {"prior_1": ROAD, "detected_1": near, "detected_2": far}
@@ -79,8 +63,6 @@ def test_a_set_is_its_nearest_member():
 
 
 def test_distance_matches_the_executor_column():
-    """THE PARITY PIN. The model must be told the number the harness scores
-    on: distance() and the compare op's ``distance to <ref>`` are one quantity."""
     out = run_program(
         [dict(CAR)], [dict(ROAD)],
         {"ops": [{"ref": "r0", "op": "compare",
@@ -96,8 +78,6 @@ def test_distance_matches_the_executor_column():
 
 
 def test_union_geometry_is_built_once(monkeypatch):
-    """A 64-way union costs ONE mask_geom, however many things are measured
-    against it. Without the cache each gap rebuilds all 64 ways."""
     ways = {f"prior_{i}": {"fid": f"prior_{i}", "name": "Neuralia Road",
                            "mask": [[[0.0, i * 20.0], [0.0, i * 20.0 + 20.0]]],
                            "xy": [0.0, i * 20.0 + 10.0]}

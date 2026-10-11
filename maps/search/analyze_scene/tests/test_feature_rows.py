@@ -1,15 +1,4 @@
-"""A row is ONE OSM way, and a name is the SET of its rows.
-
-The property these tests exist for: a fid means the same thing on the
-surface and in the runtime graph, so an op handed a row walks the ground
-that row describes. A folded row broke it -- it carried the union of a
-name's ways while its fid still addressed one of them, and ``explore``
-resolves fids against the graph.
-
-What the fold bought and this gives up: ONE served distance per name
-whatever way the probe is nearest. The agent reassembles it from the set
-(``find(name).exact``), which is also what it explores.
-"""
+"""A row is ONE OSM way, and a name is the SET of its rows."""
 
 import numpy as np
 
@@ -40,16 +29,7 @@ def _road(name, c0, c1, row=10):
 
 
 def test_each_osm_way_keeps_its_own_row():
-    """A name resolves to a SET, not to one folded row.
-
-    The ways of a road are its rows; ``find("Lime Avenue").exact`` is the
-    road, and ``explore`` covers the set in one pass. Folding them cost the
-    fid its meaning: a folded row carried the union of ten ways' cells while
-    its fid still addressed ONE way in the runtime graph, so
-    ``SearchLoop.node_coverage_stops`` walked that member alone and an
-    ``explore`` of 3.8 km of Poppy Boulevard flew one stop and reported the
-    road covered (calcity::200#198; Neuralia Road, 64 ways, walked 4 cells).
-    """
+    """A name resolves to a SET, not to one folded row."""
     ways = [("prior_9", _road("Lime Avenue", 20, 29)),
             ("prior_3", _road("Lime Avenue", 0, 9)),
             ("prior_7", _road("Lime Avenue", 10, 19)),
@@ -63,13 +43,6 @@ def test_each_osm_way_keeps_its_own_row():
 
 
 def test_a_rows_cells_are_its_own_ways_cells():
-    """THE contract the fold broke: a fid means the same thing everywhere.
-
-    ``explore`` resolves a row's fid against the runtime graph, so a row
-    whose cells describe more ground than the node it names sends the walk
-    over the wrong footprint. Asserted per row, so no row may quietly
-    describe a neighbour's ground.
-    """
     ways = [("prior_1", _road("Lime Avenue", 0, 9)),
             ("prior_2", _road("Lime Avenue", 10, 19)),
             ("prior_3", _road("Lime Avenue", 400, 409))]
@@ -84,12 +57,7 @@ def test_a_rows_cells_are_its_own_ways_cells():
 
 
 def test_every_row_is_one_place_and_may_claim_a_centre():
-    """One way is one place, so the centre columns read on every named row.
-
-    ``_mask_center`` refuses a row that is several places. Rows are ways
-    now, so a NAME never lands in that refusal — two ways 869 m apart under
-    one name are two rows, each centred on itself.
-    """
+    """One way is one place, so the centre columns read on every named row."""
     _c, anchors = build_surface(
         [], [("prior_1", _road("Lime Avenue", 0, 9)),
              ("prior_2", _road("Lime Avenue", 400, 409))], (0.0, 0.0), 2.0)
@@ -102,8 +70,6 @@ def test_every_row_is_one_place_and_may_claim_a_centre():
             G.mask_geom(row["mask"]),
             G.mask_geom([[list(row["mask_centroid"])]]))
         assert off <= 2.0, (row["fid"], row["mask_centroid"], off)
-    # VACUITY FLOOR: a centre over BOTH places would be ~400 m from each,
-    # which is the point a folded row used to serve.
     both = [ch for r in lime for ch in r["mask"]]
     ghost = G.loops_area_centroid(both)
     off, _a, _b = G.gap_witness(G.mask_geom(both), G.mask_geom([[list(ghost)]]))
@@ -111,13 +77,7 @@ def test_every_row_is_one_place_and_may_claim_a_centre():
 
 
 def test_a_row_that_is_STILL_several_places_orients_no_side():
-    """The ``_mask_center`` law, on the one shape that can still reach it.
-
-    A row is one way, so a name never lands here — but a single way can
-    still be several places: a mask the segmenter speckled, or a road the
-    tile boundary cut into two in-tile pieces. The refusal has to stay
-    reachable or it rots into a branch nothing ever turns over.
-    """
+    """The ``_mask_center`` law, on the one shape that can still reach it."""
     speckled = _Way(None, [[10, c] for c in range(0, 10)]
                     + [[10, c] for c in range(400, 410)])
     _c, anchors = build_surface([], [("prior_1", speckled)], (0.0, 0.0), 2.0)

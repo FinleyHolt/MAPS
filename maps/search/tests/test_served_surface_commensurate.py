@@ -1,21 +1,3 @@
-"""Every mission-served byte speaks the surface the bench actually serves —
-no retired vocabulary anywhere the model can read.
-
-Two sweeps, each with a vacuity floor (a scan that finds nothing passes for
-the wrong reason — CLAUDE.md):
-
-  * STATIC — the system prompt, the served tool description, and every
-    ``description`` string inside the served schema.
-  * DYNAMIC — the loop is DRIVEN through its serving paths with a scripted
-    reasoner and every byte it appends to the conversation (tool results,
-    repair turns) is scanned. Inline error literals have no constant to
-    audit; the only honest scan is the served output.
-
-The banned vocabulary is what the two retired surfaces served: the ROUND era
-(view / analyze / act, stop packets, qstops, CARRY) and the SAY channel (one
-sentence of a controlled language per call). Nothing in the tree serves
-either now, so a hit here means it came back.
-"""
 
 from __future__ import annotations
 
@@ -26,13 +8,8 @@ from maps.search.parse_compile import reasoner_agent as ra
 from maps.search.parse_compile import reasoner_loop as rl
 from maps.search.tests.fakes import FakeReasoner, bare_ctx
 
-# Word-boundary matches, case-insensitive except CARRY (the uppercase word
-# was the round protocol's token; lowercase "carry" is ordinary English).
-#
-# The op-JSON register rides with them: a surface that serves an op name is
-# conditioning the model on a call shape it must never emit (score_by
-# appeared in the reasoning of 18/18 hinted episodes and 0/475 unhinted on
-# saydialect_1000).
+# Word-boundary matches, case-insensitive except CARRY (the uppercase word was the round
+# protocol's token; lowercase "carry" is ordinary English).
 _BANNED_CI = ("qstop", "stop packet", "score_by", "filter_items")
 _BANNED_WORDS_CI = ("round", "rounds", "select", "terminal", "pending",
                     "tour", "tours",
@@ -102,18 +79,7 @@ def test_static_mission_surface_is_commensurate():
 
 
 def test_every_quoted_call_names_a_library_call():
-    """The inverse of the worked-example guard in ``prompts``.
-
-    ``prompts`` asserts at import that its ONE worked example parses and
-    that every call in it is real. Nothing asserted the other direction, so
-    a legend line could name a call the surface does not have — and the
-    model reads the legend. A spelling with no function behind it is a
-    refusal the model cannot act on and priming everywhere else.
-
-    Derived, not a hand-kept list: take every ``name(`` spelling in the
-    served bytes and require it to be a library call, a row method, or an
-    ordinary Python builtin the sandbox exposes.
-    """
+    """The inverse of the worked-example guard in ``prompts``."""
     from maps.search.parse_compile.python_surface import (
         _LIBRARY_CALLS,
         _MOVE_CALLS,
@@ -157,9 +123,6 @@ def test_dynamic_mission_output_is_commensurate():
          _run('go_to("prior_0")'),
          _run('go_to("prior_0")')],                # budget backstop (cap 1)
         [("teleport", {})],                        # unknown tool
-        # a hallucinated round-era analyze: an UNDECLARED name, answered by
-        # the id-closure and never executed -- its args would otherwise
-        # round-trip op-JSON into the transcript
         [("analyze", {"program": {"ops": [
             {"ref": "r0", "op": "score_by",
              "args": {"items": "r9", "emphasis": [

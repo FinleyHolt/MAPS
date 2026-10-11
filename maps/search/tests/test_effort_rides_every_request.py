@@ -1,20 +1,5 @@
 #!/usr/bin/env python
-"""The mission's reasoning effort reaches the WIRE, on every request.
-
-The operator names an effort per mission
-(``benchmarks.flight.mission.Mission(reasoning_effort=...)``) and the
-mission's requests carry it in place of the arm's
-``SEARCH_SAMPLING_REASONING_EFFORT``. ``maps/llm/tests/test_sampling.py``
-pins the kwargs builder; this pins the two passes between the mission and
-the request body, so dropping either fails here instead of flying the
-arm's value with no crash row.
-
-The vacuity floor is ``test_a_reasoner_with_no_word_sends_the_arms``: a
-reasoner that names none must still send the environment's, or these
-asserts would pass over a path that sends nothing at all.
-
-No live LLM. Run: ``pytest maps/search/tests/test_effort_rides_every_request.py``.
-"""
+"""The mission's reasoning effort reaches the WIRE, on every request."""
 from __future__ import annotations
 
 import json
@@ -47,8 +32,8 @@ def _serve(monkeypatch) -> list[dict]:
 
 @pytest.mark.parametrize("word", ["0.3", "0.0"])
 def test_the_missions_word_rides_every_request_and_the_arms_does_not(monkeypatch, word):
-    """Two rounds on one reasoner both carry the mission's word as a string;
-    "0.0" is a value (thinking off), not an absence."""
+    """Two rounds on one reasoner both carry the mission's word as a string; "0.0" is a
+    value (thinking off), not an absence."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
     sent = _serve(monkeypatch)
     r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
@@ -61,8 +46,8 @@ def test_the_missions_word_rides_every_request_and_the_arms_does_not(monkeypatch
 
 
 def test_a_reasoner_with_no_word_sends_the_arms(monkeypatch):
-    """VACUITY FLOOR: the environment is still the default, read at CALL
-    time, so a rig select mid-day reaches a mission that named none."""
+    """VACUITY FLOOR: the environment is still the default, read at CALL time, so a rig
+    select mid-day reaches a mission that named none."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.9")
     sent = _serve(monkeypatch)
     r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
@@ -72,9 +57,7 @@ def test_a_reasoner_with_no_word_sends_the_arms(monkeypatch):
 
 
 def test_the_effort_reaches_no_served_byte(monkeypatch):
-    """The CLAUDE.md law: the model is never told a budget fact. The dial
-    is a sampling field on the envelope and appears nowhere in the bytes
-    the model reads -- not the system prompt, not the tools, not a turn."""
+    """The model is never told a budget fact."""
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
     sent = _serve(monkeypatch)
     r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
@@ -86,8 +69,8 @@ def test_the_effort_reaches_no_served_byte(monkeypatch):
 
 
 def test_run_mission_hands_the_word_to_the_reasoner_it_builds(monkeypatch):
-    """THE mission entry owns the Reasoner, so the station's word has to
-    survive that construction; nothing downstream can put it back."""
+    """THE mission entry owns the Reasoner, so the station's word has to survive that
+    construction; nothing downstream can put it back."""
     seen: dict = {}
 
     def _round(*, reasoner, **kw):

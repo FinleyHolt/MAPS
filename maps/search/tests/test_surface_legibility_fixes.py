@@ -1,19 +1,4 @@
 #!/usr/bin/env python
-"""The expressiveness-audit legibility fixes, pinned.
-
-  * COLOR-BROWSE-ORDERED: a query-less find carrying ``color`` orders by
-    its own attached ``color_<word>`` column (ordering only — every row,
-    colorless included, stays in the rN) and renders rows instead of the
-    census-only null that read as "no results".
-  * HEAD-TRUNCATION-STATED: a rendered head shorter than the result says
-    "showing the first K of N", and a tie-degenerate ordering owns its
-    arbitrariness instead of posing as best-first.
-  * LINE-ASPECT-GATE: a near-square ref with a stored (PCA-derived)
-    centerline is AREAL — d_/dc_/brg_ attach; only an elongated ref (or a
-    footprint-less road prior) is a LINE with along_/off_.
-
-Pure (no GPU / tile / vLLM). ``pytest maps/search/tests/test_surface_legibility_fixes.py``.
-"""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import (
@@ -82,9 +67,6 @@ def test_truncated_tied_head_states_both_facts():
     env = compact_results(out["results"])["r0"]
     hint = env.get("hint") or ""
     assert "showing the first" in hint, hint
-    # columnless tie wording: name_match no longer renders as a grid column
-    # (audit 7/8 not-observed), so the clause states uniform match quality
-    # without naming the column or quoting an invisible value
     assert "equally good matches" in hint, hint
     assert "arbitrary" in hint, hint
     assert env["len"] == 60
@@ -107,8 +89,6 @@ def test_near_square_centerline_ref_is_areal():
 
 
 def test_distance_to_ranks_by_magnitude_either_side():
-    # sides are presence columns; 'distance to <line>' is the either-side
-    # proximity sort (the retired abs idiom, now a named column).
     cands = [
         {"fid": "d0", "xy": [10.0, 2.0], "class": "car"},   # dist 2
         {"fid": "d1", "xy": [90.0, -8.0], "class": "car"},  # dist 8
@@ -125,9 +105,6 @@ def test_distance_to_ranks_by_magnitude_either_side():
 
 
 def test_distance_to_on_a_line_charts_and_orders():
-    # 'distance to <line>' is the lateral magnitude (either side): naming
-    # it in an emphasis auto-attaches the chart and orders nearest-line-
-    # first — the old d_-on-a-line refusal is retired with the rename.
     out = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "score_by",
@@ -173,15 +150,7 @@ def _scores(hint):
 
 
 def test_a_truncated_head_says_where_its_ordering_stood_at_the_cut():
-    """The one fact a served head structurally cannot show.
-
-    Every rendered row carries its own values and the row just past the cut
-    carries none, so a head of 24 of 3,414 says nothing about whether the
-    answer is at rank 25. The episodes that never got a crop onto the
-    target queried into a match set of median 3,080 rows against 146 for
-    the ones that did, and their correct row sat at rank 0 one time in
-    eight against six in ten.
-    """
+    """The one fact a served head structurally cannot show."""
     hint = _cut_hint([float(i) for i in range(60)])
     assert "showing the first" in hint, hint
     assert "ranked on 'distance to road_9'" in hint, hint
@@ -190,14 +159,7 @@ def test_a_truncated_head_says_where_its_ordering_stood_at_the_cut():
 
 
 def test_it_reports_the_COMPOSITE_not_a_column():
-    """A multi-key sort is ordered by the SUM; no column is monotone in it.
-
-    `op_cols` is `sorted(emphasis)`, so on the legend's own
-    `near=<place>, color=<word>` shape the alphabetically-first key is
-    `color_white` -- and the row past the cut carries its BEST possible
-    value, which read as "the cut discarded a row better than everything
-    shown" on a head that had separated cleanly.
-    """
+    """A multi-key sort is ordered by the SUM; no column is monotone in it."""
     cands = [{"fid": f"d{i:03d}", "xy": [float(i), 0.0], "class": "house",
               "search_text": "house",
               "color": "white" if i % 2 else "black", "color_conf": 0.9}
@@ -223,13 +185,7 @@ def test_it_reports_the_COMPOSITE_not_a_column():
 
 
 def test_a_plateau_and_a_real_gap_read_differently():
-    """A FACT, not a verdict: the numbers separate the two cases.
-
-    The distinction is a JUMP at the cut, not a wider spacing -- the score
-    is min-max normalised, so uniformly-spread rows look the same at any
-    scale, which is correct: "is rank 25 as good as rank 24" is a relative
-    question.
-    """
+    """A FACT, not a verdict: the numbers separate the two cases."""
     flat = _scores(_cut_hint([float(i) for i in range(60)]))
     gap = _scores(_cut_hint([float(i) for i in range(24)]
                             + [900.0 + i for i in range(36)]))
@@ -260,9 +216,8 @@ def test_an_unordered_dump_has_no_cut_to_stand_at():
 
 
 def test_a_uniform_class_tie_keeps_the_generic_hint():
-    """Sixty tied UNNAMED cars: a whole-town pass is a thinned sample,
-    not the cue's remedy, so the covering clause stays off the generic
-    tie."""
+    """Sixty tied UNNAMED cars: a whole-town pass is a thinned sample, not the cue's
+    remedy, so the covering clause stays off the generic tie."""
     cands = [{"fid": f"d{i:03d}", "xy": [float(i), 0.0], "class": "car",
               "search_text": "car"}
              for i in range(60)]

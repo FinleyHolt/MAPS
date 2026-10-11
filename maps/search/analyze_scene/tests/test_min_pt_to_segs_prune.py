@@ -1,11 +1,4 @@
-"""The pruned point-to-segment argmin is the full scan's, pair for pair.
-
-The oracle is the full scan itself (``_min_pt_to_segs_all``), so the
-pruned path cannot drift into agreeing with a stored answer. Sets are
-built so both prunings bite -- many points against few segments and few
-points against many -- and so ties exist, where the witness pair is the
-part a lower-bound cut could get wrong.
-"""
+"""The pruned point-to-segment argmin is the full scan's, pair for pair."""
 import numpy as np
 
 from maps.search.analyze_scene import geom_compute as G

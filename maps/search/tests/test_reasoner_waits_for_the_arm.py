@@ -1,13 +1,3 @@
-"""A live mission holds its turn while the arm is down.
-
-The bench has a transient budget: six link faults in one round end the
-episode as ``transient_failures``. A LIVE mission (the reasoner carries a
-cancel_event) has none. The arm going down mid-flight is a VPN cookie or a
-relay to bring back, not a verdict on the run, so the loop waits on the
-cancel event between attempts, capped at thirty seconds, and resumes the
-moment the reasoner answers. Stop is the one way out: the wait raises
-``CallCanceled``, which the station reads as ``stopped``.
-"""
 
 from __future__ import annotations
 
@@ -114,9 +104,7 @@ def _status(code: int) -> httpx.HTTPStatusError:
     (402, "transient_failures"), (408, "transient_failures"),
     (429, "transient_failures"), (503, "transient_failures")])
 def test_a_refused_request_is_the_methods_failure(monkeypatch, code, ended_by):
-    """A 4xx other than 402/408/429 is the serve refusing what was sent: the
-    budget still retries it, and when it runs out the mission ends
-    ``request_refused``, which is scored, not ``transient_failures``."""
+    """A 4xx other than 402/408/429 ends the mission request_refused, which is scored."""
     reply = _round(monkeypatch, faults=6, fault=_status(code))
     assert reply.ended_by == ended_by
 

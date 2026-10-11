@@ -73,8 +73,8 @@ def test_a_look_under_a_live_station_is_cut_from_the_runs_imagery_and_says_what_
 
 
 def test_the_bench_still_crops_the_bake(monkeypatch):
-    """Without a run's imagery the renderer reads the raster it always did:
-    the simulated camera is a crop of it."""
+    """Without a run's imagery the renderer reads the raster it always did: the
+    simulated camera is a crop of it."""
     from maps.perception.ortho import camera_model
 
     seen: list = []
@@ -96,17 +96,14 @@ def test_the_bench_still_crops_the_bake(monkeypatch):
 
 
 def test_a_bake_crops_source_detail_is_the_configured_rasters_own_cell(monkeypatch, tmp_path):
-    """The look caption's "detail limited by" figure is a fact of the raster
-    the bench is configured with: a block's own map (``<map>_rgb.tif``) is a
-    capture laid at its native cell, so its cell is the detail limit. A
-    raster that states no capture cell (the PNG rasters) reports nothing,
-    whatever the map is called."""
+    """The look caption's "detail limited by" figure is a fact of the raster the bench
+    is configured with: a block's own map (``<map>_rgb.tif``) is a capture laid at
+    its native cell, so its cell is the detail limit."""
     import rasterio
     from rasterio.transform import from_origin
 
     from maps.perception.ortho import camera_model
 
-    # Named for the bench whose raster this used to be looked up by.
     map_name = "calcity"
     monkeypatch.setitem(GROUND_LEVEL, map_name, 0.0)
 

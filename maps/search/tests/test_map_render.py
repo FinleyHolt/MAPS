@@ -1,11 +1,4 @@
-"""The world-state map render: geometry, palette and honesty contracts.
-
-Pinned here: the north-up flip (grid row 0 = SOUTH edge -> image bottom),
-the kind-ranked paint (areas muted / roads stroked / prior buildings tan /
-detections class-hued with dN identity chips), the class-colour agreement
-between paint and legend word, the rotated band stating its true up, and
-the record carrying the re-render spec facts (window, gsd, sha256).
-"""
+"""The world-state map render: geometry, palette and honesty contracts."""
 from __future__ import annotations
 
 import numpy as np
@@ -111,10 +104,9 @@ def test_detection_carries_an_identity_chip():
 
 
 def test_prior_fid_chips_only_where_the_pill_fits():
-    """A surveyed building's fid digits chip IN its mask so the text
-    surface's prior_NNNN rows are findable in the picture — but only where
-    the pill fits the drawn footprint; the rest are counted, never
-    silently dropped."""
+    """A surveyed building's fid digits chip IN its mask so the text surface's
+    prior_NNNN rows are findable in the picture — but only where the pill fits the
+    drawn footprint; the rest are counted, never silently dropped."""
     big = {"fid": "prior_4829", "label": "building", "kind": "building",
            "provenance": "prebaked", "cells": [[4, 4]],
            "contour": [[2.0, 2.0], [18.0, 2.0], [18.0, 18.0], [2.0, 18.0]]}
@@ -131,14 +123,7 @@ def test_prior_fid_chips_only_where_the_pill_fits():
 
 
 def test_the_centre_carries_no_competing_numeral(monkeypatch):
-    """The centre draws its outline and NO ordinal badge.
-
-    Asked which chip named the outlined building, the model answered the
-    centre badge "1" on 17 of 18 probe items — id_binding 0/44 across two
-    independent arms. Withholding that one numeral took id_binding to
-    77.3% and detection_count 64.1% -> 93.5% (the badge was being counted
-    among the d-chips). A centre badge that comes back re-opens both.
-    """
+    """The centre draws its outline and NO ordinal badge."""
     b = {"fid": "prior_1", "label": "building", "kind": "building",
          "provenance": "prebaked", "cells": [[4, 4]],
          "contour": [[2.0, 2.0], [18.0, 2.0], [18.0, 18.0], [2.0, 18.0]]}
@@ -164,11 +149,9 @@ def test_the_centre_carries_no_competing_numeral(monkeypatch):
 
 
 def test_coresident_detection_hatches_and_stacks_both_chips():
-    """A detection sitting on its surveyed twin: the newest knowledge wins
-    the pixels, but the overlap stays VISIBLE (tan hatch through the
-    detection fill) and BOTH ids survive — the prior's fid chip stacks
-    under the detection's dN chip. Co-location is drawn; whether the pair
-    is one object stays the graph's re-identification call."""
+    """A detection sitting on its surveyed twin: the newest knowledge wins the pixels,
+    but the overlap stays VISIBLE (tan hatch through the detection fill) and BOTH ids
+    survive — the prior's fid chip stacks under the detection's dN chip."""
     prior = {"fid": "prior_4829", "label": "building", "kind": "building",
              "provenance": "prebaked", "cells": [[4, 4], [4, 5], [5, 4],
                                                  [5, 5]],
@@ -217,9 +200,6 @@ def test_render_record_carries_the_contract():
 
 
 def test_kind_palette_separates_house_street_and_landuse():
-    """The digest palette's measured failure: building / residential-road /
-    residential-landuse landed on one green (the facing render gate,
-    12/12 sheets unreadable). The kind layer must hold them apart."""
     trio = [paint_color("building", kind="building"),
             paint_color("residential", kind="road"),
             paint_color("residential", kind="area")]
@@ -272,16 +252,6 @@ def test_degenerate_grid_shape_does_not_clamp_the_paint():
 
 
 def test_the_map_frame_follows_what_was_asked_about():
-    """The span used to be a fixed radius or the whole tile whatever the map
-    was OF. The default is 6576 m at 1024 px, so a 15 m house rendered 2.3 px
-    and a 2 m road 0.31 px -- and this verb runs in 94.5% of episodes. The
-    marks were resolved and badged and then ignored by the framing, so
-    narrowing to three houses and asking to see them returned the whole tile.
-
-    Framing to the request is 8-18x linear resolution on it, and it makes
-    pointing off the picture accurate: the caption carries the world window,
-    so m/px is what an eyeballed coordinate costs.
-    """
     from maps.search.parse_compile.reasoner_loop import (
         _MAP_FRAME_MARGIN,
         _MAP_FRAME_MIN_M,
@@ -300,23 +270,7 @@ def test_the_map_frame_follows_what_was_asked_about():
     assert 15.0 / (span / 1024.0) >= 20.0, span
 
 
-
 def test_the_image_axis_convention_is_stated_once_and_correctly():
-    """30% of episodes visibly stall on "does Y increase?" -- the caption
-    said "north-up" and gave the window, then left the model to infer that
-    image row 0 is the north edge. Verbatim from a run:
-
-        "the top of the image should be the larger Y (3641) and the bottom
-         the smaller Y (3581)? OR, does Y increase So"
-
-    Drawing tick numbers on the pixels did not move that (30% with, 29%
-    without). A convention is stated, not drawn. This is the KEY half of the
-    Set-of-Mark pattern the badge legend already measured at +23.3pp: the
-    mark works once something binds it to meaning.
-
-    It lives in the system prompt because it is true of every picture and
-    the prefix is cached at 99.9%, so saying it once costs nothing.
-    """
     from maps.search.parse_compile.reasoner_agent import served_system_text
 
     # normalized: the prompt wraps, and a line break is not a claim
@@ -335,7 +289,6 @@ def test_the_image_axis_convention_is_stated_once_and_correctly():
 
 
 def test_a_picture_states_its_own_pixel_grid(ortho_dir):
-    """Map and look records carry the pixel width their jpeg was encoded at."""
     import cv2
 
     from maps.search.render.look_render import render_candidate_crops
@@ -353,15 +306,7 @@ def test_a_picture_states_its_own_pixel_grid(ortho_dir):
 
 
 def test_marks_decide_who_is_chipped_not_footprint_size():
-    """Identity follows the TEXT side's selection, and costs |marks|.
-
-    The old rule chipped whatever fit a pill inside its own footprint —
-    49.7% of in-frame priors, with which half decided by how large they
-    drew. That does not survive a window holding hundreds of detections.
-    When the request carries marks, only the marked objects are chipped;
-    a marked object is chipped even when the pill CANNOT fit, with a
-    leader line, because it was asked for.
-    """
+    """Identity follows the TEXT side's selection, and costs |marks|."""
     def _b(fid, x0, y0, x1, y1):
         return {"fid": fid, "label": "building", "kind": "building",
                 "provenance": "prebaked",
@@ -400,14 +345,7 @@ def test_marks_decide_who_is_chipped_not_footprint_size():
 
 
 def test_a_label_is_never_buried_and_never_stacked():
-    """Every glyph draws above all ink, and never on another glyph.
-
-    Prior chips used to be emitted BEFORE the detection pass painted, so
-    a detection fill drew straight over them — "3269" delivered as "3".
-    And chips had no collision check between themselves, so two ids could
-    pile into an unreadable smudge. Both are identity failures: a label
-    you cannot read names nothing.
-    """
+    """Every glyph draws above all ink, and never on another glyph."""
     # A building whose chip lands exactly under a detection painted after
     # it — the burial case.
     b = {"fid": "prior_4242", "label": "building", "kind": "building",
@@ -439,14 +377,7 @@ def test_a_label_is_never_buried_and_never_stacked():
 
 
 def test_the_record_counts_only_chips_that_actually_drew():
-    """A chip the record claims but the picture never drew is a lie.
-
-    Chips are recorded in their own pass and DRAWN later, so a glyph the
-    placement cannot fit was still being counted. That overstates the
-    caption and, worse, makes a counting ground truth score a CORRECT
-    answer wrong: detection_count lost 7 of 30 paired items to it, every
-    miss an undercount of 1-2, concentrated on the crowded windows.
-    """
+    """A chip the record claims but the picture never drew is a lie."""
     # Many detections crammed into one tiny window: placement must fail
     # for some of them, and the record must agree with the pixels.
     dets = [{"fid": f"detected_{i}", "label": "house", "kind": "detection",
@@ -462,10 +393,8 @@ def test_the_record_counts_only_chips_that_actually_drew():
 
 
 def test_cells_as_arrays_render_the_same_bytes_as_cells_as_lists():
-    """The live loop hands node cells through as int arrays and the analysis
-    readers hand lists; the painter and the delivered map must not know
-    which. Converting 3.9 M cells to a list and back per map was the map's
-    whole cost on the Cal City bake."""
+    """The live loop hands node cells through as int arrays and the analysis readers
+    hand lists; the painter and the delivered map must not know which."""
     as_lists = _FEATURES + [
         {"fid": "prior_3", "label": "building", "kind": "building",
          "provenance": "prebaked", "cells": [[4, 4], [4, 5]],
@@ -494,9 +423,7 @@ def test_cells_as_arrays_render_the_same_bytes_as_cells_as_lists():
 
 
 def test_a_map_after_a_flight_paints_the_flight_and_a_repeat_paints_the_same():
-    """The map flatten is built once per surface version. A flight moves
-    the version, so the next map carries the detections it folded; a second
-    map under the same version is the same bytes."""
+    """The map flatten is built once per surface version."""
     results, maps = map_mission(["show_map(around=prior_7)", "go_to(prior_7)",
                                  "show_map(around=prior_7)", "show_map(around=prior_7)"])
     assert all("error" not in r for r in results[:4]), results

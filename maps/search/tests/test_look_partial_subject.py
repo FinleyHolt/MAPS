@@ -1,13 +1,4 @@
-"""A subject bigger than its frame says so, in metres.
-
-The three existing partial-visibility captions all key on the subject being
-partly or wholly OUT of the window. The case that confuses a reader most
-passes all three: centroid in frame, footprint in frame, and the shape
-running kilometres past the window on every side. Cal City's
-``landuse=residential`` relation is 1,162 x 2,672 m against a 300 m ceiling,
-and the badge then binds its digit to two line fragments in a corner with
-nothing saying the thing continues.
-"""
+"""A subject bigger than its frame says so, in metres."""
 
 from __future__ import annotations
 

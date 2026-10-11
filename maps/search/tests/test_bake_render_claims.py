@@ -1,27 +1,4 @@
-"""Every claim the render makes about a REAL-bake surface, re-derived.
-
-Two served claims are asserted here against the tile bake rather than a
-fixture, because both were wrong in a way only real geometry shows:
-
-* HEAD-ORDER — the truncated-head tie clause ("all N rows tie at
-  name_match X, so this head's order is arbitrary") gated on name_match
-  UNIFORMITY and not on whether an ordering exists. Every class find gives
-  every row the same name_match, so it fired on the ordered output of every
-  ``find <class> near <road>`` and told the model its own score_by was
-  arbitrary. ``_CueSortedRows`` states the opposite in its own docstring
-  and the index guard honours it; the render note now does too.
-
-* SIDE-COMPASS — a ROW ref's ``left of``/``right of`` columns followed its
-  end0->end1 travel, an order the bake picks arbitrarily, and the served
-  note never said which way it ran. The columns went with every other
-  engine-inferred axis, and the claim went with them: no row ref names a
-  side any more. That absence is what is asserted below — an unmakeable
-  claim is a stronger guarantee than a re-derivable one.
-
-Reads the bake ``SEARCH_CITYNAV_TILES`` names, else ``tiles/citynav_2m_osmv3``
-(the shipped default), and skips without it.
-``pytest maps/search/tests/test_bake_render_claims.py``
-"""
+"""Every claim the render makes about a REAL-bake surface, re-derived."""
 from __future__ import annotations
 
 import glob
@@ -67,9 +44,6 @@ def _surface(stem):
 
 
 def test_a_cue_sorted_head_is_not_told_its_own_order_is_arbitrary():
-    """The ONE branch: the same rows, same name_match tie, same truncation
-    — the tie clause fires on the retrieval-ordered find and is gone on the
-    score_by output that resolved it."""
     armed = 0
     for stem in _blocks():
         cands, anchors = _surface(stem)
@@ -96,10 +70,6 @@ def test_a_cue_sorted_head_is_not_told_its_own_order_is_arbitrary():
         assert getattr(out["r2"], "cue_sorted", False), stem
         env = compact_results({"r0": pool, "r2": out["r2"]})
         assert "arbitrary" in (env["r0"].get("hint") or ""), (stem, env["r0"])
-        # The clause states the fact columnlessly now: name_match no longer
-        # renders as a grid column (audit: 7/8 not-observed, zero
-        # reads-to-pick-a-row), so the hint must not name it or quote the
-        # value of an invisible column.
         assert "name_match" not in (env["r0"].get("hint") or ""), env["r0"]
         assert "arbitrary" not in (env["r2"].get("hint") or ""), \
             (stem, env["r2"].get("hint"))
@@ -107,7 +77,6 @@ def test_a_cue_sorted_head_is_not_told_its_own_order_is_arbitrary():
     assert armed >= 3, armed          # vacuity floor: the branch ran
 
 
-# The op-JSON register: the vocabulary of the frozen round-era surface.
 _OP_REGISTER = re.compile(r"score_by|filter_items|find\s*\{")
 # A served hint quotes what it wants read or said. Unquoted prose ("contact
 # anywhere along the line") is ordinary English and out of scope.
@@ -115,29 +84,7 @@ _QUOTED = re.compile(r"'([^']{2,80})'")
 
 
 def test_no_rendered_hint_teaches_the_op_json_register():
-    """A remedy names the FACT, never a channel's spelling.
-
-    geom_program renders for BOTH surfaces -- the sentence channel the bench
-    flies and the frozen round-era one robots' field path serves -- so a hint
-    written in op-JSON tells a model whose only move is a sentence to emit a
-    call it cannot form. Two producers were rewritten and two survived: the
-    truncated-head tie clause ("chain score_by/filter_items on a cue column")
-    and the colour-miss remedy ("attached by find{color:'red'}"). On
-    saydialect_1000 they reached 525 of 1,000 episodes, 676 B/episode.
-
-    Rendered, not grepped from source: the source carries these identifiers
-    legitimately (they are op names), and only the SERVED string matters.
-
-    SECOND HALF -- a hint may not QUOTE a column that did not attach. The
-    line-ref note said a line's "'left of road'/'right of road' ... attach";
-    ``_side_pair`` runs ``sides=False`` on that path, so across 9,822 served
-    grids of saydialect_1000 zero side columns rendered for any line ref,
-    against 348 notes over 227 of the 1,000 episodes claiming the pair. The
-    subset check catches that WITHOUT a removed-production ban list: a quoted
-    name either names a column of this envelope or it is a claim the engine
-    did not honour. 'along road' passes because it genuinely attaches; the
-    model reads it as a table header whether or not the note names it.
-    """
+    """A remedy names the FACT, never a channel's spelling."""
     bad: list[tuple[str, str, str]] = []
     seen = claims = 0
     for stem in _blocks():
@@ -172,17 +119,11 @@ def test_no_rendered_hint_teaches_the_op_json_register():
         "served hints teach a spelling the sentence channel cannot emit, or "
         "claim a column that did not attach: "
         + "; ".join(f"{s}/{k}: {h!r}" for s, k, h in bad[:4]))
-    # VACUITY FLOOR, measured on tiles/citynav_2m_osmv3 (34 blocks): 102
-    # rendered hints. A walk that rendered no hint asserts nothing.
+    # A walk that rendered no hint asserts nothing.
     assert seen >= 60, f"only {seen} rendered hints inspected"
-    # NO hint quotes a compare column any more, and that IS the contract now.
-    # The only note that did was the line-ref note, promising 'along <ref>'
-    # plus a lateral 'distance to <ref>' in place of the footprint gap; a
-    # road measures its gap like any other shape, so the note has no subject.
-    # This replaces the old `claims >= 30` floor, which counted exactly that
-    # note: keeping it would demand the deleted behaviour, and dropping it
-    # silently would leave the claims-vs-columns check above passing over an
-    # empty set forever.
+    # The only note that did was the line-ref note, promising 'along <ref>' plus a
+    # lateral 'distance to <ref>' in place of the footprint gap; a road measures its gap
+    # like any other shape, so the note has no subject.
     assert claims == 0, (
         f"{claims} hint(s) quote a compare column; the served hints stopped "
         "naming columns when the line-ref chart was deleted")

@@ -1,16 +1,4 @@
-"""The mission contract: a block flies on the call; the plain reply ends it.
-
-Drives ``advance_reasoner_one_round(mission_spec=...)`` with a scripted
-reasoner — no serve, no SAM. This file owns the harness the surface's other
-test files drive through (``FakeReasoner``, ``bare_ctx``, ``CANDS``, ``drive``,
-``tool_results``) and pins the loop-level semantics: the ONE model-owned
-ending is a clean no-tool-call reply, a reply with nothing flown behind it is
-repaired rather than accepted, an unknown tool name is answered and never
-executed, and the liveness bounds behave with no budget fact ever served.
-
-The library's own semantics — what each call does to the world and what comes
-back — are pinned in ``test_code_surface_arm`` and ``test_python_surface``.
-"""
+"""The mission contract: a block flies on the call; the plain reply ends it."""
 
 from __future__ import annotations
 
@@ -30,10 +18,7 @@ def test_unknown_tool_names_the_one_verb():
     results = tool_results(fr)
     for r in results[:2]:
         assert "unknown tool" in r["error"]
-        # THE VERB IT NAMES IS THE ONE SERVED. The mission path serves
-        # CODE_TOOLS ([run]); this answered "available: say" for the whole
-        # life of the code arm, so the one message sent when the model has
-        # already lost the tool name handed it a retired one.
+        # THE VERB IT NAMES IS THE ONE SERVED.
         assert "available: run" in r["error"], r["error"]
         assert "say" not in r["error"], r["error"]
 
@@ -81,14 +66,7 @@ def test_a_flight_view_that_fails_to_render_never_crashes_the_flight():
 
 
 def test_three_replies_in_a_row_with_no_flight_is_a_confident_abstain():
-    """TWO repairs, then the third reply is the ending.
-
-    Zero flights stays an honest zero and the harness never picks a target:
-    "the commit is the LAST flight's target" forbids inventing one where
-    nothing flew, and asking again is not inventing. What it does forbid is
-    asking forever, so the streak ends it -- a model that says nothing three
-    times running has abstained, and that is a legal answer.
-    """
+    """TWO repairs, then the third reply is the ending."""
     reply, fr, flights, _ = drive(
         ["nothing here.", "nothing here.", "nothing here."])
     assert reply.ended_by == "reply"

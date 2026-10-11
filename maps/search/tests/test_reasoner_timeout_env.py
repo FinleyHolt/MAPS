@@ -1,9 +1,4 @@
-"""``SEARCH_REASONER_TIMEOUT_S`` reaches the per-call transport timeout.
-
-A reader that quietly stops reading has no caller for the interpreter to
-break: a slow call simply dies at the default while every caller believes it
-has the exported deadline.
-"""
+"""``SEARCH_REASONER_TIMEOUT_S`` reaches the per-call transport timeout."""
 
 from __future__ import annotations
 
@@ -34,12 +29,6 @@ def test_the_exported_value_applies(monkeypatch, value):
 
 @pytest.mark.parametrize("bad", ["nine hundred", "900s", "0", "-1", "nan", "inf", "1e12"])
 def test_a_value_that_cannot_apply_is_loud(monkeypatch, bad):
-    """A typo must not revert to the default -- that is the original bug.
-
-    0 is rejected with the rest: httpx reads it as "time out immediately",
-    never as "no limit", so the plausible-looking spelling of "unlimited" is
-    the one that would break every call.
-    """
     monkeypatch.setenv(ENV, bad)
     with pytest.raises(ValueError):
         _reasoner_timeout_s()

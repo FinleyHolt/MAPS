@@ -1,9 +1,4 @@
-"""The cardinal frame, pinned on the five shapes the review had to answer.
-
-Each case is a shape the frame review names explicitly, so a refactor that
-quietly reintroduces a nearest-point rule (or drops the abstention) fails
-here rather than on a fleet run.
-"""
+"""The cardinal frame, pinned on five shapes."""
 
 import numpy as np
 import pytest
@@ -25,13 +20,7 @@ def test_straight_road_signs_both_ways():
 
 
 def test_self_approaching_road_abstains_where_min_gap_inverts():
-    """THE counterexample: a U-shaped road with the point between its legs.
-
-    The west leg is the nearest piece, so the min-gap bearing that
-    ``brg_gap_<ref>`` computes reports the point EAST of the road --
-    confidently, and wrongly. There is no side to name here and the frame
-    must say so rather than pick one.
-    """
+    """THE counterexample: a U-shaped road with the point between its legs."""
     u_road = np.vstack([road_ns(), road_ns(x=-200.0),
                         np.column_stack([np.linspace(-200, 0, 201),
                                          np.full(201, 500.0)])])
@@ -85,7 +74,6 @@ def test_empty_reference_abstains_and_a_diagonal_refuses():
 
 
 def test_band_width_is_not_load_bearing():
-    """The measured sweep is flat, so no single width may be a magic number."""
     road = road_ns()
     got = {w: cardinal_offset(road, (-80.0, 0.0), "west", band_m=w)
            for w in (50, 150, 1000)}

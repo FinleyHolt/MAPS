@@ -1,36 +1,5 @@
 #!/usr/bin/env python
-"""ORDER-FREEDOM contract: the agent tool-calls in ANY order.
-
-Data is computed lazily when NAMED — never established by a prerequisite op.
-Where a parameter cannot ride the key, the error affords the exact producing
-call form (the family->provenance remedy map); where behavior differs by
-phase, a served factual note states WHEN the data exists. Pins:
-
-  * ALONG/OFF-LAZY: naming ``along_/off_<fid>`` in an emphasis or filter key
-    auto-attaches the chart when <fid> carries a stored centerline, with no
-    prior compare; a non-centerline fid falls through to the LOUD guard.
-  * FAMILY-REMEDY: both absent-key guards (score_by + filter_items) key the
-    remedy to the MISSING key's family — find{query} for name_match, compare
-    frame for vx_/vy_/arrangement columns, the coordinate-ref idiom for a
-    number-shaped <ref> — never a one-size d_-family default; and the key
-    census prints every key ONCE (longest-prefix family assignment).
-  * CONTACT-FACT: ``brg_gap_<ref>`` missing on an all-contact pool states
-    the geometry fact (absent where d_=0; brg_ defined), never "not a fid".
-  * VALUE-REQUIRED: ``filter_items`` with ``value`` omitted is a loud error
-    naming the op + the missing arg (op:'truthy' afforded for presence),
-    never a raw TypeError or a silent eq-vs-None dead-filter.
-  * EMPTY-FIND-NOTES: a prior-row class miss keeps its class-census
-    note on the ``_EmptyFindMiss`` marker (runtime/prior parity).
-  * PREFLIGHT-NOTES: a color-column request at preflight (emphasis-only
-    included — the attach request, not one op shape) and a runtime-surface
-    find before takeoff each state the phase fact where it is read.
-  * VIEW-PER-FIELD: a mistyped/unparseable view field gets its OWN
-    remedy-affording ack entry while valid siblings apply; a bare-string
-    watchlist add is a loud type error, never a silent added:[].
-
-Pure (no GPU / tile / vLLM). Run via pytest:
-``pytest maps/search/tests/test_order_freedom.py``.
-"""
+"""ORDER-FREEDOM contract: the agent tool-calls in ANY order."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import (
@@ -170,8 +139,6 @@ def test_frame_column_remedy_names_compare_frame_in_both_guards():
                         "op": "le", "value": 7}}]),
     ):
         assert "frame" in msg and "compare" in msg, msg
-    # a RETIRED arrangement key gets no phantom family remedy -- the plain
-    # absent-key facts + the live census serve instead.
     msg = _err([_FIND_CARS,
                 {"ref": "r1", "op": "filter_items",
                  "args": {"items": "$r0", "key": "ord_rl",
@@ -181,16 +148,12 @@ def test_frame_column_remedy_names_compare_frame_in_both_guards():
 
 
 def test_coordinate_shaped_ref_remedy_names_the_point_fact():
-    # A number-shaped <ref> extends the fid idiom to a coordinate -- the
-    # remedy states the FACT (a number pair is a POINT; a point carries
-    # columns only under the label it is given) and never "not a fid on this
-    # surface" alone. It reaches the SENTENCE channel: a spoken "near 1246
-    # 1100" mints the label 1246_1100, and a later "the nearest one." orders
-    # by 'distance to 1246_1100' over rows that sentence never related to it.
-    # The old text accused the model of writing a coordinate it never wrote,
-    # then prescribed a call that channel cannot form. This asserted the op
-    # spelling was PRESENT, so it stayed green on the defect for its whole
-    # life.
+    # A number-shaped <ref> extends the fid idiom to a coordinate -- the remedy states
+    # the FACT (a number pair is a POINT; a point carries columns only under the label
+    # it is given) and never "not a fid on this surface" alone. It reaches the SENTENCE
+    # channel: a spoken "near 1246 1100" mints the label 1246_1100, and a later "the
+    # nearest one." orders by 'distance to 1246_1100' over rows that sentence never
+    # related to it.
     msg = _err([_FIND_CARS,
                 {"ref": "r1", "op": "score_by",
                  "args": {"items": "$r0",

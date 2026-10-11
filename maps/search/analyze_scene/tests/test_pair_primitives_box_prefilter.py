@@ -1,12 +1,4 @@
-"""The crossing and containment primitives prefilter by box, exactly.
-
-A segment wholly outside the other set's bounding box crosses nothing in
-it, and a point outside a set of closed loops' box crosses an even number
-of their edges. Both prefilters are checked against the unfiltered bodies
-on random geometry built to include touches, vertices on the box edge,
-nested loops and a point-mask, so the answer -- the first crossing pair's
-point, and every point's parity -- is the unfiltered one.
-"""
+"""The crossing and containment primitives prefilter by box, exactly."""
 import numpy as np
 
 from maps.search.analyze_scene import geom_compute as G

@@ -1,10 +1,3 @@
-"""The look audit persists exactly one file per call: ``manifest.json``.
-
-A run stores no crop pixels — the manifest crop records are the re-render
-specs, and the sha256 in each is what upholds the audit claim. This pins the
-no-image invariant at the writer (``_persist_look_audit``), the ``jpg``
-virtual-filename contract the URLs key on, and the atomic manifest landing.
-"""
 
 from __future__ import annotations
 
@@ -58,7 +51,6 @@ def test_the_audit_writes_manifest_json_and_nothing_else(tmp_path):
         assert rec["sha256"] == CROPS[i]["sha256"]
         assert rec["map_name"] == "cambridge_block_7"
 
-    # No image bytes anywhere under the audit tree.
     stray = [p for p in tmp_path.rglob("*")
              if p.is_file() and p.suffix in (".jpg", ".png", ".webp")]
     assert stray == [], stray

@@ -1,19 +1,4 @@
-"""A pass stops flying on the clock, because the thing that kills it is a clock.
-
-``_fly_moves`` bounded itself in STOPS (``flight_budget``) while the bench
-harness bounds the episode in SECONDS. Those do not convert: per-stop cost
-moves with tile density, watchlist width and the serving plane's health, so
-the 1000-flight backstop is ~11 h of wall at 40 s/stop and minutes at 2 s.
-calcity::6#6 and calcity::250#248 flew 262 and 264 stops of ONE ``explore``,
-took the harness's 4 h SIGKILL, and were the only two episodes of 209 to
-record no prediction row at all -- while the flight backstop sat ~738 flights
-away from firing.
-
-Stopping the FLYING is the whole fix: the model keeps its remaining turns and
-ends the mission with its own commit, so the episode is SCORED instead of
-lost. Nothing about the clock is served -- the model reads the same
-``"not flown."`` the flight arm writes.
-"""
+"""A pass stops flying on the clock, because the thing that kills it is a clock."""
 
 from __future__ import annotations
 
@@ -24,13 +9,6 @@ from maps.search.tests.fakes import explore_drive, run
 
 
 def test_a_pass_already_past_its_deadline_flies_nothing():
-    """The arm fires on entry, not after a stop is spent.
-
-    A pass where NOTHING flew resolves to the refusal the stop bound
-    already produced for the same situation -- the model is told the pass
-    did not happen and gets its turn straight back, which is the whole
-    point: a turn back is a commit, a SIGKILL is a MISSING row.
-    """
     _reply, out, flights, _asked, _rend = explore_drive(
         [[run('explore("prior_7")\n')], "done"],
         deadline_epoch=time.time() - 60.0,
@@ -46,13 +24,6 @@ def test_a_pass_already_past_its_deadline_flies_nothing():
 
 
 def test_a_pass_cut_midway_flies_what_it_had_and_reads_as_truncated(monkeypatch):
-    """The stops before the deadline are real; the note says the rest are not.
-
-    ``_cov_note`` is built from the stops the pass PLANNED, so a cut pass
-    would otherwise report the whole walk's reach and read as "that is all
-    there was" -- the defect ``_cover_items`` already names for its own stop
-    bound.
-    """
     # A clock the stops advance, not wall time.
     clock = {"now": 1_000_000.0}
 
@@ -80,11 +51,6 @@ def test_a_pass_cut_midway_flies_what_it_had_and_reads_as_truncated(monkeypatch)
 
 
 def test_the_flight_arm_still_fires_on_its_own():
-    """The clock is a SECOND arm, not a replacement.
-
-    Vacuity floor for this file: if the stop bound stopped working the three
-    tests above would still pass, because they never let a pass reach it.
-    """
     _reply, out, flights, _asked, _rend = explore_drive(
         [[run('explore("prior_7")\n')], "done"],
         stops=[[float(x), 200.0] for x in range(100, 100 + 40 * 5, 5)],

@@ -1,13 +1,4 @@
-"""The arming channel's receipts tell the truth (acquisition campaign).
-
-Three lies measured or latent on f40088a:calcity_full_replyrepair:
-the boost receipt never said the standing watchlist stayed empty (40 of
-the facing family's 49 never-armed episodes used ONLY the boost form);
-a proper noun reaching the segmenter as a class drew no comment (3
-world-state names among 18 watch classes); and a failing segmenter
-setter produced a clean ``declared`` receipt (zero incidents this run,
-but the swallow existed).
-"""
+"""The arming channel's receipts tell the truth."""
 
 from __future__ import annotations
 

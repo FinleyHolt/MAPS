@@ -1,16 +1,4 @@
-"""Shape-natural relation columns: ``compare{refs}`` attaches each ref's
-OWN geometry. A POINT or POLYGON ref, the four relation columns — d_<ref>
-(footprint gap, 0.0 on touch/overlap), brg_gap_<ref> (compass bearing of the
-min-gap vector, ref witness -> item witness; ABSENT exactly when d_<ref>=0 —
-on contact no local direction exists), dc_<ref> (centroid-to-centroid
-distance) and brg_<ref> (centroid->centroid compass bearing, defined on
-contact too; absent only when the centroids coincide, dc_<ref>=0).
-A LINE ref (a stored centerline, mask or not) charts along_<ref> (arc
-meters from its end0_xy end, UN-CLAMPED past the ends) + off_<ref> (signed
-lateral meters, + = right of travel) INSTEAD — a 946 m road's d_ tie-block
-at 0.0 is contact, not location. Union refs stay mask aggregates (gap
-semantics).
-"""
+"""Shape-natural relation columns: ``compare{refs}`` attaches each ref's OWN geometry."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import ProgramError, run_program
@@ -52,11 +40,8 @@ def test_brg_gap_absent_on_contact_brg_still_present():
     assert 170.0 < inside["bearing from lot_1"] < 190.0, inside
     assert outside["distance to lot_1"] == 10.0, outside
     assert "facing lot_1" in outside, list(outside)
-    # locally due north of the lot's wall ((0,+10) -> ~0 deg).
-    # A WORD, and the REVERSE of where the row LIES: the row sits north of
-    # the lot, so it FACES south at it. That inversion used to be a formula
-    # in the legend and the one episode that read the degrees applied it
-    # zero times (calcity::480#478).
+    # locally due north of the lot's wall ((0,+10) -> ~0 deg). A WORD, and the REVERSE
+    # of where the row LIES: the row sits north of the lot, so it FACES south at it.
     assert outside["facing lot_1"] == "south", outside
 
 
@@ -107,9 +92,6 @@ def test_crossing_boundaries_read_zero_gap():
     assert "facing lot_2" not in r, list(r)
     assert r["center distance to lot_2"] == 0.0, r
     assert "bearing from lot_2" not in r, list(r)
-    # Offset the crossing candidate: still contact (d_=0, brg_gap_ absent)
-    # but the centroids now differ, so dc_ > 0 and brg_ IS defined on
-    # contact -- the always-on-contact half of the contract.
     cands = [{"fid": "d1", "xy": [4.0, 0.0], "class": "car",
               "mask": [[[3.0, -10.0], [5.0, -10.0], [5.0, 10.0], [3.0, 10.0], [3.0, -10.0]]]}]
     r = _compare(cands, [wide], ["lot_2"])["d1"]
@@ -119,10 +101,6 @@ def test_crossing_boundaries_read_zero_gap():
 
 
 def test_centerline_row_renders_its_termini():
-    # A centerline row carries end0_xy (the along_=0 end of every chart
-    # over it) + end1_xy — a terminus/corner cue is derivable from the row
-    # itself (nothing served termini before; 4/5 audited spatial failures
-    # hand-derived crossings they could not cite).
     from maps.search.analyze_scene.geom_program import build_surface_from_graph
 
     class _N:
@@ -199,8 +177,7 @@ def test_cells_realise_exactly_multiloop_and_holes():
 
 
 def test_a_chain_states_its_own_closure():
-    """The one rule that tells a ring from a way. Nothing asks what kind of
-    feature it belongs to; the same vertices differ only by the closing one."""
+    """The one rule that tells a ring from a way."""
     from maps.search.analyze_scene import geom_compute as G
 
     square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]
@@ -235,16 +212,7 @@ def test_a_chain_states_its_own_closure():
 
 
 def test_only_a_closed_chain_carries_area_or_an_area_centroid():
-    """A way encloses nothing, so it has neither area nor an area centroid.
-
-    The shoelace wraps with ``% n``. On a ring that re-walks the duplicated
-    closing vertex for a zero term; on an OPEN way it manufactures a phantom
-    closing edge. A way that doubles back near-cancels its own phantom lobes,
-    so the signed sum lands just above the 1e-12 guard while the moments do
-    not cancel at all, and ``sx / (3*sa)`` throws the centre clean off the
-    geometry. ``center distance to <ref>`` and ``bearing from <ref>`` are
-    SERVED columns computed from that point.
-    """
+    """A way encloses nothing, so it has neither area nor an area centroid."""
     from maps.search.analyze_scene import geom_compute as G
 
     square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]

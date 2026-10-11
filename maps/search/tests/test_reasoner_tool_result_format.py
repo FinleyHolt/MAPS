@@ -1,13 +1,5 @@
 #!/usr/bin/env python
-"""``Reasoner.append_tool_result`` byte-format.
-
-A ``str`` result passes verbatim; anything else is ``json.dumps(result,
-default=str)``; a value ``json.dumps`` cannot encode even with ``default=str``
-(a non-str/non-scalar dict KEY) falls back to ``str(result)``.
-
-No network. Run:
-``pytest maps/search/tests/test_reasoner_tool_result_format.py``.
-"""
+"""``Reasoner.append_tool_result`` byte-format."""
 from __future__ import annotations
 
 import json

@@ -1,15 +1,4 @@
-"""The tool surface is loud on malformed shapes and self-describing about
-its own state (a clean RL target). The pinned guards:
-
-- Fix 1: compare frame with {reference, from} (viewer-form 'from' supplied
-  alongside declared-view 'reference') raises a FORM-NAMING error instead of
-  silently dropping 'from' and misdirecting to a 'needs side' error.
-- Fix 4: no result ever mentions the deleted arrangement family; a road
-  chart attaches its own along_/off_ columns.
-
-The order-free tests here overlap ``test_order_freedom.py``'s surface (kept
-separate: these pin the self-description of order-free resolution errors).
-"""
+"""The tool surface is loud on malformed shapes and self-describing about its own state."""
 from __future__ import annotations
 
 

@@ -1,16 +1,4 @@
-"""The stops an ``explore`` flies: ``SearchLoop.node_coverage_stops``.
-
-The geometry half of the covering pass. The loop half — the pass flying
-them, the return leg, the one handle and the one picture — is pinned in
-``maps/search/tests/test_code_surface_arm.py``.
-
-THE ONE CONTRACT: every stop is ON the shape. It is asserted against the
-node's OWN cells rather than through a distance predicate, so the serve and
-the check share their DATA and not merely a rule. That matters here: the
-vector ``world_contour`` is the UNCLIPPED OSM ring while cells are CLIPPED
-to imagery coverage, and serving ring vertices once offered points nowhere
-near the thing — 19% of contour priors, one of them 2.4 km off its own mask.
-"""
+"""The stops an ``explore`` flies: ``SearchLoop.node_coverage_stops``."""
 from __future__ import annotations
 
 import threading
@@ -23,14 +11,7 @@ _CELL_M = 2.0
 
 
 def _loop_over(cells):
-    """A SearchLoop stand-in whose one node carries these raster cells.
-
-    Cells arrive as an (N, 2) ARRAY on the runtime graph, where ``not
-    cells`` raises "truth value of an array with more than one element is
-    ambiguous" and takes the whole episode down as an unclassified
-    no-prediction row. The first aimed arm died on exactly that with every
-    fixture a plain list, so the suite could not see it: these are arrays.
-    """
+    """A SearchLoop stand-in whose one node carries these raster cells."""
     class _Node:
         pass
 
@@ -64,9 +45,7 @@ def _on_the_shape(stops, cells):
 
 
 def _xs(cells):
-    """The world x of each cell. A cell is ``[row, col]`` and x comes off
-    the COLUMN, so a road spelled by varying the second index runs along
-    x — which is the axis these stops walk."""
+    """The world x of each cell."""
     return sorted(round((int(c[1]) + 0.5) * _CELL_M) for c in cells)
 
 
@@ -84,12 +63,7 @@ def test_every_stop_is_a_cell_of_the_thing_being_covered():
 
 
 def test_the_spacing_is_the_callers_and_it_sets_how_many_stops_there_are():
-    """The caller passes the run's own observation extent, halved.
-
-    A number written down twice goes stale on one side: a bake or an
-    altitude change moves the footprint, and a constant here would keep
-    covering the shape at the extent of an observation that is gone.
-    """
+    """The caller passes the run's own observation extent, halved."""
     lp = _loop_over(_ROAD)
     # 140 m of road at 20 m a stop is 8; at 200 m it is one.
     assert len(lp.node_coverage_stops("prior_9", 20.0)) == 8
@@ -98,11 +72,7 @@ def test_the_spacing_is_the_callers_and_it_sets_how_many_stops_there_are():
 
 
 def test_a_shape_inside_one_observation_is_covered_from_its_MIDDLE():
-    """k == 1 is a stop, not an end.
-
-    Exploring a shed is one flight and not a tour of one — and standing on
-    the far end of a thing that fits in the view square sees half of it.
-    """
+    """k == 1 is a stop, not an end."""
     lp = _loop_over(_ROAD)
     one = lp.node_coverage_stops("prior_9", 500.0)
     assert len(one) == 1, one
@@ -113,19 +83,10 @@ def test_a_shape_inside_one_observation_is_covered_from_its_MIDDLE():
 
 
 def test_the_stop_bound_binds_and_the_extremes_still_ride():
-    """A thing longer than the bound is SAMPLED, and both ends are in it.
-
-    The bound is reported by the caller, never silent (the pass's note says
-    what fraction it reached). What it costs is DENSITY, not span: the walk
-    still runs end to end, so a truncated pass covers the whole shape
-    thinly rather than covering the first part of it well.
-    """
-    # The backstop is a RUNAWAY guard now, not a budget: reaching it takes
-    # a shape no real feature approaches (the bake's longest road is 19 km,
-    # which at the observation's own ~160 m spacing wants ~120 stops). So
-    # the fixture is deliberately absurd -- 8 km walked at 4 m -- because
-    # what is pinned is that the guard still HOLDS and still keeps the ends,
-    # not that any street will ever meet it.
+    """A thing longer than the bound is SAMPLED, and both ends are in it."""
+    # So the fixture is deliberately absurd -- 8 km walked at 4 m -- because what is
+    # pinned is that the guard still HOLDS and still keeps the ends, not that any street
+    # will ever meet it.
     long_road = [[100, j] for j in range(0, 4000)]      # 8 km
     lp = _loop_over(long_road)
     stops = lp.node_coverage_stops("prior_9", 4.0)
@@ -136,21 +97,16 @@ def test_the_stop_bound_binds_and_the_extremes_still_ride():
 
 
 def test_the_stops_are_in_shape_order_so_the_pass_flies_a_line():
-    """An explore is a PASS. Stops in shape order fly a line; stops in any
-    other order fly a scribble over the same ground for the same money."""
+    """An explore is a PASS."""
     lp = _loop_over(_ROAD)
     xs = [p[0] for p in lp.node_coverage_stops("prior_9", 20.0)]
     assert xs == sorted(xs) and xs[0] != xs[-1], xs
 
 
 def test_one_representation_covers_polygon_linestring_and_point_alike():
-    """The bake rasterizes everything into cells: a polygon fills, a
-    LineString inflates to one cell of width (roads measure 1.00 cells per
-    unit of length at the median on this bake), a node is one cell. All
-    6188 priors carry them; only 64% carry a vector ring. Deriving the
-    stops from the universal form is what removes the special cases — and
-    with them the clipped-vs-unclipped divergence they introduced.
-    """
+    """The bake rasterizes everything into cells: a polygon fills, a LineString inflates
+    to one cell of width (roads measure 1.00 cells per unit of length at the median
+    on this bake), a node is one cell."""
     shapes = {
         "linestring": _ROAD,
         "polygon": [[r, c] for r in range(100, 108)
@@ -166,8 +122,6 @@ def test_one_representation_covers_polygon_linestring_and_point_alike():
 
 
 def test_nothing_from_the_vector_ring_leaks_into_the_stops():
-    """This node's ring runs 2.4 km past its own cells — the real shape of
-    the clipping mismatch. Not one stop may come from it."""
     cells = [[100, j] for j in range(50, 60)]
     lp = _loop_over(cells)
     lp.state.runtime_graph.nodes["prior_9"].world_contour = [
@@ -179,8 +133,8 @@ def test_nothing_from_the_vector_ring_leaks_into_the_stops():
 
 
 def test_a_fid_with_no_cells_has_nothing_to_cover():
-    """``None``, which the caller reads as "this pass is the one stop it
-    is" rather than as an empty cover it could mistake for a flown one."""
+    """``None``, which the caller reads as "this pass is the one stop it is" rather than
+    as an empty cover it could mistake for a flown one."""
     lp = _loop_over(_ROAD)
     assert lp.node_coverage_stops("nope", 20.0) is None
 
@@ -193,9 +147,8 @@ def test_a_fid_with_no_cells_has_nothing_to_cover():
 
 
 def test_a_wide_shape_tiles_serpentine_at_the_short_side_pitch():
-    """A block wider than the footprint's SHORT side in BOTH axes rows on
-    the minor axis at that pitch, so the 1-D walk's under-covered middle
-    is actually flown. Every stop is still a cell of the thing."""
+    """A block wider than the footprint's SHORT side in BOTH axes rows on the minor axis
+    at that pitch, so the 1-D walk's under-covered middle is actually flown."""
     block = [[i, j] for i in range(0, 60) for j in range(0, 60)]  # 120x120 m
     lp = _loop_over(block)
     stops = lp.node_coverage_stops("prior_9", 20.0, minor_spacing_m=40.0)
@@ -205,9 +158,7 @@ def test_a_wide_shape_tiles_serpentine_at_the_short_side_pitch():
 
 
 def test_the_serpentine_rows_alternate_so_the_pass_stays_one_line():
-    """Consecutive rows join at the near end: row 0 runs one way, row 1
-    the other. Same-direction rows would fly a carriage return between
-    every pair for the same money."""
+    """Consecutive rows join at the near end: row 0 runs one way, row 1 the other."""
     block = [[i, j] for i in range(0, 60) for j in range(0, 60)]
     lp = _loop_over(block)
     stops = lp.node_coverage_stops("prior_9", 20.0, minor_spacing_m=40.0)
@@ -222,9 +173,6 @@ def test_the_serpentine_rows_alternate_so_the_pass_stays_one_line():
 
 
 def test_a_narrow_shape_keeps_the_one_dimensional_walk_exactly():
-    """The serpentine arms only past the pitch in BOTH axes: a road is
-    1-D by nature and its stops must not move when the caller starts
-    passing the short side."""
     lp = _loop_over(_ROAD)
     assert (lp.node_coverage_stops("prior_9", 20.0, minor_spacing_m=240.0)
             == lp.node_coverage_stops("prior_9", 20.0))

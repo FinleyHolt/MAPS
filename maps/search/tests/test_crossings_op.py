@@ -1,22 +1,4 @@
-"""The crossing referent: ONE row per distinct crossing, loud at zero.
-
-The op that mints rows nothing else can. `between A and B` and two stacked
-`near` PPs are both a score_by on a distance sum — an ORDERING over rows that
-already exist, which can rank things near a junction and can never name the
-junction. `crossings` names it.
-
-The correctness this file exists to hold: when two features cross in SEVERAL
-places, every crossing is its own row with its own fid and its own point. A
-single centroid over three crossings lands off all three and returns a
-confident answer with no error, which is the plausible-but-silently-wrong
-class. So the multi-crossing assertions here are the load-bearing ones, and
-the single-crossing case is the easy half.
-
-Two features MEET where their exact geometry TOUCHES -- distance exactly
-zero, no dilation and no clustering. The last two tests walk the real tiles
-and hold that, so a bake that stops carrying a feature's vertices fails here
-instead of silently changing what "meet" means.
-"""
+"""The crossing referent: ONE row per distinct crossing, loud at zero."""
 from __future__ import annotations
 
 import glob
@@ -31,11 +13,9 @@ from maps.search.analyze_scene.geom_program import ProgramError, run_program
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
-# THE bake the run would use: ``SEARCH_CITYNAV_TILES`` wins, else the shipped
-# default -- the rule ``benchmarks.citynav.paths`` applies, read off the env
-# directly because ``maps`` never imports ``benchmarks``. Hardcoding the
-# default made this gate unrunnable against a re-baked sibling: the bake moved
-# and the tripwire went on reading the retired one.
+# THE bake the run would use: ``SEARCH_CITYNAV_TILES`` wins, else the shipped default --
+# the rule ``benchmarks.citynav.paths`` applies, read off the env directly because
+# ``maps`` never imports ``benchmarks``.
 _TILES = (os.environ.get("SEARCH_CITYNAV_TILES")
           or os.path.join(_REPO, "tiles", "citynav_2m_osmv3"))
 
@@ -106,13 +86,6 @@ def test_a_point_feature_meets_a_line_at_its_own_position():
 
 
 def test_near_is_not_touching():
-    """The touch band is gone, and this is what its absence means.
-
-    Two concentric ring roads 1.6 m apart, and a road beside its own parallel
-    cycleway 1.5 m off for 200 m, both used to MEET -- everywhere, for their
-    whole length. That is what a 2.0 m dilation buys, and it existed only to
-    recover contact from a 2 m raster reconstruction of geometry the map had
-    all along. Exact vertices touch or they do not."""
     import numpy as np
 
     def ring(r):
@@ -148,7 +121,6 @@ def test_nothing_crosses_itself():
                _road("prior_2", [[0, 0], [40, 0]], "Silver Street")]
     with pytest.raises(ProgramError, match="nothing crosses itself"):
         _run(anchors, "prior_1", "prior_1")
-    # a PARTIAL overlap is the same defect wearing two names
     with pytest.raises(ProgramError, match="the same feature in part"):
         _run(anchors, ["prior_1", "prior_2"], "prior_2")
 
@@ -180,8 +152,6 @@ def test_zero_crossings_refuse_loudly_and_never_bind():
         _run(anchors, "prior_1", "prior_2")
     msg = str(e.value)
     assert "Wellington Road and Grosvenor Road do not meet" in msg
-    # A ROW-PAIR fact: the tested fids and the measured gap, never a
-    # street-level verdict (a sibling segment can still cross).
     assert "prior_1" in msg and "prior_2" in msg
     assert "come no closer than 84.0 m" in msg      # the measured fact
     assert "is not their intersection" in msg       # no near-ish fallback
@@ -254,10 +224,8 @@ def test_a_crossing_row_anchors_geometry_as_a_point():
 
 
 def test_several_crossings_as_ONE_relation_anchor_refuse_in_register():
-    # "find cars near the intersection of A and B." when A and B cross twice:
-    # a relation reads one place. The refusal must not name filter_items or
-    # 'rN[i]' — op vocabulary the sentence channel cannot say, the measured
-    # register break — and must not quietly average the two.
+    # "find cars near the intersection of A and B." when A and B cross twice: a relation
+    # reads one place.
     anchors = [_road("prior_1", [[0, -10], [20, 10], [40, -10]], "Zig Road"),
                _road("prior_2", [[0, 0], [40, 0]], "Straight Street"),
                {"fid": "prior_3", "name": "Depot", "xy": [0.0, 40.0],
@@ -286,12 +254,7 @@ def _blocks():
 
 
 def _named_ways(stem):
-    """Every named feature of one block as its EXACT chains, by name.
-
-    A named road is routinely several ways, so the feature is the bundle of
-    every row carrying the name -- the same merge ``build_surface`` does.
-    Read straight off the persisted geometry: no centerline, no cells, no
-    reconstruction between the map and the measurement."""
+    """Every named feature of one block as its EXACT chains, by name."""
     nodes = json.loads(open(stem + "_nodes.json").read())
     out: dict = {}
     for _fid, n in sorted(nodes.items()):
@@ -305,13 +268,8 @@ def _named_ways(stem):
 
 @pytest.mark.skipif(not os.path.isdir(_TILES), reason="tile bake absent")
 def test_every_crossing_the_bake_emits_is_on_both_things_it_names():
-    """A crossing is CONTACT, so the point it reports is ON both features --
-    not near them, on them. Under the retired 2 m touch band this held only
-    to within that band (p50 0.00 m, max 1.00 m over the shipped bake); with
-    the exact vertices there is no band to be inside of. Measured over the
-    calcity bake: 1,318 of 1,322 crossings sit at gap EXACTLY 0.0, and the
-    other four at 1.4e-14 -- float noise from re-measuring a point the op
-    rounded to the 2 dp its fid is spelled at, not a scale."""
+    """A crossing is CONTACT, so the point it reports is ON both features -- not near
+    them, on them."""
     import itertools
     worst, n, pairs = 0.0, 0, 0
     for stem in _blocks():
@@ -326,10 +284,7 @@ def test_every_crossing_the_bake_emits_is_on_both_things_it_names():
                     G.gap_witness(G.mask_geom([[list(p)]]),
                                   G.mask_geom(side))[0]
                     for side in (pa, pb)))
-    # VACUITY FLOORS. The first one is also the re-bake tripwire: a tile
-    # baked before the exact-geometry cutover persists a contour for its
-    # polygons only, so every named road reads as geometry-less and this
-    # walk inspects nothing at all.
+    # VACUITY FLOORS.
     assert pairs >= 100, (
         f"only {pairs} named road features carry exact geometry -- re-bake "
         f"{_TILES} (benchmarks/citynav/data_prep/bake_tiles.sh)")
@@ -342,9 +297,9 @@ def test_every_crossing_the_bake_emits_is_on_both_things_it_names():
 
 @pytest.mark.skipif(not os.path.isdir(_TILES), reason="tile bake absent")
 def test_the_bake_really_does_carry_roads_that_cross_more_than_once():
-    """The multi-crossing requirement is not hypothetical, and this is the
-    floor that says so: if a bake ever served only single crossings, the test
-    above would still pass while the case they exist for went untested."""
+    """The multi-crossing requirement is not hypothetical, and this is the floor that
+    says so: if a bake ever served only single crossings, the test above would still
+    pass while the case they exist for went untested."""
     import itertools
     multi = pairs = 0
     for stem in _blocks():
@@ -364,9 +319,7 @@ def test_the_bake_really_does_carry_roads_that_cross_more_than_once():
 
 
 def test_rounding_never_serves_two_rows_the_same_address():
-    """Two crossings under a metre apart collapse to one address. Two rows
-    sharing a fid is a worse lie than one row, because the fid is how every
-    later sentence names the place."""
+    """Two crossings under a metre apart collapse to one address."""
     # A hairpin crossing the road twice, at x=50.0 and x=50.4: two exact
     # intersections 0.4 m apart, one whole-metre address.
     hairpin = [[49.8, -10], [50.2, 10], [50.6, -10]]
@@ -380,15 +333,6 @@ def test_rounding_never_serves_two_rows_the_same_address():
 
 
 def test_a_road_ends_are_rows_you_can_go_to():
-    """end0_xy/end1_xy were SERVED and unreachable.
-
-    The only spelling available was to type the number back, and the moving
-    calls refuse a coordinate. 44 episodes on 25713026 hit that refusal and
-    scored 13/44; 106 of 1,023 calcity cues say "end of" and 73 say
-    "cul-de-sac". On calcity::814#808 the served end1_xy IS the ground truth
-    to within a metre, and the episode missed by 14.85 m flying the road's
-    recorded midpoint instead.
-    """
     anchors = [dict(_road("prior_1", [[0, -100], [0, 100]], "Walker Court"),
                     centerline=[[0, -100], [0, 100]])]
     prog = {"ops": [{"ref": "r0", "op": "ends", "args": {"refs": ["prior_1"]}}]}
@@ -411,10 +355,6 @@ def test_a_footprint_has_no_ends_and_says_so():
 
 
 def test_a_sibling_segment_that_crosses_is_named():
-    """The do-not-meet answer is a ROW-PAIR fact: one episode looped
-    segments, was told the STREETS do not meet on the first non-touching
-    pair, and never reached the same-named sibling that crosses
-    (22-block miss, calcity::363#361)."""
     import pytest
 
     from maps.search.analyze_scene.geom_program import ProgramError
@@ -429,9 +369,6 @@ def test_a_sibling_segment_that_crosses_is_named():
 
 
 def test_a_crossing_set_anchors_a_distance_column():
-    """find(nearest=inter) said "inter is empty" while len(inter)==1: a
-    constructed row rides its own xy through the union path, exactly as
-    the indexed single-row form always did."""
     anchors = [_road("prior_1", [[0, 0], [100, 0]], "A Road"),
                _road("prior_2", [[50, -50], [50, 50]], "B Road")]
     cands = [{"fid": "d0", "xy": [60.0, 10.0], "class": "house",
@@ -451,11 +388,7 @@ def test_a_crossing_set_anchors_a_distance_column():
 
 
 def test_a_look_list_crops_each_element():
-    """look([a, b]) compiles one crop token PER element. A len-2 fid
-    list used to misparse as an [x, y] point (float('prior_...')), and
-    every other length stringified into one bogus fid refused as "not
-    on the live surface" while its fids were live (7 -> 52 blocks on
-    pysurface4)."""
+    """look([a, b]) compiles one crop token PER element."""
     from maps.search.parse_compile.code_surface import _plan_of
     for fids in (["prior_1", "prior_2"],
                  ["prior_1", "prior_2", "prior_3"]):

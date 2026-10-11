@@ -1,22 +1,4 @@
-"""A set in a slot that MEASURES is one place: the gap to its nearest member.
-
-This is what replaced the looking question. `look(rows, "which of these has
-a pool behind it?")` answered into the picture and bound nothing, so the
-distinction it resolved had nowhere to land: the model asked it in 89 of 500
-episodes and then indexed rank 0 by DISTANCE anyway. The same question is a
-QUERY now -- arm the class, cover the candidates, and the thing the question
-was about comes back as ROWS that sort and cut like any others.
-
-The executor could always fold a set to one column (the union ref, an exact
-min gap over the members). Only the surface could not spell it: `near=<set>`
-was refused outright with "index it -- r0[0] -- or use a name", which is the
-wrong answer to the question being asked -- "the house with a pool in the
-backyard" is not about pool number one. Fanning the set out instead measures
-every instance separately and dies on the executor's token guard the moment
-either side is large: 3,414 houses against 40 pools is 136,560 cells.
-
-Pure: no GPU, no tile, no vLLM.
-"""
+"""A set in a slot that MEASURES is one place: the gap to its nearest member."""
 from __future__ import annotations
 
 import pytest
@@ -39,12 +21,7 @@ def _pool(fid, x, y):
 
 
 def test_the_house_with_a_pool_in_the_backyard_is_one_line():
-    """The whole point, end to end: compile it and run it.
-
-    Three houses, one pool, and the pool is behind the middle one. Nothing
-    in any row says "has a pool" -- the answer is the GAP, and the union is
-    what turns forty pools into one column instead of forty.
-    """
+    """The whole point, end to end: compile it and run it."""
     ops = ops_of_block('pools = find("pool")\n'
                        'houses = find("house", nearest=pools)\n')
     cmp_, = [o for o in ops if o["op"] == "compare"]
@@ -96,15 +73,6 @@ def test_a_set_cuts_as_well_as_orders():
 
 
 def test_an_empty_set_fails_loud_and_names_the_handle_and_the_fix():
-    """The overwhelmingly common shape: asking before anything has looked.
-
-    Nothing is segmented until look_for names the class AND a flight goes
-    over the place, so `find("pool")` on turn 1 is empty by construction.
-    Ordering against an empty union would rank by nothing at all, which is
-    the silent failure this tree keeps paying for -- so it raises, and the
-    message names the handle the MODEL wrote (not the executor ref it
-    compiled to) plus the thing to do about it.
-    """
     ops = ops_of_block('pools = find("pool")\n'
                        'houses = find("house", nearest=pools)\n')
     with pytest.raises(gp.ProgramError) as exc:
@@ -116,14 +84,7 @@ def test_an_empty_set_fails_loud_and_names_the_handle_and_the_fix():
 
 
 def test_an_unseen_row_is_not_buried_by_a_colour_ordering():
-    """`color=` must not become a coverage ordering wearing a colour's name.
-
-    A prior carries a perceived colour only after a view passes over it, so
-    on a cold surface EVERY candidate is unknown. Scoring unknown as
-    worse-than-any-measured put a seen GREY house above every unseen house
-    under color="white" -- and on this bench the target is usually the
-    unseen one.
-    """
+    """`color=` must not become a coverage ordering wearing a colour's name."""
     seen_right = _house("seen_white", 0.0)
     seen_right.update(color="white", color_conf=0.9)
     seen_wrong = _house("seen_red", 10.0)
@@ -141,13 +102,7 @@ def test_an_unseen_row_is_not_buried_by_a_colour_ordering():
 
 
 def test_the_whole_chain_survives_the_reasoner_loop():
-    """`near=<set>` end to end: compiled, dispatched, served.
-
-    A 500-episode fleet run is the thing this is about to be validated by,
-    and the executor being right is not the same as the round being right --
-    the plan is split at selections, dispatched step by step and rendered
-    back. So drive it.
-    """
+    """`near=<set>` end to end: compiled, dispatched, served."""
 
     cands = [
         {"fid": "house_1", "xy": [0.0, 0.0], "class": "house",
@@ -176,18 +131,7 @@ def test_the_whole_chain_survives_the_reasoner_loop():
 
 
 def test_an_unseen_colour_drops_its_term_instead_of_killing_the_block():
-    """Nothing carries a colour until a view has passed over it.
-
-    So on every pre-takeoff surface `color=` names an absent column -- and
-    a raise there kills the WHOLE block (`reasoner_loop` breaks the segment
-    on the first error), taking down the `look_for` that would have armed
-    the segmenter. The model is then unable to ever see the thing whose
-    colour it asked about, from one legal call the legend teaches.
-
-    The ops are built here rather than compiled: `near=<name>` compiles to
-    a grounding placeholder the round resolves, and what is under test is
-    the executor's own drop.
-    """
+    """Nothing carries a colour until a view has passed over it."""
     road = {"fid": "road_1", "name": "Mill Lane", "xy": [0.0, 0.0],
             "class": "road", "centerline": [[0.0, -50.0], [0.0, 50.0]],
             "mask": [[[0.0, float(y)] for y in range(-50, 51, 10)]],
@@ -212,8 +156,6 @@ def test_an_unseen_colour_drops_its_term_instead_of_killing_the_block():
 
 
 def test_a_colour_alone_with_nothing_seen_is_still_a_loud_refusal():
-    """A sort with no term left is not an ordering, and serving one as
-    though it were is the silent failure this tree keeps paying for."""
     ops = ops_of_block('r1 = find("house", color="white")\n')
     with pytest.raises(gp.ProgramError, match="nothing orders by"):
         gp.run_program([], [_house("h_a", 0.0), _house("h_b", 10.0)],
@@ -221,13 +163,6 @@ def test_a_colour_alone_with_nothing_seen_is_still_a_loud_refusal():
 
 
 def test_a_union_over_a_whole_class_is_capped_rather_than_slow():
-    """The old guard was that a union needed hand-typed fids.
-
-    An rN member removes it, and `near=find("house")` folds every house on
-    the tile -- the members x items shape the union comment records as
-    having "ran 885 s without returning". A wall-clock cliff found inside a
-    500-episode fleet run is the expensive place to find it.
-    """
     ops = ops_of_block('everything = find("house")\n'
                        'r1 = find("house", nearest=everything)\n')
     many = [_house(f"h{i:04d}", float(i)) for i in range(gp._UNION_MAX_MEMBERS + 5)]

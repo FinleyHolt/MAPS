@@ -1,32 +1,4 @@
-"""``narrow`` cuts at a STATED gap, not only at contact.
-
-``within=`` compiles to a ``distance to <anchor>`` cut at 0 -- touching. A
-great many cues mean *beside* rather than *touching*, and a thing parked
-outside a house touches nothing, so containment could not express them and
-the only spelling left (``find(nearest=...)``) ORDERS and drops nothing.
-
-calcity::200#198 is the measured case. Its cue is "A red parked car outside
-a house off of Poppy Boulevard", and in one run's world state the served
-candidates were:
-
-    track    d(Poppy Blvd)   d(nearest house)   red
-    wt_166        3.2 m           44.0 m        0.57
-    wt_76         6.4 m           19.9 m        0.38   <- ground truth
-    wt_172       10.5 m           10.5 m        0.37   <- committed, 114 m off
-    wt_43        27.1 m           13.0 m        0.20
-
-Every column the agent could cut on ranked the wrong row first: redness put
-wt_166 top, and proximity to the ONE house it picked put wt_172 top. What it
-never had was a way to DROP wt_166 for being 44 m from any house. With the
-gap cut it is one line -- cars.filter(near=find("house"), dwithin=25) -- and
-the ordering is then free to say which of the survivors is on the boulevard,
-where the ground truth leads at 6.4 m.
-
-The set reading is the other half: a set in ``near=`` is its union and the
-distance is the gap to its NEAREST member, so ``find("house")`` is one place
-to measure from. That was already true in the executor and appeared nowhere
-in the served bytes, which is why the model kept picking a single house.
-"""
+"""``filter`` cuts at a STATED gap as well as at contact, and ``order`` sorts."""
 
 from __future__ import annotations
 
@@ -64,9 +36,6 @@ def test_ddwithin_cuts_the_distance_column_at_the_stated_metres():
 
 
 def test_within_still_cuts_at_contact():
-    """The contract that existed before the gap did. ``within=`` is
-    ``dwithin=0`` on the same machinery, and a regression here would read as
-    "narrow got more permissive" on every episode at once."""
     ops = _ops('r1 = find("car")\n'
                'r2 = r1.filter(within="Poppy Boulevard")\n')
     a = _cut(ops)
@@ -74,8 +43,8 @@ def test_within_still_cuts_at_contact():
 
 
 def test_a_whole_class_is_one_place_to_measure_from():
-    """The union reading, end to end: ``near=`` takes the find, not a row
-    index of it, and still compiles to a single distance cut."""
+    """The union reading, end to end: ``near=`` takes the find, not a row index of it,
+    and still compiles to a single distance cut."""
     ops = _ops('houses = find("house")\n'
                'cars = find("car")\n'
                'outside = cars.filter(near=houses, dwithin=25)\n')
@@ -121,16 +90,6 @@ def test_the_refusal_names_the_exit(src, phrase):
 
 
 def test_order_refuses_two_keys_because_a_table_sorts_by_one():
-    """The fused ranking is DELETED, and this is the refusal that replaces it.
-
-    Measured on calcity::200#198: the target sits 6.4 m off the boulevard
-    and 19.9 m from a house, and five ways of combining those with redness
-    (min-max sum, z-score sum, rank sum, product, distances only) each rank
-    a wrong car above it -- it is second on everything and first on nothing,
-    which is exactly what averaging discards. The fused form was also never
-    once written: 587 order_by sites across three flown arms passed two
-    kwargs zero times.
-    """
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car")\n'
              'r2 = r1.order(nearest="Poppy Boulevard", color="red")\n')
@@ -140,7 +99,6 @@ def test_order_refuses_two_keys_because_a_table_sorts_by_one():
 
 
 def test_a_cut_and_a_sort_chain_into_one_expression():
-    """The whole of calcity::200#198, in the spelling the model reached for."""
     ops = _ops('cars = find("car")\n'
                'houses = find("house")\n'
                'best = cars.filter(near=houses, dwithin=25)'
@@ -153,11 +111,7 @@ def test_a_cut_and_a_sort_chain_into_one_expression():
 
 
 def test_the_retired_free_calls_name_where_they_went():
-    """A model reaching for narrow() gets the method, not a bare NameError.
-
-    Nothing defines the old name -- this is the refusal text, not an alias.
-    Without it the arm measures whether the model can guess a rename.
-    """
+    """A model reaching for narrow() gets the method, not a bare NameError."""
     from maps.search.parse_compile.python_surface import _MOVED_TO_METHOD
 
     assert set(_MOVED_TO_METHOD) == {"narrow", "order_by", "gap"}
@@ -167,18 +121,11 @@ def test_the_retired_free_calls_name_where_they_went():
 
 
 # --------------------------------------------------------------------------
-# The spellings the model reached for and the surface did not serve
-# (calcity::200#198 on e898fdc9: six of fourteen turns lost to these)
+# The spellings the model reaches for
 # --------------------------------------------------------------------------
 
 
 def test_find_cuts_at_a_stated_gap_where_the_model_puts_it():
-    """``find(near=X, dwithin=M)`` -- reached for THREE times in one episode.
-
-    find(nearest=X) orders and find(within=X) cuts at contact, so a stated gap
-    on the same call is the only reading left. Same compare+filter_items
-    within= already compiled, at a value instead of at 0.
-    """
     ops = _ops('r1 = find("car", near="Poppy Boulevard", dwithin=25)\n')
     kinds = [o["op"] for o in ops]
     assert kinds[0] == "find", kinds
@@ -194,10 +141,6 @@ def test_ddwithin_on_find_needs_the_place_it_measures_from():
 
 
 def test_colour_never_cuts_and_the_refusal_names_the_sort():
-    """A bare TypeError cost a turn. Colour is mask-extent dependent -- the
-    same car reads 0.63 through a tight mask and 0.38 through its full one
-    -- so a colour threshold drops the right row on the width of its mask.
-    """
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car")\nr2 = r1.filter(color="red")\n')
     msg = str(e.value)
@@ -220,12 +163,6 @@ def test_colour_never_cuts_and_the_refusal_names_the_sort():
 
 
 def test_near_on_find_cuts_and_refuses_to_be_an_ordering():
-    """``find(near=X)`` ORDERED and dropped nothing while reading exactly
-    like a filter, and the model's own variable names recorded the false
-    belief: `cars_near_poppy`, `houses_near_poppy`, `houses_near_red_car`,
-    `red_cars` -- bound on five straight arms of calcity::200#198 and then
-    treated as though the constraint had been applied. It never had.
-    """
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car", near="Poppy Boulevard")\n')
     msg = str(e.value)
@@ -241,8 +178,8 @@ def test_nearest_orders_and_drops_nothing():
 
 
 def test_the_two_spellings_are_one_cut_and_one_sort():
-    """A cut and a sort in one find: near=/dwithin= drops, nearest= orders
-    what survives. Two operations, two words, neither doing the other."""
+    """A cut and a sort in one find: near=/dwithin= drops, nearest= orders what
+    survives."""
     ops = _ops('r1 = find("car", near="Poppy Boulevard", dwithin=25,\n'
                '         nearest="Poppy Boulevard")\n')
     kinds = [o["op"] for o in ops]
@@ -251,19 +188,8 @@ def test_the_two_spellings_are_one_cut_and_one_sort():
 
 
 def test_a_row_serves_no_second_point_to_subtract():
-    """There is ONE distance here and it is the footprint gap, so a row must
-    not hand over a second point the model can difference by hand.
-
-    ``mask_centroid`` rides ``geom_program._MODEL_HIDDEN_ROW_FIELDS`` on the
-    op path and was NOT hidden on the live-surface path, so ``row_of_fid``
-    served it beside ``xy``. Centroid-to-centroid is the measurement this
-    surface exists to make impossible: Poppy Boulevard way 5 is 7.0 m from
-    the car parked against it by footprint and 408.4 m by centroid.
-
-    ``xy`` stays -- points are places (``find(near=[x, y])``,
-    ``show_map(around=[x, y])``) and removing it would cost real capability
-    to close a hazard the census can watch instead.
-    """
+    """There is ONE distance here and it is the footprint gap, so a row must not hand
+    over a second point the model can difference by hand."""
     from maps.search.parse_compile.python_surface import _ROW_HIDDEN, Row
 
     assert "mask_centroid" in _ROW_HIDDEN
@@ -278,15 +204,6 @@ def test_a_row_serves_no_second_point_to_subtract():
 
 
 def test_a_predicate_filter_is_not_a_one_way_door():
-    """A lambda must not cost the served cut and sort.
-
-    calcity::200#198, nrst r4: the model narrowed cars with a lambda, was
-    refused ``order(color="red")`` because the result was a RowList, fell
-    back to reading colour strings off fifty printed rows by hand, and
-    committed a car 2,501 m from target. A list of Row rides the items slot
-    element-wise, so the served form works on a materialised subset exactly
-    as it does on a handle -- there was never a reason to refuse it.
-    """
     from maps.search.parse_compile.python_surface import Row, RowList
 
     seen = []
@@ -322,11 +239,8 @@ def test_an_empty_predicate_result_says_so_rather_than_indexing_nothing():
 
 
 def test_ddwithin_cuts_against_whichever_anchor_was_named():
-    """``find("parking", nearest=[X], dwithin=500)`` means rank by the gap to
-    X and drop past 500 -- coherent, unambiguous, and what anyone would
-    write. Refusing it was a spelling objection to a correct idea, and it
-    cost canary 139#137 a turn on 237952f9.
-    """
+    """``find("parking", nearest=[X], dwithin=500)`` means rank by the gap to X and drop
+    past 500 -- coherent, unambiguous, and what anyone would write."""
     ops = _ops('r1 = find("parking", nearest="Willow Avenue", dwithin=500)\n')
     kinds = [o["op"] for o in ops]
     assert "filter_items" in kinds, kinds          # it cut
@@ -365,8 +279,6 @@ def test_a_set_handed_to_go_to_is_told_to_index_not_told_it_is_a_coordinate():
 
 
 def test_a_cardinal_cuts_on_a_set_in_hand_not_only_inside_find():
-    """find(west_of=X) has always cut; a NARROWED set could not ask the same
-    question, so a candidate set lost the relation the moment it was cut."""
     ops = _ops('r1 = find("house")\n'
                'r2 = r1.filter(west_of="88th Street")\n')
     kinds = [o["op"] for o in ops]
@@ -397,19 +309,6 @@ def test_a_cardinal_is_its_own_cut_and_says_so_beside_a_gap():
     'r1 = find("house")\nr2 = r1.filter(within=25.0)\n',
 ])
 def test_a_distance_in_within_is_refused_and_names_dwithin(src):
-    """The two names are Shapely's, and they used to be swapped here.
-
-    ``a.within(b)`` is containment; ``dwithin(a, b, d)`` is a distance. This
-    surface spelled the distance one ``within=`` until the rename, so the old
-    spelling still reads as ordinary Python and would otherwise cut against a
-    "place" called 25 -- a kwarg that does nothing, which is the failure mode
-    this tree has been bitten by twice (``toward=`` was built, accepted, and
-    compiled to nothing; a deleted compile-result key left four live readers
-    that silently disarmed every reasoner).
-
-    The rename is only safe because the two arguments have different TYPES,
-    so the mistake is catchable rather than silent. That is what this pins.
-    """
     with pytest.raises(CodeError) as e:
         _ops(src)
     msg = str(e.value)
@@ -418,8 +317,8 @@ def test_a_distance_in_within_is_refused_and_names_dwithin(src):
 
 
 def test_the_two_spellings_still_do_their_own_jobs():
-    """Vacuity floor on the guard above: it must refuse the swap without
-    refusing either correct spelling."""
+    """Vacuity floor on the guard above: it must refuse the swap without refusing either
+    correct spelling."""
     touch = _cut(_ops('r1 = find("house")\nr2 = r1.filter(within="G Ave")\n'))
     assert touch["op"] == "le" and touch["value"] == 0, touch
     gap = _cut(_ops('r1 = find("house")\n'

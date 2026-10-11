@@ -1,25 +1,4 @@
-"""ONE compass table, and every op declares which subset of it it hears.
-
-There were five hand-written direction-word lists in a tree whose own
-``geom_compute`` docstring says "a second hand-written copy is how a silent
-mirror starts": ``COMPASS_UNIT`` (4), ``cardinal_side.CARDINALS`` (4),
-``python_surface._FURTHER`` (4) and
-``python_surface._DIAGONALS`` (4) -- while ``_compass8`` emitted EIGHT words
-for the ``facing <ref>`` column. Eight out, four in: a model that read
-``facing X == "southeast"`` had no operation that would take the word back,
-and ``stand(facing="southeast")`` fell silently through to a lookup for a
-place named "southeast".
-
-The rule this pins: ``COMPASS_UNIT`` is the table, it carries eight, and an
-op that hears fewer says WHICH fewer by naming ``CARDINALS``. Widening the
-table can then never silently widen an operation, and narrowing an op can
-never silently invent a word the geometry does not have.
-
-VACUITY FLOOR. Every assertion below would pass against empty collections,
-which is exactly how a derived guard rots into a clean confident zero. The
-floors come first: the table holds eight, the subset holds four, and both
-are non-empty before anything is compared.
-"""
+"""ONE compass table, and every op declares which subset of it it hears."""
 from __future__ import annotations
 
 import math
@@ -48,8 +27,7 @@ def test_the_table_is_eight_winds_and_the_subset_is_four():
 
 
 def test_every_unit_vector_round_trips_through_its_own_word():
-    """word -> unit vector -> word. A mirrored or transposed entry breaks
-    here rather than three layers downstream in a served column."""
+    """word -> unit vector -> word."""
     for word, u in COMPASS_UNIT.items():
         assert math.isclose(math.hypot(*u), 1.0, rel_tol=1e-12), (word, u)
         assert cardinal([0.0, 0.0], list(u)) == word, (word, u)
@@ -86,8 +64,8 @@ def test_compass8_words_are_exactly_the_table_keys():
 
 
 def test_the_band_rule_declares_the_four_cardinals():
-    """A diagonal has no single orthogonal axis to band on, so cardinal_side
-    offers four -- DERIVED from CARDINALS, never a fifth copy."""
+    """A diagonal has no single orthogonal axis to band on, so cardinal_side offers four
+    -- DERIVED from CARDINALS, never a fifth copy."""
     assert set(cardinal_side.CARDINALS) == set(CARDINALS)
     for w in CARDINALS:
         assert cardinal_side.CARDINALS[w] == COMPASS_UNIT[w], w

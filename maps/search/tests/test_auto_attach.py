@@ -1,10 +1,5 @@
-"""Auto-attach relation columns: the model can reference a relation column
-(d_/brg_gap_/brg_/dc_<ref>) in filter_items or a score_by emphasis WITHOUT
-first running an explicit compare — the executor attaches it by reusing the
-same compare op. No compare-first ceremony; the absent-key guard fires only
-for a genuinely unresolvable ref. (The along_/off_ chart members of the
-lazy family are pinned in test_order_freedom.py.)
-"""
+"""A relation column named in filter_items or a score_by emphasis attaches without
+an explicit compare, through the same compare op."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import run_program, ProgramError

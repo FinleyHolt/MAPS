@@ -1,17 +1,5 @@
 #!/usr/bin/env python
-"""Tier-3 degrade order: the NEWEST analyze dump trims dead-last.
-
-The newest dump is the round's live evidence — starving it forces the model
-to decide from memory (the choosable-miss forensics found verification
-queries returning as fids+census stubs at exactly the deciding moment).
-``_degrade_oversized_tool_dumps`` therefore trims stale dumps largest-first
-and touches the newest only when every stale dump together cannot pay the
-budget (feasibility unchanged).
-
-Pure functions; the token estimator is stubbed to a character count so the
-order is asserted deterministically. Run:
-``pytest maps/search/tests/test_compactor_newest_last.py``.
-"""
+"""Tier-3 degrade order: the NEWEST analyze dump trims dead-last."""
 from __future__ import annotations
 
 import json

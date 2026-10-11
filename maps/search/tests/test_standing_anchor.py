@@ -1,14 +1,3 @@
-"""The standing ANCHOR in the executor: the model's own discourse anchor
-({label, ref}, minted by a near-PP or anchor-superlative) rides every find
-result as 'distance to <label>' — the staged-viewpoint law applied to the
-discourse anchor (item 2: relational
-columns re-anchored to the instruction's landmark; the "the nearest one."
-stuck-loop over fresh finds, 11-40 burned turns in >=7/96 episodes, is the
-measured target).
-
-Attach-only semantics: never a gate, never a drop; an unresolvable ref
-skips without error; no anchor = no column (offline-teacher byte parity).
-"""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import (

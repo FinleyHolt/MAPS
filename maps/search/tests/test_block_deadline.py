@@ -1,11 +1,4 @@
-"""One block cannot hang the whole mission on a slow bounded loop.
-
-The runner thread executes the model's block, so a block that runs for
-minutes freezes the mission -- and the line ceiling does not catch it when
-the loop is BOUNDED but its calls are each slow. A live sortie stalled ~7
-minutes on `for d in rows: find(near=d, dwithin=40)`. The wall-clock ceiling
-stops the block at its line with a served error instead.
-"""
+"""One block cannot hang the whole mission on a slow bounded loop."""
 
 from __future__ import annotations
 
@@ -47,12 +40,7 @@ def test_a_slow_bounded_block_stops_at_the_wall_clock_ceiling(monkeypatch):
 
 
 def test_the_ceilings_are_local_to_the_block(monkeypatch):
-    """The executor under a block runs UNTRACED.
-
-    A global trace function taxed every Python call the executor made
-    beneath the block, ~14x on a class-sized find; the ceilings are charged
-    to the block's own lines and to nothing else.
-    """
+    """The executor under a block runs UNTRACED."""
     import sys
 
     seen: dict = {}
@@ -74,8 +62,8 @@ def test_the_ceilings_are_local_to_the_block(monkeypatch):
 
 def test_a_runaway_loop_inside_a_nested_def_still_hits_the_line_ceiling(
         monkeypatch):
-    """A def, lambda or comprehension in the block is the block's own code:
-    its lines count, or a runaway one line deep would run unbounded."""
+    """A def, lambda or comprehension in the block is the block's own code: its lines
+    count, or a runaway one line deep would run unbounded."""
     monkeypatch.setattr(ps, "TRACE_LINE_CEILING", 2_000)
     mp = _mission_python()
     out = mp.run_block("def spin():\n    n = 0\n    while True:\n"

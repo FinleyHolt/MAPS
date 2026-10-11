@@ -1,16 +1,4 @@
-"""Bare-token resolution (the de-sigil cutover).
-
-After the cutover the ONE canonical handle form is a BARE token: ``r0`` names
-a prior op result, ``last`` the immediately-preceding one, ``cands`` /
-``anchors`` the surface lists. The executor classifies a bare string by
-exact-match against known result names + reserved words, else it is a fid. The
-old ``$``-prefixed forms are a forwarding SLIP (typo absorption -- one meaning),
-so ``$r0`` still resolves to the same thing ``r0`` does.
-
-Programs are order-free: a program that reads a name it defines LATER (bare or
-``$``-prefixed) resolves to that IN-PROGRAM def -- the topological sort runs the
-producer first -- never the same-named prior-call seed.
-"""
+"""A bare token in an op arg resolves to the handle or fid it names."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import ProgramError, run_program

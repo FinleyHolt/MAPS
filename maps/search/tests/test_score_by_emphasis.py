@@ -1,27 +1,5 @@
 #!/usr/bin/env python
-"""AGENT-WEIGHTED ordering — the ``score_by{items, emphasis}`` contract.
-
-Pins the fully-agentic ``score_by``: the sort fuses EXACTLY the columns the
-agent's REQUIRED ``emphasis`` names — nothing is auto-added by the harness.
-
-  * EXACT-KEYS: the fused order is byte-identical to ``G.score_by`` over the
-    named keys+weights alone; a column PRESENT on the rows but NOT named
-    contributes nothing (naming it changes the order).
-  * SIGN-IS-THE-AGENT'S: flipping a named key's ``w`` reverses the order —
-    the cue's known direction drives, no harness default sign anywhere.
-  * REQUIRED-EMPHASIS: an absent or empty ``emphasis`` is a LOUD error (the
-    sort has no criteria until the agent states them), and the retired
-    keys/weights args stay a loud redirect.
-  * NO-TERMINAL-REORDER: the surfaced order of every program IS the program's
-    own order — the harness applies no composite reorder to the terminal.
-  * NEVER-TOUCHES-COMMIT: the op only reorders the terminal LIST — a
-    PERMUTATION of the same fids (none added/dropped).
-  * FAIL-LOUD: a named column no row carries and a malformed emphasis element
-    each raise an actionable ``ProgramError`` (never a silent constant term).
-
-Pure (no GPU / tile / vLLM). Run via pytest:
-``pytest maps/search/tests/test_score_by_emphasis.py``.
-"""
+"""AGENT-WEIGHTED ordering — the ``score_by{items, emphasis}`` contract."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import run_program, ProgramError
@@ -167,10 +145,7 @@ def test_reorder_is_a_commit_safe_permutation():
     prog = _score_by([{"key": "distance to xy", "w": -5}])
     out = run_geom_program_tool({"program": prog}, namespace=ns)
     surfaced = out["results"]["r2"]["fids"]
-    # PERMUTATION of the input candidate fids: none invented, none lost. The op
-    # reorders the terminal LIST only; the deterministic commit binds the per-stop
-    # reshuffle's rank-0 (P1/P2) ahead of this program-terminal (P3), and this op
-    # writes no commit field — so a consumer keyed on a specific fid is unaffected.
+    # PERMUTATION of the input candidate fids: none invented, none lost.
     assert sorted(surfaced) == sorted(c["fid"] for c in _CANDS)
 
 

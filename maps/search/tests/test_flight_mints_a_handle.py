@@ -1,16 +1,4 @@
-"""A flight returns an ADDRESSABLE set, not just a count.
-
-Standing over what it just found, the model could name none of it: the
-flight report carried ``new_detections: 127`` and no handle, so reaching any
-of those rows meant re-issuing ``find <noun>.`` over the whole accumulated
-world and hoping the new ones ranked into the head. Measured on pilot-10:
-126 of 300 episodes reason explicitly about a handle the flight never named.
-
-A view mints the set it shows. These tests drive the real mission loop over
-a graph the fly callback actually grows, and assert the minted handle is an
-ORDINARY ``rN`` — the next sentence reaches it by name, ``of those,`` reaches
-it as the set in scope, and ``look at them.`` frames it.
-"""
+"""A flight returns an ADDRESSABLE set, not just a count."""
 
 from __future__ import annotations
 
@@ -25,12 +13,7 @@ def _flown(result: dict) -> dict:
 
 
 def _minted_handle(script, *, nth=0, **kw) -> str:
-    """The handle the ``nth`` flight of ``script`` minted.
-
-    The number rides the mission's shared ref counter, so a block that ran
-    an analyze before flying gets a higher one. Tests learn it the way the
-    model does -- off the flight's own report -- instead of assuming r0.
-    """
+    """The handle the ``nth`` flight of ``script`` minted."""
     probe, _g, _a = grow_drive(list(script) + ["done"], **kw)
     flown = [r for r in probe if isinstance(r, dict) and "flown" in r]
     return _flown(flown[nth])["new_rows"].split(" ")[0]
@@ -43,12 +26,7 @@ def _fids(result: dict) -> list[str]:
 
 
 def _shown_fids(result: dict) -> list[str]:
-    """The fids a block SHOWED, in order.
-
-    A predicate filter is ordinary Python over rows already served, so its
-    answer comes back in ``printed`` rather than as an op envelope. Both are
-    the block's served output; this reads whichever one carries rows.
-    """
+    """The fids a block SHOWED, in order."""
     if "result" in result:
         return _fids(result)
     return re.findall(r"fid='([^']+)'", str(result.get("printed") or ""))
@@ -94,7 +72,6 @@ def test_the_minted_handle_gets_a_crop_per_row(_n=4):
         per_flight=_n)
     crop = results[1]["crop"]
     assert "error" not in crop, crop
-    # one crop PER ROW now, not one frame over the set
     assert crop["delivered"] == crop["looked"] >= 1, crop
     assert "badged" not in crop, crop      # per-row crops, no frame badges
     assert crop["delivered"] == _n, crop
@@ -133,8 +110,6 @@ def test_a_row_gone_from_the_surface_is_not_reported_as_out_of_frame():
     crop = results[2]["crop"]
     # VACUITY FLOOR: the eviction must actually have reached the crop path.
     assert crop["skipped"] == ["detected_3"], crop
-    # "badged" belonged to the single-frame form; every row now has its
-    # own crop, so what is served is the count DELIVERED.
     assert "badged" not in crop, crop
     # one row is gone from the surface, so it is SKIPPED, not delivered
     assert crop["delivered"] == len(added[0]) - len(crop["skipped"]), crop
@@ -197,11 +172,9 @@ def test_the_latest_flight_owns_the_scope():
     assert _fids(results[1]) == first, (results[1], first)
 
     assert _shown_fids(results[3]) == second, (results[3], second)
-    # A FIND HANDLE IS A QUERY, so naming it after a later flight answers
-    # about the world THAT flight folded -- the find's rows re-derive, and
-    # the cars the second flight added are in them. The snapshot semantics
-    # this replaced is what let calcity::200#198 commit out of a red-car
-    # list bound before the ground the target sat on had been flown.
+    # A FIND HANDLE IS A QUERY, so naming it after a later flight answers about the
+    # world THAT flight folded -- the find's rows re-derive, and the cars the second
+    # flight added are in them.
     find_handle = list(results[1]["result"]["results"])[-1]
     results2, _g2, added2 = grow_drive(
         [[run('go_to("prior_7")')], [run('find("car")')],

@@ -1,16 +1,4 @@
-"""Tags-only world model: the retrieval surface speaks raw OSM tags.
-
-Pins the tags-only contract at the op surface:
-
-* PRIOR rows carry ``tags`` (raw OSM k=v) and NO ``class`` field; detection
-  rows keep ``class`` (the detector's measurement).
-* ONE retrieval idiom — ``find{query}`` fuzzy over a prior's name + tag keys
-  AND values / a detection's detector class: a 'parking' query reaches
-  amenity=parking, service=parking_aisle and parking=surface rows.
-* The retired ``class`` arg fails LOUD, naming ``query``.
-* The broad-dump census renders tag key=value counts (not classes), and a
-  no-match query ships the surface census + name samples.
-"""
+"""Tags-only world model: the retrieval surface speaks raw OSM tags."""
 from __future__ import annotations
 
 import pytest

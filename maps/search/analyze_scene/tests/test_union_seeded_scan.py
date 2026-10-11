@@ -1,13 +1,4 @@
-"""Seeding the union scan from the nearest box must not move the answer.
-
-The seed evaluates one member out of order to get an upper bound early. That
-is only admissible if it changes which members are SKIPPED and never which one
-is RECORDED: the minimum, and the witness pair a tie keeps, both have to match
-the plain ordered scan exactly.
-
-The oracle here is that plain scan, computed in the test, so neither side can
-drift into agreement with a stored answer.
-"""
+"""Seeding the union scan from the nearest box must not move the answer."""
 import numpy as np
 import pytest
 
@@ -44,7 +35,6 @@ def _seeded(members, item):
         if cut is not None and bounds[gi] > cut + G.BOUND_SLACK_M:
             continue
         calls += 1
-        # the seed member's triple is reused, never re-measured
         _d, _wr, _wi = seed if gi == seed_i else G.gap_witness(g, item)
         if d is None or _d < d:
             d, wr, wi = _d, _wr, _wi
@@ -73,8 +63,8 @@ def test_the_seeded_scan_matches_the_plain_one_on_a_class_sized_reference():
 
 
 def test_the_seed_does_not_move_a_tie():
-    """Two members that tie exactly: the earlier one must still be recorded,
-    even when the seed evaluates the later one first."""
+    """Two members that tie exactly: the earlier one must still be recorded, even when
+    the seed evaluates the later one first."""
     item = G.mask_geom(ring(0, 0, 10, 10))
     left = G.mask_geom(ring(-30, 0, 10, 10))
     right = G.mask_geom(ring(30, 0, 10, 10))
@@ -86,10 +76,8 @@ def test_the_seed_does_not_move_a_tie():
 
 
 def test_a_bound_an_ulp_above_its_own_gap_still_evaluates_the_member():
-    """The bound and the gap are reached by different routes and can disagree
-    in the last bit. Without slack the member holding the true minimum is
-    skipped and the scan returns nothing at all -- the exact pair that failed
-    is rebuilt here so a future tightening of BOUND_SLACK_M fails loudly."""
+    """The bound and the gap are reached by different routes and can disagree in the
+    last bit."""
     rng = np.random.default_rng(19)
     members = [G.mask_geom(ring(rng.uniform(0, 3000), rng.uniform(0, 3000),
                                  rng.uniform(4, 40), rng.uniform(4, 40)))

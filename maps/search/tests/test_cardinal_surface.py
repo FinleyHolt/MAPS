@@ -1,12 +1,4 @@
-"""The signed-relation kwargs, end to end: kwarg -> ops -> served column.
-
-The failure this guards is the one the arm already paid for twice. Bug #2 of
-the cutover was `near=[literal point]` refused because "the compare labelled
-the column one way and key_for another, so score_by asked for a column that
-was never written". A cardinal has the same two halves and the same way to
-drift, so the compiled key and the executor's written key are asserted to be
-the SAME STRING here rather than each checked alone.
-"""
+"""The signed-relation kwargs, end to end: kwarg -> ops -> served column."""
 
 import numpy as np
 import pytest
@@ -43,10 +35,7 @@ def test_the_compiled_key_is_the_key_the_executor_writes():
         'west_of="North Loop Boulevard")\n')
     cmp_op = next(o for o in ops if o["op"] == "compare")
     score = next(o for o in ops if o["op"] == "score_by")
-    # The CUT names the side columns; the SORT names proximity. A cardinal
-    # is not a ranking term -- ranking by signed magnitude put rank 0 at the
-    # far edge of the map (median 1,220 m from the anchor on 25713026) while
-    # 194 of this corpus's 208 cardinal cues mean ADJACENT.
+    # The CUT names the side columns; the SORT names proximity.
     cuts = [o for o in ops if o["op"] == "filter_items"]
     assert [o["args"]["key"] for o in cuts] == [
         "east of orchid_drive", "west of north_loop_boulevard"]
@@ -90,19 +79,7 @@ def test_the_column_is_signed_and_orders_by_side():
 
 
 def test_a_cardinal_CUTS_the_wrong_side_and_KEEPS_the_unplaced():
-    """Violating and unplaceable are different facts.
-
-    Ordering alone handed the model the least-wrong row at rank 0 and it
-    read like a hit: find("parking", south_of="California City Middle
-    School") ranked a lot 1,552 m NORTH of the school first, across 163 rows
-    none of which was south of it (25713025). A row the geometry PLACES on
-    the other side is not a candidate.
-
-    But `gt 0` would drop the unplaced rows with the violating ones, and on
-    that same case all 19 real parking rows in the bake ABSTAINED -- the cut
-    would have thrown away exactly what was still in play. `on_side` keeps
-    them.
-    """
+    """Violating and unplaceable are different facts."""
     cuts = [o for o in ops_of_block(
         'r1 = find("car", east_of="Orchid Drive")\n')
         if o["op"] == "filter_items"]
@@ -154,8 +131,8 @@ def test_conjoined_cardinals_chain_into_an_AND():
 
 
 def test_an_abstained_cardinal_is_ABSENT_never_zero():
-    """A zero would read as 'exactly on the line' and sort like a real
-    measurement; the missing cell is score_by's neutral."""
+    """A zero would read as 'exactly on the line' and sort like a real measurement; the
+    missing cell is score_by's neutral."""
     ew = [[[float(x), 0.0] for x in np.linspace(-400, 400, 9)]]
     prior = [{"fid": "prior_E", "xy": [0.0, 0.0], "name": "Quezon Avenue",
               "mask": ew, "centerline": None, "cells": [],
@@ -185,19 +162,6 @@ def test_a_diagonal_refuses_rather_than_answering():
 
 
 def test_a_corner_is_two_cuts_against_one_crossing():
-    """The shape 95 of the 1,023 cues ask for, and the legend now shows.
-
-    "The house on the northeast corner of 86th Street and Jacaranda Avenue"
-    is a QUADRANT OF A POINT, where north-of AND east-of is exact rather
-    than an approximation -- which is why the geometry offers four winds and
-    the surface spells a diagonal as its two halves. 95 cues read "<diag>
-    corner of A and B" and 17 more are a diagonal of a crossing or a street's
-    end; only ~14 in the whole corpus ask a diagonal of an extended feature.
-
-    The compile is pinned because the legend now teaches it: one crossings
-    op, ONE deduped ref for the anchor named twice, and the two cuts chained
-    so each says what it dropped.
-    """
 
     ops = raising_ops_of_block(
         'corner = intersection("86th Street", "Jacaranda Avenue")\n'
@@ -228,16 +192,6 @@ def test_a_diagonal_filter_kwarg_refuses_and_names_the_conjunction(kw, pair):
 
 
 def test_an_unknown_filter_kwarg_is_refused_never_dropped():
-    """`filter(southeast_of=X)` used to cut NOTHING and say nothing.
-
-    Row.filter and RowList.filter forward **kw straight to _rows_filter,
-    whose **cards swallowed any name the compiler's _CARDINALS comprehension
-    then ignored -- so the model asserted a constraint the call never
-    applied, in silence. That is the exact shape of `toward=`: built,
-    accepted, compiled to nothing, deleted. code_surface's own law is that a
-    kwarg outside the set is REFUSED, never ignored, and _rows_filter is the
-    one funnel all three filter paths reach.
-    """
     from maps.search.parse_compile.python_surface import (
         CodeError,
         MissionEnv,
@@ -269,19 +223,7 @@ def test_an_unknown_filter_kwarg_is_refused_never_dropped():
 
 
 def test_a_set_anchor_places_a_cardinal_and_abstains_when_it_straddles():
-    """A SET is one place for a cardinal too, and the band rule decides.
-
-    Both halves are run, not assumed, because they are indistinguishable
-    from the compile side. A car BETWEEN the two roads is not east of the
-    pair, and the column is ABSENT rather than 0.0 -- unmeasured, never
-    refuted. A car past both is east of the union by its nearest member's
-    offset.
-
-    This replaces an assertion that read the straddle case as a structural
-    "a union writes no cardinal column". It is not structural: the same
-    program with the item moved DOES write the column, so a surface law
-    built on the absent case would have rested on one geometry.
-    """
+    """A SET is one place for a cardinal too, and the band rule decides."""
     _cands, prior = _surface()
 
     def _run(x):
@@ -304,17 +246,6 @@ def test_a_set_anchor_places_a_cardinal_and_abstains_when_it_straddles():
 
 
 def test_an_anchor_may_be_a_SET_of_objects():
-    """156 blocks on 112 episodes died handing a LIST to a relating slot.
-
-    `near=[A, B]` had worked the whole time, so the model was reading a
-    slot that takes a set and generalising correctly; the cardinal and
-    containment slots refused the same shape with the executor's
-    `compare refs element ... must be a bare fid string`, the top
-    structural refusal on the surface over six 500-episode roots. A set
-    folds to its UNION: one ref, one column, one cut. Two cuts against two
-    anchors is `.filter(east_of=A).filter(east_of=B)`, which the surface
-    already spells and this must not silently become.
-    """
     ops = ops_of_block(
         'r1 = find("car", east_of=["prior_A", "prior_B"])\n')
     cmp_op = next(o for o in ops if o["op"] == "compare")
@@ -344,13 +275,7 @@ def test_an_anchor_may_be_a_SET_of_objects():
 
 
 def test_near_and_a_cardinal_fuse_into_ONE_sort():
-    """Two sorts in a row is not two constraints.
-
-    The second score_by re-ranks the rows the first ordered, so the first
-    contributes NOTHING: `find("house", nearest="Taylor", south_of="Viburnum
-    Avenue")` ordered by the side alone and dropped the proximity, with no
-    error. Live on 25713014 before this fused them.
-    """
+    """Two sorts in a row is not two constraints."""
     ops = ops_of_block(
         'r1 = find("house", nearest="Taylor", south_of="Viburnum Avenue")\n')
     sorts = [o for o in ops if o["op"] == "score_by"]
@@ -360,9 +285,6 @@ def test_near_and_a_cardinal_fuse_into_ONE_sort():
 
 
 def test_one_anchor_named_twice_is_ONE_ref():
-    """The executor suffixes a repeated ref's label (`x_2`), and the key
-    built here would still name the first -- score_by would then ask for a
-    column that was never written. Naming one CORNER does exactly this."""
     ops = ops_of_block('r1 = find("house", east_of="Jacaranda Avenue", '
                        'north_of="Jacaranda Avenue")\n')
     cmp_op = next(o for o in ops if o["op"] == "compare")
@@ -402,13 +324,7 @@ def test_one_anchor_named_twice_is_ONE_ref():
 
 
 def test_a_POINT_anchor_computes_a_cardinal():
-    """A point mask has vertices and no segments.
-
-    "North of that corner" is the simplest cardinal there is, and without a
-    vertex fallback the column was never written: the model wrote
-    `find("house", north_of=[5284, 700])` and got a loud "nothing orders by
-    'north of 5284_700'" nine times on 25713024.
-    """
+    """A point mask has vertices and no segments."""
     prior = [{"fid": "prior_P", "xy": [0.0, 0.0], "name": "corner",
               "mask": [[[0.0, 0.0]]], "centerline": None, "cells": [],
               "search_text": "corner"}]
@@ -436,14 +352,7 @@ def test_within_still_cuts_ahead_of_every_ordering():
 
 
 def test_the_side_cut_STATES_the_three_way_outcome():
-    """The fact only exists at the moment of the cut.
-
-    A note written in the reasoner loop could never fire: the loop sees only
-    SURVIVORS, which are positive by construction, and when nothing survives
-    the list is empty. Measured 0 firings in 194 episodes -- the
-    present-but-always-empty failure this repo has a rule about. The count
-    lives with the op that does the dropping.
-    """
+    """The fact only exists at the moment of the cut."""
     _, prior = _surface()
     cands = [{"fid": f, "xy": list(xy), "class": "car",
               "mask": [[list(xy)]], "centerline": None, "cells": [],
@@ -474,16 +383,8 @@ def test_the_side_cut_STATES_the_three_way_outcome():
 
 
 def test_a_quoted_xy_token_is_a_POINT_in_relating_slots_and_refused_in_moving_ones():
-    """A crossing's fid IS its [x, y] token, and the model quotes a fid the
-    way it quotes every other one.
-
-    Grounded as a NAME it drew `rule N: nothing named "[2707, 5217]" is on
-    this surface` -- the wrong wrongness twice over. For a RELATING slot the
-    point is welcome (the surface's own text says so); for a MOVING one the
-    objection is not that nothing bears that name, it is that a coordinate is
-    not a thing. 19 quoted-xy refs on 25713032, 10 of them still refused
-    before this.
-    """
+    """A crossing's fid IS its [x, y] token, and the model quotes a fid the way it
+    quotes every other one."""
     plan = plan_of_block('show_map(around="[3895, 1890]")\n')
     assert [s.get("do") for s in plan["steps"]] == ["map"]
     assert plan["steps"][0]["around"] == ("xy", [3895.0, 1890.0]), plan
@@ -499,15 +400,6 @@ def test_a_quoted_xy_token_is_a_POINT_in_relating_slots_and_refused_in_moving_on
 
 
 def test_near_takes_TWO_places_and_fuses_both_distances():
-    """The multi-anchor gap this arm closes.
-
-    Ranking rows by closeness to BOTH features a cue names takes top-24 from
-    68.7% to 92.9% on the 281 episodes whose cue names two -- +6.65 points
-    corpus-wide, held out across three anchor splits. The SENTENCE surface
-    has said this since before any of these runs ("find <thing> near <place>
-    near <place>.") and the executor already fuses the keys in score_by;
-    only the code surface could not spell it.
-    """
     ops = ops_of_block(
         'r1 = find("house", nearest=["Lime Avenue", "85th Street"])\n')
     cmp_op = next(o for o in ops if o["op"] == "compare")
@@ -526,20 +418,6 @@ def test_near_takes_TWO_places_and_fuses_both_distances():
 
 
 def test_facing_is_a_CUT_and_the_word_rides_as_data():
-    """The largest directional family in the corpus, 325 of 1,023 cues.
-
-    `facing <place>` has been a served compass WORD since 8e00c408, read
-    30 times over 6 of 29 episodes as
-    `houses.filter(lambda r: r.get("facing viburnum_avenue") == "south")`.
-    That is a cut spelled as a predicate over a column, so this is the cut
-    itself -- no new column, only the filter_items that reads the one
-    every compare already stamps.
-
-    The word rides in direction= as DATA. Putting it in the kwarg name
-    (`faces_south=`) reached 3 of 45 episodes before 8e00c408 deleted it.
-    FOUR cardinals, because a direction COMPOSES -- see the composition
-    test below.
-    """
     ops = raising_ops_of_block(
         'r1 = find("house")\n'
         'r2 = r1.filter(facing="Orchid Drive", direction="south")\n')
@@ -581,12 +459,9 @@ def test_facing_is_a_CUT_and_the_word_rides_as_data():
 
 
 def test_a_facing_cut_keeps_the_row_it_could_not_measure():
-    """`facing <ref>` is ABSENT at contact -- no min-gap vector to take a
-    bearing from -- and a house TOUCHING the road it fronts is the common
-    case for "the south-facing house on Viburnum Avenue". Plain `eq`
-    compares None to the word and drops it, refuting a row that was never
-    measured. Same law `on_side` keeps for the signed columns.
-    """
+    """`facing <ref>` is ABSENT at contact -- no min-gap vector to take a bearing from
+    -- and a house TOUCHING the road it fronts is the common case for "the
+    south-facing house on Viburnum Avenue"."""
     prior = [{"fid": "prior_R", "xy": [0.0, 0.0], "name": "Orchid Drive",
               "mask": _road(0.0), "centerline": None, "cells": [],
               "search_text": "orchid drive"}]
@@ -639,21 +514,6 @@ def test_a_facing_cut_keeps_the_row_it_could_not_measure():
 
 
 def test_a_direction_COMPOSES_so_southwest_faces_south_and_west():
-    """The rule, and the ground truth that priced it.
-
-    A thing facing southwest faces south AND west. Measured on the
-    corpus's own targets: asking the served column for an EXACT word
-    answered the cue on 12.1% of corner-facing cues -- a house sits
-    DIAGONALLY from the crossing it is on the corner of, so the column
-    reads `southwest` where the cue says `south` -- against 87.9% under
-    composition. The named-road cell went 87.8% -> 89.9% at the same
-    time, because a cue asking a diagonal now matches a measured one. No
-    cell loses.
-
-    The cut is LOOSER by construction, three winds of eight per cardinal
-    against one, and chaining the two cardinals of a diagonal takes the
-    precision back -- which is the surface's own law that filters compose.
-    """
     from maps.search.parse_compile.code_surface import _wind_parts, _winds_holding
 
     # derived from the wind's spelling, never tabulated
@@ -699,20 +559,6 @@ def test_a_direction_COMPOSES_so_southwest_faces_south_and_west():
 
 
 def test_a_direction_ORDERS_globally_and_takes_no_anchor():
-    """The axis the whole surface splits on.
-
-    "The northernmost pool" is a fact about the MAP FRAME, not a relation
-    to any object, so ordering by a direction takes no anchor. Every
-    relation to a place is a CUT and lives on filter(). Treating the
-    global fact as a relative one is what `order(further=<dir>)` did, and
-    extremal_ceiling.py then priced that ordering BELOW its own chance
-    rate (-3.8% margin on misses) before 0aea70c7 deleted it.
-
-    This buys REGISTER, not capability: the model already reaches the same
-    ordering as `sorted(rows, key=lambda h: h.xy[1])` on 44-58 episodes
-    per run at 82% success. It is here so a global question is spelled
-    globally, on the method a cut and a sort already live on.
-    """
     from maps.search.parse_compile.python_surface import Row, RowList, _direction_key
 
     rows = RowList([Row({"fid": f, "xy": list(xy), "class": "pool"}, None)
@@ -748,17 +594,7 @@ def test_a_direction_ORDERS_globally_and_takes_no_anchor():
 
 
 def test_order_takes_reverse_on_a_key_and_names_the_word_on_a_direction():
-    """`sorted()`'s own kwarg, because that is what the model writes.
-
-    Live on the directional arm: the model wrote
-    `.order(lambda r: r.xy[0], reverse=True)` and got
-    `Rows.order() got an unexpected keyword argument 'reverse'`. A method
-    surface that reads like the stdlib has to take the stdlib's kwarg.
-
-    On direction= it is REFUSED, because the opposite direction is a word
-    the model already has and two spellings of one ordering is what this
-    surface keeps deleting.
-    """
+    """`sorted()`'s own kwarg, because that is what the model writes."""
     from maps.search.parse_compile.python_surface import Row, RowList
 
     rows = RowList([Row({"fid": f, "xy": list(xy), "class": "pool"}, None)

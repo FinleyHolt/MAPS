@@ -1,23 +1,6 @@
 #!/usr/bin/env python
 """Arithmetic + tier control-flow of ``compactor.compact_transcript`` and the
-``EndpointSpec`` budget derivation that feeds it.
-
-Offline + hermetic: the real ``_estimate_input_tokens`` loads the Qwen HF
-tokenizer (network). It is monkeypatched with a deterministic char-count fake —
-the CONTROL FLOW and the token arithmetic are what these pin, not HF. The
-clear-to-census compactor makes NO LLM call on this path, so nothing is patched
-but the estimator. The estimator is length-sensitive: it SHRINKS when a verbose
-``rows`` render (or a per-fid ``colors`` table) is dropped, so the tier chain —
-(1) clear stale dumps to fids+census+colors, (2) strip color tables, (3)
-degrade the live dump, (4) CompactionInfeasible — is exercised faithfully.
-
-The budget is CALLER-SUPPLIED (``target_input_tokens``), derived from the
-server-discovered ``EndpointSpec.input_budget`` in production — there is no
-window env knob to steer.
-
-Run: ``pytest maps/search/tests/test_compactor_arithmetic.py`` (the
-suite runs ``-n auto``; every test is independent + env-scoped).
-"""
+``EndpointSpec`` budget derivation that feeds it."""
 from __future__ import annotations
 
 import json
@@ -43,10 +26,8 @@ def _content_str(m: dict) -> str:
 
 
 def _charcount(messages, *, model, tools=None):
-    """A stand-in for ``_estimate_input_tokens``: ~4 chars/token over the
-    serialized message contents. Deterministic, offline, and — crucially — it
-    SHRINKS when a verbose ``rows`` render is stubbed OR a per-fid ``colors``
-    table is stripped, so the tier arithmetic is exercised faithfully."""
+    """A stand-in for ``_estimate_input_tokens``: ~4 chars/token over the serialized
+    message contents."""
     return sum(len(_content_str(m)) // 4 for m in messages)
 
 
@@ -64,9 +45,7 @@ def _const(value):
 def _color_grid(color_rows, *, filler: int = 0) -> str:
     """A realistic model-facing markdown grid (``| idx | fid | class | color |
     color_conf | xy |``) — the same header/columns ``geom_program`` renders, so
-    ``_rows_color_entries`` parses ``fid=color[@conf]`` out of it. ``filler``
-    appends a bulky NON-pipe line (dropped wholesale with ``rows``; ignored by
-    the color parser) to inflate the dump without touching the color table."""
+    ``_rows_color_entries`` parses ``fid=color[@conf]`` out of it."""
     header = "| idx | fid | class | color | color_conf | xy |"
     sep = "| --- | --- | --- | --- | --- | --- |"
     lines = [header, sep]
@@ -80,8 +59,8 @@ def _color_grid(color_rows, *, filler: int = 0) -> str:
 
 def _analyze_dump(tcid: str, fids, color_rows, *, filler: int = 0) -> dict:
     """One ``analyze`` tool-result message in the LIVE nested payload shape
-    ``{"results": {"r0": head}}`` — the shape ``_iter_op_heads`` resolves
-    through its ``results`` wrapper."""
+    ``{"results": {"r0": head}}`` — the shape ``_iter_op_heads`` resolves through its
+    ``results`` wrapper."""
     head = {
         "len": len(fids),
         "fids": list(fids),
@@ -94,16 +73,16 @@ def _analyze_dump(tcid: str, fids, color_rows, *, filler: int = 0) -> dict:
 
 
 def _assistant_call(tcid: str) -> dict:
-    """The assistant tool_call turn that PRODUCES ``tcid`` — every analyze
-    tool-result needs one earlier so ``_validate_invariants`` closure holds."""
+    """The assistant tool_call turn that PRODUCES ``tcid`` — every analyze tool-result
+    needs one earlier so ``_validate_invariants`` closure holds."""
     return {"role": "assistant", "content": "",
             "tool_calls": [{"id": tcid, "type": "function",
                             "function": {"name": "analyze", "arguments": "{}"}}]}
 
 
 def _transcript(dumps: list[dict]) -> list[dict]:
-    """[system, (assistant_call, analyze_dump)*, user] — tool-protocol closed
-    and > the 4-msg cheap gate."""
+    """[system, (assistant_call, analyze_dump)*, user] — tool-protocol closed and > the
+    4-msg cheap gate."""
     msgs: list[dict] = [{"role": "system", "content": "SYS"}]
     for d in dumps:
         msgs.append(_assistant_call(d["tool_call_id"]))

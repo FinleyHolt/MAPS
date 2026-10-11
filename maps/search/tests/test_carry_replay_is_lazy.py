@@ -1,14 +1,4 @@
-"""A handle re-derives on read, and only the ops it reads are replayed.
-
-A handle is a query: after a flight it answers about the flown world
-(``test_flight_mints_a_handle`` pins that law). What this file pins is the
-COST of that law. The replay used to run the mission's whole op history
-against the new surface on the first read after a flight, so a flight late
-in a mission paid for every compare the mission had run -- 32 s on the Cal
-City surface with 60 blocks behind it. A read now replays the handle's own
-dependency closure and nothing else, and the rows it hands back are the
-ones a fresh computation over the same surface makes.
-"""
+"""A handle re-derives on read, and only the ops it reads are replayed."""
 
 from __future__ import annotations
 
@@ -74,8 +64,8 @@ def test_a_read_after_a_flight_replays_its_own_closure_and_nothing_else(
 
 def test_a_handle_never_read_between_two_flights_is_replayed_once(
         monkeypatch):
-    """The replay is charged to the READ, not to the flight: two flights and
-    then one read pay for one re-derivation, not two."""
+    """The replay is charged to the READ, not to the flight: two flights and then one
+    read pay for one re-derivation, not two."""
     seen = _programs_run(monkeypatch)
     results, _graph, added = grow_drive([
         [run('cars = find("car")')],
@@ -94,10 +84,8 @@ def test_a_handle_never_read_between_two_flights_is_replayed_once(
 
 def test_a_replay_the_executor_refuses_leaves_the_handle_stale_and_unclaimed(
         monkeypatch):
-    """An executor refusal on the replay is a failed replay: the handle keeps
-    the rows it held and is NOT marked fresh, so the next read tries again.
-    The full-history replay accepted the refusal as success and served every
-    handle stale for the rest of the mission."""
+    """An executor refusal on the replay is a failed replay: the handle keeps the rows
+    it held and is NOT marked fresh, so the next read tries again."""
     orig = rl.run_geom_program_tool
     refused = [0]
 

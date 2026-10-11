@@ -1,9 +1,5 @@
-"""Argument-shape coercion (do-what-the-model-means, same family as the
-fan-out / auto-attach): a refs-less compare that carries the frame aspect is
-legal (it computes its own columns); as_points flattens a $rN nested in a
-list literal and wraps a single resolved row into a one-item list. The
-frame-compare surface itself is pinned in ``test_frame_aspect.py``.
-"""
+"""Argument-shape coercion: a refs-less compare with a frame computes its own columns;
+as_points flattens a nested $rN and wraps a single resolved row."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import run_program, ProgramError
@@ -67,7 +63,6 @@ def test_frame_viewer_between_read():
     mid = next(r for r in rows if r["fid"] == "d0")  # midway between a1 and b1
     assert mid.get("left of a1_b1", mid.get("right of a1_b1", 9.9)) < 0.5, mid
     assert 0.0 <= mid["ahead of a1_b1"] <= 20.0, mid  # span 20
-
 
 
 def test_compare_truly_empty_still_errors():
@@ -158,10 +153,7 @@ def test_bare_rn_compare_ref_promoted():
         {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r2", "op": "compare", "args": {"items": "$r1", "refs": ["r0"]}},
     ])
-    # The promoted ref RESOLVED: its gap columns attach. A road ref measures
-    # its gap like any other shape -- it used to attach an 'along' chart
-    # instead, which made 'distance to <road>' a different quantity than
-    # 'distance to <building>' under one column name.
+    # The promoted ref RESOLVED: its gap columns attach.
     assert _has_prefix(out["results"]["r2"], "distance to ")
     assert not _has_prefix(out["results"]["r2"], "along ")
 

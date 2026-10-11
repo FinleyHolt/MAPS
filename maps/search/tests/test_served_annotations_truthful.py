@@ -1,25 +1,4 @@
-"""Served truth: every served note/annotation states the stored fact.
-
-* F1 — the find matched-note states the matched head's score RANGE and the
-  sub-threshold tail's size + value range (the tail stays OUT of the match
-  set, and the note says so); the Best: banner labels its numeric score.
-* F2 — ONE truth for [x,y] compare labels: a bare [x,y] literal attaches
-  the _xy family (d_xy/brg_gap_xy/dc_xy/brg_xy); {ref:[x,y], as:'label'}
-  is the named-columns path; TWO bare literals in one compare is a loud
-  ambiguity error; every served doc states exactly that.
-* F3 — tie-flat heads on ranked renders carry a truthful tie annotation
-  (rows 0..N tie at <score> -- within-tie order is arbitrary), computed
-  from the stored scores; the sort itself is unchanged.
-* F4 — viewpoints.add's bound echo serves the bound row's name (or
-  '(unnamed)') + compact tag head + xy; never-surfaced tokens keep the
-  bare-xy / not-a-fid echoes.
-* F5 — emphasis sign semantics defined on every served score_by surface:
-  composite = w-weighted sum of normalized values, rank-0 = LARGEST
-  composite, w>0 larger-raw-first / w<0 smaller-raw-first — and the
-  executor does exactly that.
-* F6 — a zero-match find on a closed-palette color word affords the
-  color path (find{color} / score_by color_<word> emphasis key).
-"""
+"""Served truth: every served note/annotation states the stored fact."""
 from __future__ import annotations
 
 import pytest
@@ -64,10 +43,8 @@ def _find(world, query):
 
 
 def test_head_banner_endorses_only_a_name_tier_head():
-    # "Best" is an ENDORSEMENT and a tag-tier head has not earned it:
-    # 140#138 flew a parking_aisle 212 m off the cue's street from a
-    # "Best:" banner over 0.5-0.8 tag matches. A tag head is just the
-    # head; the number still rides the banner, labeled and visibly weak.
+    # A tag head is just the head; the number still rides the banner, labeled and
+    # visibly weak.
     _, env = _find(_grass_world(), "landuse=grass")
     assert "Best: " not in env["hint"]
     assert "Head: " in env["hint"]
@@ -141,10 +118,7 @@ def test_sign_semantics_sentence_on_every_scored_surface():
 # ---------------------------------------------------------------------------
 
 def test_color_word_miss_names_the_color_column_path():
-    """The COLUMN, not the op that attaches it. This hint reaches the
-    sentence channel, whose only move is a sentence, so naming
-    ``find{color:...}`` / a ``score_by`` emphasis key taught a register it
-    cannot emit -- the same defect the two rewritten remedies carried."""
+    """The COLUMN, not the op that attaches it."""
     _, env = _find(_grass_world(), "white")
     hint = env["hint"]
     assert env["len"] == 0

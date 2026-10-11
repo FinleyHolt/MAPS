@@ -1,23 +1,4 @@
-"""The text tiers fire on the mission surface, not just the analyze one.
-
-They selected tool results by NAME -- ``name == "analyze"`` -- which reads
-as a shape test and is not one. A mission declares a single tool called
-``run``, so across 859 measured mission tool-results every text tier matched
-nothing and reported "cleared 0 stale dump(s) AND degraded 0 dump(s)" while
-appearing to work.
-
-Crop eviction alone does not cover it: crops run out. Five max-effort
-episodes on the reasoning-effort ladder evicted every stale crop they had
-and still died 1,822 tokens over budget with their text untouched. On one of
-those episodes 22 of 33 op heads carried render keys worth 61,403 of the
-182,446 tool-result characters -- thirty-four times what was needed.
-
-The payload shape below is the real one, taken from
-``flight/llm/transcript.jsonl`` of a ``compaction_infeasible`` episode: the
-mission wraps the analyze-shaped dump one level deeper, under ``result``,
-because its ``run`` tool reports the script the model wrote beside what the
-script returned.
-"""
+"""The text tiers fire on the mission surface, not just the analyze one."""
 
 from __future__ import annotations
 
@@ -75,7 +56,6 @@ def _tool_msg(content: str, name: str) -> dict:
 
 
 def test_no_candidate_fid_leaves_the_pool() -> None:
-    """A trim that dropped candidates would cost SR, not just tokens."""
     after = json.loads(_degrade_tool_result_content(_mission_dump()))
     head = after["result"]["results"]["res"]
     assert head["fids"] == [f"prior_{i}" for i in range(40)]
@@ -93,8 +73,8 @@ def test_the_script_the_model_wrote_survives() -> None:
 
 
 def test_color_is_kept_when_asked_on_the_mission_shape() -> None:
-    """Color rides in the ``rows`` render the trim drops, and it is an
-    ordering signal the model has to keep seeing."""
+    """Color rides in the ``rows`` render the trim drops, and it is an ordering signal
+    the model has to keep seeing."""
     after = json.loads(
         _degrade_tool_result_content(_mission_dump(), keep_color=True))
     colors = after["result"]["results"]["res"]["colors"]
@@ -119,10 +99,8 @@ def test_both_surfaces_are_selected_and_a_stub_is_not_reselected() -> None:
 
 
 def test_a_trailing_non_dump_does_not_expose_the_live_dump() -> None:
-    """Callers protect the NEWEST selected message as the live view, so
-    selection must admit dumps ONLY. The round-era surface declares ``act``
-    and ``view`` beside ``analyze``; if a trailing ``act`` result counted,
-    the live analyze dump would fall into the stale set and be cleared."""
+    """Callers protect the NEWEST selected message as the live view, so selection must
+    admit dumps ONLY."""
     act_result = json.dumps({"flown": True, "at": [10, 20]})
     msgs = [
         _tool_msg(_analyze_dump(), "analyze"),
@@ -135,8 +113,7 @@ def test_a_trailing_non_dump_does_not_expose_the_live_dump() -> None:
 
 
 def test_a_tool_result_that_is_not_a_dump_is_left_verbatim() -> None:
-    """Most ``run`` results carry no dump at all -- they report a print or an
-    error. Selecting them costs nothing; rewriting them would."""
+    """Most ``run`` results carry no dump at all -- they report a print or an error."""
     for content in (
         json.dumps({"said": 'print("hi")', "printed": "hi"}),
         json.dumps({"error": "name 'foo' is not defined"}),

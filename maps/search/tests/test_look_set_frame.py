@@ -1,24 +1,5 @@
-""""look at them." delivers ONE CROP PER ROW over the set in scope —
-end to end, real pixels, through the mission loop.
-
-It used to deliver one wide frame with the rows badged in it, and that
-frame could not resolve what these cues turn on: median 300 m window, 70%
-of them 300 m or wider, the widest 37,243 m at 36.37 m/px, against 78.6 m
-at 0.15 m/px for a single-row look. So the only form that named more than
-one row could not tell them apart, and the only form that could resolve a
-difference named exactly the row already picked.
-
-Compile-only coverage does not hold this: the sentence has to reach
-``_build_crop_requests`` with a populated ``mark_fids``, and that has to
-reach ``render_candidate_crops``, before any of the renderer's badge
-machinery runs. So the loop here is driven with the REAL renderer over a
-synthetic ortho, and the assertions are on the delivered record and the
-bytes the model would read.
-
-The other half of the contract is that nothing was CHANGED: a one-id look
-still hands the renderer exactly the request it handed before the set look
-existed, and the renderer is a pure function of its request.
-"""
+""""look at them." delivers ONE CROP PER ROW over the set in scope — end to end, real
+pixels, through the mission loop."""
 
 from __future__ import annotations
 
@@ -45,7 +26,6 @@ def test_the_set_look_delivers_one_crop_per_row(ortho_dir):
     # which is what makes badge->fid unambiguous by construction.
     assert [m["fid"] for m in req.get("marks") or []] == ["detected_0"], req
     assert [r["center_fid"] for r in reqs[0]] == [c["fid"] for c in cands]
-    # one record PER ROW now; the first is rank 0's own crop
     rec = recs[0][0]
 
     # ONE badge per crop, and it is that crop's own subject
@@ -55,9 +35,6 @@ def test_the_set_look_delivers_one_crop_per_row(ortho_dir):
     assert legend[0]["fid"] in legend[0]["label"], legend
     assert legend[0]["role"] == "center" and legend[0]["fid"] == "detected_0"
     assert [e["digit"] for e in legend] == [1], legend
-    # ...and the SET is covered across crops, one row each, in the handle's
-    # own order -- the correspondence the frame form served in a legend is
-    # now served by there being one picture per row.
     assert [r["legend"][0]["fid"] for r in recs[0]] == [
         c["fid"] for c in cands]
     assert rec["marks_dropped"] == 0 and rec["marks_out_of_view"] == [], rec
@@ -80,15 +57,8 @@ def test_the_set_look_delivers_one_crop_per_row(ortho_dir):
     assert len(vision) == 1, vision
     for c in cands:
         assert c["fid"] in vision[0], (c["fid"], vision[0])
-    # ... and say, ON the message the pixels are in, that these badges ARE
-    # the rows of a handle it still holds: the frame and the result table
-    # are one object, so the frame's contents stay nameable afterwards.
-    # the handle rides the ref_notes / preamble now, not a frame count note
     handle = results[1]["crop"].get("handle") or "r0"
     assert handle.startswith("r"), results[1]
-    # No spelling is invited: the old preamble said "of <ref>, ...",
-    # which is sentence phrasing naming the EXECUTOR's ref, so a
-    # code-surface model was told to say a handle it never bound.
     # What the caption owes is which row each picture shows.
     assert "of r" not in vision[0].split("Overhead")[0], vision[0]
     for c in cands:
@@ -109,13 +79,7 @@ def test_over_budget_is_a_served_fact_not_a_silent_truncation(ortho_dir):
         cars(n), ortho_dir)
     # the cap that bites is the per-call CROP budget, not the badge cap
     assert len(reqs[0]) == 16, len(reqs[0])
-    # one record PER ROW now; the first is rank 0's own crop
     rec = recs[0][0]
-    # center + (cap - 2) neighbours saturates the renderer's own ceiling
-    # exactly, so the cap is reached and nothing is dropped inside it
-    # ONE legend entry per crop: badge -> fid is unambiguous by
-    # construction rather than by a legend that got it wrong on
-    # 2,115 of 6,256 served entries.
     assert len(rec["legend"]) == 1, rec["legend"]
     assert rec["marks_dropped"] == 0, rec
     note = " ".join(results[1]["crop"].get("ref_notes") or [])
@@ -125,13 +89,6 @@ def test_over_budget_is_a_served_fact_not_a_silent_truncation(ortho_dir):
 
 def test_a_spread_set_gets_a_crop_each_at_single_look_scale(
         ortho_dir):
-    """A set spread wider than one frame loses nothing now.
-
-    The frame form clipped it: rows outside rank 0's neighbourhood got no
-    badge, and the ack had to count what the renderer DREW and name what it
-    could not. Per-row crops have no frame to fall outside of -- every row
-    is its own subject, at its own single-look scale.
-    """
     cands = [{"fid": f"detected_{i}", "xy": [12.5 + 400.0 * i, 12.5],
               "class": "car", "search_text": "car"} for i in range(4)]
     results, reqs, recs, _vis = look_drive(
@@ -158,7 +115,6 @@ def test_the_one_id_look_is_the_request_it_always_was(ortho_dir):
     # the target IS the center, so the ONE mark resolves onto the subject
     # and the frame keeps the tight appearance geometry
     assert [m["fid"] for m in req["marks"]] == ["detected_1"], req
-    # one record PER ROW now; the first is rank 0's own crop
     rec = recs[0][0]
     assert rec["context_m"] == _MIN_M, rec["context_m"]
     assert rec["legend"] == [{"digit": 1, "fid": "detected_1",
@@ -168,12 +124,7 @@ def test_the_one_id_look_is_the_request_it_always_was(ortho_dir):
 
 
 def test_a_set_look_with_no_set_says_so_in_register(ortho_dir):
-    """Looking at a name nothing bound renders nothing and says which name.
-
-    The say channel answered this with a grammar rule id; Python answers it
-    with the name itself, which is strictly more actionable -- the model can
-    see WHICH of its names it never bound.
-    """
+    """Looking at a name nothing bound renders nothing and says which name."""
     results, reqs, _recs, _vision = look_drive(
         [[run("look(a)")], "over"], cars(3), ortho_dir)
     assert reqs == [], reqs           # nothing rendered

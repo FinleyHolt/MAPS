@@ -1,16 +1,5 @@
-"""Anti-spiral program identity: identical SELF-CONTAINED programs dedup,
-with ref LABELS normalized out of the key.
-
-Within one reasoner round the (cands, anchors) surface is frozen, so an
-identical self-contained program is a pure re-render — the dispatch returns
-the one-line ``_DEDUP_NOTE`` reference instead of re-executing (the observed
-failure re-issued one program 18x in a stop and blew the compaction budget;
-an INCREMENTING rN defeated byte-identity entirely: 356/357 identical calls,
-0 firings). Emission-order permutations stay distinct (order freedom is a
-feature). Programs that read carry state (an ``rN`` they do not define, or
-``last``/``prev``) can legitimately return new rows as the round's results
-accumulate, so they are never deduped.
-"""
+"""Anti-spiral program identity: identical SELF-CONTAINED programs dedup, with ref
+LABELS normalized out of the key."""
 from __future__ import annotations
 
 from maps.search.parse_compile.reasoner_loop import (
@@ -107,13 +96,12 @@ def test_note_is_a_terse_reference():
 
 
 # --------------------------------------------------------------------------- #
-# ref-label normalization: an incrementing rN no longer defeats the guard      #
+# ref-label normalization: an incrementing rN does not defeat the guard        #
 # --------------------------------------------------------------------------- #
 
 
 def test_incrementing_ref_labels_share_a_key():
-    # The measured pathology: the same program re-issued with r0 -> r1 ->
-    # r2... (356/357 identical calls, 0 firings). Labels normalize out.
+    # Ref labels normalize out of the key.
     a = {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "filter_items",
@@ -189,11 +177,6 @@ _CROSS = {"op": "crossings", "args": {"refs": ["prior_1", "prior_2"]}}
 
 
 def test_a_reissue_can_map_its_own_labels_onto_the_stored_ones():
-    """THE defect. `go to the intersection of A and B.` reported "0 distinct
-    crossings" for two roads the SAME episode had just resolved with `find
-    the intersection of A and B.` -- 49 says over 47 episodes on
-    calcity_v3base, the prior success being the PRECONDITION, because the
-    re-issue resolved its slot from a label the deduped run never wrote."""
     first = [{"ref": "r0", **_CROSS}]
     reissue = [{"ref": "r4", **_CROSS}]
     assert _program_dedup_key({"ops": first}) \
@@ -220,8 +203,8 @@ def test_the_correspondence_is_total_on_a_multi_op_key_hit():
 
 
 def test_programs_whose_normalisation_differs_cannot_share_a_key():
-    """A second copy of this map is how an alias starts meaning something the
-    identity did not, so the key must be unable to disagree with it."""
+    """A second copy of this map is how an alias starts meaning something the identity
+    did not, so the key must be unable to disagree with it."""
     a = [{"ref": "r0", **_CROSS}]
     b = [{"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
          {"ref": "r1", **_CROSS}]
@@ -230,8 +213,6 @@ def test_programs_whose_normalisation_differs_cannot_share_a_key():
 
 
 def test_off_grammar_refs_stay_out_of_the_correspondence():
-    """Only rN-grammar refs are renamed, matching the key's own rule, so an
-    off-grammar name is never aliased -- it was never normalized."""
     ops = [{"ref": "anchors", "op": "find", "args": {"provenance": "prior"}},
            {"ref": "r0", **_CROSS}]
     assert _dedup_ref_norm(ops) == {"r1": "r0"}

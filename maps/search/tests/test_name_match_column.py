@@ -1,14 +1,3 @@
-"""The name_match key: a query-find's fuzzy grounding trust survives as the
-RAW row field and the compare-header grounding-trust key (never
-``match_score``) -- the row COLUMN no longer renders
-(7/8 not-observed, zero
-reads-to-pick-a-row, anti-correlated on 2 committed rows).
-
-Contract: the token ``score`` that a *resolved* set carries must not be the
-same token a NAME match carries. The raw-field and compare-header key is
-``name_match``; the string ``match_score`` appears NOWHERE on any served
-surface (find rows, compare headers, or the tool text).
-"""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import compact_results, run_program
@@ -63,9 +52,6 @@ def test_query_find_rows_carry_name_match():
 
 
 def test_unscored_ref_carries_no_name_match():
-    # A bare literal fid (nothing grounded it by query) carries no trust
-    # column -- name_match keys on query-find provenance, same as the old
-    # match_score did.
     out = _run([
         {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r2", "op": "compare", "args": {"items": "$r1", "refs": ["z_solo"]}},

@@ -1,16 +1,3 @@
-"""The episode's attached-column union fills, or it measures nothing.
-
-``reasoner.evidence_columns`` accumulates every evidence-column name the
-conversation's programs attached, across the whole episode. It is the offline read of what the agent
-actually acquired against what the cue asked for -- the measurement that
-showed acquisition running 58% on the deprescribed arm and ~69% when a
-select-time attribution was required, while SR moved on neither.
-
-The fold lives inside a ``try`` that swallows everything, so a union that
-silently never fills would read exactly like a live one and every arm would
-report 0% acquired. Assert a real column key reaches it, not just that the
-set exists.
-"""
 from __future__ import annotations
 
 from maps.search.parse_compile.reasoner_agent import Reasoner

@@ -1,10 +1,4 @@
-"""``conversation.jsonl`` holds every row the loop appended, as it happened.
-
-The dump-at-end it replaces left NOTHING for a mission killed mid-flight,
-which is the mission an operator most wants to read. So the pin is that each
-append is on disk before the next one, not merely that the file exists at
-the end.
-"""
+"""``conversation.jsonl`` holds every row the loop appended, as it happened."""
 
 from __future__ import annotations
 

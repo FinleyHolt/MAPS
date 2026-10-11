@@ -1,9 +1,5 @@
-"""Anchor multiplicity: a compare ref that resolves to N same-named landmark
-instances fans out into one per-instance column, reusing the target-candidate
-column machinery. No anchor-specific branch — a multi-instance ref surfaces as
-columns (never a single-fid collapse, never a duplicate-name census or
-`ambiguous` header); anchors ride the same score_by discernment as targets.
-"""
+"""Anchor multiplicity: a compare ref that resolves to N same-named landmark instances
+fans out into one per-instance column, reusing the target-candidate column machinery."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import run_program, ProgramError
@@ -163,11 +159,10 @@ def test_single_instance_column_sort_via_muted_emphasis():
 
 
 def test_find_query_grounded_anchor_carries_name_match():
-    # A landmark grounded via find{query} IS a query-find token, so its
-    # grounding-trust score rides the compare header under name_match — the
-    # NAME matched, not (necessarily) the instance. With find as THE one
-    # retrieval op, every named-landmark grounding is fuzzy-SCORED — a weak
-    # name hit is never invisible. (The retired key was match_score.)
+    # A landmark grounded via find{query} IS a query-find token, so its grounding-trust
+    # score rides the compare header under name_match — the NAME matched, not
+    # (necessarily) the instance. With find as THE one retrieval op, every
+    # named-landmark grounding is fuzzy-SCORED — a weak name hit is never invisible.
     out = _run([
         {"ref": "r0", "op": "find",
          "args": {"query": "manhattan house", "provenance": "prior"}},
@@ -193,11 +188,9 @@ def test_find_query_grounded_anchor_carries_name_match():
 
 
 def test_fanout_census_past_knee_is_render_only():
-    # 7 same-named instances (past _ANCHOR_FANOUT_CENSUS_INSTANCES): the
-    # DEFAULT grid swaps the per-instance block for a census + near_/by_/
-    # spread_ cells per candidate. The RAW rows — the $rN every chained op
-    # and the commit read consume — keep every per-instance column
-    # byte-identical; nothing is dropped from the set.
+    # 7 same-named instances (past _ANCHOR_FANOUT_CENSUS_INSTANCES): the DEFAULT grid
+    # swaps the per-instance block for a census + near_/by_/ spread_ cells per
+    # candidate.
     import copy
 
     from maps.search.analyze_scene.geom_program import compact_results

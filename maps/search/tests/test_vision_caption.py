@@ -1,12 +1,4 @@
-"""The delivered-image caption states each view's TRUE orientation.
-
-flygoal_1000 measured the defect this pins: `_look_vision_text` hardcoded
-"nadir, north-up" in the header, so all 1,129 rotated crops (327 episodes)
-arrived with pixels turned and a caption claiming north-up — the mechanism
-behind the model's left→west gloss. The contract now: the header claims no
-orientation; each crop line derives its own ("north-up" only when true; a
-rotated crop states its up bearing + the frame note).
-"""
+"""The delivered-image caption states each view's TRUE orientation."""
 from __future__ import annotations
 
 from maps.search.parse_compile.reasoner_loop import _look_vision_text

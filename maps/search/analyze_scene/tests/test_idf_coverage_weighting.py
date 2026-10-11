@@ -1,35 +1,4 @@
-"""The fuzz band weights coverage by IDF, over SATISFIABLE words only.
-
-Counting query words equally let the corpus's commonest word carry a match by
-itself. Eleven of the calcity surface's top thirteen near-stopword tokens were
-BAKE PROVENANCE rather than map vocabulary -- ``way`` is a token of every
-``osm_id: way/1136853905`` once the normalizer splits on '/', and
-``worldkit_layer=roads`` donated ``road`` to all 810 of its rows -- so
-``find("hugo way")`` covered one of two words on 4,733 of 5,257 rows and
-``find("neuralia road")`` on 810.
-
-TWO HALVES, AND NEITHER WORKS ALONE (measured as a 2x2):
-
-* ``geom_program._SEARCH_PROVENANCE_DROP`` keeps the four provenance keys out
-  of ``search_text``, which is what makes ``way`` and ``road`` ordinary words
-  again. The node keeps every tag, so the exact tag tiers and
-  ``tag_family_keys`` are untouched.
-* :func:`text_match.token_idf` prices what is left, and the fuzz band divides
-  by the IDF mass of the words SOME row could cover.
-
-Dropping unsatisfiable words is not a refinement, it is what makes the
-weighting usable at all: plain IDF takes ``find("parking lot")`` to ZERO rows
-because ``lot`` has zero df, therefore maximum idf, and it vetoes the word
-that does match. But dropping them ON ITS OWN re-opens the flood, because any
-absent rare word leaves the common one as the whole denominator.
-
-The two shapes are pinned SYNTHETICALLY below (they run on any checkout), and
-the corpus assertions are derived from the calcity bake when it is staged.
-A derived scan fails open, so the derivation carries a vacuity floor on the
-vocabulary it found, and the two contracts the scan could not notice
-disappearing are pinned BY NAME: ``find("parking lot")`` still reaches the
-parking rows, and ``find("swimming pool")`` still returns its 34.
-"""
+"""The fuzz band weights coverage by IDF, over SATISFIABLE words only."""
 
 from __future__ import annotations
 
@@ -49,26 +18,14 @@ from maps.sws.graph.io import load_graph
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", "..", ".."))
-# THE bake a Cal City run would use: ``SEARCH_CALCITY_TILES`` wins, else the
-# shipped default -- the rule ``benchmarks.calcity.paths`` applies, read off
-# the env directly because ``maps`` never imports ``benchmarks``.
 _TILES = (os.environ.get("SEARCH_CALCITY_TILES")
           or os.path.join(_REPO, "benchmarks", "calcity", "tiles"))
 
 
 def test_the_searchable_drop_is_a_subset_of_what_the_model_never_reads():
-    """Withheld from the HAYSTACK only where it is already withheld from the
-    EYES. The four keys were in the fuzzy haystack purely by omission -- the
-    tree had already decided the model should not read them -- so this pins
-    the two sets in the one direction that matters. Widening the search drop
-    past the render drop would hide from search something the model can see
-    quoted in its own table, which is a different and much worse change.
-    """
+    """Withheld from the HAYSTACK only where it is already withheld from the EYES."""
     assert _SEARCH_PROVENANCE_DROP <= _TAG_RENDER_DROP, (
         _SEARCH_PROVENANCE_DROP - _TAG_RENDER_DROP)
-    # ...and it is the FOUR, not the whole render drop: the full 16-key set
-    # was measured at 80.3% precision against 79.8% for these four, which
-    # does not pay for the blast radius.
     assert len(_SEARCH_PROVENANCE_DROP) == 4, _SEARCH_PROVENANCE_DROP
 
 
@@ -130,8 +87,6 @@ def test_a_word_no_row_can_cover_leaves_the_denominator():
     assert "lot" not in T.token_idf(_UNSATISFIABLE_SURFACE)
     got = {r["fid"] for r in _find(_UNSATISFIABLE_SURFACE, "parking lot")}
     assert got == {"p_park_a", "p_park_b"}, got
-    # Keeping it would have vetoed the word that matched: `lot` is absent,
-    # so its df is 0 and its IDF is the maximum the corpus can express.
     assert not _find(_UNSATISFIABLE_SURFACE, "helipad lot")
 
 
@@ -162,26 +117,18 @@ def calcity_rows():
 def test_the_surface_vocabulary_is_real_and_prices_common_words_low(
         calcity_rows):
     idf = T.token_idf(calcity_rows)
-    # VACUITY FLOOR. A df scan that found nothing would satisfy every
-    # ordering below by vacuous truth. The calcity surface reads 979 distinct
-    # tokens once the provenance keys are out of `search_text` (6,269 with
-    # them in -- `osm_id` alone contributes one unique numeric token per row,
-    # which is precisely the vocabulary that was drowning the real one).
+    # VACUITY FLOOR. A df scan that found nothing would satisfy every ordering below by
+    # vacuous truth.
     assert len(idf) >= 500, len(idf)
     assert len(calcity_rows) >= 5000, len(calcity_rows)
-    # A street's generic head noun is common; the name that picks the street
-    # out is rare. This is the whole ordering the fuzz band now turns on.
+    # A street's generic head noun is common; the name that picks the street out is
+    # rare.
     assert idf["way"] < idf["hugo"], (idf["way"], idf["hugo"])
     assert idf["building"] < idf["avenue"], (idf["building"], idf["avenue"])
 
 
 @needs_bake
 def test_find_parking_lot_still_reaches_the_parking_rows(calcity_rows):
-    """PINNED BY NAME: the contract the df scan above cannot notice going.
-
-    ``lot`` is a zero-df word on this bake, so a plain IDF weighting scores
-    every parking row 0 and this returns nothing at all.
-    """
     got = _find(calcity_rows, "parking lot")
     assert len(got) == 75, len(got)
     assert all("parking" in (r.get("search_text") or "") for r in got)
@@ -189,12 +136,6 @@ def test_find_parking_lot_still_reaches_the_parking_rows(calcity_rows):
 
 @needs_bake
 def test_find_swimming_pool_still_returns_its_thirty_four(calcity_rows):
-    """PINNED BY NAME: the second contract the scan cannot notice going.
-
-    31 of the 34 arrive through ``tag_family_keys`` -- ``swimming pool`` is
-    an exact ``leisure`` VALUE -- so this also pins that the IDF weighting
-    left the corpus widening alone.
-    """
     assert len(_find(calcity_rows, "swimming pool")) == 34
     # The bare noun stays at the three rows that actually spell it: a single
     # satisfiable word is its own whole denominator, weighting or not.

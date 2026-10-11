@@ -1,19 +1,4 @@
-"""Over budget on a vision surface, the oldest STALE crops go, newest kept.
-
-Counting images correctly is only half the fix: on the mission surface every
-other step keys on ``name == "analyze"`` and a mission declares one tool
-named ``run``, so on 859 measured mission tool-results they match nothing and
-report "cleared 0 ... degraded 0" while looking like they worked. Without a
-step that sheds image mass, a true estimate converts a silent server 400 into
-a loud CompactionInfeasible and the episode still dies.
-
-Crops are the LAST thing given up, not the first. They led the ladder while the
-budget was 48,128 and sixteen 1024px maps were 42,112 tokens of it. At 221,120,
-with a delivered crop measuring a median 225 tokens across 11,635 look
-manifests, images are ~9% of a large prompt and the re-derivable text dumps are
-the rest. ``maps/search/tests/test_compaction_order.py`` pins the ordering;
-these pin this step's own behaviour once it is reached.
-"""
+"""Over budget on a vision surface, the oldest STALE crops go, newest kept."""
 
 from __future__ import annotations
 
@@ -60,8 +45,7 @@ def test_it_shes_enough_and_stops() -> None:
 
 
 def test_the_current_turn_s_crops_are_never_evicted() -> None:
-    """They are what the turn is FOR. Evicting them saves a window the turn
-    then has no reason to occupy."""
+    """They are what the turn is FOR."""
     msgs = [_vision_turn("old", 2), _vision_turn("newest", 2)]
     out, evicted, _ = _evict_oldest_crops(msgs, shed_tokens=10**9)
     assert evicted == 2, "it reached into the newest vision message"
@@ -90,8 +74,6 @@ def test_an_evicted_crop_says_so() -> None:
 
 
 def test_a_text_only_transcript_is_returned_untouched() -> None:
-    """Parity: the identity, not a copy, so text-only compaction is
-    byte-identical to what it was before any of this existed."""
     msgs = [
         {"role": "user", "content": "plain"},
         {"role": "assistant", "content": "reply"},
@@ -116,11 +98,7 @@ def test_the_input_list_is_never_mutated() -> None:
 
 
 def test_the_current_turn_is_thinned_only_as_a_last_resort() -> None:
-    """One turn may carry the whole per-request image cap. When THAT is what
-    will not fit, every tier above has already run and the choice is a
-    thinner view or a dead episode -- measured: two max-effort ladder
-    episodes died 2,500 tokens over with one 314 KB user message holding
-    every image in the transcript."""
+    """One turn may carry the whole per-request image cap."""
     msgs = [_vision_turn("only turn", 6)]
     one = image_tokens_of(build_image_part(jpeg(512)))
 
@@ -131,8 +109,8 @@ def test_the_current_turn_is_thinned_only_as_a_last_resort() -> None:
 
 
 def test_thinning_never_takes_the_newest_crop() -> None:
-    """The turn keeps the view it most recently asked for; a text-only
-    prompt is not a cheaper answer, it is a different question."""
+    """The turn keeps the view it most recently asked for; a text-only prompt is not a
+    cheaper answer, it is a different question."""
     msgs = [_vision_turn("only turn", 4)]
     out, evicted, _ = _evict_current_turn_crops(msgs, shed_tokens=10**9)
     assert evicted == 3
