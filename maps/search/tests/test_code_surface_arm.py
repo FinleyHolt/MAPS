@@ -750,7 +750,12 @@ def test_more_of_pages_a_long_result_and_stops_at_the_end():
         served.append(env["fids"])
     assert served[0] + served[1] + served[2] == [f"car_{i:03d}"
                                                  for i in range(3 * H)]
-    assert "already served" in (out[3].get("error") or ""), out[3]
+    end = out[3].get("error") or ""
+    assert "already served" in end, out[3]
+    # ...and the narrowing it teaches is spelled in this surface's methods.
+    assert re.search(r'r\d+\.order\(color="<colour>"\)', end), end
+    assert re.search(r'r\d+\.filter\(within="<place>"\)', end), end
+    assert "order_by(" not in end and "narrow(" not in end, end
 
     import pytest
 

@@ -3071,9 +3071,9 @@ def advance_reasoner_one_round(
                 return _plan_err(ack, (
                     f"all {_held} row(s) of {_h} are already served -- there "
                     f"is no further block to serve. Narrow it "
-                    f"(order_by({_h}, color=\"<colour>\"), "
-                    f"order_by({_h}, nearest=\"<fid>\"), "
-                    f"narrow({_h}, inside=\"<place>\"))"
+                    f"({_h}.order(color=\"<colour>\"), "
+                    f"{_h}.order(nearest=\"<fid>\"), "
+                    f"{_h}.filter(within=\"<place>\"))"
                     + ("." if withheld("look") else f" or look({_h}).")))
         slot_fid: dict[str, str] = {}
         slot_ties: dict[str, list] = {}
