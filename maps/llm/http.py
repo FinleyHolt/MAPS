@@ -380,56 +380,6 @@ def _flight_response_record(
         })
 
 
-class _RawChoiceMessage:
-    """Minimal stand-in for an OpenAI ChatCompletionMessage."""
-
-    __slots__ = ("content", "tool_calls", "reasoning")
-
-    def __init__(self, d: dict):
-        self.content = d.get("content")
-        # vLLM v0.21.0 renamed the wire field from ``reasoning_content`` ->
-        # ``reasoning`` (PR #27752, RFC #27755). Pre-0.21 deployments and
-        # some non-vLLM backends still emit ``reasoning_content``, so read
-        # both with ``reasoning`` first. The OpenCode-style interleaved
-        # round-trip (sending prior thinking back on subsequent requests)
-        # sees a non-None value on the hot path either way.
-        self.reasoning = d.get("reasoning") or d.get("reasoning_content")
-        raw_tcs = d.get("tool_calls") or []
-        self.tool_calls = [_RawToolCall(tc) for tc in raw_tcs]
-
-
-class _RawToolCall:
-    __slots__ = ("id", "type", "function")
-
-    def __init__(self, d: dict):
-        self.id = d.get("id")
-        self.type = d.get("type", "function")
-        self.function = _RawFn(d.get("function", {}))
-
-
-class _RawFn:
-    __slots__ = ("name", "arguments")
-
-    def __init__(self, d: dict):
-        self.name = d.get("name", "")
-        self.arguments = d.get("arguments", "")
-
-
-class _RawChoice:
-    __slots__ = ("message", "finish_reason")
-
-    def __init__(self, d: dict):
-        self.message = _RawChoiceMessage(d.get("message", {}))
-        self.finish_reason = d.get("finish_reason", "")
-
-
-class _RawResponse:
-    __slots__ = ("choices",)
-
-    def __init__(self, d: dict):
-        self.choices = [_RawChoice(c) for c in d.get("choices", [])]
-
-
 def _request_headers(api_key: str | None) -> dict[str, str]:
     """Headers for one chat-completions POST.
 
@@ -449,6 +399,10 @@ def _request_headers(api_key: str | None) -> dict[str, str]:
     return headers
 
 
+_EMPTY_STREAM_S = 90.0
+_EMPTY_STREAM_CHUNKS = 1200
+
+
 def _stream_chat_completions(
     url: str,
     headers: dict[str, str],
@@ -460,14 +414,11 @@ def _stream_chat_completions(
     """POST with ``stream: true``, return the aggregated response.
 
     Reassembles the SSE deltas into the same ``{"choices": [...],
-    "usage": {...}}`` shape vLLM returns for non-streaming calls so
-    every downstream consumer (parser, _RawResponse) is
-    unaffected. Streaming exists for CANCELLATION (the per-chunk hook
-    that tears down the TCP socket), not for logging — the flight
-    transcript records the request at dispatch and the response when it
-    lands, and stores no per-token stream.
+    "usage": {...}}`` shape vLLM returns for non-streaming calls.
+    Streaming exists for CANCELLATION (the per-chunk hook that tears down
+    the TCP socket), not for logging: the flight transcript stores no
+    per-token stream.
     """
-    streamed_body = {**body, "stream": True}
     aggregated_text: list[str] = []
     aggregated_reasoning: list[str] = []
     aggregated_tool_calls: dict[int, dict] = {}
@@ -476,9 +427,7 @@ def _stream_chat_completions(
     model: str | None = None
     role: str | None = None
     # A server that streams nothing but empty deltas is a hung generation;
-    # give up on whichever bound trips first.
-    empty_stream_timeout_s = 90.0
-    empty_stream_max_chunks = 1200
+    # give up after _EMPTY_STREAM_S or _EMPTY_STREAM_CHUNKS, whichever first.
     empty_chunk_count = 0
     first_empty_at: float | None = None
 
@@ -488,7 +437,7 @@ def _stream_chat_completions(
     watch = _CancelWatch(cancel_event) if cancel_event is not None else None
     try:
         with httpx.Client(timeout=timeout) as client, client.stream(
-            "POST", url, headers=headers, json=streamed_body,
+            "POST", url, headers=headers, json=body,
             extensions={"trace": watch.trace} if watch is not None else None,
         ) as resp:
             if resp.status_code >= 400:
@@ -501,11 +450,6 @@ def _stream_chat_completions(
                 # cancel fired.
                 if cancel_event is not None and cancel_event.is_set():
                     raise CallCanceled("canceled mid-stream")
-                # httpx normally yields str, but tests / older
-                # clients may yield bytes; normalize so the SSE
-                # parser stays simple.
-                if isinstance(raw_line, bytes):
-                    raw_line = raw_line.decode("utf-8", errors="replace")
                 if not raw_line or not raw_line.startswith("data:"):
                     continue
                 payload = raw_line[len("data:") :].strip()
@@ -570,24 +514,13 @@ def _stream_chat_completions(
                 if has_signal:
                     empty_chunk_count = 0
                     first_empty_at = None
-                else:
-                    empty_chunk_count += 1
-                    now = time.monotonic()
-                    if first_empty_at is None:
-                        first_empty_at = now
-                    timed_out = (
-                        empty_stream_timeout_s > 0
-                        and now - first_empty_at >= empty_stream_timeout_s
-                    )
-                    chunk_capped = (
-                        empty_stream_max_chunks > 0
-                        and empty_chunk_count >= empty_stream_max_chunks
-                    )
-                    if timed_out or chunk_capped:
-                        raise httpx.ReadTimeout(
-                            "LLM stream emitted only empty deltas "
-                            f"for {empty_chunk_count} chunks"
-                        )
+                    continue
+                empty_chunk_count += 1
+                first_empty_at = first_empty_at or time.monotonic()
+                if (time.monotonic() - first_empty_at >= _EMPTY_STREAM_S
+                        or empty_chunk_count >= _EMPTY_STREAM_CHUNKS):
+                    raise httpx.ReadTimeout(
+                        f"LLM stream emitted only empty deltas for {empty_chunk_count} chunks")
     except httpx.HTTPError:
         if cancel_event is not None and cancel_event.is_set():
             raise CallCanceled("canceled in flight") from None
@@ -636,6 +569,12 @@ def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusa
         )
 
 
+#: The sampling keys a refused request's summary names. A serve whose template
+#: carries no effort field answers 400 on one, and the summary is where that
+#: reads: the body head below is swamped by ``messages``.
+_SAMPLING_KEYS = ("temperature", "top_p", "top_k", "presence_penalty", "max_tokens", "reasoning_effort")
+
+
 def _chat_completions_raw(
     base_url: str,
     api_key: str | None,
@@ -643,16 +582,14 @@ def _chat_completions_raw(
     timeout: float,
     cancel_event: threading.Event | None = None,
     **kwargs,
-) -> _RawResponse:
-    """Send a chat completion via raw HTTP.
+) -> dict:
+    """Send a chat completion via raw HTTP and return the response JSON.
 
-    Retries transient 5xx responses up to `_MAX_RETRIES` times with exponential
-    backoff. Request errors (connection refused, timeout) also retry.
-    Rate-limit and quota responses (429/402) draw on a separate
-    `_MAX_RATE_LIMIT_RETRIES` budget so a burst of them cannot consume the
-    transient-fault budget; each wait honours `Retry-After` when present.
-    Every other 4xx is surfaced immediately; it indicates a malformed request
-    that retrying would not fix.
+    A 5xx or a transport error (connection refused, connect timeout) burns
+    `_MAX_RETRIES` with exponential backoff. Rate-limit and quota responses
+    (429/402) draw on a separate `_MAX_RATE_LIMIT_RETRIES` budget, each wait
+    honouring `Retry-After`. Every other 4xx is surfaced immediately; it
+    indicates a malformed request that retrying would not fix.
     """
     transport_meta = {k: kwargs.pop(k, None) for k in _TRANSPORT_META_KEYS}
     body = {k: v for k, v in kwargs.items() if v is not None}
@@ -669,22 +606,11 @@ def _chat_completions_raw(
     # A ``cancel_event`` streams: the SSE path is where the cancel watch
     # shuts the socket down (see ``_stream_chat_completions``).
     use_stream = cancel_event is not None
-
-    # Ask the server to emit the final ``usage`` block on streaming
-    # responses — without this, Gemini/OpenAI-compat streams omit it
-    # entirely and the transcript's response carries no token counts.
-    # vLLM honors the same field. Merge into any pre-set
-    # ``stream_options`` so a caller's flags (e.g. ``continuous_usage``)
-    # aren't clobbered.
     if use_stream:
-        existing_opts = body.get("stream_options")
-        if not isinstance(existing_opts, dict):
-            existing_opts = {}
-        else:
-            existing_opts = dict(existing_opts)
-        existing_opts.setdefault("include_usage", True)
-        body["stream_options"] = existing_opts
-        body.setdefault("stream", True)
+        # The final ``usage`` block: without it OpenAI-compatible streams
+        # omit token counts and the transcript's response carries none.
+        body["stream_options"] = {"include_usage": True}
+        body["stream"] = True
         # Watch vLLM #43713 here: the qwen3_xml STREAMING tool parser can emit
         # invalid JSON for several ``<function=...>`` blocks in one
         # ``<tool_call>``. The reasoner's own arg-repair
@@ -705,26 +631,10 @@ def _chat_completions_raw(
                 raise CallCanceled("canceled before dispatch")
             if use_stream:
                 response_json = _stream_chat_completions(
-                    url,
-                    headers,
-                    body,
-                    timeout=timeout,
-                    cancel_event=cancel_event,
-                )
+                    url, headers, body, timeout=timeout, cancel_event=cancel_event)
             else:
                 with httpx.Client(timeout=timeout) as client:
                     r = client.post(url, headers=headers, json=body)
-                if 500 <= r.status_code < 600 and attempt < _MAX_RETRIES:
-                    log.warning(
-                        "LLM endpoint %d on attempt %d/%d; retrying in %.1fs",
-                        r.status_code,
-                        attempt + 1,
-                        _MAX_RETRIES + 1,
-                        _BACKOFF_S * (2**attempt),
-                    )
-                    time.sleep(_BACKOFF_S * (2**attempt))
-                    attempt += 1
-                    continue
                 r.raise_for_status()
                 response_json = r.json()
             if cancel_event is not None and cancel_event.is_set():
@@ -732,7 +642,7 @@ def _chat_completions_raw(
                 raise CallCanceled("canceled as the answer landed")
             if flight_dir is not None:
                 _flight_response_record(flight_dir, request_id, response_json)
-            return _RawResponse(response_json)
+            return response_json
         except CallCanceled:
             # Surface immediately; cancellation is intentional and
             # retrying would just re-dispatch the same aborted call.
@@ -802,90 +712,20 @@ def _chat_completions_raw(
                 # model surfaces here, on either path.
                 _raise_on_served_model_mismatch(base_url, body.get("model"), e.response.text)
             if status is not None and status < 500:
-                try:
-                    resp_text = e.response.text
-                except Exception:
-                    resp_text = "<failed to read response body>"
-                tools_list = body.get("tools") or []
-                log.error(
-                    "LLM endpoint %d response body: %s",
-                    e.response.status_code,
-                    resp_text[:4000],
-                )
+                # A <500 that is not a rate limit is a malformed-request
+                # bug, not a capacity event; surface it (retry won't fix it).
                 msgs = body.get("messages") or []
-                msg_sizes = []
-                for i, m in enumerate(msgs):
-                    c = m.get("content")
-                    if isinstance(c, str):
-                        n = len(c)
-                    elif c is None:
-                        n = 0
-                    else:
-                        n = len(json.dumps(c, default=str))
-                    tcs = m.get("tool_calls") or []
-                    tc_chars = sum(
-                        len(((tc.get("function") or {}).get("arguments") or ""))
-                        for tc in tcs
-                    )
-                    msg_sizes.append(
-                        f"[{i}:{m.get('role')}]={n}c"
-                        + (f"+{tc_chars}tc" if tc_chars else "")
-                    )
-                tools_chars = sum(
-                    len(json.dumps(t, default=str)) for t in tools_list
-                )
                 log.error(
-                    "LLM endpoint %d request summary: transport_kind=%s, "
-                    "body_keys=%s, n_tools=%d (%dc), tool_choice=%r, "
-                    "sampling=%r, model=%r, "
-                    "n_messages=%d, msg_sizes=%s, total_msg_chars=%d",
-                    e.response.status_code,
-                    transport_meta.get("transport_kind"),
-                    sorted(body.keys()),
-                    len(tools_list),
-                    tools_chars,
-                    body.get("tool_choice"),
-                    {
-                        k: body.get(k)
-                        for k in (
-                            "temperature",
-                            "top_p",
-                            "top_k",
-                            "presence_penalty",
-                            "max_tokens",
-                            # A serve whose template carries no effort
-                            # field answers 400 on one, and this line is
-                            # where that reads: the summary names the key
-                            # and the value, so an arm asking for an
-                            # effort the card does not take is a legible
-                            # refusal rather than an unexplained
-                            # malformed-request raise. The body head below
-                            # cannot serve for it — ``messages`` is dumped
-                            # first and swamps the 8000-char window.
-                            "reasoning_effort",
-                        )
-                        if k in body
-                    },
-                    body.get("model"),
-                    len(msgs),
-                    " ".join(msg_sizes),
-                    sum(
-                        (
-                            len(m["content"])
-                            if isinstance(m.get("content"), str)
-                            else 0
-                        )
-                        for m in msgs
-                    ),
-                )
+                    "LLM endpoint %d response body: %s", status, e.response.text[:4000])
+                log.error(
+                    "LLM endpoint %d request summary: transport_kind=%s, body_keys=%s, "
+                    "n_tools=%d, sampling=%r, model=%r, n_messages=%d, roles=%s",
+                    status, transport_meta.get("transport_kind"), sorted(body),
+                    len(body.get("tools") or []), {k: body[k] for k in _SAMPLING_KEYS if k in body},
+                    body.get("model"), len(msgs), [m.get("role") for m in msgs])
                 log.error(
                     "LLM endpoint %d request body (head): %s",
-                    e.response.status_code,
-                    json.dumps(body, indent=2, default=str)[:8000],
-                )
-                # A <500 that is not a rate limit is a malformed-request
-                # bug, not a capacity event; surface it (retry won't fix
-                # it).
+                    status, json.dumps(body, indent=2, default=str)[:8000])
                 raise
             if attempt >= _MAX_RETRIES:
                 raise

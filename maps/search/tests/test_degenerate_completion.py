@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from maps.llm.http import DegenerateCompletion, _RawResponse
+from maps.llm.http import DegenerateCompletion
 from maps.search.parse_compile import reasoner_agent
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.tests.fakes import TEST_SPEC
@@ -17,11 +17,11 @@ def _serve(monkeypatch, *, content="", reasoning="", finish_reason="stop",
 
     def _fake(url, api_key, **kwargs):
         sent.update(kwargs)
-        return _RawResponse({"choices": [{
+        return {"choices": [{
             "finish_reason": finish_reason,
             "message": {"content": content, "reasoning_content": reasoning,
                         "tool_calls": list(tool_calls)},
-        }]})
+        }]}
 
     monkeypatch.setattr(reasoner_agent, "_chat_completions_raw", _fake)
     return sent

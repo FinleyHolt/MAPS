@@ -7,7 +7,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from maps.llm.http import _RawResponse
 from maps.search.parse_compile import reasoner_agent
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.reasoner_loop import MissionReply, run_mission
@@ -20,11 +19,11 @@ def _serve(monkeypatch) -> list[dict]:
 
     def _fake(url, api_key, **kwargs):
         sent.append(kwargs)
-        return _RawResponse({"choices": [{
+        return {"choices": [{
             "finish_reason": "stop",
             "message": {"content": "standing by", "reasoning_content": "",
                         "tool_calls": []},
-        }]})
+        }]}
 
     monkeypatch.setattr(reasoner_agent, "_chat_completions_raw", _fake)
     return sent

@@ -426,16 +426,17 @@ class Reasoner:
             kwargs["cancel_event"] = self.cancel_event
 
         resp = _chat_completions_raw(self.reasoner_url, self.api_key, **kwargs)
-        choice = resp.choices[0]
-        msg = choice.message
+        choice = resp["choices"][0]
+        msg = choice.get("message", {})
         # Round-trip the reasoning channel back to the model on the next
         # request (OpenCode's `interleaved` pattern): prior thinking is
         # preserved on the assistant turn so vLLM's Qwen3 chat template
         # renders it as `<think>...</think>` in the next prompt. Empty
         # string (rather than absent key) keeps the field shape stable.
-        reasoning_text = msg.reasoning or ""
-        text = msg.content or ""
-        finish_reason = str(choice.finish_reason or "")
+        # vLLM 0.21 names the span ``reasoning``; older serves ``reasoning_content``.
+        reasoning_text = msg.get("reasoning") or msg.get("reasoning_content") or ""
+        text = msg.get("content") or ""
+        finish_reason = str(choice.get("finish_reason") or "")
         assistant_msg: dict[str, Any] = {
             "role": "assistant",
             "content": text,
@@ -443,14 +444,14 @@ class Reasoner:
         }
         raw_calls = [
             {
-                "id": tc.id,
-                "type": tc.type or "function",
+                "id": tc.get("id"),
+                "type": tc.get("type") or "function",
                 "function": {
-                    "name": tc.function.name,
-                    "arguments": tc.function.arguments,
+                    "name": tc.get("function", {}).get("name", ""),
+                    "arguments": tc.get("function", {}).get("arguments", ""),
                 },
             }
-            for tc in (msg.tool_calls or [])
+            for tc in (msg.get("tool_calls") or [])
         ]
         # An unregistered function name is a parser mangle (fragments of the
         # XML envelope leaking into the name). Keep the call ON history with
