@@ -889,7 +889,7 @@ class _CueSortedRows(list):
     """Marker: this list's ORDER was produced by the ordering op (score_by)
     over cue-derived keys. Behaves as a plain list everywhere else."""
 
-    cue_sorted = True
+    ordered = True
     op_cols: list = []
 
 
@@ -1223,8 +1223,7 @@ def compact_results(results: dict, *, widen_form: str = "",
                 f"this retrieval searched {v.searched} and matched nothing."
                 if isinstance(v, _EmptyFindMiss) else "")
             return head
-        elif not (getattr(v, "cue_sorted", False)
-                  or getattr(v, "ordered", False)):
+        elif not getattr(v, "ordered", False):
             census, named = _surface_census(v)
             head = {"len": len(v), "census": census, "named": named}
             if cut:
@@ -2198,8 +2197,7 @@ def _filter_items(cx, a):
     key, opr, val = a["key"], a["op"], a.get("value")
     # A filter PRESERVES its input's order: a cut over an ordered set stays
     # ordered (and renderable); a cut over a browse stays not.
-    _in_ordered = bool(getattr(items, "cue_sorted", False)
-                       or getattr(items, "ordered", False))
+    _in_ordered = bool(getattr(items, "ordered", False))
     if opr == "le":
         if items and not any(isinstance(it.get(key), (int, float)) for it in items):
             raise ProgramError(
@@ -2334,8 +2332,7 @@ def _stratum(cx, a):
             return False
         return (_lo is None or v >= _lo) and (_hi is None or v < _hi)
     r = _FilterCutRows(it for it in items if _in_tier(it))
-    r.ordered = bool(getattr(items, "cue_sorted", False)
-                     or getattr(items, "ordered", False))
+    r.ordered = bool(getattr(items, "ordered", False))
     return r
 
 
@@ -2454,8 +2451,7 @@ def _compare(cx, a):
     # Order propagation: compare preserves input order, so its result is
     # ordered iff its input was (read off the resolved source).
     _src = cx.resolve(a["items"]) if cx.is_ref(a["items"]) else a["items"]
-    _in_ordered = bool(getattr(_src, "cue_sorted", False)
-                       or getattr(_src, "ordered", False))
+    _in_ordered = bool(getattr(_src, "ordered", False))
     specs, _standing_ref_handles = _compare_specs(cx, a.get("refs") or [])
 
     # --- per-ref column labels + headers ------------------------------

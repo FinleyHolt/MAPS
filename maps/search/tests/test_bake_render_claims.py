@@ -67,7 +67,7 @@ def test_a_cue_sorted_head_is_not_told_its_own_order_is_arbitrary():
         # below is testing anything.
         if len(pool) <= _BROAD_DUMP_SOFT_ROWS or len(nm) != 1 or None in nm:
             continue
-        assert getattr(out["r2"], "cue_sorted", False), stem
+        assert getattr(out["r2"], "ordered", False), stem
         env = compact_results({"r0": pool, "r2": out["r2"]})
         assert "arbitrary" in (env["r0"].get("hint") or ""), (stem, env["r0"])
         assert "name_match" not in (env["r0"].get("hint") or ""), env["r0"]
