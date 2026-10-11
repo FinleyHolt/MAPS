@@ -135,7 +135,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     """Render ONE resolved map view. Pure; returns the record or None.
 
     ``spec``: {center_xy, context_m, center_fid?, center_label,
-    center_boundary?, marks [{fid, xy, boundary, label, is_target}],
+    center_boundary?, marks [{fid, xy, boundary, label}],
     frame_up?, frame_note?} -- the crop-request vocabulary, so the loop's
     resolver and audit persist one shape for both instruments.
     """
@@ -527,9 +527,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     center_label = str(spec.get("center_label") or center_fid or "map center")
     legend = [{"digit": 1, "fid": center_fid, "label": center_label,
                "role": "center"}]
-    target_px = None
-    target_label = ""
-    target_poly = None
     neighbor_px: list = []
     neighbor_polys: list = []
     marks_out_of_view: list[str] = []
@@ -549,21 +546,13 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         _mlab = str(mk.get("label") or "").strip()
         if _mlab and _mlab != mfid:
             _name_cands.append((px, py, _mlab))
-        if bool(mk.get("is_target")) and target_px is None:
-            target_px = (px, py)
-            target_label = str(mk.get("label") or mfid)
-            target_poly = _proj_poly(mk.get("boundary"))
-            legend.append({"digit": 2, "fid": mfid, "label": target_label,
-                           "role": "target"})
-        else:
-            neighbor_px.append((px, py))
-            neighbor_polys.append(_proj_poly(mk.get("boundary")))
-            # digits are 1 = center, 2 = the target when there is one, then
-            # the other marks in caller order.
-            _base = 2 if target_px is not None else 1
-            legend.append({"digit": _base + len(neighbor_px), "fid": mfid,
-                           "label": str(mk.get("label") or mfid),
-                           "role": "context"})
+        # every mark is context (a map request names no target): digits
+        # are 1 = center, then the marks in caller order
+        neighbor_px.append((px, py))
+        neighbor_polys.append(_proj_poly(mk.get("boundary")))
+        legend.append({"digit": 1 + len(neighbor_px), "fid": mfid,
+                       "label": str(mk.get("label") or mfid),
+                       "role": "context"})
 
     # NAMES: the cue is written in names. Marked features carry theirs (a
     # mark's label is its name), and so does EVERY named road in the window;
@@ -621,8 +610,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
             rgb,
             center_px=_w2p(cx, cy),
             center_poly_px=_proj_poly(spec.get("center_boundary")),
-            target_px=target_px,
-            target_poly_px=target_poly,
             neighbor_px=neighbor_px,
             neighbor_polys_px=neighbor_polys,
             band_text=band_text,

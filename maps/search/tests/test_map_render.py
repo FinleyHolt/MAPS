@@ -176,7 +176,7 @@ def test_render_record_carries_the_contract():
          "center_fid": "prior_0", "center_label": "residential prior_0",
          "marks": [{"fid": "detected_0", "xy": [19.0, 19.0],
                     "boundary": None, "label": "car detected_0",
-                    "is_target": True}]},
+                    "is_target": False}]},
         _FEATURES, **_TILE)
     assert rec is not None
     assert rec["kind"] == "map"
