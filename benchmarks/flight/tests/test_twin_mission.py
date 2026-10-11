@@ -88,8 +88,10 @@ def serves(monkeypatch):
 
     from benchmarks.citynav.run_benchmark import perception
 
+    from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+
     seen = SimpleNamespace(detect=lambda obs, xy, instruction_hint=None: [], reset=lambda: None,
-                           concept_provider=None)
+                           concept_provider=ReasonerUnionConceptProvider(), sahi_tiles_failed=0)
     monkeypatch.setattr(perception, "make_perception", lambda cfg: seen)
     return sent
 
@@ -135,7 +137,7 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity,
         detect=lambda obs, xy, instruction_hint=None: [], concept_provider=ReasonerUnionConceptProvider()))
     endpoint_spec.install_spec(endpoint_spec.discover_from_env())
     M.activate_calcity()
-    h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", workdir=tmp_path)
+    h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml")
     h.search_loop.declare_mission_concepts([{"class": "car", "role": "target"}])
     h.search_loop.state.perception_director.watchlist_apply(["tree"], [])
     assert h.perception.concept_provider.concepts == ["car", "tree"]

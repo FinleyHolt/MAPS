@@ -37,10 +37,9 @@ import os
 import queue
 import threading
 import time
-from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -49,6 +48,11 @@ from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat
 from benchmarks.flight.vehicle import Leg
 from maps.search.parse_compile.conversation import CONVERSATION_JSONL, ConversationLog
+
+if TYPE_CHECKING:
+    # Imported where used: the engine binds the bench's paths at import,
+    # after the Cal City bridge has been activated.
+    from benchmarks.citynav.run_benchmark.episode_runner import Hydrated
 
 log = logging.getLogger("flight.mission")
 
@@ -120,21 +124,6 @@ def authored_episode(episode_id: str, start_xy: tuple[float, float]):
     )
 
 
-@dataclass
-class Hydrated:
-    """The search stack for one mission, built the way the bench builds it."""
-
-    cfg: Any
-    state: Any
-    assets: Any
-    episode: Any
-    sensor: Any
-    tile_frame: Any
-    perception: Any
-    search_loop: Any
-    compiler: Any
-
-
 def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] | None = None):
     """The split's row named ``episode_id``, or with ``start_xy`` an
     operator-authored mission with no row (:func:`authored_episode`)."""
@@ -149,73 +138,24 @@ def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] |
     return parse_episode(found[1], row_index=found[0])
 
 
-def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
+def hydrate(*, episode_id: str, split: str, config: str,
             start_xy: tuple[float, float] | None = None) -> Hydrated:
-    """Assets, perception and the belief engine for one mission, exactly as the bench builds them."""
-    from benchmarks.citynav.episode import EpisodeState  # noqa: PLC0415
-    from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, tile_stem  # noqa: PLC0415
+    """The engine for one mission, built by the bench's own
+    :func:`build_episode`: the flown engine (no withhold), a sensor that
+    resolves, and the operator's start as given."""
     from benchmarks.citynav.run_benchmark import load_config, load_episode_assets  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
-    from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
-    from benchmarks.citynav.run_benchmark.perception import make_perception  # noqa: PLC0415
-    from maps.perception.geometry.geolocate import TileFrame  # noqa: PLC0415
-    from maps.perception.geometry.sensor_spec import resolve_sensor, served_description  # noqa: PLC0415
-    from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider  # noqa: PLC0415
-    from maps.search import MapsCompiler, SearchLoop  # noqa: PLC0415
-    from maps.sws import GridDomain  # noqa: PLC0415
-    from maps.sws.graph import load_graph  # noqa: PLC0415
+    from benchmarks.citynav.run_benchmark.dispatch import _build_compiler  # noqa: PLC0415
+    from benchmarks.citynav.run_benchmark.episode_runner import build_episode  # noqa: PLC0415
+    from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
 
     cfg = load_config(str(config))
     assert_flight_config(cfg)
-    episode = resolve_episode(episode_id, split, start_xy)
-    assets = load_episode_assets(episode.map_name, cfg.cell_size_m)
-
-    perception = make_perception(cfg)
-    sam_concept_setter = None
-    cp = getattr(perception, "concept_provider", None)
-    if isinstance(cp, ReasonerUnionConceptProvider):
-        sam_concept_setter = cp.set_concepts
-
-    try:
-        graph = load_graph(tile_stem(episode.map_name))
-    except FileNotFoundError:
-        from maps.sws.graph import build_object_graph  # noqa: PLC0415
-
-        graph = build_object_graph(assets.base_features, cell_size_m=float(assets.cell_size_m))
-
-    grid_h, grid_w = assets.grid_shape
-    grid = GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m))
-    sensor = resolve_sensor(cfg.sensor)
-    if sensor is None:
+    if resolve_sensor(cfg.sensor) is None:
         raise RuntimeError(f"cfg.sensor did not resolve a SensorSpec: {cfg.sensor!r}")
-    compiler = MapsCompiler(sensor_description=served_description(sensor, cfg.start_altitude_agl_m),
-                            workdir=workdir)
-
-    start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.start_z)
-    search_loop = SearchLoop(
-        grid,
-        tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
-        tile_name=f"citynav::{assets.map_name}",
-        compiler=compiler,
-        sam_concept_setter=sam_concept_setter,
-        sam_watchlist_setter=sam_concept_setter,
-        # The block's ground datum: the mission's observation span is
-        # ``2 * (alt - ground)`` off it, and without it every explore answers
-        # "no footprint to cover".
-        ortho_ground_z_m=ground,
-        # The look tool's crop renderer is wired off this; in flight every
-        # crop is cut from the run's own imagery instead (``look_imagery``).
-        rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
-    )
-    search_loop.start(graph)
-
-    state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m, graph=graph)
-    state.record_visit()
-
-    tile_frame = TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
-                           cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape))
-    return Hydrated(cfg=cfg, state=state, assets=assets, episode=episode, sensor=sensor, tile_frame=tile_frame,
-                    perception=perception, search_loop=search_loop, compiler=compiler)
+    episode = resolve_episode(episode_id, split, start_xy)
+    return build_episode(cfg, episode, load_episode_assets(episode.map_name, cfg.cell_size_m),
+                         _build_compiler(cfg))
 
 
 def leg_span_m(h: Hydrated) -> float:
@@ -366,7 +306,7 @@ class Mission:
         """``area`` in WGS84, the form the recording is asked in."""
         return [local_to_lonlat(self._tiles_dir, self.map_name, float(x), float(y)) for x, y in area]
 
-    def _fly_live(self, inner, h: Hydrated, item: dict[str, Any]) -> dict[str, Any]:
+    def _fly_live(self, session, item: dict[str, Any]) -> dict[str, Any]:
         """A flight on the aircraft, under the one arrival rule: a leg is flown
         for an AREA (:func:`leg_area`) and has arrived when the recording holds
         it, whichever pass held it. The observation is the frames that held
@@ -380,18 +320,9 @@ class Mission:
         pass did hold, and nothing when none was; the ``leg`` row says which.
         The model is served the stop as the target it named either way: the
         pass geometry is the crew's to fix, not the reasoner's."""
-        from benchmarks.citynav.run_benchmark.mission_engine import resolve_flight_target  # noqa: PLC0415
-
+        h = session.h
         token = str(item.get("target_fid") or "")
-
-        def _node_xy(fid: str):
-            xy = h.search_loop.world_xy_for_node(fid)
-            return ((float(xy[0]), float(xy[1])), "prior") if xy is not None else None
-
-        markers = list(getattr(h.episode, "marker_positions", None) or [])
-        marker_xy = ((float(sum(p[0] for p in markers) / len(markers)),
-                      float(sum(p[1] for p in markers) / len(markers))) if markers else None)
-        resolved = resolve_flight_target(token, node_xy=_node_xy, pose_xy=h.state.pose_xy, marker_xy=marker_xy)
+        resolved = session.resolve(token)
         if "error" not in resolved:
             xy = [float(resolved["xy"][0]), float(resolved["xy"][1])]
             area = leg_area(h, token, xy)
@@ -469,7 +400,7 @@ class Mission:
                             f"it, and the flight has no observation")})
             self._held, self._held_area = held, (area, xy)
         try:
-            return inner(item)
+            return session.fly(item)
         finally:
             # The fused pass is spent with the flight; the area stays, so a
             # later observation in the turn is the pass over it again.
@@ -692,10 +623,10 @@ class Mission:
 
     def _run(self) -> None:
         from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
-        from benchmarks.citynav.run_benchmark.mission_engine import build_mission_session  # noqa: PLC0415
+        from benchmarks.citynav.run_benchmark.mission_engine import MissionSession  # noqa: PLC0415
         from maps.llm.endpoint_spec import discover_from_env, install_spec  # noqa: PLC0415
         from maps.llm.http import CallCanceled  # noqa: PLC0415
-        from maps.search.parse_compile.reasoner_loop import continue_mission, run_mission  # noqa: PLC0415
+        from maps.search.parse_compile.reasoner_loop import continue_mission  # noqa: PLC0415
 
         try:
             with self._lock:
@@ -705,16 +636,15 @@ class Mission:
             install_spec(discover_from_env())
             self._write_manifests()
 
-            h = hydrate(episode_id=self.episode_id, split=self.split, config=self.config, workdir=self.workdir,
-                        start_xy=self._start_xy)
+            h = hydrate(episode_id=self.episode_id, split=self.split, config=self.config, start_xy=self._start_xy)
             self._hydrated = h
             instruction = self.instruction_override or h.episode.description
             # The override IS the operator's instruction, so the episode
-            # carries no second copy: fly_one echoes the description back as
+            # carries no second copy: a flight echoes the description back as
             # the flight report's cue and hints the detector with it, and the
             # split's own sentence would serve an attribute the operator
             # withheld. ponytail: stamp the episode rather than thread the
-            # instruction through fly_one.
+            # instruction through the flight.
             h.episode.description = instruction
             with self._lock:
                 self.instruction = instruction
@@ -747,42 +677,15 @@ class Mission:
                 self._imagery.add(obs)
                 return obs
 
-            session = build_mission_session(
-                cfg=h.cfg, state=h.state, assets=h.assets, episode=h.episode, sensor=h.sensor,
-                tile_frame=h.tile_frame, perception=h.perception,
-                search_loop=h.search_loop, recorder=self._recorder, t_start=time.monotonic(),
-                observe=observe,
-            )
+            session = MissionSession(h, recorder=self._recorder, t_start=time.monotonic(), observe=observe)
             self.flights = session.flights
             # On the aircraft the leg is flown BEFORE the frame is read, and a
             # pass takes the stop the recording holds first.
-            session.mission_spec.fly = functools.partial(self._fly_live, session.mission_spec.fly, h)
+            session.mission_spec.fly = functools.partial(self._fly_live, session)
             session.mission_spec.held_now = functools.partial(self._held_now, h)
-
-            common = dict(
-                ctx=session.ctx,
-                mission_spec=session.mission_spec,
-                look_renderer=h.search_loop._render_candidate_crops,
-                look_audit_dir=h.search_loop._look_audit_dir(),
-                obs_span_m=session.obs_span_m,
-                obs_minor_m=session.obs_minor_m,
-                boost_queue=session.boost,
-                transcript=self.transcript,
-                retask=self._next_tasking,
-            )
-            seed = h.compiler._resolve_seed_base() & 0x7FFFFFFF
-            reply, reasoner = run_mission(
-                instruction=instruction,
-                reasoner_url=h.compiler.reasoner_url,
-                endpoint_spec=h.compiler.endpoint_spec,
-                api_key=h.compiler.api_key,
-                seed=seed,
-                sensor_description=h.compiler.sensor_description,
-                cancel_event=self._cancel,
-                diag=self._turn_diag,
-                reasoning_effort=self.reasoning_effort,
-                **common,
-            )
+            heard = dict(transcript=self.transcript, retask=self._next_tasking)
+            reply, reasoner = session.run(instruction, cancel_event=self._cancel, diag=self._turn_diag,
+                                          reasoning_effort=self.reasoning_effort, **heard)
             self._record_reply(reply)
 
             # THE REPLY IS A REPORT, NOT AN ENDING: park and wait for the
@@ -798,7 +701,7 @@ class Mission:
                     self.ended_at = None
                 turn += 1
                 reply = continue_mission(reasoner=reasoner, instruction=nxt, diag=self._turn_diag,
-                                         rid_tag=f"m{turn}", **common)
+                                         rid_tag=f"m{turn}", **heard, **session.run_kwargs)
                 self._record_reply(reply)
             with self._lock:
                 self.status = STATE_ENDED
@@ -883,18 +786,13 @@ class Mission:
         h = self._hydrated
         if h is None or h.episode.target_xy is None or len(visited) < 1:
             return None
-        from benchmarks.citynav import eval as bench_eval  # noqa: PLC0415
         from benchmarks.citynav.adapter import load_objects  # noqa: PLC0415
         from benchmarks.citynav.paths import OBJECTS_JSON  # noqa: PLC0415
-        from benchmarks.citynav.run_benchmark.episode_runner import _success_mask  # noqa: PLC0415
+        from benchmarks.citynav.run_benchmark.episode_runner import score_episode  # noqa: PLC0415
 
         trajectory = [(float(p[0]), float(p[1])) for p in visited]
-        criterion, mask = _success_mask(h.cfg, h.episode, load_objects(OBJECTS_JSON))
-        scores = bench_eval.score_arrival(
-            criterion=criterion, final_pos_xy=trajectory[-1],
-            target_xy=(float(h.episode.target_xy[0]), float(h.episode.target_xy[1])),
-            pos_trajectory=trajectory,
-            success_dist_m=float(h.cfg.success_radius_m), flew=len(trajectory) > 1, **mask)
+        scores = score_episode(h.cfg, h.episode, load_objects(OBJECTS_JSON), trajectory[-1], trajectory,
+                               flew=len(trajectory) > 1)
         scores["success_basis"] = "final_pos_xy"
         return scores
 

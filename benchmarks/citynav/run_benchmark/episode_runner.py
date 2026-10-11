@@ -1,41 +1,43 @@
-"""run_episode: per-episode setup -> mission conversation (fly-on-request)
--> trajectory synthesis -> scored result record.
+"""One episode's engine and, on the bench, its run: build the search stack
+(shared with the flight station), fly the mission conversation, replay the
+flown stops in the six-action alphabet, and score the final pose.
 """
 
 from __future__ import annotations
 
-from benchmarks.citynav.adapter import parse_episode
+import dataclasses
+import functools
+import logging
+import os
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from benchmarks.citynav.adapter import CityNavEpisode, parse_episode
 from benchmarks.citynav.episode import EpisodeState
+from benchmarks.citynav.eval import score_arrival
 from benchmarks.citynav.live_recorder import LiveRecorder
 from benchmarks.citynav.metrics import classify_referent
 from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, tile_stem
+from benchmarks.citynav.run_benchmark import perception as _perception
+from benchmarks.citynav.run_benchmark.assets import BlockAssets, load_episode_assets
 from benchmarks.citynav.run_benchmark.config import RunConfig
-from pathlib import Path
-from typing import Any
+from benchmarks.citynav.run_benchmark.mission_engine import (
+    MissionSession,
+    perceive,
+    run_mission_episode,
+)
+from benchmarks.citynav.run_benchmark.spawn import uniform_spawn_xy
+from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 from maps.llm import flight_summary
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import crop_observation
-from maps.perception.ortho.detection_stamping import (
-    project_and_stamp_ortho_detections,
-)
-from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
-from maps.perception.sam.detect_client import SamDetectClient
-from maps.search import (
-    MapsCompiler,
-    SearchLoop,
-)
-from maps.sws import GridDomain
+from maps.search import MapsCompiler, SearchLoop
 from maps.search.withhold import withheld
+from maps.sws import GridDomain
 from maps.sws.graph import build_object_graph, load_graph
-import math
-import os
-import time
-from benchmarks.citynav.run_benchmark.assets import load_episode_assets
-from benchmarks.citynav.run_benchmark.mission_engine import run_mission_episode
-from benchmarks.citynav.run_benchmark.perception import make_perception
-from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
-import logging
 
 log = logging.getLogger("run_benchmark")
 
@@ -119,47 +121,161 @@ def _success_mask(cfg, episode, objects_by_map: dict) -> tuple[str, dict]:
     }
 
 
+def score_episode(cfg, episode, objects_by_map: dict, final_xy, trajectory, *, flew: bool = True) -> dict:
+    """The episode's metrics for an agent that ended at ``final_xy`` over
+    ``trajectory``, under this bench's success mask (``eval.score_arrival``).
+    The one scoring call of the bench row, its zero-flight row, the
+    commit's would-score check and the flight station's mission row."""
+    criterion, mask = _success_mask(cfg, episode, objects_by_map)
+    return score_arrival(
+        criterion=criterion,
+        final_pos_xy=final_xy,
+        target_xy=episode.target_xy,
+        pos_trajectory=trajectory,
+        success_dist_m=cfg.success_radius_m,
+        flew=flew,
+        **mask,
+    )
+
+
+@dataclass
+class Hydrated:
+    """The search stack for one episode, built once by :func:`build_episode`
+    for the bench and the flight station alike."""
+
+    cfg: RunConfig
+    state: EpisodeState
+    assets: BlockAssets
+    episode: CityNavEpisode
+    sensor: Any
+    tile_frame: TileFrame
+    perception: Any
+    search_loop: SearchLoop
+    compiler: MapsCompiler
+
+
+def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets,
+                  compiler: MapsCompiler) -> Hydrated:
+    """The engine for one episode: its graph, the start pose, the segmenter
+    with both of the agent's concept channels wired (the declared union and
+    the director's watchlist, which a view{watchlist} change or a placed
+    boost pushes), and the started SearchLoop."""
+    graph = _episode_graph(tile_stem(episode.map_name), assets)
+    start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.start_z)
+    # Runtime observations accumulate in this same graph; ``provenance``
+    # separates them from the prebaked nodes.
+    state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m, graph=graph)
+    state.record_visit()
+    # Looked up at call time: the flight's forced replay swaps it.
+    perception = _perception.make_perception(cfg)
+    set_concepts = perception.concept_provider.set_concepts
+    grid_h, grid_w = assets.grid_shape
+    search_loop = SearchLoop(
+        GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),
+        tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
+        tile_name=f"citynav::{assets.map_name}",
+        compiler=compiler,
+        sam_concept_setter=set_concepts,
+        sam_watchlist_setter=set_concepts,
+        # The mission's observation span is ``2 * (alt - ground)`` off it.
+        ortho_ground_z_m=ground,
+        # The look tool's crop raster (a live run crops its own imagery).
+        rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
+    )
+    search_loop.start(graph)
+    return Hydrated(
+        cfg=cfg, state=state, assets=assets, episode=episode,
+        sensor=resolve_sensor(cfg.sensor) if cfg.sensor else None,
+        tile_frame=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
+                             cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape)),
+        perception=perception, search_loop=search_loop, compiler=compiler,
+    )
+
+
+def _detected_fids(search_loop) -> set[str]:
+    return {nid for nid, node in search_loop.state.runtime_graph.nodes.items()
+            if str(getattr(node, "provenance", "")) == "detected"}
+
+
+def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
+    """The bench's retrospective perception: a view{boost} at a FLOWN stop
+    re-renders the raster crop at the recorded pose (north-up, as the flight
+    drew it), re-segments it with the boost vocabulary and folds it as a
+    flight does (:func:`mission_engine.perceive`); the delta is the tool
+    result. Zero flight: the ortho render is deterministic over the static
+    raster, so a visited pose stays re-analyzable. Bench-only, because the
+    flight's camera is not the raster."""
+    pose_xy = flown_entry.get("pose_xy")
+    if not (isinstance(pose_xy, (list, tuple)) and len(pose_xy) == 2):
+        return {"error": "the flown observation's pose is unknown"}
+    px, py = float(pose_xy[0]), float(pose_xy[1])
+    alt = flown_entry.get("alt_m")
+    alt = float(alt) if alt is not None else float(h.cfg.altitude_m)
+    try:
+        obs = crop_observation(
+            (px, py),
+            altitude_m=alt,
+            yaw_deg=0.0,
+            sensor=h.sensor,
+            rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
+            map_name=h.episode.map_name,
+        )
+    except Exception as exc:  # noqa: BLE001 — surfaced as a tool fact
+        log.exception("retro re-render failed")
+        return {"error": f"re-render failed: {type(exc).__name__}: {exc}"}
+    if obs is None or obs.rgb is None or obs.ortho_view_corners_xy is None:
+        return {"error": "re-render produced no ortho frame"}
+    try:
+        dets = h.perception._segment(obs, list(concepts))
+    except Exception as exc:  # noqa: BLE001 — surfaced as a tool fact
+        log.exception("retro segment failed")
+        return {"error": f"segment failed: {type(exc).__name__}: {exc}"}
+    obs.tile = h.tile_frame
+    before = _detected_fids(h.search_loop)
+    try:
+        perceive(h, obs, dets, h.state.step_idx)
+    except Exception as exc:  # noqa: BLE001 — surfaced as a tool fact
+        log.exception("retro ingest failed")
+        return {"error": f"ingest failed: {type(exc).__name__}: {exc}"}
+    new = sorted(_detected_fids(h.search_loop) - before)
+    sid = flown_entry.get("stop_id")
+    return {
+        "n_dets": len(dets),
+        "n_new": len(new),
+        "new_fids": new,
+        "note": (
+            f"re-segmented the recorded view at ({px:.0f}, {py:.0f})"
+            + (f" ({sid})" if sid else "")
+            + f" for {list(concepts)}: "
+            + (f"{len(new)} new detection(s) {new}" if new else "no new detections")
+        ),
+    }
+
+
 def run_episode(
     row: dict,
-    compiler: MapsCompiler | None,
+    compiler: MapsCompiler,
     objects_by_map: dict,
     cfg: RunConfig,
     recorder: LiveRecorder | None = None,
     row_index: int | None = None,
 ) -> dict | None:
+    """Fly one split row and return its scored record (None: no CityRefer
+    objects on its map, nothing to score)."""
     episode = parse_episode(row, row_index=row_index)
-    objs_for_map = objects_by_map.get(episode.map_name, [])
-    if not objs_for_map:
+    if not objects_by_map.get(episode.map_name, []):
         log.warning("  skip %s: no CityRefer objects", episode.episode_id)
         return None
 
     assets = load_episode_assets(episode.map_name, cfg.cell_size_m)
-    graph_stem = tile_stem(episode.map_name)
-    log.info("tile_stem=%s map_name=%s", graph_stem, episode.map_name)
-    graph = _episode_graph(graph_stem, assets)
-
+    log.info("tile_stem=%s map_name=%s", tile_stem(episode.map_name), episode.map_name)
     if cfg.spawn == "uniform":
-        # Seeded uniform spawn over the tile (run_benchmark.spawn). The
-        # episode object itself is rebound so every downstream reader —
-        # flight record, metrics, crash floors — sees the FLOWN start,
-        # not the dataset's.
-        import dataclasses as _dataclasses
-
-        from benchmarks.citynav.run_benchmark.spawn import uniform_spawn_xy
-
-        episode = _dataclasses.replace(
-            episode,
-            start_xy=uniform_spawn_xy(
-                (
-                    float(assets.bounds.x_min),
-                    float(assets.bounds.y_min),
-                    float(assets.bounds.x_max),
-                    float(assets.bounds.y_max),
-                ),
-                cfg.spawn_seed,
-                episode.episode_id,
-            ),
-        )
+        # The FLOWN start replaces the dataset's on the episode itself, so
+        # every downstream reader sees it.
+        b = assets.bounds
+        episode = dataclasses.replace(episode, start_xy=uniform_spawn_xy(
+            (float(b.x_min), float(b.y_min), float(b.x_max), float(b.y_max)),
+            cfg.spawn_seed, episode.episode_id))
         log.info(
             "  uniform spawn: (%.1f, %.1f) (spawn_seed=%d, episode=%s)",
             episode.start_xy[0],
@@ -167,456 +283,93 @@ def run_episode(
             int(cfg.spawn_seed),
             episode.episode_id,
         )
-    elif cfg.spawn != "episode":
-        raise ValueError(
-            f"unknown spawn mode {cfg.spawn!r} — expected 'episode' or 'uniform'"
-        )
-    # The start pose's altitude and the block's ground datum. The datum is
-    # threaded to the orthographic viewpoint picker so it sizes the view
-    # square from the same scalar the crop uses (``side = 2 * (alt -
-    # ground)``) instead of any per-object height prior.
-    start_alt_m, ortho_ground_z_m = start_altitude_m(
-        cfg, episode.map_name, episode.start_z
-    )
+    h = build_episode(cfg, episode, assets, compiler)
+    state = h.state
+    ground = h.search_loop._ortho_ground_z_m
     log.info(
         "  ortho start altitude: %.2f m (%s, ground=%.2f, "
         "cap=%.0f, view_square=%.0fm, episode=%s)",
-        start_alt_m,
+        state.altitude_m,
         (
             f"AGL {cfg.start_altitude_agl_m:.0f} m"
             if cfg.start_altitude_agl_m is not None
             else f"row z={episode.start_z:.2f}"
         ),
-        ortho_ground_z_m,
+        ground,
         float(cfg.altitude_cap_m),
-        2.0 * (start_alt_m - ortho_ground_z_m),
+        2.0 * (state.altitude_m - ground),
         episode.episode_id,
     )
-    state = EpisodeState(
-        pose_xy=episode.start_xy,
-        altitude_m=start_alt_m,
-        graph=graph,
-    )
-    # Runtime observations accumulate in the SAME graph as prebaked nodes;
-    # ``provenance`` is the only tag separating them. The belief engine
-    # mutates ``graph`` in place via maps.sws.graph.upsert_*; downstream
-    # consumers that filter by provenance get the right detected subset.
-    state.record_visit()
-
-    grid_h, grid_w = assets.grid_shape
-    grid = GridDomain(
-        height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)
-    )
-
-    perception = make_perception(cfg)
-
-    # Build the belief engine. The compiler carries the reasoner endpoint
-    # facts the mission engine reads (None disables the LLM path entirely;
-    # the engine still runs perception_update / paint in that mode). The
-    # SAM concept setter pushes each act.sam_concepts union back into a
-    # SAM-style perception adapter; non-SAM adapters get a no-op. The
-    # mission declares concepts latest-wins.
-    sam_concept_setter = None
-    sam_watchlist_setter = None
-    if isinstance(perception, SamDetectClient):
-        cp = perception.concept_provider
-        if isinstance(cp, ReasonerUnionConceptProvider):
-            sam_concept_setter = cp.set_concepts
-            # The agent-owned watchlist channel: how a view{watchlist}
-            # mutation / boost activation reaches the per-flight /segment
-            # calls.
-            sam_watchlist_setter = cp.set_concepts
-
-    search_loop: SearchLoop | None = None
-    if compiler is not None:
-        search_loop = SearchLoop(
-            grid,
-            tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
-            tile_name=f"citynav::{assets.map_name}",
-            compiler=compiler,
-            sam_concept_setter=sam_concept_setter,
-            sam_watchlist_setter=sam_watchlist_setter,
-            ortho_ground_z_m=ortho_ground_z_m,
-            # Upstream raster dir for the ``look`` tool's crop renderer,
-            # passed as a str so maps.search stays benchmark-agnostic.
-            rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
-        )
-        search_loop.start(graph)
-
-    tile_frame = TileFrame(
-        x_min=float(assets.bounds.x_min),
-        y_min=float(assets.bounds.y_min),
-        cell_size_m=float(assets.cell_size_m),
-        grid_shape=tuple(assets.grid_shape),
-    )
-    # Resolve the per-episode SensorSpec (a registered name or an inline
-    # sensor override; resolve_sensor).
-    sensor = resolve_sensor(cfg.sensor) if cfg.sensor else None
-    # ---- RETROSPECTIVE PERCEPTION executor (spec C4) --------------------
-    # The ortho ortho render is DETERMINISTIC over the static
-    # raster, so an already-visited pose's observation is permanently
-    # re-analyzable: a view{boost} targeting a FLOWN stop re-renders the
-    # crop at the recorded pose (the same crop_observation path the flight
-    # used), re-segments it with the boost vocabulary through the standard
-    # /segment client, ingests through the NORMAL update_perception upsert
-    # (world_contour + color-mixture stamping mirrored from the flight's
-    # paint pass — keep the two in lockstep), and returns the delta
-    # synchronously in the view tool result. Zero flight. crop_observation
-    # is a pure raster read for the ortho backend, /segment is HTTP, and
-    # update_perception takes the engine RLock (re-entrant under the boost
-    # callback's lock).
-    if search_loop is not None:
-        def _retro_perceive(flown_entry: dict, concepts: list) -> dict:
-            if perception is None or not hasattr(perception, "_segment"):
-                return {"error": "no SAM segment client on this run"}
-            pose_xy = flown_entry.get("pose_xy")
-            if not (isinstance(pose_xy, (list, tuple)) and len(pose_xy) == 2):
-                return {"error": "the flown observation's pose is unknown"}
-            _px, _py = float(pose_xy[0]), float(pose_xy[1])
-            _alt = flown_entry.get("alt_m")
-            _alt = float(_alt) if _alt is not None else float(cfg.altitude_m)
-            try:
-                _obs = crop_observation(
-                    (_px, _py),
-                    altitude_m=_alt,
-                    yaw_deg=0.0,
-                    sensor=sensor,
-                    rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
-                    map_name=episode.map_name,
-                )
-            except Exception as exc:  # noqa: BLE001 — surfaced as a tool fact
-                log.exception("retro re-render failed")
-                return {"error": (
-                    f"re-render failed: {type(exc).__name__}: {exc}")}
-            if (_obs is None or _obs.rgb is None
-                    or _obs.ortho_view_corners_xy is None):
-                return {"error": "re-render produced no ortho frame"}
-            try:
-                _dets = perception._segment(_obs, list(concepts))
-            except Exception as exc:  # noqa: BLE001 — surfaced as a tool fact
-                log.exception("retro segment failed")
-                return {"error": (
-                    f"segment failed: {type(exc).__name__}: {exc}")}
-            _obs.tile = tile_frame
-            # Ortho project + stamp: the SAME shared paint pass a flight
-            # runs (maps.perception.ortho.detection_stamping), so the
-            # two ingest paths stay in lockstep by construction.
-            _tracked: dict[int, object] = dict(
-                project_and_stamp_ortho_detections(
-                    _dets,
-                    view_corners_xy=_obs.ortho_view_corners_xy,
-                    rgb=_obs.rgb,
-                    tile=tile_frame,
-                )
-            )
-
-            def _detected_ids() -> set[str]:
-                return {
-                    nid for nid, node in
-                    search_loop.state.runtime_graph.nodes.items()
-                    if str(getattr(node, "provenance", "")) == "detected"
-                }
-
-            _before = _detected_ids()
-            try:
-                search_loop.update_perception(
-                    step_idx=int(getattr(state, "step_idx", 0) or 0),
-                    detections=_dets,
-                    projected_masks=_tracked,
-                    bounds_xy_min=(
-                        float(assets.bounds.x_min),
-                        float(assets.bounds.y_min),
-                    ),
-                    cell_size_m=float(assets.cell_size_m),
-                )
-            except Exception as exc:  # noqa: BLE001 — surfaced as a tool fact
-                log.exception("retro ingest failed")
-                return {"error": (
-                    f"ingest failed: {type(exc).__name__}: {exc}")}
-            _new = sorted(_detected_ids() - _before)
-            _sid = flown_entry.get("stop_id")
-            return {
-                "n_dets": len(_dets),
-                "n_new": len(_new),
-                "new_fids": _new,
-                "note": (
-                    "re-segmented the recorded view at "
-                    f"({_px:.0f}, {_py:.0f})"
-                    + (f" ({_sid})" if _sid else "")
-                    + f" for {list(concepts)}: "
-                    + (f"{len(_new)} new detection(s) "
-                       f"{_new}" if _new else "no new detections")
-                ),
-            }
-
-        search_loop.set_retro_perceiver(_retro_perceive)
+    h.search_loop.set_retro_perceiver(functools.partial(retro_perceive, h))
 
     t_start = time.monotonic()
-
-    steps_taken = 0
-
-    # The episode takeoff pose, snapshotted before the mission moves the
-    # drone: the replay below flies from exactly here, facing upstream's
-    # start heading, so the submittable trajectory starts where the episode
-    # did and the turn to the first stop costs actions. The mission works
-    # north-up, as every frame the model reads is.
-    _synth_start_pose_xyh = (
-        float(state.pose_xy[0]),
-        float(state.pose_xy[1]),
-        float(episode.start_heading_deg),
-    )
-    _synth_start_alt = float(state.altitude_m)
-
-    # Mission branch: the episode is ONE reasoner conversation over the
-    # seeded prior graph — requested viewpoints fly the moment they land,
-    # the plain reply ends the mission, and the commit is the LAST flight's
-    # target. ``synthesize_compliant_trajectory`` then rebuilds
-    # ``visited_xy``/``pred_xy`` from a deterministic discrete-action
-    # replay of the flown stops + committed final leg.
-    mission_out: dict | None = None
-    if search_loop is not None and compiler is not None:
-        mission_out = run_mission_episode(
-            cfg=cfg,
-            state=state,
-            assets=assets,
-            episode=episode,
-            sensor=sensor,
-            tile_frame=tile_frame,
-            perception=perception,
-            search_loop=search_loop,
-            recorder=recorder,
-            compiler=compiler,
-            t_start=t_start,
-        )
-        if not mission_out["flights"]:
-            # ZERO flights -> honest zero: the drone never took off and no
-            # target was committed. Scored-failure row, cause "no_flights".
-            from benchmarks.citynav.eval import score_arrival
-
-            _pred_xy = (float(episode.start_xy[0]), float(episode.start_xy[1]))
-            _pos_traj = [_pred_xy, _pred_xy]
-            # ``flew=False`` is the honest zero: no target was committed and
-            # the drone never took off, so EVERY success flag goes to 0 while
-            # the distances stay true. The scorer owns that list. Naming the
-            # flags here is what let the mirrored SR/OSR survive while the
-            # four *_to_goal flags were zeroed -- and on a shape-scored bench
-            # the corpus has an episode whose start pose sits INSIDE its own
-            # target footprint, so a never-flown row scored SR=1.
-            _criterion, _mask = _success_mask(cfg, episode, objects_by_map)
-            _scores = score_arrival(
-                criterion=_criterion,
-                final_pos_xy=_pred_xy,
-                target_xy=episode.target_xy,
-                pos_trajectory=_pos_traj,
-                success_dist_m=cfg.success_radius_m,
-                flew=False,
-                **_mask,
-            )
-            _scores["referent_bucket"] = classify_referent(episode.description)
-            _scores["steps_taken"] = 0
-            _scores["compile_s"] = 0.0
-            _scores["committed_fid"] = None
-            _scores["committed_provenance"] = None
-            _scores["committed_xy"] = None
-            _scores["commit_would_score"] = None
-            _scores["sam_tiles_failed"] = int(getattr(perception, "sahi_tiles_failed", 0))
-            _scores["mission"] = {
-                "flights_flown": 0,
-                "ended_by": mission_out["reply"].ended_by,
-                "turns_used": mission_out["reply"].turns_used,
-            }
-            return {
-                "episode_id": episode.episode_id,
-                "map_name": episode.map_name,
-                "description": episode.description,
-                "start_xy": list(episode.start_xy),
-                "target_xy": list(episode.target_xy),
-                "pred_xy": list(_pred_xy),
-                "final_pos_xy": list(_pred_xy),
-                "visited_xy": [list(p) for p in _pos_traj],
-                "metrics": _scores,
-            }
+    # The takeoff pose, before the mission moves the drone: the replay flies
+    # from exactly here, facing upstream's start heading.
+    start_pose_xyh = (float(state.pose_xy[0]), float(state.pose_xy[1]),
+                      float(episode.start_heading_deg))
+    start_alt = float(state.altitude_m)
+    session = MissionSession(h, recorder=recorder, t_start=t_start)
+    reply = run_mission_episode(session)
+    flights = session.flights
+    if flights:
         steps_taken = synthesize_compliant_trajectory(
-            cfg=cfg,
-            state=state,
-            episode=episode,
-            feature_tour=mission_out["feature_tour"],
-            start_pose_xyh=_synth_start_pose_xyh,
-            start_alt=_synth_start_alt,
+            cfg=cfg, state=state, episode=episode, feature_tour=session.feature_tour,
+            start_pose_xyh=start_pose_xyh, start_alt=start_alt,
         )
+        compile_s = round(time.monotonic() - t_start, 2)
+        final_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
+        visited = state.visited_xy
     else:
-        # No LLM (smoke configs): nothing can request a flight; hold at
-        # start and score honestly.
-        log.error(
-            "no mission engine for %s (search_loop=%s, compiler=%s); "
-            "holding at start",
-            episode.episode_id,
-            "ready" if search_loop is not None else "None",
-            "ready" if compiler is not None else "None",
-        )
-        steps_taken = 0
+        # ZERO flights: the drone never took off and nothing was committed.
+        steps_taken, compile_s = 0, 0.0
+        final_xy = (float(episode.start_xy[0]), float(episode.start_xy[1]))
+        visited = [final_xy, final_xy]
 
-    compile_s = time.monotonic() - t_start
-
-    snap = state.belief_snapshot
-    target_xy_world = (float(episode.target_xy[0]), float(episode.target_xy[1]))
-    visited_dists = [
-        math.hypot(float(p[0]) - target_xy_world[0], float(p[1]) - target_xy_world[1])
-        for p in state.visited_xy
-    ]
-    min_dist_to_target = min(visited_dists) if visited_dists else float("inf")
-    frames_within_R20 = sum(1 for d in visited_dists if d <= 20.0)
-    frames_within_R200 = sum(1 for d in visited_dists if d <= 200.0)
-    commit_step_for_log = snap.lock_step if snap is not None else None
-    log.info(
-        "EPISODE-END SA: episode=%s commit_step=%s commit_pose=%s "
-        "min_dist_to_target=%.1fm frames_within_R20=%d frames_within_R200=%d "
-        "frames_total=%d",
-        episode.episode_id,
-        str(commit_step_for_log),
-        str((round(state.pose_xy[0], 1), round(state.pose_xy[1], 1)))
-        if commit_step_for_log is not None
-        else "None",
-        min_dist_to_target,
-        frames_within_R20,
-        frames_within_R200,
-        len(visited_dists),
-    )
-
-    # The committed target is flown as a normal trajectory leg. Prediction
-    # output stays the replayed final drone pose so the row cannot imply
-    # an unflown target was reached.
-    final_pos_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
-    record_pred_xy = final_pos_xy
-
-    # Commit-arrival integrity telemetry: the replay ending short of the
-    # recorded commit must be LOUD, never silent.
-    _committed_xy_end = (
-        getattr(snap, "confirmed_target_xy", None) if snap is not None else None
-    )
-    if _committed_xy_end is not None:
-        _short_of_commit_m = math.hypot(
-            final_pos_xy[0] - float(_committed_xy_end[0]),
-            final_pos_xy[1] - float(_committed_xy_end[1]),
-        )
-        if _short_of_commit_m > 5.0:
-            log.warning(
-                "EPISODE-END: flight ended %.1fm SHORT of the committed target "
-                "%s (action budget exhausted mid-transit?) -> pred_xy is the "
-                "final pose, NOT the commit",
-                _short_of_commit_m,
-                (round(float(_committed_xy_end[0]), 1),
-                 round(float(_committed_xy_end[1]), 1)),
-            )
-
-    agent_traj = [(float(p[0]), float(p[1])) for p in state.visited_xy]
-    # Upstream gsamllavanav/evaluate.py parity: 2D NE/SR/OSR of the final
-    # agent pose, under THIS bench's success mask, which decides what
-    # ``SR`` is a verdict on.
-    from benchmarks.citynav.eval import score_arrival
-
-    _criterion, _mask = _success_mask(cfg, episode, objects_by_map)
-    scores = score_arrival(
-        criterion=_criterion,
-        final_pos_xy=final_pos_xy,
-        target_xy=episode.target_xy,
-        pos_trajectory=agent_traj,
-        success_dist_m=cfg.success_radius_m,
-        **_mask,
-    )
+    scores = score_episode(cfg, episode, objects_by_map, final_xy,
+                           [(float(p[0]), float(p[1])) for p in visited], flew=bool(flights))
     # ``referent_bucket`` is a NOISY TEXT PROXY (regex over the description;
-    # matches "car" anywhere, so ~23% of building targets that merely mention
-    # a nearby car are mislabeled "car").
+    # ~23% of building targets that mention a nearby car read "car").
     scores["referent_bucket"] = classify_referent(episode.description)
     scores["steps_taken"] = steps_taken
-    scores["compile_s"] = round(compile_s, 2)
-    # What the episode spent on the LLM, reduced to row size. The flight dir
-    # already holds it in the transcript, but that does not survive a
-    # rows-only telemetry pull and costs a file walk per episode to read, so
-    # the population view could not have tokens or turns across a fleet. Read here, after the flight: the transcript writer
-    # flushes per record, so the file is complete. Never raises.
-    _flight_dir = os.environ.get("SEARCH_COMPILE_WORKDIR")
-    scores["llm"] = (
-        flight_summary.summarize(Path(_flight_dir) / "flight")
-        if _flight_dir
-        else flight_summary.blank()
-    )
-    # Commit identity comes from the mission engine's flight ledger: the
-    # committed fid may be an "[x, y]" point token (provenance "point"),
-    # which no prefix heuristic can classify.
-    _mission_flights = mission_out["flights"] if mission_out is not None else []
-    _committed_fid = (
-        _mission_flights[-1]["target"] if _mission_flights else None
-    )
-    scores["committed_fid"] = _committed_fid
-    scores["committed_provenance"] = (
-        _mission_flights[-1]["provenance"] if _mission_flights else None
-    )
-    scores["mission"] = (
-        {
-            "flights_flown": len(_mission_flights),
-            "ended_by": mission_out["reply"].ended_by,
-            "turns_used": mission_out["reply"].turns_used,
-            "no_call_turns": mission_out["reply"].no_call_turns,
-        }
-        if mission_out is not None
-        else None
-    )
-    # SELECTION CEILING (decouples "picked the right place" from "the drone
-    # physically reached it within the action budget"). ``committed_xy`` is
-    # the last flight's target (snap.confirmed_target_xy); ``commit_would_score``
-    # is True iff that
-    # committed location itself SCORES under this bench's mask -- inside the
-    # target's footprint where that is the criterion, within the success
-    # radius where the ring is -- i.e. the episode
-    # WOULD have scored had the replay flown there. Ring-basis on a
-    # shape-scored row would put the funnel's commit stage on a different
-    # question from its own last stage, and the two would stop nesting. The
-    # honest Sankey split: a
-    # failed episode with commit_would_score=True is an EXECUTION/budget miss
-    # (the choice was right); commit_would_score=False is a SELECTION/grounding
-    # miss (wrong region or wrong object). The mission flies its own commit, so
-    # the execution arm should stay near-empty -- a growing one is a bug.
-    _committed_xy = (
-        snap.confirmed_target_xy if snap is not None else None
-    )
-    if _committed_xy is not None and episode.target_xy is not None:
-        _cmt = math.hypot(
-            float(_committed_xy[0]) - episode.target_xy[0],
-            float(_committed_xy[1]) - episode.target_xy[1],
-        )
-        scores["committed_xy"] = [float(_committed_xy[0]), float(_committed_xy[1])]
-        if _criterion == "shape":
-            from benchmarks.citynav.eval import score_precise
-
-            scores["commit_would_score"] = bool(
-                score_precise(
-                    final_xy=(float(_committed_xy[0]), float(_committed_xy[1])),
-                    target_xy=episode.target_xy,
-                    **_mask,
-                )["SR"]
-            )
-        else:
-            scores["commit_would_score"] = bool(_cmt <= cfg.success_radius_m)
+    scores["compile_s"] = compile_s
+    if flights:
+        # What the episode spent on the LLM, at row size, read after the
+        # flight from its transcript.
+        flight_dir = os.environ.get("SEARCH_COMPILE_WORKDIR")
+        scores["llm"] = (flight_summary.summarize(Path(flight_dir) / "flight")
+                         if flight_dir else flight_summary.blank())
+    # Commit identity is the last flight's: it may be an "[x, y]" point
+    # token (provenance "point"), which no fid prefix classifies.
+    last = flights[-1] if flights else {}
+    scores["committed_fid"] = last.get("target")
+    scores["committed_provenance"] = last.get("provenance")
+    scores["mission"] = {
+        "flights_flown": len(flights),
+        "ended_by": reply.ended_by,
+        "turns_used": reply.turns_used,
+        **({"no_call_turns": reply.no_call_turns} if flights else {}),
+    }
+    # SELECTION CEILING: would the committed point itself score under this
+    # bench's mask? A miss whose commit would score is an execution/budget
+    # miss; one whose commit would not is a selection/grounding miss.
+    if flights:
+        cxy = (float(last["resolved_xy"][0]), float(last["resolved_xy"][1]))
+        scores["committed_xy"] = list(cxy)
+        scores["commit_would_score"] = bool(score_episode(cfg, episode, objects_by_map, cxy, [cxy])["SR"])
     else:
-        scores["committed_xy"] = None
-        scores["commit_would_score"] = None
+        scores["committed_xy"] = scores["commit_would_score"] = None
     # SAHI tiles the segmenter could not answer: their objects are missing
     # from those frames, which the episode survives.
-    scores["sam_tiles_failed"] = int(getattr(perception, "sahi_tiles_failed", 0))
+    scores["sam_tiles_failed"] = int(h.perception.sahi_tiles_failed)
 
-    rec: dict[str, Any] = {
+    return {
         "episode_id": episode.episode_id,
         "map_name": episode.map_name,
         "description": episode.description,
         "start_xy": list(episode.start_xy),
         "target_xy": list(episode.target_xy),
-        "pred_xy": list(record_pred_xy),
-        "final_pos_xy": list(final_pos_xy),
-        "visited_xy": [list(p) for p in state.visited_xy],
+        "pred_xy": list(final_xy),
+        "final_pos_xy": list(final_xy),
+        "visited_xy": [list(p) for p in visited],
         "metrics": scores,
     }
-
-    # World-state cleanout: no mask-cache disk twin to save (the ledger
-    # rebuilds from graph.nodes in ~ms).
-    return rec

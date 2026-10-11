@@ -28,10 +28,17 @@ def make_mission(built, make_twin, make_live, tmp_path):
 def _hydrated(sensor, cells=None):
     """The parts of a hydrated mission the leg reads."""
     return SimpleNamespace(
-        sensor=sensor, episode=SimpleNamespace(marker_positions=[]),
-        state=SimpleNamespace(pose_xy=(600.0, 100.0), altitude_m=world.AGL_M),
-        search_loop=SimpleNamespace(_ortho_ground_z_m=0.0, node_cells_xy=lambda token: cells,
-                                    world_xy_for_node=lambda fid: None))
+        sensor=sensor, state=SimpleNamespace(pose_xy=(600.0, 100.0), altitude_m=world.AGL_M),
+        search_loop=SimpleNamespace(_ortho_ground_z_m=0.0, node_cells_xy=lambda token: cells))
+
+
+def _session(h, fly):
+    """The parts of a mission session a leg reads: the hydrated stack, the
+    target resolution, and the flight the leg hands its observation to."""
+    from benchmarks.citynav.run_benchmark.mission_engine import resolve_flight_target
+
+    return SimpleNamespace(h=h, fly=fly, resolve=lambda token: resolve_flight_target(
+        token, node_xy=lambda fid: None, pose_xy=h.state.pose_xy, marker_xy=None))
 
 
 def _legs(m):
@@ -55,7 +62,7 @@ def test_a_flight_over_unflown_ground_posts_the_leg_and_serves_the_pass_that_hel
         served.append(obs)
         return {"stop": item["target_fid"]}
 
-    m._fly_live(inner, h, {"target_fid": "[600, 600]"})
+    m._fly_live(_session(h, inner), {"target_fid": "[600, 600]"})
     assert [leg.point for leg in twin.legs] == [(600.0, 600.0)]
     assert twin.legs[0].coverage_floor == M.COVERED_FRACTION and len(twin.legs[0].area) == 19
     assert served[0] is not None and served[0].ortho_view_corners_xy is not None
@@ -68,7 +75,7 @@ def test_ground_the_pass_holds_already_is_answered_without_a_leg(built, make_mis
     twin.post(M.Leg(target="t", point=(600.0, 700.0), step=0))
     twin.sleep(10.0)
     posted = len(twin.legs)
-    m._fly_live(lambda item: {}, _hydrated(built[3]), {"target_fid": "[600, 600]"})
+    m._fly_live(_session(_hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
     assert len(twin.legs) == posted
     assert "no leg is flown" in _legs(m)[-1]
 
@@ -90,7 +97,7 @@ def test_a_pass_that_misses_a_side_is_short_and_is_asked_again_toward_it(built, 
     asked again moved east, and the second pass completes it."""
     m, twin = make_mission()
     footprint = [(600.0 + dx, 600.0 + dy) for dx in range(0, 401, 50) for dy in (-30, 0, 30)]
-    m._fly_live(lambda item: {}, _hydrated(built[3], cells=footprint), {"target_fid": "[600, 600]"})
+    m._fly_live(_session(_hydrated(built[3], cells=footprint), lambda item: {}), {"target_fid": "[600, 600]"})
     first, again = twin.legs[0], twin.legs[1]
     assert (first.revision, again.revision) == (0, 1)
     assert again.point[0] > 700.0 and abs(again.point[1] - 600.0) < 1.0
@@ -140,4 +147,4 @@ def test_the_flight_refuses_a_config_that_withholds_a_part(tmp_path):
     arm = tmp_path / "arm.yaml"
     arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nwithhold: [images]\n")
     with pytest.raises(ValueError, match="bench ablation"):
-        mission.hydrate(episode_id="calcity::0#0", split="calcity", config=str(arm), workdir=tmp_path)
+        mission.hydrate(episode_id="calcity::0#0", split="calcity", config=str(arm))
