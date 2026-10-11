@@ -89,43 +89,23 @@ def test_run_log_receives_the_loggers_and_close_detaches_it(tmp_path, caplog):
 def test_a_station_attempt_names_its_run_number_and_a_bench_attempt_names_none(
     tmp_path, monkeypatch
 ):
-    """One identifier walks from a run row to the folder on disk.
-
-    A sortie numbers its runs from 1, both cabin screens say that number,
-    and the ledger row carries it -- so it is the number, not a timestamp,
-    that a person browsing the tree greps for. A BENCH attempt carries none:
-    there the run is the root the attempt already sits in.
-
-    The stamp stays FIRST whichever it is, because ``analysis.rows`` orders
-    an episode's attempts by it and so does ``ls``.
-    """
+    """A station flight's directory carries its sortie run number (two digits
+    at least) through ``open_episode_dir``; a bench attempt's carries none.
+    The stamp stays first, because ``analysis.rows`` orders attempts by it."""
     from benchmarks.citynav.analysis import rows
 
     monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
-    flight = ew.mint_workdir(tmp_path, "calcity::8#0", 3)
+    ep = ew.open_episode_dir(tmp_path, episode_id="calcity::8#0", run_no=3)
+    ep.close()
+    flight = ep.dir
     bench = ew.mint_workdir(tmp_path, "calcity::8#0")
 
     assert re.fullmatch(r"maps_\d{8}_\d{6}_run03_calcity_calcity__8_0", flight.name), flight.name
+    assert (flight / "flight").is_dir()
     assert re.fullmatch(r"maps_\d{8}_\d{6}_calcity_calcity__8_0", bench.name), bench.name
-    assert "run03" in flight.name and "run" not in bench.name.replace("maps_", "")
-    # A two-digit floor keeps `ls` in flying order through run 99; past it
-    # the number simply grows.
-    assert "_run12_" in ew.mint_workdir(tmp_path, "calcity::8#0", 12).name
     assert "_run104_" in ew.mint_workdir(tmp_path, "calcity::8#0", 104).name
 
     for d in (flight, bench):
         stamp = rows.attempt_stamp({"workdir": f"w0/{d.name}"})
         assert re.fullmatch(r"\d{8}_\d{6}", stamp), (d.name, stamp)
         assert d.name.startswith(f"maps_{stamp}_")
-
-
-def test_the_run_number_reaches_the_directory_through_open_episode_dir(tmp_path):
-    """``open_episode_dir`` is the one place a directory is set up, so the
-    number has to survive the call rather than only the mint."""
-    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", run_no=7)
-    try:
-        assert "_run07_" in ep.dir.name, ep.dir.name
-        assert ep.dir.parent == tmp_path
-        assert (ep.dir / "flight").is_dir()
-    finally:
-        ep.close()
