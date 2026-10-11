@@ -70,7 +70,8 @@ def test_registration_reads_a_pose_error_as_the_shift_that_undoes_it(built, make
 
     posed = live._posed(jpeg, t_host, pose=tag_pose(tag, t_host))
     posed.pose_xy = (posed.pose_xy[0] + 12.0, posed.pose_xy[1] - 7.0)
-    record, _measured = register_frame(live.register, posed.rgb, frame_pose(posed), posed.sensor)
+    record, _measured = register_frame(live.register, posed.rgb, frame_pose(posed), posed.sensor,
+                                       live.ground_msl(posed.pose_xy))
     assert record["applied"] and record["source"] == "measured", record
     assert abs(record["shift_e_m"] + 12.0) < 1.5 and abs(record["shift_n_m"] - 7.0) < 1.5, record
 
@@ -83,7 +84,8 @@ def test_a_frame_off_the_map_is_refused_by_name(built, make_twin, make_live):
 
     posed = live._posed(jpeg, t_host, pose=tag_pose(tag, t_host))
     posed.pose_xy = (-5000.0, -5000.0)
-    record, _measured = register_frame(live.register, posed.rgb, frame_pose(posed), posed.sensor)
+    record, _measured = register_frame(live.register, posed.rgb, frame_pose(posed), posed.sensor,
+                                       live.ground_msl(posed.pose_xy))
     assert not record["applied"] and record["why"] == "the frame reaches off the map"
 
 
@@ -102,7 +104,8 @@ def test_a_featureless_map_is_no_match_and_the_frame_is_refused_by_its_response(
     assert frame_offset.offset(posed.rgb, blank) == (0.0, 0.0, 0.0)
     flat = replace(live.register, render=lambda s, *a, **k: np.full(
         (s.intrinsics.image_height, s.intrinsics.image_width, 3), 128, np.uint8))
-    record, _measured = register_frame(flat, posed.rgb, frame_pose(posed), posed.sensor)
+    record, _measured = register_frame(flat, posed.rgb, frame_pose(posed), posed.sensor,
+                                       live.ground_msl(posed.pose_xy))
     assert not record["applied"] and record["why"].startswith("the frame does not register: response 0.00"), record
 
 

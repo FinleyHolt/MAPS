@@ -266,17 +266,10 @@ class Boresight:
 @dataclass(frozen=True)
 class Registration:
     """The map each frame is registered against: ``ortho`` the raster
-    (:func:`map_render.load_raster`), ``render`` the expected view off it, and
-    the ground under a nadir, the map's ``terrain`` where it carries one, else
-    ``floor_msl_m``. Heights are the receiver's orthometric datum."""
+    (:func:`map_render.load_raster`) and ``render`` the expected view off it."""
 
     ortho: tuple
     render: Callable
-    floor_msl_m: float
-    terrain: object | None = None
-
-    def ground_at(self, xy) -> float:
-        return map_render.ground_msl(self.terrain, self.floor_msl_m, xy)
 
 
 def fused_registration(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -305,7 +298,7 @@ def frame_pose(posed) -> frame_ties.Pose:
                            -float(posed.pitch_proj))
 
 
-def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor
+def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor, ground: float
                    ) -> tuple[dict[str, Any], tuple[float, float, float] | None]:
     """This frame's ground residual on its own pixels: its record (``applied``
     with the shift, or ``why``), and the measurement ``(east, north, response)`` or None.
@@ -313,13 +306,13 @@ def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor
     The whole frame is the one mark: its edge structure located on the map's
     render at ``pose`` (:func:`frame_offset.offset`), the shift taken to the
     ground through the projector's Jacobian. ``pose.alt_msl_m`` is the
-    camera's orthometric altitude. A banked frame is asked like a level one:
+    camera's orthometric altitude and ``ground`` the height under its nadir in
+    the same datum. A banked frame is asked like a level one:
     its peak is noisier, and the graph's vote over the window is what reads it.
     """
     record: dict[str, Any] = {"applied": False, "source": None, "shift_yaw_deg": 0.0}
     measured: tuple[float, float, float] | None = None
     try:
-        ground = register.ground_at(pose.pose_xy)
         intr = sensor.intrinsics
         expected = register.render(locator.sized(sensor, intr.image_width // frame_offset.DOWN,
                                                  intr.image_height // frame_offset.DOWN),
@@ -457,7 +450,12 @@ class LiveSource:
     def ground_tile_z(self, pose_xy) -> float:
         """The ground under ``pose_xy`` in the tile frame: the map's surface
         over its floor where the map carries one, else the tile's floor."""
-        return self.tile_ground_z + (map_render.ground_msl(self.terrain, self.floor_msl_m, pose_xy) - self.floor_msl_m)
+        return self.tile_ground_z + (self.ground_msl(pose_xy) - self.floor_msl_m)
+
+    def ground_msl(self, xy) -> float:
+        """The ground under ``xy`` in the receiver's orthometric datum: the
+        map's surface where it carries one, else ``floor_msl_m``."""
+        return map_render.ground_msl(self.terrain, self.floor_msl_m, xy)
 
     def correct(self, got: tuple[bytes, float, int, int, dict]) -> dict[str, Any] | None:
         """Register one recorded frame into the pose graph, posed by the
@@ -470,9 +468,10 @@ class LiveSource:
             return None
         with self._correcting:
             if self.graph is None:
-                self.graph = PoseGraph(posed.sensor, self.register.ground_at)
+                self.graph = PoseGraph(posed.sensor, self.ground_msl)
             pose = frame_pose(posed)
-            record, measured = register_frame(self.register, posed.rgb, pose, posed.sensor)
+            record, measured = register_frame(self.register, posed.rgb, pose, posed.sensor,
+                                              self.ground_msl(pose.pose_xy))
             placed = self.graph.offer(seq, t_host, pose, locator.gray(posed.rgb), measured)
         if placed.get("why") and not record.get("why"):
             record["why"] = placed["why"]
@@ -490,7 +489,9 @@ class LiveSource:
         refused or unmeasured ring frame takes that nearest node (``nearest``);
         without one the pose stands and the record says why.
         """
-        record, _measured = register_frame(self.register, posed.rgb, frame_pose(posed), posed.sensor)
+        pose = frame_pose(posed)
+        record, _measured = register_frame(self.register, posed.rgb, pose, posed.sensor,
+                                           self.ground_msl(pose.pose_xy))
         record.update(seq=seq, ring=True)
         with self._correcting:
             est = self.graph.estimate(t) if self.graph is not None else None
@@ -758,8 +759,7 @@ def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresigh
         ortho = map_render.load_raster(register_raster, map_name)
         if ortho is None:
             raise ValueError(f"no {map_name} raster under {register_raster} to register the frames against")
-        register = Registration(ortho=ortho, render=map_render.renderer(ortho), floor_msl_m=FLOOR_MSL_M[map_name],
-                                terrain=map_render.terrain(map_name, str(tiles_dir)))
+        register = Registration(ortho=ortho, render=map_render.renderer(ortho))
     source = LiveSource(tiles_dir=tiles_dir, map_name=map_name, boresight=boresight, vehicle=vehicle, tile=tile,
                         tile_ground_z=float(GROUND_LEVEL[map_name]), floor_msl_m=FLOOR_MSL_M[map_name],
                         register=register)
