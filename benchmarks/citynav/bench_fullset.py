@@ -114,6 +114,8 @@ DEFAULT_EPISODE_TIMEOUT_S = 4 * 3600
 # whole cap inside one explore and recorded no prediction at all.
 _DEADLINE_RESERVE_FRAC = 0.1
 POLL_INTERVAL_S = 5.0
+# Pause between worker thread starts, so warm runners do not all spawn at once.
+WORKER_STAGGER_S = 2.0
 # Infra attempts an episode gets before the run leaves it out and reports
 # it as persistent infra with its errors (``--max-infra-attempts``).
 MAX_INFRA_ATTEMPTS = 3
@@ -1255,7 +1257,7 @@ class Driver:
                 t = threading.Thread(target=self.worker_loop, args=(wid,), daemon=False)
                 t.start()
                 threads.append(t)
-                time.sleep(2.0)
+                time.sleep(WORKER_STAGGER_S)
             for t in threads:
                 t.join()
             self.log(f"pass {pass_idx} drained")
