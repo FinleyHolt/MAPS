@@ -2,217 +2,50 @@
 LABELS normalized out of the key."""
 from __future__ import annotations
 
-from maps.search.parse_compile.reasoner_loop import (
-    _DEDUP_NOTE,
-    _dedup_ref_norm,
-    _program_dedup_key,
-)
+from maps.search.parse_compile.reasoner_loop import _program_dedup_key
+from maps.search.tests.fakes import drive, ops_of_block, run, tool_results
 
-_FIND = {"ref": "r0", "op": "find",
-         "args": {"provenance": "runtime"}}
-_FILTER = {"ref": "r1", "op": "filter_items",
-           "args": {"items": "r0", "key": "row_index", "op": "le", "value": 3}}
+_BLOCK = 'r1 = find("car")\nr2 = r1.order(nearest="prior_1")\n'
 
 
-def test_different_ops_get_different_keys():
-    k1 = _program_dedup_key({"ops": [dict(_FIND)]})
-    other = {**_FIND, "args": {"provenance": "prior", "class": "car"}}
-    k2 = _program_dedup_key({"ops": [other]})
-    assert k1 is not None and k2 is not None
-    assert k1 != k2
+def _key(code, **kw):
+    return _program_dedup_key({"ops": ops_of_block(code, **kw)})
 
 
-def test_program_reading_undefined_ref_is_never_deduped():
-    # r5 is read but never defined -> resolves from the round's carry, which
-    # grows across calls -> exempt.
-    ops = [{"ref": "r0", "op": "compare",
-            "args": {"items": "r5", "refs": ["building_1"]}}]
-    assert _program_dedup_key({"ops": ops}) is None
+def test_a_reissued_block_shares_its_key_whatever_its_ref_labels():
+    assert _key(_BLOCK) is not None
+    assert _key(_BLOCK) == _key(_BLOCK, rn=7)
+    assert _key(_BLOCK) != _key(_BLOCK.replace("prior_1", "prior_2"))
 
 
-def test_program_reading_carry_tokens_is_never_deduped():
-    for tok in ("last", "prev", "previous", "$last"):
-        ops = [{"ref": "r0", "op": "rank_by",
-                "args": {"items": tok, "key": "distance to xy"}}]
-        assert _program_dedup_key({"ops": ops}) is None, tok
+def test_a_program_reading_an_earlier_handle_is_never_deduped():
+    assert _key('r2 = r1.order(nearest="prior_1")\n', bound={"r1": "r7"}) is None
+    assert _key("more_of(r1)\n", bound={"r1": "r7"}) is None
 
 
-def test_self_defined_refs_do_not_exempt():
-    # The program defines every ref it reads (r0 -> r1 -> r2): dedupable.
-    ops = [
-        dict(_FIND),
-        {"ref": "r1", "op": "compare", "args": {"items": "r0",
-                                                "refs": ["building_1"]}},
-        {"ref": "r2", "op": "score_by", "args": {"items": "r1"}},
-    ]
-    assert _program_dedup_key({"ops": ops}) is not None
-
-
-def test_indexed_handle_of_own_ref_still_dedupable():
-    # r1[0] indexes a ref the program defines -- still self-contained.
-    ops = [
-        dict(_FIND),
-        {"ref": "r1", "op": "rank_by", "args": {"items": "r0", "key": "distance to xy"}},
-        {"ref": "r2", "op": "compare",
-         "args": {"items": "cands", "view": {"reference": "r1[0]",
-                                             "side": "left"}}},
-    ]
-    assert _program_dedup_key({"ops": ops}) is not None
-
-
-def test_off_grammar_carry_ref_is_exempt():
-    # An earlier call stored a result under an off-grammar handle ("foo",
-    # "r1000") — a program reading it must re-resolve against the live
-    # carry, never dedup. Without the carry it IS self-contained.
-    for handle in ("foo", "r1000"):
-        ops = [{"ref": "r0", "op": "rank_by",
-                "args": {"items": handle, "key": "distance to xy"}}]
-        assert _program_dedup_key({"ops": ops}, carry_refs=(handle,)) is None
-        assert _program_dedup_key({"ops": ops}) is not None
-
-
-def test_locally_shadowed_carry_ref_stays_dedupable():
-    # The program DEFINES r0 itself; a carry entry of the same name is
-    # shadowed (the executor never reads the seed), so dedup is safe.
-    ops = [dict(_FIND), dict(_FILTER)]
-    assert _program_dedup_key({"ops": ops}, carry_refs=("r0", "r1")) is not None
-
-
-def test_malformed_programs_are_exempt():
-    assert _program_dedup_key(None) is None
-    assert _program_dedup_key({}) is None
-    assert _program_dedup_key({"ops": []}) is None
-    assert _program_dedup_key({"ops": "not-a-list"}) is None
-
-
-def test_note_is_a_terse_reference():
-    lower = _DEDUP_NOTE.format(turn=1, handles=' (r0)').lower()
-    # It names the WORLD, not the submission: the guard fires on an
-    # unmoved surface, so "no program answers differently" is the fact
-    # the model can act on and "you repeated yourself" is not.
-    assert "no new information since turn 1" in lower
-    assert "not re-rendered" in lower
-    assert "identical to the program" not in lower
-
-
-# --------------------------------------------------------------------------- #
-# ref-label normalization: an incrementing rN does not defeat the guard        #
-# --------------------------------------------------------------------------- #
-
-
-def test_incrementing_ref_labels_share_a_key():
-    # Ref labels normalize out of the key.
-    a = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "filter_items",
-         "args": {"items": "r0", "key": "class", "op": "eq", "value": "car"}},
-    ]}
-    b = {"ops": [
-        {"ref": "r7", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r8", "op": "filter_items",
-         "args": {"items": "r7", "key": "class", "op": "eq", "value": "car"}},
-    ]}
-    ka, kb = _program_dedup_key(a), _program_dedup_key(b)
-    assert ka is not None and ka == kb
-
-
-def test_bracket_suffixed_ref_uses_normalize_too():
-    a = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "cands", "refs": ["$r0[0]"]}},
-    ]}
-    b = {"ops": [
-        {"ref": "r3", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r4", "op": "compare",
-         "args": {"items": "cands", "refs": ["$r3[0]"]}},
-    ]}
-    ka, kb = _program_dedup_key(a), _program_dedup_key(b)
-    assert ka is not None and ka == kb
-
-
-def test_different_wiring_never_collides():
-    # Same shape, different READ structure: normalization must keep them
-    # distinct (op 2 reads the find in A, the filter in B).
-    a = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "filter_items",
-         "args": {"items": "r0", "key": "class", "op": "eq", "value": "car"}},
-        {"ref": "r2", "op": "score_by",
-         "args": {"items": "r0", "emphasis": [{"key": "name_match", "w": 1}]}},
-    ]}
-    b = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "filter_items",
-         "args": {"items": "r0", "key": "class", "op": "eq", "value": "car"}},
-        {"ref": "r2", "op": "score_by",
-         "args": {"items": "r1", "emphasis": [{"key": "name_match", "w": 1}]}},
-    ]}
-    ka, kb = _program_dedup_key(a), _program_dedup_key(b)
-    assert ka is not None and kb is not None and ka != kb
-
-
-def test_emission_order_permutation_stays_distinct():
-    # Order freedom is a FEATURE: permuted emission is not a re-issue.
-    a = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "find", "args": {"provenance": "prior"}},
-    ]}
-    b = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-        {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},
-    ]}
-    ka, kb = _program_dedup_key(a), _program_dedup_key(b)
-    assert ka is not None and kb is not None and ka != kb
-
-
-# --- the dedup owes the re-issue its OWN labels -----------------------------
-# Identity is judged with ref labels normalized out, so a deduped program's
-# results sit under the FIRST run's labels while the caller resolves slots by
-# its own. ``_alias_deduped_refs`` closes that on a key hit, joining on
-# ``_dedup_ref_norm`` -- the very correspondence the key is computed from, so
-# an alias can never mean something the identity did not.
-
-_CROSS = {"op": "crossings", "args": {"refs": ["prior_1", "prior_2"]}}
-
-
-def test_a_reissue_can_map_its_own_labels_onto_the_stored_ones():
-    first = [{"ref": "r0", **_CROSS}]
-    reissue = [{"ref": "r4", **_CROSS}]
-    assert _program_dedup_key({"ops": first}) \
-        == _program_dedup_key({"ops": reissue})
-    a, b = _dedup_ref_norm(first), _dedup_ref_norm(reissue)
-    assert set(a) == set(b), "a shared key must give a TOTAL correspondence"
-    assert {b[n]: a[n] for n in b} == {"r4": "r0"}   # and not the identity
-
-
-def test_the_correspondence_is_total_on_a_multi_op_key_hit():
-    first = [{"ref": "r0", **_CROSS},
-             {"ref": "r1", "op": "filter_items",
-              "args": {"items": "r0", "key": "row_index",
-                       "op": "le", "value": 3}}]
-    reissue = [{"ref": "r7", **_CROSS},
-               {"ref": "r8", "op": "filter_items",
-                "args": {"items": "r7", "key": "row_index",
-                         "op": "le", "value": 3}}]
-    assert _program_dedup_key({"ops": first}) \
-        == _program_dedup_key({"ops": reissue})
-    a, b = _dedup_ref_norm(first), _dedup_ref_norm(reissue)
-    assert set(a) == set(b)
-    assert {b[n]: a[n] for n in b} == {"r7": "r0", "r8": "r1"}
-
-
-def test_programs_whose_normalisation_differs_cannot_share_a_key():
-    """A second copy of this map is how an alias starts meaning something the identity
-    did not, so the key must be unable to disagree with it."""
-    a = [{"ref": "r0", **_CROSS}]
-    b = [{"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-         {"ref": "r1", **_CROSS}]
-    assert _dedup_ref_norm(a) != _dedup_ref_norm(b)
+def test_wiring_and_emission_order_stay_distinct():
+    find = {"op": "find", "args": {"query": "car"}}
+    near = {"op": "find", "args": {"query": "gate"}}
+    a = [{"ref": "r0", **find}, {"ref": "r1", **near}]
+    b = [{"ref": "r0", **near}, {"ref": "r1", **find}]
     assert _program_dedup_key({"ops": a}) != _program_dedup_key({"ops": b})
 
+    def _cut(items):
+        return {"ref": "r2", "op": "filter_items",
+                "args": {"items": items, "key": "xy", "op": "truthy"}}
+    assert _program_dedup_key({"ops": a + [_cut("r0")]}) \
+        != _program_dedup_key({"ops": a + [_cut("r1")]})
 
-def test_off_grammar_refs_stay_out_of_the_correspondence():
-    ops = [{"ref": "anchors", "op": "find", "args": {"provenance": "prior"}},
-           {"ref": "r0", **_CROSS}]
-    assert _dedup_ref_norm(ops) == {"r1": "r0"}
+
+def test_a_deduped_reissue_answers_under_its_own_labels():
+    """The re-run is not re-rendered, and the handle it names still reaches the
+    first run's rows."""
+    reply, fr, flights, _d = drive([
+        [run('a = find("car")\n')],
+        [run('b = find("car")\n')],
+        [run("go_to(b[0])\n")],
+        "done",
+    ])
+    out = tool_results(fr)
+    assert "no new information since turn" in out[1]["result"]["note"], out[1]
+    assert flights == [{"target_fid": "car_1"}], flights

@@ -149,107 +149,26 @@ def _summarise_exc(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
-# Carry-state tokens: a program reading these consumes results from EARLIER
-# calls, so an identical re-issue can legitimately return new rows.
-_DEDUP_CARRY_TOKENS = ("last", "prev", "previous")
-
-
-def _dedup_ref_norm(ops: object) -> dict:
-    """``{normalized label -> the ref as WRITTEN}``, by emission index.
-
-    THE correspondence :func:`_program_dedup_key` judges identity on, read
-    by both the key and the alias that repairs a dedup hit
-    (``_alias_deduped_refs``), so the alias cannot mean something the
-    identity did not.
-    """
-    if not isinstance(ops, list):
-        return {}
-    return {
-        f"r{i}": str(op.get("ref")).lstrip("$")
-        for i, op in enumerate(ops)
-        if isinstance(op, dict) and isinstance(op.get("ref"), str)
-        and re.fullmatch(r"\$?r[0-9]{1,3}", str(op.get("ref")))
-    }
-
-
-def _program_dedup_key(program: object, carry_refs: object = ()) -> str | None:
+def _program_dedup_key(program: dict) -> str | None:
     """Canonical identity of a SELF-CONTAINED program, or ``None`` when it
-    reads carry state and is therefore never deduped.
+    reads a handle it does not define and is therefore never deduped.
 
     While the surface version holds, an identical self-contained program is
-    a pure re-render — its result cannot change. Identity is judged on the
-    program's SHAPE with ref LABELS normalized out (each rN-grammar ref
-    renamed to its emission index, rN tokens inside args strings rewritten
-    to match), so an incrementing ``rN`` does not defeat it. Emission-order
-    permutations stay distinct. Programs that read a handle they do
-    not define — a bare ``rN``, the ``last``/``prev`` tokens, or ANY live
-    carry ref (which covers off-grammar ref names another call may have
-    stored) — resolve against the round's ACCUMULATED results and stay
-    dedup-exempt (all checks run against the ORIGINAL names).
+    a pure re-render -- its result cannot change. Every op's ref is an
+    ``rN``; identity is judged with each renamed to its emission index
+    (``r0``, ``r1``, ...) wherever it is spelled, so an incrementing ``rN``
+    does not defeat it while emission-order permutations stay distinct. A
+    program that reads an ``rN`` it does not define resolves against the
+    mission's ACCUMULATED results, so it stays dedup-exempt.
     """
-    if not isinstance(program, dict):
+    ops = program.get("ops") or []
+    if not ops:
         return None
-    ops = program.get("ops")
-    if not isinstance(ops, list) or not ops:
+    ren = {op["ref"]: f"r{i}" for i, op in enumerate(ops)}
+    blob = json.dumps(ops, sort_keys=True, default=str)
+    if any(t not in ren for t in re.findall(r"\br\d+\b", blob)):
         return None
-    try:
-        blob = json.dumps(ops, sort_keys=True, default=str)
-    except Exception:  # noqa: BLE001 — unserialisable program: just don't dedup
-        return None
-    defined = {
-        str(op.get("ref")).lstrip("$")
-        for op in ops
-        if isinstance(op, dict) and isinstance(op.get("ref"), str)
-    }
-    for tok in re.findall(r"\br[0-9]{1,3}\b", blob):
-        if tok not in defined:
-            return None
-    low = blob.lower()
-    if any(f'"{t}"' in low or f'"${t}"' in low for t in _DEDUP_CARRY_TOKENS):
-        return None
-    for name in carry_refs or ():
-        name = str(name)
-        if name in defined:
-            continue  # locally shadowed — the seed is never read
-        if (f'"{name}"' in blob or f'"${name}' in blob
-                or f'"{name}[' in blob):
-            return None
-    # Ref-label normalization AFTER the carry checks: rename each rN-grammar
-    # ref to its emission index in ONE pass (no chaining), leaving
-    # off-grammar names untouched (renaming a definition without its
-    # free-text uses could collide two genuinely different programs).
-    ren = {actual: norm for norm, actual in _dedup_ref_norm(ops).items()}
-
-    def _rw(v):
-        if isinstance(v, str):
-            return re.sub(r"\br[0-9]{1,3}\b",
-                          lambda m: ren.get(m.group(0), m.group(0)), v)
-        if isinstance(v, dict):
-            return {k: _rw(x) for k, x in v.items()}
-        if isinstance(v, list):
-            return [_rw(x) for x in v]
-        return v
-
-    canon = []
-    for op in ops:
-        if isinstance(op, dict):
-            op2 = {k: _rw(v) for k, v in op.items() if k != "ref"}
-            # NULL-NORMALIZE: the required-form schema fills unused args
-            # with null; the same program written with and without the
-            # sentinels is the same program.
-            if isinstance(op2.get("args"), dict):
-                op2["args"] = {k: v for k, v in op2["args"].items()
-                               if v is not None}
-            if "ref" in op:
-                op2["ref"] = ren.get(str(op.get("ref")).lstrip("$"),
-                                     op["ref"])
-            canon.append(op2)
-        else:
-            canon.append(op)
-    try:
-        return json.dumps(canon, sort_keys=True, default=str)
-    except Exception:  # noqa: BLE001 — unserialisable program: just don't dedup
-        return None
+    return re.sub(r"\br\d+\b", lambda m: ren[m.group(0)], blob)
 
 
 # The dedup hit serves a one-line REFERENCE, never a fresh payload (a full
@@ -1948,27 +1867,20 @@ def advance_reasoner_one_round(
             _ensure_fresh([ref])
         return carry_results.get(ref)
 
-    def _alias_deduped_refs(prev_ops, cur_program) -> None:
-        """Point THIS emission's grammar refs at the handles the first run
-        stored under its own labels.
-
-        Joined on ``_dedup_ref_norm`` -- the SAME normalization the dedup key
-        is computed with -- so the alias cannot drift from the identity that
-        justified it. A label already live is never overwritten: the emission
-        that defines it owns it.
+    def _alias_deduped_refs(prev_ops, cur_ops) -> None:
+        """Point THIS emission's refs at the handles the first run stored
+        under its own labels, op by op -- the emission-index correspondence
+        the dedup key judged identity on. A label already live is never
+        overwritten: the emission that defines it owns it.
         """
-        prev_map = _dedup_ref_norm(prev_ops)
-        cur_map = _dedup_ref_norm((cur_program or {}).get("ops"))
-        for norm, cur_ref in cur_map.items():
-            prev_ref = prev_map.get(norm)
-            if prev_ref is not None and cur_ref not in carry_results \
-                    and prev_ref in carry_results:
-                carry_results[cur_ref] = carry_results[prev_ref]
+        for prev, cur in zip(prev_ops, cur_ops):
+            if cur["ref"] not in carry_results \
+                    and prev["ref"] in carry_results:
+                carry_results[cur["ref"]] = carry_results[prev["ref"]]
 
     def _dispatch_analyze_scene(a, _ns=(compute_namespace or {}), *,
                                 answer_ref=""):
-        _key = _program_dedup_key((a or {}).get("program"),
-                                  carry_refs=carry_results.keys())
+        _key = _program_dedup_key(a["program"])
         _prev = _programs_seen.get(_key) if _key is not None else None
         if _prev is not None and _prev[0] == _surface_version[0]:
             # ONE-LINE REFERENCE, never a payload and never a lockout: the
@@ -1983,7 +1895,7 @@ def advance_reasoner_one_round(
             # Alias by the key's own emission-index correspondence so a
             # deduped program is indistinguishable from a re-run to
             # everything downstream of it.
-            _alias_deduped_refs(_prev[3], (a or {}).get("program"))
+            _alias_deduped_refs(_prev[3], a["program"]["ops"])
             if _dedup_streak["key"] == _key:
                 _dedup_streak["n"] += 1
             else:
