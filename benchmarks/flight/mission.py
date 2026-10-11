@@ -159,9 +159,9 @@ def hydrate(*, episode_id: str, split: str, config: str,
 def leg_span_m(h: Hydrated) -> float:
     """The run's observation span in metres: what one frame holds along its
     long side at the mission's height."""
-    from maps.perception.observation import observation_extent_m  # noqa: PLC0415
+    from maps.perception.observation import ground_sides_m  # noqa: PLC0415
 
-    return float(observation_extent_m(float(h.state.altitude_m), float(h.search_loop._ortho_ground_z_m), h.sensor))
+    return float(max(ground_sides_m(float(h.state.altitude_m), float(h.search_loop._ortho_ground_z_m), h.sensor)))
 
 
 def leg_area(h: Hydrated, token: str, xy) -> list[tuple[float, float]]:

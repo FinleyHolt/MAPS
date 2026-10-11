@@ -18,7 +18,7 @@ import pytest
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import (
     crop_ortho_observation,
-    observation_extent_m,
+    ground_sides_m,
 )
 from maps.perception.ortho.sensor_frame import footprint_corners_xy, footprint_m
 from maps.search.tests.ortho_fixture import write_rasters
@@ -100,14 +100,10 @@ def test_sensorless_path_is_byte_identical_to_before(ortho_dir):
     assert oc["rgb"].shape == (200, 200, 3)
 
 
-def test_observation_extent_is_the_footprint_long_side():
-    assert observation_extent_m(AGL, GROUND_Z) == pytest.approx(2.0 * AGL)
-    w_m, h_m = footprint_m(ORYX, AGL)
+def test_ground_sides_are_the_view_square_or_the_sensor_footprint():
+    assert ground_sides_m(AGL, GROUND_Z, None) == pytest.approx((2.0 * AGL, 2.0 * AGL))
+    assert ground_sides_m(AGL, GROUND_Z, ORYX) == footprint_m(ORYX, AGL)
+    # 3,000 ft AGL under the Oryx is a ~258 m wide footprint.
+    w_m, h_m = ground_sides_m(3000.0 * 0.3048, 0.0, ORYX)
     assert w_m > h_m  # hfov 16.1 > vfov 12.1
-    assert observation_extent_m(AGL, GROUND_Z, ORYX) == pytest.approx(w_m)
-    # The TMP number: 3,000 ft AGL under the Oryx is a ~258 m wide footprint.
-    ft3000 = 3000.0 * 0.3048
-    assert observation_extent_m(ft3000, 0.0, ORYX) == pytest.approx(
-        2.0 * ft3000 * math.tan(math.radians(ORYX.intrinsics.hfov_deg) / 2.0)
-    )
-    assert observation_extent_m(ft3000, 0.0, ORYX) == pytest.approx(258.5, abs=0.5)
+    assert w_m == pytest.approx(258.5, abs=0.5)

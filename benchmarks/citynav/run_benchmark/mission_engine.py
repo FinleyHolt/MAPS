@@ -20,11 +20,7 @@ from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
 from benchmarks.citynav.run_benchmark.osm_prior import _build_frame_enrich
 from maps.llm.endpoint_spec import spec as endpoint_spec
 from maps.perception.geometry.sensor_spec import served_description
-from maps.perception.observation import (
-    crop_observation,
-    observation_extent_m,
-    observation_minor_extent_m,
-)
+from maps.perception.observation import crop_observation, ground_sides_m
 from maps.perception.ortho.detection_stamping import project_and_stamp_ortho_detections
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from benchmarks.citynav.conversation import CONVERSATION_JSONL, ConversationLog
@@ -290,11 +286,13 @@ class MissionSession:
         self.ctx.pose_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
         ground = float(loop._ortho_ground_z_m)
         alt = float(state.altitude_m)
-        obs_span_m = observation_extent_m(alt, ground, h.sensor)
-        # The footprint's SHORT side: the row pitch an explore's serpentine
-        # can rely on whichever way the footprint is turned, and the look
-        # coverage gate (a crop on ground no flight covered refuses).
-        self.obs_minor_m = observation_minor_extent_m(alt, ground, h.sensor)
+        sides = ground_sides_m(alt, ground, h.sensor)
+        # The footprint's LONG side is the crop window's ceiling; its SHORT
+        # side is the row pitch an explore's serpentine can rely on whichever
+        # way the footprint is turned, and the look coverage gate (a crop on
+        # ground no flight covered refuses).
+        obs_span_m = max(sides)
+        self.obs_minor_m = min(sides)
         self.mission_spec = MissionSpec(
             fly=self.fly,
             declare_concepts=loop.declare_mission_concepts,

@@ -104,7 +104,7 @@ def crop_ortho_observation(
     )
     H_o = rgb_map.shape[0]
 
-    width_m, height_m = _ground_sides_m(altitude_m, ground_z, sensor)
+    width_m, height_m = ground_sides_m(altitude_m, ground_z, sensor)
     corners_world = footprint_corners_xy(pose_xy, width_m, height_m, yaw_deg)
     if sensor is not None:
         out_w = int(sensor.intrinsics.image_width)
@@ -176,34 +176,18 @@ def crop_ortho_observation(
     }
 
 
-def _ground_sides_m(
+def ground_sides_m(
     altitude_m: float, ground_z: float, sensor: SensorSpec | None
 ) -> tuple[float, float]:
     """The observation's ground ``(width, height)`` in meters at this AGL:
     sensorless the view square, ``2·(altitude − ground)`` a side; with a nadir
     sensor its footprint (``2·AGL·tan(fov/2)`` per axis). The crop, the
-    mission engine and the search loop all read the footprint here, so they
-    cannot disagree about what the observation showed."""
+    mission engine and the flight all read the footprint here, so they cannot
+    disagree about what the observation showed."""
     agl = max(1.0, float(altitude_m) - float(ground_z))
     if sensor is None:
         return 2.0 * agl, 2.0 * agl
     return footprint_m(sensor, agl)
-
-
-def observation_extent_m(
-    altitude_m: float, ground_z: float, sensor: SensorSpec | None = None
-) -> float:
-    """The observation's LONG ground side in meters, the crop window's honest
-    ceiling (``obs_span_m``)."""
-    return float(max(_ground_sides_m(altitude_m, ground_z, sensor)))
-
-
-def observation_minor_extent_m(
-    altitude_m: float, ground_z: float, sensor: SensorSpec | None = None
-) -> float:
-    """The observation's SHORT ground side in meters, the row pitch a 2-D
-    coverage tiling can rely on whichever way the footprint is turned."""
-    return float(min(_ground_sides_m(altitude_m, ground_z, sensor)))
 
 
 def crop_observation(
