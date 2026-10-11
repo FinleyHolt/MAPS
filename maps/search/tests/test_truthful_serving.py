@@ -183,7 +183,7 @@ def test_exact_kv_outranks_token_bag_variant():
 
 def test_name_phrase_tier_beats_fuzz_but_not_exact():
     # 'The Museum of Cambridge' (name-phrase tier) must outrank a fixme-tag
-    # token-bag row; typo fuzz stays alive under the threshold contract.
+    # token-bag row.
     world = [
         _prior("prior_museum", 0, 0, name="The Museum of Cambridge",
                tags={"tourism": "museum"}),
@@ -208,7 +208,7 @@ def test_name_phrase_tier_beats_fuzz_but_not_exact():
                       _fixme["search_text"], _fixme.get("name"),
                       _fixme.get("tags"), idf={})
     assert _s < 0.9 and _s < rows[0]["name_match"], _s
-    # typo fuzz survives (it earned wins: 'Con Exchange' -> Corn Exchange)
+    # a two-word query with one unmatched word still clears the threshold on the other
     q = T.fuzzy_prepare_query("Con Exchange")
     assert T.find_score(
         q, "corn exchange", "Corn Exchange", {},
