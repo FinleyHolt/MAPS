@@ -209,9 +209,10 @@ class Program:
                 if isinstance(inner, list) and len(inner) == 1 \
                         and isinstance(inner[0], str):
                     inner = inner[0]         # a whole result: its rN
-                if not isinstance(inner, str):
-                    # A union member rides its MASK, and a bare [x, y] has
-                    # none, so the executor's union takes fids and rN only.
+                if not isinstance(inner, str) and not (
+                        isinstance(m, Bind) and is_xy(inner)):
+                    # A union member rides its MASK, or a row with no fid
+                    # its own point; a bare [x, y] names no thing.
                     raise CodeError(
                         f"a set anchor holds PLACES -- fids, handles, or "
                         f"results -- and {m!r} is a bare point. Name one "
@@ -361,7 +362,10 @@ def compile_find(p: Program, query, *, name=None, near=None, nearest=None,
                 "to measure from: find(<thing>, near=<place>, "
                 f"dwithin={dwithin!r}), or nearest=<place> to rank "
                 "against the same place while you cut.")
-        if isinstance(anchor, list):
+        # A LIST OF ROWS in near= is one place, their union.
+        if isinstance(anchor, list) and not (
+                anchor is near
+                and all(isinstance(m, (Ref, Bind)) for m in anchor)):
             raise CodeError(
                 "dwithin= cuts against ONE place, and a LIST in "
                 "near= fuses several distances into an ordering, so "

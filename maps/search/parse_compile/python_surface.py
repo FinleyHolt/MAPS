@@ -917,7 +917,7 @@ def _places(v, who: str) -> tuple:
                      for r in v._rows())
     if is_xy(v):
         return ((None, (float(v[0]), float(v[1]))),)
-    if isinstance(v, (list, tuple)):
+    if isinstance(v, (list, tuple, set, frozenset)):
         if not v:
             raise CodeError(f"{who}() got an empty list -- there is "
                             "nothing there to measure.")
@@ -1098,6 +1098,10 @@ class MissionPython:
             return Bind(v.bind, self.name_of(v) or (v.fid or "row"))
         if isinstance(v, str):
             return self._held(v) or v
+        if isinstance(v, (set, frozenset)):
+            # a Python SET of things is the list of them, in a fixed order
+            v = sorted(v, key=lambda x: str(x.bind) if isinstance(x, Row)
+                       else repr(x))
         if isinstance(v, (list, tuple)) and not is_xy(v):
             # a LIST of things -- order(nearest=[roadA, roadB]) -- maps
             # element-wise.

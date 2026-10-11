@@ -5,7 +5,7 @@ import pytest
 
 from maps.search.analyze_scene import geom_program as gp
 from maps.search.analyze_scene.geom_program import compact_results
-from maps.search.tests.fakes import drive, ops_of_block, tool_results
+from maps.search.tests.fakes import drive, ops_of_block, run, tool_results
 
 
 def _house(fid, x, name=None):
@@ -185,3 +185,36 @@ def test_a_fid_less_member_is_measured_by_its_own_point():
     by = {r["fid"]: r["distance to spot"] for r in out["results"]["r2"]}
     assert by == {"h_a": pytest.approx(10.0), "h_b": pytest.approx(90.0)}, by
     assert out["results"]["r2"].refs[0]["members"] == [[10.0, 0.0]]
+
+
+def _fids_printed(code):
+    _reply, fr, _f, _d = drive([[run(code + "print(sorted(r.fid for r in hit))\n")],
+                                "done"])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    return out["printed"]
+
+
+def test_a_python_set_of_rows_is_its_union_like_the_handle():
+    """set(rows) in within= or near= is the union of those rows, as the handle
+    is: the same rows survive the cut."""
+    for kw in ('within=set(cars)', 'near=set(cars), dwithin=15',
+               'near=[r for r in cars], dwithin=15'):
+        handle = kw.replace("set(cars)", "cars").replace(
+            "[r for r in cars]", "cars")
+        got = _fids_printed(f'cars = find("car")\nhit = find("", {kw})\n')
+        want = _fids_printed(f'cars = find("car")\nhit = find("", {handle})\n')
+        assert got == want, (kw, got, want)
+
+
+def test_a_point_union_member_is_measured_by_its_own_point():
+    """A fid-less row (a terminus) in a union rides as its [x, y]."""
+    out = gp.run_program(
+        [], [_house("h_a", 0.0), _house("h_b", 100.0), _house("h_c", 300.0)],
+        {"ops": [{"ref": "r1", "op": "compare",
+                  "args": {"items": ["h_a", "h_b"],
+                           "refs": [{"ref": ["h_c", [10.0, 0.0]],
+                                     "as": "spots"}]}}]})
+    by = {r["fid"]: r["distance to spots"] for r in out["results"]["r1"]}
+    assert by == {"h_a": pytest.approx(10.0), "h_b": pytest.approx(90.0)}, by
+

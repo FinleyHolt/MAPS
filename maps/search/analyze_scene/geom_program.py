@@ -2756,9 +2756,14 @@ def _compare_specs(cx, refs):
                 as_label = _sanitize_token(el["as"])
             ref_el = el["ref"]
             if (isinstance(ref_el, (list, tuple)) and ref_el
-                    and all(isinstance(x, str) for x in ref_el)):
+                    and not is_xy(ref_el)
+                    and all(isinstance(x, str) or is_xy(x) for x in ref_el)):
                 _members = []
                 for x in ref_el:
+                    if is_xy(x):
+                        # a row with no fid (a terminus) is its own point
+                        _members.append({"xy": [float(x[0]), float(x[1])]})
+                        continue
                     if cx.is_ref(x):
                         # A constructed or fid-less row (a crossing, an
                         # [x, y] item) is not in by_fid and rides on its own xy.
