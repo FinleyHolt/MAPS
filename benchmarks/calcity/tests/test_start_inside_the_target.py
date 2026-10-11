@@ -87,17 +87,15 @@ def test_those_episodes_score_zero_when_nothing_flew(start_on_target):
             "floor_radius_m": FLOOR_M,
         }
         flown = cn_eval.score_arrival(
-            criterion="shape", final_pos_xy=start, pred_xy=start,
-            target_xy=target, pos_trajectory=[start, start],
-            pred_trajectory=[start], **mask)
+            criterion="shape", final_pos_xy=start,
+            target_xy=target, pos_trajectory=[start, start], **mask)
         assert flown["SR"] == 1, (
             f"row {idx}: the fixture must win when it flies, or the zero "
             "below proves nothing"
         )
         grounded = cn_eval.score_arrival(
-            criterion="shape", final_pos_xy=start, pred_xy=start,
-            target_xy=target, pos_trajectory=[start, start],
-            pred_trajectory=[start], flew=False, **mask)
+            criterion="shape", final_pos_xy=start,
+            target_xy=target, pos_trajectory=[start, start], flew=False, **mask)
         assert grounded["SR"] == 0, f"row {idx}: never flew, must not score"
         # The distance stays honest -- it is 0 m because the start really is
         # on the target, and that fact is not what was wrong.

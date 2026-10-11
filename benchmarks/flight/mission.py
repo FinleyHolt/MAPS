@@ -893,9 +893,9 @@ class Mission:
         trajectory = [(float(p[0]), float(p[1])) for p in visited]
         criterion, mask = _success_mask(h.cfg, h.episode, load_objects(OBJECTS_JSON))
         scores = bench_eval.score_arrival(
-            criterion=criterion, final_pos_xy=trajectory[-1], pred_xy=trajectory[-1],
+            criterion=criterion, final_pos_xy=trajectory[-1],
             target_xy=(float(h.episode.target_xy[0]), float(h.episode.target_xy[1])),
-            pos_trajectory=trajectory, pred_trajectory=[trajectory[-1]],
+            pos_trajectory=trajectory,
             success_dist_m=float(h.cfg.success_radius_m), flew=len(trajectory) > 1, **mask)
         scores["success_basis"] = "final_pos_xy"
         return scores

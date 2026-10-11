@@ -406,10 +406,8 @@ def run_episode(
             _scores = score_arrival(
                 criterion=_criterion,
                 final_pos_xy=_pred_xy,
-                pred_xy=_pred_xy,
                 target_xy=episode.target_xy,
                 pos_trajectory=_pos_traj,
-                pred_trajectory=[_pred_xy],
                 success_dist_m=cfg.success_radius_m,
                 flew=False,
                 **_mask,
@@ -512,37 +510,20 @@ def run_episode(
             )
 
     agent_traj = [(float(p[0]), float(p[1])) for p in state.visited_xy]
-    # Upstream gsamllavanav/evaluate.py parity: 2D NE/SR/OSR with
-    # both pos_to_goal (final agent pose) and pred_to_goal
-    # (committed predicted target) families -- under THIS bench's success
-    # mask, which decides what ``SR`` is a verdict on.
+    # Upstream gsamllavanav/evaluate.py parity: 2D NE/SR/OSR of the final
+    # agent pose, under THIS bench's success mask, which decides what
+    # ``SR`` is a verdict on.
     from benchmarks.citynav.eval import score_arrival
 
     _criterion, _mask = _success_mask(cfg, episode, objects_by_map)
     scores = score_arrival(
         criterion=_criterion,
         final_pos_xy=final_pos_xy,
-        pred_xy=record_pred_xy,
         target_xy=episode.target_xy,
         pos_trajectory=agent_traj,
-        pred_trajectory=[record_pred_xy],
         success_dist_m=cfg.success_radius_m,
         **_mask,
     )
-    _ne_pred = scores.get("ne_pred_to_goal")
-    if _ne_pred is not None:
-        _inv = math.hypot(
-            record_pred_xy[0] - episode.target_xy[0],
-            record_pred_xy[1] - episode.target_xy[1],
-        )
-        if abs(_inv - _ne_pred) > 0.5:
-            log.error(
-                "pred_xy invariant violated for %s: "
-                "dist(pred_xy,target)=%.2f != ne_pred_to_goal=%.2f",
-                episode.episode_id,
-                _inv,
-                _ne_pred,
-            )
     # ``referent_bucket`` is a NOISY TEXT PROXY (regex over the description;
     # matches "car" anywhere, so ~23% of building targets that merely mention
     # a nearby car are mislabeled "car").

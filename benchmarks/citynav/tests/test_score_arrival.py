@@ -28,10 +28,8 @@ def _score(criterion: str, xy, **kw):
     return cn_eval.score_arrival(
         criterion=criterion,
         final_pos_xy=xy,
-        pred_xy=xy,
         target_xy=CENTRE,
         pos_trajectory=[(0.0, 0.0), xy],
-        pred_trajectory=[xy],
         success_dist_m=20.0,
         gt_polygon=SHAPE,
         radius_m=20.0,
@@ -69,7 +67,7 @@ def test_a_shape_row_carries_no_ring_key():
     for key in cn_eval._RING_ONLY:
         assert key not in row, key
     # The criterion-neutral distances stay: they carry no radius.
-    for key in ("NE", "ne_pos_to_goal", "ne_pred_to_goal",
+    for key in ("NE", "ne_pos_to_goal",
                 "min_dist_pos_to_target_m", "scoring_basis"):
         assert key in row, key
     # ...as does the mask's own detail.

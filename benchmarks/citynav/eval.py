@@ -69,16 +69,14 @@ def spl_pos_from_path(
 def score_goal_prediction_citynav_native(
     *,
     final_pos_xy: tuple[float, float],
-    pred_xy: tuple[float, float],
     target_xy: tuple[float, float],
     pos_trajectory: list[tuple[float, float]] | None = None,
-    pred_trajectory: list[tuple[float, float]] | None = None,
     success_dist_m: float = 20.0,
 ) -> dict:
     """Score one episode as upstream ``gsamllavanav/evaluate.py`` does: in 2D.
 
-    ``*_pos_to_goal`` measures the final pose, ``*_pred_to_goal`` the final
-    predicted goal, and the oracle keys the closest point of the trajectory.
+    ``*_pos_to_goal`` measures the final pose and the oracle keys the
+    closest point of the trajectory.
     Upstream ships no SPL; ``spl_pos`` is added. ``NE``/``SR``/``OSR`` mirror
     the ``pos_to_goal`` family.
     """
@@ -87,25 +85,17 @@ def score_goal_prediction_citynav_native(
         return float(np.hypot(a[0] - b[0], a[1] - b[1]))
 
     ne_pos = _d(final_pos_xy, target_xy)
-    ne_pred = _d(pred_xy, target_xy)
     pos_traj = list(pos_trajectory) if pos_trajectory else [final_pos_xy]
-    pred_traj = list(pred_trajectory) if pred_trajectory else [pred_xy]
     or_pos = min(_d(p, target_xy) for p in pos_traj)
-    or_pred = min(_d(p, target_xy) for p in pred_traj)
     sr_pos = 1 if ne_pos <= success_dist_m else 0
-    sr_pred = 1 if ne_pred <= success_dist_m else 0
     osr_pos = 1 if or_pos <= success_dist_m else 0
-    osr_pred = 1 if or_pred <= success_dist_m else 0
 
     spl_pos = spl_pos_from_path(target_xy, pos_traj, sr_pos)
 
     return {
         "ne_pos_to_goal": round(ne_pos, 2),
-        "ne_pred_to_goal": round(ne_pred, 2),
         "sr_pos_to_goal": sr_pos,
-        "sr_pred_to_goal": sr_pred,
         "osr_pos_to_goal": osr_pos,
-        "osr_pred_to_goal": osr_pred,
         "min_dist_pos_to_target_m": round(or_pos, 2),
         "spl_pos": spl_pos,
         "NE": round(ne_pos, 2),
@@ -188,22 +178,18 @@ def score_precise(
 
 #: Every key that is a success verdict or scales with one (SPL multiplies it):
 #: an episode that never flew has all of them zeroed together.
-_SUCCESS_FLAGS = ("SR", "OSR", "sr_pos_to_goal", "sr_pred_to_goal", "osr_pos_to_goal",
-                  "osr_pred_to_goal", "spl_pos")
+_SUCCESS_FLAGS = ("SR", "OSR", "sr_pos_to_goal", "osr_pos_to_goal", "spl_pos")
 
 #: Ring-basis keys ("within R of the target point"), dropped from a shape-scored row.
-_RING_ONLY = ("sr_pos_to_goal", "sr_pred_to_goal", "OSR", "osr_pos_to_goal", "osr_pred_to_goal",
-              "spl_pos")
+_RING_ONLY = ("sr_pos_to_goal", "OSR", "osr_pos_to_goal", "spl_pos")
 
 
 def score_arrival(
     *,
     criterion: str,
     final_pos_xy: tuple[float, float],
-    pred_xy: tuple[float, float],
     target_xy: tuple[float, float],
     pos_trajectory: list[tuple[float, float]] | None = None,
-    pred_trajectory: list[tuple[float, float]] | None = None,
     success_dist_m: float = 20.0,
     gt_polygon: list[tuple[float, float]] | None = None,
     radius_m: float | None = None,
@@ -227,10 +213,8 @@ def score_arrival(
 
     scores = score_goal_prediction_citynav_native(
         final_pos_xy=final_pos_xy,
-        pred_xy=pred_xy,
         target_xy=target_xy,
         pos_trajectory=pos_trajectory,
-        pred_trajectory=pred_trajectory,
         success_dist_m=success_dist_m,
     )
     if criterion == "shape":
@@ -238,7 +222,7 @@ def score_arrival(
             scores.pop(key, None)
         scores.update(
             score_precise(
-                final_xy=pred_xy,
+                final_xy=final_pos_xy,
                 target_xy=target_xy,
                 gt_polygon=gt_polygon,
                 radius_m=success_dist_m if radius_m is None else radius_m,
@@ -259,8 +243,8 @@ def aggregate(per_episode: list[dict]) -> dict:
     if not per_episode:
         return {"n_episodes": 0}
     n = len(per_episode)
-    keys_mean = ["NE", "SR", "OSR", "spl_pos", "ne_pos_to_goal", "ne_pred_to_goal", "sr_pos_to_goal",
-                 "sr_pred_to_goal", "osr_pos_to_goal", "osr_pred_to_goal", "min_dist_pos_to_target_m"]
+    keys_mean = ["NE", "SR", "OSR", "spl_pos", "ne_pos_to_goal", "sr_pos_to_goal", "osr_pos_to_goal",
+                 "min_dist_pos_to_target_m"]
     out: dict = {"n_episodes": n}
     for k in keys_mean:
         # A None (``spl_pos`` on a single-pose record) never poisons the mean.
@@ -283,8 +267,7 @@ def aggregate(per_episode: list[dict]) -> dict:
         1 for r in per_episode if r.get("precise_floor_applied")
     )
     # CityNav reports SR/OSR/SPL as percentages.
-    for k in ("SR", "OSR", "spl_pos", "sr_pos_to_goal", "sr_pred_to_goal", "osr_pos_to_goal",
-              "osr_pred_to_goal", "SR_by_shape", "SR_by_radius"):
+    for k in ("SR", "OSR", "spl_pos", "sr_pos_to_goal", "osr_pos_to_goal", "SR_by_shape", "SR_by_radius"):
         if k in out:
             out[k + "_pct"] = round(out[k] * 100.0, 2)
     return out
