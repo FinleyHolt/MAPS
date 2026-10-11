@@ -44,7 +44,7 @@ _pool = ThreadPoolExecutor(max_workers=LOCATE_THREADS, thread_name_prefix="locat
 
 def sized(sensor, width: int, height: int):
     """``sensor`` at ``width`` x ``height`` pixels, the same fields of view."""
-    from maps.perception.ortho.camera_model import CameraIntrinsics  # noqa: PLC0415
+    from maps.perception.geometry.sensor_spec import CameraIntrinsics  # noqa: PLC0415
 
     intr = sensor.intrinsics
     if (intr.image_width, intr.image_height) == (width, height):

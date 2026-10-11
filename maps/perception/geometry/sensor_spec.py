@@ -33,7 +33,32 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from maps.perception.ortho.camera_model import CameraIntrinsics
+
+
+@dataclass(frozen=True)
+class CameraIntrinsics:
+    """A plain perspective pinhole: fields of view and pixel size."""
+
+    hfov_deg: float
+    vfov_deg: float
+    image_width: int
+    image_height: int
+
+    @property
+    def fx(self) -> float:
+        return self.image_width / (2.0 * np.tan(np.deg2rad(self.hfov_deg) / 2.0))
+
+    @property
+    def fy(self) -> float:
+        return self.image_height / (2.0 * np.tan(np.deg2rad(self.vfov_deg) / 2.0))
+
+    @property
+    def cx(self) -> float:
+        return self.image_width / 2.0
+
+    @property
+    def cy(self) -> float:
+        return self.image_height / 2.0
 
 
 def mount_rotation_matrix(pitch_deg: float, roll_deg: float = 0.0, yaw_deg: float = 0.0) -> np.ndarray:

@@ -12,7 +12,7 @@ import math
 
 import numpy as np
 
-from maps.perception.ortho.camera_model import CameraIntrinsics
+from maps.perception.geometry.sensor_spec import CameraIntrinsics
 from maps.perception.geometry.geolocate import project_pixels_to_world
 from maps.perception.geometry.sensor_spec import SensorSpec
 

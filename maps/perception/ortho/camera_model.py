@@ -1,8 +1,5 @@
-"""Top-down ortho loading + the pinhole intrinsics type.
-
-Builds the 2D RGB+height ortho of a block from its rasters
-(``load_ortho_or_rasters``) and exposes the pinhole intrinsics dataclass
-(``CameraIntrinsics``) the rest of the perception package consumes.
+"""Top-down ortho loading: the 2D RGB+height ortho of a block from its
+rasters (``load_ortho_or_rasters``).
 
 The ortho is the single 2D source of truth. A PNG-sourced bake has
 its interior holes (cells enclosed by coverage — photogrammetry gaps under
@@ -33,7 +30,6 @@ import logging
 import os
 import shutil
 import threading
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -49,30 +45,6 @@ try:
     _pil_image.MAX_IMAGE_PIXELS = None
 except ImportError:  # pragma: no cover - PIL is a hard dep in practice
     pass
-
-
-@dataclass(frozen=True)
-class CameraIntrinsics:
-    hfov_deg: float
-    vfov_deg: float
-    image_width: int
-    image_height: int
-
-    @property
-    def fx(self) -> float:
-        return self.image_width / (2.0 * np.tan(np.deg2rad(self.hfov_deg) / 2.0))
-
-    @property
-    def fy(self) -> float:
-        return self.image_height / (2.0 * np.tan(np.deg2rad(self.vfov_deg) / 2.0))
-
-    @property
-    def cx(self) -> float:
-        return self.image_width / 2.0
-
-    @property
-    def cy(self) -> float:
-        return self.image_height / 2.0
 
 
 def _mmap_dir(rgbd_dir, map_name: str) -> Path:
