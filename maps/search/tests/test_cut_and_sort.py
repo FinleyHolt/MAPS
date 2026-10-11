@@ -77,6 +77,8 @@ def test_a_float_gap_survives_as_a_float():
      "not a number"),
     ('r1 = find("car")\nr2 = r1.filter(near="A", dwithin=-5)\n',
      "cannot be negative"),
+    ('r1 = find("car")\nr2 = r1.filter(lambda r: True, north_of="A")\n',
+     "not both"),
 ])
 def test_the_refusal_names_the_exit(src, phrase):
     with pytest.raises(CodeError) as e:

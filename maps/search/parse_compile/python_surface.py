@@ -797,10 +797,12 @@ class Rows:
         _refuse_filter_kwargs(kw)
         _refuse_metres_in_within(within)
         if pred is not None:
-            if (near is not None or within is not None or dwithin is not None
-                    or facing is not None or direction is not None):
+            if any(v is not None for v in (
+                    near, within, dwithin, facing, direction,
+                    north_of, south_of, east_of, west_of)):
                 raise CodeError("filter takes a predicate OR "
-                                "near=/within=/dwithin=/facing=, not both")
+                                "near=/within=/dwithin=/facing=/east_of=/"
+                                "north_of=/south_of=/west_of=, not both")
             if not callable(pred):
                 raise CodeError(
                     f"filter's first argument is a predicate and {pred!r} "
