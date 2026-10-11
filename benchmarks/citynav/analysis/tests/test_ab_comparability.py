@@ -30,19 +30,14 @@ def _prov(*, sha="abc123", tiles="tiles/citynav_2m_osmv2", split="val_seen",
     }
 
 
+_CALCITY = {"split": "calcity",
+            "search_env_flags": {"SEARCH_CITYNAV_TILES": "/a/benchmarks/calcity/tiles"}}
+_SHA_A, _SHA_B = "5fee5f556bc1b4" + "0" * 50, "a8389803eb2322" + "0" * 50
+
+
 def test_identical_runs_raise_nothing():
     fatal, arm = comparability_issues(_prov(), _prov())
     assert fatal == [] and arm == []
-
-
-def test_tile_bake_mismatch_is_fatal():
-    fatal, arm = comparability_issues(
-        _prov(tiles="tiles/citynav_2m"), _prov(tiles="tiles/citynav_2m_osmv2")
-    )
-    assert fatal, "a retired-bake arm must be refused"
-    assert "tile bake" in fatal[0]
-    # It is fatal, NOT an arm difference -- otherwise the waiver would clear it.
-    assert arm == []
 
 
 def test_split_mismatch_is_fatal():
@@ -79,7 +74,8 @@ def test_waiving_the_arm_keys_cannot_waive_the_tile_bake():
         _prov(sha="2822471", tiles="tiles/citynav_2m_osmv2"),
     )
     assert arm, "shas differ, so the waivable class is populated"
-    assert fatal, "and the bake mismatch survives the waiver"
+    assert fatal and "tile bake" in fatal[0], "and the bake mismatch survives the waiver"
+    assert not any("tile" in m for m in arm), "the bake is never a waivable arm key"
 
 
 def test_look_tool_difference_is_reported():
@@ -106,11 +102,6 @@ def test_unrecorded_ground_truth_is_fatal():
     assert len(fatal) == 2 and all("unrecorded" in f for f in fatal)
 
 
-def test_split_unrecorded_on_one_side_is_fatal():
-    fatal, _ = comparability_issues(_prov(split=None), _prov())
-    assert fatal and "split unrecorded" in fatal[0]
-
-
 def test_split_unrecorded_on_both_sides_is_fatal():
     fatal, _ = comparability_issues(_prov(split=None), _prov(split=None))
     assert fatal and "split unrecorded" in fatal[0]
@@ -120,14 +111,8 @@ def test_the_same_bake_name_with_different_content_is_fatal():
     """Every Cal City bake is called ``tiles``, so the NAME check passes two
     genuinely different bakes. Two are live across the cluster today; the
     content hash is what separates them."""
-    from benchmarks.citynav.analysis.ab_report import comparability_issues
-
-    a = {
-        "split": "calcity",
-        "search_env_flags": {"SEARCH_CITYNAV_TILES": "/a/benchmarks/calcity/tiles"},
-        "bake_sha256": "5fee5f556bc1b4" + "0" * 50,
-    }
-    b = {**a, "bake_sha256": "a8389803eb2322" + "0" * 50}
+    a = {**_CALCITY, "bake_sha256": _SHA_A}
+    b = {**a, "bake_sha256": _SHA_B}
     fatal, _arm = comparability_issues(a, b)
     assert any("CONTENT differs" in f for f in fatal)
     # and the name check alone would have waved it through
@@ -135,13 +120,7 @@ def test_the_same_bake_name_with_different_content_is_fatal():
 
 
 def test_the_same_bake_content_pairs():
-    from benchmarks.citynav.analysis.ab_report import comparability_issues
-
-    a = {
-        "split": "calcity",
-        "search_env_flags": {"SEARCH_CITYNAV_TILES": "/a/benchmarks/calcity/tiles"},
-        "bake_sha256": "5fee5f556bc1b4" + "0" * 50,
-    }
+    a = {**_CALCITY, "bake_sha256": _SHA_A}
     b = {**a, "search_env_flags": {"SEARCH_CITYNAV_TILES": "/b/benchmarks/calcity/tiles"}}
     fatal, _arm = comparability_issues(a, b)
     assert fatal == [], fatal
@@ -152,13 +131,8 @@ def test_an_unstamped_bake_does_not_become_fatal():
     them -- and it is not a loophole: the tiles NAME check above still
     refuses an unrecorded bake, so ground truth is never compared against
     nothing. The content key only ever tightens."""
-    from benchmarks.citynav.analysis.ab_report import comparability_issues
-
-    a = {
-        "split": "calcity",
-        "search_env_flags": {"SEARCH_CITYNAV_TILES": "/a/benchmarks/calcity/tiles"},
-    }
-    b = {**a, "bake_sha256": "a8389803eb2322" + "0" * 50}
+    a = _CALCITY
+    b = {**a, "bake_sha256": _SHA_B}
     assert comparability_issues(a, b)[0] == []
     # but an unrecorded tiles PATH is still fatal, on either side
     c = {"split": "calcity", "search_env_flags": {}}

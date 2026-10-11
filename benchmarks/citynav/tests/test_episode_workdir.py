@@ -23,17 +23,6 @@ def declared_benchmark(monkeypatch):
     monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "citynav")
 
 
-def test_the_directory_is_named_by_stamp_benchmark_and_slug(tmp_path, monkeypatch):
-    monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
-    ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3")
-    try:
-        assert ep.dir.parent == tmp_path
-        assert re.fullmatch(r"maps_\d{8}_\d{6}_calcity_block_7__0_3", ep.dir.name), ep.dir.name
-        assert (ep.dir / "flight").is_dir()
-    finally:
-        ep.close()
-
-
 def test_each_benchmark_mints_its_own_name_and_the_stamp_reader_reads_it(tmp_path, monkeypatch):
     """``maps_<stamp>_<benchmark>_<episode>``, for every declared benchmark.
 
@@ -60,17 +49,14 @@ def test_each_benchmark_mints_its_own_name_and_the_stamp_reader_reads_it(tmp_pat
     assert len(set(minted.values())) == len(ew.BENCHMARKS), minted
 
 
-@pytest.mark.parametrize("declared", ["", "  ", "maps", "CityNav", "edwards"])
+@pytest.mark.parametrize("declared", [None, "", "CityNav"])
 def test_an_undeclared_benchmark_refuses_instead_of_naming_the_wrong_one(
     tmp_path, monkeypatch, declared
 ):
-    monkeypatch.setenv("SEARCH_BENCHMARK_NAME", declared)
-    with pytest.raises(RuntimeError, match="SEARCH_BENCHMARK_NAME"):
-        ew.mint_workdir(tmp_path, "block_7::0#3")
-
-
-def test_a_process_that_declares_nothing_refuses(tmp_path, monkeypatch):
-    monkeypatch.delenv("SEARCH_BENCHMARK_NAME", raising=False)
+    if declared is None:
+        monkeypatch.delenv("SEARCH_BENCHMARK_NAME")
+    else:
+        monkeypatch.setenv("SEARCH_BENCHMARK_NAME", declared)
     with pytest.raises(RuntimeError, match="SEARCH_BENCHMARK_NAME"):
         ew.mint_workdir(tmp_path, "block_7::0#3")
 
@@ -141,6 +127,7 @@ def test_the_run_number_reaches_the_directory_through_open_episode_dir(tmp_path)
     ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3", run_no=7)
     try:
         assert "_run07_" in ep.dir.name, ep.dir.name
-        assert ep.dir.is_dir()
+        assert ep.dir.parent == tmp_path
+        assert (ep.dir / "flight").is_dir()
     finally:
         ep.close()

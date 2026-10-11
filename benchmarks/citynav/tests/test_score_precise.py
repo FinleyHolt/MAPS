@@ -66,20 +66,12 @@ def test_falls_back_to_the_radius_with_no_shape():
     assert out["precise_distance_m"] == 14.0
 
 
-def test_radius_boundary_is_inclusive_like_sr():
+@pytest.mark.parametrize("y, sr", [(20.0, 1), (20.01, 0)])
+def test_the_radius_fallback_is_inclusive_like_sr(y, sr):
     """SR is ``NE <= success_radius_m``; the fallback must not disagree with
     the headline metric at the boundary."""
-    out = score_precise(
-        final_xy=(5.0, 20.0), target_xy=(5.0, 5.0), gt_polygon=None, radius_m=15.0
-    )
-    assert out["SR"] == 1
-
-
-def test_radius_just_outside_fails():
-    out = score_precise(
-        final_xy=(5.0, 20.01), target_xy=(5.0, 5.0), gt_polygon=None, radius_m=15.0
-    )
-    assert out["SR"] == 0
+    out = score_precise(final_xy=(5.0, y), target_xy=(5.0, 5.0), gt_polygon=None, radius_m=15.0)
+    assert out["SR"] == sr
 
 
 def test_degenerate_polygon_is_not_treated_as_a_shape():
