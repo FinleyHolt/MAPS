@@ -1,7 +1,5 @@
-"""Runtime graph: re-identification and serdes.
+"""Runtime graph serdes.
 
-- ``_find_track`` re-identifies by exact ByteTrack ``track_id`` and nothing
-  else; a different id mints a distinct node even on an identical footprint.
 - ``save_graph`` / ``load_graph`` round-trip ``semantic_attributes`` through
   the nodes JSON, which is where str/int coercion at the wire layer would show.
 - ``save_graph`` / ``load_graph`` preserve ``cells``, ``tags['height_m']`` and
@@ -12,7 +10,6 @@ from __future__ import annotations
 
 from maps.sws import MapObject, ObjectGraph
 from maps.sws.graph.io import load_graph, save_graph
-from maps.sws.graph.runtime import _find_track
 
 
 def _detected(centroid: tuple[int, int], **overrides) -> MapObject:
@@ -55,42 +52,6 @@ def test_semantic_attributes_round_trip_via_json(tmp_path):
         for value, count in counts.items():
             assert isinstance(value, str)
             assert isinstance(count, int)
-
-
-def test_find_track_exact_track_id_only():
-    """``_find_track`` re-identifies ONLY by exact ``track_id`` — ByteTrack
-    is the sole dedup, with no geometry fallback. A query for the node's own
-    track_id returns it; any other track_id returns None even when the
-    existing node's class/footprint would have matched under a geometry
-    path, so a distinct node would be minted."""
-    car = MapObject(
-        id="detected_0",
-        class_name="car",
-        name="car",
-        tags={},
-        centroid=(10, 10),
-        bbox=(10, 10, 11, 11),
-        cell_count=4,
-        orientation=None,
-        provenance="detected",
-        track_id="wt_existing",
-    )
-    graph = ObjectGraph(
-        nodes={"detected_0": car}, cell_size_m=2.0
-    )
-    # Same track_id -> re-identifies the existing node.
-    assert _find_track(graph, "wt_existing") == "detected_0"
-
-    # Different track_id -> None even though the existing node's class and
-    # footprint match (no geometry fallback; the ByteTrack track_id is the
-    # only key).
-    assert _find_track(graph, "wt_new") is None
-
-
-# ---------------------------------------------------------------------------
-# Prebake nodes carry ``cells``, so a reader can take a real target mask off
-# the runtime graph for a prebake fid as for a detected one.
-# ---------------------------------------------------------------------------
 
 
 def test_build_object_graph_populates_cells_and_height_tag():
