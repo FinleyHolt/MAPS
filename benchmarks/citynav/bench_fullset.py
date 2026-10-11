@@ -424,10 +424,13 @@ class Driver:
     # -- health gate -------------------------------------------------------
 
     def _vllm_healthy(self) -> bool:
-        """True when the reasoner endpoint answers ``/models``, asked with
-        the chat path's bearer (hosted endpoints auth ``/v1/models``)."""
+        """True when the reasoner endpoint answers its model list, at the URL
+        discovery read it from (``endpoint_spec.models_url``), asked with the
+        chat path's bearer (hosted endpoints auth ``/v1/models``)."""
+        from maps.llm.endpoint_spec import models_url  # noqa: PLC0415
+
         url = os.environ.get("SEARCH_REASONER_URL", "").strip().rstrip("/")
-        req = urllib.request.Request(f"{url}/models")
+        req = urllib.request.Request(models_url(url))
         key = os.environ.get("SEARCH_REASONER_API_KEY")
         if key:
             req.add_header("Authorization", f"Bearer {key}")

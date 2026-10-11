@@ -61,6 +61,34 @@ def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
     assert not (d.out_root / "w0" / "maps_20260101_000000_citynav_sleep" / "episode.json").exists()
 
 
+def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypatch) -> None:
+    """bedrock-mantle serves GPT-5.6 under /openai/v1 and lists it under /v1/models: a gate
+    asking SEARCH_REASONER_URL/models would hold every launch on a reasoner discovery accepted."""
+    asked: list[str] = []
+
+    class _Answer:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def _open(req, timeout):
+        asked.append(req.full_url)
+        return _Answer()
+
+    monkeypatch.setattr(bf.urllib.request, "urlopen", _open)
+    monkeypatch.setenv("SEARCH_REASONER_URL", "https://bedrock-mantle.us-east-1.api.aws/openai/v1")
+    monkeypatch.setenv("SEARCH_REASONER_MODELS_URL", "https://bedrock-mantle.us-east-1.api.aws/v1/models")
+    assert driver()._vllm_healthy()
+    monkeypatch.delenv("SEARCH_REASONER_MODELS_URL")
+    monkeypatch.setenv("SEARCH_REASONER_URL", "http://127.0.0.1:8001/v1")
+    assert driver()._vllm_healthy()
+    assert asked == ["https://bedrock-mantle.us-east-1.api.aws/v1/models", "http://127.0.0.1:8001/v1/models"]
+
+
 def test_a_window_of_infra_casualties_stops_the_run(driver, tmp_path: Path) -> None:
     """Named by its dominant cause, with the tail of the log that explains it:
     the attempt's run.log, or the worker's server.log for an attempt that

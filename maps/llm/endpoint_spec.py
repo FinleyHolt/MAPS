@@ -37,6 +37,11 @@ Escape hatches (explicit, never inferred):
       When the endpoint IS reachable the override's ``model_id`` is still
       cross-checked against the served ids — the override never bypasses
       the live check.
+  ``SEARCH_REASONER_MODELS_URL=<url>``
+      Where the served ids are listed, for an endpoint that lists them
+      somewhere other than ``{SEARCH_REASONER_URL}/models``: Bedrock's
+      bedrock-mantle serves GPT-5.6 under ``/openai/v1`` and its model
+      list under ``/v1/models``.
 """
 
 from __future__ import annotations
@@ -205,7 +210,13 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
         ) from exc
 
 
-def _models_url(base_url: str) -> str:
+def models_url(base_url: str) -> str:
+    """Where the reasoner at ``base_url`` lists its served models: discovery
+    and every later health probe ask the same URL, so a probe can never
+    fail on an endpoint discovery accepted."""
+    explicit = os.environ.get("SEARCH_REASONER_MODELS_URL", "").strip()
+    if explicit:
+        return explicit
     base = base_url.rstrip("/")
     return f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
 
@@ -213,13 +224,13 @@ def _models_url(base_url: str) -> str:
 def _probe_models(base_url: str) -> list[dict]:
     """``GET {base_url}/v1/models`` -> the ``data`` model list (non-empty)."""
     payload = _get_json(
-        _models_url(base_url),
+        models_url(base_url),
         bearer=os.environ.get("SEARCH_REASONER_API_KEY") or None,
     )
     data = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(data, list) or not data:
         raise EndpointDiscoveryError(
-            f"{_models_url(base_url)} returned no served models "
+            f"{models_url(base_url)} returned no served models "
             f"(data={data!r}) — the server is up but serves nothing"
         )
     return [m for m in data if isinstance(m, dict)]
@@ -242,7 +253,7 @@ def _facts_from_endpoint(
         if override.model_id not in ids:
             raise EndpointDiscoveryError(
                 f"SEARCH_ENDPOINT_SPEC_OVERRIDE names {override.model_id!r} "
-                f"but {_models_url(base_url)} serves {ids} — the pin does "
+                f"but {models_url(base_url)} serves {ids} — the pin does "
                 f"not match the live endpoint"
             )
         served_len = next(m for m in models if m.get("id") == override.model_id).get("max_model_len")
@@ -255,7 +266,7 @@ def _facts_from_endpoint(
         return override.model_id, override.max_model_len, bool(served_len)
     if len(models) != 1:
         raise EndpointDiscoveryError(
-            f"{_models_url(base_url)} serves {len(models)} models ({ids}); "
+            f"{models_url(base_url)} serves {len(models)} models ({ids}); "
             f"refusing to guess — set SEARCH_ENDPOINT_SPEC_OVERRIDE="
             f"'<model_id>:<max_model_len>' to pin one"
         )
@@ -264,11 +275,11 @@ def _facts_from_endpoint(
     max_model_len = model.get("max_model_len")
     if not model_id:
         raise EndpointDiscoveryError(
-            f"{_models_url(base_url)} model entry has no id: {model!r}"
+            f"{models_url(base_url)} model entry has no id: {model!r}"
         )
     if not max_model_len:
         raise EndpointDiscoveryError(
-            f"{_models_url(base_url)} reports no max_model_len for "
+            f"{models_url(base_url)} reports no max_model_len for "
             f"{model_id!r} — cannot derive a token budget. If this is a "
             f"non-vLLM endpoint, set SEARCH_ENDPOINT_SPEC_OVERRIDE="
             f"'<model_id>:<max_model_len>'"
