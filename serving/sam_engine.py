@@ -404,8 +404,8 @@ def segment(
     This is the in-process backend ``serving.sam_server`` drives for
     ``/segment``. Application code does NOT call this directly; the
     runtime adapter (``maps.perception.sam.detect_client``) POSTs
-    ``/segment`` to that server. ``pixel_mask`` is the bbox crop; ``pixel_bbox_rcrc`` is the
-    absolute origin in tile-local coords.
+    ``/segment`` to that server. ``pixel_mask`` is the full ``(H, W)`` frame mask;
+    ``pixel_bbox_rcrc`` is its inclusive extent in tile-local coords.
     """
     if not concepts:
         return []
