@@ -204,3 +204,19 @@ def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
             float(_raw_radius) if _raw_radius is not None else None
         ),
     )
+
+
+def find_row(rows: list[dict], episode_id: str) -> tuple[int, dict] | None:
+    """``(index, row)`` of the split row ``episode_id`` names, else None:
+    ``<map>::<ann>#<i>`` is row ``i`` when its bare id matches, a bare
+    ``<map>::<ann>`` the first row carrying it."""
+    base, sep, suffix = episode_id.rpartition("#")
+    if sep:
+        try:
+            i = int(suffix)
+        except ValueError:
+            return None
+        if 0 <= i < len(rows) and parse_episode(rows[i]).episode_id == base:
+            return i, rows[i]
+        return None
+    return next(((i, r) for i, r in enumerate(rows) if parse_episode(r).episode_id == episode_id), None)

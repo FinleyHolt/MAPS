@@ -7,7 +7,7 @@ Example:
 
 from __future__ import annotations
 
-from benchmarks.citynav.adapter import load_objects, load_split, parse_episode
+from benchmarks.citynav.adapter import find_row, load_objects, load_split, parse_episode
 from benchmarks.citynav.paths import OBJECTS_JSON, assert_available, split_path
 from benchmarks.citynav.run_benchmark.config import (
     export_withhold,
@@ -202,44 +202,11 @@ def main(
     # disambiguated episode_id the dashboard picked.
     indexed_rows: list[tuple[int, dict]] = list(enumerate(raw_rows))
     if args.episode_id:
-        # Fast path: ``<base>#<row_index>`` pins the exact row, so we
-        # don't have to re-parse every row to find a match.
-        if "#" in args.episode_id:
-            base, _, suffix = args.episode_id.rpartition("#")
-            try:
-                idx = int(suffix)
-            except ValueError:
-                idx = -1
-            if 0 <= idx < len(indexed_rows):
-                candidate = indexed_rows[idx]
-                if parse_episode(candidate[1]).episode_id == base:
-                    indexed_rows = [candidate]
-                else:
-                    log.error(
-                        "Row %d in split=%s does not match prefix %s",
-                        idx,
-                        args.split,
-                        base,
-                    )
-                    return 2
-            else:
-                log.error("Row index %d out of range in split=%s", idx, args.split)
-                return 2
-        else:
-            indexed_rows = [
-                (i, r)
-                for i, r in indexed_rows
-                if parse_episode(r).episode_id == args.episode_id
-            ]
-            if not indexed_rows:
-                log.error(
-                    "No episode with id=%s in split=%s", args.episode_id, args.split
-                )
-                return 2
-            # CityNav can have multiple descriptions sharing one bare
-            # ``map::ann`` id. A dashboard-driven single-episode run wants
-            # one; the dashboard addresses episodes by the disambiguated form.
-            indexed_rows = indexed_rows[:1]
+        found = find_row(raw_rows, args.episode_id)
+        if found is None:
+            log.error("No episode with id=%s in split=%s", args.episode_id, args.split)
+            return 2
+        indexed_rows = [found]
     if args.limit and args.limit > 0:
         indexed_rows = indexed_rows[: args.limit]
     log.info("Loaded %d episodes from split=%s", len(indexed_rows), args.split)

@@ -138,17 +138,15 @@ class Hydrated:
 def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] | None = None):
     """The split's row named ``episode_id``, or with ``start_xy`` an
     operator-authored mission with no row (:func:`authored_episode`)."""
-    from benchmarks.citynav.adapter import load_split, parse_episode  # noqa: PLC0415
+    from benchmarks.citynav.adapter import find_row, load_split, parse_episode  # noqa: PLC0415
     from benchmarks.citynav.paths import split_path  # noqa: PLC0415
 
     if start_xy is not None:
         return authored_episode(episode_id, start_xy)
-    rows = load_split(split_path(split))
-    episode = next((ep for ep in (parse_episode(r, row_index=i) for i, r in enumerate(rows))
-                    if ep.episode_id == episode_id), None)
-    if episode is None:
+    found = find_row(load_split(split_path(split)), episode_id)
+    if found is None:
         raise ValueError(f"{split} holds no episode {episode_id}")
-    return episode
+    return parse_episode(found[1], row_index=found[0])
 
 
 def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
