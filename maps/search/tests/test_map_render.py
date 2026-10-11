@@ -130,7 +130,7 @@ def test_prior_fid_chips_only_where_the_pill_fits():
     assert rec["prior_chips"][0]["chip"] == "4829"
 
 
-def test_the_centre_carries_no_competing_numeral():
+def test_the_centre_carries_no_competing_numeral(monkeypatch):
     """The centre draws its outline and NO ordinal badge.
 
     Asked which chip named the outlined building, the model answered the
@@ -144,9 +144,16 @@ def test_the_centre_carries_no_competing_numeral():
          "contour": [[2.0, 2.0], [18.0, 2.0], [18.0, 18.0], [2.0, 18.0]]}
     d = {"fid": "detected_2", "label": "house", "kind": "detection",
          "provenance": "detected", "cells": [[4, 4]]}
+    from maps.perception.viz import mllm_overlay
+
+    seen = []
+    real = mllm_overlay.render_look_overlay
+    monkeypatch.setattr(mllm_overlay, "render_look_overlay",
+                        lambda *a, **kw: seen.append(kw) or real(*a, **kw))
     rec = render_map_from_spec(
         {"center_xy": [10.0, 10.0], "context_m": 20.0,
          "center_label": "map center"}, [b, d], **_TILE)
+    assert seen and all(kw.get("draw_digits") is False for kw in seen), seen
     chips = ([c["chip"] for c in rec["prior_chips"]]
              + [c["chip"] for c in rec["detection_chips"]])
     assert chips, "no chips drawn — the guard would pass vacuously"
@@ -154,15 +161,6 @@ def test_the_centre_carries_no_competing_numeral():
     # NO glyph: its digit is withheld at draw time.
     centre = [e for e in rec["legend"] if e.get("role") == "center"]
     assert len(centre) == 1
-    import inspect
-
-    from maps.perception.viz import mllm_overlay
-    sig = inspect.signature(mllm_overlay.render_look_overlay)
-    assert "draw_digits" in sig.parameters, "the suppression knob is gone"
-    src = inspect.getsource(
-        __import__("maps.search.render.map_render", fromlist=["x"])
-        .render_map_from_spec)
-    assert "draw_digits=False" in src, "the schematic re-armed its badges"
 
 
 def test_coresident_detection_hatches_and_stacks_both_chips():
@@ -336,33 +334,22 @@ def test_the_image_axis_convention_is_stated_once_and_correctly():
     assert "never where the answer is" in t
 
 
-def test_a_picture_states_its_own_pixel_grid():
-    """The grid is NOT constant -- a crop's upscale is
-    clamp(round(450/native), 1, 3) and a map's side is
-    clamp(span/0.35, 320, 1024) -- so it cannot be said once in the system
-    prompt and has to ride each image.
+def test_a_picture_states_its_own_pixel_grid(ortho_dir):
+    """Map and look records carry the pixel width their jpeg was encoded at."""
+    import cv2
 
-    With the world window already in the caption, the grid closes the loop:
-    "300 of 1000 down" and "three tenths down" land on the same metre.
+    from maps.search.render.look_render import render_candidate_crops
+    from maps.search.tests.fakes import ORTHO_MAP
 
-    This replaces the WORLD TICKS drawn in 0ca4619f. Ticks moved nothing --
-    axis confusion 30% with, 29% without, over 180 episodes each -- because
-    the model's problem was never reading numbers off pixels, it was not
-    knowing the convention. The convention is now stated once in
-    WORLD CONVENTIONS, and the per-image grid is stated per image. A mark
-    the model does not use is clutter on every frame.
-    """
-    import inspect
-
-    from maps.perception.viz import mllm_overlay
-    from maps.search.render import look_render, map_render
-
-    # the ticks are gone from the overlay and from both callers
-    assert "WORLD TICKS" not in inspect.getsource(mllm_overlay)
-    for mod in (look_render, map_render):
-        src = inspect.getsource(mod)
-        assert "world_window=(" not in src, mod.__name__
-        assert '"side_px": int(W)' in src, mod.__name__
+    rec = render_map_from_spec({"center_xy": [10.0, 10.0], "context_m": 20.0,
+                                "center_label": "map center"}, [], **_TILE)
+    (look,) = render_candidate_crops(
+        [{"center_fid": "", "center_xy": [100.0, 100.0], "center_label": "here",
+          "center_boundary": None, "annotate": False, "marks": []}],
+        map_name=ORTHO_MAP, rgbd_dir=ortho_dir)
+    for r in (rec, look):
+        img = cv2.imdecode(np.frombuffer(r["jpeg"], np.uint8), cv2.IMREAD_COLOR)
+        assert img.shape[1] == r["side_px"], (img.shape, r["side_px"])
 
 
 def test_marks_decide_who_is_chipped_not_footprint_size():

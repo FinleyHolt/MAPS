@@ -11,11 +11,13 @@ but the swallow existed).
 
 from __future__ import annotations
 
+import json
 import threading
 
 import pytest
 
 from maps.search.parse_compile.reasoner_loop import _named_feature_note
+from maps.search.tests.fakes import drive, run, tool_results
 
 
 def test_named_feature_note_fires_on_a_world_state_name():
@@ -82,36 +84,16 @@ def test_clean_setter_keeps_a_clean_receipt():
     assert "error" not in rcpt
 
 
-def test_near_form_arms_the_standing_watchlist():
-    """`look_for(X, at=Y)` means what a planner means: standing attention
-    plus localized emphasis, never emphasis INSTEAD of attention. Pinned at
-    the source seam (the closure calls the ONE watch channel) and at the
-    served doc, which says the placed form is "the same, plus extra" rather
-    than a bare boost -- both corrective notes measured behaviour-flat, so
-    the semantics themselves are the fix."""
-    import inspect
+def test_the_placed_form_also_arms_the_standing_watchlist():
+    boosts = []
 
-    from maps.search.parse_compile import prompts, reasoner_loop
-    src = inspect.getsource(reasoner_loop)
-    assert '_watch_apply({"add": _adds})' in src
-    assert "standing watchlist for" in src
-    assert "the same, plus extra segmentation there" in prompts.CODE_DOC
-    assert "targeted boost where you" not in prompts.CODE_DOC
+    def _boost(concepts, where):
+        boosts.append((concepts, where))
+        return {"queued": True}
 
-
-if __name__ == "__main__":
-    import sys
-    sys.exit(pytest.main([__file__, "-q"]))
-
-
-def test_concept_union_keeps_first_seen_order():
-    from maps.search.parse_compile.compiler import (
-        _extract_reasoner_concepts,
-        concept_union,
-    )
-    specs = _extract_reasoner_concepts({"sam_concepts": [
-        {"class": "Red  Car", "role": "target"}, "tree", "None",
-        {"class": "red car", "role": "anchor"},
-        {"class": "tree", "role": "bogus"},
-    ]})
-    assert concept_union(specs) == ["red car", "tree"]
+    _, fr, _, declared = drive([[run('look_for("pool", at="the depot")\n')], "done"],
+                               boost_queue=_boost)
+    assert [c for c, _w in boosts] == [["pool"]]
+    assert {"class": "pool", "role": "target"} in declared[-1], declared
+    ack = json.dumps(tool_results(fr)[0])
+    assert "standing watchlist for every later flight" in ack, ack

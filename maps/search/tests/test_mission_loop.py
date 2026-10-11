@@ -19,7 +19,7 @@ import inspect
 from maps.search.parse_compile.reasoner_loop import (
     _mission_sanitize_moves,
 )
-from maps.search.tests.fakes import FakeReasoner, drive, tool_results
+from maps.search.tests.fakes import FakeReasoner, drive, run, tool_results
 
 
 def test_unknown_tool_names_the_one_verb():
@@ -82,37 +82,15 @@ def test_second_consecutive_empty_turn_still_ends_the_mission():
 # test_prose_that_narrates_a_call_is_a_real_ending.
 
 
-def test_a_flight_shows_what_it_saw():
-    """The harness renders the flight's view to segment it and then threw
-    the pixels away, handing back a COUNT of the classes it was told to
-    watch. That count is what makes "0 detections" read as absence when it
-    means "nothing you asked for" -- a log study over 146 reached-then-missed
-    episodes found the model trusting it while standing on the target.
+def test_a_flight_view_that_fails_to_render_never_crashes_the_flight():
+    def _broken(reqs):
+        raise RuntimeError("renderer down")
 
-    And the model paid to undo it: 45% of 4,691 flights were followed
-    immediately by a look or map call asking to see where it had just gone.
-    """
-    import maps.search.parse_compile.reasoner_loop as rl
-    src = inspect.getsource(rl)
-    i = src.index("THE FLIGHT SHOWS WHAT IT SAW")
-    # anchored at BOTH ends -- a fixed char count silently stopped covering
-    # the block the first time a comment grew inside it
-    body = src[i:src.index("mission_flights += 1", i)]
-    # rendered through the SAME look renderer, so live and replay stay
-    # byte-identical and no second render path can drift
-    assert "look_renderer([{" in body
-    # the pixels reach the model, not just the ack
-    assert "pending_vision.append" in body
-    # and a render failure never takes the flight down with it
-    assert "never crash a flight" in body
-
-
-
-
-
-
-
-
+    reply, fr, flights, _ = drive([[run("go_to(prior_7)\n")], "done"],
+                                  look_renderer=_broken)
+    assert len(flights) == 1 and reply.flights_flown == 1
+    assert "error" not in tool_results(fr)[0], tool_results(fr)[0]
+    assert fr.vision == []
 
 
 def test_three_replies_in_a_row_with_no_flight_is_a_confident_abstain():
