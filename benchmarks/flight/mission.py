@@ -328,28 +328,24 @@ class Mission:
             area = leg_area(h, token, xy)
             area_ll = self._area_lonlat(area)
             step = len(self.flights)
+            at = f"{token} at ({xy[0]:.0f}, {xy[1]:.0f})"
             cov, unread = self._coverage_before_leg(area_ll)
             held = self._held_frame(area, xy) if cov and cov["fraction"] >= COVERED_FRACTION else None
             if held is not None:
-                self.transcript.append({"kind": "leg", "said": (
-                    f"{token} at ({xy[0]:.0f}, {xy[1]:.0f}) is held by the pass already: "
-                    f"{self._held_words(held[1])}; no leg is flown")})
+                self._said(f"{at} is held by the pass already: {self._held_words(held[1])}; no leg is flown")
             else:
                 if unread is not None:
                     log.warning("the leg to %s at (%.0f, %.0f) is posted unread: the recording did not answer "
                                 "in %d reads: %s", token, xy[0], xy[1], COVERAGE_TRIES, unread)
-                    self.transcript.append({"kind": "leg", "said": (
-                        f"{token} at ({xy[0]:.0f}, {xy[1]:.0f}) may be held by the pass already, but the "
-                        f"recording could not be asked in {COVERAGE_TRIES} reads ({unread}); the leg is flown")})
+                    self._said(f"{at} may be held by the pass already, but the recording could not be asked "
+                               f"in {COVERAGE_TRIES} reads ({unread}); the leg is flown")
                 elif cov is not None and cov["fraction"] < COVERED_FRACTION:
                     log.info("the pass holds %.0f%% of %s at (%.0f, %.0f) (%d of %d points, %d frames), short "
                              "of %.0f%%; the leg is flown", 100.0 * cov["fraction"], token, xy[0], xy[1],
                              cov["held"], cov["points"], cov["frames"], 100.0 * COVERED_FRACTION)
                 elif cov is not None:
-                    self.transcript.append({"kind": "leg", "said": (
-                        f"{token} at ({xy[0]:.0f}, {xy[1]:.0f}) is held by the pass ({cov['fraction']:.0%}), "
-                        f"but no frame of it could be served "
-                        f"({self._live.last_refusal or 'no reason recorded'}); the leg is flown")})
+                    self._said(f"{at} is held by the pass ({cov['fraction']:.0%}), but no frame of it could be "
+                               f"served ({self._live.last_refusal or 'no reason recorded'}); the leg is flown")
                 ahead = [(float(x), float(y)) for x, y in (item.get("pass_ahead") or [])]
                 leg = Leg(target=token, point=(xy[0], xy[1]), step=step, area=area_ll,
                           coverage_floor=COVERED_FRACTION, ahead=ahead)
@@ -378,26 +374,21 @@ class Mission:
                         by = ", ".join(f"{n} {k}" for k, n in (reg.get("sources") or {}).items())
                         posed = (f"the map registered it{f' ({by})' if by else ''}" if reg.get("applied") else
                                  f"the map did not register it: {reg.get('why') or 'the corrector is not running'}")
-                        self.transcript.append({"kind": "leg", "said": (
-                            f"the leg to {token} at ({xy[0]:.0f}, {xy[1]:.0f}) arrived; {waited:.1f} s later "
-                            f"{self._held_words(last)}; {posed}")})
+                        self._said(f"the leg to {at} arrived; {waited:.1f} s later {self._held_words(last)}; {posed}")
                     else:
-                        self.transcript.append({"kind": "leg", "said": (
-                            f"the leg to {token} at ({xy[0]:.0f}, {xy[1]:.0f}) arrived, but no frame of the pass "
-                            f"could be served ({self._live.last_refusal or 'no reason recorded'}); "
-                            f"the flight has no observation")})
+                        self._said(f"the leg to {at} arrived, but no frame of the pass could be served "
+                                   f"({self._live.last_refusal or 'no reason recorded'}); "
+                                   f"the flight has no observation")
                 elif outcome == "lost":
                     held = self._held_frame(area, xy)
                     if held is not None:
-                        self.transcript.append({"kind": "leg", "said": (
-                            f"the leg to {token} at ({xy[0]:.0f}, {xy[1]:.0f}) never arrived in "
-                            f"{ARRIVAL_TIMEOUT_S:.0f} s (closest {self._closest_m:.0f} m); "
-                            f"{self._held_words(held[1])}, and those frames are the observation")})
+                        self._said(f"the leg to {at} never arrived in {ARRIVAL_TIMEOUT_S:.0f} s (closest "
+                                   f"{self._closest_m:.0f} m); {self._held_words(held[1])}, "
+                                   f"and those frames are the observation")
                     else:
-                        self.transcript.append({"kind": "leg", "said": (
-                            f"the leg to {token} at ({xy[0]:.0f}, {xy[1]:.0f}) never arrived in "
-                            f"{ARRIVAL_TIMEOUT_S:.0f} s (closest {self._closest_m:.0f} m); no frame held any of "
-                            f"it, and the flight has no observation")})
+                        self._said(f"the leg to {at} never arrived in {ARRIVAL_TIMEOUT_S:.0f} s (closest "
+                                   f"{self._closest_m:.0f} m); no frame held any of it, "
+                                   f"and the flight has no observation")
             self._held, self._held_area = held, (area, xy)
         try:
             return session.fly(item)
@@ -405,6 +396,10 @@ class Mission:
             # The fused pass is spent with the flight; the area stays, so a
             # later observation in the turn is the pass over it again.
             self._held = None
+
+    def _said(self, text: str) -> None:
+        """A ``leg`` row of the transcript: what the crew's side of a flight did."""
+        self.transcript.append({"kind": "leg", "said": text})
 
     def _wait_departure(self, xy) -> float:
         """Hold until the point leaves the camera's frame, and answer with the
@@ -495,7 +490,7 @@ class Mission:
                 f"{frames} frame(s), the {side} side missing; "
                 f"the leg is asked again {shift:.0f} m {side} of the point (re-fly {n} of {SHORT_PASS_REQUESTS})")
         log.info(said)
-        self.transcript.append({"kind": "leg", "said": said})
+        self._said(said)
         return moved, f"Re-fly {token}: the pass held {held}/{len(area)} points, the {side} side missing"
 
     @staticmethod
