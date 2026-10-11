@@ -928,7 +928,6 @@ def _fetch_osm_records(georef: dict[str, Any]) -> list[tuple[dict[str, Any], dic
     try:
         import osmnx as ox
         from osmnx import utils_geo
-        from pyproj import Transformer
     except ImportError as exc:  # pragma: no cover - depends on optional env
         raise BakeError(
             "--dump-osm-cache requires the geo extra "
@@ -950,10 +949,6 @@ def _fetch_osm_records(georef: dict[str, Any]) -> list[tuple[dict[str, Any], dic
         return []
     if str(gdf.crs or "EPSG:4326") != osm_crs:
         gdf = gdf.to_crs(osm_crs)
-    transformer = Transformer.from_crs(osm_crs, osm_crs, always_xy=True)
-    # The identity transformer validates the CRS while leaving the affine as
-    # the single explicit registration into CityNav local XY.
-    del transformer
 
     records: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for idx, row in gdf.iterrows():
