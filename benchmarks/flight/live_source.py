@@ -299,31 +299,31 @@ def fused_registration(records: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def register_frame(register: Registration, rgb, pose_xy, altitude_m, yaw, roll, pitch_proj, sensor,
-                   graph: PoseGraph | None = None, seq: int | None = None, t: float | None = None
-                   ) -> tuple[tuple[float, float], dict[str, Any]]:
-    """This frame's ground residual: the corrected pose and its record, or the pose as it was and why.
+def frame_pose(posed) -> frame_ties.Pose:
+    """A posed frame's camera pose as the registration reads it, pitch back in aerospace signs."""
+    return frame_ties.Pose(tuple(posed.pose_xy), float(posed.alt_msl), float(posed.yaw), float(posed.roll),
+                           -float(posed.pitch_proj))
+
+
+def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor
+                   ) -> tuple[dict[str, Any], tuple[float, float, float] | None]:
+    """This frame's ground residual on its own pixels: its record (``applied``
+    with the shift, or ``why``), and the measurement ``(east, north, response)`` or None.
 
     The whole frame is the one mark: its edge structure located on the map's
-    render at this pose (:func:`frame_offset.offset`), the shift taken to the
-    ground through the projector's Jacobian. ``altitude_m`` is the camera's
-    orthometric altitude and ``pitch_proj`` the projector's pitch. With a
-    ``graph`` and the frame's sequence and time, the frame joins the graph
-    with its measurement (or none) and takes the graph's placement; without
-    one the measurement stands on its own. A banked frame is asked like a
-    level one: its peak is noisier, and the graph's vote over the window is
-    what reads it.
+    render at ``pose`` (:func:`frame_offset.offset`), the shift taken to the
+    ground through the projector's Jacobian. ``pose.alt_msl_m`` is the
+    camera's orthometric altitude. A banked frame is asked like a level one:
+    its peak is noisier, and the graph's vote over the window is what reads it.
     """
-    pose = frame_ties.Pose(tuple(pose_xy), float(altitude_m), float(yaw), float(roll), -float(pitch_proj))
     record: dict[str, Any] = {"applied": False, "source": None, "shift_yaw_deg": 0.0}
     measured: tuple[float, float, float] | None = None
     try:
-        ground = register.ground_at(pose_xy)
+        ground = register.ground_at(pose.pose_xy)
         intr = sensor.intrinsics
         expected = register.render(locator.sized(sensor, intr.image_width // frame_offset.DOWN,
                                                  intr.image_height // frame_offset.DOWN),
-                                   tuple(pose_xy), altitude_m - ground,
-                                   yaw, roll, pitch_proj)
+                                   pose.pose_xy, pose.alt_msl_m - ground, pose.yaw_deg, pose.roll_deg, -pose.pitch_deg)
     except ValueError:
         expected = None
     if expected is None:
@@ -331,25 +331,16 @@ def register_frame(register: Registration, rgb, pose_xy, altitude_m, yaw, roll, 
     else:
         du, dv, response = frame_offset.offset(rgb, expected)
         record["response"] = round(response, 4)
-        de, dn = frame_offset.ground_correction(pose, sensor, altitude_m=altitude_m, ground_z=ground, d_px=(du, dv))
+        de, dn = frame_offset.ground_correction(pose, sensor, altitude_m=pose.alt_msl_m, ground_z=ground,
+                                                d_px=(du, dv))
         if not (math.isfinite(de) and math.isfinite(dn)):
             record["why"] = "the frame's offset put the camera nowhere"
         elif response < FRAME_RESPONSE_MIN:
             record["why"] = f"the frame does not register: response {response:.2f} under {FRAME_RESPONSE_MIN}"
         else:
-            record.update(shift_e_m=de, shift_n_m=dn)
+            record.update(applied=True, source="measured", shift_e_m=de, shift_n_m=dn)
             measured = (de, dn, response)
-    if graph is not None and seq is not None and t is not None:
-        placed = graph.offer(seq, t, pose, locator.gray(rgb), measured)
-        if placed.get("why") and not record.get("why"):
-            record["why"] = placed["why"]
-        record.update({k: v for k, v in placed.items() if k != "why"})
-        if record["applied"]:
-            pose_xy = (pose_xy[0] + record["shift_e_m"], pose_xy[1] + record["shift_n_m"])
-    elif measured is not None:
-        pose_xy = (pose_xy[0] + measured[0], pose_xy[1] + measured[1])
-        record.update(applied=True, source="measured", shift_e_m=measured[0], shift_n_m=measured[1])
-    return pose_xy, record
+    return record, measured
 
 
 class Corrector(threading.Thread):
@@ -480,9 +471,12 @@ class LiveSource:
         with self._correcting:
             if self.graph is None:
                 self.graph = PoseGraph(posed.sensor, self.register.ground_at)
-            _xy, record = register_frame(self.register, posed.rgb, posed.pose_xy, posed.alt_msl, posed.yaw,
-                                         posed.roll, posed.pitch_proj, posed.sensor,
-                                         graph=self.graph, seq=seq, t=t_host)
+            pose = frame_pose(posed)
+            record, measured = register_frame(self.register, posed.rgb, pose, posed.sensor)
+            placed = self.graph.offer(seq, t_host, pose, locator.gray(posed.rgb), measured)
+        if placed.get("why") and not record.get("why"):
+            record["why"] = placed["why"]
+        record.update({k: v for k, v in placed.items() if k != "why"})
         return record
 
     def _register_ring(self, seq: int, posed, t: float) -> dict[str, Any]:
@@ -496,8 +490,7 @@ class LiveSource:
         refused or unmeasured ring frame takes that nearest node (``nearest``);
         without one the pose stands and the record says why.
         """
-        _xy, record = register_frame(self.register, posed.rgb, posed.pose_xy, posed.alt_msl, posed.yaw,
-                                     posed.roll, posed.pitch_proj, posed.sensor)
+        record, _measured = register_frame(self.register, posed.rgb, frame_pose(posed), posed.sensor)
         record.update(seq=seq, ring=True)
         with self._correcting:
             est = self.graph.estimate(t) if self.graph is not None else None
