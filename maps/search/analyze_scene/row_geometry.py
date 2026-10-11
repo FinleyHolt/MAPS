@@ -1,29 +1,16 @@
-"""Footprint geometry between served rows: the measurements ``xy`` cannot make.
-
-A served row carries ONE point, and every distance computed off it is wrong
-for an extended feature. Distance on this surface is FOOTPRINT GAP, mask to
-mask, over the geometry the live surface holds by fid
-(:func:`geom_compute.gap_witness`, the quantity the executor's ``distance to
-<ref>`` column carries).
-
-A SET IS ONE PLACE AND MEANS ITS NEAREST MEMBER: the gap from a house to a
-set of pools is the gap to the closest pool (:func:`geom_compute.set_gap`).
-
-Geometry is resolved BY FID off the live surface, because op OUTPUT rows
-strip the mask fields (``geom_program._MODEL_HIDDEN_ROW_FIELDS``) and a row
-holding only its point would degrade every gap to a centroid distance.
-"""
+"""Distance between served rows, mask to mask (:func:`geom_compute.gap_witness`,
+the quantity a ``distance to <ref>`` column carries). Geometry is read by fid
+off the live surface, since op output rows carry no mask; a set of places
+measures as its nearest member (:func:`geom_compute.set_gap`)."""
 
 from __future__ import annotations
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.util.xy_token import is_xy
 
-def chains_of(row) -> list:
-    """One surface row's footprint as mask chains.
 
-    Its mask when the surface holds one, else its own point.
-    """
+def chains_of(row) -> list:
+    """A surface row's mask chains, else its point as one chain."""
     if not isinstance(row, dict):
         return []
     mask = row.get("mask")
