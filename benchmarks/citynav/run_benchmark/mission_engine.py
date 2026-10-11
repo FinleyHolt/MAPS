@@ -103,16 +103,11 @@ def resolve_flight_target(
     Returns ``{"xy": (x, y), "provenance": ...}`` or ``{"error": ...}`` (the
     fid is on neither graph).
 
-    A NAMED THING FLIES ITS MIDDLE, and there is no aim to move it. The
-    model naming a point on the thing was the other way to reach a PART of
-    a region, and it cannot: probed directly with crops and the world
-    window it returned the crop's CENTER on 20/21 parsed replies --
-    midpoint arithmetic with no visual pointing in it -- and every aim of
-    the first live code-surface episodes landed 23-38 m off the footprint
-    it named. A part is reached by COVERING the thing (``explore``) and
-    flying to the row the segmenter put there: SAM's target-class
-    detection sits a median 1.5 m from GT on 83% of rows, which is
-    measurement where the aim was estimate.
+    A NAMED THING FLIES ITS MIDDLE, with no aim to move it: probed with crops,
+    the model returned the crop's centre on 20/21 replies, and its aims landed
+    23-38 m off the footprint it named. A part of a region is reached by
+    covering it (``explore``) and flying to the row the segmenter put there
+    (a median 1.5 m from GT on 83% of rows).
     """
     xy = parse_xy_token(token)
     if xy is not None:
@@ -145,28 +140,15 @@ _DETECTED_HEAD = 12
 
 
 def detected_digest(dets: list[dict], cap: int = _DETECTED_HEAD) -> dict:
-    """Report fields for THIS flight's folded detections.
+    """Report fields for THIS flight's folded detections, so acting on a
+    fresh detection is one step, not an analyze away.
 
-    Acting on a fresh detection should be one step, not an analyze away:
-    105 of the 135 observed-and-zero-row episodes on
-    f40088a:calcity_full_replyrepair never analyzed again after the
-    detection existed.
-
-    EVERY ARMED CLASS IS REPRESENTED. The head was the first ``cap`` in
-    FOLD order, which is the order the segmenter happened to return, and
-    one class routinely swamps it: a calcity pass folded 63 houses and 1
-    pool, so 12 slots of fold order can spend all 12 on houses. In
-    calcity::200#198 the ground-truth car was folded on five consecutive
-    flights at conf 0.86-0.88 and 1.5 m from truth, and never once
-    appeared in a report -- it sat among the 52 the head left out, and
-    the model committed a car 46 m away that it already had.
-
-    So the head takes the best of EACH class in turn: classes ordered by
-    their strongest detection, then round-robin, each class's own rows by
-    detector confidence. A class with one detection cannot be crowded out
-    by a class with sixty. This is an ORDERING of what the head shows --
-    the count is still the total and ``detected_more`` still names the
-    remainder, so nothing is withheld that was not withheld before.
+    EVERY ARMED CLASS IS REPRESENTED: classes ordered by their strongest
+    detection, then round-robin, each class's rows by detector confidence,
+    so one class with sixty rows cannot crowd out a class with one (a
+    ground-truth car folded on five flights once never reached a report
+    behind 52 houses). The count stays the total and ``detected_more``
+    names the remainder.
     """
     if not dets:
         return {}
