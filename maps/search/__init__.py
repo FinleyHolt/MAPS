@@ -1,8 +1,2 @@
-"""The search engine: the parse-first compiler and the per-episode search
-loop over the world graph."""
-
-from maps.search.search_loop import SearchLoop
-
-__all__ = [
-    "SearchLoop",
-]
+"""The search engine: the per-episode search loop over the world graph and
+the parse-first reasoner loop that drives it."""

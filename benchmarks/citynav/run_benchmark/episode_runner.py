@@ -34,7 +34,7 @@ from maps.llm import flight_summary
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import crop_observation
-from maps.search import SearchLoop
+from maps.search.search_loop import SearchLoop
 from maps.search.withhold import withheld
 from maps.sws import GridDomain
 from maps.sws.graph import build_object_graph, load_graph
