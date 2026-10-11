@@ -1,10 +1,5 @@
-"""Ring simplification and frame clipping for drawn footprints.
-
-Two operations every layer that draws a mask polygon needs, and neither of
-which may invent geometry: thin a closed ring toward a vertex budget without
-cutting corners, and cut a ring to a rectangle without closing it along the
-cut. Stdlib only.
-"""
+"""Ring simplification and frame clipping for drawn footprints, neither of
+which invents geometry. Stdlib only."""
 
 from __future__ import annotations
 
@@ -17,9 +12,7 @@ def _dp(pts: list, tol: float) -> list:
     """Douglas-Peucker on an OPEN run; both endpoints are pinned."""
     if len(pts) < 3:
         return list(pts)
-    # Iterative (an explicit stack, not recursion): a 2 m cell boundary loop
-    # around a 418k-cell lake arrives with 1,566 vertices, and the recursive
-    # form is O(n) deep on an already-thin run.
+    # An explicit stack: recursion is O(n) deep on an already-thin run.
     stack = [(0, len(pts) - 1)]
     keep = [False] * len(pts)
     keep[0] = keep[-1] = True
@@ -46,23 +39,10 @@ def _dp(pts: list, tol: float) -> list:
 
 
 def simplify_ring(loop, *, tolerance: float, max_points: int) -> list:
-    """Thin a closed ring to at most ``max_points`` vertices, shape-aware.
-
-    Douglas-Peucker at ``tolerance``, doubling the tolerance until the ring
-    fits the budget. NEVER index-subsampling (``loop[::n]``), which is what
-    this replaces: taking every n-th vertex of a raster boundary cuts every
-    corner it lands between, and on a shape whose window shows only part of
-    it the survivors land hundreds of metres apart and the ink reaches the
-    reader as straight chords across the interior. Douglas-Peucker spends
-    its budget where the curvature is, so a rectangle costs 4 vertices and a
-    shoreline costs what it needs. Measured on Cal City's largest footprints
-    (2 m cell quantization): a 1,566-vertex lake ring thins to 236 at one
-    cell of tolerance, where the uniform rule kept every 16th vertex.
-
-    ``tolerance`` is the deviation allowed in the ring's own units. Below
-    the source's quantization it is lossless -- a 2 m cell boundary keeps
-    its stair-steps, which are the honest realisation of what the raster
-    knows. The doubling only bites on rings too detailed for the budget.
+    """Thin a closed ring to at most ``max_points`` vertices: Douglas-Peucker
+    at ``tolerance`` (in the ring's units), doubling it until the ring fits.
+    The budget goes where the curvature is; index-subsampling would cut
+    corners into chords across the interior.
     """
     pts = [(float(p[0]), float(p[1])) for p in loop
            if isinstance(p, (list, tuple)) and len(p) == 2]
@@ -109,20 +89,10 @@ def clip_t(p0, p1, box):
 
 
 def clip_ring_to_box(loop, box) -> list:
-    """The parts of a closed ring inside ``box``, as OPEN arcs.
-
-    ``box`` is ``(x0, y0, x1, y1)``. Returns a list of point runs; a ring
-    wholly inside comes back as one run with its first point repeated at
-    the end, so a caller can draw every result the same open way.
-
-    NOT polygon clipping. Sutherland-Hodgman and friends return a closed
-    polygon, which means they synthesise edges ALONG the clip boundary --
-    drawn, that says "the lake ends here" at the frame edge, which is a
-    fact about the window masquerading as a fact about the world. Clipping
-    edge-by-edge and leaving the crossings as gaps draws only geometry the
-    ring actually has. Standard vector-tile practice is the same shape
-    (clip with a buffer, never drop); the buffer belongs to the caller,
-    which knows how wide its stroke is.
+    """The parts of a closed ring inside ``box`` = ``(x0, y0, x1, y1)``, as
+    open point runs (a ring wholly inside: one run repeating its first point).
+    Edge-by-edge, so no edge is synthesised along the box as polygon clipping
+    would; a stroke buffer is the caller's.
     """
     pts = [(float(p[0]), float(p[1])) for p in loop
            if isinstance(p, (list, tuple)) and len(p) == 2]

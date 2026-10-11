@@ -1,17 +1,7 @@
-"""A detection mask as what it is: a crop, and where it sits in the frame.
-
-The SAM wire carries a bbox crop, and keeping it as a crop lets projection,
-colour, component labelling and the area count scale with the object rather
-than with the sensor's resolution. A crop passed beside a separate box can be
-paired with the wrong box, which silently narrows a scan and leaves a
-plausible ``world_xy`` a few metres off. ``MaskRegion`` constructs the crop
-and its box together and validates them against each other.
-
-``frame_shape`` is carried because it is genuinely needed and not derivable
-from a crop: the ortho projectors normalise pixel coordinates by the FRAME
-extent, so a region that forgot its frame would project to the wrong world
-position while looking entirely well-formed.
-"""
+"""A detection mask as a crop plus its box in the frame, built and validated
+together so the two cannot be mispaired. Work scales with the object, not the
+sensor. ``frame_shape`` rides along because the projectors normalise pixel
+coordinates by the frame's extent."""
 
 from __future__ import annotations
 
@@ -24,17 +14,10 @@ from maps.util.mask_codec import _extent
 
 @dataclass(frozen=True)
 class MaskRegion:
-    """A boolean mask crop plus its inclusive ``(r0, c0, r1, c1)`` in-frame box.
-
-    Invariants, enforced at construction:
-
-    * ``crop.shape == (r1 - r0 + 1, c1 - c0 + 1)``
-    * the box lies inside ``frame_shape``
-
-    The crop is NOT required to be tight against its box — a component carved
-    out of a larger mask keeps its parent's box unless it is re-tightened —
-    but the box always bounds the crop, which is what every consumer relies on.
-    """
+    """A boolean mask crop plus its inclusive ``(r0, c0, r1, c1)`` box, which
+    lies inside ``frame_shape`` and matches the crop's shape (checked at
+    construction). The crop need not be tight: a component keeps its parent's
+    box until re-tightened."""
 
     crop: np.ndarray
     bbox: tuple[int, int, int, int]
@@ -70,10 +53,7 @@ class MaskRegion:
         return cls(m[r0 : r1 + 1, c0 : c1 + 1], (r0, c0, r1, c1), (H, W))
 
     def with_crop(self, crop: np.ndarray) -> "MaskRegion":
-        """A region over the same box carrying a different selection.
-
-        For per-component masks, which live in the parent's box.
-        """
+        """A region over the same box carrying another selection (a component)."""
         return MaskRegion(crop, self.bbox, self.frame_shape)
 
     def tightened(self) -> "MaskRegion | None":
@@ -96,21 +76,14 @@ class MaskRegion:
         return int(self.crop.sum())
 
     def window(self, arr: np.ndarray) -> np.ndarray:
-        """The view of a frame-sized array under this region's box.
-
-        Read or write through it: ``region.window(coverage)[region.crop] += 1``
-        touches only the region, where a frame-sized boolean index would walk
-        every pixel.
-        """
+        """The view of a frame-sized array under this region's box, to read or
+        write through (``region.window(a)[region.crop] += 1``)."""
         r0, c0, r1, c1 = self.bbox
         return arr[r0 : r1 + 1, c0 : c1 + 1]
 
     def rows_cols(self) -> tuple[np.ndarray, np.ndarray]:
-        """Absolute ``(rows, cols)`` of the set pixels, row-major.
-
-        The same sequence ``np.where`` over the frame-sized mask returns, so
-        aggregates taken over it are unchanged.
-        """
+        """Absolute ``(rows, cols)`` of the set pixels, row-major, as
+        ``np.where`` over the frame-sized mask returns them."""
         rr, cc = np.where(self.crop)
         r0, c0, _r1, _c1 = self.bbox
         return rr + r0, cc + c0
