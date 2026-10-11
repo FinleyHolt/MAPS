@@ -2667,6 +2667,10 @@ def advance_reasoner_one_round(
     # answered, read by _finish. _ground_names opens every call.
     _call: dict = {}
 
+    def _call_minted():
+        """The handle this call's last flight minted, or None."""
+        return (_code_minted[_call.get("minted", 0):] or [None])[-1]
+
     def _ground_names(names: dict) -> dict:
         """Open a call and ground its NAMES (``{name: why}``, first use
         first) under the name-match floor: ``{"ties": {name: top-tie
@@ -2674,6 +2678,7 @@ def advance_reasoner_one_round(
         never dedup'd, never rendered."""
         _call.clear()
         _call["notes"] = notes = []
+        _call["minted"] = len(_code_minted)   # this call's flights mint past it
         ties: dict = {}
         if not names:
             return {"ties": ties}
@@ -2858,7 +2863,7 @@ def advance_reasoner_one_round(
         # THE PASS SHOWS ITS CATCH: one crop per row it added, in the pass's
         # own (spatial) order, capped at _CATCH_CROPS so the model's own
         # later looks keep room.
-        _h = _code_minted[-1] if _code_minted else None
+        _h = _call_minted()
         _rows = [r for r in (carry_results.get(_h) or [])
                  if isinstance(r, dict) and r.get("fid")] if _h else []
         _catch = _rows[:_CATCH_CROPS]
@@ -2956,8 +2961,8 @@ def advance_reasoner_one_round(
         # flight revealed, and the set it built keeps its own handle.
         if _call.get("answer") and _call.get("rows"):
             _those[0] = _call["answer"]
-        if _code_minted:
-            _those[0] = _code_minted[-1]
+        if _call_minted():
+            _those[0] = _call_minted()
         return ack
 
     _mission_py: list = [None]
