@@ -1,37 +1,12 @@
-"""Perception direction state for the three-verb tool surface (C4).
+"""Per-episode perception direction: the segmenter watchlist and the boost.
 
-One :class:`PerceptionDirector` per episode (owned by ``search_loop._State``),
-holding the agent-owned perception-direction channels the ``view`` tool
-mutates and the ``act`` tool coordinates with:
-
-  * the WATCHLIST — the persistent passive SAM class set segmented at every
-    subsequently-flown stop. Initial value = the committed
-    ``sam_concepts`` union; ``view{watchlist:{add,remove}}`` mutates it
-    mid-flight and the mutation is pushed to the live concept provider via
-    ``push`` (``ReasonerUnionConceptProvider.set_concepts`` — the
-    freeze-exempt agent-owned channel), so the per-stop ``/segment`` calls
-    segment the LIVE watchlist.
-  * BOOSTS — targeted vocabulary from ``view{boost:{concepts,where}}``.
-    RETROSPECTIVE PERCEPTION: the ortho render is deterministic
-    over the static raster, so a boost whose ``where`` targets an
-    ALREADY-FLOWN stop/pose executes IMMEDIATELY through
-    ``retro_perceiver`` (re-render at the recorded pose → SAM with the
-    boost vocabulary → normal ingest) and the DELTA returns synchronously
-    in the same view result — zero flight; vocabulary alone NEVER re-flies.
-    A boost on a PENDING (unflown) stop / future area queues: the runtime
-    ACTIVATES pending boosts for the next perception round
-    (``activate_pending`` pushes ``watchlist + boost concepts``) and
-    RETIRES them after it (``retire_after_round``); an unmatched targeted
-    boost returns to pending so it stays attached to its target until that
-    target flies. ``where`` entries address a flown stop by its
-    ``qstop_N``/``stop_NNN`` id, a fid, or an ``[x, y]`` literal. The
-    mission flies each viewpoint the moment it lands, so no stop is ever
-    queued unflown: the watchlist and boost results report
-    ``pending_stops: 0`` and ``pending: []``.
-
-Pure state + arithmetic (no LLM, no perception imports; the retro executor
-is an injected callable) so the whole surface is unit-testable without the
-engine.
+The WATCHLIST is the class set every later flight segments; each change is
+pushed whole to the live concept provider. A BOOST (``look_for(..., at=)``)
+whose target is a flown stop, a fid a flown stop targeted, or a point near a
+flown pose re-segments that stop now through ``retro_perceiver`` and returns
+the delta. A boost on a target not yet flown (or on none) queues: the next
+flight activates it, pushing its classes beside the watchlist, and retires
+it after; a targeted boost whose target did not fly returns to pending.
 """
 
 from __future__ import annotations
@@ -45,10 +20,8 @@ from maps.util.xy_token import parse_xy_token
 
 log = logging.getLogger(__name__)
 
-# World-meter radius within which an [x, y] (or fid-resolved) boost ``where``
-# matches a flown pose / a re-requested viewpoint's pose. Sized to the stop
-# view square (fov ~100 m): a boost aimed at an area matches the stop that
-# actually images that area, without leaking to neighboring stops.
+# How near a flown pose a point boost must fall to address that stop: about
+# half the ~100 m stop view square.
 BOOST_MATCH_RADIUS_M: float = 50.0
 
 
@@ -91,35 +64,23 @@ class _Boost:
 
 @dataclass
 class PerceptionDirector:
-    """Agent-owned perception direction (watchlist / boosts)."""
+    """The watchlist, the boosts, the flown stops and the retrospective
+    executor."""
 
-    # The live channel to the SAM concept provider (freeze-exempt). None keeps
-    # every mutation state-only (offline tests / non-SAM adapters); the delta
-    # text stays honest either way.
+    # The live concept provider's setter; None keeps changes state-only.
     push: Callable[[list[str]], None] | None = None
-    # RETROSPECTIVE executor: injected by the runtime.
-    # Called with (flown_entry, concepts) where flown_entry is
-    # {"pose_xy": (x, y), "alt_m": float|None, "stop_id": str|None,
-    #  "target_fids": [...]}; returns {"n_dets": int, "new_fids": [...]} or
-    # {"error": str}. None -> a flown-targeted boost returns a LOUD factual
-    # unavailability error (never a silent degrade to attach-only).
+    # Called with (flown entry, concepts); returns {"n_dets", "new_fids", ...}
+    # or {"error": str}. None: a boost at a flown stop says re-segmentation
+    # is not wired.
     retro_perceiver: Callable[[dict, list], dict] | None = None
 
     watchlist: list[str] = field(default_factory=list)
     boosts: list[_Boost] = field(default_factory=list)
-    # Flown-observation log (appended by retire_after_round): each entry
-    # {"pose_xy": (x, y), "alt_m": float|None, "stop_id": str|None,
-    #  "target_fids": [str, ...]} — the RETROSPECTIVE address space (an
-    # already-visited pose is permanently re-analyzable).
+    # Every flown stop: {"pose_xy", "alt_m", "stop_id", "target_fids"}.
     flown_log: list[dict] = field(default_factory=list)
 
-    # ------------------------------------------------------------------
-    # Watchlist
-    # ------------------------------------------------------------------
-
     def init_watchlist(self, concepts) -> None:
-        """Set the initial watchlist (the iteration-0 sam_concepts union) and
-        push it live. Does NOT count as an agent mutation."""
+        """Set the first declared watchlist and push it."""
         self.watchlist = _dedup_concepts(concepts)
         self._push_live()
 
@@ -133,10 +94,8 @@ class PerceptionDirector:
         self._push_live()
 
     def _push_live(self) -> str:
-        """Push watchlist + active-boost concepts to the live provider.
-        Returns ``"ok"`` | ``"no_channel"`` | ``"failed"`` so callers can be
-        HONEST about whether the live segment set actually changed (a
-        swallowed push failure must never produce a success-shaped ack)."""
+        """Push the watchlist plus active boost classes to the provider:
+        ``"ok"``, ``"no_channel"`` or ``"failed"``."""
         if self.push is None:
             return "no_channel"
         try:
@@ -147,14 +106,9 @@ class PerceptionDirector:
             log.exception("PerceptionDirector: live concept push failed")
             return "failed"
 
-    # ------------------------------------------------------------------
-    # Boosts (queue + RETROSPECTIVE execution)
-    # ------------------------------------------------------------------
-
     def _find_flown(self, w: dict) -> dict | None:
-        """The flown observation a resolved where entry addresses, or None:
-        the flown-log entry with that stop id; a fid any flown stop
-        targeted; an [x, y] within radius of a flown pose."""
+        """The flown stop a where entry addresses: by stop id, by a fid it
+        targeted, or by a pose within the match radius of a point."""
         sid = w.get("stop")
         if sid:
             for f in self.flown_log:
@@ -177,10 +131,8 @@ class PerceptionDirector:
         return None
 
     def boost_queue(self, concepts, where) -> dict:
-        """One ``view{boost}``: RETROSPECTIVE targets (already-flown
-        stop/pose/fid) execute IMMEDIATELY through ``retro_perceiver`` with
-        the delta returned in this ack; pending/future targets (and a
-        where-less boost) QUEUE for fly-time attachment."""
+        """One boost: each flown target re-segments now; an unflown fid or
+        point (or no target at all) queues; an unknown stop id is named."""
         concepts = _dedup_concepts(concepts)
         if not concepts:
             return {"error": "boost needs a non-empty 'concepts' list"}
@@ -195,12 +147,10 @@ class PerceptionDirector:
             if not token:
                 continue
             if token.startswith(("qstop_", "stop_")):
-                # A stop token: a flown stop in the flown log, else unknown.
                 resolved.append({"kind": "stop", "stop": token,
                                  "fid": "", "xy": None})
             else:
                 resolved.append({"kind": "fid", "fid": token})
-        # Split: retro (already flown — execute now) vs queue (pending).
         retro_results: list[dict] = []
         queue_where: list[dict] = []
         for w in resolved:
@@ -213,8 +163,6 @@ class PerceptionDirector:
                     continue
                 queue_where.append(w)
                 continue
-            # RETROSPECTIVE PERCEPTION: zero flight — re-analysis of the
-            # legitimately captured observation at the recorded pose.
             if self.retro_perceiver is None:
                 retro_results.append({
                     "where": token,
@@ -237,8 +185,6 @@ class PerceptionDirector:
             retro_results.append(rec)
         ack: dict = {"queued": [], "where": []}
         if queue_where or not (where or []):
-            # Queue when targets remain pending OR the boost is where-less
-            # (next flown stops). A purely-retro boost queues NOTHING.
             self.boosts.append(_Boost(concepts=concepts, where=queue_where))
             ack["queued"] = concepts
             ack["where"] = [
@@ -254,9 +200,8 @@ class PerceptionDirector:
         if not ack["queued"]:
             del ack["queued"], ack["where"]
         if "queued" not in ack and "retro" not in ack:
-            # A TARGETED boost none of whose where entries resolved must NOT
-            # silently degrade to a where-less next-round boost: say so,
-            # and name the addressable set.
+            # A targeted boost none of whose targets resolved says so rather
+            # than becoming a where-less one.
             return {
                 "error": ("no boost target resolved; nothing was queued or "
                           "re-segmented"),
@@ -266,12 +211,8 @@ class PerceptionDirector:
         return ack
 
     def activate_pending(self) -> list[str]:
-        """Activate every pending boost for the NEXT perception round;
-        push ``watchlist + boost concepts`` live. Returns the activated
-        concept union ([] when nothing was pending). A FAILED live push
-        REVERTS the activation (the boosts stay pending and retry next
-        round) — otherwise retire would consume boosts that never actually
-        rode a segment call."""
+        """Activate every pending boost for the next flight and push; returns
+        their classes. A failed push leaves them pending."""
         pending = [b for b in self.boosts if not b.active]
         if not pending:
             return []
@@ -305,16 +246,9 @@ class PerceptionDirector:
         return False
 
     def retire_after_round(self, flown: list[dict]) -> None:
-        """Consume boosts after one perception round.
-
-        ``flown`` entries: ``{"pose_xy": (x, y), "alt_m"?: float,
-        "stop_id"?: str, "target_fids": [str, ...]}`` — one per stop the
-        round actually perceived; each is APPENDED to the flown log (the
-        retrospective address space). A where-less ACTIVE boost is
-        consumed; a where-targeted active boost is consumed iff any of its
-        where entries matched a flown stop, else it returns to PENDING (it
-        stays attached to its target until that target flies). Pushes the
-        post-retire concept set live."""
+        """Log the flown stops, then consume each active boost that was
+        where-less or whose target flew (the rest return to pending), and
+        push."""
         flown = [f for f in (flown or []) if isinstance(f, dict)]
         for f in flown:
             self.flown_log.append({
