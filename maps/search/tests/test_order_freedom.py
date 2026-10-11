@@ -10,7 +10,6 @@ from maps.search.analyze_scene.geom_program import (
 )
 from maps.search.parse_compile.reasoner_loop import (
     _PREFLIGHT_COLOR_NOTE,
-    _PREFLIGHT_RUNTIME_NOTE,
     run_geom_program_tool,
 )
 
@@ -155,18 +154,8 @@ def test_preflight_color_note_on_emphasis_only_attach():
     assert _PREFLIGHT_COLOR_NOTE in str(out.get("error")), out
 
 
-def test_preflight_runtime_find_states_the_detection_fact():
-    out = run_geom_program_tool(
-        {"program": {"ops": [
-            {"ref": "r0", "op": "find",
-             "args": {"provenance": "runtime", "query": "car"}},
-        ]}}, namespace=_PRIOR_NS, preflight=True)
-    assert "error" not in out, out
-    assert _PREFLIGHT_RUNTIME_NOTE in str(out["results"]["r0"].get("hint")), out
-
-
 def test_per_stop_round_serves_no_phase_note():
-    # the notes are PREFLIGHT-only: the same programs per-stop stay clean.
+    # the note is PREFLIGHT-only: the same program per-stop stays clean.
     ns = {"cands": [dict(c) for c in _CANDS],
           "anchors": [dict(a) for a in _ANCHORS], "cell_m": 1.0}
     out = run_geom_program_tool(
@@ -175,4 +164,3 @@ def test_per_stop_round_serves_no_phase_note():
              "args": {"provenance": "runtime", "query": "car"}},
         ]}}, namespace=ns)
     assert _PREFLIGHT_COLOR_NOTE not in str(out), out
-    assert _PREFLIGHT_RUNTIME_NOTE not in str(out), out

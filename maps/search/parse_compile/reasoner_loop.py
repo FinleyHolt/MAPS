@@ -723,15 +723,6 @@ _PREFLIGHT_COLOR_NOTE = (
 )
 
 
-# One factual line on a PREFLIGHT runtime-surface retrieval: the detection
-# surface is empty before takeoff -- a fact about WHEN detections exist,
-# stated on the result the agent actually reads.
-_PREFLIGHT_RUNTIME_NOTE = (
-    "no runtime detections exist before takeoff; the detection surface "
-    "populates per flown stop."
-)
-
-
 def _color_words_of_op(op) -> list[str]:
     """The canonical palette words this op requests a color COLUMN for,
     read off every slot that can name one — the find ``color`` arg, a
@@ -820,36 +811,23 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
                                       widen_form="more_of(<rN>)",
                                       answer_ref=answer_ref)
     if preflight:
-        # Pre-takeoff phase notes, keyed on what each op's
-        # result ACTUALLY holds (never an op shape):
-        #   * a color-column request (find color / emphasis key / filter
-        #     key) whose raw rows carry NONE of the requested columns
-        #     states the color-availability fact;
-        #   * a runtime-surface find over the empty pre-takeoff detection
-        #     pool states the detection-availability fact.
+        # The pre-takeoff phase note, keyed on what each op's result
+        # ACTUALLY holds (never an op shape): a color-column request (find
+        # color / emphasis key / filter key) whose raw rows carry NONE of
+        # the requested columns states the color-availability fact.
         for _op in (program.get("ops") or []):
-            if not isinstance(_op, dict):
-                continue
-            _notes: list[str] = []
             _words = _color_words_of_op(_op)
-            if _words:
-                _rows = _raw_results.get(_op.get("ref"))
-                _attached = isinstance(_rows, list) and any(
-                    isinstance(_it, dict) and any(
-                        _it.get("color_" + _w) is not None for _w in _words)
-                    for _it in _rows)
-                if not _attached:
-                    _notes.append(_PREFLIGHT_COLOR_NOTE)
-            _args = _op.get("args") if isinstance(_op.get("args"), dict) else {}
-            if (_op.get("op") == "find" and not cands
-                    and str(_args.get("provenance") or "").strip().lower()
-                    in ("runtime", "detected", "detection", "detections")):
-                _notes.append(_PREFLIGHT_RUNTIME_NOTE)
-            if _notes:
-                _env = out["results"].get(_op.get("ref"))
-                if isinstance(_env, dict):
-                    for _n in _notes:
-                        _env["hint"] = join_hints(_env.get("hint"), _n)
+            if not _words:
+                continue
+            _rows = _raw_results.get(_op.get("ref"))
+            _attached = isinstance(_rows, list) and any(
+                isinstance(_it, dict) and any(
+                    _it.get("color_" + _w) is not None for _w in _words)
+                for _it in _rows)
+            _env = out["results"].get(_op.get("ref"))
+            if not _attached and isinstance(_env, dict):
+                _env["hint"] = join_hints(_env.get("hint"),
+                                          _PREFLIGHT_COLOR_NOTE)
     return out
 
 
