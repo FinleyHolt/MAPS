@@ -1,10 +1,5 @@
-"""Feature graph construction from tile features.
-
-Builds ``MapObject`` nodes (centroid, bbox, cells, orientation, centerline)
-from ``features.json`` data. No edges are built or stored — spatial relations
-are computed geometrically from node xy/cells by the geom_compute ops at
-query time.
-"""
+"""The prebake graph: one ``MapObject`` per baked feature (centroid, bbox,
+cells, orientation, centerline, contour, tags)."""
 
 from __future__ import annotations
 
@@ -63,20 +58,12 @@ def _compute_bbox(cells: list[list[int]]) -> tuple[int, int, int, int]:
 def _mask_centerline(
     arr: np.ndarray, *, cell_size_m: float
 ) -> tuple[list[list[float]], list[float], float, float, str] | None:
-    """Raw, parameter-free principal-axis centerline of a mask.
+    """A mask's principal-axis centerline: ``(centerline_rc, arc_m, length_m,
+    residual_m, method)``, or ``None`` for a mask too small to have an axis.
 
-    Returns ``(centerline_rc, arc_m, length_m, residual_m, method)`` or
-    ``None`` when the mask is too small / degenerate to admit an axis.
-
-    The centerline is the mask's medial line along its PCA principal axis:
-    every cell is projected onto the axis, binned by the integer projection
-    step (the grid's own resolution), and each bin contributes its mean cell
-    position. Vertices are in the ``(row, col)`` grid frame; the meter scalars
-    are frame-invariant.
-
-    ``residual_m`` is the max perpendicular distance (meters) of any mask cell
-    to the straight PCA line: about half the width for a straight mask, more
-    for a curved one.
+    Cells are projected onto the PCA axis and binned per grid step; each bin
+    contributes its mean cell (``(row, col)`` vertices). ``residual_m`` is the
+    largest cell distance from the straight axis.
     """
     if arr is None or len(arr) < 2:
         return None
@@ -175,12 +162,7 @@ def build_object_graph(
     *,
     cell_size_m: float,
 ) -> ObjectGraph:
-    """Build the object graph (nodes only) from features.json data.
-
-    Emits one ``MapObject`` per feature — centroid, bbox, cells, orientation,
-    centerline. No edges: spatial relations are derived geometrically from
-    node xy/cells at query time by the geom_compute ops.
-    """
+    """The nodes-only object graph of a ``features.json``."""
     nodes: dict[str, MapObject] = {}
 
     for class_name, feats in features.items():

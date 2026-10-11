@@ -1,13 +1,5 @@
-"""Runtime graph mutation: the track_id-keyed detected-node upsert.
-
-A detection folds onto its ``detected_<N>`` node by exact ``track_id``
-(``_find_track``; the world tracker's id is the sole re-id signal) or mints a
-new one. A runtime node differs from a prebake node by
-``provenance="detected"`` and its per-observation counters. The graph is
-nodes-only; spatial relations are computed from node xy/cells by the
-geom_compute ops. ``upsert_detected_centroid_only`` mints a node for a
-detection without a track_id.
-"""
+"""Runtime graph mutation: a detection folds onto the ``detected_<i>`` node
+carrying its exact ``track_id`` or mints one; a prior gains perceived colour."""
 
 from __future__ import annotations
 
@@ -71,20 +63,12 @@ def upsert_prior_percept(
     px: int = 0,
     now: float | None = None,
 ) -> bool:
-    """Merge a perceived attribute set onto a prebake node.
-
-    ``attrs`` is the color read over the prior's projected footprint, the
-    same extractor a detection gets (``perception.color``), e.g.
-    ``{"color": "blue 0.7 / black 0.2", "color_conf": "0.83", ...}``. Color
-    keys follow :func:`apply_best_view_color` on ``px``; any other key
-    accumulates as ``{value: count}``. Every non-empty sighting bumps
-    ``observation_count`` / ``first_seen_t`` / ``last_seen_t`` so the prior
-    surfaces as an observed candidate. Only pixel-derived attributes land
-    here; the node's geometry is untouched.
-
-    True when the node was enriched. A missing fid, a non-prebake node or
-    empty ``attrs`` returns False; it never raises.
-    """
+    """Merge a perceived attribute set (the colour read over the prior's
+    footprint) onto a prebake node: colour keys follow
+    :func:`apply_best_view_color` on ``px``, any other key accumulates as
+    ``{value: count}``, and a non-empty sighting bumps the observation
+    counters. True when enriched; a missing fid, a non-prebake node or empty
+    ``attrs`` returns False."""
     nodes = getattr(graph, "nodes", None)
     if not isinstance(nodes, dict) or not attrs:
         return False
@@ -127,9 +111,7 @@ def upsert_detected_centroid_only(
     *,
     now: float | None = None,
 ) -> str:
-    """Mint a centroid-only detected node for a detection without a
-    ``track_id``; the new ``detected_<N>`` id. Tracked detections go through
-    :func:`upsert_tracked_detected`."""
+    """Mint a node for a detection without a ``track_id``; its new id."""
     if node.provenance != "detected":
         raise ValueError(
             "upsert_detected_centroid_only only accepts provenance='detected' nodes"
@@ -159,20 +141,12 @@ def _cells_from_mask(hm_rows: np.ndarray, hm_cols: np.ndarray) -> np.ndarray:
 def _stamp_cells(
     node: MapObject, hm_rows: np.ndarray, hm_cols: np.ndarray, cell_size_m: float
 ) -> None:
-    """Set a detected node's footprint and the centerline derived from it.
+    """Set a detected node's ``cells`` and, if it has none yet, the bake's own
+    centerline family (``builder._mask_centerline``) derived from them.
 
-    The one place a detected node's ``cells`` are written. The centerline
-    family (``centerline`` / ``centerline_arc_m`` / ``axis_length_m`` /
-    ``axis_residual_m`` / ``centerline_method``) is the bake's own
-    ``builder._mask_centerline`` reduction, so a detected node carries the
-    centerline a baked one does; the geom ops resolve a fid with a
-    centerline as a line and one without as a point
-    (``analyze_scene/geom_program.py`` ``_cl`` / ``_axis_q``).
-
-    ponytail: derive-if-absent, so a detected node's centerline stays its
-    first frame's footprint while its ``cells`` are re-stamped every frame.
-    Re-deriving on every re-stamp changes the geom surface for detected fids
-    and needs a paired SR read.
+    ponytail: derive-if-absent, so the centerline stays the first frame's
+    while ``cells`` are re-stamped every frame; re-deriving changes the geom
+    surface for detected fids and needs a paired SR read.
     """
     node.cells = _cells_from_mask(hm_rows, hm_cols)
     if node.centerline is not None or len(node.cells) < 2:
@@ -193,20 +167,10 @@ def upsert_tracked_detected(
     confidence: float,
     now: float | None = None,
 ) -> str:
-    """Upsert a tracked detection from its projected ground cells.
-
-    ``rows`` / ``cols`` are the deduplicated occupied cells of the
-    detection's footprint on the tile grid, in row-major order
-    (``TileProjectedMask.rows`` / ``.cols``).
-
-    First sighting of ``track_id`` allocates a new ``detected_*`` node.
-
-    Repeat sightings look up the existing node by ``track_id`` (ByteTrack
-    is the sole dedup) and replace the node attrs in place.
-
-    ``base_node`` carries the class/tags/label for a fresh insert; its
-    centroid and footprint are set from the cells.
-    """
+    """Upsert a tracked detection from its footprint cells on the tile grid
+    (``rows``/``cols``, row-major). A first sighting of ``track_id`` inserts
+    ``base_node`` with its geometry set from the cells; a repeat updates the
+    node carrying that ``track_id`` in place. Returns the fid."""
     if base_node.provenance != "detected":
         raise ValueError(
             "upsert_tracked_detected only accepts provenance='detected' nodes"
@@ -281,11 +245,7 @@ def upsert_tracked_detected(
 
 
 def _find_track(graph: ObjectGraph, track_id: str) -> str | None:
-    """The detected node carrying ``track_id``, else None.
-
-    The world tracker assigns one stable, class-gated ``track_id`` per
-    physical object, so the exact id is the whole re-identification rule.
-    """
+    """The detected node carrying ``track_id`` (the whole re-id rule), else None."""
     for fid, node in graph.nodes.items():
         if node.provenance == "detected" and node.track_id == track_id:
             return fid

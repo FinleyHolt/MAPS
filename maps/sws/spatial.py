@@ -8,19 +8,9 @@ import numpy as np
 
 
 def compute_orientation(rows: np.ndarray, cols: np.ndarray) -> tuple[float, float]:
-    """PCA-based orientation angle and confidence for a feature.
-
-    Parameters
-    ----------
-    rows, cols : ndarray
-        Cell coordinates (integer grid positions).
-
-    Returns
-    -------
-    (angle_deg, confidence)
-        angle_deg : float in [0, 180). 0 = north-south, 90 = east-west.
-        confidence : float in [0, 1]. 0 = round/ambiguous, 1 = perfectly linear.
-    """
+    """PCA ``(angle_deg, confidence)`` of a cell set: the angle in [0, 180)
+    (0 north-south, 90 east-west), the confidence in [0, 1] (0 round, 1 a
+    line)."""
     if len(rows) <= 1:
         return 0.0, 0.0
 

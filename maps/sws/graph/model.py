@@ -53,26 +53,18 @@ class MapObject:
     # The world tracker's stable identity; None for prebake nodes and
     # untracked detections.
     track_id: str | None = None
-    # Footprint cells, ``(N, 2) int32`` (row, col): the builder's for a prebake
-    # node, the latest projected footprint for a tracked detection, None for a
-    # centroid-only detection. No dense per-node raster is kept.
+    # Footprint cells, ``(N, 2) int32`` (row, col): the bake's, a tracked
+    # detection's latest footprint, or None for a centroid-only detection.
     cells: np.ndarray | None = None
     # The exact vertex chain in world meters, ``[[x, y], ...]``: a point, an
-    # open way, or a closed ring that repeats its first vertex
-    # (``geom_compute.is_closed_chain``). A measured contour is decimated by
-    # its producer; a map contour is kept whole, since it is the footprint and
-    # footprint_area_m2 is computed from it. build_surface prefers it over
-    # ``cells`` for the row mask and shape scalars.
+    # open way, or a closed ring repeating its first vertex. A map contour is
+    # kept whole (it is the footprint); the surface prefers it over ``cells``.
     world_contour: list[list[float]] | None = None
     # The tracker's sub-cell world position; geometry readers prefer it over
     # the cell centroid.
     world_xy: tuple[float, float] | None = None
-    # Mask-derived geometry in the grid (row, col) frame, never world xy: the
-    # builder has no tile origin, so frame-dependent quantities (bearing,
-    # left/right) are derived by the tools at query time.
-    # ``centerline`` is the principal-axis polyline of the mask, sampled at
-    # grid resolution: a short stub for a compact mask, the centerline of an
-    # elongated one.
+    # Mask-derived geometry in the grid (row, col) frame (the builder has no
+    # tile origin): the mask's principal-axis polyline at grid resolution.
     centerline: list[list[float]] | None = None  # [[row, col], ...] grid frame
     centerline_arc_m: list[float] | None = None  # cumulative meters per vertex
     axis_length_m: float = 0.0  # total centerline arc length, meters
@@ -84,9 +76,7 @@ class MapObject:
 
 @dataclass
 class ObjectGraph:
-    """Node graph over tile features, without edges: spatial relations are
-    computed from node xy/cells by the geom_compute ops at query time.
-    """
+    """Node graph over tile features, without edges."""
 
     nodes: dict[str, MapObject]  # id -> node
     cell_size_m: float  # meters per grid cell; sourced from the tile's _meta.json
