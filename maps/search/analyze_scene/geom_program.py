@@ -1075,13 +1075,16 @@ def _render_grid_rows(rows, cols=None) -> str:
     return "\n".join(lines)
 
 
-# The relation-column prefixes compare attaches (suffixed with the ref
-# label).
+# The relation column-key prefixes, each followed by its ref's label. The
+# side prefixes may name a staged viewpoint handle; the python surface reads
+# them, and _AUTOATTACH_PREFIXES, to name what writes a missing key.
+_STANDING_SIDE_PREFIXES = ("left of ", "right of ", "ahead of ", "behind ")
 _COMPARE_COL_PREFIXES = ("distance to ", "center distance to ",
-                         "bearing from ", "facing ",
-                         "contains ", "along ", "left of ", "right of ",
-                         "ahead of ", "behind ",
+                         "bearing from ", "facing ", "contains ", "along ",
+                         *_STANDING_SIDE_PREFIXES,
                          "east of ", "west of ", "north of ", "south of ")
+_AUTOATTACH_PREFIXES = tuple(
+    p for p in _COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
 
 # A union's own bound, a wall-clock net: a union renders one column set
 # however many members it folds, but an rN member can fold a whole class,
@@ -1349,22 +1352,6 @@ def _polyline_arc_midpoint(verts) -> list:
                     float(verts[i][1]) + t * (float(verts[i + 1][1]) - float(verts[i][1]))]
     return [float(verts[-1][0]), float(verts[-1][1])]
 
-
-
-# The staged-viewpoint side columns: the four phrase prefixes whose
-# parameter may name a staged handle (act.stage's vN). Distance/bearing
-# prefixes are NOT here -- a staged handle resolves as a plain point ref
-# on those families (the compare path), so nothing is re-implemented.
-_STANDING_SIDE_PREFIXES = ("left of ", "right of ", "ahead of ", "behind ")
-
-# The prefixes of the relation and color column keys; the python surface
-# reads them to name what writes a missing key.
-_AUTOATTACH_PREFIXES = ("facing ", "bearing from ",
-                        "center distance to ", "distance to ",
-                        "along ", "left of ", "right of ",
-                        "ahead of ", "behind ",
-                        "east of ", "west of ", "north of ", "south of ",
-                        "color_")
 
 
 def _attach_standing_columns(items, frame, with_distance=False):
