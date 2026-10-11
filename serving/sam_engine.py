@@ -18,8 +18,6 @@ from typing import Any
 import numpy as np
 
 
-
-
 @dataclass
 class SamDetection:
     label: str
@@ -31,16 +29,9 @@ class SamDetection:
 
 @dataclass
 class _LoadedSam:
-    """Holds Meta's sam3 image model + the canonical Datapoint pipeline
-    (transform, collate, postprocessor) so all concepts and (optionally)
-    all tiles run in ONE ``model(batch)`` forward pass.
-
-    This is the SAM 3.1 batched-concept path used by the official
-    ``examples/sam3_image_batched_inference.ipynb`` notebook. It bypasses
-    the per-concept ``Sam3Processor.set_text_prompt`` loop entirely —
-    every concept is a separate ``FindQueryLoaded`` inside one Datapoint
-    and the model handles them together.
-    """
+    """Meta's sam3 image model and its Datapoint pipeline (transform,
+    collate, postprocessor): every concept is a ``FindQueryLoaded`` in one
+    Datapoint, so all of them run in one ``model(batch)`` forward."""
 
     model: Any
     transform: Any
@@ -55,12 +46,9 @@ _SAM_SINGLETON: _LoadedSam | None = None
 
 
 def release() -> None:
-    """Drop the resident model and hand its device memory back to the driver.
-
-    A process that ends with the model referenced leaves its allocations
-    for the driver to reclaim on its own schedule; on a Jetson's unified
-    memory that is host memory the box's free-memory checks read as gone.
-    """
+    """Drop the resident model and hand its device memory back to the driver
+    (on unified memory, a referenced model's allocations read as host memory
+    gone)."""
     global _SAM_SINGLETON
     _SAM_SINGLETON = None
     gc.collect()
@@ -70,10 +58,8 @@ def release() -> None:
         _torch.cuda.synchronize()
         _torch.cuda.empty_cache()
 
-# Distinct concept unions one process may hold before the text-encoder cache is
-# cleared. A runner process flies one episode and an episode freezes ONE union,
-# so the live set is 1; this is a bound against a caller that never stops
-# minting new phrase lists, not a working-set estimate.
+# Distinct concept lists the text-encoder cache holds before it is cleared: a
+# bound against a caller that never stops minting new lists.
 _TEXT_MEMO_MAX = 32
 
 
@@ -117,22 +103,12 @@ def _ensure_sam(
         model.to(_dev)
     model.eval()
 
-    # Disable the segmentation-head activation checkpoint at inference.
-    # `model_builder` hardcodes `act_ckpt=True` on the
-    # `UniversalSegmentationHead`, and `SegmentationHead._embed_pixels`
-    # gates the pixel-decoder `torch.utils.checkpoint.checkpoint` on a
-    # bare `if self.act_ckpt:` with NO `self.training` guard, so it runs
-    # on every forward even in eval/inference_mode. Activation
-    # checkpointing only buys memory by recomputing in the backward
-    # pass; under `torch.inference_mode()` there is no backward, so the
-    # checkpoint wrapper is pure overhead — a per-call CUDA RNG-state
-    # stash (a host<->device sync stall on the hot path) plus a
-    # Dynamo/fusion barrier — for zero benefit. The pixel decoder is
-    # Conv2d/GroupNorm/ReLU/interpolate with nothing RNG-dependent, so
-    # disabling the checkpoint is mathematically identical to the
-    # checkpointed path (verified by the parity gate). Quoted exactly so
-    # a sam3 version that renames the class fails loudly rather than
-    # silently leaving the stall in.
+    # Disable the segmentation-head activation checkpoint at inference:
+    # `SegmentationHead._embed_pixels` runs it on every forward (no
+    # `self.training` guard), and with no backward pass it only adds an
+    # RNG-state stash and a sync. The pixel decoder has nothing random, so
+    # the output is identical. The class is named exactly so a sam3 version
+    # that renames it fails loudly.
     try:
         from sam3.model.maskformer_segmentation import SegmentationHead
 
@@ -155,51 +131,11 @@ def _ensure_sam(
 
     _memoize_text_encoder(model)
 
-    # torch.compile is dead on this model ON ADA, and every clause of that
-    # finding names an Ada mechanism. Whole-model max-autotune trips the
-    # sm_89 101 KB shared-mem Triton ceiling and reduce-overhead
-    # AssertionErrors on the dynamic DETR head; the one remaining avenue —
-    # compiling ONLY `backbone.vision_backbone` via SAM3's own
-    # `compile_visual` hook, `max-autotune-no-cudagraphs`, `dynamic=False`,
-    # with `max_autotune_prune_choices_based_on_shared_mem` set so the sm_89
-    # crash is pruned away — was measured on GPU 3: it compiled cleanly but
-    # produced ~0 throughput change (386.6 vs 392 ms/frame) AND drifted
-    # detections past the bit-identical gate (1223 frame mismatches, mask
-    # IoU down to 0.975) because Inductor's autotuned bf16 GEMMs reassociate
-    # differently from stock cuBLAS. No speedup + quality drift, so on an
-    # L40S it is not an option and throughput comes from the host-overhead
-    # removals above.
-    #
-    # Do not re-attempt ON sm_89. The shared-memory ceiling and the measured
-    # autotune drift are both properties of that card, and neither transfers
-    # to a Blackwell part. `build_sam3_image_model` also takes its own
-    # `compile=` flag, a different hook from the `compile_visual` tried here.
-    # Anything re-attempted elsewhere still passes the parity gate before it
-    # ships, and updates this comment in the same change.
-
-    # Precision is bf16-autocast over fp32 master weights, and that is
-    # the only viable precision for this model on the paths measured here:
-    #   * The FAIR sam3 backbone uses custom ops that torchao's
-    #     Float8Tensor subclass cannot dispatch ("NotImplementedError:
-    #     Float8Tensor dispatch"), so post-training FP8/INT8 weight
-    #     quantization of this model does not run on this stack. That is a
-    #     dead end for PTQ over the WEIGHTS specifically, and it says
-    #     nothing about `sam3.perflib.fa3`, which is the package's own FP8
-    #     ATTENTION: it casts q/k/v to `float8_e4m3fn` and calls
-    #     `flash_attn_interface`, behind a `use_fa3` flag that every
-    #     attention module defaults to False. Different mechanism, never
-    #     tried here, and it needs FA3 installed to be switchable at all.
-    #   * fp32-direct (no autocast) is ~2-3x slower on the 1008px ViT
-    #     (half the Ada tensor-core rate, 2x memory traffic) for zero
-    #     inference-accuracy gain — bf16 matmul is lossless for this
-    #     model's scale.
-    #   * Converting master weights to bf16 (vs fp32 + autocast) is ~no
-    #     throughput gain (matmuls already run bf16 under autocast) and
-    #     risks LayerNorm/reduction drift that autocast otherwise keeps
-    #     in fp32 — i.e. accuracy risk for no speed. Keep fp32 weights +
-    #     autocast.
-    # The model also has hardcoded internal `.to(torch.bfloat16)` calls; the
-    # master fp32 + autocast pattern is what they expect.
+    # Precision is bf16 autocast over fp32 master weights, the pattern the
+    # model's internal `.to(torch.bfloat16)` calls expect. On an L40S,
+    # torch.compile of the vision backbone moved detections past the parity
+    # gate, and torchao weight quantization does not dispatch on the
+    # backbone's custom ops; any speed change passes that gate before it ships.
     transform = ComposeAPI(
         transforms=[
             RandomResizeAPI(
@@ -218,19 +154,11 @@ def _ensure_sam(
         use_original_sizes_box=True,
         use_original_sizes_mask=True,
         convert_mask_to_rle=False,
-        # The postprocessor filters by score BEFORE the full-resolution
-        # bilinear mask upscale, so it never upsamples masks the engine
-        # would discard. Measured on the 8-concept aerial workload
-        # (L40S, 1008 px): postprocess 46 ms -> ~0 at N=8, +12 %
-        # single-stream throughput (392 -> 348 ms/call). Its internal
-        # cut is strict ``>`` against ``score_threshold - 1e-6`` while
-        # the engine's own filter is ``>=``, so a single near-threshold
-        # (score ~= the 0.3 floor) detection is dropped on ~6 % of
-        # frames: a measured 3 / 1775 detections (0.17 %), and only the
-        # weakest one per affected frame. Every retained detection is
-        # byte-identical (mask IoU 1.0, scores/bboxes unchanged) — this
-        # is a pure drop of the flimsiest detections, never a shift.
-        # That recall/throughput trade is the default.
+        # The postprocessor filters by score BEFORE the full-resolution mask
+        # upscale, so it never upsamples masks the engine would discard. Its
+        # cut is strict ``>`` against ``score_threshold - 1e-6`` where the
+        # engine's own is ``>=``: a detection at the floor itself can drop;
+        # every retained one is unchanged.
         detection_threshold=max(0.0, float(confidence_threshold) - 1e-6),
         to_cpu=False,
     )
@@ -251,41 +179,12 @@ def _memoize_text_encoder(model: Any) -> None:
     """Cache the text encoder's output on the concept phrases that produced it.
 
     ``VETextEncoder.forward(text: list[str], ...)`` is a pure function of the
-    phrase list: it tokenizes, embeds, runs the encoder and resizes, with no
-    state and nothing random, under ``eval`` and ``inference_mode``. The same
-    phrases therefore give the same three tensors every time.
-
-    They are asked for on every single call, and the SAME ones over and over.
-    The mission surface lets the model retarget the segmenter at any turn —
-    ``perceive``'s watchlist channel calls ``declare_mission_concepts`` with
-    the full set, latest-wins by class, and nothing freezes it — so the reuse
-    is not a property of the protocol. It is a property of what the model
-    actually asks for: job 1806's SAM log carries 936 ``/segment`` calls
-    against **19 distinct concept lists**. One miss per distinct list is a 98%
-    hit rate in one process.
-
-    Measured on a B300 (job 1875), the encode costs ~16 ms whether the list
-    holds one phrase or eight — a fixed shape, so this is ~13% of a ~119 ms
-    call at EVERY concept count, not a tax that shrinks with the workload.
-
-    The cache is PER PROCESS, so a replica plane pays one miss per distinct
-    list per replica. At four replicas that is at most 76 misses of those
-    936 calls, still ~92%. It gets worse as replicas grow,
-    which is the one thing that would make this stop paying.
-
-    Bit-identical by construction, which is the only reason this is a cache and
-    not a trade: same weights, same input, deterministic module. The tensors
-    are CLONED in and out so a downstream in-place write can never reach
-    another call's copy — the cost of that is a few kB against the 16 ms.
-
-    Bounded and cleared wholesale rather than LRU-evicted. The observed working
-    set is ~19 lists across a whole sweep, so the bound exists to stop a
-    pathological caller growing it forever rather than to manage pressure; at
-    that size the eviction policy cannot matter, and a clear costs one re-encode
-    per live list.
-
-    The class is named exactly, so a sam3 version that renames or restructures
-    it fails LOUD here instead of silently leaving the 16 ms in.
+    phrase list under ``eval`` and ``inference_mode``, and a mission asks for
+    the same few lists over and over, so the same tensors come back every
+    time. The tensors are cloned in and out so a downstream in-place write
+    never reaches another call's copy. Bounded by ``_TEXT_MEMO_MAX`` and
+    cleared wholesale. The class is named exactly so a sam3 version that
+    renames it fails loudly.
     """
     try:
         from sam3.model.text_encoder_ve import VETextEncoder
@@ -333,10 +232,9 @@ def _memoize_text_encoder(model: Any) -> None:
 
 
 def _build_datapoint(rgb: np.ndarray, concepts: list[str], dp_counter: list[int]):
-    """Construct one Datapoint with one image + N text queries, exactly
-    like the FAIR notebook. ``dp_counter`` is a 1-element list used as a
-    mutable monotonic id; each query gets a unique ``coco_image_id``
-    that we use later to align results back to concepts."""
+    """One Datapoint with one image and a text query per concept.
+    ``dp_counter`` is a one-element list holding the next query id; each
+    query's ``coco_image_id`` aligns its results back to its concept."""
     from sam3.train.data.sam3_image_dataset import (
         Datapoint,
         FindQueryLoaded,
@@ -363,13 +261,8 @@ def _build_datapoint(rgb: np.ndarray, concepts: list[str], dp_counter: list[int]
                     coco_image_id=cid,
                     original_image_id=cid,
                     original_category_id=1,
-                    # (H, W), the order the postprocessor unbinds it in:
-                    # ``img_h, img_w = target_sizes.unbind(1)`` for boxes, and
-                    # ``interpolate(masks, target_size.tolist())`` for masks.
-                    # Reversed, a non-square frame comes back transposed --
-                    # invisible for every square frame the runtime feeds
-                    # (the 1008 nadir frame and SAHI tiles are square), and a
-                    # silent wrong answer for anything else.
+                    # (H, W), the order the postprocessor unbinds it in;
+                    # reversed, a non-square frame comes back transposed.
                     original_size=[h, w],
                     object_id=0,
                     frame_index=0,
@@ -399,14 +292,9 @@ def segment(
     max_per_image: int,
     resolution: int = 1008,
 ) -> list[SamDetection]:
-    """Run SAM 3.1 once on a single frame in-process.
-
-    This is the in-process backend ``serving.sam_server`` drives for
-    ``/segment``. Application code does NOT call this directly; the
-    runtime adapter (``maps.perception.sam.detect_client``) POSTs
-    ``/segment`` to that server. ``pixel_mask`` is the full ``(H, W)`` frame mask;
-    ``pixel_bbox_rcrc`` is its inclusive extent in tile-local coords.
-    """
+    """Run SAM 3.1 once on one frame: the backend of ``serving.sam_server``'s
+    ``/segment``. ``pixel_mask`` is the full ``(H, W)`` frame mask and
+    ``pixel_bbox_rcrc`` its inclusive extent."""
     if not concepts:
         return []
     return _segment_via_meta(
@@ -432,31 +320,10 @@ def _segment_via_meta(
     max_per_image: int,
     resolution: int,
 ) -> list[list[SamDetection]]:
-    """Segment ``rgb_tiles`` via the SAM 3.1 standalone Datapoint
-    pipeline. Returns a list aligned with ``rgb_tiles`` of
-    per-concept-ordered SamDetection.
-
-    Tiles are processed in GPU-forward chunks of ``SAM_GPU_CHUNK`` (env,
-    default 8). Each chunk is one collated ``model(batch)`` forward: the
-    vision encoder runs once per tile in the chunk and every concept
-    decoder for the chunk runs inside that single forward (the
-    ``examples/sam3_image_batched_inference.ipynb`` pattern). Chunking
-    decouples the caller's requested batch size from the GPU forward
-    size: a caller may pass any number of tiles, while per-forward peak
-    VRAM stays bounded by the chunk.
-
-    This bound is required, not optional. The dominant transient is the
-    MaskFormer segmentation-head FPN (``maskformer_segmentation`` group
-    norm under activation checkpointing), whose peak grows ~linearly in
-    the forward batch size (~2.85 GB/tile at 1008 px / 8 concepts on an
-    L40S); an unbounded batch of 16 tiles tries a single >10 GiB
-    allocation and OOMs a 44 GB card. The chunk is the ceiling.
-
-    Per-image outputs are independent of chunk composition (per-image
-    attention; ``LayerNorm``/``GroupNorm`` are per-sample, not
-    ``BatchNorm``; ``process_results`` keys per query group), so chunking
-    is detection-equivalent to one big forward.
-    """
+    """Segment ``rgb_tiles`` through the Datapoint pipeline: a list aligned
+    with ``rgb_tiles`` of per-concept-ordered detections. Tiles run in
+    collated forwards of ``SAM_GPU_CHUNK`` (env, default 8), which bounds the
+    per-forward peak memory; per-image outputs do not depend on the chunk."""
     import torch as _torch
 
     loaded = _ensure_sam(version, device, resolution, score_threshold)
@@ -495,12 +362,8 @@ def _forward_chunk(
     min_area_px: int,
     max_per_image: int,
 ) -> list[list[SamDetection]]:
-    """One collated ``model(batch)`` forward over the tiles in one GPU
-    chunk. ``dp_counter`` stays monotonic across chunks so query ids are
-    globally unique. All chunk-local tensors (``out``, ``results``,
-    ``batch``) are dropped on return, so the caching allocator reuses
-    that memory for the next chunk and per-forward peak stays bounded by
-    a single chunk."""
+    """One collated ``model(batch)`` forward over one GPU chunk of tiles.
+    ``dp_counter`` stays monotonic across chunks so query ids are unique."""
     dps = []
     qids_per_tile: list[list[int]] = []
     for rgb, tile_concepts in zip(rgb_chunk, concepts_chunk):
@@ -519,13 +382,9 @@ def _forward_chunk(
 
     detections_per_tile: list[list[SamDetection]] = []
     for tile_concepts, qids in zip(concepts_chunk, qids_per_tile):
-        # No per-concept cap: every same-class instance (e.g. EVERY car) must be
-        # detected and exposed so the reasoner can do relational counting
-        # ("the Nth car from the intersection", "between X and Y"). The old
-        # per_concept_cap = max(8, max_per_image // n_concepts) silently dropped
-        # same-class instances (~8-12/frame under the multi-concept union). Only
-        # the total ``max_per_image`` backstop remains (set high via config to
-        # be effectively unlimited while bounding a pathological frame -> OOM).
+        # No per-concept cap: every same-class instance stays countable for
+        # the reasoner ("the Nth car from the intersection"); only the total
+        # ``max_per_image`` backstop bounds a pathological frame.
         per_tile: list[SamDetection] = []
         next_object_id = 0
         for concept, qid in zip(tile_concepts, qids):
@@ -566,11 +425,8 @@ def _forward_chunk(
             r_max_t = (H - 1) - rows_any_t.flip(dims=[1]).float().argmax(dim=1)
             c_max_t = (W - 1) - cols_any_t.flip(dims=[1]).float().argmax(dim=1)
 
-            # Pack the 4 bbox-bound tensors into one transfer. Each
-            # ``.cpu().numpy()`` forces a CUDA sync, and the bbox
-            # bounds are tiny same-shape int tensors that benefit from
-            # being moved together (stack on GPU, single sync). Drops
-            # 6 syncs/concept to 3 (scores, bounds, masks).
+            # The four bbox bounds move to the host in one transfer: each
+            # ``.cpu()`` is a CUDA sync.
             bounds_t = _torch.stack([r_min_t, c_min_t, r_max_t, c_max_t], dim=0)
             bounds_np = bounds_t.cpu().numpy()
             r_min_np, c_min_np, r_max_np, c_max_np = (

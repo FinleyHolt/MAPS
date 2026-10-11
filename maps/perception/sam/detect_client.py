@@ -1,9 +1,8 @@
-"""SAM 3.1 image adapter: per-frame POST to the segment server's ``/segment``
-(``serving/sam_server.py``).
-
-One batched forward per image runs every concept decoder. The client gets back
-bbox-cropped bit-packed masks, projects them to world coords and reads colour
-locally. Object identity across an episode comes from the world-space tracker.
+"""SAM 3.1 client: each frame goes to the segment server's ``/segment``
+(``serving/sam_server.py``) as native tiles. The client gets back bbox-cropped
+bit-packed masks, dedups them across tiles, projects them to world coordinates
+and reads their colour. Object identity across an episode comes from the
+world-space tracker.
 """
 
 from __future__ import annotations
@@ -29,14 +28,13 @@ from maps.util.mask_region import MaskRegion
 
 DEFAULT_SAM_VIDEO_SERVER_URL = "http://127.0.0.1:8772"
 
-# SAM 3.1's encoder input. The client aspect-resizes and letterbox-pads to it,
-# so the wire carries ~200-400 KB instead of a multi-MB 4K PNG and the server
-# sees the same pixels.
+# SAM 3.1's encoder input: every tile is this square, fed 1:1.
 _SAM_INPUT_SIZE = 1008
 
-#: The segmenter's fixed options, the same in every config: the score floor and speckle floor the server applies, the per-frame
-#: detection backstop (no per-concept cap, so every same-class instance stays
-#: countable), and the SAHI tile overlap and cross-tile IoU-NMS threshold.
+#: The segmenter's fixed options: the score and speckle floors the server
+#: applies, the per-frame detection backstop (no per-concept cap, so every
+#: same-class instance stays countable), and the tile overlap and cross-tile
+#: IoU-NMS threshold.
 SCORE_THRESHOLD = 0.3
 MIN_AREA_PX = 32
 MAX_PER_STEP = 1024
@@ -164,21 +162,15 @@ def _post_segment_avoid_stale_pool(*, picker, json_body) -> dict | None:
     return None
 
 
-# Colour is read here, over the mask pixels, as a structured attribute of a
-# bare-noun SAM concept ("car", not "white car"): what the object looks like,
-# like its class. The agent matches the cue's colour word to it by reasoning.
-# Both a palette name and the median RGB are served, so the agent can settle
-# a fuzzy case (silver vs gray) the name cannot.
+# Colour is read over the mask pixels as a structured attribute of a bare-noun
+# SAM concept ("car", not "white car"); the agent matches a cue's colour word
+# to it by reasoning. Both the palette name and the median RGB are served, so
+# the agent can settle a fuzzy case the name cannot.
 #
-# Perceived-RGB anchors for nearest-name. The five well-sampled car colours
-# (white, gray, black, red, blue) are the median perceived (SAM-mask interior)
-# RGB on the CityNav birmingham/cambridge nadir orthos, n>=15 per colour over
-# the LLM-labelled GT set: +10.8pp colour family and +10.4pp white/black
-# lightness over ideal sRGB anchors (2-fold CV, held-out maps). The rest keep
-# their ideal sRGB anchor. "silver" has no anchor: its ideal (190,192,198)
-# sits above the calibrated white on this dark imagery, so true white cars
-# would snap to a word CityNav cues almost never use; a silver car named
-# "white" still matches a "silver" cue at 0.8 through the achromatic family.
+# Nearest-name anchors: white, gray, black, red and blue are the median
+# perceived RGB of SAM-mask interiors on the CityNav nadir orthos, the rest
+# ideal sRGB. Silver has no anchor: its ideal sits above the calibrated white
+# on this imagery, so white cars would snap to it.
 _COLOR_PALETTE: dict[str, tuple[int, int, int]] = {
     "white": (175, 183, 191), "black": (77, 86, 98), "gray": (121, 132, 145),
     "red": (135, 78, 88), "blue": (75, 101, 136), "green": (45, 130, 70),
@@ -187,11 +179,9 @@ _COLOR_PALETTE: dict[str, tuple[int, int, int]] = {
 }
 
 
-# Colour is sampled over the mask INTERIOR: a small nadir car mask is ~1/4-1/2
+# Colour is sampled over the mask INTERIOR: a small nadir car mask is largely
 # boundary pixels straddling the asphalt, which drain chroma and darken the
-# median. Measured on GT cars (colour family, n~39-50 over 3 match radii):
-# +14-17pp against the full mask; a value gate was inert and white balance
-# negative (Hsieh 2015; Stavrothanasopoulos 2022).
+# median.
 _COLOR_INTERIOR_PCTL = 50
 _COLOR_INTERIOR_MIN_PX = 12
 
@@ -215,8 +205,7 @@ def _interior_mask(region) -> "np.ndarray":
 
 
 # Per-colour reliability prior on the colour confidence: chromatic car colours
-# read unreliably off dark, low-contrast nadir masks (~57-80% mislabel on red
-# and blue sole cues), achromatic ones reliably (~16-19%).
+# read unreliably off dark, low-contrast nadir masks, achromatic ones reliably.
 _COLOR_RELIABILITY_PRIOR_DEFAULT = 0.35  # chromatic seed
 _COLOR_ACHROMATIC = frozenset({"white", "black", "gray"})
 
@@ -274,11 +263,10 @@ def _set_color_attr(attrs: dict, rgb, region) -> None:
 
 
 # Per-instance split. SAM 3.x emits one mask per DETR query with no instance
-# separation, NMS or component split (arXiv 2511.16719 §3), so a mask over tiny
-# dense objects can span two disjoint cars or carry speckle. Each mask splits
-# into connected components; the noise floor is relative to the class's
-# typical single-instance area (0.10 of the median car mask ~ 1 m^2 at
-# 0.25 m/px), so it needs no per-class prior.
+# separation (arXiv 2511.16719 §3), so a mask over tiny dense objects can span
+# two disjoint cars or carry speckle. Each mask splits into connected
+# components; the noise floor is a fraction of the class's median
+# single-instance area, so it needs no per-class prior.
 _INSTANCE_SPLIT_AREA_FRAC = 0.10
 _INSTANCE_SPLIT_MIN_REF_SAMPLES = 5
 # A non-largest component more than this fraction covered by ANOTHER same-class
@@ -327,15 +315,14 @@ def split_into_instances(
     """Split a SAM concept mask into per-instance connected components.
 
     A single-component mask comes back as ``[region]``. Otherwise the largest
-    component is kept as the detection's primary, and each other one is
-    dropped as speckle (area under ``max(MIN_AREA_PX,
-    _INSTANCE_SPLIT_AREA_FRAC * ref_area_px)``,
-    ``ref_area_px`` the median clean same-class area, None with too few
-    samples) or as redundant (more than ``_INSTANCE_SPLIT_REDUNDANT_FRAC`` of its pixels under
-    ``coverage_count``, the per-pixel count of same-class PRIMARIES: another
-    detection already owns it), and kept otherwise: a unique component is a
-    car nothing else found. Keying redundancy off primaries, not raw overlap,
-    keeps a small car that two merged masks both cover. Never empty.
+    component is the detection's primary and is kept; each other one is
+    dropped as speckle (area under ``MIN_AREA_PX`` or
+    ``_INSTANCE_SPLIT_AREA_FRAC`` of ``ref_area_px``, the median clean
+    same-class area, None with too few samples) or as redundant (more than
+    ``_INSTANCE_SPLIT_REDUNDANT_FRAC`` of its pixels under ``coverage_count``,
+    the per-pixel count of same-class primaries), and kept otherwise. Keying
+    redundancy off primaries keeps a small car that two merged masks both
+    cover. Never empty.
     """
     comps = _connected_components(region)
     if len(comps) <= 1:
@@ -356,20 +343,14 @@ def split_into_instances(
     return kept
 
 
-# zlib level of the wire PNG: level 1 encodes a 1008 tile in 79 ms against
-# 259 ms at the default 6, for 0.4% more bytes. Every level is lossless, so SAM
-# sees the same pixels. JPEG q95 moved 12% of detections against a
-# bit-deterministic PNG control, so the wire stays PNG.
+# zlib level of the wire PNG: every level is lossless, so SAM sees the same
+# pixels, and level 1 is the fastest. The wire stays PNG: JPEG moves detections.
 _PNG_WIRE_LEVEL = 1
 
 
 def _png_wire_bytes(canvas: np.ndarray) -> bytes:
-    """PNG-encode a letterboxed frame for the ``/segment`` wire (cv2: faster
-    and smaller than PIL at the same level).
-
-    cv2 writes BGR and the server decodes RGB with PIL, hence ``[:, :, ::-1]``;
-    ``test_wire_png_is_lossless`` decodes through PIL to hold it.
-    """
+    """PNG-encode a tile for the ``/segment`` wire. cv2 writes BGR and the
+    server decodes RGB with PIL, hence ``[:, :, ::-1]``."""
     import cv2
 
     ok, buf = cv2.imencode(
@@ -441,9 +422,9 @@ class SamDetectClient:
 
     @staticmethod
     def _tile_bounds(H: int, W: int) -> "list[tuple[int, int, int, int]]":
-        """Fixed native-size tiling: every tile is EXACTLY ``_SAM_INPUT_SIZE`` so
-        it is fed to SAM 1:1. The tile count follows from the frame size and
-        overlap: a 2016 render gives a 3x3 grid (starts {0, 504, 1008})."""
+        """``(r0, r1, c0, c1)`` of the ``_SAM_INPUT_SIZE`` tiles covering an
+        ``H x W`` frame, overlapping by at least ``SAHI_OVERLAP``: a 2016 px
+        side gives starts {0, 504, 1008}."""
         t = _SAM_INPUT_SIZE
 
         def starts(size: int) -> "list[int]":

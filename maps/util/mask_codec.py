@@ -1,8 +1,8 @@
 """Bbox-cropped, bit-packed, deflated pixel-mask records.
 
 One encoding for every pixel mask that crosses a process boundary: the SAM
-server's detection wire and the per-step detection record. A mask is stored as its bounding-box crop, bit-packed one bit per pixel,
-then deflated::
+server's detection wire and the per-step detection record. A mask is stored
+as its bounding-box crop, bit-packed one bit per pixel, then deflated::
 
     {
       "pixel_bbox_rcrc":  [r0, c0, r1, c1],   # absolute, INCLUSIVE
@@ -13,15 +13,9 @@ then deflated::
 Bbox coordinates are absolute in the source image's pixel space, so a decoder
 can place the crop back on a full frame without any other context.
 
-Measured on one real CityNav step (38 detections, 2016x2016 frame): a
-full-frame PNG per mask costs 215 KiB, the bare bit-packed crop 67 KiB, and
-this record 10 KiB — 21x smaller than the PNG for about 1 ms of encode per
-frame, which is noise beside SAM inference.
-
-``mask_zpacked_b64`` is deliberately not named ``mask_packed_b64``: the payload
-is deflated, so a reader expecting raw ``packbits`` bytes must fail on the
-missing key rather than silently unpack compressed data into a plausible-looking
-wrong mask.
+The key is ``mask_zpacked_b64``, not ``mask_packed_b64``, so a reader
+expecting raw ``packbits`` bytes fails on the missing key instead of unpacking
+deflated data into a wrong mask.
 """
 
 from __future__ import annotations
@@ -31,8 +25,7 @@ import zlib
 
 import numpy as np
 
-# Deflate level. 6 buys ~21x over the raw packed crop for ~1 ms per frame;
-# 9 buys a further 3% for 4x the CPU.
+# Deflate level: zlib's default.
 _DEFLATE_LEVEL = 6
 
 
@@ -57,11 +50,9 @@ def encode_mask_record(
 ) -> dict | None:
     """Encode a boolean mask as a bbox-cropped, packed, deflated record.
 
-    ``mask`` is either a full-frame ``(H, W)`` bool array or an already-cropped
-    one; pass ``bbox_rcrc`` when it is already cropped, otherwise the bbox is
-    derived from the mask's own extent. Returns ``None`` for an empty mask —
-    a detection with no pixels carries no mask, and callers drop it rather than
-    recording a zero-area record.
+    ``mask`` is a full-frame ``(H, W)`` array or a crop; with ``bbox_rcrc``
+    it is placed (and a full frame reduced) at that box, otherwise the box is
+    the mask's own extent. ``None`` for an empty mask: callers drop it.
     """
     arr = np.asarray(mask).astype(bool, copy=False)
 

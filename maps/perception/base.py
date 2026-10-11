@@ -1,11 +1,8 @@
 """Perception contract: the detection dataclass.
 
 The segmenter (:class:`maps.perception.sam.detect_client.SamDetectClient`)
-converts an observation + pose into a list of detected objects, one crop per
-call. Each detection carries enough metadata for a caller to promote it into
-a spatial graph, wrap it as evidence, or dedup it across steps — none of
-which is perception's job — and the world tracker stamps the stable
-``metadata["track_id"]`` the graph upsert uses to re-identify objects.
+turns an observation into detected objects; the world tracker stamps the
+stable ``metadata["track_id"]`` the graph upsert uses to re-identify them.
 """
 
 from __future__ import annotations
@@ -29,10 +26,5 @@ class DetectedObject:
     # folds them into a node's semantic_attributes as {key: {value: 1}} counters.
 
     # The segmentation mask, as a crop plus where it sits in the frame
-    # (see ``maps.util.mask_region``).
-    #
-    # A region, not a frame-sized array with a box beside it: with separate
-    # fields every consumer re-derives the box by scanning the whole frame,
-    # which costs the SENSOR's resolution per detection. A region cannot be
-    # separated from its box.
+    # (``maps.util.mask_region``), so no consumer scans the whole frame.
     mask: "MaskRegion | None" = None
