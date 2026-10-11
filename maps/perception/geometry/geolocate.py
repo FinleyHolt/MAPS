@@ -71,23 +71,24 @@ class TileFrame:
     grid_shape: tuple[int, int]  # (H, W)
 
 
-def _view_square_xy(
-    view_corners_xy: tuple, u: np.ndarray, v: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
-    """World (x, y) at normalised frame coordinates ``u = col / (w - 1)``,
-    ``v = row / (h - 1)`` through the view-square corners ``[FL, FR, BR, BL]``
-    (== image ``[TL, TR, BR, BL]``, the inverse of upstream
-    ``cropclient.crop_image``'s warp).
-
-    world = FL + u*(FR-FL) + v*(BL-FL); exact, since the square is a
-    parallelogram and the bilinear map is affine.
+def _frame_world_xy(
+    view_corners_xy: tuple, rows: np.ndarray, cols: np.ndarray, frame_shape: tuple[int, int]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """``(u, v, x, y)`` of frame pixels ``(rows, cols)``: normalised frame
+    coordinates ``u = col / (w - 1)``, ``v = row / (h - 1)`` and the world
+    (x, y) there through the view-square corners ``[FL, FR, BR, BL]`` (==
+    image ``[TL, TR, BR, BL]``). ``world = FL + u*(FR-FL) + v*(BL-FL)`` is
+    exact: the square is a parallelogram, so the bilinear map is affine.
     """
+    h, w = frame_shape
+    u = cols.astype(np.float64) / max(w - 1, 1)
+    v = rows.astype(np.float64) / max(h - 1, 1)
     flx, fly = float(view_corners_xy[0][0]), float(view_corners_xy[0][1])
     frx, fry = float(view_corners_xy[1][0]), float(view_corners_xy[1][1])
     blx, bly = float(view_corners_xy[3][0]), float(view_corners_xy[3][1])
     xs = flx + u * (frx - flx) + v * (blx - flx)
     ys = fly + u * (fry - fly) + v * (bly - fly)
-    return xs, ys
+    return u, v, xs, ys
 
 
 def _tile_mask_from_world(
@@ -297,7 +298,7 @@ def project_mask_to_tile_cells_ortho(
     orthographic, yaw-rotated square warp, not a camera frustum, so
     perspective depth unprojection does not apply. Instead each mask pixel
     maps to world (x, y) by the exact view-square affine
-    (:func:`_view_square_xy`). No depth buffer is involved (the ground
+    (:func:`_frame_world_xy`). No depth buffer is involved (the ground
     plane is the projection surface).
 
     Returns ``None`` when the mask has fewer than ``_MIN_VALID_DEPTH_PIXELS``
@@ -310,19 +311,19 @@ def project_mask_to_tile_cells_ortho(
     rr, cc = region.rows_cols()
     if rr.size < _MIN_VALID_DEPTH_PIXELS:
         return None
-    h, w = region.frame_shape
-    u = cc.astype(np.float64) / max(w - 1, 1)
-    v = rr.astype(np.float64) / max(h - 1, 1)
-    xs, ys = _view_square_xy(view_corners_xy, u, v)
+    _u, _v, xs, ys = _frame_world_xy(view_corners_xy, rr, cc, region.frame_shape)
     return _tile_mask_from_world(xs, ys, tile)
+
+
+# A traced contour is simplified to ~1.5% of its perimeter, then decimated to
+# at most this many vertices.
+_CONTOUR_EPSILON_FRAC = 0.015
+_CONTOUR_MAX_VERTICES = 16
 
 
 def world_contour_from_region(
     region: MaskRegion,
     view_corners_xy: tuple,
-    *,
-    max_vertices: int = 16,
-    epsilon_frac: float = 0.015,
 ) -> list[list[float]] | None:
     """WORLD_CONTOUR from a native-res crop-pixel mask — ORTHO path only.
 
@@ -335,15 +336,13 @@ def world_contour_from_region(
     uses (``world = FL + u*(FR-FL) + v*(BL-FL)``, u = col/(w-1),
     v = row/(h-1) — the inverse of upstream ``cropclient.crop_image``'s warp;
     the axis-aligned ``world_window`` alone is NOT sufficient because the
-    crop may be yaw-rotated). Decimated to ``max_vertices`` (uniform stride),
+    crop may be yaw-rotated). Decimated to ``_CONTOUR_MAX_VERTICES`` (uniform stride),
     rounded to 2 dp, and returned CLOSED — the chain ends on the vertex it
     started from, which is how a reader tells a ring from a way.
 
     Returns ``None`` when the mask/corners are degenerate, or when the
     simplified contour has < 3 vertices.
     """
-    if view_corners_xy is None:
-        return None
     if not region.crop.any():
         return None
 
@@ -359,23 +358,19 @@ def world_contour_from_region(
     largest = max(contours, key=cv2.contourArea)
     if len(largest) < 3:
         return None
-    eps = float(epsilon_frac) * cv2.arcLength(largest, True)
+    eps = _CONTOUR_EPSILON_FRAC * cv2.arcLength(largest, True)
     approx = cv2.approxPolyDP(largest, eps, True).reshape(-1, 2)
     if approx.shape[0] < 3:
         return None
-    if approx.shape[0] > max_vertices:
-        stride = int(np.ceil(approx.shape[0] / max_vertices))
+    if approx.shape[0] > _CONTOUR_MAX_VERTICES:
+        stride = int(np.ceil(approx.shape[0] / _CONTOUR_MAX_VERTICES))
         approx = approx[::stride]
         if approx.shape[0] < 3:
             return None
 
-    # Normalised by the FRAME, which is why a region carries its frame shape.
-    h, w = region.frame_shape
-    r0, c0 = region.bbox[0], region.bbox[1]
     # cv2 contour points are (x=col, y=row), crop-relative until shifted.
-    u = (approx[:, 0].astype(np.float64) + c0) / max(w - 1, 1)
-    v = (approx[:, 1].astype(np.float64) + r0) / max(h - 1, 1)
-    xs, ys = _view_square_xy(view_corners_xy, u, v)
+    r0, c0 = region.bbox[0], region.bbox[1]
+    _u, _v, xs, ys = _frame_world_xy(view_corners_xy, approx[:, 1] + r0, approx[:, 0] + c0, region.frame_shape)
     ring = [[round(float(x), 2), round(float(y), 2)] for x, y in zip(xs, ys)]
     # A traced mask boundary ENCLOSES, and the chain says so by returning to
     # its first vertex — the one rule that tells a ring from a way
@@ -430,10 +425,7 @@ def project_mask_to_world_ortho(
     rr, cc = region.rows_cols()
     if rr.size == 0:
         return None
-    h, w = region.frame_shape
-    u = cc.astype(np.float64) / max(w - 1, 1)
-    v = rr.astype(np.float64) / max(h - 1, 1)
-    xs, ys = _view_square_xy(view_corners_xy, u, v)
+    u, v, xs, ys = _frame_world_xy(view_corners_xy, rr, cc, region.frame_shape)
 
     # Upstream CityNav ships the depth raster at a different resolution
     # than the RGB the mask lives in (224x224 RGB vs 256x256 depth). Both
