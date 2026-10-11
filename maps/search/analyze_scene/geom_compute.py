@@ -408,14 +408,11 @@ def point_in_polygon(pt, poly) -> bool:
 _PAIR_CHUNK = 4_000_000
 
 
-def loops_area_centroid(loops):
-    """TRUE area centroid ``[x, y]`` of a mask realised as boundary loops —
-    the signed shoelace centroid summed across ALL loops, so hole loops
-    (which the directed cell trace winds opposite to outer loops) subtract
-    exactly. A single loop is orientation-independent (the sign cancels).
-    ONLY closed chains contribute: the ``% n`` wrap would give an open way a
-    phantom closing edge. With no closed chain (a way encloses nothing) this
-    falls back to the vertex mean."""
+def _shoelace(loops):
+    """``(sum cross, sum (x1+x2) cross, sum (y1+y2) cross)`` over the CLOSED
+    chains of ``loops``; open chains are skipped, since the ``% n`` wrap
+    would close a way implicitly. Hole loops wind opposite to outer loops
+    and subtract exactly."""
     sa = sx = sy = 0.0
     for lp in (loops or []):
         if not is_closed_chain(lp):
@@ -428,6 +425,14 @@ def loops_area_centroid(loops):
             sa += cr
             sx += (x1 + x2) * cr
             sy += (y1 + y2) * cr
+    return sa, sx, sy
+
+
+def loops_area_centroid(loops):
+    """Area centroid ``[x, y]`` of a mask realised as boundary loops
+    (:func:`_shoelace`), or the vertex mean when no closed chain encloses
+    area, or ``None`` with no vertices."""
+    sa, sx, sy = _shoelace(loops)
     if abs(sa) < 1e-12:
         pts = [p for lp in (loops or []) for p in lp]
         if not pts:
@@ -438,21 +443,9 @@ def loops_area_centroid(loops):
 
 
 def loops_area(loops):
-    """Total enclosed area (m^2) of a mask realised as boundary loops — the
-    absolute signed shoelace sum across ALL loops (hole loops wind opposite
-    to outer loops and subtract exactly). 0.0 for a point or polyline: open
-    chains are skipped, since the ``% n`` wrap would close a way
-    implicitly."""
-    sa = 0.0
-    for lp in (loops or []):
-        if not is_closed_chain(lp):
-            continue
-        n = len(lp)
-        for i in range(n):
-            x1, y1 = float(lp[i][0]), float(lp[i][1])
-            x2, y2 = float(lp[(i + 1) % n][0]), float(lp[(i + 1) % n][1])
-            sa += x1 * y2 - x2 * y1
-    return abs(sa) / 2.0
+    """Enclosed area (m^2) of a mask realised as boundary loops
+    (:func:`_shoelace`); 0.0 for a point or a way."""
+    return abs(_shoelace(loops)[0]) / 2.0
 
 
 def is_closed_chain(pts) -> bool:
@@ -764,25 +757,54 @@ def _min_pt_to_segs_all(P, A, B):
     """Every pair, in order: the scan ``_min_pt_to_segs`` is defined by."""
     if len(P) == 0 or len(A) == 0:
         return float("inf"), -1, None
-    E = B - A
-    L2 = np.einsum("ij,ij->i", E, E)
-    L2s = np.where(L2 > 0.0, L2, 1.0)
     best_d2, best_i, best_foot = float("inf"), -1, None
     step = max(1, int(_PAIR_CHUNK // max(1, len(A))))
     for s in range(0, len(P), step):
-        p = P[s:s + step]
-        W = p[:, None, :] - A[None, :, :]
-        t = np.einsum("nsj,sj->ns", W, E) / L2s[None, :]
-        t = np.clip(np.where(L2[None, :] > 0.0, t, 0.0), 0.0, 1.0)
-        F = A[None, :, :] + t[..., None] * E[None, :, :]
-        D = p[:, None, :] - F
-        d2 = np.einsum("nsj,nsj->ns", D, D)
+        d2, F = _pt_to_segs_grid(P[s:s + step], A, B)
         i, j = np.unravel_index(int(np.argmin(d2)), d2.shape)
         if float(d2[i, j]) < best_d2:
             best_d2 = float(d2[i, j])
             best_i = s + i
             best_foot = (float(F[i, j, 0]), float(F[i, j, 1]))
     return math.sqrt(best_d2), best_i, best_foot
+
+
+def _pt_to_segs_grid(P, A, B):
+    """``(d2, F)`` for EVERY (point, segment) pair: squared distances
+    ``(N, M)`` and foot points ``(N, M, 2)`` from points ``P`` to segments
+    ``A``->``B``."""
+    E = B - A
+    L2 = np.einsum("mj,mj->m", E, E)
+    L2s = np.where(L2 > 0.0, L2, 1.0)
+    W = P[:, None, :] - A[None, :, :]
+    t = np.einsum("nmj,mj->nm", W, E) / L2s[None, :]
+    t = np.clip(np.where(L2[None, :] > 0.0, t, 0.0), 0.0, 1.0)
+    F = A[None, :, :] + t[..., None] * E[None, :, :]
+    D = P[:, None, :] - F
+    return np.einsum("nmj,nmj->nm", D, D), F
+
+
+def _proper_crossings(a1, b1, A2, B2):
+    """``(X, P)``: which segment pairs ``a1->b1`` (n) x ``A2->B2`` (m)
+    PROPERLY cross (interiors intersect), and their ``(n, m, 2)`` contact
+    points (``None`` when none cross)."""
+    r1 = b1 - a1
+    r2 = B2 - A2
+    W1 = A2[None, :, :] - a1[:, None, :]
+    W2 = B2[None, :, :] - a1[:, None, :]
+    o1 = r1[:, None, 0] * W1[..., 1] - r1[:, None, 1] * W1[..., 0]
+    o2 = r1[:, None, 0] * W2[..., 1] - r1[:, None, 1] * W2[..., 0]
+    W3 = a1[:, None, :] - A2[None, :, :]
+    W4 = b1[:, None, :] - A2[None, :, :]
+    o3 = r2[None, :, 0] * W3[..., 1] - r2[None, :, 1] * W3[..., 0]
+    o4 = r2[None, :, 0] * W4[..., 1] - r2[None, :, 1] * W4[..., 0]
+    X = (o1 * o2 < 0.0) & (o3 * o4 < 0.0)
+    if not X.any():
+        return X, None
+    rxs = r1[:, None, 0] * r2[None, :, 1] - r1[:, None, 1] * r2[None, :, 0]
+    t = ((W1[..., 0] * r2[None, :, 1] - W1[..., 1] * r2[None, :, 0])
+         / np.where(rxs != 0.0, rxs, 1.0))
+    return X, a1[:, None, :] + t[..., None] * r1[:, None, :]
 
 
 def _overlaps_box(A, B, C, D):
@@ -815,26 +837,12 @@ def _segments_cross(A1, B1, A2, B2):
         if not k1.any() or not k2.any():
             return None
         A1, B1, A2, B2 = A1[k1], B1[k1], A2[k2], B2[k2]
-    r = B1 - A1
-    s = B2 - A2
     step = max(1, int(_PAIR_CHUNK // max(1, len(A2))))
     for k in range(0, len(A1), step):
-        a1, b1, rr = A1[k:k + step], B1[k:k + step], r[k:k + step]
-        W1 = A2[None, :, :] - a1[:, None, :]
-        W2 = B2[None, :, :] - a1[:, None, :]
-        o1 = rr[:, None, 0] * W1[..., 1] - rr[:, None, 1] * W1[..., 0]
-        o2 = rr[:, None, 0] * W2[..., 1] - rr[:, None, 1] * W2[..., 0]
-        W3 = a1[:, None, :] - A2[None, :, :]
-        W4 = b1[:, None, :] - A2[None, :, :]
-        o3 = s[None, :, 0] * W3[..., 1] - s[None, :, 1] * W3[..., 0]
-        o4 = s[None, :, 0] * W4[..., 1] - s[None, :, 1] * W4[..., 0]
-        hit = (o1 * o2 < 0.0) & (o3 * o4 < 0.0)
-        if hit.any():
-            i, j = np.unravel_index(int(np.argmax(hit)), hit.shape)
-            rxs = rr[i, 0] * s[j, 1] - rr[i, 1] * s[j, 0]
-            t = (W1[i, j, 0] * s[j, 1] - W1[i, j, 1] * s[j, 0]) / rxs
-            return (float(a1[i, 0] + t * rr[i, 0]),
-                    float(a1[i, 1] + t * rr[i, 1]))
+        X, P = _proper_crossings(A1[k:k + step], B1[k:k + step], A2, B2)
+        if P is not None:
+            i, j = np.unravel_index(int(np.argmax(X)), X.shape)
+            return float(P[i, j, 0]), float(P[i, j, 1])
     return None
 
 
@@ -938,20 +946,6 @@ def _segment_arrays(polys):
     return np.concatenate(A), np.concatenate(B)
 
 
-def _pt_to_segs_grid(P, A, B):
-    """``(d, F)`` for EVERY (point, segment) pair: distances ``(N, M)`` and
-    foot points ``(N, M, 2)`` from points ``P`` to segments ``A``->``B``."""
-    E = B - A
-    L2 = np.einsum("mj,mj->m", E, E)
-    L2s = np.where(L2 > 0.0, L2, 1.0)
-    W = P[:, None, :] - A[None, :, :]
-    t = np.einsum("nmj,mj->nm", W, E) / L2s[None, :]
-    t = np.clip(np.where(L2[None, :] > 0.0, t, 0.0), 0.0, 1.0)
-    F = A[None, :, :] + t[..., None] * E[None, :, :]
-    D = P[:, None, :] - F
-    return np.sqrt(np.einsum("nmj,nmj->nm", D, D)), F
-
-
 def polyline_crossings(polys_a, polys_b):
     """``(points, nearest_m)`` — every DISTINCT place two BUNDLES of exact
     vertex chains MEET, and their nearest approach.
@@ -972,18 +966,16 @@ def polyline_crossings(polys_a, polys_b):
     A2, B2 = _segment_arrays(polys_b)
     if len(A1) == 0 or len(A2) == 0:
         return [], float("inf")
-    r2 = B2 - A2
     hits: list = []
     nearest = float("inf")
     step = max(1, int(_PAIR_CHUNK // max(1, len(A2))))
     for k in range(0, len(A1), step):
         a1, b1 = A1[k:k + step], B1[k:k + step]
-        r1 = b1 - a1
         d1, F1 = _pt_to_segs_grid(a1, A2, B2)
         d2, F2 = _pt_to_segs_grid(b1, A2, B2)
         d3, F3 = _pt_to_segs_grid(A2, a1, b1)
         d4, F4 = _pt_to_segs_grid(B2, a1, b1)
-        d = np.stack([d1, d2, d3.T, d4.T])
+        d = np.sqrt(np.stack([d1, d2, d3.T, d4.T]))
         w = np.stack([
             (a1[:, None, :] + F1) * 0.5,
             (b1[:, None, :] + F2) * 0.5,
@@ -993,23 +985,10 @@ def polyline_crossings(polys_a, polys_b):
         pick = np.argmin(d, axis=0)
         dmin = np.take_along_axis(d, pick[None], 0)[0]
         wmin = np.take_along_axis(w, pick[None, ..., None], 0)[0]
-        # PROPER crossing (interiors intersect): distance 0 at the exact
-        # contact, whatever the vertex spacing.
-        W1 = A2[None, :, :] - a1[:, None, :]
-        W2 = B2[None, :, :] - a1[:, None, :]
-        o1 = r1[:, None, 0] * W1[..., 1] - r1[:, None, 1] * W1[..., 0]
-        o2 = r1[:, None, 0] * W2[..., 1] - r1[:, None, 1] * W2[..., 0]
-        W3 = a1[:, None, :] - A2[None, :, :]
-        W4 = b1[:, None, :] - A2[None, :, :]
-        o3 = r2[None, :, 0] * W3[..., 1] - r2[None, :, 1] * W3[..., 0]
-        o4 = r2[None, :, 0] * W4[..., 1] - r2[None, :, 1] * W4[..., 0]
-        X = (o1 * o2 < 0.0) & (o3 * o4 < 0.0)
-        if X.any():
-            rxs = (r1[:, None, 0] * r2[None, :, 1]
-                   - r1[:, None, 1] * r2[None, :, 0])
-            t = ((W1[..., 0] * r2[None, :, 1] - W1[..., 1] * r2[None, :, 0])
-                 / np.where(rxs != 0.0, rxs, 1.0))
-            P = a1[:, None, :] + t[..., None] * r1[:, None, :]
+        # A proper crossing is distance 0 at its exact contact, whatever
+        # the vertex spacing.
+        X, P = _proper_crossings(a1, b1, A2, B2)
+        if P is not None:
             dmin = np.where(X, 0.0, dmin)
             wmin = np.where(X[..., None], P, wmin)
         nearest = min(nearest, float(dmin.min()))
