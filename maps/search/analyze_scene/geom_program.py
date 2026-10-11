@@ -2760,9 +2760,9 @@ def _compare_specs(cx, refs):
                 _members = []
                 for x in ref_el:
                     if cx.is_ref(x):
-                        # A constructed row (a crossing, a terminus) is not
-                        # in by_fid and rides on its own xy.
-                        _got = [cx.by_fid.get(r["fid"], r)
+                        # A constructed or fid-less row (a crossing, an
+                        # [x, y] item) is not in by_fid and rides on its own xy.
+                        _got = [cx.by_fid.get(r.get("fid"), r)
                                 for r in cx.resolve(x)
                                 if isinstance(r, dict)
                                 and (r.get("fid") in cx.by_fid
@@ -2889,7 +2889,9 @@ def _compare(cx, a):
                    "xy": [round(payload[0], 2), round(payload[1], 2)]}
         else:
             hdr = {"ref_name": lab, "kind": "union",
-                   "members": [n["fid"] for n in payload]}
+                   "members": [n.get("fid") or [round(n["xy"][0], 2),
+                                                round(n["xy"][1], 2)]
+                               for n in payload]}
         headers.append(hdr)
         col_specs.append((kind, payload, lab))
 

@@ -169,3 +169,19 @@ def test_a_union_over_a_whole_class_is_capped_rather_than_slow():
     with pytest.raises(gp.ProgramError,
                        match=r"folds at most.*first \(within=, a cardinal"):
         gp.run_program([], many, {"ops": ops})
+
+
+def test_a_fid_less_member_is_measured_by_its_own_point():
+    """compare over [x, y] items yields rows without a fid; as a union member
+    such a row is a place like any other: its point."""
+    out = gp.run_program(
+        [], [_house("h_a", 0.0), _house("h_b", 100.0)],
+        {"ops": [
+            {"ref": "r1", "op": "compare",
+             "args": {"items": [[10.0, 0.0]], "refs": ["h_a"]}},
+            {"ref": "r2", "op": "compare",
+             "args": {"items": ["h_a", "h_b"],
+                      "refs": [{"ref": ["r1"], "as": "spot"}]}}]})
+    by = {r["fid"]: r["distance to spot"] for r in out["results"]["r2"]}
+    assert by == {"h_a": pytest.approx(10.0), "h_b": pytest.approx(90.0)}, by
+    assert out["results"]["r2"].refs[0]["members"] == [[10.0, 0.0]]
