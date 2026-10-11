@@ -718,13 +718,17 @@ def _census_counts(rows) -> tuple[dict, int]:
     return counts, named
 
 
+def _top(counts: dict, n: int) -> dict:
+    """The ``n`` largest counts, ties by key."""
+    return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:n])
+
+
 def _surface_census(rows, top_n: int = 12) -> tuple[dict, int]:
     """FACTS census of a row set: the top-``top_n`` tag ``key=value`` counts.
     The world-graph discovery affordance — what this world speaks; counts
     only, no vocabulary advice."""
     counts, named = _census_counts(rows)
-    top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:top_n]
-    return dict(top), named
+    return _top(counts, top_n), named
 
 
 def _query_matched_census(counts: dict, query: str, top_n: int = 8) -> dict:
@@ -755,8 +759,7 @@ def _query_matched_census(counts: dict, query: str, top_n: int = 8) -> dict:
                 break
         if hit:
             matched[key] = n
-    top = sorted(matched.items(), key=lambda kv: (-kv[1], kv[0]))[:top_n]
-    return dict(top)
+    return _top(matched, top_n)
 
 
 def _census_note(rows, *, name_samples: int = 4, query: str | None = None) -> str:
@@ -765,7 +768,7 @@ def _census_note(rows, *, name_samples: int = 4, query: str | None = None) -> st
     then the global top counts + name samples. Rides empty/no-match
     retrievals so the re-query is one read, not a guess."""
     counts, _named = _census_counts(rows)
-    top = dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:12])
+    top = _top(counts, 12)
     parts = ", ".join(f"{k}({v})" for k, v in top.items())
     names: list[str] = []
     for it in rows:
@@ -953,26 +956,17 @@ def _is_gridable(v) -> bool:
 
 
 def _fmt_float(v: float) -> str:
-    """THE one float render rule: serve the STORED value verbatim (trailing
-    zeros trimmed, ``-0.0`` normalized to ``0.0``, always at least one
-    decimal). Every compute site quantizes ONCE when it stamps the value
-    (d_/dc_ at 2 dp, bearings at 1 dp, name_match/color at 3 dp, score at
-    ADAPTIVE 4..10 dp — geom_compute._SCORE_MAX_DP), so the SERVED number IS
-    the number every law/invariant keyed on — a 0.04 m gap can never render
-    as ``0.0`` next to a served ``brg_gap_`` (the absence law keys on the
-    same stored value), and distinct stored composite scores always render
-    distinct (the auditability fact; the render widens past 4 dp exactly
-    when 4 dp would lose the stored value, capped at 10 dp)."""
+    """THE one float render rule: the stored value in the fewest decimals
+    (4 to 10) that round-trip it, trailing zeros trimmed, ``-0.0`` as
+    ``0.0``, always one decimal. Every compute site quantizes once when it
+    stamps a value, so the served number is the number every rule keyed on,
+    and distinct stored scores render distinct."""
     if v == 0.0:
-        v = 0.0  # normalize -0.0 (a signed zero is a render artifact)
-    s = f"{v:.4f}"
-    if float(s) != v:
-        # ADAPTIVE widening: the fewest decimals that round-trip the stored
-        # value (a >4 dp adaptive score stamp), bounded at the stamp cap.
-        for dp in range(5, 11):
-            s = f"{v:.{dp}f}"
-            if float(s) == v:
-                break
+        v = 0.0
+    for dp in range(4, 11):
+        s = f"{v:.{dp}f}"
+        if float(s) == v:
+            break
     s = s.rstrip("0").rstrip(".")
     return s if "." in s else s + ".0"
 
@@ -1328,28 +1322,19 @@ def _grouped_keys(present) -> str:
     return ", ".join(parts)
 
 
-def _present_numeric_keys_hint(items) -> str:
-    """Live-state tail for a score_by/filter on an absent key:
-    the numeric keys the items ACTUALLY carry, facts only."""
+def _present_keys_hint(items, numeric: bool) -> str:
+    """For an op on an absent key: the served keys the items DO carry --
+    numeric ones (grouped) for a sort or a numeric cut, every scalar one
+    for any other cut."""
+    kinds = (int, float) if numeric else (int, float, str, bool)
     present = sorted({k for it in items if isinstance(it, dict)
-                      for k, v in it.items() if isinstance(v, (int, float))
-                      and k not in MODEL_UNSERVED_COLUMNS})
-    if present:
-        return f"numeric keys present on these items: {_grouped_keys(present)}."
-    return "these items carry NO numeric key."
-
-
-def _present_keys_hint(items) -> str:
-    """Live-state tail for a filter naming an ABSENT column: every scalar key
-    the items ACTUALLY carry (numeric AND string/bool -- an eq cut is legal on
-    a string column like class), facts only."""
-    present = sorted({k for it in items if isinstance(it, dict)
-                      for k, v in it.items()
-                      if isinstance(v, (int, float, str, bool)) and v != ""
-                      and k not in MODEL_UNSERVED_COLUMNS})
-    if present:
-        return f"keys present on these items: {present}."
-    return "these items carry NO scalar key."
+                      for k, v in it.items() if isinstance(v, kinds)
+                      and v != "" and k not in MODEL_UNSERVED_COLUMNS})
+    if numeric:
+        return (f"numeric keys present on these items: {_grouped_keys(present)}."
+                if present else "these items carry NO numeric key.")
+    return (f"keys present on these items: {present}." if present
+            else "these items carry NO scalar key.")
 
 
 def _polyline_arc_midpoint(verts) -> list:
@@ -2144,12 +2129,12 @@ def _score_by(cx, a):
                     f"nothing orders by {_quote(_k)} here: no row carries a "
                     f"perceived color, so no color column attaches (rows "
                     f"without a color read omit color_<word> columns). "
-                    f"{_present_numeric_keys_hint(items)}")
+                    f"{_present_keys_hint(items, True)}")
             raise ProgramError(
                 f"nothing orders by {_quote(_k)} here: no row carries a "
                 f"numeric {_quote(_k)}. "
                 f"{_contact_fact(cx, _k, items)}"
-                f"{_present_numeric_keys_hint(items)}")
+                f"{_present_keys_hint(items, True)}")
     for _k in _dropped_color:
         # NEVER SILENT: the rows are ranked by fewer things than asked for.
         _sb_notes.append(
@@ -2182,7 +2167,7 @@ def _filter_items(cx, a):
                 f"filter_items op {_quote(opr)} on key {_quote(key)}: no item "
                 f"carries a numeric {_quote(key)}. "
                 f"{_contact_fact(cx, key, items)}"
-                f"{_present_numeric_keys_hint(items)}")
+                f"{_present_keys_hint(items, True)}")
     elif (items
           and not any(isinstance(it, dict) and key in it for it in items)
           and not _relate_ran(key, items)):
@@ -2193,7 +2178,7 @@ def _filter_items(cx, a):
             f"filter_items op {_quote(opr)} on key {_quote(key)}: no item carries "
             f"{_quote(key)}. "
             f"{_contact_fact(cx, key, items)}"
-            f"{_present_keys_hint(items)}")
+            f"{_present_keys_hint(items, False)}")
     if opr == "in_or_blank":
         # The three-way statement for a word column: rows reading a counted
         # word, rows reading another (dropped), and rows never measured
