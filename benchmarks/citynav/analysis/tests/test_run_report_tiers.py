@@ -32,19 +32,15 @@ def test_an_episode_json_beside_the_ledger_is_not_an_attempt(tmp_path):
                   "metrics": {"episode_id": "e::2#2", "SR": 1, "NE": 0.0}},
                  name="episode.json")
 
-    files, tier = rows.result_files(root)
-    assert tier == "ledger"
-    assert files == [root / rows.EPISODES_JSONL]
     picked, stats = rows.load_attempts(root)
     assert set(picked) == {"e::1#1"}
     assert stats.rows == 1
 
 
-def test_a_root_with_nothing_readable_reports_no_tier(tmp_path):
+def test_a_root_without_a_ledger_reads_empty(tmp_path):
     """No ledger, no run -- an episode.json alone is not one."""
     write_ledger(tmp_path / "w0/maps_20260725_110000_citynav_e__1_1",
                  ledger_row("e::1#1", "20260725_110000", 1), name="episode.json")
-    assert rows.result_files(tmp_path)[1] == "none"
     assert load_run(tmp_path) == ({}, 0)
 
 
@@ -62,7 +58,7 @@ def test_report_and_paired_still_run(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "SR = 1/1 (100.0%)" in out
     assert "NE median = 10.0 m  mean = 10.0 m (n=1)" in out
-    assert "source: ledger tier" in out
+    assert "tier" not in out
     assert "PAIRED on 1 shared episodes" in out
 
 
@@ -124,7 +120,7 @@ def test_an_all_infra_run_refuses_and_names_what_it_read(tmp_path):
     with pytest.raises(SystemExit) as excinfo:
         report(root)
     assert "infra: 3" in str(excinfo.value)
-    assert "tier: ledger" in str(excinfo.value)
+    assert "tier" not in str(excinfo.value)
 
 
 # --------------------------------------------------------------------------

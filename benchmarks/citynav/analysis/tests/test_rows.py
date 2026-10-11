@@ -226,7 +226,7 @@ def test_every_shared_fixture_case():
     for run_name, want in expected["runs"].items():
         root = FIXTURES / run_name
         picked, stats = rows.load_attempts(root)
-        for key in ("tier", "files", "rows", "no_metrics", "timed_out", "infra"):
+        for key in ("rows", "no_metrics", "timed_out", "infra"):
             assert getattr(stats, key) == want[key], (run_name, key)
 
         got = {

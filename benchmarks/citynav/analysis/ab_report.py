@@ -106,13 +106,6 @@ def render(st: dict) -> str:
     )
 
 
-def _iter_rows(run_root: Path):
-    """Every ledger row under the run root, as ``(file, row)``."""
-    for f in _rows.result_files(run_root)[0]:
-        for r in _rows.iter_json_rows(f):
-            yield f, r
-
-
 def _sr_by_episode(run_root: Path, *, allow_partial: bool = False) -> dict[str, int]:
     """The SR bit per episode, through the canonical pick."""
     from benchmarks.citynav.analysis.run_report import load_run
@@ -123,7 +116,7 @@ def _sr_by_episode(run_root: Path, *, allow_partial: bool = False) -> dict[str, 
 
 def _run_provenance(run_root: Path) -> dict:
     """The first row's provenance block with the manifest's bake stamp attached, else {}."""
-    for _f, r in _iter_rows(run_root):
+    for r in _rows.iter_json_rows(run_root / _rows.EPISODES_JSONL):
         prov = r.get("provenance")
         if prov:
             bake = _bake_stamp(run_root)

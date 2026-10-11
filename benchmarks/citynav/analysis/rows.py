@@ -30,7 +30,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Iterable, Iterator, Sequence
+from typing import Iterable, Iterator
 
 #: The run's ledger; tests/test_rows.py pins it equal to ``episodes.EPISODES_JSONL``.
 EPISODES_JSONL = "episodes.jsonl"
@@ -106,12 +106,6 @@ def attempt_stamp(row: dict) -> str:
     return ""
 
 
-def result_files(root: Path) -> tuple[list[Path], str]:
-    """(files, tier name) for a run root: its ledger, else nothing."""
-    ledger = root / EPISODES_JSONL
-    return ([ledger], "ledger") if ledger.exists() else ([], "none")
-
-
 @dataclass(frozen=True)
 class Attempt:
     """One ledger row, with everything the pick needs decided at read."""
@@ -121,7 +115,6 @@ class Attempt:
     metrics: dict
     stamp: str
     seq: int
-    source: Path | None
     complete: bool
 
     @property
@@ -134,8 +127,6 @@ class Attempt:
 class ReadStats:
     """What the read saw, so a caller can print an honest denominator."""
 
-    tier: str
-    files: int
     rows: int
     keyed: int
     no_metrics: int
@@ -166,47 +157,39 @@ def iter_json_rows(path: Path) -> Iterator[dict]:
             yield row
 
 
-def read_attempts(
-    files: Sequence[Path], tier: str = ""
-) -> tuple[list[Attempt], ReadStats]:
-    """Ledger files as Attempts, plus the audit counters. Infra rows are
+def read_attempts(ledger: Path) -> tuple[list[Attempt], ReadStats]:
+    """A ledger's rows as Attempts, plus the audit counters. Infra rows are
     counted and dropped (not in ``no_metrics``); rows with no episode id
     are dropped but count in ``rows`` and ``no_metrics``."""
     attempts: list[Attempt] = []
     rows = no_metrics = timed_out = infra = 0
     infra_episodes: set[str] = set()
-    seq = 0
-    for source in files:
-        for row in iter_json_rows(source):
-            rows += 1
-            if row.get("status") == "timed_out":
-                timed_out += 1
-            m = metrics(row)
-            eid = episode_id(row, m)
-            if is_infra_abort(row):
-                infra += 1
-                if eid:
-                    infra_episodes.add(eid)
-                continue
-            if not m:
-                no_metrics += 1
-            if not eid:
-                continue
-            attempts.append(
-                Attempt(
-                    episode_id=eid,
-                    row=row,
-                    metrics=m,
-                    stamp=attempt_stamp(row),
-                    seq=seq,
-                    source=source,
-                    complete=is_complete(row, m),
-                )
+    for row in iter_json_rows(ledger):
+        rows += 1
+        if row.get("status") == "timed_out":
+            timed_out += 1
+        m = metrics(row)
+        eid = episode_id(row, m)
+        if is_infra_abort(row):
+            infra += 1
+            if eid:
+                infra_episodes.add(eid)
+            continue
+        if not m:
+            no_metrics += 1
+        if not eid:
+            continue
+        attempts.append(
+            Attempt(
+                episode_id=eid,
+                row=row,
+                metrics=m,
+                stamp=attempt_stamp(row),
+                seq=len(attempts),
+                complete=is_complete(row, m),
             )
-            seq += 1
+        )
     return attempts, ReadStats(
-        tier=tier,
-        files=len(files),
         rows=rows,
         keyed=len(attempts),
         no_metrics=no_metrics,
@@ -270,8 +253,7 @@ def load_attempts(
     """The one canonical read of a run root: episode -> its result. A root
     short of its manifest's selection raises unless ``allow_partial``,
     which prints the shortfall to stderr."""
-    files, tier = result_files(root)
-    attempts, stats = read_attempts(files, tier)
+    attempts, stats = read_attempts(root / EPISODES_JSONL)
     picked = pick_attempts(attempts)
     shortfall = _shortfall(root, picked, stats)
     if shortfall and not allow_partial:

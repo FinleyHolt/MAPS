@@ -5,8 +5,6 @@
   ],
   "runs": {
     "citynav_pin_2026-07-25_11-04-15": {
-      "tier": "ledger",
-      "files": 1,
       "rows": 9,
       "no_metrics": 1,
       "timed_out": 2,
@@ -46,6 +44,5 @@
     }
   },
   "scope": "`picks` are the picked episodes carrying metrics. `unscored` episodes appear in the ledger but produced no metrics on any non-infra attempt -- they are counted in no_metrics and score as a miss (SR 0). `never_landed` episodes have an episode.json under a worker dir (status flying) and NO ledger row: an owner never appends a flying row, so they contribute no attempt.",
-  "counts": "rows counts every ledger line; no_metrics every non-infra line without a metrics dict; timed_out every line with status timed_out; infra every line with status infra.",
-  "tiers": "'ledger' is the run's own episodes.jsonl, the one tier the reader reads."
+  "counts": "rows counts every ledger line; no_metrics every non-infra line without a metrics dict; timed_out every line with status timed_out; infra every line with status infra."
 }

@@ -65,7 +65,6 @@ def arm_row(root: Path, *, allow_partial: bool = False) -> dict:
         "no_metrics": stats.no_metrics,
         "timed_out": stats.timed_out,
         "infra": stats.infra,
-        "tier": stats.tier,
         # Every row carries every metric key, absent ones as null.
         **{k: None for k in _METRIC_KEYS},
     }

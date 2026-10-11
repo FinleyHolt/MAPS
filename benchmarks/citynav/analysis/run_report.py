@@ -139,14 +139,12 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     if n == 0:
         raise SystemExit(
             f"run_report: no scored rows under {root} "
-            f"(tier: {stats.tier}, files: {stats.files}, "
-            f"attempt rows: {stats.rows}, no_metrics: {stats.no_metrics}, "
+            f"(attempt rows: {stats.rows}, no_metrics: {stats.no_metrics}, "
             f"infra: {stats.infra})"
         )
     sr = sum(1 for m in scored.values() if m.get("SR"))
     _criterion = run_criterion(list(scored.values()))
     print(f"\n=== {root} ===")
-    print(f"source: {stats.tier} tier, {stats.files} file(s)")
     print(bake_line(root))
     # ``rows`` counts attempts, ``scored`` episodes.
     print(

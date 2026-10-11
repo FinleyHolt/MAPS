@@ -60,6 +60,7 @@ def test_one_row_per_arm_with_the_arm_s_own_sr_and_ne(tmp_path):
     # they only checked shape, so pin the counts first.
     assert len(rows) == 2
     assert all(r["n"] == 2 for r in rows)
+    assert all("tier" not in r for r in rows)
 
     assert [r["label"] for r in rows] == ["low", "high"]    # sorted by effort
     assert [r["effort"] for r in rows] == ["0.0", "0.9"]
