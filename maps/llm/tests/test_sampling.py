@@ -66,13 +66,13 @@ def test_unset_reasoning_effort_sends_no_key_at_all(monkeypatch) -> None:
 
 
 def test_vision_content_helpers_build_openai_parts() -> None:
-    image = build_image_part(b"jpeg", detail="low")
+    image = build_image_part(b"jpeg")
 
     assert image["type"] == "image_url"
     assert image["image_url"]["url"].startswith("data:image/jpeg;base64,")
-    assert image["image_url"]["detail"] == "low"
+    assert image["image_url"]["detail"] == "high"
 
-    content = build_vision_user_content("look", [b"jpeg", b""], detail="low")
+    content = build_vision_user_content("look", [b"jpeg", b""])
     assert content[0] == {"type": "text", "text": "look"}
     assert content[1] == image
     assert len(content) == 2

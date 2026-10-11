@@ -1,17 +1,6 @@
-"""OpenAI-vision content helpers: package JPEG bytes into the multi-part
-content-part dict shape.
-
-The vLLM endpoint accepts the OpenAI multi-part content schema (verified on the
-live ``qwen36-35b-a3b`` deployment, 2026-05-12). This module just packages JPEG
-bytes into the content-part dict so a caller can append a multi-part user
-message without scattering base64 + dict construction across call sites.
-
-NOTE: the live CityNav path is TEXT-ONLY — the single persistent
-MAPS Reasoner reasons over the structured world-state (SAM detections +
-perceived attributes); no image crop is fed to it — so these helpers have no
-production caller today (only the transport test). When used, the content built
-by :func:`build_vision_user_content` reaches the reasoner's ``messages`` and the
-only step mode, ``step_tool_call``, forwards the multi-part shape unchanged.
+"""OpenAI-vision content parts: JPEG bytes packaged as the multi-part user
+content a reasoner's ``messages`` carry (``reasoner_agent.append_vision``),
+and the server's vision-token bill for those parts.
 """
 
 from __future__ import annotations
@@ -109,47 +98,14 @@ def image_tokens_in(messages: list[dict]) -> int:
     return total
 
 
-def build_image_part(jpeg_bytes: bytes, *, detail: str = "high") -> dict:
-    """Wrap a JPEG byte-string in the OpenAI vision content-part shape.
-
-    The vLLM server reads the ``data:image/jpeg;base64,...`` URL form
-    directly; no HTTP fetch round-trip happens server-side.
-    """
-
-    if not jpeg_bytes:
-        raise ValueError("jpeg_bytes must be non-empty")
+def build_image_part(jpeg_bytes: bytes) -> dict:
+    """One JPEG as an OpenAI ``image_url`` part: a ``data:`` URL the serve
+    reads directly, with no HTTP fetch."""
     b64 = base64.b64encode(jpeg_bytes).decode("ascii")
-    return {
-        "type": "image_url",
-        "image_url": {
-            "url": f"data:image/jpeg;base64,{b64}",
-            "detail": detail,
-        },
-    }
+    return {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}}
 
 
-def build_vision_user_content(
-    text: str,
-    jpegs: list[bytes],
-    *,
-    detail: str = "high",
-) -> list[dict]:
-    """Compose the multi-part user content list (text + image parts).
-
-    The text part lands first so the prefix-stable head of the
-    conversation matches the text-only reasoner path until the first
-    image part. Image parts follow in caller order.
-    """
-
-    content: list[dict] = [{"type": "text", "text": text}]
-    for jpeg in jpegs:
-        if not jpeg:
-            continue
-        content.append(build_image_part(jpeg, detail=detail))
-    return content
-
-
-__all__ = [
-    "build_image_part",
-    "build_vision_user_content",
-]
+def build_vision_user_content(text: str, jpegs: list[bytes]) -> list[dict]:
+    """The text part, then one image part per non-empty JPEG in caller order:
+    the text-first head stays prefix-stable with the text-only path."""
+    return [{"type": "text", "text": text}, *(build_image_part(j) for j in jpegs if j)]
