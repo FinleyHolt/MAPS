@@ -1634,11 +1634,10 @@ def advance_reasoner_one_round(
         repetition fact + compact state (``_repeated_rejection_state``)
         replaces the verbatim remedy+census re-issue. A successful program
         resets the CONSECUTIVE streak; the class count keeps accumulating.
-        A structural op-SHAPE error (unknown top-level key / bad op /
-        missing ref / a handle used where a literal fid is required / a
-        syntax error, whose echoed offending line is its own fix material)
-        repeats for program-shape reasons, and a fid inventory is noise
-        there — those get only the count."""
+        A structural SHAPE error (an unknown ref / a handle used where a
+        literal fid is required / a syntax error, whose echoed offending
+        line is its own fix material) repeats for program-shape reasons,
+        and a fid inventory is noise there — those get only the count."""
         _sig = _err_class_sig(err)
         _n = _err_class_counts[_sig] = _err_class_counts.get(_sig, 0) + 1
         if _err_streak["sig"] == _sig:
@@ -1649,11 +1648,7 @@ def advance_reasoner_one_round(
         _consec = _err_streak["n"]
         if _n < 2:
             return err
-        # A syntax error is a code-shape fact too: the echoed offending
-        # line (scan_block serves it with a caret) is the fix material.
-        _SHAPE_MARKERS = ("top-level key(s)", "not a known op",
-                          "lacks its required 'ref'", "unknown ref",
-                          "unknown handle", "is a result handle",
+        _SHAPE_MARKERS = ("unknown ref", "is a result handle",
                           "syntax error")
         if any(m in err for m in _SHAPE_MARKERS):
             return err + f" This error class has now occurred {_n}x."
