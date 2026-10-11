@@ -267,11 +267,8 @@ def test_broad_filter_items_capped_same_law():
 
 
 def test_windowed_ordered_result_serves_the_continuation_rows():
-    # `more of <rN>.` compiles to filter_items over rN[12:24]. The slice used
-    # to return a BARE list -- its order flag gone -- so the filter read
-    # unordered and the envelope downgraded to census: the continuation
-    # served rows 0 times in 451 flown calls (saydialect_1000). A window of
-    # an ordered result stays ordered and serves the ranking's own next rows.
+    # A continuation is filter_items over rN[12:24]: a window of an ordered
+    # result stays ordered and serves the ranking's own next rows.
     n = 120
     out = run_program([], _wide_world(n), {"ops": [
         {"ref": "r0", "op": "find", "args": {}},
