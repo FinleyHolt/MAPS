@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from maps.search.analyze_scene.cardinal_side import CARDINALS as _GEOM_CARDINALS
+from maps.search.analyze_scene.geom_compute import CARDINALS as _GEOM_CARDINALS
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import _sanitize_token
 from maps.util.xy_token import is_xy, parse_xy_token

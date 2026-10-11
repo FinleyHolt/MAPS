@@ -5,13 +5,13 @@ import math
 
 import pytest
 
-from maps.search.analyze_scene import cardinal_side
 from maps.search.analyze_scene.geom_compute import (
     CARDINALS,
     COMPASS_UNIT,
     _COMPASS8,
     _compass8,
     cardinal,
+    cardinal_offset,
 )
 
 _EIGHT = {"north", "northeast", "east", "southeast",
@@ -64,12 +64,8 @@ def test_compass8_words_are_exactly_the_table_keys():
 
 
 def test_the_band_rule_declares_the_four_cardinals():
-    """A diagonal has no single orthogonal axis to band on, so cardinal_side offers four
-    -- DERIVED from CARDINALS, never a fifth copy."""
-    assert set(cardinal_side.CARDINALS) == set(CARDINALS)
-    for w in CARDINALS:
-        assert cardinal_side.CARDINALS[w] == COMPASS_UNIT[w], w
-    # and it refuses a diagonal loudly rather than answering badly
+    """A diagonal has no single orthogonal axis to band on, so the band rule
+    refuses one loudly rather than answering badly."""
     road = [[0.0, y] for y in range(-100, 101)]
     with pytest.raises(ValueError):
-        cardinal_side.cardinal_offset(road, (50.0, 0.0), "northeast")
+        cardinal_offset(road, (50.0, 0.0), "northeast")

@@ -39,9 +39,8 @@ _COMPASS8 = (
     (202.5, "south"), (247.5, "southwest"), (292.5, "west"), (337.5, "northwest"),
 )
 
-# THE compass-word unit vectors, world frame (x east, y north): eight winds,
-# the same words :func:`_compass8` emits. Every consumer (the crop rotation
-# in reasoner_loop, the band rule in cardinal_side) reads this one table.
+# The compass-word unit vectors, world frame (x east, y north): the eight
+# words :func:`_compass8` emits.
 _SQRT_HALF = math.sqrt(0.5)
 COMPASS_UNIT = {
     "north": (0.0, 1.0), "northeast": (_SQRT_HALF, _SQRT_HALF),
@@ -50,9 +49,8 @@ COMPASS_UNIT = {
     "west": (-1.0, 0.0), "northwest": (-_SQRT_HALF, _SQRT_HALF),
 }
 
-# The four axis-aligned winds, declared as a subset of the table above. The
-# band rule needs one orthogonal axis to band on and a diagonal has none
-# (:mod:`cardinal_side`).
+# The four axis-aligned winds: :func:`cardinal_offset` bands on the
+# orthogonal axis, and a diagonal has none.
 CARDINALS = frozenset({"north", "south", "east", "west"})
 
 
@@ -99,6 +97,79 @@ def bearing(a, b) -> float:
 def cardinal(a, b) -> str:
     """8-point compass direction of ``a -> b`` ('north', 'northeast', ...)."""
     return _compass8(bearing(a, b))
+
+
+# Half-width of the cardinal band, in metres: wide enough that a block-scale
+# target still sees the road, narrow enough that a distant limb of the same
+# name does not vote.
+DEFAULT_BAND_M = 150.0
+
+
+def cardinal_offset(cells_xy, at_xy, direction: str,
+                    band_m: float = DEFAULT_BAND_M) -> float | None:
+    """Signed metres the point lies in ``direction`` (one of
+    :data:`CARDINALS`) from an extended reference, or ``None`` when there is
+    no side to name.
+
+    The reference's points (``cells_xy``, every member way of a merged
+    feature) are cut to the band of ``band_m`` around the point on the axis
+    orthogonal to ``direction`` ("east of the road where the road is, at my
+    latitude"), then compared along it. Positive: the clearance past the
+    band's near edge in that direction. ``None`` when the band holds no
+    reference point, or the reference straddles the point inside it."""
+    d = str(direction or "").strip().lower()
+    if d not in CARDINALS:
+        raise ValueError(
+            f"cardinal_offset direction must be one of "
+            f"{sorted(CARDINALS)}; got {direction!r}")
+    pts = np.asarray(cells_xy, dtype=float)
+    if pts.ndim != 2 or pts.shape[0] == 0 or pts.shape[1] != 2:
+        return None
+    u = np.asarray(COMPASS_UNIT[d], dtype=float)
+    q = np.asarray(at_xy, dtype=float)
+    orth = np.array([-u[1], u[0]], dtype=float)
+    near = pts[np.abs((pts - q) @ orth) <= float(band_m)]
+    if not len(near):
+        return None
+    along = near @ u
+    here = float(q @ u)
+    lo, hi = float(along.min()), float(along.max())
+    if lo < here < hi:
+        return None
+    return here - hi if here >= hi else here - lo
+
+
+def densify_segments(seg_a, seg_b, step: float = 2.0):
+    """Segment endpoints -> a point cloud at the bake's 2 m pitch, so a band
+    around a point halfway along a two-vertex road still holds the road."""
+    a = np.asarray(seg_a, dtype=float)
+    b = np.asarray(seg_b, dtype=float)
+    if not len(a):
+        return np.empty((0, 2), dtype=float)
+    out = [a, b]
+    d = np.hypot(*(b - a).T)
+    for k in range(1, int(d.max() // step) + 1):
+        sel = d > k * step
+        if not sel.any():
+            break
+        t = (k * step) / d[sel]
+        out.append(a[sel] + (b[sel] - a[sel]) * t[:, None])
+    return np.vstack(out)
+
+
+def points_from_geoms(geoms):
+    """The :func:`cardinal_offset` point cloud of one or more
+    :func:`mask_geom` dicts (every member's densified segments, or its
+    vertices when it has none), or ``None``."""
+    out = []
+    for g in geoms:
+        if not isinstance(g, dict):
+            continue
+        if len(g.get("A", ())):
+            out.append(densify_segments(g["A"], g["B"]))
+        elif len(g.get("V", ())):
+            out.append(np.asarray(g["V"], dtype=float))
+    return np.vstack(out) if out else None
 
 
 # --- fuzzy color matching (perceptual, FAMILY-based) ------------------------

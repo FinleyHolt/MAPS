@@ -22,7 +22,6 @@ detections into the graph) and returns the flight report the model reads.
 | Which classes the segmenter watches | `search/parse_compile/perception_director.py`, `search/search_loop.py` (`declare_mission_concepts`) |
 | The geometry op program behind `find`, `intersection`, `ends_of`, `distance` | `search/analyze_scene/geom_program.py`, `search/analyze_scene/geom_compute.py`, `search/analyze_scene/row_geometry.py` |
 | Matching a query to rows by name | `search/analyze_scene/text_match.py` |
-| Side-of-feature and facing words | `search/analyze_scene/cardinal_side.py` |
 | Transcript compaction when the conversation outgrows the window | `search/analyze_scene/compactor.py` |
 | The per-episode search state machine and its observation step | `search/search_loop.py` |
 | The `look` crop and the `show_map` schematic | `search/render/look_render.py`, `search/render/map_render.py` |

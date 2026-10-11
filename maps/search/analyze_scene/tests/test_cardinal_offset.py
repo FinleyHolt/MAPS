@@ -3,8 +3,7 @@
 import numpy as np
 import pytest
 
-from maps.search.analyze_scene.cardinal_side import (CARDINALS,
-                                                       cardinal_offset)
+from maps.search.analyze_scene.geom_compute import CARDINALS, cardinal_offset
 
 
 def road_ns(x=0.0, y0=-500.0, y1=500.0, n=501):

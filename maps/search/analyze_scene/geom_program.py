@@ -20,7 +20,6 @@ import re
 
 import numpy as np
 
-from maps.search.analyze_scene import cardinal_side
 from maps.search.analyze_scene import cell_mesh
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene import text_match as T
@@ -2126,7 +2125,7 @@ def _compare(cx, a):
             col_cards.append(None)
             continue
         _g = col_geoms[ci][0]
-        _pts = cardinal_side.points_from_geoms(_g if isinstance(_g, list) else [_g])
+        _pts = G.points_from_geoms(_g if isinstance(_g, list) else [_g])
         col_cards.append((want, _pts) if _pts is not None else None)
 
     # A window-covering ref's gap columns would be 0 on every row: one
@@ -2159,7 +2158,7 @@ def _compare(cx, a):
             if col_cards[ci] is not None and it_c is not None:
                 _dirs, _rpts = col_cards[ci]
                 for _d in _dirs:
-                    _v = cardinal_side.cardinal_offset(_rpts, it_c, _d)
+                    _v = G.cardinal_offset(_rpts, it_c, _d)
                     # Absent, never 0.0, when there is no side to name.
                     if _v is not None:
                         _put(row, f"{_d} of {lab}", round(_v, 1), ci)
