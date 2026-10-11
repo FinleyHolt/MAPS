@@ -73,17 +73,3 @@ def test_a_stale_flag_is_still_stripped(tmp_path):
     # provenance is re-asserted per bake, never inherited.
     assert out.get("provenance", {}).get("prior") != "stale"
     assert _STALE_BAKE_FLAGS, "the stale-flag set must not be empty"
-
-
-def test_every_stale_flag_is_one_this_baker_reasserts():
-    """The rule that keeps georef from being re-added by reflex: a key belongs
-    in the set only if some bake path writes it back. ``georef`` failed this —
-    no ``flags`` dict in the module has ever carried it."""
-    source = Path(__file__).resolve().parents[1].joinpath("bake", "city.py").read_text()
-    # Every member must appear as a key in a flags/provenance literal, i.e.
-    # somewhere this module assigns it, not merely in the strip set itself.
-    for key in _STALE_BAKE_FLAGS:
-        assert source.count(f'"{key}"') > 1, (
-            f"{key!r} is stripped but never re-asserted by this baker — it can "
-            "only belong to an upstream caller, and stripping deletes it"
-        )

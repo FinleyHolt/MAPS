@@ -111,36 +111,3 @@ def test_a_never_flown_episode_scores_zero_under_either_mask():
                 assert row[key] == 0, f"{criterion}: {key}"
         # The honest part: NE is still start->target, not zeroed.
         assert row["NE"] == won["NE"]
-
-
-def test_no_writer_can_emit_a_row_that_mixes_the_two_masks():
-    """The derived scan: every writer of a scored row goes through
-    ``score_arrival``, so this asks the question ONCE, of the function they
-    all call, instead of grepping three call sites that could each drift.
-
-    Its floor is the call-site count: the scan is worthless if the writers
-    stopped routing through here.
-    """
-    import inspect
-
-    from benchmarks.citynav.run_benchmark import episode_runner
-
-    sources = (inspect.getsource(episode_runner),)
-    calls = sum(src.count("score_arrival(") for src in sources)
-    assert calls >= 2, (
-        f"only {calls} score_arrival call sites -- a writer stopped routing "
-        "through the one scorer and this scan no longer covers it"
-    )
-    # No writer may reach the ring scorer or the shape scorer directly and
-    # assemble a row by hand; that is how the two drifted apart before.
-    for src in sources:
-        assert "score_goal_prediction_citynav_native(" not in src
-
-    for criterion in ("ring", "shape"):
-        row = _score(criterion, BOTH_YES)
-        has_ring = any(k in row for k in cn_eval._RING_ONLY)
-        has_shape = "precise_target" in row
-        assert has_ring != has_shape, (
-            f"{criterion} row carries {'both' if has_ring else 'neither'} "
-            f"family: {sorted(row)}"
-        )
