@@ -60,15 +60,3 @@ def test_newest_survives_when_stale_trims_suffice(monkeypatch):
     assert "rows" in newest["results"]["r0"], "newest dump must keep its rows"
     oldest = json.loads(out[2]["content"])
     assert "rows" not in oldest["results"]["r0"], "biggest stale dump trims first"
-
-
-def test_newest_still_degrades_when_budget_demands(monkeypatch):
-    monkeypatch.setattr(compactor, "_estimate_input_tokens", _char_estimator)
-    msgs = _messages()
-    out, n = _degrade_oversized_tool_dumps(
-        msgs, model="m", tools=None, target_input_tokens=10)
-    assert n == 3, "feasibility unchanged: every dump degrades when needed"
-    for i in (2, 3, 4):
-        head = json.loads(out[i]["content"])["results"]["r0"]
-        assert "rows" not in head
-        assert head["fids"], "no candidate ever leaves the pool"

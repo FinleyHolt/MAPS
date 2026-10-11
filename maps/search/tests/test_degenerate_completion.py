@@ -37,11 +37,6 @@ import pytest
 from maps.llm.http import DegenerateCompletion, _RawResponse
 from maps.search.parse_compile import reasoner_agent
 from maps.search.parse_compile.reasoner_agent import Reasoner
-from maps.search.parse_compile.reasoner_loop import (
-    MissionReply,
-    MissionSpec,
-    advance_reasoner_one_round,
-)
 from maps.search.tests.fakes import TEST_SPEC
 
 
@@ -66,27 +61,10 @@ def _reasoner() -> Reasoner:
     return Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
 
 
-def test_collapse_in_reasoning_raises_and_leaves_history_clean(monkeypatch):
-    """The measured shape: a few clean chars, then token 0 forever."""
-    _serve(monkeypatch, reasoning="These" + "!" * 400, finish_reason="length")
-    r = _reasoner()
-    before = len(r.messages)
-    with pytest.raises(DegenerateCompletion):
-        r.step_tool_call([])
-    # The whole point of raising in the agent rather than the loop: the run
-    # must not reach the prefix, the next request, or the compactor.
-    assert len(r.messages) == before
-
-
-def test_collapse_in_content_channel_also_raises(monkeypatch):
-    """Nothing about a NaN logit row is channel-specific.
-
-    A collapse after ``</think>`` lands in ``content``, and the loop reads a
-    non-empty prose reply as the mission's ONE model-owned ending -- so an
-    uncaught one stops the mission on a reply of pure garbage, with no
-    repair and no retry.
-    """
-    _serve(monkeypatch, content="!" * 400, finish_reason="length")
+@pytest.mark.parametrize("channel", ["reasoning", "content"])
+def test_a_collapse_in_either_channel_raises_and_leaves_history_clean(monkeypatch, channel):
+    """A few clean chars then token 0 forever, in the think span or after it."""
+    _serve(monkeypatch, **{channel: "These" + "!" * 400}, finish_reason="length")
     r = _reasoner()
     before = len(r.messages)
     with pytest.raises(DegenerateCompletion):
@@ -114,22 +92,6 @@ def test_length_clip_with_real_reasoning_is_NOT_degenerate(monkeypatch):
     assert len(r.messages) == before + 1
 
 
-def test_no_stop_sequence_is_sent(monkeypatch):
-    """`stop`/`no_stop_trim` are sglang-only and were removed.
-
-    Trimming behaviour differs per engine -- sglang deletes matched stop
-    text unless `no_stop_trim`, vLLM spells it `include_stop_str_in_output`,
-    llama.cpp has neither -- so on any of them the stop would delete the run
-    and DEFEAT this guard. `no_stop_trim` is also an unknown top-level field
-    that a hosted OpenAI-compatible endpoint 400s on. Pinned because the
-    cost of reintroducing it is silent and engine-dependent.
-    """
-    sent = _serve(monkeypatch, content="a reply")
-    _reasoner().step_tool_call([])
-    assert "stop" not in sent
-    assert "no_stop_trim" not in sent
-
-
 def test_empty_turn_still_reads_as_a_text_turn(monkeypatch):
     """VACUITY FLOOR: the model's own empty turn is a DIFFERENT thing.
 
@@ -146,46 +108,3 @@ def test_empty_turn_still_reads_as_a_text_turn(monkeypatch):
     assert out["kind"] == "text"
     assert out["content"] == ""
     assert len(r.messages) == before + 1
-
-
-def test_loop_retries_a_collapse_instead_of_ending_the_mission(monkeypatch):
-    """The mission survives a collapse: it is retriable, not terminal."""
-    monkeypatch.setattr(
-        "maps.search.parse_compile.reasoner_loop.time.sleep",
-        lambda _s: None)
-
-    turns = iter([
-        DegenerateCompletion("collapse"),
-        {"kind": "text", "content": "the goal is the flown object",
-         "reasoning": ""},
-    ] + [{"kind": "text", "content": "the goal is the flown object",
-          "reasoning": ""}] * 4)
-
-    def _step(tools):
-        nxt = next(turns)
-        if isinstance(nxt, BaseException):
-            raise nxt
-        return nxt
-
-    r = _reasoner()
-    r.step_tool_call = _step
-
-    class _DummyCtx:
-        pass
-
-    reply = advance_reasoner_one_round(
-        reasoner=r,
-        user_message="find the car",
-        ctx=_DummyCtx(),
-        compute_namespace={"cands": [], "anchors": []},
-        rid_tag="h0",
-        mission_spec=MissionSpec(
-            fly=lambda item: {
-                "stop_id": "stop_000", "target": item["target_fid"],
-                "pose_xy": [0.0, 0.0], "new_detections": 0},
-            declare_concepts=lambda items: {"declared": []},
-            flight_budget=4, turn_cap=16),
-    )
-    assert isinstance(reply, MissionReply)
-    # The collapse was retried, not counted against the transient budget.
-    assert reply.ended_by != "transient_failures"

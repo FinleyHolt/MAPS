@@ -14,17 +14,11 @@ from maps.search.parse_compile.reasoner_loop import _look_vision_text
 _LEGEND = [{"digit": 1, "label": "car c1", "role": "center"}]
 
 
-def test_header_claims_no_orientation():
-    t = _look_vision_text([{"center_fid": "c1", "legend": _LEGEND,
-                            "context_m": 15.0}])
-    assert "north-up), one per fid" not in t.splitlines()[0]
-    assert "north-up" not in t.splitlines()[0]
-
-
-def test_unrotated_crop_says_north_up():
+def test_unrotated_crop_says_north_up_on_its_line_not_the_header():
     t = _look_vision_text([{"center_fid": "c1", "legend": _LEGEND,
                             "context_m": 15.0}])
     assert "(15 m window; north-up)" in t
+    assert "north-up" not in t.splitlines()[0]
 
 
 def test_rotated_crop_states_true_up_never_north_up():

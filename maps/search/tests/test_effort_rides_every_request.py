@@ -20,6 +20,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from maps.llm.http import _RawResponse
 from maps.search.parse_compile import reasoner_agent
 from maps.search.parse_compile.reasoner_agent import Reasoner
@@ -43,32 +45,19 @@ def _serve(monkeypatch) -> list[dict]:
     return sent
 
 
-def test_the_missions_word_rides_every_request_and_the_arms_does_not(monkeypatch):
-    """Two rounds on ONE reasoner -- the field's later operator turns run
-    through ``continue_mission`` on the same object -- and both carry the
-    mission's word as a top-level string."""
+@pytest.mark.parametrize("word", ["0.3", "0.0"])
+def test_the_missions_word_rides_every_request_and_the_arms_does_not(monkeypatch, word):
+    """Two rounds on one reasoner both carry the mission's word as a string;
+    "0.0" is a value (thinking off), not an absence."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
     sent = _serve(monkeypatch)
     r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
-                 reasoning_effort="0.3")
+                 reasoning_effort=word)
     r.append_user("find the truck")
     r.step_tool_call([])
     r.append_user("and the one north of it")
     r.step_tool_call([])
-    assert [b["reasoning_effort"] for b in sent] == ["0.3", "0.3"]
-
-
-def test_off_is_a_word_like_any_other(monkeypatch):
-    """The dial's bottom rung is ``0.0``, which is a VALUE and not an
-    absence: sent as the string, it turns thinking off. Read as falsy it
-    would fall through to the arm's, which is the opposite request."""
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
-    sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
-                 reasoning_effort="0.0")
-    r.append_user("find the truck")
-    r.step_tool_call([])
-    assert sent[0]["reasoning_effort"] == "0.0"
+    assert [b["reasoning_effort"] for b in sent] == [word, word]
 
 
 def test_a_reasoner_with_no_word_sends_the_arms(monkeypatch):

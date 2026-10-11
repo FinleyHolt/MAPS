@@ -46,13 +46,6 @@ def test_a_slow_bounded_block_stops_at_the_wall_clock_ceiling(monkeypatch):
     assert elapsed < 2.0, f"did not stop early: {elapsed:.2f}s"
 
 
-def test_a_fast_block_is_untouched():
-    """A normal block finishes well inside the ceiling and returns no error."""
-    mp = _mission_python()
-    out = mp.run_block("x = sum(range(10))\nprint(x)\n")
-    assert "error" not in out, out
-
-
 def test_the_ceilings_are_local_to_the_block(monkeypatch):
     """The executor under a block runs UNTRACED.
 

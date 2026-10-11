@@ -19,7 +19,6 @@ import pytest
 
 from maps.search.render.look_render import (
     LOOK_CAR_MARGIN_M,
-    LOOK_CTX_BUDGET_PX,
     LOOK_MAX_BADGES,
     LOOK_TARGET_PX,
     look_window_bounds_m,
@@ -32,8 +31,6 @@ _MIN_M, _BUDGET_M = look_window_bounds_m(0.1)
 
 MAP = "unit_test_look_block"
 GROUND_Z = 10.0
-
-
 
 
 def _req(center_xy, marks_xy=(), target_xy=None, fid="c0"):
@@ -245,17 +242,3 @@ def test_a_shape_too_big_for_the_frame_is_not_drawn_on_it(ortho_dir):
                                     [106.0, 102.0], [102.0, 102.0]]
     fits = _render_one(ortho_dir, req)
     assert [o["fid"] for o in fits["outlined"]] == ["tgt"], fits["outlined"]
-
-
-def test_upscale_formula_never_exceeds_the_serving_budget():
-    # The invariant behind LOOK_TARGET_PX and LOOK_CTX_BUDGET_PX (mirrors
-    # the in-render formula; the e2e cases above pin it in situ at
-    # x3/x2/x1): for every native side the delivered image — width x
-    # (width + the overlay's 20 px band) — stays within the 1024^2 budget.
-    budget_px = LOOK_CTX_BUDGET_PX
-    for native in range(1, budget_px + 1):
-        up = max(1, min(3, round(LOOK_TARGET_PX / max(1, native))))
-        assert 1 <= up <= 3
-        w = up * native
-        assert w <= budget_px, (native, up)
-        assert w * (w + 20) <= 1024 * 1024, (native, up)

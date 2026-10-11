@@ -22,12 +22,7 @@ lacked. Tested here is what the surface does; the gate is a separate fix.
 """
 from __future__ import annotations
 
-from maps.search.parse_compile.reasoner_agent import Reasoner
-from maps.search.parse_compile.reasoner_loop import (
-    MissionSpec,
-    advance_reasoner_one_round,
-)
-from maps.search.tests.fakes import TEST_SPEC, bare_ctx
+from maps.search.tests.fakes import drive, run, tool_results
 
 # Colour never cuts, so this block is refused every time it is served.
 _COLOR_FILTER_BLOCK = ('a = find("car")\n'
@@ -46,79 +41,23 @@ _CANDS = [
 ]
 
 
-def _run_turn(i: int, code: str) -> dict:
-    return {"kind": "tool_call", "content": "", "reasoning": "",
-            "tool_calls": [{"id": f"c{i}", "type": "function",
-                            "function": {"name": "run",
-                                         "arguments": {"code": code}}}]}
-
-
 def drive_blocks(blocks: list[str]) -> list[dict]:
-    """Run one REAL mission issuing ``blocks`` in order; return the served
-    ``run`` tool-result payloads in order."""
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
-    turns = iter([_run_turn(i, b) for i, b in enumerate(blocks)]
-                 # A reply with no flight behind it is nudged rather than
-                 # accepted, so the tail has to outlast the abstain streak.
-                 + [{"kind": "text", "content": "done.", "reasoning": ""}] * 5)
-    r.step_tool_call = lambda tools: next(turns)
-    served: list[dict] = []
-    _orig = r.append_tool_result
-
-    def _record(cid, name, payload):
-        if name == "run":
-            served.append(payload)
-        return _orig(cid, name, payload)
-
-    r.append_tool_result = _record
-    advance_reasoner_one_round(
-        reasoner=r,
-        user_message="the gray car",
-        ctx=bare_ctx(),
-        compute_namespace={"cands": [dict(c) for c in _CANDS],
-                           "anchors": []},
-        rid_tag="h0",
-        mission_spec=MissionSpec(
-            fly=lambda item: {
-                "stop_id": "stop_000", "target": item["target_fid"],
-                "pose_xy": [0.0, 0.0], "new_detections": 0},
-            declare_concepts=lambda items: {"declared": []},
-            flight_budget=4, turn_cap=16),
-    )
-    return served
+    """The served ``run`` results of one mission issuing ``blocks`` in order
+    (the replies outlast the no-flight abstain streak)."""
+    _, fr, _, _ = drive([[run(b)] for b in blocks] + ["done."] * 3, cands=_CANDS)
+    return tool_results(fr)
 
 
-def test_first_serve_is_the_rejection_verbatim():
-    served = drive_blocks([_COLOR_FILTER_BLOCK])
-    err = served[0]["error"]
-    assert "colour never CUTS" in err
-    assert "occurred" not in err  # no repetition machinery on first serve
-
-
-def test_second_serve_carries_the_census_once():
-    served = drive_blocks([_COLOR_FILTER_BLOCK] * 2)
-    err2 = served[1]["error"]
-    assert "colour never CUTS" in err2
-    assert "occurred 2x." in err2
-    assert "Live surface:" in err2  # the full census vehicle
-    assert "Columns computed on rows so far" in err2
-
-
-def test_the_count_keeps_climbing_so_no_two_serves_are_identical():
-    # The 7181 loop's whole failure was byte-identity: 195 serves that said
-    # exactly the same thing. The count is what breaks it.
+def test_each_repeat_counts_up_with_the_census_and_no_fid_inventory():
     served = drive_blocks([_COLOR_FILTER_BLOCK] * 5)
     texts = [p["error"] for p in served]
+    assert "colour never CUTS" in texts[0]
+    assert "occurred" not in texts[0]
     assert len(set(texts)) == len(texts), texts
-    for k, payload in enumerate(served[1:], start=2):
-        assert f"occurred {k}x." in payload["error"], payload["error"]
-
-
-def test_no_fid_inventory_rides_a_repeat():
-    # Counts only, so the served size does not scale with the surface.
-    served = drive_blocks([_COLOR_FILTER_BLOCK] * 4)
-    for payload in served[1:]:
-        err = payload["error"]
+    for k, err in enumerate(texts[1:], start=2):
+        assert "colour never CUTS" in err
+        assert f"occurred {k}x." in err, err
+        assert "Live surface:" in err and "Columns computed on rows so far" in err
         assert "detected_0" not in err, err
         assert len(err) < 700, len(err)
 

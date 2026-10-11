@@ -33,49 +33,26 @@ SGLANG_OVERSIZE = (
 )
 
 
-def test_the_served_window_rejection_is_permanent() -> None:
-    assert _is_oversize_rejection(_status_error(400, SGLANG_OVERSIZE))
-
-
-@pytest.mark.parametrize(
-    "body",
-    [
-        "This model's maximum context length is 65536 tokens",
-        "prompt is longer than the maximum model length",
-        "Please reduce the length of the messages",
-    ],
-)
-def test_other_spellings_of_the_same_refusal(body: str) -> None:
+@pytest.mark.parametrize("body", [
+    SGLANG_OVERSIZE,
+    SGLANG_OVERSIZE.upper(),
+    "This model's maximum context length is 65536 tokens",
+    "prompt is longer than the maximum model length",
+    "Please reduce the length of the messages",
+])
+def test_a_400_saying_the_request_does_not_fit_is_permanent(body: str) -> None:
     assert _is_oversize_rejection(_status_error(400, body))
 
 
-def test_a_rejected_generation_stays_retriable() -> None:
-    """xgrammar refusing a malformed tool-args envelope. A fresh generation
-    produces a different envelope, so the retry is what fixes it."""
-    assert not _is_oversize_rejection(
-        _status_error(400, "Failed to parse tool call arguments against schema")
-    )
-
-
-def test_an_unrecognised_400_stays_retriable() -> None:
-    """Fail-safe: a spelling this misses degrades to today's retry path.
-    It can cost a wasted retry; it must not turn a retriable error
-    permanent."""
-    assert not _is_oversize_rejection(_status_error(400, "something else entirely"))
-
-
-def test_a_5xx_is_not_this_and_never_was() -> None:
-    """Capacity, and the transport layer already retries it. Matching the
-    prose in a 503 body would steal an error that a retry does fix."""
-    assert not _is_oversize_rejection(
-        _status_error(503, "maximum context length exceeded downstream")
-    )
-
-
-def test_a_non_http_error_is_not_this() -> None:
-    assert not _is_oversize_rejection(httpx.ConnectError("tunnel flap"))
-    assert not _is_oversize_rejection(ValueError("empty body"))
-
-
-def test_the_matcher_is_case_insensitive() -> None:
-    assert _is_oversize_rejection(_status_error(400, SGLANG_OVERSIZE.upper()))
+@pytest.mark.parametrize("err", [
+    # a grammar refusal: a fresh generation differs, so a retry fixes it
+    _status_error(400, "Failed to parse tool call arguments against schema"),
+    # fail-safe: an unrecognised 400 keeps the retry path
+    _status_error(400, "something else entirely"),
+    # capacity, which the transport already retries
+    _status_error(503, "maximum context length exceeded downstream"),
+    httpx.ConnectError("tunnel flap"),
+    ValueError("empty body"),
+])
+def test_everything_else_stays_retriable(err) -> None:
+    assert not _is_oversize_rejection(err)

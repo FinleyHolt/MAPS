@@ -16,7 +16,7 @@ import threading
 import httpx
 import pytest
 
-from maps.llm.http import CallCanceled
+from maps.llm.http import CallCanceled, DegenerateCompletion
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.reasoner_loop import (
     _RETRIABLE_LLM_ERRORS,
@@ -91,6 +91,11 @@ def test_a_live_mission_outlasts_the_bench_budget_and_resumes(monkeypatch):
 def test_stop_is_the_one_way_out_of_the_wait(monkeypatch):
     with pytest.raises(CallCanceled):
         _round(monkeypatch, faults=9, cancel_event=_Stop(set_on=3))
+
+
+def test_a_collapsed_completion_is_retried_not_terminal(monkeypatch):
+    reply = _round(monkeypatch, faults=1, fault=DegenerateCompletion("collapse"))
+    assert reply.ended_by != "transient_failures"
 
 
 def test_the_bench_keeps_its_budget(monkeypatch):

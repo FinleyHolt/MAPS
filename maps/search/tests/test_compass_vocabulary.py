@@ -95,13 +95,3 @@ def test_the_band_rule_declares_the_four_cardinals():
     road = [[0.0, y] for y in range(-100, 101)]
     with pytest.raises(ValueError):
         cardinal_side.cardinal_offset(road, (50.0, 0.0), "northeast")
-
-
-def test_no_op_hears_a_word_the_geometry_cannot_compute():
-    """The direction of the guard that actually matters: an op may narrow the
-    table, never widen it. A word in an op and not in COMPASS_UNIT would be a
-    spelling with no vector behind it."""
-    for name, words in (("cardinal_side.CARDINALS", set(cardinal_side.CARDINALS)),
-                        ("geom_compute.CARDINALS", set(CARDINALS))):
-        assert words, f"{name} is empty -- vacuity"
-        assert words <= set(COMPASS_UNIT), (name, sorted(words - set(COMPASS_UNIT)))

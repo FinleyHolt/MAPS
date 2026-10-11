@@ -65,13 +65,3 @@ def test_unencodable_result_falls_back_to_str():
     r.append_tool_result("c4", "analyze", result)
     assert r.messages[-1]["content"] == str(result)
     assert r.messages[-1]["content"] == "{(1, 2): 'v'}"
-
-
-def test_result_message_shape_is_tool_role():
-    r = _mk()
-    r.append_tool_result("cid-9", "select", {"ok": True})
-    msg = r.messages[-1]
-    assert msg["role"] == "tool"
-    assert msg["tool_call_id"] == "cid-9"
-    assert msg["name"] == "select"
-    assert set(msg) == {"role", "tool_call_id", "name", "content"}

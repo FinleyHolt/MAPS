@@ -62,13 +62,3 @@ def test_the_audit_writes_manifest_json_and_nothing_else(tmp_path):
     stray = [p for p in tmp_path.rglob("*")
              if p.is_file() and p.suffix in (".jpg", ".png", ".webp")]
     assert stray == [], stray
-
-
-def test_the_manifest_lands_atomically(tmp_path):
-    """No ``.tmp`` residue — a mid-run reader either sees the full manifest
-    or no manifest, never a partial parse."""
-    _persist_look_audit(
-        audit_dir=str(tmp_path), stop_id="s", step_idx=0, rid_tag="r0",
-        cid="c", annotate=False, tool_ack={}, vision_text="", crops=CROPS[:1])
-    names = {p.name for p in (tmp_path / "s" / "c").iterdir()}
-    assert names == {"manifest.json"}

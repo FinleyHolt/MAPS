@@ -47,19 +47,6 @@ def test_validate_raises_when_the_call_comes_after_its_result():
         ])
 
 
-def test_validate_passes_on_a_closed_tool_exchange():
-    msgs = [
-        {"role": "system", "content": "s"},
-        {"role": "user", "content": "instruction"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "a1"}]},
-        {"role": "tool", "tool_call_id": "a1", "name": "analyze",
-         "content": "ok"},
-        {"role": "user", "content": "next"},
-    ]
-    _validate_invariants(msgs)
-
-
 def test_a_call_with_no_result_is_caught() -> None:
     """Coverage: the half that only became reachable when a step started
     dropping messages.

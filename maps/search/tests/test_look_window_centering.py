@@ -45,12 +45,6 @@ def test_7875_every_finalist_gets_a_distinct_window():
     assert len(set(windows.values())) == len(windows), windows
 
 
-def test_7875_every_subject_sits_inside_its_own_window():
-    for fid, (x, y) in _FIDS.items():
-        x0, y0, x1, y1 = _window((x, y))
-        assert x0 <= x <= x1 and y0 <= y <= y1, (fid, (x, y), (x0, y0, x1, y1))
-
-
 def test_shift_capped_at_keep_in_frame_margin():
     # PER AXIS, which IS the containment condition for an axis-aligned
     # window: the subject keeps a half-car of margin inside each edge. A

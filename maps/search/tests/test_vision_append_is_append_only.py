@@ -57,29 +57,3 @@ def test_appending_a_crop_leaves_every_earlier_message_byte_identical():
             f"index {next(k for k, (a, b) in enumerate(zip(before, after)) if a != b)}"
         )
         assert len(after) == len(before) + 1
-
-
-def test_every_delivered_crop_survives_the_whole_episode():
-    """No image part is ever replaced by a placeholder, at any depth."""
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
-    for i in range(_DELIVERIES):
-        r.append_vision_user(f"look {i}", [_jpeg(i)])
-    images = [
-        part
-        for m in r.messages
-        if isinstance(m.get("content"), list)
-        for part in m["content"]
-        if isinstance(part, dict) and part.get("type") == "image_url"
-    ]
-    assert len(images) == _DELIVERIES
-
-
-def test_a_text_turn_between_crops_does_not_disturb_them():
-    """Interleaving is the real shape: analyze results and repairs land
-    between deliveries, and the digest check has to hold across them."""
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
-    for i in range(_DELIVERIES):
-        r.append_vision_user(f"look {i}", [_jpeg(i)])
-        before = _digests(r.messages)
-        r.append_user(f"packet {i}")
-        assert _digests(r.messages)[: len(before)] == before

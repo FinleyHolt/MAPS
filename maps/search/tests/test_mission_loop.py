@@ -18,7 +18,7 @@ from __future__ import annotations
 from maps.search.parse_compile.reasoner_loop import (
     _mission_sanitize_moves,
 )
-from maps.search.tests.fakes import FakeReasoner, drive, run, tool_results
+from maps.search.tests.fakes import drive, run, tool_results
 
 
 def test_unknown_tool_names_the_one_verb():
@@ -38,12 +38,6 @@ def test_unknown_tool_names_the_one_verb():
         assert "say" not in r["error"], r["error"]
 
 
-
-
-
-
-
-
 def test_sanitizer_is_directly_pinned():
     ok, errs = _mission_sanitize_moves(["[900, 640]", "marked_region"], {})
     assert ok == [{"target_fid": "[900, 640]"},
@@ -56,12 +50,6 @@ def test_sanitizer_is_directly_pinned():
     assert errs == []
     ok, errs = _mission_sanitize_moves("not-a-list", {})
     assert ok == [] and errs == []
-
-
-
-
-
-
 
 
 def test_second_consecutive_empty_turn_still_ends_the_mission():
@@ -110,35 +98,3 @@ def test_three_replies_in_a_row_with_no_flight_is_a_confident_abstain():
               if m.get("role") == "user" and "flown nowhere" in
               str(m.get("content"))]
     assert len(nudges) == 2, nudges
-
-
-
-
-
-
-# --------------------------------------------------------------------------
-# The operator's channel into a flying mission (the field console's re-task).
-# The bench passes no channel and must stay one-user-message; the console
-# passes one and its text has to reach the model as a plain user turn.
-# --------------------------------------------------------------------------
-
-
-def _plain_user_turns(fr: FakeReasoner) -> list[str]:
-    """User-role turns that are neither a harness repair nor a crop legend.
-
-    Repairs are prefixed by ``append_repair`` and vision rides
-    ``append_vision_user``; neither is the operator speaking.
-    """
-    return [str(m.get("content")) for m in fr.messages
-            if m.get("role") == "user"
-            and not str(m.get("content")).startswith("[Repair] ")]
-
-
-
-
-
-
-
-
-
-
