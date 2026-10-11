@@ -1,7 +1,8 @@
 """Runtime graph serdes.
 
-- ``save_graph`` / ``load_graph`` round-trip ``semantic_attributes`` through
-  the nodes JSON, which is where str/int coercion at the wire layer would show.
+- ``save_graph`` / ``load_graph`` round-trip a detection's runtime fields and
+  ``semantic_attributes`` through the nodes JSON (where str/int coercion at the
+  wire layer would show), and a prebaked node's defaults.
 - ``save_graph`` / ``load_graph`` preserve ``cells``, ``tags['height_m']`` and
   ``world_contour``.
 """
@@ -29,7 +30,7 @@ def _detected(centroid: tuple[int, int], **overrides) -> MapObject:
     return node
 
 
-def test_semantic_attributes_round_trip_via_json(tmp_path):
+def test_runtime_fields_and_semantic_attributes_round_trip_via_json(tmp_path):
     node = _detected(
         (10, 12),
         semantic_attributes={"color": {"gray": 3, "white": 1}, "text_span": {"7B": 2}},
@@ -38,13 +39,19 @@ def test_semantic_attributes_round_trip_via_json(tmp_path):
         observation_count=4,
         confidence=0.8,
     )
+    prebaked = MapObject(id="buildings_0", class_name="buildings", name="Church", tags={},
+                         centroid=(10, 10), bbox=(9, 9, 11, 11), cell_count=9, orientation=None)
     graph = ObjectGraph(
-        nodes={"detected_0": node},
+        nodes={"detected_0": node, "buildings_0": prebaked},
         cell_size_m=5.0,
     )
     save_graph(graph, str(tmp_path / "t"))
     restored = load_graph(str(tmp_path / "t"))
-    out = restored.nodes["detected_0"].semantic_attributes
+    det, pre = restored.nodes["detected_0"], restored.nodes["buildings_0"]
+    assert (det.provenance, det.first_seen_t, det.last_seen_t, det.observation_count) == ("detected", 1.0, 4.0, 4)
+    assert det.confidence == 0.8
+    assert (pre.provenance, pre.first_seen_t, pre.observation_count, pre.confidence) == ("prebaked", None, 0, 1.0)
+    out = det.semantic_attributes
     assert out == {"color": {"gray": 3, "white": 1}, "text_span": {"7B": 2}}
     # Counts must remain ints (not str), keys must remain str.
     for key, counts in out.items():
