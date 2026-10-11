@@ -195,3 +195,15 @@ def test_the_bake_reads_no_citynav_raster_and_keeps_the_bounds_rectangle(tmp_pat
     assert names == sorted(p.name for p in (tmp_path / "tiles").iterdir()) and len(names) == 4
     for name in names:
         assert (tmp_path / "tiles" / name).read_bytes() == (reaching / name).read_bytes(), name
+
+
+def test_a_bundle_missing_a_layer_is_refused_by_name(tmp_path):
+    """A bundle without its roads file would bake a map with no roads."""
+    from benchmarks.calcity.data_prep.bundle import OSM_LAYERS, iter_features
+
+    (tmp_path / "osm").mkdir()
+    for layer in OSM_LAYERS:
+        if layer != "roads":
+            (tmp_path / "osm" / f"{layer}.geojson").write_text('{"features": []}')
+    with pytest.raises(FileNotFoundError, match="roads.geojson"):
+        list(iter_features(tmp_path))

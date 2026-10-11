@@ -25,7 +25,7 @@ from benchmarks.calcity.data_prep.aoi import LocalFrame
 
 log = logging.getLogger("calcity.bundle")
 
-# Vector layers a world bundle may carry (absent layers are skipped).
+# The vector layers a world bundle carries; a missing one is refused.
 OSM_LAYERS = (
     "buildings",
     "roads",
@@ -50,7 +50,7 @@ def iter_features(bundle: Path) -> Iterator[tuple[str, dict[str, Any]]]:
     for layer in OSM_LAYERS:
         path = bundle / "osm" / f"{layer}.geojson"
         if not path.is_file():
-            continue
+            raise FileNotFoundError(f"the world bundle has no {path}")
         fc = json.loads(path.read_text())
         for feature in fc.get("features", []):
             yield layer, feature
