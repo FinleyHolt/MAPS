@@ -1435,9 +1435,7 @@ def _grouped_keys(present) -> str:
 
 def _present_numeric_keys_hint(items) -> str:
     """Live-state tail for a score_by/filter on an absent key:
-    the numeric keys the items ACTUALLY carry, facts only (the remedy for
-    the MISSING key is :func:`_key_remedy`, the ONE family->provenance
-    source)."""
+    the numeric keys the items ACTUALLY carry, facts only."""
     present = sorted({k for it in items if isinstance(it, dict)
                       for k, v in it.items() if isinstance(v, (int, float))
                       and k not in MODEL_UNSERVED_COLUMNS})
@@ -1449,8 +1447,7 @@ def _present_numeric_keys_hint(items) -> str:
 def _present_keys_hint(items) -> str:
     """Live-state tail for a filter naming an ABSENT column: every scalar key
     the items ACTUALLY carry (numeric AND string/bool -- an eq cut is legal on
-    a string column like class), facts only (the remedy for the MISSING key
-    is :func:`_key_remedy`)."""
+    a string column like class), facts only."""
     present = sorted({k for it in items if isinstance(it, dict)
                       for k, v in it.items()
                       if isinstance(v, (int, float, str, bool)) and v != ""
@@ -1458,31 +1455,6 @@ def _present_keys_hint(items) -> str:
     if present:
         return f"keys present on these items: {present}."
     return "these items carry NO scalar key."
-
-
-def _key_remedy(key) -> str:
-    """The producing fact for an ABSENT relation column, rendered beside the
-    present-keys census. Returns a sentence ending in a space, or ''."""
-    k = str(key)
-    if not re.fullmatch(r"[A-Za-z][\w. ]{0,60}", k):
-        return ""  # not a column-shaped token: no worked example applies
-    for pre in ("facing ", "distance to "):
-        if not k.startswith(pre):
-            continue
-        param = k[len(pre):]
-        if re.fullmatch(r"[0-9][0-9_.]*", param):
-            # The model may never have written this label: a point named in
-            # one call mints it, and a later ordering can name the column.
-            return (f"{_quote(param)} is not a fid: a number pair names a POINT, "
-                    f"and a point carries columns only under the label it is "
-                    f"given when it is related to rows -- the column is then "
-                    f"{pre}<label>. ")
-        # The say path reaches here through `in <place>`, so the remedy names
-        # the fact (the column exists once the ref is related to these rows),
-        # not an op.
-        return (f"a '{pre}<ref>' column exists once <ref> has been related "
-                "to these rows, and <ref> must be a fid on this surface. ")
-    return ""
 
 
 def _polyline_arc_midpoint(verts) -> list:
@@ -1755,11 +1727,9 @@ def _relate_ran(key, items) -> bool:
 
 
 def _contact_fact(cx, key, items) -> str:
-    """The degenerate-column facts for the absent-key guards, where the
-    compare ran and the column is legitimately absent: (a) 'distance to'
-    / 'facing' a <fid> whose mask contains the whole surface window; (b)
-    'facing <fid>' where 'distance to <fid>' is 0 on every row (contact:
-    no min-gap direction). Returns the fact, or ''."""
+    """For an absent 'distance to' / 'facing' a <fid> whose mask contains
+    the whole surface window: why neither is stamped. Returns the fact, or
+    ''."""
     if isinstance(key, str) and key.startswith(("distance to ", "facing ")):
         _p = (key[len("facing "):] if key.startswith("facing ")
               else key[len("distance to "):])
@@ -1771,19 +1741,6 @@ def _contact_fact(cx, key, items) -> str:
                     f"facing is stamped; 'center distance to "
                     f"{_p}'/'bearing from {_p}' attach per-row and DO "
                     f"order/filter. ")
-    if not (isinstance(key, str) and key.startswith("facing ")):
-        return ""
-    param = key[len("facing "):]
-    if param not in cx.by_fid:
-        return ""
-    dkey = "distance to " + param
-    vals = [it.get(dkey) for it in items if isinstance(it, dict)]
-    if vals and all(isinstance(v, (int, float))
-                    and not isinstance(v, bool)
-                    and float(v) == 0.0 for v in vals):
-        return (f"{key} is absent where '{dkey}'=0 (contact -- no "
-                f"min-gap direction exists); 'bearing from {param}' "
-                f"(centroid bearing) is defined on contact too. ")
     return ""
 
 
@@ -2310,7 +2267,7 @@ def _score_by(cx, a):
             raise ProgramError(
                 f"nothing orders by {_quote(_k)} here: no row carries a "
                 f"numeric {_quote(_k)}. "
-                f"{_contact_fact(cx, _k, items) or _key_remedy(_k)}"
+                f"{_contact_fact(cx, _k, items)}"
                 f"{_present_numeric_keys_hint(items)}")
     for _k in _dropped_color:
         # NEVER SILENT: the rows are ranked by fewer things than asked for.
@@ -2344,7 +2301,7 @@ def _filter_items(cx, a):
             raise ProgramError(
                 f"filter_items op {_quote(opr)} on key {_quote(key)}: no item "
                 f"carries a numeric {_quote(key)}. "
-                f"{_contact_fact(cx, key, items) or _key_remedy(key)}"
+                f"{_contact_fact(cx, key, items)}"
                 f"{_present_numeric_keys_hint(items)}")
     elif (items
           and not any(isinstance(it, dict) and key in it for it in items)
@@ -2355,7 +2312,7 @@ def _filter_items(cx, a):
         raise ProgramError(
             f"filter_items op {_quote(opr)} on key {_quote(key)}: no item carries "
             f"{_quote(key)}. "
-            f"{_contact_fact(cx, key, items) or _key_remedy(key)}"
+            f"{_contact_fact(cx, key, items)}"
             f"{_present_keys_hint(items)}")
     if opr == "in_or_blank":
         # The three-way statement for a word column: rows reading a counted

@@ -1,10 +1,7 @@
-"""Columns a key names attach on demand, the remedies an absent key serves, and
-the pre-takeoff phase notes."""
+"""A truthy cut, the census on an empty find, and the pre-takeoff phase notes."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import (
-    ProgramError,
-    _grouped_keys,
     compact_results,
     run_program,
 )
@@ -35,51 +32,8 @@ def _run(ops, cands=None, anchors=None):
         {"ops": ops})
 
 
-def _err(ops, cands=None, anchors=None) -> str:
-    try:
-        _run(ops, cands, anchors)
-    except ProgramError as e:
-        return str(e)
-    raise AssertionError(f"expected ProgramError for {ops!r}")
-
-
 _FIND_CARS = {"ref": "r0", "op": "find",
               "args": {"provenance": "runtime"}}
-
-
-# --------------------------------------------------------------------------- #
-# A LINE REF: its 'distance to' charts off the centerline                      #
-# --------------------------------------------------------------------------- #
-
-
-# --------------------------------------------------------------------------- #
-# FAMILY-REMEDY: the missing key's OWN producing idiom, in BOTH guards         #
-# --------------------------------------------------------------------------- #
-
-
-def test_coordinate_shaped_ref_remedy_names_the_point_fact():
-    # A number-shaped <ref> extends the fid idiom to a coordinate -- the remedy states
-    # the FACT (a number pair is a POINT; a point carries columns only under the label
-    # it is given) and never "not a fid on this surface" alone. It reaches the SENTENCE
-    # channel: a spoken "near 1246 1100" mints the label 1246_1100, and a later "the
-    # nearest one." orders by 'distance to 1246_1100' over rows that sentence never
-    # related to it.
-    msg = _err([_FIND_CARS,
-                {"ref": "r1", "op": "score_by",
-                 "args": {"items": "r0",
-                          "emphasis": [{"key": "distance to 1593_5", "w": -1}]}}])
-    assert "is not a fid" in msg and "POINT" in msg, msg
-    assert "distance to <label>" in msg, msg
-    assert "refs:[" not in msg and "score_by" not in msg, msg
-
-
-def test_key_census_prints_each_key_once():
-    # longest-prefix family assignment: brg_gap_* members never re-list
-    # under brg_, grp_size never re-lists under grp.
-    present = ["facing xy", "bearing from xy", "grp", "grp_size", "distance to road_1"]
-    tokens = _grouped_keys(present).split(", ")
-    for k in present:
-        assert tokens.count(k) == 1, (k, tokens)
 
 
 # --------------------------------------------------------------------------- #

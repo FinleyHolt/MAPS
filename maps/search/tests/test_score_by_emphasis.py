@@ -117,11 +117,8 @@ def test_reorder_is_a_commit_safe_permutation():
 
 def test_emphasis_key_no_row_carries_fails_loud():
     try:
-        # 'nope' is not a fid on the surface, so the auto-attach can't resolve it
-        # and the emphasis-key guard still fires loud (a real typo).
         _run_fids(_score_by([{"key": "distance to nope", "w": -1}]))
     except ProgramError as e:
-        assert "distance to nope" in str(e) and (
-            "auto-attach" in str(e) or "fid on this surface" in str(e))
+        assert "nothing orders by 'distance to nope'" in str(e), str(e)
     else:
         raise AssertionError("expected ProgramError on an absent emphasis key")
