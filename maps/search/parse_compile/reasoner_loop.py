@@ -2974,6 +2974,9 @@ def advance_reasoner_one_round(
         """One code block, run in the mission's ONE persistent namespace on
         the verbs above. An error costs the line it is on: everything the
         block ran before it stands, receipts included."""
+        if "__args_parse_error" in (args or {}):
+            return {"error": "the call's arguments did not parse as JSON: "
+                             f"{args['__args_parse_error']}; nothing ran"}
         code = (args or {}).get("code")
         if not isinstance(code, str) or not code.strip():
             return {"error": "run takes one block of code in code"}

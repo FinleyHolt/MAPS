@@ -23,6 +23,15 @@ def test_unknown_tool_names_the_one_verb():
         assert "say" not in r["error"], r["error"]
 
 
+def test_unparseable_arguments_serve_the_parse_error():
+    _, fr, _, _ = drive([
+        [("run", {"__args_parse_error": "Expecting ',' delimiter at pos 9"})],
+        "over",
+    ])
+    err = tool_results(fr)[0]["error"]
+    assert "Expecting ',' delimiter at pos 9" in err and "nothing ran" in err, err
+
+
 def test_sanitizer_is_directly_pinned():
     ok, errs = _mission_sanitize_moves(["[900, 640]", "marked_region"])
     assert ok == [{"target_fid": "[900, 640]"},
