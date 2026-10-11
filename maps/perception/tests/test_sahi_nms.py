@@ -75,7 +75,7 @@ def _random_blobs(rng, n, H, W):
     return out
 
 
-def test_nms_matches_full_frame_reference():
+def test_nms_matches_full_frame_reference(monkeypatch):
     rng = np.random.default_rng(20260802)
     H = W = 160
     for trial in range(5):
@@ -83,7 +83,8 @@ def test_nms_matches_full_frame_reference():
         items = [(MaskRegion.from_full(m), lab, sc) for m, lab, sc in masks]
         for thr in (0.3, 0.5, 0.9):
             ref = _reference_nms_full_masks(masks, thr)
-            got = SamDetectClient._nms_masks(items, thr)
+            monkeypatch.setattr(dc, "SAHI_NMS_IOU", thr)
+            got = SamDetectClient._nms_masks(items)
             assert [(lab, sc) for _r, lab, sc in got] == [(lab, sc) for _m, lab, sc in ref]
             for (region, _l, _s), (rm, _rl, _rs) in zip(got, ref):
                 assert np.array_equal(full(region), rm)
@@ -132,7 +133,7 @@ def _build_tile_case():
     provider = ReasonerUnionConceptProvider()
     provider.set_concepts(["car"])
     client = SamDetectClient(concept_provider=provider)
-    bounds = client._tile_bounds(H, W, dc.SAHI_OVERLAP)
+    bounds = client._tile_bounds(H, W)
     assert bounds == [(0, 1008, 0, 1008), (0, 1008, 504, 1512)]
 
     def tile_mask(r0, c0, r1, c1):

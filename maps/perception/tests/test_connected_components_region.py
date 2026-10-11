@@ -17,6 +17,7 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage
 
+from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import (
     _connected_components,
     split_into_instances,
@@ -96,10 +97,10 @@ def test_single_component_hands_back_the_same_region_object():
     assert len(comps) == 1 and comps[0] is region
 
 
-def test_split_into_instances_drops_speckle_and_redundant_components():
+def test_split_into_instances_drops_speckle_and_redundant_components(monkeypatch):
     """The split's own rules on top of the labelling: a component under the
     noise floor goes, and one already owned by another detection's primary
-    goes. Both now read through the component's own window."""
+    goes. Both read through the component's own window."""
     mask = _blocks((30, 40, 24, 26), (100, 150, 3, 3), (120, 20, 12, 14))
     region = MaskRegion.from_full(mask)
     cov = np.zeros(_SHAPE, dtype=np.int16)
@@ -107,13 +108,15 @@ def test_split_into_instances_drops_speckle_and_redundant_components():
 
     assert len(_connected_components(region)) == 3
 
-    loose = split_into_instances(region, min_area_px=1)
+    monkeypatch.setattr(dc, "MIN_AREA_PX", 1)
+    loose = split_into_instances(region)
     assert len(loose) == 3  # nothing dropped when nothing gates
 
-    speckle_gone = split_into_instances(region, min_area_px=16)
+    monkeypatch.setattr(dc, "MIN_AREA_PX", 16)
+    speckle_gone = split_into_instances(region)
     assert len(speckle_gone) == 2  # the 3x3 is under the floor
 
-    both_gone = split_into_instances(region, min_area_px=16, coverage_count=cov)
+    both_gone = split_into_instances(region, coverage_count=cov)
     assert len(both_gone) == 1  # and the covered one is redundant
     assert both_gone[0].area == max(c.area for c in loose)  # the primary survives
 

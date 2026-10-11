@@ -221,7 +221,7 @@ def _interior_mask(region) -> "np.ndarray":
 # read unreliably off dark, low-contrast nadir masks (~57-80% mislabel on red
 # and blue sole cues), achromatic ones reliably (~16-19%).
 _COLOR_RELIABILITY_PRIOR_DEFAULT = 0.35  # chromatic seed
-_COLOR_ACHROMATIC = frozenset({"white", "black", "gray", "silver"})
+_COLOR_ACHROMATIC = frozenset({"white", "black", "gray"})
 
 
 def _color_reliability_prior(name: str) -> float:
@@ -248,8 +248,6 @@ def _dominant_color(rgb: "np.ndarray | None", region):
         if not inner_box.any():
             return None
         px = region.window(rgb)[inner_box][:, :3].astype(np.float32)
-        if px.shape[0] == 0:
-            return None
         med = np.median(px, axis=0)
         dists = sorted(
             (float(np.sum((med - np.asarray(anchor, dtype=np.float32)) ** 2)), cname)
@@ -260,7 +258,7 @@ def _dominant_color(rgb: "np.ndarray | None", region):
         # runner-up, in [0, 1] (~0 between two anchors, ~1 a clean snap), times
         # the colour's reliability prior.
         d1 = float(np.sqrt(max(0.0, dists[0][0])))
-        d2 = float(np.sqrt(max(0.0, dists[1][0]))) if len(dists) > 1 else d1
+        d2 = float(np.sqrt(max(0.0, dists[1][0])))
         margin = (d2 - d1) / (d2 + d1) if (d1 + d2) > 0.0 else 0.0
         conf = round(max(0.0, min(1.0, margin * _color_reliability_prior(name))), 3)
         return name, [int(med[0]), int(med[1]), int(med[2])], conf
@@ -327,18 +325,16 @@ def split_into_instances(
     region: MaskRegion,
     *,
     ref_area_px: float | None = None,
-    min_area_px: int = 16,
-    frac: float = _INSTANCE_SPLIT_AREA_FRAC,
     coverage_count: "np.ndarray | None" = None,
-    redundant_frac: float = _INSTANCE_SPLIT_REDUNDANT_FRAC,
 ) -> "list[MaskRegion]":
     """Split a SAM concept mask into per-instance connected components.
 
     A single-component mask comes back as ``[region]``. Otherwise the largest
     component is kept as the detection's primary, and each other one is
-    dropped as speckle (area under ``max(min_area_px, frac * ref_area_px)``,
+    dropped as speckle (area under ``max(MIN_AREA_PX,
+    _INSTANCE_SPLIT_AREA_FRAC * ref_area_px)``,
     ``ref_area_px`` the median clean same-class area, None with too few
-    samples) or as redundant (more than ``redundant_frac`` of its pixels under
+    samples) or as redundant (more than ``_INSTANCE_SPLIT_REDUNDANT_FRAC`` of its pixels under
     ``coverage_count``, the per-pixel count of same-class PRIMARIES: another
     detection already owns it), and kept otherwise: a unique component is a
     car nothing else found. Keying redundancy off primaries, not raw overlap,
@@ -347,9 +343,9 @@ def split_into_instances(
     comps = _connected_components(region)
     if len(comps) <= 1:
         return comps
-    floor = int(min_area_px)
+    floor = MIN_AREA_PX
     if ref_area_px is not None and ref_area_px > 0:
-        floor = max(floor, int(round(frac * float(ref_area_px))))
+        floor = max(floor, int(round(_INSTANCE_SPLIT_AREA_FRAC * float(ref_area_px))))
     order = sorted(comps, key=lambda c: c.area, reverse=True)
     cov = None if coverage_count is None else np.asarray(coverage_count)
     kept = [order[0]]  # largest = the detection's primary instance, always kept
@@ -357,7 +353,7 @@ def split_into_instances(
         if c.area < floor:
             continue  # speckle
         # Disjoint from its own primary, so cov >= 1 is ANOTHER detection's.
-        if cov is not None and float((c.window(cov)[c.crop] >= 1).mean()) > redundant_frac:
+        if cov is not None and float((c.window(cov)[c.crop] >= 1).mean()) > _INSTANCE_SPLIT_REDUNDANT_FRAC:
             continue  # redundant sliver of an already-detected neighbor
         kept.append(c)
     return kept
@@ -447,9 +443,7 @@ class SamDetectClient:
         return _post_segment_avoid_stale_pool(picker=_pick_url, json_body=body)
 
     @staticmethod
-    def _tile_bounds(
-        H: int, W: int, overlap: float
-    ) -> "list[tuple[int, int, int, int]]":
+    def _tile_bounds(H: int, W: int) -> "list[tuple[int, int, int, int]]":
         """Fixed native-size tiling: every tile is EXACTLY ``_SAM_INPUT_SIZE`` so
         it is fed to SAM 1:1. The tile count follows from the frame size and
         overlap: a 2016 render gives a 3x3 grid (starts {0, 504, 1008})."""
@@ -458,7 +452,7 @@ class SamDetectClient:
         def starts(size: int) -> "list[int]":
             if size <= t:
                 return [0]
-            step = max(1, int(round(t * (1.0 - overlap))))
+            step = max(1, int(round(t * (1.0 - SAHI_OVERLAP))))
             n = max(2, -(-(size - t) // step) + 1)  # ceil((size-t)/step) + 1
             return [int(round(i * (size - t) / (n - 1))) for i in range(n)]
 
@@ -468,7 +462,7 @@ class SamDetectClient:
 
     @staticmethod
     def _nms_masks(
-        items: "list[tuple[MaskRegion, str, float]]", iou_thr: float
+        items: "list[tuple[MaskRegion, str, float]]",
     ) -> "list[tuple[MaskRegion, str, float]]":
         """Greedy IoU-NMS over ``(region, label, score)`` items, highest score
         first (ties in input order), bbox-prefiltered so it stays ~linear when
@@ -490,7 +484,7 @@ class SamDetectClient:
                         & k.crop[wr0 - kbb[0] : wr1 - kbb[0] + 1, wc0 - kbb[1] : wc1 - kbb[1] + 1]
                     ).sum()
                 )
-                if inter and inter / (a + ka - inter) > iou_thr:
+                if inter and inter / (a + ka - inter) > SAHI_NMS_IOU:
                     break
             else:
                 kept.append((region, a, lab, sc))
@@ -509,7 +503,7 @@ class SamDetectClient:
         assert rgb is not None
         H, W = int(rgb.shape[0]), int(rgb.shape[1])
         canvas = np.pad(rgb, ((0, max(0, _SAM_INPUT_SIZE - H)), (0, max(0, _SAM_INPUT_SIZE - W)), (0, 0)))
-        bounds = self._tile_bounds(canvas.shape[0], canvas.shape[1], SAHI_OVERLAP)
+        bounds = self._tile_bounds(canvas.shape[0], canvas.shape[1])
 
         def _one_tile(bound) -> "list[tuple[MaskRegion, str, float]] | None":
             """One tile's ``(region, label, score)`` items in wire order, or
@@ -552,7 +546,7 @@ class SamDetectClient:
                 "(/segment returned no usable response after retries) — "
                 "whole-frame outage, not a partial or empty frame"
             )
-        kept = self._nms_masks(tiledets, SAHI_NMS_IOU)
+        kept = self._nms_masks(tiledets)
         if n_failed:
             print(
                 f"[sam] WARNING: {n_failed}/{len(bounds)} SAHI tiles "
@@ -673,8 +667,6 @@ class SamDetectClient:
             components = split_into_instances(
                 region,
                 ref_area_px=class_ref.get(label),
-                min_area_px=MIN_AREA_PX,
-                frac=_INSTANCE_SPLIT_AREA_FRAC,
                 coverage_count=coverage_by_label.get(label),
             )
             n_comp = len(components)
