@@ -28,7 +28,7 @@ the C-12's ``oryx_orx32_25mm_nadir``.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
 from typing import Any, Mapping
 
 import numpy as np
@@ -281,6 +281,7 @@ def list_sensors() -> list[str]:
 
 # What an inline override may name: a registered base and SensorSpec.to_dict's keys.
 _INLINE_KEYS = frozenset({"base", *_REGISTRY["nadir_1008_90"].to_dict()})
+_INTRINSIC_KEYS = tuple(f.name for f in fields(CameraIntrinsics))
 
 
 def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
@@ -311,29 +312,11 @@ def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
     if unknown:
         raise ValueError(f"unknown sensor override key(s) {unknown}; known: {sorted(_INLINE_KEYS)}")
     base_name = spec.get("base")
-    base = (
-        _REGISTRY[str(base_name)]
-        if base_name is not None
-        else _REGISTRY["nadir_1008_90"]
-    )
-    intr = base.intrinsics
-    return SensorSpec(
-        name=str(spec.get("name", base.name + "_override")),
-        intrinsics=CameraIntrinsics(
-            hfov_deg=float(spec.get("hfov_deg", intr.hfov_deg)),
-            vfov_deg=float(spec.get("vfov_deg", intr.vfov_deg)),
-            image_width=int(spec.get("image_width", intr.image_width)),
-            image_height=int(spec.get("image_height", intr.image_height)),
-        ),
-        mount_pitch_deg=float(spec.get("mount_pitch_deg", base.mount_pitch_deg)),
-        max_range_m=float(spec.get("max_range_m", base.max_range_m)),
-        min_range_m=float(spec.get("min_range_m", base.min_range_m)),
-        world_yaw_deg=float(spec.get("world_yaw_deg", base.world_yaw_deg)),
-        mount_yaw_deg=float(spec.get("mount_yaw_deg", base.mount_yaw_deg)),
-        mount_roll_deg=float(spec.get("mount_roll_deg", base.mount_roll_deg)),
-        depth_subsample=int(spec.get("depth_subsample", base.depth_subsample)),
-        body_offset_x=float(spec.get("body_offset_x", base.body_offset_x)),
-        body_offset_y=float(spec.get("body_offset_y", base.body_offset_y)),
-        body_offset_z=float(spec.get("body_offset_z", base.body_offset_z)),
-        description=str(spec.get("description", base.description)),
-    )
+    base = _REGISTRY[str(base_name)] if base_name is not None else _REGISTRY["nadir_1008_90"]
+    over = {}
+    for k, v in spec.items():
+        if k not in ("base", "name"):
+            held = base.intrinsics if k in _INTRINSIC_KEYS else base
+            over[k] = type(getattr(held, k))(v)  # the type the base value carries
+    intr = replace(base.intrinsics, **{k: over.pop(k) for k in _INTRINSIC_KEYS if k in over})
+    return replace(base, name=str(spec.get("name", base.name + "_override")), intrinsics=intr, **over)
