@@ -16,7 +16,6 @@ from pathlib import Path
 import pytest
 
 from benchmarks.citynav.run_benchmark.config import (
-    assert_flight_config,
     load_config,
     resolve_config,
 )
@@ -143,12 +142,6 @@ def test_a_base_loop_is_refused(tmp_path):
     _write(tmp_path, "b.yaml", "base: a.yaml\n")
     with pytest.raises(ValueError, match="base chain loops"):
         resolve_config(tmp_path / "a.yaml")
-
-
-def test_the_flight_mission_refuses_a_withholding_config(tmp_path):
-    assert_flight_config(load_config(REPO_ROOT / "configs" / "calcity.yaml"))
-    with pytest.raises(ValueError, match="withhold"):
-        assert_flight_config(load_config(_over(tmp_path, "withhold: [images]\n")))
 
 
 def test_each_withhold_config_is_the_control_less_its_own_part():

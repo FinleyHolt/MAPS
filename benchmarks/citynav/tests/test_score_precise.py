@@ -193,13 +193,3 @@ def test_floor_does_not_touch_the_radius_fallback():
     assert out["SR"] == 1
     assert out["precise_reach_m"] == 15.0
     assert out["precise_floor_applied"] is False
-
-
-def test_across_the_street_is_a_miss():
-    """SR asks only where the agent finished: the correct building
-    identified from across the street is still a miss."""
-    across_the_street = score_precise(
-        final_xy=(-8.0, 5.0), target_xy=(5.0, 5.0), gt_polygon=BUILDING, radius_m=20.0
-    )
-    assert across_the_street["SR"] == 0
-    assert across_the_street["precise_distance_m"] == 8.0

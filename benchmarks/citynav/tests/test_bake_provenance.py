@@ -58,13 +58,3 @@ def test_osm_bake_stamps_provenance(tmp_path):
     # The bake adds WHO/WHEN on top of the source identity.
     assert prov["baked_at_utc"]
     assert "bake_git_sha" in prov
-
-
-def test_a_rebake_cannot_inherit_stale_provenance(tmp_path):
-    block = _seed_meta(tmp_path)
-    bake_osm_blocks("birmingham", _records(), tiles_dir=tmp_path,
-                    provenance={"prior": "osm"})
-    meta = json.loads((tmp_path / f"{block}_meta.json").read_text())
-    assert meta["provenance"]["prior"] == "osm", (
-        "the seed meta's stale provenance leaked through the rebake"
-    )

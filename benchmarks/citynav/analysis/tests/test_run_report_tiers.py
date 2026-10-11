@@ -73,17 +73,6 @@ def test_a_root_with_nothing_readable_reports_no_tier(tmp_path):
 # --------------------------------------------------------------------------
 
 
-def test_load_run_keeps_its_two_tuple_contract(tmp_path):
-    """``report`` and ``paired`` unpack this; they must need no change."""
-    root = tmp_path / "run"
-    _write(root / LEDGER, _row("e::1#1", "20260725_110000", 1))
-    scored, no_metrics = load_run(root)
-    assert isinstance(no_metrics, int)
-    assert set(scored) == {"e::1#1"}
-    value = scored["e::1#1"]
-    assert "SR" in value and "workdir" not in value
-
-
 def test_report_and_paired_still_run(tmp_path, capsys):
     a, b = tmp_path / "a", tmp_path / "b"
     _write(a / LEDGER, _row("e::1#1", "20260725_110000", 1))

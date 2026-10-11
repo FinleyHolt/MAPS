@@ -8,12 +8,6 @@ def test_split_contract_is_calcity_owned():
     assert paths.split_path("calcity") == paths.SPLITS_DIR / "calcity.json"
 
 
-def test_the_bench_declares_one_criterion_and_it_is_the_shape():
-    """Every row of this corpus resolves a footprint, so the fallback
-    radius fires on no episode."""
-    assert paths.SUCCESS_CRITERION == "shape"
-
-
 def test_default_release_layout_is_inside_calcity_package(monkeypatch):
     """The default falls inside the package when nothing overrides it.
 

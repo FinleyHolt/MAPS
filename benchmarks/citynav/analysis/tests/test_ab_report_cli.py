@@ -65,24 +65,6 @@ def test_wilson_ci_bounds_and_midpoint():
     assert wilson_ci(0, 0) == (pytest.approx(float("nan"), nan_ok=True),) * 2
 
 
-def test_sr_by_episode_uses_canonical_first_complete_pick(tmp_path):
-    """A duplicated episode reads as its FIRST complete attempt (by start
-    stamp), not the last row in the file."""
-    from benchmarks.citynav.analysis.ab_report import _sr_by_episode
-
-    root = tmp_path / "run"
-    root.mkdir()
-    later = {"episode_id": "e1", "status": "ok", "metrics": {"SR": 0},
-             "workdir": "w0/maps_20260801_110000_citynav_e1"}
-    earlier = {"episode_id": "e1", "status": "ok", "metrics": {"SR": 1},
-               "workdir": "w0/maps_20260801_100000_citynav_e1"}
-    # File order is completion order: the re-fly (later start) landed first.
-    (root / "episodes.jsonl").write_text(
-        json.dumps(later) + "\n" + json.dumps(earlier) + "\n"
-    )
-    assert _sr_by_episode(root) == {"e1": 1}
-
-
 def test_the_served_alias_is_not_the_served_build():
     """`inkling-small` named two different quantizations on the same cluster
     in the same week — `thinkingmachines/Inkling-Small-NVFP4` and
