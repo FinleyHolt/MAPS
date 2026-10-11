@@ -553,82 +553,76 @@ class SearchLoop:
     # Per-flight perception
     # ------------------------------------------------------------------ #
 
-    def update_perception(
-        self,
-        *,
-        step_idx: int,
-        detections: list,
-        projected_masks: dict[int, object] | None = None,
-        bounds_xy_min: tuple[float, float] | None = None,
-        cell_size_m: float | None = None,
-    ) -> list[dict]:
-        """Fold one flight's detections into the runtime graph.
-
-        Returns the per-step detections record (the serialisable shape
-        the recorder expects).
-        """
-        with self._lock:
-            return self._update_perception_locked(
-                step_idx=step_idx,
-                detections=detections,
-                projected_masks=projected_masks,
-                bounds_xy_min=bounds_xy_min,
-                cell_size_m=cell_size_m,
-            )
-
-    def _update_perception_locked(
-        self,
-        *,
-        step_idx: int,
-        detections: list,
-        projected_masks: dict[int, object] | None = None,
-        bounds_xy_min: tuple[float, float] | None = None,
-        cell_size_m: float | None = None,
-    ) -> list[dict]:
-        s = self.state
-        bounds_min = bounds_xy_min or self._tile_origin_xy
-        cell = float(cell_size_m or self._grid.cell_size_m)
-
-        now = time.time()
-
-        upsert_ids, step_detections = self._upsert_detections(
-            detections=detections,
-            projected_masks=projected_masks or {},
-            now=now,
-            bounds_min=bounds_min,
-            cell_size_m=cell,
+    def update_perception(self, detections: list, projected_masks: dict[int, object]) -> list[dict]:
+        """Fold one flight's detections into the runtime graph: tracked ones
+        with a projected footprint through the tracked upsert, the rest
+        centroid-only. Returns the per-step detection records the recorder
+        writes."""
+        from maps.sws.graph import (  # noqa: PLC0415
+            upsert_detected_centroid_only,
+            upsert_tracked_detected,
         )
 
-        # THIS flight's folded detections, as the handles the analyze
-        # surface serves (same graph, same fids; the loop refreshes its
-        # surface after every fly, so they are addressable the turn the
-        # report lands). xy comes off the detection itself -- the durable
-        # coordinate if a later dedup re-homes the fid. Replaced whole
-        # every step: a step folding nothing leaves an empty list, never
-        # the previous flight's.
-        _seen: dict[str, dict] = {}
-        for _i, _fid in sorted(upsert_ids.items()):
-            try:
-                _det = detections[_i]
-            except (IndexError, TypeError):
-                continue
-            _wxy = getattr(_det, "world_xy", None)
-            if not isinstance(_fid, str) or _wxy is None:
-                continue
-            try:
-                _conf = float(getattr(_det, "confidence", 0.0) or 0.0)
-            except (TypeError, ValueError):
-                _conf = 0.0
-            _seen.setdefault(_fid, {
-                "fid": _fid,
-                "class": str(getattr(_det, "label", "") or ""),
-                "xy": [round(float(_wxy[0]), 1), round(float(_wxy[1]), 1)],
-                # The detector's own score, so the report's head can show
-                # the best of each class instead of the first folded.
-                "conf": round(_conf, 3),
-            })
-        s.last_flight_detections = list(_seen.values())
-        return step_detections
+        with self._lock:
+            s = self.state
+            bounds_min, cell, now = self._tile_origin_xy, self._cell_size_m, time.time()
+            # The world tracker stamps each detection's stable cross-frame
+            # ``track_id`` ('wt_<n>'), the upsert's sole re-id key.
+            self._world_tracker.update(detections)
+            upsert_ids: dict[int, str] = {}
+            for i, tp in projected_masks.items():
+                det = detections[i]
+                if not (det.metadata or {}).get("track_id"):
+                    continue
+                upsert_ids[i] = upsert_tracked_detected(
+                    s.runtime_graph,
+                    track_id=self._detection_id(det),
+                    base_node=_detection_to_mapobject(det, bounds_min, cell, now),
+                    # Sparse occupied cells, never a dense tile raster.
+                    rows=tp.rows,
+                    cols=tp.cols,
+                    confidence=float(det.confidence),
+                    now=now,
+                )
+
+            step_detections: list[dict] = []
+            for i, det in enumerate(detections):
+                if i not in upsert_ids:
+                    node = _detection_to_mapobject(det, bounds_min, cell, now)
+                    upsert_detected_centroid_only(s.runtime_graph, node, now=now)
+                det_record = {
+                    "world_xy": list(det.world_xy),
+                    "label": det.label,
+                    "confidence": float(det.confidence),
+                    "source_tier": det.source_tier,
+                    "attributes": dict(det.attributes or {}),
+                    "metadata": {k: _json_safe(v) for k, v in (det.metadata or {}).items()},
+                }
+                if det.mask is not None:
+                    mask_record = encode_mask_record(det.mask.crop, bbox_rcrc=det.mask.bbox)
+                    if mask_record is not None:
+                        det_record.update(mask_record)
+                step_detections.append(det_record)
+
+            # THIS flight's tracked detections, by the fids the analyze
+            # surface serves, for the flight report; replaced whole every
+            # flight. xy is the detection's own, durable if a later dedup
+            # re-homes the fid.
+            seen: dict[str, dict] = {}
+            for i, fid in sorted(upsert_ids.items()):
+                det = detections[i]
+                if det.world_xy is None:
+                    continue
+                seen.setdefault(fid, {
+                    "fid": fid,
+                    "class": str(det.label or ""),
+                    "xy": [round(float(det.world_xy[0]), 1), round(float(det.world_xy[1]), 1)],
+                    # The detector's own score: the report heads each class
+                    # with its best.
+                    "conf": round(float(det.confidence or 0.0), 3),
+                })
+            s.last_flight_detections = list(seen.values())
+            return step_detections
 
     def last_flight_detections(self) -> list[dict]:
         """``[{fid, class, xy}]`` folded by the LAST perception update.
@@ -688,122 +682,20 @@ class SearchLoop:
     # Internal phase helpers
     # ------------------------------------------------------------------ #
 
-    def _upsert_detections(
-        self,
-        *,
-        detections: list,
-        projected_masks: dict[int, object],
-        now: float,
-        bounds_min: tuple[float, float],
-        cell_size_m: float,
-    ) -> tuple[dict[int, str], list[dict]]:
-        """Upsert each detection: tracked ones with a projected footprint
-        through the tracked upsert, the rest centroid-only. Returns the
-        tracked index -> fid map and the per-step detection records."""
-        from maps.sws.graph import (
-            upsert_detected_centroid_only,
-            upsert_tracked_detected,
-        )
-
-        s = self.state
-        # World-space tracker: assign a STABLE cross-frame ``track_id``
-        # ('wt_<n>') in place on each detection BEFORE the upsert, so
-        # ``_find_track``'s primary exact-id match re-identifies the
-        # object directly instead of relying on the per-frame world-IoU
-        # fallback (which churns and folds thin diagonals together). Runs
-        # on whatever detections arrive (image-mode SAM, video, or
-        # synthetic) — it is situation-agnostic.
-        self._world_tracker.update(detections)
-        # Pass the world-tracker ``track_id`` straight through to the
-        # world-state upsert. That ByteTrack id is the sole re-id signal:
-        # ``_find_track`` resolves it by exact match, so cross-frame re-ID
-        # is preserved without a parallel canonical-UUID layer.
-        tracked_by_idx: dict[int, str] = {
-            i: self._detection_id(det)
-            for i, det in enumerate(detections)
-            if (det.metadata or {}).get("track_id")
-        }
-
-        upsert_ids: dict[int, str] = {}
-        if projected_masks:
-            batch_replaces: list[dict] = []
-            batch_index_map: list[int] = []
-            for i, tp in projected_masks.items():
-                track_id = tracked_by_idx.get(i)
-                if track_id is None:
-                    continue
-                det = detections[i]
-                base = _detection_to_mapobject(det, bounds_min, cell_size_m, now)
-                batch_replaces.append(
-                    {
-                        "track_id": track_id,
-                        "base_node": base,
-                        # Sparse occupied cells, never a dense tile raster:
-                        # a full-city tile is ~10 MB per detection dense
-                        # against a few kB sparse.
-                        "rows": tp.rows,
-                        "cols": tp.cols,
-                        "confidence": float(det.confidence),
-                        "now": now,
-                    }
-                )
-                batch_index_map.append(i)
-            fids_out = [
-                upsert_tracked_detected(s.runtime_graph, **r) for r in batch_replaces
-            ]
-            upsert_ids.update(zip(batch_index_map, fids_out))
-
-        step_detections: list[dict] = []
-        for i, det in enumerate(detections):
-            if i not in upsert_ids:
-                node = _detection_to_mapobject(det, bounds_min, cell_size_m, now)
-                upsert_detected_centroid_only(s.runtime_graph, node, now=now)
-            det_record = {
-                "world_xy": list(det.world_xy),
-                "label": det.label,
-                "confidence": float(det.confidence),
-                "source_tier": det.source_tier,
-                "attributes": dict(det.attributes or {}),
-                "metadata": {k: _json_safe(v) for k, v in (det.metadata or {}).items()},
-            }
-            if det.mask is not None:
-                mask_record = encode_mask_record(
-                    det.mask.crop, bbox_rcrc=det.mask.bbox
-                )
-                if mask_record is not None:
-                    det_record.update(mask_record)
-            step_detections.append(det_record)
-
-        return upsert_ids, step_detections
-
     @staticmethod
     def _detection_id(det) -> str:
-        """Stable per-detection id.
+        """The world tracker's ``wt_<n>`` id, else ``label@x,y``.
 
-        Precedence: the world tracker's stable id ('wt_<n>') wins when
-        present — it is the canonical cross-frame identity authority for
-        ``_find_track``'s exact-id match. A FRAME-LOCAL INDEX IS NEVER A
-        RE-ID KEY: the retired ``sam3_1_<object_id>`` fallback was the
-        per-frame post-NMS index, so stop N's detection 3 exact-matched
-        stop N+1's unrelated detection 3 and ``_find_track`` re-homed the
-        node 300 m — a pass DESTROYED its own rows as it flew (140#138's
-        GT lot, four runs). Every SAM detection with a world position
-        carries ``wt_``; a non-churning adapter track id (gt_perfect's
-        stable object ids) still rides, and everything else keys on
-        label@xy — a per-frame identity that collides only when two
-        sightings are genuinely co-located, which is the fold the graph
-        wants.
+        A FRAME-LOCAL INDEX IS NEVER A RE-ID KEY: the segmenter's per-frame
+        ``sam3_1_img_<n>`` id would exact-match the next stop's unrelated
+        detection n and re-home its node. ``label@x,y`` collides only on
+        genuine co-location, which is the fold the graph wants.
         """
-        meta = getattr(det, "metadata", None) or {}
-        if isinstance(meta, dict):
-            track = meta.get("track_id")
-            if isinstance(track, str) and track.startswith("wt_"):
-                return track
-            if track and not str(track).startswith("sam3_1_img_"):
-                return str(track)
-        label = str(getattr(det, "label", "?") or "?")
-        xy = getattr(det, "world_xy", None) or (0.0, 0.0)
-        return f"{label}@{float(xy[0]):.0f},{float(xy[1]):.0f}"
+        track = (det.metadata or {}).get("track_id")
+        if isinstance(track, str) and track.startswith("wt_"):
+            return track
+        xy = det.world_xy or (0.0, 0.0)
+        return f"{det.label or '?'}@{float(xy[0]):.0f},{float(xy[1]):.0f}"
 
 
 # ---------------------------------------------------------------------------

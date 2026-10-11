@@ -199,7 +199,7 @@ def echo_pose(ctx, report: dict) -> None:
         ctx.pose_xy = (float(pxy[0]), float(pxy[1]))
 
 
-def perceive(h, obs, detections, step_idx: int, mark=lambda _phase: None) -> list[dict]:
+def perceive(h, obs, detections, mark=lambda _phase: None) -> list[dict]:
     """Project and stamp one observation's detections through its view square
     and fold them into the live world-state; returns the folded rows. The
     one ingest path a flight and the bench's retrospective boost share."""
@@ -207,13 +207,7 @@ def perceive(h, obs, detections, step_idx: int, mark=lambda _phase: None) -> lis
         detections, view_corners_xy=obs.ortho_view_corners_xy, rgb=obs.rgb, tile=h.tile_frame,
     )) if obs is not None else {}
     mark("project")
-    return h.search_loop.update_perception(
-        step_idx=step_idx,
-        detections=detections,
-        projected_masks=projected,
-        bounds_xy_min=(float(h.assets.bounds.x_min), float(h.assets.bounds.y_min)),
-        cell_size_m=float(h.assets.cell_size_m),
-    )
+    return h.search_loop.update_perception(detections=detections, projected_masks=projected)
 
 
 class MissionSession:
@@ -386,7 +380,7 @@ class MissionSession:
             else []
         )
         _ph.at("segment")
-        step_detections = perceive(h, obs, detections, step_idx, mark=_ph.at)
+        step_detections = perceive(h, obs, detections, mark=_ph.at)
         _ph.at("fold")
 
         if self.recorder is not None and obs is not None:
