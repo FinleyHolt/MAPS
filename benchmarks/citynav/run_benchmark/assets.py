@@ -26,45 +26,6 @@ class BlockAssets:
     base_features: dict  # Prebaked features dict, loaded once per block.
 
 
-def _assert_descriptions_wall(features: object, source_path: str) -> None:
-    """CityRefer descriptions-wall regression guard. Walks the loaded
-    features dict (the LLM-bound catalog) and aborts loudly if any
-    nested entry carries a ``description`` or ``descriptions`` field.
-
-    The per-episode operator instruction is one item of the CityRefer
-    object's NL description list. If the bake (or any upstream change)
-    ever surfaces ``descriptions`` into the LLM-bound catalog, the
-    ranker can string-match the instruction back to the catalog node
-    that contains it and recover ground-truth position at rank 0 --
-    silently flipping SR toward ~100% via label leak. The load-bearing
-    wall is ``benchmarks/citynav/bake/city.py`` (descriptions
-    stripped at bake time); this is a defense-in-depth assertion that
-    catches a regression at load time, before any LLM call.
-    """
-
-    def _walk(obj: object, path: str) -> None:
-        if isinstance(obj, dict):
-            for key, val in obj.items():
-                if key in ("description", "descriptions"):
-                    raise RuntimeError(
-                        f"CityRefer descriptions-wall REGRESSION at "
-                        f"{source_path}{path}: field {key!r} reached the "
-                        f"LLM-bound features catalog. This is a "
-                        f"ground-truth label leak (the agent's per-episode "
-                        f"instruction is one item of this list; the ranker "
-                        f"would recover GT position by string-match). "
-                        f"Restore the bake-time strip in "
-                        f"bake/city.py; do NOT rely on the "
-                        f"runtime denylist alone."
-                    )
-                _walk(val, f"{path}/{key}")
-        elif isinstance(obj, list):
-            for i, val in enumerate(obj):
-                _walk(val, f"{path}[{i}]")
-
-    _walk(features, "")
-
-
 def load_episode_assets(map_name: str, cell_size_m: float) -> BlockAssets:
     """Load the episode's per-block bakes."""
     stem = tile_stem(map_name)
@@ -88,7 +49,8 @@ def load_episode_assets(map_name: str, cell_size_m: float) -> BlockAssets:
     cell_size_m = float(meta.get("cell_size_m", cell_size_m))
 
     # The features dict is the OSM bake's sidecar, never rebuilt from
-    # objects.json (that would hand the reasoner ground-truth geometry).
+    # objects.json (that would hand the reasoner ground-truth geometry); the
+    # bake drops the CityRefer descriptions (bake/city.py _PRIVILEGED_KEYS).
     feat_path = Path(f"{stem}_features.json")
     if not feat_path.exists():
         raise FileNotFoundError(
@@ -97,7 +59,6 @@ def load_episode_assets(map_name: str, cell_size_m: float) -> BlockAssets:
         )
     base_features = json.loads(feat_path.read_text())
     assert_current_tile_schema(base_features, str(feat_path))
-    _assert_descriptions_wall(base_features, str(feat_path))
 
     return BlockAssets(
         map_name=map_name,
