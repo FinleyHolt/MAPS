@@ -75,15 +75,11 @@ _CHEAP_GATE_MSG_COUNT = 4
 _CLEAR_HEADROOM_TOKENS = 16384
 
 
-class CompactionError(RuntimeError):
-    """Base class for autocompact failures."""
-
-
-class CompactionInfeasible(CompactionError):
+class CompactionInfeasible(RuntimeError):
     """No strategy can bring the prompt under target_input_tokens."""
 
 
-class CompactionInvariantError(CompactionError):
+class CompactionInvariantError(RuntimeError):
     """Post-compaction sweep found a tool_call_id without its counterpart:
     a result with no earlier call, or a call with no result."""
 
@@ -160,48 +156,48 @@ def _messages_for_tokenization(messages: list[dict]) -> list[dict]:
 _EVICTED_CROP_TEXT = "[earlier crop evicted from context]"
 
 
-def _evict_oldest_crops(
-    messages: list[dict], *, shed_tokens: int
+def _crop_slots(messages: list[dict]) -> list[tuple[int, int]]:
+    """``(message index, part index)`` of every ``image_url`` part, in order."""
+    return [
+        (i, j)
+        for i, message in enumerate(messages)
+        if isinstance(message.get("content"), list)
+        for j, part in enumerate(message["content"])
+        if isinstance(part, dict) and part.get("type") == "image_url"
+    ]
+
+
+def _evict_crops(
+    messages: list[dict], *, shed_tokens: int, current: bool
 ) -> tuple[list[dict], int, int]:
-    """Drop the OLDEST image crops until ``shed_tokens`` are freed.
+    """Replace crops with :data:`_EVICTED_CROP_TEXT`, oldest first, until
+    ``shed_tokens`` are freed: every priced crop before the message carrying
+    the newest crops (the current turn's), or with ``current`` that
+    message's own crops but its newest.
 
     Returns ``(messages, n_evicted, tokens_freed)``; the input list is never
-    mutated and is returned unchanged when nothing is evicted. The LAST
-    message carrying images (the current turn's crops) is never touched.
-    Each crop's cost comes from its own pixels, so no re-tokenization runs
-    per eviction.
+    mutated and comes back itself when nothing is evicted. Each crop's cost
+    comes from its own pixels, so no re-tokenization runs per eviction.
     """
-    last_with_images = -1
-    for i, message in enumerate(messages):
-        content = message.get("content")
-        if isinstance(content, list) and any(
-            isinstance(p, dict) and p.get("type") == "image_url" for p in content
-        ):
-            last_with_images = i
-    if last_with_images < 0:
+    slots = _crop_slots(messages)
+    if not slots:
         return messages, 0, 0
-
+    last = slots[-1][0]
+    if current:
+        slots = [s for s in slots if s[0] == last][:-1]
+    else:
+        slots = [(i, j) for i, j in slots
+                 if i < last and image_tokens_of(messages[i]["content"][j])]
     out = list(messages)
     freed = evicted = 0
-    for i in range(last_with_images):
+    for i, j in slots:
         if freed >= shed_tokens:
             break
-        content = out[i].get("content")
-        if not isinstance(content, list):
-            continue
-        parts: list[dict] = []
-        touched = False
-        for part in content:
-            cost = image_tokens_of(part)
-            if cost and freed < shed_tokens:
-                freed += cost
-                evicted += 1
-                touched = True
-                parts.append({"type": "text", "text": _EVICTED_CROP_TEXT})
-            else:
-                parts.append(part)
-        if touched:
-            out[i] = {**out[i], "content": parts}
+        freed += image_tokens_of(out[i]["content"][j])
+        evicted += 1
+        parts = list(out[i]["content"])
+        parts[j] = {"type": "text", "text": _EVICTED_CROP_TEXT}
+        out[i] = {**out[i], "content": parts}
     return (out, evicted, freed) if evicted else (messages, 0, 0)
 
 
@@ -222,13 +218,7 @@ def bound_image_count(messages: list[dict], *, max_images: int) -> list[dict]:
     last. The input list is never mutated and is returned itself when it is
     already within the limit.
     """
-    image_at = [
-        (i, j)
-        for i, message in enumerate(messages)
-        if isinstance(message.get("content"), list)
-        for j, part in enumerate(message["content"])
-        if isinstance(part, dict) and part.get("type") == "image_url"
-    ]
+    image_at = _crop_slots(messages)
     if len(image_at) <= max_images:
         return messages
     excess = len(image_at) - max(max_images - _IMAGE_COUNT_HEADROOM, 1)
@@ -422,45 +412,6 @@ def _drop_spent_turns(
     return out, len(folded), freed
 
 
-def _evict_current_turn_crops(
-    messages: list[dict], *, shed_tokens: int
-) -> tuple[list[dict], int, int]:
-    """Last resort: thin the CURRENT turn's own crops, oldest-first.
-
-    Reached when the newest vision message alone overruns the window. The
-    NEWEST crop always survives, so the turn never degenerates to a
-    text-only prompt.
-    """
-    last_with_images = -1
-    for i, message in enumerate(messages):
-        content = message.get("content")
-        if isinstance(content, list) and any(
-            isinstance(p, dict) and p.get("type") == "image_url" for p in content
-        ):
-            last_with_images = i
-    if last_with_images < 0:
-        return messages, 0, 0
-
-    content = messages[last_with_images]["content"]
-    crop_at = [
-        j for j, p in enumerate(content)
-        if isinstance(p, dict) and p.get("type") == "image_url"
-    ]
-    freed = evicted = 0
-    parts = list(content)
-    for j in crop_at[:-1]:  # never the newest
-        if freed >= shed_tokens:
-            break
-        freed += image_tokens_of(parts[j])
-        evicted += 1
-        parts[j] = {"type": "text", "text": _EVICTED_CROP_TEXT}
-    if not evicted:
-        return messages, 0, 0
-    out = list(messages)
-    out[last_with_images] = {**out[last_with_images], "content": parts}
-    return out, evicted, freed
-
-
 def _estimate_input_tokens(
     messages: list[dict],
     *,
@@ -526,28 +477,18 @@ def _validate_invariants(messages: list[dict]) -> None:
 # line). The ``fids`` list carries the rank order and
 # ``census``/``len``/``named``/``columns`` the census and schema, so dropping
 # these trims a dump to fids+census without removing any candidate fid.
-_TRIM_RENDER_KEYS = ("rows", "units", "grid", "legend")
+_TRIM_RENDER_KEYS = ("rows", "legend")
 
 
 def _iter_op_heads(obj: dict):
-    """Yield the per-op head dicts wherever the payload nests them.
-
-    The analyze payload is ``{"results": {"rN": head, ...}}``; a bare head
-    or a top-level ``{op_ref: head}`` map also occur. The mission surface
-    wraps the same dump under ``result``:
-    ``{"said": ..., "result": {"results": {"near_res": head}}}``.
-    """
-    if any(k in obj for k in _TRIM_RENDER_KEYS):
-        yield obj
-        return
-    wrapped = obj.get("result")
-    if isinstance(wrapped, dict) and not isinstance(obj.get("results"), dict):
-        yield from _iter_op_heads(wrapped)
-        return
-    inner = obj.get("results") if isinstance(obj.get("results"), dict) else obj
-    for v in inner.values():
-        if isinstance(v, dict) and any(k in v for k in _TRIM_RENDER_KEYS):
-            yield v
+    """The op heads of a served ``run`` result,
+    ``{"result": {"results": {name: head, ...}}}``, that carry a render."""
+    res = obj.get("result")
+    results = res.get("results") if isinstance(res, dict) else None
+    if isinstance(results, dict):
+        for v in results.values():
+            if isinstance(v, dict) and any(k in v for k in _TRIM_RENDER_KEYS):
+                yield v
 
 
 def _rows_color_entries(rows: str) -> list[str]:
@@ -632,11 +573,7 @@ def _degrade_oversized_tool_dumps(
     every candidate fid. A message not in the expected shape stays verbatim.
     Biggest dumps trim first, so the fewest trims restore feasibility, except
     the NEWEST dump, the round's live evidence, which trims last."""
-    idxs = [
-        i for i, m in enumerate(messages)
-        if isinstance(m, dict) and m.get("role") == "tool"
-        and _carries_dump(m.get("content"))
-    ]
+    idxs = _dump_result_indices(messages)
     newest = max(idxs) if idxs else None
     idxs.sort(key=lambda i: len(messages[i]["content"]), reverse=True)
     if newest is not None:
@@ -687,16 +624,12 @@ def compact_transcript(
     target_input_tokens: int,
     model: str,
     tools: list[dict] | None = None,
-    site: str = "unknown",
 ) -> list[dict]:
     """Return a possibly-compacted view of ``messages`` whose
     chat-templated input-token count is <= ``target_input_tokens``.
 
     Below budget: returns ``messages`` itself (same ``id()``). Above budget:
     the steps of the module docstring, in order. No LLM call is made.
-
-    ``site`` identifies the call site for log lines (e.g.
-    ``"reasoner.step_tool_call"``).
 
     Raises ``CompactionInfeasible`` when every step together cannot reach
     the target, and ``CompactionInvariantError`` if the post-compaction
@@ -730,18 +663,16 @@ def compact_transcript(
     folded_turns = 0
     out = messages
     output_tokens = input_tokens
-    if input_tokens > target_input_tokens:
-        out, folded_turns, freed_fold = _drop_spent_turns(
-            out, shed_tokens=input_tokens - low_water, model=model, tools=tools,
+    out, folded_turns, freed_fold = _drop_spent_turns(
+        out, shed_tokens=input_tokens - low_water, model=model, tools=tools,
+    )
+    if folded_turns:
+        output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
+        log.info(
+            "compaction folded %d spent turn(s) into a script block, "
+            "freed ~%d tok -> %s/%d",
+            folded_turns, freed_fold, output_tokens, target_input_tokens,
         )
-        if folded_turns:
-            output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
-            log.info(
-                "compaction[%s] folded %d spent turn(s) into a script block, "
-                "freed ~%d tok -> %s/%d",
-                site, folded_turns, freed_fold, output_tokens,
-                target_input_tokens,
-            )
 
     # 5. STEP 2 -- clear stale dumps (never the newest, the live view) to
     # their fids+census stubs oldest-first, color tables kept, stopping at the
@@ -818,37 +749,37 @@ def compact_transcript(
                 stripped_findings = True
         if stripped_findings:
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
-            log.info("compaction[%s] stripped block findings -> %s/%d",
-                     site, output_tokens, target_input_tokens)
+            log.info("compaction stripped block findings -> %s/%d",
+                     output_tokens, target_input_tokens)
 
     # 9. STEP 6 -- evict STALE image crops, oldest-first, never the message
     # carrying the current turn's. Text-only transcripts have nothing to
     # evict.
     n_evicted = 0
     if output_tokens > target_input_tokens:
-        out, n_evicted, freed = _evict_oldest_crops(
-            out, shed_tokens=output_tokens - target_input_tokens
+        out, n_evicted, freed = _evict_crops(
+            out, shed_tokens=output_tokens - target_input_tokens, current=False
         )
         if n_evicted:
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
             log.info(
-                "compaction[%s] evicted %d stale crop(s), freed ~%d tok -> %s/%d",
-                site, n_evicted, freed, output_tokens, target_input_tokens,
+                "compaction evicted %d stale crop(s), freed ~%d tok -> %s/%d",
+                n_evicted, freed, output_tokens, target_input_tokens,
             )
 
     # 10. STEP 7 -- thin the CURRENT turn's crops, oldest-first, keeping the
     # newest.
     evicted_current = 0
     if output_tokens > target_input_tokens:
-        out, evicted_current, freed_current = _evict_current_turn_crops(
-            out, shed_tokens=output_tokens - target_input_tokens
+        out, evicted_current, freed_current = _evict_crops(
+            out, shed_tokens=output_tokens - target_input_tokens, current=True
         )
         if evicted_current:
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
             log.info(
-                "compaction[%s] thinned the current turn: %d crop(s), "
+                "compaction thinned the current turn: %d crop(s), "
                 "freed ~%d tok -> %s/%d",
-                site, evicted_current, freed_current, output_tokens,
+                evicted_current, freed_current, output_tokens,
                 target_input_tokens,
             )
 
@@ -875,17 +806,16 @@ def compact_transcript(
             f"{degraded_dumps} dump(s), folded {folded_turns} spent turn(s), "
             f"evicted {n_evicted} stale crop(s) AND thinned {evicted_current} "
             f"current-turn crop(s); tokens={output_tokens} still exceeds "
-            f"target={target_input_tokens} (site={site}, "
-            f"input_tokens={input_tokens}); largest: {anatomy}")
+            f"target={target_input_tokens} "
+            f"(input_tokens={input_tokens}); largest: {anatomy}")
 
     # 11. Invariant validation: closure AND coverage.
     _validate_invariants(out)
 
     log.info(
-        "[compactor] fired site=%s input_tokens=%d output_tokens=%d "
+        "[compactor] fired input_tokens=%d output_tokens=%d "
         "cleared_dumps=%d color_tables_kept=%d degraded_dumps=%d "
         "latency_s=%.2f",
-        site,
         input_tokens,
         output_tokens,
         len(cleared),
@@ -897,7 +827,6 @@ def compact_transcript(
 
 
 __all__ = [
-    "CompactionError",
     "CompactionInfeasible",
     "CompactionInvariantError",
     "compact_transcript",

@@ -218,7 +218,6 @@ class Reasoner:
             target_input_tokens=self.endpoint_spec.input_budget,
             model=self.model,
             tools=tools,
-            site="reasoner.step_tool_call",
         )
         wire = speaks_openai(self.model)
         sent = self.messages
