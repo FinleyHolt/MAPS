@@ -998,11 +998,8 @@ def _bake_provenance() -> dict[str, Any]:
 
 
 def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
     with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(fh, "sha256").hexdigest()
 
 
 _EXCLUDED = (
