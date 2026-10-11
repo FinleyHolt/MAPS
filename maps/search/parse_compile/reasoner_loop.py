@@ -594,9 +594,8 @@ def _mission_sanitize_moves(raw: list[str]) -> tuple[list[dict], list[dict]]:
         token = token.strip()
         if _is_handle_token(token):
             errors.append({"index": i, "error": (
-                f"{token!r} is a result handle; move takes a staged "
-                "handle (vN), a literal fid off the rows, or an [x, y] "
-                "world point")})
+                f"{token!r} is a result handle; move takes a literal fid "
+                "off the rows, a flown stop id, or an [x, y] world point")})
             continue
         accepted.append({"target_fid": token})
     return accepted, errors

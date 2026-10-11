@@ -39,6 +39,8 @@ def test_sanitizer_is_directly_pinned():
     assert errs == []
     ok, errs = _mission_sanitize_moves(["r3[0:2]"])
     assert ok == [] and "is a result handle" in errs[0]["error"], errs
+    # what move accepts, and only that
+    assert "staged" not in errs[0]["error"] and "flown stop id" in errs[0]["error"], errs
 
 
 def test_second_consecutive_empty_turn_still_ends_the_mission():
