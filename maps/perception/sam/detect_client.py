@@ -623,7 +623,6 @@ SEGMENT_CONNECT_TIMEOUT_S = 45
 #: ``serving/sam_server.py``'s ``_INFLIGHT_WAIT_S`` (600 s) before
 #: it answers 503; the client must outwait that, or it abandons a request
 #: the server is still going to serve and posts the tile again on top.
-#: ``maps/perception/tests/test_detect_client.py`` pins the order.
 SEGMENT_READ_TIMEOUT_S = 660
 
 
