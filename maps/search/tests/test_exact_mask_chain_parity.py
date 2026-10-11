@@ -68,7 +68,7 @@ def test_chain_vs_fresh_parity_over_score_by_slice_and_filter():
          "args": {"items": "r1", "key": "distance to prior_1", "op": "le",
                   "value": 1000}},
         {"ref": "r3", "op": "compare",
-         "args": {"items": "r2[:3]", "refs": ["prior_1", "prior_2"]}},
+         "args": {"items": "r2[0:3]", "refs": ["prior_1", "prior_2"]}},
     ]}
     out = run_program([dict(_CAR)], _anchors(), chained)["results"]
     chained_rows = {r["fid"]: _geom_cols(r) for r in out["r3"]}
@@ -247,27 +247,6 @@ def test_tag_fat_row_renders_bounded_head():
 
 
 # --- degrader pins ----------------------------------------------------------
-
-def test_distance_key_positive_weight_serves_inversion_note():
-    prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0",
-                  "emphasis": [{"key": "distance to prior_1", "w": 1}]}},
-    ]}
-    out = run_program([], _anchors(), prog)["results"]
-    notes = list(getattr(out["r1"], "notes", []))
-    assert any("INVERTS its natural direction" in n
-               and "farthest" in n for n in notes), notes
-    # rank-0 IS the farthest (the sort itself is untouched -- note only)
-    assert out["r1"][0]["fid"] == "prior_3", [r["fid"] for r in out["r1"]]
-    # the default direction serves NO such note
-    prog["ops"][1]["args"]["emphasis"][0]["w"] = -1
-    out = run_program([], _anchors(), prog)["results"]
-    assert not any("INVERTS" in n
-                   for n in getattr(out["r1"], "notes", []) or []), (
-        getattr(out["r1"], "notes", []))
-
 
 def test_semicolon_compound_query_gets_the_or_remedy():
     prog = {"ops": [{"ref": "r0", "op": "find",

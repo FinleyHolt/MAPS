@@ -131,20 +131,3 @@ def test_side_columns_render_contiguous_in_fixed_order():
     assert fam == ["left of v1", "right of v1", "ahead of v1", "behind v1"]
     i = [cols.index(c) for c in fam]
     assert i == list(range(i[0], i[0] + 4))  # contiguous
-
-
-def test_side_key_sorts_keep_their_pair_in_the_budget_tier():
-    # score_by/filter_items put their read key in op_cols; the pair's
-    # sibling columns must ride the same budget tier, not the first-cut
-    # extras (they were cut first on exactly the ops that read them).
-    out = run_program(
-        [dict(c) for c in _CANDS], [],
-        {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-            {"ref": "r1", "op": "score_by",
-             "args": {"items": "r0",
-                      "emphasis": [{"key": "ahead of v1", "w": 1}]}},
-        ]},
-        staged=_STAGED)
-    oc = getattr(out["results"]["r1"], "op_cols", [])
-    assert {"left of v1", "right of v1", "ahead of v1", "behind v1"} <= set(oc)

@@ -2,6 +2,11 @@
 from __future__ import annotations
 
 from maps.search.analyze_scene import text_match as T
+from maps.search.analyze_scene.geom_program import (
+    _BroadRows,
+    _EmptyFindMiss,
+    run_program,
+)
 
 
 def _flat(*texts: str) -> dict:
@@ -301,3 +306,46 @@ def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
     assert U("Green Street", _rows("Green Street highway residential")) == []
     assert U("Green Street", _rows("Castle Street highway",
                                    colour="gray 0.55")) == ["green"]
+
+
+def test_find_query_returns_the_match_set_best_first():
+    # A block of streets, so the head noun is COMMON and the proper name is RARE -- the
+    # shape of every real map, and the one the fuzz band's IDF weighting reads. (Three
+    # rows with `earl` on two of them inverted that, and made a proper name the LESS
+    # discriminating half of the query.)
+    anchors = [
+        {"fid": "b_a", "name": "Earl Street", "xy": [0.0, 0.0], "class": "building"},
+        {"fid": "b_b", "name": "Earl Court", "xy": [10.0, 0.0], "class": "building"},
+        {"fid": "b_c", "name": "King Road", "xy": [20.0, 0.0], "class": "building"},
+        {"fid": "b_d", "name": "Main Street", "xy": [30.0, 0.0], "class": "building"},
+        {"fid": "b_e", "name": "Oak Street", "xy": [40.0, 0.0], "class": "building"},
+        {"fid": "b_f", "name": "Pine Street", "xy": [50.0, 0.0], "class": "building"},
+        {"fid": "b_g", "name": "Elm Street", "xy": [60.0, 0.0], "class": "building"},
+    ]
+    out = run_program([], [dict(a) for a in anchors], {"ops": [
+        {"ref": "r0", "op": "find",
+         "args": {"provenance": "prior", "query": "Earl Street"}},
+    ]})
+    rows = out["results"]["r0"]
+    # The result IS the match set (len = match count), best-first, ordered;
+    # the sub-threshold row stays out (a query-less find browses it).
+    assert isinstance(rows, _BroadRows), type(rows)
+    assert getattr(rows, "ordered", False), "a query-matched find is ordered"
+    # b_b is "Earl Court" -- it shares the word `earl` with an exactly-named
+    # "Earl Street" and is a DIFFERENT street, so once the query has named
+    # something the band leaves the match set.
+    assert {r["fid"] for r in rows} == {"b_a"}, rows
+    assert all(isinstance(r.get("name_match"), (int, float)) for r in rows), rows
+    scores = [r["name_match"] for r in rows]
+    assert scores == sorted(scores, reverse=True), scores  # best-first
+    assert rows[0]["fid"] == "b_a", rows  # the exact name match heads the set
+
+
+def test_find_query_no_match_returns_empty_miss_affordance():
+    out = run_program([], [{"fid": "b_a", "name": "Earl Street", "xy": [9.0, 9.0], "class": "building"}], {"ops": [
+        {"ref": "r0", "op": "find",
+         "args": {"provenance": "prior", "query": "zxqv wqzzk"}},
+    ]})
+    rows = out["results"]["r0"]
+    assert isinstance(rows, _EmptyFindMiss), type(rows)
+    assert len(rows) == 0, rows

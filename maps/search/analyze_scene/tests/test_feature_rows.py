@@ -4,7 +4,7 @@ import numpy as np
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import (
-    ProgramError, build_surface, run_program,
+    build_surface, run_program,
 )
 
 
@@ -77,25 +77,22 @@ def test_every_row_is_one_place_and_may_claim_a_centre():
 
 
 def test_a_row_that_is_STILL_several_places_orients_no_side():
-    """The ``_mask_center`` law, on the one shape that can still reach it."""
+    """The ``_mask_center`` law, on the one shape that can still reach it: a
+    reference that is several places serves its gap and no centre column."""
     speckled = _Way(None, [[10, c] for c in range(0, 10)]
                     + [[10, c] for c in range(400, 410)])
     _c, anchors = build_surface([], [("prior_1", speckled)], (0.0, 0.0), 2.0)
     assert G.chain_components(anchors[0]["mask"]) == 2, anchors[0]["mask"]
     assert anchors[0].get("mask_centroid") is None, anchors[0]
 
-    try:
-        run_program([{"fid": "d0", "xy": [83.0, 27.0], "class": "car"}],
-                    [dict(a) for a in anchors],
-                    {"ops": [{"ref": "r0", "op": "compare",
-                              "args": {"items": [{"fid": "d0",
-                                                  "xy": [83.0, 27.0],
-                                                  "class": "car"}],
-                                       "frame": {"reference": "prior_1",
-                                                 "side": "left"}}}]})
-        raise AssertionError("a two-place reference oriented a side")
-    except ProgramError as e:
-        assert "several disjoint places" in str(e), str(e)
+    out = run_program([{"fid": "d0", "xy": [83.0, 27.0], "class": "car"}],
+                      [dict(a) for a in anchors],
+                      {"ops": [{"ref": "r0", "op": "compare",
+                                "args": {"items": ["d0"], "refs": ["prior_1"]}}]})
+    row = out["results"]["r0"][0]
+    assert "distance to prior_1" in row, row
+    assert "center distance to prior_1" not in row, row
+    assert "bearing from prior_1" not in row, row
 
 
 def test_the_surface_carries_cells_and_a_name_repeats_across_its_ways():

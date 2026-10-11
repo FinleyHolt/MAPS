@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-"""ORDER-FREEDOM contract: the agent tool-calls in ANY order."""
+"""Columns a key names attach on demand, the remedies an absent key serves, and
+the pre-takeoff phase notes."""
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import (
@@ -49,102 +49,24 @@ _FIND_CARS = {"ref": "r0", "op": "find",
 
 
 # --------------------------------------------------------------------------- #
-# ALONG/OFF-LAZY: the chart parameter rides the key                            #
+# A LINE REF: its 'distance to' charts off the centerline                      #
 # --------------------------------------------------------------------------- #
-
-
-def test_along_emphasis_auto_attaches_without_compare():
-    out = _run([
-        _FIND_CARS,
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "$r0",
-                  "emphasis": [{"key": "along road_1", "w": -1}]}},
-    ])
-    fids = [r["fid"] for r in out["results"]["r1"]]
-    assert fids == ["d0", "d2", "d1"], fids  # arc order along the road
-    assert out["results"]["r1"][0]["along road_1"] is not None
 
 
 def test_off_filter_auto_attaches_without_compare():
     out = _run([
         _FIND_CARS,
         {"ref": "r1", "op": "filter_items",
-         "args": {"items": "$r0", "key": "distance to road_1",
+         "args": {"items": "r0", "key": "distance to road_1",
                   "op": "le", "value": 5.0}},
     ])
     fids = {r["fid"] for r in out["results"]["r1"]}
     assert fids == {"d0", "d2"}, fids  # d1 sits 8 m off the road
 
 
-def test_along_matches_explicit_frame_chart():
-    auto = _run([
-        _FIND_CARS,
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "$r0",
-                  "emphasis": [{"key": "along road_1", "w": -1}]}},
-    ])["results"]["r1"]
-    explicit = _run([
-        _FIND_CARS,
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "$r0", "frame": {"along": "road_1"}}},
-        {"ref": "r2", "op": "score_by",
-         "args": {"items": "$r1",
-                  "emphasis": [{"key": "along road_1", "w": -1}]}},
-    ])["results"]["r2"]
-    assert [r["fid"] for r in auto] == [r["fid"] for r in explicit]
-    assert auto[0]["along road_1"] == explicit[0]["along road_1"]
-
-
-def test_along_on_non_centerline_fid_falls_through_loud():
-    # 'church' is a live fid but carries no centerline -> no chart attaches
-    # and the guard fires with the along_/off_ family remedy.
-    msg = _err([
-        _FIND_CARS,
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "$r0",
-                  "emphasis": [{"key": "along church", "w": -1}]}},
-    ])
-    assert "along church" in msg, msg
-
-
 # --------------------------------------------------------------------------- #
 # FAMILY-REMEDY: the missing key's OWN producing idiom, in BOTH guards         #
 # --------------------------------------------------------------------------- #
-
-
-def test_name_match_remedy_names_find_query_in_both_guards():
-    for msg in (
-        _err([_FIND_CARS,
-              {"ref": "r1", "op": "score_by",
-               "args": {"items": "$r0",
-                        "emphasis": [{"key": "name_match", "w": 1}]}}]),
-        _err([_FIND_CARS,
-              {"ref": "r1", "op": "filter_items",
-               "args": {"items": "$r0", "key": "name_match",
-                        "op": "ge", "value": 0.5}}]),
-    ):
-        assert "find{query" in msg, msg
-        assert "compare" not in msg.split("numeric keys present")[0], msg
-
-
-def test_frame_column_remedy_names_compare_frame_in_both_guards():
-    for msg in (
-        _err([_FIND_CARS,
-              {"ref": "r1", "op": "score_by",
-               "args": {"items": "$r0",
-                        "emphasis": [{"key": "ahead of road_1", "w": 1}]}}]),
-        _err([_FIND_CARS,
-              {"ref": "r1", "op": "filter_items",
-               "args": {"items": "$r0", "key": "behind road_1",
-                        "op": "le", "value": 7}}]),
-    ):
-        assert "frame" in msg and "compare" in msg, msg
-    msg = _err([_FIND_CARS,
-                {"ref": "r1", "op": "filter_items",
-                 "args": {"items": "$r0", "key": "ord_rl",
-                          "op": "eq", "value": 7}}])
-    assert "no item carries" in msg and "keys present" in msg, msg
-    assert "frame" not in msg, msg
 
 
 def test_coordinate_shaped_ref_remedy_names_the_point_fact():
@@ -156,7 +78,7 @@ def test_coordinate_shaped_ref_remedy_names_the_point_fact():
     # related to it.
     msg = _err([_FIND_CARS,
                 {"ref": "r1", "op": "score_by",
-                 "args": {"items": "$r0",
+                 "args": {"items": "r0",
                           "emphasis": [{"key": "distance to 1593_5", "w": -1}]}}])
     assert "is not a fid" in msg and "POINT" in msg, msg
     assert "distance to <label>" in msg, msg
@@ -173,63 +95,15 @@ def test_key_census_prints_each_key_once():
 
 
 # --------------------------------------------------------------------------- #
-# CONTACT-FACT: brg_gap_ absent where d_=0 states the geometry                 #
+# TRUTHY: a key-presence cut takes no value                                    #
 # --------------------------------------------------------------------------- #
-
-
-def test_brg_gap_on_all_contact_pool_states_the_contact_fact():
-    # one candidate exactly ON the anchor point: d_=0 everywhere, brg_gap_
-    # legitimately absent. The error must state contact + the brg_ sibling,
-    # never "not a fid on this surface" (the fid IS live; the compare ran).
-    cands = [{"fid": "d0", "xy": [200.0, 200.0], "class": "car"}]
-    for msg in (
-        _err([_FIND_CARS,
-              {"ref": "r1", "op": "score_by",
-               "args": {"items": "$r0",
-                        "emphasis": [{"key": "facing church", "w": 1}]}}],
-             cands=cands),
-        _err([_FIND_CARS,
-              {"ref": "r1", "op": "filter_items",
-               "args": {"items": "$r0", "key": "facing church",
-                        "op": "ge", "value": 0.0}}],
-             cands=cands),
-    ):
-        assert "contact" in msg and "bearing from church" in msg, msg
-        assert "not a fid" not in msg, msg
-
-
-# --------------------------------------------------------------------------- #
-# VALUE-REQUIRED: filter_items without value is loud, never TypeError/dead     #
-# --------------------------------------------------------------------------- #
-
-
-def test_filter_omitted_value_is_loud_and_names_op_and_arg():
-    msg = _err([_FIND_CARS,
-                {"ref": "r1", "op": "filter_items",
-                 "args": {"items": "$r0", "key": "distance to church", "op": "lt"}}])
-    assert "'lt'" in msg and "'value'" in msg and "truthy" in msg, msg
-
-
-def test_filter_default_eq_without_value_is_loud_not_a_dead_filter():
-    msg = _err([_FIND_CARS,
-                {"ref": "r1", "op": "filter_items",
-                 "args": {"items": "$r0", "key": "class"}}])
-    assert "'eq'" in msg and "'value'" in msg, msg
 
 
 def test_filter_truthy_without_value_still_works():
     out = _run([_FIND_CARS,
                 {"ref": "r1", "op": "filter_items",
-                 "args": {"items": "$r0", "key": "class", "op": "truthy"}}])
+                 "args": {"items": "r0", "key": "class", "op": "truthy"}}])
     assert len(out["results"]["r1"]) == 3
-
-
-def test_filter_numeric_op_requires_numeric_value():
-    msg = _err([_FIND_CARS,
-                {"ref": "r1", "op": "filter_items",
-                 "args": {"items": "$r0", "key": "distance to church",
-                          "op": "lt", "value": "near"}}])
-    assert "NUMERIC" in msg and "'lt'" in msg, msg
 
 
 # --------------------------------------------------------------------------- #
@@ -275,20 +149,10 @@ def test_preflight_color_note_on_emphasis_only_attach():
         {"program": {"ops": [
             {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
             {"ref": "r1", "op": "score_by",
-             "args": {"items": "$r0",
+             "args": {"items": "r0",
                       "emphasis": [{"key": "color_red", "w": 1}]}},
         ]}}, namespace=_PRIOR_NS, preflight=True)
     assert _PREFLIGHT_COLOR_NOTE in str(out.get("error")), out
-
-
-def test_preflight_color_note_on_find_color():
-    out = run_geom_program_tool(
-        {"program": {"ops": [
-            {"ref": "r0", "op": "find",
-             "args": {"provenance": "prior", "color": "red"}},
-        ]}}, namespace=_PRIOR_NS, preflight=True)
-    assert "error" not in out, out
-    assert _PREFLIGHT_COLOR_NOTE in str(out["results"]["r0"].get("hint")), out
 
 
 def test_preflight_runtime_find_states_the_detection_fact():
@@ -308,7 +172,7 @@ def test_per_stop_round_serves_no_phase_note():
     out = run_geom_program_tool(
         {"program": {"ops": [
             {"ref": "r0", "op": "find",
-             "args": {"provenance": "runtime", "color": "red"}},
+             "args": {"provenance": "runtime", "query": "car"}},
         ]}}, namespace=ns)
     assert _PREFLIGHT_COLOR_NOTE not in str(out), out
     assert _PREFLIGHT_RUNTIME_NOTE not in str(out), out

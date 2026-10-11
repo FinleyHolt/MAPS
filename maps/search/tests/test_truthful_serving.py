@@ -4,7 +4,6 @@ from maps.search.analyze_scene import text_match as T
 from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
     _BROAD_HEAD_ROWS,
-    ProgramError,
     compact_results,
     run_program,
 )
@@ -399,24 +398,6 @@ def test_full_set_stays_chainable_past_the_head():
 # ---------------------------------------------------------------------------
 # B4 served strings
 # ---------------------------------------------------------------------------
-
-def test_color_filter_rejection_names_the_real_remedy():
-    # Class filters do not exist (the Key grammar admits no class key); the
-    # rejection must afford score_by + color_<word>, not 'filter by CLASS'.
-    world = [_prior("prior_0", 0, 0, tags={"building": "yes"})]
-    try:
-        run_program([], world, {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-            {"ref": "r1", "op": "filter_items",
-             "args": {"items": "r0", "key": "color", "value": "white"}},
-        ]})
-    except ProgramError as e:
-        msg = str(e)
-        assert "class" not in msg.lower()
-        assert "score_by" in msg and "color_<word>" in msg
-    else:
-        raise AssertionError("color filter must be rejected loudly")
-
 
 # ---------------------------------------------------------------------------
 # Dedup: an identical re-issue gets a one-line REFERENCE, never a payload

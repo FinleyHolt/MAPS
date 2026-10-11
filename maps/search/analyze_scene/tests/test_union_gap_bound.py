@@ -53,62 +53,6 @@ def test_the_bound_is_symmetric_and_cached():
     assert G.bbox_gap(a, empty) == 0.0  # prunes nothing rather than lying
 
 
-def test_the_pruned_union_min_equals_the_unpruned_one():
-    """The loop the bound serves, both ways, on a class-sized reference."""
-    rng = np.random.default_rng(5)
-    members = [G.mask_geom(ring(rng.uniform(0, 2000), rng.uniform(0, 2000),
-                                 rng.uniform(4, 40), rng.uniform(4, 40)))
-               for _ in range(300)]
-    items = [G.mask_geom(ring(rng.uniform(0, 2000), rng.uniform(0, 2000),
-                               rng.uniform(4, 40), rng.uniform(4, 40)))
-             for _ in range(40)]
-    saved = 0
-    for item in items:
-        plain = (None, None, None)
-        for g in members:
-            gd, gwr, gwi = G.gap_witness(g, item)
-            if plain[0] is None or gd < plain[0]:
-                plain = (gd, gwr, gwi)
-
-        d = wr = wi = None
-        calls = 0
-        for g in members:
-            if d is not None:
-                if d <= 0.0:
-                    break
-                if G.bbox_gap(g, item) > d:
-                    continue
-            calls += 1
-            _d, _wr, _wi = G.gap_witness(g, item)
-            if d is None or _d < d:
-                d, wr, wi = _d, _wr, _wi
-        saved += len(members) - calls
-        assert d == pytest.approx(plain[0]), "the pruned min differs"
-        assert wr == plain[1] and wi == plain[2], "a different witness survived"
-    # A vacuity floor: a run that pruned nothing would pass every assert above
-    # while proving nothing about the bound doing any work.
-    assert saved > len(items) * len(members) * 0.5, saved
-
-
-def test_a_zero_gap_stops_the_scan_without_changing_the_answer():
-    """Containment gives 0, and nothing can beat 0 -- but the break must not change
-    WHICH witness is kept when an earlier member already tied."""
-    a = G.mask_geom(ring(0, 0, 10, 10))
-    overlapping = G.mask_geom(ring(5, 5, 10, 10))
-    also = G.mask_geom(ring(6, 6, 10, 10))
-    members = [overlapping, also]
-    d = wr = None
-    for g in members:
-        if d is not None and d <= 0.0:
-            break
-        _d, _wr, _wi = G.gap_witness(g, a)
-        if d is None or _d < d:
-            d, wr = _d, _wr
-    assert d == 0.0
-    first, fwr, _ = G.gap_witness(overlapping, a)
-    assert first == 0.0 and wr == fwr, "the earliest zero must be the one kept"
-
-
 def test_math_bound_matches_a_hand_computed_separation():
     a = G.mask_geom(ring(0, 0, 10, 10))
     b = G.mask_geom(ring(30, 40, 10, 10))

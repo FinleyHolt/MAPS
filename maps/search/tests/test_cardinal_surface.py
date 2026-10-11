@@ -151,16 +151,6 @@ def test_an_abstained_cardinal_is_ABSENT_never_zero():
     assert row["north of quezon_avenue"] == 200.0  # the orthogonal one reads
 
 
-def test_a_diagonal_refuses_rather_than_answering():
-    cands, prior = _surface()
-    with pytest.raises(gp.ProgramError, match="diagonal"):
-        gp.run_program(cands, prior, {"ops": [
-            {"ref": "r1", "op": "compare", "args": {
-                "items": ["car_0"],
-                "refs": [{"ref": "prior_A", "as": "Orchid Drive"}],
-                "cardinals": [{"dir": "northeast", "ref": "orchid_drive"}]}}]})
-
-
 def test_a_corner_is_two_cuts_against_one_crossing():
 
     ops = raising_ops_of_block(

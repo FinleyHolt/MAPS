@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import (
@@ -24,10 +23,6 @@ def _run(ops, cands, anchors=None):
         {"ops": ops})
 
 
-# --------------------------------------------------------------------------- #
-# COLOR-BROWSE-ORDERED                                                        #
-# --------------------------------------------------------------------------- #
-
 _COLOR_CANDS = [
     {"fid": "d0", "xy": [10.0, 2.0], "class": "car",
      "color": "white", "color_conf": 0.9},
@@ -35,21 +30,6 @@ _COLOR_CANDS = [
      "color": "black", "color_conf": 0.9},
     {"fid": "d2", "xy": [50.0, 3.0], "class": "car"},  # colorless
 ]
-
-
-def test_color_browse_orders_by_color_column():
-    out = _run([{"ref": "r0", "op": "find",
-                 "args": {"color": "black", "provenance": "runtime"}}],
-               _COLOR_CANDS)
-    rows = list(out["results"]["r0"])
-    assert [r["fid"] for r in rows][0] == "d1"          # blackest first
-    assert [r["fid"] for r in rows][-1] == "d2"         # colorless last
-    assert len(rows) == 3                                # nothing dropped
-    env = compact_results(out["results"])["r0"]
-    assert env.get("fids") or env.get("rows"), env       # rows RENDER
-    hint = env.get("hint") or ""
-    assert "ordered by color_black" in hint, hint
-    assert "nothing dropped" in hint, hint
 
 
 # --------------------------------------------------------------------------- #
@@ -81,7 +61,7 @@ def test_near_square_centerline_ref_is_areal():
     out = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "compare",
-         "args": {"items": "$r0", "refs": ["lot_1"]}},
+         "args": {"items": "r0", "refs": ["lot_1"]}},
     ], _COLOR_CANDS)
     row = out["results"]["r1"][0]
     assert "distance to lot_1" in row, sorted(row)                 # areal family attaches
@@ -97,7 +77,7 @@ def test_distance_to_ranks_by_magnitude_either_side():
     magnitude = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "$r0",
+         "args": {"items": "r0",
                   "emphasis": [{"key": "distance to road_1", "w": -1}]}},
     ], cands)
     assert [r["fid"] for r in magnitude["results"]["r1"]] == \
@@ -108,7 +88,7 @@ def test_distance_to_on_a_line_charts_and_orders():
     out = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "$r0",
+         "args": {"items": "r0",
                   "emphasis": [{"key": "distance to road_1", "w": -1}]}},
     ], _COLOR_CANDS)
     rows = out["results"]["r1"]

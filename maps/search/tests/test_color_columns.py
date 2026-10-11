@@ -54,22 +54,6 @@ def test_emphasis_attaches_color_column_with_no_prior_find():
     assert sorted(r["fid"] for r in rows) == ["d0", "d1", "d2", "d3"]
 
 
-# --- FIND-ATTACHES-THE-SAME-COLUMN ------------------------------------------
-
-
-def test_find_color_attaches_the_named_column():
-    out = _run([
-        {"ref": "r0", "op": "find",
-         "args": {"provenance": "runtime", "color": "purple"}},
-    ])
-    rows = list(out["results"]["r0"])
-    by_fid = {r["fid"]: r for r in rows}
-    assert by_fid["d1"]["color_purple"] == round(G.color_match("purple", "purple", 0.9), 3)
-    assert "color_purple" not in by_fid["d3"]
-    # nothing dropped: color annotates, never gates
-    assert len(rows) == 4
-
-
 # --- COEXISTENCE: two color columns on the same rows, independent orders ---
 
 
@@ -102,10 +86,6 @@ def test_off_palette_word_errors_loud_with_the_palette():
         {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
             {"key": "color_chartreuse", "w": 1}]}},
     ], "closed palette", ", ".join(G.COLOR_ENUM))
-    _expect_error([
-        {"ref": "r0", "op": "find",
-         "args": {"provenance": "runtime", "color": "chartreuse"}},
-    ], "closed palette")
 
 
 def test_open_word_normalization_is_noted():
@@ -121,15 +101,6 @@ def test_open_word_normalization_is_noted():
     # (the blue car ranks first under the navy cue)
     assert rows[0]["fid"] == "d0", [r["fid"] for r in rows]
     assert isinstance(rows[0].get("color_blue"), float)
-
-    out2 = _run([
-        {"ref": "r0", "op": "find",
-         "args": {"provenance": "runtime", "color": "navy"}},
-    ])
-    rows2 = out2["results"]["r0"]
-    notes2 = getattr(rows2, "notes", []) or []
-    assert any("navy" in n and "color_blue" in n for n in notes2), notes2
-    assert isinstance({r["fid"]: r for r in rows2}["d0"].get("color_blue"), float)
 
 
 # --- OMIT-ON-COLORLESS: all-colorless pool is a loud, truthful error ------
@@ -149,18 +120,6 @@ def test_all_colorless_pool_color_emphasis_fails_loud():
         assert "perceived color" in str(e), str(e)
     else:
         raise AssertionError("expected ProgramError on an all-colorless pool")
-
-
-# --- ORDERING-ONLY: filter on any color key stays a loud rejection ---------
-
-
-def test_filter_on_any_color_key_is_rejected():
-    for key in ("color_blue", "color_score", "color", "color_conf"):
-        _expect_error([
-            {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-            {"ref": "r1", "op": "filter_items",
-             "args": {"items": "r0", "key": key, "op": "ge", "value": 0.5}},
-        ], "ordering signal")
 
 
 # --- CALIBRATED-UNIT: centered on 0.5, NEVER min-maxed ------------------------

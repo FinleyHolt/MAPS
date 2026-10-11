@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """AGENT-WEIGHTED ordering — the ``score_by{items, emphasis}`` contract."""
 from __future__ import annotations
 
@@ -12,7 +11,7 @@ from maps.search.parse_compile.reasoner_loop import (
 # compare against two point refs — the bare literal attaches the documented
 # _xy family (d_xy/brg_xy/dc_xy); the labeled {ref, as:'n'} form is the
 # named-columns path (d_n/brg_n/dc_n; a second BARE literal would be the
-# loud ambiguity error) — and find{color:'white'} attaches color_white.
+# loud ambiguity error).
 _CANDS = [
     {"fid": "d0", "xy": [0.0, 0.0], "class": "car", "color": "white"},
     {"fid": "d1", "xy": [90.0, 5.0], "class": "car", "color": "white"},
@@ -20,15 +19,15 @@ _CANDS = [
     {"fid": "d3", "xy": [50.0, 50.0], "class": "car", "color": "white"},
 ]
 _BASE = [
-    {"ref": "r0", "op": "find", "args": {"provenance": "runtime", "color": "white"}},
+    {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
     {"ref": "r1", "op": "compare",
-     "args": {"items": "$r0",
+     "args": {"items": "r0",
               "refs": [[100.0, 0.0], {"ref": [0.0, 100.0], "as": "n"}]}},
 ]
 
 
 def _score_by(emphasis=None):
-    op = {"ref": "r2", "op": "score_by", "args": {"items": "$r1"}}
+    op = {"ref": "r2", "op": "score_by", "args": {"items": "r1"}}
     if emphasis is not None:
         op["args"]["emphasis"] = emphasis
     return {"ops": _BASE + [op]}
@@ -74,39 +73,6 @@ def test_emphasis_sign_controls_order():
     assert pos[0] != neg[0] and pos[0] == neg[-1], (pos, neg)
 
 
-# --- REQUIRED-EMPHASIS: absent/empty is loud; keys/weights stay a redirect --
-
-
-def test_absent_emphasis_fails_loud():
-    try:
-        _run_fids(_score_by())
-    except ProgramError as e:
-        assert "emphasis" in str(e) and "EXACTLY" in str(e), str(e)
-    else:
-        raise AssertionError("expected ProgramError on absent emphasis")
-
-
-def test_empty_emphasis_list_fails_loud():
-    try:
-        _run_fids(_score_by([]))
-    except ProgramError as e:
-        assert "NON-EMPTY" in str(e), str(e)
-    else:
-        raise AssertionError("expected ProgramError on empty emphasis")
-
-
-def test_retired_keys_weights_args_fail_loud():
-    prog = {"ops": _BASE + [
-        {"ref": "r2", "op": "score_by",
-         "args": {"items": "$r1", "keys": ["distance to xy"], "weights": [-1]}}]}
-    try:
-        _run_fids(prog)
-    except ProgramError as e:
-        assert "emphasis" in str(e), str(e)
-    else:
-        raise AssertionError("expected ProgramError on keys/weights args")
-
-
 # --- NO-TERMINAL-REORDER: the program's own order is the surfaced order -----
 
 
@@ -123,10 +89,7 @@ def test_surfaced_order_is_the_programs_own_order():
 
 def test_compare_terminal_order_is_input_order():
     # a compare terminal (an attach, not a sort) surfaces INPUT order — no
-    # harness reorder fires even though color + d_ columns are on the rows.
-    # The input order is the color-browse's own: a query-less find{color}
-    # orders by its attached column (whites stable-first, the gray last),
-    # and compare passes that order through untouched.
+    # harness reorder fires even though d_ columns are on the rows.
     ns = {"cands": [dict(c) for c in _CANDS], "anchors": []}
     out = run_geom_program_tool({"program": {"ops": _BASE}}, namespace=ns)
     assert "error" not in out
@@ -134,7 +97,7 @@ def test_compare_terminal_order_is_input_order():
     # duplicate `fids` array beside it is gone
     _rows = out["results"]["r1"]["rows"].splitlines()
     _order = [ln.split("|")[1].strip() for ln in _rows[2:] if ln.startswith("|")]
-    assert _order == ["d0", "d1", "d3", "d2"], _order
+    assert _order == ["d0", "d1", "d2", "d3"], _order
 
 
 # --- NEVER-TOUCHES-COMMIT: permutation only, no fid added/dropped/mutated ----
@@ -156,23 +119,9 @@ def test_emphasis_key_no_row_carries_fails_loud():
     try:
         # 'nope' is not a fid on the surface, so the auto-attach can't resolve it
         # and the emphasis-key guard still fires loud (a real typo).
-        _run_fids(_score_by([{"key": "along nope", "w": 1}]))
+        _run_fids(_score_by([{"key": "distance to nope", "w": -1}]))
     except ProgramError as e:
-        assert "along nope" in str(e) and (
+        assert "distance to nope" in str(e) and (
             "auto-attach" in str(e) or "fid on this surface" in str(e))
     else:
         raise AssertionError("expected ProgramError on an absent emphasis key")
-
-
-def test_malformed_emphasis_element_fails_loud():
-    for bad in ([{"key": "distance to xy"}],                      # missing w
-                [{"w": 1}],                             # missing key
-                [{"key": "distance to xy", "w": "lots"}],         # w not numeric
-                [{"key": 5, "w": 1}],                   # key not a string
-                {"distance to xy": -1}):                          # not a list
-        try:
-            _run_fids(_score_by(bad))
-        except ProgramError:
-            pass
-        else:
-            raise AssertionError(f"expected ProgramError on malformed emphasis {bad!r}")

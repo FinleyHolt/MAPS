@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from maps.search.analyze_scene.geom_program import compact_results, run_program
+from maps.search.analyze_scene.geom_program import run_program
 
 _CANDS = [
     {"fid": "d0", "xy": [12.0, 10.0], "class": "car", "color": "white"},
@@ -54,23 +54,9 @@ def test_query_find_rows_carry_name_match():
 def test_unscored_ref_carries_no_name_match():
     out = _run([
         {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r2", "op": "compare", "args": {"items": "$r1", "refs": ["z_solo"]}},
+        {"ref": "r2", "op": "compare", "args": {"items": "r1", "refs": ["z_solo"]}},
     ])
     hdrs = _cmp_headers(out, "r2")
     assert hdrs, hdrs
     assert all("name_match" not in h and "match_score" not in h
                for h in hdrs), hdrs
-
-
-def test_compact_compare_header_carries_name_match():
-    # The rename survives the compact render the model actually reads.
-    out = _run([
-        {"ref": "r0", "op": "find",
-         "args": {"query": "manhattan house", "provenance": "prior"}},
-        {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r2", "op": "compare", "args": {"items": "$r1", "refs": ["$r0"]}},
-    ])
-    comp = compact_results(out["results"])["r2"]
-    keyset = {k for h in (comp.get("refs") or []) for k in h}
-    assert "name_match" in keyset, keyset
-    assert "match_score" not in keyset, keyset

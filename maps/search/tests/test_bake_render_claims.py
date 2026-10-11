@@ -11,7 +11,7 @@ import pytest
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
-    _is_compare_column,
+    _COMPARE_COL_PREFIXES,
     build_surface_from_graph,
     compact_results,
     run_program,
@@ -110,7 +110,7 @@ def test_no_rendered_hint_teaches_the_op_json_register():
             if _OP_REGISTER.search(hint):
                 bad.append((os.path.basename(stem), key, hint[:200]))
             cols = set((env or {}).get("columns") or [])
-            named = {q for q in _QUOTED.findall(hint) if _is_compare_column(q)}
+            named = {q for q in _QUOTED.findall(hint) if q.startswith(_COMPARE_COL_PREFIXES)}
             claims += len(named)
             for miss in sorted(named - cols):
                 bad.append((os.path.basename(stem), key,

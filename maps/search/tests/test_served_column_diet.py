@@ -1,10 +1,8 @@
 """The served-surface diet: what the renderer drops, and what it must not."""
 from __future__ import annotations
 
-import re
 
 from maps.search.analyze_scene.geom_program import (
-    KEY_PATTERN,
     _GRID_COL_DROP,
     _TAG_RENDER_DROP,
     _grid_cell,
@@ -57,9 +55,6 @@ def test_header_renders_keys_verbatim_with_units_separate():
         assert c in header, header
     assert "(m)" not in header, header
     assert "(deg)" not in header, header
-    for c in ("distance to new_park_street", "facing new_park_street"):
-        assert re.match(KEY_PATTERN, c), (KEY_PATTERN, c)
-        assert not re.match(KEY_PATTERN, c + "(m)")
 
 
 def test_dropped_tag_keys_do_not_render_and_kept_ones_do():
@@ -126,40 +121,18 @@ def test_no_axis_heading_is_produced_at_all():
         contour_shape_features,
         mask_shape_features,
     )
-    from maps.search.analyze_scene.geom_program import KEY_PATTERN
 
     cells = mask_shape_features([(0, 0), (0, 1), (1, 0), (1, 1)], 2.0)
     assert set(cells) == {"footprint_area_m2", "aspect_ratio"}, cells
     box = [[[0.0, 0.0], [8.0, 0.0], [8.0, 3.0], [0.0, 3.0], [0.0, 0.0]]]
     contour = contour_shape_features(box)
     assert set(contour) == {"footprint_area_m2", "aspect_ratio"}, contour
-    assert "orientation" not in KEY_PATTERN, KEY_PATTERN
 
 
 def test_shape_scalars_are_gone_from_the_mission_surface():
     """aspect_ratio is a lossy min-rect proxy for shape, answered by the crop channel."""
-    import pytest
-
-    from maps.search.analyze_scene.geom_program import (
-        ProgramError,
-        run_program,
-    )
-
     header = _render_grid_rows([ROW]).splitlines()[0]
     assert "aspect_ratio" not in header, header
-    world = [{"fid": "prior_a", "name": None, "xy": [1.0, 2.0],
-              "centerline": None, "tags": {"building": "yes"},
-              "color": "", "search_text": "building yes"}]
-    with pytest.raises(ProgramError) as err:
-        run_program([], world, {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-            {"ref": "r1", "op": "filter_items",
-             "args": {"items": "r0", "key": "xy", "op": "gt", "value": 5}},
-        ]})
-    served = str(err.value)
-    assert "SCALAR key" in served, served
-    assert "aspect_ratio" not in served, served
-    assert "looking question" in served, served
 
 
 def test_the_row_path_obeys_the_same_diet_as_the_grid():

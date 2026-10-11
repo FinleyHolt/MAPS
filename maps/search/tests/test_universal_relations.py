@@ -8,7 +8,7 @@ def _compare(cands, anchors, refs):
     out = run_program([dict(c) for c in cands], [dict(a) for a in anchors],
                       {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "compare", "args": {"items": "$r0", "refs": refs}},
+        {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": refs}},
     ]})
     return {r["fid"]: r for r in out["results"]["r1"]}
 
@@ -253,7 +253,7 @@ def test_frame_along_is_unclamped_past_the_ends():
     out = run_program([dict(c) for c in cands], [dict(_ROAD)], {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "compare",
-         "args": {"items": "$r0", "frame": {"along": "road_1"}}},
+         "args": {"items": "r0", "frame": {"along": "road_1"}}},
     ]})
     rows = {r["fid"]: r for r in out["results"]["r1"]}
     assert rows["past"]["along road_1"] == 110.0, rows["past"]
@@ -281,7 +281,7 @@ def _union_run(cands, extra_ops=None):
         {"ref": "r0", "op": "find",
          "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "compare",
-         "args": {"items": "$r0",
+         "args": {"items": "r0",
                   "refs": [{"ref": ["road_86", "road_88"],
                             "as": "st_peters"}]}},
     ] + list(extra_ops or [])
@@ -362,7 +362,7 @@ def test_union_unknown_member_is_loud():
         run_program([{"fid": "d0", "xy": [0.0, 0.0], "class": "car"}],
                     [dict(_SEG_A)], {"ops": [
             {"ref": "r0", "op": "compare",
-             "args": {"items": "cands",
+             "args": {"items": ["d0"],
                       "refs": [{"ref": ["road_86", "road_99"],
                                 "as": "st_peters"}]}},
         ]})

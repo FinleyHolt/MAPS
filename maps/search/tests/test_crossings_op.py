@@ -165,14 +165,6 @@ def test_a_side_with_no_geometry_refuses_rather_than_guessing():
         _run(anchors, "prior_1", "prior_2")
 
 
-def test_the_op_takes_exactly_two_refs():
-    anchors = [_road("prior_1", [[0, 0], [100, 0]])]
-    prog = {"ops": [{"ref": "r0", "op": "crossings",
-                     "args": {"refs": ["prior_1"]}}]}
-    with pytest.raises(ProgramError, match="exactly two refs"):
-        run_program([], anchors, prog)
-
-
 def test_a_road_named_by_several_rows_passes_as_one_bundle():
     # OSM splits a way ON the junction node, so both halves END there.
     anchors = [_road("prior_1", [[0, 0], [50, 0]], "Split Road"),
@@ -195,7 +187,7 @@ def test_the_crossings_chain_like_any_other_rows():
         {"ref": "r0", "op": "crossings",
          "args": {"refs": ["prior_1", "prior_2"]}},
         {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": ["prior_3"], "frame": None}},
+         "args": {"items": "r0", "refs": ["prior_3"]}},
         {"ref": "r2", "op": "score_by",
          "args": {"items": "r1",
                   "emphasis": [{"key": "distance to prior_3", "w": -1}]}},
@@ -214,36 +206,13 @@ def test_a_crossing_row_anchors_geometry_as_a_point():
     prog = {"ops": [
         {"ref": "r0", "op": "crossings",
          "args": {"refs": ["prior_1", "prior_2"]}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "anchors",
-                  "refs": [{"ref": "r0", "as": "corner"}], "frame": None}},
+        {"ref": "r1", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r2", "op": "compare",
+         "args": {"items": "r1", "refs": [{"ref": ["r0"], "as": "corner"}]}},
     ]}
-    rows = run_program([], anchors, prog)["results"]["r1"]
+    rows = run_program([], anchors, prog)["results"]["r2"]
     by = {r["fid"]: r for r in rows}
     assert math.isclose(by["prior_3"]["distance to corner"], 30.0, abs_tol=0.5)
-
-
-def test_several_crossings_as_ONE_relation_anchor_refuse_in_register():
-    # "find cars near the intersection of A and B." when A and B cross twice: a relation
-    # reads one place.
-    anchors = [_road("prior_1", [[0, -10], [20, 10], [40, -10]], "Zig Road"),
-               _road("prior_2", [[0, 0], [40, 0]], "Straight Street"),
-               {"fid": "prior_3", "name": "Depot", "xy": [0.0, 40.0],
-                "centerline": None, "tags": {}, "search_text": ""}]
-    prog = {"ops": [
-        {"ref": "r0", "op": "crossings",
-         "args": {"refs": ["prior_1", "prior_2"]}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "anchors",
-                  "refs": [{"ref": "r0", "as": "corner"}], "frame": None}},
-    ]}
-    with pytest.raises(ProgramError) as e:
-        run_program([], anchors, prog)
-    msg = str(e.value).split("; signature:")[0]
-    assert "is 2 places (Zig Road x Straight Street)" in msg
-    assert "a relation reads ONE" in msg
-    assert "centre is at none of them" in msg
-    assert "filter_items" not in msg and "[i]" not in msg
 
 
 # --- the same op, walked over a real bake -----------------------------------

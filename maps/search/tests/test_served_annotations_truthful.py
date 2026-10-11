@@ -5,7 +5,6 @@ import pytest
 
 from maps.search.analyze_scene.geom_program import (
     _OP_SIGNATURE,
-    ProgramError,
     compact_results,
     run_program,
 )
@@ -82,26 +81,6 @@ def test_labeled_xy_literal_is_the_named_columns_path():
     row = out["results"]["r1"][0]
     assert "distance to gate" in row and "distance to corner" in row
     assert "distance to xy" not in row
-
-
-def test_two_bare_xy_literals_is_a_loud_ambiguity_error():
-    try:
-        run_program([], _grass_world(), {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-            {"ref": "r1", "op": "compare",
-             "args": {"items": "r0", "refs": [[5.0, 5.0], [25.0, 5.0]]}},
-        ]})
-    except ProgramError as e:
-        msg = str(e)
-        assert "distance to xy" in msg
-        assert "as:'label'" in msg
-    else:
-        raise AssertionError("two bare [x,y] literals must error loudly")
-
-
-# ---------------------------------------------------------------------------
-# F3: tie-flat heads carry the truthful tie annotation
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

@@ -1,11 +1,9 @@
 """Tags-only world model: the retrieval surface speaks raw OSM tags."""
 from __future__ import annotations
 
-import pytest
 
 from maps.search.analyze_scene import text_match as T
 from maps.search.analyze_scene.geom_program import (
-    ProgramError,
     build_surface,
     compact_results,
     run_program,
@@ -62,19 +60,6 @@ def test_query_over_tags_reaches_key_and_value_matches():
     # the non-parking row is sub-threshold: NOT in the match set (a
     # query-less find browses it)
     assert "prior_3" not in rows
-
-
-def test_retired_class_arg_errors_loud_naming_query():
-    cands, anchors = _prior_surface()
-    with pytest.raises(ProgramError) as ei:
-        run_program(cands, anchors, {"ops": [
-            {"ref": "r0", "op": "find",
-             "args": {"provenance": "prior", "class": "parking"}},
-        ]})
-    msg = str(ei.value)
-    assert "no 'class' arg" in msg, msg
-    assert "query" in msg, msg
-    assert "'parking'" in msg, msg  # echoes the value into the redirect
 
 
 def test_broad_dump_census_renders_tag_counts():

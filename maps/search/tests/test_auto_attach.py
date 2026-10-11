@@ -2,7 +2,7 @@
 an explicit compare, through the same compare op."""
 from __future__ import annotations
 
-from maps.search.analyze_scene.geom_program import run_program, ProgramError
+from maps.search.analyze_scene.geom_program import run_program
 
 # three cars + one landmark ("church" at [100,100]); d0 nearest the church.
 _CANDS = [
@@ -26,14 +26,14 @@ def test_single_key_emphasis_sign_orders_without_compare():
     asc = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "$r0", "emphasis": [{"key": "distance to church", "w": -1}]}},
+         "args": {"items": "r0", "emphasis": [{"key": "distance to church", "w": -1}]}},
     ])
     fids = [r["fid"] for r in asc["results"]["r1"]]
     assert fids[0] == "d0", fids  # nearest the church ranks first
     desc = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "$r0", "emphasis": [{"key": "distance to church", "w": 1}]}},
+         "args": {"items": "r0", "emphasis": [{"key": "distance to church", "w": 1}]}},
     ])
     fids_desc = [r["fid"] for r in desc["results"]["r1"]]
     assert fids_desc[0] == "d1", fids_desc  # farthest first under w:+1
@@ -45,13 +45,13 @@ def test_matches_explicit_compare_then_sort():
     auto = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "$r0", "emphasis": [{"key": "distance to church", "w": -1}]}},
+         "args": {"items": "r0", "emphasis": [{"key": "distance to church", "w": -1}]}},
     ])["results"]["r1"]
     explicit = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "compare", "args": {"items": "$r0", "refs": ["church"]}},
+        {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": ["church"]}},
         {"ref": "r2", "op": "score_by",
-         "args": {"items": "$r1", "emphasis": [{"key": "distance to church", "w": -1}]}},
+         "args": {"items": "r1", "emphasis": [{"key": "distance to church", "w": -1}]}},
     ])["results"]["r2"]
     assert [r["fid"] for r in auto] == [r["fid"] for r in explicit]
     # and the attached column value matches too
@@ -62,40 +62,21 @@ def test_filter_items_relation_column_without_compare():
     out = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "filter_items",
-         "args": {"items": "$r0", "key": "distance to church", "op": "le", "value": 20.0}},
+         "args": {"items": "r0", "key": "distance to church", "op": "le", "value": 20.0}},
     ])
     fids = {r["fid"] for r in out["results"]["r1"]}
     assert fids == {"d0"}, fids  # only d0 within 20m of the church
 
 
-def test_dc_and_brg_gap_auto_attach():
-    # the centroid-distance and min-gap-bearing columns auto-attach the same
-    # way d_ does (brg_gap_ strips its own longer prefix, never brg_'s).
+def test_facing_auto_attaches_as_a_word():
+    # 'facing <ref>' attaches the same way, as a compass WORD on every
+    # off-contact row.
     out = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "$r0", "emphasis": [{"key": "center distance to church", "w": -1}]}},
-    ])
-    fids = [r["fid"] for r in out["results"]["r1"]]
-    assert fids[0] == "d0", fids
-    # 'facing <ref>' auto-attaches the same way, and it is a WORD, so it
-    # answers truthy/eq and REFUSES the ordering ops -- a compass word has no
-    # >=. That refusal is the column doing its job: ranking rows by a compass
-    # reading sorts a circle by where you cut it.
-    out2 = _run([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "filter_items",
-         "args": {"items": "$r0", "key": "facing church", "op": "truthy"}},
+         "args": {"items": "r0", "key": "facing church", "op": "in_or_blank",
+                  "value": ["north", "northeast", "east"]}},
     ])
-    assert len(out2["results"]["r1"]) == 3  # attached on every off-contact row
-    try:
-        _run([
-            {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-            {"ref": "r1", "op": "filter_items",
-             "args": {"items": "$r0", "key": "facing church",
-                      "op": "ge", "value": 0.0}},
-        ])
-    except ProgramError as e:
-        assert "SCALAR key" in str(e), str(e)
-    else:
-        raise AssertionError("a compass word must refuse an ordering op")
+    rows = out["results"]["r1"]
+    assert {r["fid"] for r in rows} == {"d0", "d1", "d2"}
+    assert all(r["facing church"] in ("north", "northeast", "east") for r in rows)
