@@ -1,20 +1,8 @@
-"""color.py — the deterministic Lab-chroma-blended van de Weijer (w2c) color extractor.
-
-Owns color for the runtime detection path, read from pixels only (color is
-ORDERING-only, never a filter or gate). The w2c color lattice lives in
-``data/w2c.txt``.
-
-``color_from_mask_m6(rgb_crop, region)`` returns the runtime dict
-  {"color": "<word> <frac> / ...", "color_conf": float, "color_shade": "dk"|"mid"|"lt",
-   "color_flag": "" | "look"}
-where color_shade drives the dk/lt prefix on the compact surface render and
-color_flag=='look' is the uncertain '?' that routes to a viewpoint.
-Returns ``None`` on an empty/degenerate mask (never raises on the detect path).
-``m6_attributes(rgb_crop, region)`` is the same reading as the string
-attributes a detection or a prior node carries (``color_conf`` to 3 dp).
-
-Body pixels are selected by an erode plus a luminance drop, so the reported
-color comes from the object's interior rather than its edges or its shadow.
+"""The deterministic Lab-chroma-blended van de Weijer (w2c) colour read
+(M6) of a mask, for detections and prior nodes alike: ordering-only, never a
+filter. The w2c lattice lives in ``data/w2c.txt``. Body pixels are selected by
+an erode plus a luminance drop, so the colour comes from the object's interior
+rather than its edges or its shadow.
 """
 from __future__ import annotations
 import logging
@@ -123,22 +111,16 @@ def _median_lab(surv):
     return L, (a * a + b * b) ** 0.5
 
 
-def color_from_mask_m6(rgb_crop, region) -> "dict | None":
-    """M6 runtime color extraction. See module docstring for the returned dict. Robust: None on
-    empty/degenerate input, never raises on the detection path.
-
-    ``region`` is a ``MaskRegion``: the crop and where it sits, so the read
-    never touches the frame.
-
-    A wrong TYPE raises rather than joining the degenerate-input path below.
-    The except is deliberately broad because a genuine failure here must not
-    kill a flight, but that same breadth turned an un-migrated caller passing a
-    bare array into colour silently returning None fleet-wide — visible only as
-    "no colour anywhere". A signature mismatch is a programming error and has
-    to fail at the call site."""
+def m6_attributes(rgb_crop, region) -> "dict[str, str] | None":
+    """The M6 colour read of ``region`` (a ``MaskRegion``) as node attributes:
+    ``color`` ("<word> <frac> / ..."), ``color_conf`` (3 dp), ``color_shade``
+    (dk | mid | lt) and ``color_flag`` ("look" for the uncertain chroma band,
+    else ""); ``None`` on an empty or degenerate mask. A wrong region type
+    raises; any other failure is logged rate-limited and reads as ``None``, so
+    colour never crashes a flight."""
     if region is not None and not isinstance(region, MaskRegion):
         raise TypeError(
-            f"color_from_mask_m6 takes a MaskRegion, got {type(region).__name__}"
+            f"m6_attributes takes a MaskRegion, got {type(region).__name__}"
         )
     try:
         sp = _survivors(rgb_crop, region)
@@ -170,34 +152,16 @@ def color_from_mask_m6(rgb_crop, region) -> "dict | None":
         shade = "dk" if L < 50.0 else ("lt" if L > 75.0 else "mid")
         flag = "look" if _CLO <= C <= _CHI else ""
         color = " / ".join(f"{w} {frac:.2f}" for w, frac in comps)
-        return {"color": color, "color_conf": conf, "color_shade": shade, "color_flag": flag}
+        return {"color": color, "color_conf": f"{conf:.3f}", "color_shade": shade, "color_flag": flag}
     except Exception:
-        # A degenerate/empty mask already returned None above (``sp is None``); a
-        # failure THIS deep is SYSTEMATIC (missing data/w2c.txt, a cv2/numpy break)
-        # and — now that BOTH detections and priors route color through M6 — would
-        # silently kill color fleet-wide, surfacing only as "no color anywhere".
-        # Log rate-limited so it is VISIBLE, but never raise (color must not crash a
-        # flight; the caller treats None as "no color this frame").
+        # Past the degenerate-mask return above a failure is systematic
+        # (missing data/w2c.txt, a cv2/numpy break): visible, never raised.
         global _M6_FAIL_N
         _M6_FAIL_N += 1
         if _M6_FAIL_N == 1 or _M6_FAIL_N % 100 == 0:
             _log.warning(
-                "color_from_mask_m6 failed (n=%d) — color extraction may be "
+                "m6_attributes failed (n=%d) — color extraction may be "
                 "systematically broken (check perception/viz/data/w2c.txt, cv2)",
                 _M6_FAIL_N, exc_info=True,
             )
         return None
-
-
-def m6_attributes(rgb_crop, region) -> "dict[str, str] | None":
-    """The M6 mixture as node attributes: ``color``, ``color_conf`` (3 dp),
-    ``color_shade``, ``color_flag``; ``None`` where M6 reads nothing."""
-    mix = color_from_mask_m6(rgb_crop, region)
-    if not mix:
-        return None
-    return {
-        "color": mix["color"],
-        "color_conf": f"{mix['color_conf']:.3f}",
-        "color_shade": mix["color_shade"],
-        "color_flag": mix["color_flag"],
-    }

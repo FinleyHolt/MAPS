@@ -1,10 +1,5 @@
-"""Catalog-prior footprints projected onto the ortho crop.
-
-:func:`build_prior_polys_ortho` rasterizes each requested prior's tile-grid
-footprint onto the crop's pixels; the per-stop prior colour enrichment
-(``benchmarks.citynav.run_benchmark.osm_prior``) reads M6 colour inside each
-mask, the same reading SAM detections get.
-"""
+"""Catalog-prior footprints projected onto the ortho crop, for the per-stop
+prior colour enrichment (``benchmarks.citynav.run_benchmark.osm_prior``)."""
 
 from __future__ import annotations
 
@@ -88,41 +83,26 @@ def build_prior_polys_ortho(
     bounds: TileFrame,
     view_corners_xy: Sequence[tuple[float, float]],
     fids_to_render: Sequence[str],
-    target_fid: str | None = None,
-) -> tuple[list[dict[str, Any]], list]:
-    """The requested priors' footprints as masks on the ortho crop.
+) -> list[tuple[str, MaskRegion]]:
+    """The requested priors' footprints as ``(fid, mask)`` on the ortho crop,
+    sorted by fid.
 
-    ``features`` is the bake's per-class ``base_features``; a row's id is its
-    ``fid``, else ``cityref_<cityref_id>``, else ``<class>_<index>`` (the
-    runtime graph's positional id). Each row in ``fids_to_render`` with a
-    centroid and cells is rasterized through the ``world -> pixel``
-    homography of ``view_corners_xy`` (``[FL, FR, BR, BL]``) at ``rgb_shape``;
-    one that touches no pixel is skipped.
-
-    Returns ``(polys, [])``: ``polys`` is ``[{"fid", "mask"}]``, ``target_fid``
-    first, then by short id (``C<cityref_id>``, else the fid).
+    ``features`` is the bake's per-class ``base_features``; a row's fid is
+    ``<class>_<index>``, the runtime graph's positional id. Each requested row
+    is rasterized through the ``world -> pixel`` homography of
+    ``view_corners_xy`` (``[FL, FR, BR, BL]``) at ``rgb_shape``; one that
+    touches no pixel is skipped.
     """
     img_h, img_w = int(rgb_shape[0]), int(rgb_shape[1])
     src = np.array([(float(c[0]), float(c[1])) for c in view_corners_xy], dtype=np.float32)
     world_to_px = cv2.getPerspectiveTransform(src, frame_corners_px(img_w, img_h))
-    wanted = {str(f).strip() for f in (fids_to_render or []) if f}
-    keyed = []
+    wanted = set(fids_to_render)
+    out = []
     for class_name, feats in features.items():
         for idx, feat in enumerate(feats):
-            cid = feat.get("cityref_id")
-            if feat.get("fid") is not None:
-                fid = str(feat["fid"])
-            elif cid is not None:
-                fid = f"cityref_{cid}"
-            else:
-                fid = f"{class_name}_{idx}"
-            if fid not in wanted or feat.get("centroid_row") is None or feat.get("centroid_col") is None:
-                continue
-            mask = _rasterize_cells_to_mask(feat.get("cells") or [], bounds, world_to_px, img_h, img_w)
-            if mask is None:
-                continue
-            short_id = f"C{cid}" if cid is not None else fid
-            keyed.append(((fid != target_fid, short_id), {"fid": fid, "mask": mask}))
-    keyed.sort(key=lambda kp: kp[0])
-    # ponytail: the empty second slot is osm_prior's two-value unpack; it goes when osm_prior takes one value
-    return [poly for _, poly in keyed], []
+            fid = f"{class_name}_{idx}"
+            if fid in wanted:
+                mask = _rasterize_cells_to_mask(feat.get("cells") or [], bounds, world_to_px, img_h, img_w)
+                if mask is not None:
+                    out.append((fid, mask))
+    return sorted(out, key=lambda fm: fm[0])

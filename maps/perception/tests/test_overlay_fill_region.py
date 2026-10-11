@@ -1,23 +1,12 @@
-"""Filling a prior's box draws the pixels a whole-frame fill would have.
-
-Both prior builders allocated one FULL-resolution array per feature — around
-76 features a stop, each a 2016x2016 array for a building covering a fraction
-of it. That was the largest client-side cost left once the detection path went
-crop-native, and it is the same root cause in a different subsystem.
-
-``cv2.fillPoly`` clips to whatever array it is handed, so the change is to
-translate the polygons into a box clipped to the frame. Integer translation is
-exact, which is the argument that the rasterisation is unchanged rather than
-merely close — and this is where that argument gets checked, including for
-polygons that hang off the frame, where the clip does the work.
-"""
+"""Filling a prior's box draws exactly the pixels a whole-frame fill would,
+including for polygons that hang off the frame."""
 
 from __future__ import annotations
 
 import cv2
 import numpy as np
 
-from maps.perception.viewpoint.overlay import _fill_region
+from maps.perception.ortho.prior_overlay import _fill_region
 from maps.perception.tests.regions import full
 
 _H, _W = 120, 160
@@ -69,8 +58,7 @@ def test_region_fill_matches_a_whole_frame_fill():
 
 
 def test_a_small_prior_does_not_get_a_frame_sized_array():
-    """The whole point. A feature covering a fraction of the frame must carry
-    a crop of that scale, or this change bought nothing."""
+    """A feature covering a fraction of the frame carries a crop of that scale."""
     region = _fill_region([_quad(20, 30, 40, 50)], img_h=_H, img_w=_W)
     assert region is not None
     assert region.crop.size < (_H * _W) / 10
@@ -78,15 +66,11 @@ def test_a_small_prior_does_not_get_a_frame_sized_array():
 
 
 def test_nothing_inside_the_frame_is_none():
-    """The callers used to spot this with ``mask.any()`` and skip the feature;
-    None has to mean the same thing or a prior silently gains an empty mask."""
+    """None means the prior touches no pixel, so it is skipped."""
     assert _fill_region([], img_h=_H, img_w=_W) is None
     assert _fill_region([_quad(-400, -400, -300, -300)], img_h=_H, img_w=_W) is None
     assert _fill_region([_quad(500, 500, 600, 600)], img_h=_H, img_w=_W) is None
-    # A degenerate polygon is NOT nothing: cv2 fills its single pixel, and the
-    # whole-frame fill did too. Checked against the reference rather than
-    # against an expectation, because the contract here is "same as before",
-    # not "what seems reasonable".
+    # A degenerate polygon is not nothing: cv2 fills its single pixel.
     degenerate = [_tri([[10, 10], [10, 10], [10, 10]])]
     ref = _reference(degenerate)
     assert int(ref.sum()) == 1

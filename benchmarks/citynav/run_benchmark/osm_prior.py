@@ -11,9 +11,9 @@ import time
 
 import numpy as np
 
-from maps.perception.viewpoint.base import TileBounds
-from maps.perception.viewpoint.overlay import build_prior_polys_ortho
-from maps.perception.viz.color import color_from_mask_m6
+from maps.perception.geometry.geolocate import TileFrame
+from maps.perception.ortho.prior_overlay import build_prior_polys_ortho
+from maps.perception.viz.color import m6_attributes
 
 log = logging.getLogger("run_benchmark")
 
@@ -61,37 +61,25 @@ def _build_frame_enrich(*, obs, step_idx: int, view_corners, assets, build_prior
             _m = _c()
             if rgb_arr.ndim == 3 and enrich_fids:
                 try:
-                    prior_polys, _table = build_prior_polys_ortho(
+                    prior_polys = build_prior_polys_ortho(
                         rgb_shape=(int(rgb_arr.shape[0]), int(rgb_arr.shape[1])),
                         features=assets.base_features,
-                        bounds=TileBounds(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
-                                          cell_size_m=float(assets.cell_size_m),
-                                          grid_shape=tuple(assets.grid_shape)),
+                        bounds=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
+                                         cell_size_m=float(assets.cell_size_m),
+                                         grid_shape=tuple(assets.grid_shape)),
                         view_corners_xy=view_corners,
                         fids_to_render=enrich_fids,
                     )
                 except Exception as exc:  # noqa: BLE001
                     log.warning("catalog prior overlay build failed step=%d anchor=?: %s", step_idx, exc)
-                    prior_polys = None
+                    prior_polys = []
                 _t["p_polys"] = _c() - _m
                 _m = _c()
-                for poly in prior_polys or []:
-                    pfid = str(poly.get("fid") or "")
-                    pmask = poly.get("mask")
-                    if not pfid or pmask is None:
-                        continue
-                    # One colour contract: priors get M6 over the projected
-                    # footprint, the extractor detections get.
-                    mix = color_from_mask_m6(rgb_arr, pmask)
-                    if not mix:
-                        continue
-                    pattrs = {
-                        "color": mix["color"],
-                        "color_conf": f"{mix['color_conf']:.3f}",
-                        "color_shade": mix["color_shade"],
-                        "color_flag": mix["color_flag"],
-                    }
-                    out["prior"].append((pfid, pattrs, pmask.area))
+                for pfid, pmask in prior_polys:
+                    # Priors get the M6 colour detections get, over the projected footprint.
+                    pattrs = m6_attributes(rgb_arr, pmask)
+                    if pattrs:
+                        out["prior"].append((pfid, pattrs, pmask.area))
                 _t["p_color"] = _c() - _m
         except Exception as exc:  # noqa: BLE001 - carried to the apply
             out["prior_exc"] = exc

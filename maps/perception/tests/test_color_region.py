@@ -1,22 +1,12 @@
-"""Colour reads a detection's region, and returns the same values it always did.
-
-Both colour paths — the adapter's ``_dominant_color`` (which runs on the
-perspective path too, so it ships to the field) and M6's
-``color_from_mask_m6`` — used to take a frame-sized mask and make several
-whole-frame passes to find an object covering a few hundred pixels. They now
-take a ``MaskRegion``.
-
-There is no whole-frame path left to compare against, so the values are pinned
-directly. They were captured from the build before the change; a colour that
-moves here is a real change in what perception reports, not a refactor.
-"""
+"""Both colour reads (the adapter's ``_dominant_color`` and M6's
+``m6_attributes``) read a detection's ``MaskRegion``, never the frame."""
 
 from __future__ import annotations
 
 import numpy as np
 
 from maps.perception.sam.detect_client import _dominant_color, _interior_mask
-from maps.perception.viz.color import color_from_mask_m6
+from maps.perception.viz.color import m6_attributes
 from maps.util.mask_region import MaskRegion
 
 _SHAPE = (200, 240)
@@ -58,7 +48,7 @@ def test_colour_is_read_through_the_region_and_never_the_frame():
         if int(inner.sum()) < region.area:
             eroded_seen = True
             # M6 needs a body to erode to; on the real detections it does.
-            mix = color_from_mask_m6(rgb, region)
+            mix = m6_attributes(rgb, region)
             assert mix is not None, (r0, c0)
             assert set(mix) == {"color", "color_conf", "color_shade", "color_flag"}
         else:
@@ -66,7 +56,7 @@ def test_colour_is_read_through_the_region_and_never_the_frame():
             # to the whole mask, M6 declines. Both are pre-existing behaviour
             # and are asserted so a change to either is visible.
             fallback_seen = True
-            assert color_from_mask_m6(rgb, region) is None, (r0, c0)
+            assert m6_attributes(rgb, region) is None, (r0, c0)
 
     # Vacuity floor: both the erosion and the too-small fallback must have run.
     assert eroded_seen and fallback_seen
@@ -86,7 +76,7 @@ def test_colour_values_are_pinned():
     assert name == "white", (name, med)
     assert med == [235, 235, 235]
     assert 0.0 <= conf <= 1.0
-    assert color_from_mask_m6(rgb, region)["color"].startswith("white")
+    assert m6_attributes(rgb, region)["color"].startswith("white")
 
 
 def test_degenerate_inputs_return_none():
@@ -98,21 +88,17 @@ def test_degenerate_inputs_return_none():
     assert _dominant_color(rgb, None) is None
     # rgb whose frame does not match the region's frame.
     assert _dominant_color(np.zeros((8, 8, 3), np.uint8), region) is None
-    assert color_from_mask_m6(np.zeros((8, 8, 3), np.uint8), region) is None
+    assert m6_attributes(np.zeros((8, 8, 3), np.uint8), region) is None
     # A region carrying no set pixels.
     empty = region.with_crop(np.zeros_like(region.crop))
     assert _dominant_color(rgb, empty) is None
-    assert color_from_mask_m6(rgb, empty) is None
+    assert m6_attributes(rgb, empty) is None
 
 
 def test_a_bare_array_raises_instead_of_silently_returning_none():
-    """The regression this exists for: ``color_from_mask_m6`` catches
-    everything so a genuine failure cannot kill a flight, and that same breadth
-    turned one un-migrated caller passing a bare array into colour returning
-    None fleet-wide — visible only as "no colour anywhere", never as a stack.
-
-    A signature mismatch is a programming error and must fail at the call
-    site."""
+    """``m6_attributes`` catches every failure so colour cannot kill a
+    flight; a bare array instead of a region is a programming error and must
+    fail at the call site, not read as "no colour anywhere"."""
     import pytest
 
     rng = np.random.default_rng(7)
@@ -121,7 +107,7 @@ def test_a_bare_array_raises_instead_of_silently_returning_none():
     bare[80:100, 100:120] = True
 
     with pytest.raises(TypeError, match="MaskRegion"):
-        color_from_mask_m6(rgb, bare)
+        m6_attributes(rgb, bare)
 
     # None is still the degenerate-input path, not a type error.
-    assert color_from_mask_m6(rgb, None) is None
+    assert m6_attributes(rgb, None) is None

@@ -35,7 +35,7 @@ detections into the graph) and returns the flight report the model reads.
 | Detections stamped onto the tile grid | `perception/ortho/detection_stamping.py` |
 | World-space tracking of detections across flights | `perception/world_tracker.py` |
 | Seen colour of a detection | `perception/viz/color.py` |
-| Catalog-prior footprints projected onto the ortho crop | `perception/viewpoint/` |
+| Catalog-prior footprints projected onto the ortho crop | `perception/ortho/prior_overlay.py` |
 | Endpoint discovery: served model, window, output reserve | `llm/endpoint_spec.py` |
 | Per-model sampling envelopes and the reasoning effort | `llm/model_cards.py` |
 | The chat-completions transport and its flight log | `llm/http.py` |
