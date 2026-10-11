@@ -1,5 +1,4 @@
-"""Grid geometry primitives: PCA orientation of a cell set and the
-cell-to-world mapping. numpy only."""
+"""Grid geometry: the PCA orientation of a cell set. numpy only."""
 
 from __future__ import annotations
 
@@ -48,21 +47,3 @@ def compute_orientation(rows: np.ndarray, cols: np.ndarray) -> tuple[float, floa
         angle_deg -= 180.0
 
     return round(angle_deg, 1), confidence
-
-
-def grid_to_world_xy(
-    gr: float,
-    gc: float,
-    bounds: tuple[float, float, float, float],
-    cell_size_m: float,
-) -> tuple[float, float]:
-    """Cell (row, col) -> world (x, y) at the cell's centre.
-
-    ``bounds`` is ``(x_min, y_min, x_max, y_max)`` in world metres; the
-    half-cell offset puts the result at the centre, not the corner.
-    """
-    x_min, y_min, _, _ = bounds
-    return (
-        float(x_min + (gc + 0.5) * cell_size_m),
-        float(y_min + (gr + 0.5) * cell_size_m),
-    )
