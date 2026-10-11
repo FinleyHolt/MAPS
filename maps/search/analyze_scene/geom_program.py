@@ -1,10 +1,8 @@
 """The analyze executor: runs a compiled op-program over the ``(cands, anchors)`` surface.
 
-The code surface's compiler turns the model's run-block calls into a small
-program of ops, and :func:`run_program` executes it with ONLY
-:mod:`maps.search.analyze_scene.geom_compute` primitives and a few list
-helpers. Every op returns rows; :func:`compact_results` renders them for the
-model. Program shape (the compiled dialect)::
+:func:`run_program` executes the ops the code surface compiles, with
+:mod:`maps.search.analyze_scene.geom_compute` primitives; every op returns
+rows, and :func:`compact_results` renders them for the model::
 
   {"ops": [{"ref": "r1", "op": "find", "args": {"query": "car"}},
            {"ref": "r2", "op": "compare",
@@ -36,24 +34,15 @@ def _quote(v, cap: int = 120) -> str:
     return s if len(s) <= cap else s[:cap] + "..."
 
 
-# --- the named color-column family: color_<word> ---------------------------
-# The parameter rides in the key name: naming a color column anywhere a
-# column key is accepted attaches it. The closed palette is G.COLOR_ENUM;
-# G.normalize_color maps an open cue word onto it (navy -> blue), noted on
-# the result envelope.
-
-
 def _is_color_column_key(k) -> bool:
-    """A key requesting a color column: the ``color_`` prefix. ``color_conf``
-    is a base surface field (perception's read confidence), not a column
-    request, so it is excluded."""
+    """A ``color_<word>`` column key (``color_conf`` is a surface field)."""
     return isinstance(k, str) and k.startswith("color_") and k != "color_conf"
 
 
 def _resolve_color_word(word: str) -> "tuple[str, str | None]":
-    """Resolve a cue color word onto the closed palette. Returns
-    ``(canonical, note)`` where note states the normalization when the typed
-    word differs; raises a loud ProgramError off-palette."""
+    """A cue color word on the closed palette: ``(canonical, note)``, the
+    note set when the word was normalized (navy -> blue). Off-palette
+    raises."""
     w = str(word or "").strip().lower()
     canon = G.normalize_color(w)
     if canon not in G.COLOR_ENUM:
@@ -69,10 +58,8 @@ def _resolve_color_word(word: str) -> "tuple[str, str | None]":
 
 
 def _attach_color_column(items, canon):
-    """Attach ``color_<canon>`` = the conf-shrunk, family-soft cue match on
-    every color-carrying row; rows without a perceived color omit the column
-    (the existing missing-value idiom — score_by treats it as the neutral).
-    Multiple color columns coexist on the same rows."""
+    """Attach ``color_<canon>`` (the confidence-shrunk color match) to every
+    row with a perceived color; a row without one omits the column."""
     col = "color_" + canon
     out = []
     for it in items:
@@ -112,9 +99,6 @@ _FIND_SIGNATURE = ("find([query]) -- SEARCH the world-state: "
 _SIGNED_OPS = ("stratum", "crossings", "compare", "score_by", "filter_items")
 
 
-# _color_of reads a color token from a class label; _color_fields prefers the
-# perceived color on semantic_attributes and falls back to it. A row without
-# a perceived color carries no color_<word> column.
 _COLOR_WORDS = ("white", "black", "gray", "silver", "red", "blue", "green",
                 "yellow", "orange", "brown", "tan", "beige", "gold", "maroon", "purple")
 
@@ -127,21 +111,19 @@ def _color_of(label: str) -> str:
 
 
 def _modal_attr(n, key):
-    """The modal value of ``key`` on the node's ``semantic_attributes``
-    ({value: count} buckets), or None."""
+    """The modal value of ``key`` in the node's ``semantic_attributes``, or None."""
     cc = (getattr(n, "semantic_attributes", None) or {}).get(key)
     return max(cc.items(), key=lambda kv: kv[1])[0] if cc else None
 
 
-# Tag keys withheld from the model-facing tags (search text + rendered tags):
-# the GT-label ``description`` tags (the catalog instructions are sampled
-# from) and the bake's ``source`` provenance (the fid carries it).
+# Tag keys no model-facing text carries: the ground-truth ``description``
+# tags the instructions are sampled from, and the bake's ``source``.
 _SEARCH_TAG_DENYLIST = frozenset({"description", "descriptions", "source"})
 
 
 def _row_tags(n) -> dict:
-    """A prior row's model-facing tags: the node's raw OSM tags verbatim
-    (string values), minus only the bookkeeping keys (_SEARCH_TAG_DENYLIST)."""
+    """A prior row's tags: the node's string-valued OSM tags minus
+    _SEARCH_TAG_DENYLIST."""
     tags = getattr(n, "tags", None) or {}
     if not isinstance(tags, dict):
         return {}
@@ -149,21 +131,15 @@ def _row_tags(n) -> dict:
             if isinstance(v, str) and str(k).lower() not in _SEARCH_TAG_DENYLIST}
 
 
-# Bake-provenance keys, withheld from the searchable free text only (the row
-# keeps every tag; the exact tag tiers and ``tag_family_keys`` read them).
-# They are bookkeeping stamped on every row and act as fuzzy-match stopwords
-# (``osm_id: way/...`` donates ``way`` to every row). All four are also in
-# ``_TAG_RENDER_DROP``.
+# Bake bookkeeping kept out of the free search text only: stamped on every
+# row, they would act as fuzzy-match stopwords (``osm_id`` donates ``way``).
 _SEARCH_PROVENANCE_DROP = frozenset({
     "osm_id", "worldkit_layer", "worldkit_height_m", "source_tag"})
 
 
 def _anchor_search_text(n) -> str:
-    """Searchable free text for a PRIOR row: name + raw OSM tag keys and
-    values, minus the bake-provenance keys (_SEARCH_PROVENANCE_DROP) and the
-    denylisted tags. A 'parking' query reaches amenity=parking,
-    service=parking_aisle and parking=surface rows through keys as well as
-    values. Coordinates never enter it."""
+    """A prior row's search text: its name and its tag keys and values,
+    minus _SEARCH_PROVENANCE_DROP."""
     parts = [str(getattr(n, "name", "") or "")]
     for k, v in _row_tags(n).items():
         if str(k) in _SEARCH_PROVENANCE_DROP:
@@ -174,8 +150,7 @@ def _anchor_search_text(n) -> str:
 
 
 def _cand_search_text(n) -> str:
-    """Searchable free text for a DETECTION row: class name only. Color is
-    matched through the ``color`` field, not free text."""
+    """A detection row's search text: its class name."""
     return str(getattr(n, "class_name", "") or "").lower()
 
 
@@ -183,11 +158,10 @@ class ProgramError(Exception):
     pass
 
 
-
 def _color_fields(n) -> dict:
-    """``{"color": ...}`` plus ``color_conf``/``color_shade``/``color_flag``
-    only when perception set them (omitted, never None, otherwise). The color
-    is the perceived one, else a color token in the class label."""
+    """``color`` (perceived, else a color word in the class label) plus
+    ``color_conf`` / ``color_shade`` / ``color_flag`` where perception set
+    them."""
     color = _modal_attr(n, "color")
     fields = {"color": color if color is not None
               else _color_of(str(getattr(n, "class_name", "") or ""))}
@@ -197,7 +171,6 @@ def _color_fields(n) -> dict:
             fields["color_conf"] = round(float(conf), 3)
         except ValueError:
             pass
-    # _mask_noise_color folds shade/flag into the ``col`` cell.
     shade = _modal_attr(n, "color_shade")
     if shade is not None:
         fields["color_shade"] = shade
@@ -208,37 +181,16 @@ def _color_fields(n) -> dict:
 
 
 def _mask_center(mask):
-    """The centre a mask may honestly claim as its position — or ``None``.
-
-    ONE place has a centre; several places do not. ``center distance to
-    <ref>`` and ``bearing from <ref>`` are served off this point, so a mask
-    of several disjoint pieces (a name that resolves to ways far apart)
-    serves no centre. ``distance to <ref>``
-    is the gap to the nearest piece and still reads.
-    """
+    """The mask's area centroid when it is one connected piece, else None:
+    several disjoint places have no centre to measure from."""
     return (G.loops_area_centroid(mask)
             if mask and G.chain_components(mask) == 1 else None)
 
 
 def representative_point(chains) -> list:
-    """A point ON the geometry -- what a row may honestly serve as a POSITION.
-
-    The other half of :func:`_mask_center`'s law. That one answers "where is
-    the centre of this thing" and refuses when there are several things;
-    this one answers "somewhere this thing IS", which every row can answer
-    and which ``act.move`` needs to be able to fly to.
-
-    A vertex or cell mean is not on a way bent around a block: it sits in
-    the middle of the block, which is the one place the way is not. So a
-    closed chain takes its area centroid WHEN that lands inside the mask
-    (the ordinary building -- a filled footprint does contain its own
-    centroid, and nothing moves for it), and otherwise the boundary's arc
-    midpoint; an open chain takes the arc midpoint outright. Several chains
-    resolve on the longest, which is a piece of the feature and therefore a
-    place it is.
-
-    Rounded to the 2 dp every other served point is spelled at.
-    """
+    """A point ON the geometry, the row's flight target, at 2 dp: a closed
+    chain's area centroid when it lies inside the mask, else the arc
+    midpoint of the longest chain (a mean over a bent way lies off it)."""
     if not any(chains):
         return [0.0, 0.0]
     geom = G.mask_geom(chains)
@@ -255,26 +207,18 @@ def representative_point(chains) -> list:
 
 
 # A surface row is a pure function of its node's content and the tile
-# geometry, so an unchanged node is not rebuilt. The key hashes the node's
-# content (fingerprint_node), not its identity: ingest returns fresh objects,
-# and a hand-kept dirty list could go stale.
+# geometry, so rows are cached by content (fingerprint_node): ingest returns
+# fresh node objects. Each cache is dropped whole at its cap.
 _ROW_CACHE: "dict[tuple, dict | None]" = {}
-# Steady state is one entry per node per tile. The cap is a runaway backstop;
-# on overflow the cache is dropped whole and the next rebuild refills it.
 _ROW_CACHE_MAX = 50_000
 
-# A row's mask geometry (G.mask_geom + centre), built once per mask list.
-# Keyed on the list's identity, pinned by the entry so the id cannot be
-# reused; the row cache shares one mask list per unchanged node. Dropped
-# whole at the cap.
+# A mask list's (G.mask_geom, centre), keyed on the list's identity; the
+# entry pins the list so the id cannot be reused.
 _MASK_GEOM: dict = {}
 _MASK_GEOM_MAX = 50_000
 
-# The retrieval is memoised per surface: a find's scored rows are a pure
-# function of (surface, query), and a program asks the
-# same query repeatedly. The memo keys on the identity of the two surface
-# lists (replaced whole on every rebuild) and empties when either changes.
-# It hands out copies: a result never aliases another result's dicts.
+# A find's scored rows per query, for the surface lists it was built on
+# (their identities; a rebuild replaces them). Results get copies.
 _FIND_MEMO: dict = {"lists": None, "idf": None, "scored": {}, "dead": {},
               "census": {}}
 
@@ -302,13 +246,9 @@ def _mask_geom_center(m):
 
 
 def _rows_by_content(kind, nodes, build_row, geom):
-    """Build one row per ``(fid, node)``, reusing unchanged ones.
-
-    Returns fresh dicts: the caller stamps ``covers_window`` / ``end0_xy`` on
-    rows, and the cached original must stay the pre-stamp row. The copy is
-    shallow, so the heavy values (cells, mask loops) are shared rather than
-    duplicated -- they are read-only everywhere in the tree.
-    """
+    """One row per ``(fid, node)``, reusing unchanged ones. Each is a
+    shallow copy, since the caller stamps fields on it; the heavy values
+    are shared and read-only."""
     out = []
     for f, n in nodes:
         key = (kind, str(f), geom, fingerprint_node(n))
@@ -325,25 +265,14 @@ def _rows_by_content(kind, nodes, build_row, geom):
 
 
 def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
-    """THE single (cands, anchors) surface builder — called by BOTH the offline
-    enrich (det/prior nodes from a bundle's tile graph) and the live analyze_scene
-    tool (det/prior nodes from the runtime graph). One function ⇒ no teacher/student
-    drift in xy source, centerline policy, class/color, rounding, or order.
+    """The ``(cands, anchors)`` surface from detection and prior ``(fid,
+    node)`` iterables, both sorted by fid.
 
-    ``det_nodes`` / ``prior_nodes`` are iterables of ``(fid, node)``; a node exposes
-    ``centroid`` (grid row,col), ``centerline`` (grid polyline or None), ``class_name``,
-    ``name``. xy PREFERS the node's continuous ``world_xy`` (the tracker's
-    sub-cell position, 2dp), then a point on the node's own geometry, then the
-    cell centre of its centroid. Detections carry NO centerline; priors carry
-    their baked centerline (cell-center world, 2dp). Both lists are sorted by
-    fid.
-
-    UNIFORM FOOTPRINT: every node with a realised mask — a detected car AND a
-    prebake building — gets the SAME mask-derived fields via ``_mask_fields``:
-    the hidden EXACT ``mask`` loops + ``mask_centroid`` (the compare op's gap /
-    center substrate — the ingested mask verbatim, every fragment and hole,
-    no decimation) plus two VISIBLE opt-in shape scalars
-    (``footprint_area_m2``/``aspect_ratio``). Nodes without a mask stay bare.
+    A row's xy is the node's ``world_xy``, else a point on its own geometry,
+    else its centroid cell's centre. Every node with a mask, detection or
+    prior, gets the same mask fields: the exact ``mask`` chains and
+    ``mask_centroid`` (hidden from the model) and the shape scalars.
+    Priors carry their centerline in world metres.
     """
     tx, ty = float(origin_xy[0]), float(origin_xy[1])
     cs = float(cell_m)
@@ -352,15 +281,8 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         return [round(tx + (int(rc[1]) + 0.5) * cs, 2), round(ty + (int(rc[0]) + 0.5) * cs, 2)]
 
     def _xy(n, mask=None):
-        """The row's served point -- the ``act.move`` FLIGHT TARGET.
-
-        A measured position wins: a detection's ``world_xy`` is where the
-        tracker put the object, sub-cell. Otherwise the point is
-        representative of the row's own geometry
-        (:func:`representative_point`), never a mean over it: a mean is off
-        a loop road, off a bent way, and off every piece of a name that is
-        several places, and a flight target has to be where the feature is.
-        """
+        """The row's served point, the ``act.move`` flight target: the
+        tracker's ``world_xy``, else :func:`representative_point`."""
         w = getattr(n, "world_xy", None)
         if w is not None and len(w) >= 2:
             return [round(float(w[0]), 2), round(float(w[1]), 2)]
@@ -374,46 +296,23 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         return [_w(p) for p in cl] if cl else None
 
     def _cells(n):
-        """The node's own 2 m mesh, as a plain (row, col) int list.
-
-        The primary geometry: every spatial op measures on this; the mask
-        loops and the centerline are reductions of it. A list rather than an
-        array so a surface round-trips through JSON unchanged. ``tolist``
-        rather than a comprehension: this is the hottest line of the rebuild.
-        """
+        """The node's 2 m mesh as a plain (row, col) int list, so a surface
+        round-trips through JSON."""
         c = cell_mesh.cells_of(n)
         return c.tolist() if len(c) else []
 
     def _axis_q(n, key):
-        # axis_length_m is meaningful only for a node that HAS a baked
-        # centerline (a linear feature); None when there is no centerline.
+        # Only a node with a centerline has an axis length.
         if not getattr(n, "centerline", None):
             return None
         v = getattr(n, key, None)
         return round(float(v), 2) if v is not None else None
 
     def _exact_chains(n) -> list:
-        """The node's EXACT vertex chains, CUT to the ground this tile
-        actually covers.
-
-        A map node carries one ``world_contour``: a ring, a way or a single
-        point, stating its own closure. A row is ONE way, so that contour is
-        the whole of what the row describes, and the set a name resolves to
-        carries one row -- and one contour -- per way.
-
-        The clip: the bake rasterises the full geometry and clips the CELLS
-        to its grid, so a feature's cells stop at the tile edge while its
-        contour runs on. The box the node's own cells occupy is therefore the
-        clip: a no-op for a feature wholly inside, the tile edge for one that
-        leaves.
-
-        One cell of margin, because a cell contains the chain that rasterised
-        it and its centre is half a cell inside its own edge. The margin stops
-        at the tile origin: cell index -1 is off the map.
-
-        A node with no cells is not clipped: there is nothing to say which
-        ground it covers, and guessing would delete geometry on no evidence.
-        """
+        """The node's ``world_contour`` (one ring, way or point) clipped to
+        the box of its own cells plus one cell, since the bake clips cells
+        to the tile while a contour runs on. A node with no cells is not
+        clipped."""
         wc = getattr(n, "world_contour", None)
         parts = [wc] if wc else []
         chains = [[[float(x), float(y)] for x, y in p] for p in parts if p]
@@ -427,20 +326,11 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
             tx + (int(c1) + 2) * cs, ty + (int(r1) + 2) * cs))
 
     def _mask_fields(n) -> dict:
-        # The mask-derived fields, identical for a detection and a prior:
-        #  * ``mask`` + ``mask_centroid``: the exact geometry as world-meter
-        #    vertex chains (the node's contour, else its full multi-loop cell
-        #    boundary) and its area centroid -- the compare op's gap and
-        #    centre substrate, hidden from the model (_MODEL_HIDDEN_ROW_FIELDS).
-        #  * ``footprint_area_m2`` / ``aspect_ratio``: visible opt-in shape
-        #    scalars. An open chain encloses nothing and gets none.
-        # A node without a mask gets no mask fields.
+        # ``mask`` (the contour, else the cell boundary loops), its centroid
+        # and the shape scalars; none for a node without either.
         cells = getattr(n, "cells", None)
         chains = _exact_chains(n)
-        # A one-vertex chain (an OSM POI) is not a drawable shape: it falls
-        # through to the cell boundary below, which draws. Two-vertex chains
-        # (single-segment ways) stay on their exact geometry, per cell_mesh's
-        # policy that distance and intersection run on the exact chains.
+        # A one-vertex chain (a POI) draws nothing: the cell boundary does.
         if any(len(ch) >= 2 for ch in chains):
             out = {"mask": chains}
             _c = _mask_center(chains)
@@ -459,16 +349,13 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
             _c = _mask_center(loops)
             if _c is not None:
                 out["mask_centroid"] = [round(v, 2) for v in _c]
-        # Shape scalars only when the raster can express shape: below ~6
-        # cells the 2 m grid quantizes area to {4..16} m2 and aspect to {1,2}.
+        # Below 6 cells the 2 m grid cannot express shape.
         if len(cells) >= 6:
             shape = G.mask_shape_features(cells, cs)
             if shape:
                 out.update(shape)
         return out
 
-    # ``_mask_fields`` runs once per node and its ``mask`` is handed to
-    # ``_xy``, so the served point is representative of the geometry served.
     def _cand_row(f, n):
         mf = _mask_fields(n)
         xy = _xy(n, mf.get("mask"))
@@ -482,11 +369,8 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
                 "search_text": _cand_search_text(n)}
 
     cands = _rows_by_content("c", det_nodes, _cand_row, (tx, ty, cs))
-    # PRIOR rows carry no class field: a prior's semantics are its name + raw
-    # OSM tags. One row per way: a named road is routinely several ways and
-    # the set is what a name resolves to, so a row's cells, centerline and
-    # position describe one way and its fid resolves to that way in the
-    # runtime graph.
+    # A prior row is one way and carries no class: its name and tags say
+    # what it is.
     def _anchor_row(f, n):
         mf = _mask_fields(n)
         xy = _xy(n, mf.get("mask"))
@@ -503,8 +387,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
                 "search_text": _anchor_search_text(n)}
 
     anchors = _rows_by_content("a", prior_nodes, _anchor_row, (tx, ty, cs))
-    # A centerline row renders its termini: end0_xy is the along=0 end of
-    # every chart over it, end1_xy the far end.
+    # A centerline row carries its termini.
     for _ar in anchors:
         _acl = _ar.get("centerline")
         if isinstance(_acl, list) and len(_acl) >= 2:
@@ -512,12 +395,10 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
                               round(float(_acl[0][1]), 2)]
             _ar["end1_xy"] = [round(float(_acl[-1][0]), 2),
                               round(float(_acl[-1][1]), 2)]
-    # Fold pure duplicate cand rows (identical rounded xy and class), keeping
-    # the best-attributed one: color present, then higher color_conf, then
-    # the lowest fid numerically. Distinct classes at one xy are not folded.
+    # Duplicate detections (same rounded xy and class) fold to the one with
+    # a color, then the higher color_conf, then the lower fid.
     def _fid_key(f):
-        # detected_2 before detected_100: the numeric tail sorts as a
-        # NUMBER; a fid with no numeric tail sorts after, by string.
+        # detected_2 before detected_100; a fid without a numeric tail after.
         s = str(f)
         head, _, tail = s.rpartition("_")
         return ((head, 0, int(tail), "") if tail.isdigit()
@@ -540,15 +421,11 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
             _best[k] = c
     if len(_best) != len(cands):
         cands = list(_best.values())
-    # Natural fid order (detected_2 before detected_100): numeric order is
-    # mint order, which for an explore pass is stop order.
+    # Numeric fid order is mint order.
     cands.sort(key=lambda c: _fid_key(c["fid"]))
     anchors.sort(key=lambda a: _fid_key(a["fid"]))
-    # Window-covering mask (geometric, tag-blind): a mask containing every
-    # surface row position makes the gap to it 0 for every row. The visible
-    # ``covers_window`` fact stamped here makes compare serve one containment
-    # fact instead; a bbox prefilter keeps the exact test to the few
-    # window-spanning masks.
+    # A mask containing every row position is 0 m from every row:
+    # ``covers_window`` lets compare state that once instead.
     _all_rows = cands + anchors
     if len(_all_rows) >= 3:
         _xs = [r["xy"][0] for r in _all_rows]
@@ -571,9 +448,8 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
 
 
 def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
-    """Split a flat ``(fid, node)`` iterable into detections (cands) and
-    priors (anchors) by ``node.provenance`` and run :func:`build_surface`:
-    the one graph -> surface path."""
+    """:func:`build_surface` over a graph's ``(fid, node)`` pairs, split by
+    ``node.provenance``."""
     det, prior, seen = [], [], set()
     for fid, node in nodes_iter:
         fid = str(fid)
@@ -587,38 +463,26 @@ def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
     return build_surface(det, prior, origin_xy, cell_m)
 
 
-# Row fields resolved server-side by fid that no model decision needs
-# verbatim: ``search_text`` (the fuzzy-match haystack), ``centerline`` (a
-# full polyline, hundreds of tokens on a road), ``mask``/``mask_centroid``
-# (the exact footprint compare resolves) and ``cells`` (the bake's 2 m mesh;
-# distance and intersection run on the exact ``mask`` chains).
+# Row fields the executor resolves by fid and the model never reads.
 _MODEL_HIDDEN_ROW_FIELDS = ("search_text", "centerline", "mask",
                             "mask_centroid", "cells")
 
-# Render-input fields: folded into the compact color cell
-# (:func:`_mask_noise_color`), never served as raw columns or named in a
-# present-columns echo.
+# Fields folded into the rendered color cell, never served raw.
 _RENDER_INPUT_ROW_FIELDS = ("color_shade", "color_flag")
 
 
-# Below this color_conf a color word is noise, and the model literal-matches
-# color words, so the model-facing render marks it uncertain. Render only:
-# the raw rows keep the real color, so the color columns are unchanged.
+# Below this color_conf the rendered color word is marked uncertain.
 _COLOR_CONF_FLOOR = 0.15
 
 
 def _mask_noise_color(row):
-    """Render the color cell as a token-minimal ``col`` tag:
-    ``[dk|lt ]word[/word2][?]``. A trailing ``?`` marks an uncertain read
-    (below-floor color_conf, or ``color_flag='look'``); a ``color_shade`` of
-    dk/lt prefixes. Render only: the raw row keeps the mixture string.
-    Returns the row unchanged when it carries no color."""
+    """The row with its color rendered ``[dk|lt ]word[/word2][?]`` (``?``
+    for a below-floor conf or ``color_flag='look'``) and the shade/flag
+    inputs removed."""
     if not isinstance(row, dict):
         return row
     c = row.get("color")
     if not (isinstance(c, str) and c.strip()):
-        # shade/flag are render inputs to the `col` tag; with no color word
-        # they are still stripped (never served raw).
         if "color_shade" in row or "color_flag" in row:
             row = dict(row)
             row.pop("color_shade", None)
@@ -628,75 +492,51 @@ def _mask_noise_color(row):
     uncertain = ((isinstance(conf, (int, float)) and conf < _COLOR_CONF_FLOOR)
                  or row.get("color_flag") == "look")
     shade = row.get("color_shade")
-    # /word2 only when color_shade is set (a color-name posterior); the
-    # palette-mode mixture's second component is glass/shadow noise.
+    # A palette mixture's second word is glass or shadow: only a color-name
+    # read (shade set) serves it.
     rich = shade is not None
     out = {**row, "color": G.compact_color_cell(
         c, shade=shade if shade in ("dk", "lt") else None, uncertain=uncertain, rich=rich)}
-    # shade/flag are render INPUTS folded into the `col` tag above — never shown raw.
     out.pop("color_shade", None)
     out.pop("color_flag", None)
     return out
 
 
 def _model_facing_row(row):
-    """Project a surface row for the model: strip server-resolvable fields and
-    mask a below-floor color word to '?' (noise looks like noise).
-
-    The commit binds on ``fid`` and every op resolves geometry by fid, so the
-    hidden fields are pure context weight. Idempotent where absent."""
+    """A row as the model sees it: hidden fields dropped, color rendered."""
     if isinstance(row, dict) and any(k in row for k in _MODEL_HIDDEN_ROW_FIELDS):
         row = {k: val for k, val in row.items() if k not in _MODEL_HIDDEN_ROW_FIELDS}
     return _mask_noise_color(row)
 
 
 class _BroadRows(list):
-    """Marker for a retrieval (``find``) result list.
-
-    Behaves as a plain list everywhere server-side (rN chaining, geometry
-    ops); :func:`compact_results` applies the ONE broad-result envelope law
-    to it like every other row list. ``ordered`` is True on a query-matched
-    find (best-first is a real ordering, so its rows render); a query-less
-    browse stays unordered and renders census + len only."""
+    """A find / crossings / ends result. ``ordered`` when its order is real
+    (a matched query), ``name_set`` when it is one name's tied ways,
+    ``op_cols`` the columns its op attached."""
 
     empty_condition: "str | None" = None
-    # A tied one-name set renders its shape (len + name), never rows or fids.
     name_set: bool = False
-    # POSITIVE ordering marker: True when this list's order is real
-    # (query-matched best-first). compact_results renders rows only when an
-    # ordering exists.
     ordered: bool = False
-    # Columns this result's own op attached (render-budget priority).
     op_cols: list = []
 
 
-# THE broad-result envelope law: any row-list result longer than
-# _BROAD_DUMP_SOFT_ROWS renders as census + the first _BROAD_HEAD_ROWS rows
-# in the result's order, with the full set live in the rN handle. Response
-# shape only, never a candidate cap: the commit reads the RAW results. The
-# head equals LOOK_SET_ROWS, so a set crop badges exactly the rows the head
-# shows.
 def join_hints(*parts) -> str:
-    """Hints joined as SENTENCES, one per line -- the ONE hint shape.
-
-    Several ops contribute facts to one envelope; a line each keeps them
-    separable. Empty parts drop out.
-    """
+    """The non-empty hint sentences, one per line."""
     return "\n".join(str(p) for p in parts if p)
 
 
-# Above this many tied ways under ONE name, a find's initial reply is the
-# shape (how many ways, how long), not a table of arbitrarily ordered rows.
+# Above this many tied ways under one name, a find renders the set's shape.
 _NAME_SET_SHAPE_ROWS = 8
 
+# A row list longer than _BROAD_DUMP_SOFT_ROWS renders its first
+# _BROAD_HEAD_ROWS rows (a set crop badges the same rows); the rN keeps all.
 _BROAD_DUMP_SOFT_ROWS = 48
 _BROAD_HEAD_ROWS = LOOK_SET_ROWS
 
 
-
 def _census_counts(rows) -> tuple[dict, int]:
-    """FULL tag ``key=value`` counts of a row set (priors carry raw OSM tags;
-    detections counted as ``class=<c>``) + how many rows carry a name."""
+    """``key=value`` counts over a row set's tags and ``class=<c>``, and how
+    many rows carry a name."""
     counts: dict[str, int] = {}
     named = 0
     for it in rows:
@@ -711,7 +551,7 @@ def _census_counts(rows) -> tuple[dict, int]:
         if isinstance(tags, dict):
             for k, v in tags.items():
                 if str(k) == "osm_id":
-                    continue  # per-row unique id, not vocabulary
+                    continue
                 key = f"{k}={v}"
                 counts[key] = counts.get(key, 0) + 1
     return counts, named
@@ -723,19 +563,14 @@ def _top(counts: dict, n: int) -> dict:
 
 
 def _surface_census(rows, top_n: int = 12) -> tuple[dict, int]:
-    """FACTS census of a row set: the top-``top_n`` tag ``key=value`` counts.
-    The world-graph discovery affordance — what this world speaks; counts
-    only, no vocabulary advice."""
+    """The top ``top_n`` census counts of a row set, and its named count."""
     counts, named = _census_counts(rows)
     return _top(counts, top_n), named
 
 
 def _query_matched_census(counts: dict, query: str, top_n: int = 8) -> dict:
-    """QUERY-CONDITIONED slice of a full census: the tag ``key=value`` entries
-    whose key or value shares a token (or an edit-distance-close token) with
-    the query, by count. Pure LEXICAL retrieval over the tag vocabulary — it
-    surfaces the long-tail tags a global top-N cut hides exactly for
-    divergent-vocabulary queries (counts only, no advice)."""
+    """The census entries sharing a token (or a close spelling) with the
+    query, top ``top_n``: the long tail a global top cut hides."""
     q_tokens = {t for cl in T.fuzzy_prepare_query(query) for t in cl[1]}
     q_long = [t for t in q_tokens if len(t) >= 4]
     matched: dict[str, int] = {}
@@ -762,10 +597,8 @@ def _query_matched_census(counts: dict, query: str, top_n: int = 8) -> dict:
 
 
 def _census_note(rows, *, name_samples: int = 4, query: str | None = None) -> str:
-    """One-line surface census note: on a query miss, FIRST the tags sharing
-    tokens/fuzz with the query (the long-tail entries a global top-N hides),
-    then the global top counts + name samples. Rides empty/no-match
-    retrievals so the re-query is one read, not a guess."""
+    """The census note a missed or thin find serves: the tags sharing
+    tokens with the query, the top tags and a few names."""
     counts, _named = _census_counts(rows)
     top = _top(counts, 12)
     parts = ", ".join(f"{k}({v})" for k, v in top.items())
@@ -801,18 +634,9 @@ class _EmptyFindMiss(list):
 
 
 class _FilterCutRows(list):
-    """Marker for every ``filter_items`` result (a cut over its input).
-
-    Behaves as a plain list server-side (rN chaining, geometry ops);
-    :func:`compact_results` additionally renders ``cut_stats`` on a NUMERIC
-    cut — the one-row deterministic cut line: ``{"cut": "27->4",
-    "nearest_excluded": {"fid": ..., <key>: <value>}, "admit_at": <value>}``.
-    Information-only: the harness never relaxes or re-runs the cut itself; the
-    MODEL reads the nearest-excluded row + the admit-at threshold and decides
-    whether to widen. On an EMPTY result the same stats ride the payload
-    (facts only, radical arm). ``ordered`` propagates from the filter's
-    INPUT: a filter preserves order, so a cut over an ordered set stays
-    renderable."""
+    """A filter_items or stratum result: its ``cut_stats`` (what the cut
+    kept, dropped and would admit) render with it, and ``ordered`` is its
+    input's."""
 
     cut_stats: dict = {}
     ordered: bool = False
@@ -820,45 +644,21 @@ class _FilterCutRows(list):
 
 
 class _CompareRows(list):
-    """Marker for a ``compare`` op result: a plain list of evidence rows
-    server-side (chainable — ``score_by{items:"rN", emphasis:[{key:"d_...", w:-1}]}`` works
-    directly), rendered by :func:`compact_results` as the SAME union-header
-    markdown grid every other non-empty list result gets — identity columns
-    + every column this compare attached, ONE joined table (audit: served as
-    two shapes, the blocks were never joined; the model re-derived from xy
-    and injected arithmetic errors) — prefixed by the per-ref ``refs``
-    header (labels, ref_fid, per-ref ``cols`` echo, ``name_match`` grounding
-    trust) and the verbatim ``columns`` echo (the one broad-result
-    census+head law applies past ``_BROAD_DUMP_SOFT_ROWS``).
-    ``notes`` carries the loud empty-set / no-flanker notes; ``columns`` is
-    the VERBATIM ordered list of every column key this compare attached
-    (echoed as the result header's ``columns`` so the model reads real names
-    instead of guessing d_<...>); ``ordered`` propagates from the compare's
-    INPUT (compare preserves input order)."""
+    """A compare result: rows with the attached columns, rendered as one grid
+    under the per-ref ``refs`` headers and the verbatim ``columns`` it
+    attached. ``ordered`` is its input's."""
 
     refs: list = []
     notes: list = []
     columns: list = []
-    # Propagates from the compare's INPUT (compare preserves input order).
     ordered: bool = False
 
 
 def _cut_stands_at(v, body: list, capped: list) -> str | None:
-    """Where the ORDERING COLUMN stood at the head's cut, both sides of it.
-
-    A head of 24 rows out of thousands says nothing about rank 25. If the
-    sort separated, the next row sits far from the last one shown; if not,
-    the head is an arbitrary slice of a plateau. The value just past the cut
-    is the one thing the served head cannot show. A fact, never a verdict.
-
-    It reports the composite ``score``, not a column: a multi-key sort is
-    ordered by the sum, and no single column is monotone in the head. Only a
-    ``score_by`` result (``_CueSortedRows``) is an ordering; a find's or a
-    filter's ``op_cols`` is a column-budget list, not a sort.
-
-    The next row comes from ``body`` (window-covering rows already dropped),
-    the sequence the head was cut from.
-    """
+    """For a truncated score_by head: the composite score span it shows and
+    the score of the first row past it, so a plateau reads differently from
+    a real gap. The composite, since no single key is monotone in a
+    multi-key sort."""
     if not isinstance(v, _CueSortedRows) or len(capped) >= len(body):
         return None
 
@@ -881,17 +681,14 @@ def _cut_stands_at(v, body: list, capped: list) -> str | None:
 
 
 class _CueSortedRows(list):
-    """Marker: this list's ORDER was produced by the ordering op (score_by)
-    over cue-derived keys. Behaves as a plain list everywhere else."""
+    """A score_by result: ordered, ``op_cols`` the keys it ranked on."""
 
     ordered = True
     op_cols: list = []
 
 
-# Model-facing column order for the working-set grid: identity first, then the
-# opt-in shape scalars, then whatever compare/other ops attached (first-seen).
-# ``idx`` + ``fid`` are the two leading columns the renderer emits itself and
-# are NOT listed here.
+# The grid's leading columns after ``fid``; attached columns follow in
+# first-seen order.
 _GRID_COL_PRIORITY = (
     "class", "color", "color_conf", "name", "tags", "xy",
     "footprint_area_m2", "aspect_ratio", "axis_length_m",
@@ -900,39 +697,27 @@ _GRID_COL_PRIORITY = (
 # Repeat the header row every N data rows on a long dump.
 _GRID_HEADER_EVERY = 50
 
-# Render bound on a tag-fat row's tags cell: the first N tags render, the
-# rest fold to a '+K more tags' marker. The node keeps every tag and find
-# still searches all of them.
+# A tags cell renders its first N tags and counts the rest.
 _TAG_RENDER_HEAD = 12
 
-# Tag keys the renderer drops: ids, postal bookkeeping and import constants
-# the model does not read. A render cut only: the node keeps every tag and
-# ``search_text`` is built from the full set, so a find on them still
-# matches.
+# Tag keys the grid does not render (ids, postal and import bookkeeping);
+# find still searches them.
 _TAG_RENDER_DROP = frozenset({
     "osm_id", "source_tag", "addr_postcode", "addr_city", "oneway",
     "ref_GB_uprn",
-    # Import bookkeeping and constants (tiger_county and worldkit_height_m
-    # barely vary). tiger_name_base / tiger_name_type stay: street names are
-    # not readable from nadir pixels.
     "tiger_reviewed", "tiger_cfcc", "tiger_source", "tiger_tlid",
     "tiger_separated", "tiger_county", "worldkit_layer",
     "worldkit_height_m", "calcity_object_id", "source_lanes",
 })
 
-# Columns the grid does not render (the raw fields stay on the rows):
-# name_match and score (never read to pick a row; score duplicates in-row
-# values on color sorts), aspect_ratio (a min-rect scalar is a lossy proxy
-# for shape; the crop answers shape), axis_length_m (inconsistent with the
-# endpoints) and color_conf.
+# Row fields the grid does not render.
 _GRID_COL_DROP = frozenset({
     "aspect_ratio", "axis_length_m", "color_conf",
     "name_match", "score",
 })
 
-# The one list of column names the model never sees, on any channel: the
-# grid, the Row repr on the python surface, and the census echoes in error
-# and dedup notes.
+# The column names the model never sees on any channel: the grid, the
+# python surface's Row, and the key echoes in refusals and notes.
 MODEL_UNSERVED_COLUMNS = (
     _GRID_COL_DROP
     | frozenset(_MODEL_HIDDEN_ROW_FIELDS)
@@ -940,11 +725,7 @@ MODEL_UNSERVED_COLUMNS = (
 
 
 def _is_gridable(v) -> bool:
-    """A value the grid renders as ONE cell: a scalar (str/int/float/bool), an
-    xy-like 2-number list, or a flat tags dict (rendered compact ``k=v``).
-    Hidden list fields (mask/centerline) are stripped
-    by :func:`_model_facing_row` before a row reaches the grid, so ``xy`` is the
-    only list that survives here."""
+    """A value one grid cell renders: a scalar, an xy pair or a flat dict."""
     if isinstance(v, (bool, int, float, str)):
         return True
     if isinstance(v, dict):
@@ -955,11 +736,9 @@ def _is_gridable(v) -> bool:
 
 
 def _fmt_float(v: float) -> str:
-    """THE one float render rule: the stored value in the fewest decimals
-    (4 to 10) that round-trip it, trailing zeros trimmed, ``-0.0`` as
-    ``0.0``, always one decimal. Every compute site quantizes once when it
-    stamps a value, so the served number is the number every rule keyed on,
-    and distinct stored scores render distinct."""
+    """A stored float in the fewest decimals (4 to 10) that round-trip it,
+    trailing zeros trimmed, ``-0.0`` as ``0.0``: values are quantized when
+    stamped, so the served number is the stored one."""
     if v == 0.0:
         v = 0.0
     for dp in range(4, 11):
@@ -971,10 +750,8 @@ def _fmt_float(v: float) -> str:
 
 
 def _grid_cell(v) -> str:
-    """One markdown cell. Absent/empty -> ``-``; floats -> the stored value
-    verbatim (:func:`_fmt_float` — the ONE rounding rule); xy -> ``x, y``;
-    a tags dict -> compact ``k=v; k2=v2``; a stray ``|`` in a string becomes
-    ``/`` so a value never column-breaks the pipe table."""
+    """One markdown cell: ``-`` when empty, floats by :func:`_fmt_float`, xy
+    as ``x, y``, tags as ``k=v; k2=v2``, and ``|`` as ``/``."""
     if v is None or v == "" or (isinstance(v, dict) and not v):
         return "-"
     if isinstance(v, bool):
@@ -999,8 +776,8 @@ def _grid_cell(v) -> str:
 
 
 def _grid_columns(rows) -> list[str]:
-    """The ordered union of non-fid gridable columns present (non-empty) across
-    model-facing rows: priority columns first, then first-seen extras."""
+    """The non-empty gridable columns across the rows: priority columns,
+    then the rest in first-seen order."""
     seen: list[str] = []
     seen_set: set = set()
     for row in rows:
@@ -1017,10 +794,8 @@ def _grid_columns(rows) -> list[str]:
                 seen.append(k)
     prio = [c for c in _GRID_COL_PRIORITY if c in seen_set]
     extras = [c for c in seen if c not in _GRID_COL_PRIORITY]
-    # Side columns are presence pairs (one member per row), so a first-seen
-    # union interleaves them with foreign columns. Group each ref's four side
-    # columns at the first position any appears, in the fixed order
-    # left/right/ahead/behind.
+    # A ref's four side columns (one of each pair per row) group where the
+    # first appears, in left/right/ahead/behind order.
     _side = re.compile(r"^(left of|right of|ahead of|behind) (.+)$")
     _order = {"left of": 0, "right of": 1, "ahead of": 2, "behind": 3}
     grouped: list[str] = []
@@ -1044,13 +819,8 @@ def _grid_columns(rows) -> list[str]:
 
 
 def _render_grid_rows(rows, cols=None) -> str:
-    """Union-header markdown grid — the ONE working-set surface serialization
-    (the main ``{len, items}`` list results AND ``compare`` evidence).
-
-    ``| fid | <cols...> |`` -- every column at least one row carries. Absent
-    cells ``-``, the header repeated every _GRID_HEADER_EVERY data rows. Rows
-    pass through :func:`_model_facing_row`. There is no index column:
-    position is what ``rN[i]`` / ``rN[a:b]`` addresses."""
+    """The rows as a ``| fid | <cols...> |`` markdown grid, the header
+    repeated every _GRID_HEADER_EVERY rows."""
     proj = [_model_facing_row(r) if isinstance(r, dict) else r for r in rows]
     if cols is None:
         cols = _grid_columns(proj)
@@ -1085,34 +855,22 @@ _COMPARE_COL_PREFIXES = ("distance to ", "center distance to ",
 _AUTOATTACH_PREFIXES = tuple(
     p for p in _COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
 
-# A union's own bound, a wall-clock net: a union renders one column set
-# however many members it folds, but an rN member can fold a whole class,
-# and members x items gap calls is the cost.
+# A wall-clock net: a union measures members x items gaps.
 _UNION_MAX_MEMBERS = 400
 
+
 def _sanitize_token(lbl, fallback="ref") -> str:
-    """The one column-key sanitizer: a typed token (fid, ``rN`` base, name,
-    ``as:`` label) -> a ``[^a-z0-9]+``-collapsed lowercase base, shared by
-    the compare column labels and the compiler's keys."""
+    """A token as a column label: lowercase, ``[^a-z0-9]+`` collapsed to
+    ``_``. The compiler builds its keys with it too."""
     base = re.sub(r"[^a-z0-9]+", "_", str(lbl).lower()).strip("_")
     return base or fallback
 
 
-
-
-# THE one render budget: a result's rendered grid stays under this many
-# chars. Over it, columns the program's own ops named come first, then
-# identity columns, then first-seen extras; the tail elides with a count
-# note. Render only: every column lives on the full set in the rN.
+# A rendered grid stays under this many chars by eliding columns.
 _RENDER_CHAR_BUDGET = 12_000
 
-# THE one-line table legend, served once per response under the first
-# envelope that renders rows. Every clause is code-derived (test_table_legend):
-#   xy       build_surface._xy: a detection's measured world_xy, else a
-#            point ON the row's own geometry (representative_point); the
-#            same point act.move flies.
-#   distance G.gap_witness min edge gap, 0.0 on contact
-#   bearing  G.bearing: 0 = north = +y, 90 = east = +x, clockwise
+# Served once per response, under its first grid. xy is build_surface's
+# point, distance G.gap_witness, bearings G.bearing.
 _TABLE_LEGEND = (
     "reading these tables: xy = [east_m, north_m] world meters, +y is "
     "north (xy is the row's recorded point -- not always its footprint "
@@ -1127,18 +885,14 @@ _TABLE_LEGEND = (
 
 
 def _budget_columns(rows_r, cols, op_cols) -> tuple[list, int]:
-    """Trim ``cols`` (original order kept) so the rendered grid of ``rows_r``
-    fits ``_RENDER_CHAR_BUDGET``: keep every priority column that fits, in
-    priority order (program-named ``op_cols`` first, then
-    ``_GRID_COL_PRIORITY`` identity, then first-seen extras; always at least
-    one column) — one oversized column skips, it does not wall off the
-    cheaper columns behind it. Returns ``(kept_cols, n_cut)``."""
+    """``(kept, n_cut)``: ``cols`` cut to fit ``_RENDER_CHAR_BUDGET``, taken
+    in priority order (``op_cols``, identity, the rest) and skipping a
+    column that does not fit; at least one is kept, order unchanged."""
     proj = [_model_facing_row(r) for r in rows_r if isinstance(r, dict)]
     base = 20 * (len(proj) + 2)  # fid cell + pipes per line
     cost = {}
     for c in cols:
-        # header cell + separator overhead, deliberately GENEROUS so the
-        # kept prefix always renders under the budget.
+        # header and separator overhead, generous so the kept set fits
         w = len(c) + 12
         for row in proj:
             w += len(_grid_cell(row.get(c))) + 3
@@ -1294,12 +1048,9 @@ def compact_results(results: dict, *, widen_form: str = "",
 
 
 def _grouped_keys(present) -> str:
-    """Key list -> a readable summary: singleton keys verbatim, per-instance
-    families collapsed ('distance to building_* (100 instances)'), so an
-    error naming hundreds of per-fid columns does not bury the one key the
-    model needs. Each key joins exactly one family, its longest matching
-    prefix from :data:`_COMPARE_COL_PREFIXES` + ``color_``.
-    """
+    """The keys with each family of more than three per-instance keys
+    collapsed ('distance to building_* (100 instances, e.g. ...)'); a key's
+    family is its longest column prefix plus its stem's leading word."""
     prefixes = sorted(_COMPARE_COL_PREFIXES + ("color_",), key=len, reverse=True)
     fams: dict[str, list] = {}
     for k in present:
@@ -1307,9 +1058,6 @@ def _grouped_keys(present) -> str:
         if pre is None:
             fams.setdefault(k, []).append(k)
             continue
-        # Family = prefix + the instance stem's leading token, so
-        # 'distance to building_1'/'..._2' collapse but 'distance to road_5'
-        # stays its own family.
         stem = k[len(pre):]
         base = re.match(r"^([A-Za-z]+)_", stem)
         fams.setdefault(pre + (base.group(1) + "_" if base else stem),
@@ -1352,15 +1100,12 @@ def _polyline_arc_midpoint(verts) -> list:
     return [float(verts[-1][0]), float(verts[-1][1])]
 
 
-
 def _attach_standing_columns(items, frame, with_distance=False):
-    """Attach a staged viewpoint's presence-pair side columns to every
-    xy-bearing row -- on COPIES, never the shared surface rows: 'left of
-    <h>'/'right of <h>' (lateral meters) and 'ahead of <h>'/'behind <h>'
-    (longitudinal meters), computed by standing at ``from_xy`` and looking
-    along ``up_unit`` (right = cw(up), the one handedness law). Presence IS
-    the side; 0.0 on-axis lands right/ahead.
-    A row without an xy passes through untouched."""
+    """Copies of the rows with a staged viewpoint's side columns, standing
+    at ``from_xy`` looking along ``up_unit``: 'left of'/'right of <h>' and
+    'ahead of'/'behind <h>' in metres, the key present naming the side (0
+    lands right/ahead). With ``with_distance``, 'distance to <h>' from the
+    stand point."""
     h = str(frame.get("handle") or "v")
     fx, fy = (float(frame["from_xy"][0]), float(frame["from_xy"][1]))
     ux, uy = (float(frame["up_unit"][0]), float(frame["up_unit"][1]))
@@ -1378,34 +1123,24 @@ def _attach_standing_columns(items, frame, with_distance=False):
         lat = dx * rx + dy * ry
         lon = dx * ux + dy * uy
         rec = {**it}
-        # a re-attach must not leave BOTH members of a presence-pair behind
+        # a re-attach must not leave both members of a pair
         for k in (left_k, right_k, ahead_k, behind_k):
             rec.pop(k, None)
-        # Fixed pair order: the grid's column order derives from first-seen
-        # insertion.
         rec[right_k if lat >= 0 else left_k] = round(abs(lat), 2)
         rec[ahead_k if lon >= 0 else behind_k] = round(abs(lon), 2)
         if with_distance:
-            # straight-line meters from the STAND POINT to the row's
-            # recorded position (centroid) -- the stance is a viewer, not
-            # a mask, so there is no footprint-gap variant to confuse.
             rec[dist_k] = round((dx * dx + dy * dy) ** 0.5, 2)
         out.append(rec)
     return out
 
 
 def union_gap(geoms, bbs, item_geom):
-    """``(gap, ref_witness, item_witness)`` from ``item_geom`` to the nearest
-    of ``geoms`` -- the exact min over the members, the witness from the
-    argmin member.
+    """``(gap, ref_witness, item_witness)`` from ``item_geom`` to the
+    nearest of ``geoms`` (``bbs`` = ``G.stack_bboxes(geoms)``).
 
-    ``bbs`` is ``G.stack_bboxes(geoms)``, built once per reference by the
-    caller. A member whose bounding-box separation already exceeds the best
-    gap in hand cannot beat it and is skipped. The scan is seeded from the
-    nearest box, an upper bound straight away, but the record is still taken
-    in member order with a strict test, so a tie keeps the earliest member's
-    witness. The seed member's measurement is reused when the pass reaches
-    it. A zero gap ends the scan: nothing beats contact.
+    The nearest box seeds an upper bound and members whose box is farther
+    are skipped; members are still taken in order with a strict test, so a
+    tie keeps the earliest member's witness. Contact ends the scan.
     """
     bounds = G.bbox_bounds(bbs, item_geom)
     ub = None
@@ -1428,8 +1163,8 @@ def union_gap(geoms, bbs, item_geom):
 
 
 class _Run:
-    """One ``run_program`` call: the surface, the results so far, the seed,
-    and the op dispatching (its signature rides that op's errors)."""
+    """One ``run_program`` call: the surface, the seed, the results so far
+    and the op running."""
 
     def __init__(self, cands, anchors, seed=None, staged=None, standing=None):
         self.cands, self.anchors = cands, anchors
@@ -1447,8 +1182,7 @@ class _Run:
         return f"; signature: {self.op}" if self.op in _SIGNED_OPS else ""
 
     def avail(self, kind: str) -> str:
-        """The run's live fid census (bounded) for an error, keyed by the
-        arg kind that failed."""
+        """The live handles and fids (bounded) a refusal names."""
         def _cap(fids):
             return f"{fids[:12]}" + (f" (+{len(fids) - 12} more)" if len(fids) > 12 else "")
         if kind == "list":
@@ -1466,8 +1200,8 @@ class _Run:
         return base in self.results or base in self.seed
 
     def resolve(self, tok):
-        """``rN`` -> its rows (this program's result shadows an earlier
-        call's); ``rN[a:b]`` -> that window of them."""
+        """``rN`` -> its rows (this program's shadowing an earlier call's);
+        ``rN[a:b]`` -> that window of them."""
         base, _, win = tok.partition("[")
         if base in self.results:
             v = self.results[base]
@@ -1484,8 +1218,7 @@ class _Run:
 
 
 class _Args(dict):
-    """An op's args: a required arg that is absent raises a ProgramError
-    naming the op and the arg."""
+    """An op's args; an absent required arg raises a ProgramError."""
 
     def __init__(self, d, cx):
         super().__init__(d)
@@ -1497,9 +1230,8 @@ class _Args(dict):
 
 
 def _window(cur, win, token):
-    """``rN[a:b]``: the rows, keeping the source's class and order attributes
-    (whole-set descriptors -- notes, cut_stats, refs, columns -- stay
-    behind). A window that selects 0 of a non-empty set fails loud."""
+    """``rN[a:b]``: those rows, keeping the source's class, ``ordered`` and
+    ``op_cols``. Selecting none of a non-empty set raises."""
     part = "[" + win
     lo, hi = (int(b) for b in win[:-1].split(":"))
     if not isinstance(cur, list):
@@ -1553,9 +1285,9 @@ def _as_rows(cx, arg):
 
 
 def _named_rows(cx, el, need):
-    """One crossings/ends ref -> EVERY row it names (a road is routinely
-    several ways): a fid, an rN, a list of them, or {ref:..., as:...}. A
-    row off the surface counts when it carries ``need``."""
+    """Every row a crossings/ends ref names (a road is several ways): a fid,
+    an rN, a list of them, or {ref, as}. A row off the surface counts when
+    it carries ``need``."""
     if isinstance(el, dict):
         el = el.get("ref")
     out: list = []
@@ -1576,17 +1308,9 @@ def _named_rows(cx, el, need):
 
 
 def _relate_ran(key, items) -> bool:
-    """Did the compare that WRITES ``key`` actually run on these rows?
-
-    A relation column has siblings: relating rows to a place stamps
-    ``distance to <lab>`` beside ``facing <lab>``. So a ``facing <lab>``
-    missing on every row while ``distance to <lab>`` is present is the
-    geometry declining to name a direction (every row TOUCHES the place,
-    which has no min-gap vector), not the model guessing a column name.
-    Only ``in_or_blank`` needs the distinction, and it needs one that works
-    for an ``as`` LABEL -- ``_contact_fact`` reads ``by_fid`` and answers ""
-    for a labelled ref.
-    """
+    """Whether the compare that writes a ``facing <lab>`` key ran: its
+    sibling ``distance to <lab>`` is on a row, so a facing absent everywhere
+    means every row touches the place."""
     if not (isinstance(key, str) and key.startswith("facing ")):
         return False
     sib = "distance to " + key[len("facing "):]
@@ -1612,8 +1336,7 @@ def _contact_fact(cx, key, items) -> str:
 
 
 def _match_label(r):
-    """What a query hit, as a name: the row's own name, else whole
-    identifying tag pairs (never osm_id)."""
+    """What a query hit: the row's name, else its first tag pairs."""
     nm = (r.get("name") or "").strip()
     if nm:
         return repr(nm[:32])
@@ -1633,32 +1356,26 @@ def _match_label(r):
 
 
 def _find(cx, a):
-    """Search the surface. A query returns the match set (best-first, len =
-    the match count); a query-less find browses the selected surface."""
+    """Search the surface: a query returns its match set best-first; no
+    query browses every row."""
     _q_notes: list = []
     _q_matched = False   # a query ran and matched (the rN is ordered)
-    _name_set = False    # tied ways of ONE name: render the shape
-    _find_cols: list = []  # columns this find attached (budget prio)
-    _empty_cond = None  # the truthful no-match condition, set on a query miss
+    _name_set = False    # tied ways of one name: render the shape
+    _find_cols: list = []
+    _empty_cond = None
     rows = cx.cands + cx.anchors
     _fid_hit = (cx.by_fid.get(str(a.get("query") or "").strip())
                 if a.get("query") else None)
     if _fid_hit is not None:
-        # A query naming a live fid is retrieval of that row (the fuzzy
-        # scorer matches text, never ids).
+        # The fuzzy scorer matches text, never ids.
         rows = [_fid_hit]
         _q_matched = True
         _q_notes.append(
             "query " + repr(str(a.get("query")).strip())
             + " is a live fid -- that row returned directly.")
     elif a.get("query"):
-        # Fuzzy free text over the walled search_text + name. The result is
-        # the match set, best-first; the sub-threshold tail stays out (its
-        # size is stated in the note). Every returned row carries name_match
-        # (the grid renders none).
         _q_raw = str(a["query"])
         if ";" in _q_raw:
-            # ';' is not a query operator: loud, naming the idioms.
             raise ProgramError(
                 f"find query {_quote(_q_raw)} contains ';', which is not a "
                 f"query operator (the whole string would fuzz-score "
@@ -1677,16 +1394,12 @@ def _find(cx, a):
         _hit = _memo["scored"].get(_mkey)
 
         def _memo_census():
-            # the surface census a miss or a thin match serves: edit
-            # distances over the whole vocabulary, once
             got = _memo["census"].get(_mkey)
             if got is None:
                 got = _memo["census"][_mkey] = _census_note(
                     _searched_rows, query=_q_raw)
             return got
-        # The fuzz band's denominator is a CORPUS fact, minted over the same
-        # rows being scored (the sibling of `tag_family_keys` below): how
-        # rare a query word is here, and whether any row could cover it.
+        # Query-word rarity over the rows being scored.
         _idf = _memo["idf"]
         if _idf is None and _hit is None:
             _idf = _memo["idf"] = T.token_idf(_searched_rows)
@@ -1696,10 +1409,8 @@ def _find(cx, a):
                                        x.get("name"), x.get("tags"),
                                        idf=_idf), 3)}
                       for x in rows]
-            # Widen to the query's own tag family: a query that is a value
-            # of some tag key reaches every row carrying that key, at
-            # T.TAG_FAMILY_SCORE, ranked below every exact hit. Never a drop:
-            # no row that matched before stops matching.
+            # A query that is a tag value reaches every row carrying that
+            # tag key, at T.TAG_FAMILY_SCORE, below every exact hit.
             _fams = T.tag_family_keys(q_data, _searched_rows)
             if _fams:
                 for _r in scored:
@@ -1710,9 +1421,6 @@ def _find(cx, a):
             _memo["scored"][_mkey] = _hit = scored
         scored = [dict(_r) for _r in _hit]
         if scored and scored[0]["name_match"] < T.FUZZY_THRESHOLD:
-            # Nothing matched: the no-match affordance, its truthful
-            # condition (the scoring threshold) and the query-conditioned
-            # census, so the re-query is one read.
             scored = []
             _q_tokens = sorted({t for _cl in q_data for t in _cl[1]})
             _empty_cond = (
@@ -1720,8 +1428,7 @@ def _find(cx, a):
                 f"{T.FUZZY_THRESHOLD} against query {_quote(_q_raw)} "
                 f"(query tokens: {_q_tokens}).")
             _q_notes.append(_memo_census())
-            # A query word that is a palette color matches no row text: the
-            # miss names the column that carries it.
+            # A palette color word matches no row text: name its column.
             for _cl in q_data:
                 _w = str(_cl[0] or "").strip()
                 if not _w or " " in _w:
@@ -1737,17 +1444,12 @@ def _find(cx, a):
         elif scored:
             _n_match = sum(1 for r in scored
                            if r["name_match"] >= T.FUZZY_THRESHOLD)
-            # When the query hits a NAME, everything under the name tier
-            # shares a word, not a referent (find("Neuralia Road") would also
-            # return every other "... Road"), so the band under the name tier
-            # is cut. A class word hits no name tier and keeps its whole
-            # fuzzy band.
+            # A query that hits a NAME cuts the band under the name tier,
+            # which shares a word, not a referent ("... Road").
             _n_named = sum(
                 1 for r in scored
                 if r["name_match"] >= T._NAME_PHRASE_TIER_BASE)
-            # A proper noun only: a detection whose CLASS is the query also
-            # scores 1.0, and cutting there would delete the priors that are
-            # the candidates. Only a name is a referent.
+            # Only a proper name counts: a detection's class scores 1.0 too.
             _n_proper = sum(
                 1 for r in scored
                 if r["name_match"] >= T.NAME_TIER_FLOOR
@@ -1760,21 +1462,15 @@ def _find(cx, a):
             _band_cut = (_n_match - _n_exact) if _n_named else 0
             if _n_named:
                 _n_match = _n_exact
-            # The head names what is in this rN: off the match set, never off
-            # ``scored`` (rows the name cut removed).
             _head_note = "; ".join(
                 f"{r.get('fid')} {_match_label(r)} "
                 f"(match {r['name_match']})"
                 for r in scored[:_n_match][:4]
                 if r["name_match"] >= T.FUZZY_THRESHOLD)
-            # The match set is the result: state its score range and the size
-            # of the sub-threshold tail kept out. "best-first" is claimed only
-            # when the scores separate; a tie says so.
+            # "best-first" only when the scores separate; a tie says so.
             _m_vals = [r["name_match"] for r in scored[:_n_match]]
-            # A name's ways are a set, not a ranking: every row ties at the
-            # name tier, so the initial reply is the shape and the rN holds
-            # every row. The one name must BE a name: unnamed rows collapse
-            # to a single "" and 60 anonymous ways read as one street.
+            # One name's tied ways render as the set's shape; unnamed rows
+            # (one shared "") are not a name.
             _ex_rows = [r for r in scored[:_n_match]
                         if r.get("name_match", 0.0) >= T.NAME_TIER_FLOOR]
             _ex_names = {str(r.get("name") or "") for r in _ex_rows}
@@ -1793,8 +1489,6 @@ def _find(cx, a):
             else:
                 _order_frag = (f"best-first, match {_m_vals[0]}.."
                                f"{_m_vals[-1]}")
-                # A mixed pool with a tied head: "best-first" is true of the
-                # pool while the first k rows tie; said when k >= 2.
                 _top_n = sum(1 for _x in _m_vals if _x == _m_vals[0])
                 if _top_n > 1:
                     _order_frag += (
@@ -1806,8 +1500,6 @@ def _find(cx, a):
                 _q_notes.append(
                     f"{_n_match} of {len(scored)} rows matched "
                     f"({_order_frag}{_rest_frag}).")
-            # A MIXED POOL STATES ITS TIER CENSUS as structure the model can
-            # hold: the strata are live attribute views.
             _n_ex = sum(1 for x in _m_vals if x >= T.NAME_TIER_FLOOR)
             _n_tg = sum(1 for x in _m_vals
                         if T._KV_TIER_BASE <= x < T.NAME_TIER_FLOOR)
@@ -1823,13 +1515,10 @@ def _find(cx, a):
                     f"the name tier are a different feature and are "
                     f"NOT in this rN.")
             if _head_note and not _name_set:
-                # "Best" only on a name-tier head; a class/tag head is just
-                # the head.
                 _lead = ("Best" if _m_vals and _m_vals[0] >= T.NAME_TIER_FLOOR
                          else "Head")
                 _q_notes.append(f"{_lead}: {_head_note}")
-            # A query token no matched row carries: the match stands, and the
-            # unmatched words are named.
+            # Name the query words no matched row carries.
             _dead = _memo["dead"].get(_mkey)
             if _dead is None:
                 _dead = _memo["dead"][_mkey] = T.unmatched_query_tokens(
@@ -1840,15 +1529,10 @@ def _find(cx, a):
                     + ", ".join(repr(t) for t in _dead[:4])
                     + " -- those words did not narrow anything")
             if _n_match <= 3:
-                # LOW-match: the surface census keeps the re-query
-                # vocabulary one read away.
                 _q_notes.append(_memo_census())
             _q_matched = True
-        # THE narrowing: the returned row set IS the match set.
         rows = scored[:_n_match] if _q_matched else scored
-        # ``name=``: the model says which of the two it meant, a class word
-        # plus a proper noun. The NAME gates (matched as a name, never
-        # fuzzily); the class is accepted because the model writes it.
+        # ``name=`` keeps the rows NAMED it, matched as a name, never fuzzily.
         _want = str(a.get("name") or "").strip()
         if _want:
             _nq = T.fuzzy_prepare_query(_want)
@@ -1859,8 +1543,6 @@ def _find(cx, a):
                                        idf=_idf)
                       >= T._NAME_PHRASE_TIER_BASE]
             if not _named:
-                # LOUD, never a silent fall back to the fuzz band this gate
-                # exists to exclude.
                 raise ProgramError(
                     f"nothing found is NAMED {_quote(_want)}"
                     + (f" and matches {_quote(_q_raw)}" if _q_raw else "")
@@ -1875,30 +1557,20 @@ def _find(cx, a):
             rows = _named
             _q_matched = True
     if cx.standing is not None and rows:
-        # The standing viewpoint's side columns ride every find row (the
-        # stage receipt states this fact). Presence-pair, ordering/reading
-        # evidence only -- never a gate.
         rows = _attach_standing_columns(rows, cx.standing)
         _h = str(cx.standing.get("handle") or "v")
         _find_cols.extend(
             (f"left of {_h}", f"right of {_h}",
              f"ahead of {_h}", f"behind {_h}"))
     if not rows and a.get("query"):
-        # A query matched nothing: the marker states the searched scope; the
-        # query notes ride it as on any empty result.
         rows = _EmptyFindMiss()
         if _q_notes:
             rows.notes = list(_q_notes)
         if _empty_cond:
             rows.empty_condition = _empty_cond
         return rows
-    # A query-matched find is ORDERED (best-first is real) and its rows
-    # render; a query-less browse is unordered and renders census + len only.
-    # Either way the rN holds the full returned set for chaining.
     rows = _BroadRows(rows)
     rows.ordered = _q_matched
-    # Ordered stays TRUE on a name's set: the rN is indexable and pageable
-    # like any find. Only the initial RENDER is the shape.
     rows.name_set = bool(_name_set)
     if _find_cols:
         rows.op_cols = list(_find_cols)
@@ -1932,9 +1604,8 @@ def _x_label(nodes, el):
 
 
 def _crossings(cx, a):
-    """CONSTRUCT the places two features meet: one row per distinct
-    crossing, each with its own fid (its [x, y] token) and xy; never a
-    centroid over several. Zero crossings is a loud refusal."""
+    """The places two features meet: one row per distinct crossing, its fid
+    the [x, y] token of its whole-metre point. None raises."""
     sides = []
     for _el in a["refs"]:
         _nodes = _named_rows(cx, _el, "xy")
@@ -1946,8 +1617,7 @@ def _crossings(cx, a):
                 f"a shape. {cx.avail('point')}{cx.sig()}")
         sides.append((_x_label(_nodes, _el), _polys,
                       {str(n.get("fid")) for n in _nodes}))
-    # Nothing crosses itself: a row on both sides would hand back its own
-    # corners as crossings.
+    # A row on both sides would hand back its own corners.
     _shared = sides[0][2] & sides[1][2]
     if _shared:
         _same = "the same feature" if sides[0][2] == sides[1][2] \
@@ -1962,8 +1632,7 @@ def _crossings(cx, a):
                           (sides[1][0], sides[1][2]))
     xpts, nearest = G.polyline_crossings(sides[0][1], sides[1][1])
     if not xpts:
-        # A row-pair fact, never a street-level verdict: sweep a bounded set
-        # of same-named sibling pairs for a crossing.
+        # Sweep a bounded set of same-named sibling pairs for a crossing.
         by_fid = cx.by_fid
         _sa = [c for c in by_fid.values()
                if str(c.get("name")) == str(la)
@@ -2009,15 +1678,13 @@ def _crossings(cx, a):
             f"intersection; relate to ONE of them instead "
             f"('... near <feature>').{cx.sig()}")
     rows = _BroadRows()
-    # Whole metres: this row's fid is its coordinate and the model has to be
-    # able to say it (the language spells whole numbers only). The exact
-    # intersection stays in the geometry.
+    # Whole metres: the fid is the coordinate, and the model spells whole
+    # numbers only.
     _seen: set = set()
     for _x, _y in xpts:
         _x, _y = float(round(_x)), float(round(_y))
         tok = format_xy_token(_x, _y)
-        # Rounding can collapse two crossings onto one address; two rows
-        # sharing a fid would be worse than one row.
+        # Rounding can collapse two crossings onto one fid.
         if tok in _seen:
             continue
         _seen.add(tok)
@@ -2034,8 +1701,7 @@ def _crossings(cx, a):
 
 
 def _ends(cx, a):
-    """A road's termini as rows: end0_xy/end1_xy served as rows a cue like
-    "the end of Walker Court" can act on."""
+    """A road's termini (end0_xy / end1_xy) as rows."""
     rows = _BroadRows()
     _n_end = 0
     _no_line: list = []
@@ -2059,7 +1725,6 @@ def _ends(cx, a):
                              "name": f"{_lab} {_which}"})
                 _n_end += 1
     if not rows:
-        # Loud, never an empty bind; a row fact, never a class verdict.
         _named = ", ".join(_no_line[:4]) + (
             f" (+{len(_no_line) - 4} more)" if len(_no_line) > 4 else "")
         raise ProgramError(
@@ -2076,16 +1741,15 @@ def _ends(cx, a):
 
 
 def _score_by(cx, a):
-    """THE sort: a sign-aware, key-normalized composite over EXACTLY the
-    columns the emphasis names -- nothing is auto-added."""
+    """The sort: a signed, key-normalized composite over exactly the
+    columns the emphasis names."""
     items = _as_rows(cx, a["items"])
     _sb_notes: list = []
     emphasis: dict = {}
     for _el in a["emphasis"]:
         _k = _el["key"]
         if _is_color_column_key(_k):
-            # THE WORD RIDES IN THE KEY: the emphasis reads the canonical
-            # column the attach mints (color_navy weights color_blue; noted).
+            # color_navy weights color_blue, noted.
             _canon, _cnote = _resolve_color_word(_k[len("color_"):])
             if _cnote is not None:
                 _sb_notes.append(_cnote)
@@ -2096,17 +1760,14 @@ def _score_by(cx, a):
         if _is_color_column_key(_k) and not any(
                 isinstance(it, dict) and it.get(_k) is not None for it in items):
             items = _attach_color_column(items, _k[len("color_"):])
-    # An emphasis key no row carries (after the color attach) would be a
-    # silent constant term: loud.
+    # A key no row carries would be a silent constant term.
     _dropped_color: list = []
     for _k in list(emphasis):
         if items and not any(isinstance(it.get(_k), (int, float))
                              for it in items if isinstance(it, dict)):
             if _is_color_column_key(_k):
-                # An unseen colour drops its term when the sort has other
-                # terms: nothing carries a perceived colour before a view
-                # passes over it. Alone it still raises: a sort with no term
-                # is not an ordering.
+                # Nothing has a perceived colour before a flight sees it: the
+                # term drops, unless it is the only one.
                 if len(emphasis) > 1:
                     _dropped_color.append(_k)
                     del emphasis[_k]
@@ -2122,7 +1783,6 @@ def _score_by(cx, a):
                 f"{_contact_fact(cx, _k, items)}"
                 f"{_present_keys_hint(items, True)}")
     for _k in _dropped_color:
-        # NEVER SILENT: the rows are ranked by fewer things than asked for.
         _sb_notes.append(
             f"{_quote(_k)} ranked nothing here: no row on this surface has "
             f"been SEEN yet, so none carries a perceived colour. The "
@@ -2137,15 +1797,12 @@ def _score_by(cx, a):
 
 
 def _filter_items(cx, a):
-    """The only op that drops rows. ``le`` cuts a numeric column; ``truthy``
-    keeps rows carrying the key; ``on_side`` keeps a row its signed cardinal
-    column does not place (absent: the reference straddles the row, or none
-    of it lies abreast) and drops one it places on the other side;
-    ``in_or_blank`` keeps a word column reading one of ``value`` or blank."""
+    """The op that drops rows, keeping its input's order: ``le`` on a
+    numeric column, ``truthy`` on a present key, ``on_side`` keeps a row its
+    cardinal column places on the side or does not place, ``in_or_blank``
+    keeps a word column reading one of ``value`` or blank."""
     items = _as_rows(cx, a["items"])
     key, opr, val = a["key"], a["op"], a.get("value")
-    # A filter PRESERVES its input's order: a cut over an ordered set stays
-    # ordered (and renderable); a cut over a browse stays not.
     _in_ordered = bool(getattr(items, "ordered", False))
     if opr == "le":
         if items and not any(isinstance(it.get(key), (int, float)) for it in items):
@@ -2157,19 +1814,14 @@ def _filter_items(cx, a):
     elif (items
           and not any(isinstance(it, dict) and key in it for it in items)
           and not _relate_ran(key, items)):
-        # Loud with the missing key's own producing idiom, unless the relate
-        # ran (a 'facing <ref>' absent on every row because every row touches
-        # <ref> is a geometric fact; in_or_blank keeps them).
         raise ProgramError(
             f"filter_items op {_quote(opr)} on key {_quote(key)}: no item carries "
             f"{_quote(key)}. "
             f"{_contact_fact(cx, key, items)}"
             f"{_present_keys_hint(items, False)}")
     if opr == "in_or_blank":
-        # The three-way statement for a word column: rows reading a counted
-        # word, rows reading another (dropped), and rows never measured
-        # (kept). A compass word composes ("facing south" counts southeast
-        # and southwest), so the caller passes the set that counts.
+        # The caller passes every word that counts (south: southeast,
+        # southwest too).
         _on = [it for it in items if it.get(key) is None or it.get(key) in val]
         _blank = sum(1 for it in _on
                      if (it.get(key) if isinstance(it, dict) else None) is None)
@@ -2191,8 +1843,6 @@ def _filter_items(cx, a):
         r = _FilterCutRows(_on)
         r.cut_stats = stats
     elif opr == "on_side":
-        # The side cut states its three-way outcome: on the side, measurably
-        # on the other side (dropped), unplaced (kept).
         def _ok(it):
             v = it.get(key)
             return v is None or (isinstance(v, (int, float))
@@ -2208,8 +1858,6 @@ def _filter_items(cx, a):
             "no_side_kept": _blank,
         }
         if not (len(_on) - _blank):
-            # Nothing SURVEYED is on that side, so what is there has to be
-            # seen rather than looked up.
             stats["nothing_on_that_side"] = (
                 "the prior map holds nothing on that side -- what is "
                 "there has to be SEEN"
@@ -2219,9 +1867,8 @@ def _filter_items(cx, a):
         r = _FilterCutRows(_on)
         r.cut_stats = stats
     elif opr == "le":
-        # Cut stats: how much was cut, the nearest excluded row (the smallest
-        # value over the bound), the inclusive threshold that would admit it
-        # and how many rows that admits. Information only.
+        # The nearest excluded row, the bound that would admit it and how
+        # many rows that bound admits.
         kept: list = []
         excluded: list = []
         for it in items:
@@ -2257,9 +1904,8 @@ def _filter_items(cx, a):
 
 
 def _stratum(cx, a):
-    """A find's match tier as a set (r1.exact / r1.tagged / r1.fuzzy). A
-    view, never a re-retrieval: input order kept, nothing else dropped, the
-    full set live behind its own handle."""
+    """A find's match tier (exact / tagged / fuzzy) as a set, in input
+    order."""
     items = _as_rows(cx, a["items"])
     tier = str(a["tier"]).strip().lower()
     if not any(isinstance(it, dict)
@@ -2286,12 +1932,10 @@ def _stratum(cx, a):
 
 
 def _compare_specs(cx, refs):
-    """compare refs -> ``(specs, staged handles)``. A spec is ``(kind,
-    payload, label)``: 'row' (payload the surface row; label the ``as``
-    label, else derived from its fid), 'point' (an [x, y]), 'union' (the
-    member rows -- ``{ref:[fid|rN,...], as}``, the named masks as ONE ref:
-    'distance to <label>' is the min gap over the members, the centre
-    columns read the union's area-weighted centroid)."""
+    """compare refs -> ``(specs, staged handles)``, a spec ``(kind, payload,
+    as-label)``: 'row' (a surface row), 'point' (an [x, y]) or 'union' (the
+    member rows of ``{ref: [fid | rN | [x, y], ...]}``, measured as one
+    ref)."""
     specs: list = []
     standing: list = []
     for el in refs:
@@ -2307,12 +1951,10 @@ def _compare_specs(cx, refs):
                 _members = []
                 for x in ref_el:
                     if is_xy(x):
-                        # a row with no fid (a terminus) is its own point
                         _members.append({"xy": [float(x[0]), float(x[1])]})
                         continue
                     if cx.is_ref(x):
-                        # A constructed or fid-less row (a crossing, an
-                        # [x, y] item) is not in by_fid and rides on its own xy.
+                        # A row off the surface (a crossing) rides its own xy.
                         _got = [cx.by_fid.get(r.get("fid"), r)
                                 for r in cx.resolve(x)
                                 if isinstance(r, dict)
@@ -2320,10 +1962,6 @@ def _compare_specs(cx, refs):
                                      or is_xy(r.get("xy")))]
                         _lbl = as_label or _sanitize_token(x)
                         if not _got:
-                            # Name the handle the model wrote and why it is
-                            # usually empty: nothing is segmented until
-                            # look_for names the class and a flight goes over
-                            # the place.
                             raise ProgramError(
                                 f"{_lbl} is empty, so 'distance to "
                                 f"{_lbl}' is undefined on every row "
@@ -2338,9 +1976,6 @@ def _compare_specs(cx, refs):
                                    "goes over the place -- arm it, "
                                    "fly, then find them again.")
                                 + f"{cx.sig()}")
-                        # A cap, a wall-clock net: an rN member can fold a
-                        # whole class, and members x items gap calls is the
-                        # cost.
                         if len(_got) > _UNION_MAX_MEMBERS:
                             raise ProgramError(
                                 f"{_lbl} "
@@ -2374,8 +2009,7 @@ def _compare_specs(cx, refs):
                 f"{cx.sig()}")
         node = cx.by_fid.get(ref_el)
         if node is None and ref_el in cx.staged:
-            # A staged viewpoint handle attaches the stance's own columns,
-            # not the point family.
+            # A staged viewpoint attaches its side columns.
             if ref_el not in standing:
                 standing.append(ref_el)
             continue
@@ -2388,22 +2022,16 @@ def _compare_specs(cx, refs):
 
 
 def _compare(cx, a):
-    """THE relation attach: evidence columns onto every item row, the row's
-    fields passing through. Per ref: 'distance to' (footprint gap, 0.0 on
-    contact), 'facing' (compass word of the min-gap vector, absent on
-    contact), 'center distance to' and 'bearing from' (centroid to
-    centroid), and per requested direction a signed cardinal column. Every
-    number comes from a geom_compute primitive. An attach, not a sort: input
-    order preserved.
-    """
+    """Attach each ref's columns to every item row, in input order:
+    'distance to' (footprint gap, 0.0 on contact), 'facing' (the compass
+    word of the gap vector, absent on contact), 'center distance to' and
+    'bearing from' (centroid to centroid), and a signed '<dir> of' column
+    per requested cardinal."""
     items = _as_rows(cx, a["items"])
-    # Order propagation: compare preserves input order, so its result is
-    # ordered iff its input was (read off the resolved source).
     _src = cx.resolve(a["items"]) if cx.is_ref(a["items"]) else a["items"]
     _in_ordered = bool(getattr(_src, "ordered", False))
     specs, _standing_ref_handles = _compare_specs(cx, a.get("refs") or [])
 
-    # --- per-ref column labels + headers ------------------------------
     notes: list = []
     used_labels: set = set()
     headers: list = []
@@ -2424,9 +2052,7 @@ def _compare(cx, a):
             hdr = {"ref_fid": payload["fid"],
                    "ref_name": str(payload.get("name") or payload.get("class")
                                    or payload["fid"])}
-            # ref ATTRIBUTE confidence: a color-described detection used as an
-            # anchor ('the white car') is only as trustworthy as its perceived
-            # color.
+            # A colour-described ref is as trustworthy as its colour read.
             if payload.get("color_conf") is not None:
                 hdr["ref_color"] = payload.get("color")
                 hdr["ref_color_conf"] = payload["color_conf"]
@@ -2441,10 +2067,7 @@ def _compare(cx, a):
         headers.append(hdr)
         col_specs.append((kind, payload, lab))
 
-    # --- row assembly: PASSTHROUGH + columns ---------------------------
-    # Every attached key is recorded VERBATIM -- per ref (that header's
-    # ``cols``) and op-wide (the result's ``columns`` echo) -- so the model
-    # reads real column names instead of guessing them.
+    # Every attached key, per ref (its header's ``cols``) and op-wide.
     ref_col_keys: list[dict] = [{} for _ in col_specs]
     all_col_keys: dict = {}
 
@@ -2453,12 +2076,8 @@ def _compare(cx, a):
         all_col_keys[k] = None
         ref_col_keys[ci][k] = None
 
-    # Per-ref geometry, resolved once: ``(geom, center)``. The gap side is
-    # the exact realised mask, else its point; ``center`` is the mask's area
-    # centroid. A union holds its member geoms plus the area-weighted
-    # centroid. Refs and items re-resolve geometry BY FID: op output rows
-    # strip the mask fields, so a chained row would otherwise degrade to its
-    # point. A fid-less row (a literal, constructed geometry) keeps its own.
+    # ``(geom, centre)`` of a row: its mask, else its point. Geometry is
+    # re-read by fid, since op output rows carry no mask.
     def _row_geom_center(node):
         if isinstance(node, dict):
             node = cx.by_fid.get(node.get("fid")) or node
@@ -2497,10 +2116,8 @@ def _compare(cx, a):
         else:  # constructed point
             col_geoms.append((G.mask_geom([[payload]]), payload))
 
-    # --- the map-fixed cardinal columns -------------------------------
-    # The directions asked for, per column, built once: the reference's
-    # point cloud is fixed for the whole pass. A cardinals element names its
-    # ref by fid or by label.
+    # The cardinals asked for per ref (named by fid or label), with the
+    # ref's point cloud built once.
     _card_req: dict = {}
     for _el in (a.get("cardinals") or []):
         _card_req.setdefault(str(_el.get("ref")), []).append(_el["dir"])
@@ -2520,9 +2137,8 @@ def _compare(cx, a):
         _pts = cardinal_side.points_from_geoms(_g if isinstance(_g, list) else [_g])
         col_cards.append((want, _pts) if _pts is not None else None)
 
-    # Window-covering ref (stamped at build_surface): its gap columns would
-    # be a constant 0, so the envelope carries one containment fact instead;
-    # the centre columns stay per-row.
+    # A window-covering ref's gap columns would be 0 on every row: one
+    # note says so instead.
     col_covers: list = []
     for (kind, payload, lab) in col_specs:
         covers = bool(kind == "row" and payload.get("covers_window"))
@@ -2539,29 +2155,20 @@ def _compare(cx, a):
                 f"'center distance to {lab}'/"
                 f"'bearing from {lab}' (centroid vector) ride per-row.")
 
-    # Ref-in-mask containment (per ref index): rows whose own mask contains
-    # the ref read distance 0; the row carries a 'contains <ref>' cell and
-    # one note names them. Sorts unchanged.
+    # Rows whose own mask contains a ref, per ref, named in one note.
     contains_rows: dict[int, list[str]] = {}
     out_rows: list = []
-    # Member boxes are a property of the REFERENCE, so they are stacked once
-    # per column and reused down the items.
     col_member_bb: dict = {}
     for i, it in enumerate(items):
         row = {k: v for k, v in it.items() if k not in _MODEL_HIDDEN_ROW_FIELDS}
-        # Gap intent (distance, facing) uses both sides' exact masks; position
-        # intent (centre columns) uses the area centroid. The item resolves
-        # through the same ``_row_geom_center`` as the refs, so a ref compared
-        # to itself is exactly 0.
+        # Items resolve like refs, so a ref compared to itself is exactly 0.
         item_geom, it_c = _row_geom_center(it)
         for ci, (kind, payload, lab) in enumerate(col_specs):
             if col_cards[ci] is not None and it_c is not None:
                 _dirs, _rpts = col_cards[ci]
                 for _d in _dirs:
                     _v = cardinal_side.cardinal_offset(_rpts, it_c, _d)
-                    # ABSENT, never 0.0, when there is no side to name: a zero
-                    # would read as "exactly on the line" and sort like a real
-                    # measurement.
+                    # Absent, never 0.0, when there is no side to name.
                     if _v is not None:
                         _put(row, f"{_d} of {lab}", round(_v, 1), ci)
             ref_geom, center = col_geoms[ci]
@@ -2577,9 +2184,7 @@ def _compare(cx, a):
                 dr = round(d, 2)
                 _put(row, f"distance to {lab}", dr, ci)
                 if dr > 0.0 and wr is not None:
-                    # Which way this row faces the ref, as a word: the witness
-                    # pair runs ref->item and a thing faces the place it
-                    # fronts, so the word is item->ref.
+                    # The witness pair runs ref->item; a row faces item->ref.
                     _put(row, f"facing {lab}", G.cardinal(wi, wr), ci)
                 elif (dr == 0.0
                       and not isinstance(ref_geom, list)
@@ -2590,8 +2195,7 @@ def _compare(cx, a):
                                and str(payload.get("fid"))
                                == str(row.get("fid")))
                       and bool(G.mask_contains(item_geom, ref_geom["V"]).all())):
-                    # the row's OWN mask CONTAINS the ref (every ref vertex
-                    # inside it): distance 0 by containment, not adjacency.
+                    # every ref vertex inside the row's own mask
                     _put(row, f"contains {lab}", True, ci)
                     contains_rows.setdefault(ci, []).append(
                         str(row.get("fid") or f"item[{i}]"))
@@ -2599,8 +2203,6 @@ def _compare(cx, a):
                 dcr = round(G.dist(center, it_c), 2)
                 _put(row, f"center distance to {lab}", dcr, ci)
                 if dcr > 0.0:
-                    # centroid->centroid bearing: defined on contact too,
-                    # ABSENT only when the centroids coincide.
                     _put(row, f"bearing from {lab}",
                          round(G.bearing(center, it_c), 1), ci)
         out_rows.append(row)
@@ -2636,9 +2238,6 @@ def _compare(cx, a):
     return r
 
 
-# The op vocabulary: find retrieves; crossings/ends construct rows; compare
-# attaches relation columns; filter_items cuts; score_by orders; stratum views
-# a find's match tier. Everything is a list of rows.
 OPS = {
     "find": _find,
     "crossings": _crossings,
@@ -2652,20 +2251,13 @@ OPS = {
 
 def run_program(cands, anchors, program, seed_results=None,
                 staged=None, standing=None):
-    """Execute a compiled op-program over an explicit surface.
+    """Run ``{"ops": [{ref, op, args}, ...]}`` (dependency order) over the
+    surface rows; returns ``{"results": {ref: rows}}``.
 
-    ``program`` is ``{"ops": [{ref, op, args}, ...]}`` in dependency order,
-    as the code surface's compiler emits it. ``cands`` / ``anchors`` are
-    the surface rows (:func:`build_surface`). ``seed_results`` is a
-    read-only {ref: raw_result} map of earlier calls' results: a handle not
-    defined in THIS program resolves from it; one defined here shadows it.
-    ``staged`` (the act.stage viewpoints) is a read-only ``{handle:
-    {"handle", "from_xy", "up_unit"}}`` map: a staged handle as a compare ref
-    attaches that viewpoint's side columns, and ``standing`` names the handle
-    whose side columns ride every find result.
-
-    Returns ``{results}``; wrap with :func:`compact_results` for the
-    model-facing payload.
+    ``seed_results`` holds earlier calls' results, which a handle defined
+    here shadows. ``staged`` maps act.stage handles to ``{"handle",
+    "from_xy", "up_unit"}``; ``standing`` names the one whose side columns
+    ride every find result.
     """
     cx = _Run(cands, anchors, seed_results, staged, standing)
     ops = program["ops"]
