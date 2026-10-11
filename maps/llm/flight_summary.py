@@ -132,9 +132,12 @@ def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int
     The count is a slice of ``usage.completion_tokens``, which includes
     the reasoning tokens; the two overlap by design.
     """
-    if speaks_openai(model):
-        details = _as_dict(_as_dict(response_json.get("usage")).get("completion_tokens_details"))
-        return _usage_int({"usage": details}, "reasoning_tokens")
+    usage = _as_dict(response_json.get("usage"))
+    wire = speaks_openai(model)
+    meter = (_as_dict(usage.get("completion_tokens_details")) if wire else usage).get("reasoning_tokens")
+    direct = int(meter) if isinstance(meter, (int, float)) else 0
+    if wire:
+        return direct
     choices = response_json.get("choices") or []
     reasoning_texts: list[str] = []
     for ch in choices:
@@ -150,7 +153,6 @@ def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int
                 break
     if not reasoning_texts:
         return 0
-    direct = _usage_int(response_json, "reasoning_tokens")
     if direct > 0:
         return direct
     model_alias = response_json.get("model")
@@ -168,17 +170,6 @@ def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int
             continue
         total += len(ids)
     return total
-
-
-def _usage_int(response_json: dict, key: str) -> int:
-    usage = response_json.get("usage") if isinstance(response_json, dict) else None
-    if not isinstance(usage, dict):
-        return 0
-    val = usage.get(key)
-    try:
-        return int(val) if val is not None else 0
-    except (TypeError, ValueError):
-        return 0
 
 
 def _scan_transcript(path: Path, out: dict) -> None:
