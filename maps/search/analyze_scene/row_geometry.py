@@ -19,11 +19,6 @@ from __future__ import annotations
 from maps.search.analyze_scene import geom_compute as G
 from maps.util.xy_token import is_xy
 
-# A place, resolved: ``(fid | None, (x, y) | None)``. A fid reaches a mask;
-# the point is all a computed row (a crossing, a terminus) has.
-Place = tuple
-
-
 def chains_of(row) -> list:
     """One surface row's footprint as mask chains.
 
