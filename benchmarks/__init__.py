@@ -116,7 +116,6 @@ def repo_provenance(
     # finest-grained build fact the endpoint spec measures.
     if served_build is not None:
         prov["served_build"] = served_build
-    prov["look_tool"] = True
     return prov
 
 
@@ -145,9 +144,5 @@ def stamp_repo_provenance(*, logger=None, **kwargs) -> dict:
         lines.append("  " + "  ".join(f"{k}={v}" for k, v in ctx.items()))
     if "search_env_flags" in prov:
         lines.append(f"  search_env_flags={prov['search_env_flags']}")
-    lines.append(
-        f"  look_tool={prov.get('look_tool')} "
-        f"({'reasoner sees crops' if prov.get('look_tool') else 'reasoner is TEXT-ONLY'})"
-    )
     log.info("\n".join(lines))
     return prov

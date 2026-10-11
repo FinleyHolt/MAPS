@@ -160,8 +160,8 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
 
     ``fatal`` is the ground truth SR is scored against (split, tile bake; two
     bakes scored the same episodes 0.351 and 0.169): differing or unrecorded,
-    no A/B exists, and nothing waives it. ``arm`` is code, config, served
-    model and look tool, which an A/B is meant to vary; compared only where
+    no A/B exists, and nothing waives it. ``arm`` is code, config and served
+    model, which an A/B is meant to vary; compared only where
     both sides recorded them, and waived by ``--allow-provenance-mismatch``."""
     fatal: list[str] = []
     ga, gb = _ground_truth_keys(prov_a), _ground_truth_keys(prov_b)
@@ -189,7 +189,6 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
         ("config_sha256", "config (sha256)"),
         ("served_model", "served model"),
         ("served_build", "served model BUILD (tokenizer/quant)"),
-        ("look_tool", "look tool"),
     ):
         va, vb = prov_a.get(key), prov_b.get(key)
         if va is not None and vb is not None and va != vb:

@@ -12,12 +12,11 @@ from benchmarks.citynav.analysis.ab_report import comparability_issues
 
 
 def _prov(*, sha="abc123", tiles="tiles/citynav_2m_osmv2", split="val_seen",
-          model="qwen36-35b-a3b", look=True) -> dict:
+          model="qwen36-35b-a3b") -> dict:
     return {
         "git_commit": sha,
         "config_sha256": "cfg0",
         "served_model": model,
-        "look_tool": look,
         "split": split,
         "search_env_flags": {"SEARCH_CITYNAV_TILES": tiles},
     }
@@ -68,16 +67,17 @@ def test_waiving_the_arm_keys_cannot_waive_the_tile_bake():
     assert not any("tile" in m for m in arm), "the bake is never a waivable arm key"
 
 
-def test_look_tool_difference_is_reported():
-    """Look off is a text-only reasoner."""
-    _, arm = comparability_issues(_prov(look=True), _prov(look=False))
-    assert arm and "look tool" in arm[0]
+def test_provenance_records_no_constant():
+    """Every run has the look tool, so provenance does not record it."""
+    from benchmarks import repo_provenance
+
+    assert "look_tool" not in repo_provenance()
 
 
 def test_absent_arm_provenance_does_not_invent_a_mismatch():
     """An old run without a recorded model or sha still baselines a code A/B."""
     a = _prov()
-    del a["git_commit"], a["served_model"], a["config_sha256"], a["look_tool"]
+    del a["git_commit"], a["served_model"], a["config_sha256"]
     fatal, arm = comparability_issues(a, _prov())
     assert arm == [] and fatal == []
 
