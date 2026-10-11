@@ -1,11 +1,8 @@
 """Shared AOI definitions + local metric frame for the Cal City map.
 
-Cal City is ONE unified map covering the developed core of California
-City, CA (the gridded town around the California City Blvd commercial
-spine and Central Park) — the same continuous area the Edwards flight
-test flies. ~6.6 x 6.3 km, ~460 MP at the 0.3 m bake; the ortho raster
-cache holds it once (the loaders lift PIL's decompression-bomb ceiling
-deliberately).
+Cal City is ONE map: the California City, CA area of operations, which
+holds the town's developed core. The ortho raster cache holds it once (the
+loaders lift PIL's decompression-bomb ceiling deliberately).
 
 Runtime frame
 -------------
@@ -137,8 +134,8 @@ def build_local_frame(bbox: tuple[float, float, float, float]) -> LocalFrame:
 #
 # ``object_type`` must be one of the 13 SensatUrban / CityRefer classes so
 # ``benchmarks.citynav.adapter.object_label`` maps it to a scene label with no
-# code change. Cal City reuses the Edwards town rules (buildings / roads /
-# landuse / water / aeroway for the airport corner).
+# code change. The rules read buildings, roads, landuse, water and aeroway
+# (the airport corner).
 
 _LEISURE_WATER = {"swimming_pool"}
 _LEISURE_GROUND = {"pitch", "track", "garden", "stadium", "bleachers", "park", "golf_course"}
