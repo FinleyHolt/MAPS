@@ -90,5 +90,3 @@ class ObjectGraph:
 
     nodes: dict[str, MapObject]  # id -> node
     cell_size_m: float  # meters per grid cell; sourced from the tile's _meta.json
-    step_index: int = 0  # set by the upserts that are given one
-    tau: float | None = None  # wall-clock seconds of the latest update

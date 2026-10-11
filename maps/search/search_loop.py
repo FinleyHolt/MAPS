@@ -610,7 +610,6 @@ class SearchLoop:
         upsert_ids, step_detections = self._upsert_detections(
             detections=detections,
             projected_masks=projected_masks or {},
-            step=step_idx,
             now=now,
             bounds_min=bounds_min,
             cell_size_m=cell,
@@ -718,7 +717,6 @@ class SearchLoop:
         *,
         detections: list,
         projected_masks: dict[int, object],
-        step: int,
         now: float,
         bounds_min: tuple[float, float],
         cell_size_m: float,
@@ -778,19 +776,12 @@ class SearchLoop:
                 upsert_tracked_detected(s.runtime_graph, **r) for r in batch_replaces
             ]
             upsert_ids.update(zip(batch_index_map, fids_out))
-            s.runtime_graph.step_index = step
-            s.runtime_graph.tau = now
 
         step_detections: list[dict] = []
         for i, det in enumerate(detections):
             if i not in upsert_ids:
                 node = _detection_to_mapobject(det, bounds_min, cell_size_m, now)
-                upsert_detected_centroid_only(
-                    s.runtime_graph,
-                    node,
-                    now=now,
-                    step_index=step,
-                )
+                upsert_detected_centroid_only(s.runtime_graph, node, now=now)
             det_record = {
                 "world_xy": list(det.world_xy),
                 "label": det.label,

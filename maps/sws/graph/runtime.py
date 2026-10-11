@@ -140,7 +140,6 @@ def upsert_detected_centroid_only(
     node: MapObject,
     *,
     now: float | None = None,
-    step_index: int | None = None,
 ) -> str:
     """Mint a centroid-only detected node for a detection without a
     ``track_id``; the new ``detected_<N>`` id. Tracked detections go through
@@ -156,9 +155,6 @@ def upsert_detected_centroid_only(
     node.last_seen_t = now
     node.observation_count = 1
     graph.nodes[fid] = node
-    if step_index is not None:
-        graph.step_index = step_index
-    graph.tau = now
     return fid
 
 
@@ -179,14 +175,28 @@ def _stamp_cells(
 ) -> None:
     """Set a detected node's footprint and the centerline derived from it.
 
-    The one place a detected node's ``cells`` are written. It calls the
-    loader's own ``io.derive_centerlines``, so a detected node carries the
-    centerline a loaded node would; the geom ops resolve a fid with a
-    centerline as a line and one without as a point."""
-    from maps.sws.graph.io import derive_centerlines
+    The one place a detected node's ``cells`` are written. The centerline
+    family (``centerline`` / ``centerline_arc_m`` / ``axis_length_m`` /
+    ``axis_residual_m`` / ``centerline_method``) is the bake's own
+    ``builder._mask_centerline`` reduction, so a detected node carries the
+    centerline a baked one does; the geom ops resolve a fid with a
+    centerline as a line and one without as a point
+    (``analyze_scene/geom_program.py`` ``_cl`` / ``_axis_q``).
+
+    ponytail: derive-if-absent, so a detected node's centerline stays its
+    first frame's footprint while its ``cells`` are re-stamped every frame.
+    Re-deriving on every re-stamp changes the geom surface for detected fids
+    and needs a paired SR read.
+    """
+    from maps.sws.graph.builder import _mask_centerline  # local: avoid import cycle
 
     node.cells = _cells_from_mask(hm_rows, hm_cols)
-    derive_centerlines({node.id: node}, float(cell_size_m))
+    if node.centerline is not None or len(node.cells) < 2:
+        return
+    geom = _mask_centerline(node.cells, cell_size_m=float(cell_size_m))
+    if geom is not None:
+        (node.centerline, node.centerline_arc_m, node.axis_length_m,
+         node.axis_residual_m, node.centerline_method) = geom
 
 
 def upsert_tracked_detected(
