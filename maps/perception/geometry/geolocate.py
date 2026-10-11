@@ -55,7 +55,6 @@ class ProjectedMask:
     """
 
     world_xy: tuple[float, float]
-    n_valid_pixels: int
     # Tile-grid (row, col) cells the mask rasterizes into, ``(N, 2)
     # int32``. Populated only when the projector received a ``tile``.
     tile_cells: np.ndarray | None = None
@@ -407,8 +406,7 @@ def project_mask_to_world_ortho(
     mask pixel's normalized ``(u, v)`` is sampled in the depth grid by
     nearest-neighbor rather than requiring equal shapes.
 
-    Returns a ``ProjectedMask`` (``world_xy``, ``n_valid_pixels``, optional
-    ``tile_cells``), or ``None`` when ``depth`` is
+    Returns a ``ProjectedMask`` (``world_xy``, optional ``tile_cells``), or ``None`` when ``depth`` is
     absent or fewer than ``_MIN_VALID_DEPTH_PIXELS`` mask pixels have
     finite, positive depth. There is no ``max_range_m`` gate (no sensor in
     the orthographic path).
@@ -438,8 +436,7 @@ def project_mask_to_world_ortho(
     dc = np.clip(np.rint(u * (wd - 1)).astype(np.int64), 0, wd - 1)
     d = depth2d[dr, dc]
     finite = np.isfinite(d) & (d > 0.0)
-    n_valid = int(finite.sum())
-    if n_valid < _MIN_VALID_DEPTH_PIXELS:
+    if int(finite.sum()) < _MIN_VALID_DEPTH_PIXELS:
         return None
     xs = xs[finite]
     ys = ys[finite]
@@ -449,8 +446,4 @@ def project_mask_to_world_ortho(
         tm = _tile_mask_from_world(xs, ys, tile)
         if tm is not None:
             tile_cells = np.stack([tm.rows, tm.cols], axis=1)
-    return ProjectedMask(
-        world_xy=world_xy,
-        n_valid_pixels=n_valid,
-        tile_cells=tile_cells,
-    )
+    return ProjectedMask(world_xy=world_xy, tile_cells=tile_cells)

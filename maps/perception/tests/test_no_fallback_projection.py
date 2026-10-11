@@ -32,7 +32,6 @@ def _centered(half: int = 6) -> np.ndarray:
 def test_constant_depth_yields_real_world_xy():
     projected = _project(_centered(), np.full((H, W), 50.0, np.float32))
     assert projected is not None
-    assert projected.n_valid_pixels == 13 * 13
     assert abs(projected.world_xy[0]) < 1.0 and abs(projected.world_xy[1]) < 1.0
 
 
@@ -47,7 +46,6 @@ def test_partial_valid_depth_uses_valid_pixels_only():
     depth[:, : W // 2] = 50.0
     projected = _project(np.ones((H, W), dtype=bool), depth)
     assert projected is not None
-    assert projected.n_valid_pixels == H * (W // 2)
     assert projected.world_xy[0] < 0.0  # the valid left half lies west
 
 
