@@ -8,8 +8,7 @@ import textwrap
 
 from maps.search.withhold import WITHHOLDS, withheld
 
-# ── THE served surface ───────────────────────────────────────────────────────
-# The op DAG in Python's shape: one tool, one string argument.
+# The run tool's description.
 CODE_DOC = (
     "Write ordinary Python. A name you bind stays bound for the whole"
     " mission. Lines run in order; an error stops the block at its line"
@@ -214,13 +213,8 @@ CODE_DOC = (
     " row of the set -- loop to LOOK, then move once to the place you"
     " chose, or explore(the set) to cover it all in one pass.\n")
 
-# ── the system prompt ────────────────────────────────────────────────────────
-# The mission's load-bearing facts, in this surface's notation: the last
-# flight is the answer, naming commits nothing, the answer is a point, a
-# picture is north-up and its caption carries the world rectangle, a name is
-# not a place, a colour orders and never drops. The from-looking
-# prefix becomes stand(). It is written in this surface's notation
-# because a prompt in another notation teaches forms the parser refuses.
+# The system prompt, in the surface's own notation (another notation would
+# teach forms the parser refuses).
 CODE_SYSTEM_PROMPT = """\
 === MISSION MAP ===
 You are the reasoner for a drone search instruction, in ONE persistent
@@ -290,8 +284,7 @@ before it ran and stands. Names persist for the whole mission.
 """
 
 
-# ── bench-only withholds (maps.search.withhold) ──────────────────────────────
-# Each withhold's edits to the flown text, applied at call time. An edit is
+# Each bench withhold's edits to the flown text (maps.search.withhold). An edit is
 # ("sub", old, new): replace text written once; ("drop", opening): remove the
 # one entry that opens so; ("cut", start, end): remove from start up to end.
 # In the description an entry is a line; in the system turn it is a bullet,

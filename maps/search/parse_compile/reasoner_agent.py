@@ -1,19 +1,5 @@
-"""Reasoner LLM context for the single persistent reasoner.
-
-The reasoner is one persistent message history. The orchestrator
-appends a per-iteration packet (see ``prompts.py``) and advances the
-reasoner across the mission. The only step mode is:
-
-  - ``step_tool_call(tools)``: one NATIVE tool-call turn under
-    ``tool_choice="auto"``. Every model act is a tool call and everything
-    else is thinking; the tool call IS the output, and there is no second
-    emission after it.
-
-Serving rail (load-bearing): ``tool_choice`` is ALWAYS ``"auto"`` — never
-``required``/named — because auto IS the abstain path.
-
-The reasoner only knows its own context.
-"""
+"""The reasoner: one persistent message history for the mission, advanced
+one native tool-call turn at a time (``Reasoner.step_tool_call``)."""
 
 from __future__ import annotations
 
@@ -52,40 +38,19 @@ log = logging.getLogger(__name__)
 
 _REASONER_TIMEOUT_DEFAULT_S = 240.0
 
-#: A run of one character repeated to the end of a channel. Degenerate decode
-#: output, never prose -- one serve returned `!` (token id 0) to max_tokens on a
-#: fifth of xhigh requests, after a median of 3 clean characters.
-#:
-#: 64 characters, not 16. A collapse runs to thousands (40,000 measured), so
-#: the threshold costs nothing in detection and buys the whole false-positive
-#: margin: a markdown rule, a run of trailing spaces or tabs, an ellipsis
-#: block -- all reach 16 and none reach 64. That margin is load-bearing
-#: because a false positive here is NOT one wasted retry: it is deterministic
-#: per prompt, so it repeats, and six repeats end the mission
-#: ``transient_failures``, which analysis drops from SR and the driver
-#: re-queues forever.
+# One character repeated to the end of a channel: degenerate decode output.
+# A collapse runs to thousands of characters; 64 stays clear of markdown
+# rules and whitespace runs, which matters because a false positive repeats
+# deterministically until the mission ends on transient failures.
 _COLLAPSE_RUN = re.compile(r"(.)\1{63,}\s*$")
 
 
 def _degenerate_reason(*, text: str, reasoning: str, calls: list) -> str:
-    """Why this completion is a SERVE fault, or ``""`` if it is not.
-
-    ONE test: a callless completion whose output ends in a repeated-token
-    run. BOTH channels are checked, because nothing about a NaN logit row is
-    channel-specific -- a collapse after ``</think>`` puts the run in
-    ``content``, and the loop reads a non-empty prose reply as the mission's
-    ONE model-owned ending, so an uncaught one stops the mission on a reply
-    of pure garbage with no repair and no retry. The content check therefore
-    runs BEFORE the has-a-real-reply short circuit, not after it.
-
-    ``finish_reason`` is NOT a test. A ``finish_reason == "length"`` with
-    no content is a CLIP (the think span ran long), not a collapse, and it
-    is deterministic per prompt: raised as a serve fault, six consecutive
-    raises reach ``MAX_ROUND_TRANSIENT`` and end the mission
-    ``transient_failures``, which ``analysis/rows.py`` drops from SR as an
-    infra abort and ``bench_fullset`` re-queues forever. A clip keeps taking
-    the empty-turn repair, whose measured next-turn recovery is 84%.
-    """
+    """Why this completion is a serve fault, or ``""``: a callless
+    completion whose content, or (with no content) whose reasoning, ends in
+    a repeated-character run. Content is checked first because a prose reply
+    ends the mission. A length clip with no content is not a fault: it takes
+    the empty-turn repair."""
     if calls:
         return ""
     if _COLLAPSE_RUN.search(text):
@@ -98,13 +63,9 @@ def _degenerate_reason(*, text: str, reasoning: str, calls: list) -> str:
 
 
 def _reasoner_timeout_s() -> float:
-    """Per-call transport timeout, from ``SEARCH_REASONER_TIMEOUT_S``.
-
-    Unset or blank takes the default. Anything else must be a positive
-    number of seconds no larger than ``threading.TIMEOUT_MAX``: a
-    malformed, zero, NaN or unbounded value raises rather than falling back
-    to a default the caller did not ask for.
-    """
+    """Per-call transport timeout from ``SEARCH_REASONER_TIMEOUT_S`` (unset:
+    the default); anything but a positive number of seconds up to
+    ``threading.TIMEOUT_MAX`` raises."""
     raw = os.environ.get("SEARCH_REASONER_TIMEOUT_S", "").strip()
     if not raw:
         return _REASONER_TIMEOUT_DEFAULT_S
@@ -119,17 +80,8 @@ def _reasoner_timeout_s() -> float:
 
 
 def _normalize_tool_call_arguments(tc: dict) -> dict:
-    """Return a copy of ``tc`` whose ``function.arguments`` parses as a JSON
-    mapping.
-
-    The Qwen3 chat template renders ``tool_call.arguments|items``; vLLM's
-    ``chat_utils._postprocess_messages`` ``json.loads``-es a non-empty
-    arguments string into a dict before templating, then raises if the
-    JSON is malformed and 400s when the decoded value is not a mapping.
-    The serve's tool parser can hand back oddities on edge paths (and
-    offline test doubles inject arbitrary strings). Normalizing at the point of history
-    append keeps every subsequent turn's chat-template render safe.
-    """
+    """A copy of ``tc`` whose ``function.arguments`` is a JSON object, so
+    every later chat-template render of the history is safe."""
     fn = dict(tc.get("function") or {})
     raw = fn.get("arguments")
     if not isinstance(raw, str) or not raw.strip():
@@ -138,13 +90,8 @@ def _normalize_tool_call_arguments(tc: dict) -> dict:
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError as exc:
-            # A malformed args string is NOT silently replaced with {} —
-            # that would make the tool layer error "program must be an
-            # object..." and mislead the model (it HAD written a program;
-            # its JSON broke). First try a mechanical brace/bracket
-            # completion (truncation is the common break); else carry the
-            # REAL parse error to the tool layer via the __args_parse_error
-            # marker so the model sees the truth.
+            # Complete a truncated object, else carry the real parse error
+            # in the __args_parse_error marker.
             repaired = _complete_json_brackets(raw)
             parsed2 = None
             if repaired is not None:
@@ -169,10 +116,8 @@ def _normalize_tool_call_arguments(tc: dict) -> dict:
 
 
 def _complete_json_brackets(raw: str) -> str | None:
-    """Append the closing brackets a TRUNCATED JSON object is missing.
-    Walks the string outside string-literals tracking an opener stack;
-    returns the completed string, or None when the text is broken in a
-    non-truncation way (mismatched closers, dangling escapes)."""
+    """``raw`` with the closers a truncated JSON object is missing, or None
+    when it is broken another way (a mismatched closer, a dangling escape)."""
     stack: list[str] = []
     in_str = False
     esc = False
@@ -209,20 +154,14 @@ def _complete_json_brackets(raw: str) -> str | None:
 
 @dataclass
 class Reasoner:
-    """Persistent message history for one reasoner's reasoner LLM.
-
-    ``endpoint_spec`` is the server-discovered endpoint authority
-    (``maps.llm.endpoint_spec``), threaded explicitly from the
-    compiler: the request's ``model``, ``max_tokens`` and the compaction
-    ``target_input_tokens`` all come from it, so the sent name IS the
-    served name and ``prompt + completion`` fits the served window."""
+    """The mission's message history and its request settings.
+    ``endpoint_spec`` (server-discovered) supplies the model name,
+    ``max_tokens`` and the compaction budget, so prompt + completion fits
+    the served window."""
 
     reasoner_url: str
     endpoint_spec: EndpointSpec
     api_key: str = "EMPTY"
-    # Per-call transport timeout (``_reasoner_timeout_s``). The default fits
-    # local-serve turn latencies; a slower endpoint raises it via
-    # SEARCH_REASONER_TIMEOUT_S.
     timeout: float = field(
         default_factory=lambda: _reasoner_timeout_s())
     seed: int | None = None
@@ -230,13 +169,12 @@ class Reasoner:
     messages: list[dict] = field(default_factory=list)
     sensor_description: str = ""
     cancel_event: threading.Event | None = None
-    #: The reasoning effort this reasoner's requests carry, a string the
-    #: serve accepts (``maps.llm.sampling``); None sends the arm's own.
+    # the requests' reasoning effort (``maps.llm.sampling``); None: the default
     reasoning_effort: str | None = None
 
     @property
     def model(self) -> str:
-        """The served model id — discovered, never a client-side guess."""
+        """The served model id."""
         return self.endpoint_spec.model_id
 
     def __post_init__(self) -> None:
@@ -244,34 +182,18 @@ class Reasoner:
         if not self.messages and system:
             self.messages.append({"role": "system", "content": system})
 
-    # ------------------------------------------------------------------
-    # Message-history helpers
-    # ------------------------------------------------------------------
-
     def append_user(self, content: str) -> None:
-        """Append a TEXT user-role turn. Images ride only
-        :meth:`append_vision_user`."""
+        """Append a text user turn."""
         self.messages.append({"role": "user", "content": content})
 
     def append_vision_user(self, text: str, jpegs: list[bytes]) -> None:
-        """Append a MULTI-PART user turn (text + image crops) — the ONLY path
-        that puts non-text on the reasoner's context, driven exclusively by the
-        opt-in ``look`` tool (``reasoner_loop`` two-message delivery). ``content``
-        is the OpenAI multi-part list (``vision_content.build_vision_user_content``: text
-        part first, then one image part per JPEG). An empty ``jpegs`` degrades
-        to a plain text turn.
-
-        Append-only: no earlier message is touched, so a crop delivery extends
-        the served prefix rather than invalidating it."""
+        """Append a user turn of text plus one image part per JPEG, the only
+        way images reach the context (no jpegs: a text turn)."""
         content = build_vision_user_content(text, list(jpegs or []))
         self.messages.append({"role": "user", "content": content})
 
     def append_repair(self, message: str) -> None:
-        """Append a user-level repair turn (a protocol nudge: the no-call
-        repair, a malformed-envelope re-ask). The orchestrator counts repair
-        rounds separately so repair traffic is tracked apart from
-        substantive reasoning turns.
-        """
+        """Append a ``[Repair]`` user turn (a protocol nudge)."""
         body = f"[Repair] {message.strip()}"
         self.append_user(body)
 
@@ -283,34 +205,12 @@ class Reasoner:
                               "name": name,
                               "content": json.dumps(result, default=str)})
 
-
-    # ------------------------------------------------------------------
-    # THE step mode (three-verb native tool-call surface)
-    # ------------------------------------------------------------------
-
     def step_tool_call(self, tools: list[dict]) -> dict:
-        """One native tool-call turn under ``tool_choice="auto"``.
-
-        Appends the assistant turn (content + ``reasoning_content`` +
-        normalized ``tool_calls``) to the persistent history, and returns:
-
-            {"kind": "tool_call", "tool_calls": [...], "content": str,
-             "reasoning": str, "finish_reason": str}
-            {"kind": "text", "content": str, "reasoning": str,
-             "finish_reason": str}
-
-        On ``"tool_call"`` the orchestrator dispatches each call IN ORDER
-        and appends one tool-role result PER call id, then decides whether
-        a terminal fired. On ``"text"`` the orchestrator applies the
-        no-call rule (nudge -> carry) — a prose turn is never an error by
-        itself.
-
-        Rails: ``tool_choice`` is hard-pinned to ``"auto"`` (never
-        required/named — auto is the abstain path); NON-STREAMING only;
-        the tool call IS the output — no free-standing structured-output
-        emission. No grammar rides the request: the surface is one tool with
-        one string argument, and the block inside it is held to the language
-        by the parser's own refusals.
+        """One non-streaming turn under ``tool_choice="auto"`` (a plain reply
+        must stay possible: it ends the mission). Compacts the history,
+        appends the assistant turn and returns ``{"kind": "tool_call" |
+        "text", "tool_calls"?, "content", "reasoning", "finish_reason"}``.
+        A degenerate completion raises ``DegenerateCompletion`` unappended.
         """
         max_images = card_for(self.model).get("max_images")
         if max_images:
@@ -326,30 +226,14 @@ class Reasoner:
         sent = self.messages
         if wire:
             tools, sent = openai_wire.fit_tool_descriptions(tools, openai_wire.messages(self.messages))
-        # Sampling lives in `maps.llm.sampling.thinking_sampling_kwargs`
-        # so every reasoner turn stays in lock-step.
         kwargs: dict[str, Any] = {
             "timeout": self.timeout,
             "model": self.model,
             "messages": sent,
-            # Pin the completion to the spec's output reserve so
-            # prompt(<=input_budget) + completion(<=max_output_tokens) fits
-            # the served window — the server-side length check cannot trip.
             openai_wire.OUTPUT_CAP_KEY if wire else "max_tokens": self.endpoint_spec.max_output_tokens,
-            # NO `stop` sequence to cut a collapsed sampler short, and that
-            # is deliberate. Trimming a collapse to ~1 s of decode instead of
-            # ~9 min is a THROUGHPUT win, and it cost correctness everywhere
-            # but one engine: sglang deletes matched stop text unless
-            # `no_stop_trim` is set, vLLM spells the same idea
-            # `include_stop_str_in_output`, and llama.cpp has neither. On any
-            # of those the stop fires, the run is deleted, and the completion
-            # arrives as a bare few characters -- contentless and callless,
-            # which is the empty turn again. The stop sequence would DEFEAT
-            # the guard it exists to serve. `no_stop_trim` is also an unknown
-            # top-level field to a hosted OpenAI-compatible endpoint, which
-            # `.env.example` documents as a supported target and which 400s
-            # on unrecognized params: six retries, then every episode ends
-            # `transient_failures` and is dropped from SR as infra.
+            # No `stop` sequence: engines trim the matched text, so a stopped
+            # collapse would arrive as an empty turn the guard cannot see, and
+            # a hosted endpoint 400s on the engine-specific no-trim flags.
             **thinking_sampling_kwargs(temperature=1.0, model_id=self.model, reasoning_effort=self.reasoning_effort),
             "tools": tools,
             "tool_choice": "auto",
@@ -371,12 +255,8 @@ class Reasoner:
         resp = _chat_completions_raw(self.reasoner_url, self.api_key, **kwargs)
         choice = resp["choices"][0]
         msg = choice.get("message", {})
-        # Round-trip the reasoning channel back to the model on the next
-        # request (OpenCode's `interleaved` pattern): prior thinking is
-        # preserved on the assistant turn so vLLM's Qwen3 chat template
-        # renders it as `<think>...</think>` in the next prompt. Empty
-        # string (rather than absent key) keeps the field shape stable.
-        # vLLM 0.21 names the span ``reasoning``; older serves ``reasoning_content``.
+        # The reasoning rides the assistant turn back to the next request
+        # (vLLM 0.21 names it ``reasoning``, older serves ``reasoning_content``).
         reasoning_text = msg.get("reasoning") or msg.get("reasoning_content") or ""
         text = msg.get("content") or ""
         finish_reason = str(choice.get("finish_reason") or "")
@@ -396,15 +276,9 @@ class Reasoner:
             }
             for tc in (msg.get("tool_calls") or [])
         ]
-        # An unregistered function name is a parser mangle (fragments of the
-        # XML envelope leaking into the name). Keep the call ON history with
-        # its id: the round loop's unknown-tool branch answers it with an
-        # actionable error result (the id-closure invariant), never executes.
+        # An unknown tool name stays on history: the loop answers its id.
         calls = [_normalize_tool_call_arguments(tc) for tc in raw_calls]
-        # A collapsed completion never reaches history. Raising HERE rather
-        # than in the loop is what keeps the garbage out of the prefix: the
-        # append below is what put 40,000 characters of `!` on the next
-        # request, the compactor, and every later prefill.
+        # raised before the append, so a collapse never reaches the prefix
         degenerate = _degenerate_reason(
             text=text, reasoning=reasoning_text, calls=calls,
         )

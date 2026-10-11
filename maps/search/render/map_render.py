@@ -1,28 +1,11 @@
-"""The ``perceive{map}`` renderer: the world state as a picture, no imagery.
+"""The ``show_map`` renderer: the world state drawn as a schematic, no imagery.
 
-Draws what the graph KNOWS onto a dark canvas, ranked by the question the
-schematic answers (spatial arrangement): AREAS (landuse, water, leisure)
-paint as muted ground; ROADS draw as light-gray centerline strokes; prior
-BUILDINGS fill tan (crisp ``world_contour`` polygons where the bake has
-them, 2 m cells otherwise); DETECTIONS paint in their class's saturated
-digest hue and carry a small ``dN`` identity chip so every detection is
-individually referenceable from text (N = the digits of its fid). Colors
-come from ``osm_palette.paint_color`` and stay stable per (label, kind,
-provenance). It shows nothing nobody has recorded, and it needs no
-flight: the prior map is tile-wide from the first turn, so a map has no
-``obs_span_m`` ceiling (a camera crop selects less of a capture; a map is
-not a capture).
-
-Pure + data-in-args (the ``geom_compute`` contract): the caller flattens
-the graph to plain feature dicts (``{fid, label, kind, cells,
-centerline?, contour?, provenance}``); this module does pixels only.
-Marks, the margin band and the JPEG come from the SAME overlay renderer the
-look crops use (``mllm_overlay.render_look_overlay``); the schematic draws
-no ordinal badges. Identity chips: the fid's digits for a prior, ``dN`` for
-a detection.
-
-Area/building cell paint is largest feature first so the smallest claim
-wins a contested cell (the segmap rule).
+Areas paint muted, roads stroke their centerlines, prior buildings fill tan
+(their contour, else their 2 m cells), detections paint in their class hue;
+colours come from ``osm_palette``. Prior buildings carry their fid digits and
+detections a ``dN`` chip, so every drawn object can be named in text. The
+caller flattens the graph to feature dicts; marks, band and JPEG come from
+``mllm_overlay.render_look_overlay``, without ordinal badges.
 """
 
 from __future__ import annotations
@@ -33,16 +16,13 @@ import re
 
 log = logging.getLogger(__name__)
 
-# Delivered side in pixels. The schematic is drawn ink with no ground
-# sampling distance, so it always renders at the full pixel budget. The serve
-# applies no max_pixels bound and image tokens scale at 1 per 1024 px, so
-# this constant sets the per-map token bill.
+# Delivered side: ink has no ground sampling distance, so a map is always the
+# full 1024 px budget (1 image token per 1024 px).
 MAP_MAX_PX = 1024
 
-_BG_BGR = (28, 28, 28)          # unrecorded space -- dark, honest nothing
+_BG_BGR = (28, 28, 28)          # unrecorded space
 
-# Bump on any change to the pixels a given spec renders to; it rides every
-# map record beside its sha256.
+# Bump on any change to the pixels a given spec renders to.
 MAP_RENDERER_VERSION = 15
 
 
@@ -53,19 +33,11 @@ def _n_cells(f) -> int:
 
 def features_window_paint(features, *, tile_origin_xy, cell_size_m,
                           grid_shape, window):
-    """Paint the window's grid-cell RGB from plain feature dicts.
-
-    ``features``: [{fid, label, kind?, cells [[row, col], ...],
-    provenance}] -- row 0 is the SOUTH edge (the bake's frame). ``window``
-    is the world square ``(x0, y0, x1, y1)``. Returns ``(rgb, counts)``
-    where ``rgb`` is the north-up (row 0 = max y) window raster at cell
-    resolution and ``counts`` maps label -> ``{"cells": n, "kind": k}``
-    (kind ``road|building|area|detection`` -- legend fuel that knows which
-    paint rule fired). Kind-ranked: areas paint muted, buildings tan,
-    detections in their class hue; ROAD cells are counted but not painted
-    -- roads deliver as centerline strokes (:func:`render_map_from_spec`),
-    and a 2 m stair-line under the stroke would double-draw them.
-    """
+    """``(rgb, counts)`` for the world square ``window``: the north-up cell
+    raster painted from feature cells (grid row 0 = south), largest prior
+    first so the smallest claim wins a cell, detections last; and label ->
+    ``{"cells", "kind"}``. Road cells are counted, not painted: roads are
+    stroked by :func:`render_map_from_spec`."""
     import numpy as np  # noqa: PLC0415
     from maps.perception.viz.osm_palette import paint_color  # noqa: PLC0415
     from maps.search.analyze_scene.cell_mesh import cells_of  # noqa: PLC0415
@@ -74,21 +46,17 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
     cs = float(cell_size_m)
     gh, gw = int(grid_shape[0]), int(grid_shape[1])
     ox, oy = (float(tile_origin_xy[0]), float(tile_origin_xy[1]))
-    # window in tile-grid coords (col along x, row along y; row 0 = south)
     c0 = int(np.floor((x0 - ox) / cs))
     r0 = int(np.floor((y0 - oy) / cs))
     wcells = max(1, int(round((x1 - x0) / cs)))
     hcells = max(1, int(round((y1 - y0) / cs)))
     rgb = np.full((hcells, wcells, 3), _BG_BGR[::-1], dtype=np.uint8)  # RGB
     counts: dict[str, int] = {}
-    # largest first, so the smallest feature covering a cell wins on top;
-    # detections paint after every prior (they are the newest knowledge).
     priors = [f for f in features if f.get("provenance") != "detected"]
     dets = [f for f in features if f.get("provenance") == "detected"]
     priors.sort(key=lambda f: -_n_cells(f))
 
     def _paint(f, color, *, count_only=False):
-        # One array pass per feature: its cells all take the one colour.
         a = cells_of(f)
         if len(a) == 0:
             return 0
@@ -105,7 +73,7 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
         e = counts.setdefault(label, {"cells": 0, "kind": kind})
         e["cells"] += n
         if kind == "detection":
-            e["kind"] = kind  # a class seen live outranks its prior twin
+            e["kind"] = kind
 
     for f in priors:
         label = str(f.get("label") or "prior")
@@ -119,20 +87,14 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
         n = _paint(f, paint_color(label, detected=True))
         if n:
             _count(label, "detection", n)
-    # grid row 0 is south; an image's row 0 renders at the top -> flip to
-    # the north-up delivery frame every crop/bearing already speaks.
     return np.flipud(rgb).copy(), counts
 
 
 def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                          grid_shape) -> dict | None:
-    """Render ONE resolved map view. Pure; returns the record or None.
-
-    ``spec``: {center_xy, context_m, center_fid?, center_label,
-    center_boundary?, marks [{fid, xy, boundary, label}],
-    frame_up?, frame_note?} -- the crop-request vocabulary, so the loop's
-    resolver and audit persist one shape for both instruments.
-    """
+    """Render one map from its spec (``center_xy, context_m, center_fid?,
+    center_label, center_boundary?, marks, frame_up?, frame_note?``, the
+    look request's vocabulary): the record with its ``jpeg``, or None."""
     import cv2  # noqa: PLC0415
     import numpy as np  # noqa: PLC0415
     from maps.perception.viz.mllm_overlay import render_look_overlay  # noqa: PLC0415
@@ -168,16 +130,13 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                      interpolation=cv2.INTER_NEAREST)
     H, W = rgb.shape[:2]
 
-    # Declared-view rotation: same law as the look crops (pixels and ink
-    # rotate together; corners introduced by the warp stay background).
     _rotM, band_text = view_rotation(spec.get("frame_up"), W, H)
     if _rotM is not None:
         rgb = cv2.warpAffine(rgb, _rotM, (W, H), borderValue=_BG_BGR[::-1])
     _w2p = pixel_mapper(x0, y1, span, span, W, H, _rotM)
 
     def _pts_array(pts):
-        """``[[x, y], ...]`` as an (N, 2) float array; a malformed list is
-        the empty array (the per-point form skipped those points)."""
+        """``[[x, y], ...]`` as an (N, 2) float array, empty if malformed."""
         try:
             P = np.asarray(pts, dtype=float)
         except (TypeError, ValueError):
@@ -199,21 +158,14 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         return _px_ring([(wx0, wy0), (wx0 + cs_, wy0),
                          (wx0 + cs_, wy0 + cs_), (wx0, wy0 + cs_)])
 
-    # --- feature ink on the delivered canvas (before the overlay, so marks
-    # land on top). Roads stroke their centerline; prior buildings with a
-    # recorded ``contour`` fill it over their cell paint; detections get a
-    # class-colored ``dN`` chip at their in-window cell centroid. Prior
-    # buildings carry a digits chip the same way, inside the mask where the
-    # pill fits (or marked: see the chip pass), so the text surface's
-    # ``prior_NNNN`` rows are findable in the picture; the record counts the
-    # unchipped.
+    # Feature ink under the overlay: road strokes, building contour fills,
+    # and the prior-chip candidates.
     px_per_m = float(W) / max(span, 1e-6)
     road_w = int(min(9, max(2, round(2.5 * px_per_m))))
     win_pad = 2.0 * cell_size_m  # a cell of slack: strokes clip at the edge
     prior_chip_cands: list[tuple[float, float, str, float, float]] = []
-    # Surveyed-building ink mask at canvas resolution, for the coresidency
-    # hatch below: where detection ink lands on a surveyed footprint the
-    # overlap hatches in the building tan, so the survey stays visible.
+    # Where detection ink lands on a surveyed footprint (bmask) the overlap
+    # hatches tan, so the survey stays visible.
     bmask = np.zeros((H, W), np.uint8)
     for f in features:
         kind = str(f.get("kind") or "area")
@@ -252,14 +204,11 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                 cy_ = sum(p[1] for p in ppx) / len(ppx)
                 prior_chip_cands.append(
                     (cx_, cy_, m.group(1), bw, bh, str(f.get("fid"))))
-    # Chip glyphs at the badge floor: ~24 px delivered, absolute
-    # (mllm_overlay._badge states the constant).
+    # chip glyphs at the badge floor, ~24 px delivered
     _CHIP_FS = 0.9
     _CHIP_TH = 2
 
-    # Detections, gathered first: their ink bboxes decide which prior chips
-    # relocate into a stack (drawn in the detection pass below). The hatch
-    # and the stacked chip state co-location, nothing more.
+    # Detections first: a prior chip under detection ink stacks below its dN.
     det_entries: list[dict] = []
     for f in features:
         if str(f.get("provenance") or "") != "detected":
@@ -298,31 +247,19 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
 
     def _chip(x0_, y0_, pw_, ph_, txt_, th_, fill_, ax_=None, ay_=None,
               tag_=None):
-        """QUEUE one identity chip; every glyph drains after all ink, so a
-        label is never under the thing it labels.
-
-        ``ax_``/``ay_`` are the OBJECT's centre, so a glyph moved out of a
-        collision still points at what it names. The pill backdrop draws
-        only where the ink under the glyph differs from the chip's own fill
-        (a chip off its own object: leader, stacked, edge-clamped).
-        """
+        """Queue one chip; glyphs drain after all ink."""
         _glyphs.append((x0_, y0_, pw_, ph_, txt_, th_, fill_,
                         float(x0_ + pw_ / 2.0 if ax_ is None else ax_),
                         float(y0_ + ph_ / 2.0 if ay_ is None else ay_),
                         tag_))
 
     def _draw_glyphs(queue):
-        """Drain queued glyphs: above all ink, and never overlapping.
-
-        A colliding glyph tries the four diagonal offsets around its anchor
-        and takes the least crowded; when every offset still overlaps it is
-        DROPPED and counted. Earlier entries win (the queue is in priority
-        order).
-        """
+        """Draw queued glyphs in order, never overlapping: a colliding glyph
+        takes the least crowded diagonal offset, a moved one a leader, and
+        one with no free offset is dropped, counted and its tag recorded. A
+        pill backdrop draws only off the chip's own colour."""
         dropped = 0
         for x0_, y0_, pw_, ph_, txt_, th_, fill_, ax_, ay_, tag_ in queue:
-            # Candidate placements: the requested one, then the four
-            # diagonal offsets, scored by overlap AREA.
             cands = [(x0_, y0_)]
             for sx_, sy_ in ((1, -1), (1, 1), (-1, -1), (-1, 1)):
                 cands.append((ax_ + sx_ * 6 + (0 if sx_ > 0 else -pw_),
@@ -340,15 +277,12 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                 scored.append((crowd, bb))
             crowd, box = min(scored, key=lambda c: c[0])
             if crowd > 0:
-                # Every offset still overlaps: count it, and record its tag
-                # so the record never claims a chip the picture lacks.
                 dropped += 1
                 if tag_ is not None:
                     _undrawn.add(tag_)
                 continue
             x0_, y0_ = box[0], box[1]
             _placed_boxes.append(box)
-            # A moved glyph gets a leader back to its object past ~12 px.
             _gap = ((x0_ + pw_ / 2.0 - ax_) ** 2
                     + (y0_ + ph_ / 2.0 - ay_) ** 2) ** 0.5
             if _gap > 12.0:
@@ -356,8 +290,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                          (int(ax_), int(ay_)), (0, 0, 0), 3, cv2.LINE_AA)
                 cv2.line(rgb, (int(x0_ + pw_ / 2.0), int(y0_ + ph_ / 2.0)),
                          (int(ax_), int(ay_)), fill_, 1, cv2.LINE_AA)
-            # Sampled after every fill, so the backdrop test sees the final
-            # ink.
             cxp = int(min(max(x0_ + pw_ // 2, 0), W - 1))
             cyp = int(min(max(y0_ + ph_ // 2, 0), H - 1))
             under = rgb[cyp, cxp]
@@ -377,15 +309,9 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     _placed_boxes: list = []
     _undrawn: set = set()
 
-    # Prior-fid chips. WHO gets one is the TEXT side's call: when the request
-    # carries marks (the set the model's own query returned), only those
-    # objects are chipped, so identity costs |marks|, not |scene|. With no
-    # marks the fit rule (the pill fits inside the drawn footprint) decides.
-    #
-    # A MARKED object is chipped whether or not the pill fits, with a leader
-    # line to its footprint when the pill sits outside. A candidate under
-    # detection ink STACKS under that detection's dN chip (one per
-    # detection). The skipped counts ride the record.
+    # Prior chips: with marks only the marked objects (a pill that does not
+    # fit sits above with a leader); without, every building whose footprint
+    # holds the pill. One prior stacks under each covering detection.
     _marked_fids = {str(mk.get("fid")) for mk in (spec.get("marks") or [])
                     if mk.get("fid")}
     if spec.get("center_fid"):
@@ -425,9 +351,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
             by0 = int(min(max(cy_ - ph / 2.0, 1), H - ph - 1))
             _lead = None
         else:
-            # Outside placement + leader: the pill sits just above the
-            # footprint and a line runs back to it, so the binding is drawn
-            # rather than inferred from containment.
             by0 = int(min(max(cy_ - bh / 2.0 - ph - 4, 1), H - ph - 1))
             _lead = ((bx0 + pw // 2, by0 + ph), (int(cx_), int(cy_)))
         if _lead is not None:
@@ -438,10 +361,8 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
               paint_color("", kind="building"), tag_=("prior", str(pfid)))
         n_prior_chips += 1
 
-    # Detections LAST: canvas-resolution cell fill (building fills can bury
-    # the cell-raster paint underneath; this pass draws over them), the
-    # coresidency hatch (45-degree tan stripes over a surveyed footprint),
-    # the dN chip, and the stacked prior-fid pill beneath it.
+    # Detections last, over the building fills: cell fill, tan hatch on a
+    # surveyed footprint, the dN chip and any stacked prior chip.
     _tan = paint_color("", kind="building")
     stripe = ((np.add.outer(np.arange(H), np.arange(W)) // 4) % 3 == 0)
     for de in det_entries:
@@ -465,7 +386,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
             pw2, ph2 = tw2 + 8, th2 + 8
             sx0 = int(min(max(cpx - pw2 / 2.0, 1), W - pw2 - 1))
             sy0 = int(min(by0 + th + 10, H - ph2 - 1))
-            # Queued like every other glyph, so a later fill cannot cut it.
             _chip(sx0, sy0, pw2, ph2, digits, th2, _tan)
 
     center_fid = str(spec.get("center_fid") or "")
@@ -499,10 +419,8 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                        "label": str(mk.get("label") or mfid),
                        "role": "context"})
 
-    # NAMES: the cue is written in names. Marked features carry theirs (a
-    # mark's label is its name), and so does EVERY named road in the window;
-    # a street is many segments sharing one name, so one label per name
-    # bounds the cost at the distinct streets in view.
+    # Names: each mark's label and each named road in the window, one label
+    # per name, drawn after the chips so a name never takes an id's pixels.
     for _f in features:
         if _f.get("kind") != "road" or not _f.get("name"):
             continue
@@ -515,13 +433,10 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         _my = sum(float(p_[1]) for p_ in _inw) / len(_inw)
         _name_cands.append((*_w2p(_mx, _my), str(_f["name"])))
 
-    # IDENTITY FIRST, then names: chips drain before the street labels so a
-    # name never takes the pixels an id needed.
     n_prior_unchipped += _draw_glyphs(_glyphs)
 
     _seen_names: set = set()
     for _px, _py, _lab in _name_cands:
-        # One label per NAME, not per segment.
         if _lab in _seen_names:
             continue
         _seen_names.add(_lab)
@@ -529,7 +444,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         (_tw, _th), _ = cv2.getTextSize(_txt, cv2.FONT_HERSHEY_SIMPLEX,
                                         _CHIP_FS, 1)
         _pw, _ph = _tw + 8, _th + 8
-        # Below the mark, nudged up if that would leave the canvas.
         _x0 = int(min(max(_px - _pw / 2.0, 1), W - _pw - 1))
         _y0 = int(min(max(_py + 10, 1), H - _ph - 1))
         _box = (_x0, _y0, _x0 + _pw, _y0 + _ph)
@@ -554,9 +468,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
             neighbor_px=neighbor_px,
             neighbor_polys_px=neighbor_polys,
             band_text=band_text,
-            # No ordinal badges on a schematic: every object the caller
-            # cares about carries its own fid chip, so an ordinal would be a
-            # second identity. The legend still rides the record.
+            # the fid chips are the identity; no ordinal badges
             draw_digits=False,
             outline_marks=False,
         )
@@ -564,8 +476,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         log.warning("map: overlay failed at %s: %s", (cx, cy), exc)
         return None
     jp = bytes(jp)
-    # legend fuel: label -> the word for what was actually painted (the
-    # kind-ranked rule), biggest painted class first
+    # label -> the colour word painted, biggest class first
     classes = [{"label": k,
                 "color": paint_word(k, kind=e["kind"],
                                     detected=(e["kind"] == "detection")),
@@ -581,8 +492,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         "priors_chipped": int(n_prior_chips + n_stacked) - len(_undrawn),
         "priors_unchipped": int(n_prior_unchipped),
         "renderer_version": MAP_RENDERER_VERSION,
-        # what the caller handed over, so the record reads back as the
-        # request that made it
         "center_boundary": spec.get("center_boundary"),
         "marks": spec.get("marks") or [],
         "center_fid": center_fid,
