@@ -285,6 +285,8 @@ _calls = [n.func.id for n in _ast.walk(_tree)
 # inside the pass, rank, look, fly to what the pass put there.
 assert {"look_for", "find", "look",
         "explore", "go_to"} <= set(_calls), _calls
+assert _calls.index("explore") < _calls.index("go_to"), _calls
+assert "find" in _calls[_calls.index("explore"):], _calls
 # ORDERING IS PINNED ON THE ARGS, not on the token `order`: the example
 # RANKS ON EVERY CRITERION THE CUE NAMED, appearance included (colour
 # ordering heads: 13 over 2 of 500 episodes without it in the example,

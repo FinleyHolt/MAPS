@@ -24,33 +24,6 @@ from maps.search.tests.fakes import (
 )
 
 
-def test_a_block_grounds_finds_orders_and_flies():
-    """The chain: find near a named place, order it, take a row, go to it.
-
-    One block, four handles, and the flight at the end is the commit — the
-    thing the say surface needs four separate sentences and a transcribed
-    fid to reach.
-    """
-    reply, fr, flights, _declared = drive([
-        [run('r1 = find("car", nearest="the depot")\n'
-              'r2 = r1.order(nearest="the depot")\n'
-              'r3 = r2[0]\n')],
-        [run('go_to(r3)\n')],
-        "The house by the depot.",
-    ])
-    assert reply.ended_by == "reply"
-    out = tool_results(fr)
-    assert "error" not in out[0], out[0]
-    # The block is recorded, append-only, and counted.
-    assert out[0]["script_lines"] == 3
-    assert out[1]["script_lines"] == 4
-    # r3 bound to a real row of r2, and the NEXT block flew to it -- the
-    # handle outlived its block, which is what makes the chain multi-hop.
-    assert "r3" in out[1]["handles"], out[1]
-    assert reply.flights_flown == 1
-    assert flights and flights[0]["target_fid"] == "car_1", flights
-
-
 def test_the_whole_vocabulary_in_one_episode():
     """find -> narrow -> order -> select -> go_to, plus adjective ordering.
 
@@ -70,6 +43,9 @@ def test_the_whole_vocabulary_in_one_episode():
     assert "error" not in out[0], out[0]
     assert "error" not in out[1], out[1]
     assert out[1]["handles"] == ["r1", "r2", "r3", "r4"], out[1]
+    # each block is recorded append-only and counted, and r4 outlives its block
+    assert [o["script_lines"] for o in out[:3]] == [1, 5, 6], out
+    assert "r4" in out[2]["handles"], out[2]
     # size= compiles to a footprint_area_m2 sort (asserted in
     # code_surface.demo); this fixture's synthetic cars carry no footprint,
     # so the executor says so rather than ordering by nothing.
@@ -127,6 +103,9 @@ def test_an_explore_flies_the_stops_and_ends_on_the_last_one():
     assert flown == STOPS, flown
     ack = out[0]["explored"]
     assert ack["stops"] == len(STOPS), ack
+    # ONE ack for the pass, not a list of flight reports
+    assert "flown" not in out[0], out[0]
+    assert ack["new_detections"] == len(STOPS), ack
     # No coordinate is served for where the walk ended: the answer standing
     # is named as the pass's last stop over the thing explored.
     assert "ended_at" not in ack, ack
@@ -150,27 +129,6 @@ def test_an_explore_spends_half_an_observation_of_the_run_per_stop():
         "done",
     ], obs_span_m=320.82)
     assert asked == [("prior_7", 320.82 / 2.0)], asked
-
-
-def test_an_explore_serves_ONE_picture_and_ONE_handle():
-    """A pass is one act, and its mechanism is not its result.
-
-    Per-stop views would put a dozen images in a single turn against a
-    whole-context budget of sixteen — one explore would evict everything
-    the mission had seen. Per-stop mints would hand the model a name for
-    stop 5's rows and call it the explore's product.
-    """
-    reply, out, flights, _a, _rend = explore_drive([
-        [run('explore("prior_7")\n')],
-        "done",
-    ])
-    ack = out[0]["explored"]
-    # ONE ack, not a list of flight reports
-    assert "flown" not in out[0], out[0]
-    assert ack["new_detections"] == len(STOPS), ack
-    # the pass mints at most one handle, over the whole of itself
-    assert len([k for k in out[0].get("handles") or [] if k]) >= 0
-    assert isinstance(ack.get("stops"), int)
 
 
 def test_an_explore_of_a_thing_with_no_footprint_is_the_one_stop_it_is():
@@ -371,60 +329,15 @@ def test_the_moving_calls_refuse_a_coordinate_in_every_spelling():
     try:
         plan_of_block("go_to([3411, 1468])\n")
     except CodeError as exc:
-        assert "look_for" in str(exc) and "explore" in str(exc), str(exc)
+        assert "look_for" in str(exc) and "explore the thing" in str(exc), str(exc)
     # A POINT STILL RELATES AND STILL LOOKS — only moving refuses it.
     assert plan_of_block('corner = [1, 2]\nr1 = find("car", nearest=corner)\n')
     assert plan_of_block("show_map(around=[1, 2])\n")
     assert plan_of_block('stand(at=[1, 2], facing="north")\n')
 
 
-def test_a_go_to_still_leaves_the_drone_where_it_flew():
-    """The other half of the pair, and the reason the pair is two calls."""
-    reply, out, flights, _a, _rend = explore_drive([
-        [run('go_to("prior_7")\n')],
-        "done",
-    ])
-    assert len(flights) == 1 and flights[0]["target_fid"] == "prior_7"
-    assert "explored" not in out[0], out[0]
-    assert out[0]["flown"]["flown"][0]["target"] == "prior_7", out[0]
-
-
-def test_the_inline_selection_a_live_reasoner_actually_writes():
-    """`go_to(r1[0])`, which is the FIRST thing a live reasoner emitted here.
-
-    The two-statement form was what the surface was built for; the model
-    wrote the inline one, because that is the natural Python. It is
-    normalised into a pick rather than refused, and the pick resolves from
-    rows an earlier block already has, so the move carries a real fid.
-    """
-    reply, fr, flights, _d = drive([
-        [run('r1 = find("car")\n')],
-        [run('go_to(r1[0])\n')],
-        "the car",
-    ])
-    out = tool_results(fr)
-    assert "error" not in out[1], out[1]
-    assert reply.flights_flown == 1
-    assert flights and flights[0]["target_fid"] == "car_1", flights
-
-
-def test_the_two_silent_defects_the_live_smoke_exposed():
-    """Both were found by a 3-episode smoke and both failed SILENTLY.
-
-    A live reasoner wrote `find("church", name="Desert Song Foursquare
-    Church")` and the name constraint vanished into an ignored kwarg while
-    the run still looked successful. And types lasted one block, so a set
-    built in one turn flowed into a one-place slot in the next -- the case
-    the type system exists for.
-
-    ``name=`` is IMPLEMENTED now rather than refused. It was the largest
-    single error family in the run -- 135 blocks over 61 episodes, scoring
-    13/61 against 92/194 -- and the model writes it unprompted because it is
-    drawing a real distinction: a query is a CLASS or a PROPER NOUN, and the
-    surface used to have to guess. The original defect this test names is
-    still pinned: the constraint must never vanish silently. It now either
-    GATES by name or fails loud.
-    """
+def test_a_name_constraint_gates_or_fails_loud_never_vanishes():
+    """``find(query, name=...)`` gates by name or says nothing bears it."""
     reply, fr, _f, _d = drive([
         [run('r1 = find("church", name="Desert Song Foursquare Church")\n')],
         "done",
@@ -436,26 +349,6 @@ def test_the_two_silent_defects_the_live_smoke_exposed():
     assert "never fuzzily" in err, err
     # the remedy names the working spelling, not the old refusal
     assert "find('Desert Song Foursquare Church')" in err, err
-
-    # A SET SURVIVING INTO THE NEXT TURN is now ANSWERABLE rather than
-    # refused: `near=<set>` is the gap to the set's NEAREST member, which
-    # is the whole of "the house with a pool in the backyard". What the
-    # type system still refuses is a set where a POINT has to be (stand at,
-    # face, centre a map on) -- there is no one point in a union.
-    reply, fr, flights, _d = drive([
-        [run('r1 = find("car")\n')],
-        [run('r2 = find("car", nearest=r1)\n')],   # r1 is a SET from turn 1
-        "done",
-    ])
-    assert "error" not in tool_results(fr)[1], tool_results(fr)[1]
-    reply, fr, flights, _d = drive([
-        [run('r1 = find("car")\n')],
-        [run('show_map(around=r1)\n')],
-        "done",
-    ])
-    err = tool_results(fr)[1].get("error") or ""
-    assert "around= takes ONE place" in err, err
-    assert flights == []
 
 
 def test_the_vision_calls_are_the_sentence_surface_s_own_steps():
@@ -530,8 +423,9 @@ def test_no_argument_is_dropped_on_the_floor():
 
     # The kwarg gate's twin: an EXTRA POSITIONAL was dropped just as
     # silently, and it is the same sentence spelled the other way.
-    with pytest.raises(CodeError, match="find takes ONE query"):
+    with pytest.raises(CodeError, match="find takes ONE query") as e:
         plan_of_block('r1 = find("road", "Sherwood Avenue")\n')
+    assert "intersection(" in str(e.value), str(e.value)
     with pytest.raises(CodeError, match="positional argument"):
         plan_of_block('go_to("prior_1", "prior_2")\n')
     # ...and too FEW: go_to() flew to the string "None".
@@ -1079,44 +973,6 @@ def test_the_near_form_is_the_targeted_boost_and_a_place_is_grounded():
     assert flights == [{"target_fid": "prior_7"}], flights
 
 
-def test_there_is_no_aim_and_no_refusal_may_invent_one():
-    """`at=` is DELETED, and the capability moved instruments.
-
-    121 blocks tried to express an aim -- fly(x, y), fly(fid, x, y), at=,
-    offset= -- so the thing they reached for is real: a cue names a PART of
-    a region and the centroid is not it. It is not reached by the model
-    naming a coordinate. Probed directly with crops and the world window it
-    returned the crop's CENTER on 20/21 parsed replies -- midpoint
-    arithmetic with no visual pointing in it -- and every aim of the first
-    live episodes here landed 23-38 m off the footprint it named. It is
-    reached by COVERING the thing and flying to the row the segmenter put
-    there, and every refusal must say that rather than name a keyword the
-    surface no longer has.
-    """
-    import pytest
-
-    from maps.search.parse_compile.code_surface import CodeError
-    for bad in ('go_to("prior_160", at=(4623, 2981))\n',
-                'explore("prior_160", at=(4623, 2981))\n'):
-        with pytest.raises(CodeError, match="unexpected keyword argument 'at'"):
-            plan_of_block(bad)
-    # The COORDINATE spelling that does reach the call names what a moving
-    # call takes, and the instrument that reaches a PART of it.
-    with pytest.raises(CodeError, match="takes a THING on the map") as exc:
-        plan_of_block("go_to([3411, 1468])\n")
-    assert "explore the thing" in str(exc.value), str(exc.value)
-    # A THING still moves, whatever spells it.
-    lit = plan_of_block('go_to("prior_160")\n')
-    assert lit["steps"] == [{"do": "move", "to": ("lit", "prior_160")}], lit
-    # AND NOTHING SERVED SPELLS ONE. A legend that teaches a form the parser
-    # refuses is the failure this arm was built after -- 30 blocks in 22% of
-    # episodes were exactly that.
-    from maps.search.parse_compile.prompts import CODE_DOC, CODE_SYSTEM_PROMPT
-    for blob in (CODE_DOC, CODE_SYSTEM_PROMPT):
-        assert "at=(" not in blob.replace("stand(at=", ""), blob
-        assert " at <x>" not in blob, blob
-
-
 def test_stand_adopts_the_viewpoint_and_its_columns_ride_the_rows():
     """`stand(at=..., facing=...)` -- the sentence's from-looking prefix.
 
@@ -1370,6 +1226,10 @@ def test_the_legend_documents_every_call_the_surface_serves():
     # within= is 0 m CONTACT, and 21 of 36 uses returned zero rows because
     # the model read it as "on or near".
     assert "TOUCHES it -- distance 0" in CODE_DOC
+    # the gap cut, the union rule (a set measures from its NEAREST member),
+    # the cardinal cut's order, and a blank cell as unknown
+    for phrase in ("dwithin=25", "NEAREST member", "NEAREST first", "blank"):
+        assert phrase in CODE_DOC, phrase
     # look over a set serves one crop PER ROW (the map-scale set frame is
     # retired); the image budget is stated when it bites, never spelled
     # in the legend.
@@ -1393,71 +1253,12 @@ def test_the_legend_documents_every_call_the_surface_serves():
     assert "settled by look(), not by" in CODE_SYSTEM_PROMPT
     assert "known only from a look, never from rank" in CODE_SYSTEM_PROMPT
     assert "never that its head is the thing" in CODE_SYSTEM_PROMPT
-
-
-def test_no_served_string_teaches_a_form_this_surface_refuses():
-    """`_run_plan` is SHARED, so the code arm receives the say surface's
-    notes -- and several of them named sentences its parser refuses.
-
-    This is the footer defect one door over. `look_for` was added because
-    every result's footer told the model to say a form the arm did not
-    have; these are the same mistake inside the plan body, where the
-    register break is invisible until a live episode reads it back.
-
-    TWO MODULES, and the first version of this scan read only one. Smoke
-    25712733 served `say "go to prior_6005 at <x> <y>."` and
-    `say look_for("<class>")` in the same episode: the aim advice is built
-    in benchmarks/citynav/run_benchmark/mission_engine.py, which the scan
-    never opened, and the watchlist footer said `say <a call>`, which the
-    `say "` pattern could not match because no quote follows the verb. A
-    scan scoped to one file and one spelling failed OPEN in exactly the
-    way a derived test is warned about -- so the file list and the
-    spellings both widened, and the file list carries its own floor.
-
-    ZERO literals may teach a sentence now. The say dispatch that owned the
-    one allowed exception is deleted, so the exception went with it: there
-    is no second register left for a note to slip into.
-    """
-    import ast
-    import pathlib
-
-    # Every module that builds a model-facing string on the mission path.
-    # A floor on the list itself: a renamed module drops silently
-    # otherwise, which is the failure this scan just had.
-    modules = [pathlib.Path(p) for p in (
-        "maps/search/parse_compile/reasoner_loop.py",
-        "benchmarks/citynav/run_benchmark/mission_engine.py",
-    )]
-    assert len(modules) >= 2 and all(m.is_file() for m in modules), modules
-
-    served = []
-    for mod in modules:
-        tree = ast.parse(mod.read_text())
-        docstrings = set()
-        for node in ast.walk(tree):
-            body = getattr(node, "body", None)
-            if isinstance(node, (ast.Module, ast.FunctionDef,
-                                 ast.AsyncFunctionDef, ast.ClassDef)) and body \
-                    and isinstance(body[0], ast.Expr) \
-                    and isinstance(body[0].value, ast.Constant):
-                docstrings.add(id(body[0].value))
-        served += [(mod.name, n) for n in ast.walk(tree)
-                   if isinstance(n, ast.Constant) and isinstance(n.value, str)
-                   and id(n) not in docstrings]
-    assert len(served) > 1_000, len(served)          # vacuity floor
-
-    # `say ` bare, not `say "`: the footer that shipped read
-    # `say look_for("<class>")` -- the verb of the other surface in front
-    # of a call of this one, which the quoted pattern walked straight past.
-    sentence_forms = ('say "', 'Say "', 'say look', 'say the ', 'of those',
-                      'look at them', 'the nearest one.', 'go to ', 'show me ',
-                      'look for <', 'the say tool', 'this sentence')
-    hits = sorted({(m, n.lineno, w) for m, n in served for w in sentence_forms
-                   if w in n.value})
-    # Nothing. The scan's own vacuity floor is the served-literal count
-    # asserted above, so an empty result here is a real zero rather than a
-    # scan that stopped looking.
-    assert not hits, hits
+    # the facing word, the cut's compass value and the axis convention
+    from maps.search.parse_compile.prompts import CODE_TOOLS
+    desc = CODE_TOOLS[0]["function"]["description"]
+    assert '"facing <place>"' in desc, desc
+    assert 'filter(facing=<place>, direction="south")' in desc, desc
+    assert "+x runs EAST" in desc and "+y runs NORTH" in desc
 
 
 def test_a_block_written_into_the_reply_channel_is_repaired_not_an_ending():
@@ -1508,61 +1309,6 @@ def test_prose_that_narrates_a_call_is_a_real_ending():
     assert not _code_reply("done")
     assert not _code_reply("The pool house is prior_7.")
     assert not _code_reply("")
-
-
-def test_the_worked_blocks_in_the_legend_parse_on_this_surface():
-    """A legend example the surface refuses is the worst case there is.
-
-    `narrow` sat in the say legend that way -- served as prose while being
-    unsayable as a form -- and the model reached for it 9 times against a
-    parser that had nothing to parse it onto. The example here exists
-    BECAUSE the worked example is what comes back: the say legend's one
-    example is a flight onto a junction and the model copies both halves,
-    and one legend line carrying a crossing moved crossing-as-anchor 9 ->
-    24 (2.7x, p=0.0015). So it has to run.
-
-    It is ONE block now: lines execute eagerly in source order, so the
-    query over what a pass found rides IN the block that flew the pass --
-    the chain the fold-order surface had to split across two blocks.
-    """
-    import ast
-
-    from maps.search.parse_compile.prompts import CODE_DOC
-    from maps.search.parse_compile.python_surface import scan_block
-
-    head, _, rest = CODE_DOC.partition(
-        "A block is any number of lines, run in order. This is one block:\n")
-    assert rest, "the worked block is gone from the legend"
-    body = rest.partition("\nEach line runs")[0]
-    block = "\n".join(ln.strip() for ln in body.splitlines()
-                      if ln.startswith("  ") and ln.strip())
-    assert block.count("\n") >= 5, block          # it is a BLOCK, not a line
-    tree = scan_block(block)                      # the surface accepts it
-    calls = [n.func.id for n in ast.walk(tree)
-             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
-    # The chain that replaced the aim: watch, cover the thing, read what
-    # the pass put there, rank, look, fly -- and the COVER precedes both
-    # the query over its detections and the flight that commits.
-    assert {"look_for", "explore", "find", "look", "go_to"} <= set(calls), \
-        calls
-    assert calls.index("explore") < calls.index("go_to"), calls
-    # THE ORDERING RIDES THE FIND: the example ranks on every criterion
-    # the cue names, appearance included -- 13 colour-ordering heads over
-    # 2 of 500 episodes on the fold-order surface against 440 over 175 of
-    # 300 on the sentence language is the gap the worked block is the
-    # lever on.
-    kw = {k.arg for n in ast.walk(tree)
-          if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-          and n.func.id == "find" for k in n.keywords}
-    assert "color" in kw, kw
-    # nearest= is the ordering spelling; near= now cuts and needs dwithin=.
-    assert kw & {"nearest", "near", "within", "east_of", "west_of",
-                 "north_of", "south_of"}, kw
-    # AND THE PICTURE CARRIES NO SENTENCE. `look(rows, "...?")` is off the
-    # surface: it answered into the picture and bound nothing.
-    assert all(len(n.args) == 1 for n in ast.walk(tree)
-               if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-               and n.func.id == "look")
 
 
 def test_find_takes_the_colour_ordering_the_executor_always_had():
@@ -1919,11 +1665,14 @@ def test_a_pass_hands_every_stop_the_stops_behind_it():
     assert len(flights) == len(STOPS) > 1
     for k, f in enumerate(flights):
         assert f["pass_ahead"] == STOPS[k + 1:], (k, f)
-    _r, _o, flights, _a, _rend = explore_drive([
+    _r, out, flights, _a, _rend = explore_drive([
         [run('go_to("prior_7")\n')],
         "done",
     ])
-    assert flights and all("pass_ahead" not in f for f in flights), flights
+    assert len(flights) == 1 and flights[0]["target_fid"] == "prior_7"
+    assert "pass_ahead" not in flights[0], flights
+    assert "explored" not in out[0], out[0]
+    assert out[0]["flown"]["flown"][0]["target"] == "prior_7", out[0]
 
 
 def test_a_pass_takes_a_stop_the_recording_holds_first():

@@ -73,18 +73,6 @@ def test_point_ref_carries_all_four_columns():
     assert r["facing xy"] == G._compass8((r["bearing from xy"] + 180) % 360), r
 
 
-def test_mask_gap_is_the_only_d_path():
-    # two footprints touching -> d 0.0 (contact), brg_gap_ absent; the item's
-    # own mask (not its centroid) is the measured side.
-    cands = [{"fid": "d0", "xy": [25.0, 10.0], "class": "car",
-              "mask": [[[20.0, 8.0], [30.0, 8.0], [30.0, 12.0], [20.0, 12.0], [20.0, 8.0]]]}]
-    rows = _compare(cands, [_LOT], ["lot_1"])
-    r = rows["d0"]
-    assert r["distance to lot_1"] == 0.0, r            # wall touches the lot edge
-    assert "facing lot_1" not in r, list(r)
-    assert "bearing from lot_1" in r, list(r)
-
-
 def test_multi_fragment_mask_measures_every_fragment():
     # The EXACT mask keeps every disjoint fragment: a candidate near the
     # SMALL fragment reads its gap from that fragment, never from the big

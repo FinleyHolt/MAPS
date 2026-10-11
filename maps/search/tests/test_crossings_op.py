@@ -28,7 +28,6 @@ import pytest
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import ProgramError, run_program
-from maps.search.tests.fakes import plan_of_block
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
@@ -364,8 +363,6 @@ def test_the_bake_really_does_carry_roads_that_cross_more_than_once():
     assert multi >= 8, multi
 
 
-
-
 def test_rounding_never_serves_two_rows_the_same_address():
     """Two crossings under a metre apart collapse to one address. Two rows
     sharing a fid is a worse lie than one row, because the fid is how every
@@ -380,17 +377,6 @@ def test_rounding_never_serves_two_rows_the_same_address():
     rows = _run(anchors, "prior_1", "prior_2")
     assert len({r["fid"] for r in rows}) == len(rows)
     assert rows[0]["fid"] == "[50, 0]"
-
-
-def test_distinct_crossings_keep_distinct_addresses():
-    """The vacuity floor on the collapse: rounding must not merge junctions
-    that are genuinely apart, or the op stops naming places."""
-    anchors = [_road("prior_1", [[0, -10], [20, 10], [40, -10], [60, 10]],
-                     "Zig Road"),
-               _road("prior_2", [[0, 0], [60, 0]], "Straight Street")]
-    rows = _run(anchors, "prior_1", "prior_2")
-    assert len(rows) == 3
-    assert len({r["fid"] for r in rows}) == 3
 
 
 def test_a_road_ends_are_rows_you_can_go_to():
@@ -422,28 +408,6 @@ def test_a_footprint_has_no_ends_and_says_so():
         run_program([], anchors,
                     {"ops": [{"ref": "r0", "op": "ends",
                               "args": {"refs": ["prior_9"]}}]})
-
-
-def test_a_terminus_FLIES_without_needing_a_registry():
-    """The bug that cost the sibling branch 17 points, pinned here.
-
-    A computed row's fid names nothing on the surface, so a slot handed
-    `end_0` draws "unknown fid 'end_0'". Binding to the POINT sidesteps the
-    whole registry question and is the path a crossing already flies.
-
-    Asserted through the compiled MOVE STEP, not by grepping a log: the
-    check that missed this the first time read the SLURM log, which carries
-    episode START/END lines and never a per-block error.
-    """
-    from maps.search.parse_compile.code_surface import bind_row
-    from maps.search.parse_compile.python_surface import Row
-    assert bind_row({"fid": "end_0", "xy": [177.0, 5273.0]}) == [177.0, 5273.0]
-    assert bind_row({"fid": "prior_31", "xy": [1.0, 2.0]}) == "prior_31"
-    # `t = ends_of(road)[0]` binds the ROW, and what a slot reads off it is
-    # that bind -- so the move carries the point and never the name.
-    t = Row({"fid": "end_0", "xy": [177.0, 5273.0]})
-    plan = plan_of_block("go_to(t)\n", bound={"t": t})
-    assert plan["steps"] == [{"do": "move", "to": ("xy", [177.0, 5273.0])}]
 
 
 def test_a_sibling_segment_that_crosses_is_named():

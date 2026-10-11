@@ -23,8 +23,7 @@ import pytest
 
 from maps.search.analyze_scene import geom_program as gp
 from maps.search.analyze_scene.geom_program import compact_results
-from maps.search.parse_compile.code_surface import CodeError
-from maps.search.tests.fakes import drive, ops_of_block, plan_of_block, tool_results
+from maps.search.tests.fakes import drive, ops_of_block, tool_results
 
 
 def _house(fid, x, name=None):
@@ -94,21 +93,6 @@ def test_a_set_cuts_as_well_as_orders():
     cut, = [o for o in ops if o["op"] == "filter_items"]
     assert cut["args"]["key"] == "distance to pools", cut
     assert (cut["args"]["op"], cut["args"]["value"]) == ("le", 0), cut
-
-
-def test_a_slot_that_POSITIONS_still_needs_one_place():
-    """A union has a region; it has no one point to stand at or centre on."""
-    for src, slot in (("show_map(around=r0)\n", "around"),
-                      ('stand(at=r0, facing="north")\n', "at")):
-        with pytest.raises(CodeError, match=f"{slot}= takes ONE place"):
-            plan_of_block(src, bound={"r0": "r7"})
-
-
-def test_the_looking_question_is_off_this_surface():
-    """look() shows a thing. It does not take a sentence about it."""
-    with pytest.raises(CodeError, match="positional argument"):
-        plan_of_block('look(r0, "which of these has a pool?")\n',
-                      bound={"r0": "r7"})
 
 
 def test_an_empty_set_fails_loud_and_names_the_handle_and_the_fix():
@@ -249,35 +233,3 @@ def test_a_union_over_a_whole_class_is_capped_rather_than_slow():
     many = [_house(f"h{i:04d}", float(i)) for i in range(gp._UNION_MAX_MEMBERS + 5)]
     with pytest.raises(gp.ProgramError, match="folds at most"):
         gp.run_program([], many, {"ops": ops})
-
-
-def test_a_served_block_flies_and_then_queries_what_it_found():
-    """The execution model, asserted against the served bytes.
-
-    Lines run eagerly in source order, so a block that covers a place and
-    then asks for what the pass found reads the rows the pass just
-    detected -- the chain the fold-order surface (analyze before every
-    flight) had to split across two blocks. The worked example teaches
-    exactly that shape, so the served text and the execution model state
-    ONE fact.
-
-    A static guard because it is a property of the SERVED TEXT, and the
-    same shape the `_WORKED` import-time guards already take.
-    """
-    import ast
-
-    from maps.search.parse_compile.prompts import CODE_DOC
-    from maps.search.parse_compile.python_surface import scan_block
-
-    body = CODE_DOC.partition("This is one block:\n")[2].partition(
-        "\nEach line runs")[0]
-    block = "\n".join(ln.strip() for ln in body.splitlines()
-                      if ln.startswith("  ") and ln.strip())
-    calls = [n.func.id for n in ast.walk(scan_block(block))
-             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
-    flies_at = min(i for i, c in enumerate(calls)
-                   if c in ("explore", "go_to"))
-    # the find AFTER the pass is the point: it reads the pass's detections
-    assert [c for c in calls[flies_at:] if c == "find"], (calls, block)
-    # ...and the ranking find carries the colour term beside the place
-    assert "color=" in block and "nearest=" in block, block

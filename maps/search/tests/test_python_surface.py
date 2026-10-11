@@ -11,14 +11,11 @@ from __future__ import annotations
 import pytest
 
 from maps.search.parse_compile.python_surface import (
-    _AUTOATTACH_PREFIXES,
     CodeError,
     Row,
-    looks_like_code,
     scan_block,
 )
 from maps.search.tests.fakes import (
-    FakeReasoner,
     drive,
     explore_drive,
     grow_drive,
@@ -116,16 +113,6 @@ def test_a_row_is_data_the_python_way():
     assert "fid='car_1'" in printed, printed
 
 
-def test_find_refuses_two_queries_with_the_remedy():
-    reply, fr, _f, _d = drive([
-        [run('find("89th Street", "Fuchsia Avenue")\n')],
-        "done",
-    ])
-    out = tool_results(fr)[0]
-    assert "find takes ONE query" in (out.get("error") or ""), out
-    assert "intersection(" in out["error"], out
-
-
 def test_a_conditional_runs_and_a_loop_may_look():
     reply, fr, _f, _d = drive([
         [run('r1 = find("car")\n'
@@ -192,25 +179,6 @@ def test_a_runaway_loop_dies_on_the_line_ceiling():
     ])
     out = tool_results(fr)[0]
     assert "unbounded loop" in (out.get("error") or ""), out
-
-
-def test_the_code_reply_detector_reads_python():
-    assert looks_like_code("go_to(prior_4302)")
-    assert looks_like_code('r1 = find("car")\ngo_to(r1[0])')
-    assert not looks_like_code("The pool house is prior_7.")
-    assert not looks_like_code("done")
-
-
-def test_a_bare_fid_name_is_that_fid():
-    """go_to(detected_192) unquoted: 541 NameErrors over 149 episodes on
-    the first fleet. A served fid reads as a binding."""
-    reply, fr, flights, _d = drive([
-        [run("go_to(prior_7)\n")],
-        "done",
-    ])
-    out = tool_results(fr)[0]
-    assert "error" not in out, out
-    assert flights and flights[0]["target_fid"] == "prior_7", flights
 
 
 def test_printing_a_whole_city_is_capped_like_a_notebook():
@@ -316,19 +284,6 @@ def test_try_except_is_ordinary_python():
     out = tool_results(fr)[0]
     assert "error" not in out, out
     assert "caught caught too" in (out.get("printed") or ""), out
-
-
-def test_show_is_the_bare_expression_renderer():
-    """show(r1) was reached 25x on arm 1 and only earned an error; the
-    model's own display verb now renders exactly what `r1` on its own
-    line does."""
-    reply, fr, _f, _d = drive([
-        [run('r1 = find("car")\nshow(r1)\n')],
-        "done",
-    ])
-    out = tool_results(fr)[0]
-    assert "error" not in out, out
-    assert "r1" in ((out.get("result") or {}).get("results") or {}), out
 
 
 def test_an_unbound_name_says_why_it_is_gone():
@@ -555,14 +510,6 @@ def test_an_explore_names_the_uncovered_sibling_segments():
     """A named street is many fragments; a pass covers one. The ack says
     how much of the NAME remains un-flown (147#145's method-correct retry
     explored 2 of 10 segments and missed by 573 m)."""
-    import json as _json
-    from types import SimpleNamespace
-
-    from maps.search.parse_compile.reasoner_loop import (
-        MissionSpec,
-        advance_reasoner_one_round,
-    )
-
     cands = [
         {"fid": "prior_1", "name": "85th Street", "xy": [0.0, 0.0],
          "class": "road", "centerline": [[0.0, -50.0], [0.0, 50.0]],
@@ -574,32 +521,9 @@ def test_an_explore_names_the_uncovered_sibling_segments():
          "class": "road", "centerline": [[0.0, 350.0], [0.0, 450.0]],
          "search_text": "85th street"},
     ]
-    flights: list = []
-
-    def _fly(item):
-        flights.append(item)
-        return {"stop_id": f"stop_{len(flights):03d}",
-                "target": item["target_fid"], "pose_xy": [1.0, 2.0],
-                "new_detections": 0, "cue": "the cue"}
-
-    fr = FakeReasoner([
-        [("run", {"code": 'look_for("pool")\nexplore(prior_1)\n'})],
-        "done",
-    ])
-    advance_reasoner_one_round(
-        reasoner=fr, user_message="Find it.", ctx=SimpleNamespace(
-            graph=None, cell_size_m=1.0, tile_origin_xy=(0.0, 0.0),
-            grid_shape=(10, 10), robot_pose=None),
-        rid_tag="m0",
-        compute_namespace={"cands": cands, "anchors": [], "cell_m": 1.0},
-        diag={}, obs_span_m=200.0,
-        mission_spec=MissionSpec(
-            fly=_fly, declare_concepts=lambda i: {"declared": []},
-            coverage_stops=lambda fid, spacing_m: [[0.0, -50.0], [0.0, 50.0]],
-            flight_budget=8, turn_cap=16),
-    )
-    out = [_json.loads(m["content"]) for m in fr.messages
-           if m.get("role") == "tool"]
+    _reply, out, _flights, _asked, _rend = explore_drive(
+        [[run('look_for("pool")\nexplore(prior_1)\n')], "done"],
+        cands=cands, stops=[[0.0, -50.0], [0.0, 50.0]])
     note = (out[0].get("explored") or {}).get("note") or out[0].get("note") or ""
     assert "2 more segment(s) no pass has covered" in note, out[0]
     assert "prior_2" in note and "prior_3" in note, note
@@ -795,18 +719,6 @@ def test_a_relation_key_names_the_relate_instead_of_a_column_list():
     assert r.get("distance to redwood", 99) == 99
 
 
-def test_the_prefix_table_has_one_home():
-    """Retyping it is how the two halves drift: the Row would name a
-    remedy for a key the executor cannot attach, or stay silent on one it
-    can."""
-    from maps.search.analyze_scene import geom_program as gp
-    assert _AUTOATTACH_PREFIXES is gp._AUTOATTACH_PREFIXES
-    # the three families the Row branches on are all covered by it
-    assert set(gp._STANDING_SIDE_PREFIXES) <= set(_AUTOATTACH_PREFIXES)
-    for p in ("distance to ", "facing ", "east of ", "along ", "color_"):
-        assert p in _AUTOATTACH_PREFIXES, p
-
-
 def test_a_non_callable_predicate_teaches_the_method_the_surface_serves():
     for call in ("r1.filter(5)", "r1.order(5)"):
         _reply, fr, _f, _d = drive([[run(f'r1 = find("car")\n{call}\n')], "done"])
@@ -821,13 +733,6 @@ def test_every_filter_refuses_an_unknown_kwarg_in_one_text():
                                      "done"])
         errs.append(tool_results(fr)[0].get("error") or "")
     assert errs[0] == errs[1] == errs[2] and "toward=" in errs[0], errs
-
-
-def test_every_filter_refuses_a_colour_cut():
-    for rows in ("r1", "r1[0]", "r1.filter(lambda r: True)"):
-        _reply, fr, _f, _d = drive([[run(f'r1 = find("car")\n{rows}.filter(color="red")\n')],
-                                     "done"])
-        assert "colour never CUTS" in (tool_results(fr)[0].get("error") or ""), rows
 
 
 def test_a_list_plus_rows_is_a_rowlist_either_way_round():

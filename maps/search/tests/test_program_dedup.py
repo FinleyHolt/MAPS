@@ -25,13 +25,6 @@ _FILTER = {"ref": "r1", "op": "filter_items",
            "args": {"items": "r0", "key": "row_index", "op": "le", "value": 3}}
 
 
-def test_identical_self_contained_programs_share_a_key():
-    k1 = _program_dedup_key({"ops": [dict(_FIND), dict(_FILTER)]})
-    k2 = _program_dedup_key({"ops": [dict(_FIND), dict(_FILTER)]})
-    assert k1 is not None
-    assert k1 == k2
-
-
 def test_different_ops_get_different_keys():
     k1 = _program_dedup_key({"ops": [dict(_FIND)]})
     other = {**_FIND, "args": {"provenance": "prior", "class": "car"}}

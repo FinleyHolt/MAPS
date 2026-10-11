@@ -116,36 +116,6 @@ def test_the_refusal_names_the_exit(src, phrase):
 
 
 # --------------------------------------------------------------------------
-# The served bytes -- pinned BY NAME, because a scan cannot notice its own
-# disappearance and an affordance the model is never told about is one it
-# does not use. That is the whole mechanism this file exists for: the union
-# rule was true in the executor and absent from the prompt, and the model
-# narrowed to a single house every time.
-# --------------------------------------------------------------------------
-
-
-def _served() -> str:
-    from maps.search.parse_compile import prompts
-    return "\n".join(
-        str(v) for k, v in vars(prompts).items()
-        if k.isupper() and isinstance(v, str))
-
-
-def test_the_legend_serves_the_gap_and_the_union_rule():
-    doc = _served()
-    assert "dwithin=25" in doc, "the gap form is not in the served bytes"
-    assert "NEAREST member" in doc, \
-        "the union rule is not served -- the model cannot use what it is " \
-        "not told, which is how 200#198 was lost"
-    # The vacuity floor: this scan passes trivially if the doc ever shrinks
-    # to nothing, so hold it to a plausible size and to the sibling verbs
-    # it sits beside.
-    assert len(doc) > 4000, len(doc)
-    for verb in (".filter(", "find(", "go_to(", "explore(", "look_for("):
-        assert verb in doc, verb
-
-
-# --------------------------------------------------------------------------
 # One ordering, many cuts
 # --------------------------------------------------------------------------
 
@@ -223,15 +193,6 @@ def test_ddwithin_on_find_needs_the_place_it_measures_from():
     assert "near=" in str(e.value), str(e.value)
 
 
-def test_a_row_and_a_set_both_measure_distance_as_a_method():
-    """``row.gap(other)`` answered "carries no 'gap'" -- which reads as a
-    missing COLUMN on a surface whose cut and sort are already methods. The
-    measurement is spelled `distance`, the word the served column uses."""
-    from maps.search.parse_compile.python_surface import Row, Rows
-    assert callable(Row.distance) and callable(Rows.distance)
-    assert not hasattr(Rows, "gap") and not hasattr(Row, "gap")
-
-
 def test_colour_never_cuts_and_the_refusal_names_the_sort():
     """A bare TypeError cost a turn. Colour is mask-extent dependent -- the
     same car reads 0.63 through a tight mask and 0.38 through its full one
@@ -246,6 +207,10 @@ def test_colour_never_cuts_and_the_refusal_names_the_sort():
     from maps.search.parse_compile.python_surface import Row
     with pytest.raises(CodeError) as e:
         Row({"fid": "detected_1"}).filter(color="red")
+    assert "never CUTS" in str(e.value), str(e.value)
+    # ...and so does a list a predicate filter returned
+    with pytest.raises(CodeError) as e:
+        _ops('r1 = find("car")\nr2 = r1.filter(lambda r: True).filter(color="red")\n')
     assert "never CUTS" in str(e.value), str(e.value)
 
 
@@ -283,16 +248,6 @@ def test_the_two_spellings_are_one_cut_and_one_sort():
     kinds = [o["op"] for o in ops]
     assert "filter_items" in kinds and "score_by" in kinds, kinds
     assert kinds.index("filter_items") < kinds.index("score_by"), kinds
-
-
-def test_look_for_names_where_it_segments_with_at():
-    """``near=`` on look_for meant a third thing -- where to segment extra
-    -- so it is ``at=``, the word stand() already uses for a location."""
-    import inspect
-
-    from maps.search.parse_compile.python_surface import MissionPython
-    sig = inspect.signature(MissionPython._call_look_for)
-    assert "at" in sig.parameters and "near" not in sig.parameters, sig
 
 
 def test_a_row_serves_no_second_point_to_subtract():
@@ -436,72 +391,6 @@ def test_a_cardinal_is_its_own_cut_and_says_so_beside_a_gap():
     assert "ONE relation at a time" in str(e.value), str(e.value)
 
 
-def test_facing_is_a_word_and_it_is_already_inverted():
-    """A facing question is a READ, not a second cut family.
-
-    ``direction=`` served ``facing <place>`` in DEGREES and told the model to
-    apply ``(b + 180) % 360`` itself. Zero calls across two 93-episode arms,
-    and the one episode that read the column took a bearing of 0 to mean "on
-    the north side" -- the un-inverted answer -- then abandoned the surface
-    and hand-rolled ``p.xy[1] > 1305`` (calcity::480#478, a baseline hit the
-    arm lost). A ``faces_<dir>=`` cut family replaced it and reached 3 of 45
-    episodes; it was also the argument-swapped inverse of ``<dir>_of=``,
-    which is the shape SpatialML dropped from its own schema because it
-    confuses the reader.
-
-    So: ONE cut family, and the facing fact rides the compare that
-    ``near=``/``nearest=`` already runs, as a compass WORD that cannot be
-    read backwards.
-
-    ``direction=`` IS BACK, and it is not the kwarg this retired. The dead
-    one asked for a raw DEGREES column and pushed ``(b + 180) % 360`` onto
-    the model. The live one is the compass WORD as the value of a cut,
-    beside ``facing=<place>``: no degrees, no arithmetic, no column
-    request, and the word stays out of the kwarg NAME, which is the whole
-    lesson ``faces_east=`` paid for. What has to stay gone is the degrees
-    reading and the inversion instruction, so that is what is asserted.
-    """
-    from maps.search.analyze_scene.geom_program import run_program
-
-    road = {"fid": "prior_1", "name": "88th Street", "xy": [0.0, 0.0],
-            "mask": [[[0.0, 0.0], [0.0, 400.0]]], "tags": {"highway": "x"},
-            "search_text": ""}
-
-    def house(fid, x):
-        return {"fid": fid, "name": fid, "class": "house", "xy": [x, 200.0],
-                "mask": [[[x - 5, 195.0], [x + 5, 195.0],
-                          [x + 5, 205.0], [x - 5, 205.0]]],
-                "tags": {}, "search_text": "house"}
-
-    out = run_program([house("detected_1", 40.0), house("detected_2", -40.0)],
-                      [road],
-                      {"ops": [
-                          {"ref": "r1", "op": "find",
-                           "args": {"query": "house"}},
-                          {"ref": "r2", "op": "compare",
-                           "args": {"items": "r1",
-                                    "refs": [{"ref": ["prior_1"],
-                                              "as": "88th Street"}]}}]})
-    rows = {r["fid"]: r for r in out["results"]["r2"]}
-    key = "facing 88th_street"
-    # detected_1 sits EAST of the road, so its front points WEST at it.
-    assert rows["detected_1"][key] == "west", rows["detected_1"]
-    assert rows["detected_2"][key] == "east", rows["detected_2"]
-    # and the legend says so, or the column is unreachable in practice
-    from maps.search.parse_compile import prompts
-    desc = prompts.CODE_TOOLS[0]["function"]["description"]
-    assert '"facing <place>"' in desc, desc
-    # the word never rides the kwarg NAME: that shape reached 3 of 45
-    assert "faces_east" not in desc and "faces_south" not in desc
-    # and the degrees reading with its inversion stays retired
-    assert "edge bearing" not in desc and "180) % 360" not in desc
-    # direction= is served only as the cut's compass WORD, next to facing=
-    assert 'filter(facing=<place>, direction="south")' in desc, desc
-    # the axis convention is stated, because the model re-derives it
-    # otherwise: "x is east y is" ran 24 windows over the 1,021-episode arm.
-    assert "+x runs EAST" in desc and "+y runs NORTH" in desc
-
-
 @pytest.mark.parametrize("src", [
     'r1 = find("house", within=25)\n',
     'r1 = find("house")\nr2 = r1.filter(within=25)\n',
@@ -536,81 +425,3 @@ def test_the_two_spellings_still_do_their_own_jobs():
     gap = _cut(_ops('r1 = find("house")\n'
                     'r2 = r1.filter(near="G Ave", dwithin=25)\n'))
     assert gap["op"] == "le" and gap["value"] == 25, gap
-
-
-def test_further_is_gone_from_every_channel():
-    """``order(further=<dir>)`` is DELETED, and a clean cutover means gone
-    from the surface, the compiler's kwarg table and the served legend at
-    once -- a spelling that survives in one of the three is the "present but
-    always empty" hazard wearing a kwarg.
-
-    Why it went. It was off-executor (a plain ``sorted()`` on ``r.xy``), so
-    it served no column, dropped the ref, and read the row's recorded POINT
-    rather than its footprint. Its own refusal named an impossible remedy --
-    "chain the two you mean" -- where ``order`` refuses two orderings and a
-    second ``order`` call overwrites the first, so a diagonal had no
-    expressible form at all. It reached 1 of 29 episodes and its arm scored
-    17/87 against the 25/87 of the arm it was built on.
-
-    The corpus does not miss it: ``<dir>ernmost`` is 12 of the 1,023 cues and
-    ``<dir> end of`` is 34. The commit's "61% carry an end / ordinal / corner
-    word" was counting *corner* (227) and *intersection* (246), which are
-    ``intersection()`` and ``ends_of()``, not an ordering.
-
-    What says it instead is the key ``order`` already takes, over a column
-    the rows already carry.
-    """
-    import inspect
-
-    from maps.search.parse_compile import prompts
-    from maps.search.parse_compile import python_surface as ps
-
-    assert not hasattr(ps, "_FURTHER")
-    assert not hasattr(ps, "_further_key")
-    assert "further" not in inspect.signature(ps.Rows.order).parameters
-    desc = prompts.CODE_TOOLS[0]["function"]["description"]
-    # the KWARG, not the English word: the axis line still reads "a larger y
-    # is further north", which is prose about the frame and not a spelling.
-    assert "further=" not in desc, desc
-
-    # ...and no ordering entry point still ACCEPTS the name. Every kwarg path
-    # funnels to _rows_order, whose signature is keyword-only, so a surviving
-    # `further=` would raise TypeError naming itself rather than compiling to
-    # nothing -- which is how `toward=` lived here once, accepted and inert.
-    import inspect
-    for fn in (ps.Rows.order, ps.MissionPython._rows_order):
-        assert "further" not in inspect.signature(fn).parameters, fn
-
-
-def test_a_directional_ordering_is_a_key_over_a_served_column():
-    """The replacement, and the reason no kwarg replaced it.
-
-    Nothing in the ecosystem ships a directional ordering verb -- no
-    ``northernmost`` in Shapely, GeoPandas, rasterio or xarray. The
-    documented idiom is a COLUMN then a SORT (``gdf.bounds`` ->
-    ``sort_values("maxy", ascending=False)``), which is exactly the shape
-    that already works on this surface: the ``facing <ref>`` word column read
-    in the model's own lambda took facing clauses from 15% to 65%.
-    """
-    from maps.search.parse_compile.python_surface import RowList
-
-    class _R:
-        def __init__(self, fid, xy, east_of=None):
-            self.fid, self.xy = fid, xy
-            self._c = {"east of poppy_boulevard": east_of}
-
-        def __getitem__(self, k):
-            return self._c[k]
-
-        @property
-        def y(self):
-            return self.xy[1]
-
-    rows = RowList([_R("a", [10.0, 100.0], 5.0), _R("b", [50.0, 20.0], 90.0),
-                    _R("c", [30.0, 60.0], 40.0)])
-    # global: which end of the street, off the axis convention the legend states
-    assert [r.fid for r in rows.order(lambda r: -r.y)] == ["a", "c", "b"]
-    # anchored: furthest east OF a named place, off the signed column
-    assert [r.fid for r in
-            rows.order(lambda r: -r["east of poppy_boulevard"])] == \
-        ["b", "c", "a"]

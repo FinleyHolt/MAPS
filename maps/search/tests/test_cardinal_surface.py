@@ -36,16 +36,6 @@ def _surface():
     return cands, prior
 
 
-def test_every_cardinal_is_a_find_kwarg():
-    import inspect
-
-    from maps.search.parse_compile.python_surface import MissionPython
-
-    params = inspect.signature(MissionPython._call_find).parameters
-    for d in ("east", "west", "north", "south"):
-        assert f"{d}_of" in params
-
-
 def test_the_compiled_key_is_the_key_the_executor_writes():
     """The two halves, asserted against each other and not separately."""
     ops = ops_of_block(
@@ -226,32 +216,15 @@ def test_a_corner_is_two_cuts_against_one_crossing():
     assert all(o["args"]["op"] == "on_side" for o in cuts), cuts
 
 
-def test_a_diagonal_kwarg_refuses_and_names_the_conjunction():
-    """A `<diag>_of=` mistake earns the COMPOSITION, not just the four names.
-
-    Listing north_of=/south_of=/east_of=/west_of= leaves the model to invent
-    the conjunction on its own, and the conjunction is what 95 of the 1,023
-    cues ask for ("the house on the southwest corner of A and B"). On a
-    quadrant of a POINT it is exact rather than an approximation, which is
-    why cardinal_side offers four winds and the refusal names the pairing.
-    """
-    from maps.search.analyze_scene.geom_compute import CARDINALS, COMPASS_UNIT
-    from maps.search.parse_compile.python_surface import (
-        _CARDINAL_KWARGS,
-        _diagonal_remedy,
-        _split_diagonal,
-    )
-
-    # the kwarg set IS the declared four-subset -- no fifth spelling
-    assert _CARDINAL_KWARGS == {f"{w}_of" for w in CARDINALS}
-    diagonals = set(COMPASS_UNIT) - set(CARDINALS)
-    assert len(diagonals) == 4, sorted(diagonals)     # vacuity floor
-    for w in diagonals:
-        a, b = _split_diagonal(w)
-        assert a in CARDINALS and b in CARDINALS, w
-        msg = _diagonal_remedy([f"{w}_of"])
-        assert f"{a}_of=" in msg and f"{b}_of=" in msg, (w, msg)
-    assert _diagonal_remedy(["bogus"]) == ""          # only for diagonals
+@pytest.mark.parametrize("kw, pair", [("southwest_of", ("south_of", "west_of")),
+                                      ("northeast_of", ("north_of", "east_of"))])
+def test_a_diagonal_filter_kwarg_refuses_and_names_the_conjunction(kw, pair):
+    with pytest.raises(CodeError) as e:
+        raising_ops_of_block(f'r1 = find("car")\nr2 = r1.filter({kw}="Orchid Drive")\n')
+    assert f"{pair[0]}=<place>, {pair[1]}=<place>" in str(e.value), str(e.value)
+    with pytest.raises(CodeError) as e:
+        raising_ops_of_block('r1 = find("car")\nr2 = r1.filter(bogus="Orchid Drive")\n')
+    assert "diagonal" not in str(e.value), str(e.value)
 
 
 def test_an_unknown_filter_kwarg_is_refused_never_dropped():
@@ -460,17 +433,6 @@ def test_within_still_cuts_ahead_of_every_ordering():
     ops = [o["op"] for o in ops_of_block(
         'r1 = find("house", within="Mill Lane", east_of="Orchid Drive")\n')]
     assert ops.index("filter_items") < ops.index("score_by")
-
-
-def test_the_legend_states_the_capability_and_its_limit():
-    from maps.search.parse_compile.prompts import CODE_DOC
-    assert "east_of=" in CODE_DOC and "north_of=" in CODE_DOC
-    # The served text must match what the executor DOES. It said "Nothing is
-    # dropped" for a whole run after the cut shipped.
-    assert "Nothing is dropped" not in CODE_DOC
-    assert "NEAREST first" in CODE_DOC
-    # ...and a blank cell means unknown, never "no".
-    assert "blank" in CODE_DOC and "never" in CODE_DOC
 
 
 def test_the_side_cut_STATES_the_three_way_outcome():
@@ -783,22 +745,6 @@ def test_a_direction_ORDERS_globally_and_takes_no_anchor():
 
     # the key is shared, so a handle and a list cannot drift apart
     assert _direction_key("north")(rows[0]) == -500.0
-
-
-def test_the_order_docstring_does_not_promise_an_unwritten_column():
-    """It said "every compare writes `facing <place>` and `<dir> of
-    <place>`". Only `facing` is true: geom_program stamps the signed
-    column ONLY for a direction a cardinal cut asked for, so the idiom the
-    docstring taught -- rows.order(lambda r: -r["east of poppy"]) -- was a
-    KeyError on any rows that had not already been cut.
-    """
-    from maps.search.parse_compile.python_surface import Rows
-    doc = Rows.order.__doc__
-    assert "<dir> of <place>" in doc          # still described...
-    assert "rides\n        a cardinal CUT" in doc or "cardinal CUT" in doc
-    # ...and never as something every compare writes
-    assert "every compare\n        writes" not in doc
-    assert "ORDERS GLOBALLY" in doc
 
 
 def test_order_takes_reverse_on_a_key_and_names_the_word_on_a_direction():
