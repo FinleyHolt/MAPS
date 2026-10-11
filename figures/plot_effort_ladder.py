@@ -1,9 +1,7 @@
 """Draw a reasoning-effort ladder as one dual-axis SVG, light and dark.
 
 One arm per run root, one model over a swept effort: success rate on the left
-axis, median navigation error on the right. It renders two static SVGs with
-no webfont (a plain system type stack, every colour written into the file),
-so either theme displays anywhere.
+axis, median navigation error on the right, as two static SVGs.
 
 It defines no metric. ``arm_table.table`` is the canonical reader and hands
 back exactly the row a printed table shows, so the figure and the table
@@ -23,8 +21,8 @@ from pathlib import Path
 
 from benchmarks.citynav.analysis import arm_table
 from benchmarks.citynav.analysis import rows as _rows
+from figures import FONT, MONO, bench_label, esc, themes
 from figures.capability_effort_arms import effort_value
-from figures.plot_capability_effort import bench_label, esc
 
 #: Geometry, in viewBox units. One coordinate system for both themes.
 W, H = 920, 512
@@ -33,18 +31,9 @@ L, R, T, B = 92, 826, 58, 372
 #: Left axis is success, right axis is distance. Each axis takes its series'
 #: colour -- with two scales on one frame, a shared neutral tick makes the
 #: reader guess which line it belongs to.
-THEMES = {
-    "light": {
-        "bg": "#FAFBFC", "ink": "#161A22", "body": "#404955",
-        "muted": "#69727F", "grid": "#E1E5EA", "spine": "#B9C1CB",
-        "sr": "#B8560D", "ne": "#26708F", "open": "#FAFBFC",
-    },
-    "dark": {
-        "bg": "#161A21", "ink": "#E7EBF1", "body": "#BAC2CE",
-        "muted": "#8B95A3", "grid": "#272E38", "spine": "#3A434F",
-        "sr": "#F0A44C", "ne": "#63B6DA", "open": "#161A21",
-    },
-}
+THEMES = themes(light={"grid": "#E1E5EA", "sr": "#B8560D", "ne": "#26708F"},
+                dark={"grid": "#272E38", "sr": "#F0A44C", "ne": "#63B6DA"})
+
 
 def axis(values: list[float], step: int) -> tuple[int, int]:
     """The data's range widened to whole steps, a step at least."""
@@ -72,8 +61,6 @@ def _duplicates(rows: list[dict]) -> set[int]:
 def render(rows: list[dict], theme: str, title: str, subtitle: str) -> str:
     c = THEMES[theme]
     title, subtitle = esc(title), esc(subtitle)
-    font = "'DejaVu Sans','Helvetica Neue',Helvetica,Arial,sans-serif"
-    mono = "'DejaVu Sans Mono','SFMono-Regular',Menlo,Consolas,monospace"
     dup = {id(rows[i]) for i in _duplicates(rows)}
     is_dup = lambda r: id(r) in dup  # noqa: E731
     sr_lo, sr_hi = axis([r["SR_pct"] for r in rows], 10)
@@ -85,7 +72,7 @@ def render(rows: list[dict], theme: str, title: str, subtitle: str) -> str:
 
     p: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" '
-        f'width="{W}" height="{H}" font-family="{font}" '
+        f'width="{W}" height="{H}" font-family="{FONT}" '
         f'role="img" aria-label="{title}: success rate and navigation error '
         f'against reasoning effort">',
         f'<rect width="{W}" height="{H}" fill="{c["bg"]}"/>',
@@ -107,14 +94,14 @@ def render(rows: list[dict], theme: str, title: str, subtitle: str) -> str:
         p.append(f'<line x1="{L}" y1="{y:.1f}" x2="{R}" y2="{y:.1f}" '
                  f'stroke="{c["grid"]}" stroke-width="1"/>')
         p.append(f'<text x="{L - 12}" y="{y + 4:.1f}" text-anchor="end" '
-                 f'fill="{c["sr"]}" font-size="12" font-family="{mono}">{v}</text>')
+                 f'fill="{c["sr"]}" font-size="12" font-family="{MONO}">{v}</text>')
     # ---- right axis ---------------------------------------------------
     for v in range(ne_lo, ne_hi + 1, 10):
         y = sy_ne(v)
         p.append(f'<line x1="{R}" y1="{y:.1f}" x2="{R + 6}" y2="{y:.1f}" '
                  f'stroke="{c["spine"]}" stroke-width="1"/>')
         p.append(f'<text x="{R + 13}" y="{y + 4:.1f}" fill="{c["ne"]}" '
-                 f'font-size="12" font-family="{mono}">{v}</text>')
+                 f'font-size="12" font-family="{MONO}">{v}</text>')
 
     # ---- x axis -------------------------------------------------------
     for i in range(11):
@@ -123,7 +110,7 @@ def render(rows: list[dict], theme: str, title: str, subtitle: str) -> str:
         p.append(f'<line x1="{x:.1f}" y1="{B}" x2="{x:.1f}" y2="{B + 6}" '
                  f'stroke="{c["spine"]}" stroke-width="1"/>')
         p.append(f'<text x="{x:.1f}" y="{B + 22}" text-anchor="middle" '
-                 f'fill="{c["muted"]}" font-size="12" font-family="{mono}">'
+                 f'fill="{c["muted"]}" font-size="12" font-family="{MONO}">'
                  f'{e:.1f}</text>')
     p.append(f'<line x1="{L}" y1="{B}" x2="{R}" y2="{B}" '
              f'stroke="{c["spine"]}" stroke-width="1.4"/>')
@@ -154,7 +141,7 @@ def render(rows: list[dict], theme: str, title: str, subtitle: str) -> str:
                  f'stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>')
         for r in rows:
             x, y = sx(r["effort"]), ycvt(r[key])
-            fill = c["open"] if is_dup(r) else colour
+            fill = c["bg"] if is_dup(r) else colour
             sw = 2.2 if is_dup(r) else 0
             if shape == "circle":
                 p.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="{fill}" '
@@ -170,10 +157,10 @@ def render(rows: list[dict], theme: str, title: str, subtitle: str) -> str:
     last = max(rows, key=lambda r: r["effort"])
     p.append(f'<text x="{sx(last["effort"]) - 10:.0f}" y="{sy_sr(last["SR_pct"]) - 12:.0f}" '
              f'text-anchor="end" fill="{c["sr"]}" font-size="12.5" '
-             f'font-family="{mono}">{last["SR_pct"]:.1f}%</text>')
+             f'font-family="{MONO}">{last["SR_pct"]:.1f}%</text>')
     p.append(f'<text x="{sx(last["effort"]) - 14:.0f}" y="{sy_ne(last["NE_med"]) - 12:.0f}" '
              f'text-anchor="end" fill="{c["ne"]}" font-size="12.5" '
-             f'font-family="{mono}">{last["NE_med"]:.1f} m</text>')
+             f'font-family="{MONO}">{last["NE_med"]:.1f} m</text>')
     # ---- legend, below the frame so no series can collide with it -----
     ly = B + 82
     p.append(f'<line x1="{L}" y1="{ly}" x2="{L + 26}" y2="{ly}" '
@@ -188,7 +175,7 @@ def render(rows: list[dict], theme: str, title: str, subtitle: str) -> str:
     p.append(f'<text x="{L + 224}" y="{ly + 4}" fill="{c["body"]}" font-size="12.5">'
              f'median error (right axis)</text>')
     if dup:
-        p.append(f'<circle cx="{L + 400}" cy="{ly}" r="5" fill="{c["open"]}" '
+        p.append(f'<circle cx="{L + 400}" cy="{ly}" r="5" fill="{c["bg"]}" '
                  f'stroke="{c["sr"]}" stroke-width="2.2"/>')
         p.append(f'<text x="{L + 414}" y="{ly + 4}" fill="{c["body"]}" font-size="12.5">'
                  f'a second arm at an effort already on the line</text>')

@@ -27,6 +27,7 @@ import sys
 from pathlib import Path
 
 from benchmarks.citynav.analysis import rows as _rows
+from figures import FONT, MONO, bench_label, esc, themes
 from figures.capability_effort_arms import build
 
 W, H = 940, 540
@@ -35,19 +36,8 @@ TOP, BOT = 108, 424
 
 SR_LO, SR_HI, SR_STEP = 0, 100, 20
 
-THEMES = {
-    "light": {
-        "bg": "#FAFBFC", "ink": "#161A22", "body": "#404955", "muted": "#69727F",
-        "grid": "#E8ECF0", "spine": "#B9C1CB", "arm": "#2a78d6",
-    },
-    "dark": {
-        "bg": "#161A21", "ink": "#E7EBF1", "body": "#BAC2CE", "muted": "#8B95A3",
-        "grid": "#242B34", "spine": "#3A434F", "arm": "#3987e5",
-    },
-}
-
-FONT = "'DejaVu Sans','Helvetica Neue',Helvetica,Arial,sans-serif"
-MONO = "'DejaVu Sans Mono','SFMono-Regular',Menlo,Consolas,monospace"
+THEMES = themes(light={"grid": "#E8ECF0", "arm": "#2a78d6"},
+                dark={"grid": "#242B34", "arm": "#3987e5"})
 
 COST_KEY = {"completion": "completion_tok_mean", "total": "total_tok_mean"}
 COST_LABEL = {"completion": "completion tokens per episode (mean)",
@@ -58,15 +48,6 @@ RUNG_ORDER = ("none", "minimal", "low", "medium", "high", "xhigh")
 
 #: Minimum vertical separation between two labels, in viewBox units.
 LABEL_PITCH = 22.0
-
-
-def esc(t) -> str:
-    return (str(t).replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace('"', "&quot;"))
-
-
-def bench_label(split: str) -> str:
-    return "Cal City" if split == "calcity" else f"CityNav {split}"
 
 
 def token_ticks(values: list[float]) -> list[float]:
