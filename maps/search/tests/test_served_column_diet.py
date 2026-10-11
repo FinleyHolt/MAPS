@@ -1,12 +1,15 @@
 """The served-surface diet: what the renderer drops, and what it must not."""
 from __future__ import annotations
 
+import pytest
 
 from maps.search.analyze_scene.geom_program import (
     _GRID_COL_DROP,
     _TAG_RENDER_DROP,
+    ProgramError,
     _grid_cell,
     _render_grid_rows,
+    run_program,
 )
 
 # One prior row shaped like the live surface: kept tags, dropped tags, a
@@ -149,3 +152,16 @@ def test_the_row_path_obeys_the_same_diet_as_the_grid():
     # Vacuity floor: an emptied drop set would satisfy the loops above.
     assert len(_GRID_COL_DROP) >= 5, _GRID_COL_DROP
     assert {"name_match", "score", "aspect_ratio"} <= _ROW_HIDDEN
+
+
+@pytest.mark.parametrize("op", [
+    {"op": "score_by", "args": {"emphasis": [{"key": "nope", "w": 1}]}},
+    {"op": "filter_items", "args": {"key": "nope", "op": "truthy"}}])
+def test_an_absent_key_refusal_names_only_served_columns(op):
+    with pytest.raises(ProgramError) as e:
+        run_program([], [dict(ROW)], {"ops": [
+            {"ref": "r0", "op": "find", "args": {"query": "Willmore Road"}},
+            {"ref": "r1", "op": op["op"], "args": {"items": "r0", **op["args"]}}]})
+    msg = str(e.value)
+    assert "footprint_area_m2" in msg, msg
+    assert not any(k in msg for k in _GRID_COL_DROP), msg

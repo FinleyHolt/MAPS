@@ -1581,7 +1581,7 @@ def _present_numeric_keys_hint(items) -> str:
     source)."""
     present = sorted({k for it in items if isinstance(it, dict)
                       for k, v in it.items() if isinstance(v, (int, float))
-                      and k not in _RENDER_INPUT_ROW_FIELDS})
+                      and k not in MODEL_UNSERVED_COLUMNS})
     if present:
         return f"numeric keys present on these items: {_grouped_keys(present)}."
     return "these items carry NO numeric key."
@@ -1595,8 +1595,7 @@ def _present_keys_hint(items) -> str:
     present = sorted({k for it in items if isinstance(it, dict)
                       for k, v in it.items()
                       if isinstance(v, (int, float, str, bool)) and v != ""
-                      and k not in _MODEL_HIDDEN_ROW_FIELDS
-                      and k not in _RENDER_INPUT_ROW_FIELDS})
+                      and k not in MODEL_UNSERVED_COLUMNS})
     if present:
         return f"keys present on these items: {present}."
     return "these items carry NO scalar key."
