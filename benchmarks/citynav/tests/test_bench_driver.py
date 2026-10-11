@@ -108,7 +108,7 @@ def test_a_window_of_infra_casualties_stops_the_run(driver, tmp_path: Path) -> N
     text = d.driver_log.read_text()
     assert "ABORTING RUN" in text and "nothing was scored" in text
     assert "endpoint discovery failed" in text, "the excerpt did not read server.log"
-    assert d._next_claimed_episode(0) is None
+    assert d._next_claimed_episode() is None
     assert d._done_cache == set()
 
     fresh = driver(tmp_path / "w0")
@@ -126,22 +126,22 @@ def test_scattered_infra_and_timeouts_never_stop_the_run(driver) -> None:
     for i in range(200):
         d._append_result(_infra(i) if i % 8 == 0 else
                          {"episode_id": f"ep{i}", "status": "timed_out"})
-    assert d._abort is None and d._next_claimed_episode(0) is not None
+    assert d._abort is None and d._next_claimed_episode() is not None
 
 
 def test_claims_hand_each_episode_to_one_worker(driver) -> None:
     d = driver(selection=["a", "b", "c"])
-    assert [d._next_claimed_episode(i) for i in range(3)] == ["a", "b", "c"]
-    assert d._next_claimed_episode(3) is None, "a live episode was handed out twice"
+    assert [d._next_claimed_episode() for _ in range(3)] == ["a", "b", "c"]
+    assert d._next_claimed_episode() is None, "a live episode was handed out twice"
     d._append_result({"episode_id": "a", "status": "ok"})
     d._in_flight.discard("a")
     d._append_result({"episode_id": "b", "status": "infra", "error": "killed_midrun"})
     d._in_flight.discard("b")
     d._in_flight.discard("c")  # released with no row
-    assert d._next_claimed_episode(0) == "b" and d._next_claimed_episode(1) == "c"
+    assert d._next_claimed_episode() == "b" and d._next_claimed_episode() == "c"
     d.max_infra_attempts = 1
     d._in_flight.clear()
-    assert d._next_claimed_episode(0) == "c", "a capped infra episode was re-flown"
+    assert d._next_claimed_episode() == "c", "a capped infra episode was re-flown"
 
 
 def test_the_summary_is_the_run_report_under_the_infra_lines(driver) -> None:
@@ -179,7 +179,7 @@ def test_an_aborted_run_exits_3_and_the_summary_says_why(driver, monkeypatch, no
 
     def one_window(worker_id: int) -> None:
         for i in seq:
-            if d._next_claimed_episode(worker_id) is None:
+            if d._next_claimed_episode() is None:
                 return
             d._append_result(_infra(i))
 
@@ -263,7 +263,7 @@ def test_a_ledger_the_worker_cannot_write_stops_the_run(driver, monkeypatch) -> 
     d.worker_loop(0)
     assert "No space left on device" in d._abort
     assert "No space left on device" in d.driver_log.read_text()
-    assert d._next_claimed_episode(1) is None
+    assert d._next_claimed_episode() is None
 
 
 _CHILD = (

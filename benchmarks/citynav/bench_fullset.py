@@ -1,55 +1,15 @@
-"""Continuous full-split benchmark driver.
+"""Continuous full-split benchmark driver: one ``run_benchmark --attempt-root`` child per attempt.
 
-Runs the search stack across a whole split at a fixed worker concurrency,
-one fresh ``run_benchmark --attempt-root`` child per attempt.
-Resumable and idempotent: every episode that already has a qualifying row
-in ``episodes.jsonl`` is skipped, so re-running the same command continues
-coverage rather than restarting.
-
-Seeded random episode order
----------------------------
-The split is enumerated block-ordered, so walking it in order front-loads
-``birmingham_block_0`` and any partial run is a block-0 sample, not a
-representative one. The pending list is therefore shuffled by a fixed
-seed (``--sample-seed`` / ``BENCH_SAMPLE_SEED``, default 1234) BEFORE
-``--limit`` is applied, so a given ``(seed, limit)`` selects the
-identical N episodes. ``--episode-allowlist`` filters the split before
-the shuffle.
-
-Per-episode dedup
------------------
-An episode is "done" (skipped on resume) once it has a row in
-``episodes.jsonl`` whose ``status`` is not ``infra`` (the attempt never
-got a fair run). Infra rows never gate, so the next pass re-attempts them; they are
-retained as an audit trail. Among several qualifying attempts the reader
-scores the first-started complete one (``analysis.rows.pick_attempts``).
-
-Budgets: a run-count budget (``--limit``) and a wall-time budget
-(``--max-wall-s``: stop claiming new episodes after S seconds, let
-in-flight finish, retain results). Both default to unlimited.
-
-One condition stops a run that has not spent a budget: mass instant
-failure. When the last ``ABORT_WINDOW`` completions are
-``ABORT_FRACTION`` infra casualties -- no prediction, excluded from SR,
-re-queued -- the run cannot produce results (a missing tile bake is the
-canonical case) and it stops with exit 3, naming the dominant cause and
-the tail of a representative worker log. Nothing is scored, so a resume
-re-flies exactly those episodes once the cause is fixed.
-
-Outputs (under ``--out-root``, default ``output/citynav_fullset``):
-    episodes.jsonl  one row per attempt (status ok | timed_out | infra;
-                    ``workdir`` relative to this directory)
-    summary.txt     ``analysis.run_report`` over the root, refreshed after
-                    every attempt, under the driver's infra lines
-    driver.log      orchestrator log
-    w<id>/          per-worker directory: server.log (every attempt
-                    child's stderr), and one
-                    maps_<stamp>_<benchmark>_<slug>/ directory per attempt
-                    holding episode.json, run.log and flight/
+The split is shuffled by ``--sample-seed`` (after ``--episode-allowlist``, before
+``--limit``), so a ``(seed, limit)`` pair always selects the same episodes. A
+re-run into the same ``--out-root`` resumes: an episode with a non-infra row in
+``episodes.jsonl`` is done, and an infra attempt is flown again up to
+``--max-infra-attempts``. The run stops when nothing is left, the wall budget
+(``--max-wall-s``) is spent, or a window of infra casualties aborts it (exit 3).
+The out-root's layout is in ``benchmarks/citynav/README.md``.
 """
 
 from __future__ import annotations
-
 
 import argparse
 import contextlib
@@ -87,17 +47,7 @@ def _activate_bridge_from_env() -> None:
 
 _activate_bridge_from_env()
 
-# Full strict-compliant CityNav: the upstream cropclient observation
-# (ortho backend) at the paper's 100-150 m spawn band with the
-# ~100-step budget, for the honest paper-comparable SR.
-_CONFIG_OVERRIDE = os.environ.get("CITYNAV_BENCH_CONFIG", "").strip()
-CONFIG = (
-    Path(_CONFIG_OVERRIDE)
-    if _CONFIG_OVERRIDE and Path(_CONFIG_OVERRIDE).is_absolute()
-    else (REPO / _CONFIG_OVERRIDE).resolve()
-    if _CONFIG_OVERRIDE
-    else REPO / "configs/citynav.yaml"
-)
+CONFIG = REPO / (os.environ.get("CITYNAV_BENCH_CONFIG", "").strip() or "configs/citynav.yaml")
 
 DEFAULT_WORKERS = 6
 # The runner each worker process spawns; a peer benchmark names its own
@@ -109,10 +59,8 @@ RUNNER_MODULE = os.environ.get(
 # must be NAMED on the command line, never inherited from a default.
 DEFAULT_SPLIT = "train_seen"
 DEFAULT_EPISODE_TIMEOUT_S = 4 * 3600
-# Share of the episode cap held back from FLYING, so the model still has
-# turns to reply and commit after the pass's wall-clock backstop fires. The
-# backstop trades the tail of a pass for a scored row: calcity::6#6 spent its
-# whole cap inside one explore and recorded no prediction at all.
+# Share of the episode cap held back from flying, so the model still has
+# turns to reply and commit after the mission's wall-clock backstop fires.
 _DEADLINE_RESERVE_FRAC = 0.1
 # How often the driver asks the reasoner's ``/models`` while an attempt
 # flies; two failures in a row kill the attempt as ``vllm_down_midrun``.
@@ -128,21 +76,9 @@ MAX_INFRA_ATTEMPTS = 3
 # Wall-time budget for a continuous run (0 = unlimited; run until the
 # selection / run-count budget is exhausted).
 DEFAULT_MAX_WALL_S = 0
-# Mass-instant-failure abort. A tree deployed without its tile bake fails
-# EVERY episode in seconds. The driver recognizes the shape
-# (``no_prediction_unclassified``), but a warning line in the END-OF-RUN
-# summary alone lets the run grind to completion and report the problem
-# an hour late. When the last ABORT_WINDOW
-# completions are ABORT_FRACTION infra casualties the run is not
-# producing results and stops, loudly, naming the dominant cause and the
-# tail of a representative worker log.
-#
-# A trailing WINDOW, not a session rate: a rate over the whole session
-# cannot fire after a healthy first hour (100 good rows would need ~900
-# bad ones to cross), and a mid-run infra death is the same waste.
-#
-# Absolute count before rate: the window must FILL before the gate can
-# fire, so two failures out of two is never evidence.
+# The run aborts when ABORT_FRACTION of the last ABORT_WINDOW completions are
+# infra casualties (a missing tile bake fails every episode in seconds). A
+# trailing window still fires after a healthy first hour; it must fill first.
 ABORT_WINDOW = 12
 ABORT_FRACTION = 0.9
 
@@ -159,11 +95,9 @@ def _enumerate_split(split: str) -> list[str]:
     return episode_ids(enumerate(load_split(split_path(split))))
 
 
-# The native thread pools an attempt child starts: one thread each for BLAS
-# (OpenMP, OpenBLAS, MKL), OpenCV and the tokenizer (Rayon), and two malloc
-# arenas. Uncapped, every pool starts a thread per core in every child, and
-# a thread that fails to start crashes its episode. A value the shell set
-# wins.
+# One thread per native pool (BLAS, OpenCV, Rayon) and two malloc arenas per
+# attempt child: uncapped, every child starts a thread per core, and a thread
+# that fails to start crashes its episode. A value the shell set wins.
 RUNNER_THREAD_ENV = {
     "OMP_NUM_THREADS": "1",
     "OPENBLAS_NUM_THREADS": "1",
@@ -177,32 +111,25 @@ RUNNER_THREAD_ENV = {
 def _runner_env() -> dict[str, str]:
     """The environment an attempt child is spawned under."""
     env = {**RUNNER_THREAD_ENV, **os.environ}
-    # Unbuffered, so ``server.log`` gets every line as it happens: redirected
-    # to a file, Python block-buffers, and a child that dies fast would leave
-    # nothing behind.
+    # Unbuffered, so a child that dies fast still leaves its lines in server.log.
     env["PYTHONUNBUFFERED"] = "1"
-    # cli.PARENT_PID_ENV, named here so the driver stays off the engine's
-    # imports.
+    # cli.PARENT_PID_ENV, named here so the driver stays off the engine's imports.
     env["CITYNAV_BENCH_PARENT_PID"] = str(os.getpid())
     return env
 
 
-# The ONE predicate for "this attempt never got a fair run" (excluded from
-# SR, re-queued), shared with the readers so the driver and a reader of the
-# finished run reach the same verdict. A timeout is not one: it is the
-# algorithm missing within its budget.
+# "This attempt never got a fair run" (excluded from SR, re-queued): the
+# readers' predicate. A timeout is not one: it is a miss within the budget.
 _infra_casualty = _rows.is_infra_abort
 
 
 def _infra_cause(row: dict) -> str:
-    """What killed this attempt, for the abort banner: the ``error`` every
-    infra row carries."""
+    """What killed this infra attempt: its ``error``."""
     return str(row.get("error") or "").strip() or "infra"
 
 
 def _done_qualify(row: dict) -> str | None:
-    """The episode_id when ``row`` marks its episode done (a string id, not
-    infra), else ``None``."""
+    """The episode_id when ``row`` marks its episode done (not infra), else ``None``."""
     eid = row.get("episode_id")
     if isinstance(eid, str) and not _infra_casualty(row):
         return eid
@@ -211,10 +138,8 @@ def _done_qualify(row: dict) -> str | None:
 
 def _missing_block_assets(episode_ids: list[str]) -> list[Path]:
     """The files the selected episodes' blocks need and do not have: the
-    bake's per-block files, and the raster pair the ortho reads --
-    ``<map>.tif`` beside ``<map>_rgb.tif`` (a georeferenced map) or
-    ``<map>.png`` (CityNav's rasterized one). Read off ``paths`` at call
-    time, which the bench's bridge rebinds."""
+    bake's per-block files, and ``<map>.tif`` beside ``<map>_rgb.tif`` or
+    ``<map>.png``. Read off ``paths`` at call time, which the bridge rebinds."""
     from benchmarks.citynav import paths  # noqa: PLC0415
 
     missing: list[Path] = []
@@ -234,12 +159,9 @@ class Driver:
     def __init__(self, args: argparse.Namespace) -> None:
         self.workers = max(1, int(args.workers))
         self.split = args.split
-        # The split and seed stamp every row's provenance (dispatch), and
-        # ab_report refuses to pair runs whose splits differ or went
-        # unrecorded.
+        # The split and seed stamp every row's provenance (dispatch).
         os.environ["CITYNAV_BENCH_SPLIT"] = str(self.split)
-        if getattr(args, "sample_seed", None) is not None:
-            os.environ["CITYNAV_BENCH_SAMPLE_SEED"] = str(args.sample_seed)
+        os.environ["CITYNAV_BENCH_SAMPLE_SEED"] = str(args.sample_seed)
         self.episode_timeout_s = int(args.episode_timeout_s)
         self.max_infra_attempts = max(1, int(args.max_infra_attempts))
         # episode_id -> its infra attempts' errors, counted.
@@ -255,14 +177,13 @@ class Driver:
         self.sample_seed = int(args.sample_seed)
         # Newline-delimited episode_ids, applied before the seeded shuffle.
         self.allowlist_path: Path | None = None
-        if getattr(args, "episode_allowlist", None):
+        if args.episode_allowlist:
             ap = Path(args.episode_allowlist)
             if not ap.is_absolute():
                 ap = (REPO / ap).resolve()
             self.allowlist_path = ap
-        # Dispatch state, all guarded by _dispatch_lock. _in_flight keeps a
-        # worker that finishes early off a sibling's live episode; _recent is
-        # the mass-infra window as (cause or None, log path).
+        # Guarded by _dispatch_lock. _recent is the mass-infra window as
+        # (cause or None, log path).
         self._selection: list[str] = []
         self._cursor = 0
         self._dispatch_lock = threading.Lock()
@@ -288,9 +209,8 @@ class Driver:
 
     def _append_result(self, row: dict) -> None:
         episodes.append_row(self.out_root, row)
-        # The write and the done-cache add are one step to a claimer, so a
-        # finished episode is never claimed again; infra rows stay
-        # claimable up to max_infra_attempts.
+        # The write lands before the done-cache add, so a finished episode is
+        # never claimed again.
         eid = _done_qualify(row)
         with self._dispatch_lock:
             if eid is not None:
@@ -314,9 +234,7 @@ class Driver:
 
     def _check_mass_infra(self, row: dict) -> None:
         """Stop claiming once ABORT_FRACTION of a full ABORT_WINDOW are infra
-        casualties (``_infra_casualty``: a timeout never counts). Nothing is
-        written or scored; every counted row is already re-queued, so a
-        resume after the fix re-flies exactly these episodes."""
+        casualties; every counted row is already re-queued for a resume."""
         cause = _infra_cause(row) if _infra_casualty(row) else None
         # The log that explains the row: the attempt's own run.log, or the
         # worker's server.log for an attempt that never got a workdir.
@@ -359,20 +277,18 @@ class Driver:
         )
 
     def _resume_done(self) -> set[str]:
-        """The episodes this root's ledger already answered. Read once per
-        pass: this run holds the root, so ``_append_result`` keeps the set
-        current from then on."""
+        """The episodes this root's ledger already answered."""
         return {e for r in _rows.iter_json_rows(self.episodes_file)
                 if (e := _done_qualify(r)) is not None}
 
-    def _next_claimed_episode(self, worker_id: int) -> str | None:
-        """The next episode not done, not in flight here and not past its
-        infra attempts; ``None`` once nothing is left, the wall budget is
-        spent, or the run aborted (workers drain, in-flight attempts
-        finish)."""
-        if self._deadline is not None and time.monotonic() >= self._deadline:
-            return None
-        if self._abort is not None:
+    def _wall_spent(self) -> bool:
+        return self._deadline is not None and time.monotonic() >= self._deadline
+
+    def _next_claimed_episode(self) -> str | None:
+        """The next episode not done, not in flight and not past its infra
+        attempts; ``None`` once nothing is left, the wall budget is spent, or
+        the run aborted (in-flight attempts finish)."""
+        if self._wall_spent() or self._abort is not None:
             return None
         with self._dispatch_lock:
             done = self._done_cache
@@ -397,8 +313,7 @@ class Driver:
 
     def _persistent_infra(self, episodes_: list[str]) -> str:
         """The line naming the selected episodes left out after
-        ``max_infra_attempts`` infra attempts each, with their errors
-        counted, or "" when there are none."""
+        ``max_infra_attempts`` infra attempts, errors counted, or ""."""
         with self._dispatch_lock:
             stuck = [e for e in episodes_ if e not in self._done_cache
                      and self._infra_attempts(e) >= self.max_infra_attempts]
@@ -444,11 +359,9 @@ class Driver:
     # -- one launch cycle --------------------------------------------------
 
     def _wait(self, proc: subprocess.Popen) -> str:
-        """Block until the attempt child exits: ``exited``; or hits the
-        episode cap: ``timeout``; or the reasoner fails two ``/models``
-        probes ``VLLM_PROBE_S`` apart while it flies: ``vllm_dead`` (the
-        episode is doomed, so this bounds the waste to minutes instead of
-        the cap)."""
+        """Block until the attempt child exits (``exited``), hits the episode
+        cap (``timeout``), or the reasoner fails two ``/models`` probes
+        ``VLLM_PROBE_S`` apart while it flies (``vllm_dead``)."""
         deadline = time.monotonic() + self.episode_timeout_s
         down = 0
         while (left := deadline - time.monotonic()) > 0:
@@ -467,11 +380,10 @@ class Driver:
     def _run_attempt(self, worker_id: int, episode_id: str) -> dict:
         """One attempt in a fresh child: its ledger row.
 
-        The row is the child's own ``episode.json`` plus what only this
-        driver knows (``worker_id``, ``workdir`` relative to the out-root,
-        the wall it measured), with ``status`` overridden on the driver's
-        paths: ``timed_out`` for the wall-clock cap; ``infra`` for a lost
-        reasoner (``vllm_down_midrun``), a child that died with no record
+        The child's ``episode.json`` plus ``worker_id``, ``workdir`` and the
+        wall measured here, with ``status`` overridden on the driver's paths:
+        ``timed_out`` for the cap; ``infra`` for a lost reasoner
+        (``vllm_down_midrun``), a child that died with no record
         (``killed_midrun``), and one that exited clean with none
         (``no_prediction_unclassified``).
         """
@@ -479,12 +391,8 @@ class Driver:
         worker_root = self.out_root / f"w{worker_id}"
         worker_root.mkdir(parents=True, exist_ok=True)
         env = _runner_env()
-        # The mission's wall-clock backstop (mission_engine.MISSION_DEADLINE_ENV),
-        # an absolute epoch stamped as the cap's clock starts, so the cold
-        # start is charged against it exactly as the driver charges it. THE
-        # RESERVE IS WHAT ENDING COSTS: the backstop stops FLYING, and the
-        # model still needs a turn or two to reply and commit, which is the
-        # difference between a scored row and the missing one a kill leaves.
+        # The mission's wall-clock backstop (mission_engine.MISSION_DEADLINE_ENV):
+        # an absolute epoch from the cap's start, less the reserve for ending.
         env["CITYNAV_EPISODE_DEADLINE_EPOCH"] = repr(
             time.time() + self.episode_timeout_s * (1.0 - _DEADLINE_RESERVE_FRAC))
         cmd = [sys.executable, "-m", RUNNER_MODULE, "--config", str(CONFIG),
@@ -527,17 +435,14 @@ class Driver:
         }
         landed = episodes.read_episode_json(workdir) if workdir else None
         if verdict == "vllm_dead":
-            # Killed now and re-queued: the attempt stays pending until the
-            # reasoner is back, instead of grinding to the cap or scoring as
-            # a false algorithm miss.
+            # Re-queued: the attempt is pending until the reasoner is back.
             self.log(f"[w{worker_id}] VLLM-DEAD mid-episode {episode_id} after "
                      f"{elapsed:.0f}s; killed + re-queued (not scored)")
             return {**killed, "error": "vllm_down_midrun"}
         if verdict == "timeout":
             self.log(f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killed")
         elif landed is None and proc.returncode != 0:
-            # SIGKILLed (a cgroup OOM) or crashed before landing a record:
-            # never reached a decision, so re-queued, never scored.
+            # SIGKILLed (a cgroup OOM) or crashed before landing a record.
             self.log(f"[w{worker_id}] CRASHED mid-episode {episode_id} after "
                      f"{elapsed:.0f}s (exit {proc.returncode}); re-queued (not scored)")
             return {**killed, "error": "killed_midrun"}
@@ -551,24 +456,20 @@ class Driver:
             **where,
         }
         if landed is None and verdict == "exited":
-            # Fail-closed floor: a child that exits clean with NO record is
-            # an unrecognized instant failure, not a completion (a missing
-            # tile bake once laundered 762 of these as scored rows).
+            # A child that exits clean with no record failed, unrecognised.
             row["status"] = episodes.STATUS_INFRA
             row["error"] = "no_prediction_unclassified"
         elif row.get("status") == episodes.STATUS_INFRA:
             pass
         elif verdict == "timeout":
-            # The wall-clock cap is an algorithm failure (in the denominator,
-            # never infra) whether or not a record was committed.
+            # The cap is an algorithm miss (in the denominator), record or not.
             row["status"] = episodes.STATUS_TIMED_OUT
         else:
             row["status"] = episodes.STATUS_OK
         return row
 
     def run_one(self, worker_id: int, episode_id: str) -> None:
-        """Fly one attempt and land its row. An infra attempt is flown again
-        by a later claim, up to ``max_infra_attempts``."""
+        """Fly one attempt and land its row."""
         self.log(f"[w{worker_id}] START {episode_id}")
         row = self._run_attempt(worker_id, episode_id)
         m = row.get("metrics") or {}
@@ -583,9 +484,8 @@ class Driver:
     # -- aggregate / summary ----------------------------------------------
 
     def _write_summary(self) -> None:
-        """``summary.txt``: the driver's own lines (infra by cause, persistent
-        infra, an abort) above ``analysis.run_report.report`` over the root,
-        so the live view scores by the readers' one SR rule."""
+        """``summary.txt``: the driver's infra and abort lines above
+        ``analysis.run_report.report`` over the root."""
         from benchmarks.citynav.analysis import run_report  # noqa: PLC0415
 
         infra = Counter(str(r.get("error") or "?")
@@ -614,7 +514,7 @@ class Driver:
     # -- main loop ---------------------------------------------------------
 
     def worker_loop(self, worker_id: int) -> None:
-        while (eid := self._next_claimed_episode(worker_id)) is not None:
+        while (eid := self._next_claimed_episode()) is not None:
             try:
                 self._wait_for_vllm()
                 self.run_one(worker_id, eid)
@@ -629,8 +529,7 @@ class Driver:
                         "ts": round(time.time(), 1),
                     })
                 except OSError as werr:
-                    # The ledger itself cannot take a row: no worker can
-                    # land a result, so the run stops, loudly.
+                    # No worker can land a result: the run stops.
                     with self._dispatch_lock:
                         self._abort = self._abort or (
                             f"[w{worker_id}] cannot write {self.episodes_file}: {werr}"
@@ -730,38 +629,21 @@ class Driver:
         except _rm.ManifestIdentityError as exc:
             self.log(f"FATAL: {exc}")
             return 2
-        sel_set = set(episodes)
-        pass_idx = 0
-        while True:
-            pass_idx += 1
-            if self._deadline is not None and time.monotonic() >= self._deadline:
-                self.log(
-                    f"wall budget reached ({self.max_wall_s}s); stopping "
-                    f"(results retained, aggregate whatever completed)"
-                )
-                self._write_summary()
-                return 0
-            self._cursor = 0
-            self._done_cache = self._resume_done()
-            self._infra_errors = {}
-            for r in _rows.iter_json_rows(self.episodes_file):
-                if _infra_casualty(r) and isinstance(r.get("episode_id"), str):
-                    self._infra_errors.setdefault(r["episode_id"], Counter())[
-                        _infra_cause(r)] += 1
-            pending = [e for e in episodes if e not in self._done_cache
-                       and self._infra_attempts(e) < self.max_infra_attempts]
-            self.log(
-                f"pass {pass_idx}: split={self.split} selection={len(episodes)} "
-                f"done={len(self._done_cache & sel_set)} pending={len(pending)} "
-                f"workers={self.workers}"
-            )
-            persistent = self._persistent_infra(episodes)
-            if persistent:
-                self.log(persistent)
-            if not pending:
-                self.log(f"nothing left to fly: {len(episodes)} episodes selected")
-                self._write_summary()
-                return 0
+        self._done_cache = self._resume_done()
+        for r in _rows.iter_json_rows(self.episodes_file):
+            if _infra_casualty(r) and isinstance(r.get("episode_id"), str):
+                self._infra_errors.setdefault(r["episode_id"], Counter())[
+                    _infra_cause(r)] += 1
+        pending = [e for e in episodes if e not in self._done_cache
+                   and self._infra_attempts(e) < self.max_infra_attempts]
+        self.log(
+            f"split={self.split} selection={len(episodes)} "
+            f"done={len(self._done_cache & set(episodes))} pending={len(pending)} "
+            f"workers={self.workers}"
+        )
+        # Workers claim until nothing is left, the wall budget is spent, or the
+        # run aborts; an infra attempt is re-claimed by whichever worker is free.
+        if pending and not self._wall_spent():
             threads = []
             for wid in range(self.workers):
                 t = threading.Thread(target=self.worker_loop, args=(wid,), daemon=False)
@@ -770,12 +652,23 @@ class Driver:
                 time.sleep(WORKER_STAGGER_S)
             for t in threads:
                 t.join()
-            self.log(f"pass {pass_idx} drained")
+        persistent = self._persistent_infra(episodes)
+        if persistent:
+            self.log(persistent)
+        if self._abort is not None:
             # Nonzero, so a launcher sees a failed run rather than a fast one.
-            if self._abort is not None:
-                self.log(f"ABORTED: {self._abort}")
-                self._write_summary()
-                return 3
+            self.log(f"ABORTED: {self._abort}")
+            self._write_summary()
+            return 3
+        if self._wall_spent():
+            self.log(
+                f"wall budget reached ({self.max_wall_s}s); stopping "
+                f"(results retained, aggregate whatever completed)"
+            )
+        else:
+            self.log(f"nothing left to fly: {len(episodes)} episodes selected")
+        self._write_summary()
+        return 0
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -837,9 +730,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="path to a newline-delimited file of episode_ids. When set, "
         "only those ids run (intersected with the enumerated split). The "
-        "seeded shuffle + --limit still apply on top of the allowlist. "
-        "Used by the ablation harness to pin a fixed N-episode subset "
-        "for matched-pair statistical power.",
+        "seeded shuffle + --limit still apply on top of the allowlist.",
     )
     p.add_argument(
         "--dry-run",
@@ -852,22 +743,19 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     from benchmarks import stamp_repo_provenance
 
-    # Without a logging config the stamp below falls to logging.lastResort
-    # (WARNING) and the fleet driver's EVAL-PROVENANCE block reaches no log.
+    # Without a logging config the INFO provenance block reaches no log.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(message)s",
         datefmt="%H:%M:%S",
     )
-    stamp_repo_provenance()  # loud EVAL-PROVENANCE audit line (which code ran)
+    stamp_repo_provenance()
     args = _build_parser().parse_args(argv)
     driver = Driver(args)
     if args.dry_run:
         return driver.dry_run()
-    # Endpoint discovery: probe the vLLM /v1/models facts + every service /health ONCE, so a fleet run
-    # fails HERE — before spawning workers — on an unreachable endpoint,
-    # a wrong-model serve, or a mis-ported SAM, instead of churning
-    # per-episode infra aborts forever.
+    # Endpoint discovery once, so an unreachable or wrong serve fails here,
+    # before any worker spawns.
     from maps.llm.endpoint_spec import (
         EndpointDiscoveryError,
         discover_from_env,
