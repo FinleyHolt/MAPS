@@ -37,7 +37,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from maps.search.analyze_scene import cell_mesh as M
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import build_surface
 

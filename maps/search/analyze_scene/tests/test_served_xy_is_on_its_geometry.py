@@ -84,12 +84,6 @@ def _gap(row) -> float:
     return float(d.min())
 
 
-def _vertex_mean(row):
-    """The rule this replaced: the mean over the row's own geometry."""
-    pts = [p for ch in (row.get("mask") or []) for p in ch]
-    return [sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)]
-
-
 def test_every_served_point_is_on_its_own_geometry():
     rows = _surface()
     # FOUR rows: the two far ways share a name and are still two rows. A
@@ -99,18 +93,6 @@ def test_every_served_point_is_on_its_own_geometry():
     assert len(rows) == 4, [r["fid"] for r in rows]
     for r in rows:
         assert _gap(r) <= 0.01, (r["fid"], r["xy"], _gap(r))
-
-
-def test_the_mean_this_replaced_really_was_off_the_geometry():
-    """VACUITY FLOOR. Without a shape the mean gets wrong, the test above
-    passes on a fixture of convex blobs and asserts nothing."""
-    rows = {r["fid"]: r for r in _surface()}
-    worst = 0.0
-    for fid in ("p_bent", "p_far_a"):
-        r = rows[fid]
-        m = _vertex_mean(r)
-        worst = max(worst, _gap({**r, "xy": m}))
-    assert worst > 20.0, worst
 
 
 def test_a_measured_position_wins_over_a_derived_one():

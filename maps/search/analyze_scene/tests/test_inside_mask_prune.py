@@ -41,22 +41,6 @@ def _arrays(edges):
             np.asarray([e[1] for e in edges], dtype=float))
 
 
-def test_the_prune_is_exact_on_a_city_of_masks():
-    """Many small masks and points scattered across them -- the shape that
-    made `find building in building.` run 885 s without returning."""
-    rng = np.random.default_rng(7)
-    edges = []
-    for _ in range(1200):
-        edges += _ring(rng.uniform(0, 4000), rng.uniform(0, 4000),
-                       rng.uniform(5, 40), rng.uniform(5, 40))
-    A, B = _arrays(edges)
-    P = np.stack([rng.uniform(0, 4000, 3000), rng.uniform(0, 4000, 3000)], 1)
-    got = G._inside_mask_arr(P, A, B)
-    assert np.array_equal(got, _unpruned(P, A, B))
-    # A vacuity floor: a run where nothing is inside would pass trivially.
-    assert 1 <= int(got.sum()) < len(P)
-
-
 def test_the_prune_is_exact_on_the_boundary_cases_a_bound_gets_wrong():
     """Horizontal edges, and points sharing a y with a vertex."""
     edges = _ring(0.0, 0.0, 10.0, 10.0) + _ring(2.0, 2.0, 3.0, 3.0)

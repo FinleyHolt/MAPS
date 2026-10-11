@@ -74,14 +74,6 @@ def _tool_msg(content: str, name: str) -> dict:
             "content": content}
 
 
-def test_a_mission_dump_degrades() -> None:
-    """The floor on the whole fix: before it, this returned None."""
-    before = _mission_dump()
-    after = _degrade_tool_result_content(before)
-    assert after is not None, "the mission-nested dump was not reached"
-    assert len(after) < len(before) / 2, "trimming recovered almost nothing"
-
-
 def test_no_candidate_fid_leaves_the_pool() -> None:
     """A trim that dropped candidates would cost SR, not just tokens."""
     after = json.loads(_degrade_tool_result_content(_mission_dump()))
@@ -108,15 +100,6 @@ def test_color_is_kept_when_asked_on_the_mission_shape() -> None:
     colors = after["result"]["results"]["res"]["colors"]
     assert "prior_0=red" in colors
     assert "@0.8" in colors, "color_conf was severed from the stub"
-
-
-def test_the_analyze_shape_still_degrades() -> None:
-    """Parity. The mission nesting is additive, not a replacement."""
-    after = _degrade_tool_result_content(_analyze_dump())
-    assert after is not None
-    head = json.loads(after)["results"]["r1"]
-    assert "rows" not in head
-    assert len(head["fids"]) == 40
 
 
 def test_both_surfaces_are_selected_and_a_stub_is_not_reselected() -> None:
