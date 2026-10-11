@@ -13,6 +13,7 @@ import numpy as np
 
 from maps.perception.tests.regions import square_view
 from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import SamDetectClient
 from maps.util.mask_codec import encode_mask_record
 
@@ -45,7 +46,6 @@ def _per_detection_seconds(frame_px: int, reps: int = 3) -> tuple[float, int]:
         concept_provider=provider,
         min_area_px=16,
         max_per_step=999,
-        decode_workers=1,  # serial: this measures work, not scheduling
     )
     payload, obs = _case(frame_px)
     best = float("inf")
@@ -64,7 +64,8 @@ def _per_detection_seconds(frame_px: int, reps: int = 3) -> tuple[float, int]:
     return best / max(len(out), 1), len(out)
 
 
-def test_per_detection_decode_cost_does_not_track_frame_area():
+def test_per_detection_decode_cost_does_not_track_frame_area(monkeypatch):
+    monkeypatch.setattr(dc, "_DECODE_WORKERS", 1)  # serial: this measures work, not scheduling
     small, n_small = _per_detection_seconds(SMALL)
     large, n_large = _per_detection_seconds(LARGE)
 

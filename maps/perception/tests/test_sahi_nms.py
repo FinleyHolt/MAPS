@@ -179,7 +179,7 @@ def _tile_b64(rgb, bound):
     return base64.b64encode(_png_wire_bytes(canvas)).decode("ascii")
 
 
-def _build_repack_case(*, sahi_tile_workers: int = 1):
+def _build_repack_case():
     """One SAHI frame (2 tiles), its wire payloads, and the reference
     repack. The rgb is a deterministic gradient so each tile's PNG is
     distinct — the content-keyed mock must never be degenerate."""
@@ -194,7 +194,6 @@ def _build_repack_case(*, sahi_tile_workers: int = 1):
         sahi=True,
         sahi_overlap=0.2,
         sahi_nms_iou=0.5,
-        sahi_tile_workers=sahi_tile_workers,
     )
     bounds = client._tile_bounds(H, W, client.sahi_overlap)
     assert bounds == [(0, 1008, 0, 1008), (0, 1008, 504, 1512)]
@@ -282,12 +281,10 @@ def test_sahi_segment_repack_matches_reference(monkeypatch):
 
 
 def test_sahi_tile_order_survives_out_of_order_completion(monkeypatch):
-    """Force tile 1 to COMPLETE before tile 0 (workers=2, tile 0 gated on
-    tile 1's completion) — the repack must still equal the bounds-order
-    reference: collection order is bounds order, not completion order."""
-    client, obs, payload_by_b64, ref_dets, (H, W) = _build_repack_case(
-        sahi_tile_workers=2
-    )
+    """Force tile 1 to COMPLETE before tile 0 (tile 0 gated on tile 1's
+    completion) — the repack must still equal the bounds-order reference:
+    collection order is bounds order, not completion order."""
+    client, obs, payload_by_b64, ref_dets, (H, W) = _build_repack_case()
     idx_by_b64 = {k: i for i, k in enumerate(payload_by_b64)}
 
     completion_order: list[int] = []

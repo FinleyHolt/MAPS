@@ -165,28 +165,3 @@ def test_pick_url_survives_a_shrinking_endpoint_list(monkeypatch):
     assert {dc._pick_url() for _ in range(4)} == {"http://a:1"}
 
 
-def test_tile_workers_track_the_replica_count(monkeypatch):
-    """The default width covers the tiles; an explicit value wins (1 is the serial triage knob)."""
-    from maps.perception.sam import detect_client as dc
-
-    monkeypatch.delenv("SAM_VIDEO_SERVER_URL", raising=False)
-    monkeypatch.setenv("SAM_SERVER_URL", ",".join(f"http://r{i}:8772" for i in range(7)))
-
-    auto = SamDetectClient(concept_provider=ReasonerUnionConceptProvider())
-    assert auto.sahi_tile_workers is None
-    # auto covers the tiles: 9 tiles at a width of 8 would pay two round trips.
-    assert dc.tile_pool_width(9, auto.sahi_tile_workers) == 9
-    # ...and with fewer tiles than replicas the pool is still the tile count,
-    # never idle threads.
-    assert dc.tile_pool_width(4, auto.sahi_tile_workers) == 4
-
-    pinned = SamDetectClient(
-        concept_provider=ReasonerUnionConceptProvider(), sahi_tile_workers=1
-    )
-    assert dc.tile_pool_width(9, pinned.sahi_tile_workers) == 1
-    # a pin above the tile count still cannot spawn idle threads
-    assert dc.tile_pool_width(3, 32) == 3
-    # and a degenerate tile count never asks for a zero-wide pool
-    assert dc.tile_pool_width(0, None) == 1
-
-

@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import SamDetectClient
 from maps.perception.tests.regions import square_view
 from maps.util.mask_codec import encode_mask_record
@@ -60,14 +61,13 @@ def _build_case():
     return {"detections": dets, "image_shape_hw": [H, W]}, square_view(rgb, depth)
 
 
-def _run(decode_workers: int):
+def _run():
     provider = ReasonerUnionConceptProvider()
     provider.set_concepts(["car"])
     client = SamDetectClient(
         concept_provider=provider,
         min_area_px=16,
         max_per_step=MAX_PER_STEP,
-        decode_workers=decode_workers,
     )
     payload, obs = _build_case()
     return client._decode_payload_to_detections(
@@ -96,8 +96,9 @@ GOLDEN = [
 
 
 @pytest.mark.parametrize("workers", [1, 4])
-def test_decode_output_matches_the_golden(workers):
-    out = _run(workers)
+def test_decode_output_matches_the_golden(workers, monkeypatch):
+    monkeypatch.setattr(dc, "_DECODE_WORKERS", workers)
+    out = _run()
     assert len(out) == len(GOLDEN)
 
     for i, (d, g) in enumerate(zip(out, GOLDEN)):
