@@ -39,10 +39,16 @@ _RENAMED_KEYS = {
 }
 
 
+def _quote(v, cap: int = 120) -> str:
+    """A user value as a refusal quotes it: its repr, cut to ``cap`` chars."""
+    s = repr(v)
+    return s if len(s) <= cap else s[:cap] + "..."
+
+
 def _reject_renamed_key(key):
     if key in _RENAMED_KEYS:
         raise ProgramError(
-            f"{key!r} is not a column; it was replaced by "
+            f"{_quote(key)} is not a column; it was replaced by "
             f"{_RENAMED_KEYS[key]}.")
 
 
@@ -68,12 +74,12 @@ def _resolve_color_word(word: str) -> "tuple[str, str | None]":
     canon = G.normalize_color(w)
     if canon not in G.COLOR_ENUM:
         raise ProgramError(
-            f"{w!r} is not a color on the closed palette; color columns "
+            f"{_quote(w)} is not a color on the closed palette; color columns "
             f"are color_<word> with word one of: "
             f"{', '.join(G.COLOR_ENUM)} (an open word that maps onto the "
             f"palette is accepted, e.g. navy -> blue).")
     note = (None if canon == w else
-            f"color {w!r} maps onto the closed palette as {canon!r}; "
+            f"color {_quote(w)} maps onto the closed palette as {_quote(canon)}; "
             f"the column is color_{canon}.")
     return canon, note
 
@@ -1631,7 +1637,7 @@ def _key_remedy(key) -> str:
         if re.fullmatch(r"[0-9][0-9_.]*", param):
             # The model may never have written this label: a point named in
             # one call mints it, and a later ordering can name the column.
-            return (f"{param!r} is not a fid: a number pair names a POINT, "
+            return (f"{_quote(param)} is not a fid: a number pair names a POINT, "
                     f"and a point carries columns only under the label it is "
                     f"given when it is related to rows -- the column is then "
                     f"{pre}<label>. ")
@@ -1803,7 +1809,7 @@ class _Run:
         else:
             _known = sorted(set(self.results) | set(self.seed))
             raise ProgramError(
-                f"unknown ref {tok!r}: an op defined with ref 'r0' is read back "
+                f"unknown ref {_quote(tok)}: an op defined with ref 'r0' is read back "
                 f"as r0. Refs persist across your analyze calls (redefining one "
                 f"replaces it). "
                 f"valid refs so far: {_known or '(none)'}")
@@ -1820,7 +1826,7 @@ class _Args(dict):
 
     def __missing__(self, key):
         raise ProgramError(
-            f"op {self._cx.op!r} is missing required arg {key!r}{self._cx.sig()}")
+            f"op {_quote(self._cx.op)} is missing required arg {_quote(key)}{self._cx.sig()}")
 
 
 def _window(cur, win, token):
@@ -1840,7 +1846,7 @@ def _window(cur, win, token):
         rows = w
     if not rows and cur:
         raise ProgramError(
-            f"window {part} in ref {token!r} selected 0 of "
+            f"window {part} in ref {_quote(token)} selected 0 of "
             f"{len(cur)} rows: this ref holds {len(cur)} row(s) and "
             f"the window begins at or past the end of them "
             f"(or begins at or after where it stops).")
@@ -1863,13 +1869,13 @@ def _as_list(cx, arg):
                 out.append(cx.by_fid[x])
             elif isinstance(x, str):
                 raise ProgramError(
-                    f"cannot resolve {x!r} in list {arg!r}: not a fid in this "
+                    f"cannot resolve {_quote(x)} in list {_quote(arg)}: not a fid in this "
                     f"surface or an rN ref. {cx.avail('list')}{cx.sig()}")
             else:
                 out.append(x)
         return out
     raise ProgramError(
-        f"cannot resolve a LIST from {arg!r}: wants a list -- an rN ref to a "
+        f"cannot resolve a LIST from {_quote(arg)}: wants a list -- an rN ref to a "
         f"find/compare/filter_items result -- NOT a single fid. "
         f"{cx.avail('list')}{cx.sig()}")
 
@@ -1884,7 +1890,7 @@ def _as_points(cx, arg):
         v = [cx.by_fid[v]]
     if not isinstance(v, list):
         raise ProgramError(
-            f"cannot resolve a POINT-LIST from {arg!r}: wants a list of points -- an "
+            f"cannot resolve a POINT-LIST from {_quote(arg)}: wants a list of points -- an "
             f"rN ref to a find/compare result, or a list of "
             f"fids/[x,y] -- NOT a single fid. {cx.avail('list')}{cx.sig()}")
     out = []
@@ -1899,7 +1905,7 @@ def _as_points(cx, arg):
             out.extend(_as_points(cx, cx.resolve(it)))
         else:
             raise ProgramError(
-                f"cannot resolve a point in the list from item {it!r}: each item must "
+                f"cannot resolve a point in the list from item {_quote(it)}: each item must "
                 f"be a fid in this surface, a {{'fid':...}} dict, an [x,y], or an rN. "
                 f"{cx.avail('point')}{cx.sig()}")
     return out
@@ -2088,7 +2094,7 @@ def _find(cx, a):
         rows = cx.cands + cx.anchors         # the whole surface
     else:
         raise ProgramError(
-            f"unknown find provenance {prov!r}; legal: any | prior "
+            f"unknown find provenance {_quote(prov)}; legal: any | prior "
             f"(baked map features) | runtime (in-flight detections)."
             f"{cx.sig()}")
     _fid_hit = (cx.by_fid.get(str(a.get("query") or "").strip())
@@ -2110,7 +2116,7 @@ def _find(cx, a):
         if ";" in _q_raw:
             # ';' is not a query operator: loud, naming the idioms.
             raise ProgramError(
-                f"find query {_q_raw!r} contains ';', which is not a "
+                f"find query {_quote(_q_raw)} contains ';', which is not a "
                 f"query operator (the whole string would fuzz-score "
                 f"as one text blob). ALTERNATIVES are the literal "
                 f"UPPERCASE token OR ('a=b OR c=d', scored as the "
@@ -2167,7 +2173,7 @@ def _find(cx, a):
             _q_tokens = sorted({t for _cl in q_data for t in _cl[1]})
             _empty_cond = (
                 f"find matched nothing: no row scored >= "
-                f"{T.FUZZY_THRESHOLD} against query {_q_raw!r} "
+                f"{T.FUZZY_THRESHOLD} against query {_quote(_q_raw)} "
                 f"(query tokens: {_q_tokens}).")
             _q_notes.append(_memo_census())
             # A query word that is a palette color matches no row text: the
@@ -2179,7 +2185,7 @@ def _find(cx, a):
                 _canon = G.normalize_color(_w)
                 if _canon in G.COLOR_ENUM:
                     _q_notes.append(
-                        f"{_w!r} is a color word on the closed "
+                        f"{_quote(_w)} is a color word on the closed "
                         f"palette: color is not row text -- it "
                         f"rides the color_{_canon} column, which "
                         f"attaches when the color word is named.")
@@ -2312,14 +2318,14 @@ def _find(cx, a):
                 # LOUD, never a silent fall back to the fuzz band this gate
                 # exists to exclude.
                 raise ProgramError(
-                    f"nothing found is NAMED {_want!r}"
-                    + (f" and matches {_q_raw!r}" if _q_raw else "")
+                    f"nothing found is NAMED {_quote(_want)}"
+                    + (f" and matches {_quote(_q_raw)}" if _q_raw else "")
                     + ". A name is matched as a NAME, never fuzzily "
                     "-- check the spelling, or drop the class word "
-                    f"and say find({_want!r}).{cx.sig()}")
+                    f"and say find({_quote(_want)}).{cx.sig()}")
             if len(_named) < len(rows):
                 _q_notes.append(
-                    f"name={_want!r} kept {len(_named)} of "
+                    f"name={_quote(_want)} kept {len(_named)} of "
                     f"{len(rows)} by NAME; the fuzz band does not "
                     "apply to a name")
             rows = _named
@@ -2395,7 +2401,7 @@ def _crossings(cx, a):
         _polys = [p for n in _nodes for p in _x_polys(n)]
         if not _polys:
             raise ProgramError(
-                f"crossings ref {_el!r} names no geometry on this "
+                f"crossings ref {_quote(_el)} names no geometry on this "
                 f"surface -- a crossing needs two features that HAVE "
                 f"a shape. {cx.avail('point')}{cx.sig()}")
         sides.append((_x_label(_nodes, _el), _polys,
@@ -2497,7 +2503,7 @@ def _ends(cx, a):
         _nodes = _named_rows(cx, _el, "centerline")
         if not _nodes:
             raise ProgramError(
-                f"ends ref {_el!r} names no row on this surface. "
+                f"ends ref {_quote(_el)} names no row on this surface. "
                 f"{cx.avail('point')}{cx.sig()}")
         for _nd in _nodes:
             _cl = _nd.get("centerline")
@@ -2563,19 +2569,19 @@ def _score_by(cx, a):
                     del emphasis[_k]
                     continue
                 raise ProgramError(
-                    f"nothing orders by {_k!r} here: no row carries a "
+                    f"nothing orders by {_quote(_k)} here: no row carries a "
                     f"perceived color, so no color column attaches (rows "
                     f"without a color read omit color_<word> columns). "
                     f"{_present_numeric_keys_hint(items)}")
             raise ProgramError(
-                f"nothing orders by {_k!r} here: no row carries a "
-                f"numeric {_k!r}. "
+                f"nothing orders by {_quote(_k)} here: no row carries a "
+                f"numeric {_quote(_k)}. "
                 f"{_contact_fact(cx, _k, items) or _key_remedy(_k)}"
                 f"{_present_numeric_keys_hint(items)}")
     for _k in _dropped_color:
         # NEVER SILENT: the rows are ranked by fewer things than asked for.
         _sb_notes.append(
-            f"{_k!r} ranked nothing here: no row on this surface has "
+            f"{_quote(_k)} ranked nothing here: no row on this surface has "
             f"been SEEN yet, so none carries a perceived colour. The "
             f"other keys still rank. A row gets a colour once a "
             f"flight has passed over it.")
@@ -2603,8 +2609,8 @@ def _filter_items(cx, a):
     if opr == "le":
         if items and not any(isinstance(it.get(key), (int, float)) for it in items):
             raise ProgramError(
-                f"filter_items op {opr!r} on key {key!r}: no item "
-                f"carries a numeric {key!r}. "
+                f"filter_items op {_quote(opr)} on key {_quote(key)}: no item "
+                f"carries a numeric {_quote(key)}. "
                 f"{_contact_fact(cx, key, items) or _key_remedy(key)}"
                 f"{_present_numeric_keys_hint(items)}")
     elif (items
@@ -2614,8 +2620,8 @@ def _filter_items(cx, a):
         # ran (a 'facing <ref>' absent on every row because every row touches
         # <ref> is a geometric fact; in_or_blank keeps them).
         raise ProgramError(
-            f"filter_items op {opr!r} on key {key!r}: no item carries "
-            f"{key!r}. "
+            f"filter_items op {_quote(opr)} on key {_quote(key)}: no item carries "
+            f"{_quote(key)}. "
             f"{_contact_fact(cx, key, items) or _key_remedy(key)}"
             f"{_present_keys_hint(items)}")
     if opr == "in_or_blank":
@@ -2636,7 +2642,7 @@ def _filter_items(cx, a):
         }
         if not (len(_on) - _blank):
             stats["nothing_reads_those_words"] = (
-                f"no surveyed row reads any of {_want} in {key!r}; "
+                f"no surveyed row reads any of {_want} in {_quote(key)}; "
                 f"the rows kept are the ones the geometry never "
                 f"measured (a row TOUCHING the reference has no "
                 f"facing word). Widen, or read the column and "
@@ -2811,7 +2817,7 @@ def _compare_specs(cx, refs):
                     _mnode = cx.by_fid.get(x)
                     if _mnode is None:
                         raise ProgramError(
-                            f"union ref member {x!r} is not a fid on "
+                            f"union ref member {_quote(x)} is not a fid on "
                             f"this surface. {cx.avail('point')}"
                             f"{cx.sig()}")
                     _members.append(_mnode)
@@ -2823,7 +2829,7 @@ def _compare_specs(cx, refs):
             continue
         if not isinstance(ref_el, str):
             raise ProgramError(
-                f"compare refs element {ref_el!r} must be a bare fid string, "
+                f"compare refs element {_quote(ref_el)} must be a bare fid string, "
                 f"an rN result, an [x,y] literal, or {{ref:..., as:...}}."
                 f"{cx.sig()}")
         node = cx.by_fid.get(ref_el)
@@ -2835,7 +2841,7 @@ def _compare_specs(cx, refs):
             continue
         if node is None:
             raise ProgramError(
-                f"compare ref {ref_el!r} is not a fid on this "
+                f"compare ref {_quote(ref_el)} is not a fid on this "
                 f"surface. {cx.avail('point')}{cx.sig()}")
         specs.append(("row", node, as_label))
     return specs, standing
@@ -3158,7 +3164,7 @@ def run_program(cands, anchors, program, seed_results=None,
     for op in ops:
         if op["ref"] in _seen:
             raise ProgramError(
-                f"handle {op['ref']!r} is defined by two ops -- one handle names ONE "
+                f"handle {_quote(op['ref'])} is defined by two ops -- one handle names ONE "
                 f"op (a program never redefines a handle). Give the second op a "
                 f"fresh ref (rN) and reference each by its own name.")
         _seen.add(op["ref"])

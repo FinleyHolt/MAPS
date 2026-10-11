@@ -218,3 +218,10 @@ def test_a_point_union_member_is_measured_by_its_own_point():
     by = {r["fid"]: r["distance to spots"] for r in out["results"]["r1"]}
     assert by == {"h_a": pytest.approx(10.0), "h_b": pytest.approx(90.0)}, by
 
+
+def test_a_huge_user_value_in_a_refusal_stays_short():
+    with pytest.raises(gp.ProgramError) as e:
+        gp.run_program([], [_house("h_a", 0.0)], {"ops": [
+            {"ref": "r1", "op": "compare",
+             "args": {"items": ["h_a"], "refs": [["x" * 100_000, 1]]}}]})
+    assert "x" * 200 not in str(e.value)
