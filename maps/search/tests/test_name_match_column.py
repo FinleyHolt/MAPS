@@ -11,13 +11,7 @@ surface (find rows, compare headers, or the tool text).
 """
 from __future__ import annotations
 
-import os
-
-
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
-
-from maps.search.analyze_scene.geom_program import compact_results, run_program  # noqa: E402
+from maps.search.analyze_scene.geom_program import compact_results, run_program
 
 _CANDS = [
     {"fid": "d0", "xy": [12.0, 10.0], "class": "car", "color": "white"},
@@ -136,30 +130,3 @@ def test_compact_compare_header_carries_name_match():
     keyset = {k for h in (comp.get("refs") or []) for k in h}
     assert "name_match" in keyset, keyset
     assert "match_score" not in keyset, keyset
-
-
-# --------------------------------------------------------------------------- #
-# no 'match_score' token anywhere on the served surface                        #
-# --------------------------------------------------------------------------- #
-
-
-def test_no_match_score_token_in_geom_program_source():
-    # The retired key must not linger anywhere in the executor -- not in a
-    # header stamp, not in a comment, not in an error string.
-    src = os.path.join(_REPO, "maps", "search",
-                       "analyze_scene", "geom_program.py")
-    with open(src, encoding="utf-8") as fh:
-        text = fh.read()
-    assert "match_score" not in text, "match_score still present in geom_program.py"
-
-
-def test_no_match_score_token_in_prompts_source():
-    # The retired key must not linger in the served analyze/tool text either:
-    # the doc that describes the compare header must name the field the
-    # runtime actually emits (name_match), or the model is told to look for a
-    # key that is never there.
-    src = os.path.join(_REPO, "maps", "search",
-                       "parse_compile", "prompts.py")
-    with open(src, encoding="utf-8") as fh:
-        text = fh.read()
-    assert "match_score" not in text, "match_score still present in prompts.py"

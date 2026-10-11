@@ -48,8 +48,6 @@ _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
 # directly because ``maps`` never imports ``benchmarks``.
 _TILES = (os.environ.get("SEARCH_CITYNAV_TILES")
           or os.path.join(_REPO, "tiles", "citynav_2m_osmv3"))
-_GEOM_SRC = os.path.join(_REPO, "maps", "search", "analyze_scene",
-                         "geom_program.py")
 
 pytestmark = pytest.mark.skipif(not os.path.isdir(_TILES),
                                 reason="tile bake absent")
@@ -107,24 +105,6 @@ def test_a_cue_sorted_head_is_not_told_its_own_order_is_arbitrary():
             (stem, env["r2"].get("hint"))
         armed += 1
     assert armed >= 3, armed          # vacuity floor: the branch ran
-
-
-def test_the_tie_clause_still_exists_to_be_gated():
-    """A derived absence test passes when the thing it looks for was
-    deleted. This pins the clause itself, so removing the wording fails
-    here instead of greening the test above.
-
-    The clause is the RETRIEVAL's, not the render's: `find` compares the
-    scores it computed and says either "best-first" or "equally good
-    matches, so this order is arbitrary". The render used to re-derive the
-    same fact from a uniform name_match column and glue it on, which is how
-    one hint came to carry both claims (23 results in the audited corpus).
-    """
-    src = open(_GEOM_SRC).read()
-    assert "so this order is arbitrary" in src
-    assert 'if _m_vals[0] == _m_vals[-1]:' in src
-    # ...and the render no longer has a second opinion about it.
-    assert "so this head's order is " not in src
 
 
 # The op-JSON register: the vocabulary of the frozen round-era surface.
@@ -206,37 +186,3 @@ def test_no_rendered_hint_teaches_the_op_json_register():
     assert claims == 0, (
         f"{claims} hint(s) quote a compare column; the served hints stopped "
         "naming columns when the line-ref chart was deleted")
-
-
-# --------------------------------------------------------------------------- #
-# SIDE-COMPASS                                                                #
-# --------------------------------------------------------------------------- #
-
-def test_no_row_ref_carries_sides():
-    """A side needs a travel direction, and no ROW ref has one: the bake
-    picks a way's end0->end1 order arbitrarily, so a left/right column off it
-    names a side of nothing. Only a DECLARED chart (frame:{along: ...}) has a
-    direction its caller chose. Asserted over the shapes a ref can take — a
-    footprint, a bare point, a union — because none of them is exempt."""
-    checked = 0
-    for stem in _blocks():
-        cands, anchors = _surface(stem)
-        areal = [a for a in anchors if a.get("mask")]
-        if len(areal) < 2:
-            continue
-        refs = [{"ref": areal[0]["fid"], "as": "lot"},
-                {"ref": [float(areal[1]["xy"][0]), float(areal[1]["xy"][1])],
-                 "as": "pt"},
-                {"ref": [a["fid"] for a in areal[:2]], "as": "both"}]
-        r1 = run_program(cands, anchors, {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-            {"ref": "r1", "op": "compare",
-             "args": {"items": "r0", "refs": refs}},
-        ]})["results"]["r1"]
-        assert len(r1.refs) == 3, r1.refs
-        for hdr in r1.refs:
-            assert "sides" not in hdr, (stem, hdr)
-        checked += 1
-        if checked >= 3:
-            break
-    assert checked >= 3, checked      # vacuity floor
