@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from maps.perception.observation import Observation
+from maps.perception.tests.regions import square_view
 from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.sam.detect_client import (
     SamDetectClient,
@@ -249,14 +249,7 @@ def _build_repack_case(*, sahi_tile_workers: int = 1):
     }
     assert len(payload_by_b64) == 2, "tile PNGs must be distinct for keying"
 
-    obs = Observation(
-        pose_xy=(0.0, 0.0),
-        altitude_m=100.0,
-        yaw_deg=0.0,
-        world_window=(0.0, 0.0, 100.0, 100.0),
-        rgb=rgb,
-        ortho_view_corners_xy=((0.0, 100.0), (100.0, 100.0), (100.0, 0.0), (0.0, 0.0)),
-    )
+    obs = square_view(rgb)
     return client, obs, payload_by_b64, ref_dets, (H, W)
 
 

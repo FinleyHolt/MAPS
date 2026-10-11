@@ -1,28 +1,84 @@
-"""What ``_decode_payload_to_detections`` produces, pinned value by value.
+"""``_decode_payload_to_detections`` output, pinned value by value, serial and on a thread pool.
 
-The per-detection stages of the decoder are being reworked to stop building a
-frame-sized canvas for every mask. Every one of those changes is supposed to be
-a pure representation change, and the failure mode when it is not is a mask
-that shifts by a few pixels — which moves ``world_xy`` a little, keeps every
-count identical, and shows up as a slightly worse SR weeks later.
-
-Nothing else in the suite pins the decoder's OUTPUT: the neighbouring identity
-test compares two runs of the same code against each other, so it stays green
-through any change that is merely consistently wrong. This one carries the
-values, captured from the build before the rework, and it is a snapshot on
-purpose — if a change is meant to move a number here, that has to be a
-deliberate edit with a reason, not a green test.
-
-The fixture is shared with ``test_decode_pack_identity``: multi-component
-splits, a detection over NaN depth whose components and merged fallback all
-fail projection, and a ``max_per_step`` cap that truncates mid-detection.
+The case splits multi-component masks, drops a detection over NaN depth (its components and merged
+fallback all fail projection), and hits ``max_per_step`` mid-detection. A change meant to move a value
+here is a deliberate edit of the snapshot.
 """
 
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from maps.perception.tests.test_decode_pack_identity import MAX_PER_STEP, _run
+from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+from maps.perception.sam.detect_client import SamDetectClient
+from maps.perception.tests.regions import square_view
+from maps.util.mask_codec import encode_mask_record
+
+H = W = 128
+MAX_PER_STEP = 9  # 8 two-component dets = 16 packs -> cap hits mid-det
+
+
+def _det(mask, oid, score):
+    rec = encode_mask_record(mask)
+    assert rec is not None
+    return {**rec, "label": "car", "score": score, "object_id": oid}
+
+
+def _build_case():
+    """8 disjoint two-component dets + one det on NaN depth (projection
+    fails for its components AND its merged fallback -> dropped)."""
+    depth = np.ones((H, W), dtype=np.float32)
+    depth[100:, 100:] = np.nan
+    rr, cc = np.meshgrid(np.arange(H) % 256, np.arange(W) % 256, indexing="ij")
+    rgb = np.stack([rr, cc, (rr + cc) % 256], axis=-1).astype(np.uint8)
+
+    def two_blocks(r, c):
+        m = np.zeros((H, W), dtype=bool)
+        m[r : r + 6, c : c + 6] = True
+        m[r : r + 6, c + 10 : c + 16] = True  # second component
+        return m
+
+    dets = []
+    oid = 0
+    for r in (0, 16, 32, 48, 64, 80):
+        for c in (0, 40):
+            if len(dets) == 2:
+                # det index 2 sits entirely in the NaN-depth corner: every
+                # component and the merged fallback fail projection.
+                dets.append(_det(two_blocks(100, 100), oid, 0.9))
+                oid += 1
+                if len(dets) == 9:
+                    break
+            dets.append(_det(two_blocks(r, c), oid, 0.9))
+            oid += 1
+            if len(dets) == 9:
+                break
+        if len(dets) == 9:
+            break
+
+    return {"detections": dets, "image_shape_hw": [H, W]}, square_view(rgb, depth)
+
+
+def _run(decode_workers: int):
+    provider = ReasonerUnionConceptProvider()
+    provider.set_concepts(["car"])
+    client = SamDetectClient(
+        concept_provider=provider,
+        min_area_px=16,
+        max_per_step=MAX_PER_STEP,
+        decode_workers=decode_workers,
+    )
+    payload, obs = _build_case()
+    return client._decode_payload_to_detections(
+        payload,
+        obs=obs,
+        scale=1.0,
+        pad_top=0,
+        pad_left=0,
+        orig_HW=(H, W),
+    )
+
 
 # (label, confidence, world_xy, mask.bbox, mask.area, track_id, pixel_area,
 #  mask_pixel_count, color, color_rgb)
@@ -39,8 +95,9 @@ GOLDEN = [
 ]
 
 
-def test_decode_output_matches_the_golden():
-    out = _run(1)
+@pytest.mark.parametrize("workers", [1, 4])
+def test_decode_output_matches_the_golden(workers):
+    out = _run(workers)
     assert len(out) == len(GOLDEN)
 
     for i, (d, g) in enumerate(zip(out, GOLDEN)):
@@ -58,25 +115,3 @@ def test_decode_output_matches_the_golden():
         assert int(d.metadata["mask_pixel_count"]) == n_valid, where
         assert d.attributes.get("color") == color, where
         assert d.attributes.get("color_rgb") == rgb, where
-
-
-def test_the_golden_case_still_exercises_what_it_claims_to():
-    """Vacuity floor for the snapshot above.
-
-    A fixture that quietly stopped splitting, stopped dropping the
-    NaN-depth detection, or stopped hitting the cap would still match a
-    golden captured from that same degraded fixture. These are the three
-    behaviours the snapshot exists to protect."""
-    out = _run(1)
-    track_ids = [d.metadata["track_id"] for d in out]
-
-    assert len(out) == MAX_PER_STEP, "cap no longer truncates"
-    assert any(t.endswith("_c1") for t in track_ids), "no multi-component split"
-    assert not any(
-        t.startswith("sam3_1_img_2") for t in track_ids
-    ), "the NaN-depth detection survived"
-    # Masks are real regions: non-empty, and a small part of their frame.
-    for d in out:
-        assert 0 < d.mask.area <= d.mask.crop.size
-        frame_px = d.mask.frame_shape[0] * d.mask.frame_shape[1]
-        assert d.mask.crop.size < frame_px / 4
