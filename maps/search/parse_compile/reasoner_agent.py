@@ -19,8 +19,7 @@ from maps.llm.http import (
     DegenerateCompletion,
     _chat_completions_raw,
 )
-from maps.llm.model_cards import card_for, speaks_openai
-from maps.llm.sampling import thinking_sampling_kwargs
+from maps.llm.model_cards import card_for, sampling_kwargs, speaks_openai
 from maps.llm.vision_content import build_vision_user_content
 from maps.search.parse_compile.prompts import served_system_prompt
 
@@ -168,7 +167,7 @@ class Reasoner:
     messages: list[dict] = field(default_factory=list)
     sensor_description: str = ""
     cancel_event: threading.Event | None = None
-    # the requests' reasoning effort (``maps.llm.sampling``); None: the default
+    # the requests' reasoning effort (``model_cards.sampling_kwargs``); None: the default
     reasoning_effort: str | None = None
 
     @property
@@ -233,7 +232,7 @@ class Reasoner:
             # No `stop` sequence: engines trim the matched text, so a stopped
             # collapse would arrive as an empty turn the guard cannot see, and
             # a hosted endpoint 400s on the engine-specific no-trim flags.
-            **thinking_sampling_kwargs(temperature=1.0, model_id=self.model, reasoning_effort=self.reasoning_effort),
+            **sampling_kwargs(self.model, self.reasoning_effort),
             "tools": tools,
             "tool_choice": "auto",
         }

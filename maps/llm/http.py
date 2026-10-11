@@ -2,7 +2,7 @@
 
 Every stage of the parse-first compiler goes through this client rather
 than the OpenAI SDK, so the request body is exactly what
-`maps.llm.sampling` builds — a flat set of top-level keys that both a
+`maps.llm.model_cards.sampling_kwargs` builds — a flat set of top-level keys that both a
 self-hosted vLLM and a hosted endpoint honour. No LLM logic here; just
 the transport.
 

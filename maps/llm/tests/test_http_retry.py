@@ -81,15 +81,15 @@ def _posted_body(transport, **kwargs) -> dict:
 
 def test_an_arm_naming_no_effort_puts_no_effort_key_on_the_wire(monkeypatch, transport) -> None:
     """Unset carries no key at all (not a null), and the named effort is the only difference on the wire."""
-    from maps.llm.sampling import thinking_sampling_kwargs
+    from maps.llm.model_cards import sampling_kwargs
 
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
-    quiet = _posted_body(transport, **thinking_sampling_kwargs(temperature=1.0, model_id="inkling-small"))
+    quiet = _posted_body(transport, **sampling_kwargs("inkling-small"))
     assert "reasoning_effort" not in quiet
     assert "reasoning_effort" not in json.dumps(quiet)
 
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
-    named = _posted_body(transport, **thinking_sampling_kwargs(temperature=1.0, model_id="inkling-small"))
+    named = _posted_body(transport, **sampling_kwargs("inkling-small"))
     assert named["reasoning_effort"] == "0.99"
     assert '"reasoning_effort": "0.99"' in json.dumps(named)
     assert {k: v for k, v in named.items() if k != "reasoning_effort"} == quiet

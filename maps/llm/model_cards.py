@@ -13,6 +13,7 @@ declares a presence penalty, so no request carries one.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 #: alias -> {tokenizer, top_p, top_k[, efforts][, effort_numbers]}, or for a
@@ -121,7 +122,31 @@ def speaks_openai(model_id: str | None) -> bool:
     return CARDS.get((model_id or "").strip().lower(), {}).get("wire") == "openai"
 
 
-def envelope_kwargs(model_id: str | None) -> dict[str, Any]:
-    """The card's sampling fields as flat request kwargs (no temperature)."""
+def sampling_kwargs(model_id: str, reasoning_effort: str | None = None) -> dict[str, Any]:
+    """The request's sampling keys, flat at the top level (a hosted endpoint
+    drops an ``extra_body`` object whole). A chat-template card sends
+    temperature 1.0, its ``top_p``/``top_k`` and ``enable_thinking``; an
+    OpenAI-wire card sends none of them (1.0 is that API's default and the
+    only value its reasoning models take, and it thinks unasked).
+
+    ``reasoning_effort`` is the mission's own word, else
+    ``SEARCH_SAMPLING_REASONING_EFFORT``; it rides verbatim as a string (a
+    serve refuses a JSON float for it), and empty sends no key, leaving the
+    template's own default."""
     card = card_for(model_id)
-    return {"top_p": card["top_p"], "top_k": card["top_k"]}
+    if card.get("wire") == "openai":
+        kwargs: dict[str, Any] = {}
+    else:
+        kwargs = {"temperature": 1.0, "top_p": card["top_p"], "top_k": card["top_k"],
+                  "chat_template_kwargs": {"enable_thinking": True}}
+    effort = (reasoning_effort if reasoning_effort is not None
+              else os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "")).strip()
+    if effort:
+        # ponytail: the request key is spelled `reasoning_effort` for every
+        # card; a card that names no effort values (the gemma rows) takes any
+        # well-formed value at discovery, and a template without the field
+        # ignores it while the row stamps an effort the template never saw.
+        # The upgrade path is declaring those cards' values once their serves
+        # are checked.
+        kwargs["reasoning_effort"] = effort
+    return kwargs

@@ -12,8 +12,7 @@ import pytest
 from maps.llm import endpoint_spec as E
 from maps.llm import openai_wire
 from maps.llm.flight_summary import reasoning_tokens_of, summarize
-from maps.llm.model_cards import CARDS, check_effort
-from maps.llm.sampling import thinking_sampling_kwargs
+from maps.llm.model_cards import CARDS, check_effort, sampling_kwargs
 from maps.search.parse_compile import reasoner_agent
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.tests.fakes import TEST_SPEC, jpeg
@@ -33,14 +32,9 @@ def test_the_card_is_the_one_an_openai_wire_reader_keys_on() -> None:
 
 
 def test_no_sampling_envelope_and_no_template_kwargs_ride_the_request(monkeypatch) -> None:
-    assert thinking_sampling_kwargs(temperature=1.0, model_id=GPT) == {}
+    assert sampling_kwargs(GPT) == {}
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "high")
-    assert thinking_sampling_kwargs(temperature=1.0, model_id=GPT) == {"reasoning_effort": "high"}
-
-
-def test_a_temperature_the_api_refuses_raises_here() -> None:
-    with pytest.raises(ValueError, match="1.0 only"):
-        thinking_sampling_kwargs(temperature=0.6, model_id=GPT)
+    assert sampling_kwargs(GPT) == {"reasoning_effort": "high"}
 
 
 @pytest.mark.parametrize("rung", ["none", "low", "medium", "high", "xhigh", "max"])
