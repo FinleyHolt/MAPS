@@ -1,49 +1,11 @@
-"""World-space multi-object tracker (UCMCTrack core, static-scene variant).
-
-Assigns a stable cross-frame ``track_id`` to per-frame
-``DetectedObject``s so the belief engine's re-identification
-(``maps.sws.graph.runtime._find_track`` primary exact-id match)
-becomes trivial instead of relying on world-bbox-IoU churn.
-
-Why this algorithm (literature-grounded, 2024-2026 SOTA review):
-UCMCTrack (AAAI 2024, arXiv:2312.08952) is the only recent motion-only,
-appearance-free tracker that *decisively* beats ByteTrack
-(+2.7 HOTA MOT17, +16.3 HOTA DanceTrack) by associating on the
-ground/world plane with a Kalman filter and a Mapped Mahalanobis
-Distance cost rather than image-plane IoU. Our regime is an even
-stronger fit than UCMCTrack's:
-
-* World coordinates are *given* (depth projection from a known sim pose,
-  or DSM ray-cast depth + the flight controller's EKF pose on hardware), so UCMCTrack's
-  homography + camera-motion
-  compensation machinery is unnecessary and is dropped entirely — its
-  own ablation showed per-frame CMC hurts when the plane is already
-  correct; the value was the world-plane Mahalanobis association.
-* Targets are a STATIONARY worldstate (buildings, parked cars, roads,
-  trees) observed by a moving drone. So the constant-velocity Kalman is
-  replaced by **constant-position** (``F = I``): the prior is "this
-  object is where it was, ± projection/depth noise". A CV model would
-  let static-object tracks drift on noisy detections — strictly worse.
-* IDs must persist for the whole flight (re-acquire on revisit). Tracks
-  are **never deleted**: unseen tracks go dormant, their covariance
-  inflates (capped) so the gate widens, and the same Mahalanobis cost
-  re-binds the old ID when the drone flies back over the object. Only
-  never-confirmed provisional tracks are pruned.
-
-The one ByteTrack idea kept: confirm a track only after ``_N_INIT``
-consecutive hits, to reject SAM single-frame false positives.
-
-Robot-agnostic: imports only numpy / scipy / ``perception.base``. No
-ROS, world-graph, maps.search, or benchmark imports. Consumes
-``DetectedObject.world_xy`` (the depth-projected world centroid — the
-world-plane position UCMCTrack associates on) and ``.label`` (a hard
-class gate, a large win at hundreds of objects/frame). Masks/boxes are
-not needed: centroid-only Mahalanobis is UCMCTrack's design and is fast.
+"""World-space tracker (UCMCTrack core, arXiv:2312.08952, static-scene
+variant): stamps a stable ``metadata["track_id"]`` on each detection by
+Mahalanobis-gated Hungarian association on ``world_xy`` within one label,
+under a constant-position Kalman filter. Confirmed tracks are never deleted.
 """
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -51,7 +13,6 @@ from scipy.optimize import linear_sum_assignment
 
 from maps.perception.base import DetectedObject
 
-log = logging.getLogger(__name__)
 
 # χ²(2 dof, p=0.99) ≈ 9.21 — Mahalanobis gate for a 2-D position residual.
 _CHI2_2DOF_P99 = 9.21
@@ -101,13 +62,10 @@ class WorldTracker:
         # --- gather valid detections (finite world_xy) ----------------
         dets: list[tuple[int, np.ndarray, str]] = []
         for i, d in enumerate(detections):
-            wxy = getattr(d, "world_xy", None)
-            if wxy is None:
-                continue
-            z = np.asarray(wxy, dtype=np.float64).reshape(-1)
+            z = np.asarray(d.world_xy, dtype=np.float64).reshape(-1)
             if z.shape[0] != 2 or not np.all(np.isfinite(z)):
                 continue
-            dets.append((i, z, str(getattr(d, "label", "") or "")))
+            dets.append((i, z, str(d.label or "")))
 
         # --- associate (Mahalanobis-gated Hungarian) ------------------
         # ``matched_track_idx`` indexes the pre-birth ``self._tracks``;
