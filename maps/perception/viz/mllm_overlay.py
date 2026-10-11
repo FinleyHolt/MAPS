@@ -38,10 +38,7 @@ def render_look_overlay(
     target_poly_px: Sequence[tuple[float, float]] | None = None,
     neighbor_px: Sequence[tuple[float, float]] | None = None,
     neighbor_polys_px: Sequence[Sequence[tuple[float, float]] | None] | None = None,
-    jpeg_quality: int = 85,
     band_text: str = "N up",
-    neighbor_digit_start: int = 3,
-    badge_inside: bool = False,
     draw_digits: bool = True,
     outline_marks: bool = True,
     place_labels: "Sequence[tuple[float, float, str]] | None" = None,
@@ -73,11 +70,6 @@ def render_look_overlay(
       numerals are 1 = center, 2 = target, 3.. = neighbors in the
       caller's order. The numeral -> full fid binding lives in the TOOL
       TEXT legend (the caller mirrors the same ordering), not on the image.
-      ``badge_inside=True`` (the SCHEMATIC caller) centers each badge IN
-      its mark instead: a filled schematic shape has no pixels to protect,
-      and a digit sitting in the shape binds tighter than one hanging off
-      it. Photo crops keep the outside placement — occluding the object
-      the crop exists to show is never worth the tighter binding.
     - The margin band carries ONLY the tiny "N up" strip; all naming lives
       in the tool-text legend.
     ``rgb`` is (H, W, 3) uint8 RGB; the returned JPEG is BGR-encoded.
@@ -107,22 +99,10 @@ def render_look_overlay(
         # frozen absolute, independent of crop upscale). A badge whose
         # gap to its mark exceeds ~12 px gets a LEADER LINE so the
         # binding is geometric, not proximal (VP-Bench arrows 82.6%).
-        # badge_inside: centered IN the mark, no leader (schematic mode).
         txt = str(digit)
         fs, th = 0.9, 2
         (tw, tht), _ = cv2.getTextSize(txt, _LABEL_FONT, fs, th)
         pw, ph = tw + 12, tht + 10
-        if badge_inside:
-            x0_ = int(round(min(max(cx_ - pw / 2.0, 1.0), w - pw - 1.0)))
-            y0_ = int(round(min(max(cy_ - ph / 2.0, 1.0), h - ph - 1.0)))
-            x1_, y1_ = x0_ + pw, y0_ + ph
-            cv2.rectangle(canvas, (x0_, y0_), (x1_, y1_), (0, 0, 0), -1)
-            cv2.rectangle(canvas, (x0_, y0_), (x1_, y1_), (255, 255, 255),
-                          1, cv2.LINE_AA)
-            cv2.putText(canvas, txt, (x0_ + 6, y1_ - 6), _LABEL_FONT, fs,
-                        (255, 255, 255), th, cv2.LINE_AA)
-            placed.append((float(x0_), float(y0_), float(x1_), float(y1_)))
-            return
         cands = []
         for sx_, sy_ in ((1, -1), (1, 1), (-1, -1), (-1, 1)):
             px_ = cx_ + sx_ * (ax_ + 5) + (0 if sx_ > 0 else -pw)
@@ -235,10 +215,9 @@ def render_look_overlay(
                       "poly": target_poly_px, "thick": 2,
                       "digit": 2 if draw_digits else None})
     _nb_polys = list(neighbor_polys_px or [])
-    # Neighbors default to 3.. (1 = center, 2 = target). A caller whose
-    # view carries no target passes 2 so no digit is skipped — the badge
-    # numerals and the caller's text legend must count the same way.
-    _digit = int(neighbor_digit_start)
+    # Neighbors count from 3 (1 = center, 2 = target); the badge numerals
+    # and the caller's text legend count the same way.
+    _digit = 3
     for _i, nb in enumerate(neighbor_px or []):
         if isinstance(nb, (tuple, list)) and len(nb) == 2:
             # An explicit None means this mark is identified some OTHER
@@ -362,7 +341,7 @@ def render_look_overlay(
     out = np.vstack([band, canvas])
 
     ok, buf = cv2.imencode(
-        ".jpg", out, [int(cv2.IMWRITE_JPEG_QUALITY), int(jpeg_quality)]
+        ".jpg", out, [int(cv2.IMWRITE_JPEG_QUALITY), 85]
     )
     if not ok:
         raise RuntimeError("cv2.imencode failed on look overlay")

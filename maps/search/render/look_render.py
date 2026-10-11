@@ -682,8 +682,8 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
                            "role": "context"})
     # Resolve the ordinal sequence: named roads take None, everything else
     # takes the next digit, so the legend and the drawn badges count the
-    # same way. Neighbours start at 3 (1 = centre, 2 = target), the
-    # overlay's neighbor_digit_start default.
+    # same way. Neighbours start at 3 (1 = centre, 2 = target), as the
+    # overlay counts.
     _seq = 2
     _ctx_rows = [_le for _le in legend if _le.get("role") == "context"]
     for _i, _slot in enumerate(_neighbor_digits):

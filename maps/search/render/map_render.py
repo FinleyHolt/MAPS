@@ -639,10 +639,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
             neighbor_px=neighbor_px,
             neighbor_polys_px=neighbor_polys,
             band_text=band_text,
-            neighbor_digit_start=(3 if target_px is not None else 2),
-            # a schematic shape is filled ink, not evidence pixels: the
-            # digit sits IN the mark
-            badge_inside=True,
             # No ordinal badges on a schematic: every object the caller
             # cares about carries its own fid chip, so an ordinal would be a
             # second identity. The legend still rides the record.
