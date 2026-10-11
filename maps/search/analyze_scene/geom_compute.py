@@ -928,6 +928,35 @@ def gap_witness(ga, gb):
     return best
 
 
+def set_gap(geoms, bbs, item_geom):
+    """``(gap, ref_witness, item_witness)`` from ``item_geom`` to the
+    nearest of ``geoms`` (``bbs`` = :func:`stack_bboxes` of them): a set of
+    places is its nearest member.
+
+    The nearest box seeds an upper bound and members whose box is farther
+    are skipped; members are still taken in order with a strict test, so a
+    tie keeps the earliest member's witness. Contact ends the scan.
+    """
+    bounds = bbox_bounds(bbs, item_geom)
+    ub = None
+    seed_i, seed = -1, None
+    if len(geoms) > 1 and len(bounds):
+        seed_i = int(bounds.argmin())
+        seed = gap_witness(geoms[seed_i], item_geom)
+        ub = seed[0]
+    d = wr = wi = None
+    for gi, g in enumerate(geoms):
+        if d is not None and d <= 0.0:
+            break
+        cut = d if d is not None else ub
+        if cut is not None and bounds[gi] > cut + BOUND_SLACK_M:
+            continue
+        _d, _wr, _wi = seed if gi == seed_i else gap_witness(g, item_geom)
+        if d is None or _d < d:
+            d, wr, wi = _d, _wr, _wi
+    return d, wr, wi
+
+
 def _segment_arrays(polys):
     """Bundle of ``[[x, y], ...]`` polylines -> its ``(A, B)`` segment
     endpoint arrays. A one-vertex polyline is a zero-length segment, so a

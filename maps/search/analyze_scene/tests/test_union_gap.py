@@ -1,10 +1,9 @@
-"""``union_gap``: the gap to a union's nearest member, pruned by member boxes
+"""``set_gap``: the gap to a union's nearest member, pruned by member boxes
 and seeded from the nearest box, equals the plain scan -- value AND witness."""
 import numpy as np
 import pytest
 
 from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene.geom_program import union_gap
 from maps.search.tests.fakes import ring
 
 
@@ -19,7 +18,7 @@ def _plain(members, item):
 
 
 def _union_gap(members, item):
-    return union_gap(members, G.stack_bboxes(members), item)
+    return G.set_gap(members, G.stack_bboxes(members), item)
 
 
 def _boxes(seed, n_members, n_items, span):

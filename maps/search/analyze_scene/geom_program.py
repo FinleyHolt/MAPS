@@ -1154,34 +1154,6 @@ def _attach_standing_columns(items, frame, with_distance=False):
     return out
 
 
-def union_gap(geoms, bbs, item_geom):
-    """``(gap, ref_witness, item_witness)`` from ``item_geom`` to the
-    nearest of ``geoms`` (``bbs`` = ``G.stack_bboxes(geoms)``).
-
-    The nearest box seeds an upper bound and members whose box is farther
-    are skipped; members are still taken in order with a strict test, so a
-    tie keeps the earliest member's witness. Contact ends the scan.
-    """
-    bounds = G.bbox_bounds(bbs, item_geom)
-    ub = None
-    seed_i, seed = -1, None
-    if len(geoms) > 1 and len(bounds):
-        seed_i = int(bounds.argmin())
-        seed = G.gap_witness(geoms[seed_i], item_geom)
-        ub = seed[0]
-    d = wr = wi = None
-    for gi, g in enumerate(geoms):
-        if d is not None and d <= 0.0:
-            break
-        cut = d if d is not None else ub
-        if cut is not None and bounds[gi] > cut + G.BOUND_SLACK_M:
-            continue
-        _d, _wr, _wi = seed if gi == seed_i else G.gap_witness(g, item_geom)
-        if d is None or _d < d:
-            d, wr, wi = _d, _wr, _wi
-    return d, wr, wi
-
-
 class _Run:
     """One ``run_program`` call: the surface, the seed, the results so far
     and the op running."""
@@ -2197,7 +2169,7 @@ def _compare(cx, a):
             elif kind == "union":
                 if ci not in col_member_bb:
                     col_member_bb[ci] = G.stack_bboxes(ref_geom)
-                d, wr, wi = union_gap(ref_geom, col_member_bb[ci], item_geom)
+                d, wr, wi = G.set_gap(ref_geom, col_member_bb[ci], item_geom)
             else:
                 d, wr, wi = G.gap_witness(ref_geom, item_geom)
             if d is not None:

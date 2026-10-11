@@ -39,8 +39,7 @@ def test_distance_is_footprint_not_centroid():
 
 
 def test_a_set_is_its_nearest_member():
-    """The union's chains are ONE geometry, so the min-gap witness picks the nearest
-    member."""
+    """A set measures as its nearest member."""
     near = {"fid": "detected_1", "class": "pool", "xy": [7.0, 0.0]}
     far = {"fid": "detected_2", "class": "pool", "xy": [400.0, 0.0]}
     surface = {"prior_1": ROAD, "detected_1": near, "detected_2": far}
@@ -58,6 +57,24 @@ def test_a_set_is_its_nearest_member():
         == pytest.approx(7.0)
 
 
+def test_a_point_inside_overlapping_members_is_inside_the_set():
+    """A set is its nearest member: inside either of two overlapping squares
+    is 0 m from the set, as the executor's ``distance to`` a union reads."""
+    sq = lambda x0: [[x0, 0.0], [x0 + 10, 0.0], [x0 + 10, 10.0], [x0, 10.0], [x0, 0.0]]
+    surface = {"prior_1": {"fid": "prior_1", "mask": [sq(0.0)]},
+               "prior_2": {"fid": "prior_2", "mask": [sq(5.0)]}}
+    mp = _mp(surface)
+    assert mp._call_distance([7.0, 5.0], ["prior_1", "prior_2"]) == 0.0
+    assert mp._call_distance([7.0, 5.0], "prior_2") == 0.0
+
+
+def test_an_empty_set_is_infinitely_far():
+    """An empty result set has no footprint: inf, as the executor's empty geom."""
+    mp = _mp({"prior_1": ROAD})
+    assert mp._geom.distance((), (("prior_1", None),)) == math.inf
+    assert mp._geom.distance((("prior_1", None),), ()) == math.inf
+
+
 def test_distance_matches_the_executor_column():
     out = run_program(
         [dict(CAR)], [dict(ROAD)],
@@ -73,7 +90,7 @@ def test_distance_matches_the_executor_column():
     assert row[f"center distance to {ROAD['fid']}"] - column > 400.0
 
 
-def test_union_geometry_is_built_once(monkeypatch):
+def test_each_place_geometry_is_built_once(monkeypatch):
     ways = {f"prior_{i}": {"fid": f"prior_{i}", "name": "Neuralia Road",
                            "mask": [[[0.0, i * 20.0], [0.0, i * 20.0 + 20.0]]],
                            "xy": [0.0, i * 20.0 + 10.0]}
@@ -96,8 +113,8 @@ def test_union_geometry_is_built_once(monkeypatch):
     road = list(ways)
     gaps = [mp._call_distance(f"detected_{i % 64}", road) for i in range(100)]
     assert len(gaps) == 100 and all(math.isfinite(g) for g in gaps)
-    assert calls["n"] <= 65, calls["n"]
-    # VACUITY FLOOR: it really did build the union and the houses, so a
+    assert calls["n"] <= 128, calls["n"]
+    # VACUITY FLOOR: it really did build the ways and the houses, so a
     # cache that returned a stale empty geometry would not pass here.
     assert calls["n"] >= 2, calls["n"]
     assert gaps[0] == pytest.approx(50.0)
