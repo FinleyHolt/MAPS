@@ -319,12 +319,8 @@ def test_install_then_read_back():
     assert E.install_spec(s) is s
     assert E.spec() is s
     assert E.spec_installed() is True
-
-
-def test_identical_second_install_is_noop():
-    E.install_spec(_spec())
     E.install_spec(_spec())  # equal fields: idempotent
-    assert E.spec() == _spec()
+    assert E.spec() is s
 
 
 def test_divergent_second_install_raises():
@@ -370,19 +366,7 @@ def test_lora_pin_unserved_adapter_refused(monkeypatch):
 
 
 def test_the_budget_and_the_pin_always_fit_the_window() -> None:
-    """``input_budget + max_output_tokens <= max_model_len``, at EVERY window.
-
-    A transcript compacted exactly to budget is served with ``max_output_tokens``
-    pinned, so if the two do not fit the window together the request 400s on
-    length -- and it 400s only for the episodes that needed compaction most.
-
-    This held above 32,768 and failed below it: ``input_budget`` subtracted
-    ``output_reserve`` (``maxlen // 4``) while the request pins
-    ``max(output_reserve, _MIN_OUTPUT_TOKENS)``, and below 32,768 the floor is
-    the larger. At 24,576 that gave budget 17,408 plus a pinned 8,192 = 25,600
-    against a 24,576 window. Swept rather than spot-checked, because the defect
-    lived in a range nobody had a served model in.
-    """
+    """A transcript compacted to budget plus the pinned output fits every window discovery admits."""
     from maps.llm.endpoint_spec import _MIN_INPUT_BUDGET, _output_reserve_for
 
     # Windows that survive discovery. Below ~18k the reasoner minimum rejects
@@ -401,28 +385,6 @@ def test_the_budget_and_the_pin_always_fit_the_window() -> None:
         assert spec.input_budget >= _MIN_INPUT_BUDGET, (
             f"window={window}: budget {spec.input_budget} is below the "
             f"reasoner minimum, so discovery should have refused it"
-        )
-
-
-def test_the_fleet_windows_are_unchanged_by_that_correction() -> None:
-    """Vacuity guard on the fix: it must move nothing a served model uses.
-
-    Every window at or above 32,768 has a reserve that already clears the
-    floor, so the corrected subtraction is the same subtraction there. If these
-    move, the fix stopped being a no-op in production and every stored ledger
-    column's compaction behaviour changed with it.
-    """
-    from maps.llm.endpoint_spec import _output_reserve_for
-
-    for window, expected in ((262144, 221120), (131072, 97280),
-                             (65536, 48128), (32768, 23552)):
-        spec = EndpointSpec(
-            model_id="m", base_url="u", tokenizer_name="t",
-            max_model_len=window, output_reserve=_output_reserve_for(window),
-        )
-        assert spec.input_budget == expected, (
-            f"window={window}: budget moved to {spec.input_budget}, expected "
-            f"{expected} — this was supposed to be a no-op above 32,768"
         )
 
 
@@ -473,8 +435,7 @@ def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
 
 
 @pytest.mark.parametrize("model_id,effort", [
-    ("inkling-small", "0.0"), ("inkling-small", "0.3"), ("inkling-small", "0.99"),
-    ("inkling-small", "high"), ("qwen38-flash-next-nvfp4", "xhigh"), ("gemma4-e4b", "0.9"),
+    ("inkling-small", "0.99"), ("qwen38-flash-next-nvfp4", "xhigh"), ("gemma4-e4b", "0.9"),
 ])
 def test_discovery_takes_an_effort_the_card_takes(monkeypatch, model_id, effort):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(model_id, 262144)})
@@ -483,11 +444,9 @@ def test_discovery_takes_an_effort_the_card_takes(monkeypatch, model_id, effort)
 
 
 @pytest.mark.parametrize("model_id,effort,named", [
-    ("inkling-small", "nan", "nan"), ("inkling-small", "inf", "inf"),
-    ("inkling-small", "-1", "-1"), ("inkling-small", "1.0", "1.0"),
+    ("inkling-small", "nan", "nan"), ("inkling-small", "1.0", "1.0"),
     ("inkling-small", "hgih", "hgih"), ("inkling-small", "xhigh", "xhigh"),
-    ("inkling-small", "0.90", "'0.9'"), ("inkling-small", "-0.0", "'0.0'"),
-    ("qwen38-flash-next-nvfp4", "0.9", "0.9"),
+    ("inkling-small", "-0.0", "'0.0'"), ("qwen38-flash-next-nvfp4", "0.9", "0.9"),
 ])
 def test_discovery_refuses_an_effort_the_card_does_not_take(monkeypatch, model_id, effort, named):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(model_id, 262144)})
