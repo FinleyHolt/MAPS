@@ -1,23 +1,9 @@
-"""Render what a declared nadir camera sees over a baked ortho, at its own
-field of view and a given altitude AGL.
+"""A camera's ground footprint and the frame it sees over a baked ortho.
 
-This is the sensor-aware counterpart to the bench observation.
-``observation.crop_ortho_observation`` is sensor-agnostic: its footprint is the
-CityNav view square, ``side = 2*AGL``, and the callsite passes ``sensor=None``.
-Here a ``SensorSpec``'s HFOV/VFOV plus the altitude give a ground rectangle, and
-the ortho is warped over that rectangle at the sensor's own pixel count. For a
-16.1-degree lens at 1,500 ft the two differ by 7.1x in linear ground extent.
-
-A nadir camera over a flat ground plane is exactly a homography, so the four
-footprint corners plus ``cv2.getPerspectiveTransform`` *is* the perspective
-render. Relief displacement is not modelled: a tall building at the frame edge
-should lean outward and does not.
-
-The render GSD is usually finer than the ortho it samples, so a frame is
-geometrically true and photometrically capped by the source.
-
-Site-specific loading (which raster, which bounds) belongs to the caller; every
-function here takes the ortho and its bounds as arguments.
+A pinhole over flat ground is exactly a homography, so the four footprint
+corners plus ``cv2.getPerspectiveTransform`` are the perspective render;
+relief displacement is not modelled. Every function takes the ortho and its
+bounds as arguments.
 """
 
 from __future__ import annotations
@@ -76,14 +62,10 @@ def ground_corners_xy(
     airframe_pitch_deg: float = 0.0,
     ground_z: float = 0.0,
 ) -> list[tuple[float, float]]:
-    """Where the frame's four corner pixels meet flat ground, image order ``[TL, TR, BR, BL]``.
-
-    Through the projector, so the sensor's mount angles and the airframe's
-    roll and pitch shape the footprint the way they shape every projection
-    in the tree. :func:`footprint_corners_xy` is the level, mount-aligned
-    special case of this, and the two agree there to a half pixel: this
-    lands the corner PIXEL CENTRES on the ground, which is what the warp's
-    destination corners are.
+    """Where the frame's four corner pixel centres meet flat ground, image
+    order ``[TL, TR, BR, BL]``, through the projector (mount angles and
+    airframe tilt included); :func:`footprint_corners_xy` is the level,
+    mount-aligned case to within half a pixel.
     """
     from maps.perception.geometry.geolocate import project_pixels_to_world  # noqa: PLC0415
 
@@ -125,18 +107,10 @@ def render_frame(
     airframe_roll_deg: float = 0.0,
     airframe_pitch_deg: float = 0.0,
 ) -> np.ndarray:
-    """Warp ``ortho_rgb`` over the sensor footprint and return the frame.
-
-    ``ortho_rgb`` is north-up with row 0 at ``bounds.y_max``, the layout
-    ``camera_model.bake_ortho_from_rasters`` produces. Raises if any footprint
-    corner falls outside ``bounds`` -- a black-bordered frame is a silent lie
-    about coverage.
-
-    The footprint is the projector's (:func:`ground_corners_xy`): a sensor
-    carrying mount angles, or an airframe that is banked or pitched, renders
-    the frame that camera would see. Flat ground under a pinhole is a
-    homography exactly, so the warp is exact for any orientation; relief is
-    what it does not carry.
+    """The frame ``sensor`` sees over ``ortho_rgb`` (north-up, row 0 at
+    ``bounds.y_max``) through the footprint :func:`ground_corners_xy` gives.
+    Raises when a corner falls outside ``bounds``: a black-bordered frame
+    would misstate coverage.
     """
     corners = ground_corners_xy(
         sensor, pose_xy, agl_m, yaw_deg,
@@ -162,13 +136,9 @@ def render_frame(
 
 
 def source_map(src_px: np.ndarray, width: int, height: int) -> tuple[np.ndarray, np.ndarray]:
-    """``(map_x, map_y)``: the ortho pixel every pixel of a ``width x height`` frame reads.
-
-    The four-corner homography inverted and evaluated over the frame's own
-    pixel grid, in float64 and returned float32, which is the map
-    ``cv2.warpPerspective`` builds for itself. It is built here instead so
-    :func:`warp_window` can slide it onto a window of the ortho.
-    """
+    """``(map_x, map_y)``: the ortho pixel every pixel of a ``width x height``
+    frame reads (the inverted four-corner homography, float64 evaluated,
+    float32 returned)."""
     import cv2  # noqa: PLC0415
 
     inv = np.linalg.inv(
@@ -185,19 +155,10 @@ def source_map(src_px: np.ndarray, width: int, height: int) -> tuple[np.ndarray,
 
 
 def warp_window(ortho_rgb: np.ndarray, src_px: np.ndarray, width: int, height: int) -> np.ndarray:
-    """The frame the corners ``src_px`` cut from ``ortho_rgb``, reading only the window under them.
-
-    Pixel for pixel what a whole-raster warp gives: the map is computed
-    against the ortho's own origin, and the window's offset is a whole
-    number of pixels subtracted in float32, which is exact, so every tap
-    reads the same pixel -- or the same border -- either way. The window
-    carries :data:`TAP_MARGIN_PX` around the footprint so the taps at its
-    edge are real pixels rather than border.
-
-    The window is load-bearing, not a saving. OpenCV's ``remap`` refuses a
-    source or destination of 32,767 px or more, which a block-wide ortho
-    passes at 10 km and 0.3 m, and a whole-raster pass faults in every page
-    of the memory-mapped raster to fill one frame.
+    """The frame the corners ``src_px`` cut from ``ortho_rgb``, reading only
+    the window under them (plus :data:`TAP_MARGIN_PX`): OpenCV's ``remap``
+    refuses a source of 32,767 px or more. The window offset is a whole
+    number of pixels, so every tap reads what a whole-raster warp would.
     """
     import cv2  # noqa: PLC0415
 
@@ -217,11 +178,8 @@ def warp_window(ortho_rgb: np.ndarray, src_px: np.ndarray, width: int, height: i
 
 
 def frame_corners_px(width: int, height: int) -> np.ndarray:
-    """The frame's own corner pixels in image order ``[TL, TR, BR, BL]``.
-
-    The destination half of every homography over a rendered frame, so the
-    render and any overlay projected onto it share one definition.
-    """
+    """The frame's own corner pixels in image order ``[TL, TR, BR, BL]``, the
+    destination of every homography onto a frame."""
     return np.array(
         [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]],
         dtype=np.float32,

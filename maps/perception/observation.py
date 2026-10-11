@@ -1,14 +1,10 @@
 """Pose -> nadir observation: the ortho crop the segmenter and reasoner see.
 
-Given a block's rasters and a world pose, :func:`crop_observation` warps the
-hole-free 2D ortho over the view rectangle (the CityNav view square, or a
-nadir sensor's ground footprint) into ``obs.rgb`` + ``obs.depth``, and records
-the rectangle's ground corners in ``obs.ortho_view_corners_xy``: pixel ->
-world goes through those corners (``geometry.geolocate``), never a frustum.
-
-This module is raster-format agnostic: the caller resolves file paths for a
-given map / scene and passes them in. Perception never knows what a CityNav
-block or a Matterport scan or a warehouse layout is.
+:func:`crop_observation` warps the block's ortho over the view rectangle (the
+CityNav view square, or a nadir sensor's ground footprint) into ``obs.rgb`` +
+``obs.depth`` and records the rectangle's ground corners in
+``obs.ortho_view_corners_xy``: pixel -> world goes through those corners
+(``geometry.geolocate``), never a frustum.
 """
 
 from __future__ import annotations
@@ -58,35 +54,20 @@ def crop_ortho_observation(
     sensor: "SensorSpec | None" = None,
     ortho: dict | None = None,
 ) -> dict:
-    """The single nadir observation renderer: crop the hole-free 2D ortho over
-    the view rectangle.
+    """Crop the ortho over the view rectangle (:func:`ground_sides_m`,
+    yaw-rotated, corners ``[FL, FR, BR, BL]``): ``rgb``, ``height`` and
+    ``validity`` warped, ``depth = altitude_m - height``.
 
-    ``ortho`` is the raster to crop, in hand: ``{rgb, height, alpha, x_min,
-    y_min, px_per_m}``, the shape :func:`camera_model.load_ortho_or_rasters`
-    returns. Given, nothing is loaded: a flight hands the imagery its own
-    run captured (``benchmarks/flight/run_imagery.py``); the bench
-    leaves it unset and crops the bake's raster, which is its camera.
+    ``ortho`` is the raster in hand (``{rgb, height, alpha, x_min, y_min,
+    px_per_m}``, a flight's own imagery); unset, the block's is loaded from
+    ``rgbd_dir`` (:func:`camera_model.load_ortho_or_rasters`). Sensorless, the
+    output is square at the ortho's resolution (capped at ``_MAX_PX``); with a
+    nadir sensor, its native ``image_width x image_height``. Either way the
+    warp is orthographic.
 
-    Warps ``rgb`` + ``height`` + ``validity`` from the canonical ortho
-    (:func:`camera_model.load_ortho_or_rasters`), then derives
-    ``depth = altitude_m - height``.
-
-    The view rectangle is one of two shapes:
-
-    - ``sensor=None`` — the CityNav view square: ``side = 2*(altitude_m -
-      ground_z)``, yaw-rotated, corners ``[FL,FR,BR,BL]``, output square-pixel
-      at the ortho's own resolution (capped at ``_MAX_PX``).
-    - a nadir ``SensorSpec`` — the sensor's ground footprint at this AGL
-      (``2·AGL·tan(fov/2)`` per axis, via :mod:`maps.perception.ortho.
-      sensor_frame`), warped to the sensor's native ``image_width ×
-      image_height``. Still an ORTHOGRAPHIC warp — geometrically the nadir
-      frame a real camera would see over flat ground, photometrically capped
-      by the source imagery — so pixel→world stays on the ortho projector
-      over ``view_corners_xy``, never the perspective frustum.
-
-    Returns ``{rgb, depth, validity, view_corners_xy, world_window}``.
-    Out-of-raster border is ``validity=0`` with ``depth=0`` so the projection's
-    validity gate drops it (instead of trusting an ``altitude - 0`` depth).
+    Returns ``{rgb, depth, validity, view_corners_xy, world_window}``;
+    out-of-raster pixels have ``validity`` 0 and ``depth`` 0, which the
+    projection drops.
     """
     import cv2  # noqa: PLC0415
 
@@ -127,15 +108,9 @@ def crop_ortho_observation(
         )
         out_w = out_h = max(1, min(span, _MAX_PX))
     M = cv2.getPerspectiveTransform(corners_px, frame_corners_px(out_w, out_h))
-    # Warp from the window's own neighbourhood of the map, never the whole
-    # map. Cal City's raster is 34,035 x 44,853 x 3, past the 2^31 elements
-    # one OpenCV Mat addresses, and a warp handed the whole of it read the
-    # wrong memory: a black crop with a sliver of picture and validity 255
-    # throughout (sortie 20260913T014538Z, the look at prior_4533). The
-    # neighbourhood is the corners' box plus INTER_LINEAR's neighbours, and
-    # the transform is M composed with the box's offset, so an in-raster
-    # window samples exactly the pixels the whole-map warp did; the
-    # off-raster remainder is the constant border either way.
+    # Warp from the corners' box (plus INTER_LINEAR's neighbours), never the
+    # whole map: Cal City's raster is past the 2^31 elements one OpenCV Mat
+    # addresses. M composed with the box offset samples the same pixels.
     pad = 2
     x0 = max(0, int(np.floor(corners_px[:, 0].min())) - pad)
     y0 = max(0, int(np.floor(corners_px[:, 1].min())) - pad)
@@ -200,17 +175,7 @@ def crop_observation(
     sensor: SensorSpec | None = None,
 ) -> Observation:
     """The observation at a pose: :func:`crop_ortho_observation` over the
-    block's ortho, with ``ground_z = GROUND_LEVEL[map_name]``.
-
-    With ``sensor=None`` the view rectangle is the altitude-driven view
-    square (side = ``2·(altitude_m − GROUND_LEVEL[map])``); with a nadir
-    ``sensor`` it is the sensor's ground footprint at this AGL warped to the
-    sensor's native ``image_width × image_height``. Either way the warp is
-    ORTHOGRAPHIC and pixel→world goes through the orthographic geolocate path
-    keyed off ``ortho_view_corners_xy`` (an ``Observation`` carrying both
-    ``sensor`` and ortho corners is an ortho rendering of that sensor's
-    footprint — the corners, not the frustum, are its projection contract).
-    """
+    block's ortho with ``ground_z = GROUND_LEVEL[map_name]``."""
     from maps.perception.ortho.ground_level import GROUND_LEVEL
 
     if map_name not in GROUND_LEVEL:

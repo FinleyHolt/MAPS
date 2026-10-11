@@ -62,20 +62,13 @@ class CameraIntrinsics:
 
 def mount_rotation_matrix(pitch_deg: float, roll_deg: float = 0.0, yaw_deg: float = 0.0) -> np.ndarray:
     """Body <- camera rotation for a mount at ``pitch_deg`` (positive-down),
-    ``roll_deg`` (body-X / forward-axis roll, positive = right side down) and
-    ``yaw_deg`` (about the camera's own optical axis, CW looking out).
+    ``roll_deg`` (about body +X, positive = right side down) and ``yaw_deg``
+    (about the camera's own optical axis, CW looking out).
 
     Camera +Z = optical axis, +X = right, +Y = down; body +X = forward,
-    +Y = left, +Z = up. The pitch matrix is the canonical axis-fix + Y-pitch;
-    the roll is a body-X rotation applied on top. ``roll_deg = 0`` reduces to
-    the pure-pitch matrix every existing caller relied on (byte-identical).
-
-    The yaw right-multiplies, so it turns the CAMERA inside the body and not
-    the body inside the world. That ordering is the whole point: an installed
-    camera's yaw has to compose after the airframe's roll and pitch, and
-    folding it into the heading instead tilts the aircraft about axes the
-    mount rotated -- which at 180 degrees inverts roll and pitch outright.
-    ``yaw_deg = 0`` returns the matrix unchanged.
+    +Y = left, +Z = up. The roll left-multiplies the pitch; the yaw
+    right-multiplies, turning the camera inside the body (see the module
+    docstring on the two yaws).
     """
     pr = math.radians(float(pitch_deg))
     cp, sp = math.cos(pr), math.sin(pr)
@@ -93,23 +86,10 @@ def mount_rotation_matrix(pitch_deg: float, roll_deg: float = 0.0, yaw_deg: floa
 
 
 def body_tilt_matrix(roll_deg: float, pitch_deg: float) -> np.ndarray:
-    """Rotation composed between the body frame and the level/heading frame for
-    an airframe whose body deviates from level by ``roll_deg`` (about body +X,
-    forward) and ``pitch_deg`` (about body +Y, left).
-
-    Body frame: +X = forward, +Y = left, +Z = up (right-handed), matching
-    ``mount_rotation_matrix``'s body convention. The perspective projection
-    treats the post-mount body vector as level (forward horizontal, +Z true up)
-    before applying the heading yaw; when the airframe is banked or pitched that
-    assumption is wrong, so the projection left-multiplies this matrix onto the
-    body<-camera mount rotation (``R_eff = body_tilt_matrix @ R_bc``) to carry
-    the vector into the level frame first. ``roll_deg = pitch_deg = 0`` returns
-    the identity, so the static-mount-only path is byte-identical.
-
-    Composed pitch-then-roll (``Rx(roll) @ Ry(pitch)``). The physical sign of
-    each angle (which way the correction tilts) is pinned by the flight-video
-    overlay validation against known banked frames; forward/inverse projection
-    stay exact inverses for any sign because both compose this matrix identically.
+    """Level frame <- body rotation for an airframe tilted ``roll_deg`` (about
+    body +X, forward) and ``pitch_deg`` (about body +Y, left), composed
+    ``Rx(roll) @ Ry(pitch)``; the projection left-multiplies it onto the mount
+    rotation so the heading yaw acts on a level vector. Identity at 0, 0.
     """
     if roll_deg == 0.0 and pitch_deg == 0.0:
         return np.eye(3)
@@ -145,19 +125,11 @@ class SensorSpec:
     in ``_REGISTRY`` populates this field."""
 
 
-# Teledyne FLIR Oryx ORX-10GS-32S4C (3.2 MP, 2048x1536, Sony IMX252: a
-# 1/1.8" sensor at 3.45 um a pixel, 7.07 x 5.30 mm) behind a 25 mm M112FM25
-# C-mount lens: 2 * atan(3.53 / 25) = 16.09 deg across and 12.10 deg down.
-# The lens table's 19.9 x 15.0 deg is the same lens on a 2/3" (8.8 x 6.6 mm)
-# sensor, which this body is not, and reads a fifth too much ground per
-# pixel. The flight measures the pair with no map: `calibration/flow_timing`
-# reads the frames' own motion against the receiver's ground speed, and on
-# sortie 20260910T162111Z it reads this entry's focal length long by 0.3%
-# over 4,140 pairs at 88.8 m/s and 1,034 m AGL (`flow_timing.json`,
-# `lens.focal_scale` -0.0028), three metres of terrain at that height, where
-# the 2/3" figure reads a fifth. Nadir-mounted on the C-12 belly. The
-# served description states its footprint at the height the config flies
-# (:func:`served_description`).
+# Teledyne FLIR Oryx ORX-10GS-32S4C (2048x1536, Sony IMX252: a 1/1.8" sensor,
+# 7.07 x 5.30 mm) behind a 25 mm M112FM25 C-mount lens: 2 * atan(3.53 / 25) =
+# 16.09 deg across and 12.10 deg down. The lens table's 19.9 x 15.0 deg is the
+# same lens on a 2/3" sensor, which this body is not. Nadir-mounted on the
+# C-12 belly.
 _ORYX_ORX32_25MM_INTRINSICS = CameraIntrinsics(
     hfov_deg=16.09, vfov_deg=12.10, image_width=2048, image_height=1536
 )
@@ -231,13 +203,9 @@ _REGISTRY: dict[str, SensorSpec] = {
         # Depth is DSM-raycast (no stereo); 8 km march cap lives in the
         # renderer, so the sensor envelope is effectively infinite.
         max_range_m=float("inf"),
-        # Belly-mounted on the C-12, roughly under the CG, and installed
-        # facing AFT: the frame's top is the tail, not the nose. The frames
-        # say so with no map at all: the ground moves UP the frame on both
-        # headings of sortie 20260910T162111Z (`calibration/flow_timing`,
-        # `lens.flow_minus_track_deg` reads 180 on every leg), where a
-        # forward mount sees it move down. A heading-sign error would swap
-        # which way between the two headings; a mount reads the same on both.
+        # Installed facing AFT: the frame's top is the tail. The ground moves
+        # up the frame on both headings, where a forward mount sees it move
+        # down (a heading-sign error would differ between headings).
         mount_yaw_deg=180.0,
         description=_ORYX_ORX32_25MM_NADIR_DESCRIPTION,
     ),
@@ -275,16 +243,10 @@ _INLINE_KEYS = frozenset({"base", *_INTRINSIC_KEYS, *(f.name for f in fields(Sen
 
 
 def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
-    """Turn ``cfg.sensor`` into a ``SensorSpec``.
-
-    Accepts:
-    * ``None`` or empty -> returns ``None`` (caller should fall back to
-      orthographic raster rendering).
-    * Registered string name -> looks up the registry.
-    * Inline dict with any of ``hfov_deg``, ``vfov_deg``, ``image_width``,
-      ``image_height``, ``mount_pitch_deg``, ``max_range_m``, etc. A
-      ``base`` key picks a registered starting point; other keys override
-      that base.
+    """``cfg.sensor`` as a ``SensorSpec``: ``None`` for none or empty, the
+    registry entry for a name, or for an inline dict its ``base`` entry
+    (default ``nadir_1008_90``) with the other keys overriding it, each cast to
+    the type the base value carries. An unknown key raises.
     """
     if spec is None or spec == "":
         return None

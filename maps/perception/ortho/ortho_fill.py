@@ -1,21 +1,8 @@
-"""Validity-masked interior hole fill for baked 2D orthomosaics.
+"""Interior hole fill for a baked ortho (``alpha == 0`` is no-data).
 
-A top-down ortho rasterized from a point cloud (CityNav's 0.1 m/px PDAL
-rasters) leaves empty cells as ``alpha=0`` (rendered black). Two kinds of
-no-data coexist:
-
-- **interior speckle holes** — cells enclosed by real coverage (photogrammetry
-  gaps under tree canopy, thin scan seams). These are safe to fill: TELEA
-  inpaint sources only from the surrounding real texture.
-- **boundary no-coverage** — water / glass / scan edges / the block's exterior
-  frame. These are TRUE no-data; filling them projects invented texture toward
-  the frame edge (long TELEA smears). They MUST stay black.
-
-``fill_ortho_holes`` fills the interior holes and leaves boundary no-data black,
-so the baked ortho has zero *interior* black while never inventing ground at a
-frame boundary. The interior/boundary split is frame connectivity
-(:func:`interior_holes`): a black component touching the frame edge is
-boundary, every other one is an interior hole.
+A black component enclosed by coverage (a photogrammetry gap under canopy, a
+scan seam) is filled; one touching the frame edge (water, scan edges, the
+block's exterior) stays black, so no fill smears toward a frame boundary.
 """
 
 from __future__ import annotations
@@ -32,14 +19,9 @@ def fill_in_coverage_holes(
     hole_mask: np.ndarray,
     no_coverage_mask: np.ndarray,
 ) -> np.ndarray:
-    """TELEA-inpaint the interior holes; leave boundary no-coverage black.
-
-    The inpaint mask is the holes plus a thin fringe of no-coverage pixels
-    bordering a hole, so TELEA never *sources* color from a black no-data
-    neighbor (which would drag fills toward black at coverage boundaries). The
-    fringe — and the whole no-coverage region — is restored to black afterwards,
-    so no-coverage output is black and only ``hole_mask`` pixels differ from the
-    input. Non-black input pixels are byte-identical.
+    """TELEA-inpaint ``hole_mask``; only those pixels change. The inpaint mask
+    also covers the no-coverage fringe beside a hole (restored afterwards), so
+    TELEA never sources colour from black no-data.
     """
     import cv2
 
@@ -63,12 +45,8 @@ def fill_in_coverage_holes(
 
 
 def _nearest_fill(layer: np.ndarray, covered: np.ndarray, hole: np.ndarray) -> np.ndarray:
-    """Fill ``hole`` pixels of ``layer`` from the nearest ``covered`` pixel.
-
-    Used for height, where TELEA's smooth interpolation gives a nonsense metric
-    (a height of 0 under a filled canopy pixel). Nearest-neighbour keeps values
-    exact and label-safe.
-    """
+    """Fill ``hole`` pixels of ``layer`` from the nearest ``covered`` pixel
+    (for height, where interpolation would invent values)."""
     from scipy import ndimage
 
     if not hole.any():
@@ -80,15 +58,8 @@ def _nearest_fill(layer: np.ndarray, covered: np.ndarray, hole: np.ndarray) -> n
 
 
 def interior_holes(alpha: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Split ``alpha==0`` no-data into (interior holes, frame-connected no-data).
-
-    Interior = any black connected component NOT touching the frame edge (any
-    size — a large enclosed canopy gap counts). Frame-connected = the exterior
-    border plus any no-data that reaches an edge. This is the strict
-    frame-connectivity policy: fill everything enclosed, so no fill can ever
-    project to a frame boundary (no edge smear), and the filled ortho has zero
-    *interior* black. Uses the same 4-connectivity as the interior-black audit.
-    """
+    """Split ``alpha == 0`` into (interior holes, frame-connected no-data) by
+    4-connected components: one touching the frame edge is frame-connected."""
     from scipy import ndimage
 
     black = alpha == 0
@@ -105,16 +76,9 @@ def fill_ortho_holes(
     height: np.ndarray,
     alpha: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Frame-connectivity hole fill for a baked ortho, keyed off ``alpha``.
-
-    ``alpha == 0`` is the exact no-data mask. Every hole ENCLOSED by coverage
-    (not connected to the frame edge — any size) is filled: ``rgb`` via TELEA
-    inpaint, ``height`` via nearest-covered-pixel fill, ``alpha`` → 255. No-data that reaches the frame edge (the exterior
-    border, water/scan edges opening to it) stays black with ``alpha`` 0, so no
-    fill ever projects to a frame boundary. Result: zero interior black, no
-    edge smear.
-
-    Returns ``(rgb, height, alpha)``. Inputs are not mutated.
+    """``(rgb, height, alpha)`` with every interior hole filled: ``rgb`` by
+    TELEA, ``height`` from the nearest covered pixel, ``alpha`` 255.
+    Frame-connected no-data stays black. Inputs are not mutated.
     """
     black = alpha == 0
     hole, no_coverage = interior_holes(alpha)

@@ -1,19 +1,11 @@
-"""OSM-label palette + label rule for the model-facing world-state map.
+"""OSM label rule and palette for the model-facing map
+(``maps.search.render.map_render``).
 
-The map render (``maps.search.render.map_render``) paints by KIND first,
-label second: the question the schematic answers is spatial ("which house
-fronts which road"), and the ground truth of the digest palette is that
-``building`` (104,219,92), ``residential`` (97,219,92) and ``tertiary``
-(92,219,110) — the house, the street it fronts, and the landuse behind
-both — land on one indistinguishable green (measured on the facing render
-gate, 12/12 sheets). So the load-bearing kinds carry RESERVED colors
-(:func:`paint_color`): roads light gray, prior buildings tan, areas their
-digest hue muted to context, detections their class's digest hue at full
-saturation. Hue identity within a kind still comes from the digest, so a
-label keeps one hue on every surface.
-
-``osm_label`` and the label digest (:func:`_hue`) are the label rule and
-the colour rule every surface reads.
+The map paints by kind first, label second: a digest hue alone can put a
+house, the street it fronts and the landuse behind both on one green, so
+roads, prior buildings, areas and detections carry reserved colours
+(:func:`paint_color`), with the label's digest hue (:func:`_hue`) giving
+identity within a kind on every surface.
 """
 
 from __future__ import annotations
