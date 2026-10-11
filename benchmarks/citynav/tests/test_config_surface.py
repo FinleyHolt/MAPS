@@ -1,94 +1,36 @@
-"""The config loader: base chains, deep merge, and the schema's refusals.
-
-The resolved shipped configs equal the flat files they replaced. Those files
-are pinned below as parsed data, each checked against the sha256 of its
-canonical JSON taken from the file itself; the expected resolution is that
-data less the keys nothing read, plus the value the code used where a flat
-file left a key out.
-"""
+"""The config loader: base chains, deep merge, and the schema's refusals."""
 
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
 
 import pytest
 
-from benchmarks.citynav.run_benchmark.config import (
-    load_config,
-    resolve_config,
-)
+from benchmarks.citynav.run_benchmark.config import load_config, resolve_config
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-FLAT_CITYNAV = {
-    "altitude_m": 125.0, "altitude_tolerance_m": 1.0, "cell_size_m": 2.0,
-    "compact": {"enable": True}, "descent_step_m": 5.0,
-    "flight_model": {"camera_hz": 5.0, "kind": "discrete6"}, "fov_m": 0.0,
-    "landing_altitude_m": 5.0, "landing_xy_tolerance_m": 5.0, "max_steps": 200,
-    "perception": "sam", "rgb_upscale_px": 2016,
-    "sam": {"color_palette": "citynav", "device": "cuda", "dtype": "bfloat16",
-            "max_per_step": 1024, "min_area_px": 32, "model_id": "facebook/sam3.1",
-            "sahi": True, "sahi_nms_iou": 0.5, "sahi_overlap": 0.2,
-            "score_threshold": 0.3},
-    "sensor": "nadir_1008_90", "success_radius_m": 20.0,
+CITYNAV = {
+    "altitude_cap_m": 200.0, "altitude_m": 125.0, "cell_size_m": 2.0, "max_steps": 200,
+    "precise_floor_radius_m": 5.0, "precise_tolerance_m": 0.0,
+    "sam": {"color_palette": "citynav", "max_per_step": 1024, "min_area_px": 32,
+            "model_id": "facebook/sam3.1", "sahi": True, "sahi_nms_iou": 0.5,
+            "sahi_overlap": 0.2, "score_threshold": 0.3},
+    "sensor": "nadir_1008_90", "spawn": "episode", "spawn_seed": 0,
+    "start_altitude_agl_m": None, "success_radius_m": 20.0, "withhold": [],
 }
-FLAT_CALCITY = {
-    "altitude_cap_m": 1000.0, "altitude_m": 125.0, "altitude_tolerance_m": 1.0,
-    "cell_size_m": 2.0,
-    "compact": {"concept_union_budget": 20000, "enable": True,
-                "examiner_budget": 8000, "grader_budget": 38000,
-                "router_budget": 8000, "stage1_budget": 8000,
-                "stage2_3_budget": 38000, "subagent_budget": 20000,
-                "teacher_budget": 38000},
-    "descent_step_m": 5.0, "flight_model": {"camera_hz": 5.0}, "fov_m": 0.0,
-    "landing_altitude_m": 5.0, "landing_xy_tolerance_m": 5.0, "max_steps": 100000,
-    "perception": "sam", "rgb_upscale_px": 1008,
-    "sam": {"device": "cuda", "dtype": "bfloat16", "max_per_step": 1024,
-            "min_area_px": 32, "model_id": "facebook/sam3.1",
-            "score_threshold": 0.3},
+CALCITY = {
+    **CITYNAV, "altitude_cap_m": 1000.0, "max_steps": 100000,
+    "sam": {**CITYNAV["sam"], "sahi": False},
     "sensor": "oryx_orx32_25mm_nadir", "spawn": "uniform", "spawn_seed": 1234,
-    "start_altitude_agl_m": 914.4, "success_radius_m": 20.0,
+    "start_altitude_agl_m": 914.4,
 }
-FLAT_SHA256 = {
-    "citynav": "c38e9c91e487b09b8e149baeffb28f9ac6e741ed027fbec348b2cb656b907de5",
-    "calcity": "366ceb132d850769dc3875e6615b2faaabf525576cf2fcb19cf0a446e2221e16",
-}
-# Keys nothing read.
-DEAD_TOP = ("descent_step_m", "altitude_tolerance_m", "landing_xy_tolerance_m", "perception",
-            "fov_m", "rgb_upscale_px", "compact", "flight_model", "landing_altitude_m")
-DEAD_SAM = ("device", "dtype")
-# Where a flat file left a key out, the value the code used (the RunConfig
-# and SamDetectClient defaults; an
-# absent color_palette ran "citynav" in run_benchmark/perception.py).
-ABSENT_MEANT = {
-    "precise_tolerance_m": 0.0, "precise_floor_radius_m": 5.0, "spawn": "episode",
-    "spawn_seed": 0, "start_altitude_agl_m": None, "altitude_cap_m": 200.0,
-    "withhold": [],
-}
-ABSENT_MEANT_SAM = {"color_palette": "citynav", "sahi": False, "sahi_overlap": 0.2,
-                    "sahi_nms_iou": 0.5}
 
 
-def _sha(d: dict) -> str:
-    return hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-
-
-def _expected(flat: dict) -> dict:
-    out = {**ABSENT_MEANT, **json.loads(json.dumps(flat))}
-    for k in DEAD_TOP:
-        del out[k]
-    out["sam"] = {k: v for k, v in {**ABSENT_MEANT_SAM, **out["sam"]}.items()
-                  if k not in DEAD_SAM}
-    return out
-
-
-@pytest.mark.parametrize("name,flat", [("citynav", FLAT_CITYNAV), ("calcity", FLAT_CALCITY)])
-def test_shipped_configs_resolve_to_the_flat_files(name, flat):
-    assert _sha(flat) == FLAT_SHA256[name]
+@pytest.mark.parametrize("name,want", [("citynav", CITYNAV), ("calcity", CALCITY)])
+def test_shipped_configs_resolve_to_what_the_bench_flies(name, want):
     resolved, _ = resolve_config(REPO_ROOT / "configs" / f"{name}.yaml")
-    assert resolved == _expected(flat)
+    assert resolved == want
     load_config(REPO_ROOT / "configs" / f"{name}.yaml")
 
 
