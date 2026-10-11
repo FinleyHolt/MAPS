@@ -7,12 +7,14 @@ from benchmarks.citynav import eval as cn_eval
 
 def test_ne_ignores_the_path_taken():
     """Same endpoint, wildly different routes -> identical NE."""
-    direct = cn_eval.score_goal_prediction_citynav_native(
+    direct = cn_eval.score_arrival(
+        criterion="ring",
         final_pos_xy=(101.0, 100.0),
         target_xy=(100.0, 100.0),
         pos_trajectory=[(0.0, 0.0), (101.0, 100.0)],
     )
-    scenic = cn_eval.score_goal_prediction_citynav_native(
+    scenic = cn_eval.score_arrival(
+        criterion="ring",
         final_pos_xy=(101.0, 100.0),
         target_xy=(100.0, 100.0),
         pos_trajectory=[(0.0, 0.0), (0.0, 3000.0), (3000.0, 3000.0), (101.0, 100.0)],

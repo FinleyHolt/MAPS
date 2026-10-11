@@ -786,10 +786,8 @@ class Mission:
         from benchmarks.citynav.run_benchmark.episode_runner import score_episode  # noqa: PLC0415
 
         trajectory = [(float(p[0]), float(p[1])) for p in visited]
-        scores = score_episode(h.cfg, h.episode, load_objects(OBJECTS_JSON), trajectory[-1], trajectory,
-                               flew=len(trajectory) > 1)
-        scores["success_basis"] = "final_pos_xy"
-        return scores
+        return score_episode(h.cfg, h.episode, load_objects(OBJECTS_JSON), trajectory[-1], trajectory,
+                             flew=len(trajectory) > 1)
 
     def row(self) -> dict[str, Any]:
         """The mission as a ledger row, the keys a bench row carries, so
@@ -818,7 +816,7 @@ class Mission:
             "start_xy": visited[0] if episode else None,
             "target_xy": ([float(episode.target_xy[0]), float(episode.target_xy[1])]
                           if episode is not None and episode.target_xy is not None else None),
-            "pred_xy": last, "final_pos_xy": last, "success_basis": "final_pos_xy", "visited_xy": visited,
+            "final_pos_xy": last, "visited_xy": visited,
             # A mission PARKED on its report flew: ok with ``ended_by: reply``. Only a fault is infra.
             "status": STATUS_OK if status in (STATE_ENDED, STATE_AWAITING) else STATUS_INFRA,
             "error": error, "ended_by": ended_by, "turns_used": turns, "flights_flown": flown,

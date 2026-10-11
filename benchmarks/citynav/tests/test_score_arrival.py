@@ -66,10 +66,8 @@ def test_a_shape_row_carries_no_ring_key():
     row = _score("shape", BOTH_YES)
     for key in cn_eval._RING_ONLY:
         assert key not in row, key
-    # The criterion-neutral distances stay: they carry no radius.
-    for key in ("NE", "ne_pos_to_goal",
-                "min_dist_pos_to_target_m", "scoring_basis"):
-        assert key in row, key
+    # The criterion-neutral distance stays: it carries no radius.
+    assert "NE" in row
     # ...as does the mask's own detail.
     assert row["precise_target"] == "shape"
     assert row["precise_distance_m"] is not None
@@ -85,6 +83,13 @@ def test_a_ring_row_carries_no_shape_key():
         assert key not in row, key
     assert row["OSR"] in (0, 1)
     assert row["spl_pos"] is not None
+
+
+def test_a_row_carries_each_measure_once():
+    assert set(_score("ring", BOTH_YES)) == {"NE", "SR", "OSR", "spl_pos", "success_criterion"}
+    assert set(_score("shape", BOTH_YES)) == {
+        "NE", "SR", "success_criterion", "precise_target", "precise_distance_m",
+        "precise_reach_m", "precise_floor_applied"}
 
 
 def test_an_unknown_criterion_refuses():
