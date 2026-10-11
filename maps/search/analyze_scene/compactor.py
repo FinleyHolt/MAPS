@@ -515,11 +515,9 @@ def compact_transcript(
     # floored at 8000, the least input budget a reasoner runs on.
     low_water = max(target_input_tokens - _CLEAR_HEADROOM_TOKENS,
                     min(8000, target_input_tokens))
-    folded_turns = 0
-    out = messages
     output_tokens = input_tokens
     out, folded_turns, freed_fold = _drop_spent_turns(
-        out, shed_tokens=input_tokens - low_water, model=model, tools=tools,
+        messages, shed_tokens=input_tokens - low_water, model=model, tools=tools,
     )
     if folded_turns:
         output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
