@@ -188,3 +188,54 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(monkeypatch):
     assert flights[-1]["pose_xy"] == flights[-1]["resolved_xy"] == [100.0, 200.0]
     assert state.pose_xy == (100.0, 200.0)
     assert "error" in me.fly_one({"target_fid": "nowhere"}, **common) and len(flights) == 1
+
+
+def _stub_flight(monkeypatch, *, raise_boosts=False, markers=()):
+    """``fly(item)`` over a stubbed SearchLoop and a live frame, and the
+    flight ledger it appends to."""
+    from types import SimpleNamespace
+
+    from benchmarks.citynav.episode import EpisodeState
+    from benchmarks.citynav.run_benchmark import mission_engine as me
+    from maps.search.parse_compile.tour_state import FeatureTour
+
+    def _boom(*a, **k):
+        raise RuntimeError("director down")
+
+    monkeypatch.setattr(me, "_write_tour_cursor", lambda *a, **k: None)
+    loop = SimpleNamespace(
+        activate_pending_boosts=_boom if raise_boosts else (lambda: None),
+        update_perception=lambda **kw: [], snapshot=lambda: None,
+        retire_boosts_after_round=_boom if raise_boosts else (lambda rounds: None),
+        last_flight_detections=lambda: [])
+    frame = SimpleNamespace(pose_xy=(1.0, 2.0), altitude_m=900.0, yaw_deg=0.0, rgb=None,
+                            sensor=None, ortho_view_corners_xy=None)
+    flights: list = []
+    marker_xy = (tuple(sum(p[i] for p in markers) / len(markers) for i in (0, 1))
+                 if markers else None)
+    common = dict(
+        flights=flights, feature_tour=FeatureTour(), node_xy=_node_xy, marker_xy=marker_xy,
+        cfg=SimpleNamespace(altitude_cap_m=1000.0),
+        state=EpisodeState(pose_xy=_POSE, altitude_m=100.0, graph=None),
+        assets=SimpleNamespace(bounds=SimpleNamespace(x_min=0.0, y_min=0.0), cell_size_m=2.0,
+                               grid_shape=(10, 10)),
+        episode=SimpleNamespace(map_name="calcity", description="d"),
+        sensor=None, tile_frame=None, perception=None, search_loop=loop,
+        recorder=None, t_start=0.0, observe=lambda: frame)
+    return (lambda item: me.fly_one(item, **common)), flights
+
+
+def test_a_view_position_flight_flies_the_pose_or_the_marked_region(monkeypatch):
+    fly, flights = _stub_flight(monkeypatch, markers=[(300.0, 400.0, 0.0), (500.0, 600.0, 0.0)])
+    fly({"target_fid": "current_position"})
+    assert flights[-1]["resolved_xy"] == list(_POSE) and flights[-1]["provenance"] == "point"
+    fly({"target_fid": "marked_region"})
+    assert flights[-1]["resolved_xy"] == [400.0, 500.0] and flights[-1]["provenance"] == "point"
+    fly_none, none_flights = _stub_flight(monkeypatch)
+    assert "error" in fly_none({"target_fid": "marked_region"}) and not none_flights
+
+
+def test_a_failing_boost_director_never_kills_a_flight(monkeypatch):
+    fly, flights = _stub_flight(monkeypatch, raise_boosts=True)
+    report = fly({"target_fid": "building_7"})
+    assert "error" not in report and report["target"] == "building_7" and len(flights) == 1
