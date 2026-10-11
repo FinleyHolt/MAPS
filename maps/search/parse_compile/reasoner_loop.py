@@ -587,39 +587,16 @@ _PICTURE_WITHHELD = ("the crop's caption follows in the next message; "
                      "its picture is not served on this run")
 
 
-def _mission_sanitize_moves(raw, staged) -> tuple[list[dict], list[dict]]:
-    """Normalize the mission act's ``move`` list.
-
-    Each entry is ONE slot — a staged handle (vN, resolved to its stand
-    point), a literal fid / view-position sentinel, or the canonical
-    ``"[x, y]"`` token. A staged handle normalizes to the canonical token
-    under ``target_fid`` (``maps.util.xy_token``) so every downstream
-    consumer keeps reading the ONE wire grammar; a
-    vN-resolved item carries ``via`` so the flight report can echo the
-    handle. Returns ``(accepted_items, item_errors)`` — per-entry errors
+def _mission_sanitize_moves(raw: list[str]) -> tuple[list[dict], list[dict]]:
+    """The move targets as flight items: each a literal fid or the
+    canonical ``"[x, y]"`` token, under ``target_fid``. A result handle is
+    refused. Returns ``(accepted_items, item_errors)`` -- per-entry errors
     carry the entry's list index so valid siblings still fly.
     """
-    items = raw if isinstance(raw, list) else []
     accepted: list[dict] = []
     errors: list[dict] = []
-    for i, it in enumerate(items):
-        if not isinstance(it, str) or not it.strip():
-            errors.append({"index": i, "error": (
-                "each move entry is a staged handle (vN), a literal fid, "
-                "or an [x, y] world point")})
-            continue
-        token = it.strip()
-        sv = (staged or {}).get(token)
-        if sv is not None:
-            accepted.append({"target_fid": format_xy_token(
-                float(sv["from_xy"][0]), float(sv["from_xy"][1])),
-                "via": token})
-            continue
-        if re.fullmatch(r"v\d{1,3}", token):
-            errors.append({"index": i, "error": (
-                f"{token!r} names no staged viewpoint (stage one first, "
-                f"or pass a fid / [x, y] point)")})
-            continue
+    for i, token in enumerate(raw):
+        token = token.strip()
         if _is_handle_token(token):
             errors.append({"index": i, "error": (
                 f"{token!r} is a result handle; move takes a staged "
@@ -2091,7 +2068,6 @@ def advance_reasoner_one_round(
                 _item_errors.append({"target_fid": _item["target_fid"],
                                      "error": "not flown."})
                 continue
-            _via = _item.pop("via", None)
             _snap_from = None
             _pt = parse_xy_token(_item["target_fid"])
             if _pt is not None:
@@ -2113,8 +2089,6 @@ def advance_reasoner_one_round(
             _report = mission_spec.fly(dict(_item))
             if not isinstance(_report, dict):
                 _report = {"error": str(_report)}
-            if _via:
-                _report.setdefault("via", _via)
             if _snap_from:
                 _report.setdefault(
                     "note",
@@ -2943,8 +2917,7 @@ def advance_reasoner_one_round(
                     for _t in _raw_members:
                         if _t not in _uniq:
                             _uniq.append(_t)
-                    _accepted, _item_errors = _mission_sanitize_moves(
-                        _uniq, staged_viewpoints)
+                    _accepted, _item_errors = _mission_sanitize_moves(_uniq)
                     if not _accepted:
                         _msg = next(
                             (str(e.get("error")) for e in _item_errors
@@ -3011,8 +2984,7 @@ def advance_reasoner_one_round(
                     tok, _stop_err = _flown_stop(tok)
                     if _stop_err:
                         return _plan_err(ack, _stop_err)
-                _accepted, _item_errors = _mission_sanitize_moves(
-                    [tok], staged_viewpoints)
+                _accepted, _item_errors = _mission_sanitize_moves([tok])
                 mv = _fly_moves(_accepted, _item_errors)
                 ack["flown"] = mv
                 _ok = [r for r in mv.get("flown") or []

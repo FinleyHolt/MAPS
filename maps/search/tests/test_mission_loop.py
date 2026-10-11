@@ -24,17 +24,12 @@ def test_unknown_tool_names_the_one_verb():
 
 
 def test_sanitizer_is_directly_pinned():
-    ok, errs = _mission_sanitize_moves(["[900, 640]", "marked_region"], {})
+    ok, errs = _mission_sanitize_moves(["[900, 640]", "marked_region"])
     assert ok == [{"target_fid": "[900, 640]"},
                   {"target_fid": "marked_region"}]
     assert errs == []
-    staged = {"v1": {"handle": "v1", "from_xy": [3.0, 4.0],
-                     "up_unit": [0.0, 1.0]}}
-    ok, errs = _mission_sanitize_moves(["v1"], staged)
-    assert ok == [{"target_fid": "[3, 4]", "via": "v1"}]
-    assert errs == []
-    ok, errs = _mission_sanitize_moves("not-a-list", {})
-    assert ok == [] and errs == []
+    ok, errs = _mission_sanitize_moves(["r3[0:2]"])
+    assert ok == [] and "is a result handle" in errs[0]["error"], errs
 
 
 def test_second_consecutive_empty_turn_still_ends_the_mission():
