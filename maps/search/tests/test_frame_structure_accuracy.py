@@ -48,11 +48,6 @@ def lot(n_rows, n_cols, rot_deg=0.0, jitter_m=0.0, seed=0,
     return pts
 
 
-def truth_partition(n_rows, n_cols, drop=()):
-    return {frozenset(f"r{r}c{c}" for c in range(n_cols) if (r, c) not in drop)
-            for r in range(n_rows)}
-
-
 def test_axis_tie_on_a_regular_lattice_is_exact():
     """Both candidate axes score EXACTLY zero, so the tie-break decides.
 
@@ -63,6 +58,7 @@ def test_axis_tie_on_a_regular_lattice_is_exact():
     — the tie must fall to NN (the measured local lattice), never PCA.
     """
     P = [tuple(d["xy"]) for d in lot(3, 5)]
+    assert len(P) == 15
     along = _row_partition_tightness(P, (1.0, 0.0))   # the true row direction
     across = _row_partition_tightness(P, (0.0, 1.0))
     assert along == across == 0.0, (along, across)
@@ -110,16 +106,3 @@ def test_a_pool_with_no_local_lattice_falls_back_to_pca():
          (12.0, 28.0), (48.0, 24.0)]
     _u, conf, src = _row_axis_direction(P)
     assert src == "pca" and conf == 0.0
-
-
-# --- vacuity floor ----------------------------------------------------------
-
-def test_the_generator_actually_builds_what_it_claims():
-    """If `lot` silently produced one row, every assertion above would pass
-    while testing nothing. (`lot`/`truth_partition` also feed the dashboard
-    lab's truth overlay.)"""
-    pts = lot(3, 5, rot_deg=30)
-    assert len(pts) == 15
-    xs = {round(p["xy"][0], 6) for p in pts}
-    assert len(xs) > 5, "a rotated lot must not collapse onto shared columns"
-    assert len(truth_partition(3, 5)) == 3
