@@ -36,10 +36,7 @@ Escape hatches (explicit, never inferred):
       Endpoint serving several models (or omitting ``max_model_len``).
       When the endpoint IS reachable the override's ``model_id`` is still
       cross-checked against the served ids — the override never bypasses
-      the live check. A LoRA arm pins SGLang's ``<base>:<adapter>`` form
-      (e.g. ``qwen36-35b-a3b:qwen36-35b-a3b-lora:262144``): both
-      components must be served ids, and requests then carry the full
-      colon form, which is what routes them through the adapter.
+      the live check.
 """
 
 from __future__ import annotations
@@ -51,7 +48,6 @@ import threading
 import urllib.error
 import time
 import urllib.request
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
@@ -124,8 +120,8 @@ class EndpointSpec:
 
     ``base_url`` is THE OpenAI-style base (typically ending in ``/v1``)
     discovery probed — one URL; the engine load-balances its own replicas
-    behind it. Service URLs may be comma-lists of replicas; they are
-    frozen verbatim as probed."""
+    behind it. ``sam_url`` may be a comma-list of replicas, frozen verbatim
+    as probed."""
 
     base_url: str
     model_id: str
@@ -133,7 +129,6 @@ class EndpointSpec:
     tokenizer_name: str
     output_reserve: int
     sam_url: str = ""
-    sam_video_url: str = ""
     # Whether the endpoint reported its own ``max_model_len`` on
     # ``/v1/models``. That is the tell for a dedicated engine we
     # launched: a self-hosted vLLM declares its window, while a hosted
@@ -175,14 +170,6 @@ def _output_reserve_for(max_model_len: int) -> int:
 # ---------------------------------------------------------------------------
 # Probing
 # ---------------------------------------------------------------------------
-
-
-def _split_urls(raw: str | Sequence[str]) -> tuple[str, ...]:
-    if isinstance(raw, str):
-        parts = raw.split(",")
-    else:
-        parts = [p for chunk in raw for p in str(chunk).split(",")]
-    return tuple(u.strip().rstrip("/") for u in parts if u.strip())
 
 
 def _get_json(url: str, *, bearer: str | None = None) -> object:
@@ -251,24 +238,14 @@ def _facts_from_endpoint(
     ids = [str(m.get("id") or "") for m in models]
     if override is not None:
         # The override never bypasses the live check: the pinned id must be
-        # among the served ids. A ``base:adapter`` pin (SGLang's OpenAI form
-        # for routing a request through a served LoRA adapter — a BARE
-        # adapter name in ``model`` silently serves the base) validates both
-        # components; the window check reads the BASE entry, since adapter
-        # entries carry ``max_model_len: null``.
-        anchor_id = override.model_id
+        # among the served ids.
         if override.model_id not in ids:
-            base, sep, adapter = override.model_id.partition(":")
-            if not (sep and base in ids and adapter in ids):
-                raise EndpointDiscoveryError(
-                    f"SEARCH_ENDPOINT_SPEC_OVERRIDE names {override.model_id!r} "
-                    f"but {_models_url(base_url)} serves {ids} — the pin does "
-                    f"not match the live endpoint (a LoRA pin must be "
-                    f"'<base>:<adapter>' with both ids served)"
-                )
-            anchor_id = base
-        served = next(m for m in models if m.get("id") == anchor_id)
-        served_len = served.get("max_model_len")
+            raise EndpointDiscoveryError(
+                f"SEARCH_ENDPOINT_SPEC_OVERRIDE names {override.model_id!r} "
+                f"but {_models_url(base_url)} serves {ids} — the pin does "
+                f"not match the live endpoint"
+            )
+        served_len = next(m for m in models if m.get("id") == override.model_id).get("max_model_len")
         if served_len and int(served_len) != override.max_model_len:
             raise EndpointDiscoveryError(
                 f"SEARCH_ENDPOINT_SPEC_OVERRIDE pins max_model_len="
@@ -299,35 +276,24 @@ def _facts_from_endpoint(
     return model_id, int(max_model_len), True
 
 
-# Per-service identity tokens: when a service's /health payload carries a
-# ``service`` field, it must contain one of these substrings — a stale or
-# foreign server answering 200 on the right port aborts instead of
-# producing a silently-wrong green run. A payload without the field is
-# reachability-checked only.
-_SERVICE_IDENTITY_TOKENS: dict[str, tuple[str, ...]] = {
-    "sam": ("sam",),
-    "sam_video": ("sam",),
-}
-
-
-def _probe_service_health(name: str, urls: str) -> None:
-    """Probe every replica of one service URL (comma-list tolerated)."""
-    for url in _split_urls(urls):
+def _probe_sam_health(urls: str) -> None:
+    """Probe every SAM replica's ``/health`` (comma-list tolerated). A payload
+    carrying a ``service`` field must name sam: a stale or foreign server
+    answering 200 on the right port aborts instead of producing a
+    silently-wrong green run. A payload without the field is
+    reachability-checked only."""
+    for url in (u.strip().rstrip("/") for u in urls.split(",") if u.strip()):
         try:
             payload = _get_json(f"{url}/health")
         except EndpointDiscoveryError as exc:
             raise EndpointDiscoveryError(
-                f"service {name!r} failed its /health probe: {exc}"
+                f"service 'sam' failed its /health probe: {exc}"
             ) from exc
-        identity = ""
-        if isinstance(payload, dict):
-            identity = str(payload.get("service") or "").lower()
-        expected = _SERVICE_IDENTITY_TOKENS.get(name, ())
-        if identity and expected and not any(t in identity for t in expected):
+        identity = str(payload.get("service") or "").lower() if isinstance(payload, dict) else ""
+        if identity and "sam" not in identity:
             raise EndpointDiscoveryError(
-                f"service {name!r} at {url} answered /health as "
-                f"{identity!r} — a reachable-but-WRONG server; expected an "
-                f"identity containing one of {expected}"
+                f"service 'sam' at {url} answered /health as {identity!r} — a "
+                f"reachable-but-WRONG server; expected an identity containing 'sam'"
             )
 
 
@@ -383,7 +349,7 @@ def _require_tokenizer(model_id: str) -> str:
 
 def discover(
     base_url: str,
-    service_urls: Mapping[str, str] | None = None,
+    sam_url: str = "",
     *,
     offline: bool = False,
     override: EndpointOverride | None = None,
@@ -395,9 +361,9 @@ def discover(
     engine's own data parallelism behind this single endpoint, so a
     comma-list is refused loud instead of routed client-side.
 
-    ``service_urls``: ``{"sam"|"sam_video": url}``; empty
-    values are skipped, every non-empty one must answer ``/health`` with a
-    matching identity (comma-lists of replicas tolerated).
+    ``sam_url``: the SAM replicas the run posts to (comma-list); empty is
+    skipped, otherwise each must answer ``/health`` with a matching
+    identity.
 
     ``offline=True`` skips all probes and REQUIRES ``override``.
     """
@@ -409,7 +375,7 @@ def discover(
             f"its own data-parallel replicas behind it, and no "
             f"client-side endpoint picking exists"
         )
-    services = {k: str(v or "").strip() for k, v in (service_urls or {}).items()}
+    sam_url = str(sam_url or "").strip()
 
     if offline:
         if override is None:
@@ -430,9 +396,8 @@ def discover(
         model_id, max_model_len, server_declared_window = _facts_from_endpoint(
             url, override
         )
-        for name, value in services.items():
-            if value:
-                _probe_service_health(name, value)
+        if sam_url:
+            _probe_sam_health(sam_url)
 
     from maps.llm.model_cards import card_for, check_effort  # noqa: PLC0415
 
@@ -455,8 +420,7 @@ def discover(
         max_model_len=max_model_len,
         tokenizer_name=tokenizer_name,
         output_reserve=output_reserve,
-        sam_url=services.get("sam", ""),
-        sam_video_url=services.get("sam_video", ""),
+        sam_url=sam_url,
         server_declared_window=server_declared_window,
     )
     # Checked off the SPEC, never off a second spelling of the arithmetic.
@@ -477,7 +441,7 @@ def discover_from_env() -> EndpointSpec:
     """The one canonical env -> :func:`discover` glue for process entry
     points (``run_benchmark.main``, ``bench_fullset``, ``launch``).
 
-    Reads ``SEARCH_REASONER_URL`` + the service URL keys, honors the explicit
+    Reads ``SEARCH_REASONER_URL`` + the SAM replicas, honors the explicit
     ``SEARCH_ENDPOINT_OFFLINE`` / ``SEARCH_ENDPOINT_SPEC_OVERRIDE`` escape
     hatches."""
 
@@ -490,10 +454,7 @@ def discover_from_env() -> EndpointSpec:
         raise EndpointDiscoveryError(str(exc)) from exc
     return discover(
         os.environ.get("SEARCH_REASONER_URL", "http://127.0.0.1:8001/v1"),
-        {
-            "sam": sam_url,
-            "sam_video": os.environ.get("SAM_VIDEO_SERVER_URL", ""),
-        },
+        sam_url,
         offline=os.environ.get("SEARCH_ENDPOINT_OFFLINE", "").strip() == "1",
         override=parse_override(override_raw) if override_raw else None,
     )

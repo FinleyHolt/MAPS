@@ -98,4 +98,3 @@ def test_a_served_name_with_no_card_is_refused_with_the_names_there_are() -> Non
     for near in ("qwen38-flash-next", "gemma-4-e2b", "qwen"):
         with pytest.raises(ValueError, match="inkling-small"):
             card_for(near)
-    assert card_for("inkling-small:some-lora") is card_for("inkling-small")

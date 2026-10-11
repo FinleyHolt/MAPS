@@ -95,9 +95,8 @@ def test_service_urls_frozen_and_probed(monkeypatch):
             "http://sam:8772/health": {"service": "sam"},
         },
     )
-    s = discover(_URL_A, {"sam": "http://sam:8772", "sam_video": ""})
+    s = discover(_URL_A, "http://sam:8772")
     assert s.sam_url == "http://sam:8772"
-    assert s.sam_video_url == ""  # unset service is skipped, not an error
 
 
 # --------------------------------------------------------------------------- #
@@ -196,7 +195,7 @@ def test_case_g_discovery_refuses_a_template_that_cannot_render_a_tool_turn(monk
 def test_case_h_service_unreachable(monkeypatch):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload()})
     with pytest.raises(EndpointDiscoveryError, match="'sam'"):
-        discover(_URL_A, {"sam": "http://sam:8772"})
+        discover(_URL_A, "http://sam:8772")
 
 
 def test_case_i_service_identity_mismatch(monkeypatch):
@@ -210,7 +209,7 @@ def test_case_i_service_identity_mismatch(monkeypatch):
         },
     )
     with pytest.raises(EndpointDiscoveryError, match="WRONG"):
-        discover(_URL_A, {"sam": "http://sam:8772"})
+        discover(_URL_A, "http://sam:8772")
 
 
 def test_service_health_without_identity_field_is_reachability_only(monkeypatch):
@@ -221,7 +220,7 @@ def test_service_health_without_identity_field_is_reachability_only(monkeypatch)
             "http://sam:8772/health": {"status": "ok"},
         },
     )
-    s = discover(_URL_A, {"sam": "http://sam:8772"})
+    s = discover(_URL_A, "http://sam:8772")
     assert s.sam_url == "http://sam:8772"
 
 
@@ -239,7 +238,7 @@ def test_offline_with_pin_skips_probes(monkeypatch):
     _fake_http(monkeypatch, {})  # every URL unreachable — must not matter
     s = discover(
         _URL_A,
-        {"sam": "http://sam:8772"},
+        "http://sam:8772",
         offline=True,
         override=EndpointOverride("gemma4-e4b", 131072),
     )
@@ -251,7 +250,7 @@ def test_offline_with_pin_skips_probes(monkeypatch):
 
 def test_override_cross_checked_against_live_ids(monkeypatch):
     # The override never bypasses the live check: pin absent from /v1/models
-    # -> abort (stale-override / LoRA-second-card re-entry of the 404).
+    # -> abort (a stale override).
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload("served-model")})
     with pytest.raises(EndpointDiscoveryError, match="does not match"):
         discover(_URL_A, override=EndpointOverride("pinned-model", 131072))
@@ -327,42 +326,6 @@ def test_divergent_second_install_raises():
     E.install_spec(_spec())
     with pytest.raises(EndpointDiscoveryError, match="divergent"):
         E.install_spec(_spec(max_model_len=131072))
-
-
-# --------------------------------------------------------------------------- #
-# LoRA pin: SGLang's ``base:adapter`` OpenAI form                             #
-# --------------------------------------------------------------------------- #
-
-
-def test_lora_pin_validates_both_components(monkeypatch):
-    # SGLang lists the base and each adapter; the adapter entry carries
-    # max_model_len null, so the window check anchors on the BASE entry.
-    _fake_http(
-        monkeypatch,
-        {
-            f"{_URL_A}/models": _models_payload(
-                extra=[{"id": "gemma4-e4b-lora", "max_model_len": None}]
-            )
-        },
-    )
-    s = discover(
-        _URL_A,
-        override=E.parse_override("gemma4-e4b:gemma4-e4b-lora:262144"),
-    )
-    assert s.model_id == "gemma4-e4b:gemma4-e4b-lora"
-    assert s.max_model_len == 262144
-
-
-def test_lora_pin_unserved_adapter_refused(monkeypatch):
-    # A bare-adapter or unserved-adapter pin must refuse: SGLang silently
-    # serves the BASE for a model id with no colon, so an unvalidated pin
-    # would fly the wrong arm while stamping the adapter name.
-    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload()})
-    with pytest.raises(EndpointDiscoveryError, match="not match the live"):
-        discover(
-            _URL_A,
-            override=E.parse_override("gemma4-e4b:no-such-adapter:262144"),
-        )
 
 
 def test_the_budget_and_the_pin_always_fit_the_window() -> None:

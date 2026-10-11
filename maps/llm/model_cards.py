@@ -7,9 +7,8 @@ serve-side half of a model's facts (model path, parsers, TP, spec-decode
 composition) belongs to whoever runs the serve — serve and client run on
 different boxes, so each layer carries only the fields it consumes.
 
-Resolution: exact served-alias match (a LoRA ``base:adapter`` takes its
-base's card); any other name is refused. No card declares a presence
-penalty, so no request carries one.
+Resolution: exact served-alias match; any other name is refused. No card
+declares a presence penalty, so no request carries one.
 """
 
 from __future__ import annotations
@@ -108,10 +107,9 @@ CARDS: dict[str, ModelCard] = {
 
 
 def card_for(model_id: str | None) -> ModelCard:
-    """The card for a served alias, by exact name (a LoRA ``base:adapter``
-    rides its base's card). A name the table does not carry is refused: a
-    near name would draw another model's envelope."""
-    alias = (model_id or "").strip().lower().partition(":")[0]
+    """The card for a served alias, by exact name. A name the table does not
+    carry is refused: a near name would draw another model's envelope."""
+    alias = (model_id or "").strip().lower()
     hit = CARDS.get(alias)
     if hit is None:
         raise ValueError(f"no model card for served model {model_id!r}; serve it under one of: "
