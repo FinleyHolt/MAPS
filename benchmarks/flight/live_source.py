@@ -678,7 +678,7 @@ class LiveSource:
             posed = self._posed(jpeg, t_host, pose=pose)
             if posed is None:
                 continue
-            pose_xy, yaw, corners = posed.pose_xy, posed.yaw, posed.corners
+            corners = posed.corners
             if self.register is not None:
                 record = self._register_ring(seq, posed, t_host)
                 # The heading the frame was placed at and the track beside it: a crab is their difference.
@@ -686,11 +686,8 @@ class LiveSource:
                               attitude=posed.pose.attitude)
                 records.append(record)
                 if record["applied"]:
-                    pose_xy = (pose_xy[0] + record["shift_e_m"], pose_xy[1] + record["shift_n_m"])
-                    yaw = yaw + record.get("shift_yaw_deg", 0.0)
-                    lift = record.get("shift_alt_m", 0.0)
-                    posed.agl, posed.camera_z = posed.agl + lift, posed.camera_z + lift
-                    corners = ground_corners_xy(posed.sensor, pose_xy, posed.agl, yaw,
+                    pose_xy = (posed.pose_xy[0] + record["shift_e_m"], posed.pose_xy[1] + record["shift_n_m"])
+                    corners = ground_corners_xy(posed.sensor, pose_xy, posed.agl, posed.yaw,
                                                 airframe_roll_deg=posed.roll, airframe_pitch_deg=posed.pitch_proj,
                                                 ground_z=posed.ground_tile)
             placed.append(SimpleNamespace(angle=angle, seq=seq, t_host=t_host, log_time=log_time,
