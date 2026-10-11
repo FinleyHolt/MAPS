@@ -445,20 +445,15 @@ def _request_headers(api_key: str | None) -> dict[str, str]:
     an opaque affinity header — a key-affine router (sglang-router
     ``--policy manual``) pins every call carrying the same key to one
     worker, so an episode's growing context stays with its radix cache.
-    ``SEARCH_LLM_ROUTING_KEY_HEADER`` renames the header for a router
-    with a different spelling. Unset = no header: the client carries no
-    router fact and single-instance serves see today's requests. Read
-    per call, not cached — the runner rewrites the key each episode.
+    Unset = no header. Read per call: the runner rewrites the key each
+    episode.
     """
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     routing_key = os.environ.get("SEARCH_LLM_ROUTING_KEY")
     if routing_key:
-        header_name = (
-            os.environ.get("SEARCH_LLM_ROUTING_KEY_HEADER") or "x-smg-routing-key"
-        )
-        headers[header_name] = routing_key
+        headers["x-smg-routing-key"] = routing_key
     return headers
 
 

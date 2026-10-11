@@ -14,16 +14,8 @@ def test_no_key_means_no_extra_header(monkeypatch):
 
 def test_key_rides_the_default_header(monkeypatch):
     monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "calcity::7#7")
-    monkeypatch.delenv("SEARCH_LLM_ROUTING_KEY_HEADER", raising=False)
-    assert _request_headers(None)["x-smg-routing-key"] == "calcity::7#7"
-
-
-def test_header_rename_and_auth_compose(monkeypatch):
-    monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "e1")
-    monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY_HEADER", "x-affinity")
     headers = _request_headers("sk-x")
-    assert headers["x-affinity"] == "e1"
-    assert "x-smg-routing-key" not in headers
+    assert headers["x-smg-routing-key"] == "calcity::7#7"
     assert headers["Authorization"] == "Bearer sk-x"
 
 

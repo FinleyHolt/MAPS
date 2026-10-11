@@ -39,10 +39,6 @@ ARM_ENV_FLAGS = (
     # block share a bake and a split and differ on exactly this.
     "SEARCH_CITYNAV_RGBD_DIR",
     "SEARCH_SEED_BASE",
-    # The envelope sweep's knobs (maps/llm/sampling.py); reasoner turns
-    # sample at temperature 1.0, so these move the score directly.
-    "SEARCH_SAMPLING_TEMPERATURE",
-    "SEARCH_SAMPLING_PRESENCE_PENALTY",
     # Unset sends none and flies at the serve's default: a row without it
     # and a row with it are two arms.
     "SEARCH_SAMPLING_REASONING_EFFORT",

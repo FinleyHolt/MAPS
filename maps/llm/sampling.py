@@ -20,11 +20,6 @@ from maps.llm import endpoint_spec
 from maps.llm.model_cards import envelope_kwargs
 
 
-def _env_float(name: str) -> float | None:
-    raw = os.environ.get(name, "").strip()
-    return float(raw) if raw else None
-
-
 def thinking_sampling_kwargs(
     *, temperature: float, model_id: str | None = None, reasoning_effort: str | None = None
 ) -> dict[str, Any]:
@@ -50,13 +45,6 @@ def thinking_sampling_kwargs(
       - a lower value (e.g. ``0.6``, the model card precise default)
         suits a more deterministic, less exploratory commit.
 
-    ``SEARCH_SAMPLING_TEMPERATURE`` / ``SEARCH_SAMPLING_PRESENCE_PENALTY``
-    override the corresponding field for envelope-sweep measurement runs
-    (a sweep sets them per cell; unset — the deployed default — leaves the
-    envelope exactly as the card declares, including carrying NO
-    presence_penalty key when the card declares no penalty term).
-    Thinking mode is never overridable.
-
     ``SEARCH_SAMPLING_REASONING_EFFORT`` is the arm's reasoning effort,
     passed through VERBATIM as a top-level string. Unset sends no key and
     the served chat template's own default applies; this layer holds no
@@ -76,15 +64,11 @@ def thinking_sampling_kwargs(
         model_id = (
             endpoint_spec.spec().model_id if endpoint_spec.spec_installed() else ""
         )
-    temp_override = _env_float("SEARCH_SAMPLING_TEMPERATURE")
-    pp_override = _env_float("SEARCH_SAMPLING_PRESENCE_PENALTY")
     kwargs: dict[str, Any] = {
-        "temperature": temperature if temp_override is None else temp_override,
+        "temperature": temperature,
         **envelope_kwargs(model_id),
         "chat_template_kwargs": {"enable_thinking": True},
     }
-    if pp_override is not None:
-        kwargs["presence_penalty"] = pp_override
     effort = (reasoning_effort if reasoning_effort is not None
               else os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "")).strip()
     if effort:

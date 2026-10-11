@@ -11,12 +11,7 @@ from maps.llm.vision_content import build_image_part, build_vision_user_content
 @pytest.fixture(autouse=True)
 def _no_ambient_sampling_env(monkeypatch) -> None:
     """The envelope pins measure the code, not a shell that sourced an arm file."""
-    for name in (
-        "SEARCH_SAMPLING_TEMPERATURE",
-        "SEARCH_SAMPLING_PRESENCE_PENALTY",
-        "SEARCH_SAMPLING_REASONING_EFFORT",
-    ):
-        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
 
 
 def test_thinking_sampling_kwargs_are_flat_top_level_keys() -> None:
@@ -32,20 +27,6 @@ def test_thinking_sampling_kwargs_are_flat_top_level_keys() -> None:
     }
 
 
-def test_sampling_env_overrides_swap_only_their_field(monkeypatch) -> None:
-    # Envelope-sweep instrumentation: each override replaces exactly its
-    # field — including to 0.0, the greedy end of the sweep — and leaves
-    # the rest of the envelope (and thinking mode) untouched.
-    monkeypatch.setenv("SEARCH_SAMPLING_TEMPERATURE", "0.0")
-    monkeypatch.setenv("SEARCH_SAMPLING_PRESENCE_PENALTY", "0")
-    kwargs = thinking_sampling_kwargs(temperature=1.0, model_id="qwen38-flash-next-nvfp4")
-    assert kwargs["temperature"] == 0.0
-    assert kwargs["presence_penalty"] == 0.0
-    assert kwargs["top_p"] == 0.95
-    assert kwargs["top_k"] == 20
-    assert kwargs["chat_template_kwargs"] == {"enable_thinking": True}
-
-
 def test_gemma_envelope_keys_off_model_id() -> None:
     # The gemma family envelope is the gemma-4 card's recommended set:
     # top_k 64, no penalty term at all — a presence_penalty key would be
@@ -56,16 +37,6 @@ def test_gemma_envelope_keys_off_model_id() -> None:
         "top_k": 64,
         "chat_template_kwargs": {"enable_thinking": True},
     }
-
-
-def test_gemma_presence_override_is_sweep_instrumentation(monkeypatch) -> None:
-    # An explicit SEARCH_SAMPLING_PRESENCE_PENALTY applies on gemma too —
-    # that is what an envelope sweep sets per cell.
-    monkeypatch.setenv("SEARCH_SAMPLING_PRESENCE_PENALTY", "0.5")
-    kwargs = thinking_sampling_kwargs(temperature=1.0, model_id="gemma4-26b-a4b-nvfp4")
-    assert kwargs["presence_penalty"] == 0.5
-    assert kwargs["top_k"] == 64
-    assert kwargs["chat_template_kwargs"] == {"enable_thinking": True}
 
 
 def test_reasoning_effort_is_never_parsed_into_a_number(monkeypatch) -> None:

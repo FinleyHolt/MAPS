@@ -9,8 +9,7 @@ different boxes, so each layer carries only the fields it consumes.
 
 Resolution: exact served-alias match (a LoRA ``base:adapter`` takes its
 base's card); any other name is refused. No card declares a presence
-penalty, so no request carries one unless an envelope sweep sets
-``SEARCH_SAMPLING_PRESENCE_PENALTY``.
+penalty, so no request carries one.
 """
 
 from __future__ import annotations
