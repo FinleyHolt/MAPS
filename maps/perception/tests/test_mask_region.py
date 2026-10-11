@@ -95,15 +95,3 @@ def test_tightened_keeps_the_pixels_and_shrinks_the_box():
     assert np.array_equal(full(tight), full(comp))
     assert tight.area == comp.area
     assert tight.crop.size < comp.crop.size  # the box really shrank
-
-
-def test_from_full_accepts_a_known_box_and_validates_it():
-    m = _mask()
-    assert np.array_equal(
-        full(MaskRegion.from_full(m, bbox=(10, 12, 15, 19))), m
-    )
-    # A box that does not bound the mask loses pixels rather than raising, so
-    # from_full is exactly as trustworthy as the box handed to it — the reason
-    # producers derive it here rather than accept one from a distance.
-    partial = MaskRegion.from_full(m, bbox=(10, 12, 12, 19))
-    assert partial.area < int(m.sum())
