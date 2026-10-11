@@ -154,7 +154,7 @@ def test_a_crash_row_with_no_workdir_is_counted_and_never_wins(tmp_path):
     """The driver's spawn-failure row carries no ``workdir`` at all. A
     naive ``Path(row["workdir"]).name`` explodes on it."""
     naked = {"episode_id": "e::8#8", "worker_id": "w0", "status": "infra",
-             "error": "RuntimeError: warm runner never came up"}
+             "error": "attempt spawn: OSError: [Errno 24] Too many open files"}
     assert rows.attempt_stamp(naked) == ""
     root = write_ledger(tmp_path / "run", naked, ledger_row("e::8#8", "20260725_120000", 1))
     picked, stats = rows.load_attempts(root)
