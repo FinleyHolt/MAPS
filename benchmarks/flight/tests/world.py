@@ -21,8 +21,6 @@ def build(root: Path) -> tuple[Path, Path]:
     """``(tiles_dir, raster_dir)`` under ``root``: ``calcity_meta.json`` with
     bounds and georef, and the ``calcity_rgb.tif`` / ``calcity.tif`` pair."""
     import cv2
-    import rasterio
-    from rasterio.transform import from_origin
 
     tiles, raster = root / "tiles", root / "raster"
     tiles.mkdir(parents=True)
@@ -41,12 +39,35 @@ def build(root: Path) -> tuple[Path, Path]:
     for k in range(0, n, 160):
         cv2.line(rgb, (0, k), (n, k + 30), (60, 60, 60), 6)
         cv2.line(rgb, (k, 0), (k + 20, n), (60, 60, 60), 6)
-    transform = from_origin(0.0, SIZE_M, PX_M, PX_M)
-    with rasterio.open(raster / "calcity_rgb.tif", "w", driver="GTiff", width=n, height=n, count=3, dtype="uint8",
-                       transform=transform) as dst:
+    write_raster_pair(raster, rgb, PX_M)
+    return tiles, raster
+
+
+def texture(n: int, rects: int) -> np.ndarray:
+    """An ``n`` px square of grey ground under ``rects`` small coloured roofs."""
+    import cv2
+
+    rng = np.random.default_rng(3)
+    img = np.full((n, n, 3), 150, np.uint8)
+    for _ in range(rects):
+        x, y = rng.integers(0, n - 30, 2)
+        cv2.rectangle(img, (int(x), int(y)), (int(x + 12), int(y + 9)),
+                      tuple(int(c) for c in rng.integers(20, 255, 3)), -1)
+    return img
+
+
+def write_raster_pair(raster_dir: Path, rgb: np.ndarray, px_m: float) -> None:
+    """``calcity_rgb.tif`` from ``rgb`` and a flat ``calcity.tif`` height beside it,
+    north-up with the south-west corner at the frame origin."""
+    import rasterio
+    from rasterio.transform import from_origin
+
+    n = rgb.shape[0]
+    transform = from_origin(0.0, n * px_m, px_m, px_m)
+    with rasterio.open(raster_dir / "calcity_rgb.tif", "w", driver="GTiff", width=n, height=n, count=3,
+                       dtype="uint8", transform=transform) as dst:
         for b in range(3):
             dst.write(rgb[..., b], b + 1)
-    with rasterio.open(raster / "calcity.tif", "w", driver="GTiff", width=n, height=n, count=1, dtype="float32",
-                       transform=transform) as dst:
+    with rasterio.open(raster_dir / "calcity.tif", "w", driver="GTiff", width=n, height=n, count=1,
+                       dtype="float32", transform=transform) as dst:
         dst.write(np.zeros((1, n, n), np.float32))
-    return tiles, raster

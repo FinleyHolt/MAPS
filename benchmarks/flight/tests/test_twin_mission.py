@@ -7,8 +7,9 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-import numpy as np
 import pytest
+
+from benchmarks.flight.tests import world
 
 
 TARGET = (1000.0, 1000.0)
@@ -19,9 +20,6 @@ START = (1000.0, 300.0)
 def calcity(tmp_path, monkeypatch):
     """A Cal City data root, bake, split and raster on a 2 km window, the
     bench's paths pointed at them and put back afterwards."""
-    import cv2
-    import rasterio
-    from rasterio.transform import from_origin
     from shapely.geometry import Polygon
 
     from benchmarks.calcity import paths
@@ -47,20 +45,7 @@ def calcity(tmp_path, monkeypatch):
     (root / "data" / "cityrefer").mkdir(parents=True)
     (root / "data" / "cityrefer" / "objects.json").write_text(json.dumps({"calcity": {}}))
     rgbd.mkdir(parents=True)
-    n = 2000
-    img = np.full((n, n, 3), 150, np.uint8)
-    rng = np.random.default_rng(3)
-    for _ in range(3000):
-        x, y = rng.integers(0, n - 30, 2)
-        cv2.rectangle(img, (int(x), int(y)), (int(x + 12), int(y + 9)), tuple(int(c) for c in rng.integers(20, 255, 3)), -1)
-    transform = from_origin(0.0, float(n), 1.0, 1.0)
-    with rasterio.open(rgbd / "calcity_rgb.tif", "w", driver="GTiff", width=n, height=n, count=3, dtype="uint8",
-                       transform=transform) as dst:
-        for b in range(3):
-            dst.write(img[..., b], b + 1)
-    with rasterio.open(rgbd / "calcity.tif", "w", driver="GTiff", width=n, height=n, count=1, dtype="float32",
-                       transform=transform) as dst:
-        dst.write(np.zeros((1, n, n), np.float32))
+    world.write_raster_pair(rgbd, world.texture(2000, 3000), 1.0)
 
     for name, value in (("CALCITY_ROOT", root), ("DATA_DIR", root / "data"), ("SPLITS_DIR", splits),
                         ("OBJECTS_JSON", root / "data" / "cityrefer" / "objects.json"), ("TILES_DIR", tiles),
