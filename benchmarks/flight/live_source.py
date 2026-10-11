@@ -368,14 +368,14 @@ class LiveSource:
     """The vehicle's recorded frames, posed and registered, as coverage and observations."""
 
     def __init__(self, *, tiles_dir: str | Path, map_name: str, boresight: Boresight, vehicle,
-                 tile_ground_z: float, floor_msl_m: float, register: Registration | None = None,
-                 tile: object | None = None) -> None:
+                 tile_ground_z: float, floor_msl_m: float, register: Registration | None = None) -> None:
         self.tiles_dir = Path(tiles_dir)
         self.map_name = map_name
         self.boresight = boresight
         self.register = register
         self.vehicle = vehicle
-        self.tile = tile
+        #: The mission's tile grid the observations project onto, set when the mission is hydrated.
+        self.tile: object | None = None
         self.tile_ground_z = float(tile_ground_z)
         self.floor_msl_m = float(floor_msl_m)
         #: The map's bare-earth surface, None where it carries none (:func:`map_render.terrain`).
@@ -735,7 +735,7 @@ class LiveSource:
 
 
 def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresight_path: str | Path | None = None,
-              register_raster: str | Path | None = None, tile=None, corrector: bool = True) -> LiveSource:
+              register_raster: str | Path | None = None, corrector: bool = True) -> LiveSource:
     """A live source over ``vehicle``, failing on the ramp rather than on the first flight.
 
     No boresight file flies the datasheet camera. ``register_raster`` names
@@ -760,7 +760,7 @@ def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresigh
         if ortho is None:
             raise ValueError(f"no {map_name} raster under {register_raster} to register the frames against")
         register = Registration(ortho=ortho, render=map_render.renderer(ortho))
-    source = LiveSource(tiles_dir=tiles_dir, map_name=map_name, boresight=boresight, vehicle=vehicle, tile=tile,
+    source = LiveSource(tiles_dir=tiles_dir, map_name=map_name, boresight=boresight, vehicle=vehicle,
                         tile_ground_z=float(GROUND_LEVEL[map_name]), floor_msl_m=FLOOR_MSL_M[map_name],
                         register=register)
     if register is not None and corrector:
