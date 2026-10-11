@@ -465,17 +465,6 @@ class SearchLoop:
         director.init_watchlist([str(c) for c in (concepts or [])])
         self.state.perception_director = director
 
-    def _watchlist_apply_cb(self, add, remove) -> dict:
-        """``view{watchlist}`` channel handed to the per-stop round."""
-        with self._lock:
-            d = self.state.perception_director
-            if d is None:
-                # No armed director: say so rather than ack a phantom
-                # mutation.
-                return {"error": "watchlist is not armed this episode "
-                                 "(no compile committed a concept union)"}
-            return d.watchlist_apply(add, remove)
-
     def _boost_queue_cb(self, concepts, where) -> dict:
         """``view{boost}`` channel handed to the per-stop round."""
         with self._lock:

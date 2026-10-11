@@ -6,7 +6,7 @@ import re
 from maps.search.parse_compile import prompts
 from maps.search.parse_compile import reasoner_agent as ra
 from maps.search.parse_compile import reasoner_loop as rl
-from maps.search.tests.fakes import FakeReasoner, bare_ctx
+from maps.search.tests.fakes import FakeReasoner, bare_ctx, unarmed_boost
 
 # Word-boundary matches, case-insensitive except CARRY (the uppercase word was the round
 # protocol's token; lowercase "carry" is ordinary English).
@@ -136,6 +136,7 @@ def test_dynamic_mission_output_is_commensurate():
 
     fr = FakeReasoner(script)
     reply = rl.advance_reasoner_one_round(
+        boost_queue=unarmed_boost,
         reasoner=fr,
         user_message="instruction",
         ctx=bare_ctx(),
@@ -178,6 +179,7 @@ def test_the_transcript_says_what_json_says():
     tr: list[dict] = []
     fr = FakeReasoner([[("run", {"code": 'look_for("car")'})], "over"])
     rl.advance_reasoner_one_round(
+        boost_queue=unarmed_boost,
         reasoner=fr, user_message="i", ctx=bare_ctx(),
         rid_tag="m0", transcript=tr,
         compute_namespace={"cands": [], "anchors": [], "cell_m": 1.0},

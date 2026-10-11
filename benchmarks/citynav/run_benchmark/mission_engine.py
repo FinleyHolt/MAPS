@@ -718,7 +718,6 @@ def run_mission_episode(
         seed=seed,
         sensor_description=compiler.sensor_description,
         cancel_event=None,
-        look_enabled=True,
         look_renderer=search_loop._render_candidate_crops,
         look_audit_dir=search_loop._look_audit_dir(),
         obs_span_m=obs_span_m,
@@ -726,7 +725,6 @@ def run_mission_episode(
         # are earned by flying, and a crop on ground no flight has covered
         # refuses toward explore.
         obs_minor_m=_obs_minor_m,
-        watchlist_apply=search_loop._watchlist_apply_cb,
         boost_queue=_boost,
         transcript=transcript,
         diag=diag,

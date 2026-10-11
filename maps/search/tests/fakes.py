@@ -109,6 +109,12 @@ CANDS = [
 ]
 
 
+def unarmed_boost(concepts, where):
+    """The boost channel of a run with no armed perception director: the
+    answer ``SearchLoop._boost_queue_cb`` gives then."""
+    return {"error": "boost queueing is not armed this episode"}
+
+
 def drive(script, *, fly=None, declare=None, flight_budget=8, turn_cap=48,
           transcript=None, cands=None, retask=None, look_renderer=None,
           **loop_kw):
@@ -139,6 +145,7 @@ def drive(script, *, fly=None, declare=None, flight_budget=8, turn_cap=48,
         return {"declared": [f"{i['class']} ({i['role']})" for i in items]}
 
     fr = FakeReasoner(script)
+    loop_kw.setdefault("boost_queue", unarmed_boost)
     reply = advance_reasoner_one_round(
         reasoner=fr,
         user_message="Find the goal object.",
@@ -208,6 +215,7 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
 
     fr = FakeReasoner(script)
     reply = advance_reasoner_one_round(
+        boost_queue=unarmed_boost,
         reasoner=fr, user_message="Find the goal object.",
         ctx=bare_ctx(robot_pose=SimpleNamespace(x=START[0], y=START[1])),
         rid_tag="m0",
@@ -300,6 +308,7 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
         graph.nodes.items(), (0.0, 0.0), 1.0)
     fr = FakeReasoner(script)
     advance_reasoner_one_round(
+        boost_queue=unarmed_boost,
         reasoner=fr,
         user_message="Find the goal object.",
         ctx=bare_ctx(graph=graph),
@@ -357,6 +366,7 @@ def map_mission(script, renderer=None, finds=1, extra_priors=None, spread=False)
     cands, anchors = build_surface_from_graph(graph.nodes.items(), (0.0, 0.0), 1.0)
     fr = FakeReasoner([[run(c)] for c in script] + ["done"])
     advance_reasoner_one_round(
+        boost_queue=unarmed_boost,
         reasoner=fr, user_message="Find the car.",
         ctx=bare_ctx(graph=graph, grid_shape=(100, 100)),
         rid_tag="m0", transcript=[],
@@ -402,6 +412,7 @@ def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
 
     fr = FakeReasoner(script)
     advance_reasoner_one_round(
+        boost_queue=unarmed_boost,
         reasoner=fr,
         user_message="find the car",
         ctx=bare_ctx(),

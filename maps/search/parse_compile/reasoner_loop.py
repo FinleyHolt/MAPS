@@ -1082,13 +1082,11 @@ def run_mission(
     seed: int | None = None,
     sensor_description: str = "",
     cancel_event: "threading.Event | None" = None,
-    look_enabled: bool,
     look_renderer: "Callable[[list[dict]], list[dict]] | None" = None,
     look_audit_dir: str | None = None,
     obs_span_m: float | None = None,
     obs_minor_m: float | None = None,
-    watchlist_apply: "Callable[[list, list], dict] | None" = None,
-    boost_queue: "Callable[[list, list], dict] | None" = None,
+    boost_queue: "Callable[[list, list], dict]",
     transcript: list[dict] | None = None,
     diag: dict | None = None,
     rid_tag: str = "m0",
@@ -1112,16 +1110,6 @@ def run_mission(
     at the top of each turn. With it unset the instruction is the single
     user message.
     """
-    # ponytail: the code prompt states the crops capability unconditionally
-    # rather than carrying reasoner_agent's `_NO_CROPS_FACT` needle for the
-    # swap, because SEARCH_LOOK_TOOL=0 is a wiring no config or run script
-    # in this tree declares. The assert is what makes that true rather than
-    # assumed; give the prompt the needle and a code-spelled capability
-    # fact if a crops-less code arm is ever wanted.
-    assert look_enabled, (
-        "the code arm's system prompt states the look()/show_map() "
-        "capability unconditionally; a crops-less run would serve a legend "
-        "for calls it cannot make")
     reasoner = Reasoner(
         reasoner_url=reasoner_url,
         endpoint_spec=endpoint_spec,
@@ -1144,7 +1132,6 @@ def run_mission(
         obs_span_m=obs_span_m,
         obs_minor_m=obs_minor_m,
         look_audit_dir=look_audit_dir,
-        watchlist_apply=watchlist_apply,
         boost_queue=boost_queue,
         preflight=True,
         mission_spec=mission_spec,
@@ -1164,8 +1151,7 @@ def continue_mission(
     look_audit_dir: str | None = None,
     obs_span_m: float | None = None,
     obs_minor_m: float | None = None,
-    watchlist_apply: "Callable[[list, list], dict] | None" = None,
-    boost_queue: "Callable[[list, list], dict] | None" = None,
+    boost_queue: "Callable[[list, list], dict]",
     transcript: list[dict] | None = None,
     diag: dict | None = None,
     rid_tag: str = "m1",
@@ -1197,7 +1183,6 @@ def continue_mission(
         obs_span_m=obs_span_m,
         obs_minor_m=obs_minor_m,
         look_audit_dir=look_audit_dir,
-        watchlist_apply=watchlist_apply,
         boost_queue=boost_queue,
         # Takeoff happened on the first turn. Preflight notes on an
         # aircraft already airborne would state a phase it has left.
@@ -1222,8 +1207,7 @@ def advance_reasoner_one_round(
     obs_span_m: float | None = None,
     obs_minor_m: float | None = None,
     look_audit_dir: str | None = None,
-    watchlist_apply: Callable[[list, list], dict] | None = None,
-    boost_queue: Callable[[list, list], dict] | None = None,
+    boost_queue: Callable[[list, list], dict],
     preflight: bool = False,
     mission_spec: MissionSpec,
     retask: Callable[[], str | None] | None = None,
@@ -2827,11 +2811,6 @@ def advance_reasoner_one_round(
         return ack
 
     def _boost_apply(step: dict, where: list) -> dict:
-        if boost_queue is None:
-            return {"error": (
-                "targeted boost is not wired on this run: call "
-                "look_for(\"<class>\") without near= instead — the "
-                "watchlist is active at every later flight.")}
         res = boost_queue(list(step.get("concepts") or []), where) or {}
         if "error" not in res and res.get("queued"):
             # THE PLACED FORM MEANS WHAT A PLANNER MEANS: standing attention
