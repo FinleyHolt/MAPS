@@ -30,7 +30,6 @@ class FakeReasoner:
         self.messages = [{"role": "system", "content": "sys"}]
         self.vision: list[tuple[str, list]] = []
         self.compaction_infeasible = False
-        self.evidence_columns = set()
         self.combined_tag = None
         self.model = "test"
 

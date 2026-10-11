@@ -711,65 +711,6 @@ def _mission_sanitize_moves(raw, staged) -> tuple[list[dict], list[dict]]:
     return accepted, errors
 
 
-def _single_fid_of_geom_result_value(v) -> str | None:
-    """The fid IFF this one op result isolated EXACTLY one fid-bearing node, else None.
-
-    Two compacted shapes count as "one fid":
-      * a single result-dict bearing a ``fid`` key — a ``pick``
-        reducing to one node (survives ``compact_results`` untouched);
-      * a LIST result that ``compact_results`` rendered as ``{"len": 1, "items": [d]}``
-        where the one item ``d`` carries a ``fid`` — i.e. a ``find`` /
-        ``score_by`` / ``filter_items`` that reduced to exactly one car
-        WITHOUT a trailing ``pick``. (``compact_results`` returns the full
-        list up to a high safety cap, so a len-1 list is always fully preserved.)
-    A multi-element list, a scalar, or a fid-less dict is NOT one isolated fid."""
-    if isinstance(v, dict) and "len" not in v and "items" not in v \
-            and "fids" not in v:
-        fid = v.get("fid")
-        return fid if isinstance(fid, str) and fid else None
-    # Compacted list shape: a len-1 list whose single row carries a fid counts
-    # as the program isolating one object. A list result carries its ordered
-    # fids as ``fids`` (the rows render as a grid string) or ``items``. A
-    # ``compare`` result (which has ``refs``) is an ATTACH, never an isolation.
-    if isinstance(v, dict) and v.get("len") == 1 and "refs" not in v:
-        items = v.get("items")
-        if isinstance(items, list) and len(items) == 1 and isinstance(items[0], dict):
-            fid = items[0].get("fid")
-            return fid if isinstance(fid, str) and fid else None
-        fids = v.get("fids")
-        if isinstance(fids, list) and len(fids) == 1 \
-                and isinstance(fids[0], str) and fids[0]:
-            return fids[0]
-    return None
-
-
-def _terminal_fid_of_geom_result(out: dict) -> str | None:
-    """The fid stamped by the LAST op that reduced the program to ONE fid.
-
-    PURE OBSERVER — no behavior depends on the return value. Reads the
-    ``run_geom_program_tool`` payload's ``results`` map (which preserves op order:
-    ``run_program`` inserts each op's result by ref in execution order, and
-    ``compact_results`` is an order-preserving dict comprehension that leaves a
-    single result-dict untouched — only LIST results are truncated to
-    ``{len, items}``). A terminal single-fid op (``pick``
-    -> a fid-bearing dict, OR a ``find`` / ``score_by``
-    that reduced to exactly one fid-bearing item) leaves a
-    one-fid result — the fid carried through from the surface.
-
-    Returns the fid of the LAST such op. Scaffold-then-prose programs that never
-    reduced to one fid return ``None`` (only multi-element lists, scalars, or
-    fid-less dicts remain)."""
-    results = (out or {}).get("results")
-    if not isinstance(results, dict):
-        return None
-    terminal_fid: str | None = None
-    for v in results.values():
-        fid = _single_fid_of_geom_result_value(v)
-        if fid is not None:
-            terminal_fid = fid
-    return terminal_fid
-
-
 # One factual line on a PREFLIGHT color-column request that attached to no
 # row: before landing the prior surface carries no perceived color, so no
 # color_<word> column attaches anywhere -- a fact about WHEN color exists,
@@ -780,6 +721,7 @@ _PREFLIGHT_COLOR_NOTE = (
     "priors carry no perceived color before landing, so no color column "
     "attaches yet; color enriches per-stop after arrival."
 )
+
 
 # One factual line on a PREFLIGHT runtime-surface retrieval: the detection
 # surface is empty before takeoff -- a fact about WHEN detections exist,
@@ -826,8 +768,7 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
                           raw_sink: dict | None = None,
                           seed_results: dict | None = None,
                           preflight: bool = False,
-                          answer_ref: str = "",
-                          geometry_sink: dict | None = None) -> dict:
+                          answer_ref: str = "") -> dict:
     """Dispatch one ``analyze_scene(program)`` call — the ONE geometry channel.
 
     Runs the model's typed op-program through the SHARED
@@ -837,8 +778,7 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
 
     ``raw_sink`` (harness-side, never model-facing): when given, receives the
     PRE-compaction results under ``raw_sink["results"]`` for the carry store
-    and the latest enriched rows. ``geometry_sink`` is its audit sibling: the
-    resolved compare geometry under ``sink["ops"]`` (see :func:`run_program`).
+    and the latest enriched rows.
 
     The namespace's ``staged``/``standing`` thread through to
     :func:`run_program` (the staged-viewpoint side columns ride every find
@@ -857,7 +797,6 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
     try:
         out = _run_program(cands, anchors, program,
                            seed_results=seed_results,
-                           geometry_sink=geometry_sink,
                            staged=ns.get("staged"),
                            standing=ns.get("standing"))
     except _ProgramError as exc:
@@ -1001,20 +940,6 @@ def _pose_xy_of_ctx(ctx) -> tuple[float, float] | None:
         return (float(pose.x), float(pose.y))
     except (AttributeError, TypeError, ValueError):
         return None
-
-
-def _tool_call_args(tc: dict) -> dict:
-    """Parse one normalized tool_call's arguments string to a dict.
-    ``reasoner_agent._normalize_tool_call_arguments`` guarantees the string
-    parses to a mapping; belt-and-braces for direct/offline callers."""
-    raw = (tc.get("function") or {}).get("arguments")
-    if isinstance(raw, dict):
-        return raw
-    try:
-        parsed = json.loads(raw) if isinstance(raw, str) and raw.strip() else {}
-    except json.JSONDecodeError:
-        parsed = {}
-    return parsed if isinstance(parsed, dict) else {}
 
 
 def _envelope_residue(text: str) -> bool:
@@ -1243,12 +1168,6 @@ def advance_reasoner_one_round(
     # of the episode (the residual head/prose mass it cannot touch only
     # grows), so don't grow it further with a message no dispatch will read.
     thread_infeasible = bool(getattr(reasoner, "compaction_infeasible", False))
-    # Episode-scoped union of every evidence-column name the programs attach,
-    # kept on the reasoner. Instrument only — nothing served reads it.
-    evidence_columns: set = getattr(reasoner, "evidence_columns", None)
-    if evidence_columns is None:
-        evidence_columns = set()
-        reasoner.evidence_columns = evidence_columns
     if not thread_infeasible:
         reasoner.append_user(user_message)
 
@@ -2121,20 +2040,6 @@ def advance_reasoner_one_round(
                                     answer_ref=answer_ref)
         if isinstance(out, dict) and "error" in out:
             out = {**out, "error": _loop_broken_error(str(out.get("error")))}
-        if diag is not None:
-            try:
-                diag["sel_geom_calls"] = int(diag.get("sel_geom_calls", 0)) + 1
-                errored = isinstance(out, dict) and "error" in out
-                diag["sel_geom_last_errored"] = bool(errored)
-                if errored:
-                    diag["sel_geom_last_error"] = str(out.get("error"))[:200]
-                elif isinstance(out, dict):
-                    diag["sel_geom_ok"] = int(diag.get("sel_geom_ok", 0)) + 1
-                tfid = _terminal_fid_of_geom_result(out)
-                if tfid is not None:
-                    diag["sel_geom_terminal_fid"] = tfid
-            except Exception:  # noqa: BLE001 — diagnostics never perturb the round
-                log.debug("geom observer stamp failed (non-fatal)", exc_info=True)
         if isinstance(out, dict) and "error" not in out:
             # a fresh successful program ends the CONSECUTIVE-rejection
             # streak: the next same-class error serves its full text again.
@@ -2169,11 +2074,6 @@ def advance_reasoner_one_round(
                     for _row in _rows:
                         if isinstance(_row, dict) and _row.get("fid"):
                             row_latest[str(_row["fid"])] = _row
-                # The episode's acquisition record: the same column vocabulary
-                # ``_loop_breaker_facts`` discloses, unioned across the episode
-                # and carried to metrics.evidence_columns.
-                evidence_columns.update(
-                    _surface_census_counts(compute_namespace or {})[2])
             except Exception:  # noqa: BLE001 — evidence plumbing never perturbs the round
                 pass
         return out
@@ -3635,7 +3535,7 @@ def advance_reasoner_one_round(
         for tc in r["tool_calls"]:
             name = (tc.get("function") or {}).get("name") or ""
             cid = tc.get("id") or ""
-            args = _tool_call_args(tc)
+            args = json.loads(tc["function"]["arguments"])
             if name == "run":
                 out = _dispatch_run(args, cid)
                 if isinstance(out, dict) and not withheld("look_for"):
