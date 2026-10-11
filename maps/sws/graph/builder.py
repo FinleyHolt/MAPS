@@ -19,36 +19,17 @@ from maps.sws.graph.model import (
 )
 
 # Keys in the ``features`` dict that carry non-feature metadata rather than a
-# list of OSM / CityRefer features. ``build_object_graph`` skips them.
+# feature list. ``build_object_graph`` skips them.
 _NON_FEATURE_KEYS: frozenset[str] = frozenset(
     {"bbox", "georef", "_tile_name", "nlcd_zones"}
 )
 
 
-# Geometry / bookkeeping keys stored on dedicated MapObject fields, consumed
-# by the builder itself, or dropped, never as tags. Everything else on a
-# feature rides into ``MapObject.tags`` verbatim — the agent pulls semantics
-# from the tags at runtime; there is no semantic tag denylist.
+# Feature keys stored on dedicated MapObject fields or consumed by the builder,
+# never as tags; everything else rides into ``MapObject.tags`` verbatim.
 # ``descriptions`` is the GT-label wall and never reaches a node.
 _TAG_SKIP_KEYS = frozenset(
-    {
-        "cells",
-        "cell",
-        "world_contour",  # stamped on MapObject.world_contour, not a tag
-        "centroid_row",
-        "centroid_col",
-        "centroid_lat",
-        "centroid_lon",
-        "lat",
-        "lon",
-        "orientation",
-        "name",  # stored separately on MapObject
-        "descriptions",  # the GT-label wall: never a tag
-        "cityref_id",  # explicitly added to tags below; skip generic scrape
-        "object_type",
-        "altitude_m",
-        "height_m",
-    }
+    {"cells", "world_contour", "centroid_row", "centroid_col", "orientation", "name", "descriptions"}
 )
 
 
@@ -66,15 +47,6 @@ def _extract_tags(feat: dict) -> dict[str, str]:
             if unique:
                 tags[key] = ",".join(unique)
     return tags
-
-
-def _get_cells(feat: dict) -> list[list[int]]:
-    """Get cell coordinates from a feature."""
-    if "cells" in feat:
-        return feat["cells"]
-    if "cell" in feat:
-        return [feat["cell"]]
-    return []
 
 
 def _compute_bbox(cells: list[list[int]]) -> tuple[int, int, int, int]:
@@ -153,18 +125,13 @@ def _mask_centerline(
 def _build_node(
     fid: str, class_name: str, feat: dict, *, cell_size_m: float
 ) -> MapObject | None:
-    """Build a MapObject from a feature dict. Returns None if no cells."""
-    cells = _get_cells(feat)
+    """Build a MapObject from a baked feature dict. Returns None if no cells."""
+    cells = feat["cells"]
     if not cells:
         return None
 
     arr = np.array(cells)
-
-    # Use precomputed centroid if available
-    if "centroid_row" in feat and "centroid_col" in feat:
-        centroid = (int(round(feat["centroid_row"])), int(round(feat["centroid_col"])))
-    else:
-        centroid = (int(round(arr[:, 0].mean())), int(round(arr[:, 1].mean())))
+    centroid = (int(round(feat["centroid_row"])), int(round(feat["centroid_col"])))
 
     angle, confidence = _compute_orientation(arr[:, 0], arr[:, 1])
     # The mask centerline family, the same for every class.
@@ -179,33 +146,15 @@ def _build_node(
         _cl_method = ""
 
     # The bake's exact world-meter vertex chain (a ring, a way, or a node's
-    # single vertex), stamped verbatim; no length floor, since a way or a
-    # single node is a whole contour too.
-    wc_raw = feat.get("world_contour")
-    world_contour: list[list[float]] | None = None
-    if isinstance(wc_raw, list) and wc_raw:
-        try:
-            world_contour = [[float(p[0]), float(p[1])] for p in wc_raw]
-        except (TypeError, ValueError, IndexError):
-            world_contour = None
-
-    tags = _extract_tags(feat)
-    # CityRefer features carry these as scalar fields; surface them as tags
-    # so downstream code can read them without a special-case schema check.
-    if "cityref_id" in feat and feat["cityref_id"] is not None:
-        tags["cityref_id"] = str(feat["cityref_id"])
-    if "object_type" in feat and feat["object_type"]:
-        tags.setdefault("object_type", str(feat["object_type"]))
-    if "altitude_m" in feat and feat["altitude_m"] is not None:
-        tags["altitude_m"] = f"{float(feat['altitude_m']):.3f}"
-    if "height_m" in feat and feat["height_m"] is not None:
-        tags["height_m"] = f"{float(feat['height_m']):.3f}"
+    # single vertex), stamped verbatim; the bake omits it when the geometry
+    # has none.
+    world_contour = [[float(p[0]), float(p[1])] for p in feat.get("world_contour") or []] or None
 
     return MapObject(
         id=fid,
         class_name=class_name,
         name=feat.get("name"),
-        tags=tags,
+        tags=_extract_tags(feat),
         centroid=centroid,
         bbox=_compute_bbox(cells),
         cell_count=len(cells),
@@ -242,25 +191,10 @@ def build_object_graph(
         for i, feat in enumerate(feats):
             if not isinstance(feat, dict):
                 continue
-            # Fids carry PROVENANCE, never semantics. CityRefer features carry
-            # a stable dataset object id — prefer `cityref_<id>` so the
-            # dataset's reference (used by episodes' ``object_ids``) is the
-            # canonical handle through the graph. Every other baked feature is
-            # ``<features-key>_<i>`` — the bake writes one ``prior`` list, so
-            # priors mint ``prior_<i>``, mirroring the runtime's
-            # ``detected_<i>`` (provenance_index; i stable per bake sort
-            # order). All semantics live on the row (name + tags).
-            cityref_id = feat.get("cityref_id")
-            if cityref_id is not None:
-                # str form supports block-namespaced ids in the city-level
-                # aggregate (``birmingham_block_0_3``); int is the per-block
-                # shape. Both pass through unchanged.
-                if isinstance(cityref_id, str):
-                    fid = f"cityref_{cityref_id}"
-                else:
-                    fid = f"cityref_{int(cityref_id)}"
-            else:
-                fid = f"{class_name}_{i}"
+            # Fids carry provenance, never semantics: ``<features-key>_<i>``
+            # (the bake writes one ``prior`` list, so ``prior_<i>``, i stable
+            # per bake sort order), mirroring the runtime's ``detected_<i>``.
+            fid = f"{class_name}_{i}"
             node = _build_node(fid, class_name, feat, cell_size_m=cell_size_m)
             if node is not None:
                 nodes[fid] = node

@@ -8,7 +8,8 @@ from benchmarks.citynav.run_benchmark import episode_runner
 
 
 def test_the_prior_withhold_starts_an_empty_graph(monkeypatch):
-    feats = {"prior": [{"cells": [[0, 0], [0, 1]], "name": "Mill Lane", "class": "road"}]}
+    feats = {"prior": [{"cells": [[0, 0], [0, 1]], "centroid_row": 0, "centroid_col": 0,
+                        "name": "Mill Lane", "class": "road"}]}
     assets = SimpleNamespace(base_features=feats, cell_size_m=2.0)
     monkeypatch.setattr(episode_runner, "load_graph",
                         lambda stem: (_ for _ in ()).throw(FileNotFoundError(stem)))
