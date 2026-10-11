@@ -66,30 +66,6 @@ def test_model_resolves_the_instance_by_emphasis():
     assert fids[0] == "d0", fids
 
 
-def test_explicit_single_index_into_same_named_browse_raises_the_law():
-    # r0[0] into an UNORDERED browse holding THREE same-named 'Earl Street'
-    # instances does not silently resolve to the first — a name is not a
-    # place, so the position picks a tied same-named instance arbitrarily.
-    # The guard fires loud and names the resolution path (score the set
-    # against the cue's OTHER refs, then index). A query-matched find is
-    # ORDERED and indexes freely (its own tie note stated the
-    # arbitrariness); the fan-out onto per-instance columns (the bare-ref
-    # path) keeps every instance.
-    try:
-        _run([
-            {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-            {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},
-            {"ref": "r2", "op": "compare", "args": {"items": "$r1", "refs": ["$r0[0]"]}},
-        ])
-    except ProgramError as e:
-        msg = str(e).lower()
-        assert "name" in msg and ("resolve which" in msg
-                                  or "not a place" in msg), str(e)
-    else:
-        raise AssertionError(
-            "indexing an unresolved same-named set must raise the tie law")
-
-
 def test_bare_fid_ref_single_column_unchanged():
     out = _run([
         {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},

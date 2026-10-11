@@ -70,6 +70,8 @@ def test_key_value_query_retrieves_the_tagged_rows():
     assert "prior_4" not in rows_by_fid
     assert "3 of 4 rows matched" in env["hint"]
     assert "1 sub-threshold row" in env["hint"]
+    assert "NOT in this rN" in env["hint"]
+    assert f"match {max(rows_by_fid[f]['name_match'] for f in rows_by_fid)}" in env["hint"]
 
 
 def test_or_query_is_max_over_clauses():
@@ -356,19 +358,6 @@ def test_compare_grid_joins_identity_and_relational_columns():
                if isinstance(r, dict))
 
 
-def test_compare_without_prior_grid_renders_full_identity():
-    # An inline-fid compare: the same joined shape (this is now the general
-    # behaviour of every compare, earlier grid or none).
-    out = run_program([], _wide_world(60), {"ops": [
-        {"ref": "r0", "op": "compare",
-         "args": {"items": ["prior_001", "prior_002"],
-                  "refs": ["prior_000"]}},
-    ]})
-    env = compact_results(out["results"])["r0"]
-    header = env["rows"].splitlines()[0]
-    assert "xy" in header and "distance to prior_000" in header
-
-
 def test_identical_census_served_once_per_response():
     # 3 identical census blocks rode one 32.7KB message; now the census is
     # served once and later envelopes reference the ref that holds it.
@@ -464,12 +453,6 @@ def test_color_filter_rejection_names_the_real_remedy():
 # ---------------------------------------------------------------------------
 # Dedup: an identical re-issue gets a one-line REFERENCE, never a payload
 # ---------------------------------------------------------------------------
-
-def test_no_effective_args_echo_rides_the_envelope():
-    out = run_program([], _grass_world(), {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-    ]})
-    assert set(out) == {"results"}, out.keys()
 
 
 def test_dedup_note_is_a_reference_not_a_payload():

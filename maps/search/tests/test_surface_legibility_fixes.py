@@ -252,23 +252,12 @@ def test_an_unordered_dump_has_no_cut_to_stand_at():
                  "args": {"query": "car", "provenance": "runtime"}}], cands)
     hint = compact_results(out["results"])["r0"].get("hint") or ""
     assert "showing the first" in hint, hint
-    assert "this head runs" not in hint, hint
-
-
-def test_an_untruncated_head_stays_silent():
-    """Stated only when it BITES -- the whole set is on the page."""
-    cands = [{"fid": f"d{i:03d}", "xy": [float(i), 0.0], "class": "car",
-              "search_text": "car"} for i in range(5)]
-    out = _run([{"ref": "r0", "op": "find",
-                 "args": {"query": "car", "provenance": "runtime"}}], cands)
-    hint = compact_results(out["results"])["r0"].get("hint") or ""
-    assert "this head runs" not in hint, hint
+    assert "ranked on" not in hint, hint
 
 
 # --------------------------------------------------------------------------- #
 # SAME-NAME-TIE-COVERING-OCCASION                                             #
 # --------------------------------------------------------------------------- #
-
 
 
 def test_a_uniform_class_tie_keeps_the_generic_hint():
@@ -285,5 +274,3 @@ def test_a_uniform_class_tie_keeps_the_generic_hint():
     hint = env.get("hint") or ""
     assert "arbitrary" in hint, hint
     assert "pieces of ONE named thing" not in hint, hint
-
-

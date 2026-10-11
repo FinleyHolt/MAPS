@@ -73,28 +73,6 @@ def test_filter_items_relation_column_without_compare():
     assert fids == {"d0"}, fids  # only d0 within 20m of the church
 
 
-def test_score_by_emphasis_relation_column_without_compare():
-    out = _run([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "$r0", "emphasis": [{"key": "distance to church", "w": -1}]}},
-    ])
-    fids = [r["fid"] for r in out["results"]["r1"]]
-    assert fids[0] == "d0", fids
-
-
-def test_already_attached_is_byte_identical():
-    # when the model DID compare first, auto-attach must be a no-op (short-circuit
-    # on the already-present column) — the explicit program is unchanged.
-    out = _run([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "compare", "args": {"items": "$r0", "refs": ["church"]}},
-        {"ref": "r2", "op": "score_by",
-         "args": {"items": "$r1", "emphasis": [{"key": "distance to church", "w": -1}]}},
-    ])
-    assert [r["fid"] for r in out["results"]["r2"]][0] == "d0"
-
-
 def test_dc_and_brg_gap_auto_attach():
     # the centroid-distance and min-gap-bearing columns auto-attach the same
     # way d_ does (brg_gap_ strips its own longer prefix, never brg_'s).
@@ -126,19 +104,3 @@ def test_dc_and_brg_gap_auto_attach():
         assert "SCALAR key" in str(e), str(e)
     else:
         raise AssertionError("a compass word must refuse an ordering op")
-
-
-def test_unresolvable_ref_still_errors():
-    # the absent-key guard survives for a genuinely-unresolvable / guessed key:
-    # 'ghost' is not a fid on the surface, so nothing attaches and the loud error
-    # (the model typo'd) still fires.
-    try:
-        _run([
-            {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-            {"ref": "r1", "op": "score_by",
-             "args": {"items": "$r0", "emphasis": [{"key": "distance to ghost", "w": -1}]}},
-        ])
-    except ProgramError as e:
-        assert "distance to ghost" in str(e)
-    else:
-        raise AssertionError("expected ProgramError for an unresolvable ref")

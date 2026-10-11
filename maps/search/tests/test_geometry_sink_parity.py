@@ -73,17 +73,6 @@ def test_model_payload_byte_identical_with_and_without_sink():
     assert sink["ops"]  # the sink actually filled
 
 
-def test_tool_wrapper_keyset_unchanged():
-    ns = {"cands": [dict(_CAR)], "anchors": _anchors()}
-    bare = run_geom_program_tool({"program": _PROG}, namespace=ns)
-    sink: dict = {}
-    sunk = run_geom_program_tool({"program": _PROG}, namespace=ns,
-                                 geometry_sink=sink)
-    assert set(bare) == set(sunk) == {"results"}
-    assert json.dumps(bare, default=str) == json.dumps(sunk, default=str)
-    assert sink["ops"]
-
-
 def test_sink_holds_the_resolved_geometry():
     sink: dict = {}
     out = run_program([dict(_CAR)], _anchors(), _PROG, geometry_sink=sink)

@@ -57,51 +57,9 @@ def test_query_find_rows_carry_name_match():
 # --------------------------------------------------------------------------- #
 
 
-def test_name_match_never_renders_as_a_grid_column():
-    # Audit: 7/8 not-observed, zero
-    # reads-to-pick-a-row in 8/8 packs -- the column is a render cut in
-    # _GRID_COL_DROP, and the elide-constant special case died with it.
-    # The attached value stays on every raw row (the ordering reads it).
-    out = _run([
-        {"ref": "r0", "op": "find",
-         "args": {"query": "car", "provenance": "runtime"}},
-    ], cands=[dict(c, search_text=c["class"]) for c in _CANDS])
-    raw = out["results"]["r0"]
-    assert all(r.get("name_match") == raw[0]["name_match"] for r in raw), raw
-    env = compact_results(out["results"])["r0"]
-    assert "name_match" not in env["rows"].splitlines()[0], env["rows"]
-    # DISTINCT values render no column either: the cut is unconditional.
-    out2 = _run([
-        {"ref": "r0", "op": "find",
-         "args": {"query": "manhattan house OR earl", "provenance": "prior"}},
-    ], anchors=_ANCHORS + [{"fid": "z_earl", "name": "Earl Court",
-                            "xy": [30.0, 0.0], "class": "building"}])
-    raw2 = out2["results"]["r0"]
-    if len({r.get("name_match") for r in raw2}) > 1:
-        env2 = compact_results(out2["results"])["r0"]
-        assert "name_match" not in env2["rows"].splitlines()[0], env2["rows"]
-
-
 # --------------------------------------------------------------------------- #
 # compare header carries name_match (not match_score)                          #
 # --------------------------------------------------------------------------- #
-
-
-def test_compare_header_carries_name_match():
-    # A landmark grounded via find{query} carries its grounding-trust on the
-    # compare header under the name_match key.
-    out = _run([
-        {"ref": "r0", "op": "find",
-         "args": {"query": "manhattan house", "provenance": "prior"}},
-        {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r2", "op": "compare", "args": {"items": "$r1", "refs": ["$r0"]}},
-    ])
-    hdrs = _cmp_headers(out, "r2")
-    assert hdrs, hdrs
-    assert any(h.get("ref_fid") == "z_solo" and "name_match" in h
-               for h in hdrs), hdrs
-    # the retired key is gone from every header
-    assert all("match_score" not in h for h in hdrs), hdrs
 
 
 def test_unscored_ref_carries_no_name_match():

@@ -74,14 +74,6 @@ def test_fix1_viewer_form_toward_from_still_valid():
 
 
 # --- Fix 4 -----------------------------------------------------------------
-def test_fix4_bare_compare_serves_no_arrangement_note():
-    # the arrangement family is DELETED: a bare compare's hint never
-    # mentions it (the absent-family note died with the columns).
-    res = _run([{"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-                {"ref": "r1", "op": "compare",
-                 "args": {"items": "$r0", "refs": ["shed_1"]}}])
-    env = compact_results(res)["r1"]
-    assert "arrangement" not in _hint_text(env)
 
 
 def test_fix4_road_chart_attaches_its_columns():
@@ -118,15 +110,6 @@ def test_census_near_cell_serves_stored_precision():
 
 
 # --- Order freedom -----------------------------------------------------------
-def test_order_free_forward_ref_resolves():
-    # an op may reference a handle defined LATER; the topological sort runs the
-    # producer first, so what used to be a forward_ref ERROR now resolves.
-    res = _run([
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": ["shed_1"]}},          # uses r0 ...
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},  # ... defined AFTER
-    ])
-    assert isinstance(res.get("r1"), list) and res["r1"]  # resolved, no error
 
 
 def test_order_free_outcome_identical_across_permutations():

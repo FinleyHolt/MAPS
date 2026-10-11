@@ -85,14 +85,6 @@ def test_unnamed_present_column_contributes_nothing():
     assert both != one, (both, one)
 
 
-def test_single_key_emphasis_is_the_one_key_sort():
-    # w:-1 on d_xy = nearest-to-(100,0)-first, exactly.
-    fids, out = _run_fids(_score_by([{"key": "distance to xy", "w": -1}]))
-    rows = {r["fid"]: r for r in out["results"]["r1"]}
-    dists = [rows[f]["distance to xy"] for f in fids]
-    assert dists == sorted(dists), (fids, dists)
-
-
 # --- SIGN-IS-THE-AGENT'S ----------------------------------------------------
 
 

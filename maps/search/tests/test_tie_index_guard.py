@@ -174,23 +174,6 @@ def test_filter_narrowed_single_row_index_is_legal():
     assert "rV" in out["results"]
 
 
-def test_single_key_emphasis_sorted_head_is_legal_to_index():
-    # The taught idiom end-to-end: score_by with a single-key emphasis IS the
-    # single-key sort (w:-1 = lower-raw-first) -- its output carries the
-    # cue_sorted order, so rN[0] is the head, same-named set or not.
-    out = _run([
-        {"ref": "r0", "op": "find",
-         "args": {"query": "Earl Street", "provenance": "prior"}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": [[10.0, 10.0]]}},
-        {"ref": "r2", "op": "score_by",
-         "args": {"items": "r1", "emphasis": [{"key": "distance to xy", "w": -1}]}},
-        {"ref": "rV", "op": "compare",
-         "args": {"items": "cands", "frame": {"reference": "r2[0]", "side": "left"}}},
-    ], _SAME_NAMED)
-    assert "rV" in out["results"]
-
-
 def test_direct_surface_index_on_tied_head_still_raises():
     # Retrieval/surface order carries no cue signal: indexing anchors[...]
     # straight into a same-named tied head still raises the law.

@@ -63,19 +63,12 @@ def _round(r, turns):
     )
 
 
-def test_a_blocks_columns_reach_the_episode_union():
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
-    _round(r, [_turn("run", {"code": _RANK_BLOCK}),
-               {"kind": "text", "content": _REPLY, "reasoning": ""}])
-    assert "rk" in r.evidence_columns, sorted(r.evidence_columns)
-
-
 def test_the_union_is_episode_scoped_and_survives_the_next_turn():
     r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
     _round(r, [_turn("run", {"code": _RANK_BLOCK}),
                {"kind": "text", "content": _REPLY, "reasoning": ""}])
     first = set(r.evidence_columns)
-    assert first, "the first block attached nothing"
+    assert "rk" in first, sorted(first)
     _round(r, [_turn("run", {"code": 'go_to("d0")'}),
                {"kind": "text", "content": _REPLY, "reasoning": ""}])
     assert first <= r.evidence_columns, (sorted(first),

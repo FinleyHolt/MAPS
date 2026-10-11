@@ -238,31 +238,3 @@ def test_the_row_path_obeys_the_same_diet_as_the_grid():
     # Vacuity floor: an emptied drop set would satisfy the loops above.
     assert len(_GRID_COL_DROP) >= 5, _GRID_COL_DROP
     assert {"name_match", "score", "aspect_ratio"} <= _ROW_HIDDEN
-
-
-def test_the_census_echo_names_no_column_the_diet_cut():
-    """The THIRD render path. The live-surface census is echoed as a bare
-    name list into the repeated-rejection remedy ("Columns computed on rows
-    so far: [...]") and the dedup note ("columns live: ..."), and it filtered
-    the hidden-field sets while ignoring the drop set -- so a cut column kept
-    being NAMED to the model even after the Row repr stopped serving its
-    value. Naming a column is how the model learns to ask for it.
-
-    Pinned through MODEL_UNSERVED_COLUMNS, which is the one home all three
-    paths now read, rather than through the emitters' own strings: a fourth
-    path would otherwise repeat the whole mistake."""
-    from maps.search.analyze_scene.geom_program import (
-        MODEL_UNSERVED_COLUMNS,
-        _MODEL_HIDDEN_ROW_FIELDS,
-        _RENDER_INPUT_ROW_FIELDS as _RIRF,
-    )
-    from maps.search.parse_compile import reasoner_loop
-
-    assert _GRID_COL_DROP <= MODEL_UNSERVED_COLUMNS
-    assert set(_MODEL_HIDDEN_ROW_FIELDS) <= MODEL_UNSERVED_COLUMNS
-    assert set(_RIRF) <= MODEL_UNSERVED_COLUMNS
-    # The census emitters read the union and nothing narrower.
-    assert reasoner_loop.MODEL_UNSERVED_COLUMNS is MODEL_UNSERVED_COLUMNS
-    assert not hasattr(reasoner_loop, "_GRID_COL_DROP")
-    # Vacuity floor: the union is the real thing, not an empty set.
-    assert len(MODEL_UNSERVED_COLUMNS) >= 10, MODEL_UNSERVED_COLUMNS

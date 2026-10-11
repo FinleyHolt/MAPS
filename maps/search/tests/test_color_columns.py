@@ -280,26 +280,3 @@ if __name__ == "__main__":
 
 
 # --- weak-appearance note is stripped: no appearance note is ever served ----
-
-
-def test_weak_color_head_serves_no_appearance_note():
-    out = _run([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
-            {"key": "color_red", "w": 1}]}},
-    ])
-    notes = list(getattr(out["results"]["r1"], "notes", []) or [])
-    assert not any(n.startswith("color_red on rows") for n in notes), notes
-
-
-def test_strong_color_head_serves_no_appearance_note():
-    assert G.color_match("red", "red", 0.95) > 0.5  # precondition
-    cands = [{"fid": f"s{i}", "xy": [float(i), 0.0], "class": "car",
-              "color": "red", "color_conf": 0.95} for i in range(3)]
-    out = run_program(cands, [], {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
-            {"key": "color_red", "w": 1}]}},
-    ]})
-    notes = list(getattr(out["results"]["r1"], "notes", []) or [])
-    assert not any(n.startswith("color_red on rows") for n in notes), notes

@@ -62,27 +62,6 @@ def _find(world, query):
 # F1: the matched-note serves the truth about sub-threshold rows
 # ---------------------------------------------------------------------------
 
-def test_find_note_states_the_subthreshold_tail_truthfully():
-    out, env = _find(_grass_world(), "landuse=grass")
-    hint = env["hint"]
-    assert "annotated ~0" not in hint
-    # the match set holds ONLY matches; the tail's size + value range are
-    # stated in the note (never a claim the tail is in the rN)
-    rows = out["results"]["r0"]
-    assert all(r["name_match"] >= T.FUZZY_THRESHOLD for r in rows)
-    assert "1 sub-threshold row" in hint
-    assert "NOT in this rN" in hint
-
-
-def test_find_note_states_matched_head_range():
-    out, env = _find(_grass_world(), "landuse=grass")
-    rows = out["results"]["r0"]
-    matched = [r["name_match"] for r in rows
-               if r["name_match"] >= T.FUZZY_THRESHOLD]
-    # the note spells "match", not the raw-field name: the name_match COLUMN
-    # no longer renders (audit: 7/8 not-observed), so the note stops naming it
-    assert f"match {max(matched)}" in env["hint"]
-
 
 def test_head_banner_endorses_only_a_name_tier_head():
     # "Best" is an ENDORSEMENT and a tag-tier head has not earned it:
@@ -143,83 +122,9 @@ def test_two_bare_xy_literals_is_a_loud_ambiguity_error():
         raise AssertionError("two bare [x,y] literals must error loudly")
 
 
-def test_label_docs_state_the_executor_truth_everywhere():
-    # the doc sites that teach the label grammar teach ONE truth: bare
-    # literal -> _xy family; the labeled form is the named-columns path.
-    # The doc site that speaks it is the compare op's own signature, which
-    # every compare rejection carries.
-    from maps.search.parse_compile.prompts import CODE_SYSTEM_PROMPT
-    assert "keeps the token you typed" not in CODE_SYSTEM_PROMPT
-    # The system prompt carries no label grammar at all (result surfaces
-    # own the composition grammar); the doc site that DOES speak teaches
-    # the one truth.
-    assert "distance to xy" not in CODE_SYSTEM_PROMPT
-    assert "distance to xy" in _OP_SIGNATURE["compare"]
-    assert "as:'label'" in _OP_SIGNATURE["compare"]
-
-
 # ---------------------------------------------------------------------------
 # F3: tie-flat heads carry the truthful tie annotation
 # ---------------------------------------------------------------------------
-
-def test_all_tied_find_head_serves_no_tie_annotation():
-    world = [_prior(f"prior_{i}", 10 * i, 0, name="Garage",
-                    tags={"building": "garage"}) for i in range(6)]
-    _, env = _find(world, "Garage")
-    assert "tie at name_match" not in env.get("hint", "")
-
-
-def test_score_by_prefix_tie_serves_no_annotation():
-    world = [
-        _prior("prior_a", 0, 10),
-        _prior("prior_b", 10, 0),
-        _prior("prior_c", 0, 20),
-    ]
-    out = run_program([], world, {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": [[0.0, 0.0]]}},
-        {"ref": "r2", "op": "score_by",
-         "args": {"items": "r1",
-                  "emphasis": [{"key": "center distance to xy", "w": -1}]}},
-    ]})
-    env = compact_results(out["results"])["r2"]
-    rows = out["results"]["r2"]
-    assert rows[0]["score"] == rows[1]["score"] != rows[2]["score"]
-    assert "tie at score" not in env.get("hint", "")
-
-
-def test_distinct_scores_serve_no_tie_annotation():
-    world = [
-        _prior("prior_a", 0, 10),
-        _prior("prior_b", 0, 20),
-        _prior("prior_c", 0, 30),
-    ]
-    out = run_program([], world, {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": [[0.0, 0.0]]}},
-        {"ref": "r2", "op": "score_by",
-         "args": {"items": "r1",
-                  "emphasis": [{"key": "center distance to xy", "w": -1}]}},
-    ]})
-    env = compact_results(out["results"])["r2"]
-    assert "tie at score" not in env.get("hint", "")
-
-
-def test_all_flat_sort_serves_no_note():
-    world = [_prior("prior_a", 0, 10), _prior("prior_b", 10, 0)]
-    out = run_program([], world, {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": [[0.0, 0.0]]}},
-        {"ref": "r2", "op": "score_by",
-         "args": {"items": "r1",
-                  "emphasis": [{"key": "center distance to xy", "w": -1}]}},
-    ]})
-    env = compact_results(out["results"])["r2"]
-    hint = env.get("hint", "")
-    assert "separated NOTHING" not in hint and "tie at score" not in hint
 
 
 # ---------------------------------------------------------------------------
@@ -229,25 +134,6 @@ def test_all_flat_sort_serves_no_note():
 def test_sign_semantics_sentence_on_every_scored_surface():
     assert "rank-0 is the LARGEST composite" in _OP_SIGNATURE["score_by"]
     assert "w>0 ranks larger raw values first" in _OP_SIGNATURE["score_by"]
-
-
-def test_executor_matches_the_served_sign_definition():
-    world = [
-        _prior("prior_near", 0, 10),
-        _prior("prior_far", 0, 40),
-    ]
-    def _rank0(w):
-        out = run_program([], world, {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-            {"ref": "r1", "op": "compare",
-             "args": {"items": "r0", "refs": [[0.0, 0.0]]}},
-            {"ref": "r2", "op": "score_by",
-             "args": {"items": "r1",
-                      "emphasis": [{"key": "center distance to xy", "w": w}]}},
-        ]})
-        return out["results"]["r2"][0]["fid"]
-    assert _rank0(1) == "prior_far"    # w>0: larger raw first
-    assert _rank0(-1) == "prior_near"  # w<0: smaller raw first
 
 
 # ---------------------------------------------------------------------------

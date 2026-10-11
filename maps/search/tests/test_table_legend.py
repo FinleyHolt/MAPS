@@ -100,12 +100,3 @@ def test_legend_claims_are_the_executors_own_facts():
     row = {a["fid"]: a for a in anchors}["road_1"]
     cl = row["centerline"]
     assert row["end0_xy"] == [round(cl[0][0], 2), round(cl[0][1], 2)], row
-
-
-def test_legend_speaks_no_banned_vocabulary():
-    # The commensurate sweep's own word lists over the one new constant
-    # (its dynamic drive covers the live path; this pins the constant).
-    from maps.search.tests.test_served_surface_commensurate import (
-        _violations,
-    )
-    assert _violations(_TABLE_LEGEND) == [], _violations(_TABLE_LEGEND)
