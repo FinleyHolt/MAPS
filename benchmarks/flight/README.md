@@ -50,8 +50,7 @@ WGS84.
 
 The ground under each frame is the block's bare-earth surface where the bake
 carries one, `<map>_dem.tif` beside `<map>_meta.json` (`map_render.terrain`,
-read through `map_render.ground_msl` by the twin, the live source and the
-registration), and the block's floor (`tile_georef.FLOOR_MSL_M`) where it
+read through `map_render.ground_msl` by the twin and the live source), and the block's floor (`tile_georef.FLOOR_MSL_M`) where it
 does not. The flown bake carried Cal City's: USGS 3DEP 1/3 arc-second heights
 (NAVD88) on 10 m cells in EPSG:32611 over the bake's bounds; the top-level
 README's Cal City section says how to make it from the public 3DEP data.
