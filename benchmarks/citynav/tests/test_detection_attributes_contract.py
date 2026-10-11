@@ -24,7 +24,7 @@ def _make_detection(
         world_xy=world_xy,
         label=label,
         confidence=0.8,
-        class_hint="object",
+        source_tier="sam3_1_image",
         attributes=attributes or {},
     )
 
@@ -71,15 +71,14 @@ def test_empty_attributes_still_records_sam_label():
 
 def test_runtime_node_carries_fine_label():
     """A runtime detection's graph node carries its FINE SAM label as
-    ``class_name``, not the coarse ``class_hint`` bucket."""
-    # The node class is the fine label, not the coarse "object" bucket.
+    ``class_name``."""
     det = _make_detection(label="white car")
     node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0, now=0.0)
     assert node.class_name == "white car"
 
 
-def test_runtime_node_falls_back_to_class_hint_when_unlabeled():
-    """No SAM label -> the coarse class_hint bucket still names the node."""
+def test_runtime_node_falls_back_to_object_when_unlabeled():
+    """No SAM label -> the node is named "object"."""
     det = _make_detection(label="")
     node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0, now=0.0)
     assert node.class_name == "object"

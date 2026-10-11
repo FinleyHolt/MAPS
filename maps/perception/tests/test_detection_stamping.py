@@ -44,7 +44,7 @@ def _rgb() -> np.ndarray:
 def test_projects_only_maskful_detections():
     dets = [
         _det("sam"),
-        DetectedObject(world_xy=(0.0, 0.0), label="car", confidence=0.5),
+        DetectedObject(world_xy=(0.0, 0.0), label="car", confidence=0.5, source_tier="sam"),
     ]
     tracked = project_and_stamp_ortho_detections(
         dets, view_corners_xy=_CORNERS, rgb=_rgb(), tile=_TILE

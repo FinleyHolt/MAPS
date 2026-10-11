@@ -786,7 +786,6 @@ class SearchLoop:
                 "world_xy": list(det.world_xy),
                 "label": det.label,
                 "confidence": float(det.confidence),
-                "class_hint": det.class_hint,
                 "source_tier": det.source_tier,
                 "attributes": dict(det.attributes or {}),
                 "metadata": {k: _json_safe(v) for k, v in (det.metadata or {}).items()},
@@ -908,9 +907,8 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
         label_bucket[label] = label_bucket.get(label, 0) + 1
     return MapObject(
         id=fid_placeholder,
-        # The FINE SAM concept label is the node class; the coarse
-        # class_hint bucket only when the detection has no label.
-        class_name=(str(det.label or "").strip() or det.class_hint),
+        # The FINE SAM concept label is the node class.
+        class_name=label or "object",
         name=det.label,
         tags={
             "label": det.label,

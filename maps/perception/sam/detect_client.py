@@ -19,7 +19,6 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from maps.perception.base import DetectedObject
-from maps.perception.sam.class_hint import resolve_class_hint
 from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.geometry.geolocate import (
     project_mask_to_world_ortho,
@@ -643,7 +642,6 @@ class SamDetectClient:
                 world_xy=projected.world_xy,
                 label=label,
                 confidence=score,
-                class_hint=resolve_class_hint(label),
                 source_tier="sam3_1_image",
                 metadata=metadata,
                 attributes=attrs,

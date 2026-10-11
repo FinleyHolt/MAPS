@@ -22,20 +22,14 @@ class DetectedObject:
     world_xy: tuple[float, float]  # Centroid in world frame (meters)
     label: str  # Free-form class-less label ("car", "building", ...)
     confidence: float  # [0, 1]
-    class_hint: str = "object"  # Coarse bucket for dedup/re-id (node class = fine label)
-    source_tier: str = "synthetic"  # "synthetic" | "sam" | ...
+    source_tier: str  # the producer: "sam3_1_image"
     metadata: dict = field(default_factory=dict)  # track_id, sam3_1_object_id, tile_cells, ...
     attributes: dict[str, str] = field(default_factory=dict)
-    # Open-vocab semantic attributes per detection (color, material, text_span,
-    # ...). Callers typically fold these into a graph node's
-    # semantic_attributes as {key: {value: 1}} counters. Synthetic perception
-    # leaves this empty; real adapters populate it.
+    # Semantic attributes per detection (the colour read). The graph upsert
+    # folds them into a node's semantic_attributes as {key: {value: 1}} counters.
 
-    # Optional segmentation mask, as a crop plus where it sits in the frame
-    # (see ``maps.util.mask_region``). Populated by segmentation-capable
-    # adapters (real SAM/SegFormer paths or the synthetic disc-mask mode).
-    # When present, the downstream geolocator projects it onto the tile grid
-    # and the runtime upsert consumes the resulting ground mask.
+    # The segmentation mask, as a crop plus where it sits in the frame
+    # (see ``maps.util.mask_region``).
     #
     # A region, not a frame-sized array with a box beside it: with separate
     # fields every consumer re-derives the box by scanning the whole frame,
