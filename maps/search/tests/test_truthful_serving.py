@@ -252,8 +252,10 @@ def test_broad_filter_items_capped_same_law():
     n = 120
     out = run_program([], _wide_world(n), {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "rc", "op": "compare",
+         "args": {"items": "r0", "refs": ["prior_000"]}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0",
+         "args": {"items": "rc",
                   "emphasis": [{"key": "distance to prior_000", "w": -1}]}},
         {"ref": "r2", "op": "filter_items",
          "args": {"items": "r1", "key": "distance to prior_000", "op": "le",
@@ -275,8 +277,10 @@ def test_windowed_ordered_result_serves_the_continuation_rows():
     n = 120
     out = run_program([], _wide_world(n), {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "rc", "op": "compare",
+         "args": {"items": "r0", "refs": ["prior_000"]}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0",
+         "args": {"items": "rc",
                   "emphasis": [{"key": "distance to prior_000", "w": -1}]}},
         {"ref": "r2", "op": "filter_items",
          "args": {"items": "r1[12:24]", "key": "xy", "op": "truthy"}},
@@ -297,8 +301,10 @@ def test_unordered_filter_serves_census_not_a_row_head():
     n = 120
     out = run_program([], _wide_world(n), {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "rc", "op": "compare",
+         "args": {"items": "r0", "refs": ["prior_000"]}},
         {"ref": "r1", "op": "filter_items",
-         "args": {"items": "r0", "key": "distance to prior_000", "op": "le",
+         "args": {"items": "rc", "key": "distance to prior_000", "op": "le",
                   "value": 500}},
     ]})
     env = compact_results(out["results"])["r1"]
@@ -330,8 +336,10 @@ def test_compare_grid_joins_identity_and_relational_columns():
 def test_identical_census_served_once_per_response():
     out = run_program([], _wide_world(120), {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "rc", "op": "compare",
+         "args": {"items": "r0", "refs": ["prior_000"]}},
         {"ref": "r1", "op": "filter_items",
-         "args": {"items": "r0", "key": "distance to prior_000", "op": "le",
+         "args": {"items": "rc", "key": "distance to prior_000", "op": "le",
                   "value": 500}},
     ]})
     envs = compact_results(out["results"])
@@ -386,8 +394,10 @@ def test_full_set_stays_chainable_past_the_head():
     # the cap is response shape, never a candidate cap.
     out = run_program([], _wide_world(120), {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "rc", "op": "compare",
+         "args": {"items": "r0[100:110]", "refs": ["prior_119"]}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0[100:110]",
+         "args": {"items": "rc",
                   "emphasis": [{"key": "distance to prior_119", "w": -1}]}},
     ]})
     env = compact_results(out["results"])["r1"]

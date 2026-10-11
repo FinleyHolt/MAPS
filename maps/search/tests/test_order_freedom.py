@@ -52,17 +52,6 @@ _FIND_CARS = {"ref": "r0", "op": "find",
 # --------------------------------------------------------------------------- #
 
 
-def test_off_filter_auto_attaches_without_compare():
-    out = _run([
-        _FIND_CARS,
-        {"ref": "r1", "op": "filter_items",
-         "args": {"items": "r0", "key": "distance to road_1",
-                  "op": "le", "value": 5.0}},
-    ])
-    fids = {r["fid"] for r in out["results"]["r1"]}
-    assert fids == {"d0", "d2"}, fids  # d1 sits 8 m off the road
-
-
 # --------------------------------------------------------------------------- #
 # FAMILY-REMEDY: the missing key's OWN producing idiom, in BOTH guards         #
 # --------------------------------------------------------------------------- #

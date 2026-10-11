@@ -34,10 +34,11 @@ def _expect_error(ops, *needles):
 # --- LAZY-ATTACH: emphasis names the column, NO prior find ------------------
 
 
-def test_emphasis_attaches_color_column_with_no_prior_find():
+def test_emphasis_attaches_the_color_column_it_names():
     out = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
+        {"ref": "rc", "op": "compare", "args": {"items": "r0", "refs": ["shed_1"]}},
+        {"ref": "r1", "op": "score_by", "args": {"items": "rc", "emphasis": [
             {"key": "color_blue", "w": 1}, {"key": "distance to shed_1", "w": -1}]}},
     ])
     rows = out["results"]["r1"]
@@ -46,8 +47,8 @@ def test_emphasis_attaches_color_column_with_no_prior_find():
     assert by_fid["d0"]["color_blue"] == round(G.color_match("blue", "blue", 0.9), 3)
     assert by_fid["d2"]["color_blue"] == round(G.color_match("gray", "blue", 0.9), 3)
     assert "color_blue" not in by_fid["d3"], by_fid["d3"]
-    # the d_<fid> relation auto-attached alongside; the sort ran (rank 0 = the
-    # blue car, which is both the color match and nearest the shed)
+    # the sort ran (rank 0 = the blue car, which is both the color match
+    # and nearest the shed)
     assert all(isinstance(r.get("distance to shed_1"), (int, float)) for r in rows)
     assert rows[0]["fid"] == "d0", [r["fid"] for r in rows]
     # permutation: no row added or dropped

@@ -74,26 +74,17 @@ def test_distance_to_ranks_by_magnitude_either_side():
         {"fid": "d1", "xy": [90.0, -8.0], "class": "car"},  # dist 8
         {"fid": "d2", "xy": [50.0, 3.0], "class": "car"},   # dist 3
     ]
+    road = dict(_ANCHORS[0], mask=[[[0.0, 0.0], [100.0, 0.0]]])
     magnitude = _run([
         {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "rc", "op": "compare",
+         "args": {"items": "r0", "refs": ["road_1"]}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0",
+         "args": {"items": "rc",
                   "emphasis": [{"key": "distance to road_1", "w": -1}]}},
-    ], cands)
+    ], cands, [road])
     assert [r["fid"] for r in magnitude["results"]["r1"]] == \
         ["d0", "d2", "d1"]
-
-
-def test_distance_to_on_a_line_charts_and_orders():
-    out = _run([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0",
-                  "emphasis": [{"key": "distance to road_1", "w": -1}]}},
-    ], _COLOR_CANDS)
-    rows = out["results"]["r1"]
-    vals = [r["distance to road_1"] for r in rows]
-    assert vals == sorted(vals), vals
 
 
 # --------------------------------------------------------------------------- #

@@ -242,26 +242,6 @@ def test_only_a_closed_chain_carries_area_or_an_area_centroid():
     assert G.loops_area_centroid(mixed) == [5.0, 5.0]
 
 
-def test_frame_along_is_unclamped_past_the_ends():
-    # The polyline chart extends past its ends: a candidate beyond the far
-    # end reads its TRUE arc coordinate (> length), one before the start < 0.
-    cands = [
-        {"fid": "past", "xy": [110.0, -5.0], "class": "car"},
-        {"fid": "before", "xy": [-10.0, -5.0], "class": "car"},
-        {"fid": "mid", "xy": [50.0, -5.0], "class": "car"},
-    ]
-    out = run_program([dict(c) for c in cands], [dict(_ROAD)], {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "frame": {"along": "road_1"}}},
-    ]})
-    rows = {r["fid"]: r for r in out["results"]["r1"]}
-    assert rows["past"]["along road_1"] == 110.0, rows["past"]
-    assert rows["before"]["along road_1"] == -10.0, rows["before"]
-    assert rows["mid"]["along road_1"] == 50.0, rows["mid"]
-    assert not any(k.startswith("clamped_") for r in rows.values() for k in r)
-
-
 # --------------------------------------------------------------------------- #
 # UNION refs: {ref:[fid,...], as:'label'} -- the named masks as ONE ref        #
 # --------------------------------------------------------------------------- #

@@ -18,7 +18,6 @@ earlier call) or a window ``rN[a:b]`` -- or a fid list; a ref is a fid, an
 """
 from __future__ import annotations
 
-import copy
 import re
 
 from maps.search.analyze_scene import cardinal_side
@@ -1194,15 +1193,6 @@ _COMPARE_COL_PREFIXES = ("distance to ", "center distance to ",
                          "ahead of ", "behind ",
                          "east of ", "west of ", "north of ", "south of ")
 
-# The map-fixed cardinal columns. One per DIRECTION asked for, never all
-# four: the direction rides the key exactly as the reference does, so a cue
-# saying "east of Orchid Drive" costs one column and not a compass rose.
-# Signed metres, positive when the row IS in that direction; ABSENT when the
-# reference has no side to name there (it straddles the row's band, or none
-# of it lies abreast). See maps/search/analyze_scene/cardinal_side.py.
-_CARDINAL_COL_PREFIXES = ("east of ", "west of ", "north of ", "south of ")
-
-
 # A union's own bound, a wall-clock net: a union renders one column set
 # however many members it folds, but an rN member can fold a whole class,
 # and members x items gap calls is the cost.
@@ -1515,9 +1505,8 @@ def _polyline_arc_midpoint(verts) -> list:
 # on those families (the compare path), so nothing is re-implemented.
 _STANDING_SIDE_PREFIXES = ("left of ", "right of ", "ahead of ", "behind ")
 
-# Every key naming one of these prefixes is a computation request: an op that
-# names it gets the column computed (``_auto_attach``, in run_program). Module
-# scope so the python surface reads the same tuple.
+# The prefixes of the relation and color column keys; the python surface
+# reads them to name what writes a missing key.
 _AUTOATTACH_PREFIXES = ("facing ", "bearing from ",
                         "center distance to ", "distance to ",
                         "along ", "left of ", "right of ",
@@ -1613,13 +1602,6 @@ class _Run:
         self.standing = self.staged.get(standing) if standing else None
         self.results: dict = {}
         self.op = None
-
-    def child(self) -> "_Run":
-        """A fresh one-op run over the same surface: the compare an
-        auto-attach runs reads no handle."""
-        c = copy.copy(self)
-        c.seed, c.results, c.op = {}, {}, "compare"
-        return c
 
     def sig(self) -> str:
         sig = _OP_SIGNATURE.get(self.op)
@@ -1752,77 +1734,6 @@ def _named_rows(cx, el, need):
             if n is not None and n not in out:
                 out.append(n)
     return out
-
-
-# ---- auto-attach columns (the parameter rides in the key name) ----
-# Naming a relation column '<prefix> <ref>' or a color column color_<word>
-# where a column key is accepted is the computation request: when <ref> is a
-# live surface fid (or a staged handle) a one-op compare attaches it and the
-# op proceeds. A key that resolves to nothing falls to the op's own
-# absent-key guard.
-
-def _attach_compare(cx, items, args):
-    """A one-op compare over ``items`` in a fresh run; its rows, else the
-    items unchanged."""
-    out = _compare(cx.child(), {"items": items, **args})
-    return list(out) if out else items
-
-
-def _auto_attach(cx, items, keys, notes=None):
-    if not (isinstance(items, list) and items):
-        return items
-    refs: list = []
-    charts: list = []
-    colors: list = []
-    # (direction, ref) pairs; the DIRECTION rides the prefix and the
-    # reference the suffix, so one key names the whole column.
-    cardinals: list = []
-    for k in keys:
-        if not isinstance(k, str) or k == "color_conf" or any(
-                isinstance(it, dict) and it.get(k) is not None for it in items):
-            continue  # not a column request, or already attached
-        pre = next((p for p in _AUTOATTACH_PREFIXES if k.startswith(p)), None)
-        if pre is None:
-            continue
-        param = k[len(pre):]
-        if pre == "color_":
-            canon, note = _resolve_color_word(param)
-            if canon not in colors:
-                colors.append(canon)
-            if note is not None and notes is not None:
-                notes.append(note)
-        elif pre in _CARDINAL_COL_PREFIXES:
-            # A map-fixed cardinal needs only the reference's geometry, so
-            # ANY ref on the surface attaches one, including the merged
-            # multi-way features whose centerline is None.
-            if param in cx.by_fid or param in cx.staged:
-                _cd = (pre.strip()[:-3].strip(), param)
-                if _cd not in cardinals:
-                    cardinals.append(_cd)
-                if param not in refs:
-                    refs.append(param)
-        else:
-            # a line-carrying fid charts its 'distance to'; any other ref on
-            # the surface gets the relation columns
-            _n = cx.by_fid.get(param)
-            _cl = _n.get("centerline") if isinstance(_n, dict) else None
-            if (pre == "distance to " and isinstance(_cl, list)
-                    and len(_cl) >= 2):
-                if param not in charts:
-                    charts.append(param)
-            elif ((param in cx.by_fid or param in cx.staged)
-                  and param not in refs):
-                refs.append(param)
-    for canon in colors:
-        items = _attach_color_column(items, canon)
-    for param in charts:
-        items = _attach_compare(cx, items, {"frame": {"along": param}})
-    if not refs:
-        return items
-    _cargs: dict = {"refs": refs}
-    if cardinals:
-        _cargs["cardinals"] = [{"dir": d, "ref": r} for d, r in cardinals]
-    return _attach_compare(cx, items, _cargs)
 
 
 def _relate_ran(key, items) -> bool:
@@ -2371,8 +2282,12 @@ def _score_by(cx, a):
                 _sb_notes.append(_cnote)
             _k = "color_" + _canon
         emphasis[_k] = float(_el["w"])
-    items = _auto_attach(cx, items, list(emphasis), notes=_sb_notes)
-    # An emphasis key no row carries (after the auto-attach) would be a
+    for _k in emphasis:
+        # Naming a color column attaches it.
+        if _is_color_column_key(_k) and not any(
+                isinstance(it, dict) and it.get(_k) is not None for it in items):
+            items = _attach_color_column(items, _k[len("color_"):])
+    # An emphasis key no row carries (after the color attach) would be a
     # silent constant term: loud.
     _dropped_color: list = []
     for _k in list(emphasis):
@@ -2424,7 +2339,6 @@ def _filter_items(cx, a):
     # ordered (and renderable); a cut over a browse stays not.
     _in_ordered = bool(getattr(items, "cue_sorted", False)
                        or getattr(items, "ordered", False))
-    items = _auto_attach(cx, items, [key])
     if opr == "le":
         if items and not any(isinstance(it.get(key), (int, float)) for it in items):
             raise ProgramError(
@@ -2674,10 +2588,6 @@ def _compare(cx, a):
     centroid), and per requested direction a signed cardinal column. Every
     number comes from a geom_compute primitive. An attach, not a sort: input
     order preserved.
-
-    ``frame:{along:<fid>}`` (the auto-attach's chart of a line ref) attaches
-    'along <fid>' (arc metres from its end0) and 'distance to <fid>' (the
-    unsigned lateral offset) instead.
     """
     items = _as_rows(cx, a["items"])
     # Order propagation: compare preserves input order, so its result is
@@ -2725,22 +2635,6 @@ def _compare(cx, a):
         headers.append(hdr)
         col_specs.append((kind, payload, lab))
 
-    # --- the chart of a line ref (auto-attach only) --------------------
-    frame_join: dict = {}
-    flab = None
-    if a.get("frame") is not None and items:
-        _fid = a["frame"]["along"]
-        flab = _sanitize_token(_fid)
-        structured, f_receipt = G.frame_polyline(
-            items, cx.by_fid[_fid]["centerline"])
-        if f_receipt.get("error"):
-            raise ProgramError(
-                f"compare frame: {f_receipt['error']}{cx.sig()}")
-        for rec in structured:
-            key = rec.get("fid") or (round(rec["xy"][0], 2),
-                                     round(rec["xy"][1], 2))
-            frame_join[key] = rec
-
     # --- row assembly: PASSTHROUGH + columns ---------------------------
     # Every attached key is recorded VERBATIM -- per ref (that header's
     # ``cols``) and op-wide (the result's ``columns`` echo) -- so the model
@@ -2748,11 +2642,10 @@ def _compare(cx, a):
     ref_col_keys: list[dict] = [{} for _ in col_specs]
     all_col_keys: dict = {}
 
-    def _put(row, k, val, ci=None):
+    def _put(row, k, val, ci):
         row[k] = val
         all_col_keys[k] = None
-        if ci is not None:
-            ref_col_keys[ci][k] = None
+        ref_col_keys[ci][k] = None
 
     # Per-ref geometry, resolved once: ``(geom, center)``. The gap side is
     # the exact realised mask, else its point; ``center`` is the mask's area
@@ -2904,14 +2797,6 @@ def _compare(cx, a):
                     # ABSENT only when the centroids coincide.
                     _put(row, f"bearing from {lab}",
                          round(G.bearing(center, it_c), 1), ci)
-        if frame_join:
-            rec = frame_join.get(it.get("fid") or (round(it["xy"][0], 2),
-                                                   round(it["xy"][1], 2)))
-            if rec is not None:
-                _put(row, f"along {flab}", rec.get("along"))
-                if rec.get("off") is not None:
-                    _put(row, f"distance to {flab}",
-                         round(abs(float(rec["off"])), 2))
         out_rows.append(row)
     for ci, (kind, payload, lab) in enumerate(col_specs):
         _cf = contains_rows.get(ci)

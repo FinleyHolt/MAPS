@@ -52,23 +52,6 @@ def test_standing_columns_ride_every_find_result():
     assert rows["c_s"]["right of v1"] == 10.0
 
 
-def test_side_key_naming_a_staged_handle_lazily_attaches():
-    # find WITHOUT standing (an old handle), then score_by names the side
-    # key: the auto-attach must compute the staged columns on demand.
-    out = run_program(
-        [dict(c) for c in _CANDS], [],
-        {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-            {"ref": "r1", "op": "score_by",
-             "args": {"items": "r0",
-                      "emphasis": [{"key": "ahead of v1", "w": 1}]}},
-        ]},
-        staged=_STAGED)
-    rows = out["results"]["r1"]
-    assert rows[0]["fid"] == "c_e"          # farthest ahead ranks first
-    assert rows[0]["ahead of v1"] == 10.0
-
-
 def test_staged_handle_ref_attaches_the_stance_columns():
     out = run_program(
         [dict(c) for c in _CANDS], [],

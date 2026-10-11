@@ -56,13 +56,15 @@ def test_repeated_compare_byte_parity():
 
 
 def test_chain_vs_fresh_parity_over_score_by_slice_and_filter():
-    # A compare on rows that came through score_by (which auto-attached its
-    # own nested compare), a slice, and a filter serves geometry
+    # A compare on rows that came through a compare, score_by, a slice and
+    # a filter serves geometry
     # byte-identical to a fresh compare on the same fids.
     chained = {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0c", "op": "compare",
+         "args": {"items": "r0", "refs": ["prior_1"]}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0",
+         "args": {"items": "r0c",
                   "emphasis": [{"key": "distance to prior_1", "w": -1}]}},
         {"ref": "r2", "op": "filter_items",
          "args": {"items": "r1", "key": "distance to prior_1", "op": "le",
@@ -89,8 +91,10 @@ def test_chain_vs_fresh_parity_over_score_by_slice_and_filter():
 def test_self_ref_reads_zero_and_directionless():
     prog = {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0c", "op": "compare",
+         "args": {"items": "r0", "refs": ["prior_1"]}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0",
+         "args": {"items": "r0c",
                   "emphasis": [{"key": "distance to prior_1", "w": -1}]}},
         {"ref": "r2", "op": "compare",
          "args": {"items": "r1", "refs": ["prior_1"]}},
@@ -204,8 +208,10 @@ def test_covering_row_as_item_omitted_from_sort_head_with_note():
     anchors[-1]["covers_window"] = True
     prog = {"ops": [
         {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0c", "op": "compare",
+         "args": {"items": "r0", "refs": ["prior_1"]}},
         {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0",
+         "args": {"items": "r0c",
                   "emphasis": [{"key": "distance to prior_1", "w": -1}]}},
         {"ref": "r2", "op": "find",
          "args": {"provenance": "prior", "query": "Cambridge"}},
