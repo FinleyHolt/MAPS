@@ -18,12 +18,13 @@ from __future__ import annotations
 
 import re
 
+import numpy as np
+
 from maps.search.analyze_scene import cardinal_side
 from maps.search.analyze_scene import cell_mesh
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene import text_match as T
 from maps.search.render.look_render import LOOK_SET_ROWS
-from maps.util.node_fingerprint import fingerprint_node
 from maps.util.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld
 
@@ -206,8 +207,9 @@ def representative_point(chains) -> list:
 
 
 # A surface row is a pure function of its node's content and the tile
-# geometry, so rows are cached by content (fingerprint_node): ingest returns
-# fresh node objects. Each cache is dropped whole at its cap.
+# geometry, so rows are cached by content (_content_key over the node's whole
+# __dict__, so a new MapObject field cannot be invisible to the key): ingest
+# returns fresh node objects. Each cache is dropped whole at its cap.
 _ROW_CACHE: "dict[tuple, dict | None]" = {}
 _ROW_CACHE_MAX = 50_000
 
@@ -244,13 +246,32 @@ def _mask_geom_center(m):
     return g, c
 
 
+def _content_key(v):
+    """A hashable summary of ``v`` that changes whenever its content does.
+    Arrays and numeric sequences hash their bytes (``cells`` is the bulk of a
+    node)."""
+    if isinstance(v, (list, tuple)):
+        try:
+            a = np.asarray(v)
+        except ValueError:  # ragged: walk it
+            a = None
+        if a is None or a.dtype.kind not in "ifb":
+            return ("seq", tuple(_content_key(x) for x in v))
+        v = a
+    if isinstance(v, np.ndarray):
+        return ("nd", v.shape, v.dtype.str, hash(v.tobytes()))
+    if isinstance(v, dict):
+        return ("map", tuple(sorted((str(k), _content_key(x)) for k, x in v.items())))
+    return v
+
+
 def _rows_by_content(kind, nodes, build_row, geom):
     """One row per ``(fid, node)``, reusing unchanged ones. Each is a
     shallow copy, since the caller stamps fields on it; the heavy values
     are shared and read-only."""
     out = []
     for f, n in nodes:
-        key = (kind, str(f), geom, fingerprint_node(n))
+        key = (kind, str(f), geom, tuple(sorted((k, _content_key(v)) for k, v in vars(n).items())))
         if key in _ROW_CACHE:
             row = _ROW_CACHE[key]
         else:
