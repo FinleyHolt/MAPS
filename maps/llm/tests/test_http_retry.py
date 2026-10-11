@@ -186,3 +186,17 @@ def test_every_call_names_its_timeout() -> None:
     with pytest.raises(TypeError, match="timeout"):
         http_mod._chat_completions_raw(
             "http://endpoint/v1", "key", model="m", messages=[{"role": "user", "content": "hi"}])
+
+
+@pytest.mark.parametrize("stream", [False, True], ids=["blocking", "streaming"])
+def test_a_404_for_a_model_no_longer_served_is_named_on_both_paths(transport, monkeypatch, stream) -> None:
+    """A serve restarted behind the URL with another model answers 404; the re-probe names the change."""
+    import threading
+
+    from maps.llm import endpoint_spec
+
+    monkeypatch.setattr(endpoint_spec, "_probe_models", lambda _url: [{"id": "another-model"}])
+    result, calls, _sleeps = transport([_err(404)], **({"cancel_event": threading.Event()} if stream else {}))
+    assert isinstance(result, RuntimeError), result
+    assert "served-model mismatch" in str(result) and "another-model" in str(result)
+    assert len(calls) == 1

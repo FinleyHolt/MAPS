@@ -725,13 +725,6 @@ def _chat_completions_raw(
                     time.sleep(_BACKOFF_S * (2**attempt))
                     attempt += 1
                     continue
-                if r.status_code == 404:
-                    # Same-URL hot-swap guard: startup discovery is
-                    # probe-once, so a server RESTARTED behind the same
-                    # URL with a different model surfaces here. Re-check
-                    # the served ids and abort naming the mismatch
-                    # instead of churning silent per-call 404s.
-                    _raise_on_served_model_mismatch(base_url, body.get("model"), r.text)
                 r.raise_for_status()
                 response_json = r.json()
             if cancel_event is not None and cancel_event.is_set():
@@ -803,6 +796,11 @@ def _chat_completions_raw(
                 )
                 time.sleep(delay)
                 continue
+            if status == 404:
+                # Same-URL hot-swap guard: startup discovery is probe-once,
+                # so a server RESTARTED behind the same URL with a different
+                # model surfaces here, on either path.
+                _raise_on_served_model_mismatch(base_url, body.get("model"), e.response.text)
             if status is not None and status < 500:
                 try:
                     resp_text = e.response.text
