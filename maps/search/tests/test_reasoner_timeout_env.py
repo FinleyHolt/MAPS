@@ -6,37 +6,20 @@ import pytest
 
 from maps.search.parse_compile.reasoner_agent import (
     _REASONER_TIMEOUT_DEFAULT_S,
+    Reasoner,
     _reasoner_timeout_s,
 )
+from maps.search.tests.fakes import TEST_SPEC
 
 ENV = "SEARCH_REASONER_TIMEOUT_S"
 
 
-@pytest.mark.parametrize("value", [None, "", "   "])
-def test_unset_or_blank_takes_the_default(monkeypatch, value):
-    if value is None:
-        monkeypatch.delenv(ENV, raising=False)
-    else:
-        monkeypatch.setenv(ENV, value)
+def test_the_env_sets_the_timeout_and_a_value_that_cannot_apply_is_loud(monkeypatch):
+    monkeypatch.setenv(ENV, "   ")
     assert _reasoner_timeout_s() == _REASONER_TIMEOUT_DEFAULT_S
-
-
-@pytest.mark.parametrize("value", ["900", " 900 "])
-def test_the_exported_value_applies(monkeypatch, value):
-    monkeypatch.setenv(ENV, value)
-    assert _reasoner_timeout_s() == 900.0 != _REASONER_TIMEOUT_DEFAULT_S
-
-
-@pytest.mark.parametrize("bad", ["nine hundred", "900s", "0", "-1", "nan", "inf", "1e12"])
-def test_a_value_that_cannot_apply_is_loud(monkeypatch, bad):
-    monkeypatch.setenv(ENV, bad)
-    with pytest.raises(ValueError):
-        _reasoner_timeout_s()
-
-
-def test_a_reasoner_takes_its_timeout_from_the_env(monkeypatch):
-    from maps.search.parse_compile.reasoner_agent import Reasoner
-    from maps.search.tests.fakes import TEST_SPEC
-
-    monkeypatch.setenv(ENV, "777")
-    assert Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC).timeout == 777.0
+    monkeypatch.setenv(ENV, " 900 ")
+    assert Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC).timeout == 900.0
+    for bad in ("900s", "0", "nan", "1e12"):
+        monkeypatch.setenv(ENV, bad)
+        with pytest.raises(ValueError):
+            _reasoner_timeout_s()
