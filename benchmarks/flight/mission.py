@@ -200,6 +200,7 @@ def hydrate(*, episode_id: str, split: str, config: str, workdir: Path,
         tile_name=f"citynav::{assets.map_name}",
         compiler=compiler,
         sam_concept_setter=sam_concept_setter,
+        sam_watchlist_setter=sam_concept_setter,
         # The block's ground datum: the mission's observation span is
         # ``2 * (alt - ground)`` off it, and without it every explore answers
         # "no footprint to cover".

@@ -120,3 +120,22 @@ def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_sortie_carri
     assert list(scored) == ["calcity::0#0"] and scored["calcity::0#0"]["SR"] == 1 and no_metrics == 0
     first = serves[0]
     assert first["messages"][-1] == {"role": "user", "content": "The church at the end of the road."}
+
+
+def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity, serves, tmp_path, monkeypatch):
+    """The flight wires the agent's watchlist channel exactly as the bench
+    does: a watchlist change the director makes reaches the segmenter's
+    concept provider, not engine state alone."""
+    from benchmarks.citynav.run_benchmark import perception
+    from benchmarks.flight import mission as M
+    from maps.llm import endpoint_spec
+    from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+
+    monkeypatch.setattr(perception, "make_perception", lambda cfg: SimpleNamespace(
+        detect=lambda obs, xy, instruction_hint=None: [], concept_provider=ReasonerUnionConceptProvider()))
+    endpoint_spec.install_spec(endpoint_spec.discover_from_env())
+    M.activate_calcity()
+    h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", workdir=tmp_path)
+    h.search_loop.declare_mission_concepts([{"class": "car", "role": "target"}])
+    h.search_loop.state.perception_director.watchlist_apply(["tree"], [])
+    assert h.perception.concept_provider.concepts == ["car", "tree"]
