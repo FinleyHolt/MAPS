@@ -58,13 +58,7 @@ _SCHEMA: dict[str, Any] = {
     "altitude_cap_m": (_NUM, _POS),
     "sensor": ((str, dict), (_sensor_ok, "a registered sensor or an inline override")),
     "sam": {
-        "model_id": (str, _ANY),
-        "score_threshold": (_NUM, ((lambda v: 0 <= v <= 1), "in [0, 1]")),
-        "min_area_px": (int, _NONNEG),
-        "max_per_step": (int, _POS),
         "sahi": (bool, _ANY),
-        "sahi_overlap": (_NUM, ((lambda v: 0 <= v < 1), "in [0, 1)")),
-        "sahi_nms_iou": (_NUM, ((lambda v: 0 < v <= 1), "in (0, 1]")),
     },
     "withhold": (list, (
         lambda v: len(set(v)) == len(v) and all(n in WITHHOLDS for n in v),

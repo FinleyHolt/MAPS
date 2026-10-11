@@ -42,11 +42,7 @@ def _case(frame_px: int):
 def _per_detection_seconds(frame_px: int, reps: int = 3) -> tuple[float, int]:
     provider = ReasonerUnionConceptProvider()
     provider.set_concepts(["car"])
-    client = SamDetectClient(
-        concept_provider=provider,
-        min_area_px=16,
-        max_per_step=999,
-    )
+    client = SamDetectClient(concept_provider=provider)
     payload, obs = _case(frame_px)
     best = float("inf")
     out: list = []
@@ -66,6 +62,8 @@ def _per_detection_seconds(frame_px: int, reps: int = 3) -> tuple[float, int]:
 
 def test_per_detection_decode_cost_does_not_track_frame_area(monkeypatch):
     monkeypatch.setattr(dc, "_DECODE_WORKERS", 1)  # serial: this measures work, not scheduling
+    monkeypatch.setattr(dc, "MIN_AREA_PX", 16)
+    monkeypatch.setattr(dc, "MAX_PER_STEP", 999)
     small, n_small = _per_detection_seconds(SMALL)
     large, n_large = _per_detection_seconds(LARGE)
 

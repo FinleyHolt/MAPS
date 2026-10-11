@@ -91,7 +91,7 @@ class WorldTracker:
         """Predict → Mahalanobis-assign → KF-update → lifecycle, then
         stamp a stable ``metadata['track_id']`` ('wt_<int>') in place on
         every detection with a finite ``world_xy``: it binds to a track or
-        spawns one. Admission is the detector's job (score_threshold);
+        spawns one. Admission is the detector's job (its score floor);
         provisional births + ``_N_INIT`` pruning are the tracker's own
         flicker valve, never a second admission gate."""
         # --- predict (constant position; variance inflates, capped) ---

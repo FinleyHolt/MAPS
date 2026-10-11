@@ -20,6 +20,7 @@ from PIL import Image
 
 from maps.perception.tests.regions import square_view
 from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import (
     SamDetectClient,
     _letterbox_to_sam,
@@ -184,18 +185,11 @@ def _build_repack_case():
     repack. The rgb is a deterministic gradient so each tile's PNG is
     distinct — the content-keyed mock must never be degenerate."""
     H, W = 1008, 1512  # 1 row × 2 cols of native 1008 tiles: c0 ∈ {0, 504}
-    min_area = 16
+    min_area = dc.MIN_AREA_PX
     provider = ReasonerUnionConceptProvider()
     provider.set_concepts(["car"])
-    client = SamDetectClient(
-        concept_provider=provider,
-        score_threshold=0.1,
-        min_area_px=min_area,
-        sahi=True,
-        sahi_overlap=0.2,
-        sahi_nms_iou=0.5,
-    )
-    bounds = client._tile_bounds(H, W, client.sahi_overlap)
+    client = SamDetectClient(concept_provider=provider, sahi=True)
+    bounds = client._tile_bounds(H, W, dc.SAHI_OVERLAP)
     assert bounds == [(0, 1008, 0, 1008), (0, 1008, 504, 1512)]
 
     def tile_mask(r0, c0, r1, c1):
@@ -214,7 +208,7 @@ def _build_repack_case():
         _tile_det(tile_mask(300, 96, 340, 196), "car", 0.7, 0),
         _tile_det(tile_mask(500, 700, 560, 800), "car", 0.85, 1),
         _tile_det(tile_mask(700, 100, 760, 200), "building", 0.85, 2),
-        _tile_det(tile_mask(10, 10, 12, 12), "car", 0.99, 3),  # 4 px < 16
+        _tile_det(tile_mask(10, 10, 12, 12), "car", 0.99, 3),  # 4 px < MIN_AREA_PX
     ]
     payloads = [
         {"detections": t0, "image_shape_hw": [1008, 1008]},
@@ -233,7 +227,7 @@ def _build_repack_case():
             ref_full.append((fm, str(det["label"]), float(det["score"])))
     ref_dets = []
     for i, (m, lab, sc) in enumerate(
-        _reference_nms_full_masks(ref_full, client.sahi_nms_iou)
+        _reference_nms_full_masks(ref_full, dc.SAHI_NMS_IOU)
     ):
         rec = encode_mask_record(m)
         ref_dets.append({**rec, "object_id": i, "label": lab, "score": sc})

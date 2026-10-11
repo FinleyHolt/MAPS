@@ -38,18 +38,10 @@ spawn_seed: 0
 start_altitude_agl_m: null
 altitude_cap_m: 200.0
 sam:
-  model_id: facebook/sam3.1
-  score_threshold: 0.3
-  min_area_px: 32
-  # A backstop against a pathological frame, not a budget: there is no
-  # per-concept cap, so every same-class instance stays available for
-  # relational and ordinal counting.
-  max_per_step: 1024
   # Native-resolution SAHI tiling of the 2016 px render into 1008 px tiles,
-  # masks remapped to the full frame, cross-tile IoU-NMS dedup.
+  # masks remapped to the full frame, cross-tile IoU-NMS dedup. The
+  # segmenter's other options are fixed (maps/perception/sam/detect_client.py).
   sahi: true
-  sahi_overlap: 0.2
-  sahi_nms_iou: 0.5
 sensor: nadir_1008_90
 # Bench-only ablation withholds over the flown engine (maps.search.withhold):
 # prior, look_for, look, images, mission_map, system_turn. Empty serves the

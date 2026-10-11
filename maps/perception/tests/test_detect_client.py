@@ -72,14 +72,13 @@ def serve(monkeypatch):
 
 
 @pytest.fixture
-def adapter():
+def adapter(monkeypatch):
+    from maps.perception.sam import detect_client as dc
+
+    monkeypatch.setattr(dc, "MIN_AREA_PX", 1)
     provider = ReasonerUnionConceptProvider()
     provider.set_concepts(["building"])
-    return SamDetectClient(
-        concept_provider=provider,
-        score_threshold=0.1,
-        min_area_px=1,
-    )
+    return SamDetectClient(concept_provider=provider)
 
 
 def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):

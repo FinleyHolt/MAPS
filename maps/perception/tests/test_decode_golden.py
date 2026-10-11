@@ -64,11 +64,7 @@ def _build_case():
 def _run():
     provider = ReasonerUnionConceptProvider()
     provider.set_concepts(["car"])
-    client = SamDetectClient(
-        concept_provider=provider,
-        min_area_px=16,
-        max_per_step=MAX_PER_STEP,
-    )
+    client = SamDetectClient(concept_provider=provider)
     payload, obs = _build_case()
     return client._decode_payload_to_detections(
         payload,
@@ -98,6 +94,8 @@ GOLDEN = [
 @pytest.mark.parametrize("workers", [1, 4])
 def test_decode_output_matches_the_golden(workers, monkeypatch):
     monkeypatch.setattr(dc, "_DECODE_WORKERS", workers)
+    monkeypatch.setattr(dc, "MIN_AREA_PX", 16)
+    monkeypatch.setattr(dc, "MAX_PER_STEP", MAX_PER_STEP)
     out = _run()
     assert len(out) == len(GOLDEN)
 

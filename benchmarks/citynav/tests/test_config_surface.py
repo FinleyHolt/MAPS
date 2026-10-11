@@ -13,15 +13,13 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CITYNAV = {
     "altitude_cap_m": 200.0, "altitude_m": 125.0, "cell_size_m": 2.0, "max_steps": 200,
     "precise_floor_radius_m": 5.0, "precise_tolerance_m": 0.0,
-    "sam": {"max_per_step": 1024, "min_area_px": 32,
-            "model_id": "facebook/sam3.1", "sahi": True, "sahi_nms_iou": 0.5,
-            "sahi_overlap": 0.2, "score_threshold": 0.3},
+    "sam": {"sahi": True},
     "sensor": "nadir_1008_90", "spawn": "episode", "spawn_seed": 0,
     "start_altitude_agl_m": None, "success_radius_m": 20.0, "withhold": [],
 }
 CALCITY = {
     **CITYNAV, "altitude_cap_m": 1000.0, "max_steps": 100000,
-    "sam": {**CITYNAV["sam"], "sahi": False},
+    "sam": {"sahi": False},
     "sensor": "oryx_orx32_25mm_nadir", "spawn": "uniform", "spawn_seed": 1234,
     "start_altitude_agl_m": 914.4,
 }
@@ -49,10 +47,10 @@ def _over(tmp_path: Path, body: str) -> Path:
 def test_base_resolves_relative_to_the_file_and_deep_merges(tmp_path):
     _write(tmp_path, "a/base.yaml", f"base: {(REPO_ROOT / 'configs/citynav.yaml').resolve()}\n"
            "sam:\n  sahi: false\n")
-    p = _write(tmp_path, "a/b/arm.yaml", "base: ../base.yaml\nsam:\n  min_area_px: 7\n")
+    p = _write(tmp_path, "a/b/arm.yaml", "base: ../base.yaml\nmax_steps: 7\n")
     data, _ = resolve_config(p)
-    assert data["sam"]["sahi"] is False and data["sam"]["min_area_px"] == 7
-    assert data["sam"]["model_id"] == "facebook/sam3.1"
+    assert data["sam"]["sahi"] is False and data["max_steps"] == 7
+    assert data["sensor"] == "nadir_1008_90"
 
 
 @pytest.mark.parametrize("body,needle", [
@@ -61,7 +59,7 @@ def test_base_resolves_relative_to_the_file_and_deep_merges(tmp_path):
     ("max_steps: 2.5\n", "max_steps must be int"),
     ("max_steps: 0\n", "max_steps must be > 0"),
     ("max_steps: true\n", "max_steps must be int"),
-    ("sam:\n  score_threshold: 1.5\n", "sam.score_threshold must be in [0, 1]"),
+    ("sam:\n  sahi: 1\n", "sam.sahi must be bool"),
     ("spawn: random\n", "spawn must be one of"),
     ("sam: true\n", "sam is a block of keys"),
     ("withhold: [pictures]\n", "withhold must be"),

@@ -40,6 +40,17 @@ DEFAULT_SAM_VIDEO_SERVER_URL = "http://127.0.0.1:8772"
 # sees the same pixels.
 _SAM_INPUT_SIZE = 1008
 
+#: The segmenter's fixed options, the same in every config: the served model,
+#: the score floor and speckle floor the server applies, the per-frame
+#: detection backstop (no per-concept cap, so every same-class instance stays
+#: countable), and the SAHI tile overlap and cross-tile IoU-NMS threshold.
+MODEL_ID = "facebook/sam3.1"
+SCORE_THRESHOLD = 0.3
+MIN_AREA_PX = 32
+MAX_PER_STEP = 1024
+SAHI_OVERLAP = 0.2
+SAHI_NMS_IOU = 0.5
+
 
 class SamServerOutage(RuntimeError):
     """The SAM ``/segment`` server gave no valid response for a whole detect
@@ -475,17 +486,11 @@ class SamDetectClient:
     """
 
     concept_provider: ReasonerUnionConceptProvider
-    model_id: str = "facebook/sam3.1"
-    score_threshold: float = 0.3
-    min_area_px: int = 16
-    max_per_step: int = 64
     # Force native-resolution SAHI tiling on a frame that already fits the
     # encoder (a larger frame always tiles): 1008 px tiles fed 1:1, remapped
     # to the frame, cross-tile IoU-NMS dedup. Recovers dense-lot car recall
     # full-frame SAM loses to sub-pixel cars (~67% -> 82% measured).
     sahi: bool = False
-    sahi_overlap: float = 0.2
-    sahi_nms_iou: float = 0.5
     # SAHI tiles whose ``/segment`` gave no usable response after retries,
     # over this client's life (one episode; the row's ``sam_tiles_failed``).
     # A frame with some failed tiles is partial-blind, not empty.
@@ -534,9 +539,9 @@ class SamDetectClient:
         image = {"image_b64": base64.b64encode(_png_wire_bytes(canvas)).decode("ascii")}
         knobs = {
             "concepts": concepts,
-            "score_threshold": float(self.score_threshold),
-            "min_area_px": int(self.min_area_px),
-            "max_per_image": int(self.max_per_step),
+            "score_threshold": SCORE_THRESHOLD,
+            "min_area_px": MIN_AREA_PX,
+            "max_per_image": MAX_PER_STEP,
             "resolution": _SAM_INPUT_SIZE,
         }
         body = {**image, **knobs} if image_first else {**knobs, **image}
@@ -617,7 +622,7 @@ class SamDetectClient:
         rgb = obs.rgb
         assert rgb is not None
         H, W = int(rgb.shape[0]), int(rgb.shape[1])
-        bounds = self._tile_bounds(H, W, self.sahi_overlap)
+        bounds = self._tile_bounds(H, W, SAHI_OVERLAP)
 
         def _one_tile(bound) -> list[tuple] | None:
             """One tile's ``(crop, bbox_rcrc, area, label, score)`` items in
@@ -640,7 +645,7 @@ class SamDetectClient:
                     frame_hw=sub.shape[:2],
                 )
                 area = 0 if region is None else region.area
-                if area < self.min_area_px:
+                if area < MIN_AREA_PX:
                     continue
                 lab, sc = str(det["label"]), float(det["score"])
                 if region is None:
@@ -670,7 +675,7 @@ class SamDetectClient:
                 "(/segment returned no usable response after retries) — "
                 "whole-frame outage, not a partial or empty frame"
             )
-        kept = self._nms_masks(tiledets, self.sahi_nms_iou)
+        kept = self._nms_masks(tiledets, SAHI_NMS_IOU)
         # The merged masks as a wire payload whose wire frame IS the frame
         # (identity letterbox).
         dets: list[dict] = []
@@ -765,7 +770,7 @@ class SamDetectClient:
                 pad_left=pad_left,
                 frame_hw=(orig_h, orig_w),
             )
-            if region is None or region.area < self.min_area_px:
+            if region is None or region.area < MIN_AREA_PX:
                 return None
             comps = _connected_components(region)
             primary = comps[0] if len(comps) == 1 else max(comps, key=lambda c: c.area)
@@ -824,7 +829,7 @@ class SamDetectClient:
                 "pixel_bbox": [r0, c0, r1, c1],
                 "pixel_area": area,
                 "mask_pixel_count": int(projected.n_valid_pixels),
-                "model_id": self.model_id,
+                "model_id": MODEL_ID,
                 "frame_index": -1,
             }
             if projected.tile_cells is not None and projected.tile_cells.size:
@@ -852,7 +857,7 @@ class SamDetectClient:
             components = split_into_instances(
                 region,
                 ref_area_px=class_ref.get(label),
-                min_area_px=self.min_area_px,
+                min_area_px=MIN_AREA_PX,
                 frac=_INSTANCE_SPLIT_AREA_FRAC,
                 coverage_count=coverage_by_label.get(label),
             )
@@ -889,7 +894,7 @@ class SamDetectClient:
                 n_union_fallback += 1
             for d in packs:
                 out.append(d)
-                if len(out) >= self.max_per_step:
+                if len(out) >= MAX_PER_STEP:
                     hit_cap = True
                     break
             if hit_cap:
@@ -899,7 +904,7 @@ class SamDetectClient:
             print(
                 f"[sam] split: {len(decoded)} masks -> {len(out)} dets; "
                 f"union_fallback={n_union_fallback} lost(no-depth)={n_lost} "
-                f"cap_hit={hit_cap} max_per_step={self.max_per_step}",
+                f"cap_hit={hit_cap} max_per_step={MAX_PER_STEP}",
                 flush=True,
             )
         return out
