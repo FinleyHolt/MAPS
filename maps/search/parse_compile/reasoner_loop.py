@@ -767,44 +767,11 @@ def _surface_from_ctx(ctx) -> dict:
     return {"cands": cands, "anchors": anchors, "cell_m": cell_m}
 
 
-def _ref_key(ref_token) -> str:
-    """Normalize a bare ``rN`` result-handle token to its carry-dict key,
-    absorbing the ``$``/``ref:``/``ref_`` slips the program resolver forwards
-    (a ``$``-prefixed form still resolves; the canonical served form is bare
-    ``rN``)."""
-    key = str(ref_token or "").strip()
-    if key.startswith("$"):
-        key = key[1:]
-    for _pre in ("ref:", "ref_", "ref-", "ref."):
-        if key.startswith(_pre):
-            key = key[len(_pre):]
-            break
-    return key
-
-
-_VP_TOKEN_RE = re.compile(r"^(?P<base>[^\[\]]+?)(?:\[(?P<idx>[^\]]*)\])?$")
-
-# A result-handle base is bare ``rN`` (optionally windowed ``rN[i]``/``rN[a:b]``)
-# or a reserved previous-result word. Literal fids (building_/road_/parking_/
-# detected_) and the view-position sentinels do NOT match, so they pass through
-# expansion untouched.
-_HANDLE_BASE_RE = re.compile(r"^r[0-9]{1,3}$")
-_HANDLE_WORDS = ("last", "prev", "previous", "ref")
-
-
-def _is_handle_token(token) -> bool:
-    """True when ``token`` is a result handle — bare ``rN`` / ``rN[i]`` /
-    ``rN[a:b]`` or a reserved previous-result word (``last``). Handles are
-    REFUSED wherever a literal fid/[x,y] is wanted (move targets). A
-    ``$``-prefixed form still matches (typo absorption). A literal fid or a
-    view-position sentinel returns False."""
-    if not isinstance(token, str):
-        return False
-    m = _VP_TOKEN_RE.match(token.strip().lstrip("$"))
-    if not m:
-        return False
-    base = _ref_key(m.group("base"))
-    return bool(_HANDLE_BASE_RE.match(base)) or base in _HANDLE_WORDS
+def _is_handle_token(token: str) -> bool:
+    """True when ``token`` is a result handle -- ``rN`` or a window
+    ``rN[...]`` of one. Handles are REFUSED wherever a literal fid/[x,y]
+    is wanted (move targets)."""
+    return bool(re.fullmatch(r"r\d+(\[[^\]]*\])?", token))
 
 
 def _crop_token_of(row: dict, live: bool) -> str:
@@ -1776,31 +1743,10 @@ def advance_reasoner_one_round(
     _event_handles: set = set()
 
     def _refs_read(op: dict) -> set:
-        """The handle bases an op's args name -- every string that could
-        reach ``run_program``'s resolver -- plus ``*`` for the
-        previous-result words, which read whatever ran before them."""
-        found: set = set()
-
-        def _walk(v):
-            if isinstance(v, str):
-                m = re.match(r"^([^.\[\]]+)", v.lstrip("$"))
-                b = _ref_key(m.group(1) if m else v)
-                if b.lower() in _HANDLE_WORDS:
-                    found.add("*")
-                elif re.fullmatch(r"r\d+", b) or b in carry_results:
-                    found.add(b)
-            elif isinstance(v, dict):
-                for x in v.values():
-                    _walk(x)
-            elif isinstance(v, (list, tuple)):
-                for x in v:
-                    _walk(x)
-
-        for k, v in op.items():
-            if k not in ("ref", "op"):
-                _walk(v)
-        found.discard(str(op.get("ref")))
-        return found
+        """The handles an op's args read: every string that is an ``rN``
+        or an ``rN[a:b]`` window of one."""
+        return set(re.findall(r'"(r\d+)(?:\[[^"\]]*\])?"',
+                              json.dumps(op["args"], default=str))) - {op["ref"]}
 
     def _program_reads(program) -> set:
         """The carry handles a program reads and does not define."""
@@ -1822,9 +1768,6 @@ def advance_reasoner_one_round(
         while todo:
             r = todo.pop()
             if r in need or r in _fresh:
-                continue
-            if r == "*":
-                todo.extend(_producers)
                 continue
             idxs = _producers.get(r)
             if not idxs:
