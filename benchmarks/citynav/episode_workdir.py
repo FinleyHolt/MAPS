@@ -4,7 +4,6 @@
         episode.json       the runner's row once the attempt lands: ok | infra
         run.log            this process's log while the episode runs
         conversation.jsonl the mission's event trace
-        steps.jsonl        one line per step (``live_recorder``)
         detections.jsonl   one line per detection, stamped with its step
         frames/            every jpeg the model was shown, by sha256
         flight/            the engine's working files: llm/transcript.jsonl (the wire
@@ -143,7 +142,7 @@ def open_episode_dir(
     )
     logging.getLogger().addHandler(handler)
 
-    recorder = LiveRecorder(d, episode_id=episode_id)
+    recorder = LiveRecorder(d)
 
     def close() -> None:
         logging.getLogger().removeHandler(handler)

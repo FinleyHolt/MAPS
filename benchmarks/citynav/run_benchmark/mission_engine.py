@@ -388,24 +388,7 @@ class MissionSession:
 
         if self.recorder is not None and obs is not None:
             try:
-                self.recorder.write_step(
-                    step=step_idx,
-                    pose_xy=state.pose_xy,
-                    altitude_m=state.altitude_m,
-                    heading_deg=state.heading_deg,
-                    visited_xy=list(state.visited_xy),
-                    # The observation's own crop corners: the frame IS the
-                    # ground footprint, so the map draws what was cropped.
-                    fov_corners_xy=(
-                        [tuple(c) for c in obs.ortho_view_corners_xy]
-                        if obs.ortho_view_corners_xy is not None
-                        else None
-                    ),
-                    detections=step_detections,
-                    wall_t_monotonic=time.monotonic() - self.t_start,
-                    frame_px=(int(obs.rgb.shape[0]) if obs.rgb is not None else None),
-                    sensor=(obs.sensor.name if obs.sensor is not None else None),
-                )
+                self.recorder.write_step(step=step_idx, detections=step_detections)
             except Exception as exc:  # noqa: BLE001
                 log.warning("mission step write failed step=%d: %s", step_idx, exc)
 
