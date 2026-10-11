@@ -27,7 +27,7 @@ def thinking_sampling_kwargs(
 
     Every field is a flat top-level request key. Callers merge this into
     their request kwargs alongside ``model``, ``messages``, ``tools``,
-    ``tool_choice``, ``response_format``, ``transport_kind``, etc.
+    ``tool_choice``, ``response_format``, etc.
 
     ``top_k`` and ``chat_template_kwargs`` ride at the top level rather
     than nested under ``extra_body``. vLLM reads them either way; a

@@ -165,7 +165,6 @@ class Reasoner:
     timeout: float = field(
         default_factory=lambda: _reasoner_timeout_s())
     seed: int | None = None
-    reasoner_index: int | None = None
     messages: list[dict] = field(default_factory=list)
     sensor_description: str = ""
     cancel_event: threading.Event | None = None
@@ -237,14 +236,11 @@ class Reasoner:
             **thinking_sampling_kwargs(temperature=1.0, model_id=self.model, reasoning_effort=self.reasoning_effort),
             "tools": tools,
             "tool_choice": "auto",
-            "transport_kind": "reasoner",
         }
         # The OpenAI wire sends no seed: there it is a deprecated best-effort
         # hint that replays nothing a reasoning model does.
         if self.seed is not None and not wire:
             kwargs["seed"] = self.seed
-        if self.reasoner_index is not None:
-            kwargs["transport_subagent_id"] = str(self.reasoner_index)
         if self.cancel_event is not None:
             if self.cancel_event.is_set():
                 raise CallCanceled(

@@ -2,7 +2,7 @@
 
 ``maps.llm.http`` appends three record kinds to
 ``flight/llm/transcript.jsonl``: ``params`` (one per distinct
-tools/schema/sampling body), ``request`` (per-thread message delta with
+tools/schema/sampling body), ``request`` (message delta with
 ``n_prefix``), ``response``. These tests pin the write-time contract the
 dashboard reader reconstructs from: exact prefix+delta round-trip, image
 parts scrubbed to sha refs, params dedup, pending-then-closed ordering, and
@@ -18,12 +18,6 @@ from pathlib import Path
 
 from maps.llm import http as llm_http
 
-TRANSPORT = {
-    "transport_kind": "resolver",
-    "transport_subagent_id": None,
-}
-
-
 def _records(directory: Path) -> list[dict]:
     text = (directory / "transcript.jsonl").read_text()
     return [json.loads(line) for line in text.splitlines() if line.strip()]
@@ -31,17 +25,13 @@ def _records(directory: Path) -> list[dict]:
 
 def _reconstruct(records: list[dict]) -> dict[str, list]:
     """Reader-side reconstruction: request_id -> full message list."""
-    threads: dict[tuple, list] = {}
+    prev: list = []
     out: dict[str, list] = {}
     for rec in records:
         if rec.get("kind") != "request":
             continue
-        t = rec.get("transport") or {}
-        key = (t.get("kind"), t.get("subagent_id"))
-        prev = threads.get(key) or []
-        msgs = prev[: rec["n_prefix"]] + list(rec["new_messages"])
-        threads[key] = msgs
-        out[rec["request_id"]] = msgs
+        prev = prev[: rec["n_prefix"]] + list(rec["new_messages"])
+        out[rec["request_id"]] = prev
     return out
 
 
@@ -63,8 +53,8 @@ def test_sequential_calls_store_only_the_delta_and_round_trip(tmp_path):
     msgs2 = [*msgs1,
              {"role": "assistant", "content": "looking"},
              {"role": "user", "content": "stop 1"}]
-    llm_http._flight_request_record(tmp_path, "rid1", _body(msgs1), TRANSPORT)
-    llm_http._flight_request_record(tmp_path, "rid2", _body(msgs2), TRANSPORT)
+    llm_http._flight_request_record(tmp_path, "rid1", _body(msgs1))
+    llm_http._flight_request_record(tmp_path, "rid2", _body(msgs2))
 
     recs = _records(tmp_path)
     reqs = [r for r in recs if r["kind"] == "request"]
@@ -92,7 +82,7 @@ def test_image_parts_become_sha_refs_and_no_data_urls_survive(tmp_path):
     # without this, a scrub that dropped the message entirely would pass.
     assert "data:image" in json.dumps(body)
 
-    llm_http._flight_request_record(tmp_path, "rid1", body, TRANSPORT)
+    llm_http._flight_request_record(tmp_path, "rid1", body)
     text = (tmp_path / "transcript.jsonl").read_text()
     assert "data:image" not in text
 
@@ -107,13 +97,12 @@ def test_image_parts_become_sha_refs_and_no_data_urls_survive(tmp_path):
 
 def test_params_are_written_once_per_distinct_body(tmp_path):
     llm_http._flight_request_record(
-        tmp_path, "rid1", _body([{"role": "user", "content": "a"}]), TRANSPORT)
+        tmp_path, "rid1", _body([{"role": "user", "content": "a"}]))
     llm_http._flight_request_record(
-        tmp_path, "rid2", _body([{"role": "user", "content": "b"}]), TRANSPORT)
+        tmp_path, "rid2", _body([{"role": "user", "content": "b"}]))
     llm_http._flight_request_record(
         tmp_path, "rid3",
-        _body([{"role": "user", "content": "c"}], response_format={"x": 1}),
-        TRANSPORT)
+        _body([{"role": "user", "content": "c"}], response_format={"x": 1}))
 
     recs = _records(tmp_path)
     params = [r for r in recs if r["kind"] == "params"]
@@ -128,7 +117,7 @@ def test_params_are_written_once_per_distinct_body(tmp_path):
 
 def test_a_request_precedes_its_response_and_pending_is_readable(tmp_path):
     llm_http._flight_request_record(
-        tmp_path, "rid1", _body([{"role": "user", "content": "a"}]), TRANSPORT)
+        tmp_path, "rid1", _body([{"role": "user", "content": "a"}]))
     recs = _records(tmp_path)
     assert [r["kind"] for r in recs] == ["params", "request"]  # pending round
 
@@ -152,21 +141,11 @@ def test_compaction_yields_a_shorter_prefix_never_a_mis_slice(tmp_path):
         {"role": "system", "content": "You fly."},
         {"role": "user", "content": "compacted summary"},
     ]
-    llm_http._flight_request_record(tmp_path, "rid1", _body(msgs1), TRANSPORT)
-    llm_http._flight_request_record(tmp_path, "rid2", _body(msgs2), TRANSPORT)
+    llm_http._flight_request_record(tmp_path, "rid1", _body(msgs1))
+    llm_http._flight_request_record(tmp_path, "rid2", _body(msgs2))
 
     recs = _records(tmp_path)
     reqs = [r for r in recs if r["kind"] == "request"]
     assert reqs[1]["n_prefix"] == 1  # only the system message survived
     assert reqs[1]["n_prefix"] < reqs[0]["n_messages"]
     assert _reconstruct(recs)["rid2"] == msgs2
-
-
-def test_distinct_transport_threads_do_not_share_prefixes(tmp_path):
-    msgs = [{"role": "user", "content": "shared text"}]
-    other = {**TRANSPORT, "transport_kind": "parser"}
-    llm_http._flight_request_record(tmp_path, "rid1", _body(msgs), TRANSPORT)
-    llm_http._flight_request_record(tmp_path, "rid2", _body(msgs), other)
-    reqs = [r for r in _records(tmp_path) if r["kind"] == "request"]
-    # The parser thread starts from scratch even though the bytes match.
-    assert reqs[1]["n_prefix"] == 0

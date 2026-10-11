@@ -226,20 +226,15 @@ def _resolved_flight_log_dir() -> Path | None:
 _WARNED_NO_WORKDIR = False
 
 
-# Diagnostic-only kwargs mirrored into the flight-log transcript; they never
-# enter the HTTP body. The transcript's delta encoding keys its threads on
-# them.
-_TRANSPORT_META_KEYS = ("transport_kind", "transport_subagent_id")
-
 # The transcript is a SINGLE-PROCESS append stream: every call writes from
 # the runner process, so one module lock serializes lines. A second process appending to the same file would
 # interleave records undetected — if a multi-process runner ever appears,
 # the transcript needs a per-process file + a merge, not a bigger lock.
 _FLIGHT_LOCK = threading.Lock()
-# (flight_dir, transport kind, subagent id) -> the previous request's scrubbed-message
-# digests, for write-time delta encoding. Keyed by dir so sequential episodes
-# in one process cannot cross-contaminate.
-_FLIGHT_THREAD_DIGESTS: dict[tuple, list[str]] = {}
+# flight_dir -> the previous request's scrubbed-message digests, for
+# write-time delta encoding. Keyed by dir so sequential episodes in one
+# process cannot cross-contaminate.
+_FLIGHT_THREAD_DIGESTS: dict[str, list[str]] = {}
 # flight_dir -> params shas already written to that transcript.
 _FLIGHT_PARAMS_SEEN: dict[str, set[str]] = {}
 
@@ -309,13 +304,12 @@ def _flight_request_record(
     directory: Path,
     request_id: str,
     body: dict,
-    transport_meta: dict | None,
 ) -> None:
     """Append the params (if new) + request records for one dispatch.
 
     The flight log's "pending" pre-write: a reader sees the round the
     moment the call fires, before the response lands. ``new_messages`` is
-    the delta against the same thread's previous call (write-time LCP over
+    the delta against the previous call (write-time LCP over
     scrubbed-message digests); the reader reconstructs the full request as
     ``history[:n_prefix] + new_messages``, exactly. ``params`` (the body
     minus messages and transport flags — tools, response_format, sampling)
@@ -323,12 +317,6 @@ def _flight_request_record(
     re-serialization."""
     with _FLIGHT_LOCK:
         try:
-            meta = {
-                "kind": str(transport_meta.get("transport_kind") or "")
-                if transport_meta else "",
-                "subagent_id": (transport_meta or {}).get(
-                    "transport_subagent_id"),
-            }
             params = {
                 k: v for k, v in body.items()
                 if k not in ("messages", "stream", "stream_options")
@@ -351,19 +339,17 @@ def _flight_request_record(
                 ).hexdigest()[:16]
                 for m in scrubbed
             ]
-            thread_key = (str(directory), meta["kind"], meta["subagent_id"])
-            prev = _FLIGHT_THREAD_DIGESTS.get(thread_key) or []
+            prev = _FLIGHT_THREAD_DIGESTS.get(str(directory)) or []
             n_prefix = 0
             for a, b in zip(prev, digests):
                 if a != b:
                     break
                 n_prefix += 1
-            _FLIGHT_THREAD_DIGESTS[thread_key] = digests
+            _FLIGHT_THREAD_DIGESTS[str(directory)] = digests
             _append_flight_record(directory, {
                 "kind": "request",
                 "request_id": request_id,
                 "created_at": time.time(),
-                "transport": {k: v for k, v in meta.items() if v is not None},
                 "params_sha": params_sha,
                 "n_prefix": n_prefix,
                 "n_messages": len(scrubbed),
@@ -601,7 +587,6 @@ def _chat_completions_raw(
     honouring `Retry-After`. Every other 4xx is surfaced immediately; it
     indicates a malformed request that retrying would not fix.
     """
-    transport_meta = {k: kwargs.pop(k, None) for k in _TRANSPORT_META_KEYS}
     body = {k: v for k, v in kwargs.items() if v is not None}
     flight_dir = _resolved_flight_log_dir()
     url = base_url.rstrip("/") + "/chat/completions"
@@ -611,7 +596,7 @@ def _chat_completions_raw(
     # never returns stays a pending round in the transcript.
     request_id = uuid.uuid4().hex
     if flight_dir is not None:
-        _flight_request_record(flight_dir, request_id, body, transport_meta)
+        _flight_request_record(flight_dir, request_id, body)
 
     # A ``cancel_event`` streams: the SSE path is where the cancel watch
     # shuts the socket down (see ``_stream_chat_completions``).
@@ -728,9 +713,9 @@ def _chat_completions_raw(
                 log.error(
                     "LLM endpoint %d response body: %s", status, e.response.text[:4000])
                 log.error(
-                    "LLM endpoint %d request summary: transport_kind=%s, body_keys=%s, "
+                    "LLM endpoint %d request summary: body_keys=%s, "
                     "n_tools=%d, sampling=%r, model=%r, n_messages=%d, roles=%s",
-                    status, transport_meta.get("transport_kind"), sorted(body),
+                    status, sorted(body),
                     len(body.get("tools") or []), {k: body[k] for k in _SAMPLING_KEYS if k in body},
                     body.get("model"), len(msgs), [m.get("role") for m in msgs])
                 log.error(

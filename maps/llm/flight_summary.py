@@ -185,7 +185,7 @@ def _scan_transcript(path: Path, out: dict) -> None:
     """Fold one transcript into ``out``.
 
     A raw line scan: it never reconstructs a request's full message list
-    from the per-thread deltas. Only ``params``
+    from the deltas. Only ``params``
     (the declared vocabulary), ``request`` (timestamps, for latency and
     the unanswered count) and ``response`` matter.
     """

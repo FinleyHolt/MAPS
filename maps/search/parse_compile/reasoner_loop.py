@@ -851,7 +851,6 @@ def run_mission(
         endpoint_spec=endpoint_spec,
         api_key=api_key,
         seed=seed,
-        reasoner_index=0,
         sensor_description=sensor_description,
         cancel_event=cancel_event,
         reasoning_effort=reasoning_effort,
