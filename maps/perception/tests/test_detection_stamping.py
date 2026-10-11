@@ -50,7 +50,7 @@ def test_projects_only_maskful_detections():
         dets, view_corners_xy=_CORNERS, rgb=_rgb(), tile=_TILE
     )
     assert set(tracked) == {0}
-    assert tracked[0].cell_count > 0
+    assert tracked[0].rows.size > 0
 
 
 def test_real_tier_gets_contour_and_color():

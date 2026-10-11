@@ -75,17 +75,11 @@ def test_sparse_projection_matches_dense_raster():
     # Same cells, same row-major order — not merely the same set.
     assert np.array_equal(tp.rows, ref_rows)
     assert np.array_equal(tp.cols, ref_cols)
-    assert tp.cells == [[int(r), int(c)] for r, c in zip(ref_rows, ref_cols)]
-    assert tp.cell_count == int(ref_rows.size)
-    assert tp.centroid_rc == (
-        int(round(float(ref_rows.mean()))),
-        int(round(float(ref_cols.mean()))),
-    )
 
     # Vacuity floor: the projection has to actually collapse pixels into a
     # smaller set of real cells, or a projector returning junk would pass the
     # equality checks above by matching an equally junk reference.
-    assert 0 < tp.cell_count < int(pixel_mask.sum())
+    assert 0 < tp.rows.size < int(pixel_mask.sum())
     assert tp.rows.dtype == np.int32 and tp.cols.dtype == np.int32
 
 
@@ -101,7 +95,7 @@ def test_cells_partly_outside_the_tile_are_clipped():
     H, W = _TILE.grid_shape
     assert int(tp.rows.min()) >= 0 and int(tp.rows.max()) < H
     assert int(tp.cols.min()) >= 0 and int(tp.cols.max()) < W
-    assert tp.cell_count > 0
+    assert tp.rows.size > 0
 
 
 def test_fully_outside_the_tile_drops():

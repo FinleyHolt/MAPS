@@ -34,16 +34,11 @@ class TileProjectedMask:
     tile_W)`` bool raster would yield under ``np.where``. Sparse is the
     only representation that scales with the tile: a full-city tile is
     ~10 M cells (10 MB per detection as a dense bool), while a real
-    detection footprint is a few hundred cells, and this object crosses
-    a pickled HTTP boundary into the world-state ingest server.
+    detection footprint is a few hundred cells.
     """
 
     rows: np.ndarray  # (N,) int32 tile rows of the occupied cells
     cols: np.ndarray  # (N,) int32 tile cols, paired with ``rows``
-    cells: list[list[int]]  # list of [row, col] for occupied cells
-    centroid_rc: tuple[int, int]
-    cell_count: int
-    centroid_xy: tuple[float, float]
 
 
 @dataclass
@@ -100,8 +95,8 @@ def _tile_mask_from_world(
 ) -> TileProjectedMask | None:
     """Rasterize world points onto ``tile`` as a ``TileProjectedMask``.
 
-    Clip to the tile, collapse the many pixels that land in one cell, and
-    derive the centroid. Dedupe runs on the flat index ``row * W + col``
+    Clip to the tile and collapse the many pixels that land in one cell.
+    Dedupe runs on the flat index ``row * W + col``
     through ``np.unique``, which returns ascending order — identical cells
     in identical order to a dense bool raster scanned by ``np.where``,
     without materializing the (H, W) raster.
@@ -115,27 +110,34 @@ def _tile_mask_from_world(
 
     flat = np.unique(row_idx[in_bounds] * W + col_idx[in_bounds])
     gr_rows, gr_cols = np.divmod(flat, W)
-    gr_rows = gr_rows.astype(np.int32, copy=False)
-    gr_cols = gr_cols.astype(np.int32, copy=False)
-
-    centroid_row = int(round(float(gr_rows.mean())))
-    centroid_col = int(round(float(gr_cols.mean())))
-    world_cx = tile.x_min + (centroid_col + 0.5) * tile.cell_size_m
-    world_cy = tile.y_min + (centroid_row + 0.5) * tile.cell_size_m
-    cells = [[int(r), int(c)] for r, c in zip(gr_rows.tolist(), gr_cols.tolist())]
-    return TileProjectedMask(
-        rows=gr_rows,
-        cols=gr_cols,
-        cells=cells,
-        centroid_rc=(centroid_row, centroid_col),
-        cell_count=len(cells),
-        centroid_xy=(world_cx, world_cy),
-    )
+    return TileProjectedMask(rows=gr_rows.astype(np.int32, copy=False), cols=gr_cols.astype(np.int32, copy=False))
 
 
 # Below this many valid depth pixels a mask's world position is noise, not a
 # measurement, so the detection is dropped rather than placed badly.
 _MIN_VALID_DEPTH_PIXELS = 16
+
+
+def _r_bc(sensor: SensorSpec, airframe_roll_deg: float, airframe_pitch_deg: float) -> np.ndarray:
+    """Body <- camera rotation: the static mount, with the airframe's tilt
+    (roll/pitch deviation from level) composed on top, ``R_eff = (level-body
+    <- body) @ (body <- camera)``. The heading rotation assumes a level body,
+    so the tilt carries the ray into the level frame first; the mount alone
+    when both tilt angles are 0."""
+    r = mount_rotation_matrix(float(sensor.mount_pitch_deg), sensor.mount_roll_deg, float(sensor.mount_yaw_deg))
+    if airframe_roll_deg or airframe_pitch_deg:
+        r = body_tilt_matrix(airframe_roll_deg, airframe_pitch_deg) @ r
+    return r
+
+
+def _invalid(z_cam: np.ndarray, sensor: SensorSpec) -> np.ndarray:
+    """The points neither direction keeps: non-finite or non-positive camera
+    depth, or depth beyond a finite ``sensor.max_range_m``."""
+    invalid = ~np.isfinite(z_cam) | (z_cam <= 0.0)
+    max_range = float(sensor.max_range_m)
+    if math.isfinite(max_range):
+        invalid = invalid | (z_cam > max_range)
+    return invalid
 
 
 def project_pixels_to_world(
@@ -191,15 +193,7 @@ def project_pixels_to_world(
     x_cam = (u_grid - intr.cx) / intr.fx * z_cam
     y_cam = (v_grid - intr.cy) / intr.fy * z_cam
 
-    R_bc = mount_rotation_matrix(
-        float(sensor.mount_pitch_deg), sensor.mount_roll_deg, float(sensor.mount_yaw_deg)
-    )  # body <- camera
-    # Per-frame airframe tilt (roll/pitch deviation from level) composes on top
-    # of the static mount: R_eff = (level-body <- body) @ (body <- camera). The
-    # heading rotation below assumes a level body, so the tilt must carry the
-    # ray into the level frame first. Identity when both are 0 (byte-identical).
-    if airframe_roll_deg or airframe_pitch_deg:
-        R_bc = body_tilt_matrix(airframe_roll_deg, airframe_pitch_deg) @ R_bc
+    R_bc = _r_bc(sensor, airframe_roll_deg, airframe_pitch_deg)
     body_x = R_bc[0, 0] * x_cam + R_bc[0, 1] * y_cam + R_bc[0, 2] * z_cam  # forward
     body_y = R_bc[1, 0] * x_cam + R_bc[1, 1] * y_cam + R_bc[1, 2] * z_cam  # left
     body_z = R_bc[2, 0] * x_cam + R_bc[2, 1] * y_cam + R_bc[2, 2] * z_cam  # up
@@ -216,11 +210,7 @@ def project_pixels_to_world(
     world_z = altitude_m + body_z
 
     out = np.stack([world_x, world_y, world_z], axis=-1).astype(np.float32)
-    max_range = float(sensor.max_range_m)
-    invalid = ~np.isfinite(z_cam) | (z_cam <= 0.0)
-    if math.isfinite(max_range):
-        invalid = invalid | (z_cam > max_range)
-    out[invalid] = np.nan
+    out[_invalid(z_cam, sensor)] = np.nan
     return out
 
 
@@ -279,10 +269,7 @@ def project_world_to_pixels(
     body_x = forward_m
     body_y = -right_m
 
-    R_bc = mount_rotation_matrix(float(sensor.mount_pitch_deg), sensor.mount_roll_deg,
-                                 float(sensor.mount_yaw_deg))
-    if airframe_roll_deg or airframe_pitch_deg:
-        R_bc = body_tilt_matrix(airframe_roll_deg, airframe_pitch_deg) @ R_bc
+    R_bc = _r_bc(sensor, airframe_roll_deg, airframe_pitch_deg)
     # Orthonormal, so camera <- body is the transpose.
     x_cam = R_bc[0, 0] * body_x + R_bc[1, 0] * body_y + R_bc[2, 0] * body_z
     y_cam = R_bc[0, 1] * body_x + R_bc[1, 1] * body_y + R_bc[2, 1] * body_z
@@ -294,11 +281,7 @@ def project_world_to_pixels(
         v = intr.cy + intr.fy * (y_cam / z_cam)
 
     out = np.stack([u, v], axis=-1)
-    max_range = float(sensor.max_range_m)
-    invalid = ~np.isfinite(z_cam) | (z_cam <= 0.0)
-    if math.isfinite(max_range):
-        invalid = invalid | (z_cam > max_range)
-    out[invalid] = np.nan
+    out[_invalid(z_cam, sensor)] = np.nan
     return out
 
 
