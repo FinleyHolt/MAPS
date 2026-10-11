@@ -67,24 +67,15 @@ _MAX_RATE_LIMIT_RETRIES = 5
 _BACKOFF_S = 1.5
 
 
-def _retry_after_delay(headers: object, default_s: float) -> float:
-    """Seconds to wait before re-sending, honouring ``Retry-After``.
-
-    Only the delta-seconds form is read; the HTTP-date form is rare on
-    JSON APIs and falls through to the caller's exponential backoff.
-    """
-    raw = None
-    if headers is not None:
-        try:
-            raw = headers.get("retry-after")  # type: ignore[union-attr]
-        except (AttributeError, TypeError):
-            raw = None
-    if raw:
-        try:
-            return max(0.0, min(_RATE_LIMIT_MAX_BACKOFF_S, float(str(raw).strip())))
-        except (TypeError, ValueError):
-            pass
-    return min(_RATE_LIMIT_MAX_BACKOFF_S, default_s)
+def _retry_after_delay(headers: httpx.Headers, default_s: float) -> float:
+    """Seconds to wait before re-sending: ``Retry-After`` in its delta-seconds
+    form, else ``default_s``, capped. The HTTP-date form, rare on JSON APIs,
+    takes the default."""
+    try:
+        delay = float(headers.get("retry-after", ""))
+    except ValueError:
+        delay = default_s
+    return max(0.0, min(_RATE_LIMIT_MAX_BACKOFF_S, delay))
 
 
 def _backoff(delay: float, cancel_event: threading.Event | None) -> None:
@@ -564,11 +555,9 @@ def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusa
         )
 
 
-#: The sampling keys a refused request's summary names. A serve whose template
-#: carries no effort field answers 400 on one, and the summary is where that
-#: reads: the body head below is swamped by ``messages``.
-_SAMPLING_KEYS = ("temperature", "top_p", "top_k", "presence_penalty", "max_tokens", "max_completion_tokens",
-                  "reasoning_effort")
+#: The sampling keys a refused request's summary names (a serve whose template
+#: carries no effort field answers 400 on one).
+_SAMPLING_KEYS = ("temperature", "top_p", "top_k", "max_tokens", "max_completion_tokens", "reasoning_effort")
 
 
 def _chat_completions_raw(
@@ -587,7 +576,7 @@ def _chat_completions_raw(
     honouring `Retry-After`. Every other 4xx is surfaced immediately; it
     indicates a malformed request that retrying would not fix.
     """
-    body = {k: v for k, v in kwargs.items() if v is not None}
+    body = kwargs
     flight_dir = _resolved_flight_log_dir()
     url = base_url.rstrip("/") + "/chat/completions"
     headers = _request_headers(api_key)
@@ -718,9 +707,6 @@ def _chat_completions_raw(
                     status, sorted(body),
                     len(body.get("tools") or []), {k: body[k] for k in _SAMPLING_KEYS if k in body},
                     body.get("model"), len(msgs), [m.get("role") for m in msgs])
-                log.error(
-                    "LLM endpoint %d request body (head): %s",
-                    status, json.dumps(body, indent=2, default=str)[:8000])
                 raise
             if attempt >= _MAX_RETRIES:
                 raise
