@@ -245,13 +245,9 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
 
     _glyphs: list = []
 
-    def _chip(x0_, y0_, pw_, ph_, txt_, th_, fill_, ax_=None, ay_=None,
-              tag_=None):
+    def _chip(x0_, y0_, pw_, ph_, txt_, th_, fill_, tag_=None):
         """Queue one chip; glyphs drain after all ink."""
-        _glyphs.append((x0_, y0_, pw_, ph_, txt_, th_, fill_,
-                        float(x0_ + pw_ / 2.0 if ax_ is None else ax_),
-                        float(y0_ + ph_ / 2.0 if ay_ is None else ay_),
-                        tag_))
+        _glyphs.append((x0_, y0_, pw_, ph_, txt_, th_, fill_, tag_))
 
     def _draw_glyphs(queue):
         """Draw queued glyphs in order, never overlapping: a colliding glyph
@@ -259,7 +255,8 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         one with no free offset is dropped, counted and its tag recorded. A
         pill backdrop draws only off the chip's own colour."""
         dropped = 0
-        for x0_, y0_, pw_, ph_, txt_, th_, fill_, ax_, ay_, tag_ in queue:
+        for x0_, y0_, pw_, ph_, txt_, th_, fill_, tag_ in queue:
+            ax_, ay_ = float(x0_ + pw_ / 2.0), float(y0_ + ph_ / 2.0)
             cands = [(x0_, y0_)]
             for sx_, sy_ in ((1, -1), (1, 1), (-1, -1), (-1, 1)):
                 cands.append((ax_ + sx_ * 6 + (0 if sx_ > 0 else -pw_),
