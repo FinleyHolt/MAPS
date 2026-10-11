@@ -619,36 +619,23 @@ _PREFLIGHT_COLOR_NOTE = (
 )
 
 
-def _color_words_of_op(op) -> list[str]:
+def _color_words_of_op(op: dict) -> list[str]:
     """The canonical palette words this op requests a color COLUMN for,
-    read off every slot that can name one — the find ``color`` arg, a
-    ``filter_items`` key, a ``score_by`` emphasis key — so a phase note keys
-    on the attach request itself, never on one op shape."""
-    if not isinstance(op, dict):
-        return []
-    args = op.get("args") if isinstance(op.get("args"), dict) else {}
+    read off every slot that can name one — a ``filter_items`` key, a
+    ``score_by`` emphasis key — so a phase note keys on the attach request
+    itself, never on one op shape."""
+    args = op["args"]
     words: list[str] = []
-
-    def _add(w):
-        c = _normalize_color(str(w).strip().lower())
-        if c and c not in words:
-            words.append(c)
-
-    c = args.get("color")
-    if isinstance(c, str) and c.strip():
-        _add(c)
-    keys = [args.get("key")] + [
-        e.get("key") for e in (args.get("emphasis") or [])
-        if isinstance(e, dict)]
-    for k in keys:
+    for k in [args.get("key")] + [e["key"] for e in args.get("emphasis") or []]:
         if _is_color_column_key(k):
-            _add(k[len("color_"):])
+            c = _normalize_color(k[len("color_"):].strip().lower())
+            if c and c not in words:
+                words.append(c)
     return words
 
 
-def _program_requests_color(program) -> bool:
-    ops = program.get("ops") if isinstance(program, dict) else None
-    return any(_color_words_of_op(op) for op in ops or [])
+def _program_requests_color(program: dict) -> bool:
+    return any(_color_words_of_op(op) for op in program["ops"])
 
 
 def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
@@ -708,9 +695,9 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
                                       answer_ref=answer_ref)
     if preflight:
         # The pre-takeoff phase note, keyed on what each op's result
-        # ACTUALLY holds (never an op shape): a color-column request (find
-        # color / emphasis key / filter key) whose raw rows carry NONE of
-        # the requested columns states the color-availability fact.
+        # ACTUALLY holds (never an op shape): a color-column request
+        # (emphasis key / filter key) whose raw rows carry NONE of the
+        # requested columns states the color-availability fact.
         for _op in (program.get("ops") or []):
             _words = _color_words_of_op(_op)
             if not _words:

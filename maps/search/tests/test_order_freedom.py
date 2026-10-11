@@ -160,7 +160,9 @@ def test_per_stop_round_serves_no_phase_note():
           "anchors": [dict(a) for a in _ANCHORS], "cell_m": 1.0}
     out = run_geom_program_tool(
         {"program": {"ops": [
-            {"ref": "r0", "op": "find",
-             "args": {"provenance": "runtime", "query": "car"}},
+            {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+            {"ref": "r1", "op": "score_by",
+             "args": {"items": "r0",
+                      "emphasis": [{"key": "color_red", "w": 1}]}},
         ]}}, namespace=ns)
     assert _PREFLIGHT_COLOR_NOTE not in str(out), out
