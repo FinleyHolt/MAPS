@@ -9,13 +9,10 @@ OSM names it across the whole map.
 from shapely.geometry import LineString, Polygon
 
 from benchmarks.calcity.data_prep import build_objects_json as boj
-from benchmarks.calcity.data_prep.aoi import BLOCKS
+from benchmarks.calcity.data_prep.aoi import AOI_BBOX
 
-#: The AO this bench flies, read rather than restated. The four numbers that
-#: stood here were the retired AOI's, which named 6.6 km of ground the bake no
-#: longer covers: the builder frames whatever bbox it is handed, so the test
-#: passed while exercising a block that does not exist.
-BBOX = BLOCKS["calcity"]
+#: The AO this bench flies, read rather than restated.
+BBOX = AOI_BBOX
 
 
 def _rec(osm_id, tags, geom):

@@ -37,7 +37,7 @@ import numpy as np
 
 from benchmarks.calcity import paths
 from benchmarks.calcity.data_prep.aoi import (
-    BLOCKS,
+    AOI_BBOX,
     GROUND_LEVEL_M,
     build_local_frame,
 )
@@ -105,10 +105,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=paths.CALCITY_ROOT)
     parser.add_argument("--raster", type=Path, required=True,
                         help="the block's RGB GeoTIFF at the cell the bench runs on")
-    parser.add_argument("--blocks", nargs="+", default=list(BLOCKS), choices=list(BLOCKS))
     args = parser.parse_args(argv)
-    for map_name in args.blocks:
-        build_block(args.root, map_name, BLOCKS[map_name], args.raster)
+    build_block(args.root, "calcity", AOI_BBOX, args.raster)
     return 0
 
 

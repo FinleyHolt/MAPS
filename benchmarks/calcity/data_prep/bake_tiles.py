@@ -20,7 +20,7 @@ from typing import Any
 
 from benchmarks.calcity import paths
 from benchmarks.calcity.data_prep.aoi import (
-    BLOCKS,
+    AOI_BBOX,
     CELL_SIZE_M,
     build_local_frame,
     bundle_root,
@@ -31,7 +31,7 @@ from benchmarks.citynav.bake.city import _normalise_props
 
 
 def _write_meta(map_name: str, tiles_dir: Path) -> Path:
-    frame = build_local_frame(BLOCKS[map_name])
+    frame = build_local_frame(AOI_BBOX)
     width = round(frame.width_m / CELL_SIZE_M)
     height = round(frame.height_m / CELL_SIZE_M)
     payload = {
@@ -54,7 +54,7 @@ def _write_meta(map_name: str, tiles_dir: Path) -> Path:
             "origin_e": round(frame.origin_e, 4),
             "origin_n": round(frame.origin_n, 4),
             "runtime_transform": "x=easting-origin_e; y=northing-origin_n",
-            "aoi_bbox_wgs84": list(BLOCKS[map_name]),
+            "aoi_bbox_wgs84": list(AOI_BBOX),
         },
     }
     tiles_dir.mkdir(parents=True, exist_ok=True)
@@ -63,7 +63,7 @@ def _write_meta(map_name: str, tiles_dir: Path) -> Path:
     return path
 
 
-def local_osm_records(bundle: Path, map_name: str) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+def local_osm_records(bundle: Path) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     """The bundle's OSM as baker records in the map's local metric frame.
 
     The ONLY transform is the reprojection. Tags ride verbatim, every geometry
@@ -72,13 +72,13 @@ def local_osm_records(bundle: Path, map_name: str) -> list[tuple[dict[str, Any],
     boundary-straddling feature un-clipped, and the baker clips cells to the
     grid on its own.
 
-    The layer a feature came from rides as ``worldkit_layer``. OSM's own
-    ``source`` tag is left alone: it is a tag the map carries.
+    The layer a feature came from rides as ``worldkit_layer``; OSM's own
+    ``source`` tag rides as ``source_tag``, as in every bake.
     """
     from shapely.geometry import mapping
 
     records: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    for rec in load_features_local(bundle, build_local_frame(BLOCKS[map_name])):
+    for rec in load_features_local(bundle, build_local_frame(AOI_BBOX)):
         geom = rec.get("geom")
         if geom is None or geom.is_empty:
             continue
@@ -91,7 +91,7 @@ def local_osm_records(bundle: Path, map_name: str) -> list[tuple[dict[str, Any],
 
 
 def bake_block(bundle: Path, tiles_dir: Path, map_name: str) -> dict[str, Any]:
-    records = local_osm_records(bundle, map_name)
+    records = local_osm_records(bundle)
     if not records:
         raise ValueError(f"{bundle} carries no OSM features over {map_name!r}")
     _write_meta(map_name, tiles_dir)
@@ -102,17 +102,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, default=None)
     parser.add_argument("--tiles-dir", type=Path, default=paths.TILES_DIR)
-    parser.add_argument(
-        "--blocks", nargs="+", default=sorted(BLOCKS), choices=sorted(BLOCKS)
-    )
     args = parser.parse_args(argv)
-    bundle = args.bundle or bundle_root()
-    for map_name in args.blocks:
-        stats = bake_block(bundle, args.tiles_dir, map_name)
-        print(
-            f"[calcity-bake] {map_name}: "
-            f"{stats['features']} priors, {stats['nodes']} graph nodes"
-        )
+    stats = bake_block(args.bundle or bundle_root(), args.tiles_dir, "calcity")
+    print(f"[calcity-bake] calcity: {stats['features']} priors, {stats['nodes']} graph nodes")
     return 0
 
 

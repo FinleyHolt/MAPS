@@ -42,23 +42,11 @@ from dataclasses import dataclass
 from pathlib import Path
 import os
 
-# --------------------------------------------------------------------------
-# The one mission area: a single WGS84 bbox (w, s, e, n). The map name is
-# the bare area — rows carry ``area: "calcity"`` and no block key, and
-# ``adapter.map_name_for_row`` uses the area verbatim.
-# --------------------------------------------------------------------------
-BLOCKS: dict[str, tuple[float, float, float, float]] = {
-    # The briefed area of operations
-    # plus 3 km on every side: the C-12 turns at about 1.5 km and a reversal
-    # onto a line runs 2.9 km beside it, so a hold about a target at the
-    # AO's edge, or a turn back into it, stays on imagery. The developed core
-    # (City Hall / police / library cluster, the strip, Central Park, both
-    # golf courses, the airport's corner, the schools, the numbered grids)
-    # sits inside it.
-    "calcity": (-118.0366, 35.0763, -117.89, 35.1672),
-}
-
-AREA = "calcity"
+# The one map, ``calcity``, as a WGS84 bbox (w, s, e, n): the briefed area of
+# operations plus 3 km on every side, so a C-12 hold about a target at the
+# AO's edge, or a turn back into it, stays on imagery. Rows carry
+# ``area: "calcity"`` and no block key.
+AOI_BBOX: tuple[float, float, float, float] = (-118.0366, 35.0763, -117.89, 35.1672)
 
 # Fetch extent for the world bundle. The ~130 m padding covers
 # the UTM grid-convergence bulge at the map edges; fetching only the map bbox

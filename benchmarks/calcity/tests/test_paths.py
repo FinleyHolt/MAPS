@@ -38,7 +38,7 @@ def test_the_build_commands_default_to_the_bench_s_own_roots(monkeypatch, tmp_pa
     monkeypatch.setattr(paths, "CALCITY_ROOT", tmp_path / "root")
     monkeypatch.setattr(paths, "TILES_DIR", tmp_path / "tiles")
     seen = {}
-    monkeypatch.setattr(build_objects_json, "build", lambda root, bundle, blocks: seen.setdefault("objects", root))
+    monkeypatch.setattr(build_objects_json, "build", lambda root, bundle: seen.setdefault("objects", root))
     monkeypatch.setattr(build_rgbd_ortho, "build_block",
                         lambda root, name, bbox, raster: seen.setdefault("ortho", root) and (None, None))
     monkeypatch.setattr(bake_tiles, "bake_block",

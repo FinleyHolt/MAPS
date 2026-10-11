@@ -12,13 +12,13 @@ from pathlib import Path
 import pytest
 
 from benchmarks.calcity.data_prep import bake_tiles
-from benchmarks.calcity.data_prep.aoi import BLOCKS
+from benchmarks.calcity.data_prep.aoi import AOI_BBOX
 from benchmarks.calcity.data_prep.bake_tiles import bake_block
 from maps.sws.graph import load_graph
 
 # A metre or two east of the AOI's south-west corner, so anything built here
 # lands inside the bake window, whatever box the AOI declares.
-W, S = BLOCKS["calcity"][0], BLOCKS["calcity"][1]
+W, S = AOI_BBOX[0], AOI_BBOX[1]
 
 
 def _wgs(dx_m: float, dy_m: float) -> list[float]:
@@ -178,7 +178,7 @@ def test_the_bake_reads_no_citynav_raster_and_keeps_the_bounds_rectangle(tmp_pat
     monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", empty)
     reaching = tmp_path / "reaching"
     bake_tiles._write_meta("calcity", reaching)
-    city.bake_block("calcity", bake_tiles.local_osm_records(tmp_path / "bundle", "calcity"),
+    city.bake_block("calcity", bake_tiles.local_osm_records(tmp_path / "bundle"),
                     reaching, imagery=True)
 
     class Untouchable:

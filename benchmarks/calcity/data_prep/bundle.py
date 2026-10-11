@@ -1,8 +1,8 @@
 """Read a world bundle as the Cal City data source.
 
-A world bundle is plain files: ``manifest.json`` and ``osm/<layer>.geojson``
-in WGS84. This module is the only place Cal City touches that layout. The
-block's imagery is not in the bundle: it is the block's own map,
+A world bundle is plain files: ``osm/<layer>.geojson`` in WGS84, one per
+``OSM_LAYERS`` entry. This module is the only place Cal City touches that
+layout. The block's imagery is not in the bundle: it is the block's own map,
 ``data/rgbd_upstream/<map>_rgb.tif``.
 
 Two consumers:
@@ -36,13 +36,6 @@ OSM_LAYERS = (
     "power",
     "pois",
 )
-
-
-def load_manifest(bundle: Path) -> dict[str, Any]:
-    manifest = json.loads((bundle / "manifest.json").read_text())
-    if "osm" not in manifest.get("layers", {}):
-        raise ValueError(f"{bundle} does not look like a world bundle")
-    return manifest
 
 
 def iter_features(bundle: Path) -> Iterator[tuple[str, dict[str, Any]]]:

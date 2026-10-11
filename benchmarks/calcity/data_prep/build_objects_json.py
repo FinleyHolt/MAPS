@@ -5,8 +5,8 @@ Each OSM footprint becomes one CityRefer object. Geometry is reprojected from
 the bundle's WGS84 GeoJSON into each block's local metric frame, overlapping
 footprints are deduped, heights come from OSM tags (the bundle stamps
 ``worldkit:height_m`` on buildings), and the nested ``{map_name: {id: {...}}}``
-dict that ``benchmarks.citynav.adapter.load_objects`` reads is written —
-accumulating every block in ``benchmarks.calcity.data_prep.aoi.BLOCKS`` into one file.
+dict that ``benchmarks.citynav.adapter.load_objects`` reads is written for
+the one map, ``calcity``.
 
 The world is flat (``aoi.GROUND_LEVEL_M``), so object ``z`` is
 ``GROUND_LEVEL_M + height/2`` with no DEM sampling.
@@ -14,7 +14,6 @@ The world is flat (``aoi.GROUND_LEVEL_M``), so object ``z`` is
 Usage::
 
     python -m benchmarks.calcity.data_prep.build_objects_json
-    python -m benchmarks.calcity.data_prep.build_objects_json --blocks calcity
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ import numpy as np
 
 from benchmarks.calcity import paths
 from benchmarks.calcity.data_prep.aoi import (
-    BLOCKS,
+    AOI_BBOX,
     GROUND_LEVEL_M,
     build_local_frame,
     bundle_root,
@@ -217,8 +216,8 @@ def build_block(bundle: Path, map_name: str, bbox) -> dict:
     return objects
 
 
-def build(root: Path, bundle: Path, blocks: list[str]) -> Path:
-    all_objects = {m: build_block(bundle, m, BLOCKS[m]) for m in blocks}
+def build(root: Path, bundle: Path) -> Path:
+    all_objects = {"calcity": build_block(bundle, "calcity", AOI_BBOX)}
 
     obj_path = root / "data" / "cityrefer" / "objects.json"
     obj_path.parent.mkdir(parents=True, exist_ok=True)
@@ -238,11 +237,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=paths.CALCITY_ROOT)
     parser.add_argument("--bundle", type=Path, default=None)
-    parser.add_argument(
-        "--blocks", nargs="+", default=sorted(BLOCKS), choices=sorted(BLOCKS)
-    )
     args = parser.parse_args(argv)
-    build(args.root, args.bundle or bundle_root(), args.blocks)
+    build(args.root, args.bundle or bundle_root())
     return 0
 
 
