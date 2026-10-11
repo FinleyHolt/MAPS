@@ -91,8 +91,8 @@ def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):
                                      image_shape=(_SAM_INPUT_SIZE, _SAM_INPUT_SIZE)), {})
         for score in (0.9, 0.88)
     ]
-    dets_first = adapter.detect(obs, (0.0, 0.0))
-    dets_second = adapter.detect(obs, (0.0, 0.0))
+    dets_first = adapter.detect(obs)
+    dets_second = adapter.detect(obs)
 
     assert len(dets_first) == 1
     assert len(dets_second) == 1
@@ -119,7 +119,7 @@ def test_each_kept_mask_gets_its_own_ids(adapter, serve):
         image_shape=(_SAM_INPUT_SIZE, _SAM_INPUT_SIZE),
     )
     serve.answers = [(200, payload, {})]
-    dets = adapter.detect(obs, (0.0, 0.0))
+    dets = adapter.detect(obs)
 
     assert len(dets) == 2
     assert sorted(d.metadata["track_id"] for d in dets) == ["sam3_1_img_0", "sam3_1_img_1"]
@@ -138,7 +138,7 @@ def test_a_frame_under_a_tile_is_padded_not_resampled(adapter, serve):
     serve.answers = [(200, _build_segment_payload(
         object_ids=[3], masks=[_block_mask(500, 700, 700, 900)], scores=[0.9], concepts=["building"],
         image_shape=(_SAM_INPUT_SIZE, _SAM_INPUT_SIZE)), {})]
-    dets = adapter.detect(_build_observation(rgb), (0.0, 0.0))
+    dets = adapter.detect(_build_observation(rgb))
 
     posted = np.asarray(Image.open(io.BytesIO(base64.b64decode(serve.bodies[0]["image_b64"]))).convert("RGB"))
     assert posted.shape == (_SAM_INPUT_SIZE, _SAM_INPUT_SIZE, 3)
@@ -151,7 +151,7 @@ def test_a_frame_under_a_tile_is_padded_not_resampled(adapter, serve):
 def test_returns_empty_when_rgb_missing(adapter, serve):
     obs = _build_observation(np.full((16, 16, 3), 128, dtype=np.uint8))
     obs.rgb = None  # type: ignore[assignment]
-    assert adapter.detect(obs, obs.pose_xy) == []
+    assert adapter.detect(obs) == []
     assert serve.bodies == []
 
 
@@ -159,7 +159,7 @@ def test_requires_ortho_corners(adapter):
     obs = _build_observation(np.full((16, 16, 3), 128, dtype=np.uint8))
     obs.ortho_view_corners_xy = None
     with pytest.raises(ValueError):
-        adapter.detect(obs, obs.pose_xy)
+        adapter.detect(obs)
 
 
 def test_pick_url_is_round_robin(monkeypatch):

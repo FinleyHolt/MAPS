@@ -420,15 +420,9 @@ class SamDetectClient:
         default_factory=threading.Lock, init=False, repr=False, compare=False
     )
 
-    def detect(
-        self,
-        obs: Observation,
-        pose_xy: tuple[float, float],
-        instruction_hint: str | None = None,
-    ) -> list[DetectedObject]:
+    def detect(self, obs: Observation) -> list[DetectedObject]:
         """Detect the provider's concepts on one frame; ``[]`` with no
         concepts or no picture."""
-        del pose_xy, instruction_hint  # obs.ortho_view_corners_xy drives the projection
         if obs.rgb is None:
             return []
         if obs.ortho_view_corners_xy is None:

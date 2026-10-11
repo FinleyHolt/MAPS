@@ -90,7 +90,7 @@ def serves(monkeypatch):
 
     from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 
-    seen = SimpleNamespace(detect=lambda obs, xy, instruction_hint=None: [], reset=lambda: None,
+    seen = SimpleNamespace(detect=lambda obs: [], reset=lambda: None,
                            concept_provider=ReasonerUnionConceptProvider(), sahi_tiles_failed=0)
     monkeypatch.setattr(perception, "make_perception", lambda cfg: seen)
     return sent
@@ -134,7 +134,7 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity,
     from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 
     monkeypatch.setattr(perception, "make_perception", lambda cfg: SimpleNamespace(
-        detect=lambda obs, xy, instruction_hint=None: [], concept_provider=ReasonerUnionConceptProvider()))
+        detect=lambda obs: [], concept_provider=ReasonerUnionConceptProvider()))
     endpoint_spec.install_spec(endpoint_spec.discover_from_env())
     M.activate_calcity()
     h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml")

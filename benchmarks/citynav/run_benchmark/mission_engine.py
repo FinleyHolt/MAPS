@@ -376,7 +376,7 @@ class MissionSession:
             obs.tile = h.tile_frame
 
         detections = (
-            h.perception.detect(obs, new_xy, instruction_hint=episode.description)
+            h.perception.detect(obs)
             if h.perception is not None
             else []
         )
