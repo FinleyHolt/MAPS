@@ -166,8 +166,7 @@ def test_the_served_facing_column_matches_the_annotators():
     The checks above pin the measurement. This one runs ``run_program``'s
     ``compare`` on real Cal City geometry and reads the column the model
     actually receives -- ``facing <road>`` -- asserting the compass WORD is
-    the annotator's. It is the end of the chain that used to hand over
-    degrees and a ``(b + 180) % 360`` instruction the model never applied.
+    the annotator's.
     """
     from maps.search.analyze_scene.geom_program import run_program
 

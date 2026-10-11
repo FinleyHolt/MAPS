@@ -22,9 +22,7 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "attempt_pick"
 
 def test_the_first_started_attempt_wins_not_the_last_written(tmp_path):
     """The ledger appends on COMPLETION, so file order ranks a fast
-    duplicate ahead of the slow attempt that was claimed first. Measured
-    on citynav_train_seen_2026-07-24_13-19-41: one episode's attempts sit
-    at file positions 4, 6, 7 with start stamps 132524, 133120, 133016."""
+    duplicate ahead of the slow attempt that was claimed first."""
     root = write_ledger(
         tmp_path / "run",
         ledger_row("e::1#1", "20260725_111500", 0),   # started second, wrote first
@@ -62,7 +60,7 @@ def test_status_is_the_one_verdict():
 
 
 # --------------------------------------------------------------------------
-# Infra supersession — the property that had to survive first-by-start
+# Infra supersession
 # --------------------------------------------------------------------------
 
 
@@ -77,8 +75,7 @@ def test_a_reclaimed_retry_supersedes_its_earlier_failure(
     tmp_path, crash_stamp, good_stamp
 ):
     """Run BOTH orderings: the retry wins either way, which proves
-    supersession comes from the status and not from the ordering. That
-    is what let first-by-start replace last-row-wins without losing it."""
+    supersession comes from the status and not from the ordering."""
     crash = ledger_row("e::4#4", crash_stamp, status="infra", error="killed_midrun")
     root = write_ledger(tmp_path / "run", crash, ledger_row("e::4#4", good_stamp, 1))
     picked, stats = rows.load_attempts(root)
@@ -145,8 +142,7 @@ def test_an_episode_with_no_complete_attempt_keeps_its_last_scored_row(tmp_path)
 
 def test_a_no_commit_miss_keeps_its_coverage_slot(tmp_path):
     """An ``ok`` row with no metrics is a real miss, not a crash. It never
-    scores -- but dropping it would quietly shrink the denominator. This
-    is the shape of all fourteen rows in citynav_val_seen_2026-07-23_16-56-19."""
+    scores -- but dropping it would quietly shrink the denominator."""
     root = write_ledger(tmp_path / "run", ledger_row("e::7#7", "20260725_114000", elapsed_s=3.0))
     picked, stats = rows.load_attempts(root)
     assert "e::7#7" in picked
@@ -172,10 +168,8 @@ def test_a_crash_row_with_no_workdir_is_counted_and_never_wins(tmp_path):
 
 
 def test_a_run_root_name_is_not_an_attempt_stamp():
-    """The dashboard's fleet_stamp deliberately matches the RUN-root name
-    ``<benchmark>_<split>_<Y-m-d>_<H-M-S>`` as well. The attempt pattern must
-    not: matching it would hand every row in a standalone run the same
-    stamp and collapse the ordering entirely."""
+    """A run-root name ``<benchmark>_<split>_<Y-m-d>_<H-M-S>`` is no attempt
+    stamp: matching it would give every row of a run the same stamp."""
     assert rows.attempt_stamp({"workdir": "citynav_val_seen_2026-07-25_10-41-14"}) == ""
     assert rows.attempt_stamp(
         {"workdir": "w0/maps_20260725_110000_citynav_e__1_1"}) == "20260725_110000"
@@ -201,7 +195,6 @@ def test_metrics_is_one_shape():
 
 
 def test_a_crash_row_does_carry_an_episode_id():
-    """Every no-metrics row in citynav_val_seen_2026-07-23_16-56-19 has one."""
     row = {"episode_id": "e::9#9", "status": "ok"}
     assert rows.episode_id(row) == "e::9#9"
 

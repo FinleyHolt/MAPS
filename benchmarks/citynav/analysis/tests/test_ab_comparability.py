@@ -1,16 +1,9 @@
 """A cross-bake or cross-split delta is refused, and no flag can waive it.
 
-An A/B's SR is a score AGAINST a ground truth: a split and a tile bake. Vary
-either and the two numbers answer different questions, so the delta is not
-small or noisy, it is meaningless: two bakes of one name scored the same
-episodes 0.351 and 0.169.
-
-The waiver is the subtle half. ``--allow-provenance-mismatch`` exists because a
-refactor or model A/B is SUPPOSED to differ on git_commit, and taking that
-override must leave the tile check on. These tests pin the split: arm keys
-waivable, ground truth never --
-and UNRECORDED ground truth refuses like mismatched ground truth, because a
-null that skips the comparison is the guard silently off.
+An A/B's SR is a score against a split and a tile bake; vary either and the
+two numbers answer different questions. ``--allow-provenance-mismatch``
+waives the arm keys (git_commit, model, ...) and never the ground truth, and
+UNRECORDED ground truth refuses like mismatched ground truth.
 """
 
 from __future__ import annotations
@@ -64,11 +57,8 @@ def test_code_difference_is_an_arm_key_not_fatal():
 
 
 def test_waiving_the_arm_keys_cannot_waive_the_tile_bake():
-    """The incident shape: a real code A/B that ALSO crossed bakes.
-
-    The caller waives `arm` (correctly, the shas differ on purpose). `fatal`
-    must still be non-empty so the CLI refuses regardless.
-    """
+    """A code A/B that also crossed bakes: the caller waives ``arm``, and
+    ``fatal`` still refuses."""
     fatal, arm = comparability_issues(
         _prov(sha="8fc0fd8", tiles="tiles/citynav_2m"),
         _prov(sha="2822471", tiles="tiles/citynav_2m_osmv2"),
@@ -93,11 +83,7 @@ def test_absent_arm_provenance_does_not_invent_a_mismatch():
 
 
 def test_unrecorded_ground_truth_is_fatal():
-    """A guard that reads None on both sides and passes is not a guard.
-
-    Every pre-stamping run stored null, so the split check compared nothing
-    on every pairing ever made. Comparing nothing must refuse, not pass.
-    """
+    """Comparing nothing refuses rather than passes."""
     fatal, _ = comparability_issues({}, _prov())
     assert len(fatal) == 2 and all("unrecorded" in f for f in fatal)
 
@@ -109,8 +95,7 @@ def test_split_unrecorded_on_both_sides_is_fatal():
 
 def test_the_same_bake_name_with_different_content_is_fatal():
     """Every Cal City bake is called ``tiles``, so the NAME check passes two
-    genuinely different bakes. Two are live across the cluster today; the
-    content hash is what separates them."""
+    genuinely different bakes; the content hash separates them."""
     a = {**_CALCITY, "bake_sha256": _SHA_A}
     b = {**a, "bake_sha256": _SHA_B}
     fatal, _arm = comparability_issues(a, b)
@@ -140,11 +125,7 @@ def test_an_unstamped_bake_does_not_become_fatal():
 
 
 def test_the_served_alias_is_not_the_served_build():
-    """`inkling-small` named two different quantizations on the same cluster
-    in the same week — `thinkingmachines/Inkling-Small-NVFP4` and
-    `RedHatAI/Inkling-Small-FP8-dynamic`. On the ALIAS alone the pair reads
-    as same-model, and the ledger's null verb quoted the resulting -8.7 pts
-    at McNemar p=0.009 as what IDENTICAL code does. The build is an arm."""
+    """One served alias can name two quantizations; the build is an arm."""
     gt = {"split": "train_seen",
           "search_env_flags": {"SEARCH_CITYNAV_TILES": "/x/tiles/citynav_2m_osmv3"}}
     a = {**gt, "served_model": "inkling-small",

@@ -1,14 +1,4 @@
-"""summary.txt scores the attempt the scheduler claimed.
-
-``_write_summary`` deduped by episode_id keeping the last row, which is
-COMPLETION order -- so on a run with replicates it reported whichever
-attempt happened to finish last. On
-citynav_train_seen_2026-07-15_12-45-54 that read SR_eff 2/10 where the
-canonical reader read 3/10.
-
-Driven against a stub rather than a real Driver: constructing a Driver
-wants a split, a GPU and a live vLLM, none of which is what broke.
-"""
+"""summary.txt scores each episode's first-started attempt, the one the scheduler claimed."""
 
 from __future__ import annotations
 
@@ -27,8 +17,7 @@ def _summary(driver, split_size: int, *rows: dict) -> str:
 
 
 def test_a_replicated_run_reports_one_row_per_episode(driver):
-    """Nine attempts over four episodes -- the measured shape of
-    citynav_train_seen_2026-07-25_11-04-15."""
+    """Nine attempts over four episodes."""
     out = _summary(driver, 4,
         ledger_row("a::2#6474", "20260725_110954", 0),
         ledger_row("b::2#4994", "20260725_110955", 0),

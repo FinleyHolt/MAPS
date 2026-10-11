@@ -19,13 +19,8 @@ key evades it, and the vacuity floor keeps the scan itself from rotting
 silently. Shell scripts are composition (they export), not knob reads —
 out of scope.
 
-The helper names are load-bearing, not decoration: a helper takes the key as
-a PARAMETER, so the literal never sits beside ``os.environ`` and the read
-becomes invisible. ``maps/llm/sampling.py``'s
-``_env_float("SEARCH_SAMPLING_TEMPERATURE")`` sat outside this scan — and so
-outside the manifest, and so outside ``ab_report.comparability_issues`` —
-for as long as it existed, which made a temperature A/B pairable against a
-default-temperature run as a NULL.
+The helper names are load-bearing: a helper takes the key as a PARAMETER,
+so the literal sits at the helper's call, never beside ``os.environ``.
 """
 
 from __future__ import annotations
@@ -68,8 +63,7 @@ def test_every_identity_env_read_is_declared() -> None:
         "CITYNAV_BENCH_CONFIG",
         "SEARCH_REASONER_WARMUP_TOTAL_S",
         # Read only through sampling.py's ``_env_float`` helper: the pin that
-        # proves the scan still follows an indirection, which is the shape
-        # that hid this knob in the first place.
+        # proves the scan still follows an indirection.
         "SEARCH_SAMPLING_TEMPERATURE",
     ):
         assert pin in found, f"scan no longer sees {pin} — broken scan?"

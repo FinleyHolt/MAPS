@@ -1,9 +1,7 @@
 """The bake stamp is the ONE content check on a run's tile bake.
 
-Every other provenance field compares names: a path on the machine that
-flew the run. Two bakes of the same blocks share all
-of them and score the same episodes differently (0.351 vs 0.169,
-measured), so a name check cannot tell them apart after the fact.
+Every other provenance field compares names; two bakes of the same blocks
+share all of them and score the same episodes differently.
 
 These pin the three states a reader must distinguish -- verified,
 mismatched, and never-stamped -- and that hashing sees content, not just

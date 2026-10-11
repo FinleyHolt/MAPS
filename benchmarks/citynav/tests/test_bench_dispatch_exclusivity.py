@@ -1,17 +1,9 @@
-"""One worker per episode: the standalone dispatch never double-runs.
+"""One worker per episode: the dispatch never hands out an episode that is
+running or done.
 
-`_next_claimed_episode` walks the selection with a cursor taken modulo
-its length, so it wraps. "Done" means a qualifying row reached
-episodes.jsonl — and the claim path must see that row IMMEDIATELY: run
-contract300 re-flew 10/300 episodes when the in-flight release outran a
-stale done cache (same worker re-claimed its own episode in the same
-second), and the replicate attempts disagreed on SR. Completion here goes
-through the REAL writer (`_append_result`), and nothing re-reads the
-ledger, so only the synchronous done-cache add keeps a finished episode
-out of the next claim.
-
-These drive the dispatch directly: constructing a real Driver needs a
-split, a GPU and a vLLM, and none of that is what broke.
+A finished episode's row goes through the real writer (``_append_result``),
+and nothing re-reads the ledger, so only the synchronous done-cache add keeps
+it out of the next claim.
 """
 
 from __future__ import annotations
@@ -31,8 +23,7 @@ def test_each_episode_is_handed_out_once(driver):
 
 
 def test_a_worker_that_finishes_early_never_takes_a_live_episode(driver):
-    # The exact shape that produced 9 attempts for 4 episodes: every
-    # episode is out, one worker finishes, and the cursor has wrapped.
+    # Every episode is out, one worker finishes, and the cursor has wrapped.
     d = driver(selection=["a", "b", "c", "d"])
     for i in range(4):
         d._next_claimed_episode(i)
@@ -44,9 +35,8 @@ def test_a_worker_that_finishes_early_never_takes_a_live_episode(driver):
 
 
 def test_a_finished_episode_is_never_reclaimed(driver):
-    # contract300's 10 doubles: END and the next claim in the same
-    # second. Only the synchronous add at write time keeps "a" out of the
-    # very next claim.
+    # The write and the next claim in the same second: only the synchronous
+    # add at write time keeps "a" out of the very next claim.
     d = driver(selection=["a", "b"])
     assert d._next_claimed_episode(0) == "a"
     _complete(d, "a")

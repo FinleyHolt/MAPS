@@ -1,14 +1,9 @@
 """A block's bounds are its imagery's bounds.
 
-The block's meta sidecar box runs ~50 m past its raster on every side. OSM
-covers the planet, so that ring would fill with features, but the point cloud,
-the raster and the ortho all stop at the same line, and no upstream CityRefer
-object (26,274 checked, 0 outside) or CityNav target (22,002 checked, 0
-outside) lives past it.
-
-So the bake derives bounds from the raster and sizes the grid to match. These
-tests pin that, including the fallback when no raster is readable, which says
-so when it falls back to the sidecar box.
+The meta sidecar box runs ~50 m past the raster on every side, where no
+CityRefer object or CityNav target lies, so the bake derives bounds from the
+raster and sizes the grid to match, falling back to the sidecar box (and
+saying so) when no raster is readable.
 """
 
 from __future__ import annotations

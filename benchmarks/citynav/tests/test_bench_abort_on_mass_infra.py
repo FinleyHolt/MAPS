@@ -1,22 +1,7 @@
-"""A run that cannot produce results stops instead of grinding to the end.
+"""A run whose trailing window of completions is almost all infra casualties stops, loudly.
 
-``bench_fullset`` already classified the shape: a runner that exits clean
-with no record, no timeout and no recognized infra token is an
-unrecognized instant failure (``no_prediction_unclassified``). The only
-response was a warning line in the END-OF-RUN summary, so a tree deployed
-without its tile bake failed 282 of 282 episodes across ~15 min of an
-exclusive 8xL40S node and reported it an hour late, to nobody.
-
-The gate here is a trailing window of completions. What it must NOT do is
-misfire: a hard episode timeout with no record is the ALGORITHM failing
-to answer within its budget — a legitimate CityNav miss — and the
-classifier is explicit that reclassifying it as infra would inflate SR
-and break benchmark compliance. Scattered OOM retries on a healthy run
-are normal too.
-
-Exercised, not scanned: real rows go through the real ``_append_result``,
-and the assertions are about ``_abort``, the claim path and the
-resume-visible contents of episodes.jsonl.
+The gate must not misfire: a timeout with no record is the algorithm missing
+within its budget, and scattered infra retries on a healthy run are normal.
 """
 
 from __future__ import annotations
@@ -96,10 +81,7 @@ def test_a_healthy_run_never_aborts(driver) -> None:
 
 
 def test_episode_timeouts_are_never_mistaken_for_infra(driver) -> None:
-    """The distinction the existing classifier is explicit about: a
-    timeout with no record is the ALGORITHM failing, a legitimate miss. A
-    run of nothing but timeouts is a bad model, not a bad node, and must
-    not be aborted as infra."""
+    """A run of nothing but timeouts is a bad model, not a bad node."""
     d = driver()
     for i in range(bf.ABORT_WINDOW * 3):
         d._append_result(_timeout_row(i))
@@ -206,17 +188,9 @@ def test_the_run_exits_nonzero_and_the_summary_says_why(
 
 
 def test_a_spawn_failure_reads_the_childs_own_log(driver, tmp_path: Path) -> None:
-    """The warm runner's stderr is the only record of why it died.
-
-    ``warm runner stdout closed before ready`` is raised on the DRIVER's
-    side of the pipe: it says the child exited, never why. One run died
-    after 22 h 55 m reporting exactly that and
-    ``representative worker log: (none recorded)``, while every failing
-    child had written ``endpoint discovery failed: service 'sam'`` into its
-    server.log -- the perception serve had gone away. An
-    episode that never started has no workdir and no run.log, so the abort
-    banner reads ``w<id>/server.log`` for a row without one.
-    """
+    """An attempt that never started has no run.log, so the abort banner
+    reads the warm runner's ``w<id>/server.log``: the driver's side of the
+    pipe says only that the child exited."""
     d = driver()
     server_log = tmp_path / "w0" / "server.log"
     server_log.parent.mkdir()

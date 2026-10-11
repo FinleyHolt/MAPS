@@ -1,11 +1,8 @@
 """The shipped corpus has episodes that start ON their own target.
 
 The zero-flight branch writes an honest zero: the drone never took off and
-nothing was committed, so no success flag may be set. It used to zero the
-four ``*_to_goal`` flags by name and leave the mirrored ``SR``/``OSR``
-alone, which was invisible on the ring — Cal City's closest dataset start
-is 50 m from its target centroid, and CityNav spawns 100–150 m out, so no
-episode could reach a ring verdict from its start pose.
+nothing was committed, so no success flag may be set, ``SR``/``OSR``
+included. No episode reaches a ring verdict from its start pose.
 
 Under the SHAPE criterion the distance that matters is to the footprint's
 boundary, not its centroid, and two rows of the shipped corpus start inside

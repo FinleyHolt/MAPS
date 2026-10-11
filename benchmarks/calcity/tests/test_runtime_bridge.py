@@ -42,12 +42,9 @@ def synthetic_bake(tmp_path, monkeypatch):
 def restores_compat_env():
     """Put the shared engine's environment back after ``activate()``.
 
-    ``install_compat_env`` writes into the real ``os.environ``, which is
-    process-global: left set, ``SEARCH_CITYNAV_TILES`` points at Cal City's
-    bake for the rest of the pytest session, and the next
-    ``importlib.reload(benchmarks.citynav.paths)`` — ``test_block_assets``
-    does one — bakes it into ``TILES_DIR`` for every later reader. That is
-    how a Cal City test came to fail ``test_ledger_reader``'s bake pin.
+    ``install_compat_env`` writes the process-global ``os.environ``; left
+    set, the next reload of ``benchmarks.citynav.paths`` bakes Cal City's
+    tiles into ``TILES_DIR`` for every later test.
     """
     before = {name: os.environ.get(name) for name in compat_env()}
     try:
@@ -64,13 +61,8 @@ def restores_compat_env():
 def restores_shared_paths():
     """Put every name ``activate()`` rebinds back on ``citynav.paths``.
 
-    The env half of the leak has its own fixture above; this is the module
-    half, and it is derived from ``_replacements()`` rather than listed.
-    A hand-written restore covers the names the author remembered:
-    ``test_bake_sha256_follows_the_rebound_tiles_dir`` put back ``TILES_DIR``
-    and left the other thirteen rebound for the rest of the session, which
-    is how ``SUCCESS_CRITERION`` came to read "shape" inside a CityNav test
-    that ran after it.
+    The module half of the leak the fixture above closes for the env,
+    derived from ``_replacements()`` so no rebound name is missed.
     """
     from benchmarks.citynav import paths as shared_paths
 
@@ -186,11 +178,6 @@ def test_bake_sha256_follows_the_rebound_tiles_dir(
     captured the default at import would keep the same signature, keep passing
     the coverage test above, and start hashing the CityNav bake on a Cal City
     run — stamping every result with the wrong bake identity.
-
-    Takes both restore fixtures for the reason their docstrings give:
-    ``activate()`` writes process-global state, and a Cal City test that
-    leaves it set is what once broke ``test_ledger_reader``'s bake pin.
-    This test used to put back ``TILES_DIR`` alone and leak the rest.
     """
     from benchmarks.citynav import paths as shared
 
