@@ -1,6 +1,6 @@
-"""``SamDetectClient`` over a loopback ``/segment`` serve: one stateless POST per frame, wire detections
-mapped into ``DetectedObject`` metadata (``sam3_1_object_id``, ``sam3_1_score``, position-derived
-``track_id``)."""
+"""``SamDetectClient`` over a loopback ``/segment`` serve: one stateless POST per tile, wire detections
+mapped into ``DetectedObject`` metadata (``sam3_1_object_id``, the mask's index after the cross-tile
+dedup, ``sam3_1_score``, position-derived ``track_id``)."""
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):
     assert len(dets_second) == 1
     meta = dets_first[0].metadata
     assert dets_first[0].label == "building"
-    assert meta["sam3_1_object_id"] == 7
+    assert meta["sam3_1_object_id"] == 0
     assert meta["sam3_1_score"] == pytest.approx(0.9)
     assert meta["track_id"] == "sam3_1_img_0"
     assert dets_second[0].metadata["track_id"] == "sam3_1_img_0"
@@ -109,7 +109,7 @@ def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):
         assert "session_id" not in body
 
 
-def test_distinct_object_ids_yield_distinct_metadata(adapter, serve):
+def test_each_kept_mask_gets_its_own_ids(adapter, serve):
     obs = _build_observation(_square_frame())
     payload = _build_segment_payload(
         object_ids=[1, 42],
@@ -123,7 +123,29 @@ def test_distinct_object_ids_yield_distinct_metadata(adapter, serve):
 
     assert len(dets) == 2
     assert sorted(d.metadata["track_id"] for d in dets) == ["sam3_1_img_0", "sam3_1_img_1"]
-    assert sorted(d.metadata["sam3_1_object_id"] for d in dets) == [1, 42]
+    assert sorted(d.metadata["sam3_1_object_id"] for d in dets) == [0, 1]
+
+
+def test_a_frame_under_a_tile_is_padded_not_resampled(adapter, serve):
+    """A frame smaller than the encoder input is posted 1:1 at the tile's top-left over zeros, and a
+    mask reaching into the padding is clipped to the frame."""
+    import base64
+    import io
+
+    from PIL import Image
+
+    rgb = np.random.default_rng(0).integers(0, 256, (600, 800, 3), dtype=np.uint8)
+    serve.answers = [(200, _build_segment_payload(
+        object_ids=[3], masks=[_block_mask(500, 700, 700, 900)], scores=[0.9], concepts=["building"],
+        image_shape=(_SAM_INPUT_SIZE, _SAM_INPUT_SIZE)), {})]
+    dets = adapter.detect(_build_observation(rgb), (0.0, 0.0))
+
+    posted = np.asarray(Image.open(io.BytesIO(base64.b64decode(serve.bodies[0]["image_b64"]))).convert("RGB"))
+    assert posted.shape == (_SAM_INPUT_SIZE, _SAM_INPUT_SIZE, 3)
+    assert np.array_equal(posted[:600, :800], rgb)
+    assert not posted[600:].any() and not posted[:, 800:].any()
+    assert [d.mask.bbox for d in dets] == [(500, 700, 599, 799)]
+    assert dets[0].mask.frame_shape == (600, 800)
 
 
 def test_returns_empty_when_rgb_missing(adapter, serve):

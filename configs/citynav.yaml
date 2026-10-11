@@ -37,11 +37,6 @@ spawn: episode
 spawn_seed: 0
 start_altitude_agl_m: null
 altitude_cap_m: 200.0
-sam:
-  # Native-resolution SAHI tiling of the 2016 px render into 1008 px tiles,
-  # masks remapped to the full frame, cross-tile IoU-NMS dedup. The
-  # segmenter's other options are fixed (maps/perception/sam/detect_client.py).
-  sahi: true
 sensor: nadir_1008_90
 # Bench-only ablation withholds over the flown engine (maps.search.withhold):
 # prior, look_for, look, images, mission_map, system_turn. Empty serves the

@@ -27,8 +27,8 @@ def test_a_partially_failed_frame_counts_its_failed_tiles(monkeypatch):
         lambda self, payload, **kw: captured.append(payload) or [],
     )
     assert client.sahi_tiles_failed == 0
-    client._sahi_segment(obs, ["car"])
+    client._segment(obs, ["car"])
     assert client.sahi_tiles_failed == 1
     assert captured and captured[0]["detections"], "the answering tile's detections are kept"
-    client._sahi_segment(obs, ["car"])
+    client._segment(obs, ["car"])
     assert client.sahi_tiles_failed == 2

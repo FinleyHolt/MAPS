@@ -12,4 +12,4 @@ def make_perception(cfg: RunConfig) -> SamDetectClient:
     every active reasoner thread, pushed into the provider via
     ``set_concepts``; before the first push the provider is empty and
     ``SamDetectClient.detect`` returns no detections."""
-    return SamDetectClient(concept_provider=ReasonerUnionConceptProvider(), **cfg.sam)
+    return SamDetectClient(concept_provider=ReasonerUnionConceptProvider())

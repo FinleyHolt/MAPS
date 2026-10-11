@@ -5,7 +5,7 @@ every key) or an override: ``base: <file>`` names the file it changes,
 relative to itself, and the file holds only the keys it changes. Chains
 resolve and deep-merge; ``_SCHEMA`` is the one statement of every key, its
 type and its range, and the loader refuses an unknown key, a missing key or
-a bad value at load, naming its dotted path and the file.
+a bad value at load, naming the key and the file.
 """
 
 from __future__ import annotations
@@ -41,10 +41,9 @@ def _sensor_ok(v: Any) -> bool:
 
 _POS = (lambda v: v > 0), "> 0"
 _NONNEG = (lambda v: v >= 0), ">= 0"
-_ANY = (lambda v: True), ""
 
-# Every YAML key: (accepted types, (test, what the test asks)). A dict value
-# is a nested block with its own keys. A float key reads an int too.
+# Every YAML key: (accepted types, (test, what the test asks)). A float key
+# reads an int too.
 _SCHEMA: dict[str, Any] = {
     "max_steps": (int, _POS),
     "altitude_m": (_NUM, _POS),
@@ -57,9 +56,6 @@ _SCHEMA: dict[str, Any] = {
     "start_altitude_agl_m": ((*_NUM, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
     "altitude_cap_m": (_NUM, _POS),
     "sensor": ((str, dict), (_sensor_ok, "a registered sensor or an inline override")),
-    "sam": {
-        "sahi": (bool, _ANY),
-    },
     "withhold": (list, (
         lambda v: len(set(v)) == len(v) and all(n in WITHHOLDS for n in v),
         f"a list of distinct names from {sorted(WITHHOLDS)}")),
@@ -91,7 +87,6 @@ class RunConfig:
     altitude_cap_m: float
     # A registered sensor name or an inline override (sensor_spec).
     sensor: str | dict
-    sam: dict
     # Bench-only ablation withholds (maps.search.withhold); empty serves the
     # flown text exactly.
     withhold: list
@@ -151,27 +146,22 @@ def _read_chain(p: Path, seen: tuple[Path, ...] = ()) -> dict:
     return _merge(_read_chain(p.parent / base, (*seen, p)), data)
 
 
-def _check(data: dict, schema: dict, src: Path, prefix: str = "") -> None:
+def _check(data: dict, schema: dict, src: Path) -> None:
     unknown = sorted(set(data) - set(schema))
     missing = sorted(set(schema) - set(data))
     if unknown:
-        raise ValueError(f"{src}: unknown config key(s) {[prefix + k for k in unknown]}")
+        raise ValueError(f"{src}: unknown config key(s) {unknown}")
     if missing:
-        raise ValueError(f"{src}: missing config key(s) {[prefix + k for k in missing]}")
+        raise ValueError(f"{src}: missing config key(s) {missing}")
     for key, rule in schema.items():
-        path, v = prefix + key, data[key]
-        if isinstance(rule, dict):
-            if not isinstance(v, dict):
-                raise ValueError(f"{src}: {path} is a block of keys, got {v!r}")
-            _check(v, rule, src, path + ".")
-            continue
+        v = data[key]
         types, (ok, says) = rule
         types = types if isinstance(types, tuple) else (types,)
         if not isinstance(v, types) or (isinstance(v, bool) and bool not in types):
             names = "/".join("null" if t is _NONE else t.__name__ for t in types)
-            raise ValueError(f"{src}: {path} must be {names}, got {v!r}")
+            raise ValueError(f"{src}: {key} must be {names}, got {v!r}")
         if not ok(v):
-            raise ValueError(f"{src}: {path} must be {says}, got {v!r}")
+            raise ValueError(f"{src}: {key} must be {says}, got {v!r}")
 
 
 def resolve_config(path: str | Path | None) -> tuple[dict, Path]:

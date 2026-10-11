@@ -1,6 +1,6 @@
 """SAHI cross-tile NMS — bbox-crop pipeline is bit-identical to full-frame.
 
-``_sahi_segment`` carries each tile detection as its bbox crop plus full-frame
+``_segment`` carries each tile detection as its bbox crop plus full-frame
 bbox instead of materializing a frame-sized mask per detection (766 × 2016²
 bool allocations measured per frame). These tests pin the contract that made
 that refactor safe: the kept set, its order, and the encoded wire records are
@@ -21,11 +21,7 @@ from PIL import Image
 from maps.perception.tests.regions import square_view
 from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.sam import detect_client as dc
-from maps.perception.sam.detect_client import (
-    SamDetectClient,
-    _letterbox_to_sam,
-    _png_wire_bytes,
-)
+from maps.perception.sam.detect_client import SamDetectClient, _png_wire_bytes
 from maps.util.mask_codec import decode_mask_full, encode_mask_record
 
 
@@ -158,7 +154,7 @@ def test_empty_item_is_dropped_not_crashed():
     ]
 
 
-# ── End-to-end golden: _sahi_segment repack equals the reference repack ──
+# ── End-to-end golden: _segment repack equals the reference repack ──
 
 
 def _tile_det(mask_1008, label, score, oid):
@@ -176,8 +172,7 @@ def _tile_b64(rgb, bound):
     than saying what actually moved.
     """
     r0, r1, c0, c1 = bound
-    canvas, _scale, _pt, _pl = _letterbox_to_sam(rgb[r0:r1, c0:c1])
-    return base64.b64encode(_png_wire_bytes(canvas)).decode("ascii")
+    return base64.b64encode(_png_wire_bytes(np.ascontiguousarray(rgb[r0:r1, c0:c1]))).decode("ascii")
 
 
 def _build_repack_case():
@@ -188,7 +183,7 @@ def _build_repack_case():
     min_area = dc.MIN_AREA_PX
     provider = ReasonerUnionConceptProvider()
     provider.set_concepts(["car"])
-    client = SamDetectClient(concept_provider=provider, sahi=True)
+    client = SamDetectClient(concept_provider=provider)
     bounds = client._tile_bounds(H, W, dc.SAHI_OVERLAP)
     assert bounds == [(0, 1008, 0, 1008), (0, 1008, 504, 1512)]
 
@@ -246,7 +241,7 @@ def _build_repack_case():
     return client, obs, payload_by_b64, ref_dets, (H, W)
 
 
-def test_sahi_segment_repack_matches_reference(monkeypatch):
+def test_segment_repack_matches_reference(monkeypatch):
     client, obs, payload_by_b64, ref_dets, (H, W) = _build_repack_case()
 
     requested: list[str] = []
@@ -266,7 +261,7 @@ def test_sahi_segment_repack_matches_reference(monkeypatch):
         "_decode_payload_to_detections",
         lambda self, payload, **kw: captured.append(payload) or [],
     )
-    client._sahi_segment(obs, ["car"])
+    client._segment(obs, ["car"])
 
     # vacuity floor: exactly the two expected tiles were requested
     assert sorted(requested) == sorted(payload_by_b64)
@@ -304,7 +299,7 @@ def test_sahi_tile_order_survives_out_of_order_completion(monkeypatch):
         "_decode_payload_to_detections",
         lambda self, payload, **kw: captured.append(payload) or [],
     )
-    client._sahi_segment(obs, ["car"])
+    client._segment(obs, ["car"])
 
     # vacuity floor: completion order really was inverted
     assert completion_order == [1, 0]

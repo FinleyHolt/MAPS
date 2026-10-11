@@ -440,38 +440,6 @@ SEGMENT_CONNECT_TIMEOUT_S = 45
 SEGMENT_READ_TIMEOUT_S = 660
 
 
-def _letterbox_to_sam(rgb: np.ndarray) -> tuple[np.ndarray, float, int, int]:
-    """Aspect-preserving resize + center-pad to ``_SAM_INPUT_SIZE``:
-    ``(canvas, scale, pad_top, pad_left)`` with ``letterboxed = scale * orig +
-    pad``. A native 1008 tile passes through unresampled.
-    """
-    h, w = rgb.shape[:2]
-    if h <= 0 or w <= 0:
-        return (
-            np.zeros((_SAM_INPUT_SIZE, _SAM_INPUT_SIZE, 3), dtype=np.uint8),
-            1.0,
-            0,
-            0,
-        )
-    if h == w == _SAM_INPUT_SIZE:
-        return np.ascontiguousarray(rgb, dtype=np.uint8), 1.0, 0, 0
-    scale = float(_SAM_INPUT_SIZE) / float(max(h, w))
-    new_h = max(1, int(round(h * scale)))
-    new_w = max(1, int(round(w * scale)))
-    resized = np.asarray(
-        Image.fromarray(rgb.astype(np.uint8)).resize(
-            # LANCZOS: Pillow scales the support to the factor, so a shrink
-            # is anti-aliased.
-            (new_w, new_h), resample=Image.Resampling.LANCZOS
-        )
-    )
-    canvas = np.zeros((_SAM_INPUT_SIZE, _SAM_INPUT_SIZE, 3), dtype=np.uint8)
-    pad_top = (_SAM_INPUT_SIZE - new_h) // 2
-    pad_left = (_SAM_INPUT_SIZE - new_w) // 2
-    canvas[pad_top : pad_top + new_h, pad_left : pad_left + new_w] = resized
-    return canvas, scale, pad_top, pad_left
-
-
 #: Threads for the per-detection mask decode, projection and colour read;
 #: output order is the serial order at any width.
 _DECODE_WORKERS = 4
@@ -486,11 +454,6 @@ class SamDetectClient:
     """
 
     concept_provider: ReasonerUnionConceptProvider
-    # Force native-resolution SAHI tiling on a frame that already fits the
-    # encoder (a larger frame always tiles): 1008 px tiles fed 1:1, remapped
-    # to the frame, cross-tile IoU-NMS dedup. Recovers dense-lot car recall
-    # full-frame SAM loses to sub-pixel cars (~67% -> 82% measured).
-    sahi: bool = False
     # SAHI tiles whose ``/segment`` gave no usable response after retries,
     # over this client's life (one episode; the row's ``sam_tiles_failed``).
     # A frame with some failed tiles is partial-blind, not empty.
@@ -518,35 +481,18 @@ class SamDetectClient:
         concepts = list(self.concept_provider.concepts)
         return self._segment(obs, concepts) if concepts else []
 
-    def _segment(
-        self, obs: Observation, concepts: list[str]
-    ) -> list[DetectedObject]:
-        """SAHI tiles when the frame exceeds the encoder input in either
-        dimension (a letterbox shrink would hand the encoder a fraction of its
-        pixels) or ``sahi`` forces it; else one full-frame ``/segment``."""
-        h, w = obs.rgb.shape[:2]
-        if self.sahi or h > _SAM_INPUT_SIZE or w > _SAM_INPUT_SIZE:
-            return self._sahi_segment(obs, concepts)
-        return self._segment_image_via_server(obs, concepts)
-
-    def _post_frame(
-        self, rgb: np.ndarray, concepts: list[str], *, image_first: bool = False
-    ) -> tuple[dict | None, float, int, int]:
-        """Letterbox ``rgb`` and POST it to ``/segment``: ``(payload, scale,
-        pad_top, pad_left)``, the payload ``None`` when the poster gave up.
-        ``image_first`` puts ``image_b64`` ahead of the knobs in the body."""
-        canvas, scale, pad_top, pad_left = _letterbox_to_sam(rgb)
-        image = {"image_b64": base64.b64encode(_png_wire_bytes(canvas)).decode("ascii")}
-        knobs = {
+    def _post_tile(self, tile: np.ndarray, concepts: list[str]) -> dict | None:
+        """POST one native tile to ``/segment``; ``None`` when the poster gave up."""
+        image = base64.b64encode(_png_wire_bytes(np.ascontiguousarray(tile, dtype=np.uint8))).decode("ascii")
+        body = {
             "concepts": concepts,
             "score_threshold": SCORE_THRESHOLD,
             "min_area_px": MIN_AREA_PX,
             "max_per_image": MAX_PER_STEP,
             "resolution": _SAM_INPUT_SIZE,
+            "image_b64": image,
         }
-        body = {**image, **knobs} if image_first else {**knobs, **image}
-        payload = _post_segment_avoid_stale_pool(picker=_pick_url, json_body=body)
-        return payload, scale, pad_top, pad_left
+        return _post_segment_avoid_stale_pool(picker=_pick_url, json_body=body)
 
     @staticmethod
     def _tile_bounds(
@@ -611,26 +557,28 @@ class SamDetectClient:
                 kept.append((crop, bb, a, lab, sc))
         return [(crop, bb, lab, sc) for (crop, bb, _a, lab, sc) in kept]
 
-    def _sahi_segment(
+    def _segment(
         self, obs: Observation, concepts: list[str]
     ) -> list[DetectedObject]:
         """Native-resolution slicing-aided detection: ``/segment`` each
         ``_SAM_INPUT_SIZE`` tile at 1:1, carry each mask as its bbox crop in
         frame coordinates, cross-tile IoU-NMS dedup, then re-pack into one
-        frame-sized wire payload for the same decode as the single-frame call.
+        frame-sized wire payload for the decode. A frame under a tile in
+        either dimension is zero-padded on the bottom and right, and its
+        masks are clipped to the frame.
         """
         rgb = obs.rgb
         assert rgb is not None
         H, W = int(rgb.shape[0]), int(rgb.shape[1])
-        bounds = self._tile_bounds(H, W, SAHI_OVERLAP)
+        canvas = np.pad(rgb, ((0, max(0, _SAM_INPUT_SIZE - H)), (0, max(0, _SAM_INPUT_SIZE - W)), (0, 0)))
+        bounds = self._tile_bounds(canvas.shape[0], canvas.shape[1], SAHI_OVERLAP)
 
         def _one_tile(bound) -> list[tuple] | None:
             """One tile's ``(crop, bbox_rcrc, area, label, score)`` items in
             wire order (crop ``None`` for an empty mask), or ``None`` when its
             ``/segment`` failed. Reads only shared-immutable state."""
             r0, r1, c0, c1 = bound
-            sub = rgb[r0:r1, c0:c1]
-            payload, scale, pad_top, pad_left = self._post_frame(sub, concepts)
+            payload = self._post_tile(canvas[r0:r1, c0:c1], concepts)
             if payload is None:
                 return None
             wire_hw = payload.get("image_shape_hw", [_SAM_INPUT_SIZE, _SAM_INPUT_SIZE])
@@ -639,10 +587,10 @@ class SamDetectClient:
                 region = _wire_mask_region(
                     det,
                     wire_hw=wire_hw,
-                    scale=scale,
-                    pad_top=pad_top,
-                    pad_left=pad_left,
-                    frame_hw=sub.shape[:2],
+                    scale=1.0,
+                    pad_top=0,
+                    pad_left=0,
+                    frame_hw=(min(r1, H) - r0, min(c1, W) - c0),
                 )
                 area = 0 if region is None else region.area
                 if area < MIN_AREA_PX:
@@ -704,31 +652,6 @@ class SamDetectClient:
             pad_top=0,
             pad_left=0,
             orig_HW=(H, W),
-        )
-
-    def _segment_image_via_server(
-        self,
-        obs: Observation,
-        concepts: list[str],
-    ) -> list[DetectedObject]:
-        """One full-frame ``POST /segment``, letterboxed, decoded back to the
-        frame."""
-        rgb = obs.rgb
-        assert rgb is not None
-        payload, scale, pad_top, pad_left = self._post_frame(rgb, concepts, image_first=True)
-        if payload is None:
-            raise SamServerOutage(
-                "SAM /segment returned no usable response (transport fault / "
-                "5xx / 408 / 429 after retries) — whole-frame outage, not an "
-                "empty detection set"
-            )
-        return self._decode_payload_to_detections(
-            payload,
-            obs=obs,
-            scale=scale,
-            pad_top=pad_top,
-            pad_left=pad_left,
-            orig_HW=(int(rgb.shape[0]), int(rgb.shape[1])),
         )
 
     def _decode_payload_to_detections(
