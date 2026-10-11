@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-import time
 from collections import deque
 from pathlib import Path
 
@@ -12,9 +11,8 @@ from benchmarks.citynav import bench_fullset as bf
 
 @pytest.fixture
 def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """Build a Driver holding only the fields the dispatch, result and
-    summary paths read. ``__init__`` resolves a split, a config and a
-    serve, none of which these paths touch."""
+    """A Driver holding only the fields the dispatch, attempt, result and
+    summary paths read; ``__init__`` resolves a split, a config and a serve."""
     monkeypatch.setattr(bf, "WORKER_STAGGER_S", 0)
 
     def make(root: Path = tmp_path, selection: list[str] | None = None) -> bf.Driver:
@@ -40,7 +38,6 @@ def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         d.allowlist_path = None
         d.max_infra_attempts = 3
         d._infra_errors = {}
-        d._t_start = time.monotonic()
         return d
 
     return make

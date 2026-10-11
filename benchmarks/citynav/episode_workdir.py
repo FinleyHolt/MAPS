@@ -10,8 +10,8 @@
         flight/            the engine's working files: llm/transcript.jsonl (the wire
                            log), look/ (the look audit), net_meter.jsonl, tour_cursor.json
 
-The warm runner (``episode_server``), the batch loop (``cli.main``) and the
-field station each open their attempt directories through one function.
+The runner (``cli.main``: a batch, or one bench attempt) and the field
+station open their attempt directories through one function.
 
 The stamp in the name is the attempt's start; the readers order attempts of
 one episode by it, so a retry is a new directory, never an overwrite. A
@@ -115,8 +115,8 @@ def open_episode_dir(
     so a folder and a run row find each other (:func:`mint_workdir`). A bench
     attempt carries none.
 
-    ``close()`` detaches the log handler, so a warm runner's next episode
-    does not bleed into this one's file.
+    ``close()`` detaches the log handler, so a batch's next episode does
+    not bleed into this one's file.
     """
     # numpy at import; the driver imports this module and must stay light.
     from benchmarks.citynav.live_recorder import LiveRecorder
@@ -125,7 +125,7 @@ def open_episode_dir(
     flight = d / "flight"
     flight.mkdir(parents=True, exist_ok=True)
 
-    # ASSIGNED, never setdefault: a warm runner's previous episode left a
+    # ASSIGNED, never setdefault: a batch's previous episode left a
     # value here, and the wire log resolves its directory from
     # SEARCH_COMPILE_WORKDIR at every call.
     os.environ["SEARCH_COMPILE_WORKDIR"] = str(d)

@@ -1,7 +1,7 @@
 """Continuous full-split benchmark driver.
 
 Runs the search stack across a whole split at a fixed worker concurrency,
-one persistent ``run_benchmark --episode-server`` child per worker.
+one fresh ``run_benchmark --attempt-root`` child per attempt.
 Resumable and idempotent: every episode that already has a qualifying row
 in ``episodes.jsonl`` is skipped, so re-running the same command continues
 coverage rather than restarting.
@@ -42,8 +42,8 @@ Outputs (under ``--out-root``, default ``output/citynav_fullset``):
     summary.txt     ``analysis.run_report`` over the root, refreshed after
                     every attempt, under the driver's infra lines
     driver.log      orchestrator log
-    w<id>/          per-worker run-root: server.log (the warm child's
-                    stderr), and one
+    w<id>/          per-worker directory: server.log (every attempt
+                    child's stderr), and one
                     maps_<stamp>_<benchmark>_<slug>/ directory per attempt
                     holding episode.json, run.log and flight/
 """
@@ -54,19 +54,17 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
-import json
 import logging
 import os
-import queue
 import random
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
 from collections import Counter, deque
-
 from pathlib import Path
 
 from benchmarks.citynav import episodes
@@ -116,8 +114,13 @@ DEFAULT_EPISODE_TIMEOUT_S = 4 * 3600
 # backstop trades the tail of a pass for a scored row: calcity::6#6 spent its
 # whole cap inside one explore and recorded no prediction at all.
 _DEADLINE_RESERVE_FRAC = 0.1
-POLL_INTERVAL_S = 5.0
-# Pause between worker thread starts, so warm runners do not all spawn at once.
+# How often the driver asks the reasoner's ``/models`` while an attempt
+# flies; two failures in a row kill the attempt as ``vllm_down_midrun``.
+VLLM_PROBE_S = 60.0
+# How long claiming waits between probes of a reasoner that is down.
+VLLM_PAUSE_S = 120.0
+# Pause between worker thread starts, so the first attempts do not all
+# cold-start at once.
 WORKER_STAGGER_S = 2.0
 # Infra attempts an episode gets before the run leaves it out and reports
 # it as persistent infra with its errors (``--max-infra-attempts``).
@@ -144,18 +147,6 @@ ABORT_WINDOW = 12
 ABORT_FRACTION = 0.9
 
 
-# Proactive warm-runner recycle. The persistent ``run_benchmark
-# --episode-server`` accumulates RSS across the episodes it serves
-# (per-block ObjectGraph + mask cache + CPython allocator high-water);
-# a long-lived child under the Slurm cgroup ``--mem`` cap can get
-# SIGKILLed mid-flight. Recycling (kill, then lazy respawn on the
-# next attempt) after every large block AND after a fixed episode count
-# resets the child's RSS to its cold baseline.
-WARM_RUNNER_RECYCLE_AFTER = 8
-# Substrings of map names whose per-block graphs are large enough that a
-# single episode should trigger a recycle once it finishes, so the next
-# episode starts from a cold RSS baseline rather than stacking on top.
-WARM_RUNNER_RECYCLE_MAP_SUBSTRINGS = ("cambridge",)
 _log_lock = threading.Lock()
 
 
@@ -175,14 +166,9 @@ def _enumerate_split(split: str) -> list[str]:
     return out
 
 
-# Sentinel pushed onto a runner's stdout queue when its stdout closes
-# (the child process exited). Distinct from queue-empty (still running).
-_RUNNER_EOF = object()
-
-
-# The native thread pools a warm runner starts: one thread each for BLAS
+# The native thread pools an attempt child starts: one thread each for BLAS
 # (OpenMP, OpenBLAS, MKL), OpenCV and the tokenizer (Rayon), and two malloc
-# arenas. Uncapped, every pool starts a thread per core in every runner, and
+# arenas. Uncapped, every pool starts a thread per core in every child, and
 # a thread that fails to start crashes its episode. A value the shell set
 # wins.
 RUNNER_THREAD_ENV = {
@@ -196,278 +182,34 @@ RUNNER_THREAD_ENV = {
 
 
 def _runner_env() -> dict[str, str]:
-    """The environment a warm runner is spawned under."""
+    """The environment an attempt child is spawned under."""
     env = {**RUNNER_THREAD_ENV, **os.environ}
-    # Unbuffered, so the worker's ``server.log`` gets every line as it
-    # happens: redirected to a file, Python block-buffers, and a worker that
-    # dies fast would leave a 0-byte log.
+    # Unbuffered, so ``server.log`` gets every line as it happens: redirected
+    # to a file, Python block-buffers, and a child that dies fast would leave
+    # nothing behind.
     env["PYTHONUNBUFFERED"] = "1"
-    # episode_server.PARENT_PID_ENV, named here so the driver stays off
-    # the engine's imports.
+    # cli.PARENT_PID_ENV, named here so the driver stays off the engine's
+    # imports.
     env["CITYNAV_BENCH_PARENT_PID"] = str(os.getpid())
     return env
 
 
-class _WarmRunner:
-    """One persistent ``run_benchmark --episode-server`` per bench worker.
-
-    The expensive cold start (config, split, objects,
-    MapsCompiler) is paid once at ``spawn``; every subsequent episode
-    reuses it. Episodes are driven over the child's own stdin/stdout
-    pipes (newline-delimited JSON). The child runs in its own session, so
-    it arms a parent-death signal (``episode_server._die_with_parent``): a
-    SIGKILLed driver leaves no runner flying on.
-    """
-
-    def __init__(self, run_root: Path, split: str) -> None:
-        self.run_root = run_root
-        self.split = split
-        self.proc: subprocess.Popen | None = None
-        self._q: "queue.Queue[object]" = queue.Queue()
-        self._reader: threading.Thread | None = None
-        self._seq = 0
-        self._early_done: dict | None = None
-        # PUBLIC, because it is the only record of why a child died before it
-        # could say anything on stdout: the spawn failure row below carries
-        # this path so the abort banner can quote the child's own stderr.
-        self.server_log = run_root / "server.log"
-        # Episodes this child has served since its last spawn; drives the
-        # count-based proactive recycle (WARM_RUNNER_RECYCLE_AFTER).
-        self._episodes_since_spawn = 0
-
-    def alive(self) -> bool:
-        return self.proc is not None and self.proc.poll() is None
-
-    def _drain_stdout(self, proc: subprocess.Popen) -> None:
-        try:
-            assert proc.stdout is not None
-            for line in proc.stdout:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    self._q.put(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-        finally:
-            self._q.put(_RUNNER_EOF)
-
-    def _await_event(
-        self,
-        events: set[str],
-        *,
-        timeout_s: float,
-        what: str,
-        seq: int | None = None,
-    ) -> dict:
-        deadline = time.monotonic() + timeout_s
-        while time.monotonic() < deadline:
-            try:
-                obj = self._q.get(timeout=5.0)
-            except queue.Empty:
-                if self.proc is not None and self.proc.poll() is not None:
-                    raise RuntimeError(f"warm runner died before {what}")
-                continue
-            if obj is _RUNNER_EOF:
-                raise RuntimeError(f"warm runner stdout closed before {what}")
-            if isinstance(obj, dict) and obj.get("event") in events:
-                # Seq discipline (mirrors _wait_for_exit): when waiting on
-                # a specific episode, drain — never return — a stale
-                # started/done from a prior seq. Without this a late
-                # episode-N ``done`` is consumed as episode N+1's start
-                # and run_episode returns N's workdir, mis-scoring N+1.
-                if (
-                    seq is not None
-                    and obj.get("seq") is not None
-                    and obj.get("seq") != seq
-                ):
-                    continue
-                return obj
-            # ignore any other protocol line
-        raise RuntimeError(f"warm runner timed out before {what}")
-
-    def spawn(self) -> None:
-        self.run_root.mkdir(parents=True, exist_ok=True)
-        cmd = [
-            sys.executable,
-            "-m",
-            RUNNER_MODULE,
-            "--episode-server",
-            "--split",
-            self.split,
-            "--config",
-            str(CONFIG),
-            "--run-root",
-            str(self.run_root),
-        ]
-        env = _runner_env()
-        self._q = queue.Queue()
-        self._early_done = None
-        self._episodes_since_spawn = 0
-        slog = open(self.server_log, "a", buffering=1)
-        self.proc = subprocess.Popen(
-            cmd,
-            cwd=str(REPO),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=slog,
-            text=True,
-            start_new_session=True,
-            env=env,
-        )
-        self._reader = threading.Thread(
-            target=self._drain_stdout, args=(self.proc,), daemon=True
-        )
-        self._reader.start()
-        # Block on the one-time cold start (config, split, compiler ctor).
-        self._await_event({"ready"}, timeout_s=600.0, what="ready")
-
-    def run_episode(
-        self, episode_id: str, *, deadline_epoch: float | None = None
-    ) -> tuple[dict, int]:
-        """Dispatch one episode; block until the child created the
-        per-episode workdir and emitted ``started``.
-        Returns (handle, seq)."""
-        if not self.alive():
-            raise RuntimeError("warm runner not alive")
-        self._seq += 1
-        seq = self._seq
-        self._episodes_since_spawn += 1
-        assert self.proc is not None and self.proc.stdin is not None
-        self.proc.stdin.write(
-            json.dumps(
-                {
-                    "cmd": "run",
-                    "episode_id": episode_id,
-                    "split": self.split,
-                    "seq": seq,
-                    # Per-episode, because the child is WARM and serves many:
-                    # a spawn-time env would hand episode 40 episode 1's
-                    # deadline. ``None`` clears it child-side.
-                    "deadline_epoch": deadline_epoch,
-                }
-            )
-            + "\n"
-        )
-        self.proc.stdin.flush()
-        self._early_done = None
-        obj = self._await_event(
-            {"started", "done"}, timeout_s=600.0, what="episode start", seq=seq
-        )
-        if obj.get("event") == "done":
-            # Resolved before flight (e.g. episode_not_found). Synthesize
-            # a handle; _wait_for_exit returns immediately on _early_done.
-            self._early_done = obj
-            return {"workdir": obj.get("workdir", ""), "map": ""}, seq
-        return {"workdir": obj.get("workdir"), "map": obj.get("map")}, seq
-
-    def kill(self) -> None:
-        """SIGTERM the child's process group, SIGKILL after 5 s.
-
-        Process-group (not bare pid) because the warm runner spawns
-        SearchLoop / executor threads + child renders.
-        """
-        proc = self.proc
-        if proc is None or proc.poll() is not None:
-            return
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
-            return
-        deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline:
-            if proc.poll() is not None:
-                return
-            time.sleep(0.1)
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
-
-    def should_recycle(self, map_name: str) -> bool:
-        """Whether to recycle this child after the episode it just served.
-
-        True if the served block is one of the large
-        (``WARM_RUNNER_RECYCLE_MAP_SUBSTRINGS``) maps, or the child has
-        served at least ``WARM_RUNNER_RECYCLE_AFTER`` episodes since its
-        last spawn. Recycling bounds cumulative RSS growth under the
-        Slurm cgroup ``--mem`` cap.
-        """
-        if any(s in (map_name or "") for s in WARM_RUNNER_RECYCLE_MAP_SUBSTRINGS):
-            return True
-        return self._episodes_since_spawn >= WARM_RUNNER_RECYCLE_AFTER
-
-    def shutdown(self) -> None:
-        proc = self.proc
-        if proc is not None and proc.poll() is None:
-            try:
-                if proc.stdin is not None:
-                    proc.stdin.write(json.dumps({"cmd": "shutdown"}) + "\n")
-                    proc.stdin.flush()
-                    proc.stdin.close()
-            except (OSError, ValueError):
-                pass
-            deadline = time.monotonic() + 15.0
-            while time.monotonic() < deadline:
-                if proc.poll() is not None:
-                    break
-                time.sleep(0.2)
-            if proc.poll() is None:
-                self.kill()
-
-
-def _infra_casualty(row: dict) -> bool:
-    """True when this row is an infra abort: no prediction, excluded from
-    SR, re-queued for a full redo.
-
-    The ONE predicate for "this episode never got a fair run", shared by
-    the done-set below and the mass-instant-failure abort. A hard episode
-    timeout with no prediction is deliberately NOT one of these — that is
-    the ALGORITHM failing to answer within its budget, a legitimate
-    CityNav miss.
-
-    A mission that ends ``ended_by=transient_failures`` (the reasoner
-    endpoint failed MAX_ROUND_TRANSIENT calls in a row) IS one of these:
-    the serve died under the episode mid-search, the row's record is
-    whatever flight happened to be last before the outage. Measured on
-    ``f40088a:calcity_full_replyrepair``: a serve OOM storm forced 50/1022
-    episodes to SR 0.000 this way. ``compaction_infeasible``,
-    ``oversize_rejection`` and ``turn_cap`` stay scored — those are the
-    algorithm's own budget.
-
-    The predicate itself lives in ``analysis.rows``, because the READER of
-    a finished run has to reach the same verdict this driver does. It was
-    restated here instead, and the two diverged on exactly the
-    ``transient_failures`` clause: the driver excluded such a row and
-    re-queued the episode, while the reader scored the excluded attempt
-    and discarded the re-run as a replicate. On a reasoning-effort arm
-    whose failure was deterministic, that disagreement re-queued the same
-    episode forever.
-    """
-    return _rows.is_infra_abort(row)
+# The ONE predicate for "this attempt never got a fair run" (excluded from
+# SR, re-queued), shared with the readers so the driver and a reader of the
+# finished run reach the same verdict. A timeout is not one: it is the
+# algorithm missing within its budget.
+_infra_casualty = _rows.is_infra_abort
 
 
 def _infra_cause(row: dict) -> str:
-    """What killed this episode, in words the abort banner can act on.
-
-    Every ``infra`` row carries an ``error``: the producer writes one for
-    each of its own verdicts (``mission ended_by=transient_failures`` for a
-    serve that died under the mission), and the driver writes one for each of its
-    kill paths.
-    """
+    """What killed this attempt, for the abort banner: the ``error`` every
+    infra row carries."""
     return str(row.get("error") or "").strip() or "infra"
 
 
 def _done_qualify(row: dict) -> str | None:
-    """Done-set membership predicate, shared by the pass-start read and the
-    result writer.
-
-    An episode counts as done once it has a row with a string
-    ``episode_id`` whose status is not ``infra`` (the attempt never got a
-    fair run: the next pass re-attempts it). Excluded rows stay as an
-    audit trail. Returns the episode_id when the row
-    qualifies, else ``None``.
-    """
+    """The episode_id when ``row`` marks its episode done (a string id, not
+    infra), else ``None``."""
     eid = row.get("episode_id")
     if isinstance(eid, str) and not _infra_casualty(row):
         return eid
@@ -499,19 +241,15 @@ class Driver:
     def __init__(self, args: argparse.Namespace) -> None:
         self.workers = max(1, int(args.workers))
         self.split = args.split
-        # The split is the ground truth an SR is a score AGAINST, so it belongs
-        # in the artifact, not only in the launch command. Dispatch stamps it
-        # into every row's provenance, and ab_report REFUSES to pair two runs
-        # whose splits differ -- or whose splits went unrecorded (null is
-        # fatal there, not a silent pass).
+        # The split and seed stamp every row's provenance (dispatch), and
+        # ab_report refuses to pair runs whose splits differ or went
+        # unrecorded.
         os.environ["CITYNAV_BENCH_SPLIT"] = str(self.split)
         if getattr(args, "sample_seed", None) is not None:
             os.environ["CITYNAV_BENCH_SAMPLE_SEED"] = str(args.sample_seed)
         self.episode_timeout_s = int(args.episode_timeout_s)
         self.max_infra_attempts = max(1, int(args.max_infra_attempts))
-        # episode_id -> its infra attempts' errors, counted; read from the
-        # ledger at each pass start and kept current by _append_result.
-        # Guarded by _dispatch_lock.
+        # episode_id -> its infra attempts' errors, counted.
         self._infra_errors: dict[str, Counter] = {}
         self.out_root = Path(args.out_root)
         if not self.out_root.is_absolute():
@@ -522,44 +260,27 @@ class Driver:
         self.summary_file = self.out_root / "summary.txt"
         self.limit = int(args.limit)
         self.sample_seed = int(args.sample_seed)
-        # Optional episode-allowlist file: newline-delimited episode_ids.
-        # Intersected with the enumerated split in ``_select_episodes``
-        # before the seeded shuffle, so an (allowlist, seed) pair selects
-        # the same N episodes. Set by the ablation harness; production
-        # runs leave it None.
+        # Newline-delimited episode_ids, applied before the seeded shuffle.
         self.allowlist_path: Path | None = None
         if getattr(args, "episode_allowlist", None):
             ap = Path(args.episode_allowlist)
             if not ap.is_absolute():
                 ap = (REPO / ap).resolve()
             self.allowlist_path = ap
-        # Continuous-dispatch shared state (populated in run()).
+        # Dispatch state, all guarded by _dispatch_lock. _in_flight keeps a
+        # worker that finishes early off a sibling's live episode; _recent is
+        # the mass-infra window as (cause or None, log path).
         self._selection: list[str] = []
         self._cursor = 0
         self._dispatch_lock = threading.Lock()
         self._done_cache: set[str] = set()
-        # Episodes this process's workers are RUNNING right now. "Done"
-        # means a row landed in episodes.jsonl, so it says nothing about
-        # an episode still in flight — without this, a worker that
-        # finishes early re-hands a peer worker's live episode to itself.
-        # Guarded by _dispatch_lock, like the cursor and the done cache.
         self._in_flight: set[str] = set()
-        # Mass-instant-failure gate: the last ABORT_WINDOW completions as
-        # (cause, log path) — cause None on a row that produced a result —
-        # and the one-line reason the run stopped (None while healthy).
-        # Both guarded by _dispatch_lock.
         self._recent: deque[tuple[str | None, str]] = deque(maxlen=ABORT_WINDOW)
         self._abort: str | None = None
-        self._t_start = time.monotonic()
-        # Wall-time budget: a continuous run's standard stop condition.
-        # 0 = run until the selection is exhausted (or --limit's
-        # run-count budget). >0 = stop claiming new episodes once this
-        # many seconds elapse; in-flight episodes finish, results are
-        # retained, the summary is written. All lanes start within the
-        # ~2 s/lane stagger, so a shared deadline is effectively aligned.
+        # --max-wall-s: stop claiming once spent; in-flight attempts finish.
         self.max_wall_s = int(args.max_wall_s)
         self._deadline = (
-            self._t_start + self.max_wall_s if self.max_wall_s > 0 else None
+            time.monotonic() + self.max_wall_s if self.max_wall_s > 0 else None
         )
         self.log(f"split={self.split} sample_seed={self.sample_seed}")
 
@@ -574,11 +295,9 @@ class Driver:
 
     def _append_result(self, row: dict) -> None:
         episodes.append_row(self.out_root, row)
-        # Dispatch-time invariant: a claim must never return an episode
-        # whose qualifying row has been written this run. The write and
-        # the done-cache add are one step from a claimer's view (claims
-        # take _dispatch_lock). Infra rows do not qualify and stay
-        # re-claimable up to max_infra_attempts.
+        # The write and the done-cache add are one step to a claimer, so a
+        # finished episode is never claimed again; infra rows stay
+        # claimable up to max_infra_attempts.
         eid = _done_qualify(row)
         with self._dispatch_lock:
             if eid is not None:
@@ -590,8 +309,7 @@ class Driver:
 
     @staticmethod
     def _log_excerpt(log_path: str, n: int = 15) -> str:
-        """The tail of a worker log, indented, for the abort message. The
-        point of the gate is that the next actor does not go spelunking."""
+        """The tail of a worker log, indented, for the abort message."""
         try:
             text = Path(log_path).read_text(errors="replace")
         except OSError as exc:
@@ -602,20 +320,10 @@ class Driver:
         return "\n".join(f"    | {ln}" for ln in lines[-n:])
 
     def _check_mass_infra(self, row: dict) -> None:
-        """Stop the run once mass instant failure is already conclusive.
-
-        The classifier upstream already recognizes every shape this fires
-        on; what was missing was acting on it before the allocation was
-        spent. The window counts only rows the done-set EXCLUDES (the
-        shared ``_infra_casualty`` predicate), so an episode timeout — the
-        algorithm failing to answer, a legitimate miss — can never fill it,
-        and a healthy run's occasional infra attempt cannot either: the gate
-        needs ABORT_FRACTION of a FULL window.
-
-        Nothing is written and nothing is scored. Every counted row was
-        already excluded + re-queued, so a resume after the fix re-flies
-        exactly these episodes.
-        """
+        """Stop claiming once ABORT_FRACTION of a full ABORT_WINDOW are infra
+        casualties (``_infra_casualty``: a timeout never counts). Nothing is
+        written or scored; every counted row is already re-queued, so a
+        resume after the fix re-flies exactly these episodes."""
         cause = _infra_cause(row) if _infra_casualty(row) else None
         # The log that explains the row: the attempt's own run.log, or the
         # worker's server.log for an attempt that never got a workdir.
@@ -644,8 +352,7 @@ class Driver:
                 f"{k}x). This run is not producing results; stopping instead "
                 f"of spending the rest of the allocation on it."
             )
-        # Logged OUTSIDE the lock (self.log takes its own) and at detection
-        # time rather than at the end, which is the whole point.
+        # Outside the lock: self.log takes its own.
         self.log("!! ABORTING RUN — " + self._abort)
         self.log(f"!! by cause: {dict(counts.most_common())}")
         self.log(f"!! representative worker log: {log_path or '(none recorded)'}")
@@ -666,20 +373,14 @@ class Driver:
                 if (e := _done_qualify(r)) is not None}
 
     def _next_claimed_episode(self, worker_id: int) -> str | None:
-        # Hand this worker the next undone episode, or None when nothing
-        # is left for it to take.
+        """The next episode not done, not in flight here and not past its
+        infra attempts; ``None`` once nothing is left, the wall budget is
+        spent, or the run aborted (workers drain, in-flight attempts
+        finish)."""
         if self._deadline is not None and time.monotonic() >= self._deadline:
             return None
-        # Mass instant failure: stop claiming. Workers drain, run() reports
-        # and exits nonzero. Same shape as the wall-budget stop — in-flight
-        # episodes finish, nothing already written is touched.
         if self._abort is not None:
             return None
-        # _in_flight keeps this process's own workers off each other's
-        # episodes (the cursor alone cannot — it wraps modulo the
-        # selection, so it would re-offer a live episode as soon as a worker
-        # finished early); the done cache keeps a wrapped cursor off
-        # episodes already finished since the pass started.
         with self._dispatch_lock:
             done = self._done_cache
             n = len(self._selection)
@@ -696,9 +397,6 @@ class Driver:
                     continue
                 self._in_flight.add(eid)
                 return eid
-            # One full scan found nothing claimable: everything selected
-            # is done or running on this process's own workers, and a
-            # sibling finishing its episode leaves nothing new to take.
             return None
 
     def _infra_attempts(self, eid: str) -> int:
@@ -744,215 +442,139 @@ class Driver:
             return
         self.log("vLLM down; pausing launches until it returns")
         while not self._vllm_healthy():
-            time.sleep(120)
+            time.sleep(VLLM_PAUSE_S)
         self.log("vLLM back; resuming")
 
     # -- one launch cycle --------------------------------------------------
 
-    def _wait_for_exit(self, runner: "_WarmRunner", seq: int, timeout_s: float) -> str:
-        """Block until the warm runner reports this episode finished.
-
-        Returns one of:
-        "exited"    — the episode produced its result: a ``done``/
-                      ``fatal`` for THIS seq. The runner ran to a decision
-                      (a committed prediction, or a clean no-commit) and
-                      its landed ``episode.json`` carries the verdict.
-        "crashed"   — the runner process ended (stdout EOF) WITHOUT a
-                      ``done``/``fatal`` for this seq: SIGKILL (Slurm
-                      cgroup OOM) or a non-``Exception`` escape
-                      (MemoryError surfaced pre-GIL, an exception before
-                      the per-episode try). The episode never reached a
-                      decision and landed no row, so it is an infra
-                      casualty (excluded from SR + re-queued), not a
-                      scored zero. A clean completion
-                      ALWAYS emits ``done`` first (run_benchmark emits it
-                      even when the episode caught an exception and
-                      committed nothing), and the FIFO queue delivers that
-                      ``done`` before the later EOF, so reaching the EOF
-                      branch is a reliable crash signal.
-        "timeout"   — hit the per-episode wall cap.
-        "vllm_dead" — the shared vLLM died WHILE this episode was in
-                      flight (>= 2 consecutive 60s-spaced probes), so the
-                      episode is doomed; bounds wasted time to ~2 min
-                      instead of up to the 4 h cap. Same semantics and
-                      cadence as the pre-warm-runner implementation.
-        """
-        early = runner._early_done
-        if early is not None and early.get("seq") == seq:
-            return "exited"
-        deadline = time.monotonic() + timeout_s
-        last_vllm_check = time.monotonic()
-        vllm_down_streak = 0
-        while time.monotonic() < deadline:
+    def _wait(self, proc: subprocess.Popen) -> str:
+        """Block until the attempt child exits: ``exited``; or hits the
+        episode cap: ``timeout``; or the reasoner fails two ``/models``
+        probes ``VLLM_PROBE_S`` apart while it flies: ``vllm_dead`` (the
+        episode is doomed, so this bounds the waste to minutes instead of
+        the cap)."""
+        deadline = time.monotonic() + self.episode_timeout_s
+        down = 0
+        while (left := deadline - time.monotonic()) > 0:
             try:
-                obj: object = runner._q.get(timeout=POLL_INTERVAL_S)
-            except queue.Empty:
-                obj = None
-            if obj is _RUNNER_EOF:
-                # stdout closed with no done/fatal for this seq: the
-                # process was SIGKILLed (cgroup OOM) or crashed without
-                # emitting a result. Infra casualty, not a scored miss.
-                return "crashed"
-            if (
-                isinstance(obj, dict)
-                and obj.get("event") in ("done", "fatal")
-                and obj.get("seq") == seq
-            ):
+                proc.wait(timeout=min(VLLM_PROBE_S, left))
                 return "exited"
-            now = time.monotonic()
-            if now - last_vllm_check >= 60.0:
-                last_vllm_check = now
-                if self._vllm_healthy():
-                    vllm_down_streak = 0
-                else:
-                    vllm_down_streak += 1
-                    if vllm_down_streak >= 2:
-                        return "vllm_dead"
+            except subprocess.TimeoutExpired:
+                pass
+            if time.monotonic() >= deadline:
+                break
+            down = 0 if self._vllm_healthy() else down + 1
+            if down >= 2:
+                return "vllm_dead"
         return "timeout"
 
-    @staticmethod
-    def _landed_row(workdir: Path) -> dict | None:
-        """The attempt's own ``episode.json`` once it has landed, else None."""
-        return episodes.read_episode_json(workdir)
+    def _run_attempt(self, worker_id: int, episode_id: str) -> dict:
+        """One attempt in a fresh child: its ledger row.
 
-    def _run_attempt(
-        self, worker_id: int, episode_id: str, runner: "_WarmRunner"
-    ) -> dict:
-        """One attempt: its ledger row.
-
-        The row is the runner's own ``episode.json`` plus what only this
+        The row is the child's own ``episode.json`` plus what only this
         driver knows (``worker_id``, ``workdir`` relative to the out-root,
         the wall it measured), with ``status`` overridden on the driver's
-        kill paths: ``timed_out`` for the wall-clock cap, ``infra`` for a
-        runner that died, lost its reasoner, or exited with no record.
+        paths: ``timed_out`` for the wall-clock cap; ``infra`` for a lost
+        reasoner (``vllm_down_midrun``), a child that died with no record
+        (``killed_midrun``), and one that exited clean with none
+        (``no_prediction_unclassified``).
         """
         t0 = time.monotonic()
-        # The pass's wall-clock backstop, as an absolute epoch, stamped at
-        # the same instant the kill clock above starts -- so a slow cold
-        # start or preflight below is charged against it exactly as the
-        # driver charges it. THE RESERVE IS WHAT ENDING COSTS: the backstop
-        # stops FLYING, and the model still needs a turn or two to reply and
-        # commit, which is the difference between a scored row and the
-        # MISSING one a SIGKILL leaves.
-        deadline_epoch = time.time() + self.episode_timeout_s * (
-            1.0 - _DEADLINE_RESERVE_FRAC
-        )
-        try:
-            # Respawn-on-dead: a crashed / OOM-killed / vLLM-dead-killed
-            # runner is replaced with a fresh process. This re-pays cold
-            # start exactly once, then amortizes again.
-            if not runner.alive():
-                runner.spawn()
-            handle, seq = runner.run_episode(
-                episode_id, deadline_epoch=deadline_epoch)
-        except Exception as exc:  # spawn / dispatch failure
-            # The warm runner could not even start/dispatch the episode
-            # (process spawn failed under host contention, transient exec
-            # error). The algorithm never ran, so
-            # this is infra: excluded from SR + the done-set and fully
-            # re-queued. No ``workdir``: an episode that never started has
-            # none, and the child's own stderr (``w<id>/server.log``) is
-            # the only record of why -- ``_check_mass_infra`` reads it there.
-            return {
-                "episode_id": episode_id,
-                "worker_id": worker_id,
-                "status": episodes.STATUS_INFRA,
-                "error": f"warm-runner spawn/dispatch: {type(exc).__name__}: {exc}",
-                "elapsed_s": round(time.monotonic() - t0, 1),
-                "ts": round(time.time(), 1),
-            }
-        workdir = Path(handle["workdir"])
-        status = self._wait_for_exit(runner, seq, self.episode_timeout_s)
+        worker_root = self.out_root / f"w{worker_id}"
+        worker_root.mkdir(parents=True, exist_ok=True)
+        env = _runner_env()
+        # The mission's wall-clock backstop (mission_engine.MISSION_DEADLINE_ENV),
+        # an absolute epoch stamped as the cap's clock starts, so the cold
+        # start is charged against it exactly as the driver charges it. THE
+        # RESERVE IS WHAT ENDING COSTS: the backstop stops FLYING, and the
+        # model still needs a turn or two to reply and commit, which is the
+        # difference between a scored row and the missing one a kill leaves.
+        env["CITYNAV_EPISODE_DEADLINE_EPOCH"] = repr(
+            time.time() + self.episode_timeout_s * (1.0 - _DEADLINE_RESERVE_FRAC))
+        cmd = [sys.executable, "-m", RUNNER_MODULE, "--config", str(CONFIG),
+               "--split", self.split, "--episode-id", episode_id,
+               "--attempt-root", str(worker_root)]
+        # The child prints its workdir as its first stdout line; an unlinked
+        # file holds it, so no pipe can fill and stall the child.
+        with tempfile.TemporaryFile("w+") as out, \
+                (worker_root / "server.log").open("a") as err:
+            try:
+                # Its own session, so a kill takes the whole process group.
+                proc = subprocess.Popen(cmd, cwd=str(REPO), stdout=out, stderr=err,
+                                        text=True, start_new_session=True, env=env)
+            except OSError as exc:
+                return {
+                    "episode_id": episode_id,
+                    "worker_id": worker_id,
+                    "status": episodes.STATUS_INFRA,
+                    "error": f"attempt spawn: {type(exc).__name__}: {exc}",
+                    "elapsed_s": round(time.monotonic() - t0, 1),
+                    "ts": round(time.time(), 1),
+                }
+            verdict = self._wait(proc)
+            if verdict != "exited":
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait()
+            out.seek(0)
+            first = out.readline().strip()
         elapsed = time.monotonic() - t0
+        workdir = Path(first) if first else None
+        where = {"workdir": str(workdir.relative_to(self.out_root))} if workdir else {}
         killed = {
             "episode_id": episode_id,
             "worker_id": worker_id,
             "status": episodes.STATUS_INFRA,
             "elapsed_s": round(elapsed, 1),
             "ts": round(time.time(), 1),
-            "workdir": str(workdir.relative_to(self.out_root)),
+            **where,
         }
-        if status == "vllm_dead":
-            # The shared vLLM died mid-episode. This run is doomed (its
-            # LLM calls hang/fail); killing it now and recording an infra
-            # row means the episode stays pending and is re-attempted once
-            # vLLM is back, instead of grinding to the 4 h cap or being
-            # scored as a false algorithm miss.
-            self.log(
-                f"[w{worker_id}] VLLM-DEAD mid-episode {episode_id} after "
-                f"{elapsed:.0f}s; killing + re-queueing (not scored)"
-            )
-            runner.kill()
+        landed = episodes.read_episode_json(workdir) if workdir else None
+        if verdict == "vllm_dead":
+            # Killed now and re-queued: the attempt stays pending until the
+            # reasoner is back, instead of grinding to the cap or scoring as
+            # a false algorithm miss.
+            self.log(f"[w{worker_id}] VLLM-DEAD mid-episode {episode_id} after "
+                     f"{elapsed:.0f}s; killed + re-queued (not scored)")
             return {**killed, "error": "vllm_down_midrun"}
-        if status == "crashed":
-            # The runner process died mid-episode (SIGKILL from the Slurm
-            # cgroup OOM-killer, or a non-Exception escape) WITHOUT
-            # emitting a done for this seq. It never reached a decision —
-            # its episode.json is absent. An infra casualty, NOT an algorithm miss:
-            # excluded from SR + the done-set and re-queued for a full redo
-            # (up to max_infra_attempts), never scored on an un-flown
-            # binding. runner.kill() is a safe no-op here (the process is
-            # already dead; kill() returns immediately when poll() != None).
-            runner.kill()
-            self.log(
-                f"[w{worker_id}] CRASHED mid-episode {episode_id} after "
-                f"{elapsed:.0f}s; killing + re-queueing (not scored)"
-            )
+        if verdict == "timeout":
+            self.log(f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killed")
+        elif landed is None and proc.returncode != 0:
+            # SIGKILLed (a cgroup OOM) or crashed before landing a record:
+            # never reached a decision, so re-queued, never scored.
+            self.log(f"[w{worker_id}] CRASHED mid-episode {episode_id} after "
+                     f"{elapsed:.0f}s (exit {proc.returncode}); re-queued (not scored)")
             return {**killed, "error": "killed_midrun"}
-        if status == "timeout":
-            self.log(
-                f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killing"
-            )
-            runner.kill()
-        # The runner's own verdict decides (dispatch classifies the episode's
+        # The child's own verdict decides (dispatch classifies the episode's
         # exception chain); the driver adds only what it alone saw.
-        landed = self._landed_row(workdir)
         row = {
             **(landed or {"episode_id": episode_id}),
             "worker_id": worker_id,
             "elapsed_s": round(elapsed, 1),
             "ts": round(time.time(), 1),
-            "workdir": str(workdir.relative_to(self.out_root)),
+            **where,
         }
-        if landed is None and status == "exited":
-            # Fail-closed floor: a runner that exits clean with NO record is
-            # not a completion but an unrecognized instant failure (a missing
-            # tile bake once laundered 762 of these as scored rows). Excluded
-            # from SR and re-queued.
+        if landed is None and verdict == "exited":
+            # Fail-closed floor: a child that exits clean with NO record is
+            # an unrecognized instant failure, not a completion (a missing
+            # tile bake once laundered 762 of these as scored rows).
             row["status"] = episodes.STATUS_INFRA
             row["error"] = "no_prediction_unclassified"
         elif row.get("status") == episodes.STATUS_INFRA:
             pass
-        elif status == "timeout":
-            # The wall-clock cap is the binding bound under an unbounded step
-            # budget, so readers count these beside SR. An algorithm failure
-            # (in the denominator, never infra) whether or not a record was
-            # committed.
+        elif verdict == "timeout":
+            # The wall-clock cap is an algorithm failure (in the denominator,
+            # never infra) whether or not a record was committed.
             row["status"] = episodes.STATUS_TIMED_OUT
         else:
             row["status"] = episodes.STATUS_OK
-        # Proactive recycle: this child served the episode to completion,
-        # so its RSS now carries that block's ObjectGraph + allocator
-        # high-water. If the block is large or the child has served enough
-        # episodes, kill it now; the respawn-on-dead path at the top of
-        # the next _run_attempt re-pays the cold start exactly once and
-        # the next episode starts from a cold RSS baseline. The
-        # crashed / vllm_dead / timeout paths already killed the runner,
-        # so this only fires on a clean completion.
-        if runner.should_recycle(handle.get("map") or ""):
-            self.log(
-                f"[w{worker_id}] RECYCLE runner after {episode_id} "
-                f"(map={handle.get('map') or '?'}, "
-                f"served={runner._episodes_since_spawn})"
-            )
-            runner.kill()
         return row
 
-    def run_one(self, worker_id: int, episode_id: str, runner: "_WarmRunner") -> None:
+    def run_one(self, worker_id: int, episode_id: str) -> None:
         """Fly one attempt and land its row. An infra attempt is flown again
         by a later claim, up to ``max_infra_attempts``."""
         self.log(f"[w{worker_id}] START {episode_id}")
-        row = self._run_attempt(worker_id, episode_id, runner)
+        row = self._run_attempt(worker_id, episode_id)
         m = row.get("metrics") or {}
         summary = f"NE={m.get('NE')} SR={m.get('SR')}" if m else "MISSING"
         self.log(
@@ -996,57 +618,35 @@ class Driver:
     # -- main loop ---------------------------------------------------------
 
     def worker_loop(self, worker_id: int) -> None:
-        # One persistent run_benchmark --episode-server per worker. Lazily
-        # spawned on the first episode (so Driver.run's staggered 2 s
-        # thread starts also stagger the cold starts), reused for every
-        # subsequent episode, respawned by _run_attempt if it dies, and
-        # shut down when the shared selection is globally exhausted.
-        runner = _WarmRunner(self.out_root / f"w{worker_id}", self.split)
-        try:
-            while True:
-                eid = self._next_claimed_episode(worker_id)
-                if eid is None:
-                    return
+        while (eid := self._next_claimed_episode(worker_id)) is not None:
+            try:
+                self._wait_for_vllm()
+                self.run_one(worker_id, eid)
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"[w{worker_id}] FAIL {eid}: {type(exc).__name__}: {exc}")
                 try:
-                    self._wait_for_vllm()
-                    self.run_one(worker_id, eid, runner)
-                except Exception as exc:  # noqa: BLE001
-                    self.log(f"[w{worker_id}] FAIL {eid}: {type(exc).__name__}: {exc}")
-                    try:
-                        self._append_result(
-                            {
-                                "episode_id": eid,
-                                "worker_id": worker_id,
-                                "status": episodes.STATUS_INFRA,
-                                "error": f"{type(exc).__name__}: {exc}",
-                                "ts": round(time.time(), 1),
-                            }
-                        )
-                    except OSError as werr:
-                        # The ledger itself cannot take a row: no worker can
-                        # land a result, so the run stops, loudly.
-                        with self._dispatch_lock:
-                            self._abort = self._abort or (
-                                f"[w{worker_id}] cannot write {self.episodes_file}: {werr}"
-                            )
-                        self.log(f"!! ABORTING RUN — {self._abort}")
-                        return
-                finally:
-                    # The episode is no longer running here, however it
-                    # ended. _append_result already added its qualifying
-                    # row to the done cache, so releasing the hold cannot
-                    # re-offer it; infra rows did not qualify and are
-                    # re-claimable by design.
+                    self._append_result({
+                        "episode_id": eid,
+                        "worker_id": worker_id,
+                        "status": episodes.STATUS_INFRA,
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "ts": round(time.time(), 1),
+                    })
+                except OSError as werr:
+                    # The ledger itself cannot take a row: no worker can
+                    # land a result, so the run stops, loudly.
                     with self._dispatch_lock:
-                        self._in_flight.discard(eid)
-        finally:
-            runner.shutdown()
+                        self._abort = self._abort or (
+                            f"[w{worker_id}] cannot write {self.episodes_file}: {werr}"
+                        )
+                    self.log(f"!! ABORTING RUN — {self._abort}")
+                    return
+            finally:
+                with self._dispatch_lock:
+                    self._in_flight.discard(eid)
 
     def _select_episodes(self) -> list[str]:
         episodes = _enumerate_split(self.split)
-        # Optional allowlist filter applied BEFORE the seeded shuffle so
-        # an (allowlist, seed) pair picks the same N episodes (matched-
-        # pair power for ablations).
         if self.allowlist_path is not None:
             try:
                 lines = self.allowlist_path.read_text().splitlines()
@@ -1064,10 +664,6 @@ class Driver:
                 f"the {self.split} split (from {before} total); "
                 f"{len(unknown)} ids unknown to the split"
             )
-        # Shuffle the full block-ordered list with the fixed seed BEFORE
-        # --limit, so a given (seed, limit) is the SAME N episodes (the
-        # correct A/B subset) and any partial run is a representative
-        # random sample, not block-0-biased.
         random.Random(self.sample_seed).shuffle(episodes)
         if self.limit > 0:
             episodes = episodes[: self.limit]
@@ -1119,17 +715,13 @@ class Driver:
                 "<calcity_rgb.tif>"
             )
             return 2
-        # The run's ONE machine-written record, emitted with everything
-        # resolved and nothing flown: measured endpoint identity,
-        # inlined config, tiered env. Re-entry into this out_root (a resume)
-        # verifies identity against the stored manifest and
-        # REFUSES drift — a resumed run under a different bake/model/config
-        # is two runs wearing one run root's name.
+        # Written before anything flies; a resume under another identity is
+        # refused (run_manifest.emit_or_verify).
         from benchmarks.citynav import run_manifest as _rm
 
         try:
             fresh_manifest = _rm.build_manifest(
-                    out_root=self.out_root,
+                out_root=self.out_root,
                 config_path=CONFIG,
                 split=self.split,
                 sample_seed=self.sample_seed,
@@ -1184,10 +776,7 @@ class Driver:
             for t in threads:
                 t.join()
             self.log(f"pass {pass_idx} drained")
-            # Mass instant failure detected mid-pass: the workers have
-            # drained, so report and leave. Nonzero so a launcher (and an
-            # autoresearch loop that queues arm after arm) sees a failed
-            # run rather than a suspiciously fast successful one.
+            # Nonzero, so a launcher sees a failed run rather than a fast one.
             if self._abort is not None:
                 self.log(f"ABORTED: {self._abort}")
                 self._write_summary()

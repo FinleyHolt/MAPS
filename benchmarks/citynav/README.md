@@ -39,7 +39,7 @@ python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --out
 ```
 
 `bench_fullset` runs a split at a fixed worker count (`--workers`, default 6),
-one warm `run_benchmark --episode-server` child per worker. The pending
+one fresh `run_benchmark --attempt-root` child per attempt. The pending
 episodes are shuffled by `--sample-seed` (default 1234) before `--limit`
 applies, so a seed and a limit select the same episodes on every run.
 `--episode-allowlist` keeps only the listed ids. Rerunning a command resumes
@@ -60,7 +60,7 @@ A run root holds:
 |---|---|
 | `run_manifest.json` | The run's identity: commit, resolved config, split and selection, served model, tile bake hash, arm flags. |
 | `episodes.jsonl` | One row per attempt, its scored `metrics` included. |
-| `summary.txt` | A live aggregate. |
+| `summary.txt` | `analysis.run_report` over the root under the driver's infra lines, refreshed after every attempt. |
 | `w<id>/maps_<stamp>_<benchmark>_<slug>/` | One directory per attempt: `episode.json`, `run.log`, `conversation.jsonl` and `flight/`. |
 
 Read a root with [`analysis/`](analysis/README.md); never parse

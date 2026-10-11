@@ -17,14 +17,15 @@ from datetime import datetime
 from pathlib import Path
 from maps.llm import endpoint_spec as endpoint_spec_module
 import argparse
+import ctypes
 import os
+import signal
 import sys
 from benchmarks.citynav.run_benchmark.dispatch import (
     _build_compiler,
     _dispatch_one,
     set_run_context,
 )
-from benchmarks.citynav.run_benchmark.episode_server import _episode_server_loop
 from benchmarks.citynav import episodes
 from benchmarks.citynav.run_manifest import settle_effort
 from benchmarks.citynav.episode_workdir import (
@@ -40,6 +41,22 @@ logging.basicConfig(
 )
 log = logging.getLogger("run_benchmark")
 
+# The driver's pid, which bench_fullset sets when it spawns an attempt.
+PARENT_PID_ENV = "CITYNAV_BENCH_PARENT_PID"
+_PR_SET_PDEATHSIG = 1
+
+
+def _die_with_parent() -> None:
+    """Have the kernel SIGKILL this attempt when the driver that spawned it
+    dies: the attempt sits in its own session, so nothing else reaps it. A
+    driver already gone before the request is armed is caught by the
+    parent-pid check."""
+    ctypes.CDLL(None, use_errno=True).prctl(_PR_SET_PDEATHSIG, signal.SIGKILL)
+    parent = os.environ.get(PARENT_PID_ENV)
+    if parent and os.getppid() != int(parent):
+        os._exit(1)
+
+
 def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
     """Write this run's receipt at the run root.
 
@@ -53,8 +70,7 @@ def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
 
     A direct run's root is one run, so the write-once identity check
     refuses a root reused under another config. The fleet driver emits at
-    the fleet root; its warm children return into the episode server
-    before reaching here.
+    the fleet root; its attempt children return before reaching here.
     """
     from benchmarks.citynav.adapter import parse_episode
     from benchmarks.citynav import run_manifest as _rm
@@ -131,29 +147,20 @@ def main(
         help="Deterministic per-turn seed base (wins over SEARCH_SEED_BASE).",
     )
     parser.add_argument(
-        "--episode-server",
-        action="store_true",
-        help=(
-            f"Persistent warm-runner mode for {label} full-set "
-            "orchestration. Run the one-time init (config, split, objects, "
-            "MapsCompiler) once, emit a {'event':'ready'} line on stdout, "
-            "then read newline-delimited JSON run commands from stdin and "
-            "execute one episode per command through the same run_episode "
-            "path the batch loop uses, each into its own attempt directory. "
-            "stdout carries ONLY the protocol JSON; all logging stays on the "
-            "per-episode run.log. Not for manual use: bench_fullset spawns it."
-        ),
-    )
-    parser.add_argument(
-        "--run-root",
+        "--attempt-root",
         default=None,
         help=(
-            "Episode-server mode only: the per-worker run-root under which "
-            "each episode's maps_<stamp>_<benchmark>_<slug>/ workdir is "
-            "written."
+            "bench_fullset's per-worker directory: fly only --episode-id into "
+            "a fresh attempt directory under it, print that directory as the "
+            "first stdout line, and write its episode.json. The driver owns "
+            "the ledger and the manifest."
         ),
     )
     args = parser.parse_args()
+    if args.attempt_root:
+        if not args.episode_id:
+            parser.error("--attempt-root flies one episode: name it with --episode-id")
+        _die_with_parent()
     if args.seed_base is not None:
         os.environ["SEARCH_SEED_BASE"] = str(args.seed_base)
         log.info("Deterministic seed base: SEARCH_SEED_BASE=%d", args.seed_base)
@@ -240,18 +247,18 @@ def main(
     objects_by_map = load_objects(OBJECTS_JSON)
     log.info("Loaded CityRefer objects for %d maps", len(objects_by_map))
 
-    # Persistent warm-runner: the one-time init (config + env, split,
-    # objects, MapsCompiler) is done. Build the compiler and hand off to the
-    # stdin-driven episode loop; the batch path below is never reached in
-    # server mode.
-    if args.episode_server:
-        return _episode_server_loop(
-            args,
-            cfg=cfg,
-            objects_by_map=objects_by_map,
-            compiler=_build_compiler(cfg),
-            raw_rows=raw_rows,
-        )
+    if args.attempt_root:
+        ((orig_idx, row),) = indexed_rows
+        compiler = _build_compiler(cfg)
+        ep = open_episode_dir(args.attempt_root, episode_id=args.episode_id)
+        print(ep.dir, flush=True)
+        try:
+            _dispatch_one(row=row, orig_idx=orig_idx, idx=0, total=1, compiler=compiler,
+                          objects_by_map=objects_by_map, cfg=cfg, recorder=ep.recorder,
+                          episode_dir=ep.dir)
+        finally:
+            ep.close()
+        return 0
 
     out_root = Path(
         args.out

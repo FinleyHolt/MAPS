@@ -1,7 +1,7 @@
-"""A warm runner starts its native thread pools at one thread each.
+"""An attempt child starts its native thread pools at one thread each.
 
-Uncapped, every runner starts BLAS, OpenCV and tokenizer pools of one
-thread per core (about 1,000 per runner on a 256-thread host), and a thread
+Uncapped, every child starts BLAS, OpenCV and tokenizer pools of one
+thread per core (about 1,000 per child on a 256-thread host), and a thread
 that fails to start crashes its episode. A value the shell set wins.
 """
 
