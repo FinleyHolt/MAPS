@@ -35,11 +35,9 @@ DEFAULT_SAM_VIDEO_SERVER_URL = "http://127.0.0.1:8772"
 # sees the same pixels.
 _SAM_INPUT_SIZE = 1008
 
-#: The segmenter's fixed options, the same in every config: the served model,
-#: the score floor and speckle floor the server applies, the per-frame
+#: The segmenter's fixed options, the same in every config: the score floor and speckle floor the server applies, the per-frame
 #: detection backstop (no per-concept cap, so every same-class instance stays
 #: countable), and the SAHI tile overlap and cross-tile IoU-NMS threshold.
-MODEL_ID = "facebook/sam3.1"
 SCORE_THRESHOLD = 0.3
 MIN_AREA_PX = 32
 MAX_PER_STEP = 1024
@@ -619,8 +617,6 @@ class SamDetectClient:
         def _pack(region, det_idx, obj_id, score, label, comp_idx, n_comp):
             """One region projected, coloured and packed, or None when fewer
             than ``_MIN_VALID_DEPTH_PIXELS`` of its pixels have real depth."""
-            r0, c0, r1, c1 = region.bbox
-            area = region.area
             projected = project_mask_to_world_ortho(
                 region,
                 depth=obs.depth,
@@ -635,15 +631,9 @@ class SamDetectClient:
             suffix = f"_c{comp_idx}" if n_comp > 1 else ""
             track_id = f"sam3_1_img_{det_idx}{suffix}"
             metadata: dict[str, object] = {
-                "concept": label,
                 "sam3_1_object_id": obj_id,
                 "sam3_1_score": score,
                 "track_id": track_id,
-                "pixel_bbox": [r0, c0, r1, c1],
-                "pixel_area": area,
-                "mask_pixel_count": int(projected.n_valid_pixels),
-                "model_id": MODEL_ID,
-                "frame_index": -1,
             }
             if projected.tile_cells is not None and projected.tile_cells.size:
                 metadata["tile_cells"] = projected.tile_cells.astype(
