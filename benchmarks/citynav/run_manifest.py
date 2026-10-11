@@ -65,7 +65,6 @@ ARM_ENV_FLAGS = (
     # program's own map -- share a bake and a split and differ on exactly
     # this. Set-only: a CityNav row never carries it.
     "SEARCH_CITYNAV_RGBD_DIR",
-    "SEARCH_LOOK_TOOL",
     # Per-k resample roots differ only by their pinned seed base.
     "SEARCH_SEED_BASE",
     # The envelope sweep's two knobs (maps/llm/sampling.py). Reasoner turns
@@ -105,7 +104,6 @@ AUDITED_ENV = (
     "SEARCH_CITYNAV_TILES",
     "SEARCH_SEED_BASE",
     # arm toggles
-    "SEARCH_LOOK_TOOL",
     "SEARCH_SAMPLING_PRESENCE_PENALTY",
     "SEARCH_SAMPLING_REASONING_EFFORT",
     "SEARCH_SAMPLING_TEMPERATURE",
