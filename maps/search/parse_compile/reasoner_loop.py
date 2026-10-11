@@ -1684,12 +1684,11 @@ def advance_reasoner_one_round(
         return set(re.findall(r'"(r\d+)(?:\[[^"\]]*\])?"',
                               json.dumps(op["args"], default=str))) - {op["ref"]}
 
-    def _program_reads(program) -> set:
+    def _program_reads(program: dict) -> set:
         """The carry handles a program reads and does not define."""
-        ops = [o for o in ((program or {}).get("ops") or [])
-               if isinstance(o, dict)]
-        defined = {str(o.get("ref")) for o in ops}
-        return set().union(*(_refs_read(o) for o in ops)) - defined
+        ops = program["ops"]
+        return set().union(*(_refs_read(o) for o in ops)) \
+            - {o["ref"] for o in ops}
 
     def _ensure_fresh(refs) -> None:
         """Re-derive ``refs`` -- and every op they read -- against the
@@ -1721,7 +1720,7 @@ def advance_reasoner_one_round(
             # an op reads one, and the flight ack invites exactly that.
             _out = run_geom_program_tool(
                 {"program": {"ops": [
-                    op for op in _op_history if str(op.get("ref")) in need]}},
+                    op for op in _op_history if op["ref"] in need]}},
                 namespace=compute_namespace or {}, raw_sink=_sink,
                 seed_results={h: v for h, v in carry_results.items()
                               if h not in need})
@@ -1802,7 +1801,7 @@ def advance_reasoner_one_round(
         _raw_sink: dict = {}
         # Re-derive every handle this program reads against the CURRENT
         # surface first, so it reads the world as it is, not as it was.
-        _ensure_fresh(_program_reads((a or {}).get("program")))
+        _ensure_fresh(_program_reads(a["program"]))
         out = run_geom_program_tool(a, namespace=_ns, raw_sink=_raw_sink,
                                     seed_results=carry_results,
                                     preflight=preflight,
@@ -1822,18 +1821,13 @@ def advance_reasoner_one_round(
                 # the ops let a later dedup hit alias its own labels onto
                 # the handles this run stored (_alias_deduped_refs).
                 _programs_seen[_key] = (_surface_version[0], out, turn_idx,
-                                        ((a or {}).get("program") or {})
-                                        .get("ops"))
+                                        a["program"]["ops"])
             carry_results.update(_raw_sink.get("results") or {})
             _fresh.update(_raw_sink.get("results") or {})
-            _ops_now = ((a or {}).get("program") or {}).get("ops")
-            if isinstance(_ops_now, list):
-                for _op in _ops_now:
-                    if isinstance(_op, dict):
-                        _producers.setdefault(str(_op.get("ref")), []).append(
-                            len(_op_history))
-                        _op_history.append(_op)
-                        _op_reads.append(_refs_read(_op))
+            for _op in a["program"]["ops"]:
+                _producers.setdefault(_op["ref"], []).append(len(_op_history))
+                _op_history.append(_op)
+                _op_reads.append(_refs_read(_op))
             # Latest enriched row per fid (raw, pre-compaction) — the
             # rejection-escalation surface census reads it.
             try:
