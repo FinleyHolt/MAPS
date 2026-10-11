@@ -25,13 +25,15 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from maps.search.analyze_scene.compactor import compact_transcript
+from maps.search.analyze_scene.compactor import bound_image_count, compact_transcript
+from maps.llm import openai_wire
 from maps.llm.endpoint_spec import EndpointSpec
 from maps.llm.http import (
     CallCanceled,
     DegenerateCompletion,
     _chat_completions_raw,
 )
+from maps.llm.model_cards import card_for, speaks_openai
 from maps.llm.sampling import thinking_sampling_kwargs
 from maps.llm.vision_content import build_vision_user_content
 
@@ -69,11 +71,14 @@ def served_system_text(*, sensor_description: str = "") -> str:
     return text
 
 
-# There is no in-context image cap. Crops accumulate and the compactor bounds
-# them in TOKENS, the resource the served window actually spends; evicting an
-# already-sent crop would rewrite history, which no radix prefix survives. If
-# a serve ever advertises limit_mm_data_per_request, enforce it at DELIVERY by
-# declining the crop that would exceed it.
+# Crops accumulate and the compactor bounds them in TOKENS, the resource the
+# served window actually spends. A card that declares ``max_images`` (a hosted
+# endpoint's per-request limit) also bounds their COUNT, by evicting the oldest
+# crops past it. That rewrites history, which a self-hosted radix prefix would
+# not survive; Bedrock caches a prompt only on its Responses API, so on chat
+# completions there is no cached prefix to lose. The bound runs BEFORE the
+# compactor, which would otherwise price crops about to go and fold text to
+# make room for them.
 
 _REASONER_TIMEOUT_DEFAULT_S = 240.0
 
@@ -375,6 +380,9 @@ class Reasoner:
         one string argument, and the block inside it is held to the language
         by the parser's own refusals.
         """
+        max_images = card_for(self.model).get("max_images")
+        if max_images:
+            self.messages = bound_image_count(self.messages, max_images=max_images)
         self.messages = compact_transcript(
             self.messages,
             target_input_tokens=self.endpoint_spec.input_budget,
@@ -382,16 +390,20 @@ class Reasoner:
             tools=tools,
             site="reasoner.step_tool_call",
         )
+        wire = speaks_openai(self.model)
+        sent = self.messages
+        if wire:
+            tools, sent = openai_wire.fit_tool_descriptions(tools, openai_wire.messages(self.messages))
         # Sampling lives in `maps.llm.sampling.thinking_sampling_kwargs`
         # so every reasoner turn stays in lock-step.
         kwargs: dict[str, Any] = {
             "timeout": self.timeout,
             "model": self.model,
-            "messages": self.messages,
+            "messages": sent,
             # Pin the completion to the spec's output reserve so
             # prompt(<=input_budget) + completion(<=max_output_tokens) fits
             # the served window — the server-side length check cannot trip.
-            "max_tokens": self.endpoint_spec.max_output_tokens,
+            openai_wire.OUTPUT_CAP_KEY if wire else "max_tokens": self.endpoint_spec.max_output_tokens,
             # NO `stop` sequence to cut a collapsed sampler short, and that
             # is deliberate. Trimming a collapse to ~1 s of decode instead of
             # ~9 min is a THROUGHPUT win, and it cost correctness everywhere
@@ -411,7 +423,9 @@ class Reasoner:
             "tool_choice": "auto",
             "transport_kind": "reasoner",
         }
-        if self.seed is not None:
+        # The OpenAI wire sends no seed: there it is a deprecated best-effort
+        # hint that replays nothing a reasoning model does.
+        if self.seed is not None and not wire:
             kwargs["seed"] = self.seed
         sub_id = (
             str(self.reasoner_index) if self.reasoner_index is not None else None

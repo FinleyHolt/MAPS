@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
-#: alias -> {tokenizer, top_p, top_k[, efforts][, effort_numbers]}.
+#: alias -> {tokenizer, top_p, top_k[, efforts][, effort_numbers]}, or for a
+#: hosted OpenAI model {tokenizer, wire: "openai", efforts[, max_images]}.
 #: ``efforts`` are the ``reasoning_effort`` rungs the chat template takes and
 #: ``effort_numbers`` whether it also takes a number in [0, 0.99]; a card that
 #: names no rungs takes any rung of ``_EFFORT_RUNGS`` or any such number.
@@ -23,6 +24,15 @@ from typing import Any
 #: EXACT alias hit only). The tokenizer repo is the SERVED weights', because a
 #: quantized repo ships its own tokenizer and prompt sizing has to be measured
 #: against what is serving.
+#:
+#: ``wire: "openai"`` marks a model behind OpenAI's own chat-completions
+#: contract rather than a chat template (``maps.llm.openai_wire``): the
+#: request carries no sampling envelope, template kwargs or seed, caps output
+#: with ``max_completion_tokens``, and sends each message with only the
+#: fields that contract names. The thinking span never comes back, so the
+#: reasoning count is the provider's ``usage`` meter. ``max_images`` is the
+#: endpoint's per-request image limit; the reasoner evicts the oldest crops
+#: past it.
 CARDS: dict[str, dict[str, Any]] = {
     # Thinking Machines publishes no sampling recommendation for Inkling (no
     # generation_config.json in the BF16 or the NVFP4 repo, nothing in the
@@ -49,6 +59,15 @@ CARDS: dict[str, dict[str, Any]] = {
     "gemma4-26b-a4b-gguf": {"tokenizer": "google/gemma-4-26B-A4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e4b": {"tokenizer": "google/gemma-4-E4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e2b": {"tokenizer": "google/gemma-4-E2B-it", "top_p": 0.95, "top_k": 64},
+    # GPT-5.6 Sol on Amazon Bedrock's bedrock-mantle endpoint, which serves it
+    # under this id. OpenAI publishes no tokenizer for it; gpt-oss-120b's
+    # o200k_harmony vocabulary is the nearest published one, so prompt sizing
+    # is an estimate, and the window a run pins (SEARCH_ENDPOINT_SPEC_OVERRIDE)
+    # sits far enough under the served 1,050,000 that an undercount never
+    # reaches the server. Bedrock refuses a request carrying more than 100
+    # images.
+    "openai.gpt-5.6-sol": {"tokenizer": "openai/gpt-oss-120b", "wire": "openai",
+                           "efforts": ("none", "low", "medium", "high", "xhigh", "max"), "max_images": 100},
 }
 
 
@@ -93,6 +112,13 @@ def check_effort(model_id: str | None, raw: str) -> None:
                 return
             raise ValueError(f"reasoning effort {raw!r} is spelled {canonical!r}")
     raise ValueError(f"reasoning effort {raw!r} is not one {model_id!r} takes: {accepted}")
+
+
+def speaks_openai(model_id: str | None) -> bool:
+    """Whether the served model takes OpenAI's chat-completions contract
+    rather than a self-hosted chat template's. A name with no card reads
+    False, so a reader of an old record never raises on it."""
+    return CARDS.get((model_id or "").strip().lower(), {}).get("wire") == "openai"
 
 
 def envelope_kwargs(model_id: str | None) -> dict[str, Any]:

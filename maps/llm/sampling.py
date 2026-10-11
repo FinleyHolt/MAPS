@@ -17,7 +17,7 @@ import os
 from typing import Any
 
 from maps.llm import endpoint_spec
-from maps.llm.model_cards import envelope_kwargs
+from maps.llm.model_cards import envelope_kwargs, speaks_openai
 
 
 def thinking_sampling_kwargs(
@@ -37,13 +37,19 @@ def thinking_sampling_kwargs(
 
     ``model_id`` selects the model card. ``None`` resolves the installed
     ``EndpointSpec.model_id`` (the discovered served alias); a process
-    with no spec installed takes the fleet-default card
-    (``model_cards.card_for``).
+    with no spec installed resolves no card, and ``model_cards.card_for``
+    refuses the empty name. An OpenAI-wire card takes neither the
+    envelope nor ``chat_template_kwargs``: its API has no chat template
+    and refuses an unknown top-level key, and it thinks on every call
+    without being asked.
 
     ``temperature``:
       - reasoner turns use ``1.0`` (model card creative default).
       - a lower value (e.g. ``0.6``, the model card precise default)
         suits a more deterministic, less exploratory commit.
+      - an OpenAI-wire card sends none: 1.0 is that API's default, and its
+        reasoning models refuse any other value, so another one raises
+        here rather than at the server.
 
     ``SEARCH_SAMPLING_REASONING_EFFORT`` is the arm's reasoning effort,
     passed through VERBATIM as a top-level string. Unset sends no key and
@@ -64,11 +70,13 @@ def thinking_sampling_kwargs(
         model_id = (
             endpoint_spec.spec().model_id if endpoint_spec.spec_installed() else ""
         )
-    kwargs: dict[str, Any] = {
-        "temperature": temperature,
-        **envelope_kwargs(model_id),
-        "chat_template_kwargs": {"enable_thinking": True},
-    }
+    if speaks_openai(model_id):
+        if temperature != 1.0:
+            raise ValueError(f"{model_id!r} samples at temperature 1.0 only, not {temperature}")
+        kwargs: dict[str, Any] = {}
+    else:
+        kwargs = {"temperature": temperature, **envelope_kwargs(model_id),
+                  "chat_template_kwargs": {"enable_thinking": True}}
     effort = (reasoning_effort if reasoning_effort is not None
               else os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "")).strip()
     if effort:

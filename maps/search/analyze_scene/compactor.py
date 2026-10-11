@@ -205,6 +205,43 @@ def _evict_oldest_crops(
     return (out, evicted, freed) if evicted else (messages, 0, 0)
 
 
+#: How far under ``max_images`` an eviction goes: more than one ``look`` call
+#: delivers (``reasoner_loop._LOOK_MAX_CROPS``, 16), so one eviction buys
+#: several looks before the next rewrites the history again.
+_IMAGE_COUNT_HEADROOM = 20
+
+
+def bound_image_count(messages: list[dict], *, max_images: int) -> list[dict]:
+    """``messages`` with at most ``max_images`` image parts, the oldest
+    replaced by :data:`_EVICTED_CROP_TEXT` first.
+
+    A hosted endpoint refuses a request carrying more images than its limit
+    whatever their token cost, so this bounds the COUNT the token budget does
+    not. Past the limit it evicts down to ``max_images`` less
+    :data:`_IMAGE_COUNT_HEADROOM`. Oldest-first keeps what the model looked at
+    last. The input list is never mutated and is returned itself when it is
+    already within the limit.
+    """
+    image_at = [
+        (i, j)
+        for i, message in enumerate(messages)
+        if isinstance(message.get("content"), list)
+        for j, part in enumerate(message["content"])
+        if isinstance(part, dict) and part.get("type") == "image_url"
+    ]
+    if len(image_at) <= max_images:
+        return messages
+    excess = len(image_at) - max(max_images - _IMAGE_COUNT_HEADROOM, 1)
+    out = list(messages)
+    for i, j in image_at[:excess]:
+        parts = list(out[i]["content"])
+        parts[j] = {"type": "text", "text": _EVICTED_CROP_TEXT}
+        out[i] = {**out[i], "content": parts}
+    log.info("image bound: evicted the %d oldest of %d crops (limit %d)",
+             excess, len(image_at), max_images)
+    return out
+
+
 #: Marks a span the compactor replaced with the agent's own code; a later fire
 #: recognises it and never folds it again.
 _SCRIPT_BLOCK_HEADER = "[script so far]"

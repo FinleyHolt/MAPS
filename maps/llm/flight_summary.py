@@ -15,7 +15,9 @@ tools each ``params`` record carries.
 pulled episodes carry it, from sglang; vLLM 0.21 leaves it unset and rolls
 the span into ``completion_tokens``). :func:`reasoning_tokens_of` takes the
 wire value where it exists and re-tokenizes the response's thinking span
-where it does not. It is a SLICE of ``completion_tokens``, not an addition.
+where it does not; a hosted OpenAI model returns no span, so its count is
+the provider's ``usage`` meter. It is a SLICE of ``completion_tokens``, not
+an addition.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .model_cards import speaks_openai
 from .tokenizer import _tokenizer
 
 log = logging.getLogger(__name__)
@@ -91,8 +94,14 @@ def blank() -> dict:
     }
 
 
-def reasoning_tokens_of(response_json: dict) -> int:
+def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int:
     """Extract the reasoning-span token count from a chat-completions response.
+
+    ``model`` is the requested model. On an OpenAI-wire card
+    (``maps.llm.model_cards``) the span never comes back by design, so the
+    rule below would read every response as zero thinking: the count there
+    is ``usage.completion_tokens_details.reasoning_tokens``, the provider's
+    own meter of the tokens it billed as reasoning.
 
     A reasoning serve routes the thinking span into
     ``choices[i].message.reasoning_content`` (or ``reasoning`` on some
@@ -123,6 +132,9 @@ def reasoning_tokens_of(response_json: dict) -> int:
     The count is a slice of ``usage.completion_tokens``, which includes
     the reasoning tokens; the two overlap by design.
     """
+    if speaks_openai(model):
+        details = _as_dict(_as_dict(response_json.get("usage")).get("completion_tokens_details"))
+        return _usage_int({"usage": details}, "reasoning_tokens")
     choices = response_json.get("choices") or []
     reasoning_texts: list[str] = []
     for ch in choices:
@@ -178,6 +190,7 @@ def _scan_transcript(path: Path, out: dict) -> None:
     the unanswered count) and ``response`` matter.
     """
     started: dict[str, float] = {}
+    model: str | None = None
     with path.open(errors="replace") as fh:
         for line in fh:
             # Cheap reject before the JSON parse.
@@ -192,7 +205,10 @@ def _scan_transcript(path: Path, out: dict) -> None:
             rec = _as_dict(rec)
             kind = rec.get("kind")
             if kind == "params":
-                for t in _declared_tools(_as_dict(rec.get("params"))):
+                params = _as_dict(rec.get("params"))
+                if isinstance(params.get("model"), str):
+                    model = params["model"]
+                for t in _declared_tools(params):
                     if t not in out["declared"]["tools"]:
                         out["declared"]["tools"].append(t)
                 continue
@@ -214,7 +230,7 @@ def _scan_transcript(path: Path, out: dict) -> None:
                 out["latency_s_max"] = max(out["latency_s_max"], lat)
 
             body = _as_dict(rec.get("response"))
-            out["reasoning_tokens"] += reasoning_tokens_of(body)
+            out["reasoning_tokens"] += reasoning_tokens_of(body, model=model)
             usage = _as_dict(body.get("usage"))
             for key, field in (
                 ("prompt_tokens", "prompt_tokens"),

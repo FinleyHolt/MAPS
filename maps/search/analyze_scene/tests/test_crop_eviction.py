@@ -11,6 +11,7 @@ from maps.search.analyze_scene.compactor import (
     _EVICTED_CROP_TEXT,
     _evict_current_turn_crops,
     _evict_oldest_crops,
+    bound_image_count,
 )
 from maps.search.tests.fakes import jpeg
 
@@ -140,3 +141,19 @@ def test_a_single_crop_turn_cannot_be_thinned() -> None:
     out, evicted, freed = _evict_current_turn_crops(msgs, shed_tokens=10**9)
     assert out is msgs
     assert (evicted, freed) == (0, 0)
+
+
+def test_the_count_bound_takes_the_oldest_first_across_turns() -> None:
+    """A hosted endpoint's image limit counts parts, whatever they cost in tokens."""
+    msgs = [_vision_turn("a", 10), _vision_turn("b", 10), _vision_turn("c", 10)]
+    out = bound_image_count(msgs, max_images=25)
+    # Past the limit it drops to the low-water mark (25 - 20), not to 25: one
+    # eviction, then several looks before the next.
+    assert [_n_live_crops([m]) for m in out] == [0, 0, 5]
+    assert out[0]["content"][1] == {"type": "text", "text": _EVICTED_CROP_TEXT}
+    assert _n_live_crops(msgs) == 30, "the caller's messages were mutated"
+
+
+def test_within_the_count_bound_is_the_identity() -> None:
+    msgs = [_vision_turn("a", 2), {"role": "user", "content": "plain"}]
+    assert bound_image_count(msgs, max_images=2) is msgs
