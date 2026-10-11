@@ -23,7 +23,6 @@ import re
 from maps.search.analyze_scene import cardinal_side
 from maps.search.analyze_scene import cell_mesh
 from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene.cardinal_side import CARDINALS
 from maps.search.analyze_scene import text_match as T
 from maps.search.render.look_render import LOOK_SET_ROWS
 from maps.util.node_fingerprint import fingerprint_node
