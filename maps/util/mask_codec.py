@@ -104,20 +104,4 @@ def decode_mask_crop(record: dict) -> np.ndarray:
     )
 
 
-def decode_mask_full(record: dict, shape: tuple[int, int]) -> np.ndarray:
-    """Decode a record onto a full ``shape`` canvas at its recorded bbox.
-
-    The crop is clipped to the canvas, so a record from a differently-sized
-    frame places what it can rather than raising.
-    """
-    crop = decode_mask_crop(record)
-    r0, c0, r1, c1 = (int(v) for v in record["pixel_bbox_rcrc"])
-    full = np.zeros(shape, dtype=bool)
-    r_end = min(r1 + 1, shape[0])
-    c_end = min(c1 + 1, shape[1])
-    if r_end > r0 and c_end > c0:
-        full[r0:r_end, c0:c_end] = crop[: r_end - r0, : c_end - c0]
-    return full
-
-
-__all__ = ["decode_mask_crop", "decode_mask_full", "encode_mask_record"]
+__all__ = ["decode_mask_crop", "encode_mask_record"]

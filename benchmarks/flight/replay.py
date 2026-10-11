@@ -400,16 +400,14 @@ def recorded_segmenter(rec: Recording, state_of):
     colour read downstream is the release's own."""
 
     def segment(client, obs, concepts):
+        from maps.perception.sam.detect_client import _record_region  # noqa: PLC0415
+
         rows = rec.detections.get(int(state_of().step_idx), [])
-        h, w = obs.rgb.shape[:2]
-        payload = {"image_shape_hw": [h, w], "detections": [
-            {"label": d["label"], "object_id": int((d.get("metadata") or {}).get("sam3_1_object_id") or i),
-             "score": float((d.get("metadata") or {}).get("sam3_1_score", d.get("confidence"))),
-             "pixel_bbox_rcrc": d["pixel_bbox_rcrc"], "mask_shape": d["mask_shape"],
-             "mask_zpacked_b64": d["mask_zpacked_b64"]}
-            for i, d in enumerate(rows) if d.get("mask_zpacked_b64")]}
-        return client._decode_payload_to_detections(payload, obs=obs, scale=1.0, pad_top=0, pad_left=0,
-                                                    orig_HW=(h, w))
+        hw = obs.rgb.shape[:2]
+        return client._detections(obs, [
+            (_record_region(d, hw), d["label"], int((d.get("metadata") or {}).get("sam3_1_object_id") or i),
+             float((d.get("metadata") or {}).get("sam3_1_score", d.get("confidence"))))
+            for i, d in enumerate(rows) if d.get("mask_zpacked_b64")])
 
     return segment
 

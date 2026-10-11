@@ -1,4 +1,4 @@
-"""``_decode_payload_to_detections`` output, pinned value by value, serial and on a thread pool.
+"""``SamDetectClient._detections`` output, pinned value by value, serial and on a thread pool.
 
 The case splits multi-component masks, drops a detection over NaN depth (its components and merged
 fallback all fail projection), and hits ``max_per_step`` mid-detection. A change meant to move a value
@@ -58,21 +58,16 @@ def _build_case():
         if len(dets) == 9:
             break
 
-    return {"detections": dets, "image_shape_hw": [H, W]}, square_view(rgb, depth)
+    return dets, square_view(rgb, depth)
 
 
 def _run():
     provider = ReasonerUnionConceptProvider()
     provider.set_concepts(["car"])
     client = SamDetectClient(concept_provider=provider)
-    payload, obs = _build_case()
-    return client._decode_payload_to_detections(
-        payload,
-        obs=obs,
-        scale=1.0,
-        pad_top=0,
-        pad_left=0,
-        orig_HW=(H, W),
+    dets, obs = _build_case()
+    return client._detections(
+        obs, [(dc._record_region(d, (H, W)), d["label"], d["object_id"], d["score"]) for d in dets]
     )
 
 

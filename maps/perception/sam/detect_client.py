@@ -17,7 +17,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import numpy as np
-from PIL import Image
 
 from maps.perception.base import DetectedObject
 from maps.perception.sam.class_hint import resolve_class_hint
@@ -26,11 +25,7 @@ from maps.perception.geometry.geolocate import (
     project_mask_to_world_ortho,
 )
 from maps.perception.observation import Observation
-from maps.util.mask_codec import (
-    decode_mask_crop,
-    decode_mask_full,
-    encode_mask_record,
-)
+from maps.util.mask_codec import decode_mask_crop
 from maps.util.mask_region import MaskRegion
 
 DEFAULT_SAM_VIDEO_SERVER_URL = "http://127.0.0.1:8772"
@@ -313,56 +308,19 @@ def _connected_components(region: MaskRegion) -> "list[MaskRegion]":
     return [region.with_crop(labels == i).tightened() for i in range(1, n + 1)]
 
 
-def _wire_mask_region(
-    record: dict,
-    *,
-    wire_hw: tuple[int, int],
-    scale: float,
-    pad_top: int,
-    pad_left: int,
-    frame_hw: tuple[int, int],
-) -> "MaskRegion | None":
-    """A wire mask (a bbox crop in the letterboxed frame the server saw) as a
-    region of the frame, or ``None`` when it lands empty after clipping.
-
-    Under an identity letterbox (native SAHI tiles, the SAHI repack) the wire
-    box is already a frame box and the crop is used as is. A real letterbox is
-    undone on the materialised frame: a NEAREST resize does not decompose per
-    box.
-    """
-    frame_h, frame_w = int(frame_hw[0]), int(frame_hw[1])
-    new_h = max(1, int(round(frame_h * float(scale))))
-    new_w = max(1, int(round(frame_w * float(scale))))
-    identity = (
-        float(scale) == 1.0
-        and int(pad_top) == 0
-        and int(pad_left) == 0
-        and (new_h, new_w) == (frame_h, frame_w)
-        and (int(wire_hw[0]), int(wire_hw[1])) == (frame_h, frame_w)
-    )
-    if identity:
-        r0, c0, r1, c1 = (int(v) for v in record["pixel_bbox_rcrc"])
-        # Clipped as decode_mask_full clips.
-        r1 = min(r1, frame_h - 1)
-        c1 = min(c1, frame_w - 1)
-        if r1 < r0 or c1 < c0:
-            return None
-        crop = decode_mask_crop(record)[: r1 - r0 + 1, : c1 - c0 + 1]
-        if not crop.any():
-            return None
-        return MaskRegion(crop, (r0, c0, r1, c1), (frame_h, frame_w))
-
-    wire_full = decode_mask_full(record, (int(wire_hw[0]), int(wire_hw[1])))
-    inner = wire_full[pad_top : pad_top + new_h, pad_left : pad_left + new_w]
-    full = (
-        np.asarray(
-            Image.fromarray(inner.astype(np.uint8) * 255).resize(
-                (frame_w, frame_h), resample=Image.Resampling.NEAREST
-            )
-        )
-        > 0
-    )
-    return MaskRegion.from_full(full)
+def _record_region(record: dict, frame_hw: tuple[int, int]) -> "MaskRegion | None":
+    """A wire mask record as a region of a ``frame_hw`` frame, clipped to it;
+    ``None`` when nothing is left."""
+    frame_h, frame_w = frame_hw
+    r0, c0, r1, c1 = (int(v) for v in record["pixel_bbox_rcrc"])
+    r1 = min(r1, frame_h - 1)
+    c1 = min(c1, frame_w - 1)
+    if r1 < r0 or c1 < c0:
+        return None
+    crop = decode_mask_crop(record)[: r1 - r0 + 1, : c1 - c0 + 1]
+    if not crop.any():
+        return None
+    return MaskRegion(crop, (r0, c0, r1, c1), (frame_h, frame_w))
 
 
 def split_into_instances(
@@ -516,56 +474,42 @@ class SamDetectClient:
 
     @staticmethod
     def _nms_masks(
-        items: "list[tuple[np.ndarray | None, tuple[int, int, int, int], int, str, float]]",
-        iou_thr: float,
-    ) -> "list[tuple[np.ndarray, tuple[int, int, int, int], str, float]]":
-        """Greedy IoU-NMS over bbox-cropped masks (highest score wins),
-        bbox-prefiltered so it stays ~linear when masks are spatially disjoint.
-        Items carry ``(crop, bbox_rcrc, area, label, score)`` with the bbox in
-        full-frame coordinates; pixel work runs on the bbox-intersection window
-        only. A ``None`` crop is an empty mask carried for the tile-det count
-        and dropped here. This is the cross-tile seam dedup; the world-space
-        tracker dedups again downstream."""
-        order = sorted(range(len(items)), key=lambda i: -items[i][4])
-        kept: list[tuple] = []  # (crop, (r0,c0,r1,c1), area, label, score)
-        for i in order:
-            crop, bb, a, lab, sc = items[i]
-            if crop is None:
-                continue
-            dup = False
-            for kcrop, kbb, ka, _, _ in kept:
+        items: "list[tuple[MaskRegion, str, float]]", iou_thr: float
+    ) -> "list[tuple[MaskRegion, str, float]]":
+        """Greedy IoU-NMS over ``(region, label, score)`` items, highest score
+        first (ties in input order), bbox-prefiltered so it stays ~linear when
+        masks are spatially disjoint; pixel work runs on the box intersection
+        only. This is the cross-tile seam dedup; the world-space tracker
+        dedups again downstream."""
+        kept: list[tuple[MaskRegion, int, str, float]] = []
+        for region, lab, sc in sorted(items, key=lambda it: -it[2]):
+            bb, a = region.bbox, region.area
+            for k, ka, _, _ in kept:
+                kbb = k.bbox
                 if bb[2] < kbb[0] or bb[0] > kbb[2] or bb[3] < kbb[1] or bb[1] > kbb[3]:
                     continue  # bboxes disjoint -> no overlap
                 wr0, wr1 = max(bb[0], kbb[0]), min(bb[2], kbb[2])
                 wc0, wc1 = max(bb[1], kbb[1]), min(bb[3], kbb[3])
                 inter = int(
                     (
-                        crop[
-                            wr0 - bb[0] : wr1 - bb[0] + 1,
-                            wc0 - bb[1] : wc1 - bb[1] + 1,
-                        ]
-                        & kcrop[
-                            wr0 - kbb[0] : wr1 - kbb[0] + 1,
-                            wc0 - kbb[1] : wc1 - kbb[1] + 1,
-                        ]
+                        region.crop[wr0 - bb[0] : wr1 - bb[0] + 1, wc0 - bb[1] : wc1 - bb[1] + 1]
+                        & k.crop[wr0 - kbb[0] : wr1 - kbb[0] + 1, wc0 - kbb[1] : wc1 - kbb[1] + 1]
                     ).sum()
                 )
                 if inter and inter / (a + ka - inter) > iou_thr:
-                    dup = True
                     break
-            if not dup:
-                kept.append((crop, bb, a, lab, sc))
-        return [(crop, bb, lab, sc) for (crop, bb, _a, lab, sc) in kept]
+            else:
+                kept.append((region, a, lab, sc))
+        return [(region, lab, sc) for region, _a, lab, sc in kept]
 
     def _segment(
         self, obs: Observation, concepts: list[str]
     ) -> list[DetectedObject]:
         """Native-resolution slicing-aided detection: ``/segment`` each
-        ``_SAM_INPUT_SIZE`` tile at 1:1, carry each mask as its bbox crop in
-        frame coordinates, cross-tile IoU-NMS dedup, then re-pack into one
-        frame-sized wire payload for the decode. A frame under a tile in
-        either dimension is zero-padded on the bottom and right, and its
-        masks are clipped to the frame.
+        ``_SAM_INPUT_SIZE`` tile at 1:1, place each mask in the frame,
+        cross-tile IoU-NMS dedup, then decode the kept masks. A frame under a
+        tile in either dimension is zero-padded on the bottom and right, and
+        its masks are clipped to the frame.
         """
         rgb = obs.rgb
         assert rgb is not None
@@ -573,41 +517,32 @@ class SamDetectClient:
         canvas = np.pad(rgb, ((0, max(0, _SAM_INPUT_SIZE - H)), (0, max(0, _SAM_INPUT_SIZE - W)), (0, 0)))
         bounds = self._tile_bounds(canvas.shape[0], canvas.shape[1], SAHI_OVERLAP)
 
-        def _one_tile(bound) -> list[tuple] | None:
-            """One tile's ``(crop, bbox_rcrc, area, label, score)`` items in
-            wire order (crop ``None`` for an empty mask), or ``None`` when its
-            ``/segment`` failed. Reads only shared-immutable state."""
+        def _one_tile(bound) -> "list[tuple[MaskRegion, str, float]] | None":
+            """One tile's ``(region, label, score)`` items in wire order, or
+            ``None`` when its ``/segment`` failed. Reads only shared-immutable
+            state."""
             r0, r1, c0, c1 = bound
             payload = self._post_tile(canvas[r0:r1, c0:c1], concepts)
             if payload is None:
                 return None
-            wire_hw = payload.get("image_shape_hw", [_SAM_INPUT_SIZE, _SAM_INPUT_SIZE])
-            tile_out: list[tuple] = []
+            tile_out = []
             for det in payload.get("detections", []):
-                region = _wire_mask_region(
-                    det,
-                    wire_hw=wire_hw,
-                    scale=1.0,
-                    pad_top=0,
-                    pad_left=0,
-                    frame_hw=(min(r1, H) - r0, min(c1, W) - c0),
-                )
-                area = 0 if region is None else region.area
-                if area < MIN_AREA_PX:
-                    continue
-                lab, sc = str(det["label"]), float(det["score"])
-                if region is None:
-                    tile_out.append((None, (0, 0, 0, 0), 0, lab, sc))
+                region = _record_region(det, (min(r1, H) - r0, min(c1, W) - c0))
+                if region is None or region.area < MIN_AREA_PX:
                     continue
                 tight = region.tightened()
                 lr0, lc0, lr1, lc1 = tight.bbox
-                tile_out.append((tight.crop.copy(), (r0 + lr0, c0 + lc0, r0 + lr1, c0 + lc1), area, lab, sc))
+                tile_out.append((
+                    MaskRegion(tight.crop, (r0 + lr0, c0 + lc0, r0 + lr1, c0 + lc1), (H, W)),
+                    str(det["label"]),
+                    float(det["score"]),
+                ))
             return tile_out
 
         # One thread per tile: width costs threads, not GPU (the servers'
         # SAM_MAX_INFLIGHT gates the work), and a narrower pool leaves a tail
-        # wave. ex.map keeps bounds order, so NMS tie-breaking and the repack's
-        # object_ids are the serial loop's.
+        # wave. ex.map keeps bounds order, so NMS tie-breaking and the object
+        # ids are the serial loop's.
         with ThreadPoolExecutor(max_workers=len(bounds), thread_name_prefix="sahi-tile") as ex:
             per_tile = list(ex.map(_one_tile, bounds))
         tiledets = [item for tile_out in per_tile if tile_out is not None for item in tile_out]
@@ -624,14 +559,6 @@ class SamDetectClient:
                 "whole-frame outage, not a partial or empty frame"
             )
         kept = self._nms_masks(tiledets, SAHI_NMS_IOU)
-        # The merged masks as a wire payload whose wire frame IS the frame
-        # (identity letterbox).
-        dets: list[dict] = []
-        for i, (crop, bb, lab, sc) in enumerate(kept):
-            record = encode_mask_record(crop, bbox_rcrc=bb)
-            if record is None:
-                continue
-            dets.append({**record, "object_id": i, "label": lab, "score": sc})
         if n_failed:
             print(
                 f"[sam] WARNING: {n_failed}/{len(bounds)} SAHI tiles "
@@ -642,73 +569,48 @@ class SamDetectClient:
             )
         print(
             f"[sam] SAHI native: {len(bounds)} tiles, {n_failed} failed "
-            f"({len(tiledets)} tile-dets -> {len(dets)} after NMS)",
+            f"({len(tiledets)} tile-dets -> {len(kept)} after NMS)",
             flush=True,
         )
-        return self._decode_payload_to_detections(
-            {"detections": dets, "image_shape_hw": [H, W]},
-            obs=obs,
-            scale=1.0,
-            pad_top=0,
-            pad_left=0,
-            orig_HW=(H, W),
-        )
+        return self._detections(obs, [(region, lab, i, sc) for i, (region, lab, sc) in enumerate(kept)])
 
-    def _decode_payload_to_detections(
+    def _detections(
         self,
-        payload: dict,
-        *,
         obs: Observation,
-        scale: float,
-        pad_top: int,
-        pad_left: int,
-        orig_HW: tuple[int, int],
+        masks: "list[tuple[MaskRegion | None, str, int, float]]",
     ) -> list[DetectedObject]:
-        """Decode a ``/segment`` payload (single-frame or SAHI repack): undo
-        the letterbox, split each mask into instances, project each through
-        ``obs.depth`` and pack it as a ``DetectedObject``, in wire order on
-        thread pools.
+        """``(region, label, object_id, score)`` masks of ``obs``'s frame as
+        detections: split each mask into instances, project each through
+        ``obs.depth`` and pack it as a ``DetectedObject``, in input order on
+        thread pools. A ``None`` or sub-``MIN_AREA_PX`` region is skipped and
+        keeps its index.
         """
-        orig_h, orig_w = orig_HW
-        wire_H, wire_W = payload.get(
-            "image_shape_hw", [_SAM_INPUT_SIZE, _SAM_INPUT_SIZE]
-        )
-
-        # Pass 1: decode every mask and collect, per class, the clean
+        # Pass 1: split every mask and collect, per class, the clean
         # single-component area (the split's noise floor) and a per-pixel count
         # of primaries (the redundancy check).
-        decoded: list[tuple[int, dict, np.ndarray]] = []
+        decoded: list[tuple[int, MaskRegion, str, int, float]] = []
         class_ref_areas: dict[str, list[int]] = {}
         coverage_by_label: dict[str, np.ndarray] = {}
-        dets_wire = list(payload.get("detections", []))
-        n_workers = max(1, min(_DECODE_WORKERS, len(dets_wire) or 1))
+        n_workers = max(1, min(_DECODE_WORKERS, len(masks) or 1))
 
-        def _decode_one(idx_det):
-            det_idx, det = idx_det
-            region = _wire_mask_region(
-                det,
-                wire_hw=(wire_H, wire_W),
-                scale=scale,
-                pad_top=pad_top,
-                pad_left=pad_left,
-                frame_hw=(orig_h, orig_w),
-            )
+        def _decode_one(idx_mask):
+            det_idx, (region, label, obj_id, score) = idx_mask
             if region is None or region.area < MIN_AREA_PX:
                 return None
             comps = _connected_components(region)
             primary = comps[0] if len(comps) == 1 else max(comps, key=lambda c: c.area)
-            return det_idx, det, region, comps, primary
+            return (det_idx, region, str(label), int(obj_id), float(score)), comps, primary
 
         with ThreadPoolExecutor(
             max_workers=n_workers, thread_name_prefix="sam-decode"
         ) as ex:
-            pass1 = list(ex.map(_decode_one, enumerate(dets_wire)))
+            pass1 = list(ex.map(_decode_one, enumerate(masks)))
         for res in pass1:
             if res is None:
                 continue
-            det_idx, det, region, comps, primary = res
-            label = str(det["label"])
-            decoded.append((det_idx, det, region))
+            item, comps, primary = res
+            region, label = item[1], item[2]
+            decoded.append(item)
             # Coverage counts primaries (each mask's largest component), so a
             # small car covered only by merged masks survives the split.
             cov = coverage_by_label.get(label)
@@ -773,10 +675,7 @@ class SamDetectClient:
         def _split_and_pack(item):
             """``(packs, fallback)``: the packed components in order, and the
             merged-mask pack when none of them projected."""
-            det_idx, det, region = item
-            label = str(det["label"])
-            obj_id = int(det["object_id"])
-            score = float(det["score"])
+            det_idx, region, label, obj_id, score = item
             components = split_into_instances(
                 region,
                 ref_area_px=class_ref.get(label),

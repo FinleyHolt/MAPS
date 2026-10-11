@@ -9,11 +9,11 @@ over the client's life (one episode), and the runner stamps it on the row as
 from __future__ import annotations
 
 from maps.perception.sam.detect_client import SamDetectClient
-from maps.perception.tests.test_sahi_nms import _build_repack_case
+from maps.perception.tests.test_sahi_nms import _build_tile_case
 
 
 def test_a_partially_failed_frame_counts_its_failed_tiles(monkeypatch):
-    client, obs, payload_by_b64, _ref, _hw = _build_repack_case()
+    client, obs, payload_by_b64, _ref = _build_tile_case()
     answered = list(payload_by_b64)[:1]  # the second tile gets no usable response
 
     monkeypatch.setattr(
@@ -23,12 +23,12 @@ def test_a_partially_failed_frame_counts_its_failed_tiles(monkeypatch):
     )
     captured = []
     monkeypatch.setattr(
-        SamDetectClient, "_decode_payload_to_detections",
-        lambda self, payload, **kw: captured.append(payload) or [],
+        SamDetectClient, "_detections",
+        lambda self, obs, masks: captured.append(masks) or [],
     )
     assert client.sahi_tiles_failed == 0
     client._segment(obs, ["car"])
     assert client.sahi_tiles_failed == 1
-    assert captured and captured[0]["detections"], "the answering tile's detections are kept"
+    assert captured and captured[0], "the answering tile's detections are kept"
     client._segment(obs, ["car"])
     assert client.sahi_tiles_failed == 2

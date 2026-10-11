@@ -1,35 +1,29 @@
-"""SAHI cross-tile NMS — bbox-crop pipeline is bit-identical to full-frame.
+"""SAHI tiling and cross-tile NMS against a full-frame reference.
 
-``_segment`` carries each tile detection as its bbox crop plus full-frame
-bbox instead of materializing a frame-sized mask per detection (766 × 2016²
-bool allocations measured per frame). These tests pin the contract that made
-that refactor safe: the kept set, its order, and the encoded wire records are
-byte-identical to the full-frame reference pipeline, which lives HERE as the
+The client carries each tile detection as a region (a bbox crop placed in the
+frame) instead of a frame-sized mask; these tests hold the kept set, its order
+and its pixels equal to the full-frame pipeline, which lives here as the
 reference implementation.
 """
 
 from __future__ import annotations
 
 import base64
-import io
 import threading
 
 import numpy as np
 import pytest
-from PIL import Image
 
-from maps.perception.tests.regions import square_view
+from maps.perception.tests.regions import full, square_view
 from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import SamDetectClient, _png_wire_bytes
-from maps.util.mask_codec import decode_mask_full, encode_mask_record
-
-
-# ── Reference: the full-frame pipeline (previous shipped semantics) ──
+from maps.util.mask_codec import decode_mask_crop, encode_mask_record
+from maps.util.mask_region import MaskRegion
 
 
 def _reference_nms_full_masks(items, iou_thr):
-    """Greedy IoU-NMS over FULL-FRAME masks — the reference semantics."""
+    """Greedy IoU-NMS over FULL-FRAME masks: the reference semantics."""
     order = sorted(range(len(items)), key=lambda i: -items[i][2])
     kept = []  # (mask, bbox, area, label, score)
     for i in order:
@@ -50,31 +44,6 @@ def _reference_nms_full_masks(items, iou_thr):
         if not dup:
             kept.append((m, bb, a, lab, sc))
     return [(m, lab, sc) for (m, _bb, _a, lab, sc) in kept]
-
-
-def _items_from_full(full_masks):
-    """Build the crop-item tuples ``_nms_masks`` consumes from full masks."""
-    items = []
-    for m, lab, sc in full_masks:
-        rows = m.any(axis=1)
-        if not rows.any():
-            items.append((None, (0, 0, 0, 0), 0, lab, sc))
-            continue
-        cols = m.any(axis=0)
-        r0 = int(rows.argmax())
-        r1 = int(m.shape[0] - 1 - rows[::-1].argmax())
-        c0 = int(cols.argmax())
-        c1 = int(m.shape[1] - 1 - cols[::-1].argmax())
-        items.append(
-            (
-                m[r0 : r1 + 1, c0 : c1 + 1].copy(),
-                (r0, c0, r1, c1),
-                int(m.sum()),
-                lab,
-                sc,
-            )
-        )
-    return items
 
 
 def _random_blobs(rng, n, H, W):
@@ -110,16 +79,14 @@ def test_nms_matches_full_frame_reference():
     rng = np.random.default_rng(20260802)
     H = W = 160
     for trial in range(5):
-        full = _random_blobs(rng, 25, H, W)
+        masks = _random_blobs(rng, 25, H, W)
+        items = [(MaskRegion.from_full(m), lab, sc) for m, lab, sc in masks]
         for thr in (0.3, 0.5, 0.9):
-            ref = _reference_nms_full_masks(full, thr)
-            got = SamDetectClient._nms_masks(_items_from_full(full), thr)
-            assert len(got) == len(ref)
-            for (gcrop, gbb, glab, gsc), (rm, rlab, rsc) in zip(got, ref):
-                assert (glab, gsc) == (rlab, rsc)
-                rebuilt = np.zeros((H, W), dtype=bool)
-                rebuilt[gbb[0] : gbb[2] + 1, gbb[1] : gbb[3] + 1] = gcrop
-                assert np.array_equal(rebuilt, rm)
+            ref = _reference_nms_full_masks(masks, thr)
+            got = SamDetectClient._nms_masks(items, thr)
+            assert [(lab, sc) for _r, lab, sc in got] == [(lab, sc) for _m, lab, sc in ref]
+            for (region, _l, _s), (rm, _rl, _rs) in zip(got, ref):
+                assert np.array_equal(full(region), rm)
 
 
 def test_encode_from_crop_matches_full_frame_encode():
@@ -142,19 +109,7 @@ def test_encode_from_crop_matches_full_frame_encode():
         assert via_crop == encode_mask_record(m)
 
 
-def test_empty_item_is_dropped_not_crashed():
-    live = np.ones((4, 6), dtype=bool)
-    items = [
-        (None, (0, 0, 0, 0), 0, "car", 0.9),
-        (live, (10, 10, 13, 15), 24, "car", 0.4),
-    ]
-    kept = SamDetectClient._nms_masks(items, 0.5)
-    assert [(bb, lab, sc) for (_c, bb, lab, sc) in kept] == [
-        ((10, 10, 13, 15), "car", 0.4)
-    ]
-
-
-# ── End-to-end golden: _segment repack equals the reference repack ──
+# ── End-to-end: the masks _segment decodes equal the full-frame reference ──
 
 
 def _tile_det(mask_1008, label, score, oid):
@@ -164,23 +119,16 @@ def _tile_det(mask_1008, label, score, oid):
 
 
 def _tile_b64(rgb, bound):
-    """Replay the client's own tile encode: the mock's content key.
-
-    Calls the production encoder instead of re-implementing it. Re-implementing
-    it keyed this fixture on PIL's default zlib level, so changing that level in
-    the client failed both repack tests with a KeyError on a base64 blob rather
-    than saying what actually moved.
-    """
+    """The client's own tile encode: the mock's content key."""
     r0, r1, c0, c1 = bound
     return base64.b64encode(_png_wire_bytes(np.ascontiguousarray(rgb[r0:r1, c0:c1]))).decode("ascii")
 
 
-def _build_repack_case():
-    """One SAHI frame (2 tiles), its wire payloads, and the reference
-    repack. The rgb is a deterministic gradient so each tile's PNG is
-    distinct — the content-keyed mock must never be degenerate."""
-    H, W = 1008, 1512  # 1 row × 2 cols of native 1008 tiles: c0 ∈ {0, 504}
-    min_area = dc.MIN_AREA_PX
+def _build_tile_case():
+    """One frame of two tiles, their wire payloads, and the reference kept
+    masks. The rgb is a deterministic gradient so each tile's PNG is
+    distinct and the content-keyed mock is never degenerate."""
+    H, W = 1008, 1512  # 1 row x 2 cols of native 1008 tiles: c0 in {0, 504}
     provider = ReasonerUnionConceptProvider()
     provider.set_concepts(["car"])
     client = SamDetectClient(concept_provider=provider)
@@ -197,8 +145,8 @@ def _build_repack_case():
         _tile_det(tile_mask(100, 50, 140, 120), "car", 0.9, 0),
         _tile_det(tile_mask(300, 600, 340, 700), "car", 0.8, 1),
     ]
-    # tile 1 (c0=504): seam duplicate (frame cols 600:700 → local 96:196,
-    # lower score → NMS drops it), a tie pair, and a sub-min-area speck
+    # tile 1 (c0=504): seam duplicate (frame cols 600:700 -> local 96:196,
+    # lower score -> NMS drops it), a tie pair, and a sub-min-area speck
     t1 = [
         _tile_det(tile_mask(300, 96, 340, 196), "car", 0.7, 0),
         _tile_det(tile_mask(500, 700, 560, 800), "car", 0.85, 1),
@@ -210,100 +158,73 @@ def _build_repack_case():
         {"detections": t1, "image_shape_hw": [1008, 1008]},
     ]
 
-    # reference repack: full-frame remap → reference NMS → full-frame encode
     ref_full = []
     for (r0, r1, c0, c1), payload in zip(bounds, payloads):
         for det in payload["detections"]:
-            wire = decode_mask_full(det, (1008, 1008))
-            if int(wire.sum()) < min_area:
-                continue
             fm = np.zeros((H, W), dtype=bool)
-            fm[r0:r1, c0:c1] = wire
-            ref_full.append((fm, str(det["label"]), float(det["score"])))
-    ref_dets = []
-    for i, (m, lab, sc) in enumerate(
-        _reference_nms_full_masks(ref_full, dc.SAHI_NMS_IOU)
-    ):
-        rec = encode_mask_record(m)
-        ref_dets.append({**rec, "object_id": i, "label": lab, "score": sc})
-    assert len(ref_dets) == 4  # seam dedup dropped 1, speck dropped 1
+            pr0, pc0, pr1, pc1 = det["pixel_bbox_rcrc"]
+            fm[r0 + pr0 : r0 + pr1 + 1, c0 + pc0 : c0 + pc1 + 1] = decode_mask_crop(det)
+            if int(fm.sum()) >= dc.MIN_AREA_PX:
+                ref_full.append((fm, str(det["label"]), float(det["score"])))
+    ref = _reference_nms_full_masks(ref_full, dc.SAHI_NMS_IOU)
+    assert len(ref) == 4  # seam dedup dropped 1, speck dropped 1
 
-    rr, cc = np.meshgrid(
-        np.arange(H) % 256, np.arange(W) % 256, indexing="ij"
-    )
+    rr, cc = np.meshgrid(np.arange(H) % 256, np.arange(W) % 256, indexing="ij")
     rgb = np.stack([rr, cc, (rr + cc) % 256], axis=-1).astype(np.uint8)
-    payload_by_b64 = {
-        _tile_b64(rgb, b): p for b, p in zip(bounds, payloads)
-    }
+    payload_by_b64 = {_tile_b64(rgb, b): p for b, p in zip(bounds, payloads)}
     assert len(payload_by_b64) == 2, "tile PNGs must be distinct for keying"
-
-    obs = square_view(rgb)
-    return client, obs, payload_by_b64, ref_dets, (H, W)
+    return client, square_view(rgb), payload_by_b64, ref
 
 
-def test_segment_repack_matches_reference(monkeypatch):
-    client, obs, payload_by_b64, ref_dets, (H, W) = _build_repack_case()
+def _decoded(monkeypatch, client, obs):
+    captured = []
+    monkeypatch.setattr(SamDetectClient, "_detections", lambda self, obs, masks: captured.append(masks) or [])
+    client._segment(obs, ["car"])
+    assert captured, "the tiles never reached the decode"
+    return captured[0]
 
+
+def _assert_matches_reference(masks, ref):
+    assert [(oid, lab, sc) for _r, lab, oid, sc in masks] == [(i, lab, sc) for i, (_m, lab, sc) in enumerate(ref)]
+    for (region, _l, _o, _s), (rm, _rl, _rs) in zip(masks, ref):
+        assert np.array_equal(full(region), rm)
+
+
+def test_segment_keeps_what_the_full_frame_reference_keeps(monkeypatch):
+    client, obs, payload_by_b64, ref = _build_tile_case()
     requested: list[str] = []
 
     def serve(*, picker, json_body):
-        key = json_body["image_b64"]
-        requested.append(key)
-        return payload_by_b64[key]
+        requested.append(json_body["image_b64"])
+        return payload_by_b64[json_body["image_b64"]]
 
-    monkeypatch.setattr(
-        "maps.perception.sam.detect_client._post_segment_avoid_stale_pool",
-        serve,
-    )
-    captured = []
-    monkeypatch.setattr(
-        SamDetectClient,
-        "_decode_payload_to_detections",
-        lambda self, payload, **kw: captured.append(payload) or [],
-    )
-    client._segment(obs, ["car"])
-
-    # vacuity floor: exactly the two expected tiles were requested
+    monkeypatch.setattr(dc, "_post_segment_avoid_stale_pool", serve)
+    masks = _decoded(monkeypatch, client, obs)
     assert sorted(requested) == sorted(payload_by_b64)
-    assert captured, "SAHI path never reached the decode stage"
-    assert captured[0] == {"detections": ref_dets, "image_shape_hw": [H, W]}
+    _assert_matches_reference(masks, ref)
 
 
-def test_sahi_tile_order_survives_out_of_order_completion(monkeypatch):
-    """Force tile 1 to COMPLETE before tile 0 (tile 0 gated on tile 1's
-    completion) — the repack must still equal the bounds-order reference:
-    collection order is bounds order, not completion order."""
-    client, obs, payload_by_b64, ref_dets, (H, W) = _build_repack_case()
+def test_tile_order_survives_out_of_order_completion(monkeypatch):
+    """Tile 1 COMPLETES before tile 0 (tile 0 gated on it); the kept masks
+    still follow bounds order, not completion order."""
+    client, obs, payload_by_b64, ref = _build_tile_case()
     idx_by_b64 = {k: i for i, k in enumerate(payload_by_b64)}
-
     completion_order: list[int] = []
     tile1_done = threading.Event()
 
     def serve(*, picker, json_body):
-        key = json_body["image_b64"]
-        idx = idx_by_b64[key]
+        idx = idx_by_b64[json_body["image_b64"]]
         if idx == 0:
             assert tile1_done.wait(timeout=5.0), "tile 1 never completed"
         completion_order.append(idx)
         if idx == 1:
             tile1_done.set()
-        return payload_by_b64[key]
+        return payload_by_b64[json_body["image_b64"]]
 
-    monkeypatch.setattr(
-        "maps.perception.sam.detect_client._post_segment_avoid_stale_pool",
-        serve,
-    )
-    captured = []
-    monkeypatch.setattr(
-        SamDetectClient,
-        "_decode_payload_to_detections",
-        lambda self, payload, **kw: captured.append(payload) or [],
-    )
-    client._segment(obs, ["car"])
-
-    # vacuity floor: completion order really was inverted
+    monkeypatch.setattr(dc, "_post_segment_avoid_stale_pool", serve)
+    masks = _decoded(monkeypatch, client, obs)
     assert completion_order == [1, 0]
-    assert captured[0] == {"detections": ref_dets, "image_shape_hw": [H, W]}
+    _assert_matches_reference(masks, ref)
 
 
 if __name__ == "__main__":
