@@ -1325,8 +1325,6 @@ def compact_results(results: dict, *, widen_form: str = "",
                 ``refs``/``columns`` header: ``{refs, len, columns, fids,
                 rows, hint}`` under the SAME broad-result law (census + head
                 past the knee).
-      - row   : a single dict (a ``pick``) -> the bare ``_model_facing_row``.
-      - scalar: a number/string -> passed through.
 
     Served ONCE per response (never twice in one reply):
       - a census identical to one already served: later envelopes carry
@@ -1349,6 +1347,19 @@ def compact_results(results: dict, *, widen_form: str = "",
     envelope.
     """
     _legend_out = [False]
+
+    def _table(head, rows, op_cols):
+        """The grid of ``rows`` under the render budget into
+        ``head["rows"]``, and the legend on the response's first table (it
+        reads a TABLE, and it is served once per response). Returns the
+        elided-columns note, or None."""
+        cols, n_cut = _budget_columns(rows, _grid_columns(rows), op_cols)
+        head["rows"] = _render_grid_rows(rows, cols)
+        if not _legend_out[0]:
+            head["legend"] = _TABLE_LEGEND
+            _legend_out[0] = True
+        return (f"{n_cut} column(s) elided from this render to fit; "
+                "the rN keeps them all") if n_cut else None
 
     def _c(v):
         if isinstance(v, _CompareRows):
@@ -1374,16 +1385,9 @@ def compact_results(results: dict, *, widen_form: str = "",
                           if len(v) > _BROAD_DUMP_SOFT_ROWS else v)
                 # No `fids` array beside a grid: its first column carries
                 # them. A census-only head carries it below.
-                _cols = _grid_columns(_rrows)
-                _cols, _n_cut = _budget_columns(
-                    _rrows, _cols, getattr(v, "columns", None))
-                if _n_cut:
-                    hints.append(f"{_n_cut} column(s) elided from this "
-                                 "render to fit; the rN keeps them all")
-                head["rows"] = _render_grid_rows(_rrows, _cols)
-                if not _legend_out[0]:
-                    head["legend"] = _TABLE_LEGEND
-                    _legend_out[0] = True
+                _elided = _table(head, _rrows, getattr(v, "columns", None))
+                if _elided:
+                    hints.append(_elided)
             hints.extend(getattr(v, "notes", []) or [])
             if hints:
                 head["hint"] = join_hints(*hints)
@@ -1492,7 +1496,6 @@ def compact_results(results: dict, *, widen_form: str = "",
                                         _cut_stands_at(v, _body, capped))
             _cut = getattr(v, "cut_stats", None) \
                 if isinstance(v, _FilterCutRows) else None
-            _cols = _grid_columns(capped)
             head = {"len": len(v)}
             if getattr(v, "name_set", False):
                 # The shape as data: the name and the ways' total length.
@@ -1504,21 +1507,9 @@ def compact_results(results: dict, *, widen_form: str = "",
             if not getattr(v, "name_set", False):
                 head["fids"] = [str(it["fid"]) for it in capped
                                 if isinstance(it, dict) and it.get("fid")]
-            _cols, _n_cut = _budget_columns(
-                capped, _cols, getattr(v, "op_cols", None))
-            if _n_cut:
-                _head_note = join_hints(
-                    _head_note,
-                    f"{_n_cut} column(s) elided from this render to fit; "
-                    "the rN keeps them all")
             if not getattr(v, "name_set", False):
-                head["rows"] = _render_grid_rows(capped, _cols)
-            # The legend reads a TABLE, and it is served once per response:
-            # attaching it to a head that renders no rows spends the slot,
-            # so the next result's real table loses its column key.
-            if not _legend_out[0] and "rows" in head:
-                head["legend"] = _TABLE_LEGEND
-                _legend_out[0] = True
+                _head_note = join_hints(_head_note, _table(
+                    head, capped, getattr(v, "op_cols", None)))
             head["hint"] = join_hints(head.get("hint"), _head_note,
                                       _cover_note)
             if not head["hint"]:
@@ -1532,10 +1523,6 @@ def compact_results(results: dict, *, widen_form: str = "",
             if not head["hint"]:
                 head.pop("hint")
             return head
-        if isinstance(v, dict):
-            # A single surface row (pick) carries search_text too.
-            return _model_facing_row(v)
-        return v
 
     # Serve any identical census once per response. The answer ref goes
     # first, so it keeps its own census rather than a pointer.
