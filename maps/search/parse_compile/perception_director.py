@@ -123,32 +123,14 @@ class PerceptionDirector:
         self.watchlist = _dedup_concepts(concepts)
         self._push_live()
 
-    def watchlist_apply(self, add, remove) -> dict:
-        """Apply one ``view{watchlist:{add,remove}}`` mutation; returns the
-        delta facts the tool result states — including whether the mutation
-        actually reached the LIVE segment channel (``live``), so the ack can
-        never claim a live effect the push did not deliver."""
-        add = _dedup_concepts(add)
+    def watchlist_apply(self, add, remove) -> None:
+        """Remove then add classes (canonical-deduped) and push the result."""
         remove_keys = {canon_concept(s) for s in (remove or []) if canon_concept(s)}
-        removed = [w for w in self.watchlist if canon_concept(w) in remove_keys]
-        unknown_removes = sorted(
-            remove_keys - {canon_concept(w) for w in self.watchlist})
         kept = [w for w in self.watchlist if canon_concept(w) not in remove_keys]
         existing = {canon_concept(w) for w in kept}
-        added = [a for a in add if canon_concept(a) not in existing]
-        self.watchlist = kept + added
-        push_status = self._push_live()
-        out = {
-            "watchlist": list(self.watchlist),
-            "added": added,
-            "removed": removed,
-            "unknown_removes": unknown_removes,
-            "pending_stops": 0,
-            "live": push_status == "ok",
-        }
-        if push_status == "failed":
-            out["live_push_failed"] = True
-        return out
+        self.watchlist = kept + [a for a in _dedup_concepts(add)
+                                 if canon_concept(a) not in existing]
+        self._push_live()
 
     def _push_live(self) -> str:
         """Push watchlist + active-boost concepts to the live provider.
