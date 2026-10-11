@@ -357,20 +357,12 @@ def test_a_crossing_set_anchors_a_distance_column():
 
 
 def test_a_look_list_crops_each_element():
-    """look([a, b]) compiles one crop token PER element."""
-    from maps.search.parse_compile.code_surface import _plan_of
+    """look([a, b]) asks for one crop token PER element."""
+    from maps.search.tests.fakes import acts_of_block
     for fids in (["prior_1", "prior_2"],
                  ["prior_1", "prior_2", "prior_3"]):
-        steps = [{"call": "look", "target": None,
-                  "args": {"_pos": [list(fids)]}}]
-        plan, _ = _plan_of(steps, "look(...)", 0,
-                           {f: f for f in fids}, {})
-        crops = [st for st in plan["steps"] if st.get("do") == "crops"]
-        assert crops and crops[0]["fid"] == fids, plan["steps"]
+        assert acts_of_block(f"look({fids!r})\n") == [
+            ("crops", None, fids, None)]
     # ...and a genuine [x, y] point still rides as ONE point token.
-    steps = [{"call": "look", "target": None,
-              "args": {"_pos": [[100, 200]]}}]
-    plan, _ = _plan_of(steps, "look(...)", 0, {}, {})
-    crops = [st for st in plan["steps"] if st.get("do") == "crops"]
-    assert crops and crops[0]["fid"] == ("xy", [100.0, 200.0]), \
-        plan["steps"]
+    assert acts_of_block("look([100, 200])\n") == [
+        ("crops", None, "[100, 200]", None)]

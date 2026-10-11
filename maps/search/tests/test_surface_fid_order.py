@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 from maps.search.analyze_scene.geom_program import build_surface_from_graph
-from maps.search.tests.fakes import plan_of_block
+from maps.search.tests.fakes import acts_of_block
 
 
 class _Node:
@@ -87,11 +87,8 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
 
 
 def _crops_of(src: str) -> list:
-    """The crop steps one code block compiles to."""
-
-    plan = plan_of_block(src)
-    return [st for p in plan.get("plans", [plan])
-            for st in p["steps"] if st.get("do") == "crops"]
+    """The crop requests one code block makes: ``(of, fid, marks)``."""
+    return [c[1:] for c in acts_of_block(src) if c[0] == "crops"]
 
 
 def test_look_marks_a_street_by_its_handle_not_a_piece_of_it():
@@ -101,11 +98,11 @@ def test_look_marks_a_street_by_its_handle_not_a_piece_of_it():
                       'look(cars[0:10], marks=poppy)\n')
     assert crops, "no crops step compiled"
     # The mark rides the SAME crop request as its subject.
-    assert crops[-1].get("mark_fids"), crops[-1]
+    assert crops[-1][2], crops[-1]
 
 
 def test_look_without_marks_asks_for_none():
     """The default is unchanged: a bare look carries no mark list."""
     crops = _crops_of('cars = find("car")\nlook(cars[0:10])\n')
     assert crops, "no crops step compiled"
-    assert "mark_fids" not in crops[-1], crops[-1]
+    assert crops[-1][2] is None, crops[-1]

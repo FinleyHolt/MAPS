@@ -9,6 +9,7 @@ from maps.search.parse_compile.python_surface import (
     scan_block,
 )
 from maps.search.tests.fakes import (
+    quiet_env,
     drive,
     explore_drive,
     grow_drive,
@@ -514,20 +515,10 @@ def test_a_bound_handle_beats_a_coincidental_fid_suggestion():
 
 def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
     """The ways of ONE name tie, so no row is its first."""
-    from maps.search.parse_compile.python_surface import (
-        CodeError,
-        MissionEnv,
-        MissionPython,
-        Rows,
-    )
+    from maps.search.parse_compile.python_surface import MissionPython, Rows
 
     rows = [{"fid": f"prior_{i}", "name": "Neuralia Road"} for i in range(12)]
-    env = MissionEnv(
-        run_plan=lambda *a, **k: {},
-        rows_of_ref=lambda ref: rows,
-        tied_of_ref=lambda ref: True,
-        plan_rn=[0], discourse={}, minted=[],
-        say_err=lambda *a, **k: None, row_of_fid=lambda f: None)
+    env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: True)
     view = Rows("r1", MissionPython(env))
 
     assert len(view) == 12
@@ -542,15 +533,10 @@ def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
 
 def test_an_ordered_result_stays_subscriptable():
     """The refusal is about TIES, not about find results."""
-    from maps.search.parse_compile.python_surface import MissionEnv, MissionPython, Rows
+    from maps.search.parse_compile.python_surface import MissionPython, Rows
 
     rows = [{"fid": f"detected_{i}", "class": "car"} for i in range(6)]
-    env = MissionEnv(
-        run_plan=lambda *a, **k: {},
-        rows_of_ref=lambda ref: rows,
-        tied_of_ref=lambda ref: False,
-        plan_rn=[0], discourse={}, minted=[],
-        say_err=lambda *a, **k: None, row_of_fid=lambda f: None)
+    env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
     view = Rows("r2", MissionPython(env))
     assert view[0].get("fid") == "detected_0"
     assert len(view[0:3]) == 3
@@ -558,17 +544,14 @@ def test_an_ordered_result_stays_subscriptable():
 
 def test_a_tied_views_repr_shows_its_shape_and_leaks_no_point():
     """print(road) must not hand back what the head withholds."""
-    from maps.search.parse_compile.python_surface import MissionEnv, MissionPython, Rows
+    from maps.search.parse_compile.python_surface import MissionPython, Rows
 
     rows = [{"fid": f"prior_{5775 + i}", "name": "Neuralia Road",
              "xy": [2242.27 + i, 3048.07 + i]} for i in range(64)]
 
     def _env(tied):
-        return MissionEnv(
-            run_plan=lambda *a, **k: {}, rows_of_ref=lambda ref: rows,
-            tied_of_ref=lambda ref: tied, plan_rn=[0], discourse={},
-            minted=[], say_err=lambda *a, **k: None,
-            row_of_fid=lambda f: None)
+        return quiet_env(rows_of_ref=lambda ref: rows,
+                         tied_of_ref=lambda ref: tied)
 
     tied = repr(Rows("r1", MissionPython(_env(True))))
     assert "Neuralia Road" in tied and "64" in tied, tied

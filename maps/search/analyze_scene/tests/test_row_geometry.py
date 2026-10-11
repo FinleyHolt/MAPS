@@ -8,7 +8,8 @@ from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import run_program
 from maps.search.parse_compile.code_surface import CodeError
 from maps.search.parse_compile.python_surface import (
-    MissionEnv, MissionPython, Row, Rows, _places)
+    MissionPython, Row, Rows, _places)
+from maps.search.tests.fakes import quiet_env
 
 ROAD = {"fid": "prior_1", "name": "Poppy Boulevard", "class": "road",
         "mask": [[[0.0, 0.0], [0.0, 1198.0]]], "xy": [0.0, 599.0]}
@@ -17,13 +18,8 @@ CAR = {"fid": "detected_1", "class": "car", "xy": [7.0, 0.0]}
 
 def _mp(surface: dict, refs: dict | None = None) -> MissionPython:
     refs = refs or {}
-    env = MissionEnv(
-        run_plan=lambda plan, said: {},
-        rows_of_ref=lambda ref: refs.get(ref, []),
-        plan_rn=[0], discourse={}, minted=[],
-        say_err=lambda out, msg: {**out, "error": msg},
-        row_of_fid=surface.get)
-    return MissionPython(env)
+    return MissionPython(quiet_env(rows_of_ref=lambda ref: refs.get(ref, []),
+                                   row_of_fid=surface.get))
 
 
 def _served(row: dict) -> dict:

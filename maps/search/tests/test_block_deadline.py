@@ -5,19 +5,11 @@ from __future__ import annotations
 import time
 
 from maps.search.parse_compile import python_surface as ps
+from maps.search.tests.fakes import quiet_env
 
 
 def _mission_python():
-    env = ps.MissionEnv(
-        run_plan=lambda plan, said: {},
-        rows_of_ref=lambda ref: [],
-        plan_rn=[0],
-        discourse={},
-        minted=[],
-        say_err=lambda ack, msg: {**ack, "error": msg},
-        row_of_fid=lambda fid: None,
-    )
-    return ps.MissionPython(env)
+    return ps.MissionPython(quiet_env())
 
 
 def test_a_slow_bounded_block_stops_at_the_wall_clock_ceiling(monkeypatch):
@@ -45,12 +37,12 @@ def test_the_ceilings_are_local_to_the_block(monkeypatch):
 
     seen: dict = {}
 
-    def _run_plan(plan, said):
+    def _watch(concepts):
         seen["trace"] = sys.gettrace()
         return {}
 
     mp = _mission_python()
-    mp.env.run_plan = _run_plan
+    mp.env.watch = _watch
     out = mp.run_block('look_for("car")\n')
     assert "error" not in out, out
     assert "trace" in seen

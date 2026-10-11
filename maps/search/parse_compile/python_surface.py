@@ -7,9 +7,9 @@ loops, comprehensions, `print()` and `len()` behave exactly as the model's
 priors say they do -- and an error costs the line it is on, never the
 lines that already ran.
 
-Each call builds one step and hands it to ``code_surface._plan_of`` ->
-``reasoner_loop._run_plan``, which own the op programs, grounding, serving,
-flights and receipts.
+Each call compiles its arguments (``code_surface``) and runs on the loop's
+verbs (:class:`MissionEnv`), which own grounding, serving, flights and
+receipts.
 
 The guardrails hold at call time: the moving calls take a thing and never a
 coordinate, a whole result set cannot be flown to, and a move inside a loop
@@ -39,17 +39,21 @@ import threading
 import time
 import traceback
 import types
+from dataclasses import dataclass
+from typing import Callable
 
 from maps.search.analyze_scene import cardinal_side
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
-    _AUTOATTACH_PREFIXES, _STANDING_SIDE_PREFIXES, MODEL_UNSERVED_COLUMNS)
+    _AUTOATTACH_PREFIXES, _BROAD_HEAD_ROWS, _STANDING_SIDE_PREFIXES,
+    MODEL_UNSERVED_COLUMNS)
 from maps.search.analyze_scene.row_geometry import SurfaceGeometry
 from maps.search.withhold import withheld
-from maps.util.xy_token import is_xy
+from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
 from maps.search.parse_compile.code_surface import (
-    CodeError, act_needs_a_thing, _fid_like, _plan_of, _split_diagonal,
-    bind_row, _refuse_metres_in_within)
+    _CARDINALS, Bind, CodeError, Program, Ref, act_needs_a_thing, bind_row,
+    compile_filter, compile_find, compile_order, _fid_like,
+    _refuse_metres_in_within, rn_spelled, _split_diagonal)
 
 BLOCK_FILENAME = "<mission-block>"
 
@@ -480,7 +484,7 @@ class Row:
                 raise CodeError("filter takes a predicate OR "
                                 "near=/within=/dwithin=, not both")
             return RowList([self] if pred(self) else [])
-        return mp._rows_filter(self, f"{self.fid or 'row'}.filter(...)", **kw)
+        return mp._rows_filter(self, **kw)
 
     def order(self, key=None, **kw):
         mp = object.__getattribute__(self, "_mp")
@@ -493,7 +497,7 @@ class Row:
                 # but a bad word must read the same here as anywhere
                 _direction_key(kw["direction"])
             return RowList([self])
-        return mp._rows_order(self, f"{self.fid or 'row'}.order(...)", **kw)
+        return mp._rows_order(self, **kw)
 
     def _resolve_key(self, k):
         """The served column a Python spelling names, or None.
@@ -661,8 +665,7 @@ class RowList(list):
                     "filter needs a predicate or near=/within=/dwithin=: "
                     "rows.filter(lambda r: r.distance(<place>) <= 25), or "
                     "rows.filter(near=<place>, dwithin=25).")
-            return self._mp()._rows_filter(list(self), "rows.filter(...)",
-                                           **kw)
+            return self._mp()._rows_filter(list(self), **kw)
         if kw:
             raise CodeError("filter takes a predicate OR "
                             "near=/within=/dwithin=, not both")
@@ -687,7 +690,7 @@ class RowList(list):
                     "rows.order(lambda r: r.distance(<place>)), "
                     'rows.order(nearest=<place>), or rows.order('
                     'direction="north") for the map-fixed order.')
-            return self._mp()._rows_order(list(self), "rows.order(...)", **kw)
+            return self._mp()._rows_order(list(self), **kw)
         rev = bool(kw.pop("reverse", False))
         if kw:
             raise CodeError("order takes a key OR nearest=/color=/direction=, "
@@ -778,11 +781,10 @@ class Rows:
 
     def _stratum(self, tier: str) -> "Rows":
         src = self if not self.spec else self.mp._materialize(self)
-        st = {"call": "stratum", "target": None,
-              "args": {"of": src.ref, "tier": tier}}
-        name = self.mp.name_of(self) or self.ref
-        self.mp._dispatch([st], f"{name}.{tier}", {src.ref: src.ref})
-        return Rows(st["_ref"], self.mp)
+        p = self.mp._program(src.ref)
+        return Rows(self.mp._analyze(
+            p, p.add("stratum", {"items": src.ref, "tier": tier}),
+            shown=f"{src.ref}.{tier}"), self.mp)
 
     # -- cut and order: many filters, ONE ordering ------------------------
     #
@@ -812,9 +814,8 @@ class Rows:
                     "is not callable: rows.filter(lambda r: r.distance(x) <= 25)")
             return RowList(r for r in self if pred(r))
         src = self if not self.spec else self.mp._materialize(self)
-        name = self.mp.name_of(self) or self.ref
         return self.mp._rows_filter(
-            src, f"{name}.filter(...)", within=within, near=near,
+            src, within=within, near=near,
             dwithin=dwithin, north_of=north_of, south_of=south_of,
             east_of=east_of, west_of=west_of,
             facing=facing, direction=direction)
@@ -848,9 +849,7 @@ class Rows:
                     "is not callable: rows.order(lambda r: r.distance(x))")
             return RowList(sorted(self, key=key, reverse=bool(reverse)))
         src = self if not self.spec else self.mp._materialize(self)
-        name = self.mp.name_of(self) or self.ref
-        return self.mp._rows_order(src, f"{name}.order(...)",
-                                   nearest=nearest, color=color)
+        return self.mp._rows_order(src, nearest=nearest, color=color)
 
     def distance(self, other) -> float:
         """Metres to ``other``, this set counting as ONE place: the free
@@ -948,32 +947,75 @@ def _places(v, who: str) -> tuple:
 # --------------------------------------------------------------------------
 
 
-class MissionEnv:
-    """The hooks the loop hands this front-end. One per mission.
+class _Name(str):
+    """A place spelled by NAME: grounded by the loop before the call runs."""
 
-    ``run_plan(plan, said) -> ack`` executes one plan through the shared
-    machinery; ``rows_of_ref(ref)`` reads the executor's carry store;
-    ``plan_rn`` is the shared ref counter (the loop and flights advance
-    it); ``discourse`` is the mission discourse dict (widening ledger);
-    ``minted`` is the loop's flight-minted-handle list, drained here;
-    ``say_err(ack, msg)`` formats a refusal the way every surface does;
-    ``row_of_fid(fid)`` reads one live-surface row (None when the
-    surface holds no such fid -- the bare name then rides as a string).
+
+def _tok(site, ties: dict) -> str:
+    """A site's token once its names are grounded: the best name match."""
+    return ties[site][0] if isinstance(site, _Name) else site
+
+
+def _plain(v):
+    """An argument as the model spelled it: a result or a row is its label."""
+    if isinstance(v, (Ref, Bind)):
+        return v.label
+    if isinstance(v, (list, tuple)):
+        return type(v)(_plain(x) for x in v)
+    return v
+
+
+def _look_tok(a) -> str:
+    """One element of ``look([a, b, c])`` -> the token its crop centres on."""
+    if isinstance(a, Bind):
+        b = a.bind
+        if isinstance(b, (list, tuple)) and len(b) == 2:
+            return format_xy_token(float(b[0]), float(b[1]))
+        return b if isinstance(b, str) else a.label
+    if isinstance(a, Ref):
+        return a.label
+    if is_xy(a):
+        return format_xy_token(float(a[0]), float(a[1]))
+    return str(_plain(a))
+
+
+@dataclass
+class MissionEnv:
+    """The loop's verbs for this front-end, one per mission.
+
+    Every library call opens with ``ground(names)`` (``{name: why}`` in
+    first-use order -> ``{"ties": {name: top-tie fids}}`` or an error),
+    runs ONE verb (``analyze`` an op program, or one act: ``stand``,
+    ``move``, ``cover``, ``crops``, ``map``, ``watch``, ``boost``) and,
+    when nothing refused, closes with ``finish(ack)``. A verb's ack part
+    carries ``"error"`` when it refused. ``rows_of_ref(ref)`` reads the
+    executor's carry store; ``plan_rn`` is the shared ref counter (the loop
+    and flights advance it); ``widened`` is the mission's paging ledger
+    (executor ref -> rows already asked past); ``minted`` is the loop's
+    flight-minted-handle list, drained here; ``say_err(ack, msg)`` formats
+    a refusal the way every surface does; ``row_of_fid(fid)`` reads one
+    live-surface row (None when the surface holds no such fid -- the bare
+    name then rides as a string); ``tied_of_ref(ref)`` says whether a ref
+    holds a TIED view -- the ways of one name, which no index orders.
     """
 
-    def __init__(self, *, run_plan, rows_of_ref, plan_rn, discourse,
-                 tied_of_ref=None,
-                 minted, say_err, row_of_fid=None):
-        self.run_plan = run_plan
-        self.rows_of_ref = rows_of_ref
-        # Whether a ref holds a TIED view -- the ways of one name, which
-        # have no order for an index to mean anything by.
-        self.tied_of_ref = tied_of_ref or (lambda _ref: False)
-        self.plan_rn = plan_rn
-        self.discourse = discourse
-        self.minted = minted
-        self.say_err = say_err
-        self.row_of_fid = row_of_fid
+    rows_of_ref: Callable
+    plan_rn: list
+    widened: dict
+    minted: list
+    say_err: Callable
+    ground: Callable
+    analyze: Callable
+    stand: Callable
+    move: Callable
+    cover: Callable
+    crops: Callable
+    map: Callable
+    watch: Callable
+    boost: Callable
+    finish: Callable
+    tied_of_ref: Callable = lambda _ref: False
+    row_of_fid: Callable | None = None
 
 
 class MissionPython:
@@ -999,6 +1041,7 @@ class MissionPython:
         self._picked: dict = {}         # fids the model's Row names hold
         self._unbound: dict = {}        # name -> why this mission removed it
         self._get_noted: set = set()    # .get near-miss keys noted, per block
+        self._call_minted: list = []    # handles the last call's flights minted
         # Footprint geometry BY FID off the live surface. The cache is
         # per-block: a flight folds detections in under it, so last block's
         # union would measure a world that no longer stands.
@@ -1042,35 +1085,60 @@ class MissionPython:
                 return k
         return getattr(obj, "label", "") or None
 
-    def handles(self) -> dict:
-        """Model name -> what compile/_site resolve it to."""
-        out = {}
-        for k, v in self.ns.items():
-            if k.startswith("__"):
-                continue
-            if isinstance(v, Rows) and not v.spec:
-                out[k] = v.ref
-            elif isinstance(v, Row):
-                out[k] = v.bind
-            elif isinstance(v, str) and re.fullmatch(r"v\d{1,3}", v) \
-                    and k == v:
-                out[k] = v              # a staged viewpoint handle
-        return out
+    def _held(self, name: str):
+        """What a bound name holds, as an argument: a whole result, a row,
+        or a staged viewpoint; None for anything else."""
+        v = dict.get(self.ns, name)
+        if isinstance(v, Rows) and not v.spec:
+            return Ref(v.ref, name)
+        if isinstance(v, Row):
+            return Bind(v.bind, name)
+        if isinstance(v, str) and v == name and re.fullmatch(r"v\d{1,3}", v):
+            return Bind(v, name)
+        return None
+
+    def _slot(self, v):
+        """A Python value -> the argument the compiler reads.
+
+        A result rides as a :class:`Ref` and a row as a :class:`Bind`,
+        labelled with the model's own name so the served columns carry it;
+        a string that names one is that thing. Anything else rides
+        verbatim -- a bare name grounds through the same plumbing find and
+        the same floor it always did.
+        """
+        if isinstance(v, Rows):
+            if v.spec:
+                v = self._materialize(v)
+            return Ref(v.ref, self.name_of(v) or v.ref)
+        if isinstance(v, Row):
+            return Bind(v.bind, self.name_of(v) or (v.fid or "row"))
+        if isinstance(v, str):
+            return self._held(v) or v
+        if isinstance(v, (list, tuple)) and not is_xy(v):
+            # a LIST of things -- order(nearest=[roadA, roadB]) -- maps
+            # element-wise.
+            out = [self._slot(x) for x in v]
+            return out if any(isinstance(x, (Row, Rows)) for x in v) \
+                else type(v)(out)
+        return v
+
+    def _program(self, *args) -> Program:
+        """A program for one call: it mints past the rN names the call spells
+        and the mission's handles hold."""
+        taken = rn_spelled(args) | {
+            k for k, v in self.ns.items() if re.fullmatch(r"r\d+", k)
+            and (isinstance(v, Row) or isinstance(v, Rows) and not v.spec)}
+        live = {v.ref for v in self.ns.values()
+                if isinstance(v, Rows) and not v.spec}
+        return Program(self.env.plan_rn[0], taken, live)
 
     # -- the per-call plumbing --------------------------------------------
 
-    def _dispatch(self, steps: list[dict], said: str,
-                  extra_handles: dict | None = None) -> dict:
-        bound = self.handles()
-        if extra_handles:
-            bound.update(extra_handles)
-        plan, _ = _plan_of(steps, said, self.env.plan_rn[0], bound,
-                           self.env.discourse)
-        for lbl, ref in (plan.get("_code_shows") or {}).items():
-            if isinstance(ref, str):
-                self._shown[ref] = lbl
-                self._block_shown.add(ref)
-        ack = self.env.run_plan(plan, said)
+    def _end(self, ack: dict) -> None:
+        """Close one call: finish an ack nothing refused, fold it into the
+        receipt, bind what its flights minted; a refusal ends the block."""
+        if "error" not in ack:
+            ack = self.env.finish(ack)
         self._fold(ack)
         self._call_minted = list(self.env.minted)
         for h in self._call_minted:
@@ -1078,7 +1146,78 @@ class MissionPython:
         del self.env.minted[:]
         if "error" in ack:
             raise _Stop()
-        return plan
+
+    def _ground(self, sites) -> dict:
+        """Open a call: ground the NAMES among its ``(site, why)`` pairs ->
+        ``{name: top-tie fids}``."""
+        why: dict = {}
+        for n, w in sites:
+            if isinstance(n, _Name):
+                why.setdefault(n, w)
+        got = self.env.ground(why)
+        if "error" in got:
+            self._end(got)
+        return got["ties"]
+
+    def _site(self, v, why: str):
+        """An act's PLACE -> its token, or a :class:`_Name` to ground.
+
+        A POINT rides as its ``[x, y]`` token -- a selected crossing's fid
+        IS its token. WHAT A BINDING HOLDS IS NEVER LOOKED UP: a fid a
+        selection resolved came out of a row, and a fid the model typed
+        stays literal.
+        """
+        if isinstance(v, Ref):
+            return v.ref
+        if isinstance(v, Bind):
+            b = v.bind
+            if isinstance(b, (list, tuple)) and len(b) == 2:
+                return format_xy_token(float(b[0]), float(b[1]))
+            return b if isinstance(b, str) else str(v.label)
+        if isinstance(v, (list, tuple)) and len(v) == 2:
+            v = _plain(v)
+            return format_xy_token(float(v[0]), float(v[1]))
+        # A QUOTED [x, y] IS A POINT: welcome in a relating slot, refused as
+        # a COORDINATE in a moving one.
+        pt = parse_xy_token(v) if isinstance(v, str) else None
+        if pt:
+            if why in ("move", "cover") and not withheld("prior"):
+                raise CodeError(act_needs_a_thing(
+                    name="go_to/explore", got=f"{pt[0]:g}, {pt[1]:g}")
+                    + " A crossing you computed is a ROW: index it "
+                      "-- r2 = intersection(\"A Road\", \"B St\") then "
+                      "go_to(r2[0]).")
+            return format_xy_token(float(pt[0]), float(pt[1]))
+        if isinstance(v, str) and not _fid_like(v):
+            return _Name(v)
+        return str(_plain(v))
+
+    def _cards(self, **anchors) -> list:
+        """The cardinal cuts given, slotted in the order named, read in
+        the compiler's order."""
+        got = {d: self._slot(a) for d, a in anchors.items() if a is not None}
+        return [(d, got[d]) for d in _CARDINALS if d in got]
+
+    def _act(self, verb, sites: list, *args, **kw) -> None:
+        """Ground the NAMES among ``sites`` (``(site, why)`` pairs), then run
+        the act ``verb`` on their tokens."""
+        ties = self._ground(sites)
+        self._end(verb(*[_tok(s, ties) for s, _w in sites], *args, **kw))
+
+    def _show_as(self, ref: str, label: str) -> None:
+        """Serve ``ref``'s envelope under ``label``, kept whole."""
+        self._shown[ref] = label
+        self._block_shown.add(ref)
+
+    def _analyze(self, p: Program, ref: str, *, shown=None, page=None) -> str:
+        """Ground the program's named anchors and run it, ``ref``'s envelope
+        the answer (served under ``shown`` when given)."""
+        if shown is not None:
+            self._show_as(ref, shown)
+        ties = self._ground((_Name(n), "anchor") for n in p.anchor_names())
+        p.ground(ties)
+        self._end(self.env.analyze(p.ops, p.rn, ref, page))
+        return ref
 
     def _fold(self, part: dict) -> None:
         out = self._out
@@ -1096,50 +1235,19 @@ class MissionPython:
             else:
                 out[k] = v
 
-    def _slot(self, v, extra: dict):
-        """A Python value -> the arg shape the compiler reads.
-
-        Rows/Row ride as their (registered) name so the served columns
-        carry the model's own label; strings and [x, y] points ride
-        verbatim -- a bare name grounds through the same plumbing find
-        and the same floor it always did.
-        """
-        if isinstance(v, Rows):
-            if v.spec:
-                v = self._materialize(v)
-            name = self.name_of(v) or v.ref
-            extra[name] = v.ref
-            return name
-        if isinstance(v, Row):
-            name = self.name_of(v) or (v.fid or "row")
-            extra[name] = v.bind
-            return name
-        if isinstance(v, (list, tuple)) and not is_xy(v) \
-                and any(isinstance(x, (Row, Rows)) for x in v):
-            # a LIST of things -- order(nearest=[roadA, roadB]) -- maps
-            # element-wise, so a Row rides as its fid, never as an object.
-            return [self._slot(x, extra) for x in v]
-        return v
+    def _window(self, ref: str, spec: str, label: str, *args) -> str:
+        """The identity window over ``ref`` (sliced by ``spec``), served
+        under ``label``."""
+        p = self._program(*args)
+        return self._analyze(p, p.window(ref, spec), shown=label)
 
     def _materialize(self, sliced: "Rows") -> "Rows":
         """A sliced set becomes a real ref via the identity window, so a
         slice rides every slot a set can (find(near=r1[0:5]) is the union
         of the head, which is what the spelling plainly means)."""
-        st = {"call": "window", "target": None,
-              "args": {"win_of": sliced.ref, "spec": sliced.spec}}
-        self._dispatch([st], f"{sliced.ref}{sliced.spec}",
-                       {sliced.ref: sliced.ref})
-        return Rows(st["_ref"], self)
-
-    def _step(self, call: str, pos: list, kwargs: dict | None = None,
-              act: bool = False) -> dict:
-        args = dict(kwargs or {})
-        if pos:
-            args["_pos"] = pos
-        st = {"call": call, "args": args, "target": None}
-        if act:
-            st["act"] = True
-        return st
+        return Rows(self._window(sliced.ref, sliced.spec,
+                                 f"{sliced.ref}{sliced.spec}", sliced.ref),
+                    self)
 
     # -- the library -------------------------------------------------------
 
@@ -1152,36 +1260,31 @@ class MissionPython:
                 'find takes ONE query -- find("89th Street") then '
                 'find("Fuchsia Avenue"), or intersection("89th Street", '
                 '"Fuchsia Avenue") for where they cross.')
-        for _nm in ("nearest", "near"):
-            _v = nearest if _nm == "nearest" else near
-            if isinstance(_v, (list, tuple)) and len(_v) == 1 \
-                    and not is_xy(_v):
-                # near=[one thing] is the thing
-                if _nm == "nearest":
-                    nearest = _v[0]
-                else:
-                    near = _v[0]
+        # near=[one thing] is the thing
+        if isinstance(nearest, (list, tuple)) and len(nearest) == 1 \
+                and not is_xy(nearest):
+            nearest = nearest[0]
+        if isinstance(near, (list, tuple)) and len(near) == 1 \
+                and not is_xy(near):
+            near = near[0]
         _refuse_metres_in_within(within)
-        extra: dict = {}
-        kw = {"nearest": ([self._slot(a, extra) for a in nearest]
-                          if isinstance(nearest, (list, tuple))
-                          and not is_xy(nearest)
-                          else self._slot(nearest, extra)
-                          if nearest is not None else None),
-              "near": (self._slot(near, extra)
-                       if near is not None else None),
-              "within": (self._slot(within, extra)
-                         if within is not None else None),
-              "dwithin": dwithin,
-              "color": color, "name": name}
-        for d, a in (("north", north_of), ("south", south_of),
-                     ("east", east_of), ("west", west_of)):
-            kw[f"{d}_of"] = (self._slot(a, extra)
-                             if a is not None else None)
-        st = self._step("find", [str(query)] if query != "" else [], kw)
-        self._dispatch([st], f"find({query!r})", extra)
-        self._near_miss_note(st.get("_ref"), query)
-        return Rows(st["_ref"], self, label=f"find({query!r})")
+        if isinstance(nearest, (list, tuple)) and not is_xy(nearest):
+            nearest = [self._slot(a) for a in nearest]
+        elif nearest is not None:
+            nearest = self._slot(nearest)
+        near = self._slot(near) if near is not None else None
+        within = self._slot(within) if within is not None else None
+        cards = self._cards(north=north_of, south=south_of, east=east_of,
+                            west=west_of)
+        q = str(query) if query != "" else ""
+        p = self._program(q, nearest, near, within, dwithin, color, name,
+                          cards)
+        ref = compile_find(p, q, name=name, near=near, nearest=nearest,
+                           dwithin=dwithin, within=within, cards=cards,
+                           color=color)
+        self._analyze(p, ref)
+        self._near_miss_note(ref, query)
+        return Rows(ref, self, label=f"find({query!r})")
 
     # find("pool", nearest=<street>) re-sorts a global name-match, so pools
     # 2.5 km away can read like "the pools near the street"; this note says
@@ -1209,7 +1312,7 @@ class MissionPython:
                f" Rows of a watched class appear near {anchor} only when a "
                "flight covers it."))})
 
-    def _rows_order(self, items, label, *, nearest=None, color=None):
+    def _rows_order(self, items, *, nearest=None, color=None):
         """ONE sort key, the way a table sorts. Never two.
 
         Two keys have to be combined to make one, and every way of
@@ -1229,65 +1332,61 @@ class MissionPython:
                 "order needs its key: rows.order(nearest=<place>) by "
                 "distance, rows.order(color=\"red\") by colour, or "
                 "rows.order(<function>) for one you compute yourself.")
-        extra: dict = {}
-        near = nearest
-        if isinstance(near, (list, tuple)) and not is_xy(near):
+        if isinstance(nearest, (list, tuple)) and not is_xy(nearest):
             # nearest=[A, B] is a SET -- one place, its nearest member --
             # not two keys to average.
-            near = [self._slot(a, extra) for a in near]
-        elif near is not None:
-            near = self._slot(near, extra)
-        st = self._step("order", [self._slot(items, extra)],
-                        {"nearest": near, "color": color})
-        self._dispatch([st], label, extra)
-        return Rows(st["_ref"], self)
+            nearest = [self._slot(a) for a in nearest]
+        elif nearest is not None:
+            nearest = self._slot(nearest)
+        items = self._slot(items)
+        p = self._program(items, nearest, color)
+        return Rows(self._analyze(p, compile_order(
+            p, items, nearest=nearest, color=color)), self)
 
-    def _rows_filter(self, items, label, *, within=None, near=None,
+    def _rows_filter(self, items, *, within=None, near=None,
                      dwithin=None, facing=None, direction=None, **cards):
-        # Which-arg validation lives in code_surface's filter branch; every
-        # caller has already refused a kwarg outside the set.
+        # Which-arg validation lives in the compiler; every caller has
+        # already refused a kwarg outside the set.
         _refuse_metres_in_within(within)
-        extra: dict = {}
-        st = self._step(
-            "filter", [self._slot(items, extra)],
-            {"within": (self._slot(within, extra)
-                        if within is not None else None),
-             "near": (self._slot(near, extra)
-                      if near is not None else None),
-             "dwithin": dwithin,
-             # facing= is a PLACE and rides the slot resolver; direction=
-             # is the compass WORD and rides verbatim, which is the whole
-             # point of keeping the word out of the kwarg name.
-             "facing": (self._slot(facing, extra)
-                        if facing is not None else None),
-             "direction": direction,
-             **{d: (self._slot(v, extra) if v is not None else None)
-                for d, v in cards.items()}})
-        self._dispatch([st], label, extra)
-        return Rows(st["_ref"], self)
+        items = self._slot(items)
+        within = self._slot(within) if within is not None else None
+        near = self._slot(near) if near is not None else None
+        # facing= is a PLACE and rides the slot resolver; direction= is the
+        # compass WORD and rides verbatim, which is the whole point of
+        # keeping the word out of the kwarg name.
+        facing = self._slot(facing) if facing is not None else None
+        cards = self._cards(**{d[:-3]: v for d, v in cards.items()})
+        p = self._program(items, within, near, dwithin, facing, direction,
+                          cards)
+        return Rows(self._analyze(p, compile_filter(
+            p, items, within=within, near=near, dwithin=dwithin,
+            facing=facing, direction=direction, cards=cards)), self)
 
     def _call_intersection(self, a, b):
-        extra: dict = {}
-        st = self._step("intersection",
-                        [self._slot(a, extra),
-                         self._slot(b, extra)])
-        self._dispatch([st], "intersection(...)", extra)
-        return Rows(st["_ref"], self)
+        a, b = self._slot(a), self._slot(b)
+        p = self._program(a, b)
+        return Rows(self._analyze(p, p.add("crossings", {
+            "refs": [p.ref_of(a), p.ref_of(b)]})), self)
 
     def _call_ends_of(self, x):
-        extra: dict = {}
-        st = self._step("ends_of", [self._slot(x, extra)])
-        self._dispatch([st], "ends_of(...)", extra)
-        return Rows(st["_ref"], self)
+        x = self._slot(x)
+        p = self._program(x)
+        return Rows(self._analyze(p, p.add("ends", {
+            "refs": [p.ref_of(x)]})), self)
 
     def _call_more_of(self, x):
         if not isinstance(x, Rows) or x.spec:
             raise CodeError("more_of pages a RESULT a find or an ordering "
                             "left")
         name = self.name_of(x) or x.ref
-        st = self._step("more_of", [name])
-        self._dispatch([st], f"more_of({name})", {name: x.ref})
-        return Rows(st["_ref"], self)
+        lo = _BROAD_HEAD_ROWS + int(self.env.widened.get(x.ref) or 0)
+        p = self._program(name)
+        # The rows served are NOT the handle -- they are a window of it --
+        # so the envelope is labelled with what was asked for rather than
+        # with a name that would claim to be the whole set.
+        return Rows(self._analyze(
+            p, p.window(x.ref, f"[{lo}:{lo + _BROAD_HEAD_ROWS}]"),
+            shown=f"more_of({name})", page=(x.ref, lo)), self)
 
     # -- measuring ---------------------------------------------------------
 
@@ -1317,30 +1416,54 @@ class MissionPython:
                                    _places(b, "distance"))
 
     def _call_look(self, x, *, marks=None):
-        extra: dict = {}
         # marks= names the rows whose identity bears on the decision; a
         # named road is drawn as its NAME, everything else outlines and
         # badges.
-        _mk = None
+        mk = None
         if marks is not None:
-            _mk = [self._slot(m, extra)
-                   for m in (marks if isinstance(marks, (list, tuple))
-                             else [marks])]
+            mk = [self._slot(m) for m in (
+                marks if isinstance(marks, (list, tuple)) else [marks])]
+        # The marks ride the SAME crop request as its subject, so the
+        # renderer's frame decision and its mark projection see one window.
+        def msites():
+            return [(self._site(m, "marks"), "marks") for m in mk or []]
+
+        def crops(ties, marks, of=None, fid=None):
+            return self.env.crops(of, fid, [_tok(s, ties) for s, _w in marks]
+                                  if mk else None)
+
         if isinstance(x, Rows) and x.spec:
-            win = {"call": "window", "target": "__w0",
-                   "args": {"win_of": self.name_of(x) or x.ref,
-                            "spec": x.spec}}
-            extra[self.name_of(x) or x.ref] = x.ref
-            look = self._step("look", ["__w0"], {"marks": _mk})
-            self._dispatch([win, look], "look(...)", extra)
+            # A SLICE is looked at through its window: two verbs, one
+            # receipt, and the window is no answer of its own.
+            name = self.name_of(x) or x.ref
+            p = self._program(name, mk)
+            ref = p.window(x.ref, x.spec)
+            self._show_as(ref, f"{name}{x.spec}")
+            marks = msites()
+            ties = self._ground(marks)
+            ack = self.env.analyze(p.ops, p.rn, None, None)
+            if "error" not in ack:
+                ack.update(crops(ties, marks, of=ref))
+            self._end(ack)
             return None
-        st = self._step("look", [self._slot(x, extra)],
-                        {"marks": _mk})
-        self._dispatch([st], "look(...)", extra)
+        x = self._slot(x)
+        if isinstance(x, (list, tuple)) and not is_xy(x):
+            # look([a, b, c]) crops EACH element.
+            fids = [_look_tok(a) for a in x]
+            marks = msites()
+            self._end(crops(self._ground(marks), marks, fid=fids))
+        elif isinstance(x, Ref):
+            # A SET look is the badged frame over its rows.
+            marks = msites()
+            self._end(crops(self._ground(marks), marks, of=x.ref))
+        else:
+            site = self._site(x, "crops")
+            marks = msites()
+            ties = self._ground([(site, "crops")] + marks)
+            self._end(crops(ties, marks, fid=_tok(site, ties)))
         return None
 
     def _call_show_map(self, around=None):
-        extra: dict = {}
         if isinstance(around, Rows):
             name = self.name_of(around) or around.ref
             raise CodeError(
@@ -1349,11 +1472,8 @@ class MissionPython:
                 "place in near=, within= and nearest=, where it means "
                 "the gap to its NEAREST member, but there is no one "
                 "point to centre on.)")
-        st = self._step(
-            "show_map", [],
-            {"around": (self._slot(around, extra)
-                        if around is not None else None)})
-        self._dispatch([st], "show_map(...)", extra)
+        around = self._slot(around) if around is not None else None
+        self._act(self.env.map, [(self._site(around, "map"), "map")])
         return None
 
     def _call_look_for(self, *classes, at=None):
@@ -1361,25 +1481,38 @@ class MissionPython:
         if not classes:
             raise CodeError('look_for takes the classes to watch: '
                             'look_for("house", "pool")')
-        extra: dict = {}
-        st = self._step(
-            "look_for", [str(c) for c in classes],
-            {"at": (self._slot(at, extra)
-                    if at is not None else None)})
-        self._dispatch([st], "look_for(...)", extra)
+        # THE SEGMENTER CHANNEL: it arms perception and moves nothing. The
+        # segmenter reads WORDS, so look_for("parking_lot") and
+        # look_for("parking lot") arm the same class.
+        words = [w.strip().lower().replace("_", " ")
+                 for w in map(str, classes) if w.strip()]
+        at = self._slot(at) if at is not None else None
+        if at is None:
+            self._act(self.env.watch, [], words)
+        else:
+            # The placed form is the TARGETED BOOST, and the loop arms the
+            # standing watchlist from it too -- one verb, one semantics.
+            self._act(self.env.boost, [(self._site(at, "boost"), "boost")],
+                      words)
         return None
 
     def _call_stand(self, *, at, facing="north"):
-        extra: dict = {}
         if isinstance(at, Rows):
             raise CodeError("at= takes ONE place and a set has no one "
                             "point to stand at. Index it -- at=rows[0].")
-        st = {"call": "stand", "target": None,
-              "args": {"at": self._slot(at, extra),
-                       "facing": (self._slot(facing, extra)
-                                  if not isinstance(facing, str)
-                                  else facing)}}
-        self._dispatch([st], "stand(...)", extra)
+        at = self._slot(at)
+        if not isinstance(facing, str):
+            facing = self._slot(facing)
+        # A heading: a compass word rides as itself, anything else is a
+        # place to look TOWARD.
+        at_site = self._site(at, "stage")
+        if isinstance(facing, str) and facing.strip().lower() in COMPASS_UNIT:
+            f_site = facing.strip().lower()
+        else:
+            f_site = self._site(self._held(facing) or facing
+                                if isinstance(facing, str) else facing,
+                                "facing")
+        self._act(self.env.stand, [(at_site, "stage"), (f_site, "facing")])
         staged = (self._out.get("stance") or {}).get("staged") or []
         for s in staged:
             h = s.get("handle")
@@ -1388,7 +1521,6 @@ class MissionPython:
         return staged[-1].get("handle") if staged else None
 
     def _move(self, call: str, x):
-        extra: dict = {}
         if isinstance(x, Rows):
             # A SET is one place for explore; go_to lands on one thing.
             if call == "go_to":
@@ -1408,16 +1540,16 @@ class MissionPython:
             # explore's list is a SET of things -- rows, sets, fids -- as
             # one place to cover; any numeric element is the coordinate
             # hatch.
-            _things = (bool(x) and not is_xy(x)
-                       and all(isinstance(e, (Row, Rows, str)) for e in x))
-            _ok_set = call == "explore" and _things
+            things = (bool(x) and not is_xy(x)
+                      and all(isinstance(e, (Row, Rows, str)) for e in x))
+            ok_set = call == "explore" and things
             # A SET OF THINGS IS NOT A COORDINATE: go_to refuses it as a set.
-            if _things and not _ok_set:
+            if things and not ok_set:
                 raise CodeError(
                     f"{call}() takes ONE thing and that is a set of "
                     f"{len(x)}. Index the one you mean -- {call}(<set>[0]) "
                     "-- or explore(<set>) to cover all of it.")
-            if not _ok_set:
+            if not ok_set:
                 raise CodeError(act_needs_a_thing(
                     name="go_to/explore",
                     got=", ".join(f"{v:g}" if isinstance(v, (int, float))
@@ -1430,12 +1562,26 @@ class MissionPython:
                 f"map, and {call}() takes a thing. A stance is for "
                 "looking -- its sides ride every find row. To move, "
                 f"{call}() a row: r1[0], or a fid off one.")
-        st = self._step(call, [self._slot(x, extra)], act=True)
-        self._dispatch([st], f"{call}(...)", extra)
+        x = self._slot(x)
+        if call == "go_to":
+            self._act(self.env.move, [(self._site(x, "move"), "move")])
+        else:
+            # A `cover` move flies a pass over the thing and ends on its
+            # last stop. A SET is one place to cover; a NAME covers its
+            # whole top tie group.
+            many = isinstance(x, (list, tuple)) and not is_xy(x)
+            sites = [self._site(a, "cover") for a in (x if many else [x])]
+            said = _plain(x)
+            ties = self._ground((s, "cover") for s in sites)
+            self._end(self.env.cover(
+                [ties[s] if isinstance(s, _Name) and len(ties[s]) > 1
+                 else _tok(s, ties) for s in sites],
+                said if isinstance(said, str)
+                else ", ".join(str(a) for a in said)))
         # The arrivals: a flight minted a handle over the rows it added,
         # so `r = explore(x)` binds them.
-        minted = getattr(self, "_call_minted", None) or []
-        return self.ns.get(minted[-1]) if minted else None
+        return self.ns.get(self._call_minted[-1]) if self._call_minted \
+            else None
 
     def _call_go_to(self, x):
         return self._move("go_to", x)
@@ -1459,24 +1605,18 @@ class MissionPython:
             return
         if isinstance(value, Rows):
             name = self.name_of(value) or value.ref
-            st = {"call": "window", "target": None,
-                  "args": {"win_of": name, "spec": value.spec}}
-            self._dispatch([st], label, {name: value.ref})
-            if st.get("_ref"):
-                # Key the envelope by the MODEL's spelling ("r1[0:5]"),
-                # not the executor's ref the window compiled onto.
-                self._shown[st["_ref"]] = label
+            # Key the envelope by the MODEL's spelling ("r1[0:5]"), not the
+            # executor's ref the window compiled onto.
+            self._shown[self._window(value.ref, value.spec,
+                                     f"{name}{value.spec}", name)] = label
         elif isinstance(value, Row) and value.src \
                 and not re.fullmatch(r"\w+", label):
             # Render the ROW: a one-row window keeps the ordering
             # attribute a bare dict loses, so the model sees the row it
             # asked for rather than a census of one.
             ref, i = value.src
-            st = {"call": "window", "target": None,
-                  "args": {"win_of": ref, "spec": f"[{i}:{i + 1}]"}}
-            self._dispatch([st], label, {ref: ref})
-            if st.get("_ref"):
-                self._shown[st["_ref"]] = label
+            spec = f"[{i}:{i + 1}]"
+            self._shown[self._window(ref, spec, f"{ref}{spec}", ref)] = label
         elif isinstance(value, Row):
             self._out.setdefault("shown", {})[label] = value.bind
         else:

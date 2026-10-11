@@ -5,7 +5,7 @@ import pytest
 
 from maps.search.analyze_scene import geom_program as gp
 from maps.search.parse_compile.code_surface import CodeError
-from maps.search.tests.fakes import ops_of_block, plan_of_block, raising_ops_of_block
+from maps.search.tests.fakes import acts_of_block, ops_of_block, raising_ops_of_block
 
 
 def _road(x, y0=-400.0, y1=400.0, n=9):
@@ -184,17 +184,13 @@ def test_a_diagonal_filter_kwarg_refuses_and_names_the_conjunction(kw, pair):
 def test_an_unknown_filter_kwarg_is_refused_never_dropped():
     from maps.search.parse_compile.python_surface import (
         CodeError,
-        MissionEnv,
         MissionPython,
         Row,
         RowList,
     )
+    from maps.search.tests.fakes import quiet_env
 
-    mp = MissionPython(MissionEnv(
-        run_plan=lambda plan, said: {}, rows_of_ref=lambda ref: [],
-        plan_rn=[0], discourse={}, minted=[],
-        say_err=lambda out, msg: {**out, "error": msg},
-        row_of_fid={}.get))
+    mp = MissionPython(quiet_env())
     rows = RowList([Row({"fid": "detected_1", "xy": [0.0, 0.0]}, mp=mp)])
 
     # the diagonal: refused, and the refusal names the two cuts that work
@@ -375,18 +371,17 @@ def test_the_side_cut_STATES_the_three_way_outcome():
 def test_a_quoted_xy_token_is_a_POINT_in_relating_slots_and_refused_in_moving_ones():
     """A crossing's fid IS its [x, y] token, and the model quotes a fid the way it
     quotes every other one."""
-    plan = plan_of_block('show_map(around="[3895, 1890]")\n')
-    assert [s.get("do") for s in plan["steps"]] == ["map"]
-    assert plan["steps"][0]["around"] == ("xy", [3895.0, 1890.0]), plan
+    assert acts_of_block('show_map(around="[3895, 1890]")\n') == [
+        ("map", "[3895, 1890]")]
     cmp_op = next(o for o in ops_of_block(
         'r1 = find("house", nearest="[1058, 3418]")\n') if o["op"] == "compare")
     assert cmp_op["args"]["refs"][0]["ref"] == [1058.0, 3418.0]
     # ...and the no-coordinate law still stands for the calls that MOVE,
     # with the remedy naming the row rather than a spelling.
     with pytest.raises(CodeError, match="not a coordinate"):
-        plan_of_block('go_to("[2707, 5217]")\n')
+        acts_of_block('go_to("[2707, 5217]")\n')
     with pytest.raises(CodeError, match="intersection"):
-        plan_of_block('go_to("[2707, 5217]")\n')
+        acts_of_block('go_to("[2707, 5217]")\n')
 
 
 def test_near_takes_TWO_places_and_fuses_both_distances():

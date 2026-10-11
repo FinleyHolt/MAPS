@@ -17,6 +17,7 @@ from maps.search.parse_compile import reasoner_agent as ra
 from maps.search.parse_compile.code_surface import act_needs_a_thing
 from maps.search.parse_compile.reasoner_loop import _PICTURE_WITHHELD
 from maps.search.tests.fakes import (
+    quiet_env,
     cars,
     drive,
     look_drive,
@@ -124,11 +125,7 @@ def test_the_system_turn_withhold_serves_no_system_message(monkeypatch):
 def test_withheld_verbs_are_unbound(monkeypatch):
     monkeypatch.setenv(W.ENV, "look_for,look")
     assert "look_for" not in ps.served_calls() and "look" not in ps.served_calls()
-    env = ps.MissionEnv(run_plan=lambda plan, said: {}, rows_of_ref=lambda ref: [],
-                        plan_rn=[0], discourse={}, minted=[],
-                        say_err=lambda ack, msg: {**ack, "error": msg},
-                        row_of_fid=lambda fid: None)
-    mp = ps.MissionPython(env)
+    mp = ps.MissionPython(quiet_env())
     assert "look_for" not in mp.ns and "look" not in mp.ns and "go_to" in mp.ns
     out = json.dumps(mp.run_block('look_for("pool")'))
     assert "did you mean look_for" not in out

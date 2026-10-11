@@ -430,32 +430,63 @@ def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
     return tool_results(fr), seen_reqs, seen_recs, vision
 
 
-# --- one block compiled against a recording env ----------------------------
+# --- one block run against a recording env --------------------------------
+
+def quiet_env(**kw):
+    """A MissionEnv whose verbs do nothing and refuse nothing; ``kw``
+    overrides any field."""
+    from maps.search.parse_compile import python_surface as ps
+
+    def nop(*_a):
+        return {}
+
+    fields = dict(
+        rows_of_ref=lambda ref: [], plan_rn=[0], widened={}, minted=[],
+        say_err=lambda ack, msg: {**ack, "error": msg},
+        ground=lambda names: {"ties": {n: [n] for n in names}},
+        analyze=nop, stand=nop, move=nop, cover=nop, crops=nop, map=nop,
+        watch=nop, boost=nop, finish=lambda ack: ack,
+        row_of_fid=lambda fid: None)
+    fields.update(kw)
+    return ps.MissionEnv(**fields)
+
 
 def record_block(code: str, bound: dict | None = None, rn: int = 0,
-                 discourse: dict | None = None) -> tuple[list[dict], dict]:
-    """Run ONE block against an env whose ``run_plan`` records: (plans, ack).
+                 widened: dict | None = None) -> tuple[list[tuple], dict]:
+    """Run ONE block against an env whose verbs record: (calls, ack).
 
+    Each call is ``(verb, *args)``; a grounding is recorded only when it
+    names something, and a NAME grounds to the one fid ``"<name>"``.
     ``bound`` seeds the namespace as an earlier block would: ``rN`` binds a
     result handle, any other string a row's fid, anything else as is."""
     import re
 
     from maps.search.parse_compile import python_surface as ps
 
-    seen: list[dict] = []
+    calls: list[tuple] = []
     counter = [rn]
 
-    def _run_plan(plan, said):
-        seen.append(plan)
-        counter[0] = max(counter[0], int(plan.get("rn_end") or 0))
+    def verb(name):
+        def f(*args):
+            calls.append((name, *args))
+            return {}
+        return f
+
+    def ground(names):
+        if names:
+            calls.append(("ground", dict(names)))
+        return {"ties": {n: [f"<{n}>"] for n in names}}
+
+    def analyze(ops, rn_end, answer, page):
+        calls.append(("analyze", ops, answer, page))
+        counter[0] = max(counter[0], rn_end)
         return {}
 
-    env = ps.MissionEnv(
-        run_plan=_run_plan, rows_of_ref=lambda ref: [], plan_rn=counter,
-        discourse=discourse if discourse is not None else {},
-        minted=[], say_err=lambda ack, msg: {**ack, "error": msg},
-        row_of_fid=lambda fid: None)
-    mp = ps.MissionPython(env)
+    mp = ps.MissionPython(quiet_env(
+        plan_rn=counter, widened=widened if widened is not None else {},
+        ground=ground, analyze=analyze,
+        **{v: verb(v) for v in ("stand", "move", "cover", "crops", "map",
+                                "watch", "boost")}))
     for name, held in (bound or {}).items():
         if isinstance(held, str) and re.fullmatch(r"r\d+", held):
             mp.ns[name] = ps.Rows(held, mp)
@@ -463,42 +494,50 @@ def record_block(code: str, bound: dict | None = None, rn: int = 0,
             mp.ns[name] = ps.Row({"fid": held}, mp=mp)
         else:
             mp.ns[name] = held
-    return seen, mp.run_block(code)
+    return calls, mp.run_block(code)
 
 
-def plan_of_block(code: str, bound: dict | None = None, rn: int = 0,
-                  discourse: dict | None = None) -> dict:
-    """The plan ONE block compiles to, without flying anything."""
+def calls_of_block(code: str, bound: dict | None = None, rn: int = 0,
+                   widened: dict | None = None) -> list[tuple]:
+    """The verb calls ONE block makes, raising its refusal when it made
+    none."""
     from maps.search.parse_compile import python_surface as ps
 
-    seen, out = record_block(code, bound, rn, discourse)
-    if "error" in out and not seen:
+    calls, out = record_block(code, bound, rn, widened)
+    if "error" in out and not calls:
         raise ps.CodeError(str(out["error"]))
-    if not seen:
-        raise AssertionError(f"{code!r} compiled no plan: {out}")
-    return seen[-1] if len(seen) == 1 else {"plans": seen, **seen[-1]}
+    return calls
+
+
+def acts_of_block(code: str, bound: dict | None = None) -> list[tuple]:
+    """The act calls ONE block makes: no groundings, no programs."""
+    return [c for c in calls_of_block(code, bound)
+            if c[0] not in ("ground", "analyze")]
 
 
 def raising_ops_of_block(code: str, bound: dict | None = None,
                          rn: int = 0) -> list[dict]:
     """Every op ONE block compiles, raising the block's own refusal even when
-    an earlier line already compiled a plan."""
+    an earlier line already ran."""
     from maps.search.parse_compile import python_surface as ps
 
-    seen, out = record_block(code, bound, rn)
+    calls, out = record_block(code, bound, rn)
     if "error" in out:
         raise ps.CodeError(str(out["error"]))
-    return [op for p in seen for st in p["steps"]
-            if st.get("do") == "analyze" for op in st["program"]["ops"]]
+    return [op for c in calls if c[0] == "analyze" for op in c[1]]
 
 
 def ops_of_block(code: str, bound: dict | None = None,
                  rn: int = 0) -> list[dict]:
-    """Every op ONE block compiles, across all its plans, in order."""
-    plan = plan_of_block(code, bound=bound, rn=rn)
-    return [op for p in plan.get("plans", [plan])
-            for st in p["steps"] if st.get("do") == "analyze"
-            for op in st["program"]["ops"]]
+    """Every op ONE block compiles, in order."""
+    return [op for c in calls_of_block(code, bound, rn) if c[0] == "analyze"
+            for op in c[1]]
+
+
+def grounded_in_block(code: str, bound: dict | None = None) -> list[str]:
+    """The NAMES one block grounds, in order."""
+    return [n for c in calls_of_block(code, bound) if c[0] == "ground"
+            for n in c[1]]
 
 
 # --- small builders --------------------------------------------------------

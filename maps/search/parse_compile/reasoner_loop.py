@@ -6,8 +6,9 @@ beside it. Every model act is a native tool call; everything else is
 thinking, and there is no structured-output emission on the agent path.
 
 Each call carries one BLOCK of Python. ``_dispatch_run`` hands it to
-``python_surface``, whose library calls record steps that ``code_surface``
-compiles onto a plan; ``_run_plan`` executes it:
+``python_surface``, whose library calls compile through ``code_surface``
+and run on this loop's verbs (``_ground_names``, ``_analyze``, the acts,
+``_finish``):
 
   * ``go_to(...)`` / ``explore(...)`` FLY the moment the block lands
     (``MissionSpec.fly``), and the query surface re-derives from the world
@@ -72,11 +73,6 @@ from maps.search.analyze_scene.geom_program import (
     run_program as _run_program,
 )
 from maps.search.parse_compile.reasoner_agent import Reasoner
-from maps.search.parse_compile.discourse import (
-    echo as _echo,
-    new_discourse as _new_discourse,
-    update_discourse as _update_discourse,
-)
 from maps.search.parse_compile import python_surface as _py_surface
 
 # Transient LLM-side errors: a retry, never the end of the reasoner.
@@ -968,8 +964,8 @@ def advance_reasoner_one_round(
 
     Appends ``user_message`` as the ONE user turn, then loops native tool
     calls over ``prompts.CODE_TOOLS``. Each ``run`` call carries a block of
-    Python; the block executes in one persistent namespace and its plan
-    runs through ``_run_plan``, so a move inside it flies before the next
+    Python; the block executes in one persistent namespace and each library
+    call runs on the loop's verbs, so a move inside it flies before the next
     turn is built.
 
     The model's plain prose reply is the ONE model-owned ending, and three
@@ -1855,10 +1851,12 @@ def advance_reasoner_one_round(
     _tr_stage = "mission"
     mission_sam: list[dict] = []
 
-    # ONE discourse dict for the mission (what set is in scope, how far
-    # past a handle's head the model has asked) and the mission-global rN
-    # chain that carry_results resolves against.
-    discourse: dict = _new_discourse()
+    # THE SET IN SCOPE (the last non-empty result, or what the last flight
+    # added), the paging ledger (executor ref -> rows already asked past,
+    # written only by a call that executed), and the mission-global rN chain
+    # that carry_results resolves against.
+    _those: list = [None]
+    _widened: dict = {}
     plan_rn: list = [0]
     # THE EPISODE'S SCRIPT, append-only: each accepted block in order;
     # nothing already executed is ever re-run (that would re-mint handles
@@ -1869,14 +1867,11 @@ def advance_reasoner_one_round(
     # the rN namespace -- the compiler and the flight mint below -- skip
     # them. The dispatcher refreshes it per block.
     _code_names: set = set()
-    # The handles flights minted DURING the block being dispatched, so the
+    # The handles flights minted DURING the call being dispatched, so the
     # code scope can bind them: the flight's report names the handle, and a
-    # name the surface serves has to be a name the surface can resolve.
+    # name the surface serves has to be a name the surface can resolve. The
+    # surface drains it after every call.
     _code_minted: list = []
-    # The handle the LAST flight of this plan minted over its own new rows,
-    # applied to the discourse AFTER update_discourse so the flight — the
-    # most recent thing that happened — owns "those".
-    _flight_minted: list = [None]
     # The fids explore passes have covered this mission, for the named-
     # feature coverage note below.
     _covered_fids: set = set()
@@ -1921,11 +1916,9 @@ def advance_reasoner_one_round(
         carry_results[_h] = [_ns_rows[_f] for _f in _new_fids]
         _event_handles.add(_h)
         _fresh.add(_h)
-        # bound NOW so a later step's refusal still leaves the scope on
-        # what was shown, and re-applied after the plan's own discourse
-        # writes below.
-        discourse["those"] = _h
-        _flight_minted[0] = _h
+        # bound NOW so a later refusal still leaves the scope on what was
+        # shown, and re-applied when the call finishes.
+        _those[0] = _h
         return _h, (f"{_h} — the {len(_new_fids)} rows this {_what} added; "
                     f"the handle is bound, so {_h}, {_h}[0] and "
                     f"{_h}.order(...) all reach them")
@@ -1944,7 +1937,7 @@ def advance_reasoner_one_round(
 
           * NO per-stop view: a dozen images in one turn would spend a large
             share of the mission's token budget. The pass shows its catch
-            instead (see the explore branch of ``_run_plan``).
+            instead (see ``_cover``).
           * ONE handle, over everything the whole pass folded.
           * ONE ack. The pass is an act; N flight reports are its
             mechanism, not its result.
@@ -2420,34 +2413,12 @@ def advance_reasoner_one_round(
             _note += _uncovered_segments(_nm)
         return ([_mv for _, _mv in _flat], _note, _subject, len(_chained))
 
-    def _sub_anchors(prog: dict, ties: dict) -> dict:
-        """Substitute grounded anchor slots into compare refs: one fid
-        stays a labeled single ref; top-tie multiples become the labeled
-        UNION ref {ref:[fid,…], as} — one label, exact min gap over
-        members, never a per-instance fan-out."""
-        import copy as _copy
-        out = _copy.deepcopy(prog)
-        for _op in out.get("ops") or []:
-            refs = (_op.get("args") or {}).get("refs")
-            if not isinstance(refs, list):
-                continue
-            for _i, _el in enumerate(refs):
-                if not isinstance(_el, dict):
-                    continue
-                _r = str(_el.get("ref", ""))
-                if _r.startswith("<anchor:"):
-                    slot = _r[len("<anchor:"):-1]
-                    fids = ties.get(slot) or []
-                    refs[_i] = {"ref": fids[0] if len(fids) == 1 else fids,
-                                "as": _el.get("as")}
-        return out
-
-    def _watch_apply(step: dict) -> dict:
+    def _watch_apply(adds: list) -> dict:
         """look_for() — the ONE segmenter channel (latest declaration of a
         class wins), reached by the bare form directly and by the placed
         form on its way to the boost. The watchlist only GROWS: a removal
         buys a cheaper segmenter pass, never an answer."""
-        adds = [dict(e) for e in step.get("add") or []]
+        adds = [dict(e) for e in adds]
         for _e in adds:
             mission_sam[:] = [c for c in mission_sam
                               if c["class"] != _e["class"]]
@@ -2469,8 +2440,9 @@ def advance_reasoner_one_round(
                  [c["class"] for c in mission_sam])
         return ack
 
-    def _boost_apply(step: dict, where: list) -> dict:
-        res = boost_queue(list(step.get("concepts") or []), where) or {}
+    def _boost(where: str, concepts: list) -> dict:
+        """look_for(..., at=) -- the targeted boost."""
+        res = boost_queue(list(concepts), [where]) or {}
         if "error" not in res and res.get("queued"):
             # THE PLACED FORM MEANS WHAT A PLANNER MEANS: standing attention
             # on the class, with localized emphasis where it was asked. One
@@ -2478,9 +2450,9 @@ def advance_reasoner_one_round(
             # arming it is the call's meaning -- nothing arms that the model
             # did not say.
             _adds = [{"class": str(c), "role": "target"}
-                     for c in step.get("concepts") or [] if c]
+                     for c in concepts if c]
             if _adds:
-                _w = _watch_apply({"add": _adds})
+                _w = _watch_apply(_adds)
                 res["watching"] = _w.get("error") or _w.get("now")
             res["note"] = ("boost queued -- extra segmentation at the "
                            "asked spot fires on your next flight; the "
@@ -2493,7 +2465,9 @@ def advance_reasoner_one_round(
             (compute_namespace or {}).update(_surface_from_ctx(ctx))
             _rebuild_ns_rows()
             _surface_version[0] += 1
-        return res
+        if res.get("error"):
+            return _plan_err({"boost": res}, str(res["error"]))
+        return {"boost": res}
 
     def _crops_of(fid, cid: str, marks: list | None = None,
                    preamble: str = "") -> dict:
@@ -2689,325 +2663,274 @@ def advance_reasoner_one_round(
         return "; closest named rows: " + ", ".join(
             f"\"{names[c][1]}\" ({names[c][0]})" for c in close)
 
-    def _run_plan(plan: dict, text: str) -> dict:
-        """Execute a compiled plan and echo it: grounding under the
-        name-match floor, the analyze execution, flights, the watchlist,
-        the discourse writes."""
-        ack: dict = {"said": text}
-        # Paging a handle with nothing left to page. No row count reaches
-        # the compiler, so the length check lives HERE, where the rows are.
-        # plan["widened"][h] IS the window's start index. A refusal returns
-        # before _update_discourse, so the handle's counter does not move
-        # and a repeat gets the same answer. An unknown handle (_held == 0)
-        # falls through to the resolver's own error. Two ways to have
-        # nothing left: the window walked past the end, or the handle was
-        # never truncated at all (a result of _BROAD_DUMP_SOFT_ROWS rows or
-        # fewer renders WHOLE).
-        for _h, _lo in (plan.get("widened") or {}).items():
+    # THE CALL IN FLIGHT: what _ground_names noted and what _analyze
+    # answered, read by _finish. _ground_names opens every call.
+    _call: dict = {}
+
+    def _ground_names(names: dict) -> dict:
+        """Open a call and ground its NAMES (``{name: why}``, first use
+        first) under the name-match floor: ``{"ties": {name: top-tie
+        fids}}``, or the first refusal. One plumbing find per name, raw,
+        never dedup'd, never rendered."""
+        _call.clear()
+        _call["notes"] = notes = []
+        ties: dict = {}
+        if not names:
+            return {"ties": ties}
+        _sink: dict = {}
+        g_out = run_geom_program_tool(
+            {"program": {"ops": [
+                {"ref": f"r{i}", "op": "find",
+                 "args": {"provenance": "any", "query": q.lower()}}
+                for i, q in enumerate(names)]}},
+            namespace=(compute_namespace or {}),
+            raw_sink=_sink, preflight=preflight)
+        if isinstance(g_out, dict) and "error" in g_out:
+            return _plan_err({}, str(g_out["error"]))
+        g_res = _sink.get("results") or {}
+        _WHY_VERB = {"stage": "standing at", "move": "flying",
+                     "map": "mapping around", "crops": "looking at",
+                     "boost": "looking around", "facing": "facing"}
+        for i, (q, why) in enumerate(names.items()):
+            rows = [r for r in (g_res.get(f"r{i}") or [])
+                    if isinstance(r, dict) and r.get("fid")]
+            # the same floor the find head's retrieval uses: a below-
+            # threshold "best match" is a guess
+            rows = [r for r in rows
+                    if r.get("name_match") is None
+                    or float(r["name_match"]) >= _FUZZY_FLOOR]
+            _what = q.lower() or "that"
+            if not rows:
+                return _plan_err({}, (
+                    f"rule N: nothing named \"{_what}\" is on "
+                    f"this surface{_closest_names(_what)}; say it "
+                    "differently, say a fid off a served row, or "
+                    "perceive more first"))
+            # every name keeps only the TOP name_match tie group (anchors:
+            # the labeled union); the best match leads it
+            _top = rows[0].get("name_match")
+            ties[q] = [str(r["fid"]) for r in rows
+                       if r.get("name_match") == _top] \
+                or [str(rows[0]["fid"])]
+            if why == "stage" and len(ties[q]) > 1:
+                # rule F refuses only a genuine TOP-MATCH tie
+                _f = ", ".join(ties[q][:4])
+                return _plan_err({}, (
+                    f"rule F: a viewpoint is one point; "
+                    f"\"{_what}\" has {len(ties[q])} equally good "
+                    f"name matches ({_f}); say which one — a fid "
+                    "works"))
+            # A token NO matched row carries -- the same note the query find
+            # serves, on the grounding path, so glue in a grounding does not
+            # bind silently. A NOTE, never an error and never a filter: a
+            # real query often names an attribute no row spells.
+            _dead = _unmatched_query_tokens(q.lower(), rows)
+            if _dead:
+                notes.append(
+                    f"no row matching \"{_what}\" carries "
+                    + ", ".join(repr(t) for t in _dead[:4])
+                    + " -- those words did not narrow anything")
+            # a covered name skips this note: the pass flies EVERY top-tie
+            # segment, so "flying the best name match" would state the thing
+            # it just stopped being true of
+            if why not in ("anchor", "cover") and len(rows) > 1:
+                notes.append(
+                    f"{len(rows)} rows match \"{_what}\"; "
+                    f"{_WHY_VERB.get(why, 'using')} the best "
+                    f"name match, {rows[0]['fid']} — say a fid to "
+                    "choose precisely")
+        return {"ties": ties}
+
+    def _analyze(ops: list, rn_end: int, answer, page) -> dict:
+        """Run one compiled program; ``answer`` names the ref whose envelope
+        is served, ``page`` the ``(ref, start)`` a more_of window pages."""
+        if page:
+            # Paging a handle with nothing left to page; no row count
+            # reaches the compiler, so the check lives HERE, where the rows
+            # are. A refusal never reaches _finish, so the handle's counter
+            # does not move. Nothing left: the window walked past the end,
+            # or the handle was never truncated (a result of
+            # _BROAD_DUMP_SOFT_ROWS rows or fewer renders WHOLE).
+            _h, _lo = page
             _held = len(_carry_read(_h) or [])
             if _held and (_held <= _BROAD_DUMP_SOFT_ROWS or _lo >= _held):
-                return _plan_err(ack, (
+                return _plan_err({}, (
                     f"all {_held} row(s) of {_h} are already served -- there "
                     f"is no further block to serve. Narrow it "
                     f"({_h}.order(color=\"<colour>\"), "
                     f"{_h}.order(nearest=\"<fid>\"), "
                     f"{_h}.filter(within=\"<place>\"))"
                     + ("." if withheld("look") else f" or look({_h}).")))
-        slot_fid: dict[str, str] = {}
-        slot_ties: dict[str, list] = {}
-        ground_notes: list[str] = []
-        if plan["groundings"]:
-            # plumbing finds: raw, never dedup'd, never rendered
-            _sink: dict = {}
-            g_prog = {"program": {"ops": [
-                {"ref": f"r{i}", "op": "find",
-                 "args": {"provenance": g["provenance"],
-                          "query": g["query"]}}
-                for i, g in enumerate(plan["groundings"])]}}
-            g_out = run_geom_program_tool(
-                g_prog, namespace=(compute_namespace or {}),
-                raw_sink=_sink, preflight=preflight)
-            if isinstance(g_out, dict) and "error" in g_out:
-                return _plan_err(ack, str(g_out["error"]))
-            g_res = _sink.get("results") or {}
-            _WHY_VERB = {"stage": "standing at", "move": "flying",
-                         "map": "mapping around", "crops": "looking at",
-                         "boost": "looking around", "facing": "facing"}
-            for i, g in enumerate(plan["groundings"]):
-                rows = [r for r in (g_res.get(f"r{i}") or [])
-                        if isinstance(r, dict) and r.get("fid")]
-                # the same floor the find head's retrieval uses: a
-                # below-threshold "best match" is a guess
-                rows = [r for r in rows
-                        if r.get("name_match") is None
-                        or float(r["name_match"]) >= _FUZZY_FLOOR]
-                _what = g["query"] or "that"
-                if not rows:
-                    return _plan_err(ack, (
-                        f"rule N: nothing named \"{_what}\" is on "
-                        f"this surface{_closest_names(_what)}; say it "
-                        "differently, say a fid off a served row, or "
-                        "perceive more first"))
-                # every slot keeps only the TOP name_match tie group
-                # (anchors: the labeled union)
-                _top = rows[0].get("name_match")
-                ties = [str(r["fid"]) for r in rows
-                        if r.get("name_match") == _top] \
-                    or [str(rows[0]["fid"])]
-                slot_ties[g["slot"]] = ties
-                if g["why"] == "stage" and len(ties) > 1:
-                    # rule F refuses only a genuine TOP-MATCH tie
-                    _f = ", ".join(ties[:4])
-                    return _plan_err(ack, (
-                        f"rule F: a viewpoint is one point; "
-                        f"\"{_what}\" has {len(ties)} equally good "
-                        f"name matches ({_f}); say which one — a fid "
-                        "works"))
-                slot_fid[g["slot"]] = str(rows[0]["fid"])
-                # A token NO matched row carries -- the same note the
-                # query find serves, on the grounding path, so glue in a
-                # grounding does not bind silently. A NOTE, never an error
-                # and never a filter: a real query often names an attribute
-                # no row spells.
-                _dead = _unmatched_query_tokens(g["query"] or "", rows)
-                if _dead:
-                    ground_notes.append(
-                        f"no row matching \"{_what}\" carries "
-                        + ", ".join(repr(t) for t in _dead[:4])
-                        + " -- those words did not narrow anything")
-                # a covered slot skips this note: the pass flies EVERY
-                # top-tie segment, so "flying the best name match" would
-                # state the thing it just stopped being true of
-                if g["why"] not in ("anchor", "cover") and len(rows) > 1:
-                    ground_notes.append(
-                        f"{len(rows)} rows match \"{_what}\"; "
-                        f"{_WHY_VERB.get(g['why'], 'using')} the best "
-                        f"name match, {rows[0]['fid']} — say a fid to "
-                        "choose precisely")
+        out = _dispatch_analyze_scene({"program": {"ops": ops}},
+                                      answer_ref=str(answer or ""))
+        if isinstance(out, dict) and "error" in out:
+            # keep the mechanical fact, drop the op-signature tail (it
+            # teaches op names this surface cannot spell)
+            return {"error": str(out["error"]).split("; signature: ")[0]}
+        plan_rn[0] = max(plan_rn[0], int(rn_end or 0))
+        # THE COLUMN THIS CALL ORDERED BY -- the last score_by's leading
+        # emphasis -- so _finish can say when the ordering did not separate
+        # anything (every house on a 4 km road is 0 m from it).
+        _sb = next((o for o in reversed(ops) if o["op"] == "score_by"), None)
+        _em = ((_sb["args"].get("emphasis") or [None])[0]) if _sb else None
+        _call.update(answer=answer, page=page,
+                     rows=carry_results.get(answer),
+                     order=str(_em["key"]) if isinstance(_em, dict)
+                     and _em.get("key") else None)
+        return {"result": out}
 
-        def _refval(ref):
-            """A compiler step ref -> the literal token to execute with."""
-            if isinstance(ref, str):
-                return ref
-            kind, val = ref
-            if kind == "fid":
-                return slot_fid[val]
-            if kind == "xy":
-                # a world point; the canonical token flies through the
-                # ordinary snap path
-                return format_xy_token(val[0], val[1])
-            return str(val)  # "lit" (a literal fid) / "it"
+    def _stand(at: str, facing: str) -> dict:
+        st = _stage_apply(at, facing)
+        if not st.get("staged"):
+            return _plan_err({}, (
+                "rule F: the stance did not bind: "
+                + str(st.get("rejected") or st.get("error"))))
+        return {"stance": st}
 
-        final_rows = None
-        _flight_minted[0] = None   # this plan's flight only
-        for step in plan["steps"]:
-            do = step["do"]
-            if do == "stage":
-                facing = (step["facing"]
-                          if isinstance(step["facing"], str)
-                          else _refval(step["facing"]))
-                st = _stage_apply(_refval(step["at"]), facing)
-                if not st.get("staged"):
-                    return _plan_err(ack, (
-                        "rule F: the stance did not bind: "
-                        + str(st.get("rejected") or st.get("error"))))
-                ack["stance"] = st
-            elif do == "analyze":
-                prog = step["program"]
-                prog = _sub_anchors(prog, slot_ties)
-                out = _dispatch_analyze_scene(
-                    {"program": prog}, answer_ref=str(plan["last_ref"] or ""))
-                if isinstance(out, dict) and "error" in out:
-                    # keep the mechanical fact, drop the op-signature tail
-                    # (it teaches op names this surface cannot spell)
-                    _e = str(out["error"]).split("; signature: ")[0]
-                    return {**ack, "error": _e}
-                ack["result"] = out
-                plan_rn[0] = max(plan_rn[0], int(plan.get("rn_end") or 0))
-                final_rows = carry_results.get(plan["last_ref"])
-            elif do == "move":
-                if step.get("cover"):
-                    # AN EXPLORE IS ONE ACT MADE OF FLIGHTS, expanded HERE
-                    # because none of it exists at compile time: the stops
-                    # come off each place's own cells and the chain off the
-                    # live pose. A SET is one place to cover, and its
-                    # members arrive three ways -- a grounded NAME's whole
-                    # top tie group, a result handle's fid-bearing rows, a
-                    # compiled list -- all expanded where slot_ties and the
-                    # live handles are.
-                    _to = step["to"]
-                    _raw_members: list = []
-                    _empty_handle = None
-                    for _s in (_to if isinstance(_to, list) else [_to]):
-                        if (isinstance(_s, tuple) and len(_s) == 2
-                                and _s[0] == "fid"
-                                and len(slot_ties.get(_s[1]) or []) > 1):
-                            _raw_members.extend(slot_ties[_s[1]])
-                            continue
-                        _t = _refval(_s)
-                        if isinstance(_t, str):
-                            _t, _stop_err = _flown_stop(_t)
-                            if _stop_err:
-                                return _plan_err(ack, _stop_err)
-                            if _is_handle_token(_t):
-                                _hr = [str(r["fid"]) for r in
-                                       (_carry_read(_t) or [])
-                                       if isinstance(r, dict)
-                                       and r.get("fid")]
-                                if not _hr:
-                                    _empty_handle = _t
-                                    break
-                                _raw_members.extend(_hr)
-                                continue
-                        _raw_members.append(_t)
-                    if _empty_handle is not None:
-                        return _plan_err(ack, (
-                            f"{_empty_handle} holds 0 fid-bearing row(s) "
-                            "here; there is nothing to cover."))
-                    _uniq: list = []
-                    for _t in _raw_members:
-                        if _t not in _uniq:
-                            _uniq.append(_t)
-                    _accepted, _item_errors = _mission_sanitize_moves(_uniq)
-                    if not _accepted:
-                        _msg = next(
-                            (str(e.get("error")) for e in _item_errors
-                             if isinstance(e, dict) and e.get("error")),
-                            "nothing to cover")
-                        return _plan_err(ack, _msg)
-                    _accepted, _cov_note, _cover, _segs = _cover_items(
-                        _accepted, _said=step.get("said_to"))
-                    if not _accepted:
-                        return _plan_err(ack, _cov_note)
-                    mv = _fly_moves(_accepted, _item_errors, cover=_cover)
-                    ack["explored"] = mv
-                    if "error" in mv:
-                        return _plan_err(ack, str(mv["error"]))
-                    if _segs > 1:
-                        mv["segments"] = _segs
-                    # A TRUNCATED PASS READS AS TRUNCATED. ``_cov_note`` is
-                    # built from the stops the pass PLANNED; ``_cover_ack``
-                    # counts the stops actually flown, so a pass a backstop
-                    # cut short says what happened instead of over-claiming.
-                    if mv.get("stops", len(_accepted)) < len(_accepted):
-                        _cov_note = (f"the pass ended after "
-                                     f"{mv.get('stops', 0)} of its stops.")
-                    if _cov_note:
-                        mv["note"] = (f"{_cov_note} {mv['note']}"
-                                      if mv.get("note") else _cov_note)
-                    # THE PASS SHOWS ITS CATCH: one crop per row it added, in
-                    # the pass's own (spatial) order, capped at
-                    # _CATCH_CROPS so the model's own later looks keep room.
-                    _h = _flight_minted[0]
-                    if _h:
-                        _catch = [r for r in (carry_results.get(_h) or [])
-                                  if isinstance(r, dict)
-                                  and r.get("fid")][:_CATCH_CROPS]
-                        if _catch:
-                            _cfids = [
-                                _crop_token_of(r, str(r["fid"]) in _ns_rows)
-                                for r in _catch]
-                            _cack = _crops_of(
-                                _cfids, cid,
-                                preamble=("The pass's catch, one crop per "
-                                          "row it added, in pass order: "))
-                            if not _cack.get("error"):
-                                mv["catch"] = {
-                                    k: _cack[k] for k in
-                                    ("delivered", "not_drawn")
-                                    if k in _cack}
-                                if len(_catch) < len(
-                                        carry_results.get(_h) or []):
-                                    mv["catch"]["shown"] = (
-                                        f"first {len(_catch)} of "
-                                        f"{len(carry_results[_h])}" + (
-                                            "" if withheld("look") else
-                                            f" -- look({_h}[a:b]) pages "
-                                            "the rest"))
-                                if withheld("images"):
-                                    mv["catch"] = {"note": _PICTURE_WITHHELD}
-                    continue
-                tok = _refval(step["to"])
-                if isinstance(tok, str):
-                    # a flown stop is a place: fly its recorded point
-                    # (the xy→fid snap keeps a row's identity if one
-                    # stands there)
-                    tok, _stop_err = _flown_stop(tok)
-                    if _stop_err:
-                        return _plan_err(ack, _stop_err)
-                _accepted, _item_errors = _mission_sanitize_moves([tok])
-                mv = _fly_moves(_accepted, _item_errors)
-                ack["flown"] = mv
-                _ok = [r for r in mv.get("flown") or []
-                       if isinstance(r, dict) and "error" not in r]
-                if not (_ok and _accepted):
-                    # nothing flew: the failure is THE result, top-level,
-                    # never a flight-shaped envelope that never flew
-                    _msg = next(
-                        (str(r.get("error"))
-                         for r in mv.get("flown") or []
-                         if isinstance(r, dict) and r.get("error")),
-                        None) or next(
-                        (str(e.get("error"))
-                         for e in mv.get("rejected") or []
-                         if isinstance(e, dict) and e.get("error")),
-                        None) or str(mv.get("error") or "nothing flew")
-                    return _plan_err(ack, _msg)
-            elif do == "watch":
-                ack["watching"] = _watch_apply(step)
-                if ack["watching"].get("error"):
-                    return _plan_err(ack, str(ack["watching"]["error"]))
-            elif do == "boost":
-                _where = [_refval(w) for w in step.get("where") or []]
-                ack["boost"] = _boost_apply(step, _where)
-                if ack["boost"].get("error"):
-                    return _plan_err(ack, str(ack["boost"]["error"]))
-            elif do == "crops":
-                _cf = step.get("fid")
-                _cf = ([_refval(f) for f in _cf] if isinstance(_cf, list)
-                       else _refval(_cf)) if not step.get("of") else None
-                # RESOLVE THE MARK SLOTS. The compiler writes each mark as
-                # a grounding slot -- ('fid', 'g1') -- exactly as it writes
-                # the crop's own subject, and _look_strs downstream keeps
-                # only strings.
-                _mk = [_refval(m) for m in (step.get("mark_fids") or [])]
-                _mk = [m for m in _mk if isinstance(m, str) and m.strip()]
-                ack["crop"] = (
-                    _crops_set(str(step["of"]), cid, marks=_mk or None)
-                    if step.get("of")
-                    else _crops_of(_cf, cid, marks=_mk or None))
-                if (ack["crop"].get("error")
-                        and not ack["crop"].get("delivered")):
-                    return _plan_err(ack, str(ack["crop"]["error"]))
-            elif do == "map":
-                # THE MAP BADGES THE SET IN SCOPE. Unmarked, every detection
-                # paints as one white class (map_render's _DETECTION_RGB), so
-                # the picture could not answer "which of these rows is it" --
-                # the one question a narrowed set is asking.
-                _h = discourse.get("those")
-                _mrows = [r for r in (_carry_read(_h) or [])
-                          if isinstance(r, dict) and r.get("fid")] if _h else []
-                _mfids = [str(r["fid"]) for r in _mrows[:_MAP_MAX_MARKS]]
-                ack["map"] = _map_of(
-                    None if step.get("around") is None
-                    else _refval(step["around"]), cid, mark_fids=_mfids)
-                if _mfids:
-                    ack["map"]["badged_from"] = _h
-                    if len(_mrows) > len(_mfids):
-                        ack["map"].setdefault("ref_notes", []).append(
-                            f"{len(_mrows)} rows in {_h}; this map badges the "
-                            f"first {len(_mfids)}")
-                if (ack["map"].get("error")
-                        and not ack["map"].get("delivered")):
-                    return _plan_err(ack, str(ack["map"]["error"]))
+    def _move_to(tok: str) -> dict:
+        # a flown stop is a place: fly its recorded point (the xy→fid snap
+        # keeps a row's identity if one stands there)
+        tok, _stop_err = _flown_stop(tok)
+        if _stop_err:
+            return _plan_err({}, _stop_err)
+        _accepted, _item_errors = _mission_sanitize_moves([tok])
+        mv = _fly_moves(_accepted, _item_errors)
+        _ok = [r for r in mv.get("flown") or []
+               if isinstance(r, dict) and "error" not in r]
+        if not (_ok and _accepted):
+            # nothing flew: the failure is THE result, top-level, never a
+            # flight-shaped envelope that never flew
+            _msg = next(
+                (str(r.get("error")) for r in mv.get("flown") or []
+                 if isinstance(r, dict) and r.get("error")),
+                None) or next(
+                (str(e.get("error")) for e in mv.get("rejected") or []
+                 if isinstance(e, dict) and e.get("error")),
+                None) or str(mv.get("error") or "nothing flew")
+            return _plan_err({"flown": mv}, _msg)
+        return {"flown": mv}
+
+    def _cover(members: list, said_to: str) -> dict:
+        """AN EXPLORE IS ONE ACT MADE OF FLIGHTS, expanded HERE because
+        none of it exists at compile time: the stops come off each place's
+        own cells and the chain off the live pose. A SET is one place to
+        cover, and its members arrive three ways -- a NAME's whole top tie
+        group (a list), a result handle's fid-bearing rows, a token."""
+        _raw_members: list = []
+        for _t in members:
+            if isinstance(_t, list):
+                _raw_members.extend(_t)
+                continue
+            _t, _stop_err = _flown_stop(_t)
+            if _stop_err:
+                return _plan_err({}, _stop_err)
+            if _is_handle_token(_t):
+                _hr = [str(r["fid"]) for r in (_carry_read(_t) or [])
+                       if isinstance(r, dict) and r.get("fid")]
+                if not _hr:
+                    return _plan_err({}, (
+                        f"{_t} holds 0 fid-bearing row(s) "
+                        "here; there is nothing to cover."))
+                _raw_members.extend(_hr)
+                continue
+            _raw_members.append(_t)
+        _accepted, _item_errors = _mission_sanitize_moves(
+            list(dict.fromkeys(_raw_members)))
+        if not _accepted:
+            return _plan_err({}, next(
+                (str(e.get("error")) for e in _item_errors
+                 if isinstance(e, dict) and e.get("error")),
+                "nothing to cover"))
+        _accepted, _cov_note, _subject, _segs = _cover_items(
+            _accepted, _said=said_to)
+        if not _accepted:
+            return _plan_err({}, _cov_note)
+        mv = _fly_moves(_accepted, _item_errors, cover=_subject)
+        if "error" in mv:
+            return _plan_err({"explored": mv}, str(mv["error"]))
+        if _segs > 1:
+            mv["segments"] = _segs
+        # A TRUNCATED PASS READS AS TRUNCATED. ``_cov_note`` is built from
+        # the stops the pass PLANNED; ``_cover_ack`` counts the stops
+        # actually flown, so a pass a backstop cut short says what happened.
+        if mv.get("stops", len(_accepted)) < len(_accepted):
+            _cov_note = (f"the pass ended after "
+                         f"{mv.get('stops', 0)} of its stops.")
+        if _cov_note:
+            mv["note"] = (f"{_cov_note} {mv['note']}"
+                          if mv.get("note") else _cov_note)
+        # THE PASS SHOWS ITS CATCH: one crop per row it added, in the pass's
+        # own (spatial) order, capped at _CATCH_CROPS so the model's own
+        # later looks keep room.
+        _h = _code_minted[-1] if _code_minted else None
+        _rows = [r for r in (carry_results.get(_h) or [])
+                 if isinstance(r, dict) and r.get("fid")] if _h else []
+        _catch = _rows[:_CATCH_CROPS]
+        if _catch:
+            _cack = _crops_of(
+                [_crop_token_of(r, str(r["fid"]) in _ns_rows)
+                 for r in _catch], cid,
+                preamble=("The pass's catch, one crop per "
+                          "row it added, in pass order: "))
+            if not _cack.get("error"):
+                mv["catch"] = {k: _cack[k] for k in ("delivered", "not_drawn")
+                               if k in _cack}
+                if len(_catch) < len(carry_results.get(_h) or []):
+                    mv["catch"]["shown"] = (
+                        f"first {len(_catch)} of "
+                        f"{len(carry_results[_h])}" + (
+                            "" if withheld("look") else
+                            f" -- look({_h}[a:b]) pages the rest"))
+                if withheld("images"):
+                    mv["catch"] = {"note": _PICTURE_WITHHELD}
+        return {"explored": mv}
+
+    def _crops(of, fid, marks) -> dict:
+        # the marks a crop request carries: only real tokens
+        _mk = [m for m in marks or [] if isinstance(m, str) and m.strip()]
+        crop = (_crops_set(str(of), cid, marks=_mk or None) if of
+                else _crops_of(fid, cid, marks=_mk or None))
+        if crop.get("error") and not crop.get("delivered"):
+            return _plan_err({"crop": crop}, str(crop["error"]))
+        return {"crop": crop}
+
+    def _map(around: str) -> dict:
+        # THE MAP BADGES THE SET IN SCOPE. Unmarked, every detection paints
+        # as one white class (map_render's _DETECTION_RGB), so the picture
+        # could not answer "which of these rows is it" -- the one question a
+        # narrowed set is asking.
+        _h = _those[0]
+        _mrows = [r for r in (_carry_read(_h) or [])
+                  if isinstance(r, dict) and r.get("fid")] if _h else []
+        _mfids = [str(r["fid"]) for r in _mrows[:_MAP_MAX_MARKS]]
+        mp = _map_of(around, cid, mark_fids=_mfids)
+        if _mfids:
+            mp["badged_from"] = _h
+            if len(_mrows) > len(_mfids):
+                mp.setdefault("ref_notes", []).append(
+                    f"{len(_mrows)} rows in {_h}; this map badges the "
+                    f"first {len(_mfids)}")
+        if mp.get("error") and not mp.get("delivered"):
+            return _plan_err({"map": mp}, str(mp["error"]))
+        return {"map": mp}
+
+    def _watch(concepts: list) -> dict:
+        w = _watch_apply([{"class": c, "role": "target"} for c in concepts])
+        if w.get("error"):
+            return _plan_err({"watching": w}, str(w["error"]))
+        return {"watching": w}
+
+    def _finish(ack: dict) -> dict:
+        """Close a call nothing refused: the tie note, the grounding notes,
+        the streak reset, the scope and paging writes."""
         # AN ORDERING THAT DID NOT ORDER ANYTHING. A big prior is a big
-        # relation: every row along a many-way road is 0 m from it, so
-        # find("pool", near=<that road>) can hand back a sort in which rank 0
-        # means nothing. It is a FACT, not advice: how many rows tie, and on
-        # what column; narrowing further is the model's to choose.
-        _ok_key = (plan.get("_code_order") or [None, 1])[0]
+        # relation: every row along a many-way road is 0 m from it, so rank
+        # 0 can mean nothing. It is a FACT, not advice: how many rows tie,
+        # and on what column; narrowing further is the model's to choose.
+        _ok_key = _call.get("order")
         if _ok_key:
-            _rows = [r for r in (final_rows or []) if isinstance(r, dict)]
+            _rows = [r for r in (_call.get("rows") or [])
+                     if isinstance(r, dict)]
             if len(_rows) >= 2:
                 _v0 = _rows[0].get(_ok_key)
                 if _v0 is not None:
@@ -3021,41 +2944,41 @@ def advance_reasoner_one_round(
                               f"{_t} on '{_ok_key}' -- this ordering does "
                               f"not separate them, so its rank 0 is "
                               f"arbitrary among the tie")
-        if ground_notes:
+        if _call.get("notes"):
             ack["note"] = (f"{ack['note']}\n" if ack.get("note")
-                           else "") + "; ".join(ground_notes)
-        # a plan that executed ends the consecutive-rejection streak (mirror
+                           else "") + "; ".join(_call["notes"])
+        # a call that executed ends the consecutive-rejection streak (mirror
         # of the analyze path's reset)
         _err_streak["sig"] = None
         _err_streak["n"] = 0
-        _update_discourse(plan, final_rows, discourse)
-        if _flight_minted[0] is not None:
-            # AFTER the plan's own discourse writes: a plan that both
-            # builds a set and flies ends standing over what the flight
-            # revealed, so the flight's set is the one in scope. The set the
-            # plan built keeps its own handle and stays reachable by name.
-            discourse["those"] = _flight_minted[0]
-            _flight_minted[0] = None
-        return _echo(plan, ack)
+        if _call.get("page"):
+            _widened.update([_call["page"]])
+        # THE SET IN SCOPE: the call's answer, NON-EMPTY only -- an empty
+        # tail must not take the slot, or the rows it failed to reach become
+        # unreachable. A flight this call made owns it over that: a call
+        # that both builds a set and flies ends standing over what the
+        # flight revealed, and the set it built keeps its own handle.
+        if _call.get("answer") and _call.get("rows"):
+            _those[0] = _call["answer"]
+        if _code_minted:
+            _those[0] = _code_minted[-1]
+        return ack
 
     _mission_py: list = [None]
 
     def _dispatch_run(args, cid: str) -> dict:
-        """One code block: real Python, executed against the shared plan
-        machinery.
+        """One code block: real Python, executed against the loop's verbs.
 
         The block runs in ONE persistent namespace -- a variable an
-        earlier turn bound is still bound -- and every library call
-        compiles onto a plan that ``_run_plan`` executes. An error costs
-        the line it is on: everything the block ran before it stands,
-        receipts included.
+        earlier turn bound is still bound -- and every library call runs on
+        the verbs above. An error costs the line it is on: everything the
+        block ran before it stands, receipts included.
         """
         code = (args or {}).get("code")
         if not isinstance(code, str) or not code.strip():
             return {"error": "run takes one block of code in code"}
         if _mission_py[0] is None:
             _mission_py[0] = _py_surface.MissionPython(_py_surface.MissionEnv(
-                run_plan=_run_plan,
                 # THE CODE ARM READS THE FLOWN WORLD. Python evaluates
                 # go_to(red_cars[0])'s subscript BEFORE go_to dispatches,
                 # and len(), print() and iteration read rows the same way,
@@ -3067,11 +2990,11 @@ def advance_reasoner_one_round(
                      if isinstance(r, dict)])[1],
                 tied_of_ref=lambda ref: bool(
                     getattr(_carry_read(ref), "name_set", False)),
-                plan_rn=plan_rn,
-                discourse=discourse,
-                minted=_code_minted,
-                say_err=_plan_err,
-                row_of_fid=_ns_rows.get))
+                plan_rn=plan_rn, widened=_widened, minted=_code_minted,
+                say_err=_plan_err, row_of_fid=_ns_rows.get,
+                ground=_ground_names, analyze=_analyze, stand=_stand,
+                move=_move_to, cover=_cover, crops=_crops, map=_map,
+                watch=_watch, boost=_boost, finish=_finish))
         # The names no OTHER writer may mint: every rN this block spells
         # plus every ref a variable already holds, so a flight minting a
         # result handle never collides with a name the model is using.

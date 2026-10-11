@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from maps.search.parse_compile.python_surface import CodeError
-from maps.search.tests.fakes import raising_ops_of_block
+from maps.search.tests.fakes import quiet_env, raising_ops_of_block
 
 
 def _ops(src: str) -> list[dict]:
@@ -209,10 +209,10 @@ def test_a_predicate_filter_is_not_a_one_way_door():
     seen = []
 
     class _MP:
-        def _rows_order(self, items, label, **kw):
+        def _rows_order(self, items, **kw):
             seen.append(("order", list(items), kw)); return "ordered"
 
-        def _rows_filter(self, items, label, **kw):
+        def _rows_filter(self, items, **kw):
             seen.append(("filter", list(items), kw)); return "cut"
 
     mp = _MP()
@@ -262,10 +262,7 @@ def test_a_set_handed_to_go_to_is_told_to_index_not_told_it_is_a_coordinate():
     with pytest.raises(CodeError) as e:
         _ops('go_to(x)\n')          # unbound -> different path; use the API
     from maps.search.parse_compile import python_surface as ps
-    mp = ps.MissionPython(ps.MissionEnv(
-        run_plan=lambda p, s: {}, rows_of_ref=lambda r: [], plan_rn=[0],
-        discourse={}, minted=[], say_err=lambda a, m: {**a, "error": m},
-        row_of_fid=lambda f: None))
+    mp = ps.MissionPython(quiet_env())
     with pytest.raises(CodeError) as e:
         mp._call_go_to(rows)
     msg = str(e.value)

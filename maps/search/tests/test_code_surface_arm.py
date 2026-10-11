@@ -10,8 +10,10 @@ from maps.search.tests.fakes import (
     drive,
     explore_drive,
     grow_drive,
+    acts_of_block,
+    calls_of_block,
+    grounded_in_block,
     ops_of_block,
-    plan_of_block,
     run,
     tool_results,
 )
@@ -128,12 +130,14 @@ def test_a_call_indexed_inside_an_argument_is_its_own_dispatch():
 
 
 def test_show_of_a_handle_is_the_bare_line_spelled_out():
-    spelled = plan_of_block("show(r1)\n", bound={"r1": "r7"})
-    bare = plan_of_block("r1\n", bound={"r1": "r7"})
-    # IDENTICAL, not merely similar: two spellings of one step, or the
+    spelled = calls_of_block("show(r1)\n", bound={"r1": "r7"})
+    bare = calls_of_block("r1\n", bound={"r1": "r7"})
+    # IDENTICAL, not merely similar: two spellings of one call, or the
     # served envelope keys them differently and the model sees two things.
-    assert spelled["steps"] == bare["steps"], (spelled, bare)
-    assert spelled["_code_shows"] == bare["_code_shows"] == {"r1": "r0"}
+    assert spelled == bare == [("analyze", [
+        {"ref": "r0", "op": "filter_items",
+         "args": {"items": "r7", "key": "xy", "op": "truthy"}}],
+        "r0", None)], (spelled, bare)
     # ...and it stays out of the served vocabulary: one way to display.
     from maps.search.parse_compile.python_surface import _LIBRARY_CALLS
     assert "show" not in _LIBRARY_CALLS
@@ -141,10 +145,9 @@ def test_show_of_a_handle_is_the_bare_line_spelled_out():
 
 def test_a_fid_in_an_anchor_slot_is_the_row_it_names():
     def _refs(src):
-        plan = plan_of_block(src, bound={"r1": "r7"})
         out = [o["args"]["refs"] for o in ops_of_block(src, {"r1": "r7"})
                if o["args"].get("refs")]
-        return out, [g["query"] for g in plan["groundings"]]
+        return out, grounded_in_block(src, {"r1": "r7"})
 
     for src in ('r2 = r1.order(nearest="prior_6087")\n',
                 'r2 = r1.filter(within="prior_5631")\n',
@@ -157,8 +160,8 @@ def test_a_fid_in_an_anchor_slot_is_the_row_it_names():
     # THE VACUITY FLOOR: a real NAME must still ground, or this "fix"
     # would be a surface that grounds nothing at all.
     refs, grounds = _refs('r2 = r1.order(nearest="Green Street")\n')
-    assert grounds == ["green street"], grounds
-    assert refs[0][0]["ref"].startswith("<anchor:"), refs
+    assert grounds == ["Green Street"], grounds
+    assert refs[0][0] == {"ref": "<Green Street>", "as": "Green Street"}, refs
 
 
 def test_an_alias_gives_a_result_a_second_name():
@@ -174,15 +177,13 @@ def test_an_alias_gives_a_result_a_second_name():
     assert ops[0]["args"]["items"] == "r7", ops
     # An alias of NOTHING is still refused, and says which name is unbound.
     with pytest.raises(CodeError, match="name 'nope' is not defined"):
-        plan_of_block("x = nope\n")
+        calls_of_block("x = nope\n")
 
 
 def test_a_snake_case_class_is_the_class_it_spells():
-    plan = plan_of_block('look_for("solar_panel", "parking_lot")\n')
     # THE WIRE GETS WORDS.
-    assert plan["steps"] == [{"do": "watch", "add": [
-        {"class": "solar panel", "role": "target"},
-        {"class": "parking lot", "role": "target"}]}], plan["steps"]
+    assert acts_of_block('look_for("solar_panel", "parking_lot")\n') == [
+        ("watch", ["solar panel", "parking lot"])]
 
 
 def test_an_inline_point_relates_exactly_as_a_bound_one_does():
@@ -202,8 +203,8 @@ def test_an_inline_point_relates_exactly_as_a_bound_one_does():
     # ...and the point itself survives as a point, not as a name to ground.
     ref, _ = _cols(inline)
     assert ref["ref"] == [4630.0, 2965.0], ref
-    assert plan_of_block(
-        'r1 = find("tree", nearest=[4630, 2965])\n')["groundings"] == []
+    assert grounded_in_block('r1 = find("tree", nearest=[4630, 2965])\n') \
+        == []
 
 
 def test_the_moving_calls_refuse_a_coordinate_in_every_spelling():
@@ -217,18 +218,18 @@ def test_the_moving_calls_refuse_a_coordinate_in_every_spelling():
                 "corner = [3411, 1468]\nexplore(corner)\n",
                 'go_to("[3411, 1468]")\n'):
         with pytest.raises(CodeError, match="takes a THING on the map"):
-            plan_of_block(bad)
+            calls_of_block(bad)
     with pytest.raises(CodeError, match="positional argument"):
-        plan_of_block("go_to(3411, 1468)\n")
+        calls_of_block("go_to(3411, 1468)\n")
     # ...and the refusal names the instrument that replaces it.
     try:
-        plan_of_block("go_to([3411, 1468])\n")
+        calls_of_block("go_to([3411, 1468])\n")
     except CodeError as exc:
         assert "look_for" in str(exc) and "explore the thing" in str(exc), str(exc)
     # A POINT STILL RELATES AND STILL LOOKS — only moving refuses it.
-    assert plan_of_block('corner = [1, 2]\nr1 = find("car", nearest=corner)\n')
-    assert plan_of_block("show_map(around=[1, 2])\n")
-    assert plan_of_block('stand(at=[1, 2], facing="north")\n')
+    assert calls_of_block('corner = [1, 2]\nr1 = find("car", nearest=corner)\n')
+    assert calls_of_block("show_map(around=[1, 2])\n")
+    assert calls_of_block('stand(at=[1, 2], facing="north")\n')
 
 
 def test_a_name_constraint_gates_or_fails_loud_never_vanishes():
@@ -251,19 +252,18 @@ def test_the_vision_calls_are_the_sentence_surface_s_own_steps():
 
     from maps.search.parse_compile.code_surface import CodeError
     bound = {"r1": "r7"}
-    plan = plan_of_block("look(r1)\n", bound=bound)
-    assert plan["steps"] == [{"do": "crops", "of": "r7"}]
+    assert acts_of_block("look(r1)\n", bound) == [("crops", "r7", None, None)]
     # AND IT TAKES NOTHING ELSE. The free-text "looking question" is off this surface:
     # it answered into the picture and bound nothing, so a distinction it resolved had
     # nowhere to land.
     with pytest.raises(CodeError, match="positional argument"):
-        plan_of_block('look(r1, "which one has a pool?")\n', bound=bound)
+        calls_of_block('look(r1, "which one has a pool?")\n', bound)
     # around= POSITIONS rather than measures, so a SET is refused with the
     # fix in the message and a ROW maps straight through.
     with pytest.raises(CodeError, match="around= takes ONE place"):
-        plan_of_block("show_map(around=r1)\n", bound=bound)
-    row = plan_of_block("show_map(around=r2)\n", bound={"r2": "prior_5"})
-    assert row["steps"] == [{"do": "map", "around": ("lit", "prior_5")}], row
+        calls_of_block("show_map(around=r1)\n", bound)
+    assert acts_of_block("show_map(around=r2)\n", {"r2": "prior_5"}) == [
+        ("map", "prior_5")]
 
 
 def test_no_argument_is_dropped_on_the_floor():
@@ -274,7 +274,7 @@ def test_no_argument_is_dropped_on_the_floor():
     # find("road", query="Sherwood Avenue") -- the positional won and the
     # keyword vanished. 39 calls; one served all 810 roads on the bake.
     with pytest.raises(CodeError, match="multiple values for argument"):
-        plan_of_block('r1 = find("road", query="Sherwood Avenue")\n')
+        calls_of_block('r1 = find("road", query="Sherwood Avenue")\n')
     # ...and either one alone still works.
     assert ops_of_block('r1 = find(query="Sherwood Avenue")\n')[0]["args"] \
         == {"query": "Sherwood Avenue"}
@@ -282,9 +282,9 @@ def test_no_argument_is_dropped_on_the_floor():
     # go_to() refuses a keyword it does not take: an ignored
     # offset=(400, 0) would fly to the identical pose as offset=(-100, 0).
     with pytest.raises(CodeError, match="unexpected keyword argument 'offset'"):
-        plan_of_block('go_to(r1, offset=(400, 0))\n', bound={"r1": "prior_1"})
-    assert plan_of_block("go_to(r1)\n", bound={"r1": "prior_1"})["steps"] \
-        == [{"do": "move", "to": ("lit", "prior_1")}]
+        calls_of_block('go_to(r1, offset=(400, 0))\n', {"r1": "prior_1"})
+    assert acts_of_block("go_to(r1)\n", {"r1": "prior_1"}) \
+        == [("move", "prior_1")]
 
     # near= and within= together: the compiler read `near or inside` and filtered on
     # near='s anchor, swapping the semantics in silence.
@@ -299,15 +299,15 @@ def test_no_argument_is_dropped_on_the_floor():
     # The kwarg gate's twin: an EXTRA POSITIONAL was dropped just as
     # silently, and it is the same sentence spelled the other way.
     with pytest.raises(CodeError, match="find takes ONE query") as e:
-        plan_of_block('r1 = find("road", "Sherwood Avenue")\n')
+        calls_of_block('r1 = find("road", "Sherwood Avenue")\n')
     assert "intersection(" in str(e.value), str(e.value)
     with pytest.raises(CodeError, match="positional argument"):
-        plan_of_block('go_to("prior_1", "prior_2")\n')
+        calls_of_block('go_to("prior_1", "prior_2")\n')
     # ...and too FEW: go_to() flew to the string "None".
     with pytest.raises(CodeError, match="missing 1 required positional"):
-        plan_of_block("go_to()\n")
+        calls_of_block("go_to()\n")
     with pytest.raises(CodeError, match="order needs its key"):
-        plan_of_block("r2 = r1.order()\n", bound={"r1": "r1"})
+        calls_of_block("r2 = r1.order()\n", {"r1": "r1"})
 
 
 def test_any_earlier_handle_stays_indexable_not_just_the_newest():
@@ -393,14 +393,11 @@ def test_a_selected_crossing_can_anchor_the_next_call():
     # slot reads -- the token that spells it never reaches one.
     from maps.search.parse_compile.python_surface import Row
     pt = {"r2": Row({"fid": "[10, 20]", "xy": [10.0, 20.0]})}
-    plan = plan_of_block('r3 = find("car", nearest=r2)\n', bound=pt)
-    assert plan["groundings"] == [], plan["groundings"]
+    assert grounded_in_block('r3 = find("car", nearest=r2)\n', pt) == []
     assert ops_of_block('r3 = find("car", nearest=r2)\n', pt)[1]["args"]["refs"] \
         == [{"ref": [10.0, 20.0], "as": "r2"}]
-    assert plan_of_block("go_to(r2)\n", bound=pt)["steps"] == [
-        {"do": "move", "to": ("xy", [10.0, 20.0])}]
-    assert plan_of_block("show_map(around=r2)\n", bound=pt)["steps"] == [
-        {"do": "map", "around": ("xy", [10.0, 20.0])}]
+    assert acts_of_block("go_to(r2)\n", pt) == [("move", "[10, 20]")]
+    assert acts_of_block("show_map(around=r2)\n", pt) == [("map", "[10, 20]")]
 
 
 def test_only_the_model_s_own_names_are_served_back():
@@ -441,22 +438,22 @@ def test_a_ref_is_told_from_a_name_by_shape_not_by_first_letter():
     src = 'r3 = find("gate", nearest=r2)\n'
     held = {"r1": "r0", "r2": "car_1"}
     # A bound fid is a fid: it rides the ref slot, it is not looked up.
-    assert plan_of_block(src, bound=held)["groundings"] == []
+    assert grounded_in_block(src, held) == []
     assert ops_of_block(src, held)[1]["args"]["refs"] == [
         {"ref": "car_1", "as": "r2"}]
     # A place the model named is grounded whatever letter it starts with.
-    named = plan_of_block('r1 = find("car", nearest="Riverside Drive")\n')
-    assert [g["query"] for g in named["groundings"]] == ["riverside drive"]
+    assert grounded_in_block('r1 = find("car", nearest="Riverside Drive")\n') \
+        == ["Riverside Drive"]
     # An unbound handle never reaches the compiler at all: it is a
     # NameError on the model's own line, rather than an op ref the
     # executor answers with "reference cycle".
     with pytest.raises(CodeError, match="name 'r0' is not defined"):
-        plan_of_block('r8 = find("car", nearest=r0)\n')
+        calls_of_block('r8 = find("car", nearest=r0)\n')
     # look() on a row: the SET branch is for an op ref, by shape.
-    road = plan_of_block("look(r2)\n", bound={"r2": "road_1"})
-    assert road["steps"] == [{"do": "crops", "fid": ("lit", "road_1")}], road
-    rset = plan_of_block("look(r2)\n", bound={"r2": "r7"})
-    assert rset["steps"] == [{"do": "crops", "of": "r7"}], rset
+    assert acts_of_block("look(r2)\n", {"r2": "road_1"}) == [
+        ("crops", None, "road_1", None)]
+    assert acts_of_block("look(r2)\n", {"r2": "r7"}) == [
+        ("crops", "r7", None, None)]
     # ...and what the COMPILER put in a ref slot is never a name to ground:
     # intersection(r1, ...) relates to every way r1 names, which is the
     # escape hatch for a road whose name matches several.
@@ -465,9 +462,7 @@ def test_a_ref_is_told_from_a_name_by_shape_not_by_first_letter():
     # to the same rows the bare ref gave it -- "every way r1 names".
     assert ops_of_block(xsrc, {"r1": "r7"})[0]["args"]["refs"][0] == {
         "ref": ["r7"], "as": "r1"}
-    assert [g["query"] for g in
-            plan_of_block(xsrc, bound={"r1": "r7"})["groundings"]] \
-        == ["cross street"]
+    assert grounded_in_block(xsrc, {"r1": "r7"}) == ["Cross Street"]
 
 
 def test_the_items_slot_takes_a_bare_ref_and_the_place_slots_a_labelled_one():
@@ -664,22 +659,18 @@ def test_look_for_arms_the_segmenter_the_footer_already_advertises():
 def test_the_near_form_is_the_targeted_boost_and_a_place_is_grounded():
     """`look_for("pool", at=<place>)` compiles to the boost step, and its where= is a
     GROUNDING."""
-    plan = plan_of_block('look_for("pool", at="the church")\n')
-    assert plan["steps"] == [{"do": "boost", "concepts": ["pool"],
-                              "where": [("fid", "g0")]}], plan["steps"]
-    assert plan["groundings"] == [{"slot": "g0", "query": "the church",
-                                   "provenance": "any", "why": "boost"}]
+    assert calls_of_block('look_for("pool", at="the church")\n') == [
+        ("ground", {"the church": "boost"}),
+        ("boost", "<the church>", ["pool"])]
     # A flight to a NAME resolves the name; a flight to a fid stays literal
     # (grounding one would look its NAME up and find nothing), and so does
     # anything a binding holds -- a fid a selection resolved came OUT of a
     # row and must never go back through the find that produced it.
-    named = plan_of_block('go_to("the depot")\n')
-    assert named["steps"] == [{"do": "move", "to": ("fid", "g0")}], named
-    assert named["groundings"][0]["why"] == "move"
-    lit = plan_of_block('go_to("prior_160")\n')
-    assert lit["steps"] == [{"do": "move", "to": ("lit", "prior_160")}], lit
-    held = plan_of_block("go_to(r2)\n", bound={"r2": "car_1"})
-    assert held["steps"] == [{"do": "move", "to": ("lit", "car_1")}], held
+    assert calls_of_block('go_to("the depot")\n') == [
+        ("ground", {"the depot": "move"}), ("move", "<the depot>")]
+    assert calls_of_block('go_to("prior_160")\n') == [("move", "prior_160")]
+    assert calls_of_block("go_to(r2)\n", {"r2": "car_1"}) == [
+        ("move", "car_1")]
     # ...and end to end: the name reaches the flight as the row it named.
     reply, fr, flights, _d = drive([
         [run('go_to("the depot")\n')],
@@ -714,13 +705,12 @@ def test_stand_adopts_the_viewpoint_and_its_columns_ride_the_rows():
 
     from maps.search.parse_compile.code_surface import CodeError
     from maps.search.parse_compile.python_surface import scan_block
-    plan = plan_of_block('stand(at="the church", facing="the gate")\n')
-    assert plan["steps"] == [{"do": "stage", "at": ("fid", "g0"),
-                              "facing": ("fid", "g1")}], plan["steps"]
-    assert [g["why"] for g in plan["groundings"]] == ["stage", "facing"]
+    assert calls_of_block('stand(at="the church", facing="the gate")\n') == [
+        ("ground", {"the church": "stage", "the gate": "facing"}),
+        ("stand", "<the church>", "<the gate>")]
     # ...and both slots are one-place slots.
     with pytest.raises(CodeError, match="at= takes ONE place"):
-        plan_of_block('stand(at=r1, facing="north")\n', bound={"r1": "r7"})
+        calls_of_block('stand(at=r1, facing="north")\n', {"r1": "r7"})
     # Free means loop-legal, like look_for and unlike the moving calls.
     assert scan_block('for c in r1:\n    stand(at=c, facing="north")\n')
 
@@ -761,15 +751,15 @@ def test_more_of_pages_a_long_result_and_stops_at_the_end():
 
     from maps.search.parse_compile.code_surface import CodeError
     with pytest.raises(CodeError, match="name 'r9' is not defined"):
-        plan_of_block("more_of(r9)\n")
+        calls_of_block("more_of(r9)\n")
     with pytest.raises(CodeError, match="more_of pages a RESULT"):
-        plan_of_block("more_of(r2)\n", bound={"r2": "car_1"})
-    # A RESULT pages: the window opens at the head rows already served.
+        calls_of_block("more_of(r2)\n", {"r2": "car_1"})
+    # A RESULT pages: the window opens past the rows already asked for.
     from maps.search.analyze_scene.geom_program import _BROAD_HEAD_ROWS as B
-    paged = plan_of_block("more_of(r1)\n", bound={"r1": "r7"})["plans"][0]
-    assert paged["steps"][0]["program"]["ops"][0]["args"]["items"] \
-        == f"r7[{B}:{2 * B}]", paged
-    assert paged["widened"] == {"r7": B}, paged
+    (_v, (op,), answer, page), _shown = calls_of_block(
+        "more_of(r1)\n", {"r1": "r7"}, widened={"r7": B})
+    assert op["args"]["items"] == f"r7[{2 * B}:{3 * B}]", op
+    assert answer == op["ref"] and page == ("r7", 2 * B), page
 
 
 def test_three_ordinary_python_forms_that_were_refused_outright():
@@ -778,15 +768,15 @@ def test_three_ordinary_python_forms_that_were_refused_outright():
     # 1. a literal binding (57). What a one-place slot takes -- a fid off
     #    a served row, a world point off a caption -- binds and rides; a
     #    NAME binds too and grounds where it lands, as the quoted form does.
-    assert plan_of_block('h = "prior_3123"\ngo_to(h)\n')["steps"] \
-        == [{"do": "move", "to": ("lit", "prior_3123")}]
-    assert plan_of_block('depot = "the depot"\ngo_to(depot)\n')["steps"] \
-        == [{"do": "move", "to": ("fid", "g0")}]
+    assert acts_of_block('h = "prior_3123"\ngo_to(h)\n') \
+        == [("move", "prior_3123")]
+    assert acts_of_block('depot = "the depot"\ngo_to(depot)\n') \
+        == [("move", "<the depot>")]
     # ...and a POINT still reaches the moving calls only through a ROW,
     # which is what a selection binds.
     corner = Row({"fid": "end_0", "xy": [3411.0, 1468.0]})
-    assert plan_of_block("go_to(corner)\n", bound={"corner": corner})["steps"] \
-        == [{"do": "move", "to": ("xy", [3411.0, 1468.0])}]
+    assert acts_of_block("go_to(corner)\n", {"corner": corner}) \
+        == [("move", "[3411, 1468]")]
 
     # 2. indexing a call result (36) -- the call runs, the index picks a
     #    row of it, and a refusal names what the MODEL wrote.
@@ -845,24 +835,23 @@ def test_a_slice_frames_the_head_of_an_ordering():
     import pytest
 
     from maps.search.parse_compile.code_surface import CodeError
-    plan = plan_of_block('look(r2[0:20])\n', bound={"r2": "r7"})
-    (op,) = plan["steps"][0]["program"]["ops"]
+    (_a, (op,), answer, _p), crops = calls_of_block(
+        'look(r2[0:20])\n', {"r2": "r7"})
     assert op["args"]["items"] == "r7[0:20]", op
-    assert plan["steps"][1] == {"do": "crops", "of": op["ref"]}
+    # two verbs, one receipt: the window answers nothing, the crop shows it
+    assert answer is None and crops == ("crops", op["ref"], None, None)
     # A window is a SET, so it binds, chains and displays like one, and an
     # open lower bound is the head of the ordering.
-    shown = plan_of_block("r5 = r2[:5]\nr5\n", bound={"r2": "r7"})
-    assert shown["steps"][0]["program"]["ops"][0]["args"]["items"] \
-        == "r7[0:5]", shown
-    assert shown["_code_shows"] == {"r5[0:5]": "r0"}, shown["_code_shows"]
+    (_a, (op,), _ans, _p), = calls_of_block("r5 = r2[:5]\nr5\n", {"r2": "r7"})
+    assert op["args"]["items"] == "r7[0:5]", op
     # BOTH ENDS, and no step: a window addresses a range of the ordering,
     # and anything else is refused rather than silently reinterpreted.
     with pytest.raises(CodeError, match=r"\[lo:hi\] with both ends"):
-        plan_of_block("r3 = r2[0:20:2]\n", bound={"r2": "r7"})
+        calls_of_block("r3 = r2[0:20:2]\n", {"r2": "r7"})
     with pytest.raises(CodeError, match=r"\[lo:hi\] with both ends"):
-        plan_of_block("r2[10:]\n", bound={"r2": "r7"})
+        calls_of_block("r2[10:]\n", {"r2": "r7"})
     with pytest.raises(CodeError, match="name 'r9' is not defined"):
-        plan_of_block("r3 = r9[0:5]\n")
+        calls_of_block("r3 = r9[0:5]\n")
 
     # ...and end to end the head of the ordering is what comes back.
     from maps.search.analyze_scene.geom_program import _BROAD_HEAD_ROWS as H
