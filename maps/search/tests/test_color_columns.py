@@ -137,7 +137,7 @@ def test_color_columns_are_centered_never_minmaxed():
     assert out[1]["score"] == round(0.05 - 0.5, 4)
 
 
-# --- CALIBRATED-UNIT: absence is a DIFFERENT FACT on each of the two keys --
+# --- CALIBRATED-UNIT: an absent colour is unknown --
 
 
 def test_an_unseen_colour_is_UNKNOWN_and_ranks_between_match_and_mismatch():
@@ -154,17 +154,6 @@ def test_an_unseen_colour_is_UNKNOWN_and_ranks_between_match_and_mismatch():
                        {"fid": "mismatch", "color_red": 0.05}],
                       ["color_red"], [-1.0])
     assert [r["fid"] for r in down] == ["mismatch", "unseen", "match"], down
-
-
-def test_a_missing_name_match_is_still_strictly_worst():
-    """The other calibrated key, and its absence is the opposite fact."""
-    up = G.score_by([{"fid": "weak", "name_match": 0.05}, {"fid": "absent"}],
-                    ["name_match"], [1.0])
-    assert [r["fid"] for r in up] == ["weak", "absent"], up
-    assert up[1]["score"] < up[0]["score"]
-    down = G.score_by([{"fid": "strong", "name_match": 0.95},
-                       {"fid": "absent"}], ["name_match"], [-1.0])
-    assert [r["fid"] for r in down] == ["strong", "absent"], down
 
 
 def test_an_off_palette_color_key_names_the_palette():

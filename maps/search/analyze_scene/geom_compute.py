@@ -212,9 +212,7 @@ def normalize_color(word: str) -> str:
 
 # The named color-column family the agent sorts on: ``color_<word>`` over
 # ``COLOR_ENUM``. Each column's value is ``color_match(row.color, word,
-# row.color_conf)``; rows without a perceived color omit the column. The set
-# drives the calibrated-unit treatment in :func:`score_by` and the evidence
-# carry in the frame charts.
+# row.color_conf)``; rows without a perceived color omit the column.
 COLOR_COLUMNS = frozenset("color_" + w for w in COLOR_ENUM)
 
 
@@ -255,110 +253,40 @@ def _arc_lengths(poly_en):
     return out
 
 
-# Keys already calibrated to [0,1] with a 0.5 NEUTRAL (the color_<word>
-# columns, name_match): CENTERED (v-0.5), never min-max'd, so the neutral and
-# the color_conf shrink survive into the composite.
-def _is_calibrated_unit_key(k) -> bool:
-    return k == "name_match" or k in COLOR_COLUMNS
-
-
-# Cap on the adaptive composite-score stamp (geom_program._fmt_float's render
-# bound matches it): raw composites still colliding at this many decimals are
-# float-noise apart and stamp equal, a TRUE tie.
+# Cap on the adaptive score stamp: composites still equal at this many
+# decimals are float noise apart, a true tie.
 _SCORE_MAX_DP = 10
 
 
-def score_by(items, keys, weights=None, abs_keys=()) -> list[dict]:
-    """Fuse several scalar keys into ONE composite, sign-aware score; return items
-    ordered BEST-FIRST (rank 0 = highest). The multi-key terminal sort; the caller
-    (geom_program.score_by) passes EXACTLY the keys+weights the agent's emphasis
-    names -- nothing is auto-added here. score = sum(weight_k * term_k):
+def score_by(items, keys, weights) -> list[dict]:
+    """Rows best-first by ``sum(w * term)``, each stamped with ``score``.
 
-      - a CALIBRATED unit key (a color_<word> column / name_match): term =
-        (v - 0.5) -- CENTERED on its 0.5 neutral, so a neutral 0.5 -> 0 (no
-        pull) and the color_conf shrink stays muted; NEVER min-max'd.
-      - any other (unbounded SPATIAL) key (dist_m/arc_m/perp_offset_m): MIN-MAX
-        normalized to [0,1] over the rows that CARRY a numeric value, so a key in
-        meters fuses with the [-0.5,0.5] color term without its magnitude dominating.
-      - a MISSING spatial key on a row, or a DEGENERATE (constant, max==min)
-        spatial key: the NEUTRAL 0.5 midpoint -- no pull, and a row missing a
-        key is never dropped, only un-boosted.
-      - a MISSING ``name_match``: strictly WORSE than any measured value under
-        either weight sign (term -0.6 for w>=0, +0.6 for w<0 -- outside the
-        measured [-0.5, 0.5] band). Retrieval SCORED that row and it fell
-        below threshold, so it never outranks a row whose read merely
-        scored low.
-      - a MISSING ``color_<word>``: the NEUTRAL 0. Absence there means the
-        row has not been LOOKED at (a prior carries a perceived colour only
-        after a view passes over it), not that it fails the cue -- and
-        unknown belongs between a match and a mismatch.
-
-    A weight's SIGN is its direction: NEGATIVE = lower-raw-is-better (a d_<ref>),
-    POSITIVE = higher-raw-is-better (a color_<word> column); weights default to +1.0 each.
-    A key in ``abs_keys`` reads |value|, the magnitude term for a SIGNED
-    column (off_/vx_/vy_), so w:-1 there means nearest-the-axis-first. Each
-    returned item gets ``score`` stamped at ADAPTIVE precision: the fewest
-    decimals (floor 4, cap ``_SCORE_MAX_DP``) at which every pair of adjacent
-    DISTINCT raw composites stays distinct, so a skew-compressed distribution
-    never rounds into a false tie. A stable sort keeps input (fid-sorted)
-    order on ties. The absent-key / required-emphasis guards live in
-    geom_program.score_by."""
-    rows = list(items or [])
-    ws = [1.0] * len(keys) if not weights else [float(w) for w in weights]
-    _abs = frozenset(abs_keys or ())
-
-    def _raw(it, k):
-        v = it.get(k) if isinstance(it, dict) else None
-        if (k in _abs and isinstance(v, (int, float))
-                and not isinstance(v, bool)):
-            return abs(v)
-        return v
-
-    spans = []
+    A ``color_<word>`` term is the value centred on its 0.5 neutral (missing:
+    0, the row has not been seen yet); any other key is min-max scaled over
+    the rows carrying it (missing or constant: 0.5). A weight's sign is its
+    direction (negative: lower is better). ``score`` is rounded to the fewest
+    decimals (4 to ``_SCORE_MAX_DP``) that keep distinct composites distinct;
+    ties keep input order."""
+    spans = {}
     for k in keys:
-        if _is_calibrated_unit_key(k):
-            spans.append(None)
-            continue
-        vals = [_raw(it, k) for it in rows
-                if isinstance(it, dict) and isinstance(it.get(k), (int, float))]
-        spans.append((min(vals), max(vals)) if vals else (0.0, 0.0))
+        vals = [r[k] for r in items if isinstance(r.get(k), (int, float))]
+        spans[k] = (min(vals), max(vals)) if vals else (0.0, 0.0)
 
-    def _term(it, k, span, w):
-        v = _raw(it, k)
-        present = isinstance(v, (int, float))
-        if _is_calibrated_unit_key(k):
-            if present:
-                return v - 0.5
-            # A missing ``name_match`` is a real negative (retrieval scored
-            # the row below threshold): outside the [-0.5, 0.5] band on the
-            # losing side of the weight's sign. A missing ``color_<word>``
-            # means nothing has looked at the row yet (a prior gains a
-            # perceived color only once a view passes over it), so unknown
-            # sits between a match and a mismatch, at the neutral.
-            if k in COLOR_COLUMNS:
-                return 0.0
-            return -0.6 if w >= 0 else 0.6
-        lo, hi = span
-        if not present or hi <= lo:
-            return 0.5
-        return (v - lo) / (hi - lo)
+    def term(r, k):
+        v = r.get(k)
+        if k in COLOR_COLUMNS:
+            return v - 0.5 if isinstance(v, (int, float)) else 0.0
+        lo, hi = spans[k]
+        return (v - lo) / (hi - lo) if isinstance(v, (int, float)) and hi > lo else 0.5
 
-    out = []
-    raws = []
-    for it in rows:
-        raws.append(sum(w * _term(it, k, span, w)
-                        for w, k, span in zip(ws, keys, spans)))
-        out.append(dict(it) if isinstance(it, dict) else {"value": it})
-    # ADAPTIVE-precision stamp (see the docstring).
-    dp = 4
+    raws = [sum(float(w) * term(r, k) for w, k in zip(weights, keys)) for r in items]
     distinct = sorted(set(raws))
+    dp = 4
     while dp < _SCORE_MAX_DP and any(
-            round(a, dp) == round(b, dp)
-            for a, b in zip(distinct, distinct[1:])):
+            round(a, dp) == round(b, dp) for a, b in zip(distinct, distinct[1:])):
         dp += 1
-    for nit, s in zip(out, raws):
-        # + 0.0 turns a signed -0.0 into 0.0.
-        nit["score"] = round(s, dp) + 0.0
+    # + 0.0 turns a signed -0.0 into 0.0.
+    out = [{**r, "score": round(s, dp) + 0.0} for r, s in zip(items, raws)]
     out.sort(key=lambda r: r["score"], reverse=True)
     return out
 
