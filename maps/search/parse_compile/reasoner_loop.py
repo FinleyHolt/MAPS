@@ -1111,86 +1111,63 @@ def advance_reasoner_one_round(
             return _rounded_xy(tok)
         return None
 
-    def _stage_apply(items: list) -> dict:
-        """stand(): mint vN handles; the latest staged becomes STANDING.
-        The receipt states the columns/refs/render facts the stance turns
-        on; a re-stage is one more item. Bumps the surface version — a
-        program re-run under a new stance can say something new."""
+    def _stage_apply(at_tok: str, facing_tok: str) -> dict:
+        """stand(): mint a vN handle that becomes STANDING. The receipt
+        states the columns/refs/render facts the stance turns on. Bumps the
+        surface version -- a program re-run under a new stance can say
+        something new."""
         from maps.search.analyze_scene.geom_compute import COMPASS_UNIT  # noqa: PLC0415
-        staged_acks: list[dict] = []
-        errors: list[dict] = []
-        for i, it in enumerate(items):
-            if not isinstance(it, dict):
-                errors.append({"index": i, "error":
-                               "each stage item is {at, facing}"})
-                continue
-            at_tok, facing_tok = it.get("at"), it.get("facing")
-            at_xy = _resolve_stage_point(at_tok)
-            if at_xy is None:
-                errors.append({"index": i, "error": (
-                    f"at {at_tok!r} is not a live surface fid or an "
-                    f"[x, y] world point")})
-                continue
-            if (isinstance(facing_tok, str)
-                    and facing_tok.strip().lower() in COMPASS_UNIT):
-                w = facing_tok.strip().lower()
-                up = list(COMPASS_UNIT[w])
-                facing_desc = w
-            else:
-                f_xy = _resolve_stage_point(facing_tok)
-                if f_xy is None:
-                    errors.append({"index": i, "error": (
-                        f"facing {facing_tok!r} is not a live surface "
-                        f"fid, an [x, y] point, or one of "
-                        f"{'|'.join(COMPASS_UNIT)}")})
-                    continue
-                dx = f_xy[0] - at_xy[0]
-                dy = f_xy[1] - at_xy[1]
-                n = (dx * dx + dy * dy) ** 0.5
-                if n < 1e-6:
-                    errors.append({"index": i, "error":
-                                   "at and facing coincide -- no look "
-                                   "direction"})
-                    continue
-                up = [dx / n, dy / n]
-                facing_desc = (facing_tok.strip()
-                               if isinstance(facing_tok, str)
-                               else f"[{f_xy[0]}, {f_xy[1]}]")
-            h = f"v{len(staged_viewpoints) + 1}"
-            brg = round(up_bearing_deg(up)) % 360
-            staged_viewpoints[h] = {
-                "handle": h,
-                "from_xy": at_xy,
-                "up_unit": [round(up[0], 4), round(up[1], 4)],
-                "at": (at_tok.strip() if isinstance(at_tok, str)
-                       else list(at_xy)),
-                "facing": facing_desc,
-                "bearing_deg": brg,
-            }
-            standing_handle[0] = h
-            staged_acks.append({"handle": h, "at_xy": at_xy,
-                                "facing_bearing_deg": brg})
-        if not staged_acks and not errors:
-            return {"error": "stage is an empty list of {at, facing} items"}
-        ack: dict = {}
-        if staged_acks:
-            ack["staged"] = staged_acks
-            _h = standing_handle[0]
-            ack["note"] = (
-                f"standing viewpoint = {_h}: 'left of {_h}'/'right of "
-                f"{_h}'/'ahead of {_h}'/'behind {_h}' ride every find "
-                f"row; {_h} is a point ref ('distance to {_h}'); crops "
-                f"and maps render its facing up.")
-        if errors:
-            ack["rejected"] = errors
-        if staged_acks:
-            # a new stance changes what the SAME program returns: thread
-            # it into the analyze namespace and re-arm the dedup.
-            if compute_namespace is not None:
-                compute_namespace["staged"] = staged_viewpoints
-                compute_namespace["standing"] = standing_handle[0]
-            _surface_version[0] += 1
-        return ack
+
+        def _rejected(error: str) -> dict:
+            return {"rejected": [{"index": 0, "error": error}]}
+
+        at_xy = _resolve_stage_point(at_tok)
+        if at_xy is None:
+            return _rejected(f"at {at_tok!r} is not a live surface fid or an "
+                             f"[x, y] world point")
+        if facing_tok.strip().lower() in COMPASS_UNIT:
+            facing_desc = facing_tok.strip().lower()
+            up = list(COMPASS_UNIT[facing_desc])
+        else:
+            f_xy = _resolve_stage_point(facing_tok)
+            if f_xy is None:
+                return _rejected(
+                    f"facing {facing_tok!r} is not a live surface "
+                    f"fid, an [x, y] point, or one of "
+                    f"{'|'.join(COMPASS_UNIT)}")
+            dx = f_xy[0] - at_xy[0]
+            dy = f_xy[1] - at_xy[1]
+            n = (dx * dx + dy * dy) ** 0.5
+            if n < 1e-6:
+                return _rejected("at and facing coincide -- no look "
+                                 "direction")
+            up = [dx / n, dy / n]
+            facing_desc = facing_tok.strip()
+        h = f"v{len(staged_viewpoints) + 1}"
+        brg = round(up_bearing_deg(up)) % 360
+        staged_viewpoints[h] = {
+            "handle": h,
+            "from_xy": at_xy,
+            "up_unit": [round(up[0], 4), round(up[1], 4)],
+            "at": at_tok.strip(),
+            "facing": facing_desc,
+            "bearing_deg": brg,
+        }
+        standing_handle[0] = h
+        # a new stance changes what the SAME program returns: thread it
+        # into the analyze namespace and re-arm the dedup.
+        if compute_namespace is not None:
+            compute_namespace["staged"] = staged_viewpoints
+            compute_namespace["standing"] = h
+        _surface_version[0] += 1
+        return {
+            "staged": [{"handle": h, "at_xy": at_xy,
+                        "facing_bearing_deg": brg}],
+            "note": (f"standing viewpoint = {h}: 'left of {h}'/'right of "
+                     f"{h}'/'ahead of {h}'/'behind {h}' ride every find "
+                     f"row; {h} is a point ref ('distance to {h}'); crops "
+                     f"and maps render its facing up."),
+        }
 
     def _look_strs(v: object) -> list[str]:
         return [str(x) for x in v if isinstance(x, str) and x.strip()] \
@@ -2854,8 +2831,7 @@ def advance_reasoner_one_round(
                 facing = (step["facing"]
                           if isinstance(step["facing"], str)
                           else _refval(step["facing"]))
-                st = _stage_apply([{"at": _refval(step["at"]),
-                                    "facing": facing}])
+                st = _stage_apply(_refval(step["at"]), facing)
                 if not st.get("staged"):
                     return _plan_err(ack, (
                         "rule F: the stance did not bind: "
