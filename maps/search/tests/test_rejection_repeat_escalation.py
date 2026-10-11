@@ -59,3 +59,13 @@ def test_shape_errors_keep_the_short_count_line():
         # a shape error's own echoed line is the fix material; the census is
         # pure token noise beside it
         assert "Live surface:" not in err, err
+
+
+def test_a_signed_op_error_repeats_with_the_census_too():
+    # find's refusal of ';' carries the op-signature marker the analyze path
+    # strips; the repeat still gets its count and the live census.
+    served = drive_blocks(['a = find("cuisine=pizza;kebab")\na'] * 2)
+    assert "signature" not in served[0]["error"], served[0]
+    err = served[1]["error"]
+    assert "not a query operator" in err and "signature" not in err, err
+    assert "occurred 2x." in err and "Live surface:" in err, err

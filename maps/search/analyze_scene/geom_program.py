@@ -72,11 +72,10 @@ def _attach_color_column(items, canon):
     return out
 
 
-# An op's ProgramError ends with "; signature: <op>": the analyze path cuts
-# the error there, dropping anything appended after it (the repeated-error
-# escalation's live-surface facts), and the op name keeps one op's errors
-# their own repeated-error class. A grounding find's error is served whole,
-# so find's marker carries its text.
+# An op's ProgramError ends with "; signature: <op>": the analyze path serves
+# the error cut there, and the op name keeps one op's errors their own
+# repeated-error class. A grounding find's error is served whole, so find's
+# marker carries its text.
 _FIND_SIGNATURE = ("find([query]) -- SEARCH the world-state: "
                    "query=fuzzy free text over each row's name + tags (priors) or "
                    "detector class (detections); returns THE MATCH SET best-first "

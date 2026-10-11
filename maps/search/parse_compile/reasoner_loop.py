@@ -1606,7 +1606,7 @@ def advance_reasoner_one_round(
             f"detection fid(s), {a_n} prior map row fid(s)"
             + (f"; columns computed on rows: {_cols_s}." if cols else "."))
 
-    def _loop_broken_error(err: str) -> str:
+    def _loop_broken_error(err: str, sig_of: str | None = None) -> str:
         """Fold the live-surface facts into a repeated same-class error,
         escalating instead of repeating itself verbatim.
 
@@ -1620,7 +1620,7 @@ def advance_reasoner_one_round(
         literal fid is required / a syntax error, whose echoed offending
         line is its own fix material) repeats for program-shape reasons,
         and a fid inventory is noise there — those get only the count."""
-        _sig = _err_class_sig(err)
+        _sig = _err_class_sig(err if sig_of is None else sig_of)
         _n = _err_class_counts[_sig] = _err_class_counts.get(_sig, 0) + 1
         if _err_streak["sig"] == _sig:
             _err_streak["n"] += 1
@@ -1802,7 +1802,12 @@ def advance_reasoner_one_round(
                                     preflight=preflight,
                                     answer_ref=answer_ref)
         if isinstance(out, dict) and "error" in out:
-            out = {**out, "error": _loop_broken_error(str(out.get("error")))}
+            # The op-signature tail teaches op names this surface cannot
+            # spell: it is cut before the repeat facts join, and it still
+            # keeps one op's errors their own repeated-error class.
+            _err = str(out.get("error"))
+            out = {**out, "error": _loop_broken_error(
+                _err.split("; signature: ")[0], sig_of=_err)}
         if isinstance(out, dict) and "error" not in out:
             # a fresh successful program ends the CONSECUTIVE-rejection
             # streak: the next same-class error serves its full text again.
@@ -2766,9 +2771,7 @@ def advance_reasoner_one_round(
         out = _dispatch_analyze_scene({"program": {"ops": ops}},
                                       answer_ref=str(answer or ""))
         if isinstance(out, dict) and "error" in out:
-            # keep the mechanical fact, drop the op-signature tail (it
-            # teaches op names this surface cannot spell)
-            return {"error": str(out["error"]).split("; signature: ")[0]}
+            return {"error": out["error"]}
         plan_rn[0] = max(plan_rn[0], int(rn_end or 0))
         # THE COLUMN THIS CALL ORDERED BY -- the last score_by's leading
         # emphasis -- so _finish can say when the ordering did not separate
