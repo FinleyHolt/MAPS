@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from maps.search.parse_compile.conversation import (
+from benchmarks.citynav.conversation import (
     CONVERSATION_JSONL,
     ConversationLog,
 )

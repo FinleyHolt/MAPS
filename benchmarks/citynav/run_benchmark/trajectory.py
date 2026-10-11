@@ -19,7 +19,6 @@ from benchmarks.citynav.action_snap import (
 from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.citynav.episode import EpisodeState
 from benchmarks.citynav.run_benchmark.config import RunConfig
-from maps.search.parse_compile.tour_state import FeatureTour
 
 log = logging.getLogger("run_benchmark")
 
@@ -29,7 +28,7 @@ def synthesize_compliant_trajectory(
     cfg: RunConfig,
     state: "EpisodeState",
     episode: "CityNavEpisode",
-    feature_tour: "FeatureTour",
+    feature_tour,
     start_pose_xyh: tuple[float, float, float],
     start_alt: float,
 ) -> int:

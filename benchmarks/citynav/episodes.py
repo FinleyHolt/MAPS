@@ -13,6 +13,7 @@ import fcntl
 import json
 import math
 import os
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any
@@ -135,10 +136,38 @@ def upsert_row(root: Path, row: dict) -> None:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
-def write_episode_json(episode_dir: Path, row: dict) -> None:
-    # Lazy: the writer pulls numpy, and the fleet driver imports this module.
-    from maps.search.io.atomic import atomic_write_json
+def _json_default(obj: Any) -> Any:
+    """numpy arrays and scalars as their values; anything else as its str."""
+    import numpy as np  # noqa: PLC0415 — the fleet driver imports this module without numpy
 
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, (np.integer, np.floating)):
+        return obj.item()
+    return str(obj)
+
+
+def atomic_write_json(path: Path, payload: Any) -> None:
+    """Write ``payload`` as indented JSON via a tempfile in the destination
+    directory, flushed to disk, then ``os.replace``: a reader never sees a
+    half-written file and two writers never share a tempfile."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".tmp.", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, default=_json_default, indent=2)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def write_episode_json(episode_dir: Path, row: dict) -> None:
     atomic_write_json(Path(episode_dir) / EPISODE_JSON, strict(row))
 
 

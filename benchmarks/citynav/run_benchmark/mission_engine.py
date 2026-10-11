@@ -9,14 +9,15 @@ honest zero the episode runner scores.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
 from benchmarks.citynav.run_benchmark.osm_prior import _build_frame_enrich
-from benchmarks.citynav.run_benchmark.tour_cursor import _write_tour_cursor
 from maps.llm.endpoint_spec import spec as endpoint_spec
 from maps.perception.geometry.sensor_spec import served_description
 from maps.perception.observation import (
@@ -26,18 +27,59 @@ from maps.perception.observation import (
 )
 from maps.perception.ortho.detection_stamping import project_and_stamp_ortho_detections
 from maps.perception.ortho.ground_level import GROUND_LEVEL
-from maps.search.parse_compile.conversation import CONVERSATION_JSONL, ConversationLog
+from benchmarks.citynav.conversation import CONVERSATION_JSONL, ConversationLog
 from maps.search.parse_compile.reasoner_loop import MissionSpec, run_mission
-from maps.search.parse_compile.tour_state import (
-    VIEW_POSITION_CURRENT,
-    VIEW_POSITION_MARKER,
-    FeatureTour,
-    TourViewpoint,
-)
 from maps.search.withhold import withheld
 from maps.util.xy_token import parse_xy_token
 
 log = logging.getLogger("run_benchmark")
+
+#: The two non-feature tokens a flight target can carry: the drone's current
+#: position and the marked region.
+VIEW_POSITION_CURRENT = "current_position"
+VIEW_POSITION_MARKER = "marked_region"
+
+
+@dataclass(frozen=True)
+class TourViewpoint:
+    """One flown stop: the target token, its world point and its altitude
+    (m AGL; None falls back to ``cfg.altitude_m``)."""
+
+    fid: str
+    xy: tuple[float, float]
+    altitude_m: float | None = None
+
+
+@dataclass
+class FeatureTour:
+    """The stops flown so far, in flight order."""
+
+    viewpoints: list[TourViewpoint] = field(default_factory=list)
+
+
+def _write_tour_cursor(tour: FeatureTour) -> None:
+    """Persist the flown stops (id and xy, in flight order) to
+    ``<workdir>/flight/tour_cursor.json``, the record the flight readers
+    (``benchmarks.flight.measures`` and ``replay``) take a run's flights
+    from; temp file then replace. No-op without ``SEARCH_COMPILE_WORKDIR``."""
+    workdir_env = os.environ.get("SEARCH_COMPILE_WORKDIR")
+    if not workdir_env:
+        return
+    try:
+        flight_dir = Path(workdir_env) / "flight"
+        flight_dir.mkdir(parents=True, exist_ok=True)
+        path = flight_dir / "tour_cursor.json"
+        payload = {
+            "stops_visited": [
+                {"stop_id": vp.fid, "xy": list(vp.xy)} for vp in tour.viewpoints
+            ],
+        }
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload))
+        tmp.replace(path)
+    except Exception:
+        log.debug("tour_cursor write failed; non-fatal", exc_info=True)
+
 
 # The mission's flight budget: a NEVER-SERVED liveness backstop (the model
 # hears about no budget; flights are bounded by turns anyway). Sits far
@@ -231,7 +273,7 @@ class MissionSession:
         self.t_start = t_start
         self.observe = observe
         self.flights: list[dict] = []
-        self.feature_tour = FeatureTour.empty()
+        self.feature_tour = FeatureTour()
         markers = h.episode.marker_positions or []
         self.marker_xy = (
             (float(sum(p[0] for p in markers) / len(markers)),

@@ -9,7 +9,7 @@ def _replay(commit_xy, max_steps=60):
 
     from benchmarks.citynav.episode import EpisodeState
     from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
-    from maps.search.parse_compile.tour_state import FeatureTour, TourViewpoint
+    from benchmarks.citynav.run_benchmark.mission_engine import FeatureTour, TourViewpoint
 
     state = EpisodeState(pose_xy=(0.0, 0.0), altitude_m=50.0, graph=None)
     state.confirmed_target_xy = commit_xy

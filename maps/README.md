@@ -19,8 +19,6 @@ detections into the graph) and returns the flight report the model reads.
 | Printing the served contract | `search/parse_compile/contract.py` |
 | The Python surface: executing a block, the library calls, rows, `.filter` and `.order` | `search/parse_compile/python_surface.py` |
 | Compiling library calls onto geometry ops | `search/parse_compile/code_surface.py` |
-| The conversation on disk (`conversation.jsonl`) | `search/parse_compile/conversation.py` |
-| The flown stops and the flight-side cursor over them | `search/parse_compile/tour_state.py` |
 | Which classes the segmenter watches | `search/parse_compile/perception_director.py`, `search/search_loop.py` (`declare_mission_concepts`) |
 | The geometry op program behind `find`, `intersection`, `ends_of`, `distance` | `search/analyze_scene/geom_program.py`, `search/analyze_scene/geom_compute.py`, `search/analyze_scene/row_geometry.py` |
 | Matching a query to rows by name | `search/analyze_scene/text_match.py` |

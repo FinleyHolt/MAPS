@@ -87,6 +87,7 @@ and every value is checked by type and range at load
 | `bench_fullset.py` | The full-split driver. |
 | `run_benchmark/` | The runner: config, episode setup, the mission engine (`mission_engine.py`), the episode server, scoring rows. |
 | `adapter.py`, `episodes.py`, `paths.py` | The dataset, the ledger, the file layout. |
+| `conversation.py` | The mission's `conversation.jsonl`, written turn by turn. |
 | `eval.py` | Scoring: NE, SR, OSR, SPL, and the shape criterion the Cal City bench uses. |
 | `action_snap.py` | The six-action alphabet a flight is replayed in. |
 | `bake/city.py` | The OSM prior bake. |

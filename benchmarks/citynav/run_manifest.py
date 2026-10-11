@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 from benchmarks import repo_provenance
-from benchmarks.citynav.episodes import EPISODES_JSONL
+from benchmarks.citynav.episodes import EPISODES_JSONL, atomic_write_json
 
 SCHEMA = "maps.run_manifest/v1"
 MANIFEST_NAME = "run_manifest.json"
@@ -241,9 +241,6 @@ def emit_or_verify(out_root: Path, manifest: dict, log=print) -> Path:
     """First entry writes the manifest; re-entry verifies identity and
     appends a ``resumes`` entry. Raises ``ManifestIdentityError`` on drift, an
     unreadable manifest, or a root holding a ledger but no manifest."""
-    # Lazy: maps.search imports the engine, which no reader of this module needs.
-    from maps.search.io.atomic import atomic_write_json  # noqa: PLC0415
-
     path = Path(out_root) / MANIFEST_NAME
     if not path.exists():
         if (Path(out_root) / EPISODES_JSONL).exists():

@@ -47,7 +47,7 @@ from benchmarks.flight.live_source import OBSERVATION_JPEG_QUALITY, LiveSource
 from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat
 from benchmarks.flight.vehicle import Leg
-from maps.search.parse_compile.conversation import CONVERSATION_JSONL, ConversationLog
+from benchmarks.citynav.conversation import CONVERSATION_JSONL, ConversationLog
 
 if TYPE_CHECKING:
     # Imported where used: the engine binds the bench's paths at import,
