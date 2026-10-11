@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-XY_TOKEN_RE = re.compile(
+_XY_TOKEN_RE = re.compile(
     r"^\s*\[?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]?\s*$")
 
 
@@ -20,7 +20,7 @@ def parse_xy_token(token) -> tuple[float, float] | None:
     else ``None`` (non-strings included)."""
     if not isinstance(token, str):
         return None
-    m = XY_TOKEN_RE.match(token)
+    m = _XY_TOKEN_RE.match(token)
     if not m:
         return None
     return (float(m.group(1)), float(m.group(2)))

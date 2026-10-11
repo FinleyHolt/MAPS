@@ -17,7 +17,6 @@ def _dp(pts: list, tol: float) -> list:
     """Douglas-Peucker on an OPEN run; both endpoints are pinned."""
     if len(pts) < 3:
         return list(pts)
-    out = [pts[0]]
     # Iterative (an explicit stack, not recursion): a 2 m cell boundary loop
     # around a 418k-cell lake arrives with 1,566 vertices, and the recursive
     # form is O(n) deep on an already-thin run.
@@ -43,8 +42,7 @@ def _dp(pts: list, tol: float) -> list:
             keep[worst_i] = True
             stack.append((i0, worst_i))
             stack.append((worst_i, i1))
-    out = [p for p, k in zip(pts, keep) if k]
-    return out
+    return [p for p, k in zip(pts, keep) if k]
 
 
 def simplify_ring(loop, *, tolerance: float, max_points: int) -> list:
@@ -110,16 +108,6 @@ def clip_t(p0, p1, box):
     return t0, t1
 
 
-def _clip_segment(p0, p1, box):
-    """The part of segment p0->p1 inside ``box``, or None."""
-    t = clip_t(p0, p1, box)
-    if t is None:
-        return None
-    (x0, y0), (x1, y1) = p0, p1
-    dx, dy = x1 - x0, y1 - y0
-    return ((x0 + t[0] * dx, y0 + t[0] * dy), (x0 + t[1] * dx, y0 + t[1] * dy))
-
-
 def clip_ring_to_box(loop, box) -> list:
     """The parts of a closed ring inside ``box``, as OPEN arcs.
 
@@ -145,13 +133,15 @@ def clip_ring_to_box(loop, box) -> list:
     arcs: list = []
     run: list = []
     for i in range(len(pts)):
-        seg = _clip_segment(pts[i], pts[(i + 1) % len(pts)], box)
-        if seg is None:
+        (x0, y0), (x1, y1) = pts[i], pts[(i + 1) % len(pts)]
+        t = clip_t((x0, y0), (x1, y1), box)
+        if t is None:
             if len(run) >= 2:
                 arcs.append(run)
             run = []
             continue
-        a, b = seg
+        dx, dy = x1 - x0, y1 - y0
+        a, b = (x0 + t[0] * dx, y0 + t[0] * dy), (x0 + t[1] * dx, y0 + t[1] * dy)
         if run and run[-1] == a:
             run.append(b)
         else:
