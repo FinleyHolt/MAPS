@@ -14,7 +14,6 @@ back — are pinned in ``test_code_surface_arm`` and ``test_python_surface``.
 
 from __future__ import annotations
 
-import inspect
 
 from maps.search.parse_compile.reasoner_loop import (
     _mission_sanitize_moves,

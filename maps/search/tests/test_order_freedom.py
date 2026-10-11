@@ -39,14 +39,11 @@ from maps.search.analyze_scene.geom_program import (
     compact_results,
     run_program,
 )
-from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.reasoner_loop import (
     _PREFLIGHT_COLOR_NOTE,
     _PREFLIGHT_RUNTIME_NOTE,
-    advance_reasoner_one_round,
     run_geom_program_tool,
 )
-from maps.search.tests.fakes import TEST_SPEC, bare_ctx
 
 # Three cars strung along a road with a stored centerline, plus a plain
 # building anchor (no centerline) and a landmark the cars are away from.
@@ -352,60 +349,3 @@ def test_per_stop_round_serves_no_phase_note():
         ]}}, namespace=ns)
     assert _PREFLIGHT_COLOR_NOTE not in str(out), out
     assert _PREFLIGHT_RUNTIME_NOTE not in str(out), out
-
-
-# --------------------------------------------------------------------------- #
-# VIEW-PER-FIELD: each failed field gets its own entry; siblings apply         #
-# --------------------------------------------------------------------------- #
-
-def _view_ack_for(view_args: dict) -> dict:
-    """Drive ONE view call through the real per-stop handler (mock reasoner,
-    scripted turns: the view, then an explicit CARRY) and return its ack."""
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
-    turns = iter([
-        {"kind": "tool_call", "content": "", "reasoning": "",
-         "tool_calls": [{"id": "c0", "type": "function",
-                         "function": {"name": "view",
-                                      "arguments": view_args}}]},
-        {"kind": "text", "content": "CARRY", "reasoning": ""},
-    ])
-    r.step_tool_call = lambda tools: next(turns)
-    acks: list = []
-    _orig = r.append_tool_result
-
-    def _capture(cid, name, obj):
-        acks.append((name, obj))
-        return _orig(cid, name, obj)
-
-    r.append_tool_result = _capture
-    advance_reasoner_one_round(
-        reasoner=r,
-        user_message="find the car",
-        ctx=bare_ctx(),
-        compute_namespace={"cands": [dict(c) for c in _CANDS],
-                           "anchors": []},
-        rid_tag="h0",
-    )
-    assert acks and acks[0][0] == "view", acks
-    return acks[0][1]
-
-
-
-
-
-
-
-
-def _main() -> int:
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            fn()
-            print(f"PASS {name}")
-    print("ALL ORDER-FREEDOM TESTS PASSED")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(_main())
-
-

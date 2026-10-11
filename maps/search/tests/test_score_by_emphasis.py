@@ -201,16 +201,3 @@ def test_malformed_emphasis_element_fails_loud():
             pass
         else:
             raise AssertionError(f"expected ProgramError on malformed emphasis {bad!r}")
-
-
-def _main() -> int:
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            fn()
-            print(f"PASS {name}")
-    print("ALL SCORE_BY-EMPHASIS TESTS PASSED")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(_main())

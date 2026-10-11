@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 import threading
 
-import pytest
 
 from maps.search.parse_compile.reasoner_loop import _named_feature_note
 from maps.search.tests.fakes import drive, run, tool_results

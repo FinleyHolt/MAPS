@@ -10,7 +10,6 @@ import json
 
 from maps.search.analyze_scene.geom_program import (
     compact_results, run_program)
-from maps.search.parse_compile.reasoner_loop import run_geom_program_tool
 
 # Two buildings in contact, one detached 30 m away, one road with a
 # stored centerline (the chart / auto-attach subject).

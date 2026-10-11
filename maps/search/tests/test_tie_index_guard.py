@@ -14,6 +14,8 @@ tie either, so ``[0]`` on it is always legal.
 """
 from __future__ import annotations
 
+import pytest
+
 from maps.search.analyze_scene.geom_program import ProgramError, run_program
 
 _CANDS = [
@@ -58,41 +60,30 @@ def _assert_raises_law(ops, anchors):
 # --------------------------------------------------------------------------- #
 
 
-def test_bare_index_into_same_named_browse_raises_law_as_frame_reference():
-    # r0[0] as a compare frame.reference (the single-geometry slot).
-    _assert_raises_law([
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-        {"ref": "rV", "op": "compare",
-         "args": {"items": "cands", "frame": {"reference": "r0[0]", "side": "left"}}},
-    ], _SAME_NAMED)
-
-
-def test_bare_index_into_same_named_browse_raises_law_as_items():
-    # r0[0] as a list-op items slot (the single-row wrap path).
-    _assert_raises_law([
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-        {"ref": "r1", "op": "filter_items",
-         "args": {"items": "r0[0]", "key": "class", "op": "eq", "value": "building"}},
-    ], _SAME_NAMED)
-
-
-def test_bare_index_into_same_named_browse_raises_law_as_viewer_endpoint():
-    # r0[0]/r1[0] as the viewer frame's from/toward endpoints.
-    _assert_raises_law([
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-        {"ref": "r1", "op": "find", "args": {"provenance": "prior"}},
-        {"ref": "r2", "op": "compare",
-         "args": {"items": "cands", "frame": {"from": "r0[0]", "toward": "r1[0]"}}},
-    ], _SAME_NAMED)
-
-
-def test_dollar_form_index_into_same_named_browse_also_raises_law():
-    # the $-slip form hits the SAME guard -- one meaning.
-    _assert_raises_law([
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
-        {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "r2", "op": "compare", "args": {"items": "$r1", "refs": ["$r0[0]"]}},
-    ], _SAME_NAMED)
+@pytest.mark.parametrize("ops", [
+    # r0[0] as a compare frame.reference (the single-geometry slot)
+    [{"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+     {"ref": "rV", "op": "compare",
+      "args": {"items": "cands", "frame": {"reference": "r0[0]", "side": "left"}}}],
+    # r0[0] as a list-op items slot (the single-row wrap path)
+    [{"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+     {"ref": "r1", "op": "filter_items",
+      "args": {"items": "r0[0]", "key": "class", "op": "eq", "value": "building"}}],
+    # r0[0]/r1[0] as the viewer frame's from/toward endpoints
+    [{"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+     {"ref": "r1", "op": "find", "args": {"provenance": "prior"}},
+     {"ref": "r2", "op": "compare",
+      "args": {"items": "cands", "frame": {"from": "r0[0]", "toward": "r1[0]"}}}],
+    # the $-slip form
+    [{"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+     {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},
+     {"ref": "r2", "op": "compare", "args": {"items": "$r1", "refs": ["$r0[0]"]}}],
+    # surface order carries no cue: anchors[0] into a same-named tied head
+    [{"ref": "rV", "op": "compare",
+      "args": {"items": "cands", "frame": {"reference": "anchors[0]", "side": "left"}}}],
+])
+def test_an_index_into_a_same_named_browse_raises_the_law(ops):
+    _assert_raises_law(ops, _SAME_NAMED)
 
 
 def test_query_matched_find_tied_head_is_legal_to_index():
@@ -172,12 +163,3 @@ def test_filter_narrowed_single_row_index_is_legal():
          "args": {"items": "cands", "frame": {"reference": "r1[0]", "side": "left"}}},
     ], _SAME_NAMED)
     assert "rV" in out["results"]
-
-
-def test_direct_surface_index_on_tied_head_still_raises():
-    # Retrieval/surface order carries no cue signal: indexing anchors[...]
-    # straight into a same-named tied head still raises the law.
-    _assert_raises_law([
-        {"ref": "rV", "op": "compare",
-         "args": {"items": "cands", "frame": {"reference": "anchors[0]", "side": "left"}}},
-    ], _SAME_NAMED)

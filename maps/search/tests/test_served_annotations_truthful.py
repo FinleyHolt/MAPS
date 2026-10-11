@@ -22,8 +22,8 @@
 """
 from __future__ import annotations
 
+import pytest
 
-from maps.search.analyze_scene import text_match as T
 from maps.search.analyze_scene.geom_program import (
     _OP_SIGNATURE,
     ProgramError,
@@ -153,16 +153,12 @@ def test_color_word_miss_names_the_color_column_path():
     assert "find{" not in hint and "score_by" not in hint
 
 
-def test_color_word_in_or_clause_also_affords():
-    _, env = _find(_grass_world(), "zzqx OR white")
+@pytest.mark.parametrize("query, column", [("zzqx OR white", "color_white"),
+                                           ("silver", "color_gray")])
+def test_a_colour_word_in_a_clause_or_a_synonym_names_the_canonical_column(query, column):
+    _, env = _find(_grass_world(), query)
     assert env["len"] == 0
-    assert "color_white" in env["hint"]
-
-
-def test_synonym_color_word_names_the_canonical_column():
-    _, env = _find(_grass_world(), "silver")
-    assert env["len"] == 0
-    assert "color_gray" in env["hint"]
+    assert column in env["hint"]
 
 
 def test_non_color_miss_serves_no_color_affordance():

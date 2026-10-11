@@ -12,7 +12,6 @@ separate: these pin the self-description of order-free resolution errors).
 """
 from __future__ import annotations
 
-import re
 
 import pytest
 

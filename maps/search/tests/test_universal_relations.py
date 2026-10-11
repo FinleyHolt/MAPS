@@ -413,16 +413,3 @@ def test_union_unknown_member_is_loud():
         raise AssertionError("unknown union member did not error")
     except ProgramError as e:
         assert "road_99" in str(e), str(e)
-
-
-def _main() -> int:
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            fn()
-            print(f"PASS {name}")
-    print("ALL UNIVERSAL-RELATION TESTS PASSED")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(_main())

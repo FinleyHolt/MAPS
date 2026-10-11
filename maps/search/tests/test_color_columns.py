@@ -179,7 +179,7 @@ def test_all_colorless_pool_color_emphasis_fails_loud():
 
 
 def test_filter_on_any_color_key_is_rejected():
-    for key in ("color_blue", "color_score", "color", "color", "color_conf"):
+    for key in ("color_blue", "color_score", "color", "color_conf"):
         _expect_error([
             {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
             {"ref": "r1", "op": "filter_items",
@@ -264,19 +264,3 @@ def test_palette_equals_the_m6_emitted_vocabulary():
     assert set(G.COLOR_ENUM) == set(_VDW_TO_VOCAB.values()), (
         G.COLOR_ENUM, sorted(set(_VDW_TO_VOCAB.values())))
     assert G.COLOR_COLUMNS == frozenset("color_" + w for w in G.COLOR_ENUM)
-
-
-def _main() -> int:
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            fn()
-            print(f"PASS {name}")
-    print("ALL COLOR-COLUMN TESTS PASSED")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(_main())
-
-
-# --- weak-appearance note is stripped: no appearance note is ever served ----

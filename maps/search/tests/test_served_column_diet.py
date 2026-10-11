@@ -13,7 +13,10 @@ quoted by VALUE, never by name).
 """
 from __future__ import annotations
 
+import re
+
 from maps.search.analyze_scene.geom_program import (
+    KEY_PATTERN,
     _GRID_COL_DROP,
     _TAG_RENDER_DROP,
     _grid_cell,
@@ -42,39 +45,33 @@ ROW = {
 }
 
 
-def test_the_header_carries_no_idx_column():
-    """``idx`` restated the row's own position. ``rN[i]`` addresses position
-    directly and needs no printed index -- and was itself emitted 0 times in
-    2,700 episodes, as was any mention of ``idx`` in a say sentence."""
-    header = _render_grid_rows([ROW]).splitlines()[0]
+def test_the_live_header_keeps_and_drops_by_name():
+    """The header has no idx and none of the drop set (name_match and score by
+    name), keeps the shape, colour and identity columns, and its separator and
+    body match its width."""
+    header, sep, body = _render_grid_rows([ROW]).splitlines()[:3]
     assert header.startswith("| fid |"), header
     assert " idx " not in header
-
-
-def test_the_separator_still_matches_the_header_width():
-    """Dropping a column and not its rule renders a broken markdown table."""
-    header, sep, body = _render_grid_rows([ROW]).splitlines()[:3]
     assert header.count("|") == sep.count("|") == body.count("|")
-
-
-def test_a_dropped_column_does_not_render():
-    header = _render_grid_rows([ROW]).splitlines()[0]
     for col in _GRID_COL_DROP:
         assert col not in header, col
-
-
-def test_the_kept_shape_columns_still_render():
-    """Each keep has a NAMED reason (the drop-set comment carries them):
-    footprint_area_m2 5/8 load-bearing sleeper (the only size-adjective sort
-    and only degenerate-mask detector), end0_xy/end1_xy 8/8 consumed as a
-    PAIR (direction, extent, ends), and color the 8/8 primary target-side
-    signal. The audit REMOVED two former keeps: name_match (7/8
-    not-observed) now sits in the drop set, and the min-area rectangle's
-    axis heading is gone from the tree entirely."""
-    header = _render_grid_rows([ROW]).splitlines()[0]
+    assert "name_match" not in header and " score " not in header, header
     for col in ("footprint_area_m2", "end0_xy", "end1_xy", "color",
                 "name", "tags", "xy"):
         assert col in header, col
+
+
+def test_header_renders_keys_verbatim_with_units_separate():
+    cols = ["distance to new_park_street", "facing new_park_street",
+            "footprint_area_m2"]
+    header = _render_grid_rows([], cols).splitlines()[0]
+    for c in cols:
+        assert c in header, header
+    assert "(m)" not in header, header
+    assert "(deg)" not in header, header
+    for c in ("distance to new_park_street", "facing new_park_street"):
+        assert re.match(KEY_PATTERN, c), (KEY_PATTERN, c)
+        assert not re.match(KEY_PATTERN, c + "(m)")
 
 
 def test_dropped_tag_keys_do_not_render_and_kept_ones_do():
@@ -144,17 +141,6 @@ def test_score_by_grid_orders_without_a_score_column():
     assert all("score" in r for r in rows), rows[0].keys()
     header = compact_results(out["results"])["r2"]["rows"].splitlines()[0]
     assert "center distance to xy" in header, header
-    assert " score " not in header, header
-
-
-def test_the_comprehension_cuts_are_pinned_by_name():
-    """test_a_dropped_column_does_not_render iterates the LIVE drop set, so
-    it fails open: a name removed from ``_GRID_COL_DROP`` just shrinks the
-    loop (measured: reverting a cut left every test green). Pin the audit's
-    comprehension cuts by NAME -- name_match and score keep their own suites
-    and ride here as the one authoritative drop list."""
-    header = _render_grid_rows([ROW]).splitlines()[0]
-    assert "name_match" not in header, header
     assert " score " not in header, header
 
 

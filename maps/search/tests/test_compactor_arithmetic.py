@@ -27,7 +27,6 @@ import pytest
 from maps.llm.endpoint_spec import EndpointSpec
 from maps.search.analyze_scene import compactor as C
 from maps.search.analyze_scene.compactor import (
-    CompactionError,
     CompactionInfeasible,
     compact_transcript,
 )

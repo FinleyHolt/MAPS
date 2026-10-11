@@ -17,7 +17,6 @@ Pure (no GPU / tile / vLLM). ``pytest maps/search/tests/test_surface_legibility_
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import (
-    ProgramError,
     compact_results,
     run_program,
 )

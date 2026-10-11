@@ -11,7 +11,6 @@ honour. They pin the constants, not the dump — nothing here claims the
 say tool is served.
 """
 
-import pytest
 
 from maps.perception.geometry.sensor_spec import list_sensors
 from maps.search.parse_compile import contract, prompts
