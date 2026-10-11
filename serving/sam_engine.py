@@ -394,9 +394,9 @@ def segment(
     *,
     version: str = "sam3.1",
     device: str = "cuda",
-    score_threshold: float = 0.3,
-    min_area_px: int = 32,
-    max_per_image: int = 64,
+    score_threshold: float,
+    min_area_px: int,
+    max_per_image: int,
     resolution: int = 1008,
 ) -> list[SamDetection]:
     """Run SAM 3.1 once on a single frame in-process.
@@ -582,9 +582,7 @@ def _forward_chunk(
             scores_np = sel_scores_t.to(_torch.float32).cpu().numpy()
             masks_np_bool = masks_bool_t.cpu().numpy()
 
-            n_pass_area = int(masks_np_bool.shape[0])
-            kept_for_concept = 0
-            for k in range(n_pass_area):
+            for k in range(int(masks_np_bool.shape[0])):
                 per_tile.append(
                     SamDetection(
                         label=concept,
@@ -600,7 +598,6 @@ def _forward_chunk(
                     )
                 )
                 next_object_id += 1
-                kept_for_concept += 1
                 if len(per_tile) >= max_per_image:
                     break
             if len(per_tile) >= max_per_image:

@@ -105,7 +105,7 @@ class SegmentRequest(BaseModel):
     concepts: list[str]
     score_threshold: float = 0.3
     min_area_px: int = 32
-    max_per_image: int = 64
+    max_per_image: int = 1024
     resolution: int = 1008
 
 
