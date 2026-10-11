@@ -1830,46 +1830,20 @@ def _window(cur, win, token):
     return rows
 
 
-def _as_list(cx, arg):
-    """An ``items`` arg -> a row list: a handle's rows, or a list whose
-    handles flatten to their rows and whose fids resolve to theirs."""
+def _as_rows(cx, arg):
+    """An ``items`` arg -> point-bearing rows: a handle's rows, a fid's row,
+    an ``[x, y]`` as an xy-only row, or a list of those (handles flatten).
+    A list of rows comes back as itself, keeping its order attributes."""
     v = cx.resolve(arg) if cx.is_ref(arg) else arg
-    if isinstance(v, list):
-        if not any(isinstance(x, str) for x in v):
-            return v
-        out: list = []
-        for x in v:
-            if cx.is_ref(x):
-                sub = cx.resolve(x)
-                out.extend(sub if isinstance(sub, list) else [sub])
-            elif isinstance(x, str) and x in cx.by_fid:
-                out.append(cx.by_fid[x])
-            elif isinstance(x, str):
-                raise ProgramError(
-                    f"cannot resolve {_quote(x)} in list {_quote(arg)}: not a fid in this "
-                    f"surface or an rN ref. {cx.avail('list')}{cx.sig()}")
-            else:
-                out.append(x)
-        return out
-    raise ProgramError(
-        f"cannot resolve a LIST from {_quote(arg)}: wants a list -- an rN ref to a "
-        f"find/compare/filter_items result -- NOT a single fid. "
-        f"{cx.avail('list')}{cx.sig()}")
-
-
-def _as_points(cx, arg):
-    """compare's ``items`` -> point-bearing rows: a handle's rows, fids
-    through ``by_fid``, an ``[x, y]`` as an xy-only row."""
-    v = cx.resolve(arg) if cx.is_ref(arg) else arg
-    if is_xy(v):
+    if is_xy(v) or (isinstance(v, str) and v in cx.by_fid):
         v = [v]
-    if isinstance(v, str) and v in cx.by_fid:
-        v = [cx.by_fid[v]]
     if not isinstance(v, list):
         raise ProgramError(
-            f"cannot resolve a POINT-LIST from {_quote(arg)}: wants a list of points -- an "
-            f"rN ref to a find/compare result, or a list of "
-            f"fids/[x,y] -- NOT a single fid. {cx.avail('list')}{cx.sig()}")
+            f"cannot resolve rows from {_quote(arg)}: items is an rN ref, a "
+            f"fid on this surface, an [x,y], or a list of them. "
+            f"{cx.avail('list')}{cx.sig()}")
+    if all(isinstance(it, dict) and is_xy(it.get("xy")) for it in v):
+        return v
     out = []
     for it in v:
         if isinstance(it, dict) and is_xy(it.get("xy")):
@@ -1879,7 +1853,7 @@ def _as_points(cx, arg):
         elif is_xy(it):
             out.append({"xy": list(it)})
         elif cx.is_ref(it):
-            out.extend(_as_points(cx, cx.resolve(it)))
+            out.extend(_as_rows(cx, it))
         else:
             raise ProgramError(
                 f"cannot resolve a point in the list from item {_quote(it)}: each item must "
@@ -2515,7 +2489,7 @@ def _ends(cx, a):
 def _score_by(cx, a):
     """THE sort: a sign-aware, key-normalized composite over EXACTLY the
     columns the emphasis names -- nothing is auto-added."""
-    items = _as_list(cx, a["items"])
+    items = _as_rows(cx, a["items"])
     _sb_notes: list = []
     emphasis: dict = {}
     for _el in a["emphasis"]:
@@ -2575,7 +2549,7 @@ def _filter_items(cx, a):
     column does not place (absent: the reference straddles the row, or none
     of it lies abreast) and drops one it places on the other side;
     ``in_or_blank`` keeps a word column reading one of ``value`` or blank."""
-    items = _as_list(cx, a["items"])
+    items = _as_rows(cx, a["items"])
     key, opr, val = a["key"], a["op"], a.get("value")
     # A filter PRESERVES its input's order: a cut over an ordered set stays
     # ordered (and renderable); a cut over a browse stays not.
@@ -2695,7 +2669,7 @@ def _stratum(cx, a):
     """A find's match tier as a set (r1.exact / r1.tagged / r1.fuzzy). A
     view, never a re-retrieval: input order kept, nothing else dropped, the
     full set live behind its own handle."""
-    items = _as_list(cx, a["items"])
+    items = _as_rows(cx, a["items"])
     tier = str(a["tier"]).strip().lower()
     if not any(isinstance(it, dict)
                and isinstance(it.get("name_match"), (int, float))
@@ -2836,7 +2810,7 @@ def _compare(cx, a):
     'along <fid>' (arc metres from its end0) and 'distance to <fid>' (the
     unsigned lateral offset) instead.
     """
-    items = _as_points(cx, a["items"])
+    items = _as_rows(cx, a["items"])
     # Order propagation: compare preserves input order, so its result is
     # ordered iff its input was (read off the resolved source).
     _src = cx.resolve(a["items"]) if cx.is_ref(a["items"]) else a["items"]

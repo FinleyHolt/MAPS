@@ -28,3 +28,15 @@ def test_a_window_serves_its_span():
 def test_a_window_past_the_end_is_loud():
     with pytest.raises(ProgramError, match="selected 0 of 3"):
         _window("[5:8]")
+
+
+@pytest.mark.parametrize("op, args", [
+    ("filter_items", {"key": "xy", "op": "truthy"}),
+    ("compare", {"refs": ["b1"]})])
+def test_every_op_reads_items_by_one_rule(op, args):
+    def run(items):
+        return run_program([dict(c) for c in _CANDS], [], {"ops": [
+            {"ref": "r0", "op": op, "args": {"items": items, **args}}]})
+    assert [r["fid"] for r in run("d0")["results"]["r0"]] == ["d0"]
+    with pytest.raises(ProgramError, match="cannot resolve a point in the list from item 164"):
+        run([164])
