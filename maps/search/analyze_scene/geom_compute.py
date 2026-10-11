@@ -487,8 +487,8 @@ def clip_chains_to_box(chains, box) -> list:
 
     def at(a, b, t):
         # The endpoints come back verbatim: interpolation is not
-        # bit-identical, and :func:`chain_component_labels` partitions on
-        # exact vertex identity.
+        # bit-identical, and :func:`one_place` joins on exact vertex
+        # identity.
         if t <= 0.0:
             return [a[0], a[1]]
         if t >= 1.0:
@@ -531,25 +531,13 @@ def clip_chains_to_box(chains, box) -> list:
     return [c for c in out if c]
 
 
-def chain_component_labels(chains) -> list:
-    """WHICH place each chain of a mask realisation belongs to.
-
-    The partition :func:`chain_components` counts. A label is the index of
-    the lowest-numbered chain in its component, so the labelling depends on
-    nothing but the input order.
-
-    Two chains are the same place when they SHARE A VERTEX, or when one
-    ENCLOSES the other, which makes a hole loop part of the ring around it
-    rather than a place of its own. Whatever is left over is genuinely
-    disjoint: two fragments of a speckled mask, a way the tile boundary cut
-    into two in-tile pieces.
-
-    Exact vertex identity is the whole rule: no tolerance, no join radius.
-    """
+def one_place(chains) -> bool:
+    """Whether a mask realisation is ONE place: its chains all join by a
+    SHARED VERTEX (exact identity, no tolerance) or by one closed chain
+    ENCLOSING another (a hole belongs to its ring). Two fragments of a
+    speckled mask, or a way the tile boundary cut in two, are not."""
     chains = [ch for ch in (chains or []) if ch]
     n = len(chains)
-    if n < 2:
-        return list(range(n))
     parent = list(range(n))
 
     def find(a):
@@ -558,34 +546,20 @@ def chain_component_labels(chains) -> list:
             a = parent[a]
         return a
 
-    def union(a, b):
-        ra, rb = find(a), find(b)
-        if ra != rb:
-            parent[max(ra, rb)] = min(ra, rb)
+    def groups():
+        return len({find(i) for i in range(n)})
 
-    seen: dict = {}
+    first: dict = {}
     for i, ch in enumerate(chains):
         for p in ch:
-            k = (float(p[0]), float(p[1]))
-            if k in seen:
-                union(i, seen[k])
-            else:
-                seen[k] = i
-    if len({find(i) for i in range(n)}) > 1:
-        closed = [i for i in range(n) if is_closed_chain(chains[i])]
-        for i in closed:
-            for j in range(n):
-                if j != i and find(j) != find(i) \
-                        and point_in_polygon(chains[j][0], chains[i]):
-                    union(i, j)
-    return [find(i) for i in range(n)]
-
-
-def chain_components(chains) -> int:
-    """How many separate PLACES a mask realisation is
-    (:func:`chain_component_labels`). A centre is defined over one place
-    and over no more."""
-    return len(set(chain_component_labels(chains)))
+            parent[find(i)] = find(first.setdefault((float(p[0]), float(p[1])), i))
+    if groups() > 1:
+        for i, ch in enumerate(chains):
+            if is_closed_chain(ch):
+                for j in range(n):
+                    if j != i and point_in_polygon(chains[j][0], ch):
+                        parent[find(j)] = find(i)
+    return groups() == 1
 
 
 def mask_geom(chains):

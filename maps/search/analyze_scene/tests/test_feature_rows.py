@@ -64,7 +64,7 @@ def test_every_row_is_one_place_and_may_claim_a_centre():
     lime = [a for a in anchors if a["name"] == "Lime Avenue"]
     assert len(lime) == 2, [a["fid"] for a in lime]
     for row in lime:
-        assert G.chain_components(row["mask"]) == 1, row["mask"]
+        assert G.one_place(row["mask"]), row["mask"]
         assert row.get("mask_centroid") is not None, row
         off, _a, _b = G.gap_witness(
             G.mask_geom(row["mask"]),
@@ -82,7 +82,7 @@ def test_a_row_that_is_STILL_several_places_orients_no_side():
     speckled = _Way(None, [[10, c] for c in range(0, 10)]
                     + [[10, c] for c in range(400, 410)])
     _c, anchors = build_surface([], [("prior_1", speckled)], (0.0, 0.0), 2.0)
-    assert G.chain_components(anchors[0]["mask"]) == 2, anchors[0]["mask"]
+    assert not G.one_place(anchors[0]["mask"]), anchors[0]["mask"]
     assert anchors[0].get("mask_centroid") is None, anchors[0]
 
     out = run_program([{"fid": "d0", "xy": [83.0, 27.0], "class": "car"}],

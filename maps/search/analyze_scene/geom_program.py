@@ -183,7 +183,7 @@ def _mask_center(mask):
     """The mask's area centroid when it is one connected piece, else None:
     several disjoint places have no centre to measure from."""
     return (G.loops_area_centroid(mask)
-            if mask and G.chain_components(mask) == 1 else None)
+            if mask and G.one_place(mask) else None)
 
 
 def representative_point(chains) -> list:
