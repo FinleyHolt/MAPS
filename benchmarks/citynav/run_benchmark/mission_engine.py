@@ -469,9 +469,7 @@ def fly_one(
         TourViewpoint(
             fid=token,
             xy=(float(new_xy[0]), float(new_xy[1])),
-            prob=0.0,
             altitude_m=new_alt,
-            heading_deg=new_heading,
         )
     )
     _write_tour_cursor(feature_tour)
