@@ -54,7 +54,7 @@ def _build_observation(rgb: np.ndarray) -> Observation:
 
 
 def _square_frame(fill: int = 200) -> np.ndarray:
-    """A ``_SAM_INPUT_SIZE`` square frame: the identity letterbox, so masks are authored in wire pixels."""
+    """A ``_SAM_INPUT_SIZE`` square frame: one tile, so masks are authored in wire pixels."""
     return np.full((_SAM_INPUT_SIZE, _SAM_INPUT_SIZE, 3), fill, dtype=np.uint8)
 
 
