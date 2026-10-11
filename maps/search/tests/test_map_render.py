@@ -424,8 +424,12 @@ def test_cells_as_arrays_render_the_same_bytes_as_cells_as_lists():
 
 def test_a_map_after_a_flight_paints_the_flight_and_a_repeat_paints_the_same():
     """The map flatten is built once per surface version."""
+    from maps.search.tests.fakes import GraphNode
+
+    house = {"prior_9": GraphNode((20.0, 20.0), "house", provenance="prebaked")}
     results, maps = map_mission(["show_map(around=prior_7)", "go_to(prior_7)",
-                                 "show_map(around=prior_7)", "show_map(around=prior_7)"])
+                                 "show_map(around=prior_7)", "show_map(around=prior_7)"],
+                                extra_priors=house, spread=True)
     assert all("error" not in r for r in results[:4]), results
     assert len(maps) == 3 and all(len(j) == 1 for _, j in maps)
     before, after, again = (j[0] for _, j in maps)

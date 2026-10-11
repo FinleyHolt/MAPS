@@ -326,24 +326,29 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
     return tool_results(fr), graph, added
 
 
-def map_mission(script, renderer=None, finds=1):
-    """``script`` (one block per turn) over two surveyed buildings, each
-    flight adding ``finds`` cars; returns (tool results, vision turns)."""
+def map_mission(script, renderer=None, finds=1, extra_priors=None, spread=False):
+    """``script`` (one block per turn) over two surveyed buildings (plus
+    ``extra_priors``), each flight adding ``finds`` cars at one point, or
+    along a row with ``spread``; returns (tool results, vision turns)."""
     from maps.search.analyze_scene.geom_program import build_surface_from_graph
     from maps.search.parse_compile.reasoner_loop import (
         MissionSpec,
         advance_reasoner_one_round,
     )
 
-    graph = SimpleNamespace(nodes=priors())
+    graph = SimpleNamespace(nodes={**priors(), **(extra_priors or {})})
     for n in graph.nodes.values():
         n.cells = np.asarray([[int(n.world_xy[1]), int(n.world_xy[0])]], dtype=np.int32)
         n.tags = {"building": "yes"}
 
+    cars_added = [0]
+
     def _fly(item):
         for _ in range(finds):
-            node = GraphNode((34.0, 34.0), "car")
-            node.cells = np.asarray([[34, 34]], dtype=np.int32)
+            x = 30 + 4 * cars_added[0] if spread else 34
+            cars_added[0] += 1
+            node = GraphNode((float(x), 34.0), "car")
+            node.cells = np.asarray([[34, x]], dtype=np.int32)
             node.tags = {}
             graph.nodes[f"detected_{len(graph.nodes)}"] = node
         return {"stop_id": "stop_001", "target": item["target_fid"], "pose_xy": [30.0, 30.0],
