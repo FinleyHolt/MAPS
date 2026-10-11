@@ -1,6 +1,6 @@
 """The analyze executor: runs a compiled op-program over the ``(cands, anchors)`` surface.
 
-``code_surface.compile_steps`` turns the model's run-block calls into a small
+The code surface's compiler turns the model's run-block calls into a small
 program of ops, and :func:`run_program` executes it with ONLY
 :mod:`maps.search.analyze_scene.geom_compute` primitives and a few list
 helpers. Every op returns rows; :func:`compact_results` renders them for the
@@ -3134,7 +3134,7 @@ def run_program(cands, anchors, program, seed_results=None,
     """Execute a compiled op-program over an explicit surface.
 
     ``program`` is ``{"ops": [{ref, op, args}, ...]}`` in dependency order,
-    as ``code_surface.compile_steps`` emits it. ``cands`` / ``anchors`` are
+    as the code surface's compiler emits it. ``cands`` / ``anchors`` are
     the surface rows (:func:`build_surface`). ``seed_results`` is a
     read-only {ref: raw_result} map of earlier calls' results: a handle not
     defined in THIS program resolves from it; one defined here shadows it.
