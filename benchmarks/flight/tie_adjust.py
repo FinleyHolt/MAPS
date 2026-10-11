@@ -49,6 +49,11 @@ SCALE_PRIOR = 0.05
 ANCHOR_SIGMA_M = 1.5
 #: A tie's sigma, metres: one work pixel, since the peak is an integer one.
 TIE_SIGMA_M = 0.3
+#: The Huber cut in a population's own scale, the least scale a cut is read
+#: from (every row is already scaled by its own sigma), and the reweightings.
+HUBER_K = 2.0
+SCALE_FLOOR = 1.0
+IRLS_ITERATIONS = 8
 
 
 @dataclass(frozen=True)
@@ -96,48 +101,37 @@ class Adjustment:
     ties_per_frame: dict = field(default_factory=dict)
 
 
-@dataclass(frozen=True)
-class IrlsFit:
-    """A weighted linear fit: the parameters and their sigmas."""
+def irls_fit(A, b: np.ndarray, *, groups: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """``(x, sigmas)``: iteratively reweighted least squares on a sparse ``A x = b``, Huber-weighted per observation.
 
-    x: np.ndarray
-    sigmas: np.ndarray
-
-
-def irls_fit(A, b: np.ndarray, *, groups: np.ndarray, scale_floor: float, components: int = 2,
-             huber_k: float = 2.0, max_iter: int = 8) -> IrlsFit:
-    """Iteratively reweighted least squares on a sparse ``A x = b``, Huber-weighted per observation.
-
-    An observation is ``components`` consecutive rows, weighted by the norm of
-    its residual together. ``groups`` labels each observation with a
-    population that gets a Huber scale of its own; ``scale_floor`` is the least
-    scale a population's cut is read from, so rows already scaled by their own
-    sigmas are never discounted within ``huber_k`` of what they declared. The
-    normal matrix is solved by Cholesky, its sigmas the inverse's diagonal; a
-    design that is not full rank raises ``ValueError``.
+    An observation is two consecutive rows, weighted by the norm of its
+    residual together. ``groups`` labels each observation with a population
+    that gets a Huber scale of its own. The normal matrix is solved by
+    Cholesky, its sigmas the inverse's diagonal; a design that is not full
+    rank raises ``ValueError``.
     """
     import scipy.linalg  # noqa: PLC0415
 
-    n, p = A.shape[0] // components, A.shape[1]
+    n, p = A.shape[0] // 2, A.shape[1]
     groups = np.asarray(groups)
     weights = np.ones(n, dtype=np.float64)
     factor = None
-    for _ in range(max_iter):
-        x, factor = _normal_solve(A, b, np.repeat(weights, components))
-        norms = np.linalg.norm(np.asarray(b - A @ x).reshape(n, components), axis=1)
+    for _ in range(IRLS_ITERATIONS):
+        x, factor = _normal_solve(A, b, np.repeat(weights, 2))
+        norms = np.linalg.norm(np.asarray(b - A @ x).reshape(n, 2), axis=1)
         cut = np.empty(n, dtype=np.float64)
         for g in np.unique(groups):
-            cut[groups == g] = huber_k * max(_huber_scale(norms[groups == g]), scale_floor)
+            cut[groups == g] = HUBER_K * max(_huber_scale(norms[groups == g]), SCALE_FLOOR)
         new_weights = np.where(norms <= cut, 1.0, cut / np.maximum(norms, 1e-12))
         if np.allclose(new_weights, weights, atol=1e-9):
             weights = new_weights
             break
         weights = new_weights
-    w = np.repeat(weights, components)
+    w = np.repeat(weights, 2)
     resid_w = np.asarray(b - A @ x) * w
-    var = float(resid_w @ resid_w) / max(components * n - p, 1)
+    var = float(resid_w @ resid_w) / max(2 * n - p, 1)
     cov_diag = np.diag(scipy.linalg.cho_solve(factor, np.eye(p))) * var
-    return IrlsFit(x=x, sigmas=np.sqrt(np.maximum(cov_diag, 0.0)))
+    return x, np.sqrt(np.maximum(cov_diag, 0.0))
 
 
 def _huber_scale(norms: np.ndarray) -> float:
@@ -310,20 +304,21 @@ def solve(nodes: dict, anchors: list[Anchor], ties: list[TieRow]) -> Adjustment:
             scale_cols = {f: width for f in scaled}
             width += 1
         a, b, priors = _system(anchors, ties, columns, yaw_cols, scale_cols, width)
-        fit = irls_fit(a, b, groups=np.r_[np.full(priors, 2, dtype=np.int64), np.zeros(len(anchors), dtype=np.int64),
-                                          np.ones(len(ties), dtype=np.int64)], scale_floor=1.0)
-        too_far = {f for f, col in yaw_cols.items() if abs(fit.x[col]) > MAX_YAW_DEG}
-        too_big = {f for f, col in scale_cols.items() if abs(fit.x[col]) > MAX_SCALE}
+        x, sigmas = irls_fit(a, b, groups=np.r_[np.full(priors, 2, dtype=np.int64),
+                                                np.zeros(len(anchors), dtype=np.int64),
+                                                np.ones(len(ties), dtype=np.int64)])
+        too_far = {f for f, col in yaw_cols.items() if abs(x[col]) > MAX_YAW_DEG}
+        too_big = {f for f, col in scale_cols.items() if abs(x[col]) > MAX_SCALE}
         if not too_far and not too_big:
             break
         rotated -= too_far
         scaled -= too_big
     for f in solved:
         c = columns[f]
-        out.correction[f] = (float(fit.x[c]), float(fit.x[c + 1]))
-        out.sigma[f] = (float(fit.sigmas[c]), float(fit.sigmas[c + 1]))
+        out.correction[f] = (float(x[c]), float(x[c + 1]))
+        out.sigma[f] = (float(sigmas[c]), float(sigmas[c + 1]))
         if f in yaw_cols:
-            out.yaw_deg[f] = float(fit.x[yaw_cols[f]])
+            out.yaw_deg[f] = float(x[yaw_cols[f]])
         if f in scale_cols:
-            out.scale[f] = float(fit.x[scale_cols[f]])
+            out.scale[f] = float(x[scale_cols[f]])
     return out

@@ -34,6 +34,12 @@ YAW_STEP_DEG = 0.1
 #: tie to the wrong block.
 TIE_AGREE_PX = 3.0
 TIE_AGREE_MIN = 2
+#: Templates kept a pair: past twelve the tie rows out-vote the anchors and
+#: the cap refuses its own measurements, so eight sits a step inside that.
+TIES_PER_PAIR = 8
+#: Frames whose work grid and edge maps are kept: the pose graph's
+#: ``TIE_NEIGHBOURS`` plus two.
+CACHED_FRAMES = 3
 
 
 @dataclass(frozen=True)
@@ -89,10 +95,9 @@ def work_grid(sensor, agl_m: float) -> tuple[int, int, np.ndarray]:
     return int(binned.intrinsics.image_width), int(binned.intrinsics.image_height), s
 
 
-def candidates(warp: np.ndarray, size_j: tuple[int, int], size_i: tuple[int, int],
-               pitch: int = TIE_PITCH_PX, erode: int = ERODE_PX) -> list[tuple[float, float]]:
-    """Template centres on frame i's work grid: a ``pitch`` grid inside the
-    search border and inside the partner's warped footprint eroded by ``erode``."""
+def candidates(warp: np.ndarray, size_j: tuple[int, int], size_i: tuple[int, int]) -> list[tuple[float, float]]:
+    """Template centres on frame i's work grid: a :data:`TIE_PITCH_PX` grid inside the
+    search border and inside the partner's warped footprint eroded by :data:`ERODE_PX`."""
     import cv2  # noqa: PLC0415
 
     wj, hj = size_j
@@ -100,17 +105,17 @@ def candidates(warp: np.ndarray, size_j: tuple[int, int], size_i: tuple[int, int
     corners = np.asarray(frame_corners_px(wj, hj), dtype=np.float64).reshape(-1, 1, 2)
     poly = cv2.perspectiveTransform(corners, warp).reshape(-1, 2).astype(np.float32)
     out = []
-    for v in range(locator.SEARCH_HALF + pitch // 2, hi - locator.SEARCH_HALF, pitch):
-        for u in range(locator.SEARCH_HALF + pitch // 2, wi - locator.SEARCH_HALF, pitch):
-            if cv2.pointPolygonTest(poly, (float(u), float(v)), True) >= erode:
+    for v in range(locator.SEARCH_HALF + TIE_PITCH_PX // 2, hi - locator.SEARCH_HALF, TIE_PITCH_PX):
+        for u in range(locator.SEARCH_HALF + TIE_PITCH_PX // 2, wi - locator.SEARCH_HALF, TIE_PITCH_PX):
+            if cv2.pointPolygonTest(poly, (float(u), float(v)), True) >= ERODE_PX:
                 out.append((float(u), float(v)))
     return out
 
 
-def _keep(hits: list[tuple[tuple[float, float], tuple[float, float], float, float]], per_pair: int) -> list:
+def _keep(hits: list[tuple[tuple[float, float], tuple[float, float], float, float]]) -> list:
     """The hits past the edge gate that agree with the pair's median
     displacement to ``TIE_AGREE_PX``, at least ``TIE_AGREE_MIN`` of them or
-    none, the strongest margins first, at most ``per_pair``."""
+    none, the strongest margins first, at most ``TIES_PER_PAIR``."""
     kept = [(c, f, p, m) for c, f, p, m in hits if m >= locator.MIN_EDGE_MARGIN]
     if len(kept) < TIE_AGREE_MIN:
         return []
@@ -120,7 +125,7 @@ def _keep(hits: list[tuple[tuple[float, float], tuple[float, float], float, floa
     if len(kept) < TIE_AGREE_MIN:
         return []
     kept.sort(key=lambda h: -h[3])
-    return kept[:per_pair]
+    return kept[:TIES_PER_PAIR]
 
 
 class TieMatcher:
@@ -131,16 +136,15 @@ class TieMatcher:
     frame's floor homography sits on its own ground.
     """
 
-    def __init__(self, sensor, ground, *, per_pair: int, cache: int) -> None:
-        self.sensor, self.ground, self.per_pair = sensor, ground, per_pair
+    def __init__(self, sensor, ground) -> None:
+        self.sensor, self.ground = sensor, ground
         self._cache: dict = {}
-        self._cache_n = cache
 
     def _cached(self, key, make):
         """``make()``'s result for ``key`` as a Future on the locator's pool: a
         frame warmed ahead (:meth:`warm`) and asked for at its pair share one computation."""
         if key not in self._cache:
-            if len(self._cache) >= self._cache_n:
+            if len(self._cache) >= CACHED_FRAMES:
                 del self._cache[next(iter(self._cache))]
             self._cache[key] = locator._pool.submit(make)
         return self._cache[key]
@@ -183,7 +187,7 @@ class TieMatcher:
         hits = [(c, hit[0], hit[1], hit[2]) for c, hit in zip(centres, found) if hit is not None]
         inv_s, inv_warp = np.linalg.inv(s_i), np.linalg.inv(warp)
         out = []
-        for centre, at, _peak, _margin in _keep(hits, self.per_pair):
+        for centre, at, _peak, _margin in _keep(hits):
             uv_i = ground_of_pixels(inv_s, [at])[0]
             uv_j = ground_of_pixels(inv_warp, [centre])[0]
             out.append(Tie((float(uv_i[0]), float(uv_i[1])), (float(uv_j[0]), float(uv_j[1]))))

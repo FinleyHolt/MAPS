@@ -44,11 +44,6 @@ LOCATE_THREADS = 4
 _pool = ThreadPoolExecutor(max_workers=LOCATE_THREADS, thread_name_prefix="locate")
 
 
-def frame_gsd_m(sensor, agl_m: float) -> float:
-    """The ground a frame's pixel covers at this height, m/px, at the optical axis."""
-    return float(agl_m) / float(sensor.intrinsics.fx)
-
-
 def sized(sensor, width: int, height: int):
     """``sensor`` at ``width`` x ``height`` pixels, the same fields of view."""
     from maps.perception.ortho.camera_model import CameraIntrinsics  # noqa: PLC0415
@@ -64,7 +59,7 @@ def work_sensor(sensor, agl_m: float):
     """``(sensor, scale)``: the sensor binned to :data:`WORK_GSD_M`, and the
     frame's pixels per binned pixel; the sensor itself and 1.0 for a frame no
     finer than that."""
-    gsd = frame_gsd_m(sensor, agl_m)
+    gsd = float(agl_m) / float(sensor.intrinsics.fx)   # the ground a pixel covers at the optical axis, m/px
     if gsd <= 0.0 or gsd * BIN_ABOVE >= WORK_GSD_M:
         return sensor, 1.0
     intr = sensor.intrinsics

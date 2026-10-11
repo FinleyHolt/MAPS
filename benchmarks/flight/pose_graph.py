@@ -34,11 +34,8 @@ from benchmarks.flight import frame_ties, tie_adjust
 WINDOW_S = 10.0
 #: A solved node is kept this long after it leaves the window, for a ring frame that old.
 NODE_AGE_S = 60.0
-#: Each new frame is tied to this many frames before it, at most this many
-#: templates a pair: past twelve the tie rows out-vote the anchors and the cap
-#: refuses its own measurements, so eight sits a step inside that.
+#: Each new frame is tied to this many frames before it.
 TIE_NEIGHBOURS = 1
-TIES_PER_PAIR = 8
 #: Anchors the window needs before any frame is moved.
 MIN_ANCHORS = 2
 #: A measurement further than this from the graph's estimate is refused: sized
@@ -65,7 +62,7 @@ class PoseGraph:
 
     def __init__(self, sensor, ground) -> None:
         self.sensor, self.ground = sensor, ground
-        self.matcher = frame_ties.TieMatcher(sensor, ground, per_pair=TIES_PER_PAIR, cache=TIE_NEIGHBOURS + 2)
+        self.matcher = frame_ties.TieMatcher(sensor, ground)
         self.frames: dict[int, _Frame] = {}
         self.measurements: dict[int, tuple[float, float, float]] = {}
         self.ties: list[tuple[int, int, tuple[float, float], tuple[float, float]]] = []

@@ -20,6 +20,8 @@ from benchmarks.flight import locator
 DOWN = 4
 #: The part of the render, about its centre, that is the template.
 TEMPLATE_FRACTION = 0.5
+#: The coarse step of :func:`similarity`'s yaw sweep, degrees.
+YAW_STEP_DEG = 1.0
 
 #: The frame's structure and the render's, computed side by side.
 _POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="frame_offset")
@@ -67,13 +69,13 @@ def offset(frame_rgb: np.ndarray, render_rgb: np.ndarray) -> tuple[float, float,
     return float(at[0] - x0) * DOWN, float(at[1] - y0) * DOWN, float(peak)
 
 
-def similarity(frame_rgb: np.ndarray, render_rgb: np.ndarray, *, yaw_reach_deg: float, yaw_step_deg: float = 1.0
+def similarity(frame_rgb: np.ndarray, render_rgb: np.ndarray, *, yaw_reach_deg: float
                ) -> tuple[float, float, float, float]:
     """``(du, dv, yaw_deg, response)``: :func:`offset` with the frame's content turned as well.
 
     The yaw is the turn of the content about its centre against the render,
     in the heading's sense, the sweep's best response over ``+-yaw_reach_deg``
-    at ``yaw_step_deg`` and again at a quarter step about that; ``du`` and
+    at :data:`YAW_STEP_DEG` and again at a quarter step about that; ``du`` and
     ``dv`` are the offset of the content turned back by it.
     """
     import cv2  # noqa: PLC0415
@@ -89,8 +91,8 @@ def similarity(frame_rgb: np.ndarray, render_rgb: np.ndarray, *, yaw_reach_deg: 
         du, dv, response = offset(turned, render_rgb)
         return response, du, dv, yaw
 
-    best = max(read(float(y)) for y in np.arange(-yaw_reach_deg, yaw_reach_deg + 1e-9, yaw_step_deg))
-    fine = np.arange(best[3] - yaw_step_deg, best[3] + yaw_step_deg + 1e-9, yaw_step_deg / 4.0)
+    best = max(read(float(y)) for y in np.arange(-yaw_reach_deg, yaw_reach_deg + 1e-9, YAW_STEP_DEG))
+    fine = np.arange(best[3] - YAW_STEP_DEG, best[3] + YAW_STEP_DEG + 1e-9, YAW_STEP_DEG / 4.0)
     best = max([best] + [read(float(y)) for y in fine if abs(y - best[3]) > 1e-9])
     response, du, dv, yaw = best
     return du, dv, yaw, response
