@@ -1,26 +1,12 @@
-"""CityNav Goal-Predictor scoring.
+"""CityNav scoring: NE / SR / OSR / SPL for one episode, and their macro average.
 
-Given a predicted target `(x, y)`, the ground-truth target, the episode
-start, and the agent's trajectory, returns CityNav's canonical metrics
-(NE / SR / OSR / SPL).
+NE is the straight-line distance in metres from where the agent ended to the
+goal, with no path term: a 3 km tour that commits 1 m from the goal scores
+NE 1. ``spl_pos`` (Anderson SPL over the flown xy path) is the metric that
+prices the route; it rides ring rows only, beside the verdict it multiplies.
 
-NE measures WHERE THE AGENT ENDED UP, in metres from the goal. It is the
-straight-line distance between the committed point and the true target,
-and it carries no path term: an agent that flies a 3 km tour and commits
-1 m from the goal scores NE 1. Readers regularly assume NE means
-deviation from an optimal path, so every label that prints it says which
-it is.
-
-`spl_pos` is the metric that prices the route: Anderson SPL over the
-flown xy path, the value the CityNav paper and its follow-ups report.
-It rides ring rows only, beside the ring verdict it multiplies.
-
-Coordinate convention:
-  world XYZ with Z=up, metric
-  grid[row, col]: row index varies with Y (north), col index varies with X (east)
-  cell at (row, col) centers on world (x, y) where
-    x = x_min + (col + 0.5) * cell_size_m
-    y = y_min + (row + 0.5) * cell_size_m
+World XYZ is metric with Z up; grid cell (row, col) centres on
+x = x_min + (col + 0.5) * cell_size_m, y = y_min + (row + 0.5) * cell_size_m.
 """
 
 from __future__ import annotations
@@ -50,13 +36,8 @@ class WorldBounds:
 
 
 def path_length_m(path: list[tuple[float, float]] | None) -> float:
-    """Sum of Euclidean distances along a pose sequence.
-
-    Public because the offline efficiency reader
-    (:mod:`benchmarks.citynav.analysis.flight_cost`) prices a stored run's
-    flown path with it: one definition of "how far did it fly", so a reported
-    path length and an SPL denominator can never drift apart.
-    """
+    """Sum of Euclidean distances along a pose sequence: the one definition
+    of "how far did it fly" that path lengths and the SPL denominator share."""
     if not path or len(path) < 2:
         return 0.0
     pts = np.asarray(path, dtype=np.float64)
@@ -69,16 +50,11 @@ def spl_pos_from_path(
     pos_trajectory: list[tuple[float, float]] | None,
     sr_pos: int,
 ) -> float | None:
-    """Anderson SPL over the executed flight path (the CityNav-comparable value).
+    """Anderson SPL over the flown path: ``sr_pos * L_opt / max(L_opt, L_agent)``.
 
-    ``SPL = sr_pos * L_opt / max(L_opt, L_agent)`` with ``L_opt`` the
-    straight-line distance from the first flown pose to the target (the
-    shortest path in obstacle-free aerial space) and ``L_agent`` the length of
-    the flown xy path. Requires a real trajectory (>=2 poses); returns ``None``
-    otherwise so a degenerate single-pose record never fabricates SPL = SR.
-
-    This is the single source of truth for SPL: the live native scorer calls it,
-    and offline analysis backfills SPL through it for runs that predate the key.
+    ``L_opt`` is the straight line from the first flown pose to the target,
+    ``L_agent`` the flown xy path length. ``None`` under two poses, so a
+    single-pose record never fabricates SPL = SR.
     """
     if not pos_trajectory or len(pos_trajectory) < 2:
         return None
@@ -99,27 +75,12 @@ def score_goal_prediction_citynav_native(
     pred_trajectory: list[tuple[float, float]] | None = None,
     success_dist_m: float = 20.0,
 ) -> dict:
-    """Score one episode exactly as upstream ``gsamllavanav/evaluate.py``.
+    """Score one episode as upstream ``gsamllavanav/evaluate.py`` does: in 2D.
 
-    Upstream ``eval_goal_predictor`` computes four metric families, all
-    **2D** (``Point2D.dist_to`` over (x, y) only; the paper says
-    "spherical" but the shipped code is strictly 2D, so a faithful
-    reproduction matches the code):
-
-      - ``*_pos_to_goal``: final agent pose vs target
-      - ``*_pred_to_goal``: final predicted goal vs target
-      - oracle = the minimum distance over the whole trajectory
-
-    ``NE`` is the straight-line distance from the final pose to the goal
-    and carries no route term: an agent that flies a 3 km tour and ends
-    1 m from the goal scores NE 1.
-
-    Upstream ships no SPL of its own, so the only SPL here is
-    ``spl_pos``: Anderson over the flown path, the value the paper and
-    its follow-ups report, and the one key that does price the route.
-    Both upstream metric families are always emitted. The canonical
-    ``NE``/``SR``/``OSR`` keys mirror ``pos_to_goal`` so
-    :func:`aggregate` summarizes benchmark-comparable navigation scores.
+    ``*_pos_to_goal`` measures the final pose, ``*_pred_to_goal`` the final
+    predicted goal, and the oracle keys the closest point of the trajectory.
+    Upstream ships no SPL; ``spl_pos`` is added. ``NE``/``SR``/``OSR`` mirror
+    the ``pos_to_goal`` family.
     """
 
     def _d(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -136,10 +97,6 @@ def score_goal_prediction_citynav_native(
     osr_pos = 1 if or_pos <= success_dist_m else 0
     osr_pred = 1 if or_pred <= success_dist_m else 0
 
-    # SPL (Anderson) over the executed flight path -- the comparable value
-    # the CityNav paper and follow-ups report, under an explicitly-named
-    # key (see :func:`spl_pos_from_path`, the single source of truth
-    # offline analysis also backfills through).
     spl_pos = spl_pos_from_path(target_xy, pos_traj, sr_pos)
 
     return {
@@ -150,10 +107,7 @@ def score_goal_prediction_citynav_native(
         "osr_pos_to_goal": osr_pos,
         "osr_pred_to_goal": osr_pred,
         "min_dist_pos_to_target_m": round(or_pos, 2),
-        # Anderson SPL over the flown path (comparable to the CityNav paper).
         "spl_pos": spl_pos,
-        # Canonical mirrors (pos_to_goal family) so aggregate() summarizes
-        # the CityNav navigation protocol, not submitted-target diagnostics.
         "NE": round(ne_pos, 2),
         "SR": sr_pos,
         "OSR": osr_pos,
@@ -176,12 +130,8 @@ _FLOOR_EPS_M = 1e-3
 
 
 def _inradius_m(poly) -> float:
-    """Radius of the largest circle that fits inside ``poly``.
-
-    Half the polygon's width at the widest point it can hold, so a long
-    thin shape reads as narrow no matter how much area it covers — which
-    is the sense in which a target is too small to aim at.
-    """
+    """Radius of the largest circle inside ``poly``: a long thin shape reads
+    as narrow however much area it covers."""
     from shapely import maximum_inscribed_circle
 
     return float(maximum_inscribed_circle(poly).length)
@@ -196,30 +146,17 @@ def score_precise(
     tolerance_m: float = 0.0,
     floor_radius_m: float = 0.0,
 ) -> dict:
-    """Did the agent end up AT the target, given the target's real extent?
+    """``SR`` on a shape-criterion bench: did the agent end up on the target's real extent?
 
-    This IS ``SR`` on a bench whose ``SUCCESS_CRITERION`` is ``"shape"`` --
-    the verdict key it returns is the same one the ring scorer returns,
-    because a row carries one success mask and one verdict under it.
+    With a ``gt_polygon`` (the linked object's contour, else the episode's
+    ``target_mask``), success is landing within ``tolerance_m`` of the shape
+    (inside it at 0.0); without one, within a disc of ``radius_m``.
 
-    The target's shape substituted for a disc around its centre. Where an
-    episode has annotated ground truth — a linked
-    object's contour or a hand-drawn/derived mask — success is landing within
-    ``tolerance_m`` of that shape, which at the default ``0.0`` means landing
-    inside it. Where it has none, it falls back to a disc of ``radius_m``,
-    exactly like ``SR`` but with the dataset's own radius.
-
-    ``gt_polygon`` is the caller's choice of shape — the linked object's
-    contour when the episode names one, else its ``target_mask``.
-
-    ``floor_radius_m`` is the tightest target worth asking for: no shape
-    scores stricter than a disc of that radius. A shape narrower than the
-    floor is widened until a circle of ``floor_radius_m`` fits, rather than
-    replaced by one — the footprint still says WHERE, the floor only says
-    how finely the agent is asked to land. Road intersections here run
-    4.1 m wide at the median while the agent's arrival on episodes it
-    already gets right is 2.9 m, so without a floor most of them would be
-    scored on a precision it has never demonstrated.
+    ``floor_radius_m`` is the tightest target worth asking for: a shape
+    narrower than a circle of that radius is widened until one fits, so the
+    footprint still says where and the floor says how finely. Road
+    intersections run 4.1 m wide at the median while the agent's arrival on
+    episodes it gets right is 2.9 m.
     """
     if gt_polygon and len(gt_polygon) >= 3:
         from shapely.geometry import Point
@@ -227,9 +164,7 @@ def score_precise(
         poly = _as_polygon(gt_polygon)
         reach, floored = tolerance_m, False
         if floor_radius_m > 0.0:
-            # _inradius_m is iterative and lands within a tolerance of the
-            # true value, so ignore sub-millimetre gains — a shape that
-            # already holds the floor circle must score exactly as drawn.
+            # _inradius_m is iterative: a sub-millimetre gain is solver noise.
             widened = floor_radius_m - _inradius_m(poly)
             if widened > reach + _FLOOR_EPS_M:
                 reach, floored = widened, True
@@ -251,33 +186,14 @@ def score_precise(
     }
 
 
-#: Every key on a row whose value is a success verdict or scales with one.
-#: An episode that never flew has all of them zeroed together -- listing them
-#: HERE rather than at each writer is the point: the zero-flight branch used
-#: to zero the four ``*_to_goal`` flags and leave the mirrored ``SR``/``OSR``
-#: alone, so an episode that never took off scored SR=1 whenever its start
-#: happened to sit inside the mask.
-_SUCCESS_FLAGS = (
-    "SR",
-    "OSR",
-    "sr_pos_to_goal",
-    "sr_pred_to_goal",
-    "osr_pos_to_goal",
-    "osr_pred_to_goal",
-    # SPL multiplies the success bit, so a zeroed verdict zeroes it too.
-    "spl_pos",
-)
+#: Every key that is a success verdict or scales with one (SPL multiplies it):
+#: an episode that never flew has all of them zeroed together.
+_SUCCESS_FLAGS = ("SR", "OSR", "sr_pos_to_goal", "sr_pred_to_goal", "osr_pos_to_goal",
+                  "osr_pred_to_goal", "spl_pos")
 
-#: Ring-basis keys, dropped from a shape-scored row. Each answers "within R
-#: of the target POINT", which is not the question that bench asks.
-_RING_ONLY = (
-    "sr_pos_to_goal",
-    "sr_pred_to_goal",
-    "OSR",
-    "osr_pos_to_goal",
-    "osr_pred_to_goal",
-    "spl_pos",
-)
+#: Ring-basis keys ("within R of the target point"), dropped from a shape-scored row.
+_RING_ONLY = ("sr_pos_to_goal", "sr_pred_to_goal", "OSR", "osr_pos_to_goal", "osr_pred_to_goal",
+              "spl_pos")
 
 
 def score_arrival(
@@ -295,33 +211,16 @@ def score_arrival(
     floor_radius_m: float = 0.0,
     flew: bool = True,
 ) -> dict:
-    """One episode's metrics, under THIS bench's success mask.
+    """One episode's metrics under this bench's success mask; every scored row is written here.
 
-    ``criterion`` comes from ``paths.SUCCESS_CRITERION``, read at call time
-    so the Cal City bridge's rebind reaches it:
+    ``criterion`` (``paths.SUCCESS_CRITERION``): ``"ring"`` scores ``SR`` 1
+    within ``success_dist_m`` of the target point, ``"shape"`` inside the
+    target's annotated footprint. ``SR`` is the verdict either way, and the
+    row is stamped ``success_criterion``. ``NE`` and the ``ne_*`` /
+    ``min_dist_*`` keys measure to the target centroid on every row;
+    ``precise_distance_m`` measures to the footprint boundary.
 
-      ``"ring"``   ``SR`` is 1 within ``success_dist_m`` of the target point
-      ``"shape"``  ``SR`` is 1 inside the target's own annotated footprint
-
-    ``SR`` is the verdict either way. There is no second success key and no
-    per-row flag to reconcile: a reader that takes ``SR`` gets the number
-    this bench is scored on. The criterion is stamped as
-    ``success_criterion`` so a stored row says which mask produced it
-    without anyone inferring it from coverage.
-
-    Criterion-neutral keys ride every row: ``NE``, ``ne_pos_to_goal``,
-    ``ne_pred_to_goal``, ``min_dist_pos_to_target_m`` -- raw metres to the
-    target CENTROID, no radius in the computation. The shape criterion's
-    analogous quantity is ``precise_distance_m``, which measures to the
-    footprint's BOUNDARY. Both stay; they answer different questions.
-
-    ``flew=False`` is the honest zero for an episode that never took off:
-    every success flag goes to 0 while the distances stay true. Passing it
-    is how a caller says "no flight", instead of naming the flags itself.
-
-    Every writer of a scored row goes through here -- the bench's main merge
-    and zero-flight branch, and the flight station's mission row -- so they
-    cannot drift onto different criteria.
+    ``flew=False`` zeroes every success flag and keeps the distances.
     """
     if criterion not in ("ring", "shape"):
         raise ValueError(f"unknown success criterion {criterion!r}")
@@ -337,8 +236,6 @@ def score_arrival(
     if criterion == "shape":
         for key in _RING_ONLY:
             scores.pop(key, None)
-        # Overwrites ``SR`` with the mask verdict -- the same key, because
-        # it is the same question asked of this bench's own target.
         scores.update(
             score_precise(
                 final_xy=pred_xy,
@@ -362,32 +259,16 @@ def aggregate(per_episode: list[dict]) -> dict:
     if not per_episode:
         return {"n_episodes": 0}
     n = len(per_episode)
-    keys_mean = [
-        "NE",
-        "SR",
-        "OSR",
-        "spl_pos",
-        "ne_pos_to_goal",
-        "ne_pred_to_goal",
-        "sr_pos_to_goal",
-        "sr_pred_to_goal",
-        "osr_pos_to_goal",
-        "osr_pred_to_goal",
-        "min_dist_pos_to_target_m",
-    ]
+    keys_mean = ["NE", "SR", "OSR", "spl_pos", "ne_pos_to_goal", "ne_pred_to_goal", "sr_pos_to_goal",
+                 "sr_pred_to_goal", "osr_pos_to_goal", "osr_pred_to_goal", "min_dist_pos_to_target_m"]
     out: dict = {"n_episodes": n}
     for k in keys_mean:
-        # Skip absent keys and ``None`` values (``spl_pos`` on a degenerate
-        # single-pose record) so a null never poisons the mean.
+        # A None (``spl_pos`` on a single-pose record) never poisons the mean.
         vals = [r[k] for r in per_episode if r.get(k) is not None]
         if vals:
             out[k] = round(float(np.mean(vals)), 4)
-    # A shape-scored SR pools two different tests -- rows with an annotated
-    # footprint (containment) and rows without one (the dataset's disc) --
-    # and how much of the corpus each covers moves as annotation lands.
-    # Report them apart, so a change in the headline is attributable to real
-    # ground truth rather than to the fallback standing in until a shape
-    # exists. Absent on a ring bench, which resolves no ``precise_target``.
+    # A shape-scored SR pools footprint containment and the disc fallback;
+    # each is reported apart. A ring bench resolves no ``precise_target``.
     for kind in ("shape", "radius"):
         vals = [
             r["SR"]
@@ -397,23 +278,13 @@ def aggregate(per_episode: list[dict]) -> dict:
         out[f"precise_{kind}_n"] = len(vals)
         if vals:
             out[f"SR_by_{kind}"] = round(float(np.mean(vals)), 4)
-    # How many shapes were too narrow to score as drawn. A high count means
-    # the headline is largely a floor-radius number wearing a shape's name.
+    # Shapes too narrow to score as drawn: a high count makes SR a floor-radius number.
     out["precise_floored_n"] = sum(
         1 for r in per_episode if r.get("precise_floor_applied")
     )
     # CityNav reports SR/OSR/SPL as percentages.
-    for k in (
-        "SR",
-        "OSR",
-        "spl_pos",
-        "sr_pos_to_goal",
-        "sr_pred_to_goal",
-        "osr_pos_to_goal",
-        "osr_pred_to_goal",
-        "SR_by_shape",
-        "SR_by_radius",
-    ):
+    for k in ("SR", "OSR", "spl_pos", "sr_pos_to_goal", "sr_pred_to_goal", "osr_pos_to_goal",
+              "osr_pred_to_goal", "SR_by_shape", "SR_by_radius"):
         if k in out:
             out[k + "_pct"] = round(out[k] * 100.0, 2)
     return out

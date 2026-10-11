@@ -1,5 +1,4 @@
-"""The referent bucket a row carries (``metrics.referent_bucket``): car,
-building or other, read off the referring expression."""
+"""A row's ``referent_bucket``: car, building or other, by regex over the description."""
 
 from __future__ import annotations
 
@@ -17,7 +16,6 @@ _BUILDING_PAT = re.compile(
 
 
 def classify_referent(description: str) -> str:
-    """Return 'car', 'building', or 'other' based on the referring expression."""
     if _CAR_PAT.search(description):
         return "car"
     if _BUILDING_PAT.search(description):

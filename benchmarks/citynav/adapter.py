@@ -1,17 +1,11 @@
-"""CityNav dataset adapter.
+"""CityNav episodes and CityRefer objects, as ``citynav-arxiv/gsamllavanav/dataset`` lays them out.
 
-Parses CityNav episodes (natural-language description, map id, start pose,
-ground-truth target) and CityRefer landmark objects, the scorer's answer key.
-
-The CityNav data schema mirrors ``citynav-arxiv/gsamllavanav/dataset/...``:
-  * per-split JSON (e.g. ``data/citynav/citynav_val_seen.json``) is a list of
-    MTurk trajectory dicts with fields ``area``, ``block``, ``descriptions``,
-    ``target_positions``, ``marker_positions``, ``object_ids``, ``ann_ids``,
-    ``trajectory``. A row with no ``block`` names a whole-AOI map
-    (``map_name_for_row``).
-  * ``data/cityrefer/objects.json`` is a map ``map_name → list[CityReferObject]``,
-    each object having ``id``, ``name``, ``object_type``, ``position`` (xyz center),
-    ``dimension`` (xyz extent), ``contour`` (2D polygon).
+A split JSON (``data/citynav/citynav_<split>.json``) is a list of MTurk
+trajectory rows: ``area``, ``block``, ``descriptions``, ``target_positions``,
+``marker_positions``, ``object_ids``, ``ann_ids``, ``trajectory``.
+``data/cityrefer/objects.json`` maps a map name to objects carrying ``id``,
+``name``, ``object_type``, ``position`` (xyz centre), ``dimension`` and
+``contour`` (2D polygon): the scorer's answer key.
 """
 
 from __future__ import annotations
@@ -64,10 +58,8 @@ class CityNavEpisode:
     #: north, :func:`start_heading_deg`). The replay starts facing it.
     start_heading_deg: float = 0.0
     success_radius_m: float | None = None
-    """This episode's fallback success radius in the dataset it was read
-    from, when the split states one per row (Cal City publishes the same
-    episodes as a 20 m dataset and a precise one). ``None`` leaves the run
-    config's ``success_radius_m`` in charge, which is every CityNav split."""
+    """The row's own fallback success radius (Cal City publishes a 20 m and a
+    precise dataset); ``None`` leaves the run config's in charge."""
 
 
 # ---------------------------------------------------------------------------
@@ -82,11 +74,8 @@ def load_split(split_file: Path) -> list[dict]:
 
 
 def load_objects(objects_json: Path) -> dict[str, list[CityRefObject]]:
-    """Load ``cityrefer/objects.json`` into a dict keyed by SensatUrban ``map_name``.
-
-    CityRefer stores objects as a nested dict ``{map_name: {object_id: {...}}}``
-    or a flat list — we handle both defensively.
-    """
+    """``cityrefer/objects.json`` keyed by map name, from a nested
+    ``{map_name: {object_id: {...}}}`` dict or a flat list."""
     with open(objects_json) as f:
         raw = json.load(f)
 
@@ -134,13 +123,8 @@ def load_objects(objects_json: Path) -> dict[str, list[CityRefObject]]:
 
 
 def map_name_for_row(row: dict) -> str:
-    """The ONE map-name rule for a dataset row.
-
-    CityNav rows carry ``area`` + ``block`` and compose
-    ``<area>_block_<block>``; an ``area`` that already contains "block"
-    is a full tile id and wins verbatim; a row with no (or empty)
-    ``block`` names a whole-AOI map — ``area`` verbatim.
-    """
+    """``<area>_block_<block>``; ``area`` verbatim when it already contains
+    "block" or the row has no ``block`` (a whole-AOI map)."""
     area = str(row["area"])
     block = row.get("block")
     block_s = "" if block is None else str(block)
@@ -148,14 +132,12 @@ def map_name_for_row(row: dict) -> str:
 
 
 def start_heading_deg(start_pose: list) -> float:
-    """The heading a row's ``trajectory[0]`` starts the drone at, as upstream
-    reads it (``gsamllavanav/dataset/mturk_trajectory.py::MTurkTrajectory``):
-    ``[x, y, z, yaw, pitch]`` carries the yaw, ``[x, y, z, dx, dy, dz]`` a
-    direction whose yaw is ``atan2(dy, dx)``; upstream's yaw is radians
-    counter-clockwise from east. Returned in this tree's heading convention
-    (``action_snap``): degrees clockwise from north, in ``[0, 360)``.
-    ``[x, y, z]`` (Cal City's authored rows) carries no heading and faces
-    north. Any other length is no start pose upstream reads, and raises.
+    """The start heading of ``trajectory[0]`` as upstream's ``MTurkTrajectory`` reads it.
+
+    ``[x, y, z, yaw, pitch]`` carries the yaw, ``[x, y, z, dx, dy, dz]`` the
+    yaw ``atan2(dy, dx)`` (radians counter-clockwise from east); ``[x, y, z]``
+    (Cal City) faces north; any other length raises. Returned in degrees
+    clockwise from north, in ``[0, 360)``.
     """
     if len(start_pose) == 3:
         return 0.0
@@ -172,15 +154,10 @@ def start_heading_deg(start_pose: list) -> float:
 
 
 def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
-    """Coerce one split-JSON row into a CityNavEpisode.
+    """One split-JSON row as a CityNavEpisode, id ``<map>::<ann>#<row_index>``.
 
-    When ``row_index`` is supplied, append ``#<row_index>`` to the
-    episode_id. CityNav reuses the same ``ann_ids[0]`` across many rows
-    of the same block (each row carries one description on a shared
-    trajectory), so the legacy ``map::ann`` form collides for ~99% of
-    the corpus. The row-index suffix disambiguates those rows so every
-    scenario is uniquely addressable. Callers that don't care about
-    per-row identity can still omit it and get the legacy id.
+    Rows of one block share ``ann_ids[0]`` (~99% of ``map::ann`` ids collide),
+    so ``row_index`` makes the id unique; without it the id is ``map::ann``.
     """
     map_name = map_name_for_row(row)
     descriptions = row.get("descriptions") or []

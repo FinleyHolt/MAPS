@@ -1,24 +1,14 @@
-"""Filesystem paths for the CityNav integration.
+"""CityNav filesystem paths, each overridable by environment.
 
-Resolves everything via env vars so the same code runs on a laptop and on
-HPC without edits:
-
-- ``SEARCH_CITYNAV_DATA`` (preferred) or ``CITYNAV_ROOT`` for the dataset
-  root (the ``citynav-arxiv`` checkout: ``data/citynav/*.json``,
-  ``data/cityrefer/*``, ``data/rgbd_upstream/*``).
-- ``SEARCH_CITYNAV_TILES`` for the prebaked feature-graph tile sidecars
-  (defaults to ``<repo>/tiles/citynav_2m_osmv3/``, the OSM-only bake that
-  is the tile source of truth).
-- ``SEARCH_CITYNAV_SPLITS`` for the episode split JSONs alone (defaults
-  to ``$CITYNAV_ROOT/data/citynav``). Set this to the HETT refined
-  splits dir for an opt-in eval-only A/B; the CityRefer catalog and
-  every baked tile stay pointed at the canonical tree (HETT's
-  ``objects.json`` is byte-identical, so no re-bake). Refined ships only
-  the three base eval splits (``val_seen``/``val_unseen``/``test_unseen``);
-  the easy/medium/hard tiers and ``train_seen`` are original-only.
-
-Both defaults assume a laptop layout (``~/datasets/citynav-arxiv``,
-``<repo>/tiles/citynav_2m_osmv3``); override either env var on HPC.
+- ``SEARCH_CITYNAV_DATA`` (else ``CITYNAV_ROOT``, else ``~/datasets/citynav-arxiv``):
+  the ``citynav-arxiv`` checkout (``data/citynav``, ``data/cityrefer``, ``data/rgbd_upstream``).
+- ``SEARCH_CITYNAV_TILES`` (else ``<repo>/tiles/citynav_2m_osmv3``): the tile bake.
+- ``SEARCH_CITYNAV_SPLITS`` (else ``$CITYNAV_ROOT/data/citynav``): the split JSONs
+  alone, e.g. HETT's refined ``val_seen``/``val_unseen``/``test_unseen``
+  (github crotonyl/HETT, arXiv 2512.14222), whose ``objects.json`` is
+  byte-identical, so catalog and tiles stay put.
+- ``SEARCH_CITYNAV_RGBD_DIR`` (else ``data/rgbd_upstream``): upstream's 0.1 m/px
+  nadir rasters, from ``data_prep/rasterize_citynav_native.sh``.
 """
 
 from __future__ import annotations
@@ -50,10 +40,6 @@ CITYNAV_ROOT = (
 )
 
 DATA_DIR = CITYNAV_ROOT / "data"
-# Episode splits are independently overridable so the HETT refined set
-# (github crotonyl/HETT, arXiv 2512.14222) can be A/B'd without touching
-# the catalog or any baked tile. Default expands to exactly
-# ``$CITYNAV_ROOT/data/citynav`` — zero change to the canonical path.
 SPLITS_DIR = (
     Path(
         _env_value(
@@ -66,9 +52,6 @@ SPLITS_DIR = (
 )
 OBJECTS_JSON = DATA_DIR / "cityrefer" / "objects.json"
 
-# Upstream CityNav's nadir rasters (0.1 m/px), the imagery the observation
-# crops. Generate with ``benchmarks/citynav/data_prep/rasterize_citynav_native.sh``.
-# Override with ``SEARCH_CITYNAV_RGBD_DIR``.
 CITYNAV_NATIVE_RGBD_DIR = (
     Path(
         _env_value(
@@ -80,14 +63,10 @@ CITYNAV_NATIVE_RGBD_DIR = (
     .resolve()
 )
 
-# Per-split prebaked feature-graph tiles. Baked by data_prep/bake_tiles.sh.
 REPO_ROOT = Path(__file__).resolve().parents[2]
-# The tags-only OSM 2 m bake is the tile source of truth: ONE ``prior`` list
-# per block, rows = mask + raw OSM tags verbatim, masks coverage-clipped to
-# the block's imagery (no prior over no-data). ``assert_current_tile_schema``
-# refuses a bake of any other schema rather than let a run ground against
-# the wrong priors.
-# THE bake, by name (an SR measured against another bake is not comparable).
+# The tile bake (data_prep/bake_tiles.sh): one tags-only OSM ``prior`` list per
+# block, masks clipped to the block's imagery. An SR measured against another
+# bake is not comparable.
 DEFAULT_TILE_BAKE = "tiles/citynav_2m_osmv3"
 TILES_DIR = (
     Path(
@@ -100,22 +79,13 @@ TILES_DIR = (
     .resolve()
 )
 
-# WHAT COUNTS AS ARRIVING, for this benchmark. One value per bench, and the
-# only thing that decides which mask ``SR`` is a verdict under:
-#
-#   "ring"   within ``success_radius_m`` of the target point (CityNav, 20 m)
-#   "shape"  inside the target's own annotated footprint (Cal City)
-#
-# Rebound by ``benchmarks.calcity._citynav_bridge`` like every other name
-# here, so a Cal City run reads "shape" without the CityNav package holding a
-# Cal City fact. READ IT AT CALL TIME (``paths.SUCCESS_CRITERION``): a
-# ``from ... import`` captures the CityNav default at import and keeps
-# scoring the ring on a Cal City run, silently and with the same signature.
+# What counts as arriving on this bench (``eval.score_arrival``): "ring" for
+# CityNav, rebound to "shape" by ``benchmarks.calcity._citynav_bridge``. Read it
+# as ``paths.SUCCESS_CRITERION`` at call time: a ``from`` import keeps the ring.
 SUCCESS_CRITERION = "ring"
 
 SPLIT_FILES: dict[str, str] = {
-    # CityNav ships no test_seen split. Easy/medium/hard are difficulty tiers
-    # within each test_unseen / val_* split, pre-partitioned by trajectory length.
+    # No test_seen split exists; easy/medium/hard are trajectory-length tiers.
     "train_seen": "citynav_train_seen.json",
     "val_seen": "citynav_val_seen.json",
     "val_seen_easy": "citynav_val_seen_easy.json",
@@ -144,9 +114,7 @@ def tile_stem(map_name: str) -> str:
 
 
 def assert_available() -> None:
-    """Fail loudly if the core CityNav JSONs (the splits and
-    ``objects.json``) aren't fetched. The rasters are checked where they are
-    read."""
+    """Raise with the fetch recipe when the splits or ``objects.json`` are missing."""
     missing = [p for p in (SPLITS_DIR, OBJECTS_JSON) if not p.exists()]
     if missing:
         recipe = (
@@ -162,22 +130,13 @@ def assert_available() -> None:
         raise FileNotFoundError(recipe)
 
 
-# A run against another bake grounds on entirely different priors and still
-# completes, so the only symptom is a wrong SR, and a stale
-# SEARCH_CITYNAV_TILES goes unnoticed. The current bake writes ONE ``prior``
-# list per block (tags-only, PRIOR_CONTRACT config B): rows are mask + ALL raw
-# tags verbatim + ``source`` provenance, nothing minted. The refused shapes are the
-# typed-class bake (``building``/``footpath``/... keys, rows minting
-# ``prior_role``/``prior_source``) and the older opaque bucket whose rows
-# carry no ``source`` at all.
-
-
 def assert_current_tile_schema(features: dict, source: str) -> None:
-    """Refuse a features payload from a retired tile bake.
+    """Refuse a loaded ``<block>_features.json`` of another schema.
 
-    ``features`` is a loaded ``<block>_features.json``. Raises when it carries
-    typed class keys, or ``prior`` rows minting the retired
-    ``prior_role``/``prior_source`` fields or missing ``source`` provenance.
+    The current bake writes one ``prior`` list whose rows carry mask, raw tags
+    and ``source``. A run against another bake still completes with a wrong
+    SR, so typed class keys, ``prior_role``/``prior_source`` rows and rows
+    without ``source`` raise.
     """
     if not isinstance(features, dict) or not features:
         return
@@ -227,21 +186,12 @@ def _bake_content(f: Path) -> bytes:
 
 
 def bake_sha256(tiles_dir: Path | None = None) -> str | None:
-    """Content identity of a tile bake: one hash over the name and content
-    of every per-block file the bake writes (``BAKE_OUTPUT_SUFFIXES``).
+    """Content identity of a tile bake: one hash over the name and content of
+    every ``BAKE_OUTPUT_SUFFIXES`` file, a meta's bake time and commit left out.
 
-    ``assert_current_tile_schema`` refuses retired SHAPES; this pins the
-    retired CONTENT that shares a shape. Two bakes of the same block set
-    live at the same path under the same name and pass every suffix check
-    the manifest makes, and a run flown against the wrong one scores a
-    different SR with nothing failing (0.351 vs 0.169 on identical
-    episodes, measured). A run stamps this so a later reader can say which
-    bake produced the number instead of trusting a directory name.
-
-    A renamed, added, or dropped block file changes the result; any other
-    file in the directory, and a meta's bake time and commit, do not, so two
-    bakes of one prior hash equal. Returns ``None`` when the directory does
-    not exist -- an unhashable bake is an unknown one, never a passing one.
+    Two bakes of one block set share a path and a schema yet score different
+    SRs (0.351 vs 0.169 on identical episodes), so a run stamps this rather
+    than trust a directory name. ``None`` when the directory does not exist.
     """
     root = Path(tiles_dir) if tiles_dir is not None else TILES_DIR
     if not root.is_dir():
