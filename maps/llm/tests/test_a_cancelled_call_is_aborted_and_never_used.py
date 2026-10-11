@@ -1,5 +1,5 @@
 """The flight's stop path: a cancel aborts the call on the wire, and an answer
-that lands as the cancel is set is never handed back, booked or recorded."""
+that lands as the cancel is set is never handed back or recorded."""
 
 from __future__ import annotations
 
@@ -28,7 +28,6 @@ def test_a_cancel_aborts_a_call_the_serve_is_silent_on(monkeypatch, hold):
 
 def test_an_answer_that_lands_as_the_cancel_is_set_is_never_used(monkeypatch, tmp_path):
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
-    monkeypatch.setenv("NET_METER_LOG", str(tmp_path / "net_meter.jsonl"))
     cancel = threading.Event()
 
     def answer_as_the_stop_is_pressed(url, headers, body, *, timeout, cancel_event):
@@ -43,4 +42,3 @@ def test_an_answer_that_lands_as_the_cancel_is_set_is_never_used(monkeypatch, tm
     kinds = [json.loads(line)["kind"]
              for line in (tmp_path / "flight" / "llm" / "transcript.jsonl").read_text().splitlines()]
     assert "response" not in kinds and "request" in kinds
-    assert not (tmp_path / "net_meter.jsonl").exists()

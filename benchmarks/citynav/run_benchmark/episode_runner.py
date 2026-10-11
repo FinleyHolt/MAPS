@@ -550,10 +550,9 @@ def run_episode(
     scores["steps_taken"] = steps_taken
     scores["compile_s"] = round(compile_s, 2)
     # What the episode spent on the LLM, reduced to row size. The flight dir
-    # already holds it twice over (transcript + net_meter), but neither
-    # survives a rows-only telemetry pull and both cost a file walk per
-    # episode to read, so the population view could not have tokens or turns
-    # across a fleet. Read here, after the flight: the transcript writer
+    # already holds it in the transcript, but that does not survive a
+    # rows-only telemetry pull and costs a file walk per episode to read, so
+    # the population view could not have tokens or turns across a fleet. Read here, after the flight: the transcript writer
     # flushes per record, so the file is complete. Never raises.
     _flight_dir = os.environ.get("SEARCH_COMPILE_WORKDIR")
     scores["llm"] = (

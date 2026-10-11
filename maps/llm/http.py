@@ -18,7 +18,7 @@ vLLM rather than a blocking POST. When the event fires the call's TCP
 socket is shut down, so a read blocked on a silent serve returns at once
 and the serve frees the KV-cache slot, and the call raises
 :class:`CallCanceled`. An answer that lands as the event fires is never
-handed back, metered or recorded.
+handed back or recorded.
 """
 
 from __future__ import annotations
@@ -36,16 +36,6 @@ import uuid
 from pathlib import Path
 
 import httpx
-
-from .net_meter import (
-    NetMeter,
-    cached_tokens_of,
-    completion_tokens_of,
-    prompt_tokens_of,
-    reasoning_tokens_of,
-    request_kind,
-    serialized_size,
-)
 
 
 # 4xx codes that mean "not now" rather than "not ever": 429 is the
@@ -694,8 +684,8 @@ def _chat_completions_raw(
 
     # Ask the server to emit the final ``usage`` block on streaming
     # responses — without this, Gemini/OpenAI-compat streams omit it
-    # entirely and ``prompt_tokens_of`` / ``cached_tokens_of`` see
-    # nothing. vLLM honors the same field. Merge into any pre-set
+    # entirely and the transcript's response carries no token counts.
+    # vLLM honors the same field. Merge into any pre-set
     # ``stream_options`` so a caller's flags (e.g. ``continuous_usage``)
     # aren't clobbered.
     if use_stream:
@@ -725,7 +715,6 @@ def _chat_completions_raw(
             # before we got CPU time).
             if cancel_event is not None and cancel_event.is_set():
                 raise CallCanceled("canceled before dispatch")
-            ts_start = time.time()
             if use_stream:
                 response_json = _stream_chat_completions(
                     url,
@@ -760,18 +749,6 @@ def _chat_completions_raw(
             if cancel_event is not None and cancel_event.is_set():
                 # The answer landed as the caller gave up on it: never used.
                 raise CallCanceled("canceled as the answer landed")
-            NetMeter.instance().record(
-                "reasoner_chat",
-                serialized_size(body),
-                serialized_size(response_json),
-                ts_start,
-                time.time(),
-                kind=request_kind(body),
-                completion_tokens=completion_tokens_of(response_json),
-                prompt_tokens=prompt_tokens_of(response_json),
-                reasoning_tokens=reasoning_tokens_of(response_json),
-                cached_tokens=cached_tokens_of(response_json),
-            )
             if flight_dir is not None:
                 _flight_response_record(flight_dir, request_id, response_json)
             return _RawResponse(response_json)

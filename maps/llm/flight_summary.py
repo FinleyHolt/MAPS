@@ -1,33 +1,21 @@
 """One episode's LLM activity, reduced to a row-sized block.
 
-The flight dir already holds everything: ``llm/transcript.jsonl`` records
-every round-trip (:mod:`maps.llm.http` writes it) and ``net_meter.jsonl``
-records per-call token/latency accounting (:mod:`maps.llm.net_meter`).
-Both are written on every episode. Neither survives a rows-only telemetry
-pull, and both cost a file walk per episode to read, so the population view
-that wants "tokens and turns across 1000 episodes" could not have them.
+The flight dir's ``llm/transcript.jsonl`` records every round-trip
+(:mod:`maps.llm.http` writes it). It does not survive a rows-only telemetry
+pull, and it costs a file walk per episode to read, so the population view
+that wants "tokens and turns across 1000 episodes" could not have it.
 
-:func:`summarize` collapses the pair into ~10 scalars plus a call
-histogram and the declared tools, cheap enough to ride the row into
-``episodes.jsonl``.
+:func:`summarize` collapses it into ~10 scalars plus a call histogram and
+the declared tools, cheap enough to ride the row into ``episodes.jsonl``:
+turns, requests, tokens, the tool calls the model emitted, and the DECLARED
+tools each ``params`` record carries.
 
-WHICH FILE OWNS WHICH NUMBER — one source per quantity, never two:
-
-  TRANSCRIPT owns turns, requests, tokens, the tool calls the model
-    emitted, and the DECLARED tools each ``params`` record carries.
-
-  NET METER owns ``reasoning_tokens``. Whether it rides the wire is a
-    backend fact, not a constant: measured over the pulled tree, 1055 of
-    1761 episodes carry ``usage.reasoning_tokens`` (sglang) and the rest
-    do not (vLLM 0.21 leaves it unset and rolls the span into
-    ``completion_tokens``). ``net_meter.reasoning_tokens_of`` takes the
-    wire value where it exists and re-tokenizes ``message.reasoning``
-    where it does not, so the meter is a strict superset of the
-    transcript — which is why summing the transcript's copy here would be
-    the wrong number on half the fleet.
-
-    ``reasoning_tokens`` is a SLICE of ``completion_tokens``, not an
-    addition — the two overlap by design.
+``reasoning_tokens`` is not summed off ``usage``: whether
+``usage.reasoning_tokens`` rides the wire is a backend fact (1055 of 1761
+pulled episodes carry it, from sglang; vLLM 0.21 leaves it unset and rolls
+the span into ``completion_tokens``). :func:`reasoning_tokens_of` takes the
+wire value where it exists and re-tokenizes the response's thinking span
+where it does not. It is a SLICE of ``completion_tokens``, not an addition.
 """
 
 from __future__ import annotations
@@ -38,7 +26,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from . import net_meter
+from .tokenizer import _tokenizer
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +91,84 @@ def blank() -> dict:
     }
 
 
+def reasoning_tokens_of(response_json: dict) -> int:
+    """Extract the reasoning-span token count from a chat-completions response.
+
+    A reasoning serve routes the thinking span into
+    ``choices[i].message.reasoning_content`` (or ``reasoning`` on some
+    SDKs) and rolls its tokens into ``usage.completion_tokens``. Some
+    serves also report ``usage.reasoning_tokens``; where they do, it is
+    the exact count and beats tokenizing the text.
+
+    **THE SPAN DECIDES, NOT THE USAGE FIELD.** A response carrying no
+    thinking span reads 0 here whatever ``usage`` claims, and the order
+    is that way round because the claim is not reliable: sglang 0.6.17
+    serving Inkling reports ``reasoning_tokens = completion_tokens - 1``
+    on a response whose ``reasoning_content`` is ``null`` — not zero, not
+    absent, but one short of the entire generation. Measured on the
+    effort ladder, where the arm served ``reasoning_effort=0.0`` produced
+    341 responses, ZERO of them carrying a span, and 339 of them claiming
+    to be almost entirely thinking. Preferring the field made the
+    least-thinking arm read as the most-thinking one, and did it
+    monotonically across the whole ladder, which is the shape that gets
+    believed.
+
+    Order of resolution:
+      1. no ``reasoning`` / ``reasoning_content`` on any choice → 0.
+      2. ``usage.reasoning_tokens`` when the serve reports one.
+      3. tokenize the span with the same HF tokenizer the compactor
+         uses, keyed off the response's ``model`` alias.
+      4. 0 (no tokenizer available).
+
+    The count is a slice of ``usage.completion_tokens``, which includes
+    the reasoning tokens; the two overlap by design.
+    """
+    choices = response_json.get("choices") or []
+    reasoning_texts: list[str] = []
+    for ch in choices:
+        if not isinstance(ch, dict):
+            continue
+        msg = ch.get("message") or {}
+        if not isinstance(msg, dict):
+            continue
+        for field_name in ("reasoning", "reasoning_content"):
+            val = msg.get(field_name)
+            if isinstance(val, str) and val:
+                reasoning_texts.append(val)
+                break
+    if not reasoning_texts:
+        return 0
+    direct = _usage_int(response_json, "reasoning_tokens")
+    if direct > 0:
+        return direct
+    model_alias = response_json.get("model")
+    if not isinstance(model_alias, str):
+        return 0
+    try:
+        tok = _tokenizer(model_alias)
+    except Exception:  # noqa: BLE001 — no tokenizer reads 0
+        return 0
+    total = 0
+    for text in reasoning_texts:
+        try:
+            ids = tok.encode(text, add_special_tokens=False)
+        except Exception:  # noqa: BLE001 — tokenizer quirks; fall through silently
+            continue
+        total += len(ids)
+    return total
+
+
+def _usage_int(response_json: dict, key: str) -> int:
+    usage = response_json.get("usage") if isinstance(response_json, dict) else None
+    if not isinstance(usage, dict):
+        return 0
+    val = usage.get(key)
+    try:
+        return int(val) if val is not None else 0
+    except (TypeError, ValueError):
+        return 0
+
+
 def _scan_transcript(path: Path, out: dict) -> None:
     """Fold one transcript into ``out``.
 
@@ -148,6 +214,7 @@ def _scan_transcript(path: Path, out: dict) -> None:
                 out["latency_s_max"] = max(out["latency_s_max"], lat)
 
             body = _as_dict(rec.get("response"))
+            out["reasoning_tokens"] += reasoning_tokens_of(body)
             usage = _as_dict(body.get("usage"))
             for key, field in (
                 ("prompt_tokens", "prompt_tokens"),
@@ -190,12 +257,6 @@ def summarize(flight_dir: Path) -> dict:
     except Exception as exc:  # noqa: BLE001 — never fail the episode
         log.warning("flight summary scan failed at %s: %s", transcript, exc)
         return blank()
-
-    try:
-        meter = net_meter.summarize_window(Path(flight_dir) / "net_meter.jsonl")
-        out["reasoning_tokens"] = int(meter.get("total_reasoning_tokens") or 0)
-    except Exception as exc:  # noqa: BLE001 — never fail the episode
-        log.warning("flight summary meter read failed at %s: %s", flight_dir, exc)
 
     out["latency_s_sum"] = round(out["latency_s_sum"], 3)
     out["latency_s_max"] = round(out["latency_s_max"], 3)

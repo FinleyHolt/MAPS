@@ -44,7 +44,6 @@ from typing import Callable
 import httpx
 
 from maps.llm.http import TRANSIENT_CLIENT_STATUS, CallCanceled, DegenerateCompletion
-from maps.llm.net_meter import stage as net_meter_stage
 from maps.search.analyze_scene.compactor import (
     CompactionInfeasible,
     CompactionInvariantError,
@@ -3131,8 +3130,7 @@ def advance_reasoner_one_round(
                      mission_spec.turn_cap)
             return _mission_end("turn_cap", turns=turn_idx)
         try:
-            with net_meter_stage("mission"):
-                r = reasoner.step_tool_call(stop_tools)
+            r = reasoner.step_tool_call(stop_tools)
         except (CompactionInfeasible, CompactionInvariantError) as exc:
             # CompactionInvariantError is a sibling of Infeasible, not a
             # subclass; both mean this conversation cannot be served, so

@@ -8,7 +8,7 @@
         detections.jsonl   one line per detection, stamped with its step
         frames/            every jpeg the model was shown, by sha256
         flight/            the engine's working files: llm/transcript.jsonl (the wire
-                           log), look/ (the look audit), net_meter.jsonl, tour_cursor.json
+                           log), look/ (the look audit), tour_cursor.json
 
 The runner (``cli.main``: a batch, or one bench attempt) and the field
 station open their attempt directories through one function.
@@ -129,7 +129,6 @@ def open_episode_dir(
     # value here, and the wire log resolves its directory from
     # SEARCH_COMPILE_WORKDIR at every call.
     os.environ["SEARCH_COMPILE_WORKDIR"] = str(d)
-    os.environ["NET_METER_LOG"] = str(flight / "net_meter.jsonl")
     # Router-affinity key: every LLM call of this episode carries it, so a
     # key-affine router keeps the episode on one worker.
     os.environ["SEARCH_LLM_ROUTING_KEY"] = episode_id

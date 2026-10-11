@@ -193,17 +193,17 @@ def test_malformed_tool_name_gets_its_own_bucket(tmp_path: Path) -> None:
     assert s["calls"] == {flight_summary.MALFORMED: 1}
 
 
-def test_reasoning_tokens_come_from_the_meter(tmp_path: Path) -> None:
-    """Whether reasoning tokens ride the wire is a backend fact, so the meter
-    — which takes the wire value where it exists and re-tokenizes where it
-    does not — is the one source. The transcript alone reads 0 here."""
+def test_reasoning_tokens_are_summed_over_the_responses_that_carry_a_span(tmp_path: Path) -> None:
+    """Each response's count is ``reasoning_tokens_of``: the serve's own where a
+    thinking span exists, zero where none does."""
     flight = _flight(tmp_path)
     assert flight_summary.summarize(flight)["reasoning_tokens"] == 0
 
-    (flight / "net_meter.jsonl").write_text(
-        json.dumps({"ts_start": 100.0, "reasoning_tokens": 207}) + "\n"
-        + json.dumps({"ts_start": 200.0, "reasoning_tokens": 93}) + "\n"
-    )
+    spans = [({"reasoning_content": "thought"}, 207), ({"reasoning": "more"}, 93), ({}, 50)]
+    with (flight / "llm" / "transcript.jsonl").open("a") as fh:
+        for message, n in spans:
+            fh.write(json.dumps({"kind": "response", "response": {
+                "usage": {"reasoning_tokens": n}, "choices": [{"message": message}]}}) + "\n")
     assert flight_summary.summarize(flight)["reasoning_tokens"] == 300
 
 

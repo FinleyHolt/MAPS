@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from maps.llm.net_meter import reasoning_tokens_of
+from maps.llm.flight_summary import reasoning_tokens_of
 
 
 def _response(message: dict, *, completion: int, reported: int) -> dict:

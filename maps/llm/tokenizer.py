@@ -2,10 +2,8 @@
 
 Process-wide cache, lazy load, override via
 ``SEARCH_COMPACT_TOKENIZER_NAME`` env var. Consumed by the autocompact
-prompt sizer (``maps.search.analyze_scene.compactor``) and by the response-side
-metering (``maps.llm.net_meter``); placing the helpers here breaks
-the otherwise-cyclic dep between those two modules and keeps the
-infrastructure → robotics arrow pointing the right way.
+prompt sizer (``maps.search.analyze_scene.compactor``) and by the
+transcript's reasoning-token count (``maps.llm.flight_summary``).
 """
 
 from __future__ import annotations

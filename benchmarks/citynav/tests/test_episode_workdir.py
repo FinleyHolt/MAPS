@@ -63,12 +63,10 @@ def test_an_undeclared_benchmark_refuses_instead_of_naming_the_wrong_one(
 
 def test_the_env_is_assigned_over_a_stale_value(tmp_path, monkeypatch):
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", "/stale/previous/episode")
-    monkeypatch.setenv("NET_METER_LOG", "/stale/net_meter.jsonl")
     monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "previous::9#9")
     ep = ew.open_episode_dir(tmp_path, episode_id="block_7::0#3")
     try:
         assert os.environ["SEARCH_COMPILE_WORKDIR"] == str(ep.dir)
-        assert os.environ["NET_METER_LOG"] == str(ep.dir / "flight" / "net_meter.jsonl")
         assert os.environ["SEARCH_LLM_ROUTING_KEY"] == "block_7::0#3"
     finally:
         ep.close()
