@@ -333,6 +333,23 @@ def test_persistent_infra_is_reported_with_its_errors(
         assert "persistent infra: 1 episode(s)" in text and "A=2, B=1" in text, text
 
 
+def test_a_spent_wall_budget_stops_the_run_with_its_results(
+    driver, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from benchmarks.citynav import run_manifest as rm
+
+    monkeypatch.setattr(bf, "_missing_block_assets", lambda eps: [])
+    monkeypatch.setattr(rm, "build_manifest", lambda **kw: {})
+    monkeypatch.setattr(rm, "emit_or_verify", lambda *a, **k: None)
+    d = driver()
+    monkeypatch.setattr(d, "_select_episodes", lambda: ["ep0"])
+    monkeypatch.setattr(d, "worker_loop", lambda w: pytest.fail("flew past the budget"))
+    d.max_wall_s, d._deadline = 1, time.monotonic() - 1
+    assert d.run() == 0
+    assert "wall budget reached" in d.driver_log.read_text()
+    assert d.summary_file.exists()
+
+
 def test_a_second_run_into_a_held_root_is_refused(
     driver, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
