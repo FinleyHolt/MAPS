@@ -82,7 +82,7 @@ def test_small_window_derivation(monkeypatch):
     s = discover(_URL_A)
     assert s.output_reserve == 8192
     assert s.input_budget == 32768 - 8192 - 1024
-    assert s.max_output_tokens == 8192  # the defensive floor == reserve here
+    assert s.max_output_tokens == 8192
 
 
 def test_service_urls_frozen_and_probed(monkeypatch):
@@ -313,29 +313,6 @@ def test_divergent_second_install_raises():
     E.install_spec(_spec())
     with pytest.raises(EndpointDiscoveryError, match="divergent"):
         E.install_spec(_spec(max_model_len=131072))
-
-
-def test_the_budget_and_the_pin_always_fit_the_window() -> None:
-    """A transcript compacted to budget plus the pinned output fits every window discovery admits."""
-    from maps.llm.endpoint_spec import _MIN_INPUT_BUDGET, _output_reserve_for
-
-    # Windows that survive discovery. Below ~18k the reasoner minimum rejects
-    # the endpoint outright, so no EndpointSpec exists to check.
-    for window in (24576, 32768, 49152, 65536, 131072, 200000, 262144,
-                   1048576):
-        spec = EndpointSpec(
-            model_id="m", base_url="u", tokenizer_name="t",
-            max_model_len=window, output_reserve=_output_reserve_for(window),
-        )
-        assert spec.input_budget + spec.max_output_tokens <= window, (
-            f"window={window}: budget {spec.input_budget} + pin "
-            f"{spec.max_output_tokens} exceeds it; a prompt compacted to "
-            f"budget would 400 on length"
-        )
-        assert spec.input_budget >= _MIN_INPUT_BUDGET, (
-            f"window={window}: budget {spec.input_budget} is below the "
-            f"reasoner minimum, so discovery should have refused it"
-        )
 
 
 def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):

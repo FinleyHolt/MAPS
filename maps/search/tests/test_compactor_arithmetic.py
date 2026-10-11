@@ -136,7 +136,7 @@ def test_small_window_derivation_no_negative_budget():
     assert s.output_reserve == 8192           # min(40000, 32768 // 4)
     assert s.input_budget == 32768 - 8192 - 1024
     assert s.input_budget > 8000              # discover()'s case-f holds
-    assert s.max_output_tokens == 8192        # floor == reserve at 32k
+    assert s.max_output_tokens == 8192
 
 
 # --------------------------------------------------------------------------- #

@@ -69,15 +69,8 @@ _PROBE_TRIES = 3
 _PROBE_RETRY_S = 3.0
 
 # Output reserve cap: tokens held back for the current turn's thinking +
-# completion. ``min(cap, window // 4)`` keeps a small window from going
-# negative (the 262144-assumption bug: 32768 - 40000 < 0).
+# completion, ``min(cap, window // 4)``.
 _OUTPUT_RESERVE_CAP = 40000
-
-# Defensive floor on the request ``max_tokens`` pin: a known Qwen3
-# thinking-completion size, so a small window cannot truncate a long
-# thinking turn into a malformed/empty tool call. On windows >= 32768 the
-# floor equals ``window // 4`` and never binds.
-_MIN_OUTPUT_TOKENS = 8192
 
 # Fixed slack between the compaction input budget and the served window,
 # absorbing client-vs-server chat-template token skew so a one-token
@@ -137,27 +130,15 @@ class EndpointSpec:
 
     @property
     def input_budget(self) -> int:
-        """Compaction ceiling: prompt tokens must fit under this so that
-        ``prompt + max_output_tokens`` can never exceed the served window.
-
-        Subtracts ``max_output_tokens``, which is what the request actually
-        pins, NOT ``output_reserve``. The two differ below a 32,768 window,
-        where the ``_MIN_OUTPUT_TOKENS`` floor exceeds ``maxlen // 4``:
-        subtracting the reserve there would hand compaction a ceiling the
-        server rejects (at 24,576, budget 17,408 plus a pinned 8,192 is
-        25,600 against the window).
-
-        A no-op wherever the reserve already clears the floor, which is every
-        window at or above 32,768 and so every served model in the fleet.
-        """
+        """Compaction ceiling: a prompt under it plus ``max_output_tokens``
+        fits the served window."""
         return (self.max_model_len - self.max_output_tokens
                 - _WINDOW_MARGIN_TOKENS)
 
     @property
     def max_output_tokens(self) -> int:
-        """The request ``max_tokens`` pin: the output reserve, floored at a
-        known thinking-completion size (see ``_MIN_OUTPUT_TOKENS``)."""
-        return max(self.output_reserve, _MIN_OUTPUT_TOKENS)
+        """The request's output cap: the output reserve."""
+        return self.output_reserve
 
 
 def _output_reserve_for(max_model_len: int) -> int:
