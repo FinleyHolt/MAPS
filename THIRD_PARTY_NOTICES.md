@@ -9,7 +9,7 @@ repository come from third parties, or are derived from third-party data:
 | `maps/perception/ortho/ground_level.py` | The CityNav blocks' ground levels. | [water-cookie/citynav](https://github.com/water-cookie/citynav) `gsamllavanav/mapdata.py` | MIT, Copyright (c) 2024; same license file. |
 | `maps/perception/viz/data/w2c.txt` | The colour-name lookup table the colour extractor reads. | van de Weijer, Schmid, Verbeek and Larlus, "Learning Color Names for Real-World Applications", IEEE Transactions on Image Processing, 2009, and the table distributed with the authors' code. | Not stated by the source. |
 | `benchmarks/calcity/data/calcity.json`, `benchmarks/calcity/data_prep/authoring/ground_truth.json` | The Cal City corpus and its reviewed target shapes. Rows name and place OpenStreetMap features. | Authored for MAPS; feature names and positions from OpenStreetMap. | OpenStreetMap data © OpenStreetMap contributors, [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). |
-| `benchmarks/citynav/georef/*.json` | Each CityNav city's alignment of OpenStreetMap to the CityNav frame. | Fitted for MAPS against OpenStreetMap. | OpenStreetMap data © OpenStreetMap contributors, ODbL 1.0. |
+| `tiles/osm_cache/{birmingham,cambridge}_osm_local.geojson` | The OpenStreetMap features over each CityNav city, tags verbatim, registered into the CityNav frame; the CityNav bake's source. Each file's `citynav_osm_cache` block holds the registration fitted for MAPS. | [openstreetmap.org](https://www.openstreetmap.org), via the Overpass API. | OpenStreetMap data © OpenStreetMap contributors, [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). |
 
 These are used and not redistributed:
 
@@ -18,4 +18,4 @@ These are used and not redistributed:
 | SAM 3.1 checkpoint `facebook/sam3.1` | The SAM serve (`serving/`) fetches it on first load. | Meta, gated on [Hugging Face](https://huggingface.co/facebook/sam3.1). | Meta's terms, accepted on the model page. |
 | Meta's `sam3` package | Installed into the `sam3_1` environment from Meta's SAM 3 source; `serving/sam_engine.py` imports it. | Meta's SAM 3 source. | The license distributed with that source. |
 | CityNav episodes, CityRefer catalog, SensatUrban point clouds | Fetched by `benchmarks/citynav/data_prep/fetch_data.sh`. | Their upstream releases. | Their upstream licenses. |
-| OpenStreetMap | Fetched by the CityNav bake and read from the Cal City world bundle; baked into local tile directories. | [openstreetmap.org](https://www.openstreetmap.org) | © OpenStreetMap contributors, ODbL 1.0. |
+| OpenStreetMap | Read from the Cal City world bundle; baked into local tile directories. | [openstreetmap.org](https://www.openstreetmap.org) | © OpenStreetMap contributors, ODbL 1.0. |
