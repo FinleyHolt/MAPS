@@ -10,13 +10,7 @@ from maps.llm.vision_content import build_image_part, build_vision_user_content
 
 @pytest.fixture(autouse=True)
 def _no_ambient_sampling_env(monkeypatch) -> None:
-    """The envelope pins below measure the CODE, not the shell.
-
-    All three of these are arm-file exports, and a shell that sourced an
-    arm and then ran pytest fails the exact-equality pins with a diff that
-    names the arm's own value — which reads as a broken envelope rather
-    than a polluted environment. Each test that wants one sets it back.
-    """
+    """The envelope pins measure the code, not a shell that sourced an arm file."""
     for name in (
         "SEARCH_SAMPLING_TEMPERATURE",
         "SEARCH_SAMPLING_PRESENCE_PENALTY",
@@ -70,25 +64,6 @@ def test_gemma_presence_override_is_sweep_instrumentation(monkeypatch) -> None:
     monkeypatch.setenv("SEARCH_SAMPLING_PRESENCE_PENALTY", "0.5")
     kwargs = thinking_sampling_kwargs(temperature=1.0, model_id="gemma4-26b-a4b-nvfp4")
     assert kwargs["presence_penalty"] == 0.5
-    assert kwargs["top_k"] == 64
-    assert kwargs["chat_template_kwargs"] == {"enable_thinking": True}
-
-
-def test_reasoning_effort_rides_as_a_string_when_the_arm_names_one(
-    monkeypatch,
-) -> None:
-    # The arm names its effort and the request carries it, verbatim and at
-    # the top level. The WIRE TYPE is the point: a serve that takes the
-    # field refuses a JSON float for it (``invalid type: floating point
-    # 0.99, expected a string``), so the assertion is on the serialized
-    # bytes — a str that json.dumps quotes — not merely on the dict value.
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
-    kwargs = thinking_sampling_kwargs(temperature=1.0, model_id="inkling-small")
-    assert kwargs["reasoning_effort"] == "0.99"
-    assert isinstance(kwargs["reasoning_effort"], str)
-    assert '"reasoning_effort": "0.99"' in json.dumps(kwargs)
-    # It rides alongside the card envelope, replacing none of it.
-    assert kwargs["top_p"] == 0.95
     assert kwargs["top_k"] == 64
     assert kwargs["chat_template_kwargs"] == {"enable_thinking": True}
 

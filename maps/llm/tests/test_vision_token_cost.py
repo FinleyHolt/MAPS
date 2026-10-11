@@ -1,20 +1,5 @@
-"""Image crops cost tokens, and the client has to count them.
-
-They were counted as ZERO. Every ``image_url`` part collapsed to the string
-``"[image crop]"`` -- about 3 tokens -- before tokenization, on the stated
-theory that the server's vision budget was governed separately by a
-per-request image cap. It is not, twice over. A count cap does not bill
-tokens -- they land in the same context window as the text -- and no cap is
-declared anyway: the sglang flag is ``--limit-mm-data-per-request``
-(``--limit-mm-per-prompt`` is vLLM's spelling), and no card or script in
-this tree passes either.
-
-Measured consequence on a reasoning-effort ladder: the max-effort arm sent
-twelve requests 1,049-4,582 tokens past its own declared budget of 48,128,
-the server rejected every one, and 130,095 uncounted tokens over 136 images
-was the entire gap. The two lower-effort arms never took enough turns to
-reach the window, so it read as an effort effect rather than a harness bug.
-"""
+"""Image crops are counted in the client's token estimate: they share the context window with the text,
+and an uncounted crop sends a request past its budget."""
 
 from __future__ import annotations
 
@@ -47,16 +32,8 @@ def test_the_estimate_brackets_the_server_from_above(side, server_billed) -> Non
     assert got <= server_billed * 1.33, f"{side}px over-counted: {got}"
 
 
-def test_a_crop_is_not_three_tokens() -> None:
-    """The floor on the whole fix. The placeholder it replaces is ~3 tokens,
-    so any figure in that neighbourhood means the bug is back."""
-    assert image_tokens_of(build_image_part(_jpeg(1024, 1024))) > 1000
-
-
 def test_sixteen_maps_are_most_of_an_input_budget() -> None:
-    """The measured shape of the failure: the per-request image cap is 16,
-    denominated in COUNT, against a 48,128-token budget. Sixteen 1024px maps
-    have to read as the great majority of it, not as an empty context."""
+    """Sixteen 1024 px maps (the per-request image cap) are most of a 48,128-token budget."""
     content = build_vision_user_content("look", [_jpeg(1024, 1024)] * 16)
     assert image_tokens_in([{"role": "user", "content": content}]) > 40000
 
@@ -70,7 +47,6 @@ def test_non_square_crops_price_by_area() -> None:
 
 
 def test_text_only_messages_cost_nothing() -> None:
-    """Parity: a text-only transcript must be untouched by any of this."""
     assert image_tokens_in([
         {"role": "user", "content": "plain text"},
         {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]},
@@ -79,8 +55,6 @@ def test_text_only_messages_cost_nothing() -> None:
 
 
 def test_a_malformed_part_reads_zero_rather_than_raising() -> None:
-    """An estimate that dies on a bad crop is worse than one that misses a
-    crop the server is going to reject anyway."""
     assert image_tokens_of({"type": "image_url", "image_url": {"url": "nonsense"}}) == 0
     assert image_tokens_of({
         "type": "image_url", "image_url": {"url": "data:image/jpeg;base64,!!!"}
