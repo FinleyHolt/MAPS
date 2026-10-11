@@ -30,7 +30,7 @@ stronger fit than UCMCTrack's:
   re-binds the old ID when the drone flies back over the object. Only
   never-confirmed provisional tracks are pruned.
 
-The one ByteTrack idea kept: confirm a track only after ``n_init``
+The one ByteTrack idea kept: confirm a track only after ``_N_INIT``
 consecutive hits, to reject SAM single-frame false positives.
 
 Robot-agnostic: imports only numpy / scipy / ``perception.base``. No
@@ -44,7 +44,6 @@ not needed: centroid-only Mahalanobis is UCMCTrack's design and is fast.
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -59,17 +58,13 @@ _CHI2_2DOF_P99 = 9.21
 _BIG = 1.0e9  # finite sentinel for gated-out assignment-matrix cells
 
 
-@dataclass
-class WorldTrackerConfig:
-    """All knobs in meters² / dimensionless. Tune ``r_pos_var`` to the
-    actual world-projection 1σ position error (depth-error dominated)."""
-
-    q_pos_var: float = 0.2**2  # per-frame position random-walk variance
-    r_pos_var: float = 1.0**2  # measurement (world-projection) variance
-    p0_pos_var: float = 1.0**2  # initial track covariance
-    p_max_pos_var: float = 20.0**2  # cap on dormant-track covariance
-    gate_chi2: float = _CHI2_2DOF_P99
-    n_init: int = 3  # consecutive hits before a track is "confirmed"
+# Every term in metres² / dimensionless. ``_R_POS_VAR`` is the
+# world-projection 1σ position error (depth-error dominated), squared.
+_Q_POS_VAR = 0.2**2  # per-frame position random-walk variance
+_R_POS_VAR = 1.0**2  # measurement (world-projection) variance
+_P0_POS_VAR = 1.0**2  # initial track variance
+_P_MAX_POS_VAR = 20.0**2  # cap on a dormant track's variance
+_N_INIT = 3  # consecutive hits before a track is "confirmed"
 
 
 @dataclass
@@ -77,7 +72,9 @@ class _Track:
     track_id: int
     label: str
     x: np.ndarray  # (2,) world (east, north) meters
-    p: np.ndarray  # (2, 2) covariance
+    # Per-axis variance. Isotropic: every step adds or scales the same
+    # amount on both axes, so the 2x2 covariance is ``p * I``.
+    p: float
     hits: int = 1
     misses: int = 0
     confirmed: bool = False
@@ -87,32 +84,19 @@ class _Track:
 class WorldTracker:
     """UCMCTrack-core, constant-position, persistent-ID world tracker."""
 
-    cfg: WorldTrackerConfig = field(default_factory=WorldTrackerConfig)
     _tracks: list[_Track] = field(default_factory=list, init=False)
     _next_id: int = field(default=0, init=False)
-    _frame: int = field(default=0, init=False)
-
-    def reset(self) -> None:
-        """Drop all tracks (call once per episode)."""
-        self._tracks = []
-        self._next_id = 0
-        self._frame = 0
 
     def update(self, detections: list[DetectedObject]) -> None:
         """Predict → Mahalanobis-assign → KF-update → lifecycle, then
         stamp a stable ``metadata['track_id']`` ('wt_<int>') in place on
         every detection with a finite ``world_xy``: it binds to a track or
         spawns one. Admission is the detector's job (score_threshold);
-        provisional births + ``n_init`` pruning are the tracker's own
+        provisional births + ``_N_INIT`` pruning are the tracker's own
         flicker valve, never a second admission gate."""
-        self._frame += 1
-        cfg = self.cfg
-
-        # --- predict (constant position; covariance inflates, capped) --
-        q = np.array([[cfg.q_pos_var, 0.0], [0.0, cfg.q_pos_var]])
+        # --- predict (constant position; variance inflates, capped) ---
         for t in self._tracks:
-            t.p = t.p + q
-            np.fill_diagonal(t.p, np.minimum(np.diag(t.p), cfg.p_max_pos_var))
+            t.p = min(t.p + _Q_POS_VAR, _P_MAX_POS_VAR)
 
         # --- gather valid detections (finite world_xy) ----------------
         dets: list[tuple[int, np.ndarray, str]] = []
@@ -143,7 +127,7 @@ class WorldTracker:
                 self._kf_update(trk, z)
                 trk.hits += 1
                 trk.misses = 0
-                if not trk.confirmed and trk.hits >= cfg.n_init:
+                if not trk.confirmed and trk.hits >= _N_INIT:
                     trk.confirmed = True
                 matched_track_idx.add(r)
                 detections[det_i].metadata["track_id"] = f"wt_{trk.track_id}"
@@ -154,13 +138,7 @@ class WorldTracker:
         for det_i, z, label in dets:
             if det_i < 0:
                 continue
-            trk = _Track(
-                track_id=self._next_id,
-                label=label,
-                x=z.copy(),
-                p=np.array([[cfg.p0_pos_var, 0.0], [0.0, cfg.p0_pos_var]]),
-                confirmed=cfg.n_init <= 1,
-            )
+            trk = _Track(track_id=self._next_id, label=label, x=z.copy(), p=_P0_POS_VAR)
             self._next_id += 1
             self._tracks.append(trk)
             born_idx.add(len(self._tracks) - 1)
@@ -174,11 +152,11 @@ class WorldTracker:
                 continue
             trk.misses += 1
             # Confirmed tracks live forever (whole-flight re-ID; their
-            # covariance keeps inflating, capped, so the gate widens for
+            # variance keeps inflating, capped, so the gate widens for
             # graceful re-acquisition on revisit). Never-confirmed
-            # provisional tracks are pruned after n_init consecutive
+            # provisional tracks are pruned after _N_INIT consecutive
             # misses (kills SAM single-frame false-positive flicker).
-            if trk.confirmed or trk.misses < cfg.n_init:
+            if trk.confirmed or trk.misses < _N_INIT:
                 survivors.append(trk)
         self._tracks = survivors
 
@@ -187,55 +165,37 @@ class WorldTracker:
         self, dets: list[tuple[int, np.ndarray, str]]
     ) -> tuple[np.ndarray, np.ndarray]:
         """Mapped Mahalanobis Distance ``εᵀS⁻¹ε + ln|S|`` (UCMCTrack),
-        χ²-gated, with a hard class gate. Vectorised over T×D."""
-        cfg = self.cfg
+        χ²-gated, with a hard class gate. Vectorised over T×D.
+
+        ``S = s * I`` with ``s = p + r``, so ``|S| = s²`` and ``S⁻¹ = I * s/s²``,
+        each written the way the 2x2 closed form evaluates it."""
         tx = np.stack([t.x for t in self._tracks])  # (T,2)
-        tp = np.stack([t.p for t in self._tracks])  # (T,2,2)
+        s = np.array([t.p for t in self._tracks]) + _R_POS_VAR  # (T,)
+        det_s = s * s
+        sinv = s / det_s
         dz = np.stack([z for _, z, _ in dets])  # (D,2)
-
-        r = np.array([[cfg.r_pos_var, 0.0], [0.0, cfg.r_pos_var]])
-        s = tp + r  # (T,2,2) innovation covariance
-        a, b = s[:, 0, 0], s[:, 0, 1]
-        c_, d_ = s[:, 1, 0], s[:, 1, 1]
-        det_s = a * d_ - b * c_  # (T,)
-        det_s = np.where(det_s > 1e-12, det_s, 1e-12)
-        # closed-form 2×2 inverse
-        sinv = np.empty_like(s)
-        sinv[:, 0, 0] = d_ / det_s
-        sinv[:, 0, 1] = -b / det_s
-        sinv[:, 1, 0] = -c_ / det_s
-        sinv[:, 1, 1] = a / det_s
-
         eps = dz[None, :, :] - tx[:, None, :]  # (T,D,2)
-        # mahalanobis m[t,d] = εᵀ Sinv ε
-        se = np.einsum("tij,tdj->tdi", sinv, eps)  # (T,D,2)
-        maha = np.einsum("tdi,tdi->td", eps, se)  # (T,D)
-        logdet = np.log(det_s)[:, None]  # (T,1)
-        cost = maha + logdet
+        se = eps * sinv[:, None, None]
+        maha = eps[..., 0] * se[..., 0] + eps[..., 1] * se[..., 1]  # (T,D)
+        cost = maha + np.log(det_s)[:, None]
 
-        gated = maha > cfg.gate_chi2
+        gated = maha > _CHI2_2DOF_P99
         # Class gate: forbid cross-label association so a detection only ever
         # re-identifies a track of the SAME class (a "gray car" never folds
         # onto a "car" track). Unconditional — the two-layer perception
         # contract depends on it.
         tl = np.array([t.label for t in self._tracks], dtype=object)
         dl = np.array([lab for _, _, lab in dets], dtype=object)
-        label_mismatch = tl[:, None] != dl[None, :]
-        gated = gated | label_mismatch
-        cost = np.where(gated, _BIG, cost)
-        return cost.astype(np.float64), gated
+        gated = gated | (tl[:, None] != dl[None, :])
+        return np.where(gated, _BIG, cost), gated
 
-    def _kf_update(self, trk: _Track, z: np.ndarray) -> None:
-        """Linear KF correction, H = I (we observe position directly)."""
-        cfg = self.cfg
-        r = np.array([[cfg.r_pos_var, 0.0], [0.0, cfg.r_pos_var]])
-        s = trk.p + r
-        det_s = s[0, 0] * s[1, 1] - s[0, 1] * s[1, 0]
-        det_s = det_s if abs(det_s) > 1e-12 else math.copysign(1e-12, det_s)
-        sinv = np.array([[s[1, 1], -s[0, 1]], [-s[1, 0], s[0, 0]]]) / det_s
-        k = trk.p @ sinv  # Kalman gain (2,2)
-        trk.x = trk.x + k @ (z - trk.x)
-        trk.p = (np.eye(2) - k) @ trk.p
+    @staticmethod
+    def _kf_update(trk: _Track, z: np.ndarray) -> None:
+        """Linear KF correction, H = I (position observed directly)."""
+        s = trk.p + _R_POS_VAR
+        k = trk.p * (s / (s * s))  # Kalman gain, the closed-form 2x2 inverse's arithmetic
+        trk.x = trk.x + k * (z - trk.x)
+        trk.p = (1.0 - k) * trk.p
 
 
-__all__ = ["WorldTracker", "WorldTrackerConfig"]
+__all__ = ["WorldTracker"]

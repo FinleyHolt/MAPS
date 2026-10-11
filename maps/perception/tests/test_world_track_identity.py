@@ -11,7 +11,7 @@ its own rows as it flew.
 from __future__ import annotations
 
 from maps.perception.base import DetectedObject
-from maps.perception.world_tracker import WorldTracker, WorldTrackerConfig
+from maps.perception.world_tracker import WorldTracker
 from maps.search.search_loop import SearchLoop
 
 
@@ -27,7 +27,7 @@ def test_a_low_conf_detection_still_earns_a_track_identity():
     """conf 0.41 with score_threshold 0.3 admitted it; the tracker must
     identify it. Two frames, two far-apart objects sharing the same
     frame-local index -> two DISTINCT wt_ ids."""
-    tr = WorldTracker(WorldTrackerConfig())
+    tr = WorldTracker()
     a = _det((1805.0, 908.0), 0.41, 0)
     tr.update([a])
     b = _det((2100.0, 908.0), 0.41, 0)     # same frame index, 295 m away
