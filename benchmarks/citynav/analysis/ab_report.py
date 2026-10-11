@@ -1,18 +1,10 @@
 #!/usr/bin/env python3
-"""Paired A/B SR report with a bootstrap CI on the delta, McNemar, and the
-success->fail regression guard -- the gate every SR/DeltaSR claim passes through.
+"""Paired A/B SR report: bootstrap CI on the delta, McNemar, and the flip counts.
 
-`run_report.paired` prints point SR for A and B; this adds the CI on the
-*difference* and the flip counts. A change can trade successes for failures
-at a flat net SR, so the success->fail count is reported beside the delta.
-
-Two entry points:
-  * `ab_stats(pairs)` -- library core. `pairs` = list of (sr_a, sr_b) in {0,1}
-    over the SHARED episode set (already paired). Returns SR_a, SR_b, delta, a
-    bootstrap CI on the delta (episode resampling), McNemar (b/c discordant +
-    chi-square-1df p via math.erfc), and the win/loss (fail->success /
-    success->fail) flip counts. No numpy/scipy.
-  * CLI -- pair two run roots by episode_id on SR and print the verdict.
+A change can trade successes for failures at a flat net SR, so the
+success->fail count is reported beside the delta. ``ab_stats`` takes
+(sr_a, sr_b) pairs over the shared episodes; the CLI pairs two run roots by
+episode_id. Stdlib only.
 
 Usage:
   python -m benchmarks.citynav.analysis.ab_report <run_a> <run_b> [--label "..."]
@@ -29,8 +21,7 @@ from benchmarks.citynav.analysis import rows as _rows
 
 
 def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    """Wilson score interval for a binomial proportion k/n (95% at z=1.96):
-    the capability figure's interval."""
+    """Wilson score interval for k/n (95% at z=1.96)."""
     if n <= 0:
         return (float("nan"), float("nan"))
     p = k / n
@@ -43,11 +34,7 @@ def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
 def _bootstrap_ci(
     diffs: list[float], *, iters: int = 10000, seed: int = 12345, alpha: float = 0.05,
 ) -> tuple[float, float]:
-    """Percentile bootstrap CI for the mean of per-episode (b - a).
-
-    Deterministic (seeded) so a re-run reproduces the interval. Pure stdlib:
-    a small LCG-free resampler via random.Random.
-    """
+    """Seeded percentile bootstrap CI for the mean of per-episode (b - a)."""
     import random
 
     n = len(diffs)
@@ -65,13 +52,8 @@ def _bootstrap_ci(
 
 
 def _mcnemar(pairs: list[tuple[int, int]]) -> dict:
-    """Exact-ish McNemar over discordant pairs.
-
-    b = A-success & B-fail (losses), c = A-fail & B-success (wins). With
-    continuity correction, chi2 = (|b-c|-1)^2 / (b+c) ~ chi2(1); the p-value of
-    chi2(1) is erfc(sqrt(chi2/2)) (stdlib). For small b+c report the exact
-    two-sided binomial p instead (more honest than the chi2 approx).
-    """
+    """McNemar over discordant pairs: b losses, c wins; exact two-sided
+    binomial p up to 25 discordant, else continuity-corrected chi2(1)."""
     b = sum(1 for a, bb in pairs if a == 1 and bb == 0)  # success->fail
     c = sum(1 for a, bb in pairs if a == 0 and bb == 1)  # fail->success
     n = b + c
@@ -124,21 +106,15 @@ def render(st: dict) -> str:
     )
 
 
-# --- two-run CLI: pair by episode_id on SR --------------------------------------
-
-
 def _iter_rows(run_root: Path):
-    """Every parsed ledger row under the run root, as ``(file, row)``, in
-    the canonical tier order (``rows.result_files``)."""
+    """Every ledger row under the run root, as ``(file, row)``."""
     for f in _rows.result_files(run_root)[0]:
         for r in _rows.iter_json_rows(f):
             yield f, r
 
 
 def _sr_by_episode(run_root: Path, *, allow_partial: bool = False) -> dict[str, int]:
-    """The served SR bit per episode via the CANONICAL pick
-    (rows.load_attempts: first fully complete attempt by start time); it is
-    never recomputed from pred_xy vs target_xy."""
+    """The SR bit per episode, through the canonical pick."""
     from benchmarks.citynav.analysis.run_report import load_run
 
     scored, _ = load_run(run_root, allow_partial=allow_partial)
@@ -146,9 +122,7 @@ def _sr_by_episode(run_root: Path, *, allow_partial: bool = False) -> dict[str, 
 
 
 def _run_provenance(run_root: Path) -> dict:
-    """The first row's provenance block (git/config/model identity) stamped
-    by run_benchmark, with the tile bake's own stamp attached. Empty if the
-    run predates provenance stamping."""
+    """The first row's provenance block with the manifest's bake stamp attached, else {}."""
     for _f, r in _iter_rows(run_root):
         prov = r.get("provenance")
         if prov:
@@ -160,13 +134,8 @@ def _run_provenance(run_root: Path) -> dict:
 
 
 def _bake_stamp(run_root: Path) -> str | None:
-    """The tile-bake CONTENT hash the run recorded, from its manifest.
-
-    The rows carry the bake's PATH; the manifest carries what was in it. Two
-    bakes of the same block set live at the same path under the same name
-    (`paths.bake_sha256`), which is exactly the case the path cannot see:
-    every Cal City bake sits at ``benchmarks/calcity/tiles``.
-    """
+    """The manifest's tile-bake content hash: every Cal City bake sits at
+    ``benchmarks/calcity/tiles``, so the path the rows carry cannot tell two apart."""
     try:
         manifest = json.loads((run_root / "run_manifest.json").read_text())
     except (OSError, ValueError):
@@ -175,48 +144,25 @@ def _bake_stamp(run_root: Path) -> str | None:
 
 
 def _ground_truth_keys(prov: dict) -> dict:
-    """The facts that decide WHAT was measured, not how well it scored.
-
-    The tile bake's identity is its NAME, not the absolute path: every site
-    mounts the same bake under its own root (a cross-site pool run mixes
-    those prefixes inside ONE run), while two CityNav bakes differ in the
-    name (citynav_2m_osmv2 vs citynav_2m_osmv3)."""
+    """The facts that decide what was measured: split, bake directory name
+    (one bake mounts under many roots) and bake content."""
     flags = prov.get("search_env_flags") or {}
     tiles = flags.get("SEARCH_CITYNAV_TILES")
     return {
         "split": prov.get("split"),
         "tiles": Path(tiles).name if tiles else None,
-        # Content, where the name cannot answer. Every CityNav bake encodes
-        # itself in its directory (citynav_2m_osmv2 vs _osmv3) and the name
-        # check catches those; every Cal City bake is called ``tiles``, so two
-        # different ones share a name.
         "bake_sha256": prov.get("bake_sha256"),
     }
 
 
 def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[str]]:
-    """``(fatal, arm)`` -- two classes of mismatch, because they are not the
-    same kind of problem.
+    """``(fatal, arm)`` mismatches between two runs' provenance.
 
-    ``fatal`` is the ground truth the SR is a score AGAINST: the split and the
-    tile bake. Differ on those and the two numbers answer different questions,
-    so there is no A/B to run and no intent that makes one valid. Measured: the
-    retired ``citynav_2m`` bake scored the same episodes 0.351 where
-    ``citynav_2m_osmv2`` scores 0.169, and a baseline recalled from the wrong
-    bake was nearly used to validate a 5,311-episode run.
-
-    ``arm`` is code / config / served model / look tool. These SHOULD differ in
-    a refactor or model A/B, so ``--allow-provenance-mismatch`` waives them. It
-    does NOT waive ``fatal``: an all-or-nothing override means the one
-    legitimate reason to override (a code A/B) also silences the tile check,
-    which is precisely how the incident above happens.
-
-    UNRECORDED ground truth is fatal too. A null that skips the comparison
-    turns the guard off exactly where it is blindest -- every pre-stamping
-    run read None on both sides and passed, which is how a cross-split
-    pairing would have sailed through. Comparing nothing must refuse, not
-    pass; arm keys keep their absence-tolerant guard (an old run without a
-    recorded model is still a legitimate baseline for a code A/B)."""
+    ``fatal`` is the ground truth SR is scored against (split, tile bake; two
+    bakes scored the same episodes 0.351 and 0.169): differing or unrecorded,
+    no A/B exists, and nothing waives it. ``arm`` is code, config, served
+    model and look tool, which an A/B is meant to vary; compared only where
+    both sides recorded them, and waived by ``--allow-provenance-mismatch``."""
     fatal: list[str] = []
     ga, gb = _ground_truth_keys(prov_a), _ground_truth_keys(prov_b)
     for key, label in (
@@ -229,13 +175,7 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
         elif va != vb:
             fatal.append(f"{label} differs:  A={va}  B={vb}")
 
-    # Bake CONTENT, checked only when both sides recorded it. Unrecorded is
-    # not fatal here, and that is not the loophole it looks like: the tiles
-    # check above already refuses an unrecorded bake, so ground truth is
-    # never compared against nothing. This key only ever TIGHTENS -- it
-    # catches the pair the name says is fine. Made fatal-on-absent instead,
-    # it would invalidate every column stamped before the manifest carried
-    # the hash, which is most of the ledger.
+    # Bake content tightens the name check where both sides recorded it.
     ba, bb = ga.get("bake_sha256"), gb.get("bake_sha256")
     if ba and bb and ba != bb:
         fatal.append(
@@ -276,10 +216,6 @@ def main() -> None:
     if not shared:
         raise SystemExit("no shared scored episodes between the two runs")
 
-    # Guard: the two runs must be COMPARABLE. `fatal` is the ground truth the
-    # score is against (split, tile bake) and is NOT waivable -- no intent makes
-    # a cross-bake delta mean anything. `arm` is code/config/model/look, which a
-    # refactor or model A/B is expected to vary, so that one is waivable.
     fatal, arm = comparability_issues(
         _run_provenance(Path(args.run_a)), _run_provenance(Path(args.run_b))
     )
@@ -295,8 +231,7 @@ def main() -> None:
             + "\n(pass --allow-provenance-mismatch to override)"
         )
 
-    # Guard: a low shared/total overlap means episodes were stolen (shared
-    # coord-root) or the seed/limit differed, not noise.
+    # A low overlap means a seed/limit mismatch, not noise.
     min_n = min(len(a), len(b)) or 1
     if len(shared) < args.min_overlap_frac * min_n and not args.allow_low_overlap:
         raise SystemExit(

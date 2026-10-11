@@ -1,25 +1,14 @@
 """One metrics row per run root — the N-arm view a ladder is read with.
 
-``run_report`` speaks for one root or a pair; it does not print SR and NE
-side by side for a dozen arms, which is what a sweep over one knob produces.
-
-This defines NO metric. Every number comes from the canonical readers:
-``rows.load_attempts`` decides which attempt IS an episode's result (the
-first fully complete attempt by start time — the rule lives there and
-nowhere else), and ``eval.aggregate`` macro-averages. Its own work is
-labelling, sorting and the criterion guard.
-
-The criterion is asserted IDENTICAL across every root and printed once. A
-ring row and a shape row share no success key, so a table pooling them would
-be differencing two questions under one column heading.
+It defines no metric: ``rows.load_attempts`` picks each episode's result
+and ``eval.aggregate`` averages. The criterion must be identical across
+every root and is printed once. An arm's label is the withholds its run
+manifest records, else the root's basename; its effort is the manifest's
+``SEARCH_SAMPLING_REASONING_EFFORT``, as written.
 
 Usage:
     python -m benchmarks.citynav.analysis.arm_table <root> [<root> ...]
     python -m benchmarks.citynav.analysis.arm_table --json <root> [...]
-
-An arm's label is the withholds its run manifest records (an ablation arm),
-else the root's basename. Its effort is the reasoning effort the manifest
-records (``SEARCH_SAMPLING_REASONING_EFFORT``), as written.
 """
 
 from __future__ import annotations
@@ -34,8 +23,7 @@ from benchmarks.citynav import eval as _eval
 from benchmarks.citynav.analysis import rows as _rows
 from benchmarks.citynav.analysis.run_report import run_criterion
 
-#: (json key, header, format). ``None`` values print as ``--`` rather than 0:
-#: a metric this bench does not resolve is absent, not zero.
+#: (json key, header, format). An absent metric prints ``--``, never 0.
 COLUMNS = (
     ("label", "arm", "{:<10}"),
     ("effort", "effort", "{:>6}"),
@@ -56,29 +44,13 @@ COLUMNS = (
 
 
 #: Copied straight out of ``eval.aggregate``'s output, never recomputed.
-_AGG_KEYS = (
-    "SR",
-    "SR_pct",
-    "OSR",
-    "OSR_pct",
-    "SR_by_shape",
-    "SR_by_shape_pct",
-    "SR_by_radius",
-    "SR_by_radius_pct",
-    "precise_shape_n",
-    "precise_radius_n",
-    "precise_floored_n",
-)
+_AGG_KEYS = ("SR", "SR_pct", "OSR", "OSR_pct", "SR_by_shape", "SR_by_shape_pct", "SR_by_radius",
+             "SR_by_radius_pct", "precise_shape_n", "precise_radius_n", "precise_floored_n")
 _METRIC_KEYS = (*_AGG_KEYS, "SR_n", "NE_mean", "NE_med")
 
 
 def arm_row(root: Path, *, allow_partial: bool = False) -> dict:
-    """One arm's summary, or a row saying plainly that it has no result.
-
-    A root with zero scored episodes is REPORTED, not skipped and not
-    raised on: in a ladder, an arm whose serve died is the finding, and
-    dropping its row would leave a table that looks complete.
-    """
+    """One arm's summary; an arm with no scored episode still gets its row."""
     picked, stats = _rows.load_attempts(root, allow_partial=allow_partial)
     scored = list(_rows.scored_metrics(picked).values())
     manifest = _rows.read_manifest(root)
@@ -94,9 +66,7 @@ def arm_row(root: Path, *, allow_partial: bool = False) -> dict:
         "timed_out": stats.timed_out,
         "infra": stats.infra,
         "tier": stats.tier,
-        # Every row carries every metric key, absent ones as null. A dead
-        # arm's row and a live one's have the same shape, so a consumer
-        # never has to tell a missing key from a real zero.
+        # Every row carries every metric key, absent ones as null.
         **{k: None for k in _METRIC_KEYS},
     }
     if not scored:
@@ -147,7 +117,6 @@ def render(rows: list[dict]) -> None:
     criterion = seen.pop() if seen else None
     print(f"criterion: {criterion or 'UNRECORDED (pre-cutover runs)'}   arms: {len(rows)}")
     if criterion == "shape":
-        # Said once, here, so nobody reads the missing column as a zero.
         print("OSR is ring-basis and absent from every shape-scored row.")
     columns = [(k, h, f"{{:<{label_w}}}" if k == "label" else fmt) for k, h, fmt in COLUMNS]
     print("  ".join(fmt.format(head) for _, head, fmt in columns))

@@ -1,21 +1,9 @@
-"""Canonical single-run / paired SR report for a run root.
+"""Single-run and paired SR report for a run root.
 
-ONE trustworthy view so analysis stops hand-rolling reads against the
-wrong nesting. The authoritative per-episode record is the ledger row's
-``metrics`` dict (``episodes.jsonl``, read through ``analysis.rows``); the
-commit-provenance fields live at ``metrics.committed_fid``. The success
-bit is ``metrics.SR`` (the runner's authoritative score) -- do NOT
-recompute SR from ``pred_xy`` vs ``target_xy``.
-
-WHICH attempt represents an episode is decided in ``analysis.rows``: the
-FIRST fully complete attempt, ordered by attempt START time. Every reader
-in the tree shares that one rule. Read its module docstring before
-touching selection here.
-
-Rows with NO ``metrics`` are worker crashes and no-commit misses. They
-carry an episode_id but no result, so they are COUNTED and reported
-explicitly as ``no_metrics`` rather than silently dropped -- the
-denominator is never quietly inflated, and never quietly deflated either.
+The per-episode record is the ledger row's ``metrics`` dict, picked by
+``analysis.rows``; ``metrics.SR`` is the success bit, never recomputed from
+``pred_xy``. Rows without metrics (crashes, no-commit misses) are counted
+as ``no_metrics``.
 
 Usage:
     python -m benchmarks.citynav.analysis.run_report output/run_a
@@ -37,21 +25,8 @@ from benchmarks.citynav.analysis.rows import read_manifest
 
 
 def load_run(root: Path, *, allow_partial: bool = False) -> tuple[dict[str, dict], int]:
-    """Return (episode_id -> that episode's scored metrics, no_metrics rows).
-
-    Selection is the shared rule (``rows.pick_attempts``): each episode's
-    result is its FIRST FULLY COMPLETE attempt, ordered by attempt START
-    time -- NOT the last row in the file. The ledger appends on
-    COMPLETION, so last-row-wins would score whichever replicate happened
-    to finish last.
-
-    ``no_metrics`` is a ROW count: non-infra ledger rows carrying no
-    metrics dict at all. It is NOT a count of unscored episodes -- one episode can
-    contribute both a crash row and a scored row.
-
-    An episode whose pick carries no metrics (it never committed) scores
-    as a miss (``rows.scored_metrics``).
-    """
+    """(episode_id -> scored metrics, no_metrics) where ``no_metrics`` counts
+    ROWS: one episode can have both a crash row and a scored row."""
     picked, stats = _rows.load_attempts(root, allow_partial=allow_partial)
     return _rows.scored_metrics(picked), stats.no_metrics
 
@@ -60,8 +35,7 @@ def _pct(num: int, den: int) -> str:
     return f"{num}/{den} ({100 * num / den:.1f}%)" if den else f"{num}/0 (--)"
 
 
-#: How each criterion prints. ``None`` is a run flown before the rows carried
-#: the stamp -- named as unrecorded rather than guessed at.
+#: How each criterion prints; ``None`` is a row without the stamp.
 _CRITERION_LABEL = {
     "ring": "the 20 m disc",
     "shape": "the target's own shape",
@@ -70,13 +44,7 @@ _CRITERION_LABEL = {
 
 
 def run_criterion(metrics: list[dict]) -> str | None:
-    """The criterion these rows were scored under, or ``None`` if unstamped.
-
-    Read off the rows, never inferred from coverage. A run whose rows
-    disagree is a merged artifact and says so loudly rather than picking the
-    majority: two criteria in one report is exactly the confusion this key
-    exists to end.
-    """
+    """The criterion stamped on these rows, or ``None``; rows that disagree raise."""
     seen = {m.get("success_criterion") for m in metrics}
     seen.discard(None)
     if len(seen) > 1:
@@ -89,25 +57,9 @@ def run_criterion(metrics: list[dict]) -> str | None:
 
 
 def print_precise(metrics: list[dict], n: int) -> bool:
-    """How a SHAPE-scored SR breaks down by what the target resolved to.
-
-    It pools two different tests — episodes with an annotated shape (strict
-    containment) and episodes without one (a tighter disc) — and the mix moves
-    as annotation lands. Both are printed, so a change in the headline is
-    attributable to ground truth rather than to the radius standing in for it.
-    See :func:`benchmarks.citynav.eval.score_precise`.
-
-    Gated on ``precise_target``, NOT on the verdict. ``SR`` is the verdict
-    under whichever mask ran, so gating on it would make every ring row
-    "precise-scored" and print the 20 m disc number under a shape's label —
-    on a CityNav run, which resolves no shape at all.
-
-    ``n`` is the full episode count, so ``coverage`` states how much of the run
-    this number actually speaks for.
-
-    Returns whether it printed anything, so a caller can say what is on
-    screen rather than assume.
-    """
+    """A shape-scored SR split into shape containment and disc fallback
+    (``eval.score_precise``), with coverage over ``n`` episodes. Gated on
+    ``precise_target``, which ring rows lack. Returns whether it printed."""
     pr_scored = [
         m for m in metrics
         if m.get("precise_target") is not None and m.get("SR") is not None
@@ -125,9 +77,6 @@ def print_precise(metrics: list[dict], n: int) -> bool:
         if sub:
             hit = sum(1 for m in sub if m.get("SR"))
             parts.append(f"{label} {_pct(hit, len(sub))}")
-    # Shapes narrower than the precision floor were widened to it. Say how
-    # many, so a "by shape" number that is mostly floor does not read as a
-    # footprint result.
     floored = sum(1 for m in pr_scored if m.get("precise_floor_applied"))
     if floored:
         parts.append(f"floor-widened {floored}")
@@ -140,15 +89,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _local_bake_dir(resolved: str | None) -> Path | None:
-    """This machine's copy of the tiles dir a run recorded flying.
-
-    ``tiles_dir_resolved`` is absolute on the machine that flew the run: the
-    path itself when it is a directory here, else the longest tail of it
-    that is a directory under this repo --
-    ``/scratch/<user>/MAPS/benchmarks/calcity/tiles`` resolves to
-    ``benchmarks/calcity/tiles``. Longest tail first, so a run under
-    ``.../tiles`` cannot match a shorter unrelated path.
-    """
+    """This machine's copy of the recorded ``tiles_dir_resolved``: the path
+    itself, else its longest tail that is a directory under this repo
+    (``/scratch/<user>/MAPS/benchmarks/calcity/tiles`` -> ``benchmarks/calcity/tiles``)."""
     if not resolved:
         return None
     if Path(resolved).is_dir():
@@ -162,22 +105,10 @@ def _local_bake_dir(resolved: str | None) -> Path | None:
 
 
 def bake_line(root: Path) -> str:
-    """One line saying whether this run's tile bake is the one on disk now.
-
-    Every other provenance check compares NAMES. Two bakes of the same
-    blocks live at the same path under the same name and pass all of them,
-    and the SR moves anyway (0.351 vs 0.169 on identical episodes). This
-    compares content.
-
-    WHICH bake to compare against is the run's own business: the tiles dir
-    it recorded resolving. Only a run that recorded none falls back to this
-    checkout's default bake -- reaching for that default first is how a Cal
-    City run reported a mismatch against CityNav tiles on every read.
-
-    Never raises and never refuses: a run flown before the stamp existed
-    has no hash to check, and saying so is the honest state. Missing tiles
-    are reported as unknown, not as a pass.
-    """
+    """One line: does the run's ``bake_sha256`` match the content of the bake
+    on disk (``paths.bake_sha256``)? Compared against the tiles dir the run
+    recorded, else this checkout's default. Never raises; missing tiles or
+    stamp read as unknown or unverified, never as a pass."""
     from benchmarks.citynav import paths
 
     perception = read_manifest(root).get("perception") or {}
@@ -217,8 +148,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     print(f"\n=== {root} ===")
     print(f"source: {stats.tier} tier, {stats.files} file(s)")
     print(bake_line(root))
-    # ``rows`` counts ATTEMPTS; ``scored`` counts EPISODES. Their sum is
-    # no total.
+    # ``rows`` counts attempts, ``scored`` episodes.
     print(
         f"scored={n}  attempts={stats.rows}  "
         f"replicates_discarded={stats.keyed - len(picked)}  "
@@ -226,37 +156,26 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
         f"timeouts(wall-clock)={stats.timed_out}  "
         f"infra(re-queued)={stats.infra}"
     )
-    # WHICH CRITERION THIS RUN IS SCORED UNDER, read off the rows' own stamp.
-    # ``SR`` is the verdict under the bench's mask, and ``success_criterion``
-    # says which mask that was.
     print(f"criterion: {_CRITERION_LABEL.get(_criterion, _criterion)}")
     print(f"SR = {_pct(sr, n)}")
-    # The one distance on every scored row, under either criterion: metres
-    # from the commit to the target centroid, no radius in it.
+    # Metres from the commit to the target centroid, on every scored row.
     ne = [float(m["NE"]) for m in scored.values() if isinstance(m.get("NE"), (int, float))]
     print(f"NE median = {statistics.median(ne):.1f} m  mean = {sum(ne) / len(ne):.1f} m (n={len(ne)})"
           if ne else "NE = -- (no scored row carries NE)")
-    # The one route term on a scored row. Absent on a row that never flew.
+    # The route term; absent on a row that never flew.
     spl = [float(m["spl_pos"]) for m in scored.values()
            if isinstance(m.get("spl_pos"), (int, float))]
     print(f"mean spl_pos = {sum(spl) / len(spl):.4f} (n={len(spl)})" if spl
           else "mean spl_pos = -- (no scored row carries spl_pos)")
-    # SAHI tiles the segmenter could not answer: those frames were
-    # partial-blind, so a run that lost any says so beside its SR.
+    # SAHI tiles the segmenter could not answer left those frames partial-blind.
     tiles = [int(m.get("sam_tiles_failed") or 0) for m in scored.values()]
     if any(tiles):
         print(f"SAHI tiles failed = {sum(tiles)} over {sum(1 for t in tiles if t)} "
               f"of {n} scored episode(s)")
     shaped = print_precise(list(scored.values()), n)
     if _criterion is None:
-        # A run flown before the rows carried the stamp. Both readings are
-        # printed and NEITHER is called the headline: the criterion is
-        # unrecorded ground truth, and picking one here would be a guess
-        # that misreports the headline whenever it is wrong.
-        #
-        # What it says depends on whether a shape reading actually printed:
-        # pointing at "the shape line beside it" when the run carries no
-        # shaped rows sends the reader looking for a line that is not there.
+        # Unstamped rows: neither reading is the headline, and the note names
+        # the shape line only when one printed.
         print("  ^ this run predates the criterion stamp: the SR above is the "
               "20 m disc"
               + (", and the shape line beside it is the other reading. Which "
@@ -265,18 +184,9 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
                  ", and the run carries no shape verdict at all. Whether this "
                  "bench is scored on one is NOT recorded")
               + " -- quote neither as the bench's SR.")
-    # OSR and the (OSR, SR) joint. SR alone cannot say whether a run got
-    # WORSE at reaching the target or better at committing once it did:
-    # OSR fell 0.68 -> 0.64 on the default-frame arm while SR rose, and
-    # neither marginal shows that. Conversion = SR/OSR is the cell that
-    # moved. OSR=0,SR=1 is impossible by construction (SR is the final
-    # pose inside R, OSR the trajectory minimum inside R), so a nonzero
-    # count there means the two metrics came from different geometry.
-    #
-    # OSR is RING-basis and rides ring rows only. On a bench scored against
-    # the target's own shape the rows carry none, and printing 0/n there
-    # would put a total-failure-to-reach on the report of a run that never
-    # asked the question. The block is skipped instead of zeroed.
+    # OSR and the (OSR, SR) joint separate reaching the target from committing
+    # once there (conversion = SR|OSR). SR without OSR is impossible by
+    # construction, so a nonzero count means mismatched geometry. Ring rows only.
     osr_rows = [m for m in scored.values() if "OSR" in m]
     if osr_rows:
         osr = sum(1 for m in osr_rows if m.get("OSR"))
@@ -303,9 +213,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     prov = Counter(m.get("committed_provenance") or "none" for m in scored.values())
     print("provenance: " + "  ".join(f"{k}={v}" for k, v in prov.most_common()))
 
-    # Among SCORED FAILS: was the committed xy itself within the success
-    # radius? A stage fact, not a cause — why the commit landed where it
-    # did takes reading the episode.
+    # Among scored fails: was the committed xy itself within the success radius?
     fails = [m for m in scored.values() if not m.get("SR")]
     commit_in = sum(1 for m in fails if m.get("commit_would_score") is True)
     commit_out = sum(1 for m in fails if m.get("commit_would_score") is False)
@@ -314,11 +222,6 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
         f"fails={len(fails)}: commit_within_R={commit_in}  "
         f"commit_beyond_R={commit_out}  (no commit_xy={unk})"
     )
-
-
-    # Failure mechanism comes from reading each episode's own record. A
-    # split keyed on OSR sorts misses by transit proximity while reading as
-    # mechanism, so the report prints counts only.
     return scored
 
 
@@ -330,14 +233,8 @@ def _label(name: str, suc: int, tot: int) -> str:
 
 
 def paired(root_a: Path, root_b: Path, *, allow_partial: bool = False) -> None:
-    """Paired SR on the shared scored episode set (apples-to-apples).
-
-    UNDER THE SAME CRITERION THE HEADLINE USES: ``SR`` is the verdict
-    under whichever mask ran, so this pairs the same quantity ``report``
-    printed. The criterion is NAMED in the header so no
-    one has to infer which question moved, and a pairing ACROSS criteria
-    refuses: it would difference two different questions.
-    """
+    """Paired SR on the shared scored episodes, the criterion named in the
+    header; two runs scored under different criteria refuse to pair."""
     a, _ = load_run(root_a, allow_partial=allow_partial)
     b, _ = load_run(root_b, allow_partial=allow_partial)
     shared = sorted(set(a) & set(b))
