@@ -564,8 +564,9 @@ def one_place(chains) -> bool:
 
 def mask_geom(chains):
     """Precompute the vectorised arrays of one EXACT mask realisation:
-    ``{"V": (N,2) vertices, "A"/"B": (S,2) segment endpoints, "CA"/"CB": the
-    subset of those lying on CLOSED chains, "closed"}``.
+    ``{"V": (N,2) vertices, "BB": their (minx, miny, maxx, maxy) or None,
+    "A"/"B": (S,2) segment endpoints, "CA"/"CB": the subset of those lying on
+    CLOSED chains, "closed"}``.
 
     ``chains`` is a list of vertex chains ``[[x, y], ...]``: the multi-loop
     cell boundary (:func:`cells_boundary_loops`), a feature's ``world_contour``
@@ -594,28 +595,15 @@ def mask_geom(chains):
             if closed:
                 CA.append(pts[i])
                 CB.append(pts[i + 1])
-    return {"V": np.asarray(V, dtype=float).reshape(-1, 2),
+    Va = np.asarray(V, dtype=float).reshape(-1, 2)
+    return {"V": Va,
+            "BB": (float(Va[:, 0].min()), float(Va[:, 1].min()),
+                   float(Va[:, 0].max()), float(Va[:, 1].max())) if len(Va) else None,
             "A": np.asarray(A, dtype=float).reshape(-1, 2),
             "B": np.asarray(B, dtype=float).reshape(-1, 2),
             "CA": np.asarray(CA, dtype=float).reshape(-1, 2),
             "CB": np.asarray(CB, dtype=float).reshape(-1, 2),
             "closed": bool(CA)}
-
-
-def geom_bbox(g):
-    """``(minx, miny, maxx, maxy)`` of a :func:`mask_geom`, or ``None`` when it
-    has no vertices. Cached on the geom, which is built once per object per op
-    and then compared against every item."""
-    bb = g.get("BB")
-    if bb is None and "BB" not in g:
-        V = g.get("V")
-        if V is None or len(V) == 0:
-            bb = None
-        else:
-            bb = (float(V[:, 0].min()), float(V[:, 1].min()),
-                  float(V[:, 0].max()), float(V[:, 1].max()))
-        g["BB"] = bb
-    return bb
 
 
 def bbox_gap(ga, gb) -> float:
@@ -627,9 +615,7 @@ def bbox_gap(ga, gb) -> float:
     minimum it ends with is the same minimum, not an estimate of one. Returns
     0.0 (prunes nothing) for anything that is not a vertex-bearing geom.
     """
-    if not isinstance(ga, dict) or not isinstance(gb, dict):
-        return 0.0
-    a, b = geom_bbox(ga), geom_bbox(gb)
+    a, b = ga["BB"], gb["BB"]
     if a is None or b is None:
         return 0.0
     dx = max(0.0, a[0] - b[2], b[0] - a[2])
@@ -648,7 +634,7 @@ def stack_bboxes(geoms) -> np.ndarray:
     built once per reference column and compared against every item."""
     out = np.full((len(geoms), 4), np.nan, dtype=float)
     for i, g in enumerate(geoms):
-        bb = geom_bbox(g) if isinstance(g, dict) else None
+        bb = g["BB"] if isinstance(g, dict) else None
         if bb is not None:
             out[i] = bb
     return out
@@ -663,7 +649,7 @@ def bbox_bounds(stacked: np.ndarray, g) -> np.ndarray:
     """
     if len(stacked) == 0:
         return np.zeros(0, dtype=float)
-    bb = geom_bbox(g) if isinstance(g, dict) else None
+    bb = g["BB"] if isinstance(g, dict) else None
     if bb is None:
         return np.zeros(len(stacked), dtype=float)
     dx = np.maximum(0.0, np.maximum(stacked[:, 0] - bb[2],

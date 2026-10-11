@@ -42,14 +42,13 @@ def test_the_bound_holds_for_containment_touch_and_points():
     assert G.bbox_gap(outer, inner) == 0.0
 
 
-def test_the_bound_is_symmetric_and_cached():
+def test_the_bound_is_symmetric_and_reads_the_vertex_box():
     a = G.mask_geom(ring(0, 0, 10, 10))
     b = G.mask_geom(ring(50, 50, 10, 10))
     assert G.bbox_gap(a, b) == pytest.approx(G.bbox_gap(b, a))
-    assert G.geom_bbox(a) == (0.0, 0.0, 10.0, 10.0)
-    assert a["BB"] == (0.0, 0.0, 10.0, 10.0)  # cached on the geom
+    assert a["BB"] == (0.0, 0.0, 10.0, 10.0)
     empty = G.mask_geom([])
-    assert G.geom_bbox(empty) is None
+    assert empty["BB"] is None
     assert G.bbox_gap(a, empty) == 0.0  # prunes nothing rather than lying
 
 

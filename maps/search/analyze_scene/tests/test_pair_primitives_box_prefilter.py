@@ -102,7 +102,7 @@ def test_inside_mask_matches_the_unfiltered_parity_including_the_box_edge():
     P = rng.uniform(-260, 260, size=(3000, 2))
     edge = []
     for s in shapes:
-        x0, y0, x1, y1 = G.geom_bbox(s)
+        x0, y0, x1, y1 = s["BB"]
         for x in (x0, x1, (x0 + x1) / 2):
             for y in (y0, y1, (y0 + y1) / 2):
                 edge.append([x, y])

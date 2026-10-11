@@ -77,7 +77,7 @@ def _road_geoms():
     for name, chs in chains.items():
         if chs:
             g = G.mask_geom(chs)
-            out[name] = (g, G.geom_bbox(g))
+            out[name] = (g, g["BB"])
     return out
 
 
@@ -99,7 +99,7 @@ def _cases():
 def _faces(footprint, roads):
     """The shipped chain: nearest road, its facing, the +180 rule."""
     house = G.mask_geom([list(footprint) + [footprint[0]]])
-    hbox = G.geom_bbox(house)
+    hbox = house["BB"]
     best = (float("inf"), None, None)
     for name, (rg, rbox) in roads.items():
         if G.bbox_gap(hbox, rbox) >= best[0]:
