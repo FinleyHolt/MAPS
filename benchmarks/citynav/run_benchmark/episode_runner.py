@@ -12,7 +12,6 @@ from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, tile_stem
 from benchmarks.citynav.run_benchmark.config import RunConfig
 from pathlib import Path
 from typing import Any
-from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm import flight_summary
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.geometry.sensor_spec import resolve_sensor
@@ -36,10 +35,6 @@ from benchmarks.citynav.run_benchmark.assets import load_episode_assets
 from benchmarks.citynav.run_benchmark.mission_engine import run_mission_episode
 from benchmarks.citynav.run_benchmark.perception import make_perception
 from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
-from benchmarks.citynav.run_benchmark.reasoner_warmup import (
-    ReasonerUnreachableError,
-    _reasoner_warmup_ping,
-)
 import logging
 
 log = logging.getLogger("run_benchmark")
@@ -371,28 +366,6 @@ def run_episode(
         float(episode.start_heading_deg),
     )
     _synth_start_alt = float(state.altitude_m)
-
-    # The mission conversation is the first (and only) LLM consumer, so
-    # prove the reasoner endpoint is reachable before any flight spend.
-    if search_loop is not None and compiler is not None:
-        try:
-            _endpoint_spec = endpoint_spec_module.spec()
-            _reasoner_warmup_ping(
-                base_url=_endpoint_spec.base_url,
-                api_key=os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY"),
-                # Bound the warmup: a reachable vLLM answers on attempt 1
-                # (cold FP8 compile ~2-3 min, well under this cap), so the
-                # cap never false-aborts a live server but stops an
-                # UNreachable endpoint from spinning "standing by for
-                # tunnel" until the multi-hour episode timeout. On
-                # exhaustion ReasonerUnreachableError is raised + caught below,
-                # ending the episode so the bench's vLLM-health monitor can
-                # re-queue it instead of hanging the slot for hours.
-                total_wait_s=float(os.environ.get("SEARCH_REASONER_WARMUP_TOTAL_S", "900")),
-            )
-        except ReasonerUnreachableError as exc:
-            log.error("Pre-flight aborted: vLLM unreachable (%s)", exc)
-            return None
 
     # Mission branch: the episode is ONE reasoner conversation over the
     # seeded prior graph — requested viewpoints fly the moment they land,
