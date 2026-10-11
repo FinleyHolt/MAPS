@@ -19,6 +19,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from maps.util.mask_codec import _extent
+
 
 @dataclass(frozen=True)
 class MaskRegion:
@@ -63,16 +65,10 @@ class MaskRegion:
         m = np.asarray(mask, dtype=bool)
         H, W = int(m.shape[0]), int(m.shape[1])
         if bbox is None:
-            rows = m.any(axis=1)
-            if not rows.any():
+            bbox = _extent(m)
+            if bbox is None:
                 return None
-            cols = m.any(axis=0)
-            r0 = int(np.argmax(rows))
-            r1 = int(len(rows) - 1 - np.argmax(rows[::-1]))
-            c0 = int(np.argmax(cols))
-            c1 = int(len(cols) - 1 - np.argmax(cols[::-1]))
-        else:
-            r0, c0, r1, c1 = (int(v) for v in bbox)
+        r0, c0, r1, c1 = (int(v) for v in bbox)
         return cls(m[r0 : r1 + 1, c0 : c1 + 1], (r0, c0, r1, c1), (H, W))
 
     def with_crop(self, crop: np.ndarray) -> "MaskRegion":
@@ -84,15 +80,11 @@ class MaskRegion:
 
     def tightened(self) -> "MaskRegion | None":
         """The same pixels, re-boxed to their own extent."""
-        rows = self.crop.any(axis=1)
-        if not rows.any():
+        ext = _extent(self.crop)
+        if ext is None:
             return None
-        cols = self.crop.any(axis=0)
+        dr0, dc0, dr1, dc1 = ext
         r0, c0, _r1, _c1 = self.bbox
-        dr0 = int(np.argmax(rows))
-        dr1 = int(len(rows) - 1 - np.argmax(rows[::-1]))
-        dc0 = int(np.argmax(cols))
-        dc1 = int(len(cols) - 1 - np.argmax(cols[::-1]))
         return MaskRegion(
             self.crop[dr0 : dr1 + 1, dc0 : dc1 + 1],
             (r0 + dr0, c0 + dc0, r0 + dr1, c0 + dc1),

@@ -36,6 +36,20 @@ import numpy as np
 _DEFLATE_LEVEL = 6
 
 
+def _extent(mask: np.ndarray) -> tuple[int, int, int, int] | None:
+    """Inclusive ``(r0, c0, r1, c1)`` of a 2-D bool mask's set pixels; ``None`` when empty."""
+    rows = mask.any(axis=1)
+    if not rows.any():
+        return None
+    cols = mask.any(axis=0)
+    return (
+        int(rows.argmax()),
+        int(cols.argmax()),
+        int(len(rows) - 1 - rows[::-1].argmax()),
+        int(len(cols) - 1 - cols[::-1].argmax()),
+    )
+
+
 def encode_mask_record(
     mask,
     *,
@@ -55,14 +69,10 @@ def encode_mask_record(
     arr = arr.astype(bool, copy=False)
 
     if bbox_rcrc is None:
-        rows = np.any(arr, axis=1)
-        cols = np.any(arr, axis=0)
-        if not rows.any() or not cols.any():
+        ext = _extent(arr)
+        if ext is None:
             return None
-        r0 = int(rows.argmax())
-        r1 = int(arr.shape[0] - 1 - rows[::-1].argmax())
-        c0 = int(cols.argmax())
-        c1 = int(arr.shape[1] - 1 - cols[::-1].argmax())
+        r0, c0, r1, c1 = ext
         crop = arr[r0 : r1 + 1, c0 : c1 + 1]
     else:
         r0, c0, r1, c1 = (int(v) for v in bbox_rcrc)
