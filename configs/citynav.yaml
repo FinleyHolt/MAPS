@@ -39,9 +39,6 @@ start_altitude_agl_m: null
 altitude_cap_m: 200.0
 sam:
   model_id: facebook/sam3.1
-  # Perceived-color calibration (detect_client._COLOR_PALETTES): "citynav"
-  # for the dark aerial imagery, "default" for ideal sRGB.
-  color_palette: citynav
   score_threshold: 0.3
   min_area_px: 32
   # A backstop against a pathological frame, not a budget: there is no

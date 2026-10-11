@@ -13,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CITYNAV = {
     "altitude_cap_m": 200.0, "altitude_m": 125.0, "cell_size_m": 2.0, "max_steps": 200,
     "precise_floor_radius_m": 5.0, "precise_tolerance_m": 0.0,
-    "sam": {"color_palette": "citynav", "max_per_step": 1024, "min_area_px": 32,
+    "sam": {"max_per_step": 1024, "min_area_px": 32,
             "model_id": "facebook/sam3.1", "sahi": True, "sahi_nms_iou": 0.5,
             "sahi_overlap": 0.2, "score_threshold": 0.3},
     "sensor": "nadir_1008_90", "spawn": "episode", "spawn_seed": 0,

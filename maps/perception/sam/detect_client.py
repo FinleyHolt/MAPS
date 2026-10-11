@@ -218,81 +218,27 @@ def _post_segment_avoid_stale_pool(*, picker, json_body) -> dict | None:
     return None
 
 
-# Perception color enrichment. We request BARE-NOUN SAM concepts (one clean "car"
-# layer, not "white car"/"gray car" sub-layers) and derive color HERE, over the mask
-# pixels, as a structured attribute. This labels what the object LOOKS like (like the
-# SAM class) -- it is NOT cue-language processing; the agent matches the instruction's
-# color word to this percept by reasoning. We expose BOTH a coarse palette name AND
-# the median RGB so the agent can settle fuzzy cases (silver vs gray) the name can't.
-# Named color palettes (perceived-RGB anchors for nearest-name). "default" is
-# ideal sRGB. A per-camera/environment calibration overrides the well-sampled
-# anchors with the median PERCEIVED car color measured on that imagery — the
-# ideal anchors are far too bright/saturated for dark, low-contrast aerial frames
-# (so "white"/"red" never fire). Select per run via the adapter's
-# ``color_palette`` field (YAML ``sam.color_palette``) or
-# ``set_color_palette``; add a new entry to calibrate a new camera.
-_COLOR_PALETTE_DEFAULT: dict[str, tuple[int, int, int]] = {
-    "white": (235, 235, 235), "black": (32, 32, 32), "gray": (128, 128, 128),
-    "silver": (190, 192, 198), "red": (170, 40, 40), "blue": (45, 70, 160),
-    "green": (45, 130, 70), "yellow": (215, 205, 70), "orange": (220, 130, 45),
-    "brown": (110, 75, 50), "tan": (200, 180, 145), "gold": (200, 165, 70),
-}
-# CityNav upstream birmingham/cambridge nadir-ortho rasters: the 5 well-sampled
-# car colors recalibrated to the median perceived (SAM-mask interior) RGB,
-# n>=15/color over the LLM-labeled GT set. MEASURED +10.8pp color-family /
-# +10.4pp white<->black lightness (2-fold CV, held-out maps). Under-sampled
-# colors keep the ideal anchor — EXCEPT anchors the calibration shows are
-# INSIDE the calibrated cluster:
+# Colour is read here, over the mask pixels, as a structured attribute of a
+# bare-noun SAM concept ("car", not "white car"): what the object looks like,
+# like its class. The agent matches the cue's colour word to it by reasoning.
+# Both a palette name and the median RGB are served, so the agent can settle
+# a fuzzy case (silver vs gray) the name cannot.
 #
-# "silver" is dropped from this palette. It is under-sampled, so it would keep
-# the bright ideal (190,192,198), which sits ABOVE the recalibrated white
-# (175,183,191) on this dark imagery — so most true white cars would snap to
-# "silver", a word CityNav cues essentially never use, while the 8-unit
-# white/silver margin crushes achromatic color_conf. A genuine silver car
-# labeled "white" still matches a "silver" cue at 0.8 via the achromatic
-# family — nothing is droppable by omitting it.
-_COLOR_PALETTE_CITYNAV: dict[str, tuple[int, int, int]] = {
-    k: v
-    for k, v in {
-        **_COLOR_PALETTE_DEFAULT,
-        "white": (175, 183, 191), "gray": (121, 132, 145), "black": (77, 86, 98),
-        "red": (135, 78, 88), "blue": (75, 101, 136),
-    }.items()
-    if k != "silver"
+# Perceived-RGB anchors for nearest-name. The five well-sampled car colours
+# (white, gray, black, red, blue) are the median perceived (SAM-mask interior)
+# RGB on the CityNav birmingham/cambridge nadir orthos, n>=15 per colour over
+# the LLM-labelled GT set: +10.8pp colour family and +10.4pp white/black
+# lightness over ideal sRGB anchors (2-fold CV, held-out maps). The rest keep
+# their ideal sRGB anchor. "silver" has no anchor: its ideal (190,192,198)
+# sits above the calibrated white on this dark imagery, so true white cars
+# would snap to a word CityNav cues almost never use; a silver car named
+# "white" still matches a "silver" cue at 0.8 through the achromatic family.
+_COLOR_PALETTE: dict[str, tuple[int, int, int]] = {
+    "white": (175, 183, 191), "black": (77, 86, 98), "gray": (121, 132, 145),
+    "red": (135, 78, 88), "blue": (75, 101, 136), "green": (45, 130, 70),
+    "yellow": (215, 205, 70), "orange": (220, 130, 45), "brown": (110, 75, 50),
+    "tan": (200, 180, 145), "gold": (200, 165, 70),
 }
-_COLOR_PALETTES: dict[str, dict[str, tuple[int, int, int]]] = {
-    "default": _COLOR_PALETTE_DEFAULT,
-    "citynav": _COLOR_PALETTE_CITYNAV,
-}
-_ACTIVE_PALETTE_NAME: str = "default"
-
-
-def set_color_palette(name: "str | None") -> None:
-    """Select the active color palette by name (e.g. ``"citynav"``). ``None`` /
-    empty keeps the current palette so a config that doesn't
-    specify one doesn't clobber an earlier selection; an unknown
-    name falls back LOUDLY to ``"default"`` (a config typo must not silently
-    disable the calibration). Module-global so BOTH the detection path and the
-    prior-percept enrichment path (which calls ``_set_color_attr`` directly)
-    share one calibration; the resolved name is printed for provenance."""
-    global _ACTIVE_PALETTE_NAME
-    if not name:
-        return
-    if name not in _COLOR_PALETTES:
-        print(
-            f"[sam] WARNING: unknown color_palette {name!r}; "
-            f"known={sorted(_COLOR_PALETTES)} — using 'default' (ideal sRGB; the "
-            f"calibrated color lever is OFF)",
-            flush=True,
-        )
-        _ACTIVE_PALETTE_NAME = "default"
-        return
-    _ACTIVE_PALETTE_NAME = name
-    print(f"[sam] active color_palette = {name}", flush=True)
-
-
-def _active_palette() -> dict[str, tuple[int, int, int]]:
-    return _COLOR_PALETTES.get(_ACTIVE_PALETTE_NAME, _COLOR_PALETTE_DEFAULT)
 
 
 # Sample the INTERIOR (center) pixels for color, not the whole mask. A small
@@ -378,7 +324,7 @@ def _dominant_color(rgb: "np.ndarray | None", region):
         med = np.median(px, axis=0)
         dists = sorted(
             (float(np.sum((med - np.asarray(anchor, dtype=np.float32)) ** 2)), cname)
-            for cname, anchor in _active_palette().items()
+            for cname, anchor in _COLOR_PALETTE.items()
         )
         name = dists[0][1]
         # RGB-MARGIN confidence: how cleanly the median snaps to ONE palette anchor vs
@@ -687,10 +633,6 @@ class SamDetectClient:
     score_threshold: float = 0.3
     min_area_px: int = 16
     max_per_step: int = 64
-    # Named color calibration for this camera/environment (see _COLOR_PALETTES).
-    # None keeps the env/default palette; the CityNav configs set "citynav".
-    # _build_perception activates it module-globally after construction.
-    color_palette: "str | None" = None
     # Native-resolution SAHI tiling for the dense-small-object (ortho
     # ortho) path. When True, detect() tiles obs.rgb into
     # fixed _SAM_INPUT_SIZE (1008) tiles fed to SAM 1:1 (no resample), remap to

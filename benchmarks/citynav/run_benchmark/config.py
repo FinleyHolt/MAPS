@@ -59,7 +59,6 @@ _SCHEMA: dict[str, Any] = {
     "sensor": ((str, dict), (_sensor_ok, "a registered sensor or an inline override")),
     "sam": {
         "model_id": (str, _ANY),
-        "color_palette": (str, _one_of("citynav", "default")),
         "score_threshold": (_NUM, ((lambda v: 0 <= v <= 1), "in [0, 1]")),
         "min_area_px": (int, _NONNEG),
         "max_per_step": (int, _POS),
