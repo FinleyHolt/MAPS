@@ -61,10 +61,10 @@ MAPS flew 87 closed-loop runs on a C-12 over California City, CA, from 11 to
 board over the datalink; SAM 3.1 ran on board. The station's method half is
 [`benchmarks/flight`](benchmarks/flight/README.md) in this repository.
 
-The flown engine is this repository's engine. The served text (system turn,
-tool schema and every string the model reads) is byte-identical to what the
-station served on every run from 14 September on. The engine differs from
-the flown one in these places:
+The flown engine is this repository's engine. The station served the same
+text (system turn, tool schema and every string the model reads) on every
+run from 14 September on. The engine here differs from the flown one in
+these places, the served-text changes among them:
 
 | Difference | Effect on a flight |
 |---|---|
@@ -73,6 +73,12 @@ the flown one in these places:
 | The aircraft is reached through the `Vehicle` protocol (post a leg, read poses and recorded frames). | The station spoke to the recorder and cockpit display over HTTP with the same semantics. |
 | The bench ablation withholds (`maps/search/withhold.py`) exist; the flight mission refuses a run that names one. | None; a flight serves every part. |
 | The Cal City bench reads a user-supplied map raster and derives the reviewed episode set; its `look` caption states the raster's own ground sample distance. | Bench only; flight captions state the live imager's. |
+| The table legend under a response's first table explains `distance to`, `facing`, `<dir> of` and bearings. | The flown legend also explained a line chart's `along <name>` and lateral offset, columns no op attaches. |
+| A refusal that lists present numeric keys names only the columns the model is served; an off-palette `color_*` key gets the palette refusal; every op resolves `items` by one rule; `find`'s signature names only its query. | Flown refusals listed unserved keys, a retired `color_score` name, per-op item rules, and `find`'s ignored `color`/`provenance` arguments. |
+| A `view` watchlist change and a placed boost's concepts reach the segmenter in flight as on the bench. | The flown station had no watchlist channel; those requests never reached SAM. |
+| A cancelled reasoner call is shut down on the wire, and its answer is never used. | The flown station left a cancelled call's connection open, and a late answer to it could still be used. |
+| A python set or list of rows in a place slot is the union of those rows, and an unnamed union member keeps its own id; a refusal quotes a user value cut to 120 characters. | The flown executor failed those programs ("program failed: 'fid'", "cannot pickle") and quoted values whole. |
+| A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
 
