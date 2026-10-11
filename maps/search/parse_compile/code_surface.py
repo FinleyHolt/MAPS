@@ -33,35 +33,23 @@ def _split_diagonal(word: str):
 
 
 def _wind_parts(word: str) -> frozenset:
-    """The CARDINALS a compass wind is made of.
-
-    A DIRECTION COMPOSES. Southwest is south and west, so a thing facing
-    southwest faces south and it faces west. Derived from the wind's own
-    spelling rather than tabulated, so the eight winds and the four
-    cardinals cannot disagree.
-    """
+    """The CARDINALS a compass wind is made of: southwest is south and
+    west, so a thing facing southwest faces south and faces west."""
     pair = _split_diagonal(word)
     return frozenset(pair) if pair else frozenset((word,))
 
 
 def _winds_holding(cardinal_word: str) -> list:
-    """Every served wind that COUNTS AS facing this cardinal.
-
-    ``south`` is satisfied by south, southeast and southwest: a house sits
-    DIAGONALLY from the crossing it is on the corner of, so the column reads
-    `southwest` where the cue says `south` (exact-word matching held 12.1% of
-    corner-facing cues on ground truth, composition 87.9%). The cut is looser
-    by construction; chaining the two cardinals of a diagonal takes the
-    precision back.
-    """
+    """Every served wind that COUNTS AS facing this cardinal: ``south`` is
+    satisfied by south, southeast and southwest, since a house sits
+    DIAGONALLY from the crossing it is on the corner of. Chaining the two
+    cardinals of a diagonal takes the precision back."""
     return sorted(w for w in COMPASS_UNIT if cardinal_word in _wind_parts(w))
 
 
 # THE MOVING CALLS TAKE A THING, NEVER A COORDINATE (outside the prior
-# withhold). One refusal for every spelling of a point -- go_to([x, y]), a
-# quoted token, a name bound to a literal -- because a point is the escape
-# hatch that answers with an estimate read off a picture instead of a
-# measurement; the rows are what carry measured positions.
+# withhold): a point is an estimate read off a picture, and the rows carry
+# measured positions. One refusal for every spelling of a point.
 _ACT_NEEDS_A_THING = (
     "{name}() takes a THING on the map, not a coordinate ({got}). Points "
     "are for RELATING and LOOKING -- near=, within=, show_map(around=), "
@@ -84,13 +72,9 @@ class CodeError(ValueError):
 
 
 def _refuse_metres_in_within(v):
-    """``within=`` takes a PLACE; a bare number is ``dwithin=``.
-
-    The two names are Shapely's: ``a.within(b)`` is containment and
-    ``dwithin(a, b, d)`` is a distance. The two arguments have different
-    TYPES, so ``within=25`` is caught here rather than served as a cut
-    against a "place" called 25.
-    """
+    """``within=`` takes a PLACE; a bare number is ``dwithin=`` (Shapely's
+    names: ``a.within(b)`` is containment, ``dwithin(a, b, d)`` a
+    distance)."""
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         return
     raise CodeError(
@@ -101,16 +85,9 @@ def _refuse_metres_in_within(v):
 
 
 def bind_row(row: dict):
-    """What a selected row binds to.
-
-    A CROSSING's fid IS its ``[x, y]`` token, and a ref slot wants the
-    POINT rather than the string that spells it -- a token in a name slot
-    is grounded as text and refused. Every other row type keeps its fid.
-
-    A TERMINUS binds the same way, off its own ``xy``: it is COMPUTED, so
-    nothing on the surface answers to ``end_0``, and the point needs no
-    registry.
-    """
+    """What a selected row binds to: its fid, except a COMPUTED row binds
+    its point -- a crossing's fid IS its ``[x, y]`` token, and a terminus
+    (``end_N``) is nowhere on the surface, so it binds its own ``xy``."""
     fid = row.get("fid")
     if isinstance(fid, str) and fid.startswith("end_"):
         xy = row.get("xy")
@@ -127,9 +104,7 @@ def _is_place_list(v) -> bool:
 
 
 #: The fid families the world mints. Everything else in a place position is
-#: a NAME to ground, so this is the whole boundary between "look it up" and
-#: "you already have it". Casings are natural ones only -- these tokens are
-#: echoed back from what was served, never invented by the model.
+#: a NAME to ground.
 _FID_RE = re.compile(r"(?:prior_|detected_|stop_|end_|v)[0-9]{1,4}",
                      re.IGNORECASE)
 
@@ -198,14 +173,9 @@ class Program:
         return ref
 
     def ref_of(self, v):
-        """An argument -> an executor ref, LABELLED with the code's own name.
-
-        The column label rule is the executor's: a bare [x, y] labels its
-        columns 'distance to xy', so an anchor that is a selected crossing
-        would produce a key the ordering cannot name. `{ref, as}` names it
-        after the handle the code used, so `r2.order(nearest=r1)` reads
-        'distance to r1' and the two halves agree by construction.
-        """
+        """An argument -> an executor ref, LABELLED with the code's own name:
+        `{ref, as}` makes `r2.order(nearest=r1)` read 'distance to r1', so
+        the compare's column and the key that names it agree."""
         if isinstance(v, Ref):
             # A WHOLE RESULT IN A PLACE SLOT IS ITS UNION: one column, the
             # gap to its NEAREST member ("the house with a pool" is about
@@ -219,8 +189,7 @@ class Program:
             return {"ref": list(b) if isinstance(b, (list, tuple)) else b,
                     "as": v.label}
         if is_xy(v):
-            # AN INLINE POINT TAKES THE SAME WRAPPER: the executor labels a
-            # bare [x, y] 'distance to xy'.
+            # an inline point takes the same wrapper
             return {"ref": [float(v[0]), float(v[1])],
                     "as": f"{v[0]:g} {v[1]:g}"}
         if isinstance(v, (list, tuple)):
@@ -255,8 +224,7 @@ class Program:
             if len(labels) > 2:
                 label = f"{label}_plus{len(labels) - 2}"
             return {"ref": members, "as": label}
-        # A CROSSING'S FID *IS* ITS [x, y] TOKEN, and the model quotes it
-        # like any fid; left a string it would be grounded as a NAME.
+        # a quoted [x, y] token (a crossing's fid) is a point, not a name
         pt = parse_xy_token(v) if isinstance(v, str) else None
         if pt:
             return {"ref": [float(pt[0]), float(pt[1])],
@@ -302,15 +270,14 @@ class Program:
     def relate(self, items, near=(), cards=(), color=None,
                rank: bool = True) -> str:
         """ONE compare carrying every anchor, a cut per cardinal, and -- when
-        ranking -- ONE score_by for every ordering constraint: a second sort
-        re-ranks what the first ordered and the first is lost.
+        ranking -- ONE score_by for every ordering constraint (a second sort
+        would undo the first).
 
-        A CARDINAL CUTS; PROXIMITY ORDERS. 194 of the corpus's 208 cardinal
-        cues mean ADJACENT, so the side is a filter and the ordering is
-        nearness to the same anchor. A ranking compare dedups its refs by
-        label: the executor suffixes a repeated ref's label, so a key built
-        here would name a column never written. A colour ORDERS and never
-        drops, and rides the same emphasis as the distances.
+        A CARDINAL CUTS; PROXIMITY ORDERS: a cardinal cue means adjacent, so
+        the side is a filter and the ordering is nearness to the same
+        anchor. A ranking compare dedups its refs by label, since the
+        executor suffixes a repeated ref's label. A colour orders, in the
+        same emphasis as the distances.
         """
         refs, emphasis, seen = [], [], set()
         for a in [*near, *(a for _d, a in cards)]:
@@ -413,15 +380,9 @@ def compile_find(p: Program, query, *, name=None, near=None, nearest=None,
         # stays its own compare + filter ahead of every ordering.
         ref = p.cut_le(ref, within, 0)
     if nearest is not None or cards:
-        # TWO ANCHORS ORDER BETTER THAN ONE: ranking by closeness to BOTH
-        # features a cue names took top-24 from 68.7% to 92.9% on the 281
-        # episodes whose cue names two.
         return p.relate(ref, [] if nearest is None else _places(nearest),
                         cards, color)
     if color:
-        # COLOUR STAYS ON find: a second call for it measured 13
-        # colour-ordering heads over 2 of 500 episodes, against 440 over 175
-        # of 300 inline.
         return p.add("score_by", {"items": ref, "emphasis": [
             {"key": f"color_{color}", "w": 1}]})
     return ref

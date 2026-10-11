@@ -13,9 +13,8 @@ receipts.
 
 The guardrails hold at call time: the moving calls take a thing and never a
 coordinate, a whole result set cannot be flown to, and a move inside a loop
-is refused up front (18 of 35 model-written loops flew in the body). The
-pure deterministic stdlib (``math``, ``itertools``, ...) is loaded in the
-namespace.
+is refused up front. The pure deterministic stdlib (``math``,
+``itertools``, ...) is loaded in the namespace.
 """
 
 from __future__ import annotations
@@ -341,9 +340,7 @@ def looks_like_code(text: str) -> bool:
 # Geometry blobs and internals stay off the Python view: they are served
 # coarsely through the real columns (xy, end0_xy, end1_xy). mask_centroid is
 # hidden because centroid-to-centroid is the measurement this surface exists
-# to make impossible (a road way is 7.0 m from the car parked against it by
-# footprint, 408.4 m by centroid). The column diet the grid serves is the
-# Row's too.
+# to make impossible. The column diet the grid serves is the Row's too.
 _ROW_HIDDEN = frozenset({
     "mask", "cells", "centerline", "polygon", "contour", "search_text",
     "world_contour", "metadata", "mask_centroid"}) | MODEL_UNSERVED_COLUMNS
@@ -403,8 +400,7 @@ def _refuse_reversed_direction(direction, reverse) -> None:
 
 def _diagonal_remedy(names) -> str:
     """The extra sentence a ``<diag>_of=`` mistake earns: the conjunction
-    of its two cardinal cuts against the same place, which is exact for the
-    quadrants of a POINT (112 of the corpus's 150 conjunctive cues)."""
+    of its two cardinal cuts against the same place."""
     for n in names:
         n = str(n)
         pair = _split_diagonal(n[:-3]) if n.endswith("_of") else None
@@ -980,20 +976,15 @@ def _look_tok(a) -> str:
 class MissionEnv:
     """The loop's verbs for this front-end, one per mission.
 
-    Every library call opens with ``ground(names)`` (``{name: why}`` in
-    first-use order -> ``{"ties": {name: top-tie fids}}`` or an error),
-    runs ONE verb (``analyze`` an op program, or one act: ``stand``,
-    ``move``, ``cover``, ``crops``, ``map``, ``watch``, ``boost``) and,
-    when nothing refused, closes with ``finish(ack)``. A verb's ack part
-    carries ``"error"`` when it refused. ``rows_of_ref(ref)`` reads the
-    executor's carry store; ``plan_rn`` is the shared ref counter (the loop
-    and flights advance it); ``widened`` is the mission's paging ledger
-    (executor ref -> rows already asked past); ``minted`` is the loop's
-    flight-minted-handle list, drained here; ``say_err(ack, msg)`` formats
-    a refusal the way every surface does; ``row_of_fid(fid)`` reads one
-    live-surface row (None when the surface holds no such fid -- the bare
-    name then rides as a string); ``tied_of_ref(ref)`` says whether a ref
-    holds a TIED view -- the ways of one name, which no index orders.
+    Every library call opens with ``ground(names)`` (``{name: why}`` ->
+    ``{"ties": {name: top-tie fids}}`` or an error), runs ONE verb
+    (``analyze`` a program, or an act) and, when nothing refused, closes
+    with ``finish(ack)``; a refusing ack part carries ``"error"``.
+    ``plan_rn`` is the shared ref counter, ``widened`` the paging ledger
+    (executor ref -> rows already asked past), ``minted`` the handles the
+    call's flights minted (drained here), ``say_err(ack, msg)`` the shared
+    refusal format; ``row_of_fid(fid)`` reads a live-surface row (None when
+    absent) and ``tied_of_ref(ref)`` says whether a ref holds a TIED view.
     """
 
     rows_of_ref: Callable
@@ -1095,14 +1086,10 @@ class MissionPython:
         return None
 
     def _slot(self, v):
-        """A Python value -> the argument the compiler reads.
-
-        A result rides as a :class:`Ref` and a row as a :class:`Bind`,
-        labelled with the model's own name so the served columns carry it;
-        a string that names one is that thing. Anything else rides
-        verbatim -- a bare name grounds through the same plumbing find and
-        the same floor it always did.
-        """
+        """A Python value -> the argument the compiler reads: a result is a
+        :class:`Ref` and a row a :class:`Bind`, labelled with the model's
+        own name (as is a string naming one); anything else rides verbatim,
+        a bare name to ground."""
         if isinstance(v, Rows):
             if v.spec:
                 v = self._materialize(v)
@@ -1157,13 +1144,9 @@ class MissionPython:
         return got["ties"]
 
     def _site(self, v, why: str):
-        """An act's PLACE -> its token, or a :class:`_Name` to ground.
-
-        A POINT rides as its ``[x, y]`` token -- a selected crossing's fid
-        IS its token. WHAT A BINDING HOLDS IS NEVER LOOKED UP: a fid a
-        selection resolved came out of a row, and a fid the model typed
-        stays literal.
-        """
+        """An act's PLACE -> its token, or a :class:`_Name` to ground. A
+        point rides as its ``[x, y]`` token; what a binding holds and a fid
+        the model typed are never looked up."""
         if isinstance(v, Ref):
             return v.ref
         if isinstance(v, Bind):

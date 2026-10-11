@@ -2745,12 +2745,9 @@ def advance_reasoner_one_round(
         """Run one compiled program; ``answer`` names the ref whose envelope
         is served, ``page`` the ``(ref, start)`` a more_of window pages."""
         if page:
-            # Paging a handle with nothing left to page; no row count
-            # reaches the compiler, so the check lives HERE, where the rows
-            # are. A refusal never reaches _finish, so the handle's counter
-            # does not move. Nothing left: the window walked past the end,
-            # or the handle was never truncated (a result of
-            # _BROAD_DUMP_SOFT_ROWS rows or fewer renders WHOLE).
+            # Paging a handle with nothing left to page -- the window walked
+            # past the end, or the handle was never truncated -- is refused
+            # HERE, where the rows are; a refusal leaves the ledger alone.
             _h, _lo = page
             _held = len(_carry_read(_h) or [])
             if _held and (_held <= _BROAD_DUMP_SOFT_ROWS or _lo >= _held):
@@ -2850,9 +2847,8 @@ def advance_reasoner_one_round(
             return _plan_err({"explored": mv}, str(mv["error"]))
         if _segs > 1:
             mv["segments"] = _segs
-        # A TRUNCATED PASS READS AS TRUNCATED. ``_cov_note`` is built from
-        # the stops the pass PLANNED; ``_cover_ack`` counts the stops
-        # actually flown, so a pass a backstop cut short says what happened.
+        # A TRUNCATED PASS READS AS TRUNCATED: ``_cov_note`` counts the stops
+        # planned, ``_cover_ack`` the stops flown.
         if mv.get("stops", len(_accepted)) < len(_accepted):
             _cov_note = (f"the pass ended after "
                          f"{mv.get('stops', 0)} of its stops.")
@@ -2967,13 +2963,9 @@ def advance_reasoner_one_round(
     _mission_py: list = [None]
 
     def _dispatch_run(args, cid: str) -> dict:
-        """One code block: real Python, executed against the loop's verbs.
-
-        The block runs in ONE persistent namespace -- a variable an
-        earlier turn bound is still bound -- and every library call runs on
+        """One code block, run in the mission's ONE persistent namespace on
         the verbs above. An error costs the line it is on: everything the
-        block ran before it stands, receipts included.
-        """
+        block ran before it stands, receipts included."""
         code = (args or {}).get("code")
         if not isinstance(code, str) or not code.strip():
             return {"error": "run takes one block of code in code"}
