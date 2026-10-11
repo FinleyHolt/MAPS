@@ -22,7 +22,7 @@ def test_legend_served_once_per_response_under_the_first_grid():
         [dict(c) for c in _CANDS], [dict(a) for a in _ANCHORS],
         {"ops": [
             {"ref": "r0", "op": "find",
-             "args": {"query": "car", "provenance": "runtime"}},
+             "args": {"query": "car"}},
             {"ref": "r1", "op": "compare",
              "args": {"items": "r0", "refs": ["z_solo"]}},
             {"ref": "r2", "op": "score_by",
@@ -42,7 +42,7 @@ def test_legend_served_once_per_response_under_the_first_grid():
     browse = run_program(
         [dict(c) for c in _CANDS], [dict(a) for a in _ANCHORS],
         {"ops": [{"ref": "r0", "op": "find",
-                  "args": {"provenance": "runtime"}}]})
+                  "args": {}}]})
     benvs = compact_results(browse["results"])
     assert "census" in benvs["r0"] and "rows" not in benvs["r0"], benvs
     assert not any("legend" in e for e in benvs.values()
@@ -65,7 +65,7 @@ def test_legend_claims_are_the_executors_own_facts():
         [{"fid": "b1", "xy": [44.0, 0.0], "class": "building",
           "mask": [[[42.0, -1.0], [46.0, -1.0], [46.0, 1.0], [42.0, 1.0], [42.0, -1.0]]]}],
         {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+            {"ref": "r0", "op": "find", "args": {}},
             {"ref": "r1", "op": "compare",
              "args": {"items": "r0",
                       "refs": [{"ref": "b1", "as": "wall"}]}}]})

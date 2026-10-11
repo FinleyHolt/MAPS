@@ -7,7 +7,7 @@ from maps.search.analyze_scene.geom_program import ProgramError, run_program
 def _compare(cands, anchors, refs):
     out = run_program([dict(c) for c in cands], [dict(a) for a in anchors],
                       {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": refs}},
     ]})
     return {r["fid"]: r for r in out["results"]["r1"]}
@@ -258,10 +258,8 @@ _SEG_B = {"fid": "road_88", "name": "St Peters Street", "xy": [90.0, 0.0],
 
 def _union_run(cands, extra_ops=None):
     ops = [
-        {"ref": "r0", "op": "find",
-         "args": {"provenance": "runtime"}},
         {"ref": "r1", "op": "compare",
-         "args": {"items": "r0",
+         "args": {"items": [c["fid"] for c in cands],
                   "refs": [{"ref": ["road_86", "road_88"],
                             "as": "st_peters"}]}},
     ] + list(extra_ops or [])

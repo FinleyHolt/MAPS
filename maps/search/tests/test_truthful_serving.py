@@ -38,7 +38,7 @@ def _grass_world(n_pad=0):
 def test_key_value_query_retrieves_the_tagged_rows():
     out = run_program([], _grass_world(), {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "landuse=grass"}},
+         "args": {"query": "landuse=grass"}},
     ]})
     env = compact_results(out["results"])["r0"]
     assert env["len"] == 3  # the MATCH SET: len IS the match count
@@ -59,8 +59,7 @@ def test_or_query_is_max_over_clauses():
     # max over the OR-clauses.
     out = run_program([], _grass_world(), {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior",
-                  "query": "park OR natural OR garden OR lawn OR grass "
+         "args": {"query": "park OR natural OR garden OR lawn OR grass "
                            "OR hedge"}},
     ]})
     rows = out["results"]["r0"]
@@ -75,7 +74,7 @@ def test_query_miss_serves_truthful_condition_not_world_claim():
     # condition" as a claim about the world.
     out = run_program([], _grass_world(), {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "zzqx"}},
+         "args": {"query": "zzqx"}},
     ]})
     env = compact_results(out["results"])["r0"]
     assert env["len"] == 0
@@ -90,8 +89,7 @@ def test_miss_census_is_query_conditioned_first():
     rows = _grass_world(n_pad=40)  # 41 building=yes rows dominate the top
     out = run_program([], rows, {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior",
-                  "query": "grassy terrain zone area"}},  # a real miss
+         "args": {"query": "grassy terrain zone area"}},  # a real miss
     ]})
     env = compact_results(out["results"])["r0"]
     hint = env["hint"]
@@ -131,7 +129,7 @@ def test_exact_name_outranks_token_bag_saturation():
     # Exact name > everything else.
     out = run_program([], _downing_world(), {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "Downing Street"}},
+         "args": {"query": "Downing Street"}},
     ]})
     rows = out["results"]["r0"]
     assert rows[0]["fid"] == "prior_way"
@@ -172,7 +170,7 @@ def test_exact_kv_outranks_token_bag_variant():
     ]
     out = run_program([], world, {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "amenity=parking"}},
+         "args": {"query": "amenity=parking"}},
     ]})
     rows = out["results"]["r0"]
     assert rows[0]["fid"] == "prior_park"
@@ -191,7 +189,7 @@ def test_name_phrase_tier_beats_fuzz_but_not_exact():
     ]
     out = run_program([], world, {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "Museum of Cambridge"}},
+         "args": {"query": "Museum of Cambridge"}},
     ]})
     rows = out["results"]["r0"]
     assert rows[0]["fid"] == "prior_museum"
@@ -231,7 +229,7 @@ def test_broad_score_by_serves_census_plus_head_not_full_dump():
     n = 120
     assert n > _BROAD_DUMP_SOFT_ROWS  # past the knee, so the law applies
     out = run_program([], _wide_world(n), {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare", "args": {"items": "r0",
                                                 "refs": ["prior_000"]}},
         {"ref": "r2", "op": "score_by",
@@ -251,7 +249,7 @@ def test_broad_filter_items_capped_same_law():
     # under the same census+head law past the knee.
     n = 120
     out = run_program([], _wide_world(n), {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "rc", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_000"]}},
         {"ref": "r1", "op": "score_by",
@@ -276,7 +274,7 @@ def test_windowed_ordered_result_serves_the_continuation_rows():
     # an ordered result stays ordered and serves the ranking's own next rows.
     n = 120
     out = run_program([], _wide_world(n), {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "rc", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_000"]}},
         {"ref": "r1", "op": "score_by",
@@ -300,7 +298,7 @@ def test_unordered_filter_serves_census_not_a_row_head():
     # list). The full set stays live in the rN.
     n = 120
     out = run_program([], _wide_world(n), {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "rc", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_000"]}},
         {"ref": "r1", "op": "filter_items",
@@ -320,7 +318,7 @@ def test_compare_grid_joins_identity_and_relational_columns():
     # table, identity + attached columns.
     out = run_program([], _wide_world(60), {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "building"}},
+         "args": {"query": "building"}},
         {"ref": "r1", "op": "compare", "args": {"items": "r0",
                                                 "refs": ["prior_000"]}},
     ]})
@@ -335,7 +333,7 @@ def test_compare_grid_joins_identity_and_relational_columns():
 
 def test_identical_census_served_once_per_response():
     out = run_program([], _wide_world(120), {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "rc", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_000"]}},
         {"ref": "r1", "op": "filter_items",
@@ -365,7 +363,7 @@ def test_render_budget_elides_column_tail_never_rows():
     refs = [f"prior_{i:03d}" for i in range(1, n_refs + 1)]
     out = run_program([], world, {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "building"}},
+         "args": {"query": "building"}},
         {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": refs}},
     ]})
     env = compact_results(out["results"])["r1"]
@@ -393,7 +391,7 @@ def test_full_set_stays_chainable_past_the_head():
     # A row past the rendered head is reachable via rN slicing/chaining —
     # the cap is response shape, never a candidate cap.
     out = run_program([], _wide_world(120), {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "rc", "op": "compare",
          "args": {"items": "r0[100:110]", "refs": ["prior_119"]}},
         {"ref": "r1", "op": "score_by",

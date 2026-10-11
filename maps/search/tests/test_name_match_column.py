@@ -32,7 +32,7 @@ def test_query_find_rows_carry_name_match():
     # not overloaded onto the resolved-set token 'score'.
     out = _run([
         {"ref": "r0", "op": "find",
-         "args": {"query": "manhattan house", "provenance": "prior"}},
+         "args": {"query": "manhattan house"}},
     ])
     rows = out["results"]["r0"]
     assert rows, rows
@@ -53,7 +53,7 @@ def test_query_find_rows_carry_name_match():
 
 def test_unscored_ref_carries_no_name_match():
     out = _run([
-        {"ref": "r1", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "r1", "op": "find", "args": {}},
         {"ref": "r2", "op": "compare", "args": {"items": "r1", "refs": ["z_solo"]}},
     ])
     hdrs = _cmp_headers(out, "r2")

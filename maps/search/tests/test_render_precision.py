@@ -54,7 +54,7 @@ def test_served_grid_never_pairs_d_zero_with_brg_gap():
          "mask": [[[19.0, 8.0], [23.0, 8.0], [23.0, 12.0], [19.0, 12.0], [19.0, 8.0]]]},
     ]
     out = run_program(cands, [ref], {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_193"]}},
     ]})["results"]

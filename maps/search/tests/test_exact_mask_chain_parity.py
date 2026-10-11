@@ -43,7 +43,7 @@ def _geom_cols(row):
 def test_repeated_compare_byte_parity():
     # The IDENTICAL compare twice in one program serves identical bytes.
     prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_1"]}},
         {"ref": "r2", "op": "compare",
@@ -60,7 +60,7 @@ def test_chain_vs_fresh_parity_over_score_by_slice_and_filter():
     # a filter serves geometry
     # byte-identical to a fresh compare on the same fids.
     chained = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r0c", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_1"]}},
         {"ref": "r1", "op": "score_by",
@@ -90,7 +90,7 @@ def test_chain_vs_fresh_parity_over_score_by_slice_and_filter():
 
 def test_self_ref_reads_zero_and_directionless():
     prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r0c", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_1"]}},
         {"ref": "r1", "op": "score_by",
@@ -164,7 +164,7 @@ def test_build_surface_stamps_covers_window_geometrically():
 def test_covering_ref_serves_containment_fact_not_zero_columns():
     cands, anchors = _mega_surface()
     prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_9"]}},
     ]}
@@ -185,7 +185,7 @@ def test_score_by_on_covering_ref_gap_key_states_the_containment_fact():
     cands, anchors = _mega_surface()
     anchors[-1]["covers_window"] = True
     prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "score_by",
          "args": {"items": "r0",
                   "emphasis": [{"key": "distance to prior_9", "w": -1}]}},
@@ -207,14 +207,14 @@ def test_covering_row_as_item_omitted_from_sort_head_with_note():
     cands, anchors = _mega_surface()
     anchors[-1]["covers_window"] = True
     prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r0c", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_1"]}},
         {"ref": "r1", "op": "score_by",
          "args": {"items": "r0c",
                   "emphasis": [{"key": "distance to prior_1", "w": -1}]}},
         {"ref": "r2", "op": "find",
-         "args": {"provenance": "prior", "query": "Cambridge"}},
+         "args": {"query": "Cambridge"}},
     ]}
     out = run_program(cands, anchors, prog)["results"]
     from maps.search.analyze_scene.geom_program import compact_results
@@ -306,7 +306,7 @@ _WARD = {"fid": "prior_9", "name": "Castle Ward", "xy": [15.0, 15.0],
 
 def _ward_out():
     prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_1"]}},
     ]}
@@ -338,7 +338,7 @@ def test_self_compare_gets_no_contains_fact():
 
 def test_containment_note_names_the_row_and_the_fact():
     prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_1"]}},
     ]}

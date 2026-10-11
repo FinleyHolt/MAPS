@@ -30,7 +30,7 @@ def _grass_world():
 def _find(world, query):
     out = run_program([], world, {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": query}},
+         "args": {"query": query}},
     ]})
     return out, compact_results(out["results"])["r0"]
 
@@ -60,7 +60,7 @@ def test_head_banner_endorses_only_a_name_tier_head():
 
 def test_bare_xy_literal_attaches_the_xy_family():
     out = run_program([], _grass_world(), {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0", "refs": [[5.0, 5.0]]}},
     ]})
@@ -71,7 +71,7 @@ def test_bare_xy_literal_attaches_the_xy_family():
 
 def test_labeled_xy_literal_is_the_named_columns_path():
     out = run_program([], _grass_world(), {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0",
                   "refs": [{"ref": [5.0, 5.0], "as": "gate"},

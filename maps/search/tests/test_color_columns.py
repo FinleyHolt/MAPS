@@ -36,8 +36,8 @@ def _expect_error(ops, *needles):
 
 def test_emphasis_attaches_the_color_column_it_names():
     out = _run([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
-        {"ref": "rc", "op": "compare", "args": {"items": "r0", "refs": ["shed_1"]}},
+        {"ref": "rc", "op": "compare",
+         "args": {"items": ["d0", "d1", "d2", "d3"], "refs": ["shed_1"]}},
         {"ref": "r1", "op": "score_by", "args": {"items": "rc", "emphasis": [
             {"key": "color_blue", "w": 1}, {"key": "distance to shed_1", "w": -1}]}},
     ])
@@ -60,7 +60,7 @@ def test_emphasis_attaches_the_color_column_it_names():
 
 def test_two_color_columns_coexist_and_sort_independently():
     out = _run([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
             {"key": "color_blue", "w": 1}, {"key": "color_purple", "w": 1}]}},
         {"ref": "r2", "op": "score_by", "args": {"items": "r0", "emphasis": [
@@ -83,7 +83,7 @@ def test_two_color_columns_coexist_and_sort_independently():
 
 def test_off_palette_word_errors_loud_with_the_palette():
     _expect_error([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
             {"key": "color_chartreuse", "w": 1}]}},
     ], "closed palette", ", ".join(G.COLOR_ENUM))
@@ -91,7 +91,7 @@ def test_off_palette_word_errors_loud_with_the_palette():
 
 def test_open_word_normalization_is_noted():
     out = _run([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
             {"key": "color_navy", "w": 1}]}},
     ])
@@ -109,7 +109,7 @@ def test_open_word_normalization_is_noted():
 
 def test_all_colorless_pool_color_emphasis_fails_loud():
     prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
             {"key": "color_red", "w": 1}]}},
     ]}
@@ -169,7 +169,7 @@ def test_a_missing_name_match_is_still_strictly_worst():
 
 def test_an_off_palette_color_key_names_the_palette():
     _expect_error([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
             {"key": "color_score", "w": 1}]}},
     ], "'score' is not a color on the closed palette")

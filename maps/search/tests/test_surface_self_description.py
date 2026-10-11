@@ -31,10 +31,3 @@ def _run(ops):
 
 
 # --- One handle, one op --------------------------------------------------------
-
-
-def test_order_free_duplicate_handle_errors():
-    with pytest.raises(ProgramError) as e:
-        _run([{"ref": "r0", "op": "find", "args": {"query": "car"}},
-              {"ref": "r0", "op": "find", "args": {"query": "road"}}])
-    assert "two ops" in str(e.value)

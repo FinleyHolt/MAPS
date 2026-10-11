@@ -72,8 +72,7 @@ _FINDS = {"ops": [
     {"ref": "r1", "op": "find", "args": {"query": "b7"}},
     {"ref": "r2", "op": "find", "args": {"query": "zeppelin hangar"}},
     {"ref": "r3", "op": "find", "args": {"query": "car", "color": "red"}},
-    {"ref": "r4", "op": "find", "args": {"query": "car",
-                                          "provenance": "runtime"}},
+    {"ref": "r4", "op": "find", "args": {"query": "car"}},
     {"ref": "r5", "op": "find", "args": {"query": "car withcolor"}},
 ]}
 

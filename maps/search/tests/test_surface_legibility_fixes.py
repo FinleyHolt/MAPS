@@ -42,7 +42,7 @@ def test_truncated_tied_head_states_both_facts():
               "search_text": "car"}
              for i in range(60)]
     out = _run([{"ref": "r0", "op": "find",
-                 "args": {"query": "car", "provenance": "runtime"}}],
+                 "args": {"query": "car"}}],
                cands)
     env = compact_results(out["results"])["r0"]
     hint = env.get("hint") or ""
@@ -59,7 +59,7 @@ def test_truncated_tied_head_states_both_facts():
 
 def test_near_square_centerline_ref_is_areal():
     out = _run([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0", "refs": ["lot_1"]}},
     ], _COLOR_CANDS)
@@ -76,9 +76,8 @@ def test_distance_to_ranks_by_magnitude_either_side():
     ]
     road = dict(_ANCHORS[0], mask=[[[0.0, 0.0], [100.0, 0.0]]])
     magnitude = _run([
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
         {"ref": "rc", "op": "compare",
-         "args": {"items": "r0", "refs": ["road_1"]}},
+         "args": {"items": ["d0", "d1", "d2"], "refs": ["road_1"]}},
         {"ref": "r1", "op": "score_by",
          "args": {"items": "rc",
                   "emphasis": [{"key": "distance to road_1", "w": -1}]}},
@@ -100,7 +99,7 @@ def _cut_hint(xs) -> str:
     anchors = [{"fid": "road_9", "name": "Glade Avenue", "xy": [0.0, 0.0],
                 "class": "road", "centerline": [[0.0, -1.0], [0.0, 1.0]]}]
     out = _run([{"ref": "r0", "op": "find",
-                 "args": {"query": "house", "provenance": "runtime"}},
+                 "args": {"query": "house"}},
                 {"ref": "r1", "op": "compare",
                  "args": {"items": "r0", "refs": ["road_9"]}},
                 {"ref": "r2", "op": "score_by",
@@ -138,7 +137,7 @@ def test_it_reports_the_COMPOSITE_not_a_column():
     anchors = [{"fid": "road_9", "name": "Glade Avenue", "xy": [0.0, 0.0],
                 "class": "road", "centerline": [[0.0, -1.0], [0.0, 1.0]]}]
     out = _run([{"ref": "r0", "op": "find",
-                 "args": {"query": "house", "provenance": "runtime"}},
+                 "args": {"query": "house"}},
                 {"ref": "r1", "op": "compare",
                  "args": {"items": "r0", "refs": ["road_9"]}},
                 {"ref": "r2", "op": "score_by",
@@ -175,7 +174,7 @@ def test_an_unordered_dump_has_no_cut_to_stand_at():
     cands = [{"fid": f"d{i:03d}", "xy": [float(i), 0.0], "class": "car",
               "search_text": "car"} for i in range(60)]
     out = _run([{"ref": "r0", "op": "find",
-                 "args": {"query": "car", "provenance": "runtime"}}], cands)
+                 "args": {"query": "car"}}], cands)
     hint = compact_results(out["results"])["r0"].get("hint") or ""
     assert "showing the first" in hint, hint
     assert "ranked on" not in hint, hint
@@ -193,7 +192,7 @@ def test_a_uniform_class_tie_keeps_the_generic_hint():
               "search_text": "car"}
              for i in range(60)]
     out = _run([{"ref": "r0", "op": "find",
-                 "args": {"query": "car", "provenance": "runtime"}}],
+                 "args": {"query": "car"}}],
                cands)
     env = compact_results(out["results"])["r0"]
     hint = env.get("hint") or ""

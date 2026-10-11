@@ -23,8 +23,7 @@ _ANCHORS = [
 def _find(query, anchors=None):
     out = run_program([], [dict(a) for a in (anchors or _ANCHORS)],
                       {"ops": [{"ref": "r0", "op": "find",
-                                "args": {"provenance": "prior",
-                                         "query": query}}]})
+                                "args": {"query": query}}]})
     return out["results"]["r0"]
 
 

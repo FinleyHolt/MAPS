@@ -15,7 +15,7 @@ _CANDS = [
 
 def _window(spec):
     return run_program([dict(c) for c in _CANDS], [], {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "filter_items",
          "args": {"items": f"r0{spec}", "key": "xy", "op": "truthy"}},
     ]})["results"]["r1"]

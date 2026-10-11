@@ -103,7 +103,7 @@ def test_score_by_grid_orders_without_a_score_column():
     world = [_prior("prior_a", 0, 10), _prior("prior_b", 30, 0),
              _prior("prior_c", 0, 20)]
     out = run_program([], world, {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0", "refs": [[0.0, 0.0]]}},
         {"ref": "r2", "op": "score_by",

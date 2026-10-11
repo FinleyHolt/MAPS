@@ -138,7 +138,7 @@ def test_an_unseen_colour_drops_its_term_instead_of_killing_the_block():
             "cells": [], "search_text": "mill lane"}
     ops = [
         {"ref": "r0", "op": "find",
-         "args": {"query": "house", "provenance": "prior"}},
+         "args": {"query": "house"}},
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0", "refs": ["road_1"]}},
         {"ref": "r2", "op": "score_by",

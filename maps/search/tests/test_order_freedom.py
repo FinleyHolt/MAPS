@@ -32,19 +32,15 @@ def _run(ops, cands=None, anchors=None):
         {"ops": ops})
 
 
-_FIND_CARS = {"ref": "r0", "op": "find",
-              "args": {"provenance": "runtime"}}
-
-
 # --------------------------------------------------------------------------- #
 # TRUTHY: a key-presence cut takes no value                                    #
 # --------------------------------------------------------------------------- #
 
 
 def test_filter_truthy_without_value_still_works():
-    out = _run([_FIND_CARS,
-                {"ref": "r1", "op": "filter_items",
-                 "args": {"items": "r0", "key": "class", "op": "truthy"}}])
+    out = _run([{"ref": "r1", "op": "filter_items",
+                 "args": {"items": ["d0", "d1", "d2"], "key": "class",
+                          "op": "truthy"}}])
     assert len(out["results"]["r1"]) == 3
 
 
@@ -64,7 +60,7 @@ def test_empty_anchor_find_keeps_the_tag_census_note():
          "tags": {"building": "church"}},
     ]
     out = _run([{"ref": "r0", "op": "find",
-                 "args": {"provenance": "prior", "query": "zzzqx"}}],
+                 "args": {"query": "zzzqx"}}],
                anchors=anchors)
     env = compact_results(out["results"])["r0"]
     assert env["len"] == 0
@@ -73,7 +69,7 @@ def test_empty_anchor_find_keeps_the_tag_census_note():
     assert "highway=residential(1)" in hint, hint  # tag key=value counts
     assert "Elm Street" in hint, hint              # name samples
     # the truthful searched-scope fact rides on top of the census
-    assert "searched the prior map rows (provenance:'prior')" in hint, hint
+    assert "searched every surface row" in hint, hint
 
 
 # --------------------------------------------------------------------------- #
@@ -89,7 +85,7 @@ def test_preflight_color_note_on_emphasis_only_attach():
     # naming color_red must state the phase fact, not just "no color".
     out = run_geom_program_tool(
         {"program": {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+            {"ref": "r0", "op": "find", "args": {}},
             {"ref": "r1", "op": "score_by",
              "args": {"items": "r0",
                       "emphasis": [{"key": "color_red", "w": 1}]}},
@@ -103,7 +99,7 @@ def test_per_stop_round_serves_no_phase_note():
           "anchors": [dict(a) for a in _ANCHORS], "cell_m": 1.0}
     out = run_geom_program_tool(
         {"program": {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+            {"ref": "r0", "op": "find", "args": {}},
             {"ref": "r1", "op": "score_by",
              "args": {"items": "r0",
                       "emphasis": [{"key": "color_red", "w": 1}]}},

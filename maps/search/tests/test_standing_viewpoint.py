@@ -45,7 +45,7 @@ def test_standing_columns_ride_every_find_result():
     out = run_program(
         [dict(c) for c in _CANDS], [],
         {"ops": [{"ref": "r0", "op": "find",
-                  "args": {"provenance": "runtime"}}]},
+                  "args": {}}]},
         staged=_STAGED, standing="v1")
     rows = _rows_by_fid(out["results"]["r0"])
     assert rows["c_n"]["left of v1"] == 10.0
@@ -56,7 +56,7 @@ def test_staged_handle_ref_attaches_the_stance_columns():
     out = run_program(
         [dict(c) for c in _CANDS], [],
         {"ops": [
-            {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+            {"ref": "r0", "op": "find", "args": {}},
             {"ref": "r1", "op": "compare",
              "args": {"items": "r0", "refs": ["v1"]}},
         ]},
@@ -74,7 +74,7 @@ def test_no_stage_means_no_columns_anywhere():
     out = run_program(
         [dict(c) for c in _CANDS], [],
         {"ops": [{"ref": "r0", "op": "find",
-                  "args": {"provenance": "runtime"}}]})
+                  "args": {}}]})
     for r in out["results"]["r0"]:
         assert not any(k.endswith(" v1") for k in r)
 
@@ -86,7 +86,7 @@ def test_null_form_args_behave_as_absent():
         [{"fid": "c1", "xy": [1.0, 2.0], "class": "car",
           "search_text": "car"}], [],
         {"ops": [{"ref": "r0", "op": "find",
-                  "args": {"provenance": "runtime", "query": None,
+                  "args": {"query": None,
                            "color": None}}]})
     assert len(out["results"]["r0"]) == 1
 

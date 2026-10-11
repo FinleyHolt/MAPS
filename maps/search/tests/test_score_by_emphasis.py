@@ -19,7 +19,7 @@ _CANDS = [
     {"fid": "d3", "xy": [50.0, 50.0], "class": "car", "color": "white"},
 ]
 _BASE = [
-    {"ref": "r0", "op": "find", "args": {"provenance": "runtime"}},
+    {"ref": "r0", "op": "find", "args": {}},
     {"ref": "r1", "op": "compare",
      "args": {"items": "r0",
               "refs": [[100.0, 0.0], {"ref": [0.0, 100.0], "as": "n"}]}},

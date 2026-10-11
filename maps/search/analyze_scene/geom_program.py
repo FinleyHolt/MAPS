@@ -136,8 +136,7 @@ def _modal_attr(n, key):
 
 # Tag keys withheld from the model-facing tags (search text + rendered tags):
 # the GT-label ``description`` tags (the catalog instructions are sampled
-# from) and the bake's ``source`` provenance (the fid and the find
-# ``provenance`` arg already carry it).
+# from) and the bake's ``source`` provenance (the fid carries it).
 _SEARCH_TAG_DENYLIST = frozenset({"description", "descriptions", "source"})
 
 
@@ -273,11 +272,11 @@ _MASK_GEOM: dict = {}
 _MASK_GEOM_MAX = 50_000
 
 # The retrieval is memoised per surface: a find's scored rows are a pure
-# function of (surface, provenance, query, colour), and a program asks the
+# function of (surface, query), and a program asks the
 # same query repeatedly. The memo keys on the identity of the two surface
 # lists (replaced whole on every rebuild) and empties when either changes.
 # It hands out copies: a result never aliases another result's dicts.
-_FIND_MEMO: dict = {"lists": None, "idf": {}, "scored": {}, "dead": {},
+_FIND_MEMO: dict = {"lists": None, "idf": None, "scored": {}, "dead": {},
               "census": {}}
 
 
@@ -286,7 +285,7 @@ def _find_memo(cands, anchors) -> dict:
     key = (id(cands) if cands else 0, id(anchors) if anchors else 0)
     lists = _FIND_MEMO["lists"]
     if lists is None or lists[0] != key:
-        _FIND_MEMO.update(lists=(key, cands, anchors), idf={}, scored={},
+        _FIND_MEMO.update(lists=(key, cands, anchors), idf=None, scored={},
                           dead={}, census={})
     return _FIND_MEMO
 
@@ -790,19 +789,13 @@ def _census_note(rows, *, name_samples: int = 4, query: str | None = None) -> st
 
 
 class _EmptyFindMiss(list):
-    """Marker: a ``find`` whose retrieval matched NOTHING on a surface that
-    includes the prior map rows (a query miss, or an explicit
-    ``provenance:'prior'`` search). Always empty and chaining-safe;
-    :func:`compact_results` states WHICH rows were searched (``searched``)
-    on top of the empty-result hint (the truthful ``empty_condition`` when
-    a query miss set one), so a dead ground attempt is distinguishable from
-    an empty runtime-detection query."""
+    """Marker: a ``find`` query that matched nothing. Always empty;
+    :func:`compact_results` states the rows it searched on top of the
+    empty-result hint."""
 
     empty_condition: "str | None" = None
-    # A tied one-name set renders its shape (len + name), never rows or fids.
     name_set: bool = False
-    # The truthful scope of the miss, set where provenance is known.
-    searched: str = "the surface rows"
+    searched: str = "every surface row (prior + runtime)"
 
 
 class _FilterCutRows(list):
@@ -1676,18 +1669,7 @@ def _find(cx, a):
     _name_set = False    # tied ways of ONE name: render the shape
     _find_cols: list = []  # columns this find attached (budget prio)
     _empty_cond = None  # the truthful no-match condition, set on a query miss
-    prov = str(a.get("provenance") or "any").strip().lower()
-    if prov == "prior":
-        rows = list(cx.anchors)              # baked map priors only
-    elif prov == "runtime":
-        rows = list(cx.cands)                # in-flight detections only
-    elif prov == "any":
-        rows = cx.cands + cx.anchors         # the whole surface
-    else:
-        raise ProgramError(
-            f"unknown find provenance {_quote(prov)}; legal: any | prior "
-            f"(baked map features) | runtime (in-flight detections)."
-            f"{cx.sig()}")
+    rows = cx.cands + cx.anchors
     _fid_hit = (cx.by_fid.get(str(a.get("query") or "").strip())
                 if a.get("query") else None)
     if _fid_hit is not None:
@@ -1720,7 +1702,7 @@ def _find(cx, a):
         q_data = T.fuzzy_prepare_query(_q_raw)
         _searched_rows = list(rows)
         _memo = _find_memo(cx.cands, cx.anchors)
-        _mkey = (prov, _q_raw)
+        _mkey = _q_raw
         _hit = _memo["scored"].get(_mkey)
 
         def _memo_census():
@@ -1734,9 +1716,9 @@ def _find(cx, a):
         # The fuzz band's denominator is a CORPUS fact, minted over the same
         # rows being scored (the sibling of `tag_family_keys` below): how
         # rare a query word is here, and whether any row could cover it.
-        _idf = _memo["idf"].get(prov)
+        _idf = _memo["idf"]
         if _idf is None and _hit is None:
-            _idf = _memo["idf"][prov] = T.token_idf(_searched_rows)
+            _idf = _memo["idf"] = T.token_idf(_searched_rows)
         if _hit is None:
             scored = [{**x, "name_match": round(
                           T.find_score(q_data, x.get("search_text") or "",
@@ -1930,14 +1912,10 @@ def _find(cx, a):
         _find_cols.extend(
             (f"left of {_h}", f"right of {_h}",
              f"ahead of {_h}", f"behind {_h}"))
-    if not rows and prov != "runtime" and (a.get("query") or prov == "prior"):
-        # A ground attempt (a named query, or provenance:'prior') matched
-        # nothing: the marker states the searched scope; the query notes ride
-        # it as on any empty result.
+    if not rows and a.get("query"):
+        # A query matched nothing: the marker states the searched scope; the
+        # query notes ride it as on any empty result.
         rows = _EmptyFindMiss()
-        rows.searched = (
-            "the prior map rows (provenance:'prior')" if prov == "prior"
-            else "every surface row (prior + runtime)")
         if _q_notes:
             rows.notes = list(_q_notes)
         if _empty_cond:
@@ -2702,7 +2680,7 @@ OPS = {
 
 
 def run_program(cands, anchors, program, seed_results=None,
-                geometry_sink=None, staged=None, standing=None):
+                staged=None, standing=None):
     """Execute a compiled op-program over an explicit surface.
 
     ``program`` is ``{"ops": [{ref, op, args}, ...]}`` in dependency order,
@@ -2713,22 +2691,13 @@ def run_program(cands, anchors, program, seed_results=None,
     ``staged`` (the act.stage viewpoints) is a read-only ``{handle:
     {"handle", "from_xy", "up_unit"}}`` map: a staged handle as a compare ref
     attaches that viewpoint's side columns, and ``standing`` names the handle
-    whose side columns ride every find result. ``geometry_sink`` is accepted
-    and ignored.
+    whose side columns ride every find result.
 
     Returns ``{results}``; wrap with :func:`compact_results` for the
     model-facing payload.
     """
     cx = _Run(cands, anchors, seed_results, staged, standing)
     ops = program["ops"]
-    _seen: set = set()
-    for op in ops:
-        if op["ref"] in _seen:
-            raise ProgramError(
-                f"handle {_quote(op['ref'])} is defined by two ops -- one handle names ONE "
-                f"op (a program never redefines a handle). Give the second op a "
-                f"fresh ref (rN) and reference each by its own name.")
-        _seen.add(op["ref"])
     for op in ops:
         cx.op = op["op"]
         # A null arg is an absent one: a handle bound to a row without a fid

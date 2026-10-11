@@ -327,7 +327,7 @@ def test_find_query_returns_the_match_set_best_first():
     ]
     out = run_program([], [dict(a) for a in anchors], {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "Earl Street"}},
+         "args": {"query": "Earl Street"}},
     ]})
     rows = out["results"]["r0"]
     # The result IS the match set (len = match count), best-first, ordered;
@@ -347,7 +347,7 @@ def test_find_query_returns_the_match_set_best_first():
 def test_find_query_no_match_returns_empty_miss_affordance():
     out = run_program([], [{"fid": "b_a", "name": "Earl Street", "xy": [9.0, 9.0], "class": "building"}], {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "zxqv wqzzk"}},
+         "args": {"query": "zxqv wqzzk"}},
     ]})
     rows = out["results"]["r0"]
     assert isinstance(rows, _EmptyFindMiss), type(rows)

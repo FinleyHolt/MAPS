@@ -206,7 +206,7 @@ def test_a_crossing_row_anchors_geometry_as_a_point():
     prog = {"ops": [
         {"ref": "r0", "op": "crossings",
          "args": {"refs": ["prior_1", "prior_2"]}},
-        {"ref": "r1", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r1", "op": "find", "args": {}},
         {"ref": "r2", "op": "compare",
          "args": {"items": "r1", "refs": [{"ref": ["r0"], "as": "corner"}]}},
     ]}
@@ -346,7 +346,7 @@ def test_a_crossing_set_anchors_a_distance_column():
         {"ref": "r0", "op": "crossings",
          "args": {"refs": ["prior_1", "prior_2"]}},
         {"ref": "r1", "op": "find",
-         "args": {"query": "house", "provenance": "runtime"}},
+         "args": {"query": "house"}},
         {"ref": "r2", "op": "compare",
          "args": {"items": "r1", "refs": [{"ref": ["r0"], "as": "inter"}]}},
     ]}

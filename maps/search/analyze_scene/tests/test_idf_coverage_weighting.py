@@ -33,8 +33,7 @@ def _find(rows, query):
     """The served find, over a prepared surface."""
     out = run_program([], [dict(r) for r in rows],
                       {"ops": [{"ref": "r0", "op": "find",
-                                "args": {"provenance": "prior",
-                                         "query": query}}]})
+                                "args": {"query": query}}]})
     return out["results"]["r0"]
 
 

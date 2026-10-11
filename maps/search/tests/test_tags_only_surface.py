@@ -52,7 +52,7 @@ def test_query_over_tags_reaches_key_and_value_matches():
     cands, anchors = _prior_surface()
     out = run_program(cands, anchors, {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "parking"}},
+         "args": {"query": "parking"}},
     ]})
     rows = {r["fid"]: r for r in out["results"]["r0"]}
     for fid in ("prior_0", "prior_1", "prior_2"):
@@ -71,7 +71,7 @@ def test_broad_dump_census_renders_tag_counts():
               for i in range(60)]
     cands, anchors = build_surface([], priors, (0.0, 0.0), 2.0)
     out = run_program(cands, anchors, {"ops": [
-        {"ref": "r0", "op": "find", "args": {"provenance": "prior"}},
+        {"ref": "r0", "op": "find", "args": {}},
     ]})
     env = compact_results(out["results"])["r0"]
     assert env["len"] == 60
@@ -85,7 +85,7 @@ def test_no_match_query_ships_surface_census_with_name_samples():
     cands, anchors = _prior_surface()
     out = run_program(cands, anchors, {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "zzzqx"}},
+         "args": {"query": "zzzqx"}},
     ]})
     env = compact_results(out["results"])["r0"]
     assert env["len"] == 0
@@ -99,7 +99,7 @@ def test_grid_renders_prior_tags_compact_kv():
     cands, anchors = _prior_surface()
     out = run_program(cands, anchors, {"ops": [
         {"ref": "r0", "op": "find",
-         "args": {"provenance": "prior", "query": "parking"}},
+         "args": {"query": "parking"}},
     ]})
     env = compact_results(out["results"])["r0"]
     grid = str(env.get("legend")) + "\n" + str(env.get("rows"))
