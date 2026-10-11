@@ -1,24 +1,16 @@
 """Print the served LLM contract: system text + the mission tools.
 
-The audit artifact — what the model gets at THIS sha, assembled from the
-same single owners the flight path serves (``served_system_prompt`` and
-``served_tools``, which serve the flown constants unless a bench arm
-withholds a part). A DERIVATION from the
-constants; the flight log records what a real run actually sent (the
-capture side). Diff two shas by dumping at each.
+What the model is served at this sha, from the owners a run serves through
+(``prompts.served_system_prompt`` and ``prompts.served_tools``); the flight
+log records what a real run sent. Diff two shas by dumping at each.
 
   python -m maps.search.parse_compile.contract
   python -m maps.search.parse_compile.contract --sensor <rig> [--agl-m <m>]
-  python -m maps.search.parse_compile.contract --rendered   # template bytes
   python -m maps.search.parse_compile.contract --withhold look,images
+  python -m maps.search.parse_compile.contract --rendered   # template bytes
 
-``--rendered`` prints the chat-template render of [system + one sample
-operator instruction] with the tools attached — the byte stream the
-model, xgrammar and the prefix cache see — and the token count on stderr.
-
-The code legend states the look()/show_map() capability unconditionally
-and the loop asserts the wiring that makes that true. ``CODE_DOC`` IS the
-language, so it rides the TOOLS section where the model reads it.
+``--rendered`` prints the chat-template render of the system turn, one
+sample instruction and the tools, with its token count on stderr.
 """
 
 from __future__ import annotations
@@ -43,11 +35,9 @@ def assemble(sensor: str | None = None, agl_m: float | None = None) -> dict:
         try:
             spec = resolve_sensor(sensor)
         except ValueError:
-            spec = None
-        if spec is None:
             raise SystemExit(
                 f"contract: unknown sensor '{sensor}' -- one of: "
-                + ", ".join(list_sensors()))
+                + ", ".join(list_sensors())) from None
         try:
             description = served_description(spec, agl_m)
         except ValueError as exc:
@@ -75,10 +65,7 @@ def surface_lines() -> list[str]:
         params = ", ".join(
             str(p) for n, p in sig.parameters.items() if n != "self")
         out.append(f"  {call}({params})")
-    # A cut and a sort are METHODS on a result, so they are not in
-    # _LIBRARY_CALLS and a derivation over that tuple alone would serve a
-    # surface with no way to narrow or rank -- reading as a capability the
-    # tree lost rather than as one it moved.
+    # A cut and a sort are METHODS on a result, not _LIBRARY_CALLS.
     for name in ("filter", "order", "distance"):
         sig = inspect.signature(getattr(Rows, name))
         params = ", ".join(
@@ -91,7 +78,6 @@ def dump_text(sensor: str | None = None, agl_m: float | None = None) -> str:
     c = assemble(sensor=sensor, agl_m=agl_m)
     tools_json = json.dumps(c["tools"], indent=2, ensure_ascii=False)
     names = ", ".join(t["function"]["name"] for t in c["tools"])
-    # The SURFACE section replaces the sentence dump's LANGUAGE + LEXICON.
     return "\n".join([
         f"=== SYSTEM ({len(c['system'])} chars) ===",
         c["system"].rstrip("\n"),
