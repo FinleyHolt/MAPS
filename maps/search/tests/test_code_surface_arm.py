@@ -1288,3 +1288,13 @@ def test_a_pass_takes_a_stop_the_recording_holds_first():
     assert flown == [STOPS[2], STOPS[0], STOPS[1]]
     assert [f["pass_ahead"] for f in flights] == [[STOPS[0], STOPS[1]], [STOPS[1]], []]
     assert asked == [[STOPS[0], STOPS[1], STOPS[2]], [STOPS[0], STOPS[1]]]
+
+
+def test_two_unnamed_results_with_one_label_stay_two_results():
+    """``find(A).filter(within=find(A))``: both sets carry the label
+    "find('A')", and each slot still reads its own set."""
+    ops = ops_of_block('r1 = find("car").filter(within=find("car"))\n')
+    first, second, cmp_op = ops[0], ops[1], ops[2]
+    assert cmp_op["args"]["items"] == first["ref"], ops
+    assert cmp_op["args"]["refs"] == [
+        {"ref": [second["ref"]], "as": "find('car')"}], ops
