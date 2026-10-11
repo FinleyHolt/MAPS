@@ -8,11 +8,9 @@ rather than being guessed from anything else.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 
-from benchmarks.citynav.analysis import rows
 from benchmarks.citynav.analysis.ab_report import _run_provenance
+from benchmarks.citynav.analysis.tests.ledger import write_ledger
 
 _PROV = {
     "git_commit": "abc1234",
@@ -21,14 +19,9 @@ _PROV = {
 }
 
 
-def _write_rows(f: Path, *rows_: dict) -> None:
-    f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text("".join(json.dumps(r) + "\n" for r in rows_))
-
-
 def test_provenance_comes_off_the_first_row_that_carries_it(tmp_path):
-    _write_rows(
-        tmp_path / rows.EPISODES_JSONL,
+    write_ledger(
+        tmp_path,
         {"episode_id": "e0", "status": "infra", "error": "spawn"},
         {"episode_id": "e1", "status": "ok", "provenance": _PROV},
     )
@@ -39,13 +32,12 @@ def test_provenance_comes_off_the_first_row_that_carries_it(tmp_path):
 
 def test_an_unrecorded_split_stays_absent(tmp_path):
     prov = {k: v for k, v in _PROV.items() if k != "split"}
-    _write_rows(tmp_path / rows.EPISODES_JSONL,
-                {"episode_id": "e1", "status": "ok", "provenance": prov})
+    write_ledger(tmp_path, {"episode_id": "e1", "status": "ok", "provenance": prov})
     assert not _run_provenance(tmp_path).get("split")
 
 
 def test_a_run_without_a_ledger_has_no_provenance(tmp_path):
     """An episode.json alone is not a run."""
-    _write_rows(tmp_path / "w0/maps_20260101_000000_citynav_x/episode.json",
-                {"episode_id": "e1", "status": "ok", "provenance": _PROV})
+    write_ledger(tmp_path / "w0/maps_20260101_000000_citynav_x",
+                 {"episode_id": "e1", "status": "ok", "provenance": _PROV}, name="episode.json")
     assert _run_provenance(tmp_path) == {}

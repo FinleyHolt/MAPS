@@ -250,3 +250,18 @@ def test_a_failed_manifest_write_leaves_the_old_one_whole(stub_run, tmp_path, mo
     with pytest.raises(OSError):
         run_manifest.emit_or_verify(tmp_path, stub_run, log=lambda *_: None)
     assert path.read_text() == before
+
+
+def test_the_arm_stamp_records_the_resolved_bake(monkeypatch):
+    """An unset SEARCH_CITYNAV_TILES stamps the directory it resolves to;
+    a set one stamps verbatim."""
+    monkeypatch.delenv("SEARCH_CITYNAV_TILES", raising=False)
+    assert run_manifest.arm_env_stamp()["SEARCH_CITYNAV_TILES"] == str(paths.TILES_DIR)
+    monkeypatch.setenv("SEARCH_CITYNAV_TILES", "/data/tiles/citynav_2m_osmv3")
+    assert run_manifest.arm_env_stamp()["SEARCH_CITYNAV_TILES"] == "/data/tiles/citynav_2m_osmv3"
+
+
+def test_an_unset_effort_is_not_stamped(monkeypatch):
+    """A run that named no effort flew the serve's default."""
+    monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
+    assert "SEARCH_SAMPLING_REASONING_EFFORT" not in run_manifest.arm_env_stamp()

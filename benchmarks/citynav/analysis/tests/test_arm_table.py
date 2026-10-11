@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from benchmarks.citynav.analysis import arm_table
+from benchmarks.citynav.analysis.tests.ledger import write_ledger
 
 
 def _ledger(eid: str, stamp: str, sr: int, criterion: str = "shape",
@@ -33,11 +34,7 @@ def _ledger(eid: str, stamp: str, sr: int, criterion: str = "shape",
 
 def _arm(tmp_path: Path, name: str, *ledger_rows: dict,
          effort: float | None = None) -> Path:
-    root = tmp_path / name
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "episodes.jsonl").write_text(
-        "".join(json.dumps(r) + "\n" for r in ledger_rows)
-    )
+    root = write_ledger(tmp_path / name, *ledger_rows)
     if effort is not None:
         (root / "run_manifest.json").write_text(json.dumps(
             {"search_env_flags": {"SEARCH_SAMPLING_REASONING_EFFORT": str(effort)}}))

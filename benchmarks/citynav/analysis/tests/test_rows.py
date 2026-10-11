@@ -10,35 +10,9 @@ import pytest
 
 from benchmarks.citynav.analysis import rows
 from benchmarks.citynav.analysis.run_report import load_run
+from benchmarks.citynav.analysis.tests.ledger import ledger_row, write_ledger
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "attempt_pick"
-
-
-def _ledger(eid: str, stamp: str, sr: int | None = None, *, status: str = "ok",
-            worker: str = "w0", **extra) -> dict:
-    """A ledger row for one attempt of ``eid``, ``workdir`` relative."""
-    slug = eid.replace("::", "__").replace("#", "_")
-    row: dict = {
-        "episode_id": eid, "worker_id": worker, "status": status, "error": None,
-        "elapsed_s": 1.0, "workdir": f"{worker}/maps_{stamp}_citynav_{slug}",
-    }
-    if sr is not None:
-        row["metrics"] = {"episode_id": eid, "SR": sr, "OSR": sr, "NE": 10.0}
-    row.update(extra)
-    return row
-
-
-def _run(tmp_path: Path, *ledger_rows: dict, name: str = "run") -> Path:
-    root = tmp_path / name
-    root.mkdir(parents=True, exist_ok=True)
-    (root / rows.EPISODES_JSONL).write_text(
-        "".join(json.dumps(r) + "\n" for r in ledger_rows)
-    )
-    return root
-
-
-def _picked_stamp(attempt: rows.Attempt) -> str:
-    return attempt.stamp
 
 
 # --------------------------------------------------------------------------
@@ -51,26 +25,26 @@ def test_the_first_started_attempt_wins_not_the_last_written(tmp_path):
     duplicate ahead of the slow attempt that was claimed first. Measured
     on citynav_train_seen_2026-07-24_13-19-41: one episode's attempts sit
     at file positions 4, 6, 7 with start stamps 132524, 133120, 133016."""
-    root = _run(
-        tmp_path,
-        _ledger("e::1#1", "20260725_111500", 0),   # started second, wrote first
-        _ledger("e::1#1", "20260725_110958", 1),   # started FIRST, wrote second
+    root = write_ledger(
+        tmp_path / "run",
+        ledger_row("e::1#1", "20260725_111500", 0),   # started second, wrote first
+        ledger_row("e::1#1", "20260725_110958", 1),   # started FIRST, wrote second
     )
     picked, _ = rows.load_attempts(root)
-    assert _picked_stamp(picked["e::1#1"]) == "20260725_110958"
+    assert picked["e::1#1"].stamp == "20260725_110958"
     assert picked["e::1#1"].metrics["SR"] == 1
 
 
 def test_a_timed_out_attempt_is_not_complete(tmp_path):
     """It committed before the kill and carries metrics, but the driver
     never saw a clean exit: any ok attempt of the episode outranks it."""
-    root = _run(
-        tmp_path,
-        _ledger("e::3#3", "20260725_110100", 1, status="timed_out"),
-        _ledger("e::3#3", "20260725_113000", 0),
+    root = write_ledger(
+        tmp_path / "run",
+        ledger_row("e::3#3", "20260725_110100", 1, status="timed_out"),
+        ledger_row("e::3#3", "20260725_113000", 0),
     )
     picked, stats = rows.load_attempts(root)
-    assert _picked_stamp(picked["e::3#3"]) == "20260725_113000"
+    assert picked["e::3#3"].stamp == "20260725_113000"
     assert picked["e::3#3"].metrics["SR"] == 0
     assert stats.timed_out == 1
 
@@ -105,10 +79,10 @@ def test_a_reclaimed_retry_supersedes_its_earlier_failure(
     """Run BOTH orderings: the retry wins either way, which proves
     supersession comes from the status and not from the ordering. That
     is what let first-by-start replace last-row-wins without losing it."""
-    crash = _ledger("e::4#4", crash_stamp, status="infra", error="killed_midrun")
-    root = _run(tmp_path, crash, _ledger("e::4#4", good_stamp, 1))
+    crash = ledger_row("e::4#4", crash_stamp, status="infra", error="killed_midrun")
+    root = write_ledger(tmp_path / "run", crash, ledger_row("e::4#4", good_stamp, 1))
     picked, stats = rows.load_attempts(root)
-    assert _picked_stamp(picked["e::4#4"]) == good_stamp
+    assert picked["e::4#4"].stamp == good_stamp
     assert picked["e::4#4"].metrics["SR"] == 1
     assert stats.infra == 1
 
@@ -117,12 +91,37 @@ def test_an_infra_abort_never_represents_its_episode(tmp_path):
     """A vLLM death is not a fair run. It is audit-counted, but it must
     not occupy the episode's slot even as a last resort -- otherwise an
     infra casualty lands in the coverage denominator as a false zero."""
-    root = _run(tmp_path, _ledger("e::5#5", "20260725_110000",
-                                  status="infra", error="vllm_down_midrun"))
+    root = write_ledger(tmp_path / "run", ledger_row(
+        "e::5#5", "20260725_110000", status="infra", error="vllm_down_midrun"))
     picked, stats = rows.load_attempts(root)
     assert "e::5#5" not in picked
     assert stats.infra == 1
     assert stats.no_metrics == 0
+
+
+def _ended(eid: str, ended_by: str, status: str = "ok") -> dict:
+    return ledger_row(eid, "20260827_100000", status=status,
+                      metrics={"SR": 0, "mission": {"ended_by": ended_by}})
+
+
+def test_one_rule_reads_the_infra_stamp_or_the_serve_ending():
+    """The bench producer stamps ``infra``; a flight row carries the ending
+    itself with ``ok``. One predicate reads both."""
+    assert rows.is_infra_abort(_ended("c::1#0", "transient_failures", "infra"))
+    assert rows.is_infra_abort(_ended("c::2#0", "transient_failures"))
+    assert not rows.is_infra_abort(ledger_row("c::3#0", "20260827_100000", 1))
+    assert rows.is_infra_abort({"episode_id": "c::4#0", "status": "infra"})
+
+
+def test_the_algorithm_s_own_budget_still_scores(tmp_path):
+    """turn_cap, compaction_infeasible and oversize_rejection are the agent
+    spending what it was given. Excluding those would launder real misses."""
+    root = write_ledger(tmp_path / "run", *(
+        _ended(f"c::{i}#0", ended_by)
+        for i, ended_by in enumerate(("turn_cap", "compaction_infeasible", "oversize_rejection"))))
+    picked, stats = rows.load_attempts(root)
+    assert len(picked) == 3, "an algorithm miss was excluded from SR"
+    assert stats.infra == 0
 
 
 # --------------------------------------------------------------------------
@@ -133,13 +132,13 @@ def test_an_infra_abort_never_represents_its_episode(tmp_path):
 def test_an_episode_with_no_complete_attempt_keeps_its_last_scored_row(tmp_path):
     """Ordered by START like everything else, so the fallback cannot
     reintroduce the file ordering this change removed."""
-    root = _run(
-        tmp_path,
-        _ledger("e::6#6", "20260725_115000", 1, status="timed_out"),
-        _ledger("e::6#6", "20260725_114500", 0, status="timed_out"),
+    root = write_ledger(
+        tmp_path / "run",
+        ledger_row("e::6#6", "20260725_115000", 1, status="timed_out"),
+        ledger_row("e::6#6", "20260725_114500", 0, status="timed_out"),
     )
     picked, stats = rows.load_attempts(root)
-    assert _picked_stamp(picked["e::6#6"]) == "20260725_115000"
+    assert picked["e::6#6"].stamp == "20260725_115000"
     assert not picked["e::6#6"].complete
     assert stats.timed_out == 2
 
@@ -148,7 +147,7 @@ def test_a_no_commit_miss_keeps_its_coverage_slot(tmp_path):
     """An ``ok`` row with no metrics is a real miss, not a crash. It never
     scores -- but dropping it would quietly shrink the denominator. This
     is the shape of all fourteen rows in citynav_val_seen_2026-07-23_16-56-19."""
-    root = _run(tmp_path, _ledger("e::7#7", "20260725_114000", elapsed_s=3.0))
+    root = write_ledger(tmp_path / "run", ledger_row("e::7#7", "20260725_114000", elapsed_s=3.0))
     picked, stats = rows.load_attempts(root)
     assert "e::7#7" in picked
     assert picked["e::7#7"].metrics == {}
@@ -161,9 +160,9 @@ def test_a_crash_row_with_no_workdir_is_counted_and_never_wins(tmp_path):
     naked = {"episode_id": "e::8#8", "worker_id": "w0", "status": "infra",
              "error": "RuntimeError: warm runner never came up"}
     assert rows.attempt_stamp(naked) == ""
-    root = _run(tmp_path, naked, _ledger("e::8#8", "20260725_120000", 1))
+    root = write_ledger(tmp_path / "run", naked, ledger_row("e::8#8", "20260725_120000", 1))
     picked, stats = rows.load_attempts(root)
-    assert _picked_stamp(picked["e::8#8"]) == "20260725_120000"
+    assert picked["e::8#8"].stamp == "20260725_120000"
     assert stats.rows == 2 and stats.infra == 1 and stats.no_metrics == 0
 
 
@@ -212,7 +211,7 @@ def test_a_truncated_last_line_does_not_break_the_read(tmp_path):
     root = tmp_path / "live"
     root.mkdir()
     (root / rows.EPISODES_JSONL).write_text(
-        json.dumps(_ledger("e::10#10", "20260725_110000", 1)) + "\n"
+        json.dumps(ledger_row("e::10#10", "20260725_110000", 1)) + "\n"
         + '{"episode_id": "e::11#11", "status": "o'
     )
     picked, stats = rows.load_attempts(root)
@@ -266,13 +265,13 @@ def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_pa
     denominator; summary.txt counts it, so every reader must."""
     from benchmarks.citynav.analysis import ab_report, arm_table, run_report
 
-    root = _run(
-        tmp_path,
-        _ledger("e1", "20260101_000001", 1),
-        _ledger("e2", "20260101_000002", 0),
-        _ledger("e3", "20260101_000003", status="timed_out"),
+    root = write_ledger(
+        tmp_path / "run",
+        ledger_row("e1", "20260101_000001", 1),
+        ledger_row("e2", "20260101_000002", 0),
+        ledger_row("e3", "20260101_000003", status="timed_out"),
         {"episode_id": "e4", "status": "infra", "error": "serve_down"},
-        _ledger("e4", "20260101_000005", 0),
+        ledger_row("e4", "20260101_000005", 0),
     )
     scored, _ = load_run(root)
     assert sorted(scored) == ["e1", "e2", "e3", "e4"]
@@ -285,11 +284,10 @@ def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_pa
 
 def _partial_run(tmp_path: Path, episodes_n: int) -> Path:
     """Three selected episodes: one scored, one only ever infra, one never landed."""
-    root = _run(
-        tmp_path,
-        _ledger("e1", "20260101_000001", 1),
-        _ledger("e2", "20260101_000002", status="infra", error="serve_down"),
-        name=f"selected_{episodes_n}",
+    root = write_ledger(
+        tmp_path / f"selected_{episodes_n}",
+        ledger_row("e1", "20260101_000001", 1),
+        ledger_row("e2", "20260101_000002", status="infra", error="serve_down"),
     )
     (root / "run_manifest.json").write_text(json.dumps({"selection": {"episodes_n": episodes_n}}))
     return root

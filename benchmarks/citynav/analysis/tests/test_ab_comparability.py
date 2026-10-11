@@ -163,3 +163,24 @@ def test_an_unstamped_bake_does_not_become_fatal():
     # but an unrecorded tiles PATH is still fatal, on either side
     c = {"split": "calcity", "search_env_flags": {}}
     assert comparability_issues(a, c)[0]
+
+
+def test_the_served_alias_is_not_the_served_build():
+    """`inkling-small` named two different quantizations on the same cluster
+    in the same week — `thinkingmachines/Inkling-Small-NVFP4` and
+    `RedHatAI/Inkling-Small-FP8-dynamic`. On the ALIAS alone the pair reads
+    as same-model, and the ledger's null verb quoted the resulting -8.7 pts
+    at McNemar p=0.009 as what IDENTICAL code does. The build is an arm."""
+    gt = {"split": "train_seen",
+          "search_env_flags": {"SEARCH_CITYNAV_TILES": "/x/tiles/citynav_2m_osmv3"}}
+    a = {**gt, "served_model": "inkling-small",
+         "served_build": "thinkingmachines/Inkling-Small-NVFP4"}
+    b = {**gt, "served_model": "inkling-small",
+         "served_build": "RedHatAI/Inkling-Small-FP8-dynamic"}
+    fatal, arm = comparability_issues(a, b)
+    assert not fatal
+    assert any("BUILD" in m for m in arm), arm
+    # Absence-tolerant, or every column stored before the key existed would
+    # stop pairing against every column stored after it.
+    fatal2, arm2 = comparability_issues(a, {**gt, "served_model": "inkling-small"})
+    assert not fatal2 and not arm2

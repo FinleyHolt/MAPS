@@ -2,29 +2,24 @@
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
 import pytest
 
 from benchmarks.citynav.analysis.ab_report import main, wilson_ci
+from benchmarks.citynav.analysis.tests.ledger import write_ledger
 
 
 def _write_run(root: Path, sha: str, srs: dict[str, int]) -> None:
-    root.mkdir(parents=True)
     prov = {
         "git_commit": sha,
         "split": "val_seen",
         "search_env_flags": {"SEARCH_CITYNAV_TILES": "tiles/citynav_2m_osmv2"},
     }
-    rows = [
+    write_ledger(root, *(
         {"episode_id": eid, "status": "ok", "metrics": {"SR": sr}, "provenance": prov}
-        for eid, sr in srs.items()
-    ]
-    (root / "episodes.jsonl").write_text(
-        "".join(json.dumps(r) + "\n" for r in rows)
-    )
+        for eid, sr in srs.items()))
 
 
 def test_cli_completes_and_warns_on_waived_arm_mismatch(tmp_path, monkeypatch, capsys):
@@ -63,26 +58,3 @@ def test_wilson_ci_bounds_and_midpoint():
     assert (lo, hi) == (pytest.approx(0.4038, abs=1e-3),
                         pytest.approx(0.5962, abs=1e-3))
     assert wilson_ci(0, 0) == (pytest.approx(float("nan"), nan_ok=True),) * 2
-
-
-def test_the_served_alias_is_not_the_served_build():
-    """`inkling-small` named two different quantizations on the same cluster
-    in the same week — `thinkingmachines/Inkling-Small-NVFP4` and
-    `RedHatAI/Inkling-Small-FP8-dynamic`. On the ALIAS alone the pair reads
-    as same-model, and the ledger's null verb quoted the resulting -8.7 pts
-    at McNemar p=0.009 as what IDENTICAL code does. The build is an arm."""
-    from benchmarks.citynav.analysis.ab_report import comparability_issues
-
-    gt = {"split": "train_seen",
-          "search_env_flags": {"SEARCH_CITYNAV_TILES": "/x/tiles/citynav_2m_osmv3"}}
-    a = {**gt, "served_model": "inkling-small",
-         "served_build": "thinkingmachines/Inkling-Small-NVFP4"}
-    b = {**gt, "served_model": "inkling-small",
-         "served_build": "RedHatAI/Inkling-Small-FP8-dynamic"}
-    fatal, arm = comparability_issues(a, b)
-    assert not fatal
-    assert any("BUILD" in m for m in arm), arm
-    # Absence-tolerant, or every column stored before the key existed would
-    # stop pairing against every column stored after it.
-    fatal2, arm2 = comparability_issues(a, {**gt, "served_model": "inkling-small"})
-    assert not fatal2 and not arm2
