@@ -78,6 +78,7 @@ these places, the served-text changes among them:
 | A `view` watchlist change and a placed boost's concepts reach the segmenter in flight as on the bench. | The flown station had no watchlist channel; those requests never reached SAM. |
 | A cancelled reasoner call is shut down on the wire, and its answer is never used. | The flown station left a cancelled call's connection open, and a late answer to it could still be used. |
 | A python set or list of rows in a place slot is the union of those rows, and an unnamed union member keeps its own id; a refusal quotes a user value cut to 120 characters. | The flown executor failed those programs ("program failed: 'fid'", "cannot pickle") and quoted values whole. |
+| A `look` caption's no-data warning tests the subject's own row of the north-up validity raster. | The flown caption tested the row mirrored about the crop's centre, so a subject near a data edge could be warned about wrongly or not at all. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
