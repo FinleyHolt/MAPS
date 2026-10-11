@@ -8,7 +8,7 @@ mutates and the ``act`` tool coordinates with:
     subsequently-flown stop. Initial value = the committed
     ``sam_concepts`` union; ``view{watchlist:{add,remove}}`` mutates it
     mid-flight and the mutation is pushed to the live concept provider via
-    ``push`` (``ReasonerUnionConceptProvider.apply_watchlist`` — the
+    ``push`` (``ReasonerUnionConceptProvider.set_concepts`` — the
     freeze-exempt agent-owned channel), so the per-stop ``/segment`` calls
     segment the LIVE watchlist.
   * BOOSTS — targeted vocabulary from ``view{boost:{concepts,where}}``.

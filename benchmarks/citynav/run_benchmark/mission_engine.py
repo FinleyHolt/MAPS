@@ -493,8 +493,8 @@ def fly_one(
         "cue": episode.description,
     }
     cp = getattr(perception, "concept_provider", None)
-    if cp is not None and hasattr(cp, "concepts_for") and not withheld("look_for"):
-        report["watchlist"] = list(cp.concepts_for(None))
+    if cp is not None and hasattr(cp, "concepts") and not withheld("look_for"):
+        report["watchlist"] = list(cp.concepts)
     _ph.at("report")
     # One line per stop, to the runner log. A pass flies its stops back to
     # back with no reasoner between them, so this is the only place the cost

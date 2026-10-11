@@ -736,7 +736,7 @@ class SamDetectClient:
         canonical caller, where the drone teleports between cursors and
         cross-frame tracking would just produce noise.
         """
-        del pose_xy  # obs.ortho_view_corners_xy drives the projection
+        del pose_xy, instruction_hint  # obs.ortho_view_corners_xy drives the projection
         if obs.rgb is None:
             return []
         if obs.ortho_view_corners_xy is None:
@@ -744,10 +744,8 @@ class SamDetectClient:
                 "SamDetectClient.detect requires obs.ortho_view_corners_xy "
                 "(the view square a mask projects through)"
             )
-        concepts_list = self.concept_provider.concepts_for(obs, instruction_hint)
-        if not concepts_list:
-            return []
-        return self._segment(obs, list(concepts_list))
+        concepts = list(self.concept_provider.concepts)
+        return self._segment(obs, concepts) if concepts else []
 
     def _segment(
         self, obs: Observation, concepts: list[str]

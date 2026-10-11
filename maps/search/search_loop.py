@@ -99,12 +99,9 @@ class SearchLoop:
         self._tile_name = tile_name
         self._compiler = compiler
         self._sam_concept_setter = sam_concept_setter
-        # C4 three-verb surface: the FREEZE-EXEMPT agent-owned watchlist
-        # channel (``ReasonerUnionConceptProvider.apply_watchlist``). The
-        # PerceptionDirector pushes the live watchlist (+ active boost
-        # concepts) through it so mid-flight ``view{watchlist}`` mutations
-        # actually reach the per-stop /segment calls (``set_concepts`` is
-        # frozen after preflight and would silently no-op them).
+        # The agent-owned watchlist channel: the PerceptionDirector pushes the
+        # live watchlist (+ active boost concepts) through it so mid-flight
+        # ``view{watchlist}`` mutations reach the per-stop /segment calls.
         self._sam_watchlist_setter = sam_watchlist_setter
         # Per-block upstream ground datum: the mission's observation span is
         # measured off it.

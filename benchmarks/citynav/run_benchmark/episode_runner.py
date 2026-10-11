@@ -230,7 +230,7 @@ def run_episode(
             # The agent-owned watchlist channel: how a view{watchlist}
             # mutation / boost activation reaches the per-flight /segment
             # calls.
-            sam_watchlist_setter = cp.apply_watchlist
+            sam_watchlist_setter = cp.set_concepts
 
     search_loop: SearchLoop | None = None
     if compiler is not None:
