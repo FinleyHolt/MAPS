@@ -1276,176 +1276,89 @@ def _budget_columns(rows_r, cols, op_cols) -> tuple[list, int]:
     return [c for c in cols if c in kept], len(cols) - len(kept)
 
 
+_NO_ORDER_HINT = (
+    "no ordering exists on this result, so it renders census + len and no "
+    "fids: ordering it by an attached column renders the ordered rows of "
+    "THIS handle, and a name or color match returns matched rows directly.")
+
+
 def compact_results(results: dict, *, widen_form: str = "",
                     answer_ref: str = "") -> dict:
-    """Project each op result into its model-facing envelope. Applied
-    IDENTICALLY by the live tool return and the offline CLI trace so the
-    student reads the shape it was trained on. The live envelopes:
+    """Each op result as its model-facing envelope.
 
-      - grid  : a non-empty ORDERED list (score_by output; a query-matched
-                find; a filter over an ordered input) -> ``{len, fids, rows}``
-                (rows is the union-header markdown grid STRING — its header
-                row carries every column name; ``+cut_stats`` on a numeric
-                filter).
-                Past ``_BROAD_DUMP_SOFT_ROWS`` the ONE broad-result law
-                applies: ``{len, census, named, fids, rows, hint}`` — census
-                over the WHOLE set + the first ``_BROAD_HEAD_ROWS`` rows (and
-                fids) in the result's order; the hint states exactly how many
-                rows are held live in the rN and how to slice/chain it. The
-                rendered columns fit ``_RENDER_CHAR_BUDGET`` (program-named
-                columns first, then identity; the elided tail is counted in
-                the hint).
-      - census: a non-empty UNORDERED list (query-less browse; a filter over
-                one) -> ``{len, census, named, hint}`` — NO row head: a
-                fid-lexicographic head reads as a candidate list. Rows render
-                once an ordering exists (chain score_by / a query find); the
-                full set stays live in the rN.
-      - empty : an empty list -> ``{len:0, items:[], hint}`` (``+cut_stats`` on
-                a numeric cut). The hint is the op's TRUTHFUL condition (a
-                query miss states its threshold; a filter states its
-                predicate) — never a claim about the world. This is the ONLY
-                envelope still carrying ``items``.
-      - compare: a ``compare`` result -> the same grid envelope +
-                ``refs``/``columns`` header: ``{refs, len, columns, fids,
-                rows, hint}`` under the SAME broad-result law (census + head
-                past the knee).
-
-    Served ONCE per response (never twice in one reply):
-      - a census identical to one already served: later envelopes carry
-        ``census_ref`` naming the ref that holds it.
-
-    Rows are projected through :func:`_model_facing_row` (retrieval-internal
-    fields dropped). Response SHAPE only: the raw rows all stay live in
-    program state (rN chaining), and the commit path reads the RAW results —
-    the head cap is never a candidate cap. The first rows-carrying envelope
-    of a response carries ``legend`` — the one-line column-semantics key.
-
-    ``answer_ref`` names the op whose result IS the answer, and the response
-    is then that ONE envelope: a sentence asked one question, so it gets one
-    table. The other ops' hints ride the answer, each attributed to the ref
-    that made it — the facts survive, the re-rendered working does not.
-    Response shape as ever: every rN stays chainable and no row is dropped
-    from any of them.
-
-    The legend rides every response, once, under its first rows-carrying
-    envelope.
+    An ordered list renders ``{len, fids, rows}`` (rows a markdown grid
+    under the render budget; past ``_BROAD_DUMP_SOFT_ROWS`` only the first
+    ``_BROAD_HEAD_ROWS``); an unordered one ``{len, census, named}``; an
+    empty one ``{len: 0, items: [], hint}``; a compare adds its ``refs`` and
+    ``columns``. The legend rides the response's first grid, and a census
+    served once is referenced after. With ``answer_ref`` the response is
+    that one envelope, carrying the other ops' hints. Every rN keeps its
+    full rows.
     """
-    _legend_out = [False]
+    legend = [True]
 
-    def _table(head, rows, op_cols):
-        """The grid of ``rows`` under the render budget into
-        ``head["rows"]``, and the legend on the response's first table (it
-        reads a TABLE, and it is served once per response). Returns the
-        elided-columns note, or None."""
+    def table(head, rows, op_cols):
         cols, n_cut = _budget_columns(rows, _grid_columns(rows), op_cols)
         head["rows"] = _render_grid_rows(rows, cols)
-        if not _legend_out[0]:
+        if legend:
             head["legend"] = _TABLE_LEGEND
-            _legend_out[0] = True
+            legend.clear()
         return (f"{n_cut} column(s) elided from this render to fit; "
                 "the rN keeps them all") if n_cut else None
 
-    def _c(v):
+    def env(v):
+        notes = getattr(v, "notes", None) or []
+        cut = v.cut_stats if isinstance(v, _FilterCutRows) else None
+        capped = v[:_BROAD_HEAD_ROWS] if len(v) > _BROAD_DUMP_SOFT_ROWS else v
         if isinstance(v, _CompareRows):
-            # compare renders the SAME union-header grid every list result
-            # gets, prefixed by the refs header; the joined table is the
-            # point. ``fids`` keeps the result fid-bearing for the
-            # terminal walk (rank order preserved) without duplicating the
-            # rows.
-            head: dict = {"refs": list(getattr(v, "refs", []) or []), "len": len(v)}
-            # The header lists every attached column key verbatim, so the
-            # model reads real names instead of guessing them.
-            _cols_echo = list(getattr(v, "columns", []) or [])
-            if _cols_echo:
-                head["columns"] = _cols_echo
-            hints: list[str] = []
-            if len(v) == 0:
-                hints.append(
-                    "compare received NO items -- the items ref resolved to "
-                    "an empty list."
-                )
-            else:
-                _rrows = (list(v)[:_BROAD_HEAD_ROWS]
-                          if len(v) > _BROAD_DUMP_SOFT_ROWS else v)
-                # No `fids` array beside a grid: its first column carries
-                # them. A census-only head carries it below.
-                _elided = _table(head, _rrows, getattr(v, "columns", None))
-                if _elided:
-                    hints.append(_elided)
-            hints.extend(getattr(v, "notes", []) or [])
-            if hints:
-                head["hint"] = join_hints(*hints)
+            head = {"refs": list(v.refs), "len": len(v)}
+            if v.columns:
+                head["columns"] = list(v.columns)
+            hint = join_hints(
+                table(head, capped, v.columns) if v else
+                "compare received NO items -- the items ref resolved to an "
+                "empty list.",
+                *notes)
+        elif not v:
+            head = {"len": 0, "items": []}
+            if cut:
+                head["cut_stats"] = cut
+            head["hint"] = join_hints(
+                getattr(v, "empty_condition", None)
+                or "this op returned NO items: nothing met its condition.",
+                *notes,
+                f"this retrieval searched {v.searched} and matched nothing."
+                if isinstance(v, _EmptyFindMiss) else "")
             return head
-        if isinstance(v, list):
-            if len(v) == 0:
-                # An empty list is a valid result. State the op's truthful
-                # condition when one was recorded (a query miss names its
-                # threshold), never a claim about the world; a numeric cut's
-                # ``cut_stats`` carries the threshold facts.
-                _empty_hint = (getattr(v, "empty_condition", None)
-                               or "this op returned NO items: nothing met "
-                                  "its condition.")
-                _empty_hint = join_hints(
-                    _empty_hint, *(getattr(v, "notes", None) or []))
-                if isinstance(v, _EmptyFindMiss):
-                    # A retrieval that matched nothing over rows that include
-                    # the prior map features is a distinct mechanical fact
-                    # (the named ref never grounded) — state WHAT was
-                    # searched, truthfully scoped by provenance.
-                    _empty_hint = join_hints(
-                        _empty_hint,
-                        f"this retrieval searched {v.searched} and "
-                        "matched nothing.")
-                _cut = getattr(v, "cut_stats", None) \
-                    if isinstance(v, _FilterCutRows) else None
-                if _cut:
-                    return {"len": 0, "items": [], "cut_stats": _cut,
-                            "hint": _empty_hint}
-                return {"len": 0, "items": [], "hint": _empty_hint}
-            # The union-header grid is the one serialization for a non-empty
-            # list, under the broad-result law (census + head past
-            # _BROAD_DUMP_SOFT_ROWS; the full-set fid array is never served;
-            # the commit path reads the RAW results).
-            #
-            # Window-covering rows are omitted from the rendered head of a
-            # score_by result and named in one note: their mask contains the
-            # whole window, so they hold distance 0 to every ref and would
-            # tie rank 0 of every closest-first sort. The rN keeps them.
-            _ordered = bool(getattr(v, "cue_sorted", False)
-                            or getattr(v, "ordered", False))
-            if not _ordered:
-                # No real ordering: census + len, no row head (a
-                # fid-lexicographic head reads as a candidate list).
-                head = {"len": len(v)}
-                census, named = _surface_census(v)
-                head.update({"census": census, "named": named})
-                _cut = getattr(v, "cut_stats", None) \
-                    if isinstance(v, _FilterCutRows) else None
-                if _cut:
-                    head["cut_stats"] = _cut
-                # The route to rows, stated as the fact in neither channel's
-                # spelling (it renders for the sentence surface too).
-                head["hint"] = join_hints(
-                    *(getattr(v, "notes", None) or []),
-                    "no ordering exists on this result, so it renders "
-                    "census + len and no fids: ordering it by an attached "
-                    "column renders the ordered rows of THIS handle, and a "
-                    "name or color match returns matched rows directly.")
-                return head
-            _body = list(v)
-            _cover_note = None
+        elif not (getattr(v, "cue_sorted", False)
+                  or getattr(v, "ordered", False)):
+            census, named = _surface_census(v)
+            head = {"len": len(v), "census": census, "named": named}
+            if cut:
+                head["cut_stats"] = cut
+            head["hint"] = join_hints(*notes, _NO_ORDER_HINT)
+            return head
+        elif getattr(v, "name_set", False):
+            # A name's ways tie, so a head would be an arbitrary prefix
+            # served as a ranking: the shape renders instead.
+            head = {"len": len(v), "name": str(v[0].get("name") or "")}
+            set_m = sum(float(r.get("axis_length_m") or 0.0) for r in v)
+            if set_m:
+                head["length_m"] = round(set_m)
+            hint = join_hints(*notes)
+        else:
+            body, cover = list(v), None
             if isinstance(v, _CueSortedRows):
-                _covering = [it for it in v if isinstance(it, dict)
-                             and it.get("covers_window")]
-                if _covering:
-                    _body = [it for it in v
-                             if not (isinstance(it, dict)
-                                     and it.get("covers_window"))]
-                    _cfids = [str(it.get("fid") or "?") for it in _covering]
-                    _cover_note = (
-                        f"{len(_covering)} window-covering row(s) "
-                        f"({', '.join(_cfids[:6])}"
-                        f"{', ..' if len(_cfids) > 6 else ''}) hold "
+                # A window-covering row is 0 m from every on-surface ref and
+                # would tie rank 0 of every nearest-first sort.
+                covering = [r for r in v if r.get("covers_window")]
+                if covering:
+                    body = [r for r in v if not r.get("covers_window")]
+                    cf = [str(r.get("fid") or "?") for r in covering]
+                    cover = (
+                        f"{len(covering)} window-covering row(s) "
+                        f"({', '.join(cf[:6])}"
+                        f"{', ..' if len(cf) > 6 else ''}) hold "
                         f"'distance to' = 0 to "
                         f"every ON-SURFACE ref by containment (their mask "
                         f"contains this whole window; an off-window [x,y] "
@@ -1453,93 +1366,49 @@ def compact_results(results: dict, *, widen_form: str = "",
                         f"this rendered head; they stay live in this rN "
                         f"(full set intact), covers_window marks them "
                         f"wherever they render.")
-            # A name's set renders as its shape: every row ties, so a head
-            # would be an arbitrary prefix served as a ranking. The rN keeps
-            # every row.
-            if getattr(v, "name_set", False):
-                capped = []
-            else:
-                capped = list(_body[:_BROAD_HEAD_ROWS]
-                              if len(v) > _BROAD_DUMP_SOFT_ROWS else _body)
-            # A truncated head says so. Whether the order means anything is
-            # stated by the producing op (find's best-first or tie note),
-            # never re-derived here.
-            _head_note = None
-            if getattr(v, "name_set", False):
-                pass
-            elif len(capped) < len(_body):
-                # Channel-specific: the caller passes the widening form its
-                # channel can say (``widen_form``); none gets the fact alone.
-                _head_note = (
+            capped = (body[:_BROAD_HEAD_ROWS] if len(v) > _BROAD_DUMP_SOFT_ROWS
+                      else body)
+            more = None
+            if len(capped) < len(body):
+                more = join_hints(
                     f"showing the first {len(capped)} of {len(v)} row(s); "
                     f"the rest stay live in this rN -- later ops on it "
                     f"read the FULL set"
                     + (f", and {widen_form} serves the next "
-                       f"{_BROAD_HEAD_ROWS}" if widen_form else ""))
-                _head_note = join_hints(_head_note,
-                                        _cut_stands_at(v, _body, capped))
-            _cut = getattr(v, "cut_stats", None) \
-                if isinstance(v, _FilterCutRows) else None
-            head = {"len": len(v)}
-            if getattr(v, "name_set", False):
-                # The shape as data: the name and the ways' total length.
-                head["name"] = str(_body[0].get("name") or "")
-                _set_m = sum(float(r.get("axis_length_m") or 0.0)
-                             for r in _body)
-                if _set_m:
-                    head["length_m"] = round(_set_m)
-            if not getattr(v, "name_set", False):
-                head["fids"] = [str(it["fid"]) for it in capped
-                                if isinstance(it, dict) and it.get("fid")]
-            if not getattr(v, "name_set", False):
-                _head_note = join_hints(_head_note, _table(
-                    head, capped, getattr(v, "op_cols", None)))
-            head["hint"] = join_hints(head.get("hint"), _head_note,
-                                      _cover_note)
-            if not head["hint"]:
-                head.pop("hint")
-            if _cut:
-                # The one-row deterministic cut line on a non-empty numeric
-                # cut. Info only.
-                head["cut_stats"] = _cut
-            head["hint"] = join_hints(
-                head.get("hint"), *(getattr(v, "notes", None) or []))
-            if not head["hint"]:
-                head.pop("hint")
-            return head
+                       f"{_BROAD_HEAD_ROWS}" if widen_form else ""),
+                    _cut_stands_at(v, body, capped))
+            head = {"len": len(v),
+                    "fids": [str(r["fid"]) for r in capped if r.get("fid")]}
+            hint = join_hints(more, table(head, capped,
+                                          getattr(v, "op_cols", None)),
+                              cover, *notes)
+        if hint:
+            head["hint"] = hint
+        if cut:
+            head["cut_stats"] = cut
+        return head
 
-    # Serve any identical census once per response. The answer ref goes
-    # first, so it keeps its own census rather than a pointer.
     order = ([answer_ref] + [k for k in results if k != answer_ref]
              if answer_ref in results else list(results))
-    out: dict = {}
-    _census_seen: dict[str, str] = {}
+    out, seen = {}, {}
     for k in order:
-        env = _c(results[k])
-        if isinstance(env, dict) and "census" in env:
-            _sig = repr(sorted(env["census"].items()))
-            _first = _census_seen.get(_sig)
-            if _first is not None:
-                env.pop("census", None)
-                env.pop("named", None)
-                env["census_ref"] = (
-                    f"census identical to {_first}'s (served once above)")
+        e = out[k] = env(results[k])
+        if "census" in e:
+            sig = repr(sorted(e["census"].items()))
+            if sig in seen:
+                del e["census"], e["named"]
+                e["census_ref"] = (
+                    f"census identical to {seen[sig]}'s (served once above)")
             else:
-                _census_seen[_sig] = str(k)
-        out[k] = env
+                seen[sig] = str(k)
     if answer_ref not in out:
         return out
-    # One sentence, one table: the answer ref's envelope alone. Each other
-    # op's hint rides the answer, attributed to its ref; every rN stays
-    # chainable and the commit path reads the RAW results.
     answer = out[answer_ref]
-    if isinstance(answer, dict):
-        answer["hint"] = join_hints(
-            answer.get("hint"),
-            *(f"{k}: {e['hint']}" for k, e in out.items()
-              if k != answer_ref and isinstance(e, dict) and e.get("hint")))
-        if not answer["hint"]:
-            answer.pop("hint")
+    answer["hint"] = join_hints(answer.get("hint"), *(
+        f"{k}: {e['hint']}" for k, e in out.items()
+        if k != answer_ref and e.get("hint")))
+    if not answer["hint"]:
+        del answer["hint"]
     return {answer_ref: answer}
 
 
