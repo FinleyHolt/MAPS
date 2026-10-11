@@ -71,8 +71,6 @@ def test_discover_single_endpoint(monkeypatch):
     assert s.output_reserve == 40000
     assert s.input_budget == 262144 - 40000 - 1024
     assert s.max_output_tokens == 40000
-    # vLLM states its own window: a dedicated engine with a cold start.
-    assert s.server_declared_window is True
 
 
 def test_small_window_derivation(monkeypatch):
@@ -245,7 +243,6 @@ def test_offline_with_pin_skips_probes(monkeypatch):
     assert s.model_id == "gemma4-e4b"
     assert s.max_model_len == 131072
     assert s.sam_url == "http://sam:8772"  # frozen unprobed offline
-    assert s.server_declared_window is False  # nothing probed, nothing declared
 
 
 def test_override_cross_checked_against_live_ids(monkeypatch):
@@ -269,16 +266,6 @@ def test_override_selects_among_many_models(monkeypatch):
     s = discover(_URL_A, override=EndpointOverride("gemma4-26b-a4b-nvfp4", 131072))
     assert s.model_id == "gemma4-26b-a4b-nvfp4"
     assert s.max_model_len == 131072
-    # No max_model_len on any entry: a hosted endpoint, already warm.
-    assert s.server_declared_window is False
-
-
-def test_override_on_a_window_declaring_endpoint_stays_self_hosted(monkeypatch):
-    # A pin against a real vLLM (which does report max_model_len) must not
-    # be mistaken for a hosted endpoint — it still has a cold start.
-    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(max_model_len=131072)})
-    s = discover(_URL_A, override=EndpointOverride("gemma4-e4b", 131072))
-    assert s.server_declared_window is True
 
 
 def test_parse_override():

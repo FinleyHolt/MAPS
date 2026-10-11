@@ -201,4 +201,3 @@ def test_the_model_list_is_read_where_the_endpoint_keeps_it(monkeypatch) -> None
     monkeypatch.setenv("SEARCH_REASONER_MODELS_URL", listing)
     spec = E.discover(base, override=E.EndpointOverride(GPT, 262144))
     assert (spec.base_url, spec.model_id, spec.max_model_len, seen) == (base, GPT, 262144, [listing])
-    assert spec.server_declared_window is False

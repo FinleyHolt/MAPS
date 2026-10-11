@@ -127,7 +127,6 @@ def _endpoint_section() -> dict:
         "base_url": s.base_url,
         "model_id": s.model_id,
         "max_model_len": s.max_model_len,
-        "server_declared_window": s.server_declared_window,
         "tokenizer": s.tokenizer_name,
         "output_reserve": s.output_reserve,
         "input_budget": s.input_budget,

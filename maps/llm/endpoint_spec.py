@@ -134,14 +134,6 @@ class EndpointSpec:
     tokenizer_name: str
     output_reserve: int
     sam_url: str = ""
-    # Whether the endpoint reported its own ``max_model_len`` on
-    # ``/v1/models``. That is the tell for a dedicated engine we
-    # launched: a self-hosted vLLM declares its window, while a hosted
-    # multi-tenant endpoint does not (which is the whole reason
-    # ``SEARCH_ENDPOINT_SPEC_OVERRIDE`` exists). Callers read it to
-    # decide whether a first call pays engine cold-start cost worth
-    # pre-paying. False on an offline run: nothing was probed.
-    server_declared_window: bool = True
 
     @property
     def input_budget(self) -> int:
@@ -238,13 +230,8 @@ def _probe_models(base_url: str) -> list[dict]:
 
 def _facts_from_endpoint(
     base_url: str, override: EndpointOverride | None
-) -> tuple[str, int, bool]:
-    """One endpoint's (model_id, max_model_len, server_declared_window).
-
-    The third element records whether the server stated its own window,
-    which distinguishes a dedicated engine from a hosted endpoint — see
-    :class:`EndpointSpec`.
-    """
+) -> tuple[str, int]:
+    """One endpoint's ``(model_id, max_model_len)``."""
     models = _probe_models(base_url)
     ids = [str(m.get("id") or "") for m in models]
     if override is not None:
@@ -263,7 +250,7 @@ def _facts_from_endpoint(
                 f"{override.max_model_len} but {base_url} reports "
                 f"{served_len} for {override.model_id!r}"
             )
-        return override.model_id, override.max_model_len, bool(served_len)
+        return override.model_id, override.max_model_len
     if len(models) != 1:
         raise EndpointDiscoveryError(
             f"{models_url(base_url)} serves {len(models)} models ({ids}); "
@@ -284,7 +271,7 @@ def _facts_from_endpoint(
             f"non-vLLM endpoint, set SEARCH_ENDPOINT_SPEC_OVERRIDE="
             f"'<model_id>:<max_model_len>'"
         )
-    return model_id, int(max_model_len), True
+    return model_id, int(max_model_len)
 
 
 def _probe_sam_health(urls: str) -> None:
@@ -396,17 +383,13 @@ def discover(
                 "emulates via SEARCH_ENDPOINT_SPEC_OVERRIDE="
                 "'<model_id>:<max_model_len>'"
             )
-        # Nothing was probed, so nothing was declared.
         model_id, max_model_len = override.model_id, override.max_model_len
-        server_declared_window = False
     else:
         if not url:
             raise EndpointDiscoveryError(
                 "no reasoner endpoint to probe: SEARCH_REASONER_URL is empty"
             )
-        model_id, max_model_len, server_declared_window = _facts_from_endpoint(
-            url, override
-        )
+        model_id, max_model_len = _facts_from_endpoint(url, override)
         if sam_url:
             _probe_sam_health(sam_url)
 
@@ -432,7 +415,6 @@ def discover(
         tokenizer_name=tokenizer_name,
         output_reserve=output_reserve,
         sam_url=sam_url,
-        server_declared_window=server_declared_window,
     )
     # Checked off the SPEC, never off a second spelling of the arithmetic.
     # Recomputing the budget inline writes the property's formula twice, and
