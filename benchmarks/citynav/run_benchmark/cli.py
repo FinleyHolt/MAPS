@@ -72,15 +72,10 @@ def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
     refuses a root reused under another config. The fleet driver emits at
     the fleet root; its attempt children return before reaching here.
     """
-    from benchmarks.citynav.adapter import parse_episode
+    from benchmarks.citynav.adapter import episode_ids
     from benchmarks.citynav import run_manifest as _rm
 
-    episodes: list[str] = []
-    for i, raw in indexed_rows:
-        try:
-            episodes.append(parse_episode(raw, row_index=i).episode_id)
-        except (KeyError, ValueError, TypeError):
-            continue
+    episodes = episode_ids(indexed_rows)
     _rm.emit_or_verify(
         out_root,
         _rm.build_manifest(

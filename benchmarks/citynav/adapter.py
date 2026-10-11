@@ -206,6 +206,17 @@ def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
     )
 
 
+def episode_ids(indexed_rows: Iterable[tuple[int, dict]]) -> list[str]:
+    """The ids of the ``(row_index, row)`` pairs that parse, in order; a row that does not is skipped."""
+    ids: list[str] = []
+    for i, raw in indexed_rows:
+        try:
+            ids.append(parse_episode(raw, row_index=i).episode_id)
+        except (KeyError, ValueError, TypeError):
+            continue
+    return ids
+
+
 def find_row(rows: list[dict], episode_id: str) -> tuple[int, dict] | None:
     """``(index, row)`` of the split row ``episode_id`` names, else None:
     ``<map>::<ann>#<i>`` is row ``i`` when its bare id matches, a bare

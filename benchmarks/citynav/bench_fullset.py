@@ -151,19 +151,12 @@ _log_lock = threading.Lock()
 
 
 def _enumerate_split(split: str) -> list[str]:
-    from benchmarks.citynav.adapter import load_split, parse_episode
+    from benchmarks.citynav.adapter import episode_ids, load_split
     from benchmarks.citynav.paths import SPLIT_FILES, split_path
 
     if split not in SPLIT_FILES:
         raise SystemExit(f"unknown split {split!r}; known: {sorted(SPLIT_FILES)}")
-    rows = load_split(split_path(split))
-    out: list[str] = []
-    for i, raw in enumerate(rows):
-        try:
-            out.append(parse_episode(raw, row_index=i).episode_id)
-        except (KeyError, ValueError, TypeError):
-            continue
-    return out
+    return episode_ids(enumerate(load_split(split_path(split))))
 
 
 # The native thread pools an attempt child starts: one thread each for BLAS
