@@ -17,6 +17,8 @@ from pathlib import Path
 from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
 from benchmarks.citynav.run_benchmark.osm_prior import _build_frame_enrich
 from benchmarks.citynav.run_benchmark.tour_cursor import _write_tour_cursor
+from maps.llm.endpoint_spec import spec as endpoint_spec
+from maps.perception.geometry.sensor_spec import served_description
 from maps.perception.observation import (
     crop_observation,
     observation_extent_m,
@@ -47,6 +49,15 @@ MISSION_FLIGHT_BUDGET = 1000
 # exports, because it owns the episode start and the cap. Unset = no clock,
 # which is what the field station and a bare smoke get.
 MISSION_DEADLINE_ENV = "CITYNAV_EPISODE_DEADLINE_EPOCH"
+
+
+def _seed_base() -> int:
+    """``SEARCH_SEED_BASE`` if set, else a wall-clock nanosecond stamp, as a
+    32-bit seed."""
+    env_seed_base = os.environ.get("SEARCH_SEED_BASE")
+    if env_seed_base is not None:
+        return int(env_seed_base) & 0xFFFFFFFF
+    return time.time_ns() & 0xFFFFFFFF
 
 
 def _mission_deadline_epoch() -> float | None:
@@ -279,16 +290,20 @@ class MissionSession:
         )
 
     def run(self, instruction: str, **extra):
-        """The conversation's first turn: ``run_mission`` over this session
-        and the compiler's endpoint facts. Returns ``(reply, reasoner)``."""
-        c = self.h.compiler
+        """The conversation's first turn: ``run_mission`` over this session,
+        the installed endpoint and the rig's served description. Returns
+        ``(reply, reasoner)``."""
+        h = self.h
+        spec = endpoint_spec()
         return run_mission(
             instruction=instruction,
-            reasoner_url=c.reasoner_url,
-            endpoint_spec=c.endpoint_spec,
-            api_key=c.api_key,
-            seed=c._resolve_seed_base() & 0x7FFFFFFF,
-            sensor_description=c.sensor_description,
+            reasoner_url=spec.base_url,
+            endpoint_spec=spec,
+            # "EMPTY" is the no-auth sentinel a local vLLM accepts.
+            api_key=os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY"),
+            seed=_seed_base() & 0x7FFFFFFF,
+            sensor_description=(served_description(h.sensor, h.cfg.start_altitude_agl_m)
+                                if h.sensor is not None else ""),
             **self.run_kwargs,
             **extra,
         )

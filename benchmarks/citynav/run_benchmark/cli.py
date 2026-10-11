@@ -22,7 +22,6 @@ import os
 import signal
 import sys
 from benchmarks.citynav.run_benchmark.dispatch import (
-    build_compiler,
     _dispatch_one,
     set_run_context,
 )
@@ -210,11 +209,10 @@ def main(
 
     if args.attempt_root:
         ((orig_idx, row),) = indexed_rows
-        compiler = build_compiler(cfg)
         ep = open_episode_dir(args.attempt_root, episode_id=args.episode_id)
         print(ep.dir, flush=True)
         try:
-            _dispatch_one(row=row, orig_idx=orig_idx, idx=0, total=1, compiler=compiler,
+            _dispatch_one(row=row, orig_idx=orig_idx, idx=0, total=1,
                           objects_by_map=objects_by_map, cfg=cfg, recorder=ep.recorder,
                           episode_dir=ep.dir)
         finally:
@@ -241,10 +239,6 @@ def main(
         log.error("%s", exc)
         return 2
 
-    # The active sensor's description is patched into the reasoner's system
-    # prompt, constraining ``sam_concepts`` to surfaces the rig can observe.
-    compiler = build_compiler(cfg)
-
     for i, (orig_idx, row) in enumerate(indexed_rows):
         try:
             ep_meta = parse_episode(row, row_index=orig_idx)
@@ -261,7 +255,6 @@ def main(
                 orig_idx=orig_idx,
                 idx=i,
                 total=len(indexed_rows),
-                compiler=compiler,
                 objects_by_map=objects_by_map,
                 cfg=cfg,
                 recorder=ep.recorder,

@@ -32,7 +32,7 @@ def light(monkeypatch):
 
 def _dispatch(tmp_path):
     return dispatch._dispatch_one(
-        row={}, orig_idx=0, idx=0, total=1, compiler=None, objects_by_map={},
+        row={}, orig_idx=0, idx=0, total=1, objects_by_map={},
         cfg=SimpleNamespace(withhold=["look"]), recorder=None, episode_dir=tmp_path,
     )
 

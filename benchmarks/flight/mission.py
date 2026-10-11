@@ -145,7 +145,6 @@ def hydrate(*, episode_id: str, split: str, config: str,
     resolves, and the operator's start as given."""
     from benchmarks.citynav.run_benchmark import load_config, load_episode_assets  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
-    from benchmarks.citynav.run_benchmark.dispatch import build_compiler  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import build_episode  # noqa: PLC0415
     from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
 
@@ -154,8 +153,7 @@ def hydrate(*, episode_id: str, split: str, config: str,
     if resolve_sensor(cfg.sensor) is None:
         raise RuntimeError(f"cfg.sensor did not resolve a SensorSpec: {cfg.sensor!r}")
     episode = resolve_episode(episode_id, split, start_xy)
-    return build_episode(cfg, episode, load_episode_assets(episode.map_name, cfg.cell_size_m),
-                         build_compiler(cfg))
+    return build_episode(cfg, episode, load_episode_assets(episode.map_name, cfg.cell_size_m))
 
 
 def leg_span_m(h: Hydrated) -> float:

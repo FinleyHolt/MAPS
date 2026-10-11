@@ -84,7 +84,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
                                    grid_shape=(10, 10)),
             episode=SimpleNamespace(map_name="calcity", description="the largest building",
                                     marker_positions=list(markers)),
-            sensor=None, tile_frame=None, perception=None, search_loop=loop, compiler=None)
+            sensor=None, tile_frame=None, perception=None, search_loop=loop)
         return me.MissionSession(h, t_start=0.0, observe=lambda: frame)
 
     return make

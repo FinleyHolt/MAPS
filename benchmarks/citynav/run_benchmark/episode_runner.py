@@ -34,7 +34,7 @@ from maps.llm import flight_summary
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import crop_observation
-from maps.search import MapsCompiler, SearchLoop
+from maps.search import SearchLoop
 from maps.search.withhold import withheld
 from maps.sws import GridDomain
 from maps.sws.graph import build_object_graph, load_graph
@@ -151,11 +151,9 @@ class Hydrated:
     tile_frame: TileFrame
     perception: Any
     search_loop: SearchLoop
-    compiler: MapsCompiler
 
 
-def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets,
-                  compiler: MapsCompiler) -> Hydrated:
+def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) -> Hydrated:
     """The engine for one episode: its graph, the start pose, the segmenter
     with both of the agent's concept channels wired (the declared union and
     the director's watchlist, which a view{watchlist} change or a placed
@@ -174,7 +172,6 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets,
         GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
         tile_name=f"citynav::{assets.map_name}",
-        compiler=compiler,
         sam_concept_setter=set_concepts,
         sam_watchlist_setter=set_concepts,
         # The mission's observation span is ``2 * (alt - ground)`` off it.
@@ -188,7 +185,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets,
         sensor=resolve_sensor(cfg.sensor) if cfg.sensor else None,
         tile_frame=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
                              cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape)),
-        perception=perception, search_loop=search_loop, compiler=compiler,
+        perception=perception, search_loop=search_loop,
     )
 
 
@@ -254,7 +251,6 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
 
 def run_episode(
     row: dict,
-    compiler: MapsCompiler,
     objects_by_map: dict,
     cfg: RunConfig,
     recorder: LiveRecorder | None = None,
@@ -283,7 +279,7 @@ def run_episode(
             int(cfg.spawn_seed),
             episode.episode_id,
         )
-    h = build_episode(cfg, episode, assets, compiler)
+    h = build_episode(cfg, episode, assets)
     state = h.state
     ground = h.search_loop._ortho_ground_z_m
     log.info(

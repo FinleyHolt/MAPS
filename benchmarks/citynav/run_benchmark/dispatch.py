@@ -1,5 +1,5 @@
-"""One-episode dispatch: compiler construction, run provenance, and
-the shared batch-loop/server episode wrapper.
+"""One-episode dispatch: run provenance and the shared batch-loop/server
+episode wrapper.
 """
 
 from __future__ import annotations
@@ -15,8 +15,6 @@ from benchmarks.citynav.run_benchmark.error_taxonomy import (
 from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
 from pathlib import Path
 from maps.llm import endpoint_spec as endpoint_spec_module
-from maps.perception.geometry.sensor_spec import resolve_sensor, served_description
-from maps.search import MapsCompiler
 import os
 import time
 import traceback
@@ -24,23 +22,6 @@ from benchmarks.citynav.run_benchmark.episode_runner import run_episode
 import logging
 
 log = logging.getLogger("run_benchmark")
-
-
-def build_compiler(cfg: RunConfig) -> MapsCompiler:
-    """Construct the MapsCompiler (sensor-patched system prompts).
-
-    Extracted verbatim from the inline ctor so the persistent
-    episode-server path builds an identical compiler. The active sensor
-    description is patched into the parse-compile reasoner + scout system
-    prompts so ``sam_concepts`` stays constrained to surfaces the rig
-    can observe. The served model / endpoint facts come from the installed
-    ``EndpointSpec`` (the compiler reads ``spec()`` itself) — there is no
-    client-side model knob.
-    """
-    _sensor = resolve_sensor(cfg.sensor) if cfg.sensor else None
-    _sensor_description = (served_description(_sensor, cfg.start_altitude_agl_m)
-                           if _sensor is not None else "")
-    return MapsCompiler(sensor_description=_sensor_description)
 
 
 # The arm-flag inventory and stamp live with the rest of the run-identity
@@ -96,7 +77,6 @@ def _dispatch_one(
     orig_idx: int,
     idx: int,
     total: int,
-    compiler: MapsCompiler | None,
     objects_by_map: dict,
     cfg: RunConfig,
     recorder: LiveRecorder | None,
@@ -137,7 +117,6 @@ def _dispatch_one(
     try:
         rec = run_episode(
             row,
-            compiler,
             objects_by_map,
             cfg,
             recorder=recorder,

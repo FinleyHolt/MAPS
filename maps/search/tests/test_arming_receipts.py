@@ -89,17 +89,15 @@ def test_the_placed_form_also_arms_the_standing_watchlist():
     assert "standing watchlist for every later flight" in ack, ack
 
 
-def test_concept_union_keeps_first_seen_order():
-    from maps.search.parse_compile.compiler import (
-        _extract_reasoner_concepts,
-        concept_union,
-    )
-    specs = _extract_reasoner_concepts({"sam_concepts": [
-        {"class": "Red  Car", "role": "target"}, "tree", "None",
-        {"class": "red car", "role": "anchor"},
-        {"class": "tree", "role": "bogus"},
-    ]})
-    assert concept_union(specs) == ["red car", "tree"]
+def test_the_declared_union_is_canonical_and_keeps_first_seen_order():
+    from maps.search.search_loop import SearchLoop
+
+    pushed = []
+    SearchLoop.declare_mission_concepts(_duck(pushed.append), [
+        {"class": "Red  Car", "role": "target"}, {"class": "tree", "role": "target"},
+        {"class": "None", "role": "target"}, {"class": "red car", "role": "anchor"},
+        {"class": None, "role": "target"}])
+    assert pushed == [["red car", "tree"]]
 
 
 def test_a_quoted_point_boost_re_segments_the_flown_stop_it_falls_on():

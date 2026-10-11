@@ -20,7 +20,7 @@ from typing import Any
 
 import numpy as np
 
-from maps.search.parse_compile.compiler import MapsCompiler
+from maps.search.parse_compile.perception_director import canon_concept
 from maps.sws.graph.model import GridDomain
 from maps.util.mask_codec import encode_mask_record
 
@@ -43,6 +43,8 @@ log = logging.getLogger(__name__)
 # more pools that might not be in the prior map". SR is the goal; a longer
 # pass is the price of an ambiguous cue, not a fault to be capped.
 _COVER_MAX_STOPS = 1000
+
+_NULL_CONCEPTS = frozenset({"none", "null", "n/a", "na"})
 
 
 @dataclass(frozen=True)
@@ -85,7 +87,6 @@ class SearchLoop:
         *,
         tile_origin_xy: tuple[float, float],
         tile_name: str,
-        compiler: MapsCompiler,
         sam_concept_setter: Callable[[list[str]], None] | None = None,
         sam_watchlist_setter: Callable[[list[str]], None] | None = None,
         ortho_ground_z_m: float | None = None,
@@ -97,7 +98,6 @@ class SearchLoop:
             float(tile_origin_xy[1]),
         )
         self._tile_name = tile_name
-        self._compiler = compiler
         self._sam_concept_setter = sam_concept_setter
         # The agent-owned watchlist channel: the PerceptionDirector pushes the
         # live watchlist (+ active boost concepts) through it so mid-flight
@@ -417,11 +417,8 @@ class SearchLoop:
 
     def _look_audit_dir(self) -> str | None:
         """``<workdir>/flight/look`` — the per-episode look-audit root, keyed by
-        stop_id + call id. ``None`` when no episode workdir is known
-        (``compiler.workdir`` / ``SEARCH_COMPILE_WORKDIR``)."""
-        wd = getattr(self._compiler, "workdir", None) or os.environ.get(
-            "SEARCH_COMPILE_WORKDIR"
-        )
+        stop_id + call id. ``None`` when ``SEARCH_COMPILE_WORKDIR`` is unset."""
+        wd = os.environ.get("SEARCH_COMPILE_WORKDIR")
         if not wd:
             return None
         return str(Path(wd) / "flight" / "look")
@@ -522,13 +519,12 @@ class SearchLoop:
         ``cleaned`` is the validated ``[{class, role}]`` list the mission
         loop recorded. Returns the declaration receipt the act result
         carries."""
-        from maps.search.parse_compile.compiler import (
-            _extract_reasoner_concepts,
-            concept_union,
-        )
-
-        union = concept_union(
-            _extract_reasoner_concepts({"sam_concepts": list(cleaned or [])}))
+        # The classes SAM segments (it reads no roles), canonical, first seen
+        # first; a placeholder class is no class.
+        union = list(dict.fromkeys(
+            c for c in (canon_concept(e.get("class")) if isinstance(e.get("class"), str) else ""
+                        for e in cleaned or [])
+            if c and c not in _NULL_CONCEPTS))
         setter_err: str | None = None
         with self._lock:
             if self._sam_concept_setter is not None:
