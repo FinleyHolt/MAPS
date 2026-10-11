@@ -42,7 +42,6 @@ import types
 from dataclasses import dataclass
 from typing import Callable
 
-from maps.search.analyze_scene import cardinal_side
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
     _AUTOATTACH_PREFIXES, _BROAD_HEAD_ROWS, _STANDING_SIDE_PREFIXES,
@@ -361,10 +360,8 @@ def _norm_key(k: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", k.lower()).strip("_")
 
 
-# The cardinal cut kwargs, derived from the ONE compass table's declared
-# four-subset so a wind can never be spelled here that the geometry does not
-# compute (and vice versa).
-_CARDINAL_KWARGS = frozenset(f"{w}_of" for w in cardinal_side.CARDINALS)
+# The cardinal cut kwargs, derived from the compiler's (the geometry's) four.
+_CARDINAL_KWARGS = frozenset(f"{w}_of" for w in _CARDINALS)
 
 
 def _direction_key(word):
