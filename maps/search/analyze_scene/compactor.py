@@ -1,55 +1,23 @@
-"""Deterministic clear-to-census autocompact for the reasoning engine.
+"""Fit the reasoner transcript under the served window's input budget, with
+no model call.
 
-When the assembled prompt for the persistent reasoner would exceed the
-served window's input budget, ``compact_transcript`` sheds stale image
-crops and rewrites every SUPERSEDED tool-result dump (all but the most
-recent, the live view) to its fids+census stub form, returning a
-message list that fits. Tool dumps are re-derivable views over the live
-world-state graph, so a stub loses nothing the agent cannot re-query, and
-the stub says so. No LLM call is made on this path.
+``compact_transcript`` takes these steps in order, re-measuring after each and
+stopping once the transcript fits; re-derivable text goes before pixels:
 
-The analyze surface puts the dump at the top level of its ``analyze``
-result; the mission surface wraps the same dump under ``result`` in its
-``run`` result. Steps select tool results by SHAPE, never by tool name.
+  1. fold the oldest spent turns into one script block (the agent's code
+     verbatim, plus the fids and census of what they found), keeping the
+     head and the two newest turns, down to a low-water mark below target;
+  2. stub stale dumps (all but the newest) to fids, census and a colour
+     table, oldest first, down to the low-water mark;
+  3. drop those colour tables;
+  4. stub the remaining dumps largest first, the newest last;
+  5. strip the findings from the block this fire made;
+  6. evict stale crops oldest first, never the current turn's;
+  7. thin the current turn's crops, keeping its newest;
 
-Steps, in order, re-estimating after each; the cheapest loss goes first and
-re-derivable text goes before pixels:
-
-  1. FOLD the oldest spent turns into one script block: the agent's own code
-     verbatim plus the fids+census of what those turns found. The only step
-     that changes message count; it leaves [system, instruction, block, live
-     tail]. Bounded by the shortfall to the low-water mark.
-  2. Clear stale dumps to fids+census oldest-first, keeping a compact per-fid
-     color table (the color signal lives inside the ``rows`` render the trim
-     drops). Stops at the low-water mark; the newest dump is never cleared
-     here.
-  3. Still over: drop the color tables from the stubs, oldest-first.
-  4. Still over: degrade remaining tool dumps largest-first, the live dump
-     last, to plain fids+census. Keeps every candidate fid.
-  5. Still over: strip the findings from the block THIS fire created,
-     keeping the code. Only the newest block: an earlier fire's block is
-     already served prefix.
-  6. Still over: evict stale image crops oldest-first, never the current
-     turn's. Text-only transcripts skip it.
-  7. Still over: thin the CURRENT turn's crops oldest-first, keeping the
-     newest.
-  8. Still over: raise ``CompactionInfeasible``.
-
-APPEND-ONLY ACROSS FIRES. A block is inserted where its span was, and no later
-fire rewrites or absorbs an earlier one, so the served prefix extends rather
-than moves.
-
-Below-budget calls return the input list itself (same ``id()``), keeping
-the prefix cache byte-identical. The post-compaction sweep checks
-``tool_call_id`` closure and coverage and raises
-``CompactionInvariantError`` on either failure.
-
-The budget is CALLER-SUPPLIED: ``target_input_tokens`` comes from the
-server-discovered ``EndpointSpec.input_budget`` (``maps.llm.endpoint_spec``).
-A prompt that cannot be measured (the tokenizer cannot load or its chat
-template cannot render the transcript) raises rather than being sent
-unmeasured. The tokenizer name comes from ``SEARCH_COMPACT_TOKENIZER_NAME``
-(``maps.llm.tokenizer``).
+and raises ``CompactionInfeasible`` when all of them fall short. A block is
+never rewritten by a later fire, so the served prefix only grows. A
+transcript under budget comes back as the same list.
 """
 
 from __future__ import annotations
@@ -70,8 +38,7 @@ log = logging.getLogger(__name__)
 _CHEAP_GATE_MSG_COUNT = 4
 
 # The low-water mark sits this far below target, so a fire buys turns of
-# growth before the next one (each fire is one prefix-cache invalidation).
-# Roughly half a dense analyze dump.
+# growth before the next one invalidates the prefix cache.
 _CLEAR_HEADROOM_TOKENS = 16384
 
 
@@ -80,21 +47,15 @@ class CompactionInfeasible(RuntimeError):
 
 
 class CompactionInvariantError(RuntimeError):
-    """Post-compaction sweep found a tool_call_id without its counterpart:
-    a result with no earlier call, or a call with no result."""
+    """A tool result with no earlier call, or a call with no result."""
 
 
-# What an ``image_url`` part flattens to for tokenization, so a crop's base64
-# never reaches the tokenizer. The placeholder is not the price:
-# ``_estimate_input_tokens`` adds ``image_tokens_in`` back after the flatten.
+# What a crop flattens to for the tokenizer; its pixels are priced separately.
 _IMAGE_PART_PLACEHOLDER = "[image crop]"
 
 
 def _flatten_multimodal_content(content: object) -> str:
-    """Collapse an OpenAI multi-part content list to a compact text string,
-    replacing each ``image_url`` part with ``_IMAGE_PART_PLACEHOLDER``. A plain
-    string returns unchanged; a non-list/str falls back to ``json.dumps`` (dict
-    tool results keep their prior serialization)."""
+    """Multi-part content as one string, each image part a placeholder."""
     if isinstance(content, str):
         return content
     if not isinstance(content, list):
@@ -115,15 +76,8 @@ def _flatten_multimodal_content(content: object) -> str:
 
 
 def _messages_for_tokenization(messages: list[dict]) -> list[dict]:
-    """Return a copy of ``messages`` with tool_calls.function.arguments
-    parsed to a dict AND multimodal list content flattened to text.
-
-    ``arguments`` is a JSON string on the wire, and the chat template's
-    ``tool_call.arguments | items`` filter needs a mapping; the server parses
-    it before rendering, so the local estimate does the same. The original
-    list is unchanged. Multi-part (vision) content flattens through
-    ``_flatten_multimodal_content``.
-    """
+    """A copy of ``messages`` as the server renders them: tool-call
+    arguments parsed to a mapping, multi-part content flattened."""
     out: list[dict] = []
     for m in messages:
         m2 = m
@@ -170,15 +124,10 @@ def _crop_slots(messages: list[dict]) -> list[tuple[int, int]]:
 def _evict_crops(
     messages: list[dict], *, shed_tokens: int, current: bool
 ) -> tuple[list[dict], int, int]:
-    """Replace crops with :data:`_EVICTED_CROP_TEXT`, oldest first, until
-    ``shed_tokens`` are freed: every priced crop before the message carrying
-    the newest crops (the current turn's), or with ``current`` that
-    message's own crops but its newest.
-
-    Returns ``(messages, n_evicted, tokens_freed)``; the input list is never
-    mutated and comes back itself when nothing is evicted. Each crop's cost
-    comes from its own pixels, so no re-tokenization runs per eviction.
-    """
+    """``(messages, n_evicted, tokens_freed)``: crops replaced by
+    :data:`_EVICTED_CROP_TEXT`, oldest first, until ``shed_tokens`` are freed;
+    every priced crop before the current turn's message, or with ``current``
+    that message's crops but its newest. Nothing evicted returns the input."""
     slots = _crop_slots(messages)
     if not slots:
         return messages, 0, 0
@@ -201,23 +150,14 @@ def _evict_crops(
     return (out, evicted, freed) if evicted else (messages, 0, 0)
 
 
-#: How far under ``max_images`` an eviction goes: more than one ``look`` call
-#: delivers (``reasoner_loop._LOOK_MAX_CROPS``, 16), so one eviction buys
-#: several looks before the next rewrites the history again.
+#: How far under ``max_images`` an eviction goes: more than one look delivers.
 _IMAGE_COUNT_HEADROOM = 20
 
 
 def bound_image_count(messages: list[dict], *, max_images: int) -> list[dict]:
-    """``messages`` with at most ``max_images`` image parts, the oldest
-    replaced by :data:`_EVICTED_CROP_TEXT` first.
-
-    A hosted endpoint refuses a request carrying more images than its limit
-    whatever their token cost, so this bounds the COUNT the token budget does
-    not. Past the limit it evicts down to ``max_images`` less
-    :data:`_IMAGE_COUNT_HEADROOM`. Oldest-first keeps what the model looked at
-    last. The input list is never mutated and is returned itself when it is
-    already within the limit.
-    """
+    """Past ``max_images`` image parts (a hosted endpoint's count limit),
+    the oldest evicted down to ``max_images - _IMAGE_COUNT_HEADROOM``; within
+    the limit, the input itself."""
     image_at = _crop_slots(messages)
     if len(image_at) <= max_images:
         return messages
@@ -232,33 +172,24 @@ def bound_image_count(messages: list[dict], *, max_images: int) -> list[dict]:
     return out
 
 
-#: Marks a span the compactor replaced with the agent's own code; a later fire
-#: recognises it and never folds it again.
+#: Opens a script block; a later fire never folds one again.
 _SCRIPT_BLOCK_HEADER = "[script so far]"
 
-#: Separates the folded code from the census of what those turns found; the
-#: writer and the step that strips it share it.
+#: Separates a block's code from what its turns found.
 _FINDINGS_SEP = "\nwhat those turns found:\n"
 
 def _protected_head(messages: list[dict]) -> int:
-    """How many head messages are never droppable: through the first user
-    message (the operator instruction), after the system prompt when one is
-    served."""
+    """How many head messages never fold: through the first user message."""
     first_user = next((i for i, m in enumerate(messages) if m.get("role") == "user"), 0)
     return first_user + 1
 
-#: Turn units the fold keeps verbatim at the tail, where the model is
-#: mid-derivation.
+#: Turn units the fold keeps verbatim at the tail.
 _KEEP_TAIL_UNITS = 2
 
 
 def _run_code_of(message: dict) -> list[str]:
-    """The code an assistant turn ran, verbatim, one entry per tool call.
-
-    The mission surface's one tool, ``run``, takes ``{"code": ...}``. A call
-    whose arguments do not parse, or carry no code, contributes its raw
-    argument string, so every action stays on the record.
-    """
+    """The ``code`` of each ``run`` call, or its raw arguments when they
+    carry none."""
     out: list[str] = []
     for tc in message.get("tool_calls") or []:
         fn = tc.get("function") or {}
@@ -274,11 +205,8 @@ def _run_code_of(message: dict) -> list[str]:
 
 
 def _turn_units(messages: list[dict]) -> list[tuple[int, int]]:
-    """Contiguous ``[assistant-with-tool_calls, *its tool results]`` spans.
-
-    A unit is the atom of dropping, so a call and its results always move
-    together.
-    """
+    """The ``[assistant call, *its results]`` spans whose results are all
+    present and contiguous: a call folds with its results or not at all."""
     units: list[tuple[int, int]] = []
     i = 0
     while i < len(messages):
@@ -291,9 +219,6 @@ def _turn_units(messages: list[dict]) -> list[tuple[int, int]]:
                    and messages[j].get("tool_call_id") in ids):
                 answered.add(messages[j]["tool_call_id"])
                 j += 1
-            # Only a unit whose results are all present and contiguous is
-            # foldable: folding a short run would orphan the results that
-            # stayed. The later steps still reduce those messages.
             if ids and answered == ids:
                 units.append((i, j))
                 i = j
@@ -305,12 +230,8 @@ def _turn_units(messages: list[dict]) -> list[tuple[int, int]]:
 
 
 def _folded_findings(messages: list[dict], span: tuple[int, int]) -> list[str]:
-    """The fids+census stubs of what a folded span FOUND.
-
-    The code says what the agent asked; this says what came back, through the
-    same degrade the stubbing steps apply, so a folded turn carries exactly
-    what a stubbed one would.
-    """
+    """The colour-keeping stubs of a span's tool results (an already
+    stubbed result as it stands)."""
     out: list[str] = []
     for i in range(span[0], span[1]):
         msg = messages[i]
@@ -318,8 +239,6 @@ def _folded_findings(messages: list[dict], span: tuple[int, int]) -> list[str]:
             continue
         content = msg.get("content")
         stub = _degrade_tool_result_content(content, keep_color=True)
-        # None means nothing left to trim, which an already-stubbed dump
-        # returns; its content is then carried as it stands, fids included.
         carried = stub if stub else (content if isinstance(content, str) else None)
         if carried:
             out.append(carried)
@@ -328,13 +247,8 @@ def _folded_findings(messages: list[dict], span: tuple[int, int]) -> list[str]:
 
 def _script_block(sources: list[str], n_turns: int,
                   findings: list[str] | None = None) -> dict:
-    """The artifact: what the agent DID, in the agent's own bytes.
-
-    Verbatim code is deterministic, costs no summariser call, and loses
-    nothing in a retelling. The interpreter namespace persists for the whole
-    mission (``python_surface``), so every name the folded turns bound is
-    still live.
-    """
+    """The script block: the folded turns' code verbatim (their names stay
+    bound in the mission's namespace), then what they found."""
     body = "\n".join(sources)
     found = "\n".join(findings or [])
     return {
@@ -348,7 +262,7 @@ def _script_block(sources: list[str], n_turns: int,
 
 
 def _newest_script_block(messages: list[dict]) -> int | None:
-    """Index of the LAST script block, or None. The only one a fire may edit."""
+    """Index of the last script block, or None."""
     for i in range(len(messages) - 1, -1, -1):
         if _is_script_block(messages[i]):
             return i
@@ -365,17 +279,10 @@ def _drop_spent_turns(
     messages: list[dict], *, shed_tokens: int, model: str,
     tools: list[dict] | None = None,
 ) -> tuple[list[dict], int, int]:
-    """Fold the OLDEST spent turns into one script block until ``shed_tokens``.
-
-    Returns ``(messages, n_turns_folded, tokens_freed)``; the input list is
-    never mutated and is returned unchanged when nothing is folded. Folding
-    stops once ``shed_tokens`` are freed (the caller passes the shortfall to
-    the low-water mark).
-
-    The block is INSERTED where the folded span was, and an existing block is
-    never rewritten or absorbed, so earlier blocks stay byte-identical and the
-    served prefix extends instead of moving.
-    """
+    """``(messages, n_turns_folded, tokens_freed)``: the oldest foldable
+    turns replaced, in place, by one script block until ``shed_tokens`` are
+    freed. Earlier blocks are never touched; nothing folded returns the
+    input."""
     units = _turn_units(messages)
     head = _protected_head(messages)
     droppable = [
@@ -403,8 +310,6 @@ def _drop_spent_turns(
         out = head + [_script_block(sources, len(folded), findings)] + tail
         after = _estimate_input_tokens(out, model=model, tools=tools)
         freed = before - after
-        # Bounded by the shortfall to the low-water mark: deep enough to buy
-        # quiet turns, never the whole history for a marginal overflow.
         if freed >= shed_tokens:
             break
     if not folded or freed <= 0:
@@ -418,13 +323,8 @@ def _estimate_input_tokens(
     model: str,
     tools: list[dict] | None = None,
 ) -> int:
-    """Estimate the chat-templated input-token count vLLM will see.
-
-    Uses ``tokenizer.apply_chat_template(... add_generation_prompt=True)``
-    over ``_messages_for_tokenization``. A tokenizer that cannot load or a
-    template that cannot render the transcript raises; discovery renders a
-    transcript of every turn kind first, so neither happens mid-run.
-    """
+    """The chat-templated input tokens the server will see, crops priced by
+    their pixels; a tokenizer or template failure raises."""
     tok = _tokenizer(model)
     text = tok.apply_chat_template(
         _messages_for_tokenization(messages),
@@ -435,17 +335,12 @@ def _estimate_input_tokens(
     if not isinstance(text, str):
         text = "".join(text)
     ids = tok.encode(text, add_special_tokens=False)
-    # The flatten replaced every crop with a placeholder; the server bills the
-    # pixels against the same window as the text.
     return len(ids) + image_tokens_in(messages)
 
 
 def _validate_invariants(messages: list[dict]) -> None:
-    """Sweep ``messages`` for tool-protocol violations: CLOSURE (every tool
-    result has an earlier call) and COVERAGE (every call has a result). Step
-    1 drops messages, so both can arise; the server would answer either with
-    a 400 mid-episode.
-    """
+    """Raise unless every tool result has an earlier call and every call a
+    result; the server would refuse either."""
     seen_ids: set[str] = set()
     answered: set[str] = set()
     for msg in messages:
@@ -473,10 +368,7 @@ def _validate_invariants(messages: list[dict]) -> None:
         )
 
 
-# The verbose render keys of an op head (the markdown grid and its units
-# line). The ``fids`` list carries the rank order and
-# ``census``/``len``/``named``/``columns`` the census and schema, so dropping
-# these trims a dump to fids+census without removing any candidate fid.
+# The render keys a stub drops; ``fids`` and the census stay.
 _TRIM_RENDER_KEYS = ("rows", "legend")
 
 
@@ -492,9 +384,7 @@ def _iter_op_heads(obj: dict):
 
 
 def _rows_color_entries(rows: str) -> list[str]:
-    """``fid=color[@conf]`` entries parsed from one ``rows`` markdown grid:
-    the color cell (with its ``?`` uncertainty mark) and ``color_conf``,
-    which live inside the ``rows`` render a trim drops."""
+    """``fid=color[@conf]`` per data row of a ``rows`` grid."""
     entries: list[str] = []
     fid_i = col_i = conf_i = None
     for line in rows.splitlines():
@@ -520,14 +410,9 @@ def _rows_color_entries(rows: str) -> list[str]:
 def _degrade_tool_result_content(
     content: str, *, keep_color: bool = False
 ) -> str | None:
-    """Rewrite ONE tool-result JSON string to its fids+census stub.
-
-    Drops only the render keys from every op head; ``fids`` and every
-    scalar/census key survive. The stub's hint says the graph is live and
-    re-running analyze recovers the rows. ``keep_color`` keeps the per-fid
-    color table parsed from the dropped ``rows``. Returns the new JSON
-    string, or ``None`` when nothing is trimmable or the content is not the
-    expected shape."""
+    """One tool result's stub: every head's render keys dropped (with
+    ``keep_color``, a colour table kept) and a hint that the rows re-derive;
+    ``None`` when there is nothing to trim."""
     try:
         obj = json.loads(content)
     except (TypeError, ValueError):
@@ -547,8 +432,6 @@ def _degrade_tool_result_content(
         if colors:
             head["colors"] = "; ".join(colors)
         changed = True
-        # rN refs from an earlier round are dead, so the stub promises only
-        # that the graph is re-queryable.
         note = ("rows trimmed to fids+census for token budget (fids "
                 "preserved); the world-state graph is live — re-run analyze "
                 "to re-derive the full rows.")
@@ -565,14 +448,8 @@ def _degrade_oversized_tool_dumps(
     tools: list[dict] | None,
     target_input_tokens: int,
 ) -> tuple[list[dict], int]:
-    """Trim the largest tool-result dumps to fids+census until the
-    transcript fits ``target_input_tokens`` (or nothing more is trimmable).
-
-    Returns ``(possibly-degraded messages, n_trimmed)``. A degraded message
-    keeps its role / tool_call_id / name and a valid JSON content string, and
-    every candidate fid. A message not in the expected shape stays verbatim.
-    Biggest dumps trim first, so the fewest trims restore feasibility, except
-    the NEWEST dump, the round's live evidence, which trims last."""
+    """``(messages, n_trimmed)``: dumps stubbed largest first, the newest
+    last, until the transcript fits ``target_input_tokens``."""
     idxs = _dump_result_indices(messages)
     newest = max(idxs) if idxs else None
     idxs.sort(key=lambda i: len(messages[i]["content"]), reverse=True)
@@ -595,12 +472,7 @@ def _degrade_oversized_tool_dumps(
 
 
 def _carries_dump(content: object) -> bool:
-    """Whether a tool-result body holds a head this module can trim.
-
-    The SHAPE is the test, never the tool name: the analyze surface names its
-    tool ``analyze`` and a mission names it ``run``, and callers protect the
-    newest DUMP, so a non-dump result must not count as one.
-    """
+    """Whether a tool-result body holds a head with a render to trim."""
     if not isinstance(content, str):
         return False
     try:
@@ -625,39 +497,22 @@ def compact_transcript(
     model: str,
     tools: list[dict] | None = None,
 ) -> list[dict]:
-    """Return a possibly-compacted view of ``messages`` whose
-    chat-templated input-token count is <= ``target_input_tokens``.
-
-    Below budget: returns ``messages`` itself (same ``id()``). Above budget:
-    the steps of the module docstring, in order. No LLM call is made.
-
-    Raises ``CompactionInfeasible`` when every step together cannot reach
-    the target, and ``CompactionInvariantError`` if the post-compaction
-    sweep finds a tool-protocol violation.
-    """
-    # 1. Cheap gate.
+    """``messages`` fitted under ``target_input_tokens`` by the steps of the
+    module docstring; ``CompactionInvariantError`` if a step broke the tool
+    protocol."""
     if len(messages) <= _CHEAP_GATE_MSG_COUNT:
         return messages
 
-    # 2. Token estimate.
     input_tokens = _estimate_input_tokens(messages, model=model, tools=tools)
 
-    # 3. Budget check.
     if input_tokens <= target_input_tokens:
         return messages
 
     t0 = time.time()
 
-    # Text goes before pixels: a stubbed dump costs a re-query, an evicted
-    # crop costs a view the model cannot get back.
-    #
-    # 4. STEP 1 -- fold the spent turns into one script block. First, because
-    # every other step rewrites content in place at an old index and leaves
-    # the rewritten body to re-prefill behind the break; a fold leaves only
-    # head+block+tail. Step 5 gives the block its own degrade.
-    #
-    # The low-water mark is never above target (tiny targets) and floored at
-    # 8000, the reasoner's minimum viable input budget.
+    # Step 1 goes first: every other step rewrites an old message in place,
+    # leaving it to re-prefill. The low-water mark is never above target and
+    # floored at 8000, the least input budget a reasoner runs on.
     low_water = max(target_input_tokens - _CLEAR_HEADROOM_TOKENS,
                     min(8000, target_input_tokens))
     folded_turns = 0
@@ -674,10 +529,7 @@ def compact_transcript(
             folded_turns, freed_fold, output_tokens, target_input_tokens,
         )
 
-    # 5. STEP 2 -- clear stale dumps (never the newest, the live view) to
-    # their fids+census stubs oldest-first, color tables kept, stopping at the
-    # low-water mark so the most recent dumps stay verbatim when the budget
-    # allows.
+    # Step 2.
     idxs = _dump_result_indices(out)
     stale = idxs[:-1]
     base = out
@@ -685,13 +537,11 @@ def compact_transcript(
     cleared: list[int] = []
     colored: list[int] = []
     for i in stale:
-        # Checked before the write, so a fold that already landed under the
-        # low-water mark stubs nothing.
         if output_tokens <= low_water:
             break
         stub = _degrade_tool_result_content(out[i]["content"], keep_color=True)
         if stub is None:
-            continue  # already stubbed / not the expected shape
+            continue
         new_msg = dict(out[i])
         new_msg["content"] = stub
         out[i] = new_msg
@@ -703,8 +553,7 @@ def compact_transcript(
             break
     color_tables_kept = len(colored)
 
-    # 6. STEP 3 -- still over target: strip the per-fid color tables from the
-    # stubs oldest-first.
+    # Step 3.
     if output_tokens > target_input_tokens:
         for i in colored:
             plain = _degrade_tool_result_content(
@@ -719,8 +568,7 @@ def compact_transcript(
             if output_tokens <= target_input_tokens:
                 break
 
-    # 7. STEP 4 -- degrade the remaining dumps largest-first to plain
-    # fids+census, the live one last (_degrade_oversized_tool_dumps).
+    # Step 4.
     degraded_dumps = 0
     if output_tokens > target_input_tokens:
         out, degraded_dumps = _degrade_oversized_tool_dumps(
@@ -732,16 +580,13 @@ def compact_transcript(
         if degraded_dumps:
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
 
-    # 8. STEP 5 -- strip the findings from the script block, keeping the
-    # code. A block is not a tool result, so no step above reduces it.
+    # Step 5, on the block this fire made: earlier blocks are served prefix.
     stripped_findings = False
     if output_tokens > target_input_tokens and folded_turns:
-        # Only the block this fire created: earlier blocks are served prefix.
         i = _newest_script_block(out)
         if i is not None:
-            # rsplit: findings are single-line json, so the separator cannot
-            # occur inside them, but the agent's own code CAN contain it and
-            # split()[0] would truncate the code at the model's own text.
+            # rsplit: the agent's code may contain the separator, the
+            # single-line findings cannot.
             body = out[i]["content"].rsplit(_FINDINGS_SEP, 1)[0]
             if body != out[i]["content"]:
                 out = list(out)
@@ -752,9 +597,7 @@ def compact_transcript(
             log.info("compaction stripped block findings -> %s/%d",
                      output_tokens, target_input_tokens)
 
-    # 9. STEP 6 -- evict STALE image crops, oldest-first, never the message
-    # carrying the current turn's. Text-only transcripts have nothing to
-    # evict.
+    # Step 6.
     n_evicted = 0
     if output_tokens > target_input_tokens:
         out, n_evicted, freed = _evict_crops(
@@ -767,8 +610,7 @@ def compact_transcript(
                 n_evicted, freed, output_tokens, target_input_tokens,
             )
 
-    # 10. STEP 7 -- thin the CURRENT turn's crops, oldest-first, keeping the
-    # newest.
+    # Step 7.
     evicted_current = 0
     if output_tokens > target_input_tokens:
         out, evicted_current, freed_current = _evict_crops(
@@ -785,8 +627,7 @@ def compact_transcript(
 
     latency = time.time() - t0
     if output_tokens > target_input_tokens:
-        # Name the largest messages in the raise, so the residue's source is
-        # in the log line.
+        # The raise names the largest messages.
         sizes = sorted(
             (
                 (len(str(m.get("content") or "")), i,
@@ -809,7 +650,6 @@ def compact_transcript(
             f"target={target_input_tokens} "
             f"(input_tokens={input_tokens}); largest: {anatomy}")
 
-    # 11. Invariant validation: closure AND coverage.
     _validate_invariants(out)
 
     log.info(
