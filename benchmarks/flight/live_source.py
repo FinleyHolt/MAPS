@@ -50,6 +50,7 @@ import logging
 import math
 import threading
 import time
+from collections import Counter
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -277,18 +278,11 @@ def fused_registration(records: list[dict[str, Any]]) -> dict[str, Any]:
     as one record: ``applied`` when any was placed, ``sources`` how many by
     each (``measured``, ``tied``, ``nearest``, ``refused``), and when none was,
     ``why`` the reason most of them gave."""
-    sources: dict[str, int] = {}
-    for r in records:
-        key = r.get("source") or "refused"
-        sources[key] = sources.get(key, 0) + 1
     out: dict[str, Any] = {"applied": any(r.get("applied") for r in records), "frames": len(records),
-                           "sources": sources}
+                           "sources": dict(Counter(r.get("source") or "refused" for r in records))}
     if not out["applied"]:
-        whys: dict[str, int] = {}
-        for r in records:
-            if r.get("why"):
-                whys[str(r["why"])] = whys.get(str(r["why"]), 0) + 1
-        out["why"] = max(whys, key=whys.get) if whys else "no frame to register"
+        whys = Counter(str(r["why"]) for r in records if r.get("why")).most_common(1)
+        out["why"] = whys[0][0] if whys else "no frame to register"
     return out
 
 
