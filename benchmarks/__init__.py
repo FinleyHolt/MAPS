@@ -1,18 +1,9 @@
-"""The ``benchmarks`` package root: run-provenance shared across the eval harnesses.
+"""The ``benchmarks`` package root: the run provenance every bench entry point records.
 
-The CityNav harness (per-episode search loop, flight executor, ``maps-bench``
-CLI) lives in ``benchmarks.citynav``; the canonical SR readers in
-``benchmarks.citynav.analysis``. This package root holds only the provenance stamp.
-
-Provenance is the audit surface behind every SR number. The repo ships two
-installed packages (``maps`` / ``benchmarks``), so an editable install could in
-principle bind them to different checkouts; ``stamp_repo_provenance()`` records
-each package's resolved path so cross-package skew is visible rather than
-silent. What it records is *which code ran*: the git commit and dirty flag, the
-resolved package paths, and the run's config hash / split / seed / served model. That triple -- ``(sha, run,
-config)`` -- is what lets any number be reproduced or contested. Call
-``stamp_repo_provenance()`` at the top of each entry point; it logs a grep-able
-``EVAL-PROVENANCE`` block to run.log and returns the provenance dict.
+``repo_provenance`` says which code ran (git commit and dirty flag, and the
+path each installed package resolves to, so ``maps`` and ``benchmarks`` bound
+to different checkouts show) and under what run context; ``stamp_repo_provenance``
+logs the code half as a grep-able ``EVAL-PROVENANCE`` block.
 """
 
 from __future__ import annotations
@@ -23,7 +14,7 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def _git_provenance() -> dict:
-    """Best-effort commit + dirty flag for this checkout. Never raises."""
+    """Commit and dirty flag for this checkout, None where git cannot say."""
     import subprocess
 
     out: dict = {"git_commit": None, "git_dirty": None}
@@ -46,12 +37,7 @@ def _git_provenance() -> dict:
 
 
 def _resolved_package_paths() -> dict:
-    """Resolve each installed package's origin WITHOUT importing it.
-
-    ``importlib.util.find_spec`` walks the same ``sys.path`` a future import will,
-    so each path is what ``import <pkg>`` will bind to -- making cross-package
-    editable skew (e.g. ``maps`` and ``benchmarks`` bound to different checkouts)
-    visible in the provenance record rather than silent."""
+    """Each package's origin as ``import <pkg>`` will bind it, found without importing it."""
     import importlib.util
 
     out: dict = {}
@@ -64,16 +50,6 @@ def _resolved_package_paths() -> dict:
     return out
 
 
-def sha256_file(path: str | pathlib.Path) -> str | None:
-    """Hex sha256 of a file's bytes (used to pin config identity). None on error."""
-    import hashlib
-
-    try:
-        return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
-    except Exception:
-        return None
-
-
 def repo_provenance(
     *,
     config_path: str | pathlib.Path | None = None,
@@ -84,10 +60,7 @@ def repo_provenance(
     served_model: str | None = None,
     served_build: str | None = None,
 ) -> dict:
-    """The full provenance record: git + resolved package path + (optional) the
-    run's config hash, split/seed/limit, flag set, and served model. Pure data
-    (no logging) so it can be embedded into episodes.jsonl rows as well as
-    logged. Cheap; safe to call once per run."""
+    """The provenance record: git, package paths, and each run fact given."""
     prov: dict = {
         "repo_root": str(_REPO_ROOT),
         **_git_provenance(),
@@ -98,51 +71,29 @@ def repo_provenance(
         from benchmarks.citynav.run_benchmark.config import config_sha256  # noqa: PLC0415
 
         prov["config_sha256"] = config_sha256(config_path)
-    if split is not None:
-        prov["split"] = split
-    if seed is not None:
-        prov["seed"] = seed
-    if limit is not None:
-        prov["limit"] = limit
-    if search_flags is not None:
-        prov["search_env_flags"] = dict(search_flags)
-    if served_model is not None:
-        prov["served_model"] = served_model
-    # The served ALIAS is not the served build. `inkling-small` named both
-    # `thinkingmachines/Inkling-Small-NVFP4` and `RedHatAI/Inkling-Small-FP8-
-    # dynamic` on the same cluster in the same week, and the pair read as a
-    # NULL through comparability_issues -- -8.7 pts at McNemar p=0.009,
-    # quoted as what identical code does. The tokenizer identity is the
-    # finest-grained build fact the endpoint spec measures.
-    if served_build is not None:
-        prov["served_build"] = served_build
+    # One served alias can name two quantizations; the tokenizer (served_build) tells them apart.
+    for key, value in (
+        ("split", split),
+        ("seed", seed),
+        ("limit", limit),
+        ("search_env_flags", None if search_flags is None else dict(search_flags)),
+        ("served_model", served_model),
+        ("served_build", served_build),
+    ):
+        if value is not None:
+            prov[key] = value
     return prov
 
 
-def stamp_repo_provenance(*, logger=None, **kwargs) -> dict:
-    """Log a loud, grep-able ``EVAL-PROVENANCE`` block (the post-hoc audit surface)
-    and return the provenance dict. Call at the top of every bench entry point;
-    pass whatever run context is known (``config_path``/``split``/``seed``/
-    ``limit``/``search_flags``/``served_model``). Logging lands in run.log via
-    the runner's basicConfig."""
+def stamp_repo_provenance() -> None:
+    """Log the ``EVAL-PROVENANCE`` block (commit, dirty flag, package paths) to run.log."""
     import logging
 
-    prov = repo_provenance(**kwargs)
-    log = logger or logging.getLogger("benchmarks.provenance")
-    pkgs = prov["packages"]
+    prov = repo_provenance()
     lines = [
         "EVAL-PROVENANCE "
-        f"commit={prov.get('git_commit')} dirty={prov.get('git_dirty')} "
+        f"commit={prov['git_commit']} dirty={prov['git_dirty']} "
         f"repo_root={prov['repo_root']}",
     ]
-    for name, path in pkgs.items():
-        lines.append(f"  {name}.__file__={path}")
-    if "config" in prov:
-        lines.append(f"  config={prov['config']} sha256={prov.get('config_sha256')}")
-    ctx = {k: prov[k] for k in ("split", "seed", "limit", "served_model") if k in prov}
-    if ctx:
-        lines.append("  " + "  ".join(f"{k}={v}" for k, v in ctx.items()))
-    if "search_env_flags" in prov:
-        lines.append(f"  search_env_flags={prov['search_env_flags']}")
-    log.info("\n".join(lines))
-    return prov
+    lines += [f"  {name}.__file__={path}" for name, path in prov["packages"].items()]
+    logging.getLogger("benchmarks.provenance").info("\n".join(lines))
