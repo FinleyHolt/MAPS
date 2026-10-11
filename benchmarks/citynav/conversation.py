@@ -1,15 +1,10 @@
 """The mission's conversation, on disk as it happens.
 
-A mission's transcript is a list the loop appends to: one row per turn
-(``run``), plus the reasons a turn was not a block and the end-of-mission
-``summary``. ``ConversationLog`` IS that list, and every ``append`` also
-lands the row in ``<workdir>/conversation.jsonl`` before returning, so a
-mission killed between turns still leaves every turn it flew. A dump at
-mission end left nothing for exactly the missions worth reading.
-
-Open-per-append rather than a held handle: a row is a few hundred bytes a
-turn, and a handle nothing closes is what a SIGKILL leaves half-flushed.
-``path=None`` is a plain list -- a unit test, not a mission.
+``ConversationLog`` is the transcript list the loop appends to (a row per
+turn, the reasons a turn was not a block, the closing ``summary``); every
+``append`` also lands the row in ``<workdir>/conversation.jsonl``, opened per
+append, so a mission killed between turns keeps every turn it flew.
+``path=None`` is a plain list.
 """
 
 from __future__ import annotations

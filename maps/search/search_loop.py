@@ -1,11 +1,5 @@
-"""Per-episode search state: the one world graph and what the mission reads.
-
-``update_perception(detections, ...)`` folds one flight's detections into
-the graph through the world tracker; the concept and boost hooks drive the
-segmenter's watchlist; ``snapshot()`` returns the bound commit the
-trajectory replay and the row read. ONE reasoner on a ReAct loop drives the
-mission, with no subagents.
-"""
+"""Per-episode search state: the one world graph a mission reads and folds
+each flight's detections into, and the segmenter's class set."""
 
 from __future__ import annotations
 
@@ -35,22 +29,18 @@ class _State:
     """Mutable internal state, read and written under ``SearchLoop._lock``."""
 
     runtime_graph: object  # ObjectGraph
-    # {fid, class, xy} for the detections the LAST update_perception
-    # folded -- the flight report serves them so acting on a fresh
-    # detection is one step, not an analyze away: most observed-and-
-    # zero-row episodes never analyze after acquisition.
+    # {fid, class, xy, conf} the last update_perception folded: the flight
+    # report serves them.
     last_flight_detections: list[dict] = field(default_factory=list)
-    # The per-episode PerceptionDirector: the live SAM watchlist, the
-    # queued/active boosts, and the addressable pending-stop registry
-    # (qstop_N). None until the first concept declaration arms it.
+    # The PerceptionDirector; None until the first concept declaration.
     perception_director: Any = None
-    # Prior-color enrichment frames that raised this episode; the warning
-    # prints on the first and every 50th.
+    # Prior-colour enrichment frames that raised; the warning prints on the
+    # first and every 50th.
     prior_enrich_fails: int = 0
 
 
 class SearchLoop:
-    """Per-episode belief pipeline orchestrator."""
+    """One episode's world graph, its tile frame and the segmenter hooks."""
 
     def __init__(
         self,
@@ -71,55 +61,35 @@ class SearchLoop:
         # The segmenter's concept list: the declared union and the director's
         # watchlist both write it whole.
         self._sam_setter = sam_setter
-        # Per-block upstream ground datum: the mission's observation span is
-        # measured off it.
+        # The block's ground datum: the observation span is measured off it.
         self._ortho_ground_z_m = ortho_ground_z_m
-        # Upstream rgbd raster dir (``CITYNAV_NATIVE_RGBD_DIR``), read only
-        # by the ``look`` crop renderer (``_render_candidate_crops``).
+        # The raster ``look`` crops on the bench.
         self._rgbd_dir = rgbd_dir
-        #: What THIS RUN has captured, handed in by a live runner
-        #: (``benchmarks/flight/run_imagery.RunImagery``): the imagery
-        #: ``look`` crops instead of the bake's raster. None is the bench,
-        #: whose camera is the raster.
+        #: What a live run has captured (``benchmarks/flight/run_imagery``),
+        #: cropped by ``look`` instead of the raster; None on the bench.
         self.look_imagery = None
-        # World-space tracker (UCMCTrack-core, constant-position): a stable
-        # cross-frame ``track_id`` per detection, the upsert's sole re-id key.
-        # One instance per episode.
         from maps.perception.world_tracker import WorldTracker
 
         self._world_tracker = WorldTracker()
         self._state: _State | None = None
-        # Every public mutator and reader of ``_State`` takes this lock.
-        # ``RLock`` so a locked path may call another public method.
+        # Every public reader and writer of ``_State`` takes this lock;
+        # re-entrant so a locked path may call another public method.
         self._lock = threading.RLock()
-
-    # ------------------------------------------------------------------ #
-    # Lifecycle
-    # ------------------------------------------------------------------ #
 
     def start(self, graph) -> None:
         """Bind the episode's graph: the prior seed every detection folds into."""
         self._state = _State(runtime_graph=graph)
 
-    # ------------------------------------------------------------------ #
-    # Grid frame conversions
-    # ------------------------------------------------------------------ #
-
     @property
     def _cell_size_m(self) -> float:
-        """Tile-grid cell size in meters: the one source for every
-        grid-to-world conversion."""
+        """The tile grid's cell size in metres."""
         return float(self._grid.cell_size_m)
 
     def _grid_centroid_to_world_xy(
         self, centroid: object
     ) -> tuple[float, float] | None:
-        """Convert a ``(row, col)`` grid centroid to world XY in meters.
-
-        Returns ``None`` when ``centroid`` is not a 2-tuple of numbers.
-        Reads ``cell_size_m`` from :attr:`_cell_size_m` (canonical) and
-        the per-block frame origin from :attr:`_tile_origin_xy`.
-        """
+        """A ``(row, col)`` grid centroid as the world x, y of its cell
+        centre; None when it is not a pair of numbers."""
         if not isinstance(centroid, (list, tuple)) or len(centroid) != 2:
             return None
         try:
@@ -135,12 +105,9 @@ class SearchLoop:
         )
 
     def _prior_surface_xy_locked(self) -> dict:
-        """``{fid: (x, y)}`` for every PRIOR row, as the surface serves it.
-
-        Caller MUST hold ``self._lock``. Built once and kept: prior rows do
-        not move during a mission, and rebuilding costs ~10 s on the calcity
-        bake.
-        """
+        """``{fid: (x, y)}`` for every prior row as the surface serves it,
+        built once (priors do not move; a rebuild costs ~10 s on Cal City).
+        Under the lock."""
         cached = getattr(self, "_prior_xy_cache", None)
         if cached is not None:
             return cached
@@ -160,32 +127,11 @@ class SearchLoop:
         return out
 
     def _world_xy_for_node_locked(self, target_fid: str) -> tuple[float, float] | None:
-        """Resolve a fid to WHERE ITS ROW SAYS IT IS.
-
-        ONE POSITION PER ROW. A row's ``xy`` is the position the model
-        reasons on, orders against and names in a commit, and it is what
-        ``act.move`` flies to. They used to be different quantities computed
-        by paths no test reconciled: the row served ``representative_point``
-        over the feature's own geometry while the flight took
-        ``_grid_centroid_to_world_xy(node.centroid)``, the int cell-mean of a
-        merged feature's LEAD way. Measured over one calcity run, 17.3% of
-        prior flights landed more than 20 m from the ``xy`` their own row had
-        just served, 11.4% more than a kilometre, the worst 11,149 m; the 86
-        episodes that flew one scored 0.291 against a 0.516 run.
-
-        The precedence mirrors ``geom_program.build_surface._xy`` exactly,
-        because it answers the same question:
-
-        * a DETECTION's ``world_xy`` — the tracker's sub-cell measurement;
-        * a PRIOR's served row point, off the frozen surface;
-        * the node's cell centroid, for a fid on neither. That is a cluster
-          MEMBER rather than its row's own fid — nothing serves one, so the
-          model cannot name one, and the fallback exists for readers walking
-          the graph directly.
-
-        Caller MUST hold ``self._lock``. Returns ``None`` only when the fid
-        is off the graph or has no position at all.
-        """
+        """Where the fid's row says it is, the point a flight to it flies:
+        a detection's ``world_xy``, else a prior's served row point, else
+        the node's cell centroid (a cluster member no row serves). The
+        precedence is ``geom_program.build_surface``'s. None off the graph
+        or without a position. Under the lock."""
         node = self._node_for_fid_locked(target_fid)
         if node is None:
             return None
@@ -209,8 +155,7 @@ class SearchLoop:
             return xy, ("detected" if node.provenance == "detected" else "prior")
 
     def _node_for_fid_locked(self, fid: str):
-        """The graph node for ``fid``, or ``None``. Caller MUST hold
-        ``self._lock``."""
+        """The graph node for ``fid``, or None. Under the lock."""
         g = self.state.runtime_graph
         return g.nodes.get(fid) if g is not None else None
 
@@ -220,11 +165,7 @@ class SearchLoop:
         the lock."""
         node = self._node_for_fid_locked(target_fid)
         cells = getattr(node, "cells", None) if node is not None else None
-        # `not cells` is a numpy TRUTHINESS TRAP: a node's cells arrive as
-        # an (N, 2) array on the runtime graph, where bool(arr) raises
-        # "truth value of an array with more than one element is
-        # ambiguous" and takes the whole episode down as an
-        # unclassified no-prediction row. Length is the honest test.
+        # cells is an (N, 2) array: its truth value raises, its length does not.
         if cells is None or len(cells) == 0:
             return None
         cell = self._cell_size_m
@@ -289,9 +230,6 @@ class SearchLoop:
                         picks.extend(row[int(round(i * stride))]
                                      for i in range(rk))
                 if len(picks) > int(max_stops) > 1:
-                    # over the stop bound the pass thins even-stride,
-                    # ends kept: the caller's own reach arithmetic then
-                    # says SAMPLED rather than pretending coverage.
                     stride = (len(picks) - 1) / (int(max_stops) - 1)
                     picks = [picks[int(round(i * stride))]
                              for i in range(int(max_stops))]
@@ -301,17 +239,11 @@ class SearchLoop:
                                if (x1 - x0) >= (y1 - y0)
                                else (lambda p: p[1]))
                 reach = max(x1 - x0, y1 - y0)
-                # A shape shorter than one stop's own footprint is covered
-                # by standing in the middle of it: k == 1, and an explore
-                # of a small building is one flight, not a tour of a shed.
                 k = max(1, min(int(max_stops), int(reach // span) + 1))
                 k = min(k, len(along))
                 if k == 1:
-                    # THE MIDDLE, not an end. The one-stop case is the
-                    # shape that fits inside one observation, and standing
-                    # on its far end sees half of it — `along` is sorted
-                    # on the dominant axis, so its median is a real cell
-                    # at the middle of the length.
+                    # the median cell along the dominant axis: an end would
+                    # see half the shape
                     picks = [along[(len(along) - 1) // 2]]
                 else:
                     stride = (len(along) - 1) / (k - 1)
@@ -325,9 +257,7 @@ class SearchLoop:
             return on_it
 
     def _render_candidate_crops(self, requests: list[dict]) -> list[dict]:
-        """The ``look`` renderer (ortho only), handed to the per-stop
-        round as ``look_renderer`` — the pure render and its window/upscale/badge constants live in
-        ``look_render``; this binds the loop's tile/raster identity."""
+        """The ``look`` renderer, bound to this episode's map and imagery."""
         from maps.search.render.look_render import render_candidate_crops  # noqa: PLC0415
 
         return render_candidate_crops(
@@ -338,8 +268,8 @@ class SearchLoop:
         )
 
     def _look_audit_dir(self) -> str | None:
-        """``<workdir>/flight/look`` — the per-episode look-audit root, keyed by
-        stop_id + call id. ``None`` when ``SEARCH_COMPILE_WORKDIR`` is unset."""
+        """``<workdir>/flight/look``, the look audit root; None when
+        ``SEARCH_COMPILE_WORKDIR`` is unset."""
         wd = os.environ.get("SEARCH_COMPILE_WORKDIR")
         if not wd:
             return None
@@ -423,14 +353,10 @@ class SearchLoop:
                 d.retire_after_round(flown)
 
     def declare_mission_concepts(self, cleaned: list[dict]) -> dict:
-        """Runtime hook (the mission engine's ``act.sam_concepts`` channel,
-        latest-wins): arms the segmenter setter and the live director
-        watchlist (armed on the first declaration; DIFFED afterwards, never
-        rebuilt, so pending qstops/boosts survive).
-
-        ``cleaned`` is the validated ``[{class, role}]`` list the mission
-        loop recorded. Returns the declaration receipt the act result
-        carries."""
+        """Set the segmenter's classes to the declared ``[{class, role}]``
+        list's union and diff the director's watchlist to it (armed on the
+        first declaration). Returns the receipt the mission serves, carrying
+        a setter failure as its error."""
         # The classes SAM segments (it reads no roles), canonical, first seen
         # first; a placeholder class is no class.
         union = list(dict.fromkeys(
@@ -443,12 +369,8 @@ class SearchLoop:
                 try:
                     self._sam_setter(union)
                 except Exception as e:  # noqa: BLE001
-                    # NEVER swallowed into a clean receipt: a declaration
-                    # whose ack reads armed while the segmenter kept its
-                    # old class set is a lie in the transcript -- it LOOKS
-                    # live and no flight ever segments the class. The
-                    # receipt carries the failure; the say channel serves
-                    # it loud.
+                    # never a clean receipt over a segmenter that kept its
+                    # old classes
                     log.warning("sam concept setter failed: %s", e)
                     setter_err = str(e)
             d = self.state.perception_director
@@ -471,11 +393,6 @@ class SearchLoop:
                 f"({setter_err}); say it again"
             )
         return rcpt
-
-
-    # ------------------------------------------------------------------ #
-    # Per-flight perception
-    # ------------------------------------------------------------------ #
 
     def update_perception(self, detections: list, projected_masks: dict[int, object]) -> list[dict]:
         """Fold one flight's detections into the runtime graph: tracked ones
@@ -549,11 +466,8 @@ class SearchLoop:
             return step_detections
 
     def last_flight_detections(self) -> list[dict]:
-        """``[{fid, class, xy}]`` folded by the LAST perception update.
-
-        The flight report's source: what THIS flight just put into the
-        world, by the same fids the analyze surface serves.
-        """
+        """Copies of the rows the last perception update folded, the flight
+        report's source."""
         with self._lock:
             return [dict(d) for d in self.state.last_flight_detections]
 
@@ -561,17 +475,9 @@ class SearchLoop:
 
 
     def upsert_prior_percept(self, fid: str, attrs: dict, *, px: int = 0) -> bool:
-        """Merge a PERCEIVED attribute set onto a prebake node in the runtime
-        graph from the rendered pixels inside the prior's projected footprint
-        (the SAME deterministic postproc SAM detections get).
-
-        ``attrs`` is e.g. ``{"color": "gray", "color_rgb": "128,130,131"}``
-        from :func:`perception.sam.detect_client._set_color_attr`. The
-        write bumps the prior's ``observation_count`` so it surfaces as an
-        observed, color-bearing candidate (``collect_observed_target_candidates``)
-        and the color reads off ``node.semantic_attributes`` in the candidate
-        listing. Best-effort: never raises, so the per-frame enrichment sweep
-        in the runner can call it inline."""
+        """Merge attributes perceived inside a prior's projected footprint
+        (e.g. ``{"color": "gray", "color_rgb": "128,130,131"}``) onto its
+        node. Never raises: the per-frame enrichment calls it inline."""
         try:
             from maps.sws.graph.runtime import (
                 upsert_prior_percept as _upsert_prior_percept,
@@ -589,9 +495,7 @@ class SearchLoop:
             return False
 
     def _tool_ctx_for_examiner(self):
-        """The :class:`ToolContext` the mission's analyze programs run
-        against: the live graph and the tile frame. ``grid_shape`` is the
-        real tile grid, which the map painter clamps every cell to."""
+        """The :class:`ToolContext` over the live graph and the tile frame."""
         from maps.search.analyze_scene.tools import ToolContext
 
         return ToolContext(
@@ -600,11 +504,6 @@ class SearchLoop:
             tile_origin_xy=self._tile_origin_xy,
             cell_size_m=self._cell_size_m,
         )
-
-
-    # ------------------------------------------------------------------ #
-    # Internal phase helpers
-    # ------------------------------------------------------------------ #
 
     @staticmethod
     def _detection_id(det) -> str:
@@ -622,20 +521,13 @@ class SearchLoop:
         return f"{det.label or '?'}@{float(xy[0]):.0f},{float(xy[1]):.0f}"
 
 
-# ---------------------------------------------------------------------------
-# Module-private helpers
-# ---------------------------------------------------------------------------
-
-
 def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
-    """Convert one DetectedObject into a graph MapObject node."""
+    """One detection as a graph node: its cells (the stamped tile cells,
+    else the cell under its world point), contour, attributes and world
+    point."""
     from maps.sws.graph.model import MapObject
 
     meta = det.metadata or {}
-    # Prefer the perception adapter's rasterized tile cells when present —
-    # they are the ground truth for mask-IoU re-identification. Falls
-    # back to a 1x1 cell at the projected centroid when the adapter did
-    # not stamp cells (no-tile harnesses).
     raw_cells = meta.get("tile_cells")
     cells: np.ndarray | None = None
     if raw_cells is not None:
@@ -646,10 +538,8 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
         except (TypeError, ValueError):
             cells = None
 
-    # WORLD_CONTOUR substrate: fine world-meter footprint polygon stamped by
-    # the perceiving side (gt_perfect exact CityRefer contour, tightness-gated;
-    # or the real-SAM ortho path via geolocate.world_contour_from_pixel_mask).
-    # Carried onto the base_node; the upsert re-stamps it on repeat sightings.
+    # The footprint polygon in world metres the ortho projection stamped;
+    # the upsert re-stamps it on repeat sightings.
     raw_contour = meta.get("world_contour")
     world_contour: list[list[float]] | None = None
     if raw_contour is not None:
@@ -682,10 +572,8 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
     semantic_attributes: dict[str, dict[str, int]] = {
         key: {value: 1} for key, value in (det.attributes or {}).items()
     }
-    # Best-view color: the in-view mask pixel count rides in on det.attributes
-    # ['color_px'] as a TRANSIENT carrier (M6 sites stamp it) — promote it to the
-    # node's first-class best_view_px and strip it so it never becomes a surface
-    # attribute. The runtime upsert compares it to REPLACE color only on a larger view.
+    # ``color_px`` (the mask's in-view pixel count) becomes best_view_px, not
+    # an attribute: the upsert replaces colour only from a larger view.
     best_view_px = 0
     _bv_bucket = semantic_attributes.pop("color_px", None)
     if _bv_bucket:
@@ -699,7 +587,6 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
         label_bucket[label] = label_bucket.get(label, 0) + 1
     return MapObject(
         id=fid_placeholder,
-        # The FINE SAM concept label is the node class.
         class_name=label or "object",
         name=det.label,
         tags={
@@ -717,13 +604,11 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
         observation_count=1,
         best_view_px=best_view_px,
         confidence=float(det.confidence),
-        # `centroid`/`bbox`/`cell_count` come off the local `cells` above;
-        # the tracked upsert stamps the node's own cells.
+        # the tracked upsert stamps the node's own cells
         semantic_attributes=semantic_attributes,
         cells=None,
         world_contour=world_contour,
-        # The tracker's continuous world position — the sub-cell truth the
-        # int cell centroid quantizes away (build_surface prefers it).
+        # the sub-cell position build_surface prefers to the cell centroid
         world_xy=(float(det.world_xy[0]), float(det.world_xy[1])),
     )
 

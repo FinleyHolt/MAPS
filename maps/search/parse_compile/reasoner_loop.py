@@ -1,7 +1,7 @@
 """The mission conversation: one persistent reasoner, one served tool.
 
 ``run_mission`` (the CityNav bench) opens ONE conversation per mission
-over ``prompts.CODE_TOOLS`` ([run]) and serves ``CODE_SYSTEM_PROMPT``
+over ``prompts.served_tools()`` ([run]) and serves ``CODE_SYSTEM_PROMPT``
 beside it. Every model act is a native tool call; everything else is
 thinking, and there is no structured-output emission on the agent path.
 
@@ -951,7 +951,7 @@ def advance_reasoner_one_round(
     """The mission's turn loop: append the instruction, then serve `run`.
 
     Appends ``user_message`` as the ONE user turn, then loops native tool
-    calls over ``prompts.CODE_TOOLS``. Each ``run`` call carries a block of
+    calls over ``prompts.served_tools()``. Each ``run`` call carries a block of
     Python; the block executes in one persistent namespace and each library
     call runs on the loop's verbs, so a move inside it flies before the next
     turn is built.
