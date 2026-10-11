@@ -1,28 +1,10 @@
-"""Frame-correct geometry helpers — the math behind the ``analyze_scene`` ops.
+"""The spatial math the geometry op program runs on: compass words, colour
+columns, the composite sort, and exact-mask distance, containment and
+crossing.
 
-This module is the **single source of truth** for the spatial primitives the
-reasoner needs to disambiguate same-class instances ("the 4th car from the
-corner", "the white car between A and B", "on the road left of the church").
-The ``analyze_scene`` op-program executor
-(:mod:`maps.search.analyze_scene.geom_program`) calls these primitives to run each op.
-
-Design contract (load-bearing):
-
-- **Pure + data-in-args.** No graph, no I/O, ``math`` and ``numpy`` only
-  (numpy vectorises the exact-mask gap substrate). Points are ``[x, y]``
-  world meters; polylines are ``[[x, y], ...]`` world meters.
-
-- **ONE frame: x = east, y = NORTH.** World coordinates are
-  easting/northing (row 0 of every repo grid is the SOUTH edge). Cardinal
-  words, bearings, signed sides and left/right are all computed in this
-  frame: compass words map through the one :data:`COMPASS_UNIT` table, and
-  viewer handedness is a proper rotation of it (right = cw(forward) in a
-  y-up frame). Grid-vs-world is an affine map with positive scale, so
-  world-xy results equal grid ``(col, row)`` results in meters.
-
-- **Composable primitives, never prompt-specific solvers.** The executor
-  composes ``gap_witness`` / ``bearing`` into the
-  relation the instruction states.
+Pure functions of their arguments over world metres in ONE frame, x = east and
+y = north (row 0 of every grid is the south edge); every compass word maps
+through :data:`COMPASS_UNIT`.
 """
 
 from __future__ import annotations
@@ -55,14 +37,12 @@ CARDINALS = frozenset({"north", "south", "east", "west"})
 
 
 def cw(v):
-    """Clockwise quarter-turn in the y-up world frame, the handedness law
-    every left/right consumer shares. A viewer's RIGHT is ``cw(forward)``:
-    looking north (0,1) -> right = east (1,0)."""
+    """Clockwise quarter-turn: a viewer's right is ``cw(forward)``."""
     return (v[1], -v[0])
 
 
 def _xy(p):
-    """Coerce a point to ``(x, y)`` floats. Accepts ``[x, y]`` or ``{'xy': ...}``."""
+    """``(x, y)`` floats of ``[x, y]`` or ``{"xy": [x, y]}``."""
     if isinstance(p, dict):
         p = p.get("xy")
     return float(p[0]), float(p[1])
@@ -77,18 +57,14 @@ def _compass8(bearing_deg: float) -> str:
 
 
 def dist(a, b) -> float:
-    """Euclidean distance in meters (frame-independent)."""
+    """Euclidean distance in metres."""
     ax, ay = _xy(a)
     bx, by = _xy(b)
     return math.hypot(bx - ax, by - ay)
 
 
 def bearing(a, b) -> float:
-    """Compass bearing (0=N, clockwise, degrees) of the ray ``a -> b``.
-
-    World frame is ``(east, north)`` directly, so ``atan2(dx, dy)``: due
-    north (+y) is 0, due east (+x) is 90.
-    """
+    """Compass bearing of ``a -> b`` in degrees, 0 = north, clockwise."""
     ax, ay = _xy(a)
     bx, by = _xy(b)
     return math.degrees(math.atan2(bx - ax, by - ay)) % 360.0
@@ -172,12 +148,8 @@ def points_from_geoms(geoms):
     return np.vstack(out) if out else None
 
 
-# --- fuzzy color matching (perceptual, FAMILY-based) ------------------------
-# Perception's dominant color slip is within a family (a gray car reads
-# "silver"/"white" under glare or "black" under shadow; a red car reads
-# "maroon"), so matching is by family, never by Lab distance, which would
-# drop exactly those. Color stays a SOFT signal; geometry is the hard
-# discriminator.
+# Colour matches by FAMILY: perception's usual slip stays inside one (gray
+# reads silver under glare, red reads maroon).
 _COLOR_FAMILY = {
     "white": "achromatic", "silver": "achromatic", "gray": "achromatic", "black": "achromatic",
     "red": "red", "maroon": "red",
@@ -187,9 +159,8 @@ _COLOR_FAMILY = {
 
 
 def _color_word_raw(a: str, b: str) -> float:
-    """Word-vs-word family-soft raw score (inputs already spell-normalized +
-    lowercased): 1.0 same word; 0.8 same family; 0.0 cross-family; 0.5 when
-    either side is absent; unknown words fall back to substring containment."""
+    """1.0 same word, 0.8 same family, 0.0 another family, 0.5 when either is
+    absent; a word outside the families matches by substring."""
     if not a or not b:
         return 0.5
     if a == b:
@@ -201,11 +172,8 @@ def _color_word_raw(a: str, b: str) -> float:
 
 
 def _parse_color_mixture(s: str) -> "list[tuple[str, float]] | None":
-    """Parse a color-MIXTURE string ("red 0.45 / dark 0.30") into
-    ``[(word, fraction), ...]``; ``None`` when ``s`` is not a mixture (a plain
-    single word). The delimiter is ' / ' (it never breaks the markdown grid);
-    ' | ' parses too. Each part must be exactly ``<word> <fraction in
-    [0,1]>``."""
+    """``[(word, fraction), ...]`` of a mixture ("red 0.45 / black 0.30",
+    ``|`` also separates), or ``None`` when ``s`` is not one."""
     parts = [p.strip() for p in (s or "").replace("|", "/").split("/")]
     comps: list[tuple[str, float]] = []
     for part in parts:
@@ -224,20 +192,9 @@ def _parse_color_mixture(s: str) -> "list[tuple[str, float]] | None":
 
 
 def color_match(cand_color: str, cue_color: str, conf: float | None = None) -> float:
-    """FAMILY-based soft color match, optionally CONFIDENCE-shrunk: the value
-    of a ``color_<word>`` column. 1.0 = same word; 0.8 = same perceptual
-    family (achromatic white/silver/gray/black, red/maroon, the warm group);
-    0.0 = different family; absent color -> 0.5.
-
-    ``cand_color`` may be a color MIXTURE ("red 0.45 / black 0.30"): each
-    component's family-soft raw is shrunk toward the 0.5 neutral by its pixel
-    fraction (``0.5 + frac*(raw - 0.5)``) and the best component wins, so a
-    matching 0.45-fraction "red" scores 0.725.
-
-    ``conf`` is perception's per-detection color confidence in [0,1]. When
-    given, the score shrinks toward 0.5: ``0.5 + conf*(raw - 0.5)``, so a
-    low-confidence color neither vetoes nor carries much signal. ``conf=None``
-    returns the family-soft score unchanged."""
+    """The value of a ``color_<word>`` column: :func:`_color_word_raw`, each
+    mixture component shrunk toward 0.5 by its fraction and the best kept,
+    then shrunk toward 0.5 by ``conf`` when given."""
     b = (cue_color or "").strip().lower()
     mix = _parse_color_mixture(cand_color or "")
     if mix is not None:
@@ -254,10 +211,8 @@ def color_match(cand_color: str, cue_color: str, conf: float | None = None) -> f
     return 0.5 + c * (raw - 0.5)
 
 
-# --- color INTERFACE: closed enum + open->closed map + token-minimal surface cell ----------
-# ONE closed vocabulary the agent searches with (the find ``color`` arg), the
-# extractor emits, and the surface shows; ``normalize_color`` maps an open
-# word onto it (cue "burgundy" -> red, "navy" -> blue).
+# The closed palette the surface serves; :func:`normalize_color` maps an open
+# word onto it.
 COLOR_ENUM = ["white", "gray", "black", "red", "blue", "green", "yellow", "orange", "brown", "purple"]
 
 _COLOR_SYNONYMS = {
@@ -272,29 +227,24 @@ _COLOR_SYNONYMS = {
 
 
 def normalize_color(word: str) -> str:
-    """Map a (possibly open-world) cue color onto ``COLOR_ENUM``; identity on
-    an enum member; any other word comes back as itself, for the caller to
-    refuse or score."""
+    """``word`` on :data:`COLOR_ENUM` by synonym, or itself for the caller to
+    refuse."""
     w = (word or "").strip().lower()
     if w in COLOR_ENUM:
         return w
     return _COLOR_SYNONYMS.get(w, w)
 
 
-# The named color-column family the agent sorts on: ``color_<word>`` over
-# ``COLOR_ENUM``. Each column's value is ``color_match(row.color, word,
-# row.color_conf)``; rows without a perceived color omit the column.
+# ``color_<word>`` = ``color_match(row.color, word, row.color_conf)``; a row
+# with no perceived colour omits it.
 COLOR_COLUMNS = frozenset("color_" + w for w in COLOR_ENUM)
 
 
 def compact_color_cell(color_str: str, shade: "str | None" = None, uncertain: bool = False,
                        rich: bool = True) -> str:
-    """RENDER-ONLY: a mixture string ("red 0.45 / black 0.30") + optional
-    shade/uncertain -> a token-minimal color tag ``[dk|lt ]word[/word2][?]``.
-    ``word2`` shows only when ``rich`` (a color-name posterior's second
-    choice) AND it crosses achromatic<->chromatic or a hue family. A trailing
-    ``?`` marks an UNCERTAIN read. Never call on the raw row:
-    ``color_match`` needs the mixture intact."""
+    """The rendered colour cell ``[dk|lt ]word[/word2][?]`` of a mixture:
+    ``word2`` when ``rich`` and the second component crosses a family, ``?``
+    on an uncertain read."""
     s = (color_str or "").strip()
     if not s or s == "?":
         return "?"
@@ -362,18 +312,15 @@ def score_by(items, keys, weights) -> list[dict]:
     return out
 
 
-# --- exact-mask geometry (the `compare` op's distance substrate) --------------
-# Relation columns are computed against the EXACT mask as ingested: a
-# rasterized footprint realises as its full multi-loop cell boundary
-# (`cells_boundary_loops`), a ``world_contour`` as its polygon, a polyline-only
-# node as its polyline, a point-only node as its point. No simplification or
-# loop selection: d = 0.0 inside/on the footprint, else exact meters to it.
+# --- exact-mask geometry -----------------------------------------------------
+# A mask is the chains as ingested (a feature's contour, else its cell
+# boundary loops, else its polyline, else its point), never simplified. Gap
+# columns measure mask to mask (0.0 on containment, touch or crossing);
+# position columns measure from the area centroid.
 
 
 def point_in_polygon(pt, poly) -> bool:
-    """Even-odd ray cast: True iff ``pt`` lies inside the CLOSED polygon ``poly``
-    (a list of [x, y] vertices; the closing edge last->first is implicit). A
-    point exactly on a horizontal edge follows the half-open rule."""
+    """Even-odd ray cast of ``pt`` against ``poly`` (closing edge implicit)."""
     if not poly or len(poly) < 3:
         return False
     x, y = _xy(pt)
@@ -389,30 +336,14 @@ def point_in_polygon(pt, poly) -> bool:
     return inside
 
 
-# --- MASK-INTENT BASIS ---------------------------------------------------------
-# Each primitive consumes the mask functional that matches its INTENT:
-#
-#   GAP / CONTAINMENT (d_<ref>, brg_gap_<ref>) -> exact mask-to-mask min
-#       distance, 0.0 on containment/contact/crossing (brg_gap_ is then
-#       absent: no local direction exists).
-#   POSITION (dc_/brg_/along_/off_/vx_/vy_/frame ordinals/groups) -> the
-#       mask's AREA CENTROID (:func:`loops_area_centroid`); parked cars are
-#       ~5 m apart center-to-center but ~0.5 m edge-to-edge.
-#   AREA (footprint_area_m2) -> mask_shape_features.
-#
-# An object with no realised mask is a POINT-mask, and every functional
-# degrades to the point.
-
 # Memory bound on the vectorised (points x segments) blocks: batching only,
 # every pair is still computed exactly.
 _PAIR_CHUNK = 4_000_000
 
 
 def _shoelace(loops):
-    """``(sum cross, sum (x1+x2) cross, sum (y1+y2) cross)`` over the CLOSED
-    chains of ``loops``; open chains are skipped, since the ``% n`` wrap
-    would close a way implicitly. Hole loops wind opposite to outer loops
-    and subtract exactly."""
+    """Shoelace sums ``(sum cross, sum (x1+x2) cross, sum (y1+y2) cross)``
+    over the CLOSED chains; hole loops wind opposite and subtract."""
     sa = sx = sy = 0.0
     for lp in (loops or []):
         if not is_closed_chain(lp):
@@ -449,11 +380,8 @@ def loops_area(loops):
 
 
 def is_closed_chain(pts) -> bool:
-    """A chain ENCLOSES iff it returns to its first vertex.
-
-    The one rule that tells a ring from a way. Every producer emits the
-    closing vertex (the bake's ``_world_contour_from_geometry``,
-    :func:`cells_boundary_loops`, and the perception contour paths)."""
+    """A chain encloses iff it returns to its first vertex (every producer
+    emits the closing vertex)."""
     return (len(pts) >= 4
             and float(pts[0][0]) == float(pts[-1][0])
             and float(pts[0][1]) == float(pts[-1][1]))
@@ -461,17 +389,8 @@ def is_closed_chain(pts) -> bool:
 
 def clip_chains_to_box(chains, box) -> list:
     """``chains`` cut to ``box`` = ``(x0, y0, x1, y1)``, one chain per run
-    that stays inside.
-
-    A bake clips a feature's CELLS to its grid while ``world_contour`` runs
-    past the tile edge, so chains are cut to the tile before anything
-    measures against them.
-
-    A segment crossing the boundary is CUT at it, never dropped whole. A chain
-    that exits and re-enters comes back as two. Closure is not preserved: a
-    ring the boundary cuts is no longer a ring, and stitching it along the
-    tile edge would claim a wall nobody surveyed.
-    """
+    inside it: a crossing segment is cut at the edge, and a cut ring stays
+    open rather than gaining a wall along the tile edge."""
     x0, y0, x1, y1 = (float(box[0]), float(box[1]),
                       float(box[2]), float(box[3]))
 
@@ -556,21 +475,9 @@ def one_place(chains) -> bool:
 
 
 def mask_geom(chains):
-    """Precompute the vectorised arrays of one EXACT mask realisation:
-    ``{"V": (N,2) vertices, "BB": their (minx, miny, maxx, maxy) or None,
-    "A"/"B": (S,2) segment endpoints, "CA"/"CB": the subset of those lying on
-    CLOSED chains, "closed"}``.
-
-    ``chains`` is a list of vertex chains ``[[x, y], ...]``: the multi-loop
-    cell boundary (:func:`cells_boundary_loops`), a feature's ``world_contour``
-    (one chain per part), or a single point as ``[[x, y]]``. Each chain states
-    its OWN closure (:func:`is_closed_chain`) and the closing edge is IN the
-    chain, so segments are plain consecutive pairs.
-
-    ``CA``/``CB`` carry the closed chains' edges alone (even-odd containment
-    is defined over those); ``A``/``B`` carry every edge (distance is defined
-    over all). Build ONCE per object per op; :func:`gap_witness` consumes two
-    of these."""
+    """The arrays of one mask's chains: ``V`` vertices, ``BB`` their box
+    (``None`` when empty), ``A``/``B`` every segment (distance), ``CA``/``CB``
+    the closed chains' segments (containment), and ``closed``."""
     V: list = []
     A: list = []
     B: list = []
@@ -600,14 +507,8 @@ def mask_geom(chains):
 
 
 def bbox_gap(ga, gb) -> float:
-    """A LOWER BOUND on :func:`gap_witness`'s distance: the axis-aligned
-    separation of the two bounding boxes, 0.0 where they overlap.
-
-    Never greater than the true gap, so a caller taking a MIN over many
-    candidates may skip any whose bound already exceeds a gap it holds -- the
-    minimum it ends with is the same minimum, not an estimate of one. Returns
-    0.0 (prunes nothing) for anything that is not a vertex-bearing geom.
-    """
+    """A lower bound on :func:`gap_witness`'s gap: the separation of the two
+    boxes, 0.0 on overlap or an empty geom."""
     a, b = ga["BB"], gb["BB"]
     if a is None or b is None:
         return 0.0
@@ -616,15 +517,13 @@ def bbox_gap(ga, gb) -> float:
     return math.hypot(dx, dy)
 
 
-#: Slack on a bound comparison, in metres. A box bound never exceeds the gap
-#: it bounds mathematically, but the two arithmetic routes can disagree by an
-#: ulp; a micron of slack can only ever evaluate MORE members, never fewer.
+#: Slack on a bound comparison, in metres: the bound and the gap can disagree
+#: by an ulp, and slack only ever keeps more.
 BOUND_SLACK_M = 1e-6
 
 
 def stack_bboxes(geoms) -> np.ndarray:
-    """``(M, 4)`` of every member's bounding box, ``nan`` where one has none;
-    built once per reference column and compared against every item."""
+    """``(M, 4)`` of the members' boxes, ``nan`` where one has none."""
     out = np.full((len(geoms), 4), np.nan, dtype=float)
     for i, g in enumerate(geoms):
         bb = g["BB"] if isinstance(g, dict) else None
@@ -634,12 +533,8 @@ def stack_bboxes(geoms) -> np.ndarray:
 
 
 def bbox_bounds(stacked: np.ndarray, g) -> np.ndarray:
-    """:func:`bbox_gap` from every row of ``stacked`` to ``g``, vectorised.
-
-    Same lower bound, one numpy pass instead of a call per member. A member
-    whose box is unknown reads 0.0 and so prunes nothing, matching
-    :func:`bbox_gap`'s own refusal to guess.
-    """
+    """:func:`bbox_gap` from every row of ``stacked`` to ``g``; an unknown
+    box reads 0.0."""
     if len(stacked) == 0:
         return np.zeros(0, dtype=float)
     bb = g["BB"] if isinstance(g, dict) else None
@@ -653,15 +548,9 @@ def bbox_bounds(stacked: np.ndarray, g) -> np.ndarray:
 
 
 def _inside_mask_arr(P, A, B):
-    """Even-odd membership (bool array) of points ``P`` (N,2) against the
-    closed-loop edges ``A``->``B`` (S,2). Crossing parity over ALL loops
-    together IS exact mask membership (fragments add, holes subtract).
-
-    ONLY THE EDGES THAT CAN CROSS. An edge contributes to a point's parity
-    only when ``ylo <= py < yhi``, so testing points in y-order lets a chunk
-    spanning ``[lo, hi]`` drop every edge with ``ylo > hi`` or ``yhi <= lo``;
-    the parity is the same one (``test_inside_mask_prune_is_exact``).
-    """
+    """Even-odd membership of points ``P`` over the closed-loop edges
+    ``A``->``B``, all loops together. Points are tested in y-order, so each
+    chunk reads only the edges whose y-span meets its own."""
     out = np.zeros(len(P), dtype=bool)
     if len(P) == 0 or len(A) == 0:
         return out
@@ -698,9 +587,7 @@ def _inside_mask_arr(P, A, B):
 
 
 def mask_contains(geom, pts):
-    """Vectorised exact-mask containment: bool array over ``pts``, tested
-    against the CLOSED chains of a :func:`mask_geom`. A geom with no closed
-    chain encloses nothing and contains nothing."""
+    """Which ``pts`` lie inside the closed chains of a :func:`mask_geom`."""
     P = np.asarray([[float(p[0]), float(p[1])] for p in pts],
                    dtype=float).reshape(-1, 2)
     return _inside_mask_arr(P, geom["CA"], geom["CB"])
@@ -712,8 +599,8 @@ _PRUNE_PAIRS = 100_000
 
 
 def _min_pt_to_segs(P, A, B):
-    """``(d, i, foot)`` — the exact argmin distance from points ``P`` (N,2)
-    to segments ``A``->``B`` (S,2): winning point index + its foot point."""
+    """``(d, i, foot)``: the least distance from points ``P`` to segments
+    ``A``->``B``, its point index and its foot."""
     if len(P) == 0 or len(A) == 0:
         return float("inf"), -1, None
     if len(P) * len(A) > _PRUNE_PAIRS:
@@ -722,18 +609,9 @@ def _min_pt_to_segs(P, A, B):
 
 
 def _min_pt_to_segs_pruned(P, A, B):
-    """The full scan's triple, found on the pairs that can hold it.
-
-    A pair's distance is never below the separation of the point from the
-    segments' box, nor below the separation of the segment from the
-    points' box. One exact distance from the best-bounded segment to every
-    point, and one from the best-bounded point to every segment, gives an
-    upper bound the minimum cannot exceed; every point and every segment
-    whose bound clears it is dropped, in order, and the full scan runs on
-    what is left. The minimal pairs all survive the cut and keep their
-    order, so the first of them, the scan's witness, is the same pair,
-    computed by the same arithmetic. ``BOUND_SLACK_M`` errs toward keeping.
-    """
+    """The full scan's triple over the points and segments whose box bound
+    does not exceed an upper bound from the best-bounded of each; the
+    minimal pairs survive in order, so the witness is the same pair."""
     sx0, sx1 = np.minimum(A[:, 0], B[:, 0]), np.maximum(A[:, 0], B[:, 0])
     sy0, sy1 = np.minimum(A[:, 1], B[:, 1]), np.maximum(A[:, 1], B[:, 1])
     px0, px1 = float(P[:, 0].min()), float(P[:, 0].max())
@@ -821,11 +699,8 @@ def _overlaps_box(A, B, C, D):
 
 
 def _segments_cross(A1, B1, A2, B2):
-    """The contact point of a PROPERLY crossing segment pair between two
-    segment sets (interiors intersect), or None. Touch/collinear contact
-    needs no special case — the vertex-to-segment min already reads 0 there;
-    this catches exactly the crossing-without-vertex-contact overlap (a
-    plus-sign footprint pair, an open polyline threading a footprint)."""
+    """The first proper crossing between two segment sets, or None (a touch
+    already reads 0 through the vertex-to-segment distance)."""
     if len(A1) == 0 or len(A2) == 0:
         return None
     # Only the segments whose boxes meet: each side keeps, in order, the
@@ -847,15 +722,10 @@ def _segments_cross(A1, B1, A2, B2):
 
 
 def gap_witness(ga, gb):
-    """GAP intent WITH the argmin witness pair: the EXACT mask-to-mask MIN
-    distance between two :func:`mask_geom` realisations + the two points that
-    achieve it, ``(gap_m, witness_a, witness_b)``. 0.0 on containment, touch,
-    OR boundary crossing (the witnesses then sit at the contact point — the
-    caller reads gap 0 as "no local direction"). Exact: the min distance
-    between disjoint vertex chains is achieved vertex-to-segment, so the
-    symmetric vectorised vertex-to-chain argmin is an exact witness, and the
-    proper-crossing test catches the interiors-intersect overlap no vertex
-    membership sees. Empty either side -> ``(inf, None, None)``."""
+    """``(gap, witness_a, witness_b)``: the exact mask-to-mask distance
+    between two :func:`mask_geom` and the points achieving it; 0.0 at the
+    contact point on containment, touch or crossing; ``(inf, None, None)``
+    when either is empty."""
     Va, Vb = ga["V"], gb["V"]
     if len(Va) == 0 or len(Vb) == 0:
         return float("inf"), None, None
@@ -925,9 +795,8 @@ def set_gap(geoms, bbs, item_geom):
 
 
 def _segment_arrays(polys):
-    """Bundle of ``[[x, y], ...]`` polylines -> its ``(A, B)`` segment
-    endpoint arrays. A one-vertex polyline is a zero-length segment, so a
-    point feature meets a line exactly as its position does."""
+    """``(A, B)`` segment arrays of polylines; a one-vertex polyline is a
+    zero-length segment."""
     A: list = []
     B: list = []
     for p in polys or []:
@@ -947,21 +816,9 @@ def _segment_arrays(polys):
 
 
 def polyline_crossings(polys_a, polys_b):
-    """``(points, nearest_m)`` — every DISTINCT place two BUNDLES of exact
-    vertex chains MEET, and their nearest approach.
-
-    A bundle is a list of ``[[x, y], ...]`` chains because ONE road is
-    routinely several ways. They MEET where they TOUCH: distance exactly
-    zero, at a shared vertex, a vertex on the other's segment, or a proper
-    crossing of two segment interiors. Nothing is dilated or clustered:
-    roads that meet share an OSM node, so their contact is exactly 0.0.
-
-    ``points`` holds one entry PER CROSSING, deduplicated at the 2 dp the
-    geometry is stored to (the resolution of each crossing row's ``[x, y]``
-    fid). It is never collapsed to a centroid: a single centre over three
-    crossings lands off all three. Empty ``points`` with a finite
-    ``nearest_m`` is the caller's refusal material.
-    """
+    """``(points, nearest_m)``: every distinct place (2 dp) two bundles of
+    chains touch at distance exactly zero (a shared vertex, a vertex on a
+    segment, or a proper crossing), and their nearest approach."""
     A1, B1 = _segment_arrays(polys_a)
     A2, B2 = _segment_arrays(polys_b)
     if len(A1) == 0 or len(A2) == 0:
@@ -1019,23 +876,14 @@ def _collapse_collinear(corners):
 
 
 def cells_boundary_loops(cells, origin_xy, cell_m):
-    """Trace the EXACT boundary of a rasterized footprint: every closed loop
-    (the outer boundary of every fragment and every hole) with collinear runs
-    collapsed, which is lossless.
-
-    ``cells`` is an iterable of (row, col) tile-grid cells (numpy ``(N,2)`` or
-    a list of pairs). Returns a list of CLOSED loops, each a list of [x, y]
-    world meters ending on the vertex it started from
-    (:func:`is_closed_chain`), or None when no cells. The directed trace winds
-    hole loops opposite to outer loops, so even-odd membership over all loops
-    reproduces exact cell-union membership and :func:`loops_area_centroid`'s
-    signed sum subtracts holes exactly."""
+    """Every closed boundary loop of ``(row, col)`` cells (each fragment's
+    outline and each hole, collinear runs collapsed) in world metres, or
+    ``None`` when there are none. Holes wind opposite to outlines."""
     cs = {(int(rc[0]), int(rc[1])) for rc in (cells if cells is not None else [])}
     if not cs:
         return None
-    # Directed boundary edges on cell-corner coords, consistently oriented so
-    # loops chain head-to-tail: for each cell, each side with no 4-neighbor
-    # contributes one corner->corner edge (clockwise in (row, col) space).
+    # Each cell side with no 4-neighbour is one directed corner edge,
+    # clockwise in (row, col), so loops chain head to tail.
     edges: dict[tuple, list] = {}
     for (r, c) in cs:
         if (r - 1, c) not in cs:
