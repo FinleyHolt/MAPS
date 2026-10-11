@@ -533,8 +533,8 @@ class Row:
 
         A RELATION COLUMN IS NOT MISSING, IT IS UNASKED-FOR. ``distance to
         <ref>``, ``facing <ref>`` and ``<dir> of <ref>`` exist only where a
-        compare named that ref (``geom_program._auto_attach``, whose prefix
-        tuple this reads), so the remedy is the relate that writes it.
+        compare named that ref (``geom_program._AUTOATTACH_PREFIXES``), so
+        the remedy is the relate that writes it.
         """
         row = object.__getattribute__(self, "_row")
         pre = next((p for p in _AUTOATTACH_PREFIXES

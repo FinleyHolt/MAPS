@@ -852,7 +852,7 @@ _COMPARE_COL_PREFIXES = ("distance to ", "center distance to ",
                          *_STANDING_SIDE_PREFIXES,
                          "east of ", "west of ", "north of ", "south of ")
 _AUTOATTACH_PREFIXES = tuple(
-    p for p in _COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
+    p for p in _COMPARE_COL_PREFIXES if p not in ("contains ", "along ")) + ("color_",)
 
 # A wall-clock net: a union measures members x items gaps.
 _UNION_MAX_MEMBERS = 400

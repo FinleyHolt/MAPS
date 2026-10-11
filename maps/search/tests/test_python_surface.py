@@ -573,13 +573,17 @@ def test_a_relation_key_names_the_relate_instead_of_a_column_list():
     # a relate column names the relate, and names the PLACE it was asked
     # about rather than the ones it already carries
     for k in ("distance to redwood", "east of quezon", "facing nipa",
-              "along airway", "bearing from great_circle"):
+              "bearing from great_circle"):
         with pytest.raises(KeyError) as e:
             r[k]
         msg = str(e.value)
         assert "never related to" in msg, msg
         assert "order(nearest=" in msg, msg
         assert k[k.index(" ") + 1:].split(" ")[-1] in msg, msg
+    # no relate writes an "along" column, so none is offered for one
+    with pytest.raises(KeyError) as e:
+        r["along airway"]
+    assert "never related to" not in str(e.value), str(e.value)
     # attribute access answers the same way; one resolver, one message
     with pytest.raises(AttributeError, match="never related to"):
         r.__getattr__("distance to redwood")
