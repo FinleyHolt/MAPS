@@ -17,9 +17,9 @@ def _lines(path):
 def test_every_append_is_on_disk_before_the_next(tmp_path):
     path = tmp_path / "ep" / CONVERSATION_JSONL
     log = ConversationLog(path)
-    log.append({"stage": "mission", "kind": "run", "turn_idx": 0, "said": "x = 1"})
-    assert _lines(path) == [{"stage": "mission", "kind": "run", "turn_idx": 0, "said": "x = 1"}]
-    log.append({"stage": "mission", "kind": "summary", "ended_by": "reply", "when": object()})
+    log.append({"kind": "run", "turn_idx": 0, "said": "x = 1"})
+    assert _lines(path) == [{"kind": "run", "turn_idx": 0, "said": "x = 1"}]
+    log.append({"kind": "summary", "ended_by": "reply", "when": object()})
     rows = _lines(path)
     assert len(rows) == 2 and rows[1]["kind"] == "summary"
     assert "object" in rows[1]["when"], "an unserializable value lands as its string"

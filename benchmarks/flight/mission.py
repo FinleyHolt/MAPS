@@ -693,7 +693,7 @@ class Mission:
                     self.error = f"{type(exc).__name__}: {exc}"
         finally:
             with self._lock:
-                summary = {"stage": "mission", "kind": "summary", "status": self.status,
+                summary = {"kind": "summary", "status": self.status,
                            "ended_by": self.ended_by, "turns_used": self._turns(),
                            "flights_flown": len(self.flights), "error": self.error}
             self.transcript.append(summary)
