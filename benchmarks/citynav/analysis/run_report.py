@@ -204,14 +204,14 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     prov = Counter(m.get("committed_provenance") or "none" for m in scored.values())
     print("provenance: " + "  ".join(f"{k}={v}" for k, v in prov.most_common()))
 
-    # Among scored fails: was the committed xy itself within the success radius?
+    # Among scored fails: would the committed xy itself have scored, under the
+    # run's own success criterion (a ring or a shape)?
     fails = [m for m in scored.values() if not m.get("SR")]
-    commit_in = sum(1 for m in fails if m.get("commit_would_score") is True)
-    commit_out = sum(1 for m in fails if m.get("commit_would_score") is False)
-    unk = len(fails) - commit_in - commit_out
+    would = sum(1 for m in fails if m.get("commit_would_score") is True)
+    miss = sum(1 for m in fails if m.get("commit_would_score") is False)
     print(
-        f"fails={len(fails)}: commit_within_R={commit_in}  "
-        f"commit_beyond_R={commit_out}  (no commit_xy={unk})"
+        f"fails={len(fails)}: commit_would_score={would}  "
+        f"commit_would_miss={miss}  (no commit_xy={len(fails) - would - miss})"
     )
     return scored
 
