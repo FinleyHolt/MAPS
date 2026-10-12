@@ -337,9 +337,11 @@ class Script:
         if k <= 0 or k >= len(self.rec.requests):
             return 0
         before = len(self.rec.requests[k - 1]) + 1     # the request before, and its answer
-        # An operator's turn is words alone; a picture rides a user turn as a list.
+        # An operator's turn is words alone; a picture rides a user turn as a
+        # list, and a protocol nudge is the harness's own ``[Repair]`` turn.
         return sum(1 for m in self.rec.requests[k][before:]
-                   if m.get("role") == "user" and isinstance(m.get("content"), str))
+                   if m.get("role") == "user" and isinstance(m.get("content"), str)
+                   and not m["content"].startswith("[Repair]"))
 
     def __call__(self, url, headers, body, *, timeout, cancel_event):
         from maps.llm.http import CallCanceled  # noqa: PLC0415

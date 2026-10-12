@@ -174,9 +174,11 @@ def test_the_recorded_reasoner_speaks_an_operator_turn_where_the_next_request_ca
                       requests=[asked, asked + [answer, {"role": "tool", "content": "r"}, picture],
                                 asked + [answer, {"role": "tool", "content": "r"}, picture, answer,
                                          {"role": "tool", "content": "r"}, picture,
+                                         {"role": "user", "content": "[Repair] call run with code"},
                                          {"role": "user", "content": "the red one"}]],
                       responses=[{}, {}, {}])
     script = R.Script(rec)
+    # The harness's own [Repair] nudge is not an operator's turn.
     assert [script._user_turns(k) for k in range(3)] == [0, 0, 1]
 
 
