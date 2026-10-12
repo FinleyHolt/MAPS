@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 
-from maps.search.parse_compile import reasoner_loop as rl
+from maps.search.parse_compile import carry as rl
 from maps.search.tests.fakes import grow_drive, run
 
 

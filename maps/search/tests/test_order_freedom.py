@@ -5,7 +5,7 @@ from maps.search.analyze_scene.geom_program import (
     compact_results,
     run_program,
 )
-from maps.search.parse_compile.reasoner_loop import (
+from maps.search.parse_compile.carry import (
     _PREFLIGHT_COLOR_NOTE,
     run_geom_program_tool,
 )

@@ -45,15 +45,15 @@ from maps.search.analyze_scene.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR,
     unmatched_query_tokens as _unmatched_query_tokens,
 )
-from maps.search.analyze_scene.geom_compute import normalize_color as _normalize_color
 from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
     MODEL_UNSERVED_COLUMNS,
-    ProgramError as _ProgramError,
-    _is_color_column_key,
-    compact_results as _compact_results,
-    join_hints,
-    run_program as _run_program,
+)
+from maps.search.parse_compile.carry import (
+    Carry,
+    _program_dedup_key,
+    program_reads,
+    run_geom_program_tool,
 )
 from maps.search.parse_compile.prompts import served_tools
 from maps.search.parse_compile.reasoner_agent import Reasoner
@@ -106,20 +106,6 @@ def _is_refused_request(exc: BaseException) -> bool:
 
 def _summarise_exc(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"
-
-
-def _program_dedup_key(program: dict) -> str | None:
-    """Canonical identity of a SELF-CONTAINED program (each ref renamed to
-    its emission index), or ``None`` when it reads a handle it does not
-    define and is therefore never deduped."""
-    ops = program.get("ops") or []
-    if not ops:
-        return None
-    ren = {op["ref"]: f"r{i}" for i, op in enumerate(ops)}
-    blob = json.dumps(ops, sort_keys=True, default=str)
-    if any(t not in ren for t in re.findall(r"\br\d+\b", blob)):
-        return None
-    return re.sub(r"\br\d+\b", lambda m: ren[m.group(0)], blob)
 
 
 # The dedup hit serves a one-line REFERENCE, never a fresh payload (a full
@@ -426,90 +412,6 @@ def _mission_sanitize_moves(raw: list[str]) -> tuple[list[dict], list[dict]]:
     return accepted, errors
 
 
-# Served on a preflight color-column request that attached to no row:
-# before landing no row carries perceived color.
-_PREFLIGHT_COLOR_NOTE = (
-    "priors carry no perceived color before landing, so no color column "
-    "attaches yet; color enriches per-stop after arrival."
-)
-
-
-def _color_words_of_op(op: dict) -> list[str]:
-    """The palette words this op requests a color column for (a filter key,
-    a score_by emphasis key)."""
-    args = op["args"]
-    words: list[str] = []
-    for k in [args.get("key")] + [e["key"] for e in args.get("emphasis") or []]:
-        if _is_color_column_key(k):
-            c = _normalize_color(k[len("color_"):].strip().lower())
-            if c and c not in words:
-                words.append(c)
-    return words
-
-
-def _program_requests_color(program: dict) -> bool:
-    return any(_color_words_of_op(op) for op in program["ops"])
-
-
-def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
-                          raw_sink: dict | None = None,
-                          seed_results: dict | None = None,
-                          preflight: bool = False,
-                          answer_ref: str = "") -> dict:
-    """Run one op-program over the namespace's ``(cands, anchors)`` surface
-    (and its standing viewpoint) and compact the results for serving.
-
-    ``raw_sink["results"]`` receives the pre-compaction results. A refused
-    program returns ``{"error": ...}``, never raises.
-    """
-    program = (args or {}).get("program")
-    if not isinstance(program, dict) or not program.get("ops"):
-        return {"error": "program must be an object with a non-empty 'ops' array"}
-    ns = namespace or {}
-    cands = ns.get("cands") or []
-    anchors = ns.get("anchors") or []
-    try:
-        out = _run_program(cands, anchors, program,
-                           seed_results=seed_results,
-                           staged=ns.get("staged"),
-                           standing=ns.get("standing"))
-    except _ProgramError as exc:
-        _err = str(exc)
-        if raw_sink is not None:
-            raw_sink["error_op"] = getattr(exc, "op", "")
-        if preflight and _program_requests_color(program):
-            # The color request errored before any envelope existed (e.g.
-            # the emphasis absent-color guard) -- the phase fact rides the
-            # error so "no color" reads as WHEN, not broken.
-            _err = join_hints(_err, _PREFLIGHT_COLOR_NOTE)
-        return {"error": _err}
-    except Exception as exc:  # noqa: BLE001  — surface the failure to the agent, don't crash the round
-        return {"error": f"program failed: {exc}"}
-    _raw_results = out["results"]
-    if raw_sink is not None:
-        raw_sink["results"] = _raw_results
-    # ``answer_ref`` names the one table a plan returns; the other ops' hints
-    # ride it.
-    out["results"] = _compact_results(_raw_results, answer_ref=answer_ref)
-    if preflight:
-        # A color-column request whose raw rows carry none of its columns
-        # gets the phase note.
-        for _op in (program.get("ops") or []):
-            _words = _color_words_of_op(_op)
-            if not _words:
-                continue
-            _rows = _raw_results.get(_op.get("ref"))
-            _attached = isinstance(_rows, list) and any(
-                isinstance(_it, dict) and any(
-                    _it.get("color_" + _w) is not None for _w in _words)
-                for _it in _rows)
-            _env = out["results"].get(_op.get("ref"))
-            if not _attached and isinstance(_env, dict):
-                _env["hint"] = join_hints(_env.get("hint"),
-                                          _PREFLIGHT_COLOR_NOTE)
-    return out
-
-
 def _surface_from_ctx(ctx) -> dict:
     """The ``{cands, anchors, cell_m}`` surface of a :class:`ToolContext`'s
     graph."""
@@ -699,7 +601,6 @@ class _Mission:
         # ``(surface_version, turn, ops)``: a repeat under the same version gets
         # the dedup note. A flight, a boost or a stance bumps the version.
         self._programs_seen: dict[str, tuple] = {}
-        self._surface_version = 0
 
         # Surface rows by fid, rebuilt in place after every flight and boost.
         self._ns_rows: dict[str, dict] = {}
@@ -725,22 +626,7 @@ class _Mission:
         self._err_streak: dict = {"sig": None, "n": 0}
         self._dedup_streak: dict = {"key": None, "n": 0}
 
-        # Raw results of every successful program, by ref.
-        self.carry_results: dict = {}
-
-        # A HANDLE IS A QUERY, NOT A SNAPSHOT: after the surface moves, a read
-        # of a handle re-runs the ops that produced it (and those they read)
-        # over the current surface. A replay that fails keeps the old rows.
-        self._op_history: list = []           # every op, in execution order
-        self._op_reads: list = []             # per op: the handle bases its args name
-        self._producers: dict = {}            # ref -> indices into _op_history
-        # The surface version the carry is armed for: the first read under a new
-        # version claims it, and every read after re-derives what it reads.
-        self._carry_version = 0
-        self._fresh: set = set()              # refs re-derived, or written, under it
-        # A flight-minted handle records an event (the rows one flight added)
-        # and never re-derives.
-        self._event_handles: set = set()
+        self.carry = Carry(compute_namespace)
 
         self.mission_flights = 0
         self.mission_sam: list[dict] = []
@@ -844,7 +730,7 @@ class _Mission:
         self.standing_handle = h
         self.ns["staged"] = self.staged_viewpoints
         self.ns["standing"] = h
-        self._surface_version += 1
+        self.carry.version += 1
         return {
             "staged": [{"handle": h, "at_xy": at_xy,
                         "facing_bearing_deg": brg}],
@@ -916,7 +802,7 @@ class _Mission:
                     if re.fullmatch(r"r\d+", _mf):
                         _mfx.extend(
                             str(_r["fid"])
-                            for _r in (self._carry_read(_mf) or [])
+                            for _r in (self.carry.read(_mf) or [])
                             if isinstance(_r, dict) and _r.get("fid"))
                     else:
                         _mfx.append(_mf)
@@ -1035,8 +921,8 @@ class _Mission:
         return feats
 
     def _map_features_cached(self) -> list[dict]:
-        if self._map_feats[0] != self._surface_version:
-            self._map_feats[:] = [self._surface_version, self._map_features_from_ctx()]
+        if self._map_feats[0] != self.carry.version:
+            self._map_feats[:] = [self.carry.version, self._map_features_from_ctx()]
         return self._map_feats[1]
 
     def _map_spec(self, around: str, mark_fids: list) -> tuple[dict | None, list[str]]:
@@ -1219,82 +1105,14 @@ class _Mission:
             return self._repeated_rejection_state(err, _n, _consec)
         return err + self._loop_breaker_facts(self.ns, _n)
 
-    def _refs_read(self, op: dict) -> set:
-        """The handles an op's args read (``rN`` or ``rN[a:b]``)."""
-        return set(re.findall(r'"(r\d+)(?:\[[^"\]]*\])?"',
-                              json.dumps(op["args"], default=str))) - {op["ref"]}
-
-    def _program_reads(self, program: dict) -> set:
-        """The carry handles a program reads and does not define."""
-        ops = program["ops"]
-        return set().union(*(self._refs_read(o) for o in ops)) \
-            - {o["ref"] for o in ops}
-
-    def _ensure_fresh(self, refs) -> None:
-        """Re-derive ``refs`` and every op they read against the current
-        surface, once per surface version."""
-        if self._carry_version != self._surface_version:
-            self._carry_version = self._surface_version
-            self._fresh.clear()
-            self._fresh.update(self._event_handles)
-        need: set = set()
-        todo = [r for r in refs if r not in self._fresh]
-        while todo:
-            r = todo.pop()
-            if r in need or r in self._fresh:
-                continue
-            idxs = self._producers.get(r)
-            if not idxs:
-                continue    # an event handle, an alias, an unknown: nothing to re-derive
-            need.add(r)
-            for i in idxs:
-                todo.extend(self._op_reads[i])
-        if not need:
-            return
-        try:
-            _sink: dict = {}
-            # Seed everything else (a flight-minted handle has no op).
-            _out = run_geom_program_tool(
-                {"program": {"ops": [
-                    op for op in self._op_history if op["ref"] in need]}},
-                namespace=self.ns, raw_sink=_sink,
-                seed_results={h: v for h, v in self.carry_results.items()
-                              if h not in need})
-            if isinstance(_out, dict) and _out.get("error"):
-                # A refused replay keeps the last rows, unclaimed.
-                log.debug("carry refresh refused; handles keep their last "
-                          "rows: %s", str(_out["error"])[:200])
-                return
-            self.carry_results.update(
-                {k: v for k, v in (_sink.get("results") or {}).items()
-                 if k in need})
-            self._fresh.update(need)
-        except Exception:  # noqa: BLE001 — a failed replay keeps the old rows
-            log.debug("carry refresh failed; handles keep their last rows",
-                      exc_info=True)
-
-    def _carry_read(self, ref):
-        """A handle's rows, re-derived first when the version is armed."""
-        if self._carry_version == self._surface_version:
-            self._ensure_fresh([ref])
-        return self.carry_results.get(ref)
-
-    def _alias_deduped_refs(self, prev_ops, cur_ops) -> None:
-        """Point this emission's refs at the handles the first run stored,
-        op by op; a label already live is never overwritten."""
-        for prev, cur in zip(prev_ops, cur_ops):
-            if cur["ref"] not in self.carry_results \
-                    and prev["ref"] in self.carry_results:
-                self.carry_results[cur["ref"]] = self.carry_results[prev["ref"]]
-
     def _dispatch_analyze_scene(self, a, *, answer_ref=""):
         _key = _program_dedup_key(a["program"])
         _prev = self._programs_seen.get(_key) if _key is not None else None
-        if _prev is not None and _prev[0] == self._surface_version:
+        if _prev is not None and _prev[0] == self.carry.version:
             # A one-line reference, never a payload; the emission's own
             # labels alias the stored handles so nothing downstream can tell
             # it from a re-run.
-            self._alias_deduped_refs(_prev[2], a["program"]["ops"])
+            self.carry.alias(_prev[2], a["program"]["ops"])
             if self._dedup_streak["key"] == _key:
                 self._dedup_streak["n"] += 1
             else:
@@ -1309,10 +1127,10 @@ class _Mission:
                     counts=_live_counts(_c_n, _a_n), cols=_cols_s)}
             return {"note": _DEDUP_NOTE.format(turn=_prev[1])}
         _raw_sink: dict = {}
-        self._ensure_fresh(self._program_reads(a["program"]))
+        self.carry.ensure_fresh(program_reads(a["program"]))
         out = run_geom_program_tool(a, namespace=self.ns,
                                     raw_sink=_raw_sink,
-                                    seed_results=self.carry_results,
+                                    seed_results=self.carry.rows,
                                     preflight=self.preflight,
                                     answer_ref=answer_ref)
         if isinstance(out, dict) and "error" in out:
@@ -1326,14 +1144,9 @@ class _Mission:
             self._dedup_streak["key"] = None
             self._dedup_streak["n"] = 0
             if _key is not None:
-                self._programs_seen[_key] = (self._surface_version, self.turn_idx,
+                self._programs_seen[_key] = (self.carry.version, self.turn_idx,
                                              a["program"]["ops"])
-            self.carry_results.update(_raw_sink.get("results") or {})
-            self._fresh.update(_raw_sink.get("results") or {})
-            for _op in a["program"]["ops"]:
-                self._producers.setdefault(_op["ref"], []).append(len(self._op_history))
-                self._op_history.append(_op)
-                self._op_reads.append(self._refs_read(_op))
+            self.carry.record(a["program"]["ops"], _raw_sink.get("results") or {})
             try:
                 for _v in (_raw_sink.get("results") or {}).values():
                     _rows = _v if isinstance(_v, list) else (
@@ -1367,9 +1180,7 @@ class _Mission:
         self.plan_rn[0] += 1
         self._code_names.add(_h)
         self._code_minted.append(_h)
-        self.carry_results[_h] = [self._ns_rows[_f] for _f in _new_fids]
-        self._event_handles.add(_h)
-        self._fresh.add(_h)
+        self.carry.mint(_h, [self._ns_rows[_f] for _f in _new_fids])
         self._those = _h
         return _h, (f"{_h} — the {len(_new_fids)} rows this {_what} added; "
                     f"the handle is bound, so {_h}, {_h}[0] and "
@@ -1514,7 +1325,7 @@ class _Mission:
                 # the version.
                 self.ns.update(_surface_from_ctx(self.ctx))
                 self._rebuild_ns_rows()
-                self._surface_version += 1
+                self.carry.version += 1
                 # The flight's new rows (the surface diff) mint a handle; a
                 # pass mints once, around the whole of itself.
                 if cover is None:
@@ -1776,7 +1587,7 @@ class _Mission:
             # A retro boost ingests detections now: refresh like a flight.
             self.ns.update(_surface_from_ctx(self.ctx))
             self._rebuild_ns_rows()
-            self._surface_version += 1
+            self.carry.version += 1
         if res.get("error"):
             return self._plan_err({"boost": res}, str(res["error"]))
         return {"boost": res}
@@ -1843,7 +1654,7 @@ class _Mission:
         """look(rows): one crop per row of the handle, in its own order, each
         badged with the row it shows; the crop budget is stated when it
         bites."""
-        rows = [r for r in (self._carry_read(handle) or [])
+        rows = [r for r in (self.carry.read(handle) or [])
                 if isinstance(r, dict) and r.get("fid")]
         if not rows:
             return {"error": (f"{handle} holds no rows to look at; name a "
@@ -1995,7 +1806,7 @@ class _Mission:
         if page:
             # Paging a handle with nothing left to page is refused here.
             _h, _lo = page
-            _held = len(self._carry_read(_h) or [])
+            _held = len(self.carry.read(_h) or [])
             if _held and (_held <= _BROAD_DUMP_SOFT_ROWS or _lo >= _held):
                 return self._plan_err({}, (
                     f"all {_held} row(s) of {_h} are already served -- there "
@@ -2014,7 +1825,7 @@ class _Mission:
         _sb = next((o for o in reversed(ops) if o["op"] == "score_by"), None)
         _em = ((_sb["args"].get("emphasis") or [None])[0]) if _sb else None
         self._call.update(answer=answer, page=page,
-                          rows=self.carry_results.get(answer),
+                          rows=self.carry.rows.get(answer),
                           order=str(_em["key"]) if isinstance(_em, dict)
                           and _em.get("key") else None)
         return {"result": out}
@@ -2060,7 +1871,7 @@ class _Mission:
             if _stop_err:
                 return self._plan_err({}, _stop_err)
             if _is_handle_token(_t):
-                _hr = [str(r["fid"]) for r in (self._carry_read(_t) or [])
+                _hr = [str(r["fid"]) for r in (self.carry.read(_t) or [])
                        if isinstance(r, dict) and r.get("fid")]
                 if not _hr:
                     return self._plan_err({}, (
@@ -2094,7 +1905,7 @@ class _Mission:
                           if mv.get("note") else _cov_note)
         # THE PASS SHOWS ITS CATCH: one crop per row it added, pass order.
         _h = self._call_minted()
-        _rows = [r for r in (self.carry_results.get(_h) or [])
+        _rows = [r for r in (self.carry.rows.get(_h) or [])
                  if isinstance(r, dict) and r.get("fid")] if _h else []
         _catch = _rows[:_CATCH_CROPS]
         if _catch:
@@ -2106,10 +1917,10 @@ class _Mission:
             if not _cack.get("error"):
                 mv["catch"] = {k: _cack[k] for k in ("delivered", "not_drawn")
                                if k in _cack}
-                if len(_catch) < len(self.carry_results.get(_h) or []):
+                if len(_catch) < len(self.carry.rows.get(_h) or []):
                     mv["catch"]["shown"] = (
                         f"first {len(_catch)} of "
-                        f"{len(self.carry_results[_h])}" + (
+                        f"{len(self.carry.rows[_h])}" + (
                             "" if withheld("look") else
                             f" -- look({_h}[a:b]) pages the rest"))
                 if withheld("images"):
@@ -2127,7 +1938,7 @@ class _Mission:
     def _map(self, around: str) -> dict:
         # The map badges the set in scope.
         _h = self._those
-        _mrows = [r for r in (self._carry_read(_h) or [])
+        _mrows = [r for r in (self.carry.read(_h) or [])
                   if isinstance(r, dict) and r.get("fid")] if _h else []
         _mfids = [str(r["fid"]) for r in _mrows[:_MAP_MAX_MARKS]]
         mp = self._map_of(around, mark_fids=_mfids)
@@ -2196,11 +2007,11 @@ class _Mission:
             self._mission_py = _py_surface.MissionPython(_py_surface.MissionEnv(
                 # A read of a handle's rows re-derives it first.
                 rows_of_ref=lambda ref: (
-                    self._ensure_fresh([ref]),
-                    [r for r in (self.carry_results.get(ref) or [])
+                    self.carry.ensure_fresh([ref]),
+                    [r for r in (self.carry.rows.get(ref) or [])
                      if isinstance(r, dict)])[1],
                 tied_of_ref=lambda ref: bool(
-                    getattr(self._carry_read(ref), "name_set", False)),
+                    getattr(self.carry.read(ref), "name_set", False)),
                 plan_rn=self.plan_rn, widened=self._widened, minted=self._code_minted,
                 say_err=self._plan_err, row_of_fid=self._ns_rows.get,
                 ground=self._ground_names, analyze=self._analyze, stand=self._stand,
