@@ -157,3 +157,10 @@ def test_the_tasking_set_finds_a_run_by_its_description_wherever_the_split_lists
     ring, source = truth.ring({}, {"episode_id": "calcity::0#0", "description": "the school"})
     assert source == "tasking set" and ring[0] == [500.0, 0.0]
     assert truth.ring({}, {"episode_id": "calcity::2#2", "description": "the courts"}) == (None, None)
+
+
+def test_a_track_with_no_fix_in_the_run_covers_none_of_it():
+    track = [{"t_unix": T0 + 100.0, "x": 0.0, "y": 0.0}]
+    assert Q.track_coverage(track, T0, T0 + 2.0) == 0.0
+    assert Q.track_coverage([], T0, T0 + 2.0) == 0.0
+

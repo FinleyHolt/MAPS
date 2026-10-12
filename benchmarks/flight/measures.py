@@ -326,9 +326,10 @@ def closest_approach(path, p) -> tuple[float, dict[str, Any]]:
 
 def track_coverage(track, t0: float, t1: float) -> float:
     """The share of ``[t0, t1]`` the recording holds."""
-    if t1 <= t0:
+    fixes = _window(track, t0, t1) if t1 > t0 else []
+    if not fixes:
         return 0.0
-    ts = [t0] + [f["t_unix"] for f in _window(track, t0, t1)] + [t1]
+    ts = [t0] + [f["t_unix"] for f in fixes] + [t1]
     gaps = [b - a for a, b in zip(ts, ts[1:])]
     return round(sum(g for g in gaps if g <= TRACK_GAP_S) / (t1 - t0), 3)
 
