@@ -179,8 +179,8 @@ def _program_dedup_key(program: dict) -> str | None:
 _DEDUP_NOTE = (
     "no new information since turn {turn}: nothing has entered the world "
     "since then -- no flight, no perceive -- so every program returns what "
-    "it returned then, and this one is not re-rendered. Its handles"
-    "{handles} stay live for later ops. Change the world (fly, perceive) or "
+    "it returned then, and this one is not re-rendered. Its handles stay "
+    "live for later ops. Change the world (fly, perceive) or "
     "ask something different."
 )
 _DEDUP_REPEAT_NOTE = (
@@ -995,7 +995,7 @@ def advance_reasoner_one_round(
     row_latest: dict[str, dict] = {}
     # Anti-spiral result reuse: successful SELF-CONTAINED programs, keyed by
     # canonical ops JSON (``_program_dedup_key``) -> ``(surface_version,
-    # out, turn, ops)``. A repeat under the same surface version gets the
+    # turn, ops)``. A repeat under the same surface version gets the
     # one-line dedup note: the re-run cannot say anything new. Anything that
     # changes the world (a flight, a boost, a stance) bumps the version and
     # re-arms every program.
@@ -1759,7 +1759,7 @@ def advance_reasoner_one_round(
             # Alias by the key's own emission-index correspondence so a
             # deduped program is indistinguishable from a re-run to
             # everything downstream of it.
-            _alias_deduped_refs(_prev[3], a["program"]["ops"])
+            _alias_deduped_refs(_prev[2], a["program"]["ops"])
             if _dedup_streak["key"] == _key:
                 _dedup_streak["n"] += 1
             else:
@@ -1772,18 +1772,7 @@ def advance_reasoner_one_round(
                 return {"note": _DEDUP_REPEAT_NOTE.format(
                     n=_ordinal(_dedup_streak["n"]),
                     counts=_live_counts(_c_n, _a_n), cols=_cols_s)}
-            # name the live handles so the reference is actionable
-            _prev_out = _prev[1] if isinstance(_prev[1], dict) else {}
-            _hs = sorted((k for k in {**_prev_out,
-                                      **(_prev_out.get("result") or {}
-                                         if isinstance(
-                                             _prev_out.get("result"),
-                                             dict) else {})}
-                          if re.fullmatch(r"r\d+", str(k))),
-                         key=lambda h: int(h[1:]))
-            return {"note": _DEDUP_NOTE.format(
-                turn=_prev[2],
-                handles=f" ({', '.join(_hs)})" if _hs else "")}
+            return {"note": _DEDUP_NOTE.format(turn=_prev[1])}
         _raw_sink: dict = {}
         # Re-derive every handle this program reads against the CURRENT
         # surface first, so it reads the world as it is, not as it was.
@@ -1809,7 +1798,7 @@ def advance_reasoner_one_round(
                 # one-line reference an identical re-issue gets back, and
                 # the ops let a later dedup hit alias its own labels onto
                 # the handles this run stored (_alias_deduped_refs).
-                _programs_seen[_key] = (_surface_version[0], out, turn_idx,
+                _programs_seen[_key] = (_surface_version[0], turn_idx,
                                         a["program"]["ops"])
             carry_results.update(_raw_sink.get("results") or {})
             _fresh.update(_raw_sink.get("results") or {})
