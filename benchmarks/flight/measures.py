@@ -115,8 +115,8 @@ class Truth:
     """The analyst's entries by sortie name (a directory of ``<sortie>.json``)
     and the tasking set's footprints by description (split JSONs). A flown
     episode id is the run's place in its sortie's tasking, not in the file, so
-    the description is the join; one two entries give different footprints
-    joins nothing."""
+    the description is the join; a description two entries give different
+    footprints joins nothing."""
 
     def __init__(self, paths: list[Path]) -> None:
         self.dirs = [p for p in paths if p.is_dir()]
