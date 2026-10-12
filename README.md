@@ -101,8 +101,12 @@ The closed-loop measures are read from the flown sorties' own records by
 | OSR | 70/79 | The aircraft's path (GNSS track, else keyframe poses) came within one camera footprint width of the target centroid. |
 
 ```sh
-python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <tasking split JSON>
+python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <tasking split JSON> --tiles <flown bake>
 ```
+
+`--tiles` (default `SEARCH_CALCITY_TILES`) is the bake whose
+`calcity_features.json` holds the map features a run commits to; a run that
+commits one with no such file there is refused.
 
 A run the analysts' adjudication marks excluded is out of every rate, and so
 is a run the serve failed under (the bench's infra rule, `rows.is_infra_abort`),

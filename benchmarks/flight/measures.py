@@ -1,7 +1,7 @@
 """The closed-loop measures of each run, from its records: SR, OSR, NE, time to identification, SPL.
 
     python -m benchmarks.flight.measures --root <sortie>... --truth <adjudications dir> [<split.json>]
-        [--json] [--check runs_all.csv]
+        --tiles <bake> [--json] [--check runs_all.csv]
 
 A root is a flown sortie (``episodes.jsonl`` beside ``flight_track.jsonl``)
 or a replay's (:mod:`benchmarks.flight.replay`, its sortie folder named for
@@ -189,12 +189,16 @@ def commit_fid(bases: list[Path], xy: tuple[float, float] | None) -> str | None:
     return named[-1] if named else None
 
 
-def committed_area(bases: list[Path], fid: str | None, xy, prior: list[dict[str, Any]]) -> list[list[float]] | None:
+def committed_area(bases: list[Path], fid: str | None, xy,
+                   prior: list[dict[str, Any]] | None) -> list[list[float]] | None:
     """The committed feature's outline in map metres, kept only when the commit lies inside it or on its centroid."""
     if not fid or xy is None:
         return None
     ring = None
     if fid.startswith("prior_"):
+        if prior is None:
+            raise SystemExit(f"a run commits {fid}, a row of the bake's calcity_features.json, and the bake "
+                             "holds none: name the flown bake with --tiles (or SEARCH_CALCITY_TILES)")
         try:
             ring = prior[int(fid[len("prior_"):])].get("world_contour")
         except (ValueError, IndexError):
@@ -478,7 +482,7 @@ def tokens(bases: list[Path]) -> dict[str, Any]:
 
 
 def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], truth: Truth, track,
-                 prior: list[dict[str, Any]], turn_radius_m: float, radius_m: float = SUCCESS_RADIUS_M) -> dict[str, Any]:
+                 prior: list[dict[str, Any]] | None, turn_radius_m: float, radius_m: float = SUCCESS_RADIUS_M) -> dict[str, Any]:
     bases = _bases(root, row)
     events = _conversation(bases)
     end = ended(row)
@@ -578,7 +582,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
 def collect(roots: list[Path], truth: Truth, *, tiles_dir: Path) -> tuple[list[dict[str, Any]], float, int]:
     """Every run under ``roots``, with the crews' turn radius over them all."""
     prior_path = Path(tiles_dir) / "calcity_features.json"
-    prior = json.loads(prior_path.read_text())["prior"] if prior_path.is_file() else []
+    prior = json.loads(prior_path.read_text())["prior"] if prior_path.is_file() else None
     tracks = [sorted(_rows(r / "flight_track.jsonl"), key=lambda f: f["t_unix"]) for r in roots]
     radius, turns = flown_turn_radius_m(tracks, [routed_windows(r) for r in roots])
     radius = radius or TURN_RADIUS_FALLBACK_M

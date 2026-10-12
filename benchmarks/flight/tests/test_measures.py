@@ -114,6 +114,19 @@ def test_a_run_the_serve_failed_under_is_out_of_every_rate_and_named(tmp_path):
     assert s["infra"] == [f"{root.name} run 2", f"{root.name} run 3"]
 
 
+def test_a_prior_commit_with_no_bake_features_is_refused_not_scored_a_miss(tmp_path):
+    import pytest
+
+    root, truth = tmp_path / "20260101T000000Z", tmp_path / "truth"
+    (root / "episodes.jsonl").parent.mkdir()
+    row = _run(root, "run1", commit=("prior_0", [101.0, 99.0]))
+    (root / "episodes.jsonl").write_text(json.dumps(row) + "\n")
+    truth.mkdir()
+    (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
+    with pytest.raises(SystemExit, match="--tiles"):
+        Q.collect([root], Q.Truth([truth]), tiles_dir=tmp_path / "no_bake")
+
+
 def test_the_tasking_set_scores_a_run_only_for_the_description_it_was_flown_on(tmp_path):
     split = tmp_path / "split.json"
     split.write_text(json.dumps([{"area": "calcity", "descriptions": ["the Rite Aid"], "ann_ids": [0],
