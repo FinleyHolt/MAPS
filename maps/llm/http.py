@@ -31,6 +31,8 @@ import httpx
 
 from . import endpoint_spec
 
+log = logging.getLogger(__name__)
+
 
 # 4xx codes that mean "not now": the rate limit (429) and the quota check (402).
 _RATE_LIMIT_STATUS = frozenset({402, 429})
@@ -131,12 +133,13 @@ def _shutdown(sock: socket.socket) -> None:
     except OSError:
         pass  # already closed
 
-log = logging.getLogger(__name__)
-
 
 # ---------------------------------------------------------------------------
 # Flight log
 # ---------------------------------------------------------------------------
+
+# Said once per process, so the warning is not buried under one line per turn.
+_WARNED_NO_WORKDIR = False
 
 
 def _resolved_flight_log_dir() -> Path | None:
@@ -154,10 +157,6 @@ def _resolved_flight_log_dir() -> Path | None:
             )
         return None
     return Path(workdir).expanduser() / "flight" / "llm"
-
-
-# Said once per process, so the warning is not buried under one line per turn.
-_WARNED_NO_WORKDIR = False
 
 
 # ponytail: one process appends to a transcript, so a module lock serialises
