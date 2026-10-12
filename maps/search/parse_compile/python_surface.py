@@ -319,15 +319,6 @@ def looks_like_code(text: str) -> bool:
 # --------------------------------------------------------------------------
 
 
-# Geometry blobs and internals stay off the Python view: they are served
-# coarsely through the real columns (xy, end0_xy, end1_xy). mask_centroid is
-# hidden because centroid-to-centroid is the measurement this surface exists
-# to make impossible. The column diet the grid serves is the Row's too.
-_ROW_HIDDEN = frozenset({
-    "mask", "cells", "centerline", "polygon", "contour", "search_text",
-    "world_contour", "metadata", "mask_centroid"}) | MODEL_UNSERVED_COLUMNS
-
-
 def _norm_key(k: str) -> str:
     """A column spelling collapsed the way ``geom_program._sanitize_token``
     collapses ref labels, so "Poppy Boulevard" names the column "facing
@@ -469,12 +460,12 @@ class Row:
         else the one column equal under :func:`_norm_key` (an ambiguous match
         is None). Attribute, item and ``.get`` access all resolve here."""
         row = object.__getattribute__(self, "_row")
-        if not isinstance(k, str) or k in _ROW_HIDDEN:
+        if not isinstance(k, str) or k in MODEL_UNSERVED_COLUMNS:
             return None
         if k in row:
             return k
         hit = [rk for rk in row
-               if rk not in _ROW_HIDDEN and _norm_key(rk) == _norm_key(k)]
+               if rk not in MODEL_UNSERVED_COLUMNS and _norm_key(rk) == _norm_key(k)]
         return hit[0] if len(hit) == 1 else None
 
     def _derived(self, k):
@@ -560,7 +551,7 @@ class Row:
 
     def keys(self) -> list:
         row = object.__getattribute__(self, "_row")
-        return [k for k in row if k not in _ROW_HIDDEN
+        return [k for k in row if k not in MODEL_UNSERVED_COLUMNS
                 and not k.startswith("_")]
 
     # Value equality: a bare fid name mints a FRESH Row view per reference,

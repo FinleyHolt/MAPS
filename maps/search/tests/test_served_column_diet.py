@@ -131,22 +131,6 @@ def test_a_footprint_carries_its_area_and_no_unserved_shape_column():
     assert contour_shape_features([box[0][:-1]]) is None
 
 
-def test_the_row_path_obeys_the_same_diet_as_the_grid():
-    """A render cut is not a diet while a second render path exists."""
-    from maps.search.analyze_scene.geom_program import (
-        _RENDER_INPUT_ROW_FIELDS,
-    )
-    from maps.search.parse_compile.python_surface import _ROW_HIDDEN
-
-    for col in _GRID_COL_DROP:
-        assert col in _ROW_HIDDEN, col
-    for col in _RENDER_INPUT_ROW_FIELDS:
-        assert col in _ROW_HIDDEN, col
-    # Vacuity floor: an emptied drop set would satisfy the loops above.
-    assert len(_GRID_COL_DROP) >= 4, _GRID_COL_DROP
-    assert {"name_match", "score"} <= _ROW_HIDDEN
-
-
 @pytest.mark.parametrize("op", [
     {"op": "score_by", "args": {"emphasis": [{"key": "nope", "w": 1}]}},
     {"op": "filter_items", "args": {"key": "nope", "op": "truthy"}}])

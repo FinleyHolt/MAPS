@@ -217,9 +217,8 @@ def test_the_two_spellings_are_one_cut_and_one_sort():
 def test_a_row_serves_no_second_point_to_subtract():
     """There is ONE distance here and it is the footprint gap, so a row must not hand
     over a second point the model can difference by hand."""
-    from maps.search.parse_compile.python_surface import _ROW_HIDDEN, Row
+    from maps.search.parse_compile.python_surface import Row
 
-    assert "mask_centroid" in _ROW_HIDDEN
     r = Row({"fid": "detected_1", "xy": [10.0, 20.0],
              "mask_centroid": [11.0, 21.0], "class": "car"})
     assert "mask_centroid" not in r.keys(), r.keys()
