@@ -149,6 +149,9 @@ def _ordinal(n: int) -> str:
     return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
 
 
+log = logging.getLogger(__name__)
+
+
 def _deliver_frames(jpegs: list[bytes], sink: list[str]) -> None:
     """Record every image about to reach the model: its sha256 (the wire
     log's ``image_ref.sha256``) into ``sink`` and the bytes into
@@ -175,8 +178,6 @@ def _deliver_frames(jpegs: list[bytes], sink: list[str]) -> None:
             log.warning("frame %s not written under %s", sha[:12], workdir,
                         exc_info=True)
 
-
-log = logging.getLogger(__name__)
 
 
 # Tool-call residue: a prose turn carrying one is a malformed envelope,
@@ -441,13 +442,14 @@ class _Mission:
         self._plan_stops: dict[str, list] = {}
 
         # The flatten is built once per surface version.
-        self._map_feats: list = [None, None]
+        self._map_feats_version = None
+        self._map_feats: list[dict] = []
 
         # The escalating loop breaker's counts (see _loop_broken_error), and the
         # dedup path's own consecutive streak.
         self._err_class_counts: dict[str, int] = {}
-        self._err_streak: dict = {"sig": None, "n": 0}
-        self._dedup_streak: dict = {"key": None, "n": 0}
+        self._err_sig, self._err_n = None, 0
+        self._dedup_key, self._dedup_n = None, 0
 
         self.carry = Carry(compute_namespace)
 
@@ -574,9 +576,10 @@ class _Mission:
                 f"(bearing {_sv['bearing_deg']})")
 
     def _map_features_cached(self) -> list[dict]:
-        if self._map_feats[0] != self.carry.version:
-            self._map_feats[:] = [self.carry.version, map_features(self.ctx)]
-        return self._map_feats[1]
+        if self._map_feats_version != self.carry.version:
+            self._map_feats_version = self.carry.version
+            self._map_feats = map_features(self.ctx)
+        return self._map_feats
 
     def _loop_breaker_facts(self, _n: int) -> str:
         def _cap(fids: list[str]) -> str:
@@ -637,12 +640,11 @@ class _Mission:
         the consecutive streak, never the class count."""
         _sig = self._err_class_sig(err if sig_of is None else sig_of)
         _n = self._err_class_counts[_sig] = self._err_class_counts.get(_sig, 0) + 1
-        if self._err_streak["sig"] == _sig:
-            self._err_streak["n"] += 1
+        if self._err_sig == _sig:
+            self._err_n += 1
         else:
-            self._err_streak["sig"] = _sig
-            self._err_streak["n"] = 1
-        _consec = self._err_streak["n"]
+            self._err_sig, self._err_n = _sig, 1
+        _consec = self._err_n
         if _n < 2:
             return err
         _SHAPE_MARKERS = ("unknown ref", "is a result handle",
@@ -661,16 +663,16 @@ class _Mission:
             # labels alias the stored handles so nothing downstream can tell
             # it from a re-run.
             self.carry.alias(_prev[2], a["program"]["ops"])
-            if self._dedup_streak["key"] == _key:
-                self._dedup_streak["n"] += 1
+            if self._dedup_key == _key:
+                self._dedup_n += 1
             else:
-                self._dedup_streak["key"], self._dedup_streak["n"] = _key, 1
-            if self._dedup_streak["n"] >= 2:
+                self._dedup_key, self._dedup_n = _key, 1
+            if self._dedup_n >= 2:
                 _c_n, _a_n, _dcols = self._surface_census_counts()
                 _cols_s = ("; columns live: " + ", ".join(_dcols[:12])
                            if _dcols else "")
                 return {"note": _DEDUP_REPEAT_NOTE.format(
-                    n=_ordinal(self._dedup_streak["n"]),
+                    n=_ordinal(self._dedup_n),
                     counts=_live_counts(_c_n, _a_n), cols=_cols_s)}
             return {"note": _DEDUP_NOTE.format(turn=_prev[1])}
         _raw_sink: dict = {}
@@ -686,10 +688,8 @@ class _Mission:
             out = {**out, "error": self._loop_broken_error(
                 _err, sig_of=f"{_err}|{_raw_sink.get('error_op', '')}")}
         if isinstance(out, dict) and "error" not in out:
-            self._err_streak["sig"] = None
-            self._err_streak["n"] = 0
-            self._dedup_streak["key"] = None
-            self._dedup_streak["n"] = 0
+            self._err_sig, self._err_n = None, 0
+            self._dedup_key, self._dedup_n = None, 0
             if _key is not None:
                 self._programs_seen[_key] = (self.carry.version, self.turn_idx,
                                              a["program"]["ops"])
@@ -1359,8 +1359,7 @@ class _Mission:
         if self._call.get("notes"):
             ack["note"] = (f"{ack['note']}\n" if ack.get("note")
                            else "") + "; ".join(self._call["notes"])
-        self._err_streak["sig"] = None
-        self._err_streak["n"] = 0
+        self._err_sig, self._err_n = None, 0
         if self._call.get("page"):
             self._widened.update([self._call["page"]])
         # The set in scope: the call's non-empty answer, or what its last
@@ -1405,10 +1404,13 @@ class _Mission:
         out["script_lines"] = self._script_lines
         return out
 
-    def _mission_end(self, ended_by: str, turns: int = 0) -> MissionReply:
+    def _log(self, kind: str, **row) -> None:
+        """One transcript row, when the mission keeps a transcript."""
         if self.transcript is not None:
-            self.transcript.append({"kind": "mission_end",
-                                    "ended_by": ended_by, "turns": int(turns)})
+            self.transcript.append({"kind": kind, **row})
+
+    def _mission_end(self, ended_by: str, turns: int = 0) -> MissionReply:
+        self._log("mission_end", ended_by=ended_by, turns=int(turns))
         return MissionReply(ended_by=ended_by, turns_used=int(turns))
 
     def converse(self, user_message: str) -> MissionReply:
@@ -1462,11 +1464,7 @@ class _Mission:
                         "%s stop_round request does not fit the served window "
                         "-> terminal (retry would re-send the same bytes): %s",
                         self.rid_tag, _summarise_exc(exc))
-                    if self.transcript is not None:
-                        self.transcript.append({
-                            "kind": "oversize_rejection",
-                            "error": _summarise_exc(exc),
-                        })
+                    self._log("oversize_rejection", error=_summarise_exc(exc))
                     return self._mission_end("oversize_rejection", turns=turn_idx + 1)
                 transient_failures += 1
                 cancel = self.reasoner.cancel_event
@@ -1477,11 +1475,8 @@ class _Mission:
                     "" if cancel is not None else f"/{_MAX_ROUND_TRANSIENT}",
                     _summarise_exc(exc),
                 )
-                if self.transcript is not None:
-                    self.transcript.append({
-                        "kind": "transient_error",
-                        "attempt": transient_failures, "error": _summarise_exc(exc),
-                    })
+                self._log("transient_error", attempt=transient_failures,
+                          error=_summarise_exc(exc))
                 if cancel is None:
                     if transient_failures >= _MAX_ROUND_TRANSIENT:
                         return self._mission_end(
@@ -1499,9 +1494,7 @@ class _Mission:
                         str(r.get("reasoning") or "")):
                     log.info("%s MALFORMED_ENVELOPE at turn %d -> repair",
                              self.rid_tag, turn_idx)
-                    if self.transcript is not None:
-                        self.transcript.append({"kind": "malformed_envelope",
-                                                "turn_idx": turn_idx})
+                    self._log("malformed_envelope", turn_idx=turn_idx)
                     self.reasoner.append_repair(MALFORMED_ENVELOPE_NUDGE)
                     continue
                 miss = _not_a_reply(content)
@@ -1512,9 +1505,7 @@ class _Mission:
                     # ending.
                     kind, what, nudge = miss
                     no_call_streak += 1
-                    if self.transcript is not None:
-                        self.transcript.append({"kind": kind, "turn_idx": turn_idx,
-                                                "streak": no_call_streak})
+                    self._log(kind, turn_idx=turn_idx, streak=no_call_streak)
                     if no_call_streak < 2:
                         log.info("%s %s %d -> repair", self.rid_tag, what, turn_idx)
                         self.reasoner.append_repair(nudge)
@@ -1525,10 +1516,8 @@ class _Mission:
                 # the turn back, up to NO_FLIGHT_ABSTAIN_STREAK.
                 if no_call_streak == 0 and self.mission_flights == 0:
                     no_flight_streak += 1
-                    if self.transcript is not None:
-                        self.transcript.append({"kind": "no_flight_reply",
-                                                "turn_idx": turn_idx,
-                                                "streak": no_flight_streak})
+                    self._log("no_flight_reply", turn_idx=turn_idx,
+                              streak=no_flight_streak)
                     if no_flight_streak < NO_FLIGHT_ABSTAIN_STREAK:
                         log.info("%s reply with ZERO flights at turn %d "
                                  "(streak %d) -> repair", self.rid_tag, turn_idx,
@@ -1557,19 +1546,17 @@ class _Mission:
                             or "nothing -- no class is segmented on any flight "
                                'until one is looked for; call look_for("<class>").'))
                     self.reasoner.append_tool_result(cid, "run", out)
-                    if self.transcript is not None:
-                        self.transcript.append({
-                            "kind": "run",
-                            "turn_idx": turn_idx,
-                            "reasoning": str(r.get("reasoning") or "")[:4000],
-                            "said": str((args or {}).get("code") or "")[:400],
-                            # already capped (python_surface.PRINT_CHAR_CAP)
-                            "printed": (str(out.get("printed") or "")
-                                        if isinstance(out, dict) else ""),
-                            "errored": bool(isinstance(out, dict)
-                                            and "error" in out),
-                            # every image this block showed, by sha
-                            "frames": list(self._block_frames)})
+                    self._log(
+                        "run",
+                        turn_idx=turn_idx,
+                        reasoning=str(r.get("reasoning") or "")[:4000],
+                        said=str((args or {}).get("code") or "")[:400],
+                        # already capped (python_surface.PRINT_CHAR_CAP)
+                        printed=(str(out.get("printed") or "")
+                                 if isinstance(out, dict) else ""),
+                        errored=bool(isinstance(out, dict) and "error" in out),
+                        # every image this block showed, by sha
+                        frames=list(self._block_frames))
                     self._block_frames.clear()
                 else:
                     # An unknown tool's id is answered, never executed.
