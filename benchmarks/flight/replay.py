@@ -239,6 +239,8 @@ class BankSource:
         self._forced = forced
         self._by_flight = by_flight or {}
         self._served: dict[int, int] = {}
+        #: :meth:`_best` per area: the bank never changes, and arrival asks the same area every second.
+        self._best_of: dict[tuple, tuple[int | None, list[bool]]] = {}
 
     def close(self) -> None:
         pass
@@ -260,6 +262,9 @@ class BankSource:
             k = int(self._forced())
             held = bool(self._by_flight.get(k))
             return (k if held else None), [held] * len(points)
+        key = tuple(tuple(p) for p in points)
+        if key in self._best_of:
+            return self._best_of[key]
         xy = self._local(points)
         best, best_held = None, [False] * len(points)
         for i, h in enumerate(self.bank):
@@ -269,6 +274,7 @@ class BankSource:
             held = [h.holds(p) for p in xy]
             if sum(held) > sum(best_held):
                 best, best_held = i, held
+        self._best_of[key] = best, best_held
         return best, best_held
 
     def coverage(self, points, after=None) -> dict[str, Any]:

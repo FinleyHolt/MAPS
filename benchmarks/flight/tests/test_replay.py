@@ -303,3 +303,23 @@ def test_a_replay_row_records_no_start_time(built, tmp_path):
     m.started_at, m.started_at_utc = 0.0, 1_789_157_838.6
     row = m.row()
     assert row["started_at_utc"] is None and row["replay_of"] == {"mode": "frames"}
+
+
+def test_the_bank_reads_an_area_s_pixels_once_however_often_it_is_asked(built, tmp_path, monkeypatch):
+    """Arrival polls the same area every simulated second: a week's bank
+    answers the poll from memory, not by decoding every observation again."""
+    reads = []
+    pixels = R._pixels
+    monkeypatch.setattr(R, "_pixels", lambda path: reads.append(path) or pixels(path))
+    live = R.BankSource([_held(tmp_path, "whole", (300.0, 300.0, 900.0, 900.0))], tiles_dir=built[0],
+                        map_name="calcity", tile_ground_z=0.0)
+    area = _disc_lonlat(built[0], 600.0, 600.0)
+    first = live.coverage(area)
+    n = len(reads)
+    assert n and live.coverage(area) == first and len(reads) == n
+
+
+def _disc_lonlat(tiles, x, y):
+    from benchmarks.flight.tile_georef import local_to_lonlat
+
+    return [local_to_lonlat(tiles, "calcity", x + dx, y + dy) for dx, dy in ((0, 0), (50, 0), (0, 50), (-50, 0))]
