@@ -42,7 +42,7 @@ def _bake(seed: int = 0) -> dict:
 
 def test_the_round_trip_is_exact(tmp_path):
     src = _bake()
-    d = tmp_path / "calcity_m0.1.mmap"
+    d = tmp_path / "calcity.mmap"
     cm._write_ortho_mmap(d, src, _STAMP)
     got = cm._read_ortho_mmap(d, _STAMP)
 

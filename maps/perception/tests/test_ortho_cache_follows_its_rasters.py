@@ -51,7 +51,7 @@ def test_a_raster_rewritten_in_place_rebuilds_the_mapped_ortho(tmp_path, monkeyp
     rgb_path = _write_rasters(tmp_path, "blk", (200, 30, 30), kind)
     first = camera_model.load_ortho_or_rasters("blk", rgbd_dir=tmp_path)
     assert tuple(first["rgb"][0, 0]) == (200, 30, 30)
-    assert (tmp_path / "ortho" / "blk_m0.1.mmap" / "meta.json").is_file()
+    assert (tmp_path / "ortho" / "blk.mmap" / "meta.json").is_file()
 
     size, mtime_ns = rgb_path.stat().st_size, rgb_path.stat().st_mtime_ns
     _write_rasters(tmp_path, "blk", (30, 30, 200), kind)

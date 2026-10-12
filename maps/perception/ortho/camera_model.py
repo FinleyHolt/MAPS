@@ -38,8 +38,8 @@ except ImportError:  # pragma: no cover - PIL is a hard dep in practice
 
 def _mmap_dir(rgbd_dir, map_name: str) -> Path:
     """Where the memory-mapped copy of a raster bake lives: beside the rasters
-    it was built from. The ``_m0.1`` suffix names the PNG-sourced bake's grid."""
-    return Path(rgbd_dir) / "ortho" / f"{map_name}_m0.1.mmap"
+    it was built from."""
+    return Path(rgbd_dir) / "ortho" / f"{map_name}.mmap"
 
 
 # The three arrays that carry the pixels. Everything else in the bake dict is
