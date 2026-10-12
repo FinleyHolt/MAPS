@@ -68,11 +68,10 @@ def test_a_road_bakes_as_a_way_not_a_buffered_polygon(tmp_path, monkeypatch):
                [(100, 100), (900, 100)])],
     )
     bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity")
-    meta = json.loads((tmp_path / "tiles" / "calcity_meta.json").read_text())
-    kinds = meta["bake_counts"]["kind_census"]["mask_kinds"]
-    assert kinds == {"way": 1}, kinds
-    prior = json.loads((tmp_path / "tiles" / "calcity_features.json").read_text())
-    assert prior["prior"][0]["name"] == "South Loop Boulevard"
+    prior = json.loads((tmp_path / "tiles" / "calcity_features.json").read_text())["prior"]
+    assert len(prior) == 1 and prior[0]["name"] == "South Loop Boulevard"
+    chain = prior[0]["world_contour"]
+    assert len(chain) == 2 and chain[0] != chain[-1], "an open chain is a way"
 
 
 def test_a_feature_with_no_cityrefer_class_is_baked(tmp_path, monkeypatch):
@@ -141,8 +140,7 @@ def test_the_bake_shape_and_provenance_are_unchanged(tmp_path, monkeypatch):
     graph = load_graph(str(tiles / "calcity"))
     assert list(graph.nodes) == ["prior_0"]
     meta = json.loads((tiles / "calcity_meta.json").read_text())
-    assert meta["bake"]["mode"] == "osm_cache"
-    assert meta["source"] == "osm_only"
+    assert list(meta) == ["grid_shape", "cell_size_m", "bounds", "coordinate_frame", "georef"]
     assert meta["coordinate_frame"]["y_axis"] == "north"
 
 
@@ -164,22 +162,13 @@ def test_ground_truth_keys_can_never_enter_the_prior(tmp_path, monkeypatch):
 
 
 def test_the_bake_reads_no_citynav_raster_and_keeps_the_bounds_rectangle(tmp_path, monkeypatch):
-    """Cal City has no CityNav raster: its coverage is the bounds rectangle
-    by rule, and the bake is byte for byte the one a CityNav raster
-    directory without Cal City produced."""
+    """Cal City has no CityNav raster: its coverage is the bounds rectangle by
+    rule, so a building keeps every cell its footprint covers."""
     from benchmarks.citynav import paths as citynav_paths
-    from benchmarks.citynav.bake import city
 
     features = [_road(1, {"highway": "residential", "name": "Elm"}, [(100, 100), (400, 120)]),
                 _area(2, {"building": "yes"}, 200, 200, 260, 250)]
     _bundle(monkeypatch, features)
-    empty = tmp_path / "citynav_rasters"
-    empty.mkdir()
-    monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", empty)
-    reaching = tmp_path / "reaching"
-    bake_tiles._write_meta("calcity", reaching)
-    city.bake_block("calcity", bake_tiles.local_osm_records(tmp_path / "bundle"),
-                    reaching, imagery=True)
 
     class Untouchable:
         def __fspath__(self):
@@ -188,13 +177,10 @@ def test_the_bake_reads_no_citynav_raster_and_keeps_the_bounds_rectangle(tmp_pat
         __str__ = __truediv__ = __fspath__
 
     monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", Untouchable())
-    bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity")
-    meta = json.loads((tmp_path / "tiles" / "calcity_meta.json").read_text())
-    assert meta["coverage_source"] == "bounds rectangle" and meta["bounds_source"] == "meta sidecar"
-    names = sorted(p.name for p in reaching.iterdir())
-    assert names == sorted(p.name for p in (tmp_path / "tiles").iterdir()) and len(names) == 4
-    for name in names:
-        assert (tmp_path / "tiles" / name).read_bytes() == (reaching / name).read_bytes(), name
+    assert bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity")["features"] == 2
+    prior = json.loads((tmp_path / "tiles" / "calcity_features.json").read_text())["prior"]
+    building = next(r for r in prior if r.get("building") == "yes")
+    assert len(building["cells"]) == 30 * 25
 
 
 def test_a_bundle_missing_a_layer_is_refused_by_name(tmp_path):

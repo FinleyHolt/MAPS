@@ -60,16 +60,6 @@ def test_every_in_window_geometry_is_kept_with_its_tags_and_nothing_minted(tmp_p
     assert set(graph.nodes) == {f"prior_{i}" for i in range(4)}, sorted(graph.nodes)
 
 
-def test_kind_census_groups_by_mask_kind_and_tag_counts(tmp_path):
-    _rows, meta, _graph = _bake(tmp_path)
-    census = meta["bake_counts"]["kind_census"]
-    assert census["mask_kinds"] == {"area": 2, "node": 1, "way": 1}, census
-    top = census["top_tags"]
-    assert top["amenity=parking"] == 1, top
-    assert top["power=generator"] == 1, top
-    assert top["highway=residential"] == 1, top
-
-
 def test_a_polygon_ring_is_not_decimated():
     """The OSM ring IS the footprint, so it rides whole.
 

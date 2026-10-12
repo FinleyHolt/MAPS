@@ -1,9 +1,9 @@
-"""A block's bounds are its imagery's bounds.
+"""A CityNav block is its raster: bounds and grid come from the imagery.
 
-The meta sidecar box runs ~50 m past the raster on every side, where no
-CityRefer object or CityNav target lies, so the bake derives bounds from the
-raster and sizes the grid to match, falling back to the sidecar box (and
-saying so) when no raster is readable.
+The bake needs no seed meta: every ``<city>_block_<n>.tif`` is a block, its
+extent the bounds, on 2 m cells. A sidecar an older bake left behind (whose
+box ran ~50 m past the imagery) is overwritten, never read; a block without a
+readable raster is a named failure.
 """
 
 from __future__ import annotations
@@ -22,16 +22,15 @@ POINT = ({"amenity": "bench", "osm_id": "n1"}, {"type": "Point", "coordinates": 
 
 
 @pytest.fixture
-def tiles(tmp_path, monkeypatch):
-    """A tiles dir whose sidecar claims a box 50 m larger than the imagery."""
-    (tmp_path / f"{BLOCK}_meta.json").write_text(json.dumps({
-        "block": BLOCK,
-        "cell_size_m": 2.0,
-        "grid_shape": [60, 70],
-        "bounds": {"x_min": 750.0, "y_min": 750.0, "x_max": 890.0, "y_max": 870.0},
-    }))
+def rasters(tmp_path, monkeypatch):
     monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", tmp_path / "rasters")
-    return tmp_path
+    return tmp_path / "rasters"
+
+
+def _raster(rasters) -> None:
+    """A 40 m x 20 m raster at (800, 800)."""
+    write_rasters(rasters, BLOCK, np.full((200, 400, 3), 90, dtype=np.uint8),
+                  np.zeros((200, 400), dtype=np.float32), x_min=800.0, y_min=800.0)
 
 
 def _baked_meta(tiles) -> dict:
@@ -39,26 +38,24 @@ def _baked_meta(tiles) -> dict:
     return json.loads((tiles / f"{BLOCK}_meta.json").read_text())
 
 
-def test_bounds_and_grid_come_from_the_raster(tiles):
-    """A 40 m x 20 m raster at (800, 800): rows run north-to-south, so the grid
-    is (y, x) = (10, 20); swapping them would transpose every non-square block."""
-    write_rasters(tiles / "rasters", BLOCK, np.full((200, 400, 3), 90, dtype=np.uint8),
-                  np.zeros((200, 400), dtype=np.float32), x_min=800.0, y_min=800.0)
-    meta = _baked_meta(tiles)
+def test_bounds_and_grid_come_from_the_raster_into_an_empty_tiles_dir(tmp_path, rasters):
+    """Rows run north-to-south, so the grid is (y, x) = (10, 20); swapping them
+    would transpose every non-square block."""
+    _raster(rasters)
+    meta = _baked_meta(tmp_path / "tiles")
     assert meta["bounds"] == {"x_min": 800.0, "y_min": 800.0, "x_max": 840.0, "y_max": 820.0}
-    assert meta["grid_shape"] == [10, 20]
-    assert meta["bounds_source"] == "block raster"
-    assert meta["coverage_source"] == "ortho alpha"
+    assert meta["grid_shape"] == [10, 20] and meta["cell_size_m"] == 2.0
 
 
-def test_without_a_raster_the_sidecar_stands_and_says_so(tiles):
-    meta = _baked_meta(tiles)
-    assert meta["bounds"]["x_min"] == 750.0 and meta["bounds"]["x_max"] == 890.0
-    assert meta["grid_shape"] == [60, 70]
-    assert meta["bounds_source"] == "meta sidecar"
-    assert meta["coverage_source"] == "bounds rectangle"
+def test_a_left_over_sidecar_is_not_read(tmp_path, rasters):
+    _raster(rasters)
+    (tmp_path / f"{BLOCK}_meta.json").write_text(json.dumps({
+        "cell_size_m": 5.0, "grid_shape": [60, 70],
+        "bounds": {"x_min": 750.0, "y_min": 750.0, "x_max": 890.0, "y_max": 870.0}}))
+    meta = _baked_meta(tmp_path)
+    assert meta["bounds"]["x_min"] == 800.0 and meta["grid_shape"] == [10, 20]
 
 
-def test_a_missing_sidecar_is_a_named_failure(tmp_path):
-    with pytest.raises(BakeError, match=f"{BLOCK}_meta.json"):
+def test_a_block_without_a_raster_is_a_named_failure(tmp_path, rasters):
+    with pytest.raises(BakeError, match=f"{BLOCK}.tif"):
         bake_block(BLOCK, [POINT], tmp_path)

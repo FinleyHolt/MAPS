@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Bake the CityNav tile sidecars into tiles/citynav_2m_osmv3 from the shipped
-# OpenStreetMap caches (tiles/osm_cache). Every bake stamps meta.json with its
+# Bake the CityNav tile sidecars into tiles/citynav_2m_osmv3 (which may start
+# empty) from the shipped OpenStreetMap caches (tiles/osm_cache), one block per
+# raster under SEARCH_CITYNAV_RGBD_DIR. Every bake stamps meta.json with its
 # provenance (cache name + sha256, georef residuals, bake time + git sha).
 #
 # Usage (from the repo root):
@@ -13,10 +14,8 @@ cd "$REPO_ROOT"
 
 TILES_DIR="${TILES_DIR:-${SEARCH_CITYNAV_TILES:-tiles/citynav_2m_osmv3}}"
 PY="${PY:-python3}"
-# The bake derives block bounds AND imagery coverage from the rasters. A
-# python without rasterio/scipy does not crash: it falls back to the sidecar
-# box and rectangle coverage and completes full of priors nothing can
-# observe. Fail loud instead.
+# The bake reads block bounds and imagery coverage from the rasters
+# (rasterio, scipy): refuse up front a python without them.
 if ! "$PY" -c 'import rasterio, scipy' >/dev/null 2>&1; then
 	echo "error: ${PY} lacks rasterio/scipy; use the repo env, e.g. PY=.venv/bin/python $0" >&2
 	exit 3

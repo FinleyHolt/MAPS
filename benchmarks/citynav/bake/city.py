@@ -8,13 +8,13 @@ block imagery covers, ALL raw tags verbatim, the ``name`` when present, the
 CityNav local meters at 2 dp (a polygon's exterior ring closed, a way open, a
 node's one vertex), which ``build_surface`` serves as the row ``mask``. Nothing
 is classified, named or dropped beyond "rasterizes to no covered cell".
-Every bake stamps ``meta.json`` ``bake.mode`` (and, per block, ``provenance``:
-cache name + sha256, record count, the cache's georef residuals, bake time +
-git sha).
+``meta.json`` carries the grid (``bounds``, ``grid_shape``, ``cell_size_m``),
+a caller's ``coordinate_frame`` and ``georef``, and for a city-cache bake ``provenance``: cache name +
+sha256, record count, the cache's georef residuals, bake time + git sha.
 
 The source is the shipped OSM cache per city (``tiles/osm_cache``), already
-registered into CityNav local XY. The tiles dir must already hold the
-``<city>_block_*_meta.json`` sidecars::
+registered into CityNav local XY. Every ``<city>_block_<n>.tif`` raster
+under ``SEARCH_CITYNAV_RGBD_DIR`` is a block; the tiles dir may start empty::
 
     python -m benchmarks.citynav.bake.city --city cambridge \
         --osm-cache tiles/osm_cache/cambridge_osm_local.geojson \
@@ -29,6 +29,7 @@ import json
 import logging
 import math
 import os
+import re
 import subprocess
 from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
@@ -45,10 +46,6 @@ from maps.sws.graph.io import save_graph
 log = logging.getLogger("bake_city")
 
 _CITY_CHOICES = ("birmingham", "cambridge")
-# The one features.json key. Every baked prior lives in this single list; the
-# graph builder mints ``prior_<i>`` fids from it (provenance_index, mirroring
-# ``detected_<i>``), positionally stable per the deterministic record sort.
-PRIOR_KEY = "prior"
 _PRIVILEGED_KEYS = {
     "ann_id",
     "ann_ids",
@@ -73,78 +70,68 @@ class BakeError(RuntimeError):
     """User-facing bake failure."""
 
 
-def _raster_bounds(block: str) -> tuple[float, float, float, float] | None:
-    """World extent of a block's 0.1 m/px raster, or ``None`` when unreadable.
+#: The cell of every CityNav block bake, metres.
+CELL_SIZE_M = 2.0
+
+
+def _raster_tif(block: str) -> Path:
+    from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
+
+    return Path(CITYNAV_NATIVE_RGBD_DIR) / f"{block}.tif"
+
+
+def _raster_bounds(block: str) -> tuple[float, float, float, float]:
+    """World extent of a block's 0.1 m/px raster.
 
     The CityNav TIFFs carry no CRS, but they do carry an affine transform, so
     the local-XY extent is exact. That extent is the block's imagery — the
     same line the raw point cloud and the baked ortho stop at.
     """
-    from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
-
-    tif = Path(CITYNAV_NATIVE_RGBD_DIR) / f"{block}.tif"
-    if not tif.is_file():
-        return None
+    tif = _raster_tif(block)
     try:
         import rasterio  # noqa: PLC0415  (ships with the ortho extra)
 
         with rasterio.open(tif) as ds:
             b = ds.bounds
-        return (float(b.left), float(b.bottom), float(b.right), float(b.top))
-    except Exception as exc:  # noqa: BLE001 — a bad raster falls back to meta
-        log.warning("%s: could not read raster bounds (%s)", block, exc)
-        return None
+    except Exception as exc:  # noqa: BLE001 — every failure is the same refusal
+        raise BakeError(f"{block}: cannot read the block raster {tif} ({exc})") from exc
+    return (float(b.left), float(b.bottom), float(b.right), float(b.top))
 
 
-def _load_city_meta(city: str, tiles_dir: Path, *, imagery: bool = True
-                    ) -> tuple[dict[str, Any], WorldBounds, tuple[int, int], float]:
-    """Meta + the geometry a block bakes over.
+def _block_frame(name: str, tiles_dir: Path, *, imagery: bool = True
+                 ) -> tuple[dict[str, Any], WorldBounds, tuple[int, int], float]:
+    """``(caller_keys, bounds, grid_shape, cell_size_m)``: the grid a block bakes over.
 
-    Bounds come from the block's RASTER: the sidecar's box runs ~50 m past the
-    imagery on every side, a ring of candidates nothing can observe (42.7% of
-    all graph nodes, measured). The sidecar's box stands only when no raster
-    is readable or the block has no CityNav imagery (``imagery=False``).
+    A CityNav block is its raster's extent on ``CELL_SIZE_M`` cells. A block
+    with no CityNav imagery (``imagery=False``, Cal City) reads the
+    ``<name>_meta.json`` its caller wrote: bounds, grid_shape, cell_size_m and
+    the keys the bake keeps, ``coordinate_frame`` (the y-north guard
+    ``benchmarks.calcity.paths`` reads) and ``georef``.
     """
-    meta_path = tiles_dir / f"{city}_meta.json"
+    if imagery:
+        x_min, y_min, x_max, y_max = _raster_bounds(name)
+        # Rows run north-to-south, so grid_shape is (rows, cols) = (y, x).
+        grid_shape = (int(round((y_max - y_min) / CELL_SIZE_M)),
+                      int(round((x_max - x_min) / CELL_SIZE_M)))
+        return {}, WorldBounds(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max), grid_shape, CELL_SIZE_M
+    meta_path = tiles_dir / f"{name}_meta.json"
     if not meta_path.is_file():
-        raise BakeError(
-            f"missing {meta_path}; the CityNav prior bake needs an existing "
-            "meta sidecar for the cell size (bounds are derived from the "
-            "block raster)"
-        )
+        raise BakeError(f"missing {meta_path}: a block without CityNav imagery bakes over its caller's meta")
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    b = meta.get("bounds") or {}
     try:
-        cell_size_m = float(meta.get("cell_size_m", 2.0))
-        rb = _raster_bounds(city) if imagery else None
-        if rb is not None:
-            x_min, y_min, x_max, y_max = rb
-            # Rows run north-to-south, so grid_shape is (rows, cols) = (y, x).
-            grid_shape = (
-                int(round((y_max - y_min) / cell_size_m)),
-                int(round((x_max - x_min) / cell_size_m)),
-            )
-        else:
-            x_min, y_min = float(b["x_min"]), float(b["y_min"])
-            x_max, y_max = float(b["x_max"]), float(b["y_max"])
-            grid_shape = (int(meta["grid_shape"][0]), int(meta["grid_shape"][1]))
-        bounds = WorldBounds(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max)
+        b = meta["bounds"]
+        bounds = WorldBounds(x_min=float(b["x_min"]), y_min=float(b["y_min"]),
+                             x_max=float(b["x_max"]), y_max=float(b["y_max"]))
+        grid_shape = (int(meta["grid_shape"][0]), int(meta["grid_shape"][1]))
+        cell_size_m = float(meta["cell_size_m"])
     except (KeyError, TypeError, ValueError, IndexError) as exc:
         raise BakeError(f"{meta_path} is missing valid bounds/grid metadata") from exc
-    meta["bounds"] = {
-        "x_min": bounds.x_min,
-        "y_min": bounds.y_min,
-        "x_max": bounds.x_max,
-        "y_max": bounds.y_max,
-    }
-    meta["grid_shape"] = [grid_shape[0], grid_shape[1]]
-    meta["bounds_source"] = "block raster" if rb is not None else "meta sidecar"
-    return meta, bounds, grid_shape, cell_size_m
+    return ({k: meta[k] for k in ("coordinate_frame", "georef") if k in meta},
+            bounds, grid_shape, cell_size_m)
 
 
 def _cell_coverage(
     block: str,
-    meta: dict[str, Any],
     bounds: WorldBounds,
     grid_shape: tuple[int, int],
     cell_size_m: float,
@@ -157,12 +144,11 @@ def _cell_coverage(
     over unseen. A cell is covered iff any pixel of the filled ortho
     (``load_ortho_or_rasters``) under it has ``alpha > 0``, the same no-data
     rule the runtime observation uses. Ortho rows run north-down, cell rows
-    south-up, so the alpha is flipped before the reduce. ``None`` (stamped in
-    ``meta["coverage_source"]``) when no ortho resolves, its geometry
-    disagrees with the block bounds, or the block has no CityNav imagery
-    (``imagery=False``, Cal City): the rectangle is then the rule.
+    south-up, so the alpha is flipped before the reduce. ``None`` when no
+    ortho resolves, its geometry disagrees with the block bounds, or the block
+    has no CityNav imagery (``imagery=False``, Cal City): the rectangle is
+    then the rule.
     """
-    meta["coverage_source"] = "bounds rectangle"
     if not imagery:
         return None
     from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
@@ -204,7 +190,6 @@ def _cell_coverage(
         alpha = np.pad(alpha, ((0, pad_r), (0, pad_c)))
     alpha = alpha[: H * step, : W * step]
     coverage = alpha.reshape(H, step, W, step).any(axis=(1, 3))
-    meta["coverage_source"] = "ortho alpha"
     log.info(
         "%s: imagery covers %.1f%% of the bounds rectangle (%d/%d cells)",
         block, 100.0 * coverage.mean(), int(coverage.sum()), coverage.size,
@@ -313,8 +298,6 @@ def _world_contour_from_geometry(geometry: dict[str, Any]) -> list[list[float]] 
             if len(ring) < 3:
                 continue
             chain = ring + [ring[0]]
-        if not chain:
-            continue
         if any(not (math.isfinite(x) and math.isfinite(y)) for x, y in chain):
             # A non-finite vertex would ride into features.json as literal
             # NaN (invalid strict JSON) and poison the shape scalars.
@@ -356,7 +339,7 @@ def _cell_for_xy(
 
 def _point_to_bounds_dist(x: float, y: float, bounds: WorldBounds) -> float:
     """Distance from ``(x, y)`` to the block raster rectangle, ``0.0`` inside
-    it: the outside-the-rectangle arm of the ``off_raster`` flag."""
+    it: the outside-the-rectangle arm of the off-imagery warning."""
     dx = max(bounds.x_min - x, 0.0, x - bounds.x_max)
     dy = max(bounds.y_min - y, 0.0, y - bounds.y_max)
     return float(math.hypot(dx, dy))
@@ -474,17 +457,6 @@ def _cells_for_geometry(
     return cells
 
 
-def _geometry_kind(geometry: dict[str, Any]) -> str:
-    """The mask kind the realizer produces for this geometry: ``area`` when any
-    polygon part exists, else ``way`` for a line, else ``node``."""
-    kinds = {g for g, _c in _iter_geometry_parts(geometry)}
-    if "Polygon" in kinds:
-        return "area"
-    if "LineString" in kinds:
-        return "way"
-    return "node"
-
-
 def _tag_value(value: Any) -> str | list[str] | None:
     if value is None:
         return None
@@ -533,12 +505,11 @@ def _feature_entry(
     if source_id:
         entry["osm_id"] = source_id
     for key, value in sorted(props.items()):
-        key_norm = str(key).replace(":", "_")
-        if key_norm in _PRIVILEGED_KEYS:
+        if key in _PRIVILEGED_KEYS:
             continue
         tag_val = _tag_value(value)
         if tag_val is not None:
-            entry.setdefault(key_norm, tag_val)
+            entry.setdefault(key, tag_val)
     return entry
 
 
@@ -549,27 +520,9 @@ def _record_sort_key(record: tuple[dict[str, Any], dict[str, Any]]) -> tuple[Any
     text = json.dumps(first, sort_keys=True)
     return (
         _safe_text(props.get("name")) or "",
-        _safe_text(props.get("osm_id")) or _safe_text(props.get("@id")) or "",
+        _safe_text(props.get("osm_id")) or "",
         text,
     )
-
-
-def _tag_census(entries: list[dict[str, Any]]) -> dict[str, int]:
-    """Top ``key=value`` tag counts over baked entries — the world-graph
-    discovery census. Facts only; geometry bookkeeping keys excluded."""
-    skip = {"cells", "centroid_row", "centroid_col", "world_contour",
-            "off_raster", "off_raster_m", "name", "osm_id", "source"}
-    counts: dict[str, int] = {}
-    for entry in entries:
-        for key, val in entry.items():
-            if key in skip:
-                continue
-            vals = val if isinstance(val, list) else [val]
-            for v in vals:
-                pair = f"{key}={v}"
-                counts[pair] = counts.get(pair, 0) + 1
-    top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:15]
-    return dict(top)
 
 
 def _features_from_records(
@@ -579,9 +532,8 @@ def _features_from_records(
     grid_shape: tuple[int, int],
     cell_size_m: float,
     coverage: np.ndarray | None,
-) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
-    """Rasterize records into ``bounds``/``grid_shape`` sidecar data and its
-    ``bake_counts``.
+) -> dict[str, list[dict[str, Any]]]:
+    """Rasterize records into ``bounds``/``grid_shape`` sidecar data.
 
     Every record whose geometry rasterizes to >= 1 COVERED cell is kept — the
     ONLY exclusion is no-geometry-over-imagery (whole-city records against a
@@ -605,42 +557,28 @@ def _features_from_records(
         and bbox[3] >= bounds.y_min - pad
     ]
     entries: list[dict[str, Any]] = []
-    named_kept = 0
-    unnamed_kept = 0
-    off_coverage_dropped = 0
-    kind_counts: dict[str, int] = {}
     named_priors_total = 0
-    named_off_raster: list[list[Any]] = []  # [name, off_raster_m] per off prior
+    named_off_raster: list[list[Any]] = []  # [name, metres off imagery] per off prior
     if coverage is not None:
         from scipy import ndimage  # noqa: PLC0415  (ships with the ortho extra)
 
         # Meters from any no-coverage cell to the nearest imagery, for the
-        # off_raster honesty flag below.
+        # off-imagery warning below.
         no_data_dist_m = (
             ndimage.distance_transform_edt(~coverage) * cell_size_m
         )
     for props, geometry, bbox in sorted(in_window, key=lambda r: _record_sort_key(r[:2])):
         cells = _cells_for_geometry(geometry, bounds, grid_shape, cell_size_m, line_buffer_m)
-        if coverage is not None and cells:
-            covered = {c for c in cells if coverage[c]}
-            if not covered:
-                off_coverage_dropped += 1
-            cells = covered
+        if coverage is not None:
+            cells = {c for c in cells if coverage[c]}
         if not cells:
             continue
         raw_name = _safe_text(props.get("name"))
-        if raw_name:
-            named_kept += 1
-        else:
-            unnamed_kept += 1
-        kind = _geometry_kind(geometry)
-        kind_counts[kind] = kind_counts.get(kind, 0) + 1
-        source_id = _safe_text(props.get("osm_id") or props.get("@id"))
-        entry = _feature_entry(props, cells, source_id,
+        entry = _feature_entry(props, cells, _safe_text(props.get("osm_id")),
                                _world_contour_from_geometry(geometry), coverage)
-        # Raster-coverage honesty: a named prior whose TRUE geometry centroid
-        # sits over no imagery (outside the raster window, or inside it on
-        # no-data) is SAM-invisible. Flag those rows and tally them per block.
+        # A named prior whose TRUE geometry centroid sits over no imagery
+        # (outside the raster window, or inside it on no-data) is
+        # SAM-invisible; the bake warns with them.
         if raw_name:
             named_priors_total += 1
             cx = 0.5 * (bbox[0] + bbox[2])
@@ -653,43 +591,20 @@ def _features_from_records(
             else:
                 off_m = 0.0
             if off_m > 0.0:
-                entry["off_raster"] = True
-                entry["off_raster_m"] = round(off_m, 1)
                 named_off_raster.append([raw_name, round(off_m, 1)])
         entries.append(entry)
-    off_frac = (
-        round(len(named_off_raster) / named_priors_total, 3)
-        if named_priors_total
-        else 0.0
-    )
     if named_off_raster:
         log.warning(
             "%s named prior(s) of %d sit over NO imagery "
             "(frac=%.3f, SAM-invisible): %s",
             len(named_off_raster),
             named_priors_total,
-            off_frac,
+            round(len(named_off_raster) / named_priors_total, 3),
             ", ".join(n for n, _d in sorted(named_off_raster, key=lambda p: -p[1])[:8]),
         )
-    bake_counts = {
-        "named_kept": named_kept,
-        "unnamed_kept": unnamed_kept,
-        # The kind census: mask kinds + top tag key=value counts.
-        "kind_census": {
-            "mask_kinds": dict(sorted(kind_counts.items())),
-            "top_tags": _tag_census(entries),
-        },
-        # Records dropped for rasterizing only over no-data, and which named
-        # priors keep cells but center over no imagery.
-        "raster_coverage": {
-            "off_coverage_dropped": off_coverage_dropped,
-            "named_priors_total": named_priors_total,
-            "named_priors_off_raster": len(named_off_raster),
-            "named_off_raster_frac": off_frac,
-            "named_off_raster": sorted(named_off_raster, key=lambda p: (-p[1], p[0])),
-        },
-    }
-    return ({PRIOR_KEY: entries} if entries else {}), bake_counts
+    # The one features.json key; the graph builder mints ``prior_<i>`` fids
+    # from it, positionally stable per the deterministic record sort.
+    return {"prior": entries} if entries else {}
 
 
 def _read_geojson_cache(
@@ -717,13 +632,6 @@ def _read_geojson_cache(
         records.append((props, geometry))
     cache_meta = payload.get("citynav_osm_cache")
     return records, cache_meta if isinstance(cache_meta, dict) else None
-
-
-# Keys a previous bake may have written into meta.json. Stripped before
-# re-writing so a re-bake cannot inherit a stale provenance claim; ``bake_block``
-# re-asserts its own. A key an upstream caller writes (the Cal City baker's
-# ``georef`` block) is that caller's contribution and passes through.
-_STALE_BAKE_FLAGS = frozenset({"bake_counts", "osm_only", "provenance"})
 
 
 def _bake_provenance() -> dict[str, Any]:
@@ -757,17 +665,6 @@ def _file_sha256(path: Path) -> str:
         return hashlib.file_digest(fh, "sha256").hexdigest()
 
 
-_EXCLUDED = (
-    "CityRefer objects",
-    "target IDs",
-    "target positions",
-    "descriptions",
-    "SAM outputs",
-    "satellite segmentation",
-    "vehicle and bike object priors",
-)
-
-
 def bake_block(
     name: str,
     records: list[tuple[dict[str, Any], dict[str, Any]]],
@@ -775,18 +672,18 @@ def bake_block(
     *,
     imagery: bool = True,
     provenance: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Bake ``records`` into block ``name``'s window and write its sidecars.
+) -> dict[str, int]:
+    """Bake ``records`` into block ``name``'s window and write its sidecars;
+    ``{"features", "nodes"}``.
 
-    ``imagery=False`` is a block with no CityNav raster: the meta sidecar's
-    bounds and the bounds rectangle's coverage. A ``provenance`` dict marks a
-    city-frame cache baked per block (``bake.mode`` ``osm_blocks``) and is
-    stamped with WHO/WHEN; without one the mode is ``osm_cache``.
+    ``imagery=False`` is a block with no CityNav raster: its caller's meta
+    sidecar's grid and the bounds rectangle's coverage. A ``provenance`` dict
+    (a city-frame cache baked per block) is stamped with WHO/WHEN.
     """
     tiles_path = Path(tiles_dir).expanduser().resolve()
-    meta, bounds, grid_shape, cell_size_m = _load_city_meta(name, tiles_path, imagery=imagery)
-    coverage = _cell_coverage(name, meta, bounds, grid_shape, cell_size_m, imagery=imagery)
-    features, bake_counts = _features_from_records(
+    caller_keys, bounds, grid_shape, cell_size_m = _block_frame(name, tiles_path, imagery=imagery)
+    coverage = _cell_coverage(name, bounds, grid_shape, cell_size_m, imagery=imagery)
+    features = _features_from_records(
         records, bounds=bounds, grid_shape=grid_shape, cell_size_m=cell_size_m, coverage=coverage,
     )
     if not features:
@@ -799,61 +696,44 @@ def bake_block(
     Path(f"{stem}_features.json").write_text(
         json.dumps(features, separators=(",", ":")), encoding="utf-8"
     )
-    out_meta = {k: v for k, v in meta.items() if k not in _STALE_BAKE_FLAGS}
-    out_meta["map_name"] = name
-    out_meta["block" if "_block_" in name else "city"] = name
-    out_meta["grid_shape"] = [int(grid_shape[0]), int(grid_shape[1])]
-    out_meta["cell_size_m"] = float(cell_size_m)
-    out_meta["n_objects"] = sum(len(v) for v in features.values())
-    out_meta["source"] = "osm_only"
-    out_meta["osm_only"] = True
-    out_meta["bake_counts"] = bake_counts
+    out_meta: dict[str, Any] = {
+        "grid_shape": [int(grid_shape[0]), int(grid_shape[1])],
+        "cell_size_m": float(cell_size_m),
+        "bounds": {"x_min": bounds.x_min, "y_min": bounds.y_min,
+                   "x_max": bounds.x_max, "y_max": bounds.y_max},
+        **caller_keys,
+    }
     if provenance is not None:
         out_meta["provenance"] = {**provenance, **_bake_provenance()}
-    out_meta["bake"] = {
-        "mode": "osm_cache" if provenance is None else "osm_blocks",
-        "excluded": list(_EXCLUDED),
-    }
     Path(f"{stem}_meta.json").write_text(json.dumps(out_meta, indent=2), encoding="utf-8")
-    stats = {"city": name, "features": out_meta["n_objects"], "nodes": len(graph.nodes)}
-    log.info("wrote %s osm_only bake: %d features, %d nodes", name, stats["features"], stats["nodes"])
+    stats = {"features": sum(len(v) for v in features.values()), "nodes": len(graph.nodes)}
+    log.info("wrote %s bake: %d features, %d nodes", name, stats["features"], stats["nodes"])
     return stats
 
 
-def bake_city(city: str, osm_cache: str | Path, tiles_dir: str | Path = TILES_DIR) -> dict[str, Any]:
-    """Bake ``osm_cache``, city-frame records in CityNav local XY, into every
-    ``<city>_block_*`` window in ``tiles_dir`` (block bounds are windows of the
-    shared city frame)."""
+def bake_city(city: str, osm_cache: str | Path, tiles_dir: str | Path = TILES_DIR) -> None:
+    """Bake ``osm_cache``, city-frame records in CityNav local XY, into
+    ``tiles_dir`` for every ``<city>_block_<n>.tif`` raster (block bounds are
+    windows of the shared city frame)."""
     tiles_path = Path(tiles_dir).expanduser().resolve()
-    suffix = "_meta.json"
-    blocks = sorted(p.name[: -len(suffix)] for p in tiles_path.glob(f"{city}_block_*{suffix}"))
+    rasters = _raster_tif(f"{city}_block_0").parent
+    blocks = sorted(p.stem for p in rasters.glob(f"{city}_block_*.tif")
+                    if re.fullmatch(rf"{city}_block_\d+", p.stem))
     if not blocks:
-        raise BakeError(f"no {city}_block_*{suffix} under {tiles_path}")
+        raise BakeError(f"no {city}_block_<n>.tif under {rasters}")
     cache_path = Path(osm_cache).expanduser().resolve()
     records, cache_meta = _read_geojson_cache(cache_path)
     if not records:
         raise BakeError("no OSM records to bake")
-    cache_info = cache_meta or {}
     provenance = {
         "prior": "osm",
         "osm_cache": cache_path.name,
         "osm_cache_sha256": _file_sha256(cache_path),
-        "fetched_at_utc": cache_info.get("fetched_at_utc"),
         "records": len(records),
-        "kind_counts": cache_info.get("kind_counts"),
-        "georef": cache_info.get("georef_provenance"),
+        "georef": (cache_meta or {}).get("georef_provenance"),
     }
-    total = {"blocks": 0, "features": 0, "nodes": 0}
     for block in blocks:
-        stats = bake_block(block, records, tiles_path, provenance=provenance)
-        total["blocks"] += 1
-        total["features"] += int(stats["features"])
-        total["nodes"] += int(stats["nodes"])
-    log.info(
-        "%s osm_blocks bake: %d blocks, %d features, %d nodes",
-        city, total["blocks"], total["features"], total["nodes"],
-    )
-    return total
+        bake_block(block, records, tiles_path, provenance=provenance)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
