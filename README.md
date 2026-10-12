@@ -93,6 +93,8 @@ these places, the served-text changes among them:
 | The terrain reads the DEM cell a point lies in, counted from the raster's north-west corner. | The flown station rounded from the south-west corner, reading a neighbouring cell for most points (typically centimetres, up to about 11 m). |
 | A mission records the aircraft's track (`flight_track.jsonl`, one fix a second) and stamps every row on the vehicle's clock, so a MAPS sortie is scored like a flown one. | The flown station's track came from the ground recorder beside it; the harness itself wrote none. |
 | The pose corrector's refusal of a frame no longer replaces the reason a leg row quotes. | The flown station's corrector thread could overwrite it. |
+| Hints, the `more_of` refusal and a map's badged set name a result as the model named it (its variable, else its call), each hint once; cap notes name `look()` and `show`; the crop cap is stated once; `go_to` refuses a python set as it refuses a list. | The flown texts named internal result refs (`r0`, `r11`) the model's code could not use, repeated step hints, named nonexistent `view`/`crops`/`analyze` calls, stated the crop cap twice, and answered `go_to(set)` with a raw error. |
+| The map legend names the 90-120 degree hue bucket yellow-green, the colour it paints. | The flown legend called it olive. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
