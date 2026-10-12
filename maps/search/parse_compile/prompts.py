@@ -395,6 +395,13 @@ _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
         ("cut", "=== MISSION MAP ===", "=== WORLD CONVENTIONS ==="),
     ],
 }
+# ... and to the rig's sensor block.
+_SENSOR_EDITS: dict[str, list[tuple[str, ...]]] = {
+    "look_for": [
+        ("sub", " (SAM may merge a tight cluster of N objects into one mask or"
+                " split one into N+1)", ""),
+    ],
+}
 
 
 def _units(text: str, turn: bool) -> list[str]:
@@ -459,20 +466,22 @@ def served_tools() -> list:
 
 def served_system_prompt(sensor_description: str = "") -> str:
     """The one system message this run serves, the rig's sensor block fused
-    onto its tail (the chat template takes one system turn); empty under the
+    onto its tail (the chat template takes one system turn), then what the
+    segmenter sees unless ``look_for`` is withheld; empty under the
     ``system_turn`` withhold."""
     if withheld("system_turn"):
         return ""
     text = _served(CODE_SYSTEM_PROMPT, _TURN_EDITS, turn=True)
     if not sensor_description.strip():
         return text
-    return (text + "\n\nSensor rig (active for this run):\n"
-            f"{sensor_description.strip()}\n\n"
-            "A concept this rig cannot see produces an empty SAM response."
+    text += ("\n\nSensor rig (active for this run):\n"
+             + _served(sensor_description.strip(), _SENSOR_EDITS, turn=False))
+    if withheld("look_for"):
+        return text
+    return (text + "\n\nA concept this rig cannot see produces an empty SAM response."
             + (" This run has no prior map: what SAM segments is the only thing"
                " in the graph." if withheld("prior") else
                " SAM covers un-cataloged / movable objects; static map features"
                " are already in the graph as prior footprints with geometry and"
                " raw OSM tags.")
-            + ("" if withheld("look_for") else
-               " SAM segments roads as merged blobs and over-splits buildings."))
+            + " SAM segments roads as merged blobs and over-splits buildings.")

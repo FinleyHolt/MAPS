@@ -74,7 +74,7 @@ CASES = {
     "look_for": (("SYSTEM", "TOOLS", "SURFACE"),
                  ("look_for", "watched classes", "segmenting your", "ARM EVERY CLASS",
                   "WHAT YOU SEE BECOMES ROWS", "The flight folds", "SAM segments roads",
-                  "pools = find("),
+                  "pools = find(", "empty SAM response", "SAM covers"),
                  (23, 10), (21, 3), (1, 0)),
     "look": (("SYSTEM", "TOOLS", "SURFACE"),
              ("look(", "a CLOSE look", "known only from a look",
@@ -107,6 +107,13 @@ def test_each_withhold_takes_exactly_its_part(monkeypatch, name):
     for m in markers:
         assert m in base["SYSTEM"] + base["TOOLS"] + base_surface, m
         assert m not in served, m
+
+
+def test_a_look_for_withhold_serves_no_segmenter_in_the_sensor_block(monkeypatch):
+    base = _sections(_dump(monkeypatch, "", "nadir_1008_90"))["SYSTEM"]
+    got = _sections(_dump(monkeypatch, "look_for", "nadir_1008_90"))["SYSTEM"]
+    assert "SAM may merge" in base and "small entity counts ±1" in got
+    assert "SAM" not in got, got
 
 
 def test_the_system_turn_withhold_serves_no_system_message(monkeypatch):
@@ -234,8 +241,11 @@ def test_the_served_literals_hold_their_worked_block_and_every_edit_target():
     assert find_kwargs & {"nearest", "near", "within", "east_of", "west_of",
                           "north_of", "south_of"}, find_kwargs
 
+    from maps.perception.geometry.sensor_spec import resolve_sensor
+
     for edits, text, turn in ((prompts._DOC_EDITS, prompts.CODE_DOC, False),
-                              (prompts._TURN_EDITS, prompts.CODE_SYSTEM_PROMPT, True)):
+                              (prompts._TURN_EDITS, prompts.CODE_SYSTEM_PROMPT, True),
+                              (prompts._SENSOR_EDITS, resolve_sensor("nadir_1008_90").description, False)):
         for name, items in edits.items():
             assert name in W.WITHHOLDS, name
             for e in items:
