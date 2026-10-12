@@ -136,7 +136,7 @@ def test_a_direct_run_emits_a_manifest_the_reader_finds(
 
 
 def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tmp_path, bake):
-    """The field station's per-mission grain: the mission's stamp rides
+    """A flight mission's grain: the mission's stamp rides
     whole under ``mission``, and the effort it names is what
     ``search_env_flags`` records, since that is what its requests carried;
     a mission naming none leaves the arm's stamp, and no mission at all

@@ -86,10 +86,10 @@ def test_run_log_receives_the_loggers_and_close_detaches_it(tmp_path, caplog):
     assert "after close" not in (ep.dir / "run.log").read_text()
 
 
-def test_a_station_attempt_names_its_run_number_and_a_bench_attempt_names_none(
+def test_a_flight_attempt_names_its_run_number_and_a_bench_attempt_names_none(
     tmp_path, monkeypatch
 ):
-    """A station flight's directory carries its sortie run number (two digits
+    """A flight mission's directory carries its sortie run number (two digits
     at least) through ``open_episode_dir``; a bench attempt's carries none.
     The stamp stays first, because ``analysis.rows`` orders attempts by it."""
     from benchmarks.citynav.analysis import rows

@@ -119,7 +119,7 @@ def test_the_pose_echo_follows_a_flight_and_ignores_an_error():
 
 
 def test_the_mission_deadline_is_read_per_call_and_optional(monkeypatch):
-    """Unset means NO clock, which is the field station's case and the
+    """Unset means NO clock, which is the flight mission's case and the
     default."""
     from benchmarks.citynav.run_benchmark.mission_engine import (
         MISSION_DEADLINE_ENV, _mission_deadline_epoch)
