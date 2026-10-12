@@ -30,7 +30,7 @@ class FakeReasoner:
         self.messages = [{"role": "system", "content": "sys"}]
         self.vision: list[tuple[str, list]] = []
         self.compaction_infeasible = False
-        self.combined_tag = None
+        self.cancel_event = None
         self.model = "test"
 
     def append_user(self, content):

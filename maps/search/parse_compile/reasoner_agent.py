@@ -169,6 +169,8 @@ class Reasoner:
     cancel_event: threading.Event | None = None
     # the requests' reasoning effort (``model_cards.sampling_kwargs``); None: the default
     reasoning_effort: str | None = None
+    # Set when compaction cannot fit the thread: no later turn grows it.
+    compaction_infeasible: bool = False
 
     @property
     def model(self) -> str:

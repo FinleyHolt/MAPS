@@ -1427,9 +1427,7 @@ class _Mission:
 
     def converse(self, user_message: str) -> MissionReply:
         """Append ``user_message`` and run the turn loop to its ending."""
-        # A thread the compactor declared infeasible stays so: no message
-        # grows it.
-        if getattr(self.reasoner, "compaction_infeasible", False):
+        if self.reasoner.compaction_infeasible:
             return self._mission_end("compaction_infeasible")
         self.reasoner.append_user(user_message)
         # Channel misses, consecutive zero-flight replies
@@ -1455,7 +1453,7 @@ class _Mission:
             except (CompactionInfeasible, CompactionInvariantError) as exc:
                 # Terminal: flag the thread and drop this turn's unread message.
                 self.reasoner.compaction_infeasible = True
-                msgs = getattr(self.reasoner, "messages", None)
+                msgs = self.reasoner.messages
                 if (turn_idx == 0 and msgs
                         and msgs[-1].get("role") == "user"
                         and msgs[-1].get("content") == user_message):
@@ -1478,7 +1476,7 @@ class _Mission:
                         })
                     return self._mission_end("oversize_rejection", turns=turn_idx + 1)
                 transient_failures += 1
-                cancel = getattr(self.reasoner, "cancel_event", None)
+                cancel = self.reasoner.cancel_event
                 log.warning(
                     "%s stop_round transient LLM error %d%s: %s",
                     self.rid_tag,
