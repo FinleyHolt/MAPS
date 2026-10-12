@@ -574,10 +574,12 @@ class Driver:
         )
         # Workers claim until nothing is left, the wall budget is spent, or the
         # run aborts; an infra attempt is re-claimed by whichever worker is free.
+        # Daemon workers end with the driver (their children die with it), so
+        # none flies on once an interrupt has released the root.
         if pending and not self._wall_spent():
             threads = []
             for wid in range(self.workers):
-                t = threading.Thread(target=self.worker_loop, args=(wid,), daemon=False)
+                t = threading.Thread(target=self.worker_loop, args=(wid,), daemon=True)
                 t.start()
                 threads.append(t)
                 time.sleep(WORKER_STAGGER_S)

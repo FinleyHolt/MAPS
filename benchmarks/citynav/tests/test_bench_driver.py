@@ -314,6 +314,43 @@ def test_a_sigkilled_driver_takes_its_attempt_with_it() -> None:
             pass
 
 
+_INTERRUPTED = (
+    "import sys, time\n"
+    "from pathlib import Path\n"
+    "from benchmarks.citynav import bench_fullset as bf, run_manifest as rm\n"
+    "d = bf.Driver.__new__(bf.Driver)\n"
+    "root = Path(sys.argv[1])\n"
+    "d.out_root, d.episodes_file, d.driver_log = root, root / 'episodes.jsonl', root / 'driver.log'\n"
+    "d.summary_file, d.split, d.workers, d.max_wall_s, d._deadline = root / 'summary.txt', 's', 2, 0, None\n"
+    "d._done_cache, d._infra_errors, d.max_infra_attempts, d._abort = set(), {}, 3, None\n"
+    "d.sample_seed, d.limit, d.allowlist_path = 1, 0, None\n"
+    "d._select_episodes = lambda: ['ep0']\n"
+    "bf._missing_block_assets, bf.WORKER_STAGGER_S = (lambda eps: []), 0\n"
+    "rm.build_manifest = lambda **kw: None\n"
+    "rm.emit_or_verify = lambda *a, **kw: None\n"
+    "def fly(wid):\n"
+    "    print('flying', flush=True)\n"
+    "    time.sleep(60)\n"
+    "d.worker_loop = fly\n"
+    "d.run()\n"
+)
+
+
+def test_an_interrupted_driver_exits_with_its_workers(tmp_path) -> None:
+    """Ctrl-C releases the root, so a worker left flying would fly beside the next launch."""
+    proc = subprocess.Popen([sys.executable, "-c", _INTERRUPTED, str(tmp_path)], cwd=REPO,
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    try:
+        flying = (line for line in iter(proc.stdout.readline, "") if line == "flying\n")
+        assert next(flying) and next(flying)
+        time.sleep(0.5)    # the main thread is joining its first worker
+        proc.send_signal(signal.SIGINT)
+        assert proc.wait(timeout=10) != 0
+    finally:
+        proc.kill()
+        proc.wait()
+
+
 def test_the_split_defaults_to_the_benchmarks_own() -> None:
     from benchmarks.citynav import paths
 
