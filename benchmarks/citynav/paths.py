@@ -129,12 +129,12 @@ def assert_available() -> None:
     if missing:
         recipe = (
             f"CityNav data not found under {CITYNAV_ROOT}.\n"
-            "Fetch it:\n"
-            f"  git clone https://github.com/water-cookie/citynav-arxiv {CITYNAV_ROOT}\n"
-            f"  cd {CITYNAV_ROOT} && sh scripts/download_data.sh\n"
-            "  # Then fetch SensatUrban .ply files and run scripts/rasterize.sh.\n"
+            "Fetch it, from the repo root:\n"
+            f"  CITYNAV_ROOT={CITYNAV_ROOT} benchmarks/citynav/data_prep/fetch_data.sh\n"
+            f"  CITYNAV_ROOT={CITYNAV_ROOT} benchmarks/citynav/data_prep/rasterize_citynav_native.sh\n"
+            "  PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh\n"
             "Override the root via CITYNAV_ROOT=<path>, or the episode\n"
-            "splits alone via SEARCH_CITYNAV_SPLITS=<dir> (HETT refined A/B).\n\n"
+            "splits alone via SEARCH_CITYNAV_SPLITS=<dir>.\n\n"
             f"Missing: {', '.join(str(p) for p in missing)}"
         )
         raise FileNotFoundError(recipe)
