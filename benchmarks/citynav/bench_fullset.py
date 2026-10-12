@@ -443,7 +443,7 @@ class Driver:
         lines = [
             f"split: {self.split}   workers: {self.workers}   "
             f"episode_cap: {self.episode_timeout_s}s",
-            f"infra (re-queued, not scored): {infra.total()}"
+            f"infra attempts (excluded): {infra.total()}"
             + ("  by cause: " + ", ".join(f"{c}:{k}" for c, k in infra.most_common())
                if infra else ""),
             self._persistent_infra(),
@@ -626,12 +626,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--workers",
         type=int,
         default=6,
-        help="concurrency (default %(default)s; empirical optimum)",
+        help="concurrency (default %(default)s)",
     )
     p.add_argument(
         "--out-root",
-        default="output/citynav_fullset",
-        help="results + per-worker run-roots (default output/citynav_fullset)",
+        default=f"output/{paths.BENCHMARK}_fullset",
+        help="results + per-worker run-roots (default %(default)s)",
     )
     p.add_argument(
         "--episode-timeout-s",

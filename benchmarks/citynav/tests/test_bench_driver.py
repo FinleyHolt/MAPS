@@ -154,7 +154,7 @@ def test_the_summary_is_the_run_report_under_the_infra_lines(driver) -> None:
     )))
     d._write_summary()
     out = d.summary_file.read_text()
-    assert "infra (re-queued, not scored): 1  by cause: vllm_down_midrun:1" in out
+    assert "infra attempts (excluded): 1  by cause: vllm_down_midrun:1" in out
     # The first-STARTED attempt of c scores, not the one that finished last.
     assert "SR = 2/2 (100.0%)" in out, out
 
@@ -325,3 +325,15 @@ def test_the_summary_names_an_errorless_infra_row_as_the_driver_counts_it(driver
     episodes.append_row(d.out_root, {"episode_id": "ep0", "worker_id": 0, "status": "infra"})
     d._write_summary()
     assert "by cause: infra:1" in d.summary_file.read_text()
+
+
+def test_the_end_line_prints_no_score_for_an_infra_attempt(driver, monkeypatch) -> None:
+    d = driver(selection=["a::1#0", "b::1#1"])
+    rows = {"a": {**_infra(0), "metrics": {"NE": 3.0, "SR": 1}, "elapsed_s": 1.0},
+            "b": {"episode_id": "b::1#1", "status": "ok", "metrics": {"NE": 3.0, "SR": 1}, "elapsed_s": 1.0}}
+    monkeypatch.setattr(d, "_run_attempt", lambda w, eid: rows[eid[0]])
+    d.run_one(0, "a::1#0")
+    d.run_one(0, "b::1#1")
+    ends = [ln for ln in d.driver_log.read_text().splitlines() if " END " in ln]
+    assert ends[0].endswith("status=infra elapsed=1s"), ends
+    assert ends[1].endswith("status=ok elapsed=1s NE=3.0 SR=1"), ends
