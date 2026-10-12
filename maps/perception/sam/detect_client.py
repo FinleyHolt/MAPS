@@ -440,17 +440,11 @@ class SamDetectClient:
                 "whole-frame outage, not a partial or empty frame"
             )
         kept = self._nms_masks(tiledets)
-        if n_failed:
-            print(
-                f"[sam] WARNING: {n_failed}/{len(bounds)} SAHI tiles "
-                f"FAILED (/segment returned None after retries) -- this frame is "
-                f"PARTIAL-BLIND; dense-lot recall is degraded for those regions, "
-                f"not a clean empty",
-                flush=True,
-            )
+        # A failed tile is ground this frame did not see: partial-blind, not a clean empty.
         print(
             f"[sam] SAHI native: {len(bounds)} tiles, {n_failed} failed "
-            f"({len(tiledets)} tile-dets -> {len(kept)} after NMS)",
+            f"({len(tiledets)} tile-dets -> {len(kept)} after NMS)"
+            + (" -- WARNING: this frame is PARTIAL-BLIND" if n_failed else ""),
             flush=True,
         )
         return self._detections(obs, [(region, lab, i, sc) for i, (region, lab, sc) in enumerate(kept)])
