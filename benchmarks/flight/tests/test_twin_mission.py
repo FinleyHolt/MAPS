@@ -138,10 +138,9 @@ def test_a_twin_sortie_scores_fully_on_the_closed_loop_measures(calcity, serves,
     assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                       "--out", str(out)]) == 0
     sortie = next(out.iterdir())
-    rows, _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]),
-                                             tiles_dir=calcity.tiles)
+    rows, _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
     (run,) = rows
-    assert run["success_area"] is True and run["track_source"] == "GNSS track", run
+    assert run["success"] is True and run["track_source"] == "GNSS track", run
     assert run["track_coverage"] == 1.0 and run["oracle_success"] is True and run["agl_ft"] is not None
     assert 0.0 < run["spl"] <= 1.0 and run["path_ft"] > 0.0
     # Leg 700 m north at the C-12's speed: the time to ID is the twin's flying time, not the host's.
@@ -256,8 +255,7 @@ def test_a_retasked_mission_is_measured_to_its_last_report(calcity, serves, tmp_
                       "--then", "Check the west side too.", "--out", str(out)]) == 0
     sortie = next(out.iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
-    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]),
-                                               tiles_dir=calcity.tiles)
+    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
     assert row["flights_flown"] == 2
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
@@ -311,9 +309,8 @@ def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, ser
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
     assert row["status"] == "ok" and row["ended_by"] == "reply" and row["error"] == "SamServerOutage: no tile answered"
     assert row["flights_flown"] == 2 and len(row["visited_xy"]) == 2
-    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]),
-                                               tiles_dir=calcity.tiles)
-    assert run["commit_fid"] == "prior_0" and run["end"] == "reply" and run["success_area"] is True
+    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
+    assert run["commit_fid"] == "prior_0" and run["end"] == "reply" and run["success"] is True
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
 

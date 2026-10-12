@@ -1,7 +1,7 @@
 """The closed-loop measures of each run, from its records: SR, OSR, NE, time to identification, SPL.
 
     python -m benchmarks.flight.measures --root <sortie>... --truth <adjudications dir> [<split.json>]
-        --tiles <Cal City bake whose calcity_features.json holds the flown prior> [--json] [--check runs_all.csv]
+        [--json] [--check runs_all.csv]
 
 A root is a flown or twin sortie (``episodes.jsonl`` beside ``flight_track.jsonl``)
 or a replay's (:mod:`benchmarks.flight.replay`, its sortie folder named for
@@ -9,13 +9,10 @@ the recorded one, so the same truth scores both; a replay records no start
 time and no track, so it reads SR and NE only). Per run, from three things
 the record holds:
 
-* **The commit**: the target of the run's last flight (``commit_xy``, else
-  the last visited point), named by the flight that resolved there (the
+* **The commit**: the point the run's last flight was sent to (``commit_xy``,
+  else the last visited point), named by the flight that resolved there (the
   ground station's ``mission.json`` where one was kept, else the run's
-  ``flight/tour_cursor.json``), and its area: a map feature's outline
-  (``prior_<i>`` is row ``i`` of the bake's ``calcity_features.json``) or the
-  detection's outline off the run's ``detections.jsonl``, kept only when the
-  commit lies inside it or on its centroid.
+  ``flight/tour_cursor.json``).
 * **The truth**: the analyst's hand-drawn mask (``<sortie>.json`` in a truth
   directory, ``{episode_id: {"target_mask", "excluded", "intel_quality"}}``),
   else the tasking set's footprint for the run's episode id and description
@@ -24,10 +21,8 @@ the record holds:
 * **The path**: the aircraft's GNSS track beside the sortie
   (``flight_track.jsonl``, 1 Hz), else the keyframes' poses.
 
-SR is read two ways: the committed area contains the centroid
-(``success_area``), and the commit lies within 20 m of it
-(``success_radius``). NE is the committed area's centroid (the commit
-where no area is recovered) to the target centroid. OSR: the path came within
+SR: the commit point lies inside the truth's mask (``success``). NE is the
+commit point to the target centroid. OSR: the path came within
 one camera HFOV ground width of the centroid, at the height above ground
 ``agl_ft`` (the height of the fix nearest the centroid, else the run's median
 keyframe height, else its median commanded waypoint height; ``agl_source``
@@ -58,7 +53,6 @@ from pathlib import Path
 from benchmarks.citynav.analysis.rows import is_infra_abort, iter_json_rows
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
-from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
 from benchmarks.flight.mission import FRAMES_JSONL, TRACK_JSONL
 from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
@@ -66,12 +60,8 @@ from maps.search.analyze_scene.geom_compute import point_in_polygon
 from typing import Any
 
 FT_PER_M = 1.0 / 0.3048
-#: The success radius: CityNav's 20 m.
-SUCCESS_RADIUS_M = 20.0
 #: The C-12's camera, whose horizontal field of view is the width OSR reads.
 C12_SENSOR = "oryx_orx32_25mm_nadir"
-#: A committed area is trusted only when the commit lies inside it or this close to its centroid.
-AREA_MATCH_M = 1.0
 #: A gap between fixes longer than this is a hole in the recording.
 TRACK_GAP_S = 3.0
 #: A success's SPL needs the recording to hold this share of its run.
@@ -200,32 +190,6 @@ def commit_fid(bases: list[Path], xy: tuple[float, float] | None) -> str | None:
         return None
     named = [f for f, p in flights_named(bases) if abs(p[0] - xy[0]) < 1.0 and abs(p[1] - xy[1]) < 1.0]
     return named[-1] if named else None
-
-
-def committed_area(bases: list[Path], fid: str | None, xy,
-                   prior: list[dict[str, Any]] | None) -> list[list[float]] | None:
-    """The committed feature's outline in map metres, kept only when the commit lies inside it or on its centroid."""
-    if not fid or xy is None:
-        return None
-    ring = None
-    if fid.startswith("prior_"):
-        if prior is None:
-            raise SystemExit(f"a run commits {fid}, a row of the bake's calcity_features.json, and the bake "
-                             "holds none: name the flown bake with --tiles (or SEARCH_CALCITY_TILES)")
-        try:
-            ring = prior[int(fid[len("prior_"):])].get("world_contour")
-        except (ValueError, IndexError):
-            ring = None
-    elif fid.startswith("detected_"):
-        for b in bases:
-            near = [(math.dist(centroid(c), xy), c) for d in read_jsonl(b / DETECTIONS_JSONL)
-                    if (c := (d.get("metadata") or {}).get("world_contour")) and len(c) >= 3]
-            if near:
-                ring = min(near, key=lambda t: t[0])[1]
-                break
-    if not ring or len(ring) < 3 or not (point_in_polygon(xy, ring) or math.dist(centroid(ring), xy) <= AREA_MATCH_M):
-        return None
-    return [[float(p[0]), float(p[1])] for p in ring]
 
 
 # -- the way back: Dubins paths at one turn radius -------------------------------
@@ -501,13 +465,12 @@ def tokens(bases: list[Path]) -> dict[str, Any]:
 
 
 def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], truth: Truth, track,
-                 prior: list[dict[str, Any]] | None, turn_radius_m: float) -> dict[str, Any]:
+                 turn_radius_m: float) -> dict[str, Any]:
     bases = run_bases(root, row)
     events = _conversation(bases)
     end = ended(row)
     xy = judged_xy(row)
     fid = commit_fid(bases, xy) if bases else None
-    area = committed_area(bases, fid, xy, prior)
     determined = end == "reply" and xy is not None
     reason = entry.get("excluded")
     params = next((r.get("params") or {} for b in bases for r in read_jsonl(b / "flight" / "llm" / TRANSCRIPT_JSONL)
@@ -530,10 +493,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         "commit_xy": None if xy is None else [round(xy[0], 2), round(xy[1], 2)],
         "truth_xy": None if target is None else [round(target[0], 2), round(target[1], 2)],
         "truth_source": truth_source, "flights": row.get("flights_flown"), "turns": row.get("turns_used"),
-        "success_area": None, "success_radius": None, "ne_ft": None,
-        # Where NE is read from, decided with or without a truth to read it against.
-        "ne_from": ("committed area centroid" if area else "commit point") if determined else None,
-        "oracle_success": None,
+        "success": None, "ne_ft": None, "oracle_success": None,
         "closest_approach_ft": None, "hfov_width_ft": None, "agl_ft": None, "agl_source": None,
         "track_source": None,
         "track_coverage": None, "time_to_id_s": round(t_stop - t_start, 1) if determined and t_stop else None,
@@ -542,17 +502,13 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     }
     if target is None:
         return out
+    out["success"] = determined and point_in_polygon(xy, ring)
     if determined:
-        point = centroid(area) if area else xy
-        out["ne_ft"] = round(math.dist(point, target) * FT_PER_M, 1)
-        out["success_area"] = bool(area and point_in_polygon(target, area))
-        out["success_radius"] = math.dist(xy, target) <= SUCCESS_RADIUS_M
-    else:
-        out["success_area"] = out["success_radius"] = False
+        out["ne_ft"] = round(math.dist(xy, target) * FT_PER_M, 1)
     if t_start is None:
         return out
     t_end_run = t_stop if t_stop is not None else t_start
-    success = bool(out["success_area"])
+    success = out["success"]
     if not success:
         out["spl"] = 0.0
     out["track_coverage"] = track_coverage(track, t_start, t_end_run)
@@ -604,29 +560,8 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     return out
 
 
-def load_prior(tiles_dir: Path) -> list[dict[str, Any]] | None:
-    """The bake's ``calcity_features.json`` rows, None when it holds none."""
-    path = Path(tiles_dir) / "calcity_features.json"
-    return json.loads(path.read_text())["prior"] if path.is_file() else None
-
-
-def outline_rejected(rows: list[dict[str, Any]], prior: list[dict[str, Any]] | None) -> list[str]:
-    """The determined ``prior_<i>`` commits the bake has no row for, or whose
-    outline (three or more vertices) does not hold the commit: a sign of another bake."""
-    out = []
-    for r in rows:
-        fid = str(r["commit_fid"] or "")
-        n = fid[len("prior_"):]
-        if prior is None or not fid.startswith("prior_") or not n.isdigit() or r["ne_from"] != "commit point":
-            continue
-        if int(n) >= len(prior) or len(prior[int(n)].get("world_contour") or []) >= 3:
-            out.append(f"{r['sortie']} run {r['run_no']}")
-    return out
-
-
-def collect(roots: list[Path], truth: Truth, *, tiles_dir: Path) -> tuple[list[dict[str, Any]], float, int]:
+def collect(roots: list[Path], truth: Truth) -> tuple[list[dict[str, Any]], float, int]:
     """Every run under ``roots``, with the crews' turn radius over them all."""
-    prior = load_prior(tiles_dir)
     tracks = [sorted(read_jsonl(r / TRACK_JSONL), key=lambda f: f["t_unix"]) for r in roots]
     radius, turns = flown_turn_radius_m(tracks, [routed_windows(r) for r in roots])
     radius = radius or TURN_RADIUS_FALLBACK_M
@@ -635,7 +570,7 @@ def collect(roots: list[Path], truth: Truth, *, tiles_dir: Path) -> tuple[list[d
         entries = truth.entries(root.name)
         for row in read_jsonl(root / EPISODES_JSONL):
             out.append(run_measures(root, row, entry=entries.get(str(row.get("episode_id") or "")) or {},
-                                    truth=truth, track=track, prior=prior, turn_radius_m=radius))
+                                    truth=truth, track=track, turn_radius_m=radius))
     out.sort(key=lambda r: (r["sortie"], int(r["run_no"] or 0)))
     return out, radius, turns
 
@@ -660,7 +595,7 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     scored = [r for r in kept if r["truth_xy"] is not None]
     spl = [r["spl"] for r in scored if r["spl"] is not None]
     return {"runs": len(rows), "kept": len(kept), "scored": len(scored), "infra": infra,
-            "sr_area": _rate(scored, "success_area"), "sr_20m": _rate(scored, "success_radius"),
+            "sr": _rate(scored, "success"),
             "osr": _rate(scored, "oracle_success"),
             "ne_median_ft": _median(r["ne_ft"] for r in scored),
             "time_to_id_median_s": _median(r["time_to_id_s"] for r in kept),
@@ -675,14 +610,23 @@ def by(rows, *keys: str) -> dict[str, dict[str, Any]]:
     return {v: summarize([r for r in rows if name(r) == v]) for v in sorted({name(r) for r in rows})}
 
 
+#: The master table's columns ``--check`` compares.
+CHECKED = ("success", "oracle_success")
+
+
 def check(rows: list[dict[str, Any]], master: Path) -> list[str]:
-    """Where these rows disagree with a master table's real rows on SR (both readings) and OSR, by (sortie, run_no)."""
-    want = {(r["sortie"], int(r["run_no"])): r for r in csv.DictReader(master.open()) if r["environment"] == "real"}
+    """Where these rows disagree with a master table's real rows on SR and OSR, by (sortie, run_no)."""
+    table = csv.DictReader(master.open())
+    missing = [k for k in CHECKED if k not in (table.fieldnames or [])]
+    if missing:
+        raise SystemExit(f"{master} has no {', '.join(missing)} column: --check reads a master table that scores SR "
+                         "as the commit point inside the mask")
+    want = {(r["sortie"], int(r["run_no"])): r for r in table if r["environment"] == "real"}
     have = {(r["sortie"], int(r["run_no"] or 0)): r for r in rows}
     out = [f"{k}: in the master table, not read" for k in sorted(set(want) - set(have))]
     out += [f"{k}: read, not in the master table" for k in sorted(set(have) - set(want))]
     for k in sorted(set(want) & set(have)):
-        for key in ("success_area", "success_radius", "oracle_success"):
+        for key in CHECKED:
             a, b = have[k][key], want[k][key]
             if ("" if a is None else str(a)) != b:
                 out.append(f"{k} {key}: {a!r} here, {b!r} in the master table")
@@ -694,21 +638,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--root", type=Path, nargs="+", required=True, help="flown or replay sortie roots")
     ap.add_argument("--truth", type=Path, nargs="+", required=True,
                     help="a directory of <sortie>.json analyst entries, and/or the tasking set's split JSON")
-    ap.add_argument("--tiles", type=Path, default=None, help="the Cal City bake whose calcity_features.json holds "
-                                                              "the flown prior (default: SEARCH_CALCITY_TILES)")
     ap.add_argument("--check", type=Path, default=None, help="a master table to compare SR and OSR against")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
-    if args.tiles is None:
-        from benchmarks.calcity.paths import TILES_DIR  # noqa: PLC0415
-
-        args.tiles = TILES_DIR
     roots = sorted(r for r in args.root if (r / EPISODES_JSONL).is_file())
-    rows, radius, turns = collect(roots, Truth(args.truth), tiles_dir=args.tiles)
-    rejected = outline_rejected(rows, load_prior(args.tiles))
+    rows, radius, turns = collect(roots, Truth(args.truth))
     doc = {"turn_radius_m": radius, "turns_read": turns, "summary": summarize(rows),
            "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "model", "reasoning_effort"),
-           "prior_outline_rejected": rejected, "runs": rows}
+           "runs": rows}
     if args.check is not None:
         doc["check"] = check(rows, args.check)
     if args.json:
@@ -716,23 +653,20 @@ def main(argv: list[str] | None = None) -> int:
         print()
     else:
         def line(name: str, s: dict[str, Any]) -> str:
-            return (f"{name:14s} runs {s['runs']:3d} scored {s['scored']:3d}  SR area {s['sr_area']['k']}/{s['sr_area']['n']}"
-                    f"  SR 20 m {s['sr_20m']['k']}/{s['sr_20m']['n']}  OSR {s['osr']['k']}/{s['osr']['n']}"
+            return (f"{name:14s} runs {s['runs']:3d} scored {s['scored']:3d}  SR {s['sr']['k']}/{s['sr']['n']}"
+                    f"  OSR {s['osr']['k']}/{s['osr']['n']}"
                     f"  NE med {s['ne_median_ft']} ft  time to ID med {s['time_to_id_median_s']} s"
                     f"  SPL {s['spl_pct']}% (n {s['spl_n']})  tokens med {s['total_tokens_median']}")
         print(line("all", doc["summary"]))
         if doc["summary"]["infra"]:
             print(f"out of every rate (the serve failed under them): {', '.join(doc['summary']['infra'])}")
-        print(f"prior commits whose outline in {args.tiles} does not hold the commit: {len(rejected)}"
-              + (f" ({', '.join(rejected)})" if rejected else ""))
         for k, v in doc["by_intel_quality"].items():
             print(line(f"intel {k}", v))
         for k, v in doc["by_effort"].items():
             print(line(f"effort {k}", v))
         print(f"turn radius flown (median) {radius} m over {turns} turns")
         for r in rows:
-            print(f"  {r['sortie']} run {r['run_no']}: {r['end']}, commit {r['commit_fid']}, SR area {r['success_area']}, "
-                  f"SR 20 m {r['success_radius']}, OSR {r['oracle_success']}, NE {r['ne_ft']} ft, "
+            print(f"  {r['sortie']} run {r['run_no']}: {r['end']}, commit {r['commit_fid']}, SR {r['success']}, OSR {r['oracle_success']}, NE {r['ne_ft']} ft, "
                   f"time to ID {r['time_to_id_s']} s, {r['flights']} flights / {r['turns']} turns, SPL {r['spl']}"
                   + (f", excluded: {r['excluded']}" if r["excluded"] else ""))
         if args.check is not None:
