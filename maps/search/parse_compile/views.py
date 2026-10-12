@@ -95,7 +95,7 @@ def _look_vision_text(crops: list[dict]) -> str:
         _span = _window_caption(c)
         # The pixel grid, per image: with the window it converts what the
         # model sees into a world point.
-        _px = c.get("side_px") or c.get("width_px")
+        _px = c.get("side_px")
         if _px:
             _span += f" ({int(_px)}x{int(_px)} px)"
         base += f"\n  crop {k + 1}{_span}: {line}"
