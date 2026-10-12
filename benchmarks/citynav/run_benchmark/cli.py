@@ -238,9 +238,7 @@ def main() -> int:
             continue
         ep = open_episode_dir(out_root, episode_id=ep_meta.episode_id)
         try:
-            # Shared with the persistent episode server so both paths run
-            # the identical run_episode + row-write + infra-token code (this
-            # batch loop is the bit-identical correctness oracle).
+            # The same dispatch bench_fullset's --attempt-root children run.
             result = _dispatch_one(
                 row=row,
                 orig_idx=orig_idx,

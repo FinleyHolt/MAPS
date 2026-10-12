@@ -267,8 +267,8 @@ and the reviewed target shapes
 repository. You supply two inputs:
 
 * The C-12 v6 map raster of the block, `<map>_rgb.tif`.
-* A world bundle of OpenStreetMap layers over the block (`manifest.json` and
-  `osm/<layer>.geojson` in WGS84), named by `CALCITY_BUNDLE`.
+* A world bundle of OpenStreetMap layers over the block (`osm/<layer>.geojson`
+  in WGS84 for each of the eight `bundle.OSM_LAYERS`), named by `CALCITY_BUNDLE`.
 
 Then build the catalog, the raster pair and the tile bake:
 

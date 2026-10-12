@@ -1,4 +1,4 @@
-"""CityNav benchmark runner (the ``citynav-bench`` entry point).
+"""CityNav benchmark runner (the ``maps-bench`` entry point).
 
 The episode engine is a package of purpose-named modules: ``cli`` (main),
 ``dispatch`` -> ``episode_runner`` (per-episode flow) -> ``mission_engine``

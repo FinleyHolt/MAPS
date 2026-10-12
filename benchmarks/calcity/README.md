@@ -14,7 +14,7 @@ target's own annotated footprint (the shape criterion).
 | The corpus, 1,023 episodes | `data/calcity.json` | Ships. |
 | The reviewed target shapes | `data_prep/authoring/ground_truth.json` | Ships. |
 | The C-12 v6 map raster of the block | `<map>_rgb.tif` | You supply it. |
-| A world bundle of OpenStreetMap layers | `manifest.json` and `osm/<layer>.geojson` in WGS84 | You supply it, covering `aoi.BUNDLE_BBOX_WGS84`. |
+| A world bundle of OpenStreetMap layers | `osm/<layer>.geojson` in WGS84 for each of the eight `bundle.OSM_LAYERS` | You supply it, covering `aoi.BUNDLE_BBOX_WGS84`. |
 | The block's bare-earth surface, read by the flight harness | `calcity_dem.tif` under `SEARCH_CALCITY_TILES` | You supply it from public USGS 3DEP data (the top-level README's Cal City section). |
 
 ## Build
@@ -65,7 +65,7 @@ python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_e
 a seeded uniform start. One episode:
 
 ```sh
-python -m benchmarks.calcity.run_benchmark --episode-id 'calcity::6#6' --out output/calcity_one
+python -m benchmarks.calcity.run_benchmark --config configs/calcity.yaml --episode-id 'calcity::6#6' --out output/calcity_one
 ```
 
 Read a root with [`benchmarks/citynav/analysis`](../citynav/analysis/README.md).

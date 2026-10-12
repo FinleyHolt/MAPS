@@ -25,11 +25,10 @@ imagery cannot resolve anyway; a constant plane is the honest encoding of a
 
 World source
 ------------
-OSM vectors come from a world bundle (``manifest.json`` +
-``osm/*.geojson``), located via ``CALCITY_BUNDLE`` (default
-``~/datasets/calcity/bundle``); the imagery is the program's own map of the
-block, ``data/rgbd_upstream/<map>_rgb.tif``. The bundle must
-cover ``BUNDLE_BBOX_WGS84``, which is slightly larger than the map bbox
+OSM vectors come from a world bundle (``osm/<layer>.geojson``), located
+via ``CALCITY_BUNDLE`` (default ``~/datasets/calcity/bundle``); the imagery
+is the program's own map of the block, ``data/rgbd_upstream/<map>_rgb.tif``.
+The bundle must cover ``BUNDLE_BBOX_WGS84``, which is slightly larger than the map bbox
 because a lon/lat rectangle is not axis-aligned after projection to UTM.
 """
 

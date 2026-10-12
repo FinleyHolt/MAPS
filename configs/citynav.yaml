@@ -1,5 +1,4 @@
-# CityNav: the benchmark default config (launch.py DEFAULT_CONFIG and
-# bench_fullset CONFIG).
+# CityNav: the benchmark config, bench_fullset's default.
 #
 # Eval protocol: the upstream CityNav scoring (water-cookie/citynav,
 # gsamllavanav, Lee et al. arXiv 2406.14240): NE/SR/OSR in 2D world metres

@@ -1,9 +1,9 @@
 # benchmarks/citynav
 
 The CityNav benchmark (Lee et al., [arXiv:2406.14240](https://arxiv.org/abs/2406.14240))
-run as MAPS missions. Each episode is one mission conversation; its commit is
-scored against the episode's target by the upstream rule: success when the
-commit lies within 20 m of the target. This package also holds the shared
+run as MAPS missions. Each episode is one mission conversation, replayed as
+upstream's six discrete actions; the replay's final pose is scored against the
+episode's target by the upstream rule: success within 20 m of the target. This package also holds the shared
 engine the Cal City bench and the flight harness hydrate a mission through,
 and the run readers in [`analysis/`](analysis/README.md).
 
@@ -69,7 +69,7 @@ Read a root with [`analysis/`](analysis/README.md); never parse
 One episode, straight through the runner (its root is `--out`):
 
 ```sh
-python -m benchmarks.citynav.run_benchmark --split train_seen --episode-id <id> --out output/citynav_one
+python -m benchmarks.citynav.run_benchmark --config configs/citynav.yaml --split train_seen --episode-id <id> --out output/citynav_one
 ```
 
 ## Configs
@@ -85,7 +85,7 @@ and every value is checked by type and range at load
 | Module | Role |
 |---|---|
 | `bench_fullset.py` | The full-split driver. |
-| `run_benchmark/` | The runner: config, episode setup, the mission engine (`mission_engine.py`), the episode server, scoring rows. |
+| `run_benchmark/` | The runner: config, episode setup, the mission engine (`mission_engine.py`), scoring rows. |
 | `adapter.py`, `episodes.py`, `paths.py` | The dataset, the ledger, the file layout. |
 | `conversation.py` | The mission's `conversation.jsonl`, written turn by turn. |
 | `eval.py` | Scoring: NE, SR, OSR, SPL, and the shape criterion the Cal City bench uses. |
