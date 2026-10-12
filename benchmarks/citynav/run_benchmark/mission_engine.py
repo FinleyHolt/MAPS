@@ -305,7 +305,7 @@ class MissionSession:
         if self.observe is not None:
             obs = self.observe()
             if obs is None:
-                return {"error": "no live observation: the camera or the receiver has nothing to pose"}
+                return {"error": "no observation: the aircraft's recording served no frame of this flight's ground"}
             new_xy = (float(obs.pose_xy[0]), float(obs.pose_xy[1]))
             new_alt = float(obs.altitude_m)
             new_heading = float(obs.yaw_deg)

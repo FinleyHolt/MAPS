@@ -151,6 +151,14 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):
     assert "error" in session.fly({"target_fid": "nowhere"}) and len(flights) == 1
 
 
+def test_a_live_flight_with_no_frame_says_the_recording_served_none(stub_session):
+    session = stub_session()
+    session.observe = lambda: None
+    assert session.fly({"target_fid": "building_7"}) == {
+        "error": "no observation: the aircraft's recording served no frame of this flight's ground"}
+    assert session.flights == []
+
+
 def test_a_view_position_flight_flies_the_pose_or_the_marked_region(stub_session):
     session = stub_session(markers=[(300.0, 400.0, 0.0), (500.0, 600.0, 0.0)])
     session.fly({"target_fid": "current_position"})
