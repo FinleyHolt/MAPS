@@ -9,13 +9,13 @@ honest zero the episode runner scores.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from benchmarks.citynav.episodes import atomic_write_json
 from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
 from benchmarks.citynav.run_benchmark.osm_prior import _build_frame_enrich
 from maps.llm.endpoint_spec import spec as endpoint_spec
@@ -56,22 +56,13 @@ def _write_tour_cursor(tour: FeatureTour) -> None:
     """Persist the flown stops (id and xy, in flight order) to
     ``<workdir>/flight/tour_cursor.json``, the record the flight readers
     (``benchmarks.flight.measures`` and ``replay``) take a run's flights
-    from; temp file then replace. No-op without ``SEARCH_COMPILE_WORKDIR``."""
+    from. No-op without ``SEARCH_COMPILE_WORKDIR``."""
     workdir_env = os.environ.get("SEARCH_COMPILE_WORKDIR")
     if not workdir_env:
         return
     try:
-        flight_dir = Path(workdir_env) / "flight"
-        flight_dir.mkdir(parents=True, exist_ok=True)
-        path = flight_dir / "tour_cursor.json"
-        payload = {
-            "stops_visited": [
-                {"stop_id": vp.fid, "xy": list(vp.xy)} for vp in tour.viewpoints
-            ],
-        }
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(json.dumps(payload))
-        tmp.replace(path)
+        atomic_write_json(Path(workdir_env) / "flight" / "tour_cursor.json", {
+            "stops_visited": [{"stop_id": vp.fid, "xy": list(vp.xy)} for vp in tour.viewpoints]})
     except Exception:
         log.debug("tour_cursor write failed; non-fatal", exc_info=True)
 
