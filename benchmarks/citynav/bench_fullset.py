@@ -90,6 +90,11 @@ def _infra_cause(row: dict) -> str:
     return str(row.get("error") or "").strip() or "infra"
 
 
+def _causes(counts: Counter) -> str:
+    """Infra causes with their counts, commonest first: ``cause (n), ...``."""
+    return ", ".join(f"{c} ({k})" for c, k in counts.most_common())
+
+
 def _missing_block_assets(episode_ids: list[str]) -> list[Path]:
     """The files the selected episodes' blocks need and do not have: the
     bake's per-block files, and ``<map>.tif`` beside ``<map>_rgb.tif`` or
@@ -213,7 +218,7 @@ class Driver:
                 f"of spending the rest of the allocation on it."
             )
         self.log("!! ABORTING RUN — " + self._abort)
-        self.log(f"!! by cause: {dict(counts.most_common())}")
+        self.log(f"!! by cause: {_causes(counts)}")
         self.log(f"!! representative worker log: {log_path or '(none recorded)'}")
         self.log(self._log_excerpt(log_path))
         scored = sum(1 for r in _rows.iter_json_rows(self.episodes_file)
@@ -270,10 +275,9 @@ class Driver:
                 errors.update(self._infra_errors[e])
         if not stuck:
             return ""
-        hist = ", ".join(f"{k}={v}" for k, v in errors.most_common())
         return (
             f"persistent infra: {len(stuck)} episode(s) after "
-            f"{self.max_infra_attempts} infra attempts each ({hist}); "
+            f"{self.max_infra_attempts} infra attempts each ({_causes(errors)}); "
             f"--max-infra-attempts above {self.max_infra_attempts} flies them again"
         )
 
@@ -428,8 +432,7 @@ class Driver:
             f"split: {self.split}   workers: {self.workers}   "
             f"episode_cap: {self.episode_timeout_s}s",
             f"infra attempts (excluded): {infra.total()}"
-            + ("  by cause: " + ", ".join(f"{c}:{k}" for c, k in infra.most_common())
-               if infra else ""),
+            + (f"  by cause: {_causes(infra)}" if infra else ""),
             self._persistent_infra(),
             f"!! ABORTED: {self._abort}" if self._abort else "",
         ]

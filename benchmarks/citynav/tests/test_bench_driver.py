@@ -155,7 +155,7 @@ def test_the_summary_is_the_run_report_under_the_infra_lines(driver) -> None:
     )))
     d._write_summary()
     out = d.summary_file.read_text()
-    assert "infra attempts (excluded): 1  by cause: vllm_down_midrun:1" in out
+    assert "infra attempts (excluded): 1  by cause: vllm_down_midrun (1)" in out
     # The first-STARTED attempt of c scores, not the one that finished last.
     assert "SR = 2/2 (100.0%)" in out, out
 
@@ -199,7 +199,7 @@ def test_persistent_infra_is_left_out_and_reported(driver, tmp_path, monkeypatch
     d._deadline = time.monotonic() + 5
     assert d.run() == 0
     for text in (d.summary_file.read_text(), d.driver_log.read_text()):
-        assert "persistent infra: 1 episode(s)" in text and "A=2, B=1" in text, text
+        assert "persistent infra: 1 episode(s)" in text and "A (2), B (1)" in text, text
 
 
 def test_a_spent_wall_budget_stops_the_run(driver, monkeypatch, no_flight) -> None:
@@ -371,7 +371,7 @@ def test_the_summary_names_an_errorless_infra_row_as_the_driver_counts_it(driver
     episodes.append_row(d.out_root, {"episode_id": "ep1", "worker_id": 0, "status": "ok",
                                      "metrics": {"mission": {"ended_by": "transient_failures"}}})
     d._write_summary()
-    assert "infra attempts (excluded): 2  by cause: infra:2" in d.summary_file.read_text()
+    assert "infra attempts (excluded): 2  by cause: infra (2)" in d.summary_file.read_text()
 
 
 def test_the_end_line_prints_no_score_for_an_infra_attempt(driver, monkeypatch) -> None:
