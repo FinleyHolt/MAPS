@@ -175,56 +175,33 @@ _COLOR_RELIABILITY_PRIOR_DEFAULT = 0.35  # chromatic seed
 _COLOR_ACHROMATIC = frozenset({"white", "black", "gray"})
 
 
-def _color_reliability_prior(name: str) -> float:
-    return 0.82 if name in _COLOR_ACHROMATIC else _COLOR_RELIABILITY_PRIOR_DEFAULT
-
-
-def _dominant_color(rgb: "np.ndarray | None", region):
-    """Median colour over the region's interior -> (name, [r, g, b], conf), or
-    None on missing, mismatched or empty inputs: colour never fails a detection.
-    The median shrugs off windshield and shadow outliers."""
-    if region is not None and not isinstance(region, MaskRegion):
-        # Outside the broad except below, so a wrong caller fails loudly
-        # instead of reading as colour absent.
-        raise TypeError(
-            f"_dominant_color takes a MaskRegion, got {type(region).__name__}"
-        )
-    try:
-        if rgb is None or region is None:
-            return None
-        rgb = np.asarray(rgb)
-        if rgb.ndim != 3 or rgb.shape[2] < 3 or tuple(rgb.shape[:2]) != tuple(region.frame_shape):
-            return None
-        inner_box = _interior_mask(region)
-        if not inner_box.any():
-            return None
-        px = region.window(rgb)[inner_box][:, :3].astype(np.float32)
-        med = np.median(px, axis=0)
-        dists = sorted(
-            (float(np.sum((med - np.asarray(anchor, dtype=np.float32)) ** 2)), cname)
-            for cname, anchor in _COLOR_PALETTE.items()
-        )
-        name = dists[0][1]
-        # Confidence: the RGB margin between the nearest anchor and the
-        # runner-up, in [0, 1] (~0 between two anchors, ~1 a clean snap), times
-        # the colour's reliability prior.
-        d1 = float(np.sqrt(max(0.0, dists[0][0])))
-        d2 = float(np.sqrt(max(0.0, dists[1][0])))
-        margin = (d2 - d1) / (d2 + d1) if (d1 + d2) > 0.0 else 0.0
-        conf = round(max(0.0, min(1.0, margin * _color_reliability_prior(name))), 3)
-        return name, [int(med[0]), int(med[1]), int(med[2])], conf
-    except Exception:
-        return None
+def _dominant_color(rgb: np.ndarray, region: MaskRegion) -> tuple[str, list[int], float]:
+    """Median colour over the region's interior of its frame ``rgb``: ``(name,
+    [r, g, b], conf)``. The median shrugs off windshield and shadow outliers."""
+    px = region.window(np.asarray(rgb))[_interior_mask(region)][:, :3].astype(np.float32)
+    med = np.median(px, axis=0)
+    dists = sorted(
+        (float(np.sum((med - np.asarray(anchor, dtype=np.float32)) ** 2)), cname)
+        for cname, anchor in _COLOR_PALETTE.items()
+    )
+    name = dists[0][1]
+    # Confidence: the RGB margin between the nearest anchor and the
+    # runner-up, in [0, 1] (~0 between two anchors, ~1 a clean snap), times
+    # the colour's reliability prior.
+    d1 = float(np.sqrt(max(0.0, dists[0][0])))
+    d2 = float(np.sqrt(max(0.0, dists[1][0])))
+    margin = (d2 - d1) / (d2 + d1) if (d1 + d2) > 0.0 else 0.0
+    prior = 0.82 if name in _COLOR_ACHROMATIC else _COLOR_RELIABILITY_PRIOR_DEFAULT
+    conf = round(max(0.0, min(1.0, margin * prior)), 3)
+    return name, [int(med[0]), int(med[1]), int(med[2])], conf
 
 
 def _set_color_attr(attrs: dict, rgb, region) -> None:
-    """``attrs['color']``, ``['color_rgb']`` and ``['color_conf']`` (strings)
-    from the region's pixels, when derivable."""
-    col = _dominant_color(rgb, region)
-    if col is not None:
-        attrs["color"] = col[0]
-        attrs["color_rgb"] = f"{col[1][0]},{col[1][1]},{col[1][2]}"
-        attrs["color_conf"] = f"{col[2]:.3f}"
+    """``attrs['color']``, ``['color_rgb']`` and ``['color_conf']`` (strings) from the region's pixels."""
+    name, med, conf = _dominant_color(rgb, region)
+    attrs["color"] = name
+    attrs["color_rgb"] = f"{med[0]},{med[1]},{med[2]}"
+    attrs["color_conf"] = f"{conf:.3f}"
 
 
 # Per-instance split: SAM 3.x emits one mask per query with no instance
@@ -278,16 +255,15 @@ def split_into_instances(
     if len(comps) <= 1:
         return comps
     floor = MIN_AREA_PX
-    if ref_area_px is not None and ref_area_px > 0:
+    if ref_area_px is not None:
         floor = max(floor, int(round(_INSTANCE_SPLIT_AREA_FRAC * float(ref_area_px))))
     order = sorted(comps, key=lambda c: c.area, reverse=True)
-    cov = None if coverage_count is None else np.asarray(coverage_count)
     kept = [order[0]]  # largest = the detection's primary instance, always kept
     for c in order[1:]:
         if c.area < floor:
             continue  # speckle
-        # Disjoint from its own primary, so cov >= 1 is ANOTHER detection's.
-        if cov is not None and float((c.window(cov)[c.crop] >= 1).mean()) > _INSTANCE_SPLIT_REDUNDANT_FRAC:
+        # Disjoint from its own primary, so a count >= 1 is ANOTHER detection's.
+        if coverage_count is not None and float((c.window(coverage_count)[c.crop] >= 1).mean()) > _INSTANCE_SPLIT_REDUNDANT_FRAC:
             continue  # redundant sliver of an already-detected neighbor
         kept.append(c)
     return kept

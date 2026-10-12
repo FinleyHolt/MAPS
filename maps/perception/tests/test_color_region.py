@@ -84,14 +84,10 @@ def test_degenerate_inputs_return_none():
     rgb = _rgb(rng)
     region = _blob(80, 100, 20, 20, rng)
 
-    assert _dominant_color(None, region) is None
-    assert _dominant_color(rgb, None) is None
     # rgb whose frame does not match the region's frame.
-    assert _dominant_color(np.zeros((8, 8, 3), np.uint8), region) is None
     assert m6_attributes(np.zeros((8, 8, 3), np.uint8), region) is None
     # A region carrying no set pixels.
     empty = region.with_crop(np.zeros_like(region.crop))
-    assert _dominant_color(rgb, empty) is None
     assert m6_attributes(rgb, empty) is None
 
 
