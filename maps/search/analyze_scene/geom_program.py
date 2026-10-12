@@ -493,14 +493,27 @@ def _model_facing_row(row):
     return _mask_noise_color(row)
 
 
-class _BroadRows(list):
-    """A find / crossings / ends result. ``ordered`` when its order is real
-    (a matched query), ``name_set`` when it is one name's tied ways,
-    ``op_cols`` the columns its op attached."""
+class Result(list):
+    """An op's rows and how :func:`compact_results` renders them, by
+    ``kind``: ``broad`` (find, crossings, ends), ``miss`` (a find query that
+    matched nothing: always empty, its hint states the rows it searched),
+    ``cut`` (filter_items, stratum: ``cut_stats``, what the cut kept, dropped
+    and would admit, render with it), ``compare`` (one grid under the per-ref
+    ``refs`` headers and the ``columns`` it attached) or ``sorted``
+    (score_by). ``ordered`` when its order is real, ``name_set`` when it is
+    one name's tied ways, ``op_cols`` the columns its op attached."""
 
-    name_set: bool = False
     ordered: bool = False
+    name_set: bool = False
     op_cols: list = []
+    cut_stats: dict = {}
+    refs: list = []
+    columns: list = []
+    empty_condition: "str | None" = None
+
+    def __init__(self, rows=(), kind: str = "broad"):
+        super().__init__(rows)
+        self.kind = kind
 
 
 def join_hints(*parts) -> str:
@@ -600,41 +613,12 @@ def _census_note(rows, *, query: str | None = None) -> str:
     return note + "."
 
 
-class _EmptyFindMiss(list):
-    """Marker: a ``find`` query that matched nothing. Always empty;
-    :func:`compact_results` states the rows it searched on top of the
-    empty-result hint."""
-
-    empty_condition: "str | None" = None
-
-
-class _FilterCutRows(list):
-    """A filter_items or stratum result: its ``cut_stats`` (what the cut
-    kept, dropped and would admit) render with it, and ``ordered`` is its
-    input's."""
-
-    cut_stats: dict = {}
-    ordered: bool = False
-    op_cols: list = []
-
-
-class _CompareRows(list):
-    """A compare result: rows with the attached columns, rendered as one grid
-    under the per-ref ``refs`` headers and the verbatim ``columns`` it
-    attached. ``ordered`` is its input's."""
-
-    refs: list = []
-    notes: list = []
-    columns: list = []
-    ordered: bool = False
-
-
 def _cut_stands_at(v, body: list, capped: list) -> str | None:
     """For a truncated score_by head: the composite score span it shows and
     the score of the first row past it, so a plateau reads differently from
     a real gap. The composite, since no single key is monotone in a
     multi-key sort."""
-    if not isinstance(v, _CueSortedRows) or len(capped) >= len(body):
+    if getattr(v, "kind", None) != "sorted" or len(capped) >= len(body):
         return None
 
     def _num(row):
@@ -653,13 +637,6 @@ def _cut_stands_at(v, body: list, capped: list) -> str | None:
         return f"ranked on {what}: this head's score runs {span}"
     return (f"ranked on {what}: this head's score runs {span}, and the next "
             f"row scores {nxt:.6g}")
-
-
-class _CueSortedRows(list):
-    """A score_by result: ordered, ``op_cols`` the keys it ranked on."""
-
-    ordered = True
-    op_cols: list = []
 
 
 # The grid's leading columns after ``fid``; attached columns follow in
@@ -912,9 +889,10 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
 
     def env(v):
         notes = getattr(v, "notes", None) or []
-        cut = v.cut_stats if isinstance(v, _FilterCutRows) else None
+        kind = getattr(v, "kind", None)
+        cut = v.cut_stats if kind == "cut" else None
         capped = v[:_BROAD_HEAD_ROWS] if len(v) > _BROAD_DUMP_SOFT_ROWS else v
-        if isinstance(v, _CompareRows):
+        if kind == "compare":
             head = {"refs": list(v.refs), "len": len(v)}
             if v.columns:
                 head["columns"] = list(v.columns)
@@ -934,7 +912,7 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
                 "this retrieval searched every surface row"
                 + ("" if withheld("prior") else " (prior + runtime)")
                 + " and matched nothing."
-                if isinstance(v, _EmptyFindMiss) else "")
+                if kind == "miss" else "")
             return head
         elif not getattr(v, "ordered", False):
             counts, named = _census_counts(v)
@@ -953,7 +931,7 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
             hint = join_hints(*notes)
         else:
             body, cover = list(v), None
-            if isinstance(v, _CueSortedRows):
+            if kind == "sorted":
                 # A window-covering row is 0 m from every on-surface ref and
                 # would tie rank 0 of every nearest-first sort.
                 covering = [r for r in v if r.get("covers_window")]
@@ -1166,15 +1144,15 @@ class _Args(dict):
 
 
 def _window(cur, win, token):
-    """``rN[a:b]``: those rows, keeping the source's class, ``ordered`` and
-    ``op_cols``. Selecting none of a non-empty set raises."""
+    """``rN[a:b]``: those rows, keeping the source's ``kind``, ``ordered``
+    and ``op_cols``. Selecting none of a non-empty set raises."""
     part = "[" + win
     lo, hi = (int(b) for b in win[:-1].split(":"))
     if not isinstance(cur, list):
         cur = [cur]
     rows = cur[lo:hi]
-    if type(cur) is not list:
-        w = type(cur)(rows)
+    if isinstance(cur, Result):
+        w = Result(rows, cur.kind)
         for attr in ("ordered", "op_cols"):
             if attr in vars(cur):
                 setattr(w, attr, getattr(cur, attr))
@@ -1499,13 +1477,13 @@ def _find(cx, a):
             (f"left of {_h}", f"right of {_h}",
              f"ahead of {_h}", f"behind {_h}"))
     if not rows and a.get("query"):
-        rows = _EmptyFindMiss()
+        rows = Result(kind="miss")
         if _q_notes:
             rows.notes = list(_q_notes)
         if _empty_cond:
             rows.empty_condition = _empty_cond
         return rows
-    rows = _BroadRows(rows)
+    rows = Result(rows)
     rows.ordered = _q_matched
     rows.name_set = bool(_name_set)
     if _find_cols:
@@ -1611,7 +1589,7 @@ def _crossings(cx, a):
             f"TOUCH.{_sib} A point near one of them is not their "
             f"intersection; relate to ONE of them instead "
             f"('... near <feature>').")
-    rows = _BroadRows()
+    rows = Result()
     # Whole metres: the fid is the coordinate, and the model spells whole
     # numbers only.
     _seen: set = set()
@@ -1636,7 +1614,7 @@ def _crossings(cx, a):
 
 def _ends(cx, a):
     """A road's termini (end0_xy / end1_xy) as rows."""
-    rows = _BroadRows()
+    rows = Result()
     _n_end = 0
     _no_line: list = []
     for _el in a["refs"]:
@@ -1723,7 +1701,8 @@ def _score_by(cx, a):
             f"other keys still rank. A row gets a colour once a "
             f"flight has passed over it.")
     keys = sorted(emphasis)  # deterministic; the sum is order-independent
-    r = _CueSortedRows(G.score_by(items, keys, [emphasis[k] for k in keys]))
+    r = Result(G.score_by(items, keys, [emphasis[k] for k in keys]), "sorted")
+    r.ordered = True
     r.op_cols = list(keys)
     if _sb_notes:
         r.notes = _sb_notes
@@ -1774,7 +1753,7 @@ def _filter_items(cx, a):
                 f"measured (a row TOUCHING the reference has no "
                 f"facing word). Widen, or read the column and "
                 f"see which words are actually there.")
-        r = _FilterCutRows(_on)
+        r = Result(_on, "cut")
         r.cut_stats = stats
     elif opr == "on_side":
         def _ok(it):
@@ -1798,7 +1777,7 @@ def _filter_items(cx, a):
                 + ("" if withheld("look_for") else
                    ": look_for the class, then explore the place to "
                    "segment it"))
-        r = _FilterCutRows(_on)
+        r = Result(_on, "cut")
         r.cut_stats = stats
     elif opr == "le":
         # The nearest excluded row, the bound that would admit it and how
@@ -1828,10 +1807,10 @@ def _filter_items(cx, a):
             stats["n_at_admit"] = sum(
                 1 for it in items
                 if (v := _eff(it)) is not None and v <= ne_v)
-        r = _FilterCutRows(kept)
+        r = Result(kept, "cut")
         r.cut_stats = stats
     else:  # truthy
-        r = _FilterCutRows(it for it in items if it.get(key))
+        r = Result((it for it in items if it.get(key)), "cut")
     r.ordered = _in_ordered
     r.op_cols = [key]
     return r
@@ -1860,7 +1839,7 @@ def _stratum(cx, a):
         if not isinstance(v, (int, float)):
             return False
         return (_lo is None or v >= _lo) and (_hi is None or v < _hi)
-    r = _FilterCutRows(it for it in items if _in_tier(it))
+    r = Result((it for it in items if _in_tier(it)), "cut")
     r.ordered = bool(getattr(items, "ordered", False))
     return r
 
@@ -2161,7 +2140,7 @@ def _compare(cx, a):
             f"('left of/right of/ahead of/behind {_h}') + "
             f"'distance to {_h}' (meters from where you stand) "
             f"ride every row.")
-    r = _CompareRows(out_rows)
+    r = Result(out_rows, "compare")
     r.refs = headers
     r.columns = list(all_col_keys)
     r.notes = notes

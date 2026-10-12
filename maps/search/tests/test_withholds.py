@@ -267,10 +267,10 @@ def test_the_served_literals_hold_their_worked_block_and_every_edit_target():
 
 
 def test_a_prior_withhold_empty_find_names_no_prior(monkeypatch):
-    from maps.search.analyze_scene.geom_program import _EmptyFindMiss, compact_results
+    from maps.search.analyze_scene.geom_program import Result, compact_results
 
     def hint():
-        return compact_results({"r0": _EmptyFindMiss()})["r0"]["hint"]
+        return compact_results({"r0": Result(kind="miss")})["r0"]["hint"]
 
     assert "searched every surface row (prior + runtime) and" in hint()
     monkeypatch.setenv(W.ENV, "prior")

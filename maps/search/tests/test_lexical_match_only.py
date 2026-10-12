@@ -5,8 +5,6 @@ import pytest
 
 from maps.search.analyze_scene import text_match as T
 from maps.search.analyze_scene.geom_program import (
-    _BroadRows,
-    _EmptyFindMiss,
     ProgramError,
     run_program,
 )
@@ -305,7 +303,7 @@ def test_find_query_returns_the_match_set_best_first():
     rows = out["results"]["r0"]
     # The result IS the match set (len = match count), best-first, ordered;
     # the sub-threshold row stays out (a query-less find browses it).
-    assert isinstance(rows, _BroadRows), type(rows)
+    assert rows.kind == "broad", rows.kind
     assert getattr(rows, "ordered", False), "a query-matched find is ordered"
     # b_b is "Earl Court" -- it shares the word `earl` with an exactly-named
     # "Earl Street" and is a DIFFERENT street, so once the query has named
@@ -323,7 +321,7 @@ def test_find_query_no_match_returns_empty_miss_affordance():
          "args": {"query": "zxqv wqzzk"}},
     ]})
     rows = out["results"]["r0"]
-    assert isinstance(rows, _EmptyFindMiss), type(rows)
+    assert rows.kind == "miss", rows.kind
     assert len(rows) == 0, rows
 
 
