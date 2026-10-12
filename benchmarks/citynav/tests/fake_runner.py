@@ -29,4 +29,6 @@ elif kind == "kill":
     os.kill(os.getpid(), signal.SIGKILL)
 elif kind == "norow":
     sys.exit(0)
+elif kind == "exit":
+    sys.exit(3)
 (d / "episode.json").write_text(json.dumps(row))

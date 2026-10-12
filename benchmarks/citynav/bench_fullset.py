@@ -329,7 +329,8 @@ class Driver:
         """One attempt in a fresh child: its ledger row, the child's
         ``episode.json`` plus ``worker_id``, ``workdir`` and the wall measured
         here. ``status`` is ``infra`` for a lost reasoner (``vllm_down_midrun``),
-        a child that died with no record (``killed_midrun``) or exited clean
+        a child that a signal killed with no record (``killed_midrun``), that
+        exited nonzero with none (``exited N with no record``) or exited clean
         with none (``no_prediction_unclassified``); a record's own ``infra``
         stands; otherwise ``timed_out`` at the cap, else ``ok``.
         """
@@ -379,7 +380,7 @@ class Driver:
         elif verdict == "timeout":
             self.log(f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killed")
         elif crashed:
-            # SIGKILLed (a cgroup OOM) or crashed before landing a record.
+            # Killed by a signal (a cgroup OOM is SIGKILL) or exited with an error before landing a record.
             self.log(f"[w{worker_id}] CRASHED mid-episode {episode_id} after "
                      f"{elapsed:.0f}s (exit {proc.returncode}); re-queued (not scored)")
         if verdict == "vllm_dead" or crashed:
@@ -387,7 +388,8 @@ class Driver:
             return {"episode_id": episode_id, "worker_id": worker_id,
                     "status": episodes.STATUS_INFRA, "elapsed_s": round(elapsed, 1),
                     "ts": round(time.time(), 1), **where,
-                    "error": "vllm_down_midrun" if verdict == "vllm_dead" else "killed_midrun"}
+                    "error": ("vllm_down_midrun" if verdict == "vllm_dead" else "killed_midrun"
+                              if proc.returncode < 0 else f"exited {proc.returncode} with no record")}
         # The child's own verdict decides (dispatch classifies the episode's
         # exception chain); the driver adds only what it alone saw.
         row = {**(landed or {"episode_id": episode_id}), "worker_id": worker_id,

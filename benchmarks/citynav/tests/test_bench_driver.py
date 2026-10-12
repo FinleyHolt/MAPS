@@ -32,7 +32,8 @@ OUTCOMES = {
     "kill": ("infra", "killed_midrun", True),
     "norow": ("infra", "no_prediction_unclassified", True),
     "vllm": ("infra", "vllm_down_midrun", True),
-    "nodir": ("infra", "killed_midrun", False),
+    "exit": ("infra", "exited 3 with no record", True),
+    "nodir": ("infra", "exited 2 with no record", False),
 }
 
 
