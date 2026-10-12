@@ -1401,11 +1401,14 @@ class MissionPython:
         if not classes:
             raise CodeError('look_for takes the classes to watch: '
                             'look_for("house", "pool")')
+        if not all(isinstance(c, str) for c in classes):
+            raise CodeError('look_for takes class names as strings: '
+                            'look_for("house", "pool")')
         # THE SEGMENTER CHANNEL: it arms perception and moves nothing. The
         # segmenter reads WORDS, so look_for("parking_lot") and
         # look_for("parking lot") arm the same class.
         words = [w.strip().lower().replace("_", " ")
-                 for w in map(str, classes) if w.strip()]
+                 for w in classes if w.strip()]
         at = self._slot(at) if at is not None else None
         if at is None:
             self._act(self.env.watch, [], words)

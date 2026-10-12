@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import re
 
+import pytest
+
 from maps.search.tests.fakes import (
     CANDS,
     START,
@@ -183,6 +185,15 @@ def test_a_snake_case_class_is_the_class_it_spells():
     # THE WIRE GETS WORDS.
     assert acts_of_block('look_for("solar_panel", "parking_lot")\n') == [
         ("watch", ["solar panel", "parking lot"])]
+
+
+def test_look_for_refuses_a_class_that_is_not_a_string():
+    # A list would arm the segmenter on the class "['car']".
+    from maps.search.parse_compile.python_surface import CodeError
+    with pytest.raises(CodeError) as e:
+        acts_of_block('look_for(["car"])\n')
+    assert 'look_for takes class names as strings: look_for("house", "pool")' \
+        in str(e.value), str(e.value)
 
 
 def test_an_inline_point_relates_exactly_as_a_bound_one_does():
