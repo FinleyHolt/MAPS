@@ -11,18 +11,8 @@ import json
 import pytest
 
 from benchmarks.calcity.data_prep import bake_tiles
-from benchmarks.calcity.data_prep.aoi import AOI_BBOX
 from benchmarks.calcity.data_prep.bake_tiles import bake_block
 from maps.sws.graph.io import load_graph
-
-# A metre or two east of the AOI's south-west corner, so anything built here
-# lands inside the bake window, whatever box the AOI declares.
-W, S = AOI_BBOX[0], AOI_BBOX[1]
-
-
-def _wgs(dx_m: float, dy_m: float) -> list[float]:
-    """Roughly (dx, dy) metres from the AOI corner, in lon/lat."""
-    return [W + dx_m / 91_000.0, S + dy_m / 111_000.0]
 
 
 def _bundle(monkeypatch, features):
