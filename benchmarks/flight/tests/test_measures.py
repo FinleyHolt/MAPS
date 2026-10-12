@@ -200,3 +200,14 @@ def test_a_mission_that_failed_off_the_serve_reads_failed():
     ``failed``, not ``no run``."""
     assert Q.ended({"status": "ok", "ended_by": None, "error": "KeyError: 'x'"}) == "failed"
     assert Q.ended({"status": "infra", "error": "SamServerOutage"}) == "no run"
+
+
+def test_a_prior_commit_off_its_outline_is_named_on_a_run_with_no_truth(tmp_path):
+    root, tiles = tmp_path / "20260101T000000Z", tmp_path / "tiles"
+    tiles.mkdir()
+    (tiles / "calcity_features.json").write_text(json.dumps({"prior": [{"world_contour": TARGET}]}))
+    row = _run(root, "run1", commit=("prior_0", [400.0, 100.0]))
+    (root / "episodes.jsonl").write_text(json.dumps(row) + "\n")
+    got, _radius, _turns = Q.collect([root], Q.Truth([]), tiles_dir=tiles)
+    assert got[0]["truth_xy"] is None
+    assert Q.outline_rejected(got, Q.load_prior(tiles)) == [f"{root.name} run 1"]

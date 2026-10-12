@@ -529,7 +529,10 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         "commit_xy": None if xy is None else [round(xy[0], 2), round(xy[1], 2)],
         "truth_xy": None if target is None else [round(target[0], 2), round(target[1], 2)],
         "truth_source": truth_source, "flights": row.get("flights_flown"), "turns": row.get("turns_used"),
-        "success_area": None, "success_radius": None, "ne_ft": None, "ne_from": None, "oracle_success": None,
+        "success_area": None, "success_radius": None, "ne_ft": None,
+        # Where NE is read from, decided with or without a truth to read it against.
+        "ne_from": ("committed area centroid" if area else "commit point") if determined else None,
+        "oracle_success": None,
         "closest_approach_ft": None, "hfov_width_ft": None, "agl_ft": None, "agl_source": None,
         "track_source": None,
         "track_coverage": None, "time_to_id_s": round(t_stop - t_start, 1) if determined and t_stop else None,
@@ -540,7 +543,6 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         return out
     if determined:
         point = centroid(area) if area else xy
-        out["ne_from"] = "committed area centroid" if area else "commit point"
         out["ne_ft"] = round(math.dist(point, target) * FT_PER_M, 1)
         out["success_area"] = bool(area and point_in_polygon(target, area))
         out["success_radius"] = math.dist(xy, target) <= SUCCESS_RADIUS_M
