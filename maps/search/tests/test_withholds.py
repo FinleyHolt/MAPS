@@ -257,3 +257,15 @@ def test_the_served_literals_hold_their_worked_block_and_every_edit_target():
                 else:
                     n = 1 if e[0] == "cut" else text.count(e[1])
                 assert n == 1, (name, e)
+
+
+def test_a_prior_withhold_empty_find_names_no_prior(monkeypatch):
+    from maps.search.analyze_scene.geom_program import _EmptyFindMiss, compact_results
+
+    def hint():
+        return compact_results({"r0": _EmptyFindMiss()})["r0"]["hint"]
+
+    assert "searched every surface row (prior + runtime) and" in hint()
+    monkeypatch.setenv(W.ENV, "prior")
+    assert "searched every surface row and matched nothing" in hint()
+    assert "prior" not in hint()

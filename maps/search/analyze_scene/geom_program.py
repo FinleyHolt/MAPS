@@ -649,7 +649,6 @@ class _EmptyFindMiss(list):
 
     empty_condition: "str | None" = None
     name_set: bool = False
-    searched: str = "every surface row (prior + runtime)"
 
 
 class _FilterCutRows(list):
@@ -982,7 +981,9 @@ def compact_results(results: dict, *, widen_form: str = "",
                 getattr(v, "empty_condition", None)
                 or "this op returned NO items: nothing met its condition.",
                 *notes,
-                f"this retrieval searched {v.searched} and matched nothing."
+                "this retrieval searched every surface row"
+                + ("" if withheld("prior") else " (prior + runtime)")
+                + " and matched nothing."
                 if isinstance(v, _EmptyFindMiss) else "")
             return head
         elif not getattr(v, "ordered", False):
