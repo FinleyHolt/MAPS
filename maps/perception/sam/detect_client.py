@@ -44,8 +44,8 @@ SAHI_NMS_IOU = 0.5
 
 class SamServerOutage(RuntimeError):
     """The SAM ``/segment`` server gave no valid response for a whole detect
-    call: transport faults, 5xx, 408 or 429 until the poster's replica x retry
-    budget ran out. A ``200`` with zero detections is an empty frame, never an
+    call: transport faults, read timeouts, 5xx, 408 or 429 on every tile until
+    the poster's retry layer gave up (:func:`_post_segment`). A ``200`` with zero detections is an empty frame, never an
     outage. Raised outside the model's code (``dispatch._exc_is_sam_infra``)
     it ends the episode as infra, which a resume flies again; inside a mission
     run block it is served to the model as that line's error.
@@ -86,79 +86,65 @@ def sam_endpoints() -> list[str]:
 _rr = itertools.count()
 
 
-def _pick_url() -> str:
-    """The next replica, round-robin: a SAHI stop fires its tiles at once and
-    round-robin spreads them evenly (random would not), and the poster's
-    failover steps off a dead replica rather than redrawing it.
-    ``next`` on an ``itertools.count`` is atomic, so no lock."""
-    eps = sam_endpoints()
+def _pick_url(eps: list[str]) -> str:
+    """The next of ``eps``, round-robin: a SAHI stop fires its tiles at once and
+    round-robin spreads them evenly (random would not), and a retry steps off
+    the replica that failed rather than redrawing it. ``next`` on an
+    ``itertools.count`` is atomic, so no lock."""
     return eps[next(_rr) % len(eps)]
 
 
-def _post_segment_avoid_stale_pool(*, picker, json_body) -> dict | None:
-    """POST ``/segment`` on a fresh connection every call.
+def _post_segment(json_body: dict) -> dict | None:
+    """POST ``/segment``, the one retry layer: the parsed JSON, or ``None``
+    when no attempt gave a usable response.
 
-    A pooled socket idles through the multi-minute compile phase, the tunnel
-    or server reaps it with an RST, urllib3 cannot see the half-closed state,
-    and every retry on every replica then fails with ``ConnectionReset(104)``
-    (urllib3#944, #2751, #1301, requests#4937). So: a per-call
-    ``requests.Session`` (empty pool), a one-slot adapter nothing else can
-    poison, a ``Retry`` that covers POST (urllib3 excludes it by default), and
-    ``Connection: close``.
+    A 4xx other than 408 or 429 raises :class:`SamRequestRefused` at once. A
+    connect error, 408, 429 or 5xx is asked again of the next replica after
+    ``SEGMENT_BACKOFF_S``. A read timeout is never resent to the replica that
+    timed out: the server holds the request, and a resend would queue the
+    tile behind itself; the call moves to another replica, or fails when none
+    is left. ``SEGMENT_DEADLINE_S`` bounds the whole.
 
-    A 4xx other than 408 or 429 raises :class:`SamRequestRefused` at once;
-    transport errors, 5xx, 408 and 429 move to the next replica via
-    ``picker()``. Returns the parsed JSON, or ``None`` when all three attempts
-    failed.
+    Every attempt opens a fresh connection (``Connection: close``, a
+    per-call ``requests.Session``): a pooled socket idles through the
+    multi-minute compile phase, the tunnel or server reaps it with an RST,
+    and urllib3 cannot see the half-closed state (urllib3#944, #2751).
     """
     import requests
-    from requests.adapters import HTTPAdapter
-    from urllib3.util.retry import Retry
 
-    # urllib3 sleeps backoff_factor * 2**(n-1) before retry n: 3, 6, 12 s,
-    # 21 s across the three, so the ladder spans a radio dropout instead of
-    # spending every retry inside one.
-    retry = Retry(
-        total=3,
-        connect=3,
-        read=3,
-        status_forcelist=(502, 503, 504),
-        allowed_methods=frozenset({"POST", "GET"}),
-        backoff_factor=3.0,
-        raise_on_status=False,
-    )
-    headers = {"Connection": "close"}
-    last_exc: Exception | None = None
-    for attempt in range(3):
-        url = picker() + "/segment"
+    deadline = time.monotonic() + SEGMENT_DEADLINE_S
+    eps = sam_endpoints()
+    last: Exception | str | None = None
+    for attempt in range(len(SEGMENT_BACKOFF_S) + 1):
+        left = deadline - time.monotonic()
+        if not eps or left <= 0.0:
+            break
+        url = _pick_url(eps)
         try:
             with requests.Session() as s:
-                adapter = HTTPAdapter(
-                    max_retries=retry, pool_connections=1, pool_maxsize=1
-                )
-                s.mount("http://", adapter)
-                s.mount("https://", adapter)
-                resp = s.post(url, json=json_body, headers=headers,
-                              timeout=(SEGMENT_CONNECT_TIMEOUT_S, SEGMENT_READ_TIMEOUT_S))
-                if (
-                    400 <= resp.status_code < 500
-                    and resp.status_code not in _SAM_TRANSIENT_CLIENT_STATUSES
-                ):
-                    raise SamRequestRefused(
-                        f"/segment refused the request: HTTP {resp.status_code} at {url}: "
-                        f"{resp.text[:200]}"
-                    )
-                resp.raise_for_status()
-                return resp.json()
+                resp = s.post(url + "/segment", json=json_body, headers={"Connection": "close"},
+                              timeout=(min(SEGMENT_CONNECT_TIMEOUT_S, left), min(SEGMENT_READ_TIMEOUT_S, left)))
+                payload = resp.json() if resp.ok else None
+        except requests.exceptions.ReadTimeout as e:
+            last = e
+            eps = [u for u in eps if u != url]
+            continue
         except requests.exceptions.RequestException as e:
-            last_exc = e
-        if attempt < 2:
-            time.sleep(0.5 * (attempt + 1))
-    print(
-        f"[sam] /segment call failed after 3 attempts "
-        f"(stale-pool avoidance active): {last_exc}",
-        flush=True,
-    )
+            last = e
+        else:
+            if resp.ok:
+                return payload
+            if resp.status_code < 500 and resp.status_code not in _SAM_TRANSIENT_CLIENT_STATUSES:
+                raise SamRequestRefused(
+                    f"/segment refused the request: HTTP {resp.status_code} at {url}: {resp.text[:200]}"
+                )
+            last = f"HTTP {resp.status_code} at {url}"
+        if attempt < len(SEGMENT_BACKOFF_S):
+            backoff = SEGMENT_BACKOFF_S[attempt]
+            if time.monotonic() + backoff >= deadline:
+                break
+            time.sleep(backoff)
+    print(f"[sam] /segment gave no usable response: {last}", flush=True)
     return None
 
 
@@ -361,15 +347,21 @@ def _png_wire_bytes(canvas: np.ndarray) -> bytes:
     return buf.tobytes()
 
 
-#: How long the direct /segment call waits to connect: it outlasts a radio
+#: How long one /segment attempt waits to connect: it outlasts a radio
 #: dropout (about twenty seconds).
 SEGMENT_CONNECT_TIMEOUT_S = 45
-#: How long the direct /segment call waits for the server's answer. The
-#: server holds a request behind its in-flight semaphore for
-#: ``serving/sam_server.py``'s ``_INFLIGHT_WAIT_S`` (600 s) before
-#: it answers 503; the client must outwait that, or it abandons a request
-#: the server is still going to serve and posts the tile again on top.
+#: How long one /segment attempt waits for the server's answer. The server
+#: holds a request behind its in-flight semaphore for
+#: ``serving/sam_server.py``'s ``_INFLIGHT_WAIT_S`` (600 s) before it answers
+#: 503; the client outwaits that, or it abandons a request the server is
+#: still going to serve.
 SEGMENT_READ_TIMEOUT_S = 660
+#: The pause before each retry: 21 s across the three, so the ladder spans a
+#: radio dropout instead of spending every retry inside one.
+SEGMENT_BACKOFF_S = (3.0, 6.0, 12.0)
+#: The most one tile's /segment takes, every attempt and pause included: one
+#: full server wait plus a connect ladder.
+SEGMENT_DEADLINE_S = 900.0
 
 
 #: Threads for the per-detection mask decode, projection and colour read;
@@ -418,7 +410,7 @@ class SamDetectClient:
             "resolution": _SAM_INPUT_SIZE,
             "image_b64": image,
         }
-        return _post_segment_avoid_stale_pool(picker=_pick_url, json_body=body)
+        return _post_segment(body)
 
     @staticmethod
     def _tile_bounds(H: int, W: int) -> "list[tuple[int, int, int, int]]":

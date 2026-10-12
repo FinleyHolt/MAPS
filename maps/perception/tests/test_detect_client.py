@@ -163,27 +163,15 @@ def test_requires_ortho_corners(adapter):
         adapter.detect(obs)
 
 
-def test_pick_url_is_round_robin(monkeypatch):
+def test_pick_url_is_round_robin():
     """Nine tiles over three replicas land 3/3/3, never twice in a row on one replica."""
     from maps.perception.sam import detect_client as dc
 
     eps = ["http://a:1", "http://b:2", "http://c:3"]
-    monkeypatch.setenv("SAM_VIDEO_SERVER_URL", ",".join(eps))
-    picks = [dc._pick_url() for _ in range(9)]
+    picks = [dc._pick_url(eps) for _ in range(9)]
 
     assert sorted(picks) == sorted(eps * 3)
     # consecutive picks never repeat a replica -> a burst spreads immediately
     assert all(a != b for a, b in zip(picks, picks[1:]))
-
-
-def test_pick_url_survives_a_shrinking_endpoint_list(monkeypatch):
-    """The list is read per call, so the module-level counter never indexes past a shortened list."""
-    from maps.perception.sam import detect_client as dc
-
-    monkeypatch.setenv("SAM_VIDEO_SERVER_URL", "http://a:1,http://b:2,http://c:3")
-    for _ in range(5):
-        dc._pick_url()
-    monkeypatch.setenv("SAM_VIDEO_SERVER_URL", "http://a:1")
-    assert {dc._pick_url() for _ in range(4)} == {"http://a:1"}
 
 
