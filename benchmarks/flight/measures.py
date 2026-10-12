@@ -52,6 +52,9 @@ from bisect import bisect_left
 from pathlib import Path
 
 from benchmarks.citynav.analysis.rows import is_infra_abort
+from benchmarks.citynav.conversation import CONVERSATION_JSONL
+from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
+from benchmarks.flight.mission import FRAMES_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.search.analyze_scene.geom_compute import point_in_polygon
 from typing import Any
@@ -210,7 +213,7 @@ def committed_area(bases: list[Path], fid: str | None, xy,
             ring = None
     elif fid.startswith("detected_"):
         for b in bases:
-            near = [(math.dist(centroid(c), xy), c) for d in _rows(b / "detections.jsonl")
+            near = [(math.dist(centroid(c), xy), c) for d in _rows(b / DETECTIONS_JSONL)
                     if (c := (d.get("metadata") or {}).get("world_contour")) and len(c) >= 3]
             if near:
                 ring = min(near, key=lambda t: t[0])[1]
@@ -344,7 +347,7 @@ def keyframe_poses(bases: list[Path], t0: float, t1: float) -> list[dict[str, An
     """The live navigation's pose at each keyframe the run captured, as track fixes."""
     for b in bases:
         out = []
-        for f in _rows(b / "frames.jsonl"):
+        for f in _rows(b / FRAMES_JSONL):
             xy, utc = f.get("pose_xy"), f.get("utc")
             if xy and utc:
                 t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
@@ -360,7 +363,7 @@ def _agl(fix, bases: list[Path], events) -> tuple[float | None, str | None]:
     """Height above ground at ``fix``: its own (a GNSS fix or a keyframe pose), else the keyframes', else the waypoints' commanded."""
     if fix.get("alt_agl_m") is not None:
         return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
-    alts = [float(f["altitude_m"]) for b in bases for f in _rows(b / "frames.jsonl") if f.get("altitude_m") is not None]
+    alts = [float(f["altitude_m"]) for b in bases for f in _rows(b / FRAMES_JSONL) if f.get("altitude_m") is not None]
     if alts:
         return statistics.median(alts), "keyframes"
     asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]
@@ -461,7 +464,7 @@ def _bases(root: Path, row: dict[str, Any]) -> list[Path]:
 
 
 def _conversation(bases: list[Path]) -> list[dict[str, Any]]:
-    return next((_rows(b / "conversation.jsonl") for b in bases if (b / "conversation.jsonl").is_file()), [])
+    return next((_rows(b / CONVERSATION_JSONL) for b in bases if (b / CONVERSATION_JSONL).is_file()), [])
 
 
 def ended(row: dict[str, Any]) -> str:
@@ -534,7 +537,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         out["success_area"] = out["success_radius"] = False
     if t_start is None:
         return out
-    t_end_run = t_stop if t_stop is not None else t_start + float(row.get("elapsed_s") or 0.0)
+    t_end_run = t_stop if t_stop is not None else t_start
     success = bool(out["success_area"])
     if not success:
         out["spl"] = 0.0
