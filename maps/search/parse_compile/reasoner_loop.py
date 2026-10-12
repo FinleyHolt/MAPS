@@ -1223,8 +1223,7 @@ def advance_reasoner_one_round(
                 # value per mission because the mission flies ONE cruise
                 # altitude. On the CityNav orthos the pixel-budget ceiling
                 # binds first; this one binds where the frustum is small (a
-                # low AGL). test_look_obs_span_ceiling.py and
-                # test_start_altitude_span.py pin it.
+                # low AGL).
                 "obs_span_m": obs_span_m,
             })
         if uncovered:
@@ -2067,12 +2066,10 @@ def advance_reasoner_one_round(
         # (_CATCH_CROPS of them, pass order).
         return _ack
 
-    # HALF THE OBSERVATION'S LONG SIDE: a pass's stop spacing.
-    # ``observation_extent_m`` returns the sensor footprint's LONG side, so
-    # half of it sits under the short side for any sensor below 2:1 -- which
-    # is what lets a ONE-DIMENSIONAL walk cover a shape that is not one:
-    # consecutive stops overlap on the minor axis too. The number is the
-    # run's own: a bake or an altitude change moves it.
+    # HALF THE OBSERVATION'S LONG SIDE: a pass's stop spacing. Half of
+    # ``obs_span_m`` (the footprint's long side) sits under the short side
+    # for any sensor below 2:1, so a ONE-DIMENSIONAL walk covers a shape that
+    # is not one: consecutive stops overlap on the minor axis too.
     _cover_spacing = (float(obs_span_m) / 2.0
                       if isinstance(obs_span_m, (int, float))
                       and obs_span_m > 0 else None)
