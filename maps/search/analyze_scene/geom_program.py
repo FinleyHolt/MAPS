@@ -936,8 +936,7 @@ _NO_ORDER_HINT = (
     "THIS handle, and a name or color match returns matched rows directly.")
 
 
-def compact_results(results: dict, *, widen_form: str = "",
-                    answer_ref: str = "") -> dict:
+def compact_results(results: dict, *, answer_ref: str = "") -> dict:
     """Each op result as its model-facing envelope.
 
     An ordered list renders ``{len, fids, rows}`` (rows a markdown grid
@@ -1028,9 +1027,8 @@ def compact_results(results: dict, *, widen_form: str = "",
                 more = join_hints(
                     f"showing the first {len(capped)} of {len(v)} row(s); "
                     f"the rest stay live in this rN -- later ops on it "
-                    f"read the FULL set"
-                    + (f", and {widen_form} serves the next "
-                       f"{_BROAD_HEAD_ROWS}" if widen_form else ""),
+                    f"read the FULL set, and more_of(<rN>) serves the next "
+                    f"{_BROAD_HEAD_ROWS}",
                     _cut_stands_at(v, body, capped))
             head = {"len": len(v),
                     "fids": [str(r["fid"]) for r in capped if r.get("fid")]}

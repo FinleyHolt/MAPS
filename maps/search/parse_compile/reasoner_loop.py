@@ -684,9 +684,7 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
         raw_sink["results"] = _raw_results
     # ``answer_ref`` names the one table a plan returns; the other ops' hints
     # ride it.
-    out["results"] = _compact_results(_raw_results,
-                                      widen_form="more_of(<rN>)",
-                                      answer_ref=answer_ref)
+    out["results"] = _compact_results(_raw_results, answer_ref=answer_ref)
     if preflight:
         # The pre-takeoff phase note, keyed on what each op's result
         # ACTUALLY holds (never an op shape): a color-column request
