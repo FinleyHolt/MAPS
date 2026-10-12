@@ -850,6 +850,12 @@ def _tuple_xy(xy):
     return (float(xy[0]), float(xy[1])) if is_xy(xy) else None
 
 
+def _set_as_list(v) -> list:
+    """A Python SET of things is the list of them, in a fixed order."""
+    return sorted(v, key=lambda x: str(x.bind) if isinstance(x, Row)
+                  else repr(x))
+
+
 def _places(v, who: str) -> tuple:
     """A Python value -> the ``(fid, xy)`` places geometry measures over. A set
     is one place meaning its nearest member; the xy rides for a computed row (a
@@ -1039,9 +1045,7 @@ class MissionPython:
         if isinstance(v, str):
             return self._held(v) or v
         if isinstance(v, (set, frozenset)):
-            # a Python SET of things is the list of them, in a fixed order
-            v = sorted(v, key=lambda x: str(x.bind) if isinstance(x, Row)
-                       else repr(x))
+            v = _set_as_list(v)
         if isinstance(v, (list, tuple)) and not is_xy(v):
             # a LIST of things -- order(nearest=[roadA, roadB]) -- maps
             # element-wise.
@@ -1452,7 +1456,9 @@ class MissionPython:
                     "cover.")
         elif is_xy(x) and withheld("prior"):
             pass  # no map to name a thing on: a point is the place to fly
-        elif isinstance(x, (list, tuple)):
+        elif isinstance(x, (list, tuple, set, frozenset)):
+            if isinstance(x, (set, frozenset)):
+                x = _set_as_list(x)
             # explore's list is a SET of things -- rows, sets, fids -- as
             # one place to cover; any numeric element is the coordinate
             # hatch.

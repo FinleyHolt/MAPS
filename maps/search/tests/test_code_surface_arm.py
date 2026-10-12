@@ -242,6 +242,16 @@ def test_the_moving_calls_refuse_a_coordinate_in_every_spelling():
     assert calls_of_block('stand(at=[1, 2], facing="north")\n')
 
 
+def test_go_to_refuses_a_python_set_as_a_set():
+    import pytest
+
+    from maps.search.parse_compile.code_surface import CodeError
+    with pytest.raises(CodeError, match="takes ONE thing and that is a set of 2"):
+        calls_of_block('go_to({"prior_0", "prior_1"})\n')
+    with pytest.raises(CodeError, match="takes ONE thing and that is a set of 2"):
+        calls_of_block("go_to({a, b})\n", bound={"a": "prior_0", "b": "prior_1"})
+
+
 def test_a_name_constraint_gates_or_fails_loud_never_vanishes():
     """``find(query, name=...)`` gates by name or says nothing bears it."""
     reply, fr, _f, _d = drive([
