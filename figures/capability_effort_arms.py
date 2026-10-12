@@ -34,8 +34,8 @@ def _mean(values: list[float]) -> float | None:
     return round(statistics.fmean(values), 1) if values else None
 
 
-def _cost(root: Path, *, allow_partial: bool = False) -> dict:
-    """Price the SAME attempts arm_row scored."""
+def _cost(root: Path, *, allow_partial: bool) -> dict:
+    """Price the attempts arm_row scored that kept a transcript; ``priced_n`` counts them."""
     picked, _ = _rows.load_attempts(root, allow_partial=allow_partial)
     keys = ("completion_tokens", "total_tokens", "reasoning_tokens", "turns")
     seen: dict[str, list[float]] = {k: [] for k in keys}
@@ -52,6 +52,7 @@ def _cost(root: Path, *, allow_partial: bool = False) -> dict:
             if isinstance(llm.get(key), (int, float)):
                 seen[key].append(float(llm[key]))
     return {
+        "priced_n": len(seen["turns"]),
         "wall_med_s": _median(wall),
         "completion_tok_mean": _mean(seen["completion_tokens"]),
         "total_tok_mean": _mean(seen["total_tokens"]),

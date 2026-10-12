@@ -63,7 +63,9 @@ def test_an_episode_with_no_transcript_prices_nothing(tmp_path):
             "metrics": {"episode_id": "m::9#0", "SR": 0, "success_criterion": "ring", "llm": blank()},
         }) + "\n")
     rec = capability_effort_arms.read_root(root)
-    assert rec["n"] == 3 and rec["completion_tok_mean"] == 1000.0
+    assert rec["n"] == 3 and rec["priced_n"] == 2 and rec["completion_tok_mean"] == 1000.0
+    svg = plot_capability_effort.render(capability_effort_arms.build([root]), "light", "test_unseen")
+    assert "3 episodes per arm · 2 priced per arm" in svg
 
 
 def test_spread_separates_and_keeps_order():
