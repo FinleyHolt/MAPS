@@ -196,3 +196,10 @@ def test_a_stopped_mission_posts_no_leg_fetches_no_frame_and_flies_nothing(built
                       {"target_fid": "[600, 600]"})
     assert out == {"error": "the mission is stopped"}
     assert len(twin.legs) == int(stop_in_wait) and fetched == [] and flown == []
+
+
+def test_the_summary_line_counts_the_turns_the_row_counts(make_mission):
+    """A conversation that failed mid-turn has turns in flight: the printed line and the row agree."""
+    m, _twin = make_mission()
+    m.turns_used, m._turn_diag["turns_used"] = 2, 3
+    assert f"{m.row()['turns_used']} turns" in M.summary_line(m) and m.row()["turns_used"] == 5

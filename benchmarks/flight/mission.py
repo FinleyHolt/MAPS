@@ -888,4 +888,4 @@ def converse(mission: Mission, taskings: list[str], *, ended=None) -> None:
 def summary_line(mission: Mission) -> str:
     """How a mission ended, in one line."""
     return (f"{mission.workdir}: {mission.status}, ended by {mission.ended_by}, {len(mission.flights)} flights, "
-            f"{mission.turns_used} turns" + (f", error {mission.error}" if mission.error else ""))
+            f"{mission._turns()} turns" + (f", error {mission.error}" if mission.error else ""))
