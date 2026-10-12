@@ -267,8 +267,7 @@ def _world_contour_from_geometry(geometry: dict[str, Any]) -> list[list[float]] 
     ``_chain_extent``. The chain is kept whole: it is the footprint
     (``footprint_area_m2``) of every areal prior.
     """
-    best: list[tuple[float, float]] | None = None
-    best_extent = -1.0
+    chains = []
     for geom_type, coords in _iter_geometry_parts(geometry):
         if not coords:
             continue
@@ -283,27 +282,19 @@ def _world_contour_from_geometry(geometry: dict[str, Any]) -> list[list[float]] 
             if len(ring) < 3:
                 continue
             chain = ring + [ring[0]]
-        if any(not (math.isfinite(x) and math.isfinite(y)) for x, y in chain):
-            # A non-finite vertex would ride into features.json as literal
-            # NaN (invalid strict JSON) and poison the shape scalars.
-            continue
-        extent = _chain_extent(chain)
-        if extent > best_extent:
-            best = chain
-            best_extent = extent
-    if best is None:
+        # A non-finite vertex would ride into features.json as literal NaN
+        # (invalid strict JSON) and poison the shape scalars.
+        if all(math.isfinite(v) for p in chain for v in p):
+            chains.append(chain)
+    if not chains:
         return None
+    best = max(chains, key=_chain_extent)
     closed = len(best) >= 4 and best[0] == best[-1]
-    out = [[round(float(x), 2), round(float(y), 2)] for x, y in best]
-    if closed:
-        out = out[:-1]
+    out = [[round(float(x), 2), round(float(y), 2)] for x, y in (best[:-1] if closed else best)]
     # Rounding to 2 dp can collapse neighbours onto each other; drop the
     # repeats so the closing vertex stays the chain's ONLY one. A chain that
     # rounds down to a single vertex IS that place.
-    dedup = [out[0]]
-    for p in out[1:]:
-        if p != dedup[-1]:
-            dedup.append(p)
+    dedup = [p for i, p in enumerate(out) if i == 0 or p != out[i - 1]]
     if not closed:
         return dedup
     # A ring is only a ring while it encloses: three distinct vertices, plus
