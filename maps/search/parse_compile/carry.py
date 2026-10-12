@@ -147,9 +147,7 @@ class Carry:
         self._history: list = []          # every op, in execution order
         self._reads: list = []            # per op: the handles its args name
         self._producers: dict = {}        # ref -> indices into _history
-        # The version the carry is armed for: the first read under a new
-        # version claims it, and every read after re-derives what it reads.
-        self._armed = 0
+        self._armed = 0                   # the version _fresh is for
         self._fresh: set = set()          # refs re-derived, or written, under it
         # A flight-minted handle records an event (the rows one flight added)
         # and never re-derives.
@@ -194,9 +192,8 @@ class Carry:
         self._fresh.update(need)
 
     def read(self, ref):
-        """A handle's rows, re-derived first when the version is armed."""
-        if self._armed == self.version:
-            self.ensure_fresh([ref])
+        """A handle's rows, re-derived against the current surface first."""
+        self.ensure_fresh([ref])
         return self.rows.get(ref)
 
     def record(self, ops: list, results: dict) -> None:

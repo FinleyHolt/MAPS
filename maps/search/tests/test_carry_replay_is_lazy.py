@@ -113,3 +113,15 @@ def test_a_replay_the_executor_refuses_leaves_the_handle_stale_and_unclaimed(
     assert refused[0] == 2
     assert _printed_fids(results[2]) == [] and _printed_fids(results[3]) == []
     assert set(added[0]) <= set(_printed_fids(results[4]))
+
+
+def test_the_first_read_after_a_flight_sees_the_flown_rows_whoever_reads_it():
+    """look() reads a handle the way print/len do: the first read after a flight
+    re-derives it, so the crops cover the cars the flight added."""
+    results, _graph, added = grow_drive([
+        [run('cars = find("car")')],
+        [run('f = go_to(prior_7)')],     # nothing in this block reads a handle
+        [run('look(cars)')],
+        "done",
+    ])
+    assert results[2].get("crop", {}).get("looked") == len(added[0]), results[2]

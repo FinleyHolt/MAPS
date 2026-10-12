@@ -1390,11 +1390,8 @@ class _Mission:
             return {"error": "run takes one block of code in code"}
         if self._mission_py is None:
             self._mission_py = _py_surface.MissionPython(_py_surface.MissionEnv(
-                # A read of a handle's rows re-derives it first.
-                rows_of_ref=lambda ref: (
-                    self.carry.ensure_fresh([ref]),
-                    [r for r in (self.carry.rows.get(ref) or [])
-                     if isinstance(r, dict)])[1],
+                rows_of_ref=lambda ref: [
+                    r for r in (self.carry.read(ref) or []) if isinstance(r, dict)],
                 tied_of_ref=lambda ref: bool(
                     getattr(self.carry.read(ref), "name_set", False)),
                 plan_rn=self.plan_rn, widened=self._widened, minted=self._code_minted,
