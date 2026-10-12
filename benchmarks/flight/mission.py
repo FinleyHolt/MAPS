@@ -657,7 +657,7 @@ class Mission:
                 self._imagery.add(obs)
                 return obs
 
-            session = MissionSession(h, recorder=self._recorder, t_start=time.monotonic(), observe=observe)
+            session = MissionSession(h, recorder=self._recorder, observe=observe)
             self.flights = session.flights
             # On the aircraft the leg is flown BEFORE the frame is read, and a
             # pass takes the stop the recording holds first.

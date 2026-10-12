@@ -194,10 +194,9 @@ class MissionSession:
     renders the raster crop at the target.
     """
 
-    def __init__(self, h, *, recorder=None, t_start: float, observe=None) -> None:
+    def __init__(self, h, *, recorder=None, observe=None) -> None:
         self.h = h
         self.recorder = recorder
-        self.t_start = t_start
         self.observe = observe
         self.flights: list[dict] = []
         self.feature_tour = FeatureTour()

@@ -349,7 +349,7 @@ def run_episode(
     start_pose_xyh = (float(state.pose_xy[0]), float(state.pose_xy[1]),
                       float(episode.start_heading_deg))
     start_alt = float(state.altitude_m)
-    session = MissionSession(h, recorder=recorder, t_start=t_start)
+    session = MissionSession(h, recorder=recorder)
     reply = run_mission_episode(session)
     flights = session.flights
     if flights:

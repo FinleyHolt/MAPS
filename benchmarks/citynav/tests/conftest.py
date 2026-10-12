@@ -80,6 +80,6 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
                                     marker_positions=list(markers)),
             sensor=None, tile_frame=None, search_loop=loop,
             perception=SimpleNamespace(detect=lambda obs: [], concept_provider=SimpleNamespace(concepts=[])))
-        return me.MissionSession(h, t_start=0.0, observe=lambda: frame)
+        return me.MissionSession(h, observe=lambda: frame)
 
     return make
