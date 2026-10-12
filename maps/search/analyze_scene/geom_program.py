@@ -355,24 +355,20 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         cells = n.cells
         chains = _exact_chains(n)
         # A one-vertex chain (a POI) draws nothing: the cell boundary does.
+        def _masked(m) -> dict:
+            _c = _mask_center(m)
+            return {"mask": m, **({"mask_centroid": [round(v, 2) for v in _c]}
+                                  if _c is not None else {})}
         if any(len(ch) >= 2 for ch in chains):
-            out = {"mask": chains}
-            _c = _mask_center(chains)
-            if _c is not None:
-                out["mask_centroid"] = [round(v, 2) for v in _c]
+            out = _masked(chains)
             shape = G.contour_shape_features(chains)
             if shape:
                 out.update(shape)
             return out
         if cells is None or len(cells) == 0:
             return {}
-        out = {}
         loops = G.cells_boundary_loops(cells, (tx, ty), cs)
-        if loops:
-            out["mask"] = loops
-            _c = _mask_center(loops)
-            if _c is not None:
-                out["mask_centroid"] = [round(v, 2) for v in _c]
+        out = _masked(loops) if loops else {}
         # Below 6 cells the 2 m grid cannot express shape.
         if len(cells) >= 6:
             shape = G.mask_shape_features(cells, cs)
@@ -428,25 +424,14 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         return ((head, 0, int(tail), "") if tail.isdigit()
                 else (s, 1, 0, s))
 
-    _best: dict = {}
+    _dups: dict = {}
     for c in cands:
-        k = (round(float(c["xy"][0]), 1), round(float(c["xy"][1]), 1),
-             c.get("class") or "")
-        prev = _best.get(k)
-        if prev is None:
-            _best[k] = c
-            continue
-        def _rank(row):
-            return (1 if row.get("color") else 0,
-                    float(row.get("color_conf") or 0.0))
-        if _rank(c) > _rank(prev) or (
-                _rank(c) == _rank(prev)
-                and _fid_key(c["fid"]) < _fid_key(prev["fid"])):
-            _best[k] = c
-    if len(_best) != len(cands):
-        cands = list(_best.values())
+        _dups.setdefault((round(float(c["xy"][0]), 1), round(float(c["xy"][1]), 1),
+                          c.get("class") or ""), []).append(c)
     # Numeric fid order is mint order.
-    cands.sort(key=lambda c: _fid_key(c["fid"]))
+    cands = sorted((min(g, key=lambda r: (not r.get("color"), -float(r.get("color_conf") or 0.0),
+                                          _fid_key(r["fid"])))
+                    for g in _dups.values()), key=lambda c: _fid_key(c["fid"]))
     anchors.sort(key=lambda a: _fid_key(a["fid"]))
     # A mask containing every row position is 0 m from every row:
     # ``covers_window`` lets compare state that once instead.
