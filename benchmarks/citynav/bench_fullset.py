@@ -261,6 +261,11 @@ class Driver:
     def _infra_attempts(self, eid: str) -> int:
         return self._infra_errors.get(eid, Counter()).total()
 
+    def _pending(self, selection: list[str]) -> list[str]:
+        """The selected episodes still to fly: not done and not past their infra attempts."""
+        return [e for e in selection if e not in self._done_cache
+                and self._infra_attempts(e) < self.max_infra_attempts]
+
     def _persistent_infra(self) -> str:
         """The line naming the selected episodes left out after
         ``max_infra_attempts`` infra attempts, errors counted, or ""."""
@@ -506,7 +511,7 @@ class Driver:
         episodes = self._select_episodes()
         self._absorb_ledger()
         done = self._done_cache
-        pending = [e for e in episodes if e not in done]
+        pending = self._pending(episodes)
         print(
             f"sample_seed: {self.sample_seed}   split: {self.split}   "
             f"limit: {self.limit}"
@@ -517,7 +522,7 @@ class Driver:
         )
         print(f"first {min(20, len(episodes))} selected (post-shuffle):")
         for e in episodes[:20]:
-            mark = "done" if e in done else "PEND"
+            mark = "done" if e in done else "PEND" if e in pending else "infra"
             print(f"  [{mark}] {e}")
         return 0
 
@@ -567,8 +572,7 @@ class Driver:
             self.log(f"FATAL: {exc}")
             return 2
         self._absorb_ledger()
-        pending = [e for e in episodes if e not in self._done_cache
-                   and self._infra_attempts(e) < self.max_infra_attempts]
+        pending = self._pending(episodes)
         self.log(
             f"split={self.split} sample_seed={self.sample_seed} selection={len(episodes)} "
             f"done={len(self._done_cache & set(episodes))} pending={len(pending)} "

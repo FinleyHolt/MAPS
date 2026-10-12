@@ -384,3 +384,13 @@ def test_the_end_line_prints_no_score_for_an_infra_attempt(driver, monkeypatch) 
     ends = [ln for ln in d.driver_log.read_text().splitlines() if " END " in ln]
     assert ends[0].endswith("status=infra elapsed=1s"), ends
     assert ends[1].endswith("status=ok elapsed=1s NE=3.0 SR=1"), ends
+
+
+def test_the_dry_run_counts_a_persistent_infra_episode_as_left_out(driver, tmp_path, monkeypatch, capsys) -> None:
+    for _ in range(3):
+        episodes.append_row(tmp_path, _infra(0))
+    d = driver()
+    monkeypatch.setattr(d, "_select_episodes", lambda: ["ep0", "ep1"])
+    assert d.dry_run() == 0
+    out = capsys.readouterr().out
+    assert "pending: 1" in out and "[PEND] ep1" in out and "[PEND] ep0" not in out, out
