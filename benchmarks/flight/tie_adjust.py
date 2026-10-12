@@ -27,7 +27,7 @@ anchor reaches is unreached and keeps the corrections it came with.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -89,35 +89,19 @@ class TieRow:
     rad_j: tuple[float, float]
 
 
-@dataclass
-class Adjustment:
-    """Each reached frame's correction and sigma, the window's yaw and scale
-    where fitted, and how many ties each frame carries."""
-
-    correction: dict = field(default_factory=dict)
-    sigma: dict = field(default_factory=dict)
-    yaw_deg: dict = field(default_factory=dict)
-    scale: dict = field(default_factory=dict)
-    ties_per_frame: dict = field(default_factory=dict)
-
-
-def irls_fit(A, b: np.ndarray, *, groups: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """``(x, sigmas)``: iteratively reweighted least squares on a sparse ``A x = b``, Huber-weighted per observation.
+def irls_fit(A, b: np.ndarray, *, groups: np.ndarray) -> np.ndarray:
+    """``x``: iteratively reweighted least squares on a sparse ``A x = b``, Huber-weighted per observation.
 
     An observation is two consecutive rows, weighted by the norm of its
     residual together. ``groups`` labels each observation with a population
     that gets a Huber scale of its own. The normal matrix is solved by
-    Cholesky, its sigmas the inverse's diagonal; a design that is not full
-    rank raises ``ValueError``.
+    Cholesky; a design that is not full rank raises ``ValueError``.
     """
-    import scipy.linalg  # noqa: PLC0415
-
-    n, p = A.shape[0] // 2, A.shape[1]
+    n = A.shape[0] // 2
     groups = np.asarray(groups)
     weights = np.ones(n, dtype=np.float64)
-    factor = None
     for _ in range(IRLS_ITERATIONS):
-        x, factor = _normal_solve(A, b, np.repeat(weights, 2))
+        x = _normal_solve(A, b, np.repeat(weights, 2))
         norms = np.linalg.norm(np.asarray(b - A @ x).reshape(n, 2), axis=1)
         cut = np.empty(n, dtype=np.float64)
         for g in np.unique(groups):
@@ -127,11 +111,7 @@ def irls_fit(A, b: np.ndarray, *, groups: np.ndarray) -> tuple[np.ndarray, np.nd
             weights = new_weights
             break
         weights = new_weights
-    w = np.repeat(weights, 2)
-    resid_w = np.asarray(b - A @ x) * w
-    var = float(resid_w @ resid_w) / max(2 * n - p, 1)
-    cov_diag = np.diag(scipy.linalg.cho_solve(factor, np.eye(p))) * var
-    return x, np.sqrt(np.maximum(cov_diag, 0.0))
+    return x
 
 
 def _huber_scale(norms: np.ndarray) -> float:
@@ -145,8 +125,8 @@ def _huber_scale(norms: np.ndarray) -> float:
     return scale
 
 
-def _normal_solve(A, b: np.ndarray, w: np.ndarray):
-    """``(x, factor)``: the weighted normal equations solved by Cholesky."""
+def _normal_solve(A, b: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """The weighted normal equations solved by Cholesky."""
     import scipy.linalg  # noqa: PLC0415
 
     aw = A.multiply(w[:, None]).tocsr()
@@ -156,7 +136,7 @@ def _normal_solve(A, b: np.ndarray, w: np.ndarray):
         factor = scipy.linalg.cho_factor(normal, lower=True, check_finite=False)
     except np.linalg.LinAlgError as exc:
         raise ValueError("the design is not full rank: a parameter no equation observes") from exc
-    return scipy.linalg.cho_solve(factor, rhs, check_finite=False), factor
+    return scipy.linalg.cho_solve(factor, rhs, check_finite=False)
 
 
 def _components(frames: list, ties: list[TieRow]) -> list[set]:
@@ -268,8 +248,10 @@ def rows_from(geometry: dict, measurements: dict, ties) -> tuple[dict, list[Anch
     return nodes, anchors, tie_rows
 
 
-def solve(nodes: dict, anchors: list[Anchor], ties: list[TieRow]) -> Adjustment:
-    """The adjustment over ``nodes`` (``frame -> Node``) from its anchors and ties.
+def solve(nodes: dict, anchors: list[Anchor], ties: list[TieRow]) -> dict:
+    """Each reached frame's correction ``frame -> (east, north)`` over
+    ``nodes`` (``frame -> Node``) from its anchors and ties, the window's yaw
+    and scale fitted with them.
 
     A frame in no row, or in a tie component no anchor reaches, gets no
     correction here; the caller keeps what it had.
@@ -280,14 +262,10 @@ def solve(nodes: dict, anchors: list[Anchor], ties: list[TieRow]) -> Adjustment:
     for component in _components(frames, ties):
         if component & anchored:
             reached |= component
-    out = Adjustment()
     anchors = [a for a in anchors if a.frame in reached]
     ties = [t for t in ties if t.i in reached and t.j in reached]
     if not anchors:
-        return out
-    for t in ties:
-        out.ties_per_frame[t.i] = out.ties_per_frame.get(t.i, 0) + 1
-        out.ties_per_frame[t.j] = out.ties_per_frame.get(t.j, 0) + 1
+        return {}
     rotated = _levered(nodes, ties, reached, radial=False)
     scaled = _levered(nodes, ties, reached, radial=True)
     solved = sorted(reached, key=frames.index)
@@ -304,7 +282,7 @@ def solve(nodes: dict, anchors: list[Anchor], ties: list[TieRow]) -> Adjustment:
             scale_cols = {f: width for f in scaled}
             width += 1
         a, b, priors = _system(anchors, ties, columns, yaw_cols, scale_cols, width)
-        x, sigmas = irls_fit(a, b, groups=np.r_[np.full(priors, 2, dtype=np.int64),
+        x = irls_fit(a, b, groups=np.r_[np.full(priors, 2, dtype=np.int64),
                                                 np.zeros(len(anchors), dtype=np.int64),
                                                 np.ones(len(ties), dtype=np.int64)])
         too_far = {f for f, col in yaw_cols.items() if abs(x[col]) > MAX_YAW_DEG}
@@ -313,12 +291,4 @@ def solve(nodes: dict, anchors: list[Anchor], ties: list[TieRow]) -> Adjustment:
             break
         rotated -= too_far
         scaled -= too_big
-    for f in solved:
-        c = columns[f]
-        out.correction[f] = (float(x[c]), float(x[c + 1]))
-        out.sigma[f] = (float(sigmas[c]), float(sigmas[c + 1]))
-        if f in yaw_cols:
-            out.yaw_deg[f] = float(x[yaw_cols[f]])
-        if f in scale_cols:
-            out.scale[f] = float(x[scale_cols[f]])
-    return out
+    return {f: (float(x[columns[f]]), float(x[columns[f] + 1])) for f in solved}

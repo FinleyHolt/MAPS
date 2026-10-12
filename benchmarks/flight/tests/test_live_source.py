@@ -119,16 +119,18 @@ def test_the_corrector_graph_places_a_leg_and_gates_a_ring_frame_by_its_nearest_
     twin = make_twin()
     live = make_live(twin, register=True)
     _fly_over(twin, (600.0, 600.0), 4.0)
-    records = [live.correct(twin.frame(seq)) for seq in range(len(twin.rows))]
-    assert records[0]["applied"] is False and "anchor" in records[0]["why"]   # a lone anchor folds into nothing
-    assert any(r["source"] == "measured" for r in records[1:]), records
+    live.correct(twin.frame(0))
+    assert live.graph.nodes == {}                       # a lone anchor folds into nothing
+    for seq in range(1, len(twin.rows)):
+        live.correct(twin.frame(seq))
+    assert live.graph.nodes and live.graph.estimate(twin.rows[-1]["t_host"]) is not None
     seq = len(twin.rows) - 1
     jpeg, t_host, _log, _seq, tag = twin.frame(seq)
     posed = live._posed(jpeg, t_host, pose=tag_pose(tag, t_host))
     posed.pose_xy = (posed.pose_xy[0] + INNOVATION_CAP_M + 20.0, posed.pose_xy[1])
     record = live._register_ring(seq, posed, t_host)
     assert record["source"] == "nearest" and abs(record["shift_e_m"]) < 2.0, record
-    assert record["measured_e_m"] < -INNOVATION_CAP_M
+    assert record["why"].startswith("disagrees with the graph's nearest node"), record
 
 
 def test_a_simulated_vehicle_corrects_every_frame_up_to_its_clock_in_order(built, make_twin, monkeypatch):

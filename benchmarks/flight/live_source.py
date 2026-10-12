@@ -294,7 +294,6 @@ def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor, g
         record["why"] = "the frame reaches off the map"
     else:
         du, dv, response = frame_offset.offset(rgb, expected)
-        record["response"] = round(response, 4)
         de, dn = frame_offset.ground_correction(pose, sensor, altitude_m=pose.alt_msl_m, ground_z=ground,
                                                 d_px=(du, dv))
         if not (math.isfinite(de) and math.isfinite(dn)):
@@ -428,26 +427,22 @@ class LiveSource:
         map's surface where it carries one, else ``floor_msl_m``."""
         return map_render.ground_msl(self.terrain, self.floor_msl_m, xy)
 
-    def correct(self, got: tuple[bytes, float, int, int, dict]) -> dict[str, Any] | None:
+    def correct(self, got: tuple[bytes, float, int, int, dict]) -> None:
         """Register one recorded frame into the pose graph, posed by the
         vehicle's pose at its stamp, as the corrector does for every one."""
         if self.register is None:
-            return None
+            return
         jpeg, t_host, _log_time, seq, _tag = got
         posed = self._posed(jpeg, t_host)
         if posed is None:
-            return None
+            return
         with self._correcting:
             if self.graph is None:
                 self.graph = PoseGraph(posed.sensor, self.ground_msl)
             pose = frame_pose(posed)
-            record, measured = register_frame(self.register, posed.rgb, pose, posed.sensor,
-                                              self.ground_msl(pose.pose_xy))
-            placed = self.graph.offer(seq, t_host, pose, locator.gray(posed.rgb), measured)
-        if placed.get("why") and not record.get("why"):
-            record["why"] = placed["why"]
-        record.update({k: v for k, v in placed.items() if k != "why"})
-        return record
+            _record, measured = register_frame(self.register, posed.rgb, pose, posed.sensor,
+                                               self.ground_msl(pose.pose_xy))
+            self.graph.offer(seq, t_host, pose, locator.gray(posed.rgb), measured)
 
     def _register_ring(self, seq: int, posed, t: float) -> dict[str, Any]:
         """A frame off the ring, registered on its own pixels (the graph's
@@ -458,19 +453,18 @@ class LiveSource:
         pose = frame_pose(posed)
         record, _measured = register_frame(self.register, posed.rgb, pose, posed.sensor,
                                            self.ground_msl(pose.pose_xy))
-        record.update(seq=seq, ring=True)
+        record["seq"] = seq
         with self._correcting:
             est = self.graph.estimate(t) if self.graph is not None else None
         if record["applied"] and est is not None:
             far = math.hypot(record["shift_e_m"] - est["e_m"], record["shift_n_m"] - est["n_m"])
             if far > INNOVATION_CAP_M:
-                record.update(applied=False, source=None, measured_e_m=record["shift_e_m"],
-                              measured_n_m=record["shift_n_m"],
+                record.update(applied=False, source=None,
                               why=f"disagrees with the graph's nearest node by {far:.1f} m, past {INNOVATION_CAP_M:.0f}")
         if not record["applied"] and est is not None:
             # The node's shift and no yaw: the record's own yaw is the refused fit's.
             record.update(applied=True, source="nearest", shift_e_m=est["e_m"], shift_n_m=est["n_m"],
-                          shift_yaw_deg=0.0, nearest_s=round(abs(t - est["t"]), 2))
+                          shift_yaw_deg=0.0)
         return record
 
     def pose_now(self, t: float | None = None) -> Pose | None:

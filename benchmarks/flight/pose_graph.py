@@ -55,7 +55,7 @@ class PoseGraph:
         self.frames: dict[int, _Frame] = {}
         self.measurements: dict[int, tuple[float, float, float]] = {}
         self.ties: list[tuple[int, int, tuple[float, float], tuple[float, float]]] = []
-        #: Every solved node: ``seq -> {e_m, n_m, yaw_deg, alt_m, sigma_m, ties, t}``.
+        #: Every solved node: ``seq -> {e_m, n_m, t}``, the metres the solve adds to the chain's pose.
         self.nodes: dict[int, dict[str, Any]] = {}
 
     def estimate(self, t: float) -> dict[str, Any] | None:
@@ -82,14 +82,13 @@ class PoseGraph:
             del self.nodes[seq]
 
     def offer(self, seq: int, t: float, pose: frame_ties.Pose, gray: np.ndarray,
-              measurement: tuple[float, float, float] | None) -> dict[str, Any]:
+              measurement: tuple[float, float, float] | None) -> None:
         """Add a frame (its chain pose, its luma, its own registration
-        ``(east, north, response)`` or None), re-solve the window, and return
-        the frame's record: ``source`` is ``measured``, ``tied``, ``nearest``
-        or None, with the shift, ``ties``, ``sigma_m`` and ``why``."""
+        ``(east, north, response)`` or None) and re-solve the window once it
+        holds :data:`MIN_ANCHORS` anchors. A measurement further than
+        :data:`INNOVATION_CAP_M` from the graph's estimate is refused."""
         self._forget(t)
         frame = _Frame(seq, t, pose, gray, frame_ties.FrameGeometry(pose, self.sensor, self.ground(tuple(pose.pose_xy))))
-        record: dict[str, Any] = {"applied": False, "source": None, "shift_yaw_deg": 0.0, "shift_alt_m": 0.0, "ties": 0}
         before = sorted((f for f in self.frames.values() if f.t <= t), key=lambda f: f.t)[-TIE_NEIGHBOURS:]
         for prev in before:
             for tie in self.matcher.ties(prev.seq, self._placed(prev), prev.gray, self._placed(frame), gray):
@@ -98,39 +97,12 @@ class PoseGraph:
         if measurement is not None:
             e, n, response = measurement
             est = self.estimate(t)
-            if est is not None and math.hypot(e - est["e_m"], n - est["n_m"]) > INNOVATION_CAP_M:
-                record["why"] = (f"disagrees with the graph's estimate by {math.hypot(e - est['e_m'], n - est['n_m']):.1f} m, "
-                                 f"past the {INNOVATION_CAP_M:.0f} m cap")
-            else:
+            if est is None or math.hypot(e - est["e_m"], n - est["n_m"]) <= INNOVATION_CAP_M:
                 self.measurements[seq] = (float(e), float(n), float(response))
-        if len(self.measurements) < MIN_ANCHORS:
-            record.setdefault("why", f"{len(self.measurements)} anchor in the window, {MIN_ANCHORS} needed")
-        else:
-            self._solve(seq, t, record)
+        if len(self.measurements) >= MIN_ANCHORS:
+            geometry = {s: f.geometry for s, f in self.frames.items()}
+            for s, (e, n) in tie_adjust.solve(*tie_adjust.rows_from(geometry, self.measurements, self.ties)).items():
+                self.nodes[s] = {"e_m": e, "n_m": n, "t": self.frames[s].t}
         # This frame's work grid and edge maps, made now for the pair its
         # successor opens, at the placement the solve just gave it.
         self.matcher.warm(seq, self._placed(frame), gray)
-        return record
-
-    def _solve(self, seq: int, t: float, record: dict[str, Any]) -> None:
-        """Re-solve the window and write the frame's placement into ``record``."""
-        geometry = {s: f.geometry for s, f in self.frames.items()}
-        nodes, anchors, tie_rows = tie_adjust.rows_from(geometry, self.measurements, self.ties)
-        got = tie_adjust.solve(nodes, anchors, tie_rows)
-        for s, (e, n) in got.correction.items():
-            agl = self.frames[s].pose.alt_msl_m - self.ground(tuple(self.frames[s].pose.pose_xy))
-            self.nodes[s] = {"e_m": e, "n_m": n, "yaw_deg": got.yaw_deg.get(s, 0.0), "alt_m": got.scale.get(s, 0.0) * agl,
-                             "sigma_m": float(math.hypot(*got.sigma[s])), "ties": got.ties_per_frame.get(s, 0),
-                             "t": self.frames[s].t}
-        if seq in got.correction:
-            node = self.nodes[seq]
-            record.update(applied=True, source="measured" if seq in self.measurements else "tied",
-                          shift_e_m=node["e_m"], shift_n_m=node["n_m"], shift_yaw_deg=node["yaw_deg"],
-                          shift_alt_m=node["alt_m"], ties=node["ties"], sigma_m=node["sigma_m"])
-        else:
-            est = self.estimate(t)
-            if est is not None:
-                record.update(applied=True, source="nearest", shift_e_m=est["e_m"], shift_n_m=est["n_m"],
-                              ties=0, sigma_m=est["sigma_m"], nearest_s=round(abs(t - est["t"]), 2))
-            else:
-                record.setdefault("why", "no tie reaches an anchored frame and no node is near in time")
