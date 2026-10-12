@@ -258,3 +258,23 @@ def test_a_retasked_mission_is_measured_to_its_last_report(calcity, serves, tmp_
                                                tiles_dir=calcity.tiles)
     assert row["flights_flown"] == 2
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
+
+
+def test_a_reasoner_unreachable_at_discovery_is_infra(calcity, serves, tmp_path, monkeypatch):
+    """Discovery's GET of the models list finds nothing listening: the serve's fault, excluded."""
+    import socket
+
+    from benchmarks.flight import twin
+    from maps.llm import endpoint_spec
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        closed = s.getsockname()[1]
+    monkeypatch.setattr(endpoint_spec, "_PROBE_TRIES", 1)
+    monkeypatch.setattr(endpoint_spec, "discover_from_env",
+                        lambda: endpoint_spec._get_json(f"http://127.0.0.1:{closed}/v1/models"))
+    out = tmp_path / "out"
+    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
+                      "--out", str(out)]) == 1
+    (row,) = [json.loads(line) for line in (next(out.iterdir()) / "episodes.jsonl").read_text().splitlines()]
+    assert row["status"] == "infra" and row["error"].startswith("EndpointUnreachable: endpoint unreachable")

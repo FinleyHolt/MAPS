@@ -55,6 +55,10 @@ class EndpointDiscoveryError(RuntimeError):
     """An endpoint fact could not be discovered, or diverged from the pin."""
 
 
+class EndpointUnreachable(EndpointDiscoveryError):
+    """The endpoint did not answer: the serve's fault, not the config's."""
+
+
 @dataclass(frozen=True)
 class EndpointOverride:
     """``SEARCH_ENDPOINT_SPEC_OVERRIDE=<model_id>:<max_model_len>``, parsed."""
@@ -109,8 +113,9 @@ def _output_reserve_for(max_model_len: int) -> int:
 
 def _get_json(url: str, *, bearer: str | None = None) -> object:
     """GET ``url`` (``bearer`` as an Authorization header) and parse the JSON
-    body; raise EndpointDiscoveryError on transport failure (a non-2xx reply
-    is urllib's HTTPError, a URLError) or a non-JSON body."""
+    body; raise EndpointUnreachable when nothing answers (no connection, a
+    dropped one, a timeout, a 5xx) and EndpointDiscoveryError on a 4xx, a
+    malformed URL or a non-JSON body."""
     req = urllib.request.Request(url)
     if bearer:
         req.add_header("Authorization", f"Bearer {bearer}")
@@ -121,7 +126,8 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
             break
         except (urllib.error.URLError, OSError, ValueError, TimeoutError) as exc:
             if attempt == _PROBE_TRIES:
-                raise EndpointDiscoveryError(
+                refused = isinstance(exc, ValueError) or (isinstance(exc, urllib.error.HTTPError) and exc.code < 500)
+                raise (EndpointDiscoveryError if refused else EndpointUnreachable)(
                     f"endpoint unreachable: GET {url} failed ({exc}) after {_PROBE_TRIES} tries"
                 ) from exc
             log.warning("discovery: GET %s failed (%s); asking again in %.0f s", url, exc, _PROBE_RETRY_S)

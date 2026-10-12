@@ -106,9 +106,11 @@ def _exc_is_transient_infra(exc: BaseException) -> bool:
 
 
 def is_infra_fault(exc: BaseException) -> bool:
-    """The infra rule for a raised attempt: a SAM outage or a transient
-    shared-server fault. Any other exception is the method's own, a scored miss."""
-    return _exc_is_sam_infra(exc) or _exc_is_transient_infra(exc)
+    """The infra rule for a raised attempt: a SAM outage, a transient
+    shared-server fault or a reasoner that did not answer discovery. Any other
+    exception is the method's own, a scored miss."""
+    return (_exc_is_sam_infra(exc) or _exc_is_transient_infra(exc)
+            or any(isinstance(cur, endpoint_spec_module.EndpointUnreachable) for cur in _chain(exc)))
 
 
 def _dispatch_one(
