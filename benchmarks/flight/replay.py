@@ -308,8 +308,7 @@ class BankSource:
                                                    "corners_xy", "off_nadir_deg", "registration", "mosaic")},
                      "boresight": Path(str(boresight)).name if boresight else None,
                      "coverage": {"fraction": round(sum(held) / len(held), 3), "points": len(held),
-                                  "held": sum(held), "seqs": [frame.get("seq")]},
-                     "gap_s": 0.0}
+                                  "held": sum(held), "seqs": [frame.get("seq")]}}
         self.last_refusal = ""
         return ortho_observation(rgb, alpha, h.extent, h.camera_z, tile_ground_z=self.tile_ground_z, tile=self.tile)
 

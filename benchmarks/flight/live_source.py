@@ -645,7 +645,7 @@ class LiveSource:
         self.last = {
             "log_time": newest.log_time, "seq": newest.seq, "t_host": newest.t_host,
             "age_s": self.vehicle.now() - newest.t_host, "attitude": newest.pose.attitude,
-            "gap_s": newest.pose.gap_s, "utc": newest.pose.utc,
+            "utc": newest.pose.utc,
             "boresight": self.boresight.path.name if self.boresight.path else "datasheet",
             "registration": fused_registration(records) if self.register is not None else None,
             "corners_xy": [(x0, y1), (x1, y1), (x1, y0), (x0, y0)],

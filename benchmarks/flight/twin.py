@@ -120,7 +120,7 @@ class Twin:
         alt = self.ground((x, y)) + self.agl_m + C12_LEVER_M[2]
         utc = (EPOCH + dt.timedelta(seconds=t)).isoformat()
         return Pose(t=t, lat=lonlat[1], lon=lonlat[0], alt_msl_m=alt, track_deg=heading_deg,
-                    speed_mps=C12_SPEED_MPS, gap_s=0.0, utc=utc, heading_deg=heading_deg,
+                    speed_mps=C12_SPEED_MPS, utc=utc, heading_deg=heading_deg,
                     attitude="fusion")
 
     def _record(self) -> None:

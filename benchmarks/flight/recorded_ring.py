@@ -231,11 +231,9 @@ class NavTrack:
         if lo >= 0 and hi < len(self._fix) and self._fix_t[hi] - self._fix_t[lo] <= MAX_GAP_S:
             span = self._fix_t[hi] - self._fix_t[lo]
             fix = _interpolate(self._fix[lo], self._fix[hi], (t - self._fix_t[lo]) / span if span > 0 else 1.0)
-            gap = min(t - self._fix_t[lo], self._fix_t[hi] - t)
         else:
             j = min((k for k in (lo, hi) if 0 <= k < len(self._fix)), key=lambda k: abs(self._fix_t[k] - t))
-            gap = abs(self._fix_t[j] - t)
-            if gap > MAX_GAP_S:
+            if abs(self._fix_t[j] - t) > MAX_GAP_S:
                 return None
             fix = _extrapolate(self._fix[j], t - self._fix_t[j])
         if float(fix["accuracyMeters"]) > MAX_H_ACC_M:
@@ -250,7 +248,7 @@ class NavTrack:
                 roll = math.degrees(math.atan(float(fix["speedMps"]) * math.radians(rate) / G_MPS2))
                 attitude = "estimated"
         return Pose(t=t, lat=float(fix["lat"]), lon=float(fix["lon"]), alt_msl_m=float(fix["altitudeMslMeters"]),
-                    track_deg=float(fix["trackDeg"]) % 360.0, speed_mps=float(fix["speedMps"]), gap_s=gap,
+                    track_deg=float(fix["trackDeg"]) % 360.0, speed_mps=float(fix["speedMps"]),
                     utc=str(fix.get("timestamp", "")), heading_deg=heading % 360.0, roll_deg=roll, pitch_deg=pitch,
                     attitude=attitude)
 

@@ -27,8 +27,6 @@ class Pose:
     alt_msl_m: float
     track_deg: float
     speed_mps: float
-    #: Distance in time to the nearer fix this pose stands on.
-    gap_s: float
     utc: str
     heading_deg: float
     roll_deg: float = 0.0
@@ -55,7 +53,7 @@ def tag_pose(tag: dict[str, Any] | None, t: float) -> Pose | None:
     return Pose(t=t, lat=float(tag["lat"]), lon=float(tag["lon"]), alt_msl_m=float(tag["alt_msl_m"]),
                 track_deg=float(tag["track_deg"]) if tag.get("track_deg") is not None else heading,
                 speed_mps=float(tag.get("speed_mps") or 0.0),
-                gap_s=0.0, utc=str(tag.get("utc") or ""), heading_deg=heading,
+                utc=str(tag.get("utc") or ""), heading_deg=heading,
                 roll_deg=float(tag.get("roll_deg") or 0.0), pitch_deg=float(tag.get("pitch_deg") or 0.0),
                 attitude=str(tag.get("attitude") or "fusion"))
 

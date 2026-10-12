@@ -662,9 +662,8 @@ class Mission:
                     log.warning("live observation refused: %s", self._live.last_refusal)
                     return None
                 obs, last = held
-                log.info("live frame seq %s log_time %s age %.2fs attitude %s fix gap %.2fs",
-                         last.get("seq"), last.get("log_time"), last.get("age_s", 0.0),
-                         last.get("attitude"), last.get("gap_s", 0.0))
+                log.info("live frame seq %s log_time %s age %.2fs attitude %s", last.get("seq"),
+                         last.get("log_time"), last.get("age_s", 0.0), last.get("attitude"))
                 self._note_frame(last, obs)
                 self._imagery.add(obs)
                 return obs
