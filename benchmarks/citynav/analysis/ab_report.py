@@ -13,8 +13,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import math
 from pathlib import Path
+
+import yaml
 
 from benchmarks.citynav.analysis import rows as _rows
 
@@ -100,21 +104,24 @@ def render(st: dict) -> str:
 
 
 def _run_provenance(run_root: Path) -> dict:
-    """The first row's provenance block with the manifest's bake stamp attached, else {}."""
-    for r in _rows.iter_json_rows(run_root / _rows.EPISODES_JSONL):
-        prov = r.get("provenance")
-        if prov:
-            bake = _bake_stamp(run_root)
-            if bake:
-                prov = {**prov, "bake_sha256": bake}
-            return prov
-    return {}
-
-
-def _bake_stamp(run_root: Path) -> str | None:
-    """The manifest's tile-bake content hash: every Cal City bake sits at
-    ``benchmarks/calcity/tiles``, so the path the rows carry cannot tell two apart."""
-    return (_rows.read_manifest(run_root).get("perception") or {}).get("bake_sha256")
+    """The first row's provenance block, else {}, with what the manifest adds:
+    the tile-bake content hash (every Cal City bake sits at
+    ``benchmarks/calcity/tiles``, so the path the rows carry cannot tell two
+    apart), the arm's withholds, and the sha256 of the resolved config
+    without them (``config_body``: an E4 arm differs from E1 only there)."""
+    prov = next((r["provenance"] for r in _rows.iter_json_rows(run_root / _rows.EPISODES_JSONL)
+                 if r.get("provenance")), None)
+    if not prov:
+        return {}
+    manifest = _rows.read_manifest(run_root)
+    prov = dict(prov, withhold=manifest.get("withhold"))
+    bake = (manifest.get("perception") or {}).get("bake_sha256")
+    if bake:
+        prov["bake_sha256"] = bake
+    if manifest.get("config_yaml"):
+        body = {k: v for k, v in yaml.safe_load(manifest["config_yaml"]).items() if k != "withhold"}
+        prov["config_body"] = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+    return prov
 
 
 def _ground_truth_keys(prov: dict) -> dict:
@@ -134,9 +141,10 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
 
     ``fatal`` is the ground truth SR is scored against (split, tile bake; two
     bakes scored the same episodes 0.351 and 0.169): differing or unrecorded,
-    no A/B exists, and nothing waives it. ``arm`` is code, config and served
-    model, which an A/B is meant to vary; compared only where
-    both sides recorded them, and waived by ``--allow-provenance-mismatch``."""
+    no A/B exists, and nothing waives it. ``arm`` is code, config (apart from
+    its withholds where both manifests record it) and served model, which an
+    A/B is meant to vary; compared only where both sides recorded them, and
+    waived by ``--allow-provenance-mismatch``."""
     fatal: list[str] = []
     ga, gb = _ground_truth_keys(prov_a), _ground_truth_keys(prov_b)
     for key, label in (
@@ -158,9 +166,11 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
         )
 
     arm: list[str] = []
+    config = (("config_body", "config apart from its withholds (sha256)")
+              if prov_a.get("config_body") and prov_b.get("config_body") else ("config_sha256", "config (sha256)"))
     for key, label in (
         ("git_commit", "code (git_commit)"),
-        ("config_sha256", "config (sha256)"),
+        config,
         ("served_model", "served model"),
         ("served_build", "served model BUILD (tokenizer/quant)"),
     ):
@@ -197,9 +207,8 @@ def main() -> None:
             f"{_CRITERION_LABEL.get(crit_b, crit_b)}: the two numbers answer different questions."
         )
 
-    fatal, arm = comparability_issues(
-        _run_provenance(Path(args.run_a)), _run_provenance(Path(args.run_b))
-    )
+    prov_a, prov_b = _run_provenance(Path(args.run_a)), _run_provenance(Path(args.run_b))
+    fatal, arm = comparability_issues(prov_a, prov_b)
     if fatal:
         raise SystemExit(
             "INVALID A/B -- the two runs score against different ground truth:\n  - "
@@ -225,6 +234,8 @@ def main() -> None:
     print(render(ab_stats(pairs, label=args.label)))
     print(f"shared={len(shared)}  only_a={len(set(a) - set(b))}  "
           f"only_b={len(set(b) - set(a))}")
+    if prov_a.get("withhold") is not None or prov_b.get("withhold") is not None:
+        print(f"treatment: withhold A={prov_a.get('withhold')} B={prov_b.get('withhold')}")
     if arm and args.allow_provenance_mismatch:
         print("WARNING comparing non-comparable runs (override active):\n  - "
               + "\n  - ".join(arm))

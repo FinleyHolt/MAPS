@@ -364,7 +364,7 @@ Read the results:
 ```sh
 python -m benchmarks.citynav.analysis.arm_table output/e2/*            # SR, OSR, NE per arm
 python -m benchmarks.citynav.analysis.run_report output/e1/inkling-small   # one root in full
-python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/e4/<model>/look --allow-provenance-mismatch
+python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/e4/<model>/look
 python -m figures.plot_effort_ladder output/e3/inkling-small-e*
 python -m figures.plot_capability_effort --split test_unseen output/e2/*
 python -m figures.plot_capability_effort --split calcity --cost total output/e3/*

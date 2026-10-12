@@ -66,3 +66,24 @@ def test_wilson_ci_bounds_and_midpoint():
     assert (lo, hi) == (pytest.approx(0.4038, abs=1e-3),
                         pytest.approx(0.5962, abs=1e-3))
     assert wilson_ci(0, 0) == (pytest.approx(float("nan"), nan_ok=True),) * 2
+
+
+def test_a_withhold_arm_compares_without_a_waiver_and_names_its_treatment(tmp_path, monkeypatch, capsys):
+    import json
+
+    import yaml
+
+    for name, withhold in (("a", []), ("b", ["look"])):
+        _write_run(tmp_path / name, "aaaaaaa", {"e1": 1, "e2": 0})
+        rows = [json.loads(ln) for ln in (tmp_path / name / "episodes.jsonl").read_text().splitlines()]
+        write_ledger(tmp_path / name, *({**r, "provenance": {**r["provenance"], "config_sha256": name}} for r in rows))
+        (tmp_path / name / "run_manifest.json").write_text(json.dumps({
+            "withhold": withhold, "config_yaml": yaml.safe_dump({"max_steps": 200, "withhold": withhold})}))
+    monkeypatch.setattr(sys, "argv", ["ab_report", str(tmp_path / "a"), str(tmp_path / "b")])
+    main()
+    out = capsys.readouterr().out
+    assert "A/B paired" in out and "treatment: withhold A=[] B=['look']" in out
+    (tmp_path / "b" / "run_manifest.json").write_text(json.dumps({
+        "withhold": ["look"], "config_yaml": yaml.safe_dump({"max_steps": 100, "withhold": ["look"]})}))
+    with pytest.raises(SystemExit, match="config apart from its withholds"):
+        main()
