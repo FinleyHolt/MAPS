@@ -547,7 +547,7 @@ class Mission:
             return None
         return sha
 
-    def _wait_arrival(self, xy: Any, *, area: list[tuple[float, float]] | None, timeout_s: float,
+    def _wait_arrival(self, xy: Any, *, area: list[tuple[float, float]], timeout_s: float,
                       reach_m: float | None = None, after: float | None = None) -> str:
         """``arrived`` when the recording (the frames after ``after`` when
         given) holds ``area``; ``short`` when the pass came inside ``reach_m``
