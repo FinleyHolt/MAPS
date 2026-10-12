@@ -388,6 +388,14 @@ def _diagonal_remedy(names) -> str:
 _FILTER_KWARGS = _CARDINAL_KWARGS | {"near", "within", "dwithin", "facing", "direction"}
 
 
+def _refuse_pred_and_cut(pred, kw: dict) -> None:
+    """A predicate and a cut kwarg together are refused, one text for every
+    filter."""
+    if pred is not None and any(v is not None for v in kw.values()):
+        raise CodeError("filter takes a predicate OR near=/within=/dwithin=/"
+                        "facing=/east_of=/north_of=/south_of=/west_of=, not both")
+
+
 def _refuse_filter_kwargs(names) -> None:
     """A filter kwarg outside the set is refused, never ignored: one text
     for every filter, and a colour cut gets its own reason."""
@@ -438,10 +446,8 @@ class Row:
     def filter(self, pred=None, **kw):
         mp = object.__getattribute__(self, "_mp")
         _refuse_filter_kwargs(kw)
+        _refuse_pred_and_cut(pred, kw)
         if pred is not None:
-            if kw:
-                raise CodeError("filter takes a predicate OR "
-                                "near=/within=/dwithin=, not both")
             return RowList([self] if pred(self) else [])
         return mp._rows_filter(self, **kw)
 
@@ -610,6 +616,7 @@ class RowList(list):
         # A PREDICATE FILTER IS NOT A DEAD END: the served cut works on a
         # materialised subset exactly as it does on a handle.
         _refuse_filter_kwargs(kw)
+        _refuse_pred_and_cut(pred, kw)
         if pred is None:
             if not kw:
                 raise CodeError(
@@ -617,9 +624,6 @@ class RowList(list):
                     "rows.filter(lambda r: r.distance(<place>) <= 25), or "
                     "rows.filter(near=<place>, dwithin=25).")
             return self._mp()._rows_filter(list(self), **kw)
-        if kw:
-            raise CodeError("filter takes a predicate OR "
-                            "near=/within=/dwithin=, not both")
         return RowList(r for r in self if pred(r))
 
     def order(self, key=None, **kw) -> "RowList | Rows":
@@ -754,13 +758,11 @@ class Rows:
         """
         _refuse_filter_kwargs(kw)
         _refuse_metres_in_within(within)
+        _refuse_pred_and_cut(pred, dict(
+            near=near, within=within, dwithin=dwithin, facing=facing,
+            direction=direction, north_of=north_of, south_of=south_of,
+            east_of=east_of, west_of=west_of))
         if pred is not None:
-            if any(v is not None for v in (
-                    near, within, dwithin, facing, direction,
-                    north_of, south_of, east_of, west_of)):
-                raise CodeError("filter takes a predicate OR "
-                                "near=/within=/dwithin=/facing=/east_of=/"
-                                "north_of=/south_of=/west_of=, not both")
             if not callable(pred):
                 raise CodeError(
                     f"filter's first argument is a predicate and {pred!r} "

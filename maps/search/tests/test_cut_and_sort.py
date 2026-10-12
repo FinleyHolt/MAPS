@@ -86,6 +86,22 @@ def test_the_refusal_names_the_exit(src, phrase):
     assert phrase in str(e.value), str(e.value)
 
 
+_PRED_OR_CUT = ("filter takes a predicate OR near=/within=/dwithin=/facing=/"
+                "east_of=/north_of=/south_of=/west_of=, not both")
+
+
+def test_a_predicate_and_a_cut_kwarg_read_one_refusal_on_every_receiver():
+    from maps.search.parse_compile.python_surface import Row, RowList
+    with pytest.raises(CodeError) as e:
+        _ops('r1 = find("car")\nr2 = r1.filter(lambda r: True, facing="A")\n')
+    assert _PRED_OR_CUT in str(e.value), str(e.value)
+    row = Row({"fid": "detected_1"})
+    for rows in (row, RowList([row])):
+        with pytest.raises(CodeError) as e:
+            rows.filter(lambda r: True, facing="A")
+        assert str(e.value) == _PRED_OR_CUT, str(e.value)
+
+
 def test_a_gapless_near_cut_points_at_an_ordering_the_surface_accepts():
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car")\nr2 = r1.filter(near="A")\n')
