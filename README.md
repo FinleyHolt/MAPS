@@ -51,7 +51,7 @@ The code lives in [`maps/`](maps/README.md). Print the served contract (the
 system turn and the tool schema the model receives) with:
 
 ```sh
-python -m maps.search.parse_compile.contract --sensor oryx_orx32_25mm_nadir
+python -m maps.search.parse_compile.contract --sensor oryx_orx32_25mm_nadir   # --agl-m <m>, default configs/calcity.yaml's 914.4
 ```
 
 ## The closed-loop flight
