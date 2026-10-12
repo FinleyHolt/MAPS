@@ -9,13 +9,6 @@ import numpy as np
 
 from maps.sws.graph.model import MapObject, ObjectGraph
 
-# Keys in the ``features`` dict that carry non-feature metadata rather than a
-# feature list. ``build_object_graph`` skips them.
-_NON_FEATURE_KEYS: frozenset[str] = frozenset(
-    {"bbox", "georef", "_tile_name", "nlcd_zones"}
-)
-
-
 # Feature keys that never become tags: the geometry the builder reads, ``name``
 # (its own field), OSM's ``orientation`` (not served) and ``descriptions``
 # (the GT-label wall). Everything else rides into ``MapObject.tags`` verbatim.
@@ -123,8 +116,6 @@ def build_object_graph(
     nodes: dict[str, MapObject] = {}
 
     for class_name, feats in features.items():
-        if class_name in _NON_FEATURE_KEYS:
-            continue
         if not isinstance(feats, list):
             continue
         for i, feat in enumerate(feats):
