@@ -4,11 +4,9 @@ each flight's detections into, and the segmenter's class set."""
 from __future__ import annotations
 
 import logging
-import os
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -265,14 +263,6 @@ class SearchLoop:
             rgbd_dir=self._rgbd_dir,
             imagery=self.look_imagery,
         )
-
-    def _look_audit_dir(self) -> str | None:
-        """``<workdir>/flight/look``, the look audit root; None when
-        ``SEARCH_COMPILE_WORKDIR`` is unset."""
-        wd = os.environ.get("SEARCH_COMPILE_WORKDIR")
-        if not wd:
-            return None
-        return str(Path(wd) / "flight" / "look")
 
     @property
     def state(self) -> _State:

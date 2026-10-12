@@ -204,61 +204,14 @@ def _ordinal(n: int) -> str:
     return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
 
 
-def _persist_look_audit(
-    *, audit_dir: str, stop_id: str, step_idx: int, rid_tag: str, cid: str,
-    annotate: bool, tool_ack: dict, vision_text: str, crops: list[dict],
-) -> None:
-    """Persist EXACTLY what one ``look`` call delivered to the model, so a
-    completed run can be audited on what each tool call provided in text and
-    images (a bad crop -- mis-centred, target out of frame, unreadable -- is
-    only checkable by seeing what the model saw).
-
-    Writes ``manifest.json`` under ``<audit_dir>/<stop_id>/<cid>/`` (keyed by
-    stop_id + the tool-call id): the
-    tool-ack + the vision-user message TEXT, plus per crop the FULL render
-    record minus the jpeg bytes — the resolved spec
-    (``look_render.render_look_from_spec``'s input: map_name / center / marks /
-    boundaries / pose / context) plus the derived audit geometry and the
-    ``sha256`` of the delivered bytes. The pixels themselves are NOT stored:
-    the record is the re-render input, and the sha is the proof the re-render
-    shows what the model saw (a hash mismatch surfaces as renderer/raster
-    drift, keyed by ``renderer_version`` / ``renderer_env``). ``jpg`` stays as
-    the crop's virtual filename — the dashboard's URL + delivery-order key.
-    The manifest lands atomically (tmp + replace) so a mid-run reader never
-    parses a partial file. Never raises (audit is best-effort; it must not
-    perturb the round)."""
-    try:
-        d = Path(audit_dir) / str(stop_id) / str(cid)
-        d.mkdir(parents=True, exist_ok=True)
-        manifest: dict = {
-            "stop_id": str(stop_id), "step_idx": int(step_idx),
-            "rid": str(rid_tag), "cid": str(cid), "annotate": bool(annotate),
-            "tool_ack": tool_ack, "vision_user_text": vision_text,
-            "n_crops": len(crops), "crops": [],
-        }
-        for i, c in enumerate(crops):
-            fid = str(c.get("center_fid") or f"crop{i}")
-            rec = {k: v for k, v in c.items() if k != "jpeg"}
-            rec["jpg"] = f"{i:02d}_{fid}.jpg"
-            manifest["crops"].append(rec)
-        tmp = d / "manifest.json.tmp"
-        tmp.write_text(json.dumps(manifest, default=str, indent=2))
-        os.replace(tmp, d / "manifest.json")
-    except Exception:  # noqa: BLE001 — audit persistence never perturbs the round
-        # WARNING, not debug: a persist failure must be visible in the
-        # runner log.
-        log.warning("look audit persist failed at %s", audit_dir, exc_info=True)
-
-
 def _deliver_frames(jpegs: list[bytes], sink: list[str]) -> None:
     """Record every image about to reach the model: its sha256 into ``sink``
     (the turn's ``frames`` list in ``conversation.jsonl``) and the exact bytes
     into ``<workdir>/frames/<sha256>.jpg`` when a mission is recording.
 
     The sha is of the delivered bytes, so it equals the wire log's
-    ``image_ref.sha256`` (``maps.llm.http._scrub_image_parts``) and the look
-    manifest's per-crop ``sha256``: one name for one image across all three
-    records. A file already there is the same bytes and is left alone. Never
+    ``image_ref.sha256`` (``maps.llm.http._scrub_image_parts``): one name for
+    one image across both records. A file already there is the same bytes and is left alone. Never
     raises -- the pixel copy is evidence, and a full disk must not end the
     turn that produced it."""
     workdir = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip()
@@ -824,7 +777,6 @@ def run_mission(
     sensor_description: str = "",
     cancel_event: "threading.Event | None" = None,
     look_renderer: "Callable[[list[dict]], list[dict]] | None" = None,
-    look_audit_dir: str | None = None,
     obs_span_m: float | None = None,
     obs_minor_m: float | None = None,
     boost_queue: "Callable[[list, list], dict]",
@@ -871,7 +823,6 @@ def run_mission(
         look_renderer=look_renderer,
         obs_span_m=obs_span_m,
         obs_minor_m=obs_minor_m,
-        look_audit_dir=look_audit_dir,
         boost_queue=boost_queue,
         preflight=True,
         mission_spec=mission_spec,
@@ -888,7 +839,6 @@ def continue_mission(
     ctx: "ToolContext",
     mission_spec: MissionSpec,
     look_renderer: "Callable[[list[dict]], list[dict]] | None" = None,
-    look_audit_dir: str | None = None,
     obs_span_m: float | None = None,
     obs_minor_m: float | None = None,
     boost_queue: "Callable[[list, list], dict]",
@@ -922,7 +872,6 @@ def continue_mission(
         look_renderer=look_renderer,
         obs_span_m=obs_span_m,
         obs_minor_m=obs_minor_m,
-        look_audit_dir=look_audit_dir,
         boost_queue=boost_queue,
         # Takeoff happened on the first turn. Preflight notes on an
         # aircraft already airborne would state a phase it has left.
@@ -946,7 +895,6 @@ def advance_reasoner_one_round(
     look_renderer: Callable[[list[dict]], list[dict]] | None = None,
     obs_span_m: float | None = None,
     obs_minor_m: float | None = None,
-    look_audit_dir: str | None = None,
     boost_queue: Callable[[list, list], dict],
     preflight: bool = False,
     mission_spec: MissionSpec,
@@ -2046,20 +1994,6 @@ def advance_reasoner_one_round(
                         _report["note"] = (
                             f"{_report['note']} {_fv_note}"
                             if _report.get("note") else _fv_note)
-                        # AUDIT: a flight view is a picture the model was
-                        # SHOWN, so it is persisted like any other: a
-                        # caption cannot state a mark's footprint, and a
-                        # detected_* mark's mask lives in the runtime object
-                        # graph and nowhere on disk.
-                        if look_audit_dir and _shown:
-                            _persist_look_audit(
-                                audit_dir=look_audit_dir, stop_id="",
-                                step_idx=-1, rid_tag=rid_tag,
-                                cid=f"flight_{_report.get('stop_id') or ''}",
-                                annotate=False,
-                                tool_ack={"flight_view": 1,
-                                          "stop_id": _report.get("stop_id")},
-                                vision_text=_fv_text, crops=_fv)
                 mission_flights += 1
                 _sid = _report.get("stop_id")
                 _pxy = _report.get("pose_xy")
@@ -2415,7 +2349,7 @@ def advance_reasoner_one_round(
             return _plan_err({"boost": res}, str(res["error"]))
         return {"boost": res}
 
-    def _crops_of(fid, cid: str, marks: list | None = None,
+    def _crops_of(fid, marks: list | None = None,
                    preamble: str = "") -> dict:
         # A LIST asks for one crop PER ROW -- each its own subject, each at
         # the single-look scale where a distinction is resolvable.
@@ -2481,15 +2415,9 @@ def advance_reasoner_one_round(
         else:
             ack["error"] = ("render returned no image bytes; no crop "
                             "will follow")
-        if look_audit_dir:
-            _persist_look_audit(
-                audit_dir=look_audit_dir, stop_id="",
-                step_idx=-1, rid_tag=rid_tag, cid=cid,
-                annotate=True, tool_ack=ack, vision_text=vis_text,
-                crops=crops)
         return ack
 
-    def _crops_set(handle: str, cid: str, marks: list | None = None) -> dict:
+    def _crops_set(handle: str, marks: list | None = None) -> dict:
         """look(rows) — one crop per row of the handle, in the handle's own
         order, each badged with the row it shows.
 
@@ -2510,7 +2438,7 @@ def advance_reasoner_one_round(
         # image makes badge->fid unambiguous by construction.
         fids = [_crop_token_of(r, str(r["fid"]) in _ns_rows) for r in rows]
         ack = _crops_of(
-            fids, cid, marks=marks,
+            fids, marks=marks,
             # The preamble names no handle: ``handle`` is the EXECUTOR's
             # ref, which the model may never have bound. Each crop names its
             # own row, and naming a row is what the next call needs.
@@ -2523,7 +2451,7 @@ def advance_reasoner_one_round(
                 "handle to see the rest")
         return ack
 
-    def _map_of(fid: str, cid: str, mark_fids: list | None = None) -> dict:
+    def _map_of(fid: str, mark_fids: list | None = None) -> dict:
         spec, m_skipped = _map_spec(fid, mark_fids or [])
         ack: dict = {"maps": int(spec is not None)}
         if m_skipped:
@@ -2560,12 +2488,6 @@ def advance_reasoner_one_round(
         else:
             ack["error"] = ("render returned no image bytes; no map "
                             "will follow")
-        if look_audit_dir:
-            _persist_look_audit(
-                audit_dir=look_audit_dir, stop_id="",
-                step_idx=-1, rid_tag=rid_tag, cid=cid,
-                annotate=False, tool_ack=ack, vision_text=vis_text,
-                crops=maps)
         return ack
 
     def _plan_err(ack: dict, msg: str) -> dict:
@@ -2808,7 +2730,7 @@ def advance_reasoner_one_round(
         if _catch:
             _cack = _crops_of(
                 [_crop_token_of(r, str(r["fid"]) in _ns_rows)
-                 for r in _catch], cid,
+                 for r in _catch],
                 preamble=("The pass's catch, one crop per "
                           "row it added, in pass order: "))
             if not _cack.get("error"):
@@ -2827,8 +2749,8 @@ def advance_reasoner_one_round(
     def _crops(of, fid, marks) -> dict:
         # the marks a crop request carries: only real tokens
         _mk = [m for m in marks or [] if isinstance(m, str) and m.strip()]
-        crop = (_crops_set(str(of), cid, marks=_mk or None) if of
-                else _crops_of(fid, cid, marks=_mk or None))
+        crop = (_crops_set(str(of), marks=_mk or None) if of
+                else _crops_of(fid, marks=_mk or None))
         if crop.get("error") and not crop.get("delivered"):
             return _plan_err({"crop": crop}, str(crop["error"]))
         return {"crop": crop}
@@ -2842,7 +2764,7 @@ def advance_reasoner_one_round(
         _mrows = [r for r in (_carry_read(_h) or [])
                   if isinstance(r, dict) and r.get("fid")] if _h else []
         _mfids = [str(r["fid"]) for r in _mrows[:_MAP_MAX_MARKS]]
-        mp = _map_of(around, cid, mark_fids=_mfids)
+        mp = _map_of(around, mark_fids=_mfids)
         if _mfids:
             mp["badged_from"] = _h
             if len(_mrows) > len(_mfids):
@@ -2905,7 +2827,7 @@ def advance_reasoner_one_round(
 
     _mission_py: list = [None]
 
-    def _dispatch_run(args, cid: str) -> dict:
+    def _dispatch_run(args) -> dict:
         """One code block, run in the mission's ONE persistent namespace on
         the verbs above. An error costs the line it is on: everything the
         block ran before it stands, receipts included."""
@@ -3153,7 +3075,7 @@ def advance_reasoner_one_round(
             cid = tc.get("id") or ""
             args = json.loads(tc["function"]["arguments"])
             if name == "run":
-                out = _dispatch_run(args, cid)
+                out = _dispatch_run(args)
                 if isinstance(out, dict) and not withheld("look_for"):
                     out.setdefault("watching", (
                         _watching_trailer()

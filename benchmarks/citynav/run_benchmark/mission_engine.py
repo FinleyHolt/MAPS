@@ -241,7 +241,6 @@ class MissionSession:
             ctx=self.ctx,
             mission_spec=self.mission_spec,
             look_renderer=loop._render_candidate_crops,
-            look_audit_dir=loop._look_audit_dir(),
             obs_span_m=obs_span_m,
             obs_minor_m=self.obs_minor_m,
             boost_queue=loop._boost_queue_cb,
