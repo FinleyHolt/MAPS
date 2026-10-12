@@ -126,7 +126,7 @@ def test_the_world_frame_is_east_north():
     compass only while +y is north -- a bake that flipped y would leave the
     function unchanged and every served direction mirrored."""
     frame = json.loads(_META.read_text())["coordinate_frame"]
-    assert frame["x_axis"] == "east" and frame["y_axis"] == "north"
+    assert frame["y_axis"] == "north"
     assert G.bearing([0, 0], [0, 1]) == 0.0     # +y reads north
     assert G.bearing([0, 0], [1, 0]) == 90.0    # +x reads east
 

@@ -37,11 +37,7 @@ def _write_meta(map_name: str, tiles_dir: Path) -> Path:
     payload = {
         "grid_shape": [height, width],
         "cell_size_m": CELL_SIZE_M,
-        "coordinate_frame": {
-            "x_axis": "east",
-            "y_axis": "north",
-            "origin": "southwest",
-        },
+        "coordinate_frame": {"y_axis": "north"},
         "bounds": {
             "x_min": 0.0,
             "y_min": 0.0,

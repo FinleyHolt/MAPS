@@ -140,7 +140,7 @@ def test_the_bake_shape_and_provenance_are_unchanged(tmp_path, monkeypatch):
     assert list(graph.nodes) == ["prior_0"]
     meta = json.loads((tiles / "calcity_meta.json").read_text())
     assert list(meta) == ["grid_shape", "cell_size_m", "bounds", "coordinate_frame", "georef"]
-    assert meta["coordinate_frame"]["y_axis"] == "north"
+    assert meta["coordinate_frame"] == {"y_axis": "north"}
 
 
 def test_ground_truth_keys_can_never_enter_the_prior(tmp_path, monkeypatch):
