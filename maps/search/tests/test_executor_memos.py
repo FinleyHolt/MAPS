@@ -79,14 +79,14 @@ _FINDS = {"ops": [
 
 def test_the_find_memo_serves_the_same_bytes_cold_and_warm():
     cands, anchors = _surface()
-    gp._FIND_MEMO.update(lists=None, idf={}, scored={}, dead={}, census={})
+    gp._FIND_MEMO.reset(None, None)
     cold = _served(cands, anchors, _FINDS)
-    assert gp._FIND_MEMO["scored"], "the memo was not filled"
+    assert gp._FIND_MEMO.scored, "the memo was not filled"
     warm = _served(cands, anchors, _FINDS)
     assert warm == cold
     # the rows a result holds are never the memo's own dicts
     out = gp.run_program(cands, anchors, _FINDS)["results"]
-    memo_ids = {id(r) for rows in gp._FIND_MEMO["scored"].values()
+    memo_ids = {id(r) for rows in gp._FIND_MEMO.scored.values()
                 for r in rows}
     for rows in out.values():
         for r in rows:
@@ -94,7 +94,7 @@ def test_the_find_memo_serves_the_same_bytes_cold_and_warm():
     # a new surface -- the lists moved -- empties the memo and re-scores
     cands2, anchors2 = _surface(n=41)
     assert _served(cands2, anchors2, _FINDS) != cold
-    assert gp._FIND_MEMO["lists"][1] is cands2
+    assert gp._FIND_MEMO.lists[0] is cands2
     # vacuity floors: a hit, a miss and a dead-token note all rendered
     assert "b7" in cold and "matched nothing" in cold
     assert "withcolor" in cold
