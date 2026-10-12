@@ -1,7 +1,7 @@
 """The reviewed allowlist is derived from the shipped corpus and ground truth.
 
-A corpus row is reviewed when its target position matches a reviewed shape
-in ``ground_truth.json`` (keyed by position) within 0.2 m. On the shipped
+A corpus row is reviewed when its target position matches a position
+``ground_truth.json`` lists within 0.2 m. On the shipped
 pair that is the 606-episode set the Cal City arms were scored on, pinned
 here by count and by the sha256 of the sorted ids.
 """
@@ -29,12 +29,12 @@ def test_a_row_matches_only_within_the_tolerance(tmp_path, monkeypatch):
     corpus = tmp_path / "c.json"
     gt = tmp_path / "gt.json"
     row = {"area": "calcity", "descriptions": ["x"], "ann_ids": [0], "object_ids": [],
-           "marker_positions": [], "trajectory": [[0.0, 0.0, 125.0]], "source": "authored"}
+           "marker_positions": [], "trajectory": [[0.0, 0.0, 125.0]]}
     corpus.write_text(json.dumps([
         {**row, "ann_ids": [0], "target_positions": [[10.15, 20.0, 0.0]]},
         {**row, "ann_ids": [1], "target_positions": [[10.25, 20.0, 0.0]]},
     ]))
-    gt.write_text(json.dumps({"calcity::10.0:20.0": {"object_id": None, "target_mask": []}}))
+    gt.write_text(json.dumps(["calcity::10.0:20.0"]))
     monkeypatch.setattr(reviewed, "split_path", lambda split: corpus)
     monkeypatch.setattr(reviewed, "GROUND_TRUTH", gt)
     assert reviewed_episode_ids() == ["calcity::0#0"]

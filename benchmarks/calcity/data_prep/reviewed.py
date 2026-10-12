@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The reviewed Cal City episodes: corpus rows whose target shape was reviewed.
 
-``ground_truth.json`` keys each reviewed target shape by its position,
+``ground_truth.json`` lists the position of each reviewed target,
 ``<map>::<x>:<y>``. A corpus row is reviewed when its ``target_positions[0]``
-lies within ``TOL_M`` of a key on its own map. The list feeds
+lies within ``TOL_M`` of a listed position on its own map. The list feeds
 ``bench_fullset --episode-allowlist``, which applies it before the seeded
 shuffle::
 
@@ -22,7 +22,7 @@ from benchmarks.calcity.paths import PACKAGE_ROOT, split_path
 from benchmarks.citynav.adapter import parse_episode
 
 GROUND_TRUTH = PACKAGE_ROOT / "data_prep" / "authoring" / "ground_truth.json"
-# The keys round positions to 0.1 m, so a match sits within ~0.07 m.
+# The positions are rounded to 0.1 m, so a match sits within ~0.07 m.
 TOL_M = 0.2
 
 

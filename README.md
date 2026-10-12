@@ -291,7 +291,7 @@ relocate each part.
 ### Cal City
 
 The Cal City corpus (`benchmarks/calcity/data/calcity.json`, 1,023 episodes)
-and the reviewed target shapes
+and the positions of its reviewed targets
 (`benchmarks/calcity/data_prep/authoring/ground_truth.json`) ship with the
 repository. You supply two inputs:
 

@@ -12,7 +12,7 @@ target's own annotated footprint (the shape criterion).
 | Item | Path | Source |
 |---|---|---|
 | The corpus, 1,023 episodes | `data/calcity.json` | Ships. |
-| The reviewed target shapes | `data_prep/authoring/ground_truth.json` | Ships. |
+| The positions of the reviewed targets | `data_prep/authoring/ground_truth.json` | Ships. |
 | The C-12 v6 map raster of the block | `<map>_rgb.tif` | You supply it. |
 | A world bundle of OpenStreetMap layers | `osm/<layer>.geojson` in WGS84 for each of the eight `bundle.OSM_LAYERS` | You supply it, covering `aoi.BUNDLE_BBOX_WGS84`. |
 | The block's bare-earth surface, read by the flight harness | `calcity_dem.tif` under `SEARCH_CALCITY_TILES` | You supply it from public USGS 3DEP data (the top-level README's Cal City section). |
@@ -47,8 +47,8 @@ defaults to `SEARCH_CALCITY_TILES`.
 ## The reviewed episodes
 
 The reviewed set is derived, not listed: a corpus row is reviewed when its
-first target position lies within 0.2 m of a key of `ground_truth.json` on
-its own map. It holds 606 episodes.
+first target position lies within 0.2 m of a position `ground_truth.json`
+lists on its own map. It holds 606 episodes.
 
 ```sh
 mkdir -p output && python -m benchmarks.calcity.data_prep.reviewed > output/reviewed_episodes.txt
