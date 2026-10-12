@@ -504,7 +504,6 @@ class _BroadRows(list):
     (a matched query), ``name_set`` when it is one name's tied ways,
     ``op_cols`` the columns its op attached."""
 
-    empty_condition: "str | None" = None
     name_set: bool = False
     ordered: bool = False
     op_cols: list = []
@@ -619,7 +618,6 @@ class _EmptyFindMiss(list):
     empty-result hint."""
 
     empty_condition: "str | None" = None
-    name_set: bool = False
 
 
 class _FilterCutRows(list):
@@ -1526,8 +1524,6 @@ def _find(cx, a):
         rows.op_cols = list(_find_cols)
     if _q_notes:
         rows.notes = list(_q_notes)
-    if _empty_cond:
-        rows.empty_condition = _empty_cond
     return rows
 
 
