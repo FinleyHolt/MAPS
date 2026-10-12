@@ -66,7 +66,7 @@ def _flatten_multimodal_content(content: object) -> str:
             t = p.get("type")
             if t == "text":
                 parts.append(str(p.get("text") or ""))
-            elif t == "image_url" or "image" in str(t):
+            elif "image" in str(t):
                 parts.append(_IMAGE_PART_PLACEHOLDER)
             else:
                 parts.append(str(p))
@@ -285,10 +285,7 @@ def _drop_spent_turns(
     input."""
     units = _turn_units(messages)
     head = _protected_head(messages)
-    droppable = [
-        (a, b) for (a, b) in units
-        if a >= head and not _is_script_block(messages[a])
-    ]
+    droppable = [(a, b) for (a, b) in units if a >= head]
     if len(droppable) <= _KEEP_TAIL_UNITS:
         return messages, 0, 0
     candidates = droppable[:-_KEEP_TAIL_UNITS]
@@ -332,8 +329,6 @@ def _estimate_input_tokens(
         add_generation_prompt=True,
         tokenize=False,
     )
-    if not isinstance(text, str):
-        text = "".join(text)
     ids = tok.encode(text, add_special_tokens=False)
     return len(ids) + image_tokens_in(messages)
 
