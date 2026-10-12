@@ -423,10 +423,11 @@ class Driver:
         self.log(f"[w{worker_id}] START {episode_id}")
         row = self._run_attempt(worker_id, episode_id)
         m = row.get("metrics") or {}
-        summary = f"NE={m.get('NE')} SR={m.get('SR')}" if m else "MISSING"
+        summary = ("" if _rows.is_infra_abort(row)
+                   else f" NE={m.get('NE')} SR={m.get('SR')}" if m else " MISSING")
         self.log(
             f"[w{worker_id}] END {episode_id} status={row['status']} "
-            f"elapsed={row['elapsed_s']:.0f}s {summary}"
+            f"elapsed={row['elapsed_s']:.0f}s{summary}"
         )
         self._append_result(row)
         self._write_summary()

@@ -320,6 +320,11 @@ def test_the_split_defaults_to_the_benchmarks_own() -> None:
     assert bf._build_parser().parse_args([]).split == paths.DEFAULT_SPLIT
 
 
+def test_the_out_root_defaults_to_the_benchmarks_own(monkeypatch) -> None:
+    monkeypatch.setattr(bf.paths, "BENCHMARK", "calcity")
+    assert bf._build_parser().parse_args([]).out_root == "output/calcity_fullset"
+
+
 def test_the_summary_names_an_errorless_infra_row_as_the_driver_counts_it(driver) -> None:
     d = driver()
     episodes.append_row(d.out_root, {"episode_id": "ep0", "worker_id": 0, "status": "infra"})
