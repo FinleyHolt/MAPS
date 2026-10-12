@@ -112,3 +112,13 @@ def test_a_run_the_serve_failed_under_is_out_of_every_rate_and_named(tmp_path):
     s = Q.summarize(got)
     assert (s["sr_20m"]["k"], s["sr_20m"]["n"]) == (1, 1)
     assert s["infra"] == [f"{root.name} run 2", f"{root.name} run 3"]
+
+
+def test_the_tasking_set_scores_a_run_only_for_the_description_it_was_flown_on(tmp_path):
+    split = tmp_path / "split.json"
+    split.write_text(json.dumps([{"area": "calcity", "descriptions": ["the Rite Aid"], "ann_ids": [0],
+                                  "target_positions": [[100.0, 100.0, 0.0]], "trajectory": [[0.0, 0.0, 125.0]],
+                                  "target_mask": TARGET}]))
+    truth = Q.Truth([split])
+    assert truth.ring({}, {"episode_id": "calcity::0#0", "description": "the Rite Aid"})[1] == "tasking set"
+    assert truth.ring({}, {"episode_id": "calcity::0#0", "description": "the school"}) == (None, None)

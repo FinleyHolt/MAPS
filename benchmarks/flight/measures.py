@@ -17,8 +17,9 @@ the record holds:
   commit lies inside it or on its centroid.
 * **The truth**: the analyst's hand-drawn mask (``<sortie>.json`` in a truth
   directory, ``{episode_id: {"target_mask", "excluded", "intel_quality"}}``),
-  else the tasking set's footprint (a split JSON given as a truth path). Its
-  area centroid is the target centroid.
+  else the tasking set's footprint for the run's episode id and description
+  (a split JSON given as a truth path). Its area centroid is the target
+  centroid.
 * **The path**: the aircraft's GNSS track beside the sortie
   (``flight_track.jsonl``, 1 Hz), else the keyframes' poses.
 
@@ -111,11 +112,12 @@ def centroid(ring: list[list[float]]) -> tuple[float, float]:
 
 class Truth:
     """The analyst's entries by sortie name (a directory of ``<sortie>.json``)
-    and the tasking set's footprints by episode id (split JSONs)."""
+    and the tasking set's footprints by episode id and description (split
+    JSONs: a flown episode id names a different target in another sortie)."""
 
     def __init__(self, paths: list[Path]) -> None:
         self.dirs = [p for p in paths if p.is_dir()]
-        self.masks: dict[str, list[list[float]]] = {}
+        self.masks: dict[tuple[str, str], list[list[float]]] = {}
         for p in paths:
             if p.is_file():
                 from benchmarks.citynav.adapter import parse_episode  # noqa: PLC0415
@@ -123,7 +125,8 @@ class Truth:
                 for i, r in enumerate(json.loads(p.read_text())):
                     ep = parse_episode(r, row_index=i)
                     if ep.target_mask:
-                        self.masks[ep.episode_id] = [[float(x), float(y)] for x, y in ep.target_mask]
+                        self.masks[(ep.episode_id, ep.description)] = [[float(x), float(y)]
+                                                                       for x, y in ep.target_mask]
 
     def entries(self, sortie: str) -> dict[str, dict[str, Any]]:
         for d in self.dirs:
@@ -131,11 +134,11 @@ class Truth:
                 return json.loads((d / f"{sortie}.json").read_text())
         return {}
 
-    def ring(self, entry: dict[str, Any], episode_id: str) -> tuple[list[list[float]] | None, str | None]:
+    def ring(self, entry: dict[str, Any], row: dict[str, Any]) -> tuple[list[list[float]] | None, str | None]:
         ring = entry.get("target_mask") or []
         if len(ring) >= 3:
             return [[float(p[0]), float(p[1])] for p in ring], "hand-drawn"
-        mask = self.masks.get(episode_id)
+        mask = self.masks.get((str(row.get("episode_id") or ""), str(row.get("description") or "")))
         return (mask, "tasking set") if mask else (None, None)
 
 
@@ -486,7 +489,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     reason = entry.get("excluded")
     params = next((r.get("params") or {} for b in bases for r in _rows(b / "flight" / "llm" / "transcript.jsonl")
                    if r.get("kind") == "params"), {})
-    ring, truth_source = truth.ring(entry, str(row.get("episode_id") or ""))
+    ring, truth_source = truth.ring(entry, row)
     target = centroid(ring) if ring else None
     t_end = next((float(e["t_s"]) for e in events if e.get("kind") == "mission_end"), None)
     if t_end is None and row.get("elapsed_s"):
