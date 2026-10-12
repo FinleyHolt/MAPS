@@ -14,7 +14,7 @@ class ToolContext:
     "prebaked" / "detected") and the tile frame it sits in."""
 
     grid_shape: tuple[int, int]  # (H, W)
-    graph: ObjectGraph | None = field(default=None, repr=False)
+    graph: ObjectGraph = field(repr=False)
     pose_xy: tuple[float, float] | None = None  # the drone's world x, y; None when unknown
     tile_origin_xy: tuple[float, float] = (0.0, 0.0)
     cell_size_m: float = 0.0  # required; caller passes the tile's true value
