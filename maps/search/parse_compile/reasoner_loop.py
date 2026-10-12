@@ -586,6 +586,16 @@ def _code_reply(text: str) -> bool:
     return bool(t) and _py_surface.looks_like_code(t)
 
 
+def _not_a_reply(content: str) -> tuple[str, str, str] | None:
+    """A text turn that is a dropped message rather than a reply -- empty,
+    or a block of code -- as ``(transcript kind, log label, nudge)``."""
+    if not content.strip():
+        return "empty_turn", "EMPTY turn", EMPTY_TURN_NUDGE
+    if _code_reply(content):
+        return "code_shaped_reply", "CODE-SHAPED reply turn", CODE_REPLY_NUDGE
+    return None
+
+
 def run_mission(
     *,
     instruction: str,
@@ -2291,37 +2301,23 @@ def advance_reasoner_one_round(
                                        "turn_idx": turn_idx})
                 reasoner.append_repair(MALFORMED_ENVELOPE_NUDGE)
                 continue
-            if not content.strip():
-                # An empty turn is a dropped message: repaired once.
-                no_call_streak += 1
-                if transcript is not None:
-                    transcript.append({"kind": "empty_turn",
-                                       "turn_idx": turn_idx,
-                                       "streak": no_call_streak})
-                if no_call_streak < 2:
-                    log.info("%s EMPTY turn %d -> repair", rid_tag,
-                             turn_idx)
-                    reasoner.append_repair(EMPTY_TURN_NUDGE)
-                    continue
-                log.info("%s EMPTY turn %d repeated; mission ends",
-                         rid_tag, turn_idx)
-            elif _code_reply(content):
-                # A block in the reply channel: repaired once (the streak
-                # is shared with the empty turn).
-                no_call_streak += 1
-                if transcript is not None:
-                    transcript.append({"kind": "code_shaped_reply",
-                                       "turn_idx": turn_idx,
-                                       "streak": no_call_streak})
-                if no_call_streak < 2:
-                    log.info("%s CODE-SHAPED reply turn %d -> "
-                             "repair", rid_tag, turn_idx)
-                    reasoner.append_repair(CODE_REPLY_NUDGE)
-                    continue
-                log.info("%s CODE-SHAPED reply turn %d repeated; "
-                         "mission ends", rid_tag, turn_idx)
-            else:
+            miss = _not_a_reply(content)
+            if miss is None:
                 no_call_streak = 0
+            else:
+                # Repaired once; a repeat (the streak is shared) is the
+                # ending.
+                kind, what, nudge = miss
+                no_call_streak += 1
+                if transcript is not None:
+                    transcript.append({"kind": kind, "turn_idx": turn_idx,
+                                       "streak": no_call_streak})
+                if no_call_streak < 2:
+                    log.info("%s %s %d -> repair", rid_tag, what, turn_idx)
+                    reasoner.append_repair(nudge)
+                    continue
+                log.info("%s %s %d repeated; mission ends", rid_tag, what,
+                         turn_idx)
             # A clean prose reply before any flight answers nothing: hand
             # the turn back, up to NO_FLIGHT_ABSTAIN_STREAK.
             if no_call_streak == 0 and mission_flights == 0:
