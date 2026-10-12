@@ -88,6 +88,9 @@ STATE_AWAITING = "awaiting_tasking"
 STATE_ENDED = "ended"
 STATE_FAILED = "failed"
 
+#: What a flight asked for after Stop is answered with.
+STOPPED = {"error": "the mission is stopped"}
+
 
 def _holds(cov: dict[str, Any] | None) -> bool:
     """Whether a coverage answer holds its area: the arrival rule, ``COVERED_FRACTION`` of it."""
@@ -300,7 +303,10 @@ class Mission:
         without a leg; otherwise the leg is posted and waited on until the
         recording holds the area and the point leaves the frame, or until
         ``ARRIVAL_TIMEOUT_S``, when what the pass held is served. The ``leg``
-        row says which."""
+        row says which. A stopped mission posts, fetches and perceives nothing
+        more: the flight is refused."""
+        if self._cancel.is_set():
+            return dict(STOPPED)
         h = session.h
         token = str(item.get("target_fid") or "")
         resolved = session.resolve(token)
@@ -334,6 +340,8 @@ class Mission:
                 ahead = [(float(x), float(y)) for x, y in (item.get("pass_ahead") or [])]
                 leg = Leg(target=token, point=(xy[0], xy[1]), step=step, area=area_ll,
                           coverage_floor=COVERED_FRACTION, ahead=ahead)
+                if self._cancel.is_set():
+                    return dict(STOPPED)
                 self._vehicle.post(leg)
                 # The leg's reach: how far from the point the aircraft is still
                 # over the area. A pass that came inside it and left with the
@@ -352,6 +360,8 @@ class Mission:
                                        coverage_floor=leg.coverage_floor, ahead=ahead, revision=shorts, note=note))
                 if outcome == "arrived":
                     waited = self._wait_departure(xy)
+                    if self._cancel.is_set():
+                        return dict(STOPPED)
                     held = self._held_frame(area, xy, after)
                     if held is not None:
                         last = held[1]
@@ -364,6 +374,8 @@ class Mission:
                         self._said(f"the leg to {at} arrived, but no frame of the pass could be served "
                                    f"({self._live.last_refusal or 'no reason recorded'}); "
                                    f"the flight has no observation")
+                elif outcome == "cancel":
+                    return dict(STOPPED)
                 elif outcome == "lost":
                     held = self._held_frame(area, xy, after)
                     if held is not None:
@@ -375,6 +387,8 @@ class Mission:
                                    f"{self._closest_m:.0f} m); no frame held any of it, "
                                    f"and the flight has no observation")
             self._held, self._held_area = held, (area, xy, after)
+        if self._cancel.is_set():
+            return dict(STOPPED)
         try:
             return session.fly(item)
         finally:

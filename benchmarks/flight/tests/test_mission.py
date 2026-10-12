@@ -176,3 +176,22 @@ def test_a_leg_arrives_on_the_recording_while_the_aircraft_s_own_pose_cannot_be_
     m._live.ownship = lambda: None
     area_ll = m._area_lonlat([(600.0, 600.0), (610.0, 600.0), (600.0, 610.0)])
     assert m._wait_arrival((600.0, 600.0), area=area_ll, timeout_s=60.0) == "arrived"
+
+
+@pytest.mark.parametrize("stop_in_wait", [False, True])
+def test_a_stopped_mission_posts_no_leg_fetches_no_frame_and_flies_nothing(built, make_mission, stop_in_wait):
+    """Stop before the flight, and Stop while its leg is out: after it nothing
+    is posted, no frame is fetched, and the flight is not perceived."""
+    m, twin = make_mission()
+    fetched, flown = [], []
+    frame = twin.frame
+    twin.frame = lambda seq: fetched.append(seq) or frame(seq)
+    if stop_in_wait:
+        wait = m._wait_arrival
+        m._wait_arrival = lambda *a, **k: (m.stop(), wait(*a, **k))[1]
+    else:
+        m.stop()
+    out = m._fly_live(_session(_hydrated(built[3]), lambda item: flown.append(item) or {}),
+                      {"target_fid": "[600, 600]"})
+    assert out == {"error": "the mission is stopped"}
+    assert len(twin.legs) == int(stop_in_wait) and fetched == [] and flown == []
