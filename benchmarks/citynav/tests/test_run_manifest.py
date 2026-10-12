@@ -60,7 +60,6 @@ def test_required_fields_nonempty(stub_run):
         ("created_ts",),
         ("hostname",),
         ("out_root",),
-        ("git_commit",),
         ("config",),
         ("config_sha256",),
         ("config_yaml",),
@@ -74,11 +73,15 @@ def test_required_fields_nonempty(stub_run):
         assert run_manifest._get(m, keypath), f"empty manifest field: {keypath}"
     # By-name pins on the MEASURED identity (the fields whose disappearance
     # a derived scan could not notice).
-    for keypath in (("git_commit",), ("config_sha256",), ("endpoints", "model_id"),
-                    ("perception", "bake_sha256")):
+    for keypath in (("config_sha256",), ("endpoints", "model_id"), ("perception", "bake_sha256")):
         assert run_manifest._get(m, keypath), f"measured field vanished: {keypath}"
     assert m["selection"]["episodes_n"] == 3
     assert m["withhold"] == []
+
+
+@pytest.mark.skipif(not (paths.REPO_ROOT / ".git").exists(), reason="a tree with no git checkout has no commit")
+def test_a_checkout_records_its_commit(stub_run):
+    assert stub_run["git_commit"]
 
 
 def test_secret_never_appears(stub_run):
