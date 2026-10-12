@@ -105,27 +105,29 @@ these places, the served-text changes among them:
 ### Closed loop
 
 The closed-loop measures are read from the flown sorties' own records by
-[`benchmarks/flight/measures.py`](benchmarks/flight/measures.py):
+[`benchmarks/flight/measures.py`](benchmarks/flight/measures.py), over the
+analysts' adjudications as of commit `f20829494` of the development
+repository: of 87 runs, the 20 the infrastructure lost leave every rate, each
+with its evidence as the reason, and 67 are scored.
 
 | Measure | Value | Definition |
 |---|---|---|
-| SR, 20 m radius | 40/80 | The commit lies within 20 m of the target centroid. |
-| SR, committed area | 33/80 | The committed feature's outline contains the target centroid. |
-| OSR | 70/80 | The aircraft's path (GNSS track, else keyframe poses) came within one camera footprint width of the target centroid. |
+| SR | 38/67 | The commit point lies inside the target's hand-drawn mask (one run with none: its tasking footprint). |
+| OSR | 57/67 | The aircraft's path (GNSS track, else keyframe poses) came within one camera footprint width of the target centroid. |
+
+| Intel quality | Scored runs | SR | OSR |
+|---|---|---|---|
+| Good | 26 | 21/26 | 25/26 |
+| Medium | 32 | 13/32 | 25/32 |
+| Poor | 9 | 4/9 | 7/9 |
 
 ```sh
-python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON> --tiles <Cal City bake whose calcity_features.json holds the flown prior>
+python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON>
 ```
 
 The tasking JSON is the flight week's own tasking set (it scores a run with no
 hand-drawn mask, matched by the run's description); the released Cal City split
 is a different set of episodes.
-
-`--tiles` (default `SEARCH_CALCITY_TILES`) is the bake whose
-`calcity_features.json` holds the map features a run commits to; a run that
-commits one with no such file there is refused, and the output counts the
-`prior_<i>` commits whose outline in that bake does not hold the commit (each
-sortie's `run_manifest.json` records the `bake_sha256` it flew).
 
 A run the analysts' adjudication marks excluded is out of every rate, and so
 is a run the serve failed under (the bench's infra rule, `rows.is_infra_abort`),
