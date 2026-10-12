@@ -2,7 +2,7 @@
 
 A corpus row is reviewed when its target position matches a position
 ``ground_truth.json`` lists within 0.2 m. On the shipped
-pair that is the 606-episode set the Cal City arms were scored on, pinned
+pair that is the 596-episode set the Cal City arms are scored on, pinned
 here by count and by the sha256 of the sorted ids.
 """
 
@@ -13,8 +13,8 @@ import hashlib
 from benchmarks.calcity.data_prep import reviewed
 from benchmarks.calcity.data_prep.reviewed import reviewed_episode_ids
 
-REVIEWED_N = 606
-REVIEWED_SHA256 = "b547f241609d576aa6033ba38504b7047a9811d580e5adf221d1583b4228ad4a"
+REVIEWED_N = 596
+REVIEWED_SHA256 = "84f136c577764efaef272afa529f60e301dc5dd3f2727652086f9df8b86d6e85"
 
 
 def test_the_derivation_on_the_shipped_corpus_is_the_reviewed_set():

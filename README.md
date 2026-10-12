@@ -143,7 +143,7 @@ lists the exact commands.
 |---|---|---|---|---|
 | E1 | CityNav `train_seen`, 1,000 per arm (`--limit 1000`, seed 1234) | Inkling Small at effort 0.99; Qwen 3.8 Flash Next at `xhigh`; Gemma 4 26B-A4B | `configs/citynav.yaml`, `SEARCH_SAMPLING_REASONING_EFFORT` | `arm_table`, `run_report` |
 | E2 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `low`, `medium`, `xhigh`; Inkling Small at 0.99; Gemma 4 E2B; Gemma 4 E4B | `configs/citynav.yaml`, `--split test_unseen` | `arm_table`, `run_report` |
-| E3 | Cal City, the 606 reviewed episodes | Inkling Small at 0.0, 0.3, 0.6, 0.9, 0.99; Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table`, `figures.plot_effort_ladder` |
+| E3 | Cal City, the 596 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table`, `figures.plot_effort_ladder` |
 | E4 | CityNav `train_seen`, 1,000 per arm | Per model: the control and one arm per withhold | `configs/withhold/<part>.yaml` | `arm_table`, `ab_report` |
 | E5 | E2 and E3 roots | Every arm | none beyond E2 and E3 | `figures.capability_effort_arms`, `figures.plot_capability_effort` |
 
@@ -361,7 +361,7 @@ E3, the reviewed Cal City episodes per effort rung:
 
 ```sh
 mkdir -p output && python -m benchmarks.calcity.data_prep.reviewed > output/reviewed_episodes.txt
-for e in 0.0 0.3 0.6 0.9 0.99; do
+for e in 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.99; do
   SEARCH_SAMPLING_REASONING_EFFORT=$e \
     python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_episodes.txt \
     --out-root output/e3/inkling-small-e$e
