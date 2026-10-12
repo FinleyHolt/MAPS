@@ -46,6 +46,7 @@ def test_the_measures_score_the_commit_against_the_truth_and_the_track_against_t
     assert (one["success_area"], one["success_radius"], one["oracle_success"]) == (True, True, True)
     assert one["ne_from"] == "committed area centroid" and one["ne_ft"] == 0.0 and one["time_to_id_s"] == 600.0
     assert one["spl"] is not None and 0.0 < one["spl"] <= 1.0
+    assert one["agl_ft"] == round(600.0 * Q.FT_PER_M, 1)
     assert (two["success_area"], two["success_radius"], two["spl"]) == (False, False, 0.0)
     assert two["ne_from"] == "commit point" and round(two["ne_ft"] / Q.FT_PER_M) == 300
     assert three["excluded"] == "crew stopped it" and three["end"] == "stopped" and three["time_to_id_s"] is None

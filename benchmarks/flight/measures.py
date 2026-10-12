@@ -29,7 +29,8 @@ SR is read two ways: the committed area contains the centroid
 (``success_radius``). NE is the committed area's centroid (the commit
 where no area is recovered) to the target centroid. OSR: the path came within
 one camera HFOV ground width of the centroid, at the height above ground at
-the closest approach. Time to identification runs from the tasking to the
+the closest approach (``agl_ft``); a run that did not, on a recording holding
+under 95% of it, reads unknown. Time to identification runs from the tasking to the
 determination. SPL is ``S * l / max(p, l)``: ``p`` the GNSS path from the
 crew's last pass of the loiter waypoint before the first leg to the
 determination, plus the way back to the commit a crew flies (one turn and a
@@ -521,7 +522,8 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         "truth_xy": None if target is None else [round(target[0], 2), round(target[1], 2)],
         "truth_source": truth_source, "flights": row.get("flights_flown"), "turns": row.get("turns_used"),
         "success_area": None, "success_radius": None, "ne_ft": None, "ne_from": None, "oracle_success": None,
-        "closest_approach_ft": None, "hfov_width_ft": None, "agl_source": None, "track_source": None,
+        "closest_approach_ft": None, "hfov_width_ft": None, "agl_ft": None, "agl_source": None,
+        "track_source": None,
         "track_coverage": None, "time_to_id_s": round(t_stop - t_start, 1) if determined and t_stop else None,
         "spl": None, "spl_note": None, "path_ft": None, "final_leg_ft": None, "shortest_ft": None,
         "start_utc": _utc(t_start), "stop_utc": _utc(t_stop), **tokens(bases),
@@ -558,6 +560,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     out["closest_approach_ft"] = round(d * FT_PER_M, 1)
     agl, out["agl_source"] = _agl(nearest, bases, events)
     if agl is not None:
+        out["agl_ft"] = round(agl * FT_PER_M, 1)
         hfov_deg = resolve_sensor(C12_SENSOR).intrinsics.hfov_deg
         width = 2.0 * agl * math.tan(math.radians(hfov_deg) / 2.0)
         out["hfov_width_ft"] = round(width * FT_PER_M, 1)
