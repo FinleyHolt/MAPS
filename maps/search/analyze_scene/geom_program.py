@@ -28,10 +28,10 @@ from maps.util.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld
 
 
-def _quote(v, cap: int = 120) -> str:
-    """A user value as a refusal quotes it: its repr, cut to ``cap`` chars."""
+def _quote(v) -> str:
+    """A user value as a refusal quotes it: its repr, cut to 120 chars."""
     s = repr(v)
-    return s if len(s) <= cap else s[:cap] + "..."
+    return s if len(s) <= 120 else s[:120] + "..."
 
 
 def _is_color_column_key(k) -> bool:
@@ -294,11 +294,11 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         c = cell_mesh.cells_of(n)
         return c.tolist() if len(c) else []
 
-    def _axis_q(n, key):
+    def _axis_q(n):
         # Only a node with a centerline has an axis length.
         if not getattr(n, "centerline", None):
             return None
-        v = getattr(n, key, None)
+        v = getattr(n, "axis_length_m", None)
         return round(float(v), 2) if v is not None else None
 
     def _exact_chains(n) -> list:
@@ -373,7 +373,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
                 "xy": xy,
                 "centerline": _cl(n),
                 "cells": _cells(n),
-                "axis_length_m": _axis_q(n, "axis_length_m"),
+                "axis_length_m": _axis_q(n),
                 "tags": _row_tags(n),
                 **_color_fields(n),
                 **mf,
@@ -555,15 +555,15 @@ def _top(counts: dict, n: int) -> dict:
     return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:n])
 
 
-def _surface_census(rows, top_n: int = 12) -> tuple[dict, int]:
-    """The top ``top_n`` census counts of a row set, and its named count."""
+def _surface_census(rows) -> tuple[dict, int]:
+    """The top 12 census counts of a row set, and its named count."""
     counts, named = _census_counts(rows)
-    return _top(counts, top_n), named
+    return _top(counts, 12), named
 
 
-def _query_matched_census(counts: dict, query: str, top_n: int = 8) -> dict:
+def _query_matched_census(counts: dict, query: str) -> dict:
     """The census entries sharing a token (or a close spelling) with the
-    query, top ``top_n``: the long tail a global top cut hides."""
+    query, top 8: the long tail a global top cut hides."""
     q_tokens = {t for cl in T.fuzzy_prepare_query(query) for t in cl[1]}
     q_long = [t for t in q_tokens if len(t) >= 4]
     matched: dict[str, int] = {}
@@ -586,10 +586,10 @@ def _query_matched_census(counts: dict, query: str, top_n: int = 8) -> dict:
                 break
         if hit:
             matched[key] = n
-    return _top(matched, top_n)
+    return _top(matched, 8)
 
 
-def _census_note(rows, *, name_samples: int = 4, query: str | None = None) -> str:
+def _census_note(rows, *, query: str | None = None) -> str:
     """The census note a missed or thin find serves: the tags sharing
     tokens with the query, the top tags and a few names."""
     counts, _named = _census_counts(rows)
@@ -601,7 +601,7 @@ def _census_note(rows, *, name_samples: int = 4, query: str | None = None) -> st
             nm = str(it["name"]).strip()
             if nm not in names:
                 names.append(nm)
-        if len(names) >= name_samples:
+        if len(names) >= 4:
             break
     note = "surface census -- "
     if query:
@@ -851,11 +851,11 @@ _AUTOATTACH_PREFIXES = tuple(
 _UNION_MAX_MEMBERS = 400
 
 
-def _sanitize_token(lbl, fallback="ref") -> str:
+def _sanitize_token(lbl) -> str:
     """A token as a column label: lowercase, ``[^a-z0-9]+`` collapsed to
     ``_``. The compiler builds its keys with it too."""
     base = re.sub(r"[^a-z0-9]+", "_", str(lbl).lower()).strip("_")
-    return base or fallback
+    return base or "ref"
 
 
 # A rendered grid stays under this many chars by eliding columns.
