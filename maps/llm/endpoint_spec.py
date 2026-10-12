@@ -21,6 +21,7 @@ Explicit pins:
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import os
@@ -114,8 +115,10 @@ def _output_reserve_for(max_model_len: int) -> int:
 def _get_json(url: str, *, bearer: str | None = None) -> object:
     """GET ``url`` (``bearer`` as an Authorization header) and parse the JSON
     body; raise EndpointUnreachable when nothing answers (no connection, a
-    dropped one, a timeout, a 5xx) and EndpointDiscoveryError on a 4xx, a
-    malformed URL or a non-JSON body."""
+    dropped one, a body cut short, a timeout, a 5xx or a 4xx the serve clears
+    on its own) and EndpointDiscoveryError on any other 4xx, a malformed URL
+    or a non-JSON body."""
+    from maps.llm.http import TRANSIENT_CLIENT_STATUS  # noqa: PLC0415 -- http imports this module
     req = urllib.request.Request(url)
     if bearer:
         req.add_header("Authorization", f"Bearer {bearer}")
@@ -124,9 +127,10 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
             with urllib.request.urlopen(req, timeout=_PROBE_TIMEOUT_S) as resp:
                 body = resp.read()
             break
-        except (urllib.error.URLError, OSError, ValueError, TimeoutError) as exc:
+        except (urllib.error.URLError, OSError, ValueError, TimeoutError, http.client.HTTPException) as exc:
             if attempt == _PROBE_TRIES:
-                refused = isinstance(exc, ValueError) or (isinstance(exc, urllib.error.HTTPError) and exc.code < 500)
+                refused = isinstance(exc, ValueError) or (isinstance(exc, urllib.error.HTTPError) and exc.code < 500
+                                                          and exc.code not in TRANSIENT_CLIENT_STATUS)
                 raise (EndpointDiscoveryError if refused else EndpointUnreachable)(
                     f"endpoint unreachable: GET {url} failed ({exc}) after {_PROBE_TRIES} tries"
                 ) from exc

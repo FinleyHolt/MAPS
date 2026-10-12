@@ -12,6 +12,9 @@ Run: ``pytest maps/llm/tests/test_endpoint_spec.py``.
 """
 from __future__ import annotations
 
+import http.client
+import urllib.error
+
 import pytest
 
 from maps.llm import endpoint_spec as E
@@ -347,6 +350,28 @@ def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
     monkeypatch.setattr(E.urllib.request, "urlopen", dead)
     with pytest.raises(EndpointDiscoveryError, match="after 3 tries"):
         E._get_json("http://arm:18001/v1/models")
+    assert len(calls) == E._PROBE_TRIES
+
+
+@pytest.mark.parametrize("fault,unreachable", [
+    (lambda: urllib.error.HTTPError("u", 429, "Too Many Requests", None, None), True),
+    (lambda: urllib.error.HTTPError("u", 401, "Unauthorized", None, None), False),
+    (lambda: http.client.IncompleteRead(b'{"data":'), True),
+], ids=["429", "401", "truncated body"])
+def test_a_serve_that_is_busy_or_drops_its_body_is_unreachable_and_a_refusal_is_not(monkeypatch, fault, unreachable):
+    """A 4xx the serve clears on its own and a body cut short are the serve's
+    fault, asked again; any other 4xx is the config's."""
+    monkeypatch.setattr(E, "_PROBE_RETRY_S", 0.0)
+    calls: list[int] = []
+
+    def failing(req, timeout):
+        calls.append(1)
+        raise fault()
+
+    monkeypatch.setattr(E.urllib.request, "urlopen", failing)
+    with pytest.raises(EndpointDiscoveryError) as err:
+        E._get_json("http://arm:18001/v1/models")
+    assert isinstance(err.value, E.EndpointUnreachable) is unreachable
     assert len(calls) == E._PROBE_TRIES
 
 
