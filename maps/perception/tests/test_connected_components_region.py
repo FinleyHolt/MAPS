@@ -105,17 +105,18 @@ def test_split_into_instances_drops_speckle_and_redundant_components(monkeypatch
     cov = np.zeros(_SHAPE, dtype=np.int16)
     cov[120:132, 20:34] = 1  # the third component is already covered
 
-    assert len(_connected_components(region)) == 3
+    comps = _connected_components(region)
+    assert len(comps) == 3
 
     monkeypatch.setattr(dc, "MIN_AREA_PX", 1)
-    loose = split_into_instances(region)
+    loose = split_into_instances(comps)
     assert len(loose) == 3  # nothing dropped when nothing gates
 
     monkeypatch.setattr(dc, "MIN_AREA_PX", 16)
-    speckle_gone = split_into_instances(region)
+    speckle_gone = split_into_instances(comps)
     assert len(speckle_gone) == 2  # the 3x3 is under the floor
 
-    both_gone = split_into_instances(region, coverage_count=cov)
+    both_gone = split_into_instances(comps, coverage_count=cov)
     assert len(both_gone) == 1  # and the covered one is redundant
     assert both_gone[0].area == max(c.area for c in loose)  # the primary survives
 

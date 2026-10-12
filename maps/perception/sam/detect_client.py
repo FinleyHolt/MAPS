@@ -264,18 +264,17 @@ def _record_region(record: dict, frame_hw: tuple[int, int]) -> "MaskRegion | Non
 
 
 def split_into_instances(
-    region: MaskRegion,
+    comps: "list[MaskRegion]",
     *,
     ref_area_px: float | None = None,
     coverage_count: "np.ndarray | None" = None,
 ) -> "list[MaskRegion]":
-    """A SAM concept mask as per-instance components, never empty: the
-    largest is kept, each other one dropped as speckle (under ``MIN_AREA_PX``
+    """A SAM concept mask's connected components (:func:`_connected_components`)
+    as per-instance components, never empty: the largest is kept, each other one dropped as speckle (under ``MIN_AREA_PX``
     or ``_INSTANCE_SPLIT_AREA_FRAC`` of ``ref_area_px``, the median clean
     same-class area) or as redundant (over ``_INSTANCE_SPLIT_REDUNDANT_FRAC``
     under ``coverage_count``, the per-pixel count of same-class primaries).
     """
-    comps = _connected_components(region)
     if len(comps) <= 1:
         return comps
     floor = MIN_AREA_PX
@@ -490,18 +489,17 @@ class SamDetectClient:
         packed. A ``None`` or sub-``MIN_AREA_PX`` region is skipped."""
         # Pass 1: split every mask; per class, the clean single-component areas
         # (the noise floor) and a per-pixel count of primaries (redundancy).
-        decoded: list[tuple[int, MaskRegion, str, int, float]] = []
+        decoded: list[tuple[int, MaskRegion, list[MaskRegion], str, int, float]] = []
         class_ref_areas: dict[str, list[int]] = {}
         coverage_by_label: dict[str, np.ndarray] = {}
-        n_workers = max(1, min(_DECODE_WORKERS, len(masks) or 1))
+        n_workers = min(_DECODE_WORKERS, len(masks)) or 1
 
         def _decode_one(idx_mask):
             det_idx, (region, label, obj_id, score) = idx_mask
             if region is None or region.area < MIN_AREA_PX:
                 return None
             comps = _connected_components(region)
-            primary = comps[0] if len(comps) == 1 else max(comps, key=lambda c: c.area)
-            return (det_idx, region, str(label), int(obj_id), float(score)), comps, primary
+            return (det_idx, region, comps, str(label), int(obj_id), float(score)), max(comps, key=lambda c: c.area)
 
         with ThreadPoolExecutor(
             max_workers=n_workers, thread_name_prefix="sam-decode"
@@ -510,8 +508,8 @@ class SamDetectClient:
         for res in pass1:
             if res is None:
                 continue
-            item, comps, primary = res
-            region, label = item[1], item[2]
+            item, primary = res
+            region, comps, label = item[1], item[2], item[3]
             decoded.append(item)
             # Coverage counts primaries (each mask's largest component), so a
             # small car covered only by merged masks survives the split.
@@ -568,9 +566,9 @@ class SamDetectClient:
         def _split_and_pack(item):
             """``(packs, fallback)``: the packed components in order, and the
             merged-mask pack when none of them projected."""
-            det_idx, region, label, obj_id, score = item
+            det_idx, region, comps, label, obj_id, score = item
             components = split_into_instances(
-                region,
+                comps,
                 ref_area_px=class_ref.get(label),
                 coverage_count=coverage_by_label.get(label),
             )
