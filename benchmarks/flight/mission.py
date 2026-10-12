@@ -372,7 +372,7 @@ class Mission:
         if self._cancel.is_set():
             return None
         step = len(self.flights)
-        self._vehicle.post(Leg(target=token, point=(xy[0], xy[1]), step=step, area=area_ll, ahead=ahead))
+        self._post(Leg(target=token, point=(xy[0], xy[1]), step=step, area=area_ll, ahead=ahead))
         # The leg's reach: how far from the point the aircraft is still over
         # the area. A pass that came inside it and left with the area part
         # held is short.
@@ -386,14 +386,20 @@ class Mission:
                 break
             shorts += 1
             moved, note = self._short_pass(token, xy, area, shorts)
-            self._vehicle.post(Leg(target=token, point=(moved[0], moved[1]), step=step, area=area_ll,
-                                   ahead=ahead, revision=shorts, note=note))
+            self._post(Leg(target=token, point=(moved[0], moved[1]), step=step, area=area_ll,
+                           ahead=ahead, revision=shorts, note=note))
         waited = self._wait_departure(xy) if outcome == "arrived" else 0.0
         if self._cancel.is_set():
             return None
         held = self._held_frame(area, xy, after)
         self._said(self._outcome_words(outcome, at, held, waited))
         return held
+
+    def _post(self, leg: Leg) -> None:
+        """Hand ``leg`` to the aircraft; a ``waypoint`` row says when, at the
+        commanded height (what the measures' turn radius and height fallback read)."""
+        self._vehicle.post(leg)
+        self.transcript.append({"kind": "waypoint", "altitudeAglMeters": self.agl_m})
 
     def _outcome_words(self, outcome: str, at: str, held: tuple[Any, dict[str, Any]] | None, waited: float) -> str:
         """The ``leg`` row of a leg that arrived or was lost: what the pass

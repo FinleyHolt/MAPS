@@ -144,6 +144,12 @@ def test_a_twin_sortie_scores_fully_on_the_closed_loop_measures(calcity, serves,
     assert 0.0 < run["spl"] <= 1.0 and run["path_ft"] > 0.0
     # Leg 700 m north at the C-12's speed: the time to ID is the twin's flying time, not the host's.
     assert 0.0 < run["time_to_id_s"] < 120.0
+    # Each leg handed to the aircraft is a waypoint row at the commanded height: the
+    # turn radius and the height fallback read them.
+    (window,) = measures.routed_windows(sortie)
+    assert window[0] < window[1]
+    conversation = [json.loads(line) for line in next(sortie.glob("*/conversation.jsonl")).read_text().splitlines()]
+    assert [r["altitudeAglMeters"] for r in conversation if r.get("kind") == "waypoint"] == [pytest.approx(world.AGL_M)]
 
 
 def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity, serves, tmp_path, monkeypatch):
