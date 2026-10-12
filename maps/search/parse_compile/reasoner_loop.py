@@ -1371,101 +1371,64 @@ def advance_reasoner_one_round(
             _map_feats[:] = [_surface_version[0], _map_features_from_ctx()]
         return _map_feats[1]
 
-    def _map_default_span_m() -> float:
-        gs = getattr(ctx, "grid_shape", None) or (0, 0)
-        cs = float(getattr(ctx, "cell_size_m", 0.0) or 2.0)
-        return max(float(gs[0]), float(gs[1])) * cs or 200.0
-
-    def _build_map_requests(items: list) -> tuple[list[dict], list[str]]:
-        """Resolve show_map items into render specs. Each item
-        ``{around?, mark_fids?}`` centres one map (around absent = the whole
-        tile); marks resolve off ``_ns_rows`` exactly like crops. Returns
-        ``(specs, skipped_fids)``."""
-        specs: list[dict] = []
+    def _map_spec(around: str, mark_fids: list) -> tuple[dict | None, list[str]]:
+        """One show_map's render spec, centred on ``around``, marks resolved
+        off ``_ns_rows`` exactly like crops: ``(spec or None, skipped_fids)``."""
+        cxy = _resolve_stage_point(around)
+        if cxy is None:
+            return None, [str(around)]
         skipped: list[str] = []
-        gs = getattr(ctx, "grid_shape", None) or (0, 0)
-        cs = float(getattr(ctx, "cell_size_m", 0.0) or 2.0)
-        ox, oy = getattr(ctx, "tile_origin_xy", (0.0, 0.0))
-        tile_center = [round(float(ox) + float(gs[1]) * cs / 2.0, 2),
-                       round(float(oy) + float(gs[0]) * cs / 2.0, 2)]
-        for it in items:
-            if not isinstance(it, dict):
+        center_fid = (str(around).strip()
+                      if isinstance(around, str)
+                      and str(around).strip() in _ns_rows else "")
+        center_label = (look_label(center_fid, _ns_rows.get(center_fid),
+                                   is_target=False)
+                        if center_fid else f"[{cxy[0]}, {cxy[1]}]")
+        marks: list[dict] = []
+        for mf in dict.fromkeys(_look_strs(mark_fids)):
+            row = _ns_rows.get(mf)
+            xy = look_xy(row)
+            if xy is None:
+                skipped.append(mf)
                 continue
-            around = it.get("around")
-            center_fid = ""
-            if around is None:
-                cxy = tile_center
-                span = _map_default_span_m()
-                center_label = "map center"
-            else:
-                cxy = _resolve_stage_point(around)
-                if cxy is None:
-                    skipped.append(str(around))
-                    continue
-                center_fid = (str(around).strip()
-                              if isinstance(around, str)
-                              and str(around).strip() in _ns_rows else "")
-                center_label = (look_label(center_fid,
-                                            _ns_rows.get(center_fid),
-                                            is_target=False)
-                                if center_fid else
-                                f"[{cxy[0]}, {cxy[1]}]")
-                span = _map_default_span_m()
-            marks: list[dict] = []
-            _seen_mm: set[str] = set()
-            _mm_raw = _look_strs(it.get("mark_fids"))
-            for mf in _mm_raw:
-                if mf in _seen_mm:
-                    continue
-                _seen_mm.add(mf)
-                row = _ns_rows.get(mf)
-                xy = look_xy(row)
-                if xy is None:
-                    skipped.append(mf)
-                    continue
-                marks.append({"fid": mf, "xy": xy,
-                              "boundary": look_outline(row),
-                              "label": look_label(mf, row,
-                                                   is_target=False),
-                              "is_target": False})
-            # THE FRAME FOLLOWS THE REQUEST: the marks' and the centre's
-            # extent derives the zoom, so a narrowed set renders at a scale
-            # that resolves it instead of as a few pixels of the whole tile.
-            _cb = (look_outline(_ns_rows.get(center_fid))
-                   if center_fid else None)
-            _fpts: list = [m["xy"] for m in marks if m.get("xy")]
-            for _src in [m.get("boundary") for m in marks] + [_cb]:
-                for _b in (_src or []):
-                    if isinstance(_b, (list, tuple)) and len(_b) >= 2:
-                        _fpts.append([float(_b[0]), float(_b[1])])
-            if not _fpts and around is not None:
-                # A map around a bare point is a LOCAL ask with nothing to
-                # frame from: it gets the same floor a framed set does.
-                span = _MAP_FRAME_MIN_M
-            elif _fpts:
-                _fx = [float(p[0]) for p in _fpts]
-                _fy = [float(p[1]) for p in _fpts]
-                cxy = [round((min(_fx) + max(_fx)) / 2.0, 2),
-                       round((min(_fy) + max(_fy)) / 2.0, 2)]
-                span = max((max(_fx) - min(_fx)) * _MAP_FRAME_MARGIN,
-                           (max(_fy) - min(_fy)) * _MAP_FRAME_MARGIN,
-                           _MAP_FRAME_MIN_M)
-            spec: dict = {
-                "center_xy": cxy,
-                "context_m": round(float(span), 2),
-                "center_fid": center_fid,
-                "center_label": center_label,
-                "center_boundary": _cb,
-                "marks": marks,
-            }
-            if standing_handle[0] is not None:
-                _sv = staged_viewpoints[standing_handle[0]]
-                spec["frame_up"] = list(_sv["up_unit"])
-                spec["frame_note"] = (
-                    f"image-up = {_sv['handle']}'s facing "
-                    f"(bearing {_sv['bearing_deg']})")
-            specs.append(spec)
-        return specs, skipped
+            marks.append({"fid": mf, "xy": xy,
+                          "boundary": look_outline(row),
+                          "label": look_label(mf, row, is_target=False),
+                          "is_target": False})
+        # THE FRAME FOLLOWS THE REQUEST: the marks' and the centre's extent
+        # derives the zoom, so a narrowed set renders at a scale that
+        # resolves it instead of as a few pixels of the whole tile. A map
+        # around a bare point has nothing to frame from and gets the floor.
+        _cb = look_outline(_ns_rows.get(center_fid)) if center_fid else None
+        _fpts: list = [m["xy"] for m in marks if m.get("xy")]
+        for _src in [m.get("boundary") for m in marks] + [_cb]:
+            for _b in (_src or []):
+                if isinstance(_b, (list, tuple)) and len(_b) >= 2:
+                    _fpts.append([float(_b[0]), float(_b[1])])
+        span = _MAP_FRAME_MIN_M
+        if _fpts:
+            _fx = [float(p[0]) for p in _fpts]
+            _fy = [float(p[1]) for p in _fpts]
+            cxy = [round((min(_fx) + max(_fx)) / 2.0, 2),
+                   round((min(_fy) + max(_fy)) / 2.0, 2)]
+            span = max((max(_fx) - min(_fx)) * _MAP_FRAME_MARGIN,
+                       (max(_fy) - min(_fy)) * _MAP_FRAME_MARGIN,
+                       _MAP_FRAME_MIN_M)
+        spec: dict = {
+            "center_xy": cxy,
+            "context_m": round(float(span), 2),
+            "center_fid": center_fid,
+            "center_label": center_label,
+            "center_boundary": _cb,
+            "marks": marks,
+        }
+        if standing_handle[0] is not None:
+            _sv = staged_viewpoints[standing_handle[0]]
+            spec["frame_up"] = list(_sv["up_unit"])
+            spec["frame_note"] = (
+                f"image-up = {_sv['handle']}'s facing "
+                f"(bearing {_sv['bearing_deg']})")
+        return spec, skipped
 
     def _map_vision_text(maps: list[dict]) -> str:
         """The map message's text: what the picture IS (world state, no
@@ -2561,30 +2524,23 @@ def advance_reasoner_one_round(
         return ack
 
     def _map_of(fid: str, cid: str, mark_fids: list | None = None) -> dict:
-        _req: dict = {"around": fid}
-        if mark_fids:
-            _req["mark_fids"] = list(mark_fids)
-        specs, m_skipped = _build_map_requests([_req])
-        ack: dict = {"maps": len(specs)}
+        spec, m_skipped = _map_spec(fid, mark_fids or [])
+        ack: dict = {"maps": int(spec is not None)}
         if m_skipped:
             ack["skipped"] = m_skipped[:20]
-        if not specs:
+        if spec is None:
             ack["error"] = "no resolvable map center"
             return ack
         try:
             from maps.search.render.map_render import (  # noqa: PLC0415
                 render_map_from_spec,
             )
-            _feats = _map_features_cached()
-            maps = [m for m in (
-                render_map_from_spec(
-                    sp, _feats,
-                    tile_origin_xy=getattr(ctx, "tile_origin_xy",
-                                           (0.0, 0.0)),
-                    cell_size_m=float(getattr(ctx, "cell_size_m", 0.0)
-                                      or 2.0),
-                    grid_shape=tuple(getattr(ctx, "grid_shape", (0, 0))))
-                for sp in specs) if m is not None]
+            _m = render_map_from_spec(
+                spec, _map_features_cached(),
+                tile_origin_xy=getattr(ctx, "tile_origin_xy", (0.0, 0.0)),
+                cell_size_m=float(getattr(ctx, "cell_size_m", 0.0) or 2.0),
+                grid_shape=tuple(getattr(ctx, "grid_shape", (0, 0))))
+            maps = [_m] if _m is not None else []
         except Exception as exc:  # noqa: BLE001 — render never crashes the mission
             log.warning("%s SAY map render failed: %s", rid_tag,
                         _summarise_exc(exc))
