@@ -1273,7 +1273,8 @@ class MissionPython:
         if nearest is None and color is None:
             raise CodeError(
                 "order needs its key: rows.order(nearest=<place>) by "
-                "distance, rows.order(color=\"red\") by colour, or "
+                "distance, rows.order(color=\"red\") by colour, "
+                "rows.order(direction=\"north\") northernmost first, or "
                 "rows.order(<function>) for one you compute yourself.")
         if isinstance(nearest, (list, tuple)) and not is_xy(nearest):
             # nearest=[A, B] is a SET -- one place, its nearest member --

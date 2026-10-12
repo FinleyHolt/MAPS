@@ -326,8 +326,9 @@ def test_no_argument_is_dropped_on_the_floor():
     # ...and too FEW: go_to() flew to the string "None".
     with pytest.raises(CodeError, match="missing 1 required positional"):
         calls_of_block("go_to()\n")
-    with pytest.raises(CodeError, match="order needs its key"):
+    with pytest.raises(CodeError, match="order needs its key") as e:
         calls_of_block("r2 = r1.order()\n", {"r1": "r1"})
+    assert 'rows.order(direction="north")' in str(e.value), str(e.value)
 
 
 def test_any_earlier_handle_stays_indexable_not_just_the_newest():
