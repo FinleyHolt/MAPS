@@ -116,6 +116,18 @@ is scored by `measures` on SR and NE (it records no start time and no
 track), not by the bench reader. The recordings are not
 distributed.
 
+## The run's records
+
+A mission writes, in its run folder, the ledger row (`episode.json`, and one
+line of the sortie's `episodes.jsonl`), `conversation.jsonl` (every
+transcript row, stamped `t_s`), `frames.jsonl` (one row per observation),
+`observations/<sha>.jpg` and `flight/llm/transcript.jsonl`; the sortie's
+`flight_track.jsonl` holds the ownship track. Some fields are the recording's
+provenance, kept for a person auditing a flight against its camera recording
+and read by no measure or decision: in `frames.jsonl`, `t_host`, `age_s`,
+`attitude`, `boresight`, `registration` (with its `frames` count) and
+`mosaic`; in the ledger row, `ts` (the host's wall clock at the start).
+
 ## Closed-loop measures
 
 ```sh
