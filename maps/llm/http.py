@@ -7,6 +7,10 @@ error burns ``_MAX_RETRIES``; a 429/402 draws on its own budget,
 at once. A call with a ``cancel_event`` streams (SSE), and the event shuts its
 socket down and raises :class:`CallCanceled`; an answer that lands as the
 event fires is never handed back or recorded.
+
+``flight/llm/transcript.jsonl`` stores the conversation once: per-call
+message deltas, params written once per distinct body, image parts as sha
+refs.
 """
 
 from __future__ import annotations
@@ -136,13 +140,8 @@ log = logging.getLogger(__name__)
 
 
 def _resolved_flight_log_dir() -> Path | None:
-    """Where this mission's transcript goes: ``$SEARCH_COMPILE_WORKDIR/flight/llm``.
-
-    Recording is not optional. ``transcript.jsonl`` stores the conversation
-    once: per-call message deltas, params written once per distinct body,
-    image parts as sha refs. No workdir means no mission (a unit test): None,
-    said once at warning so an unrecorded mission cannot pass silently.
-    """
+    """``$SEARCH_COMPILE_WORKDIR/flight/llm``, or None without a workdir
+    (a unit test), warned once so an unrecorded mission cannot pass silently."""
     workdir = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip()
     if not workdir:
         global _WARNED_NO_WORKDIR
