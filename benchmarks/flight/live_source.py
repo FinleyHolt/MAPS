@@ -707,7 +707,7 @@ def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresigh
     if lonlat_to_local(Path(tiles_dir), map_name, 0.0, 0.0) is None:
         raise ValueError(f"{map_name} carries no georef under {tiles_dir}: a fix cannot be placed in the tile frame")
     if map_name not in GROUND_LEVEL:
-        raise ValueError(f"{map_name} has no floor in GROUND_LEVEL: the bench's bridge for it is not active")
+        raise ValueError(f"{map_name} has no floor in GROUND_LEVEL: no bench declares it")
     if map_name not in FLOOR_MSL_M:
         raise ValueError(f"{map_name} has no orthometric floor in tile_georef.FLOOR_MSL_M")
     boresight = Boresight.load(boresight_path) if boresight_path else Boresight(sensor=sensor)

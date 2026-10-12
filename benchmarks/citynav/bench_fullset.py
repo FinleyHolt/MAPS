@@ -120,7 +120,7 @@ def _done_qualify(row: dict) -> str | None:
 def _missing_block_assets(episode_ids: list[str]) -> list[Path]:
     """The files the selected episodes' blocks need and do not have: the
     bake's per-block files, and ``<map>.tif`` beside ``<map>_rgb.tif`` or
-    ``<map>.png``. Read off ``paths`` at call time, which the bridge rebinds."""
+    ``<map>.png``."""
     from benchmarks.citynav import paths  # noqa: PLC0415
 
     missing: list[Path] = []

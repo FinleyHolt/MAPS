@@ -26,7 +26,7 @@ def _held(tmp_path, name, extent, black_east=False):
 
 
 @pytest.fixture
-def bank_mission(built, floor, tmp_path):
+def bank_mission(built, tmp_path):
     def make(bank):
         live = R.BankSource(bank, tiles_dir=built[0], map_name="calcity", tile_ground_z=0.0)
         workdir = tmp_path / "sortie" / "run"
@@ -62,7 +62,7 @@ def test_ground_no_recorded_observation_holds_leaves_the_flight_without_one(buil
     assert "no frame held any of it" in [r["said"] for r in m.transcript if r.get("kind") == "leg"][-1]
 
 
-def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers(built, floor, tmp_path, monkeypatch):
+def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers(built, tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     import benchmarks.calcity

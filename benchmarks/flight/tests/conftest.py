@@ -16,14 +16,6 @@ def built(tmp_path_factory):
 
 
 @pytest.fixture
-def floor(monkeypatch):
-    """Cal City's tile floor, as the Cal City bridge declares it."""
-    from maps.perception.ortho.ground_level import GROUND_LEVEL
-
-    monkeypatch.setitem(GROUND_LEVEL, "calcity", 0.0)
-
-
-@pytest.fixture
 def make_twin(built):
     def make(start_xy=(600.0, 100.0)):
         from benchmarks.flight.twin import Twin
@@ -35,7 +27,7 @@ def make_twin(built):
 
 
 @pytest.fixture
-def make_live(built, floor):
+def make_live(built):
     def make(vehicle, register=False):
         from benchmarks.flight.live_source import open_live
 

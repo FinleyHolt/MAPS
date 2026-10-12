@@ -131,7 +131,7 @@ def test_the_corrector_graph_places_a_leg_and_gates_a_ring_frame_by_its_nearest_
     assert record["measured_e_m"] < -INNOVATION_CAP_M
 
 
-def test_a_simulated_vehicle_corrects_every_frame_up_to_its_clock_in_order(built, floor, make_twin, monkeypatch):
+def test_a_simulated_vehicle_corrects_every_frame_up_to_its_clock_in_order(built, make_twin, monkeypatch):
     """The twin's clock jumps when the harness sleeps, so its corrector runs
     off the clock: every frame up to it, in order, before sleep returns."""
     from benchmarks.flight.live_source import LiveSource, open_live

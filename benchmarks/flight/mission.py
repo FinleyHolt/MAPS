@@ -51,7 +51,7 @@ from benchmarks.citynav.conversation import CONVERSATION_JSONL, ConversationLog
 
 if TYPE_CHECKING:
     # Imported where used: the engine binds the bench's paths at import,
-    # after the Cal City bridge has been activated.
+    # after activate_calcity has selected Cal City.
     from benchmarks.citynav.run_benchmark.episode_runner import Hydrated
 
 log = logging.getLogger("flight.mission")
