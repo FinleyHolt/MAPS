@@ -841,11 +841,11 @@ def _render_grid_rows(rows, cols=None) -> str:
 # them, and _AUTOATTACH_PREFIXES, to name what writes a missing key.
 _STANDING_SIDE_PREFIXES = ("left of ", "right of ", "ahead of ", "behind ")
 _COMPARE_COL_PREFIXES = ("distance to ", "center distance to ",
-                         "bearing from ", "facing ", "contains ", "along ",
+                         "bearing from ", "facing ", "contains ",
                          *_STANDING_SIDE_PREFIXES,
                          "east of ", "west of ", "north of ", "south of ")
 _AUTOATTACH_PREFIXES = tuple(
-    p for p in _COMPARE_COL_PREFIXES if p not in ("contains ", "along ")) + ("color_",)
+    p for p in _COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
 
 # A wall-clock net: a union measures members x items gaps.
 _UNION_MAX_MEMBERS = 400
