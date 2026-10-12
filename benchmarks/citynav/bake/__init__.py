@@ -1,7 +1,6 @@
-"""Preflight asset baking for the CityNav benchmark (run once, offline).
+"""Preflight tile baking for the CityNav benchmark (run once, offline).
 
-Generates the per-block geometry, RGBD rasters, satellite views, feature graphs,
-and resolver caches the runtime reads from disk. None of this is on the
-per-episode flight path -- it is the one-time setup ceremony
-(`benchmarks/citynav/data_prep/` wraps the common invocations).
+Bakes the per-block prior sidecars from the OpenStreetMap caches, one block
+per raster (:mod:`benchmarks.citynav.bake.city`); none of it is on the
+per-episode path (``benchmarks/citynav/data_prep/bake_tiles.sh`` wraps it).
 """

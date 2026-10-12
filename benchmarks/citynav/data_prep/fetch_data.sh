@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Fetch the CityNav benchmark data into $CITYNAV_ROOT. Nothing is
 # redistributed by this repo — everything comes from the canonical
-# upstream sources, then benchmarks/citynav/data_prep/bake_tiles.sh
-# regenerates the tile sidecars locally.
+# upstream sources, then benchmarks/citynav/data_prep/rasterize_citynav_native.sh
+# and bake_tiles.sh regenerate the rasters and tile sidecars locally.
 #
 # Layout produced (what benchmarks/citynav/paths.py expects):
 #   $CITYNAV_ROOT/data/citynav/citynav_{train_seen,val_*,test_unseen}.json
@@ -40,9 +40,9 @@ if [[ "${PLY_COUNT}" -lt 34 ]]; then
      - the remaining 9 full-density blocks: request via the OpenDataLab /
        SensatUrban form (http://point-cloud-analysis.cs.ox.ac.uk/)
    Place them at $CITYNAV_ROOT/raw_ply/{train,test}/<block>.ply.
-   The bake proceeds without them (satellite composites skip; the
-   byte-faithful observation rasters need them — see
-   benchmarks/citynav/data_prep/rasterize_citynav_native.sh).
+   The tile bake reads its blocks off the rasters made from them: run
+   benchmarks/citynav/data_prep/rasterize_citynav_native.sh, then
+   benchmarks/citynav/data_prep/bake_tiles.sh.
 EOF
 fi
 
