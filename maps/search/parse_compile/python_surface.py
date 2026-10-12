@@ -168,7 +168,7 @@ class MissionNamespace(dict):
     def __missing__(self, k):
         mp = self.mp
         if _fid_like(k):
-            row = mp.env.row_of_fid(k) if mp and mp.env.row_of_fid else None
+            row = mp.env.row_of_fid(k) if mp else None
             return Row(row, mp=mp) if isinstance(row, dict) else k
         # A plain KeyError is what lets LOAD_GLOBAL fall through to
         # __builtins__.
@@ -180,7 +180,7 @@ class MissionNamespace(dict):
         # detected_59), but ONLY when the prefix is a near-miss of a fid
         # family: a `corner_5` typo falls through to the bound handles.
         m = re.fullmatch(r"([A-Za-z]+)_(\d+)", k)
-        if m and mp and mp.env.row_of_fid:
+        if m and mp:
             for pref in ("detected", "prior", "stop"):
                 if not difflib.get_close_matches(
                         m.group(1), [pref], n=1, cutoff=0.75):
@@ -642,7 +642,7 @@ class RowList(list):
         """The mission the rows came from. A list carries no ref of its own,
         but every Row in it carries the surface it was minted on."""
         for r in self:
-            mp = getattr(r, "_mp", None) or object.__getattribute__(r, "_mp")
+            mp = object.__getattribute__(r, "_mp")
             if mp is not None:
                 return mp
         raise CodeError(
@@ -1004,8 +1004,8 @@ class MissionEnv:
     watch: Callable
     boost: Callable
     finish: Callable
+    row_of_fid: Callable
     tied_of_ref: Callable = lambda _ref: False
-    row_of_fid: Callable | None = None
 
 
 class MissionPython:
@@ -1035,7 +1035,7 @@ class MissionPython:
         # Footprint geometry BY FID off the live surface. The cache is
         # per-block: a flight folds detections in under it, so last block's
         # union would measure a world that no longer stands.
-        self._geom = SurfaceGeometry(env.row_of_fid or (lambda fid: None))
+        self._geom = SurfaceGeometry(env.row_of_fid)
         self._measure_calls = 0
         # per-block state
         self._out: dict = {}
