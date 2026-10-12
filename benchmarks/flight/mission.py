@@ -813,12 +813,17 @@ class Mission:
             visited += [[float(f["resolved_xy"][0]), float(f["resolved_xy"][1])] for f in self.flights]
             infra, ended_by, error, turns = self.infra, self.ended_by, self.error, self._turns()
             flown = len(self.flights)
+            provenance = self.flights[-1].get("provenance") if self.flights else None
         last = visited[-1] if visited else None
         try:
             metrics = self.score(visited)
         except Exception:  # noqa: BLE001 -- an unscored row still lands
             log.exception("scoring failed for %s", self.episode_id)
             metrics = None
+        if metrics is not None:
+            # The commit as the bench's row names it: the last flight's point and provenance.
+            metrics["committed_xy"] = last if flown else None
+            metrics["committed_provenance"] = provenance
         return {
             "episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no, "split": self.split,
             "map_name": self.map_name, "description": self.instruction, "reasoning_effort": self.reasoning_effort,
