@@ -1,15 +1,13 @@
 """One episode's LLM activity, reduced to a block that rides its row.
 
 :func:`summarize` folds the flight dir's ``llm/transcript.jsonl`` into turns,
-requests, token sums, latency, a histogram of the tool calls the model emitted
-and the tools each ``params`` record declared.
+requests, token sums and latency.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 from typing import Any
 
@@ -18,34 +16,10 @@ from .tokenizer import _tokenizer
 
 log = logging.getLogger(__name__)
 
-#: The histogram bucket of a tool name the model generated rather than
-#: selected (leaked prose), counted rather than binned verbatim.
-MALFORMED = "«malformed»"
-
-_TOOL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,39}\Z")
-
-
-def _tool_name(raw: Any) -> str:
-    name = str(raw or "")
-    return name if _TOOL_NAME.match(name) else MALFORMED
-
-
 def _as_dict(v: Any) -> dict:
     """``v`` if it is a dict, else ``{}``: model-emitted JSON is untrusted in
     shape (an object field can arrive as a string)."""
     return v if isinstance(v, dict) else {}
-
-
-def _declared_tools(params: dict) -> list[str]:
-    """The tool names one params record declares, in order."""
-    names = (_as_dict(_as_dict(t).get("function")).get("name")
-             for t in params.get("tools") or [])
-    return [n for n in names if n]
-
-
-def _bump(d: dict, k: Any) -> None:
-    if k:
-        d[k] = d.get(k, 0) + 1
 
 
 def blank() -> dict:
@@ -55,15 +29,10 @@ def blank() -> dict:
         "requests": 0,
         "unanswered": 0,
         "prompt_tokens": 0,
-        # the largest single prompt: how full the window ever got
-        "prompt_tokens_max": 0,
         "completion_tokens": 0,
         "total_tokens": 0,
         "reasoning_tokens": 0,
         "latency_s_sum": 0.0,
-        "latency_s_max": 0.0,
-        "calls": {},
-        "declared": {"tools": []},
     }
 
 
@@ -120,7 +89,7 @@ def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int
 
 def _scan_transcript(path: Path, out: dict) -> None:
     """Fold one transcript into ``out`` in a raw line scan (no request is
-    rebuilt): ``params`` for the declared tools, ``request`` for timestamps,
+    rebuilt): ``params`` for the model, ``request`` for timestamps,
     ``response`` for the rest."""
     started: dict[str, float] = {}
     model: str | None = None
@@ -138,9 +107,6 @@ def _scan_transcript(path: Path, out: dict) -> None:
                 params = _as_dict(rec.get("params"))
                 if isinstance(params.get("model"), str):
                     model = params["model"]
-                for t in _declared_tools(params):
-                    if t not in out["declared"]["tools"]:
-                        out["declared"]["tools"].append(t)
                 continue
             if kind == "request":
                 out["requests"] += 1
@@ -155,9 +121,7 @@ def _scan_transcript(path: Path, out: dict) -> None:
             t0 = started.pop(str(rec.get("request_id")), None)
             t1 = rec.get("ts")
             if t0 is not None and isinstance(t1, (int, float)):
-                lat = float(t1) - t0
-                out["latency_s_sum"] += lat
-                out["latency_s_max"] = max(out["latency_s_max"], lat)
+                out["latency_s_sum"] += float(t1) - t0
 
             body = _as_dict(rec.get("response"))
             out["reasoning_tokens"] += reasoning_tokens_of(body, model=model)
@@ -170,16 +134,6 @@ def _scan_transcript(path: Path, out: dict) -> None:
                 v = usage.get(field)
                 if isinstance(v, (int, float)):
                     out[key] += int(v)
-            p = usage.get("prompt_tokens")
-            if isinstance(p, (int, float)):
-                out["prompt_tokens_max"] = max(out["prompt_tokens_max"], int(p))
-
-            message = _as_dict(
-                _as_dict((body.get("choices") or [{}])[0]).get("message")
-            )
-            for tc in message.get("tool_calls") or []:
-                fn = _as_dict(_as_dict(tc).get("function"))
-                _bump(out["calls"], _tool_name(fn.get("name")))
 
     # requests never answered: a crash, a timeout or a kill mid-call
     out["unanswered"] = len(started)
@@ -199,5 +153,4 @@ def summarize(flight_dir: Path) -> dict:
         return blank()
 
     out["latency_s_sum"] = round(out["latency_s_sum"], 3)
-    out["latency_s_max"] = round(out["latency_s_max"], 3)
     return out

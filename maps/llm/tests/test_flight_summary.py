@@ -148,49 +148,20 @@ def test_turns_tokens_and_latency(tmp_path: Path) -> None:
     assert s["unanswered"] == 1
 
     assert s["prompt_tokens"] == 2000
-    # Peak context occupancy: the LARGEST single request, not the sum.
-    assert s["prompt_tokens_max"] == 1100
     assert s["completion_tokens"] == 150
     assert s["total_tokens"] == 2150
 
     assert s["latency_s_sum"] == 12.5
-    assert s["latency_s_max"] == 10.0
+    # Every key has a reader (measures, the figures, the endpoint check).
+    assert set(s) == set(flight_summary.blank()) == {
+        "turns", "requests", "unanswered", "prompt_tokens", "completion_tokens",
+        "total_tokens", "reasoning_tokens", "latency_s_sum"}
 
 
 def test_the_row_carries_no_cached_count(tmp_path: Path) -> None:
     """Cache hits are a serve fact only some serves report; the row holds none."""
     assert "cached_tokens" not in flight_summary.summarize(_flight(tmp_path))
     assert "cached_tokens" not in flight_summary.blank()
-
-
-def test_used_vocabulary(tmp_path: Path) -> None:
-    s = flight_summary.summarize(_flight(tmp_path))
-    # Pinned by name: a derived scan that silently stopped finding tool calls
-    # would still return a plausible-looking dict.
-    assert s["calls"] == {"analyze": 1, "act": 1}
-
-
-def test_declared_tools_come_from_the_run(tmp_path: Path) -> None:
-    s = flight_summary.summarize(_flight(tmp_path))
-    assert s["declared"] == {"tools": ["act", "analyze"]}
-
-
-def test_malformed_tool_name_gets_its_own_bucket(tmp_path: Path) -> None:
-    """A generated (not selected) tool name is a real failure worth counting,
-    and too long to bin verbatim."""
-    flight = tmp_path / "flight"
-    _write(
-        flight,
-        [
-            {"kind": "request", "request_id": "r1", "created_at": 1.0},
-            _response(
-                "r1", 2.0, usage={},
-                tool_calls=[{"function": {"name": "act`. Let me fix this. " * 8}}],
-            ),
-        ],
-    )
-    s = flight_summary.summarize(flight)
-    assert s["calls"] == {flight_summary.MALFORMED: 1}
 
 
 def test_reasoning_tokens_are_summed_over_the_responses_that_carry_a_span(tmp_path: Path) -> None:
@@ -233,8 +204,7 @@ def test_wrong_typed_fields_are_skipped_not_fatal(tmp_path: Path) -> None:
     )
     s = flight_summary.summarize(flight)
     assert s["turns"] == 3
-    assert s["calls"] == {"analyze": 1, flight_summary.MALFORMED: 1}
-    assert s["declared"]["tools"] == ["analyze"]
+    assert s["total_tokens"] == 5
 
 
 def test_non_dict_record_line_is_skipped(tmp_path: Path) -> None:
