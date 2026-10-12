@@ -64,10 +64,8 @@ def test_a_polygon_ring_is_not_decimated():
     """The OSM ring IS the footprint, so it rides whole.
 
     _mask_fields prefers this contour over the cell boundary, so it is the
-    footprint for every areal prior. Measured on the Cal City bundle, a
-    16-vertex uniform stride would cost the 2.3% of rings past 16 vertices a
-    median 13.4% of their area, at worst 99.1% -- a wrong footprint_area_m2,
-    which the model scores and filters on.
+    footprint for every areal prior; a decimated ring is a wrong
+    footprint_area_m2, which the model scores and filters on.
     """
     import math
 
@@ -100,9 +98,7 @@ def test_a_polygon_ring_is_not_decimated():
 def test_the_bake_keeps_whatever_geometry_it_is_given():
     """No kind is worth less than another. A polygon's ring closes, a way's
     vertices ride open, a node is its one vertex -- and nothing here asks
-    what the feature IS. The rule this replaced kept the ring and returned
-    None for the other two, which is why 0 of 1,739 calcity road nodes
-    carried exact vertices while 3,413 of 3,414 buildings did."""
+    what the feature IS."""
     from benchmarks.citynav.bake.city import _world_contour_from_geometry as wc
 
     way = [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0]]

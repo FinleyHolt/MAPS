@@ -156,9 +156,8 @@ def test_a_ring_bench_names_the_disc(tmp_path, capsys):
 
 
 def test_an_unstamped_run_refuses_to_elect_a_headline(tmp_path, capsys):
-    """Every run flown before the stamp. The old heuristic guessed here;
-    guessing is what put the wrong number on an arm's report. Both readings
-    print and neither is called the score."""
+    """A run with no stamp: both readings print and neither is called the
+    score, since a guess would put the wrong number on an arm's report."""
     write_ledger(tmp_path, *_scored([1, 1, 1, 0, 0]))
     report(tmp_path)
     out = capsys.readouterr().out

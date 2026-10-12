@@ -39,16 +39,9 @@ def test_the_set_look_delivers_one_crop_per_row(ortho_dir):
         c["fid"] for c in cands]
     assert rec["marks_dropped"] == 0 and rec["marks_out_of_view"] == [], rec
 
-    # the WINDOW fits their hull, so it is wider than a lone appearance
-    # crop and every row is in it
-    # SINGLE-LOOK SCALE, not the set hull. This is the change: the set
-    # frame was a median 300 m window (70% of them 300 m or wider,
-    # the widest 37,243 m at 36.37 m/px) and could not resolve a
-    # round pool from a rectangular one.
+    # Each crop is at single-look scale, not the set's hull.
     assert rec["context_m"] == _MIN_M, rec["context_m"]
-    # Each row sits inside ITS OWN window. The frame form needed every row
-    # inside ONE window and clipped whatever did not fit; that constraint,
-    # and the scale it forced, is the thing being removed.
+    # Each row sits inside ITS OWN window.
     for c, r in zip(cands, recs[0]):
         x0, y0, x1, y1 = r["world_window"]
         assert x0 <= c["xy"][0] <= x1 and y0 <= c["xy"][1] <= y1, (c, r)

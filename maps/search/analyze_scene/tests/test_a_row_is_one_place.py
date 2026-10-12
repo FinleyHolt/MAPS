@@ -126,8 +126,7 @@ def test_the_real_bake_lands_every_row_on_the_map():
 
     # EVERY SERVED POINT IS INSIDE THE DECLARED BOUNDS, exactly -- no
     # tolerance, because this is the number the model reasons on and the
-    # drone flies to. Was 6 rows outside, the worst 7,901 m north of the
-    # north edge.
+    # drone flies to.
     out = [r for r in anchors
            if not (b["x_min"] <= r["xy"][0] <= b["x_max"]
                    and b["y_min"] <= r["xy"][1] <= b["y_max"])]
@@ -136,8 +135,7 @@ def test_the_real_bake_lands_every_row_on_the_map():
     # And every VERTEX is within one cell of the tile GRID -- the weaker
     # claim, and the honest one: the clip box is the node's own cells grown
     # by a cell, and the grid itself overhangs the declared bounds by up to
-    # a cell. Was 72 named features carrying geometry off the tile entirely,
-    # "Neuralia Road" to y 23,745.
+    # a cell.
     gx = float(meta["grid_shape"][1]) * cell + cell
     gy = float(meta["grid_shape"][0]) * cell + cell
     far = [r for r in anchors

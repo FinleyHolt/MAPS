@@ -44,8 +44,7 @@ def test_a_read_after_a_flight_replays_its_own_closure_and_nothing_else(
     n_flight = len(seen)
     # -- the rows: the second flight's cars are in the re-derived handle,
     # and the handle reads exactly what a fresh computation over the flown
-    # surface reads (the full-history replay made the same rows; a lazy one
-    # must).
+    # surface reads.
     shown = _printed_fids(results[6])
     assert set(added[1]) <= set(shown), (added, shown)
     assert shown == _printed_fids(results[7]), (shown, results[7])

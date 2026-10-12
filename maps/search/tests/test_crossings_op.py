@@ -100,8 +100,7 @@ def test_near_is_not_touching():
     pts, near = G.polyline_crossings([lo], [hi])
     assert pts == [] and near == 1.5, (pts, near)
 
-    # And a road that shares the junction node touches at exactly 0.0 -- the
-    # case the dilation was standing in for.
+    # And a road that shares the junction node touches at exactly 0.0.
     pts, near = G.polyline_crossings([lo], [[[100.0, -20.0], [100.0, 0.0]]])
     assert near == 0.0 and pts == [[100.0, 0.0]]
 

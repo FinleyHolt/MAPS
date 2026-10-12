@@ -30,8 +30,7 @@ def test_a_subject_that_overruns_its_frame_reports_its_true_size(ortho_dir):
     rec = _crop(ortho_dir, big)
     assert rec["subject_outline_cut"] is True, rec
     assert rec["subject_extent_m"] == [900.0, 1200.0], rec["subject_extent_m"]
-    # ...and it is still IN the window by every existing test, which is why
-    # none of the three older captions covers it.
+    # ...and it is still IN the window by the other two window facts.
     assert rec["subject_in_window"] is True, rec
     assert rec["subject_centroid_in_window"] is True, rec
 

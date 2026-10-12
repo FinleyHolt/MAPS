@@ -276,7 +276,7 @@ def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
     assert U("S andG Cycles", _rows("S G Cycles", colour="red 0.6")) == ["andg"]
     assert U("greenhouse car", _rows("car", colour="green 0.6")) == ["greenhouse"]
     # A PLURAL of the palette word itself is one word, not an escape hatch
-    # (the noun's plural is the separate, older is_carried case).
+    # (the noun's plural is the separate is_carried case).
     assert U("grays car", coloured) == []
     assert U("gray cars", coloured) == []
     assert U("Green Street", _rows("Green Street highway residential")) == []

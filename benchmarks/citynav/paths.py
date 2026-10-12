@@ -199,9 +199,8 @@ def bake_sha256(tiles_dir: Path | None = None) -> str | None:
     """Content identity of a tile bake: one hash over the name and content of
     every ``BAKE_OUTPUT_SUFFIXES`` file, a meta's bake time and commit left out.
 
-    Two bakes of one block set share a path and a schema yet score different
-    SRs (0.351 vs 0.169 on identical episodes), so a run stamps this rather
-    than trust a directory name. ``None`` when the directory does not exist.
+    Two bakes of one block set can share a path and a schema yet score
+    different SRs, so a run stamps this rather than trust a directory name. ``None`` when the directory does not exist.
     """
     root = Path(tiles_dir) if tiles_dir is not None else TILES_DIR
     if not root.is_dir():

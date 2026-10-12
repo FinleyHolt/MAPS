@@ -128,8 +128,8 @@ def test_the_algorithm_s_own_budget_still_scores(tmp_path):
 
 
 def test_an_episode_with_no_complete_attempt_keeps_its_last_scored_row(tmp_path):
-    """Ordered by START like everything else, so the fallback cannot
-    reintroduce the file ordering this change removed."""
+    """The fallback row is chosen by attempt START, like every other
+    choice."""
     root = write_ledger(
         tmp_path / "run",
         ledger_row("e::6#6", "20260725_115000", 1, status="timed_out"),

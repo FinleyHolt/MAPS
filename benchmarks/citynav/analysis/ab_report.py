@@ -139,8 +139,8 @@ def _ground_truth_keys(prov: dict) -> dict:
 def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[str]]:
     """``(fatal, arm)`` mismatches between two runs' provenance.
 
-    ``fatal`` is the ground truth SR is scored against (split, tile bake; two
-    bakes scored the same episodes 0.351 and 0.169): differing or unrecorded,
+    ``fatal`` is the ground truth SR is scored against (split, tile bake):
+    differing or unrecorded,
     no A/B exists, and nothing waives it. ``arm`` is code, config (apart from
     its withholds where both manifests record it) and served model, which an
     A/B is meant to vary; compared only where both sides recorded them, and

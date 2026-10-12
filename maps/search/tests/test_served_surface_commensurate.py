@@ -7,8 +7,8 @@ from maps.search.parse_compile import prompts
 from maps.search.parse_compile import reasoner_loop as rl
 from maps.search.tests.fakes import FakeReasoner, bare_ctx, unarmed_boost
 
-# Word-boundary matches, case-insensitive except CARRY (the uppercase word was the round
-# protocol's token; lowercase "carry" is ordinary English).
+# Word-boundary matches, case-insensitive except CARRY (lowercase "carry" is ordinary
+# English).
 _BANNED_CI = ("qstop", "stop packet", "score_by", "filter_items")
 _BANNED_WORDS_CI = ("round", "rounds", "select", "terminal", "pending",
                     "tour", "tours",

@@ -50,8 +50,8 @@ def test_every_way_of_one_street_survives(monkeypatch):
 
 
 def test_colocated_duplicates_still_collapse(monkeypatch):
-    """The dedup the name key was doing correctly: one shell tagged twice
-    (buildings layer and pois layer) is still one object."""
+    """One shell tagged twice (buildings layer and pois layer) is one
+    object."""
     objects = _build(
         [
             _rec(1, {"building": "yes", "name": "City Hall"}, _square(500, 500)),

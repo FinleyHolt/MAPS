@@ -17,8 +17,7 @@ def test_the_prompt_states_no_view_square_size_of_its_own():
     # VACUITY FLOOR: the paragraph this guards must still be there.
     assert "nadir view square" in text
     assert "nothing outside it is seen" in text
-    # ...and it derives rather than restating an arithmetic that was wrong
-    # by 43x on the flown config.
+    # ...and it carries no formula for the size.
     assert "altitude - ground" not in text
     assert "2x(altitude" not in text
 

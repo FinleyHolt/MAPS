@@ -62,8 +62,7 @@ def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
     THE BAKE STAMP IS WHY THIS EXISTS. Two tile bakes of the same blocks
     live at the same path under the same name and pass every check that
     compares NAMES; a run flown against the wrong one scores a different
-    SR with nothing failing (0.351 against 0.169 on identical episodes,
-    measured). ``perception.bake_sha256`` is the content hash that tells
+    SR with nothing failing. ``perception.bake_sha256`` is the content hash that tells
     them apart after the fact, and ``run_report`` prints
     ``bake: UNVERIFIED`` for any run that carries none.
 

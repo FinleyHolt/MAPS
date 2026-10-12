@@ -57,14 +57,8 @@ def test_state_stash_replaces_whole_each_step():
 
 
 def test_every_armed_class_reaches_the_head_however_the_fold_ordered_it():
-    """One class must not spend the whole head.
-
-    calcity::200#198's ground truth was a car folded among houses. The
-    pass that found it folded 64 detections, the report showed 12 in fold
-    order, and the car -- conf 0.88, 1.5 m from truth, folded on five
-    consecutive flights -- was never in one. The model committed a car it
-    already had, 46 m away.
-    """
+    """One class must not spend the whole head: a confident car folded
+    among many houses still reaches the report."""
     dets = [{"fid": f"h{i}", "class": "house", "xy": [float(i), 0.0],
              "conf": 0.90} for i in range(63)]
     dets.append({"fid": "car_gt", "class": "car", "xy": [3311.5, 3770.6],
@@ -87,7 +81,7 @@ def test_within_a_class_the_head_takes_the_most_confident():
 
 
 def test_no_confidences_leaves_the_fold_order_intact():
-    """A run whose detections carry no score is exactly the old head."""
+    """A run whose detections carry no score keeps the fold order."""
     dets = [{"fid": f"d{i}", "class": "house", "xy": [float(i), 0.0]}
             for i in range(20)]
     head = [d["fid"] for d in detected_digest(dets)["detected"]]

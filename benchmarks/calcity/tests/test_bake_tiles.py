@@ -144,7 +144,7 @@ def test_the_bake_shape_and_provenance_are_unchanged(tmp_path, monkeypatch):
 
 
 def test_ground_truth_keys_can_never_enter_the_prior(tmp_path, monkeypatch):
-    """The leak wall, now that arbitrary properties ride through."""
+    """The leak wall: properties ride through, ground-truth keys never do."""
     _bundle(
         monkeypatch,
         [_area(7, {"name": "X", "descriptions": ["leak"], "target_id": 3,

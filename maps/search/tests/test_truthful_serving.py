@@ -311,8 +311,8 @@ def test_unordered_filter_serves_census_not_a_row_head():
 
 
 def test_compare_grid_joins_identity_and_relational_columns():
-    # The dedup is removed, so the relational block IS the attribute block: one joined
-    # table, identity + attached columns.
+    # The relational block IS the attribute block: one joined table, identity +
+    # attached columns.
     out = run_program([], _wide_world(60), {"ops": [
         {"ref": "r0", "op": "find",
          "args": {"query": "building"}},

@@ -33,8 +33,7 @@ def test_a_rectangle_costs_four_vertices_not_ninety_six():
     ring = _staircase(200.0, 100.0)
     assert len(ring) > 96, len(ring)          # vacuity: the input is dense
     out = simplify_ring(ring, tolerance=0.5, max_points=256)
-    # Collinear runs collapse; only the corners survive. The old uniform
-    # rule kept 96 vertices of this, every one of them redundant.
+    # Collinear runs collapse; only the corners survive.
     assert len(out) <= 8, out
     xs = [p[0] for p in out]
     ys = [p[1] for p in out]
@@ -76,8 +75,7 @@ def test_a_ring_larger_than_the_box_draws_arcs_and_no_edge_along_the_cut():
         for x, y in a:
             assert -1e-9 <= x <= 100.0 + 1e-9 and -1e-9 <= y <= 100.0 + 1e-9
     # ...and NOTHING is drawn: all four edges pass outside the box, so
-    # there is no in-frame geometry. The old rule dropped the shape here
-    # too; the difference shows in the partial case below.
+    # there is no in-frame geometry.
     assert arcs == [], arcs
 
 

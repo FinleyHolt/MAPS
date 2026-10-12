@@ -1,12 +1,10 @@
 """Every admitted detection gets a track identity, and no frame-local
 index ever keys a re-id.
 
-The measured hazard (140#138, four runs): the tracker's birth floor sat
-ABOVE the detector's admission threshold, so a conf-0.41 detection got no
-``wt_`` id, fell back to the per-frame post-NMS index downstream, and
-``_find_track``'s exact-id match re-homed its graph node onto every later
-stop's unrelated detection carrying the same index -- a pass destroyed
-its own rows as it flew.
+The hazard: a tracker birth floor ABOVE the detector's admission threshold
+leaves a low-confidence detection with no ``wt_`` id; a per-frame index in its
+place would re-home its graph node onto every later stop's unrelated detection
+carrying the same index.
 """
 from __future__ import annotations
 

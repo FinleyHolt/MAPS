@@ -6,8 +6,8 @@ from maps.search.analyze_scene.geom_program import build_surface
 _CELL_M = 2.0
 _ORIGIN = (0.0, 0.0)
 
-# THE DRAWABLE FLOOR, and it is the renderers' own: `_proj_poly` returns
-# None below three vertices, so a shorter ring is a footprint no picture
+# THE DRAWABLE FLOOR, and it is the renderers' own: `look_render.frame_arcs`
+# returns None below three vertices, so a shorter ring is a footprint no picture
 # can ever show. Named here rather than spelled 3 in an assert, because
 # the number belongs to the render layer.
 _DRAWABLE_VERTS = 3

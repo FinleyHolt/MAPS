@@ -37,7 +37,7 @@ def test_the_flight_names_the_rows_it_added(_n=3):
         [[run('go_to("prior_7")')], "done"], per_flight=_n)
     rep = _flown(results[0])
     assert added[0] and len(added[0]) == _n, added
-    # the count was always there; the ADDRESS is what was missing
+    # the report carries the count AND the handle that addresses the rows
     assert rep["new_detections"] == _n, rep
     handle = rep["new_rows"].split(" ")[0]
     assert handle.startswith("r") and handle[1:].isdigit(), rep
@@ -97,8 +97,7 @@ def test_a_row_gone_from_the_surface_is_not_reported_as_out_of_frame():
     # the live surface, so views.crop_requests SKIPS it before the renderer
     # ever sees it: it is not out of frame, the vision legend never names
     # it, and it may be metres from the subject. A requested-minus-drawn
-    # residual would report it as "outside the frame" -- the same false
-    # precision the drawn count was added to remove.
+    # residual would report it as "outside the frame".
     results, _graph, added = grow_drive(
         [[run('go_to("prior_7")')], [run('go_to("prior_1")')],
          [run("look(r0)")], "done"],

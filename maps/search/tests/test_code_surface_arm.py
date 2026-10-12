@@ -960,8 +960,7 @@ def test_find_takes_the_colour_ordering_the_executor_always_had():
     assert [o for o, _a in one] == ["find", "score_by"], one
     assert [a for _o, a in one] == [a for _o, a in two], (one, two)
 
-    # ONE score_by, colour last, distances first -- so `_code_order` still
-    # reads the anchor whose span the tie note is about.
+    # ONE score_by, colour last, distances first.
     fused = _ops('r1 = find("house", nearest="A", south_of="B", color="gray")\n')
     sorts = [a for o, a in fused if o == "score_by"]
     assert len(sorts) == 1, fused
