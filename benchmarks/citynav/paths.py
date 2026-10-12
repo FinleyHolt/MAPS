@@ -179,25 +179,17 @@ def assert_current_tile_schema(features: dict, source: str) -> None:
 
 #: The per-block files the bake writes, the content :func:`bake_sha256` hashes.
 BAKE_OUTPUT_SUFFIXES = ("_meta.json", "_features.json", "_graph.npz", "_nodes.json")
-#: When and from which commit a block was baked: provenance, not content.
-_BAKE_WHEN_WHO = ("baked_at_utc", "bake_git_sha")
 
 
 def _bake_content(f: Path) -> bytes:
-    """``f``'s bytes, a block meta's bake time and commit left out."""
+    """``f``'s bytes; a block meta's as canonical JSON (sorted keys)."""
     data = f.read_bytes()
-    if not f.name.endswith("_meta.json"):
-        return data
-    meta = json.loads(data)
-    prov = meta.get("provenance")
-    if isinstance(prov, dict):
-        meta["provenance"] = {k: v for k, v in prov.items() if k not in _BAKE_WHEN_WHO}
-    return json.dumps(meta, sort_keys=True).encode()
+    return json.dumps(json.loads(data), sort_keys=True).encode() if f.name.endswith("_meta.json") else data
 
 
 def bake_sha256(tiles_dir: Path | None = None) -> str | None:
     """Content identity of a tile bake: one hash over the name and content of
-    every ``BAKE_OUTPUT_SUFFIXES`` file, a meta's bake time and commit left out.
+    every ``BAKE_OUTPUT_SUFFIXES`` file.
 
     Two bakes of one block set can share a path and a schema yet score
     different SRs, so a run stamps this rather than trust a directory name. ``None`` when the directory does not exist.

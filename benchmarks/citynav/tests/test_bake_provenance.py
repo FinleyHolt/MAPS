@@ -1,7 +1,7 @@
 """Provenance travels with the tiles.
 
 A city bake writes ``meta.json`` ``provenance`` (the cache's name and sha256,
-its record count, the georef residuals it carries, bake time and git sha) for
+its record count and the georef residuals it carries) for
 every block raster, and never keeps the previous bake's claim.
 """
 
@@ -39,6 +39,4 @@ def test_a_city_bake_stamps_the_cache_it_read(tmp_path, monkeypatch):
     assert prov["osm_cache_sha256"] == hashlib.sha256(cache.read_bytes()).hexdigest()
     assert prov["records"] == 1
     assert prov["georef"] == {"passed": True}
-    assert prov["baked_at_utc"]
-    assert "bake_git_sha" in prov
-    assert len(prov) == 7, sorted(prov)
+    assert len(prov) == 5, sorted(prov)

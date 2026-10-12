@@ -46,14 +46,11 @@ def test_hash_sees_renames_and_added_blocks(tmp_path):
 
 
 def test_two_bakes_of_one_prior_hash_equal(tmp_path):
-    """When and from which commit a block was baked is not its content, and
-    a file the bake did not write is no part of it."""
+    """A meta's key order and layout are not its content, and a file the bake
+    did not write is no part of it."""
     a, b = _bake(tmp_path / "a"), _bake(tmp_path / "b")
-    for root, when, sha in ((a, "2026-09-01T00:00:00+00:00", "abc1234"),
-                            (b, "2026-10-01T00:00:00+00:00", None)):
-        (root / "block_0_meta.json").write_text(json.dumps({
-            "crs": "utm",
-            "provenance": {"prior": "osm", "baked_at_utc": when, "bake_git_sha": sha}}))
+    (a / "block_0_meta.json").write_text(json.dumps({"crs": "utm", "provenance": {"prior": "osm"}}, indent=2))
+    (b / "block_0_meta.json").write_text(json.dumps({"provenance": {"prior": "osm"}, "crs": "utm"}))
     (b / "notes.txt").write_text("scratch")
     assert paths.bake_sha256(a) == paths.bake_sha256(b)
 

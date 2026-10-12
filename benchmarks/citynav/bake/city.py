@@ -10,7 +10,7 @@ node's one vertex), which ``build_surface`` serves as the row ``mask``. Nothing
 is classified, named or dropped beyond "rasterizes to no covered cell".
 ``meta.json`` carries the grid (``bounds``, ``grid_shape``, ``cell_size_m``),
 a caller's ``coordinate_frame`` and ``georef``, and for a city-cache bake ``provenance``: cache name +
-sha256, record count, the cache's georef residuals, bake time + git sha.
+sha256, record count and the cache's georef residuals.
 
 The source is the shipped OSM cache per city (``tiles/osm_cache``), already
 registered into CityNav local XY. Every ``<city>_block_<n>.tif`` raster
@@ -28,11 +28,8 @@ import hashlib
 import json
 import logging
 import math
-import os
 import re
-import subprocess
 from collections.abc import Iterable, Sequence
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -617,28 +614,6 @@ def _read_geojson_cache(
     return records, cache_meta if isinstance(cache_meta, dict) else None
 
 
-def _bake_provenance() -> dict[str, Any]:
-    """The WHO/WHEN of a bake's provenance: ``BAKE_GIT_SHA``, else this
-    repo's ``git rev-parse``, else ``None``."""
-    sha = os.environ.get("BAKE_GIT_SHA") or None
-    if sha is None:
-        try:
-            sha = (
-                subprocess.run(
-                    ["git", "-C", str(Path(__file__).resolve().parent),
-                     "rev-parse", "--short", "HEAD"],
-                    capture_output=True, text=True, timeout=10, check=True,
-                ).stdout.strip()
-                or None
-            )
-        except Exception:  # noqa: BLE001 — provenance is best-effort, never fatal
-            sha = None
-    return {
-        "baked_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "bake_git_sha": sha,
-    }
-
-
 def _file_sha256(path: Path) -> str:
     with path.open("rb") as fh:
         return hashlib.file_digest(fh, "sha256").hexdigest()
@@ -657,7 +632,7 @@ def bake_block(
 
     ``imagery=False`` is a block with no CityNav raster: its caller's meta
     sidecar's grid and the bounds rectangle's coverage. A ``provenance`` dict
-    (a city-frame cache baked per block) is stamped with WHO/WHEN.
+    (a city-frame cache baked per block) is written to the meta as given.
     """
     tiles_path = Path(tiles_dir).expanduser().resolve()
     caller_keys, bounds, grid_shape, cell_size_m = _block_frame(name, tiles_path, imagery=imagery)
@@ -683,7 +658,7 @@ def bake_block(
         **caller_keys,
     }
     if provenance is not None:
-        out_meta["provenance"] = {**provenance, **_bake_provenance()}
+        out_meta["provenance"] = provenance
     Path(f"{stem}_meta.json").write_text(json.dumps(out_meta, indent=2), encoding="utf-8")
     stats = {"features": sum(len(v) for v in features.values()), "nodes": len(graph.nodes)}
     log.info("wrote %s bake: %d features, %d nodes", name, stats["features"], stats["nodes"])

@@ -2,7 +2,7 @@
 # Bake the CityNav tile sidecars into tiles/citynav_2m_osmv3 (which may start
 # empty) from the shipped OpenStreetMap caches (tiles/osm_cache), one block per
 # raster under SEARCH_CITYNAV_RGBD_DIR. Every bake stamps meta.json with its
-# provenance (cache name + sha256, georef residuals, bake time + git sha).
+# provenance (cache name + sha256, record count, georef residuals).
 #
 # Usage (from the repo root):
 #   PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh
