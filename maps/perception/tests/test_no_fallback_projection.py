@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 
 from maps.perception.geometry.geolocate import project_mask_to_world_ortho
-from maps.util.mask_region import MaskRegion
+from maps.perception.tests.regions import region_of
 
 H, W = 48, 64
 # North-up square [FL, FR, BR, BL] over x in [-32, 32], y in [-24, 24].
@@ -19,7 +19,7 @@ CORNERS = ((-32.0, 24.0), (32.0, 24.0), (32.0, -24.0), (-32.0, -24.0))
 
 def _project(mask: np.ndarray, depth: np.ndarray | None):
     return project_mask_to_world_ortho(
-        MaskRegion.from_full(mask), depth=depth, view_corners_xy=CORNERS
+        region_of(mask), depth=depth, view_corners_xy=CORNERS
     )
 
 

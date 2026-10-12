@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.util.mask_region import MaskRegion
+from maps.perception.tests.regions import region_of
 
 from maps.perception.base import DetectedObject
 from maps.perception.geometry.geolocate import TileFrame
@@ -33,7 +33,7 @@ def _det(source_tier: str, attributes: dict | None = None) -> DetectedObject:
         confidence=0.9,
         source_tier=source_tier,
         attributes=dict(attributes or {}),
-        mask=MaskRegion.from_full(mask),
+        mask=region_of(mask),
     )
 
 

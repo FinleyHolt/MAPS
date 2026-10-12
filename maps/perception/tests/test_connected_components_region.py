@@ -22,8 +22,7 @@ from maps.perception.sam.detect_client import (
     _connected_components,
     split_into_instances,
 )
-from maps.util.mask_region import MaskRegion
-from maps.perception.tests.regions import full
+from maps.perception.tests.regions import full, region_of
 
 _SHAPE = (160, 200)
 
@@ -57,7 +56,7 @@ def test_components_and_order_match_a_whole_frame_reference():
     }
     split_seen = False
     for name, mask in cases.items():
-        region = MaskRegion.from_full(mask)
+        region = region_of(mask)
         got = _connected_components(region)
         ref = _reference_components(mask)
         assert len(got) == len(ref), name
@@ -78,7 +77,7 @@ def test_equal_area_components_keep_their_tie_break():
     """``max(key=area)`` picks by list position when areas tie, so a
     reordering would silently move which component becomes the primary."""
     mask = _blocks((20, 20, 10, 10), (100, 150, 10, 10))
-    got = _connected_components(MaskRegion.from_full(mask))
+    got = _connected_components(region_of(mask))
     ref = _reference_components(mask)
 
     assert len(got) == 2
@@ -92,7 +91,7 @@ def test_equal_area_components_keep_their_tie_break():
 def test_single_component_hands_back_the_same_region_object():
     """``_split_and_pack`` relies on the unsplit case being the very same
     object, so the identity is contract, not incidental."""
-    region = MaskRegion.from_full(_blocks((40, 50, 20, 25)))
+    region = region_of(_blocks((40, 50, 20, 25)))
     comps = _connected_components(region)
     assert len(comps) == 1 and comps[0] is region
 
@@ -102,7 +101,7 @@ def test_split_into_instances_drops_speckle_and_redundant_components(monkeypatch
     noise floor goes, and one already owned by another detection's primary
     goes. Both read through the component's own window."""
     mask = _blocks((30, 40, 24, 26), (100, 150, 3, 3), (120, 20, 12, 14))
-    region = MaskRegion.from_full(mask)
+    region = region_of(mask)
     cov = np.zeros(_SHAPE, dtype=np.int16)
     cov[120:132, 20:34] = 1  # the third component is already covered
 

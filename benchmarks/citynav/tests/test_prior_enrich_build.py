@@ -12,13 +12,13 @@ import numpy as np
 import pytest
 
 from benchmarks.citynav.run_benchmark import osm_prior
-from maps.util.mask_region import MaskRegion
+from maps.perception.tests.regions import region_of
 
 
 def _mask(n: int = 4):
     m = np.zeros((8, 8), dtype=bool)
     m[:n, 0] = True
-    return MaskRegion.from_full(m)
+    return region_of(m)
 
 
 def _obs():

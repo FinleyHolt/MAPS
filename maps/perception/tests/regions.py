@@ -1,4 +1,5 @@
-"""Test helpers: the oracle view of a region (the frame-sized boolean array) and a nadir square view."""
+"""Test helpers: a region from a frame-sized mask, the oracle view of a region (the frame-sized boolean
+array) and a nadir square view."""
 
 from __future__ import annotations
 
@@ -6,6 +7,12 @@ import numpy as np
 
 from maps.perception.observation import Observation
 from maps.util.mask_region import MaskRegion
+
+
+def region_of(mask: np.ndarray) -> MaskRegion | None:
+    """A frame-sized mask cropped to its own extent; None when nothing is set."""
+    m = np.asarray(mask, dtype=bool)
+    return MaskRegion(m, (0, 0, m.shape[0] - 1, m.shape[1] - 1), m.shape).tightened()
 
 
 def full(region: MaskRegion) -> np.ndarray:

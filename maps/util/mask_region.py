@@ -37,21 +37,6 @@ class MaskRegion:
 
     # --- construction ---------------------------------------------------
 
-    @classmethod
-    def from_full(cls, mask: np.ndarray) -> "MaskRegion | None":
-        """Crop a frame-sized mask down to its own extent.
-
-        ``None`` when nothing is set — an empty mask is not a region, and
-        callers drop it rather than carry a degenerate one.
-        """
-        m = np.asarray(mask, dtype=bool)
-        H, W = int(m.shape[0]), int(m.shape[1])
-        bbox = _extent(m)
-        if bbox is None:
-            return None
-        r0, c0, r1, c1 = (int(v) for v in bbox)
-        return cls(m[r0 : r1 + 1, c0 : c1 + 1], (r0, c0, r1, c1), (H, W))
-
     def with_crop(self, crop: np.ndarray) -> "MaskRegion":
         """A region over the same box carrying another selection (a component)."""
         return MaskRegion(crop, self.bbox, self.frame_shape)

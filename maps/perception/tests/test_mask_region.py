@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from maps.util.mask_region import MaskRegion
-from maps.perception.tests.regions import full
+from maps.perception.tests.regions import full, region_of
 
 
 def _mask(shape=(40, 50), r0=10, c0=12, h=6, w=8):
@@ -42,7 +42,7 @@ def test_a_box_outside_the_frame_is_rejected():
 
 def test_round_trip_through_a_frame_is_lossless():
     m = _mask()
-    region = MaskRegion.from_full(m)
+    region = region_of(m)
     assert region is not None
     assert np.array_equal(full(region), m)
     assert region.bbox == (10, 12, 15, 19)
@@ -59,7 +59,7 @@ def test_rows_cols_matches_np_where_over_the_frame():
     m[20:35, 30:50] = rng.random((15, 20)) < 0.6
     m[20, 30] = m[34, 49] = True
 
-    region = MaskRegion.from_full(m)
+    region = region_of(m)
     rr_ref, cc_ref = np.where(m)
     rr, cc = region.rows_cols()
     assert np.array_equal(rr, rr_ref)
@@ -67,7 +67,7 @@ def test_rows_cols_matches_np_where_over_the_frame():
 
 
 def test_window_writes_reach_the_frame_and_nothing_else():
-    region = MaskRegion.from_full(_mask())
+    region = region_of(_mask())
     cov = np.zeros((40, 50), dtype=np.int16)
     region.window(cov)[region.crop] += 1
 
@@ -76,14 +76,14 @@ def test_window_writes_reach_the_frame_and_nothing_else():
 
 
 def test_empty_mask_is_not_a_region():
-    assert MaskRegion.from_full(np.zeros((10, 10), dtype=bool)) is None
-    region = MaskRegion.from_full(_mask())
+    assert region_of(np.zeros((10, 10), dtype=bool)) is None
+    region = region_of(_mask())
     assert region.with_crop(np.zeros_like(region.crop)).tightened() is None
 
 
 def test_tightened_keeps_the_pixels_and_shrinks_the_box():
     m = _mask()
-    parent = MaskRegion.from_full(m)
+    parent = region_of(m)
     # A component living in the parent's box: only part of it is set.
     comp_crop = np.zeros_like(parent.crop)
     comp_crop[0:2, 0:3] = parent.crop[0:2, 0:3]

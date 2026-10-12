@@ -14,12 +14,11 @@ import threading
 import numpy as np
 import pytest
 
-from maps.perception.tests.regions import full, square_view
+from maps.perception.tests.regions import full, region_of, square_view
 from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import SamDetectClient, _png_wire_bytes
 from maps.util.mask_codec import decode_mask_crop, encode_mask_record
-from maps.util.mask_region import MaskRegion
 
 
 def _reference_nms_full_masks(items, iou_thr):
@@ -80,7 +79,7 @@ def test_nms_matches_full_frame_reference(monkeypatch):
     H = W = 160
     for trial in range(5):
         masks = _random_blobs(rng, 25, H, W)
-        items = [(MaskRegion.from_full(m), lab, sc) for m, lab, sc in masks]
+        items = [(region_of(m), lab, sc) for m, lab, sc in masks]
         for thr in (0.3, 0.5, 0.9):
             ref = _reference_nms_full_masks(masks, thr)
             monkeypatch.setattr(dc, "SAHI_NMS_IOU", thr)

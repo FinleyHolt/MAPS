@@ -7,7 +7,7 @@ import numpy as np
 
 from maps.perception.sam.detect_client import _dominant_color, _interior_mask
 from maps.perception.viz.color import m6_attributes
-from maps.util.mask_region import MaskRegion
+from maps.perception.tests.regions import region_of
 
 _SHAPE = (200, 240)
 
@@ -20,7 +20,7 @@ def _blob(r0, c0, h, w, rng, fill=1.0):
     m = np.zeros(_SHAPE, dtype=bool)
     m[r0 : r0 + h, c0 : c0 + w] = rng.random((h, w)) < fill
     m[r0, c0] = m[r0 + h - 1, c0 + w - 1] = True
-    return MaskRegion.from_full(m)
+    return region_of(m)
 
 
 def test_colour_is_read_through_the_region_and_never_the_frame():
@@ -70,7 +70,7 @@ def test_colour_values_are_pinned():
     rgb[80:120, 100:140, :] = (235, 235, 235)  # a white object
     m = np.zeros(_SHAPE, dtype=bool)
     m[80:120, 100:140] = True
-    region = MaskRegion.from_full(m)
+    region = region_of(m)
 
     name, med, conf = _dominant_color(rgb, region)
     assert name == "white", (name, med)
