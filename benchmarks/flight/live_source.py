@@ -663,10 +663,10 @@ class LiveSource:
 
 
 def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresight_path: str | Path | None = None,
-              register_raster: str | Path | None = None, corrector: bool = True) -> LiveSource:
+              register_raster: str | Path | None = None) -> LiveSource:
     """A live source over ``vehicle``, failing on the ramp rather than on the
     first flight. With ``register_raster`` (the raster each frame is
-    registered against) the corrector starts unless ``corrector`` is False."""
+    registered against) the corrector starts."""
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
 
     if lonlat_to_local(Path(tiles_dir), map_name, 0.0, 0.0) is None:
@@ -687,6 +687,6 @@ def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresigh
     source = LiveSource(tiles_dir=tiles_dir, map_name=map_name, boresight=boresight, vehicle=vehicle,
                         tile_ground_z=float(GROUND_LEVEL[map_name]), floor_msl_m=FLOOR_MSL_M[map_name],
                         register=register)
-    if register is not None and corrector:
+    if register is not None:
         source.start_corrector()
     return source

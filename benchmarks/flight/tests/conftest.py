@@ -35,11 +35,15 @@ def make_twin(built):
 
 
 @pytest.fixture
-def make_live(built):
+def make_live(built, monkeypatch):
+    """A live source over ``vehicle``; with ``register`` it registers frames
+    but its corrector is not started, so a test drives ``correct`` itself."""
     def make(vehicle, register=False):
-        from benchmarks.flight.live_source import open_live
+        from benchmarks.flight.live_source import LiveSource, open_live
 
         tiles, raster, _ortho, sensor = built
-        return open_live(vehicle=vehicle, tiles_dir=tiles, map_name="calcity", sensor=sensor,
-                         register_raster=raster if register else None, corrector=False)
+        with monkeypatch.context() as m:
+            m.setattr(LiveSource, "start_corrector", lambda self: None)
+            return open_live(vehicle=vehicle, tiles_dir=tiles, map_name="calcity", sensor=sensor,
+                             register_raster=raster if register else None)
     return make
