@@ -690,15 +690,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from benchmarks import stamp_repo_provenance
-
-    # Without a logging config the INFO provenance block reaches no log.
+    # Discovery logs at INFO (the installed spec); without a config it reaches no console.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(message)s",
         datefmt="%H:%M:%S",
     )
-    stamp_repo_provenance()
     args = _build_parser().parse_args(argv)
     driver = Driver(args)
     if args.dry_run:

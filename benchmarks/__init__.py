@@ -2,8 +2,7 @@
 
 ``repo_provenance`` says which code ran (git commit and dirty flag, and the
 path each installed package resolves to, so ``maps`` and ``benchmarks`` bound
-to different checkouts show) and under what run context; ``stamp_repo_provenance``
-logs the code half as a grep-able ``EVAL-PROVENANCE`` block.
+to different checkouts show) and under what run context.
 """
 
 from __future__ import annotations
@@ -83,17 +82,3 @@ def repo_provenance(
         if value is not None:
             prov[key] = value
     return prov
-
-
-def stamp_repo_provenance() -> None:
-    """Log the ``EVAL-PROVENANCE`` block (commit, dirty flag, package paths) to run.log."""
-    import logging
-
-    prov = repo_provenance()
-    lines = [
-        "EVAL-PROVENANCE "
-        f"commit={prov['git_commit']} dirty={prov['git_dirty']} "
-        f"repo_root={prov['repo_root']}",
-    ]
-    lines += [f"  {name}.__file__={path}" for name, path in prov["packages"].items()]
-    logging.getLogger("benchmarks.provenance").info("\n".join(lines))

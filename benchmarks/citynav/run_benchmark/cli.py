@@ -99,9 +99,6 @@ def main() -> int:
     # episode_workdir.benchmark() refuses an undeclared process.
     os.environ.setdefault("SEARCH_BENCHMARK_NAME", "citynav")
 
-    from benchmarks import stamp_repo_provenance
-
-    stamp_repo_provenance()  # loud EVAL-PROVENANCE audit line -> run.log (which code ran)
     parser = argparse.ArgumentParser(
         description=f"Run the {benchmark()} navigation benchmark."
     )
