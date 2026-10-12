@@ -3,7 +3,7 @@
 #
 # Eval protocol: the upstream CityNav scoring (water-cookie/citynav,
 # gsamllavanav, Lee et al. arXiv 2406.14240): NE/SR/OSR in 2D world metres
-# (SR = ||pred_xy - target_xy|| <= 20 m), the start pose of the split row's
+# (SR = ||final_pos_xy - target_xy|| <= 20 m), the start pose of the split row's
 # trajectory[0] (position, altitude and heading), a 200 m altitude ceiling, and the
 # six-action alphabet (move_forward 5 m, turn +-30 deg, ascend/descend 2 m,
 # stop). SPL rides as spl_pos: Anderson over the flown xy path.

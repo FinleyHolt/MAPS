@@ -80,7 +80,7 @@ def test_the_replay_flies_the_recorded_trajectory_exactly(name, tmp_path, monkey
     steps, state = _replay(CASES[name], tmp_path, monkeypatch)
 
     assert steps == recorded["steps"]
-    assert list(state.pose_xy) == recorded["pred_xy"] == recorded["final_pos_xy"]
+    assert list(state.pose_xy) == recorded["final_pos_xy"]
     flown = [[round(p[0], 9), round(p[1], 9)] for p in state.visited_xy]
     assert flown == recorded["visited_xy"]
     assert round(state.heading_deg, 9) == recorded["heading_deg"]

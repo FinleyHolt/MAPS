@@ -39,7 +39,7 @@ def _dispatch(tmp_path):
 
 def _rec(ended_by: str = "reply") -> dict:
     return {
-        "episode_id": "b::1#0", "map_name": "b", "pred_xy": [1.0, 2.0],
+        "episode_id": "b::1#0", "map_name": "b",
         "metrics": {"NE": 3.0, "SR": 1, "steps_taken": 2, "compile_s": 0.5,
                     "mission": {"ended_by": ended_by}},
     }

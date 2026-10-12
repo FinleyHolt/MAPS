@@ -151,7 +151,7 @@ def synthesize_compliant_trajectory(
             log.error(
                 "COMPLIANT-PARALLEL: commit descent UNREACHABLE within the "
                 "action budget even with the FULL budget reserved (whole "
-                "tour dropped): pred_xy stays %.1fm short of the committed "
+                "tour dropped): the final pose stays %.1fm short of the committed "
                 "target %s (steps=%d/%d, replans=%d)",
                 _short_m, descent_xy, steps, int(max_frames),
                 descent_replans,
@@ -178,13 +178,12 @@ def synthesize_compliant_trajectory(
     final_pos_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
     log.info(
         "COMPLIANT-PARALLEL trajectory (discrete 6-action): %d tour stops %s "
-        "descent=%s frames=%d pred_xy=%s final_pos_xy=%s (budget=%d) "
+        "descent=%s frames=%d final_pos_xy=%s (budget=%d) "
         "descent_starved=%s descent_truncated=%s",
         len(tour_fids),
         tour_fids,
         descent_xy,
         steps,
-        final_pos_xy,
         final_pos_xy,
         int(max_frames),
         react_descent_starved,

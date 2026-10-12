@@ -359,7 +359,6 @@ def run_episode(
         "description": episode.description,
         "start_xy": list(episode.start_xy),
         "target_xy": list(episode.target_xy),
-        "pred_xy": list(final_xy),
         "final_pos_xy": list(final_xy),
         "visited_xy": [list(p) for p in visited],
         "metrics": scores,
