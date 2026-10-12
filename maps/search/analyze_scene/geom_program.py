@@ -79,7 +79,7 @@ def _color_of(label: str) -> str:
 
 def _modal_attr(n, key):
     """The modal value of ``key`` in the node's ``semantic_attributes``, or None."""
-    cc = (getattr(n, "semantic_attributes", None) or {}).get(key)
+    cc = (n.semantic_attributes or {}).get(key)
     return max(cc.items(), key=lambda kv: kv[1])[0] if cc else None
 
 
@@ -90,7 +90,7 @@ _UNSERVED_TAG = "source"
 
 def _row_tags(n) -> dict:
     """A prior row's tags: the node's string-valued OSM tags but _UNSERVED_TAG."""
-    tags = getattr(n, "tags", None) or {}
+    tags = n.tags or {}
     if not isinstance(tags, dict):
         return {}
     return {str(k): v for k, v in tags.items() if isinstance(v, str) and str(k).lower() != _UNSERVED_TAG}
@@ -105,7 +105,7 @@ _SEARCH_PROVENANCE_DROP = frozenset({
 def _anchor_search_text(n) -> str:
     """A prior row's search text: its name and its tag keys and values,
     minus _SEARCH_PROVENANCE_DROP."""
-    parts = [str(getattr(n, "name", "") or "")]
+    parts = [str(n.name or "")]
     for k, v in _row_tags(n).items():
         if str(k) in _SEARCH_PROVENANCE_DROP:
             continue
@@ -116,7 +116,7 @@ def _anchor_search_text(n) -> str:
 
 def _cand_search_text(n) -> str:
     """A detection row's search text: its class name."""
-    return str(getattr(n, "class_name", "") or "").lower()
+    return str(n.class_name or "").lower()
 
 
 class ProgramError(Exception):
@@ -129,7 +129,7 @@ def _color_fields(n) -> dict:
     them."""
     color = _modal_attr(n, "color")
     fields = {"color": color if color is not None
-              else _color_of(str(getattr(n, "class_name", "") or ""))}
+              else _color_of(str(n.class_name or ""))}
     conf = _modal_attr(n, "color_conf")
     if conf is not None:
         try:
@@ -307,16 +307,16 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
     def _xy(n, mask=None):
         """The row's served point, the ``act.move`` flight target: the
         tracker's ``world_xy``, else :func:`representative_point`."""
-        w = getattr(n, "world_xy", None)
+        w = n.world_xy
         if w is not None and len(w) >= 2:
             return [round(float(w[0]), 2), round(float(w[1]), 2)]
         if mask:
             return representative_point(mask)
-        c = getattr(n, "centroid", None)
+        c = n.centroid
         return _w(c) if c is not None and len(c) >= 2 else None
 
     def _cl(n):
-        cl = getattr(n, "centerline", None)
+        cl = n.centerline
         return [_w(p) for p in cl] if cl else None
 
     def _cells(n):
@@ -327,9 +327,9 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
 
     def _axis_q(n):
         # Only a node with a centerline has an axis length.
-        if not getattr(n, "centerline", None):
+        if not n.centerline:
             return None
-        v = getattr(n, "axis_length_m", None)
+        v = n.axis_length_m
         return round(float(v), 2) if v is not None else None
 
     def _exact_chains(n) -> list:
@@ -337,7 +337,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         the box of its own cells plus one cell, since the bake clips cells
         to the tile while a contour runs on. A node with no cells is not
         clipped."""
-        wc = getattr(n, "world_contour", None)
+        wc = n.world_contour
         parts = [wc] if wc else []
         chains = [[[float(x), float(y)] for x, y in p] for p in parts if p]
         cl = cell_mesh.cells_of(n)
@@ -352,7 +352,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
     def _mask_fields(n) -> dict:
         # ``mask`` (the contour, else the cell boundary loops), its centroid
         # and the shape scalars; none for a node without either.
-        cells = getattr(n, "cells", None)
+        cells = n.cells
         chains = _exact_chains(n)
         # A one-vertex chain (a POI) draws nothing: the cell boundary does.
         if any(len(ch) >= 2 for ch in chains):
@@ -387,7 +387,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
             return None
         return {"fid": str(f), "xy": xy, "centerline": None,
                 "cells": _cells(n),
-                "class": str(getattr(n, "class_name", "") or ""),
+                "class": str(n.class_name or ""),
                 **_color_fields(n),
                 **mf,
                 "search_text": _cand_search_text(n)}
@@ -400,7 +400,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         xy = _xy(n, mf.get("mask"))
         if not xy:
             return None
-        return {"fid": str(f), "name": getattr(n, "name", None),
+        return {"fid": str(f), "name": n.name,
                 "xy": xy,
                 "centerline": _cl(n),
                 "cells": _cells(n),
@@ -480,7 +480,7 @@ def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
         if fid in seen:
             continue
         seen.add(fid)
-        if getattr(node, "provenance", "prebaked") == "detected":
+        if node.provenance == "detected":
             det.append((fid, node))
             continue
         prior.append((fid, node))

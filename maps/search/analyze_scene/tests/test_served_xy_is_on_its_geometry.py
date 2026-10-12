@@ -8,24 +8,19 @@ from maps.search.analyze_scene.geom_program import (
     build_surface,
     representative_point,
 )
+from maps.sws.graph.model import MapObject
 
 
-class _Node:
-    """A map node as ``build_surface`` reads one: cells + exact geometry."""
-
-    def __init__(self, contour, name=None, world_xy=None):
-        self.world_contour = [(float(x), float(y)) for x, y in contour]
-        self.name = name
-        self.tags = {"highway": "residential"} if name else {"building": "yes"}
-        self.class_name = ""
-        self.centerline = None
-        self.world_xy = world_xy
-        # The 2 m mesh the contour rasterizes to, coarsely: enough for
-        # ``cells`` and the centroid fallback to be real.
-        self.cells = _cells_of(self.world_contour)
-
-    def __iter__(self):  # cell_mesh.cells_of duck-types on this
-        return iter(())
+def _node(contour, name=None, world_xy=None):
+    """A map node with its exact geometry and the coarse 2 m mesh it
+    rasterizes to."""
+    contour = [(float(x), float(y)) for x, y in contour]
+    cells = _cells_of(contour)
+    return MapObject(
+        class_name="", name=name,
+        tags={"highway": "residential"} if name else {"building": "yes"},
+        centroid=tuple(cells[0]), cells=cells, world_contour=contour,
+        world_xy=world_xy)
 
 
 def _cells_of(contour):
@@ -48,10 +43,10 @@ _FAR_B = [(800.0, 500.0), (840.0, 500.0)]
 
 
 def _surface():
-    nodes = [("p_bent", _Node(_BENT_WAY)),
-             ("p_bldg", _Node(_BUILDING)),
-             ("p_far_a", _Node(_FAR_A, name="Raymond Avenue")),
-             ("p_far_b", _Node(_FAR_B, name="Raymond Avenue"))]
+    nodes = [("p_bent", _node(_BENT_WAY)),
+             ("p_bldg", _node(_BUILDING)),
+             ("p_far_a", _node(_FAR_A, name="Raymond Avenue")),
+             ("p_far_b", _node(_FAR_B, name="Raymond Avenue"))]
     _cands, anchors = build_surface([], nodes, (0.0, 0.0), 2.0)
     return anchors
 
@@ -83,7 +78,7 @@ def test_every_served_point_is_on_its_own_geometry():
 
 def test_a_measured_position_wins_over_a_derived_one():
     """A detection's ``world_xy`` is where the tracker put the object, sub-cell."""
-    det = ("d_car", _Node([(10.0, 10.0), (14.0, 10.0), (14.0, 12.0),
+    det = ("d_car", _node([(10.0, 10.0), (14.0, 10.0), (14.0, 12.0),
                            (10.0, 12.0), (10.0, 10.0)],
                           world_xy=(11.37, 10.94)))
     cands, _anchors = build_surface([det], [], (0.0, 0.0), 2.0)

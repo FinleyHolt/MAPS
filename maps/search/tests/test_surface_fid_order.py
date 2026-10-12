@@ -5,20 +5,17 @@ import numpy as np
 
 from maps.search.analyze_scene.geom_program import build_surface_from_graph
 from maps.search.tests.fakes import acts_of_block
+from maps.sws.graph.model import MapObject
 
 
-class _Node:
-    def __init__(self, i):
-        self.world_xy = [float(10 * i), 0.0]
-        self.centroid = (0, int(10 * i))
-        self.centerline = None
-        self.class_name = "parking lot"
-        self.name = None
-        self.provenance = "detected"
+def _node(i):
+    return MapObject(class_name="parking lot", name=None, tags={},
+                     centroid=(0, int(10 * i)), provenance="detected",
+                     world_xy=[float(10 * i), 0.0])
 
 
 def test_detected_2_serves_before_detected_100():
-    nodes = {f"detected_{i}": _Node(i) for i in range(120)}
+    nodes = {f"detected_{i}": _node(i) for i in range(120)}
     cands, _anchors = build_surface_from_graph(
         nodes.items(), (0.0, 0.0), 2.0)
     fids = [c["fid"] for c in cands]
@@ -37,23 +34,18 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
         run_program,
     )
 
-    class _Way:
-        def __init__(self, name, cells):
-            self.name = name
-            self.cells = np.asarray(cells, dtype=int).reshape(-1, 2)
-            self.tags = {}
-            self.centroid = (float(self.cells[:, 0].mean()),
-                             float(self.cells[:, 1].mean()))
-            self.world_xy = None
-            # A linear feature: the bake gives a road a centerline, and
-            # axis_length_m is served only for a node that has one.
-            self.centerline = [[int(r), int(c)] for r, c in self.cells]
-            self.class_name = ""
-            self.world_contour = None
-            self.axis_length_m = 20.0
+    def _way(name, cells):
+        cells = np.asarray(cells, dtype=int).reshape(-1, 2)
+        # A linear feature: the bake gives a road a centerline, and
+        # axis_length_m is served only for a node that has one.
+        return MapObject(
+            class_name="", name=name, tags={},
+            centroid=(float(cells[:, 0].mean()), float(cells[:, 1].mean())),
+            cells=cells, centerline=[[int(r), int(c)] for r, c in cells],
+            axis_length_m=20.0)
 
     n = _NAME_SET_SHAPE_ROWS + 2
-    ways = [(f"prior_{i}", _Way("Neuralia Road",
+    ways = [(f"prior_{i}", _way("Neuralia Road",
                                 [[10, c] for c in range(i * 20, i * 20 + 10)]))
             for i in range(n)]
     _c, anchors = build_surface([], ways, (0.0, 0.0), 2.0)

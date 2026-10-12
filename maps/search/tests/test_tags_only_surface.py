@@ -8,32 +8,24 @@ from maps.search.analyze_scene.geom_program import (
     compact_results,
     run_program,
 )
+from maps.sws.graph.model import MapObject
 
 
-class _Node:
-    """Minimal MapObject-shaped prior/detection node."""
-
-    def __init__(self, *, name=None, class_name="", tags=None,
-                 centroid=(0, 0), provenance="prebaked"):
-        self.name = name
-        self.class_name = class_name
-        self.tags = tags or {}
-        self.centroid = centroid
-        self.centerline = None
-        self.provenance = provenance
-        self.cells = None
-        self.world_contour = None
+def _node(*, name=None, class_name="", tags=None, centroid=(0, 0),
+          provenance="prebaked"):
+    return MapObject(class_name=class_name, name=name, tags=tags or {},
+                     centroid=centroid, provenance=provenance)
 
 
 def _prior_surface():
     priors = [
-        ("prior_0", _Node(tags={"amenity": "parking"}, centroid=(0, 0))),
-        ("prior_1", _Node(tags={"service": "parking_aisle"}, centroid=(0, 5))),
-        ("prior_2", _Node(tags={"parking": "surface"}, centroid=(0, 10))),
-        ("prior_3", _Node(name="Elm Street",
+        ("prior_0", _node(tags={"amenity": "parking"}, centroid=(0, 0))),
+        ("prior_1", _node(tags={"service": "parking_aisle"}, centroid=(0, 5))),
+        ("prior_2", _node(tags={"parking": "surface"}, centroid=(0, 10))),
+        ("prior_3", _node(name="Elm Street",
                           tags={"highway": "residential"}, centroid=(0, 15))),
     ]
-    dets = [("detected_0", _Node(class_name="car", centroid=(5, 5),
+    dets = [("detected_0", _node(class_name="car", centroid=(5, 5),
                                  provenance="detected"))]
     return build_surface(dets, priors, (0.0, 0.0), 2.0)
 
@@ -66,7 +58,7 @@ def test_broad_dump_census_renders_tag_counts():
     # 60 tagged priors (past the census knee): the summarize envelope carries
     # tag key=value counts, not a class taxonomy.
     priors = [(f"prior_{i}",
-               _Node(tags={"building": "yes"} if i % 2 else
+               _node(tags={"building": "yes"} if i % 2 else
                      {"highway": "residential"}, centroid=(i, 0)))
               for i in range(60)]
     cands, anchors = build_surface([], priors, (0.0, 0.0), 2.0)

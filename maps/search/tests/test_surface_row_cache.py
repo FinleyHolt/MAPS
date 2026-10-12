@@ -5,23 +5,20 @@ from __future__ import annotations
 import numpy as np
 
 from maps.search.analyze_scene import geom_program as gp
+from maps.sws.graph.model import MapObject
 
 
-class _Node:
-    def __init__(self, r, c, name=None, provenance="prebaked", cls="building"):
-        self.cells = np.asarray([[r + i, c + j] for i in range(3)
-                                 for j in range(4)], dtype=np.int32)
-        self.world_xy = [float(c) * 2.0, float(r) * 2.0]
-        self.centroid = (int(r), int(c))
-        self.centerline = None
-        self.class_name = cls
-        self.name = name
-        self.provenance = provenance
-        self.tags = {"source": "osm"}
+def _node(r, c, name=None, provenance="prebaked", cls="building"):
+    return MapObject(
+        class_name=cls, name=name, tags={"source": "osm"},
+        centroid=(int(r), int(c)), provenance=provenance,
+        cells=np.asarray([[r + i, c + j] for i in range(3) for j in range(4)],
+                         dtype=np.int32),
+        world_xy=[float(c) * 2.0, float(r) * 2.0])
 
 
 def _graph(n=9, name_suffix=""):
-    return {f"building_{i}": _Node(10 * i, 10 * i, name=f"b{i}{name_suffix}")
+    return {f"building_{i}": _node(10 * i, 10 * i, name=f"b{i}{name_suffix}")
             for i in range(1, n + 1)}
 
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from maps.search.analyze_scene.geom_program import build_surface
+from maps.sws.graph.model import MapObject
 
 _CELL_M = 2.0
 _ORIGIN = (0.0, 0.0)
@@ -13,36 +14,24 @@ _ORIGIN = (0.0, 0.0)
 _DRAWABLE_VERTS = 3
 
 
-class _PointNode:
+def _point_node(x, y, name=None):
     """An OSM POI node: its exact contour IS the point it sits at."""
-
-    def __init__(self, x, y, name=None):
-        self.world_contour = [(float(x), float(y))]
-        self.name = name
-        self.tags = {"amenity": "pharmacy"}
-        self.class_name = ""
-        self.centerline = None
-        self.world_xy = None
-        self.cells = [(int(y // _CELL_M), int(x // _CELL_M))]
-        self.centroid = (self.cells[0][0], self.cells[0][1])
+    cells = [(int(y // _CELL_M), int(x // _CELL_M))]
+    return MapObject(class_name="", name=name, tags={"amenity": "pharmacy"},
+                     centroid=cells[0], cells=cells,
+                     world_contour=[(float(x), float(y))])
 
 
-class _WayNode:
+def _way_node(ring, name=None):
     """A way with a real ring — the case that must NOT change."""
-
-    def __init__(self, ring, name=None):
-        self.world_contour = [(float(x), float(y)) for x, y in ring]
-        self.name = name
-        self.tags = {"building": "yes"}
-        self.class_name = ""
-        self.centerline = None
-        self.world_xy = None
-        xs = [p[0] for p in self.world_contour]
-        ys = [p[1] for p in self.world_contour]
-        self.cells = [(int(yy // _CELL_M), int(xx // _CELL_M))
-                      for yy in range(int(min(ys)), int(max(ys)) + 1, 2)
-                      for xx in range(int(min(xs)), int(max(xs)) + 1, 2)]
-        self.centroid = (self.cells[0][0], self.cells[0][1])
+    contour = [(float(x), float(y)) for x, y in ring]
+    xs = [p[0] for p in contour]
+    ys = [p[1] for p in contour]
+    cells = [(int(yy // _CELL_M), int(xx // _CELL_M))
+             for yy in range(int(min(ys)), int(max(ys)) + 1, 2)
+             for xx in range(int(min(xs)), int(max(xs)) + 1, 2)]
+    return MapObject(class_name="", name=name, tags={"building": "yes"},
+                     centroid=cells[0], cells=cells, world_contour=contour)
 
 
 def _row(node, fid="prior_1"):
@@ -52,7 +41,7 @@ def _row(node, fid="prior_1"):
 
 
 def test_a_point_feature_serves_a_mask_a_picture_can_draw():
-    row = _row(_PointNode(4659.6, 2965.7, name="Rite Aid"))
+    row = _row(_point_node(4659.6, 2965.7, name="Rite Aid"))
     mask = row.get("mask")
     assert mask, "a point feature must still carry a footprint"
     # THE CONTRACT: at least one loop the renderer can actually draw.
@@ -72,7 +61,7 @@ def test_a_point_feature_serves_a_mask_a_picture_can_draw():
 
 def test_a_real_ring_still_serves_its_exact_geometry():
     ring = [(100.0, 200.0), (140.0, 200.0), (140.0, 230.0), (100.0, 230.0)]
-    row = _row(_WayNode(ring, name="A Building"))
+    row = _row(_way_node(ring, name="A Building"))
     mask = row.get("mask")
     assert mask, mask
     got = {(round(p[0], 2), round(p[1], 2)) for ch in mask for p in ch}

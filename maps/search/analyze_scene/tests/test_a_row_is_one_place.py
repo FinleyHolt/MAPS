@@ -11,6 +11,7 @@ import pytest
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import build_surface
+from maps.sws.graph.model import MapObject
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", "..", ".."))
@@ -19,20 +20,11 @@ _TILES = Path(os.environ.get("SEARCH_CALCITY_TILES")
 _HAS_BAKE = (_TILES / "calcity_features.json").is_file()
 
 
-class _Way:
-    """The bit of MapObject the surface builder reads."""
-
-    def __init__(self, name, cells, contour=None):
-        self.name = name
-        self.cells = np.asarray(cells, dtype=int).reshape(-1, 2)
-        self.tags = {}
-        self.centroid = (float(self.cells[:, 0].mean()),
-                         float(self.cells[:, 1].mean()))
-        self.world_xy = None
-        self.centerline = None
-        self.class_name = ""
-        self.world_contour = contour
-        self.provenance = "prebaked"
+def _way(name, cells, contour=None):
+    cells = np.asarray(cells, dtype=int).reshape(-1, 2)
+    return MapObject(class_name="", name=name, tags={},
+                     centroid=(float(cells[:, 0].mean()), float(cells[:, 1].mean())),
+                     cells=cells, world_contour=contour)
 
 
 def _row(cells_cols, row=10):
@@ -44,8 +36,8 @@ def _row(cells_cols, row=10):
 
 def test_two_places_under_one_name_are_two_rows():
     _c, anchors = build_surface(
-        [], [("prior_1", _Way("85th Street", _row(range(0, 10)))),
-             ("prior_2", _Way("85th Street", _row(range(400, 410))))],
+        [], [("prior_1", _way("85th Street", _row(range(0, 10)))),
+             ("prior_2", _way("85th Street", _row(range(400, 410))))],
         (0.0, 0.0), 2.0)
     assert len(anchors) == 2, [a["fid"] for a in anchors]
     assert {a["name"] for a in anchors} == {"85th Street"}
@@ -54,8 +46,8 @@ def test_two_places_under_one_name_are_two_rows():
 def test_unnamed_features_are_never_folded_together():
     """There is nothing to fold them ON."""
     _c, anchors = build_surface(
-        [], [("prior_1", _Way(None, [[0, 0]])),
-             ("prior_2", _Way("", [[0, 1]]))], (0.0, 0.0), 2.0)
+        [], [("prior_1", _way(None, [[0, 0]])),
+             ("prior_2", _way("", [[0, 1]]))], (0.0, 0.0), 2.0)
     assert len(anchors) == 2, [a["fid"] for a in anchors]
 
 
@@ -65,7 +57,7 @@ def test_unnamed_features_are_never_folded_together():
 def test_geometry_is_cut_at_the_edge_of_what_the_tile_covers():
     """A way whose contour runs off the tile keeps only its in-tile half."""
     contour = [[1.0, 21.0], [1.0, 4000.0]]          # runs far north
-    way = _Way("Neuralia Road", _row(range(0, 1), row=10), contour=contour)
+    way = _way("Neuralia Road", _row(range(0, 1), row=10), contour=contour)
     way.cells = np.asarray([[r, 0] for r in range(0, 20)], dtype=int)
     _c, anchors = build_surface([], [("prior_1", way)], (0.0, 0.0), 2.0)
     ys = [p[1] for ch in anchors[0]["mask"] for p in ch]
@@ -77,7 +69,7 @@ def test_a_feature_wholly_inside_is_not_touched():
     """VACUITY FLOOR: a clip that trims everything would pass the test above while
     deleting the map."""
     contour = [[1.0, 1.0], [1.0, 19.0]]
-    way = _Way("Rea Avenue", _row(range(0, 1)), contour=contour)
+    way = _way("Rea Avenue", _row(range(0, 1)), contour=contour)
     way.cells = np.asarray([[r, 0] for r in range(0, 10)], dtype=int)
     _c, anchors = build_surface([], [("prior_1", way)], (0.0, 0.0), 2.0)
     assert anchors[0]["mask"] == [[[1.0, 1.0], [1.0, 19.0]]], anchors[0]["mask"]
@@ -96,8 +88,8 @@ def test_clipping_preserves_exact_vertex_identity():
 
 def test_the_served_point_is_on_the_row_it_belongs_to():
     _c, anchors = build_surface(
-        [], [("prior_1", _Way("85th Street", _row(range(0, 10)))),
-             ("prior_2", _Way("85th Street", _row(range(400, 410))))],
+        [], [("prior_1", _way("85th Street", _row(range(0, 10)))),
+             ("prior_2", _way("85th Street", _row(range(400, 410))))],
         (0.0, 0.0), 2.0)
     for r in anchors:
         gap, _a, _b = G.gap_witness(G.mask_geom(r["mask"]),
@@ -172,11 +164,11 @@ def test_the_real_bake_lands_every_row_on_the_map():
 def test_the_flown_pose_is_the_row_s_served_xy():
     from maps.search.tests.fakes import search_loop
 
-    ways = [("prior_1", _Way("Lime Avenue", _row(range(0, 10)))),
-            ("prior_2", _Way("Lime Avenue", _row(range(10, 20)))),
+    ways = [("prior_1", _way("Lime Avenue", _row(range(0, 10)))),
+            ("prior_2", _way("Lime Avenue", _row(range(10, 20)))),
             # A bent way: its cell mean is off its own geometry, which is
             # what made the two rules disagree in the first place.
-            ("prior_3", _Way("Bent Road",
+            ("prior_3", _way("Bent Road",
                              [[r, 40] for r in range(0, 20)]
                              + [[19, c] for c in range(40, 60)]))]
 

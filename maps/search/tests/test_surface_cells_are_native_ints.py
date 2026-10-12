@@ -6,24 +6,22 @@ import json
 
 from maps.search.analyze_scene import cell_mesh
 from maps.search.analyze_scene.geom_program import build_surface_from_graph
+from maps.sws.graph.model import MapObject
 
 
-class _Node:
-    def __init__(self, cells, provenance="prebaked"):
-        import numpy as np
+def _node(cells, provenance="prebaked"):
+    import numpy as np
 
-        self.cells = np.asarray(cells, dtype=np.int32)
-        self.world_xy = [float(cells[0][1]) * 2.0, float(cells[0][0]) * 2.0]
-        self.centroid = (int(cells[0][0]), int(cells[0][1]))
-        self.centerline = None
-        self.class_name = "building"
-        self.name = None
-        self.provenance = provenance
+    return MapObject(
+        class_name="building", name=None, tags={},
+        centroid=(int(cells[0][0]), int(cells[0][1])), provenance=provenance,
+        cells=np.asarray(cells, dtype=np.int32),
+        world_xy=[float(cells[0][1]) * 2.0, float(cells[0][0]) * 2.0])
 
 
 def _graph():
     return {
-        f"building_{i}": _Node([[r, c] for r in range(i, i + 4)
+        f"building_{i}": _node([[r, c] for r in range(i, i + 4)
                                 for c in range(i, i + 5)])
         for i in range(1, 12)
     }
@@ -64,7 +62,7 @@ def test_cells_are_json_native_ints_not_numpy_scalars():
 def test_a_node_with_no_cells_stays_bare():
     import numpy as np
 
-    node = _Node([[1, 1]])
+    node = _node([[1, 1]])
     node.cells = np.zeros((0, 2), dtype=np.int32)
     cands, anchors = build_surface_from_graph(
         {"building_1": node}.items(), (0.0, 0.0), 2.0)

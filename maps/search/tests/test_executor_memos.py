@@ -7,29 +7,25 @@ import json
 import numpy as np
 
 from maps.search.analyze_scene import geom_program as gp
+from maps.sws.graph.model import MapObject
 
 
-class _Node:
-    def __init__(self, r, c, name=None, provenance="prebaked", cls="building",
-                 w=4, h=3):
-        self.cells = np.asarray([[r + i, c + j] for i in range(h)
-                                 for j in range(w)], dtype=np.int32)
-        self.world_xy = None
-        self.centroid = (int(r), int(c))
-        self.centerline = None
-        self.class_name = cls
-        self.name = name
-        self.provenance = provenance
-        self.tags = {"building": "yes"} if provenance == "prebaked" else {}
+def _node(r, c, name=None, provenance="prebaked", cls="building", w=4, h=3):
+    return MapObject(
+        class_name=cls, name=name,
+        tags={"building": "yes"} if provenance == "prebaked" else {},
+        centroid=(int(r), int(c)), provenance=provenance,
+        cells=np.asarray([[r + i, c + j] for i in range(h) for j in range(w)],
+                         dtype=np.int32))
 
 
 def _surface(n=40):
     rng = np.random.default_rng(3)
-    nodes = {f"prior_{i}": _Node(int(rng.integers(0, 400)),
+    nodes = {f"prior_{i}": _node(int(rng.integers(0, 400)),
                                  int(rng.integers(0, 400)), name=f"b{i}")
              for i in range(n)}
-    nodes["detected_1"] = _Node(200, 200, provenance="detected", cls="car")
-    nodes["detected_2"] = _Node(210, 215, provenance="detected", cls="car")
+    nodes["detected_1"] = _node(200, 200, provenance="detected", cls="car")
+    nodes["detected_2"] = _node(210, 215, provenance="detected", cls="car")
     return gp.build_surface_from_graph(nodes.items(), (0.0, 0.0), 2.0)
 
 

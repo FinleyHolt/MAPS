@@ -6,25 +6,18 @@ from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import (
     build_surface, run_program,
 )
+from maps.sws.graph.model import MapObject
 
 
-class _Way:
-    """The bit of MapObject the surface builder reads."""
-
-    def __init__(self, name, cells, tags=None):
-        self.name = name
-        self.cells = np.asarray(cells, dtype=int).reshape(-1, 2)
-        self.tags = tags or {}
-        self.centroid = (float(self.cells[:, 0].mean()),
-                         float(self.cells[:, 1].mean()))
-        self.world_xy = None
-        self.centerline = None
-        self.class_name = ""
-        self.world_contour = None
+def _way(name, cells, tags=None):
+    cells = np.asarray(cells, dtype=int).reshape(-1, 2)
+    return MapObject(class_name="", name=name, tags=tags or {},
+                     centroid=(float(cells[:, 0].mean()), float(cells[:, 1].mean())),
+                     cells=cells)
 
 
 def _road(name, c0, c1, row=10):
-    return _Way(name, [[row, c] for c in range(c0, c1 + 1)])
+    return _way(name, [[row, c] for c in range(c0, c1 + 1)])
 
 
 def test_each_osm_way_keeps_its_own_row():
@@ -32,7 +25,7 @@ def test_each_osm_way_keeps_its_own_row():
     ways = [("prior_9", _road("Lime Avenue", 20, 29)),
             ("prior_3", _road("Lime Avenue", 0, 9)),
             ("prior_7", _road("Lime Avenue", 10, 19)),
-            ("prior_1", _Way("Oak Street", [[0, 0]]))]
+            ("prior_1", _way("Oak Street", [[0, 0]]))]
     _c, anchors = build_surface([], ways, (0.0, 0.0), 2.0)
     assert len(anchors) == 4, [a["fid"] for a in anchors]
     lime = [a for a in anchors if a["name"] == "Lime Avenue"]
@@ -78,7 +71,7 @@ def test_every_row_is_one_place_and_may_claim_a_centre():
 def test_a_row_that_is_STILL_several_places_orients_no_side():
     """The ``_mask_center`` law, on the one shape that can still reach it: a
     reference that is several places serves its gap and no centre column."""
-    speckled = _Way(None, [[10, c] for c in range(0, 10)]
+    speckled = _way(None, [[10, c] for c in range(0, 10)]
                     + [[10, c] for c in range(400, 410)])
     _c, anchors = build_surface([], [("prior_1", speckled)], (0.0, 0.0), 2.0)
     assert not G.one_place(anchors[0]["mask"]), anchors[0]["mask"]
@@ -98,7 +91,7 @@ def test_the_surface_carries_cells_and_a_name_repeats_across_its_ways():
     """Duplicate names are the POINT: they are what ``.exact`` collects."""
     ways = [(f"prior_{i}", _road("Lime Avenue", i * 10, i * 10 + 9))
             for i in range(4)]
-    ways.append(("prior_99", _Way("Oak Street", [[40, 40], [40, 41]])))
+    ways.append(("prior_99", _way("Oak Street", [[40, 40], [40, 41]])))
     _cands, anchors = build_surface([], ways, (0.0, 0.0), 2.0)
     assert len(anchors) == 5
     lime = [a for a in anchors if a["name"] == "Lime Avenue"]
