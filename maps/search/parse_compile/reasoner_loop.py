@@ -1030,17 +1030,11 @@ class _Mission:
             return {"error": (f"{handle} holds no rows to look at; name a "
                               "handle that has some, or find() one first")}
         fids = [_crop_token_of(r, str(r["fid"]) in self._ns_rows) for r in rows]
-        ack = self._crops_of(
+        return self._crops_of(
             fids, marks=marks,
             # No handle named: the executor's ref may be unbound.
             preamble=("One crop per row, in order, each badged with the "
                       "row it shows. "))
-        if not withheld("images") and len(rows) > int(ack.get("delivered") or 0):
-            ack.setdefault("ref_notes", []).append(
-                f"{len(rows)} rows in {handle}: this call shows the first "
-                f"{ack.get('delivered')} in the standing order; slice the "
-                "handle to see the rest")
-        return ack
 
     def _map_of(self, fid: str, mark_fids: list | None = None) -> dict:
         spec, m_skipped = map_spec(fid, mark_fids or [], rows=self._ns_rows,

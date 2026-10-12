@@ -76,8 +76,8 @@ def test_over_budget_is_a_served_fact_not_a_silent_truncation(ortho_dir):
     assert len(rec["legend"]) == 1, rec["legend"]
     assert rec["marks_dropped"] == 0, rec
     note = " ".join(results[1]["crop"].get("ref_notes") or [])
-    assert f"{n} rows" in note, note
-    assert "slice the handle" in note, note
+    assert f"only the first 16 crops of this call rendered ({n - 16} item(s) dropped)" in note, note
+    assert note.count("16") == 2, note       # the cap is stated once
 
 
 def test_a_spread_set_gets_a_crop_each_at_single_look_scale(

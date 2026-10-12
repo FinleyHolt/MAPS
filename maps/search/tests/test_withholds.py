@@ -151,7 +151,6 @@ def test_an_images_withhold_delivers_the_looks_caption(ortho_dir, monkeypatch):
         [[run('a = find("car")')], [run("look(a)")], "over"], cars(3), ortho_dir)
     assert reqs, "the look rendered"
     assert len(vision) == 1
-    assert "slice the handle" not in json.dumps(results), results
     assert _PICTURE_WITHHELD in json.dumps(results)
 
 
