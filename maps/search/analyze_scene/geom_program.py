@@ -83,12 +83,17 @@ def _modal_attr(n, key):
     return max(cc.items(), key=lambda kv: kv[1])[0] if cc else None
 
 
+# A bake written before the release (the flown ones the as-flown replays read)
+# stamps ``source`` on every row; it is never served.
+_UNSERVED_TAG = "source"
+
+
 def _row_tags(n) -> dict:
-    """A prior row's tags: the node's string-valued OSM tags."""
+    """A prior row's tags: the node's string-valued OSM tags but _UNSERVED_TAG."""
     tags = getattr(n, "tags", None) or {}
     if not isinstance(tags, dict):
         return {}
-    return {str(k): v for k, v in tags.items() if isinstance(v, str)}
+    return {str(k): v for k, v in tags.items() if isinstance(v, str) and str(k).lower() != _UNSERVED_TAG}
 
 
 # Bake bookkeeping kept out of the free search text only: stamped on every
