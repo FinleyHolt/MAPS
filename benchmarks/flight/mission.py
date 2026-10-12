@@ -1,28 +1,13 @@
-"""One flying mission, held open across operator turns.
+"""One flying mission, held open across operator turns: the method half of the station that flew the C-12.
 
-The method half of the station that flew the C-12. It hydrates the search
-stack for a mission exactly as the bench does, flies the conversation on a
-worker thread, and keeps the session alive afterwards so the operator can
-re-task what the model just reported.
-
-Two things separate this from the bench, and both are the point:
-
-* **The conversation does not end at the reply.** A bench episode's plain
-  reply is its ending. In flight the reply is a REPORT, so the session parks
-  in ``awaiting_tasking`` and the operator's answer goes to
-  ``continue_mission`` on the SAME reasoner. Everything the earlier turns
-  folded into the world stays.
-* **The operator speaks whenever.** Taskings land in a queue the loop drains
-  at the top of each turn (``retask``), so a bad survey is redirected without
-  waiting for the model to finish.
-
-A flight is a leg the aircraft flies (:meth:`Mission._fly_live`, the wrap of
-``MissionSpec.fly``): it is flown for an AREA and has arrived when the
-recording holds it (``LiveSource.coverage``), and its observation is the
-frames that held it, fused (``LiveSource.observe_area``). Nothing else in the
-engine's loop changes. Nothing here scores the mission while it flies: the
-row is scored after the reply, against the split's target when the episode
-has one.
+The search stack is hydrated as the bench hydrates it and the conversation
+flies on a worker thread. Two things differ from the bench. The reply is a
+REPORT: the session parks in ``awaiting_tasking`` and the operator's answer
+goes to ``continue_mission`` on the same reasoner. The operator speaks
+whenever: taskings queue and the loop drains them at the top of each turn.
+A flight is a leg flown for an AREA (:meth:`Mission._fly_live`); it arrives
+when the recording holds the area, and its observation is the frames that
+held it, fused. The row is scored after the reply.
 """
 
 from __future__ import annotations
@@ -144,11 +129,9 @@ def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] |
 
 def hydrate(*, episode_id: str, split: str, config: str,
             start_xy: tuple[float, float] | None = None, agl_m: float | None = None) -> Hydrated:
-    """The engine for one mission, built by the bench's own
-    :func:`build_episode`: the flown engine (no withhold), a sensor that
-    resolves, the operator's start as given, and with ``agl_m`` the height
-    above ground the crew is commanded to fly in place of the config's start
-    height: the one height the served sensor block and every leg read."""
+    """The engine for one mission, built by the bench's :func:`build_episode`,
+    at the operator's start and, with ``agl_m``, at the crew's commanded height
+    above ground: the one height the served sensor block and every leg read."""
     from benchmarks.citynav.run_benchmark import load_config, load_episode_assets  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import build_episode  # noqa: PLC0415
@@ -174,10 +157,9 @@ def leg_span_m(h: Hydrated) -> float:
 
 
 def leg_area(h: Hydrated, token: str, xy) -> list[tuple[float, float]]:
-    """The ground a leg is flown for, as points in tile metres: the target's
-    own cells when the token names a row the bake gave a footprint (at most
-    ``AREA_POINTS`` of them, evenly), else a disc of half the observation span
-    about the point: a centre, six points at a quarter span, twelve at half."""
+    """The ground a leg is flown for, in tile metres: the target's footprint
+    cells (at most ``AREA_POINTS``), else a disc of half the observation span
+    about the point (a centre, six points at a quarter span, twelve at half)."""
     cells = h.search_loop.node_cells_xy(token) if token else None
     # Three cells at least: fewer is a point or a line, which no coverage
     # fraction answers. A row that thin is flown as a cover stop.
@@ -278,10 +260,8 @@ class Mission:
     # -- the operator's channel -------------------------------------------
 
     def tasking(self, text: str) -> None:
-        """Queue an operator tasking; never blocks, never rejects. Typed
-        mid-turn it lands at the top of the next one; typed after the model
-        reported it wakes the parked session. The row is written when the
-        operator speaks."""
+        """Queue an operator tasking (never blocks): mid-turn it lands at the
+        next turn, after a report it wakes the parked session."""
         text = (text or "").strip()
         if not text:
             return
@@ -316,14 +296,11 @@ class Mission:
         return [local_to_lonlat(self._tiles_dir, self.map_name, float(x), float(y)) for x, y in area]
 
     def _fly_live(self, session, item: dict[str, Any]) -> dict[str, Any]:
-        """A flight on the aircraft: a leg flown for an AREA (:func:`leg_area`)
-        arrives when the recording holds it, and its observation is the frames
-        that held it, fused. An area a ring that ANSWERED holds already is
-        served without a leg (:meth:`_coverage_before_leg`); otherwise the leg
-        is posted and the recording asked until it holds the area and the point
-        leaves the frame (:meth:`_wait_departure`). A leg that never arrives
-        within ``ARRIVAL_TIMEOUT_S`` serves what the pass held, the ``leg`` row
-        says which, and the model is served the stop it named either way."""
+        """A flight on the aircraft. An area the ring already holds is served
+        without a leg; otherwise the leg is posted and waited on until the
+        recording holds the area and the point leaves the frame, or until
+        ``ARRIVAL_TIMEOUT_S``, when what the pass held is served. The ``leg``
+        row says which."""
         h = session.h
         token = str(item.get("target_fid") or "")
         resolved = session.resolve(token)
@@ -410,11 +387,9 @@ class Mission:
         self.transcript.append({"kind": "leg", "said": text})
 
     def _wait_departure(self, xy) -> float:
-        """Hold until the point leaves the camera's frame, and answer with the
-        seconds it took. The arrival rule turns true as the point crosses INTO
-        the frame; waiting for it to fall out the other side puts the whole
-        pass in the ring. Bounded by the transit the frame's geometry allows
-        and by :data:`FRAME_WAIT_S`."""
+        """Hold until the point leaves the frame, so the whole pass is in the
+        ring, at most the frame's transit and :data:`FRAME_WAIT_S`; the
+        seconds it took."""
         bound = self._live.frame_transit_s()
         if bound is None:
             return 0.0
@@ -436,10 +411,9 @@ class Mission:
         return cov
 
     def _coverage_before_leg(self, area_lonlat) -> tuple[dict[str, Any] | None, str | None]:
-        """:meth:`_coverage` asked up to ``COVERAGE_TRIES`` times,
-        ``COVERAGE_RETRY_S`` apart, because only a read that answers may decide
-        whether a leg is flown. ``(coverage, refusal)``: the refusal is the
-        live source's when the ring never answered."""
+        """:meth:`_coverage` asked up to ``COVERAGE_TRIES`` times, since only a
+        read that answers decides whether a leg is flown: ``(coverage,
+        refusal)``."""
         refusal = None
         for k in range(1, COVERAGE_TRIES + 1):
             cov = self._coverage(area_lonlat)
@@ -455,9 +429,7 @@ class Mission:
         return None, refusal
 
     def _held_now(self, h: Hydrated, stops: list) -> list[bool]:
-        """Which of a pass's stops the recording holds already, for the loop's
-        greedy order (``MissionSpec.held_now``): each stop's ground as its leg
-        would be flown for it, off one index read."""
+        """Which of a pass's stops the recording holds already, off one index read (``MissionSpec.held_now``)."""
         out = [False] * len(stops)
         if not stops:
             return out
@@ -473,11 +445,9 @@ class Mission:
         return out
 
     def _short_pass(self, token: str, xy, area: list[tuple[float, float]], n: int) -> tuple[list[float], str]:
-        """Where a short pass is asked again, and the line for why: the area's
-        centroid moved toward the centroid of the points no frame held, by the
-        missing ground's extent along that line, no further than the leg's
-        reach. Said in the transcript with the points held, the frames, and the
-        side that is missing."""
+        """Where a short pass is asked again, and the note for why: the area's
+        centroid moved toward the unheld points' centroid by the missing
+        ground's extent, no further than the leg's reach."""
         cov = self._last_coverage or {}
         best = cov.get("best") or []
         unheld = [p for p, b in zip(area, best) if b is None] or list(area)
@@ -513,9 +483,8 @@ class Mission:
 
     def _held_frame(self, area: list[tuple[float, float]], xy, after: float | None = None
                     ) -> tuple[Any, dict[str, Any]] | None:
-        """The ground the pass held over ``area`` (tile metres, about ``xy``) as
-        the observation, from the frames recorded after ``after`` when given,
-        with the live source's record of it; None when no frame held any of it."""
+        """``(observation, record)`` of the ground the pass held over ``area``
+        (the frames after ``after`` when given); None when no frame held any."""
         obs = self._live.observe_area(self._area_lonlat(area), after)
         last, refusal = dict(self._live.last or {}), self._live.last_refusal
         if obs is None:
@@ -526,9 +495,7 @@ class Mission:
         return obs, last
 
     def _downlink(self, obs) -> str | None:
-        """The observation as one north-up image under ``observations/``, the
-        fused pixels the model is about to be given, by its sha256; None when
-        it could not be written, which is a log line, never a lost stop."""
+        """The observation as ``observations/<sha256>.jpg``, its sha; None (logged) when it could not be written."""
         from PIL import Image  # noqa: PLC0415
 
         out = BytesIO()
@@ -546,12 +513,10 @@ class Mission:
 
     def _wait_arrival(self, xy: Any, *, area: list[tuple[float, float]] | None, timeout_s: float,
                       reach_m: float | None = None, after: float | None = None) -> str:
-        """``arrived`` when the recording holds ``area`` at ``COVERED_FRACTION``
-        (asked as it grows, poses only, over the frames recorded after
-        ``after`` when given); ``short`` when ``reach_m`` is given and
-        the pass came inside it, left (``SHORT_PASS_LEAVE_M`` for
-        ``SHORT_PASS_LEAVE_S``) with the area part held; ``lost`` when
-        ``timeout_s`` ran out airborne; ``cancel`` when the mission was stopped."""
+        """``arrived`` when the recording (the frames after ``after`` when
+        given) holds ``area``; ``short`` when the pass came inside ``reach_m``
+        and left with the area part held; ``lost`` when ``timeout_s`` ran out
+        airborne; ``cancel`` when the mission was stopped."""
         best = math.inf
         receding_since: float | None = None
         # The clock runs on the FLIGHT: it does not spend its timeout while the
@@ -588,9 +553,7 @@ class Mission:
         return "cancel"
 
     def _note_frame(self, last: dict[str, Any], obs) -> None:
-        """One row of ``frames.jsonl``: the observation this mission just
-        perceived, keyed to the recording by the newest frame's ``log_time``
-        and ``seq``, with every frame of the fuse in ``mosaic``."""
+        """One ``frames.jsonl`` row: the observation, keyed to the recording by its newest frame."""
         row = {"log_time": last.get("log_time"), "seq": last.get("seq"), "t_host": last.get("t_host"),
                "utc": last.get("utc"), "age_s": last.get("age_s"), "attitude": last.get("attitude"),
                "pose_xy": [float(obs.pose_xy[0]), float(obs.pose_xy[1])], "altitude_m": float(obs.altitude_m),
@@ -738,9 +701,8 @@ class Mission:
             self.close_log()
 
     def _write_manifests(self) -> None:
-        """The sortie's ``run_manifest.json``, written by the first mission flown
-        in it, and this mission's own in its workdir with the mission's grain:
-        which mission, and the reasoning effort its requests carry. Non-fatal."""
+        """The sortie's ``run_manifest.json`` (by its first mission) and this
+        mission's own in its workdir; a failure is logged."""
         from benchmarks.citynav.run_manifest import MANIFEST_NAME, build_manifest, emit_or_verify  # noqa: PLC0415
 
         sortie = self.workdir.parent
@@ -755,9 +717,7 @@ class Mission:
             log.exception("run_manifest not written for %s", self.workdir)
 
     def _mission_stamp(self) -> dict[str, Any]:
-        """The mission's own grain of the run manifest: the reasoning effort its
-        requests carry, the mission's pick, else the arm's environment value,
-        else the serve's own default (None)."""
+        """The mission's grain of the run manifest: which mission, and the reasoning effort its requests carry."""
         effort = self.reasoning_effort or os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT") or None
         return {"episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no,
                 "reasoning_effort": effort}
@@ -788,8 +748,7 @@ class Mission:
     # -- the record ----------------------------------------------------------
 
     def score(self, visited: list[list[float]]) -> dict[str, Any] | None:
-        """SR/OSR/NE/SPL for the mission through the bench's own scorer, the
-        flown points standing for the trajectory and the last of them for the
+        """SR/OSR/NE/SPL through the bench's scorer, the last flown point the
         commit; None for an episode with no target."""
         h = self._hydrated
         if h is None or h.episode.target_xy is None or len(visited) < 1:
@@ -803,9 +762,8 @@ class Mission:
                              flew=len(trajectory) > 1)
 
     def row(self) -> dict[str, Any]:
-        """The mission as a ledger row, the keys a bench row carries, so
-        ``benchmarks.citynav.analysis`` reads a sortie the way it reads a run.
-        The commit is the last flight, verbatim; zero flights is an honest zero."""
+        """The mission as a ledger row with a bench row's keys, so
+        ``benchmarks.citynav.analysis`` reads a sortie as it reads a run."""
         from benchmarks.citynav import paths  # noqa: PLC0415
         from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK  # noqa: PLC0415
         from benchmarks.citynav.run_manifest import arm_env_stamp  # noqa: PLC0415
@@ -844,10 +802,9 @@ class Mission:
         }
 
     def bank(self) -> None:
-        """The run's row on disk: ``episode.json`` in the mission's directory
-        and ONE line in the sortie's ``episodes.jsonl``, keyed by the run, so
-        a parked run that flies again replaces its row. Banked at every report
-        and at the end; a row that will not land is logged, never raised."""
+        """The run's row in ``episode.json`` and as ONE line of the sortie's
+        ``episodes.jsonl``, replaced at every report; a row that will not land
+        is logged, never raised."""
         from benchmarks.citynav.episodes import upsert_row, write_episode_json  # noqa: PLC0415
 
         try:
@@ -860,10 +817,9 @@ class Mission:
 
 
 def converse(mission: Mission, taskings: list[str], *, ended=None) -> None:
-    """Fly ``mission`` to its end: at each report the next of ``taskings`` is
-    spoken, and the mission is stopped when none is left. With ``ended`` the
-    taskings come from elsewhere, and the mission is stopped at the first
-    report after ``ended()`` turns true. The live source is closed after."""
+    """Fly ``mission`` to its end, speaking the next of ``taskings`` at each
+    report and stopping when none is left (or, with ``ended``, at the first
+    report after ``ended()``), then close the live source."""
     mission.start()
     pending, heard = list(taskings), 0
     while mission.status in (STATE_IDLE, STATE_FLYING, STATE_AWAITING):

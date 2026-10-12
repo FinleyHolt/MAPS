@@ -5,25 +5,15 @@
     python -m benchmarks.flight.replay <sortie>/<run dir> --frames <sensors.mcap> --boresight <chain.json>
         --raster <raster dir> [--nav <sensors_nocamera.mcap>]
 
-The mission is the harness's own (:class:`benchmarks.flight.mission.Mission`),
-hydrated under the recorded operator's words and start; what changes is what
-answers a flight:
-
-* **The observation bank** (default): the recorded observation (the run's
-  own, or every run's with ``--bank week``) holding the most of the leg's area
-  points on non-black pixels, through ``ortho_observation``; the user's
-  reasoner and segmenter answer, and the recorded taskings follow each report.
-* **Forced** (``--forced``): the recorded responses, observations and
-  detections answer; every request body is diffed against the recorded one
-  (``replay_diff.json``) and a divergence exits non-zero. No endpoint is contacted.
-* **The frame tier** (``--frames``): the camera recording read as the
-  aircraft's ring (:class:`benchmarks.flight.recorded_ring.RecordedRing`) and
-  re-fused by the live source at every waypoint.
-
-The bank answers at the live source's seam (the calls the harness reads
-``LiveSource`` through), since a recorded observation is fused already. Every
-replay writes the records a flown run carries, its ledger row naming the run
-it replays (``replay_of``).
+The harness's own :class:`~benchmarks.flight.mission.Mission` flies under the
+recorded operator's words and start; what answers a flight is the observation
+bank (default: the recorded observation holding most of the leg's area, your
+reasoner and segmenter answering), the recording itself (``--forced``: every
+request diffed into ``replay_diff.json``, a divergence exits non-zero, no
+endpoint contacted), or the camera recording re-fused as the aircraft's ring
+(``--frames``). The bank answers at the live source's seam. Every replay
+writes a flown run's records, its row naming the run it replays
+(``replay_of``).
 """
 
 from __future__ import annotations
@@ -231,13 +221,10 @@ class Clock:
 
 
 class BankSource:
-    """Recorded observations at the live source's seam: coverage and an observation for an area.
-
-    ``forced`` is the mission's flight count, read live: each flight is
-    then answered by what the recording served that flight, in order, and the
-    coverage rule is not asked. The bank keeps no clock, so a read ``after``
-    a time is a read of the whole bank.
-    """
+    """Recorded observations at the live source's seam. With ``forced`` (the
+    mission's flight count, read live) each flight is answered by what the
+    recording served it, in order. The bank keeps no clock: a read ``after``
+    a time reads the whole bank."""
 
     def __init__(self, bank: list[Held], *, tiles_dir, map_name: str, tile_ground_z: float, forced=None,
                  by_flight: dict[int, list[Held]] | None = None) -> None:
@@ -326,11 +313,9 @@ def bank_of(recordings: list[Recording]) -> list[Held]:
 
 
 class Script:
-    """The recorded reasoner: each request is answered with the response the
-    recording holds for it, in order. The taskings the next recorded request
-    carried as user turns are spoken as the response goes back, so the
-    harness drains them where it drained them in flight. Past the last
-    answered request the mission is stopped, as the crew stopped it."""
+    """The recorded reasoner: each request gets its recorded response, the
+    next request's operator turns are spoken as it goes back, and past the
+    last answered request the mission is stopped, as the crew stopped it."""
 
     def __init__(self, rec: Recording) -> None:
         self.rec = rec
@@ -365,10 +350,8 @@ class Script:
 
 
 def recorded_segmenter(rec: Recording, state_of):
-    """The segmenter's ``_segment`` answered from the run's detections: the
-    recorded masks of the flight in progress (``state_of().step_idx``) go
-    back through the client's own decode, so every projection, split and
-    colour read downstream is the release's own."""
+    """The segmenter's ``_segment`` answered with the flight's recorded masks,
+    through the client's own decode, split, projection and colour read."""
 
     def segment(client, obs, concepts):
         from maps.perception.sam.detect_client import _record_region  # noqa: PLC0415
@@ -425,10 +408,8 @@ def _text(message: dict[str, Any]) -> tuple[str, list[str]]:
 
 
 def diff(rec: Recording, replay_dir: Path) -> dict[str, Any]:
-    """The replay against the recording, request by request: the params
-    (the served system turn and tool), every message each request carried
-    (the receipts the model read, the operator's turns), then the flights
-    flown and the commit. ``first`` is the first request that differs."""
+    """The replay against the recording: the params, every message of every
+    request (``first`` the first that differs), the flights and the commit."""
     params, requests, answers = read_transcript(replay_dir / "flight" / "llm" / "transcript.jsonl")
     # A request past the recording's last, left unanswered, is where the crew's stop fell.
     extra = requests[len(rec.requests):]

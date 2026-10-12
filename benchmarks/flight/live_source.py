@@ -1,23 +1,16 @@
 """What the aircraft's recording holds over an area, as one observation the mission's projector reads.
 
-The live counterpart of the bench's ortho crop. :meth:`LiveSource.coverage`
-reads off the ring's index alone how much of an area the recording holds (the
-one arrival rule); :meth:`LiveSource.observe_area` fuses the frames that saw
-the area nearest nadir into ONE north-up orthophoto on the map grid. Every
-recorded frame is registered as it arrives (:class:`Corrector`) into the pose
-graph; a ring frame older than the graph's window is registered on its own
-pixels, gated by the graph's node nearest it in time. The calibration
-(``boresight.json``: sensor, GNSS bias, timing offset) is applied here and
-nowhere else; without one the datasheet camera flies.
-
-Signs: a pose carries aerospace roll and pitch (right wing down and nose up
-positive). The projector's pitch is nose down, so it is carried negated.
-
-Two floors, one datum each: ``floor_msl_m`` is the ground under the aircraft
-in the receiver's orthometric datum, so their difference is the height above
-ground; ``tile_ground_z`` is the tile frame's own floor (``GROUND_LEVEL``),
-and every altitude an observation carries is that floor plus the height
-above ground.
+:meth:`LiveSource.coverage` reads off the ring's index how much of an area
+the recording holds (the arrival rule); :meth:`LiveSource.observe_area` fuses
+the frames that saw it nearest nadir into ONE north-up orthophoto on the map
+grid. Every frame is registered into the pose graph as it arrives
+(:class:`Corrector`); an older ring frame is registered on its own pixels,
+gated by the graph's node nearest it in time. The calibration
+(``boresight.json``) is applied here alone; without one the datasheet camera
+flies. A pose's roll and pitch are aerospace (right wing down, nose up); the
+projector's pitch is nose down, so it is carried negated. ``floor_msl_m`` is
+the ground in the receiver's orthometric datum, ``tile_ground_z`` the tile
+frame's floor (``GROUND_LEVEL``).
 
 ponytail: flat ground at the bake's floor under the composite; relief needs a
 height raster under ``ground_corners_xy``.
@@ -108,14 +101,10 @@ def _radius(h: int, w: int) -> np.ndarray:
 
 def composite(corners: np.ndarray, images, *, gsd_m: float
               ) -> tuple[np.ndarray, np.ndarray, tuple[float, float, float, float], int]:
-    """A north-up mosaic of posed frames on one ground grid, by direct georeferencing.
-
-    ``corners`` is ``(n, 4, 2)``, each frame's corner pixel centres on the
-    floor in bake-local metres; ``images`` yields the same n frames as RGB
-    arrays. Where frames overlap a ground pixel takes the frame whose centre
-    it is nearest, in that frame's own pixels, so seams fall mid-overlap.
-    Returns ``(rgb, alpha, (x0, y0, x1, y1), placed)``.
-    """
+    """``(rgb, alpha, (x0, y0, x1, y1), placed)``: a north-up mosaic of posed
+    frames on one ground grid. ``corners`` is ``(n, 4, 2)`` floor corners in
+    bake-local metres for the n RGB ``images``; an overlapped ground pixel
+    takes the frame whose centre it is nearest, so seams fall mid-overlap."""
     import cv2  # noqa: PLC0415
 
     allc = np.concatenate(corners)
@@ -190,11 +179,9 @@ def corrected_ortho(rgb: np.ndarray, alpha: np.ndarray, extent: tuple[float, flo
 def register_mosaic(rgb: np.ndarray, alpha: np.ndarray, extent: tuple[float, float, float, float],
                     render: np.ndarray) -> tuple[np.ndarray, np.ndarray, tuple[float, float, float, float],
                                                  dict[str, Any]]:
-    """The whole mosaic registered on the map at its window as ONE similarity
-    (:func:`frame_offset.similarity`), and corrected by it when the fit passes
-    the corrector's gates: ``(rgb, alpha, extent, record)``, the product as it
-    was and ``why`` otherwise. What the frames share, a crab or a mount's yaw,
-    shows here as the streets turned against the prior."""
+    """``(rgb, alpha, extent, record)``: the mosaic registered on the map as
+    ONE similarity and corrected by it when the fit passes the gates, else as
+    it was with ``why``. A crab or a mount's yaw shows here."""
     t0 = time.perf_counter()
     x0, y0, x1, y1 = (float(v) for v in extent)
     h, w = rgb.shape[:2]
@@ -251,10 +238,8 @@ class Registration:
 
 
 def fused_registration(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """The frames of one fused observation, each registered on its own pixels,
-    as one record: ``applied`` when any was placed, ``sources`` how many by
-    each (``measured``, ``tied``, ``nearest``, ``refused``), and when none was,
-    ``why`` the reason most of them gave."""
+    """One fused observation's frame registrations as one record: ``applied``,
+    ``sources`` counted, and when none applied the commonest ``why``."""
     out: dict[str, Any] = {"applied": any(r.get("applied") for r in records), "frames": len(records),
                            "sources": dict(Counter(r.get("source") or "refused" for r in records))}
     if not out["applied"]:
@@ -271,16 +256,11 @@ def frame_pose(posed) -> frame_ties.Pose:
 
 def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor, ground: float
                    ) -> tuple[dict[str, Any], tuple[float, float, float] | None]:
-    """This frame's ground residual on its own pixels: its record (``applied``
-    with the shift, or ``why``), and the measurement ``(east, north, response)`` or None.
-
-    The whole frame is the one mark: its edge structure located on the map's
-    render at ``pose`` (:func:`frame_offset.offset`), the shift taken to the
-    ground through the projector's Jacobian. ``pose.alt_msl_m`` is the
-    camera's orthometric altitude and ``ground`` the height under its nadir in
-    the same datum. A banked frame is asked like a level one:
-    its peak is noisier, and the graph's vote over the window is what reads it.
-    """
+    """``(record, measurement)``: the frame's ground residual on its own
+    pixels, its edges located on the map's render at ``pose`` and the shift
+    taken to the ground through the projector's Jacobian; the record carries
+    the shift or ``why``, the measurement is ``(east, north, response)`` or
+    None. ``ground`` is the height under the nadir in ``pose``'s datum."""
     record: dict[str, Any] = {"applied": False, "source": None, "shift_yaw_deg": 0.0}
     measured: tuple[float, float, float] | None = None
     try:
@@ -365,11 +345,9 @@ class LiveSource:
         self._clocked_since: int | None = None
 
     def start_corrector(self) -> None:
-        """Register frames into the pose graph as the vehicle records them. A
-        simulated vehicle (one that carries ``on_sleep``) moves its clock only
-        when the harness sleeps, so it corrects every frame up to that clock,
-        in order, before the sleep returns; a real vehicle runs the
-        wall-clock :class:`Corrector`."""
+        """Register frames as the vehicle records them: a simulated vehicle
+        (``on_sleep``) corrects every frame up to its clock before a sleep
+        returns, a real one runs the wall-clock :class:`Corrector`."""
         hooks = getattr(self.vehicle, "on_sleep", None)
         if hooks is not None:
             if self._correct_through_now not in hooks:
@@ -445,11 +423,9 @@ class LiveSource:
             self.graph.offer(seq, t_host, pose, locator.gray(posed.rgb), measured)
 
     def _register_ring(self, seq: int, posed, t: float) -> dict[str, Any]:
-        """A frame off the ring, registered on its own pixels (the graph's
-        window has moved on): a measurement further than
-        :data:`pose_graph.INNOVATION_CAP_M` from the graph's node nearest it in
-        time is refused, and a refused or unmeasured frame takes that node
-        (``nearest``); without one the pose stands and the record says why."""
+        """A ring frame registered on its own pixels: a measurement past
+        :data:`pose_graph.INNOVATION_CAP_M` from the graph's node nearest in
+        time is refused, and a refused or unmeasured frame takes that node."""
         pose = frame_pose(posed)
         record, _measured = register_frame(self.register, posed.rgb, pose, posed.sensor,
                                            self.ground_msl(pose.pose_xy))
@@ -478,10 +454,9 @@ class LiveSource:
         return (pose_xy[0] + self.boresight.gnss_bias_e_m, pose_xy[1] + self.boresight.gnss_bias_n_m), alt_msl, yaw
 
     def in_frame(self, x: float, y: float) -> bool | None:
-        """Whether the ground point ``(x, y)`` is inside the camera's frame at
-        the pose now, read with the solved sensor's field of view; None
-        without a pose. ponytail: the solve's mount angles are not in it,
-        tenths of a degree against a frame 15 degrees tall."""
+        """Whether ground ``(x, y)`` is in the frame at the pose now; None
+        without a pose. ponytail: field of view only, no mount angles (tenths
+        of a degree against a 15 degree frame)."""
         pose = self.pose_now()
         if pose is None:
             return None
@@ -513,12 +488,10 @@ class LiveSource:
         return {"x": pose_xy[0], "y": pose_xy[1], "agl_m": alt_msl - self.floor_msl_m, "utc": pose.utc}
 
     def coverage(self, points: list[tuple[float, float]], after: float | None = None) -> dict[str, Any] | None:
-        """How much of an area, ``points`` its (lon, lat) samples, the ring's
-        index holds through the solved camera's field of view, over the frames
-        stamped after ``after`` (vehicle seconds) when given: ``fraction`` the
-        share some frame held, ``best`` per point the ``(off-nadir degrees,
-        sequence)`` of the frame nearest nadir or None. None with
-        ``last_refusal`` when the ring cannot be asked."""
+        """How much of an area (``points``, lon/lat) the ring's index holds,
+        over the frames stamped after ``after`` (vehicle seconds) when given:
+        ``fraction``, and ``best`` per point ``(off-nadir degrees, seq)`` or
+        None. None with ``last_refusal`` when the ring cannot be asked."""
         rows = self._ring_rows(None)
         if rows is None:
             return None
@@ -577,14 +550,10 @@ class LiveSource:
                 "fraction": (held / len(points)) if points else 0.0, "best": best, "frames": len(rows)}
 
     def observe_area(self, points: list[tuple[float, float]], after: float | None = None) -> Observation | None:
-        """The ground the pass held over an AREA, as one north-up observation on
-        the map grid: the frames (stamped after ``after`` when given) that saw
-        each of ``points`` nearest nadir, fused (:meth:`_fused`). ``last["coverage"]`` says how much of the area
-        was held and by which frames; a partial pass is served as the part it
-        held. None with ``last_refusal`` when no frame held any of it. Off
-        nadir is the one rank (attitude is in the angle already), and only the
-        frames that win a point are fetched.
-        """
+        """The ground the pass held over an AREA as one north-up observation:
+        the frames (after ``after`` when given) nearest nadir over each point,
+        fused; a partial pass is served as the part it held. None with
+        ``last_refusal`` when no frame held any of it."""
         cov = self.coverage(points, after)
         if cov is None:
             return None
@@ -605,10 +574,8 @@ class LiveSource:
         return obs
 
     def _fused(self, want: list[tuple[float, int]], *, ranked: int, about: str) -> Observation | None:
-        """``want``'s frames, ``(off-nadir degrees, -sequence)`` nearest nadir
-        first, fetched off the ring, each placed by its own tagged pose
-        through the boresight and its own registration, composited on one
-        north-up grid at the frames' median ground sample."""
+        """``want``'s frames, ``(off-nadir degrees, -seq)``, fetched, each placed
+        by its tagged pose and registration, composited at their median GSD."""
         placed: list[Any] = []
         records: list[dict[str, Any]] = []
         unfetched = 0
@@ -692,13 +659,9 @@ class LiveSource:
 
 def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresight_path: str | Path | None = None,
               register_raster: str | Path | None = None, corrector: bool = True) -> LiveSource:
-    """A live source over ``vehicle``, failing on the ramp rather than on the first flight.
-
-    No boresight file flies the datasheet camera. ``register_raster`` names
-    the raster directory each frame is registered against
-    (:func:`map_render.load_raster`); with it the corrector starts unless
-    ``corrector`` is False.
-    """
+    """A live source over ``vehicle``, failing on the ramp rather than on the
+    first flight. With ``register_raster`` (the raster each frame is
+    registered against) the corrector starts unless ``corrector`` is False."""
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
 
     if lonlat_to_local(Path(tiles_dir), map_name, 0.0, 0.0) is None:

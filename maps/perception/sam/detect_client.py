@@ -1,8 +1,6 @@
-"""SAM 3.1 client: each frame goes to the segment server's ``/segment``
-(``serving/sam_server.py``) as native tiles. The client gets back bbox-cropped
-bit-packed masks, dedups them across tiles, projects them to world coordinates
-and reads their colour. Object identity across an episode comes from the
-world-space tracker.
+"""SAM 3.1 client: each frame goes to ``/segment`` (``serving/sam_server.py``)
+as native tiles; the masks come back, are deduped across tiles, projected to
+world coordinates and read for colour.
 """
 
 from __future__ import annotations
@@ -44,21 +42,15 @@ SAHI_NMS_IOU = 0.5
 
 
 class SamServerOutage(RuntimeError):
-    """The SAM ``/segment`` server gave no valid response for a whole detect
-    call: transport faults, read timeouts, 5xx, 408 or 429 on every tile until
-    the poster's retry layer gave up (:func:`_post_segment`). A ``200`` with zero detections is an empty frame, never an
-    outage. Raised outside the model's code (``dispatch._exc_is_sam_infra``)
-    it ends the episode as infra, which a resume flies again; inside a mission
-    run block it is served to the model as that line's error.
-    """
+    """No tile of a frame got a usable ``/segment`` response
+    (:func:`_post_segment` gave up on each); a ``200`` with zero detections is
+    an empty frame. Outside the model's code it ends the episode as infra;
+    inside a run block it is served as that line's error."""
 
 
 class SamRequestRefused(RuntimeError):
-    """The segmenter refused the request this client built: a 4xx other than
-    the serve's weather (408, 429). Every replica refuses the same request
-    the same way, so it is raised at once and is the method's failure, never
-    a :class:`SamServerOutage`.
-    """
+    """The segmenter refused the request this client built (a 4xx other than
+    408 or 429): every replica would, so it is raised at once, never an outage."""
 
 
 #: 4xx statuses that are the serve's weather, not a request built wrong: a
@@ -68,13 +60,10 @@ _SAM_TRANSIENT_CLIENT_STATUSES = (408, 429)
 
 
 def sam_endpoints() -> list[str]:
-    """The segmenter's replica base URLs, the one resolver the client and
-    endpoint discovery read.
-
-    ``SAM_SERVER_URL``, else the default replica. A comma-separated value
-    spreads stateless ``/segment`` calls across replicas. A set but blank
-    value raises ``ValueError``: only an unset variable means the default.
-    """
+    """The segmenter's replica base URLs from ``SAM_SERVER_URL`` (a comma
+    list spreads calls across replicas), the one resolver the client and
+    endpoint discovery read. Unset is the default replica; set but blank
+    raises ``ValueError``."""
     raw = os.environ.get("SAM_SERVER_URL", DEFAULT_SAM_SERVER_URL)
     eps = [u.strip().rstrip("/") for u in raw.split(",") if u.strip()]
     if not eps:
@@ -86,28 +75,21 @@ _rr = itertools.count()
 
 
 def _pick_url(eps: list[str]) -> str:
-    """The next of ``eps``, round-robin: a SAHI stop fires its tiles at once and
-    round-robin spreads them evenly (random would not), and a retry steps off
-    the replica that failed rather than redrawing it. ``next`` on an
-    ``itertools.count`` is atomic, so no lock."""
+    """The next of ``eps``, round-robin, so a frame's tiles spread evenly and
+    a retry steps off the replica that failed (``next`` on a count is atomic)."""
     return eps[next(_rr) % len(eps)]
 
 
 def _post_segment(json_body: dict) -> dict | None:
-    """POST ``/segment``, the one retry layer: the parsed JSON, or ``None``
-    when no attempt gave a usable response.
+    """POST ``/segment``, the one retry layer: the parsed JSON, or ``None``.
 
-    A 4xx other than 408 or 429 raises :class:`SamRequestRefused` at once. A
-    connect error, 408, 429 or 5xx is asked again of the next replica after
+    A 4xx other than 408 or 429 raises :class:`SamRequestRefused`. A connect
+    error, 408, 429 or 5xx goes to the next replica after
     ``SEGMENT_BACKOFF_S``. A read timeout is never resent to the replica that
-    timed out: the server holds the request, and a resend would queue the
-    tile behind itself; the call moves to another replica, or fails when none
-    is left. ``SEGMENT_DEADLINE_S`` bounds the whole.
-
-    Every attempt opens a fresh connection (``Connection: close``, a
-    per-call ``requests.Session``): a pooled socket idles through the
-    multi-minute compile phase, the tunnel or server reaps it with an RST,
-    and urllib3 cannot see the half-closed state (urllib3#944, #2751).
+    timed out (the server still holds the request): it moves to another, or
+    fails when none is left. ``SEGMENT_DEADLINE_S`` bounds the whole. Each
+    attempt opens a fresh connection: a pooled socket the tunnel reaped
+    during a long compile reads as half-open (urllib3#944, #2751).
     """
     import requests
 
@@ -147,15 +129,10 @@ def _post_segment(json_body: dict) -> dict | None:
     return None
 
 
-# Colour is read over the mask pixels as a structured attribute of a bare-noun
-# SAM concept ("car", not "white car"); the agent matches a cue's colour word
-# to it by reasoning. Both the palette name and the median RGB are served, so
-# the agent can settle a fuzzy case the name cannot.
-#
-# Nearest-name anchors: white, gray, black, red and blue are the median
-# perceived RGB of SAM-mask interiors on the CityNav nadir orthos, the rest
-# ideal sRGB. Silver has no anchor: its ideal sits above the calibrated white
-# on this imagery, so white cars would snap to it.
+# Colour is an attribute of a bare-noun concept ("car", not "white car"),
+# served as the nearest palette name and the median RGB. White, gray, black,
+# red and blue are the median SAM-mask interiors on the CityNav nadir orthos,
+# the rest ideal sRGB; silver has none (white cars would snap to it).
 _COLOR_PALETTE: dict[str, tuple[int, int, int]] = {
     "white": (175, 183, 191), "black": (77, 86, 98), "gray": (121, 132, 145),
     "red": (135, 78, 88), "blue": (75, 101, 136), "green": (45, 130, 70),
@@ -247,11 +224,9 @@ def _set_color_attr(attrs: dict, rgb, region) -> None:
         attrs["color_conf"] = f"{col[2]:.3f}"
 
 
-# Per-instance split. SAM 3.x emits one mask per DETR query with no instance
-# separation (arXiv 2511.16719 §3), so a mask over tiny dense objects can span
-# two disjoint cars or carry speckle. Each mask splits into connected
-# components; the noise floor is a fraction of the class's median
-# single-instance area, so it needs no per-class prior.
+# Per-instance split: SAM 3.x emits one mask per query with no instance
+# separation (arXiv 2511.16719 §3), so a mask can span two cars or carry
+# speckle; the noise floor is a share of the class's median single area.
 _INSTANCE_SPLIT_AREA_FRAC = 0.10
 _INSTANCE_SPLIT_MIN_REF_SAMPLES = 5
 # A non-largest component more than this fraction covered by ANOTHER same-class
@@ -260,19 +235,13 @@ _INSTANCE_SPLIT_REDUNDANT_FRAC = 0.5
 
 
 def _connected_components(region: MaskRegion) -> "list[MaskRegion]":
-    """8-connected components of a region, as regions over the same frame.
-
-    ``[region]`` itself when single-component. Components come in raster
-    order (``ndimage.label`` on the crop), which matters: ``max(comps,
-    key=area)`` takes the FIRST maximum.
-    """
+    """8-connected components of a region, each re-boxed, in raster order
+    (``max(comps, key=area)`` takes the FIRST maximum); ``[region]`` when single."""
     from scipy import ndimage
 
     labels, n = ndimage.label(region.crop, structure=np.ones((3, 3), dtype=bool))
     if n <= 1:
         return [region]
-    # Each component re-boxes to its own extent, so a stray speckle far from
-    # the body does not drag the whole parent box along behind it.
     return [region.with_crop(labels == i).tightened() for i in range(1, n + 1)]
 
 
@@ -297,17 +266,11 @@ def split_into_instances(
     ref_area_px: float | None = None,
     coverage_count: "np.ndarray | None" = None,
 ) -> "list[MaskRegion]":
-    """Split a SAM concept mask into per-instance connected components.
-
-    A single-component mask comes back as ``[region]``. Otherwise the largest
-    component is the detection's primary and is kept; each other one is
-    dropped as speckle (area under ``MIN_AREA_PX`` or
-    ``_INSTANCE_SPLIT_AREA_FRAC`` of ``ref_area_px``, the median clean
-    same-class area, None with too few samples) or as redundant (more than
-    ``_INSTANCE_SPLIT_REDUNDANT_FRAC`` of its pixels under ``coverage_count``,
-    the per-pixel count of same-class primaries), and kept otherwise. Keying
-    redundancy off primaries keeps a small car that two merged masks both
-    cover. Never empty.
+    """A SAM concept mask as per-instance components, never empty: the
+    largest is kept, each other one dropped as speckle (under ``MIN_AREA_PX``
+    or ``_INSTANCE_SPLIT_AREA_FRAC`` of ``ref_area_px``, the median clean
+    same-class area) or as redundant (over ``_INSTANCE_SPLIT_REDUNDANT_FRAC``
+    under ``coverage_count``, the per-pixel count of same-class primaries).
     """
     comps = _connected_components(region)
     if len(comps) <= 1:
@@ -349,11 +312,8 @@ def _png_wire_bytes(canvas: np.ndarray) -> bytes:
 #: How long one /segment attempt waits to connect: it outlasts a radio
 #: dropout (about twenty seconds).
 SEGMENT_CONNECT_TIMEOUT_S = 45
-#: How long one /segment attempt waits for the server's answer. The server
-#: holds a request behind its in-flight semaphore for
-#: ``serving/sam_server.py``'s ``_INFLIGHT_WAIT_S`` (600 s) before it answers
-#: 503; the client outwaits that, or it abandons a request the server is
-#: still going to serve.
+#: How long one /segment attempt waits for the answer: past the server's
+#: ``_INFLIGHT_WAIT_S`` (600 s) admission wait, so a queued request is not abandoned.
 SEGMENT_READ_TIMEOUT_S = 660
 #: The pause before each retry: 21 s across the three, so the ladder spans a
 #: radio dropout instead of spending every retry inside one.
@@ -370,11 +330,8 @@ _DECODE_WORKERS = 4
 
 @dataclass
 class SamDetectClient:
-    """Adapter onto the SAM 3.1 image server (stateless ``/segment``).
-
-    Every call ships the full concept list: the encoder runs once and every
-    concept decoder runs in the same forward.
-    """
+    """Adapter onto the SAM 3.1 image server: every ``/segment`` call ships
+    the full concept list, decoded in one forward."""
 
     concept_provider: ReasonerUnionConceptProvider
     # SAHI tiles whose ``/segment`` gave no usable response after retries,
@@ -431,11 +388,9 @@ class SamDetectClient:
     def _nms_masks(
         items: "list[tuple[MaskRegion, str, float]]",
     ) -> "list[tuple[MaskRegion, str, float]]":
-        """Greedy IoU-NMS over ``(region, label, score)`` items, highest score
-        first (ties in input order), bbox-prefiltered so it stays ~linear when
-        masks are spatially disjoint; pixel work runs on the box intersection
-        only. This is the cross-tile seam dedup; the world-space tracker
-        dedups again downstream."""
+        """The cross-tile seam dedup: greedy IoU-NMS over ``(region, label,
+        score)``, highest score first (ties in input order), pixels compared on
+        the box intersection only."""
         kept: list[tuple[MaskRegion, int, str, float]] = []
         for region, lab, sc in sorted(items, key=lambda it: -it[2]):
             bb, a = region.bbox, region.area
@@ -460,12 +415,9 @@ class SamDetectClient:
     def _segment(
         self, obs: Observation, concepts: list[str]
     ) -> list[DetectedObject]:
-        """Native-resolution slicing-aided detection: ``/segment`` each
-        ``_SAM_INPUT_SIZE`` tile at 1:1, place each mask in the frame,
-        cross-tile IoU-NMS dedup, then decode the kept masks. A frame under a
-        tile in either dimension is zero-padded on the bottom and right, and
-        its masks are clipped to the frame.
-        """
+        """Slicing-aided detection: ``/segment`` each ``_SAM_INPUT_SIZE`` tile
+        1:1 (a smaller frame zero-padded bottom and right, its masks clipped),
+        place the masks in the frame, dedup across tiles, decode the kept."""
         rgb = obs.rgb
         assert rgb is not None
         H, W = int(rgb.shape[0]), int(rgb.shape[1])
@@ -473,9 +425,7 @@ class SamDetectClient:
         bounds = self._tile_bounds(canvas.shape[0], canvas.shape[1])
 
         def _one_tile(bound) -> "list[tuple[MaskRegion, str, float]] | None":
-            """One tile's ``(region, label, score)`` items in wire order, or
-            ``None`` when its ``/segment`` failed. Reads only shared-immutable
-            state."""
+            """One tile's ``(region, label, score)`` items, or ``None`` when its ``/segment`` failed."""
             r0, r1, c0, c1 = bound
             payload = self._post_tile(canvas[r0:r1, c0:c1], concepts)
             if payload is None:
@@ -494,10 +444,8 @@ class SamDetectClient:
                 ))
             return tile_out
 
-        # One thread per tile: width costs threads, not GPU (the servers'
-        # SAM_MAX_INFLIGHT gates the work), and a narrower pool leaves a tail
-        # wave. ex.map keeps bounds order, so NMS tie-breaking and the object
-        # ids are the serial loop's.
+        # One thread per tile (the servers' SAM_MAX_INFLIGHT gates the GPU);
+        # ex.map keeps bounds order, so NMS ties and object ids are serial's.
         with ThreadPoolExecutor(max_workers=len(bounds), thread_name_prefix="sahi-tile") as ex:
             per_tile = list(ex.map(_one_tile, bounds))
         tiledets = [item for tile_out in per_tile if tile_out is not None for item in tile_out]
@@ -534,15 +482,11 @@ class SamDetectClient:
         obs: Observation,
         masks: "list[tuple[MaskRegion | None, str, int, float]]",
     ) -> list[DetectedObject]:
-        """``(region, label, object_id, score)`` masks of ``obs``'s frame as
-        detections: split each mask into instances, project each through
-        ``obs.depth`` and pack it as a ``DetectedObject``, in input order on
-        thread pools. A ``None`` or sub-``MIN_AREA_PX`` region is skipped and
-        keeps its index.
-        """
-        # Pass 1: split every mask and collect, per class, the clean
-        # single-component area (the split's noise floor) and a per-pixel count
-        # of primaries (the redundancy check).
+        """``(region, label, object_id, score)`` masks as detections, in input
+        order: each split into instances, projected through ``obs.depth`` and
+        packed. A ``None`` or sub-``MIN_AREA_PX`` region is skipped."""
+        # Pass 1: split every mask; per class, the clean single-component areas
+        # (the noise floor) and a per-pixel count of primaries (redundancy).
         decoded: list[tuple[int, MaskRegion, str, int, float]] = []
         class_ref_areas: dict[str, list[int]] = {}
         coverage_by_label: dict[str, np.ndarray] = {}
