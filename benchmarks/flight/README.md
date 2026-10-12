@@ -137,8 +137,9 @@ python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications d
 Per run: SR two ways (the committed area contains the target centroid; the
 commit lies within 20 m of it), NE, OSR (the aircraft's path, GNSS track,
 else keyframe poses, came within one camera footprint width of the target), time to identification, SPL, and
-tokens. A run the serve failed under (the bench's infra rule) is out of every
-rate and named. It prints the totals, the totals by intel quality and by model
+tokens. A run the serve failed under before its first report (the bench's infra
+rule) is out of every rate and named; a run that failed after a report is scored
+at that report. It prints the totals, the totals by intel quality and by model
 and reasoning effort, the count of `prior_<i>` commits whose outline in
 `--tiles` does not hold the commit (a sign of another bake), then one line per run. `--check <master table>` compares SR and OSR
 row by row against a table.
