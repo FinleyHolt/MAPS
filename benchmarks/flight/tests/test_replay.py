@@ -291,3 +291,15 @@ def test_the_recorded_segmenter_keeps_a_recorded_object_id_of_zero():
     client = SimpleNamespace(_detections=lambda obs, masks: seen.extend(masks) or [])
     R.recorded_segmenter(rec, lambda: SimpleNamespace(step_idx=0))(client, SimpleNamespace(rgb=np.zeros((8, 8, 3))), [])
     assert [m[2] for m in seen] == [3, 0]
+
+
+def test_a_replay_row_records_no_start_time(built, tmp_path):
+    """A replay's clock is not the flight's: its row carries no UTC start, so
+    the measures read it on SR and NE alone."""
+    live = R.BankSource([], tiles_dir=built[0], map_name="calcity", tile_ground_z=0.0)
+    m = R.ReplayMission(replay_of={"mode": "frames"}, episode_id="calcity::t", split="calcity",
+                        config="configs/calcity.yaml", workdir=tmp_path, live=live, recorder=None,
+                        close_log=lambda: None, agl_m=world.AGL_M)
+    m.started_at, m.started_at_utc = 0.0, 1_789_157_838.6
+    row = m.row()
+    assert row["started_at_utc"] is None and row["replay_of"] == {"mode": "frames"}

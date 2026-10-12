@@ -378,7 +378,8 @@ class ReplayMission(Mission):
         self._recorded_stops = stops
 
     def row(self) -> dict[str, Any]:
-        return {**super().row(), "replay_of": self.replay_of}
+        """The mission's row naming the run it replays, with no UTC start: the replay's clock is not the flight's."""
+        return {**super().row(), "started_at_utc": None, "replay_of": self.replay_of}
 
     def _held_now(self, h, stops: list) -> list[bool]:
         if self._recorded_stops is None:
