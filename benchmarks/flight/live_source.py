@@ -327,6 +327,10 @@ class LiveSource:
         self.last_refusal = ""
         #: The ring's index as :meth:`coverage_of_each` has read it, and the
         #: newest log time, so each later read asks for the frames since.
+        #: ponytail: rows the ring has since evicted stay here, so a pass's
+        #: order may favour a stop whose frames are gone; the flight itself
+        #: asks the ring afresh (:meth:`coverage`). Dropping rows older than
+        #: the ring is the upgrade.
         self._index_rows: list[dict[str, Any]] = []
         self._index_newest: int | None = None
         #: Provenance of the last observation: the recorded frames it stands on.
