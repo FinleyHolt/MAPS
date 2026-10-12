@@ -1691,10 +1691,14 @@ class MissionPython:
                     continue
                 env = results.pop(k)
                 hint = env.get("hint") if isinstance(env, dict) else None
-                # Under a name the model can read, else unprefixed; a hint
-                # the answer already says in full is dropped whole.
-                if hint and not set(hint.splitlines()) <= said:
-                    name = mine.get(k) or self._labels.get(k)
+                # Under a name the model can read, else unprefixed; a line
+                # the answer already says is dropped, but a named result
+                # keeps its own status line.
+                name = mine.get(k) or self._labels.get(k)
+                keep = [ln for i, ln in enumerate(str(hint or "").splitlines())
+                        if (i == 0 and name) or ln not in said]
+                if keep:
+                    hint = "\n".join(keep)
                     folded.append(f"{name}: {hint}" if name else hint)
             if folded and isinstance(results.get(answer), dict):
                 a = dict(results[answer])

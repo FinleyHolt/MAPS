@@ -459,7 +459,7 @@ def test_a_keyword_only_find_serves_its_hint_once_and_never_as_find_of_nothing()
     assert "find('')" not in env["hint"], env["hint"]
 
 
-def test_a_folded_hint_the_answer_says_only_in_part_folds_whole():
+def test_a_folded_hint_keeps_the_lines_the_answer_does_not_say():
     from maps.search.tests.fakes import drive, run, tool_results
 
     _reply, fr, _f, _d = drive([[run(
@@ -487,6 +487,18 @@ def test_refusals_over_an_unnamed_result_quote_the_models_own_text():
     assert look_err.startswith("find('zeppelin') holds no rows"), look_err
     assert "row(s) of find('car').order(nearest='prior_1') are" in page_err, page_err
     assert not re.search(r"\br\d+\b", look_err + page_err), (look_err, page_err)
+
+
+def test_an_emptied_sibling_keeps_its_own_status_line():
+    from maps.search.tests.fakes import drive, run, tool_results
+
+    _reply, fr, _f, _d = drive([[run(
+        'a = find("car").filter(near="prior_1", dwithin=1)\n'
+        'b = find("depot").filter(near="prior_1", dwithin=1)\n')], "done"])
+    hint = tool_results(fr)[0]["result"]["results"]["b"]["hint"]
+    assert "a: this op returned NO items" in hint, hint
+    lines = hint.splitlines()
+    assert len(lines) == len(set(lines)), lines
 
 
 def test_refusals_over_a_keyword_only_find_quote_the_models_own_text():
