@@ -46,7 +46,7 @@ class SamServerOutage(RuntimeError):
     """The SAM ``/segment`` server gave no valid response for a whole detect
     call: transport faults, 5xx, 408 or 429 until the poster's replica x retry
     budget ran out. A ``200`` with zero detections is an empty frame, never an
-    outage. Raised outside the model's code (``error_taxonomy._exc_is_sam_infra``)
+    outage. Raised outside the model's code (``dispatch._exc_is_sam_infra``)
     it ends the episode as infra, which a resume flies again; inside a mission
     run block it is served to the model as that line's error.
     """
