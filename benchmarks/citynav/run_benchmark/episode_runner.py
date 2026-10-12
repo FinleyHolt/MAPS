@@ -147,8 +147,7 @@ def _episode_graph(stem: str, assets):
 def _success_mask(cfg, episode, objects_by_map: dict) -> tuple[str, dict]:
     """``(criterion, mask kwargs)`` for ``eval.score_arrival``.
 
-    The criterion is read off ``paths.SUCCESS_CRITERION`` at call time, so
-    the Cal City bridge's rebind reaches it. The shape is the linked
+    The criterion is the bench's ``paths.SUCCESS_CRITERION``. The shape is the linked
     object's contour when the episode names one, else its mask; the fallback
     radius is the row's when it states one, else the config's.
     """
