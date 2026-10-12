@@ -37,7 +37,7 @@ import numpy as np
 
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.flight.live_source import ortho_observation
-from benchmarks.flight.measures import _bases, _rows, tour_stops
+from benchmarks.flight.measures import read_jsonl, run_bases, tour_stops
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, activate_calcity,
                                        converse, summary_line)
 from benchmarks.flight.tile_georef import FLOOR_MSL_M
@@ -107,7 +107,7 @@ def read_transcript(path: Path) -> tuple[dict[str, Any], list[list[dict]], list[
     requests: list[list[dict]] = []
     ids: list[str] = []
     answers: dict[str, dict] = {}
-    for rec in _rows(path):
+    for rec in read_jsonl(path):
         if rec.get("kind") == "params":
             params = rec.get("params") or {}
         elif rec.get("kind") == "request":
@@ -130,12 +130,12 @@ def open_recording(run_dir: Path) -> Recording:
     sortie = run_dir.parent
     if sortie.parent.name.endswith("_grnd"):
         sortie = sortie.parent.parent / sortie.name
-    row = next((r for r in _rows(sortie / "episodes.jsonl") if r.get("workdir") == run_dir.name), None)
+    row = next((r for r in read_jsonl(sortie / "episodes.jsonl") if r.get("workdir") == run_dir.name), None)
     if row is None:
         raise ValueError(f"{sortie / 'episodes.jsonl'} names no run {run_dir.name}")
     params, requests, responses = read_transcript(run_dir / "flight" / "llm" / "transcript.jsonl")
     detections: dict[int, list[dict]] = {}
-    for d in _rows(run_dir / "detections.jsonl"):
+    for d in read_jsonl(run_dir / "detections.jsonl"):
         detections.setdefault(int(d.get("step", -1)), []).append(d)
     window = DEFAULT_WINDOW
     logged = re.search(r"endpoint spec installed: model_id=\S+ max_model_len=(\d+)",
@@ -143,8 +143,8 @@ def open_recording(run_dir: Path) -> Recording:
     if logged:
         window = int(logged.group(1))
     return Recording(sortie=sortie, run_dir=run_dir, row=row, params=params, requests=requests,
-                     responses=responses, conversation=_rows(run_dir / CONVERSATION_JSONL),
-                     frames=_rows(run_dir / FRAMES_JSONL), window=window, detections=detections)
+                     responses=responses, conversation=read_jsonl(run_dir / CONVERSATION_JSONL),
+                     frames=read_jsonl(run_dir / FRAMES_JSONL), window=window, detections=detections)
 
 
 def flown_runs(sorties: Path) -> list[Path]:
@@ -152,8 +152,8 @@ def flown_runs(sorties: Path) -> list[Path]:
     order flown: the aircraft's copy of its folder, else the ground station's."""
     out = []
     for ledger in sorted(Path(sorties).glob("*Z/episodes.jsonl")):
-        for row in _rows(ledger):
-            found = next((b for b in _bases(ledger.parent, row)
+        for row in read_jsonl(ledger):
+            found = next((b for b in run_bases(ledger.parent, row)
                           if (b / "flight" / "llm" / "transcript.jsonl").is_file()), None)
             if found is not None:
                 out.append(found)
@@ -364,12 +364,12 @@ def recorded_segmenter(rec: Recording, state_of):
     through the client's own decode, split, projection and colour read."""
 
     def segment(client, obs, concepts):
-        from maps.perception.sam.detect_client import _record_region  # noqa: PLC0415
+        from maps.perception.sam.detect_client import record_region  # noqa: PLC0415
 
         rows = rec.detections.get(int(state_of().step_idx), [])
         hw = obs.rgb.shape[:2]
         return client._detections(obs, [
-            (_record_region(d, hw), d["label"], int((d.get("metadata") or {}).get("sam3_1_object_id", i)),
+            (record_region(d, hw), d["label"], int((d.get("metadata") or {}).get("sam3_1_object_id", i)),
              float((d.get("metadata") or {}).get("sam3_1_score", d.get("confidence"))))
             for i, d in enumerate(rows) if d.get("mask_zpacked_b64")])
 
@@ -493,7 +493,7 @@ def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
     if not alts and rec.row.get("started_at_utc"):
         t0 = float(rec.row["started_at_utc"])
         t1 = t0 + float(rec.row.get("elapsed_s") or 0.0)
-        alts = [float(f["alt_msl_m"]) - FLOOR_MSL_M[map_name] for f in _rows(rec.sortie / TRACK_JSONL)
+        alts = [float(f["alt_msl_m"]) - FLOOR_MSL_M[map_name] for f in read_jsonl(rec.sortie / TRACK_JSONL)
                 if f.get("alt_msl_m") is not None and t0 <= float(f["t_unix"]) <= t1]
     if not alts:
         raise ValueError(f"{rec.run_id}: the recording holds no height above ground: no observation and no GNSS "

@@ -88,7 +88,8 @@ TURN_RADIUS_FALLBACK_M = 1500.0
 CREW_ENDS = ("stopped", "abort", "dropped")
 
 
-def _rows(path: Path) -> list[dict[str, Any]]:
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Every row of a ``.jsonl``; none when the file is absent."""
     if not path.is_file():
         return []
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
@@ -216,7 +217,7 @@ def committed_area(bases: list[Path], fid: str | None, xy,
             ring = None
     elif fid.startswith("detected_"):
         for b in bases:
-            near = [(math.dist(centroid(c), xy), c) for d in _rows(b / DETECTIONS_JSONL)
+            near = [(math.dist(centroid(c), xy), c) for d in read_jsonl(b / DETECTIONS_JSONL)
                     if (c := (d.get("metadata") or {}).get("world_contour")) and len(c) >= 3]
             if near:
                 ring = min(near, key=lambda t: t[0])[1]
@@ -351,7 +352,7 @@ def keyframe_poses(bases: list[Path], t0: float, t1: float) -> list[dict[str, An
     """The live navigation's pose at each keyframe the run captured, as track fixes."""
     for b in bases:
         out = []
-        for f in _rows(b / FRAMES_JSONL):
+        for f in read_jsonl(b / FRAMES_JSONL):
             xy, utc = f.get("pose_xy"), f.get("utc")
             if xy and utc:
                 t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
@@ -367,7 +368,7 @@ def _agl(fix, bases: list[Path], events) -> tuple[float | None, str | None]:
     """Height above ground at ``fix``: its own (a GNSS fix or a keyframe pose), else the keyframes', else the waypoints' commanded."""
     if fix.get("alt_agl_m") is not None:
         return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
-    alts = [float(f["altitude_m"]) for b in bases for f in _rows(b / FRAMES_JSONL) if f.get("altitude_m") is not None]
+    alts = [float(f["altitude_m"]) for b in bases for f in read_jsonl(b / FRAMES_JSONL) if f.get("altitude_m") is not None]
     if alts:
         return statistics.median(alts), "keyframes"
     asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]
@@ -415,12 +416,12 @@ def return_leg_m(track, t: float, q, r: float) -> float:
 def routed_windows(root: Path) -> list[tuple[float, float]]:
     """When the crews flew to a waypoint: from each waypoint handed to the next leg line, per run."""
     out = []
-    for row in _rows(root / "episodes.jsonl"):
+    for row in read_jsonl(root / "episodes.jsonl"):
         t0 = row.get("started_at_utc")
         if not t0 or not row.get("workdir"):
             continue
         handed = None
-        for e in _conversation(_bases(root, row)):
+        for e in _conversation(run_bases(root, row)):
             t = float(t0) + float(e.get("t_s") or 0.0)
             if e.get("kind") == "waypoint" and handed is None:
                 handed = t
@@ -462,13 +463,14 @@ def flown_turn_radius_m(tracks, windows) -> tuple[float | None, int]:
 # -- one run -------------------------------------------------------------------
 
 
-def _bases(root: Path, row: dict[str, Any]) -> list[Path]:
+def run_bases(root: Path, row: dict[str, Any]) -> list[Path]:
+    """A ledger row's run folder: the sortie's copy, then the ground station's (``<sortie>_grnd``)."""
     wd = str(row.get("workdir") or "")
     return [root / wd, root.parent / f"{root.name}_grnd" / root.name / wd] if wd else []
 
 
 def _conversation(bases: list[Path]) -> list[dict[str, Any]]:
-    return next((_rows(b / CONVERSATION_JSONL) for b in bases if (b / CONVERSATION_JSONL).is_file()), [])
+    return next((read_jsonl(b / CONVERSATION_JSONL) for b in bases if (b / CONVERSATION_JSONL).is_file()), [])
 
 
 def ended(row: dict[str, Any]) -> str:
@@ -496,7 +498,7 @@ def tokens(bases: list[Path]) -> dict[str, Any]:
 
 def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], truth: Truth, track,
                  prior: list[dict[str, Any]] | None, turn_radius_m: float) -> dict[str, Any]:
-    bases = _bases(root, row)
+    bases = run_bases(root, row)
     events = _conversation(bases)
     end = ended(row)
     xy = judged_xy(row)
@@ -504,7 +506,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     area = committed_area(bases, fid, xy, prior)
     determined = end == "reply" and xy is not None
     reason = entry.get("excluded")
-    params = next((r.get("params") or {} for b in bases for r in _rows(b / "flight" / "llm" / "transcript.jsonl")
+    params = next((r.get("params") or {} for b in bases for r in read_jsonl(b / "flight" / "llm" / "transcript.jsonl")
                    if r.get("kind") == "params"), {})
     ring, truth_source = truth.ring(entry, row)
     target = centroid(ring) if ring else None
@@ -619,13 +621,13 @@ def outline_rejected(rows: list[dict[str, Any]], prior: list[dict[str, Any]] | N
 def collect(roots: list[Path], truth: Truth, *, tiles_dir: Path) -> tuple[list[dict[str, Any]], float, int]:
     """Every run under ``roots``, with the crews' turn radius over them all."""
     prior = load_prior(tiles_dir)
-    tracks = [sorted(_rows(r / TRACK_JSONL), key=lambda f: f["t_unix"]) for r in roots]
+    tracks = [sorted(read_jsonl(r / TRACK_JSONL), key=lambda f: f["t_unix"]) for r in roots]
     radius, turns = flown_turn_radius_m(tracks, [routed_windows(r) for r in roots])
     radius = radius or TURN_RADIUS_FALLBACK_M
     out = []
     for root, track in zip(roots, tracks):
         entries = truth.entries(root.name)
-        for row in _rows(root / "episodes.jsonl"):
+        for row in read_jsonl(root / "episodes.jsonl"):
             out.append(run_measures(root, row, entry=entries.get(str(row.get("episode_id") or "")) or {},
                                     truth=truth, track=track, prior=prior, turn_radius_m=radius))
     out.sort(key=lambda r: (r["sortie"], int(r["run_no"] or 0)))

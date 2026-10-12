@@ -227,7 +227,7 @@ def _connected_components(region: MaskRegion) -> "list[MaskRegion]":
     return [region.with_crop(labels == i).tightened() for i in range(1, n + 1)]
 
 
-def _record_region(record: dict, frame_hw: tuple[int, int]) -> "MaskRegion | None":
+def record_region(record: dict, frame_hw: tuple[int, int]) -> "MaskRegion | None":
     """A wire mask record as a region of a ``frame_hw`` frame, clipped to it;
     ``None`` when nothing is left."""
     frame_h, frame_w = frame_hw
@@ -412,7 +412,7 @@ class SamDetectClient:
                 return None
             tile_out = []
             for det in payload.get("detections", []):
-                region = _record_region(det, (min(r1, H) - r0, min(c1, W) - c0))
+                region = record_region(det, (min(r1, H) - r0, min(c1, W) - c0))
                 if region is None or region.area < MIN_AREA_PX:
                     continue
                 tight = region.tightened()

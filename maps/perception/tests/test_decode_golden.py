@@ -67,7 +67,7 @@ def _run():
     client = SamDetectClient(concept_provider=provider)
     dets, obs = _build_case()
     return client._detections(
-        obs, [(dc._record_region(d, (H, W)), d["label"], d["object_id"], d["score"]) for d in dets]
+        obs, [(dc.record_region(d, (H, W)), d["label"], d["object_id"], d["score"]) for d in dets]
     )
 
 
