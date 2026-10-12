@@ -200,7 +200,6 @@ class FrameGeometry:
 
     def __init__(self, pose: Pose, sensor, floor: float) -> None:
         intr = sensor.intrinsics
-        self.pose = pose
         self.h = floor_homography(pose, sensor, floor)
         self._ahead = floor_homography(replace(pose, yaw_deg=pose.yaw_deg + YAW_STEP_DEG), sensor, floor)
         self._behind = floor_homography(replace(pose, yaw_deg=pose.yaw_deg - YAW_STEP_DEG), sensor, floor)
