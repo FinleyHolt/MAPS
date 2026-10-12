@@ -121,9 +121,5 @@ def test_no_rendered_hint_teaches_the_op_json_register():
         + "; ".join(f"{s}/{k}: {h!r}" for s, k, h in bad[:4]))
     # A walk that rendered no hint asserts nothing.
     assert seen >= 60, f"only {seen} rendered hints inspected"
-    # The only note that did was the line-ref note, promising 'along <ref>' plus a
-    # lateral 'distance to <ref>' in place of the footprint gap; a road measures its gap
-    # like any other shape, so the note has no subject.
-    assert claims == 0, (
-        f"{claims} hint(s) quote a compare column; the served hints stopped "
-        "naming columns when the line-ref chart was deleted")
+    # A road measures its gap like any other shape, so no hint names a column.
+    assert claims == 0, f"{claims} hint(s) quote a compare column"

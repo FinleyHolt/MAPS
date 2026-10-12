@@ -85,8 +85,8 @@ def test_sensor_frame_is_native_size_over_the_footprint(ortho_dir):
     assert np.allclose(oc["depth"], AGL - (GROUND_Z + 3.0), atol=1e-4)
 
 
-def test_sensorless_path_is_byte_identical_to_before(ortho_dir):
-    """The historical square contract carries no sensor and must not move."""
+def test_sensorless_path_crops_the_altitude_square(ortho_dir):
+    """With no sensor the crop is the nadir square the altitude spans."""
     oc = crop_ortho_observation(
         map_name=MAP,
         pose_xy=(30.0, 30.0),
