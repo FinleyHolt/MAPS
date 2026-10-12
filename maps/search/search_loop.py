@@ -565,10 +565,7 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m):
     return MapObject(
         class_name=label or "object",
         name=det.label,
-        tags={
-            "label": det.label,
-            "source_tier": det.source_tier,
-        },
+        tags={},
         centroid=centroid,
         provenance="detected",
         best_view_px=best_view_px,

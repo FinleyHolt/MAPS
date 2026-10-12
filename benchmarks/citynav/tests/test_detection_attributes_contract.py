@@ -84,13 +84,9 @@ def test_runtime_node_falls_back_to_object_when_unlabeled():
     assert node.class_name == "object"
 
 
-def test_label_and_source_tier_survive_onto_tags():
+def test_label_and_attributes_land_in_semantic_attributes():
     det = _make_detection(label="fire_hydrant", attributes={"color": "yellow"})
-    det.source_tier = "vlm"
     node = _detection_to_mapobject(det, _BOUNDS, 5.0)
-    assert node.tags["label"] == "fire_hydrant"
-    assert node.tags["source_tier"] == "vlm"
-    assert node.tags == {"label": "fire_hydrant", "source_tier": "vlm"}
     assert node.semantic_attributes == {
         "color": {"yellow": 1},
         "sam_label": {"fire_hydrant": 1},
