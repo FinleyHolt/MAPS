@@ -229,7 +229,7 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
             if re.fullmatch(r"r\d+", _mf):
                 mark_fids.extend(
                     str(_r["fid"]) for _r in (carry.read(_mf) or [])
-                    if isinstance(_r, dict) and _r.get("fid"))
+                    if _r.get("fid"))
             else:
                 mark_fids.append(_mf)
         mark_list: list[dict] = []

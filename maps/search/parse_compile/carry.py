@@ -61,9 +61,7 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
     ``raw_sink["results"]`` receives the pre-compaction results. A refused
     program returns ``{"error": ...}``, never raises.
     """
-    program = (args or {}).get("program")
-    if not isinstance(program, dict) or not program.get("ops"):
-        return {"error": "program must be an object with a non-empty 'ops' array"}
+    program = args["program"]
     ns = namespace or {}
     cands = ns.get("cands") or []
     anchors = ns.get("anchors") or []
@@ -93,14 +91,13 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
     if preflight:
         # A color-column request whose raw rows carry none of its columns
         # gets the phase note.
-        for _op in (program.get("ops") or []):
+        for _op in program["ops"]:
             _words = _color_words_of_op(_op)
             if not _words:
                 continue
             _rows = _raw_results.get(_op.get("ref"))
-            _attached = isinstance(_rows, list) and any(
-                isinstance(_it, dict) and any(
-                    _it.get("color_" + _w) is not None for _w in _words)
+            _attached = any(
+                any(_it.get("color_" + _w) is not None for _w in _words)
                 for _it in _rows)
             _env = out["results"].get(_op.get("ref"))
             if not _attached and isinstance(_env, dict):

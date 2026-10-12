@@ -21,8 +21,7 @@ def _uncovered_segments(_nm: str, rows: dict, covered: set) -> str:
     """`` '<name>' has N more segment(s) no pass has covered (...).``,
     or "" when every segment bearing the name is covered."""
     _sibs = sorted(f for f, r in rows.items()
-                   if isinstance(r, dict) and r.get("name") == _nm
-                   and f not in covered)
+                   if r.get("name") == _nm and f not in covered)
     if not _sibs:
         return ""
     _head = ", ".join(_sibs[:6])

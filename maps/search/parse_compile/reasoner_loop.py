@@ -606,7 +606,6 @@ class _Mission:
         c_n = len(self.ns.get("cands") or [])
         a_n = len(self.ns.get("anchors") or [])
         cols = sorted({k for _row in self.row_latest.values()
-                       if isinstance(_row, dict)
                        for k, _v in _row.items()
                        if k not in MODEL_UNSERVED_COLUMNS
                        and _v not in (None, "")})
@@ -680,23 +679,21 @@ class _Mission:
                                     seed_results=self.carry.rows,
                                     preflight=self.preflight,
                                     answer_ref=answer_ref)
-        if isinstance(out, dict) and "error" in out:
+        if "error" in out:
             # The failing op keeps one op's errors their own class.
-            _err = str(out.get("error"))
+            _err = str(out["error"])
             out = {**out, "error": self._loop_broken_error(
                 _err, sig_of=f"{_err}|{_raw_sink.get('error_op', '')}")}
-        if isinstance(out, dict) and "error" not in out:
+        else:
             self._err_sig, self._err_n = None, 0
             self._dedup_key, self._dedup_n = None, 0
             if _key is not None:
                 self._programs_seen[_key] = (self.carry.version, self.turn_idx,
                                              a["program"]["ops"])
-            self.carry.record(a["program"]["ops"], _raw_sink.get("results") or {})
-            for _v in (_raw_sink.get("results") or {}).values():
-                _rows = _v if isinstance(_v, list) else (
-                    [_v] if isinstance(_v, dict) else [])
+            self.carry.record(a["program"]["ops"], _raw_sink["results"])
+            for _rows in _raw_sink["results"].values():
                 for _row in _rows:
-                    if isinstance(_row, dict) and _row.get("fid"):
+                    if _row.get("fid"):
                         self.row_latest[str(_row["fid"])] = _row
         return out
 
@@ -791,8 +788,7 @@ class _Mission:
             log.warning("%s flight view render failed: %s",
                         self.rid_tag, _summarise_exc(_exc))
             _fv = []
-        _fj = [c["jpeg"] for c in (_fv or [])
-               if isinstance(c, dict) and c.get("jpeg")]
+        _fj = [c["jpeg"] for c in _fv if c.get("jpeg")]
         if not _fj:
             return
         _fv_text = _look_vision_text(_fv)
@@ -902,10 +898,8 @@ class _Mission:
                    _item_errors: list) -> dict:
         """One explore's flight reports -> the one ack of the pass. The ack
         states that the standing answer is the pass's last stop."""
-        _ok = [r for r in _reports
-               if isinstance(r, dict) and "error" not in r]
-        _stops = [r for r in _reports
-                  if isinstance(r, dict) and r.get("pose_xy")]
+        _ok = [r for r in _reports if "error" not in r]
+        _stops = [r for r in _reports if r.get("pose_xy")]
         _ack: dict = {"explored": cover, "stops": len(_stops)}
         if _stops:
             _ack["answer_if_you_reply_now"] = (
@@ -916,8 +910,7 @@ class _Mission:
         _m = self._mint_rows([_f for _f in self._ns_rows if _f not in _before], "pass")
         if _m is not None:
             _ack["new_rows"] = _m[1]
-        _errs = [str(r["error"]) for r in _reports
-                 if isinstance(r, dict) and r.get("error")]
+        _errs = [str(r["error"]) for r in _reports if r.get("error")]
         if _errs:
             _ack["not_flown"] = _errs[:4]
         if _item_errors:
@@ -1015,18 +1008,15 @@ class _Mission:
             log.warning("%s SAY crops render failed: %s", self.rid_tag,
                         _summarise_exc(exc))
             return {"error": f"crop render failed: {_summarise_exc(exc)}"}
-        jpegs = [c["jpeg"] for c in crops
-                 if isinstance(c, dict) and c.get("jpeg")]
+        jpegs = [c["jpeg"] for c in crops if c.get("jpeg")]
         vis_text = preamble + _look_vision_text(crops)
         if self._ship(ack, "crop", jpegs, vis_text) and marks:
             # Badges drawn (the legend IS the drawn set) and the renderer's
             # own out-of-frame list, on a crop that shipped.
             ack["badged"] = sum(
-                len(c.get("legend") or []) for c in crops
-                if isinstance(c, dict) and c.get("jpeg"))
+                len(c.get("legend") or []) for c in crops if c.get("jpeg"))
             ack["not_drawn"] = [
-                str(f) for c in crops
-                if isinstance(c, dict) and c.get("jpeg")
+                str(f) for c in crops if c.get("jpeg")
                 for f in (c.get("marks_out_of_view") or [])][:20]
         return ack
 
@@ -1034,8 +1024,7 @@ class _Mission:
         """look(rows): one crop per row of the handle, in its own order, each
         badged with the row it shows; the crop budget is stated when it
         bites."""
-        rows = [r for r in (self.carry.read(handle) or [])
-                if isinstance(r, dict) and r.get("fid")]
+        rows = [r for r in (self.carry.read(handle) or []) if r.get("fid")]
         if not rows:
             _mp = self._mission_py
             _name = (_mp.ref_name(handle) or _mp.call_arg("look")) if _mp else None
@@ -1193,7 +1182,7 @@ class _Mission:
                     + ("." if withheld("look") else f" or look({_h}).")))
         out = self._dispatch_analyze_scene({"program": {"ops": ops}},
                                            answer_ref=str(answer or ""))
-        if isinstance(out, dict) and "error" in out:
+        if "error" in out:
             return {"error": out["error"]}
         self.plan_rn[0] = max(self.plan_rn[0], int(rn_end or 0))
         # The column this call ordered by, so _finish can say when the
@@ -1220,16 +1209,15 @@ class _Mission:
             return self._plan_err({}, _stop_err)
         _accepted, _item_errors = _mission_sanitize_moves([tok])
         mv = self._fly_moves(_accepted, _item_errors)
-        _ok = [r for r in mv.get("flown") or []
-               if isinstance(r, dict) and "error" not in r]
+        _ok = [r for r in mv.get("flown") or [] if "error" not in r]
         if not (_ok and _accepted):
             # nothing flew: the failure is the result
             _msg = next(
-                (str(r.get("error")) for r in mv.get("flown") or []
-                 if isinstance(r, dict) and r.get("error")),
+                (str(r["error"]) for r in mv.get("flown") or []
+                 if r.get("error")),
                 None) or next(
-                (str(e.get("error")) for e in mv.get("rejected") or []
-                 if isinstance(e, dict) and e.get("error")),
+                (str(e["error"]) for e in mv.get("rejected") or []
+                 if e.get("error")),
                 None) or str(mv.get("error") or "nothing flew")
             return self._plan_err({"flown": mv}, _msg)
         return {"flown": mv}
@@ -1248,7 +1236,7 @@ class _Mission:
                 return self._plan_err({}, _stop_err)
             if _is_handle_token(_t):
                 _hr = [str(r["fid"]) for r in (self.carry.read(_t) or [])
-                       if isinstance(r, dict) and r.get("fid")]
+                       if r.get("fid")]
                 if not _hr:
                     return self._plan_err({}, (
                         f"{_t} holds 0 fid-bearing row(s) "
@@ -1260,8 +1248,7 @@ class _Mission:
             list(dict.fromkeys(_raw_members)))
         if not _accepted:
             return self._plan_err({}, next(
-                (str(e.get("error")) for e in _item_errors
-                 if isinstance(e, dict) and e.get("error")),
+                (str(e["error"]) for e in _item_errors if e.get("error")),
                 "nothing to cover"))
         _accepted, _cov_note, _subject, _segs = cover_items(
             _accepted, said_to, spec=self.mission_spec,
@@ -1284,7 +1271,7 @@ class _Mission:
         # THE PASS SHOWS ITS CATCH: one crop per row it added, pass order.
         _h = self._call_minted()
         _rows = [r for r in (self.carry.rows.get(_h) or [])
-                 if isinstance(r, dict) and r.get("fid")] if _h else []
+                 if r.get("fid")] if _h else []
         _catch = _rows[:_CATCH_CROPS]
         if _catch:
             _cack = self._crops_of(
@@ -1317,7 +1304,7 @@ class _Mission:
         # The map badges the set in scope.
         _h = self._those
         _mrows = [r for r in (self.carry.read(_h) or [])
-                  if isinstance(r, dict) and r.get("fid")] if _h else []
+                  if r.get("fid")] if _h else []
         _mfids = [str(r["fid"]) for r in _mrows[:_MAP_MAX_MARKS]]
         mp = self._map_of(around, mark_fids=_mfids)
         if _mfids:
@@ -1344,8 +1331,7 @@ class _Mission:
         # An ordering that separated nothing says how many rows tie.
         _ok_key = self._call.get("order")
         if _ok_key:
-            _rows = [r for r in (self._call.get("rows") or [])
-                     if isinstance(r, dict)]
+            _rows = self._call.get("rows") or []
             if len(_rows) >= 2:
                 _v0 = _rows[0].get(_ok_key)
                 if _v0 is not None:
@@ -1376,16 +1362,15 @@ class _Mission:
     def _dispatch_run(self, args) -> dict:
         """One code block, run in the mission's persistent namespace; an
         error costs the line it is on."""
-        if "__args_parse_error" in (args or {}):
+        if "__args_parse_error" in args:
             return {"error": "the call's arguments did not parse as JSON: "
                              f"{args['__args_parse_error']}; nothing ran"}
-        code = (args or {}).get("code")
+        code = args.get("code")
         if not isinstance(code, str) or not code.strip():
             return {"error": "run takes one block of code in code"}
         if self._mission_py is None:
             self._mission_py = _py_surface.MissionPython(_py_surface.MissionEnv(
-                rows_of_ref=lambda ref: [
-                    r for r in (self.carry.read(ref) or []) if isinstance(r, dict)],
+                rows_of_ref=lambda ref: list(self.carry.read(ref) or []),
                 tied_of_ref=lambda ref: bool(
                     getattr(self.carry.read(ref), "name_set", False)),
                 plan_rn=self.plan_rn, widened=self._widened, minted=self._code_minted,
@@ -1540,7 +1525,7 @@ class _Mission:
                 args = json.loads(tc["function"]["arguments"])
                 if name == "run":
                     out = self._dispatch_run(args)
-                    if isinstance(out, dict) and not withheld("look_for"):
+                    if not withheld("look_for"):
                         out.setdefault("watching", (
                             self._watching_trailer()
                             or "nothing -- no class is segmented on any flight "
@@ -1550,11 +1535,10 @@ class _Mission:
                         "run",
                         turn_idx=turn_idx,
                         reasoning=str(r.get("reasoning") or "")[:4000],
-                        said=str((args or {}).get("code") or "")[:400],
+                        said=str(args.get("code") or "")[:400],
                         # already capped (python_surface.PRINT_CHAR_CAP)
-                        printed=(str(out.get("printed") or "")
-                                 if isinstance(out, dict) else ""),
-                        errored=bool(isinstance(out, dict) and "error" in out),
+                        printed=str(out.get("printed") or ""),
+                        errored="error" in out,
                         # every image this block showed, by sha
                         frames=list(self._block_frames))
                     self._block_frames.clear()

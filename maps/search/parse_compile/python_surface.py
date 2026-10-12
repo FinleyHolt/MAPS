@@ -1447,12 +1447,9 @@ class MissionPython:
                                 if isinstance(facing, str) else facing,
                                 "facing")
         self._act(self.env.stand, [(at_site, "stage"), (f_site, "facing")])
-        staged = (self._out.get("stance") or {}).get("staged") or []
-        for s in staged:
-            h = s.get("handle")
-            if isinstance(h, str):
-                self.ns[h] = h
-        return staged[-1].get("handle") if staged else None
+        h = self._out["stance"]["staged"][-1]["handle"]
+        self.ns[h] = h
+        return h
 
     def _move(self, call: str, x):
         if isinstance(x, Rows):
