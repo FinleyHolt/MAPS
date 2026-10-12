@@ -4,7 +4,8 @@ transcript every call is mirrored into.
 The request body is exactly the caller's kwargs (no SDK). A 5xx or transport
 error burns ``_MAX_RETRIES``; a 429/402 draws on its own budget,
 ``_MAX_RATE_LIMIT_RETRIES``, honouring ``Retry-After``; any other 4xx raises
-at once. A call with a ``cancel_event`` streams (SSE), and the event shuts its
+at once, as does a read, write or pool timeout (the mission loop's backoff
+decides whether to send the turn again). A call with a ``cancel_event`` streams (SSE), and the event shuts its
 socket down and raises :class:`CallCanceled`; an answer that lands as the
 event fires is never handed back or recorded.
 
@@ -40,8 +41,9 @@ _RATE_LIMIT_STATUS = frozenset({402, 429})
 # and 408 request timeout. Any other 4xx is a request the caller built wrong.
 TRANSIENT_CLIENT_STATUS = _RATE_LIMIT_STATUS | {408}
 
-# Timeouts that are not retried: the server already holds the request, so a
-# re-send duplicates the work. A connect timeout is retried: nothing was accepted.
+# Timeouts this layer does not re-send (the server may still hold the request);
+# the mission loop's backoff owns that retry. A connect timeout is retried here:
+# nothing was accepted.
 _NO_RETRY_TIMEOUTS = (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout)
 
 # Ceiling on one rate-limit wait, however long the advertised ``Retry-After``.
@@ -515,12 +517,11 @@ def _chat_completions_raw(
         except CallCanceled:
             raise
         except _NO_RETRY_TIMEOUTS as e:
-            # A re-send would queue a second copy behind the first exactly when
-            # the server is saturated (congestion collapse).
+            # Raised to the caller, whose backoff decides on a re-send.
             log.error(
-                "LLM %s after %.0fs; NOT retrying (the server still holds "
-                "this request -- a re-send would duplicate it). Raise "
-                "SEARCH_REASONER_TIMEOUT_S if this is queueing, not a hang.",
+                "LLM %s after %.0fs; not re-sent here (the server may still "
+                "hold this request). Raise SEARCH_REASONER_TIMEOUT_S if this "
+                "is queueing, not a hang.",
                 type(e).__name__,
                 timeout,
             )
