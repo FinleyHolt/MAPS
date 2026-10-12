@@ -1,4 +1,4 @@
-"""An episode that never flies still records what it spent on the LLM."""
+"""An episode that never flies still records what it spent on the LLM and how it ended."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def test_a_zero_flight_episode_records_its_llm_spend(monkeypatch, tmp_path) -> N
     monkeypatch.setattr(er, "build_episode", lambda cfg, ep, assets: h)
     monkeypatch.setattr(er, "MissionSession", lambda h, **kw: SimpleNamespace(flights=[]))
     monkeypatch.setattr(er, "run_mission_episode",
-                        lambda s: SimpleNamespace(ended_by="reply", turns_used=2, no_call_turns=2))
+                        lambda s: SimpleNamespace(ended_by="reply"))
     monkeypatch.setattr(er, "score_episode", lambda *a, **k: {"SR": 0})
     monkeypatch.setattr(er.flight_summary, "summarize", lambda d: {"calls": 2})
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
@@ -27,3 +27,4 @@ def test_a_zero_flight_episode_records_its_llm_spend(monkeypatch, tmp_path) -> N
     metrics = er.run_episode(row, {"b_block_1": [object()]}, cfg)["metrics"]
 
     assert metrics["llm"] == {"calls": 2}
+    assert metrics["mission"] == {"ended_by": "reply"}

@@ -382,12 +382,7 @@ def run_episode(
     last = flights[-1] if flights else {}
     scores["committed_fid"] = last.get("target")
     scores["committed_provenance"] = last.get("provenance")
-    scores["mission"] = {
-        "flights_flown": len(flights),
-        "ended_by": reply.ended_by,
-        "turns_used": reply.turns_used,
-        **({"no_call_turns": reply.no_call_turns} if flights else {}),
-    }
+    scores["mission"] = {"ended_by": reply.ended_by}
     # Would the committed point itself score? Separates execution misses
     # from selection misses.
     if flights:
