@@ -613,8 +613,8 @@ def bake_block(
     imagery: bool = True,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, int]:
-    """Bake ``records`` into block ``name``'s window and write its sidecars;
-    ``{"features", "nodes"}``.
+    """Bake ``records`` into block ``name``'s window, write its sidecars and
+    return their counts, ``{"features", "nodes"}``.
 
     ``imagery=False`` is a block with no CityNav raster: its caller's meta
     sidecar's grid and the bounds rectangle's coverage. A ``provenance`` dict
