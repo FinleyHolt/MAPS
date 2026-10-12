@@ -3,28 +3,24 @@ and the episode wrapper."""
 
 from __future__ import annotations
 
-from benchmarks.citynav.adapter import parse_episode
-from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.live_recorder import LiveRecorder
-from benchmarks.citynav.run_benchmark.config import RunConfig
-from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
-from pathlib import Path
-from maps.llm import endpoint_spec as endpoint_spec_module
-from maps.llm.http import TRANSIENT_CLIENT_STATUS
-from maps.perception.sam.detect_client import SamServerOutage
+import logging
 import os
 import time
 import traceback
+from pathlib import Path
+
+from benchmarks.citynav.adapter import parse_episode
+from benchmarks.citynav.analysis import rows as _rows
+from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
+from benchmarks.citynav.live_recorder import LiveRecorder
+from benchmarks.citynav.run_benchmark.config import RunConfig
 from benchmarks.citynav.run_benchmark.episode_runner import run_episode
-import logging
+from benchmarks.citynav.run_manifest import arm_env_stamp
+from maps.llm import endpoint_spec as endpoint_spec_module
+from maps.llm.http import TRANSIENT_CLIENT_STATUS
+from maps.perception.sam.detect_client import SamServerOutage
 
 log = logging.getLogger("run_benchmark")
-
-
-# The arm-flag inventory and stamp live with the rest of the run-identity
-# env vocabulary in benchmarks.citynav.run_manifest (one home for "which
-# env vars are run identity"); this module stamps rows with it.
-from benchmarks.citynav.run_manifest import arm_env_stamp
 
 _RUN_PROVENANCE: dict | None = None
 _RUN_CONTEXT: dict = {}
