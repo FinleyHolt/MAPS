@@ -67,9 +67,6 @@ def _write_tour_cursor(tour: FeatureTour) -> None:
         log.debug("tour_cursor write failed; non-fatal", exc_info=True)
 
 
-# The mission's flight budget: a liveness backstop the model is never told.
-MISSION_FLIGHT_BUDGET = 1000
-
 # The wall-clock backstop: an absolute epoch the bench driver exports. Unset
 # (the field station, a bare smoke) means no clock.
 MISSION_DEADLINE_ENV = "CITYNAV_EPISODE_DEADLINE_EPOCH"
@@ -228,8 +225,6 @@ class MissionSession:
             fly=self.fly,
             declare_concepts=loop.declare_mission_concepts,
             coverage_stops=self._coverage_stops,
-            flight_budget=MISSION_FLIGHT_BUDGET,
-            turn_cap=100,
             deadline_epoch=_mission_deadline_epoch(),
         )
         #: What every turn of the conversation takes, the first and each
@@ -266,7 +261,7 @@ class MissionSession:
     def _coverage_stops(self, fid: str, spacing_m: float):
         # The flight budget bounds a pass: a stop IS a flight.
         return self.h.search_loop.node_coverage_stops(
-            fid, spacing_m, max_stops=MISSION_FLIGHT_BUDGET, minor_spacing_m=self.obs_minor_m)
+            fid, spacing_m, max_stops=self.mission_spec.flight_budget, minor_spacing_m=self.obs_minor_m)
 
     def resolve(self, token: str) -> dict:
         """``token`` as :func:`resolve_flight_target` resolves it over the live graph."""
