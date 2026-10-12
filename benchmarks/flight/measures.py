@@ -54,7 +54,7 @@ import sys
 from bisect import bisect_left
 from pathlib import Path
 
-from benchmarks.citynav.analysis.rows import is_infra_abort
+from benchmarks.citynav.analysis.rows import is_infra_abort, iter_json_rows
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
@@ -91,10 +91,8 @@ CREW_ENDS = ("stopped", "abort", "dropped")
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    """Every row of a ``.jsonl``; none when the file is absent."""
-    if not path.is_file():
-        return []
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    """Every well-formed row of a ``.jsonl`` (a torn line skipped); none when the file is absent."""
+    return list(iter_json_rows(path))
 
 
 def _utc(t: float | None) -> str:

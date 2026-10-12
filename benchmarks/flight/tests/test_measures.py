@@ -179,3 +179,17 @@ def test_a_success_the_recording_holds_one_fix_of_has_its_spl_named_undefined(tm
     (got,), _radius, _turns = Q.collect([root], Q.Truth([truth]), tiles_dir=tiles)
     assert got["success_area"] is True and got["spl"] is None
     assert got["spl_note"] == "undefined: the recording does not cover the run"
+
+
+def test_a_torn_last_ledger_line_is_skipped(tmp_path):
+    """A sortie whose writer was cut mid-line still reads its complete rows."""
+    root, truth = tmp_path / "20260101T000000Z", tmp_path / "truth"
+    row = _run(root, "run1", commit=("prior_0", [101.0, 99.0]))
+    (root / "episodes.jsonl").write_text(json.dumps(row) + "\n" + json.dumps(row)[:40])
+    truth.mkdir()
+    (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    (tiles / "calcity_features.json").write_text(json.dumps({"prior": [{"world_contour": TARGET}]}))
+    got, _radius, _turns = Q.collect([root], Q.Truth([truth]), tiles_dir=tiles)
+    assert [r["episode_id"] for r in got] == ["calcity::run1"]
