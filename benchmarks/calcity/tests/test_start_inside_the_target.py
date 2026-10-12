@@ -21,10 +21,8 @@ import pytest
 
 from benchmarks.calcity import paths as calcity_paths
 from benchmarks.citynav import eval as cn_eval
-from benchmarks.citynav.run_benchmark.config import resolve_config
-
-#: ``score_precise``'s floor, as the runner passes it from the Cal City config.
-FLOOR_M = resolve_config("configs/calcity.yaml")[0]["precise_floor_radius_m"]
+#: ``score_precise``'s floor, as ``score_arrival`` applies it.
+FLOOR_M = cn_eval.PRECISE_FLOOR_RADIUS_M
 
 
 def _episodes_that_start_on_their_target() -> list[tuple[int, float]]:
@@ -83,8 +81,6 @@ def test_those_episodes_score_zero_when_nothing_flew(start_on_target):
         mask = {
             "gt_polygon": row["target_mask"],
             "radius_m": float(row.get("success_radius_m") or 20.0),
-            "tolerance_m": 0.0,
-            "floor_radius_m": FLOOR_M,
         }
         flown = cn_eval.score_arrival(
             criterion="shape", final_pos_xy=start,

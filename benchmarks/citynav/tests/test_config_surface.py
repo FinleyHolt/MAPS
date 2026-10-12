@@ -12,7 +12,6 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 CITYNAV = {
     "altitude_cap_m": 200.0, "altitude_m": 125.0, "cell_size_m": 2.0, "max_steps": 200,
-    "precise_floor_radius_m": 5.0, "precise_tolerance_m": 0.0,
     "sensor": "nadir_1008_90", "spawn": "episode", "spawn_seed": 0,
     "start_altitude_agl_m": None, "success_radius_m": 20.0, "withhold": [],
 }

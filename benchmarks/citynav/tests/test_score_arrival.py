@@ -92,6 +92,16 @@ def test_a_row_carries_each_measure_once():
         "precise_reach_m", "precise_floor_applied"}
 
 
+def test_a_shape_row_is_scored_at_the_eval_tolerance_and_floor():
+    """The shape mask's reach is the bench's, not a caller's: a 2 m strip is
+    widened to the 5 m floor, so a point 2 m off its edge arrives."""
+    strip = [(0.0, 0.0), (100.0, 0.0), (100.0, 2.0), (0.0, 2.0)]
+    row = cn_eval.score_arrival(criterion="shape", final_pos_xy=(50.0, 4.0), target_xy=(50.0, 1.0),
+                                gt_polygon=strip)
+    assert (cn_eval.PRECISE_TOLERANCE_M, cn_eval.PRECISE_FLOOR_RADIUS_M) == (0.0, 5.0)
+    assert row["SR"] == 1 and row["precise_floor_applied"] is True and row["precise_reach_m"] == 4.0
+
+
 def test_an_unknown_criterion_refuses():
     with pytest.raises(ValueError):
         _score("disc", BOTH_YES)

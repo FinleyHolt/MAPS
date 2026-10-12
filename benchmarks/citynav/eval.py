@@ -130,6 +130,12 @@ def score_precise(
     }
 
 
+#: A shape-scored SR's reach: the margin around the target's footprint that
+#: counts as arriving (0.0 is strict containment), and the narrowest target
+#: radius scored (a narrower shape is widened until a circle this wide fits).
+PRECISE_TOLERANCE_M = 0.0
+PRECISE_FLOOR_RADIUS_M = 5.0
+
 #: Every key that is a success verdict or scales with one (SPL multiplies it):
 #: an episode that never flew has all of them zeroed together.
 _SUCCESS_FLAGS = ("SR", "OSR", "spl_pos")
@@ -147,8 +153,6 @@ def score_arrival(
     success_dist_m: float = 20.0,
     gt_polygon: list[tuple[float, float]] | None = None,
     radius_m: float | None = None,
-    tolerance_m: float = 0.0,
-    floor_radius_m: float = 0.0,
     flew: bool = True,
 ) -> dict:
     """One episode's metrics under this bench's success mask; every scored row is written here.
@@ -188,8 +192,8 @@ def score_arrival(
                 target_xy=target_xy,
                 gt_polygon=gt_polygon,
                 radius_m=success_dist_m if radius_m is None else radius_m,
-                tolerance_m=tolerance_m,
-                floor_radius_m=floor_radius_m,
+                tolerance_m=PRECISE_TOLERANCE_M,
+                floor_radius_m=PRECISE_FLOOR_RADIUS_M,
             )
         )
     scores["success_criterion"] = criterion

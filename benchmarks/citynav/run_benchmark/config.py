@@ -49,8 +49,6 @@ _SCHEMA: dict[str, Any] = {
     "altitude_m": (_NUM, _POS),
     "cell_size_m": (_NUM, _POS),
     "success_radius_m": (_NUM, _POS),
-    "precise_tolerance_m": (_NUM, _NONNEG),
-    "precise_floor_radius_m": (_NUM, _NONNEG),
     "spawn": (str, _one_of("episode", "uniform")),
     "spawn_seed": (int, _NONNEG),
     "start_altitude_agl_m": ((*_NUM, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
@@ -71,12 +69,6 @@ class RunConfig:
     altitude_m: float
     cell_size_m: float
     success_radius_m: float
-    # How close to an annotated target SHAPE counts as arriving, for a
-    # shape-scored SR (eval.score_precise); 0.0 is strict containment.
-    precise_tolerance_m: float
-    # A shape narrower than this is widened until a circle of this radius
-    # fits inside it, so no episode is scored finer than the agent resolves.
-    precise_floor_radius_m: float
     # "episode" flies the dataset's start pose; "uniform" a seeded uniform
     # point over the tile bounds, deterministic per (spawn_seed, episode_id).
     spawn: str

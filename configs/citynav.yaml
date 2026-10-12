@@ -26,10 +26,6 @@ max_steps: 200
 altitude_m: 125.0
 cell_size_m: 2.0
 success_radius_m: 20.0
-# Shape-scored SR (eval.score_precise): the margin around a target's
-# footprint that counts as arriving, and the narrowest target radius scored.
-precise_tolerance_m: 0.0
-precise_floor_radius_m: 5.0
 # Start: the dataset's recorded pose at its z (start_altitude_agl_m, when
 # set, replaces the z with that height above ground), held to [ground + 1 m,
 # the paper's 200 m ceiling].
