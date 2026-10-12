@@ -62,7 +62,7 @@ def test_report_runs(tmp_path, capsys):
 def test_the_report_prints_the_route_term(tmp_path, capsys):
     """``spl_pos`` is the one route term on a scored row, and the report
     is where it is read. Its mean rides the report, over the rows that
-    carry it; a run with none says so rather than printing a zero."""
+    carry it; a run with none (a shape-scored run) prints no route line."""
     root = tmp_path / "run"
     write_ledger(
         root,
@@ -77,7 +77,7 @@ def test_the_report_prints_the_route_term(tmp_path, capsys):
     write_ledger(root, ledger_row("e::1#1", "20260725_110000", metrics={"SR": 1}))
     report(root)
     out = capsys.readouterr().out
-    assert "mean spl_pos = --" in out
+    assert "spl_pos" not in out
     assert "NE = -- (no scored row carries NE)" in out
 
 

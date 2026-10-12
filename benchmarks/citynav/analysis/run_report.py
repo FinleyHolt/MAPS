@@ -150,15 +150,15 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     )
     print(f"criterion: {_CRITERION_LABEL.get(_criterion, _criterion)}")
     print(f"SR = {_pct(sr, n)}")
-    # Metres from the commit to the target centroid, on every scored row.
+    # Metres from the final pose to the target centroid, on every row with metrics.
     ne = [float(m["NE"]) for m in scored.values() if isinstance(m.get("NE"), (int, float))]
     print(f"NE median = {statistics.median(ne):.1f} m  mean = {sum(ne) / len(ne):.1f} m (n={len(ne)})"
           if ne else "NE = -- (no scored row carries NE)")
-    # The route term; absent on a row that never flew.
+    # The route term: 0 on a row that never flew, absent on a shape-scored row.
     spl = [float(m["spl_pos"]) for m in scored.values()
            if isinstance(m.get("spl_pos"), (int, float))]
-    print(f"mean spl_pos = {sum(spl) / len(spl):.4f} (n={len(spl)})" if spl
-          else "mean spl_pos = -- (no scored row carries spl_pos)")
+    if spl:
+        print(f"mean spl_pos = {sum(spl) / len(spl):.4f} (n={len(spl)})")
     # SAHI tiles the segmenter could not answer left those frames partial-blind.
     tiles = [int(m.get("sam_tiles_failed") or 0) for m in scored.values()]
     if any(tiles):
