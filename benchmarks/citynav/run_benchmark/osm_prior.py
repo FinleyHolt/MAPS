@@ -44,21 +44,14 @@ def _prior_fids_in_view(assets, view_corners_xy) -> list[str]:
 
 def _build_frame_enrich(*, obs, step_idx: int, view_corners, assets, build_prior: bool) -> dict:
     """One frame's prior enrichment, everything but the graph apply:
-    ``{"prior": [(fid, colour attrs, mask px)], "prior_exc", "phase_s"}``.
+    ``{"prior": [(fid, colour attrs, mask px)], "prior_exc"}``.
     A failure is carried in ``prior_exc`` with the items done before it, so
     the flight's apply warns and counts it."""
     out: dict = {"prior": [], "prior_exc": None}
-    # The steps of the one enrich mark in the stop's phase line.
-    _t: dict = {}
-    _c = time.perf_counter
     rgb_arr = np.asarray(obs.rgb)
     if build_prior:
         try:
-            _m = _c()
             enrich_fids = _prior_fids_in_view(assets, view_corners)
-            _t["p_fids"] = _c() - _m
-            _t["p_n"] = float(len(enrich_fids))
-            _m = _c()
             if rgb_arr.ndim == 3 and enrich_fids:
                 try:
                     prior_polys = build_prior_polys_ortho(
@@ -73,15 +66,11 @@ def _build_frame_enrich(*, obs, step_idx: int, view_corners, assets, build_prior
                 except Exception as exc:  # noqa: BLE001
                     log.warning("catalog prior overlay build failed step=%d anchor=?: %s", step_idx, exc)
                     prior_polys = []
-                _t["p_polys"] = _c() - _m
-                _m = _c()
                 for pfid, pmask in prior_polys:
                     # Priors get the M6 colour detections get, over the projected footprint.
                     pattrs = m6_attributes(rgb_arr, pmask)
                     if pattrs:
                         out["prior"].append((pfid, pattrs, pmask.area))
-                _t["p_color"] = _c() - _m
         except Exception as exc:  # noqa: BLE001 - carried to the apply
             out["prior_exc"] = exc
-    out["phase_s"] = _t
     return out
