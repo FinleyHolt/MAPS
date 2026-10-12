@@ -139,8 +139,9 @@ def _cell_coverage(
     """Boolean ``grid_shape`` mask of where the block's IMAGERY has pixels: a
     cell is covered iff any pixel of the filled ortho under it has
     ``alpha > 0``, the runtime observation's no-data rule. ``None`` (the
-    bounds rectangle is the coverage) when no ortho resolves, its geometry
-    disagrees with the block grid, or ``imagery=False`` (Cal City).
+    bounds rectangle is the coverage) when the ortho's geometry disagrees
+    with the block grid, or ``imagery=False`` (Cal City); an unreadable
+    ortho is a ``BakeError``.
     """
     if not imagery:
         return None
@@ -149,15 +150,8 @@ def _cell_coverage(
 
     try:
         ortho = load_ortho_or_rasters(block, rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR))
-    except Exception as exc:  # noqa: BLE001 — a city aggregate has no raster
-        log.warning(
-            "%s: no ortho readable (%s); coverage stays the bounds rectangle",
-            block, exc,
-        )
-        return None
-    if ortho is None:
-        log.warning("%s: no ortho found; coverage stays the bounds rectangle", block)
-        return None
+    except Exception as exc:  # noqa: BLE001 — every failure is the same refusal
+        raise BakeError(f"{block}: cannot read the block imagery under {CITYNAV_NATIVE_RGBD_DIR} ({exc})") from exc
     ppm = float(ortho["px_per_m"])
     step = int(round(cell_size_m * ppm))
     px_tol = 0.5 / ppm

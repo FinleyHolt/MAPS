@@ -16,9 +16,12 @@ import json
 import logging
 
 import numpy as np
+import pytest
 
 import benchmarks.citynav.paths as citynav_paths
-from benchmarks.citynav.bake.city import bake_block
+import maps.perception.ortho.camera_model as camera_model
+from benchmarks.citynav.bake.city import BakeError, _cell_coverage, bake_block
+from benchmarks.citynav.eval import WorldBounds
 from maps.search.tests.ortho_fixture import write_rasters
 
 BLOCK = "toy_block_0"
@@ -76,3 +79,13 @@ def test_no_imagery_keeps_every_rasterized_cell(tmp_path, monkeypatch) -> None:
     rows = _bake(tmp_path, monkeypatch, imagery=False)
     assert sorted(rows) == ["w_all", "w_south", "w_straddle"]
     assert len(rows["w_all"]["cells"]) == 16
+
+
+def test_an_unreadable_ortho_refuses_the_bake(monkeypatch) -> None:
+    """A block whose imagery cannot be read has no coverage to clip to."""
+    def unreadable(*_a, **_k):
+        raise OSError("truncated raster")
+
+    monkeypatch.setattr(camera_model, "load_ortho_or_rasters", unreadable)
+    with pytest.raises(BakeError, match="truncated raster"):
+        _cell_coverage(BLOCK, WorldBounds(x_min=0.0, y_min=0.0, x_max=8.0, y_max=8.0), (4, 4), 2.0)
