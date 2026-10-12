@@ -678,7 +678,8 @@ class Rows:
         # every row ties, so an index would read as a choice and be a coin
         # flip.
         if self._tied():
-            name = self.mp.name_of(self) or self.ref
+            name = (self.mp.name_of(self) or self.mp.call_arg(None)
+                    or self.ref)
             # The refusal names the call that does the work.
             raise CodeError(
                 f"{name} is a tied view of {len(self._rows())} rows and is "
@@ -697,7 +698,8 @@ class Rows:
             return Rows(self.ref, self.mp, f"[{lo}:{hi}]")
         rows = self._rows()
         if not isinstance(i, int) or not (-len(rows) <= i < len(rows)):
-            name = self.mp.name_of(self) or self.ref
+            name = (self.mp.name_of(self) or self.mp.call_arg(None)
+                    or self.ref)
             raise CodeError(
                 f"{name}[{i}] did not bind: {name} served {len(rows)} "
                 "row(s) here. Show it first, then index it.")
@@ -1030,9 +1032,10 @@ class MissionPython:
                 return k
         return self._shown.get(ref) or self._labels.get(ref)
 
-    def call_arg(self, fn: str) -> str | None:
+    def call_arg(self, fn: str | None) -> str | None:
         """The model's text for the first argument of the ``fn(...)`` call
-        its block is running, found at the block frame's live position."""
+        its block is running (``fn`` None: for what the subscript it is
+        running indexes), found at the block frame's live position."""
         fr = sys._getframe()
         while fr is not None and fr.f_code.co_filename != BLOCK_FILENAME:
             fr = fr.f_back
@@ -1040,9 +1043,13 @@ class MissionPython:
             return None
         at = inspect.getframeinfo(fr, context=0).positions
         for node in ast.walk(ast.parse(self._code)):
+            if not isinstance(node, (ast.Call, ast.Subscript)) or (
+                    node.lineno, node.col_offset) != (at.lineno, at.col_offset):
+                continue
+            if fn is None and isinstance(node, ast.Subscript):
+                return ast.unparse(node.value)
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id == fn and node.args
-                    and (node.lineno, node.col_offset) == (at.lineno, at.col_offset)):
+                    and node.func.id == fn and node.args):
                 return ast.unparse(node.args[0])
         return None
 
@@ -1241,7 +1248,7 @@ class MissionPython:
         self._near_miss_note(ref, query)
         if q:
             self._labels[ref] = f"find({query!r})"
-        return Rows(ref, self, label=f"find({query!r})")
+        return Rows(ref, self, label=f"find({query!r})" if q else "")
 
     # find("pool", nearest=<street>) re-sorts a global name-match, so pools
     # 2.5 km away can read like "the pools near the street"; this note says

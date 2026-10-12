@@ -487,3 +487,13 @@ def test_refusals_over_an_unnamed_result_quote_the_models_own_text():
     assert look_err.startswith("find('zeppelin') holds no rows"), look_err
     assert "row(s) of find('car').order(nearest='prior_1') are" in page_err, page_err
     assert not re.search(r"\br\d+\b", look_err + page_err), (look_err, page_err)
+
+
+def test_refusals_over_a_keyword_only_find_quote_the_models_own_text():
+    from maps.search.tests.fakes import drive, run, tool_results
+
+    _reply, fr, _f, _d = drive([[run('more_of(find(nearest="prior_1"))\n')],
+                                [run('find(nearest="prior_1")[999]\n')], "done"])
+    page_err, index_err = (t["error"] for t in tool_results(fr)[:2])
+    assert "find(nearest='prior_1')" in page_err, page_err
+    assert "find(nearest='prior_1')[999] did not bind" in index_err, index_err
