@@ -13,7 +13,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import math
 from pathlib import Path
 
@@ -121,11 +120,7 @@ def _run_provenance(run_root: Path) -> dict:
 def _bake_stamp(run_root: Path) -> str | None:
     """The manifest's tile-bake content hash: every Cal City bake sits at
     ``benchmarks/calcity/tiles``, so the path the rows carry cannot tell two apart."""
-    try:
-        manifest = json.loads((run_root / "run_manifest.json").read_text())
-    except (OSError, ValueError):
-        return None
-    return (manifest.get("perception") or {}).get("bake_sha256")
+    return (_rows.read_manifest(run_root).get("perception") or {}).get("bake_sha256")
 
 
 def _ground_truth_keys(prov: dict) -> dict:

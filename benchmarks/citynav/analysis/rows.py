@@ -201,19 +201,11 @@ def pick_attempts(attempts: Iterable[Attempt]) -> dict[str, Attempt]:
 
 
 def read_manifest(root: Path) -> dict:
-    """The run's manifest, shallowest first: a driver root carries it at the
-    top, a direct ``run_benchmark`` writes it two down in
-    ``<out>/<split>/<stamp>/``."""
-    for p in (
-        root / "run_manifest.json",
-        *sorted(root.glob("*/run_manifest.json")),
-        *sorted(root.glob("*/*/run_manifest.json")),
-    ):
-        try:
-            return json.loads(p.read_text())
-        except (OSError, ValueError):
-            continue
-    return {}
+    """The run's ``run_manifest.json`` at its root, else ``{}``."""
+    try:
+        return json.loads((root / "run_manifest.json").read_text())
+    except (OSError, ValueError):
+        return {}
 
 
 def _shortfall(root: Path, picked: dict[str, Attempt], stats: ReadStats) -> str | None:

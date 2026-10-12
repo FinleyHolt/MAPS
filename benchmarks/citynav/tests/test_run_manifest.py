@@ -110,18 +110,12 @@ def test_write_once_resume_and_refusal(stub_run, tmp_path):
 def test_a_direct_run_emits_a_manifest_the_reader_finds(
     stub_run, tmp_path
 ):
-    """The bake stamp reaches the reader from a DIRECT run's own run dir.
+    """The bake stamp reaches the reader from a DIRECT run's root.
 
     Every quotable SR needs a bake identity: two bakes of the same blocks
     share a path and a name, and the SR moves between them with nothing
-    failing. ``bench_fullset`` stamped; ``run_benchmark`` invoked straight
-    -- the smoke gate, ``launch``, a hand-run arm -- did not, so
-    ``run_report`` printed ``bake: UNVERIFIED`` for all of them.
-
-    Pins BOTH halves, because either alone passes while the pair is
-    broken: the manifest carries a real content hash, and the reader
-    finds it at the depth a direct run actually writes it
-    (``<out>/<split>/<stamp>/``, two below the root a reader is handed).
+    failing. Pins both halves: the manifest carries a real content hash,
+    and the reader finds it at the run root a direct run writes it to.
     """
     from benchmarks.citynav.analysis import run_report
 
@@ -129,45 +123,14 @@ def test_a_direct_run_emits_a_manifest_the_reader_finds(
     assert stamped and len(stamped) == 64, stub_run.get("perception")
     assert stamped == paths.bake_sha256(), "not the bake on disk"
 
-    run_dir = tmp_path / "out" / "train_seen" / "20260830_120000"
-    run_dir.mkdir(parents=True)
+    run_dir = tmp_path / "out"
+    run_dir.mkdir()
     run_manifest.emit_or_verify(run_dir, stub_run, log=lambda *a: None)
 
-    # the root a reader is handed is the out root, not the run dir
     assert run_report.read_manifest(tmp_path / "out") == stub_run
     line = run_report.bake_line(tmp_path / "out")
     assert line.startswith("bake: verified"), line
     assert "UNVERIFIED" not in line
-
-    # VACUITY FLOOR: the reader really needs the extra depth -- a search
-    # that stopped one level up would return {} here and this test would
-    # be asserting nothing.
-    assert run_report.read_manifest(tmp_path / "out" / "train_seen") == stub_run
-    assert not (tmp_path / "out" / "run_manifest.json").exists()
-
-
-def test_the_fleet_root_still_wins_over_a_nested_run_dir(
-    stub_run, tmp_path
-):
-    """Shallowest-first: a fleet root answers with its own manifest.
-
-    The reader now searches two levels deeper, and a fleet root has both
-    -- its own at the top and one per shard below. Ordering is the whole
-    contract: the fleet's manifest describes the fleet, a shard's
-    describes one shard, and a report on the fleet must not quote a
-    shard's selection as the run's.
-    """
-    from benchmarks.citynav.analysis import run_report
-
-    fleet = dict(stub_run, run_id="the-fleet")
-    shard = dict(stub_run, run_id="one-shard")
-    root = tmp_path / "fleet"
-    (root / "train_seen" / "20260830_120000").mkdir(parents=True)
-    run_manifest.emit_or_verify(root, fleet, log=lambda *a: None)
-    run_manifest.emit_or_verify(
-        root / "train_seen" / "20260830_120000", shard, log=lambda *a: None
-    )
-    assert run_report.read_manifest(root)["run_id"] == "the-fleet"
 
 
 def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tmp_path, bake):

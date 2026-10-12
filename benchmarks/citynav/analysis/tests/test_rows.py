@@ -310,3 +310,10 @@ def test_a_metricless_pick_is_an_osr_miss_on_a_ring_run():
     assert rows.scored_metrics(picked)["b"] == {"SR": 0, "OSR": 0}
     shape = {"a": pick({"SR": 1}), "b": pick({})}
     assert rows.scored_metrics(shape)["b"] == {"SR": 0}
+
+
+def test_the_manifest_is_the_roots_own_never_a_missions_below_it(tmp_path):
+    root = write_ledger(tmp_path / "sortie", ledger_row("e1", "20260101_000001", 1))
+    (root / "run03").mkdir()
+    (root / "run03" / "run_manifest.json").write_text(json.dumps({"selection": {"episodes_n": 5}}))
+    assert rows.read_manifest(root) == {}
