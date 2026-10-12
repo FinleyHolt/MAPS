@@ -328,10 +328,7 @@ class MissionReply:
     """
 
     ended_by: str
-    reply_text: str = ""
     turns_used: int = 0
-    flights_flown: int = 0
-    no_call_turns: int = 0
 
 
 def _served_flight(report: dict) -> dict:
@@ -951,8 +948,6 @@ def advance_reasoner_one_round(
     _programs_seen: dict[str, tuple] = {}
     _surface_version = [0]
 
-    # Protocol telemetry.
-    no_call_turns = 0
     no_call_streak = 0
     # CONSECUTIVE replies with ZERO flights behind them (see
     # NO_FLIGHT_ABSTAIN_STREAK). Its own counter rather than the no-call
@@ -2861,15 +2856,11 @@ def advance_reasoner_one_round(
             len(b.splitlines()) for b in _episode_script)
         return out
 
-    def _mission_end(ended_by: str, reply_text: str = "",
-                     turns: int = 0) -> MissionReply:
+    def _mission_end(ended_by: str, turns: int = 0) -> MissionReply:
         if transcript is not None:
             transcript.append({"kind": "mission_end",
                                "ended_by": ended_by, "turns": int(turns)})
-        return MissionReply(
-            ended_by=ended_by, reply_text=reply_text, turns_used=int(turns),
-            flights_flown=mission_flights, no_call_turns=no_call_turns,
-        )
+        return MissionReply(ended_by=ended_by, turns_used=int(turns))
 
     if thread_infeasible:
         # No dispatch: re-scanning a known-infeasible thread costs a
@@ -2984,7 +2975,6 @@ def advance_reasoner_one_round(
                 # message (a call lost between the think span and either
                 # channel). Repair once; a second consecutive empty still
                 # ends the mission -- the ending stays model-owned.
-                no_call_turns += 1
                 no_call_streak += 1
                 if transcript is not None:
                     transcript.append({"kind": "empty_turn",
@@ -3002,7 +2992,6 @@ def advance_reasoner_one_round(
                 # dropped message, not an ending. Repair once; the streak
                 # is shared with the empty turn, so a repeated
                 # not-a-reply still ends and the ending stays model-owned.
-                no_call_turns += 1
                 no_call_streak += 1
                 if transcript is not None:
                     transcript.append({"kind": "code_shaped_reply",
@@ -3045,8 +3034,7 @@ def advance_reasoner_one_round(
             # of the surface are channel misses, repaired above.)
             log.info("%s mission ended by reply at turn %d (%d flights)",
                      rid_tag, turn_idx, mission_flights)
-            return _mission_end("reply", reply_text=content,
-                                turns=turn_idx + 1)
+            return _mission_end("reply", turns=turn_idx + 1)
         no_call_streak = 0
         # THE MODEL DID SOMETHING, so the abstain streak restarts.
         no_flight_streak = 0

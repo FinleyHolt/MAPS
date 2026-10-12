@@ -74,7 +74,7 @@ def test_run_mission_hands_the_word_to_the_reasoner_it_builds(monkeypatch):
 
     def _round(*, reasoner, **kw):
         seen["reasoner"] = reasoner
-        return MissionReply(ended_by="reply", reply_text="standing by")
+        return MissionReply(ended_by="reply")
 
     monkeypatch.setattr(
         "maps.search.parse_compile.reasoner_loop.advance_reasoner_one_round",

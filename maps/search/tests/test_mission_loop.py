@@ -48,7 +48,6 @@ def test_second_consecutive_empty_turn_still_ends_the_mission():
     # dead serve cannot loop the mission on nudges.
     reply, fr, _, _ = drive(["", ""])
     assert reply.ended_by == "reply"
-    assert reply.reply_text == ""
     assert reply.turns_used == 2
 
 
@@ -66,7 +65,7 @@ def test_a_flight_view_that_fails_to_render_never_crashes_the_flight():
 
     reply, fr, flights, _ = drive([[run("go_to(prior_7)\n")], "done"],
                                   look_renderer=_broken)
-    assert len(flights) == 1 and reply.flights_flown == 1
+    assert len(flights) == 1
     assert "error" not in tool_results(fr)[0], tool_results(fr)[0]
     assert fr.vision == []
 
@@ -76,7 +75,6 @@ def test_three_replies_in_a_row_with_no_flight_is_a_confident_abstain():
     reply, fr, flights, _ = drive(
         ["nothing here.", "nothing here.", "nothing here."])
     assert reply.ended_by == "reply"
-    assert reply.flights_flown == 0
     assert flights == []
     nudges = [m for m in fr.messages
               if m.get("role") == "user" and "flown nowhere" in

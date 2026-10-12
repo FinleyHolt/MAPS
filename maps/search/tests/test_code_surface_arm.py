@@ -40,7 +40,7 @@ def test_the_whole_vocabulary_in_one_episode():
     # size= compiles to a footprint_area_m2 sort (asserted in
     # code_surface.demo); this fixture's synthetic cars carry no footprint,
     # so the executor says so rather than ordering by nothing.
-    assert reply.flights_flown == 1
+    assert len(flights) == 1
     assert flights[0]["target_fid"] == "car_1", flights
 
 
@@ -77,7 +77,6 @@ def test_an_explore_flies_the_stops_and_ends_on_the_last_one():
     assert "error" not in out[0], out[0]
     # the stops of the thing, and NOTHING after them
     assert len(flights) == len(STOPS), flights
-    assert reply.flights_flown == len(STOPS)
     from maps.util.xy_token import parse_xy_token
     flown = [list(parse_xy_token(f["target_fid"])) for f in flights]
     assert flown == STOPS, flown
@@ -320,7 +319,7 @@ def test_any_earlier_handle_stays_indexable_not_just_the_newest():
     ])
     out = tool_results(fr)
     assert "error" not in out[2], out[2]
-    assert reply.flights_flown == 1
+    assert len(flights) == 1
     assert flights and flights[0]["target_fid"] == "car_1", flights
 
 
@@ -358,7 +357,7 @@ def test_a_pick_is_usable_in_the_block_that_made_it():
     assert list(res) == ["r3"], res
     assert "r1:" in (res["r3"].get("hint") or ""), res["r3"]
     assert out[0]["handles"] == ["r1", "r2", "r3"], out[0]
-    assert reply.flights_flown == 1
+    assert len(flights) == 1
     assert flights and flights[0]["target_fid"] == "car_1", flights
 
 
@@ -924,8 +923,7 @@ def test_a_block_written_into_the_reply_channel_is_repaired_not_an_ending():
         "the car by the depot.",
     ])
     assert reply.ended_by == "reply"
-    assert reply.reply_text == "the car by the depot."
-    assert reply.flights_flown == 1
+    assert len(flights) == 1
     nudges = [m for m in fr.messages
               if m.get("role") == "user"
               and "not through the run tool" in str(m.get("content"))]
@@ -936,7 +934,7 @@ def test_a_second_block_in_the_reply_channel_still_ends_the_mission():
     """A stuck emitter cannot loop the mission on nudges."""
     reply, fr, flights, _d = drive(['go_to(r1[0])', 'go_to(r1[0])'])
     assert reply.ended_by == "reply"
-    assert reply.flights_flown == 0
+    assert flights == []
     assert reply.turns_used == 2
 
 

@@ -429,8 +429,7 @@ def run_mission_episode(session: MissionSession):
     h = session.h
     workdir = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip() or None
     transcript = ConversationLog(Path(workdir) / CONVERSATION_JSONL if workdir else None)
-    diag: dict = {}
-    reply, _ = session.run(h.episode.description, transcript=transcript, diag=diag)
+    reply, _ = session.run(h.episode.description, transcript=transcript)
     flights = session.flights
     if flights:
         last = flights[-1]
@@ -449,13 +448,10 @@ def run_mission_episode(session: MissionSession):
         )
     transcript.append(
         {
-            "stage": "mission",
             "kind": "summary",
             "ended_by": reply.ended_by,
             "turns_used": reply.turns_used,
             "flights_flown": len(flights),
-            "no_call_turns": reply.no_call_turns,
-            "diag": diag,
         }
     )
     return reply
