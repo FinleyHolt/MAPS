@@ -191,6 +191,13 @@ def look_strs(v: object) -> list[str]:
         if isinstance(v, list) else []
 
 
+def _mark(fid: str, row, xy, is_target: bool) -> dict:
+    """One drawn mark: the row's point, outline and badge label."""
+    return {"fid": fid, "xy": xy, "boundary": look_outline(row),
+            "label": look_label(fid, row, is_target=is_target),
+            "is_target": is_target}
+
+
 def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
                   stops: dict, obs_minor_m: float | None,
                   obs_span_m: float | None,
@@ -212,6 +219,19 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
             return True
         _r = float(obs_minor_m) / 2.0
         return any(math.dist(_xy, _p) <= _r for _p in stops.values())
+
+    # A handle is a legal mark (a street is its ways).
+    def _fids_of(tokens) -> list[str]:
+        out: list[str] = []
+        for t in tokens:
+            if re.fullmatch(r"r\d+", t):
+                out.extend(str(_r["fid"]) for _r in (carry.read(t) or [])
+                           if _r.get("fid"))
+            else:
+                out.append(t)
+        return out
+
+    marked = _fids_of(look_strs(marks))
     for _i, f in enumerate(fids):
         if len(requests) >= LOOK_MAX_CROPS:
             ref_notes.append(
@@ -223,17 +243,8 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
         f = f.strip()
         if not f:
             continue
-        # A handle is a legal mark (a street is its ways).
-        mark_fids: list[str] = []
-        for _mf in look_strs(marks) + [f]:
-            if re.fullmatch(r"r\d+", _mf):
-                mark_fids.extend(
-                    str(_r["fid"]) for _r in (carry.read(_mf) or [])
-                    if _r.get("fid"))
-            else:
-                mark_fids.append(_mf)
         mark_list: list[dict] = []
-        for mf in dict.fromkeys(mark_fids):
+        for mf in dict.fromkeys(marked + _fids_of([f])):
             row = rows.get(mf)
             xy = look_xy(row)
             if xy is None:
@@ -241,13 +252,7 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
             if xy is None:
                 skipped.append(mf)
                 continue
-            mark_list.append({
-                "fid": mf,
-                "xy": xy,
-                "boundary": look_outline(row),
-                "label": look_label(mf, row, is_target=(mf == f)),
-                "is_target": bool(mf == f),
-            })
+            mark_list.append(_mark(mf, row, xy, mf == f))
         row = rows.get(f)
         xy = look_xy(row)
         if xy is None:
@@ -303,10 +308,7 @@ def map_spec(around: str, mark_fids: list, *, rows: dict, resolve,
         if xy is None:
             skipped.append(mf)
             continue
-        marks.append({"fid": mf, "xy": xy,
-                      "boundary": look_outline(row),
-                      "label": look_label(mf, row, is_target=False),
-                      "is_target": False})
+        marks.append(_mark(mf, row, xy, False))
     # The frame follows the request: the marks' and centre's extent
     # derives the zoom; a bare point gets the floor.
     _cb = look_outline(rows.get(center_fid)) if center_fid else None
