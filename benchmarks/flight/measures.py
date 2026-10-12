@@ -569,6 +569,8 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     if out["oracle_success"] is False and thin:
         out["oracle_success"] = None  # a thin recording cannot show the aircraft never came near
     if out["track_source"] != "GNSS track" or len(flown) < 2:
+        if success and flown and out["spl_note"] is None:
+            out["spl_note"] = "undefined: the recording does not cover the run"
         return out
     loiter = row.get("start_xy") or (row.get("visited_xy") or [None])[0]
     first = next((t_start + float(e["t_s"]) for e in events if e.get("kind") == "leg"), t_end_run)

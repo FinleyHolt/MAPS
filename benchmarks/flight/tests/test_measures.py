@@ -164,3 +164,18 @@ def test_a_track_with_no_fix_in_the_run_covers_none_of_it():
     assert Q.track_coverage(track, T0, T0 + 2.0) == 0.0
     assert Q.track_coverage([], T0, T0 + 2.0) == 0.0
 
+
+def test_a_success_the_recording_holds_one_fix_of_has_its_spl_named_undefined(tmp_path):
+    root, truth, tiles = tmp_path / "20260101T000000Z", tmp_path / "truth", tmp_path / "tiles"
+    tiles.mkdir()
+    (tiles / "calcity_features.json").write_text(json.dumps({"prior": [{"world_contour": TARGET}]}))
+    (root / "episodes.jsonl").parent.mkdir()
+    row = _run(root, "run1", commit=("prior_0", [101.0, 99.0]))
+    (root / "episodes.jsonl").write_text(json.dumps(row) + "\n")
+    (root / "flight_track.jsonl").write_text(json.dumps({"t_unix": T0 + 10.0, "x": 0.0, "y": 0.0, "alt_agl_m": 600.0,
+                                                         "track_deg": 0.0, "ground_speed_mps": 100.0}) + "\n")
+    truth.mkdir()
+    (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
+    (got,), _radius, _turns = Q.collect([root], Q.Truth([truth]), tiles_dir=tiles)
+    assert got["success_area"] is True and got["spl"] is None
+    assert got["spl_note"] == "undefined: the recording does not cover the run"
