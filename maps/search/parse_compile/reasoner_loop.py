@@ -593,11 +593,11 @@ class _Mission:
             self._map_feats[:] = [self.carry.version, map_features(self.ctx)]
         return self._map_feats[1]
 
-    def _loop_breaker_facts(self, _ns, _n: int) -> str:
+    def _loop_breaker_facts(self, _n: int) -> str:
         def _cap(fids: list[str]) -> str:
             return f"{fids[:8]}" + (
                 f" (+{len(fids) - 8} more)" if len(fids) > 8 else "")
-        c_n, a_n, cols = self._surface_census_counts(_ns)
+        c_n, a_n, cols = self._surface_census_counts()
         parts = [
             f" This error class has now occurred {_n}x.",
             f" Live surface: {_live_counts(c_n, a_n, ';')}.",
@@ -613,11 +613,11 @@ class _Mission:
         s = re.sub(r"\d+", "_", s)
         return s[:100]
 
-    def _surface_census_counts(self, _ns) -> tuple[int, int, list[str]]:
+    def _surface_census_counts(self) -> tuple[int, int, list[str]]:
         """Live counts: detections, priors, computed columns."""
-        c_n = sum(1 for r in (_ns.get("cands") or [])
+        c_n = sum(1 for r in (self.ns.get("cands") or [])
                   if isinstance(r, dict) and r.get("fid"))
-        a_n = sum(1 for r in (_ns.get("anchors") or [])
+        a_n = sum(1 for r in (self.ns.get("anchors") or [])
                   if isinstance(r, dict) and r.get("fid"))
         cols = sorted({k for _row in self.row_latest.values()
                        if isinstance(_row, dict)
@@ -631,7 +631,7 @@ class _Mission:
         and census again: the counts, the rejection's first clause and the
         live state."""
         _first = str(err).split(". ", 1)[0].strip().rstrip(".")
-        c_n, a_n, cols = self._surface_census_counts(self.ns)
+        c_n, a_n, cols = self._surface_census_counts()
         _cols_s = f"{cols[:12]}" + (
             f" (+{len(cols) - 12} more)" if len(cols) > 12 else "")
         return (
@@ -666,7 +666,7 @@ class _Mission:
             return err + f" This error class has now occurred {_n}x."
         if _consec >= 3:
             return self._repeated_rejection_state(err, _n, _consec)
-        return err + self._loop_breaker_facts(self.ns, _n)
+        return err + self._loop_breaker_facts(_n)
 
     def _dispatch_analyze_scene(self, a, *, answer_ref=""):
         _key = _program_dedup_key(a["program"])
@@ -681,8 +681,7 @@ class _Mission:
             else:
                 self._dedup_streak["key"], self._dedup_streak["n"] = _key, 1
             if self._dedup_streak["n"] >= 2:
-                _c_n, _a_n, _dcols = self._surface_census_counts(
-                    self.ns)
+                _c_n, _a_n, _dcols = self._surface_census_counts()
                 _cols_s = ("; columns live: " + ", ".join(_dcols[:12])
                            if _dcols else "")
                 return {"note": _DEDUP_REPEAT_NOTE.format(
