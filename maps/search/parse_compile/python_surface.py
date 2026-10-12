@@ -1325,21 +1325,18 @@ class MissionPython:
 
     # -- measuring ---------------------------------------------------------
 
-    def _measured(self, call: str) -> None:
+    def _call_distance(self, a, b) -> float:
+        """Metres between two footprints, mask to mask; 0.0 on touch or
+        containment. Either side may be a set, meaning its nearest member."""
         self._measure_calls += 1
         if self._measure_calls > MEASURE_CALL_CEILING:
             raise CodeError(
                 f"this block ran past {MEASURE_CALL_CEILING:,} measurements. "
-                f"{call}() in a loop inside a loop is one call per PAIR, "
+                "distance() in a loop inside a loop is one call per PAIR, "
                 "which is millions over sets this size. Slice the sets "
                 "down, or measure each thing against the WHOLE other set "
                 "in one call -- a set is one place and means its nearest "
                 "member.")
-
-    def _call_distance(self, a, b) -> float:
-        """Metres between two footprints, mask to mask; 0.0 on touch or
-        containment. Either side may be a set, meaning its nearest member."""
-        self._measured("distance")
         return self._geom.distance(_places(a, "distance"),
                                    _places(b, "distance"))
 

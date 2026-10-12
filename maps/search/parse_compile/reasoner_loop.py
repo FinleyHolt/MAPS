@@ -459,7 +459,7 @@ class _Mission:
         self._those: str | None = None
         self._widened: dict = {}
         self.plan_rn: list = [0]
-        # The lines of every accepted block, counted on each result.
+        # The lines of every block run, a running total on each result.
         self._script_lines = 0
         # Every rN in play (bound handles and those the running block spells):
         # the flight mint skips them.
