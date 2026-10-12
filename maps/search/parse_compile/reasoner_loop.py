@@ -1316,8 +1316,8 @@ def advance_reasoner_one_round(
     _those: list = [None]
     _widened: dict = {}
     plan_rn: list = [0]
-    # Every accepted block, in order (counted on each result).
-    _episode_script: list = []
+    # The lines of every accepted block, counted on each result.
+    _script_lines = [0]
     # Every rN in play (bound handles and those the running block spells):
     # the flight mint skips them.
     _code_names: set = set()
@@ -2209,10 +2209,9 @@ def advance_reasoner_one_round(
             v.ref for v in _mission_py[0].ns.values()
             if isinstance(v, _py_surface.Rows))
         _code_minted.clear()
-        _episode_script.append(code.strip())
+        _script_lines[0] += len(code.strip().splitlines())
         out = _mission_py[0].run_block(code)
-        out["script_lines"] = sum(
-            len(b.splitlines()) for b in _episode_script)
+        out["script_lines"] = _script_lines[0]
         return out
 
     def _mission_end(ended_by: str, turns: int = 0) -> MissionReply:
