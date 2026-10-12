@@ -671,12 +671,11 @@ def _surface_from_ctx(ctx) -> dict:
     the prebaked priors."""
     from maps.search.analyze_scene.geom_program import build_surface_from_graph
 
-    cell_m = float(getattr(ctx, "cell_size_m", 0.0) or 0.0)
-    g = getattr(ctx, "graph", None)
-    if g is None or not hasattr(g, "nodes"):
+    cell_m = float(ctx.cell_size_m)
+    if ctx.graph is None:
         return {"cands": [], "anchors": [], "cell_m": cell_m}
     cands, anchors = build_surface_from_graph(
-        g.nodes.items(), getattr(ctx, "tile_origin_xy", (0.0, 0.0)), cell_m
+        ctx.graph.nodes.items(), ctx.tile_origin_xy, cell_m
     )
     return {"cands": cands, "anchors": anchors, "cell_m": cell_m}
 
@@ -1251,10 +1250,9 @@ def advance_reasoner_one_round(
             osm_kind,
             osm_label,
         )
-        g = getattr(ctx, "graph", None)
-        nodes = getattr(g, "nodes", None) or {}
-        _ox, _oy = (getattr(ctx, "tile_origin_xy", None) or (0.0, 0.0))
-        _cs = float(getattr(ctx, "cell_size_m", 0.0) or 2.0)
+        nodes = getattr(ctx.graph, "nodes", None) or {}
+        _ox, _oy = ctx.tile_origin_xy
+        _cs = float(ctx.cell_size_m)
 
         def _grid_to_world(pts):
             # astype truncates toward zero, like int(): ox + (c + 0.5) * cs
@@ -2205,7 +2203,7 @@ def advance_reasoner_one_round(
                 _members.append({"tok": _tok, "pts": [_p] if _p else [],
                                  "items": [dict(_it)], "walk": 0.0})
         # greedy nearest-endpoint chain, seeded from where the drone is
-        _cur = getattr(ctx, "pose_xy", None)
+        _cur = ctx.pose_xy
         _cur = [float(_cur[0]), float(_cur[1])] if _cur else None
         _chained: list[dict] = []
         _rest = list(_members)
@@ -2303,7 +2301,7 @@ def advance_reasoner_one_round(
             ack["error"] = _rcpt["error"]
         _names = {s for s in (
             str(getattr(n, "name", "") or "").strip().lower()
-            for n in (getattr(getattr(ctx, "graph", None), "nodes", None)
+            for n in (getattr(ctx.graph, "nodes", None)
                       or {}).copy().values()) if s}
         _note = _named_feature_note([c["class"] for c in adds], _names)
         if _note:
@@ -2464,9 +2462,9 @@ def advance_reasoner_one_round(
             )
             _m = render_map_from_spec(
                 spec, _map_features_cached(),
-                tile_origin_xy=getattr(ctx, "tile_origin_xy", (0.0, 0.0)),
-                cell_size_m=float(getattr(ctx, "cell_size_m", 0.0) or 2.0),
-                grid_shape=tuple(getattr(ctx, "grid_shape", (0, 0))))
+                tile_origin_xy=ctx.tile_origin_xy,
+                cell_size_m=float(ctx.cell_size_m),
+                grid_shape=tuple(ctx.grid_shape))
             maps = [_m] if _m is not None else []
         except Exception as exc:  # noqa: BLE001 — render never crashes the mission
             log.warning("%s SAY map render failed: %s", rid_tag,

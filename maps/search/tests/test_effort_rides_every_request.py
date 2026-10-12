@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 import pytest
 
 from maps.search.parse_compile import reasoner_agent
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.reasoner_loop import MissionReply, run_mission
-from maps.search.tests.fakes import TEST_SPEC, unarmed_boost
+from maps.search.tests.fakes import TEST_SPEC, bare_ctx, unarmed_boost
 
 
 def _serve(monkeypatch) -> list[dict]:
@@ -83,7 +82,7 @@ def test_run_mission_hands_the_word_to_the_reasoner_it_builds(monkeypatch):
         instruction="find the truck",
         reasoner_url="http://unused",
         endpoint_spec=TEST_SPEC,
-        ctx=SimpleNamespace(),
+        ctx=bare_ctx(),
         mission_spec=None,
         boost_queue=unarmed_boost,
         reasoning_effort="0.6",

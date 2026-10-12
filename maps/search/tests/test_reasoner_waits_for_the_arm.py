@@ -14,7 +14,7 @@ from maps.search.parse_compile.reasoner_loop import (
     MissionSpec,
     advance_reasoner_one_round,
 )
-from maps.search.tests.fakes import TEST_SPEC, unarmed_boost
+from maps.search.tests.fakes import TEST_SPEC, bare_ctx, unarmed_boost
 
 _REPLY = {"kind": "text", "content": "the goal is the flown object",
           "reasoning": ""}
@@ -51,12 +51,9 @@ def _round(monkeypatch, faults: int, *, cancel_event=None, transcript=None,
                  cancel_event=cancel_event)
     r.step_tool_call = _step
 
-    class _Ctx:
-        pass
-
     return advance_reasoner_one_round(
         boost_queue=unarmed_boost,
-        reasoner=r, user_message="find the car", ctx=_Ctx(),
+        reasoner=r, user_message="find the car", ctx=bare_ctx(),
         compute_namespace={"cands": [], "anchors": []},
         rid_tag="h0", transcript=transcript,
         mission_spec=MissionSpec(
