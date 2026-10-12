@@ -619,8 +619,7 @@ class Mission:
         from maps.search.parse_compile.reasoner_loop import continue_mission  # noqa: PLC0415
 
         try:
-            with self._lock:
-                self.status = STATE_FLYING
+            self._set(STATE_FLYING)
             # One probe per process, before any inference call: a dead reasoner
             # fails this mission, honestly.
             install_spec(discover_from_env())
@@ -682,31 +681,22 @@ class Mission:
                 nxt = self._await_tasking()
                 if nxt is None:
                     break
-                with self._lock:
-                    self.status = STATE_FLYING
-                    self.ended_by = None
-                    self.ended_s = None
+                self._set(STATE_FLYING, ended_by=None, ended_s=None)
                 turn += 1
                 reply = continue_mission(reasoner=reasoner, instruction=nxt, diag=self._turn_diag,
                                          rid_tag=f"m{turn}", **heard, **session.run_kwargs)
                 self._record_reply(reply)
-            with self._lock:
-                self.status = STATE_ENDED
+            self._set(STATE_ENDED)
         except CallCanceled:
             # Stop, pressed while the reasoner call was in flight.
-            with self._lock:
-                self.status = STATE_ENDED
-                self.ended_by = "stopped"
+            self._set(STATE_ENDED, ended_by="stopped")
         except Exception as exc:  # noqa: BLE001 -- the operator must see why
             if self._cancel.is_set():
                 log.info("mission %s: %s after the stop", self.episode_id, type(exc).__name__)
-                with self._lock:
-                    self.status, self.ended_by = STATE_ENDED, "stopped"
+                self._set(STATE_ENDED, ended_by="stopped")
             else:
                 log.exception("mission %s failed", self.episode_id)
-                with self._lock:
-                    self.status = STATE_FAILED
-                    self.error = f"{type(exc).__name__}: {exc}"
+                self._set(STATE_FAILED, error=f"{type(exc).__name__}: {exc}")
         finally:
             with self._lock:
                 summary = {"kind": "summary", "status": self.status,
@@ -715,6 +705,13 @@ class Mission:
             self.transcript.append(summary)
             self.bank()
             self.close_log()
+
+    def _set(self, status: str, **fields) -> None:
+        """``status`` and any other of the mission's fields, set under its lock."""
+        with self._lock:
+            self.status = status
+            for name, value in fields.items():
+                setattr(self, name, value)
 
     def _write_manifests(self) -> None:
         """The sortie's ``run_manifest.json`` (by its first mission) and this
