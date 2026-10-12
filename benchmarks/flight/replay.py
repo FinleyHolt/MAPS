@@ -510,7 +510,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     episode_id, map_name = str(row["episode_id"]), str(row.get("map_name") or "calcity")
     script = None
     if forced:
-        from benchmarks.citynav.run_benchmark import perception  # noqa: PLC0415
+        from benchmarks.citynav.run_benchmark import episode_runner  # noqa: PLC0415
         from maps.llm import http  # noqa: PLC0415
 
         from huggingface_hub import constants as hub  # noqa: PLC0415
@@ -523,14 +523,14 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
             os.environ["SEARCH_SEED_BASE"] = str(rec.params["seed"])
         script = Script(rec)
         http._stream_chat_completions = script
-        make = perception.make_perception
+        make = episode_runner.make_perception
 
-        def recorded(cfg):
-            adapter = make(cfg)
+        def recorded():
+            adapter = make()
             adapter._segment = functools.partial(recorded_segmenter(rec, lambda: mission._hydrated.state), adapter)
             return adapter
 
-        perception.make_perception = recorded
+        episode_runner.make_perception = recorded
     frames = live is not None
     if not frames:
         by_flight: dict[int, list[Held]] = {}

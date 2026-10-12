@@ -86,13 +86,13 @@ def serves(monkeypatch):
 
     monkeypatch.setattr(http, "_stream_chat_completions", reply)
 
-    from benchmarks.citynav.run_benchmark import perception
+    from benchmarks.citynav.run_benchmark import episode_runner
 
     from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 
     seen = SimpleNamespace(detect=lambda obs: [], reset=lambda: None,
                            concept_provider=ReasonerUnionConceptProvider(), sahi_tiles_failed=0)
-    monkeypatch.setattr(perception, "make_perception", lambda cfg: seen)
+    monkeypatch.setattr(episode_runner, "make_perception", lambda: seen)
     return sent
 
 
@@ -128,12 +128,12 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity,
     """The flight wires the agent's watchlist channel exactly as the bench
     does: a watchlist change the director makes reaches the segmenter's
     concept provider, not engine state alone."""
-    from benchmarks.citynav.run_benchmark import perception
+    from benchmarks.citynav.run_benchmark import episode_runner
     from benchmarks.flight import mission as M
     from maps.llm import endpoint_spec
     from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 
-    monkeypatch.setattr(perception, "make_perception", lambda cfg: SimpleNamespace(
+    monkeypatch.setattr(episode_runner, "make_perception", lambda: SimpleNamespace(
         detect=lambda obs: [], concept_provider=ReasonerUnionConceptProvider()))
     endpoint_spec.install_spec(endpoint_spec.discover_from_env())
     M.activate_calcity()

@@ -8,7 +8,7 @@ re-measure the old one.
 """
 from __future__ import annotations
 
-from benchmarks.citynav.run_benchmark.spawn import uniform_spawn_xy
+from benchmarks.citynav.run_benchmark.episode_runner import uniform_spawn_xy
 
 BOUNDS = (0.0, 0.0, 3227.6, 4078.7)
 EIDS = [f"calcity::{i}" for i in range(200)]

@@ -7,20 +7,19 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import hashlib
 import logging
 import os
+import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from benchmarks.citynav.adapter import CityNavEpisode, parse_episode
-from benchmarks.citynav.episode import EpisodeState
 from benchmarks.citynav.eval import score_arrival
 from benchmarks.citynav.live_recorder import LiveRecorder
-from benchmarks.citynav.metrics import classify_referent
 from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, tile_stem
-from benchmarks.citynav.run_benchmark import perception as _perception
 from benchmarks.citynav.run_benchmark.assets import BlockAssets, load_episode_assets
 from benchmarks.citynav.run_benchmark.config import RunConfig
 from benchmarks.citynav.run_benchmark.mission_engine import (
@@ -28,19 +27,82 @@ from benchmarks.citynav.run_benchmark.mission_engine import (
     perceive,
     run_mission_episode,
 )
-from benchmarks.citynav.run_benchmark.spawn import uniform_spawn_xy
 from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 from maps.llm import flight_summary
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import crop_observation
+from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+from maps.perception.sam.detect_client import SamDetectClient
 from maps.search.search_loop import SearchLoop
 from maps.search.withhold import withheld
 from maps.sws.graph.builder import build_object_graph
 from maps.sws.graph.io import load_graph
-from maps.sws.graph.model import GridDomain
+from maps.sws.graph.model import GridDomain, ObjectGraph
 
 log = logging.getLogger("run_benchmark")
+
+
+@dataclass
+class EpisodeState:
+    """The harness's pose, visit history, prior graph and bound commit; the
+    runtime graph lives on the ``SearchLoop``."""
+
+    pose_xy: tuple[float, float]
+    altitude_m: float
+    graph: ObjectGraph  # frozen prior graph (prebaked OSM/CityRefer)
+    visited_xy: list[tuple[float, float]] = field(default_factory=list)
+    step_idx: int = 0
+    heading_deg: float = 0.0  # 0 = facing north (+y); derived from motion vector.
+    # The last flight's resolved point, bound when the mission ends; None
+    # when nothing flew. The trajectory replay flies to it.
+    confirmed_target_xy: tuple[float, float] | None = None
+
+    def record_visit(self) -> None:
+        self.visited_xy.append(self.pose_xy)
+
+
+def make_perception() -> SamDetectClient:
+    """The SAM client. Its class set is the concept union of every active
+    reasoner thread, pushed via ``set_concepts``; before the first push it
+    detects nothing."""
+    return SamDetectClient(concept_provider=ReasonerUnionConceptProvider())
+
+
+def uniform_spawn_xy(
+    bounds_xyxy: tuple[float, float, float, float],
+    spawn_seed: int,
+    episode_id: str,
+) -> tuple[float, float]:
+    """The ``spawn: uniform`` start: a point uniform over the tile bounds,
+    deterministic per ``(spawn_seed, episode_id)`` from a hash fraction, so
+    workers share no RNG state."""
+    x_min, y_min, x_max, y_max = (float(v) for v in bounds_xyxy)
+    digest = hashlib.sha256(
+        f"spawn:{int(spawn_seed)}:{episode_id}".encode()
+    ).hexdigest()
+    fx = int(digest[:16], 16) / float(0xFFFFFFFFFFFFFFFF)
+    fy = int(digest[16:32], 16) / float(0xFFFFFFFFFFFFFFFF)
+    return (x_min + fx * (x_max - x_min), y_min + fy * (y_max - y_min))
+
+
+_CAR_PAT = re.compile(
+    r"\b(car|cars|vehicle|truck|van|bus|taxi|suv|sedan|lorry)\b",
+    re.IGNORECASE,
+)
+_BUILDING_PAT = re.compile(
+    r"\b(building|buildings|tower|church|cathedral|hall|museum|hotel|shop|store|library)\b",
+    re.IGNORECASE,
+)
+
+
+def classify_referent(description: str) -> str:
+    """A row's ``referent_bucket``: car, building or other, by regex over the description."""
+    if _CAR_PAT.search(description):
+        return "car"
+    if _BUILDING_PAT.search(description):
+        return "building"
+    return "other"
 
 
 def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, float]:
@@ -162,8 +224,8 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
     # separates them from the prebaked nodes.
     state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m, graph=graph)
     state.record_visit()
-    # Looked up at call time: the flight's forced replay swaps it.
-    perception = _perception.make_perception(cfg)
+    # A module global looked up at call time: the flight's forced replay swaps it.
+    perception = make_perception()
     grid_h, grid_w = assets.grid_shape
     search_loop = SearchLoop(
         GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import math
+from typing import TYPE_CHECKING
 
 from benchmarks.citynav.action_snap import (
     ARRIVAL_BOUND_M,
@@ -17,8 +18,10 @@ from benchmarks.citynav.action_snap import (
     snap_to_actions,
 )
 from benchmarks.citynav.adapter import CityNavEpisode
-from benchmarks.citynav.episode import EpisodeState
 from benchmarks.citynav.run_benchmark.config import RunConfig
+
+if TYPE_CHECKING:
+    from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
 
 log = logging.getLogger("run_benchmark")
 

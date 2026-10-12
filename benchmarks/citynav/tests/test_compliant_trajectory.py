@@ -7,7 +7,7 @@ from __future__ import annotations
 def _replay(commit_xy, max_steps=60):
     from types import SimpleNamespace
 
-    from benchmarks.citynav.episode import EpisodeState
+    from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
     from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
     from benchmarks.citynav.run_benchmark.mission_engine import FeatureTour, TourViewpoint
 

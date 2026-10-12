@@ -57,7 +57,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
     pose_xy=, rgb=)``."""
     from types import SimpleNamespace
 
-    from benchmarks.citynav.episode import EpisodeState
+    from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
     from benchmarks.citynav.run_benchmark import mission_engine as me
     from maps.search.tests.fakes import search_loop
 
