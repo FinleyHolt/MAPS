@@ -1,18 +1,12 @@
 """The analyze executor: runs a compiled op-program over the ``(cands, anchors)`` surface.
 
-:func:`run_program` executes the ops the code surface compiles, with
-:mod:`maps.search.analyze_scene.geom_compute` primitives; every op returns
-rows, and :func:`compact_results` renders them for the model::
-
-  {"ops": [{"ref": "r1", "op": "find", "args": {"query": "car"}},
-           {"ref": "r2", "op": "compare",
-            "args": {"items": "r1", "refs": [{"ref": "prior_3", "as": "lot"}]}},
-           {"ref": "r3", "op": "score_by",
-            "args": {"items": "r2", "emphasis": [{"key": "distance to lot", "w": -1}]}}]}
-
-An ``items`` value is a handle -- ``rN`` (a result of this program or an
-earlier call) or a window ``rN[a:b]`` -- or a fid list; a ref is a fid, an
-``[x, y]``, or ``{ref, as}`` naming a fid, a point, or a set (a union).
+:func:`run_program` executes the ``{"ops": [{ref, op, args}, ...]}`` the code
+surface compiles, with :mod:`maps.search.analyze_scene.geom_compute`
+primitives; every op returns rows, and :func:`compact_results` renders them
+for the model. An ``items`` value is a handle -- ``rN`` (a result of this
+program or an earlier call) or a window ``rN[a:b]`` -- or a fid list; a ref is
+a fid, an ``[x, y]``, or ``{ref, as}`` naming a fid, a point, or a set (a
+union).
 """
 from __future__ import annotations
 
