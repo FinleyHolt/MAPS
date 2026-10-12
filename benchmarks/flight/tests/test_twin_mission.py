@@ -171,3 +171,52 @@ def test_a_mission_hydrated_at_a_commanded_height_flies_at_that_height(calcity, 
     M.activate_calcity()
     h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=1828.8)
     assert h.state.altitude_m - h.search_loop._ortho_ground_z_m == pytest.approx(1828.8)
+
+
+def _fly_failing(tmp_path, monkeypatch, fault):
+    """A twin mission whose reasoner raises ``fault`` on its second request,
+    after the first flight: the sortie's one ledger row."""
+    from benchmarks.flight import twin
+    from maps.llm import http
+
+    scripted = http._stream_chat_completions
+    calls = []
+
+    def reply(url, headers, body, **kw):
+        calls.append(1)
+        if len(calls) == 2:
+            raise fault
+        return scripted(url, headers, body, **kw)
+
+    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    out = tmp_path / "out"
+    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho",
+                      str(tmp_path / "calcity" / "data" / "rgbd_upstream"), "--out", str(out)]) == 1
+    (row,) = [json.loads(line) for line in (next(out.iterdir()) / "episodes.jsonl").read_text().splitlines()]
+    return row
+
+
+def test_an_engine_fault_mid_flight_is_a_scored_miss(calcity, serves, tmp_path, monkeypatch):
+    """The bench's infra rule: a fault that is not the serve's is the method's own, scored."""
+    row = _fly_failing(tmp_path, monkeypatch, KeyError("boom"))
+    assert row["status"] == "ok" and row["error"] == "KeyError: 'boom'" and row["flights_flown"] == 1
+
+
+def test_a_segmenter_outage_that_ends_the_mission_is_infra(calcity, serves, tmp_path, monkeypatch):
+    from maps.perception.sam.detect_client import SamServerOutage
+
+    row = _fly_failing(tmp_path, monkeypatch, SamServerOutage("no tile answered"))
+    assert row["status"] == "infra" and row["error"] == "SamServerOutage: no tile answered"
+
+
+def test_a_config_that_withholds_a_part_leaves_no_sortie(calcity, serves, tmp_path):
+    from benchmarks.flight import twin
+
+    repo = __import__("pathlib").Path(__file__).resolve().parents[3]
+    arm = tmp_path / "arm.yaml"
+    arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nwithhold: [images]\n")
+    out = tmp_path / "out"
+    with pytest.raises(ValueError, match="bench ablation"):
+        twin.main(["--config", str(arm), "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
+                   "--out", str(out)])
+    assert not out.exists()

@@ -107,6 +107,12 @@ def _exc_is_transient_infra(exc: BaseException) -> bool:
     return False
 
 
+def is_infra_fault(exc: BaseException) -> bool:
+    """The infra rule for a raised attempt: a SAM outage or a transient
+    shared-server fault. Any other exception is the method's own, a scored miss."""
+    return _exc_is_sam_infra(exc) or _exc_is_transient_infra(exc)
+
+
 def _dispatch_one(
     *,
     row: dict,
@@ -157,7 +163,7 @@ def _dispatch_one(
         log.error("  fail row %d: %s", idx, e, exc_info=True)
         # The token names an infra death before commit: a SAM outage or a
         # transient shared-server fault.
-        if _exc_is_sam_infra(e) or _exc_is_transient_infra(e):
+        if is_infra_fault(e):
             token = "CITYNAV_EPISODE_INFRA_ABORT"
             log.error("%s episode_id=%s type=%s", token, _eid, type(e).__qualname__)
         else:

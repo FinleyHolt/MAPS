@@ -191,17 +191,16 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
 
     from benchmarks.flight.mission import (STATE_ENDED, Mission, activate_calcity, converse,  # noqa: PLC0415
-                                           resolve_episode, summary_line)
+                                           flight_config, resolve_episode, summary_line)
 
     activate_calcity()
     from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
     from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
     from benchmarks.flight.live_source import open_live  # noqa: PLC0415
-    from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
     from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
 
-    cfg = load_config(args.config)
+    cfg = flight_config(args.config)
     sensor = resolve_sensor(cfg.sensor)
     episode = resolve_episode(args.episode, args.split, args.start_xy)
     map_name = episode.map_name

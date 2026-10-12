@@ -134,20 +134,29 @@ def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] |
     return parse_episode(found[1], row_index=found[0])
 
 
-def hydrate(*, episode_id: str, split: str, config: str, agl_m: float,
-            start_xy: tuple[float, float] | None = None) -> Hydrated:
-    """The engine for one mission, built by the bench's :func:`build_episode`,
-    at the operator's start and at ``agl_m``, the crew's commanded height
-    above ground: the one height the served sensor block and every leg read."""
-    from benchmarks.citynav.run_benchmark import load_config, load_episode_assets  # noqa: PLC0415
+def flight_config(config: str):
+    """The config a flight flies, refused (before any sortie is written) when
+    it withholds a part of the flown engine or names no sensor."""
+    from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
-    from benchmarks.citynav.run_benchmark.episode_runner import build_episode  # noqa: PLC0415
     from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
 
     cfg = load_config(str(config))
     assert_flight_config(cfg)
     if resolve_sensor(cfg.sensor) is None:
         raise RuntimeError(f"cfg.sensor did not resolve a SensorSpec: {cfg.sensor!r}")
+    return cfg
+
+
+def hydrate(*, episode_id: str, split: str, config: str, agl_m: float,
+            start_xy: tuple[float, float] | None = None) -> Hydrated:
+    """The engine for one mission, built by the bench's :func:`build_episode`,
+    at the operator's start and at ``agl_m``, the crew's commanded height
+    above ground: the one height the served sensor block and every leg read."""
+    from benchmarks.citynav.run_benchmark import load_episode_assets  # noqa: PLC0415
+    from benchmarks.citynav.run_benchmark.episode_runner import build_episode  # noqa: PLC0415
+
+    cfg = flight_config(config)
     episode = resolve_episode(episode_id, split, start_xy)
     h = build_episode(cfg, episode, load_episode_assets(episode.map_name))
     h.state.altitude_m = float(h.search_loop._ortho_ground_z_m) + float(agl_m)
@@ -227,6 +236,8 @@ class Mission:
         #: ``elapsed_s`` is the mission's and not the park's.
         self.ended_s: float | None = None
         self.error: str | None = None
+        #: The mission failed on a serve fault (the bench's infra rule), not its own.
+        self.infra = False
         #: Model turns of the conversations that have ENDED; :meth:`_turns` adds the one in flight.
         self.turns_used = 0
         #: How many reports the model has made.
@@ -613,6 +624,7 @@ class Mission:
 
     def _run(self) -> None:
         from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
+        from benchmarks.citynav.run_benchmark.dispatch import is_infra_fault  # noqa: PLC0415
         from benchmarks.citynav.run_benchmark.mission_engine import MissionSession  # noqa: PLC0415
         from maps.llm.endpoint_spec import discover_from_env, install_spec  # noqa: PLC0415
         from maps.llm.http import CallCanceled  # noqa: PLC0415
@@ -696,7 +708,7 @@ class Mission:
                 self._set(STATE_ENDED, ended_by="stopped")
             else:
                 log.exception("mission %s failed", self.episode_id)
-                self._set(STATE_FAILED, error=f"{type(exc).__name__}: {exc}")
+                self._set(STATE_FAILED, error=f"{type(exc).__name__}: {exc}", infra=is_infra_fault(exc))
         finally:
             with self._lock:
                 summary = {"kind": "summary", "status": self.status,
@@ -786,7 +798,7 @@ class Mission:
         with self._lock:
             visited = [[float(episode.start_xy[0]), float(episode.start_xy[1])]] if episode else []
             visited += [[float(f["resolved_xy"][0]), float(f["resolved_xy"][1])] for f in self.flights]
-            status, ended_by, error, turns = self.status, self.ended_by, self.error, self._turns()
+            infra, ended_by, error, turns = self.infra, self.ended_by, self.error, self._turns()
             flown = len(self.flights)
         last = visited[-1] if visited else None
         try:
@@ -801,8 +813,8 @@ class Mission:
             "target_xy": ([float(episode.target_xy[0]), float(episode.target_xy[1])]
                           if episode is not None and episode.target_xy is not None else None),
             "final_pos_xy": last, "visited_xy": visited,
-            # A mission PARKED on its report flew: ok with ``ended_by: reply``. Only a fault is infra.
-            "status": STATUS_OK if status in (STATE_ENDED, STATE_AWAITING) else STATUS_INFRA,
+            # The bench's infra rule: only a serve fault is infra; any other failure is a scored miss.
+            "status": STATUS_INFRA if infra else STATUS_OK,
             "error": error, "ended_by": ended_by, "turns_used": turns, "flights_flown": flown,
             "metrics": metrics,
             "provenance": {"git_commit": self.git_commit, "git_dirty": self.git_dirty,

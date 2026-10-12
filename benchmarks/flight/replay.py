@@ -41,7 +41,7 @@ from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
 from benchmarks.flight.live_source import ortho_observation
 from benchmarks.flight.measures import read_jsonl, run_bases, tour_stops
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, activate_calcity,
-                                       converse, summary_line)
+                                       converse, flight_config, summary_line)
 from benchmarks.flight.tile_georef import FLOOR_MSL_M
 from maps.llm.http import TRANSCRIPT_JSONL
 
@@ -511,6 +511,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     frame tier), else the bank answers. Returns the mission, ended, and its folder."""
     _arm_env(rec, forced=forced)
     activate_calcity()
+    flight_config(config)
     from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
     from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
