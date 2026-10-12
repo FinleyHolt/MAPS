@@ -120,3 +120,16 @@ def test_a_root_that_is_not_there_is_named_not_dropped(tmp_path, capsys):
     assert plot_capability_effort.main([str(root), gone, "--split", "test_unseen",
                                         "--out-dir", str(tmp_path / "f")]) == 0
     assert gone in capsys.readouterr().err
+
+
+def test_an_arm_left_off_a_figure_is_named(tmp_path, capsys):
+    """An arm with no numeric effort (the ladder) or no priced episode (the
+    capability plot) is named on stderr, not dropped silently."""
+    roots = [_arm(tmp_path, f"e{e}", "inkling-small", e, [1, 0, 0]) for e in ("0.0", "0.6", "0.99")]
+    rung = _arm(tmp_path, "xh", "inkling-small", "xhigh", [1, 0])
+    assert plot_effort_ladder.main([*map(str, roots), str(rung), "--out-dir", str(tmp_path / "f")]) == 0
+    assert f"{rung} left out" in capsys.readouterr().err
+    unpriced = _arm(tmp_path, "free", "inkling-small", "0.3", [1, 0], tokens=0)
+    assert plot_capability_effort.main([str(roots[0]), str(unpriced), "--split", "test_unseen",
+                                        "--out-dir", str(tmp_path / "g")]) == 0
+    assert f"{unpriced} left out" in capsys.readouterr().err

@@ -212,6 +212,8 @@ def main(argv: list[str]) -> int:
         effort = effort_value(r["effort"])
         if isinstance(effort, float):
             rows.append({**r, "effort": effort})
+        else:
+            print(f"plot_effort_ladder: {r['root']} left out: effort {r['effort']!r} is not numeric", file=sys.stderr)
     # Vacuity floor: this figure is two lines over a swept knob. A single
     # point, or a row with no metric, is not a ladder and must not render as
     # a confident-looking empty frame.

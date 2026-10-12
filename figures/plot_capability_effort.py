@@ -98,11 +98,15 @@ def spread(labels: list[tuple[float, str]]) -> list[tuple[float, str]]:
     return out
 
 
+def drawn(r: dict, cost: str) -> bool:
+    """An arm is drawn when it has a priced episode and an SR."""
+    return bool(r["n"] and r[COST_KEY[cost]] and r["sr"] is not None)
+
+
 def render(data: dict, theme: str, split: str, cost: str = "completion") -> str:
     c = THEMES[theme]
     key = COST_KEY[cost]
-    arms = [r for r in data["records"]
-            if r["split"] == split and r["n"] and r[key] and r["sr"] is not None]
+    arms = [r for r in data["records"] if r["split"] == split and drawn(r, cost)]
     ticks = token_ticks([r[key] for r in arms] or [100.0, 1000.0])
     sx = make_sx(ticks)
     crit = sorted({str(r["criterion"]) for r in arms if r["criterion"]})
@@ -227,6 +231,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"plot_capability_effort: no root carries split {args.split!r}; the roots carry {splits}",
               file=sys.stderr)
         return 2
+    for r in data["records"]:
+        if r["split"] == args.split and not drawn(r, args.cost):
+            print(f"plot_capability_effort: {r['root']} left out: no priced episode or no SR", file=sys.stderr)
     stem = args.stem or f"capability_effort_{args.split}_{args.cost}"
     args.out_dir.mkdir(parents=True, exist_ok=True)
     for theme in THEMES:
