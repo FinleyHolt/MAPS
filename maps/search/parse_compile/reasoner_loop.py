@@ -484,6 +484,13 @@ class _Mission:
 
         self._mission_py = None
 
+    def _world_moved(self) -> None:
+        """The world stepped: refresh both surface views and bump the
+        version."""
+        self.ns.update(_surface_from_ctx(self.ctx))
+        self._rebuild_ns_rows()
+        self.carry.version += 1
+
     def _rebuild_ns_rows(self) -> None:
         # cands win on fid collision.
         self._ns_rows.clear()
@@ -728,6 +735,105 @@ class _Mission:
                     f"the handle is bound, so {_h}, {_h}[0] and "
                     f"{_h}.order(...) all reach them")
 
+    def _stop_xy(self, _it) -> list[float] | None:
+        _t = str(_it.get("target_fid") or "")
+        return parse_xy_token(_t) or look_xy(self._ns_rows.get(_t) or {})
+
+    def _pick_next(self, _queue: list, cover: str | None) -> int:
+        """The queue index to fly next: in a pass, a stop the recording
+        already holds flies first; otherwise the head."""
+        if cover is None or len(_queue) < 2 or self.mission_spec.held_now is None:
+            return 0
+        try:
+            _held = self.mission_spec.held_now(
+                [(str(_it.get("target_fid") or ""), self._stop_xy(_it)) for _it in _queue])
+        except Exception as _exc:  # noqa: BLE001 — the order is a convenience, never a fault
+            log.warning("%s pass: held_now failed: %s", self.rid_tag, _summarise_exc(_exc))
+            return 0
+        _pick = next((_i for _i, _h in enumerate(_held) if _h), 0)
+        if _pick:
+            log.info("%s pass: %s taken first, the recording holds it",
+                     self.rid_tag, _queue[_pick].get("target_fid"))
+        return _pick
+
+    def _snap_to_row(self, _item: dict) -> str | None:
+        """A point target within 1 m of a row flies as that row's fid; the
+        point it was asked as, or None when nothing snapped."""
+        _pt = parse_xy_token(_item["target_fid"])
+        if _pt is None:
+            return None
+        _best, _bd = None, 1.0
+        for _bf, _brow in self._ns_rows.items():
+            _bxy = look_xy(_brow)
+            if _bxy is None:
+                continue
+            _d = ((_bxy[0] - _pt[0]) ** 2 + (_bxy[1] - _pt[1]) ** 2) ** 0.5
+            if _d < _bd:
+                _best, _bd = _bf, _d
+        if _best is None:
+            return None
+        _snap_from = _item["target_fid"]
+        _item["target_fid"] = _best
+        return _snap_from
+
+    def _flight_view(self, _item: dict, _report: dict) -> None:
+        """THE FLIGHT SHOWS WHAT IT SAW: the target's own look, centred on
+        the row it asked for (a stop flown again centres on the stop's
+        point), queued for the next message and named in the report."""
+        _tfid = str(_item.get("target_fid") or "")
+        _trow = self._ns_rows.get(_tfid)
+        _txy = look_xy(_trow)
+        try:
+            _fv = self.look_renderer([{
+                "center_fid": _tfid if _txy else "",
+                "center_xy": (list(_txy) if _txy
+                              else list(_report["pose_xy"])),
+                "center_label": (
+                    look_label(_tfid, _trow, is_target=True)
+                    if _txy else (_tfid or "the stop")),
+                "center_boundary": look_outline(_trow) if _txy else None,
+                "annotate": False,
+                "marks": [],
+            }])
+        except Exception as _exc:  # noqa: BLE001 — never crash a flight
+            log.warning("%s flight view render failed: %s",
+                        self.rid_tag, _summarise_exc(_exc))
+            _fv = []
+        _fj = [c["jpeg"] for c in (_fv or [])
+               if isinstance(c, dict) and c.get("jpeg")]
+        if not _fj:
+            return
+        _fv_text = _look_vision_text(_fv)
+        _shown = not withheld("images")
+        _fv_note = ("the view follows." if _shown else
+                    "the view's caption follows.")
+        if _shown:
+            _deliver_frames(_fj, self._block_frames)
+        self.pending_vision.append((_fv_text, _fj if _shown else []))
+        _report["note"] = (f"{_report['note']} {_fv_note}"
+                           if _report.get("note") else _fv_note)
+
+    def _after_flight(self, _report: dict, _fids_before: set,
+                      cover: str | None) -> None:
+        """A flight that flew: count it, record its stop, re-derive the
+        surface, and (outside a pass) mint the rows it added."""
+        self.mission_flights += 1
+        _sid = _report.get("stop_id")
+        _pxy = _report.get("pose_xy")
+        if (_sid and isinstance(_pxy, (list, tuple))
+                and len(_pxy) == 2):
+            self._plan_stops[str(_sid).strip().lower()] = [
+                float(_pxy[0]), float(_pxy[1])]
+        self._world_moved()
+        # The flight's new rows (the surface diff) mint a handle; a pass
+        # mints once, around the whole of itself.
+        if cover is None:
+            _m = self._mint_rows([_f for _f in self._ns_rows
+                                  if _f not in _fids_before], "flight")
+            if _m is not None:
+                _report["new_rows"] = _m[1]
+        self.preflight = False
+
     def _fly_moves(self, _accepted: list, _item_errors: list,
                    cover: str | None = None) -> dict:
         """Fly each entry in order; after each flight the surface re-derives
@@ -739,31 +845,13 @@ class _Mission:
         _reports: list[dict] = []
         _cover_before = set(self._ns_rows) if cover is not None else None
         _clock_cut = False
-
-        def _stop_xy(_it):
-            _t = str(_it.get("target_fid") or "")
-            return parse_xy_token(_t) or look_xy(self._ns_rows.get(_t) or {})
-
         _queue = list(_accepted)
         while _queue:
-            _pick = 0
-            if cover is not None and len(_queue) > 1 and self.mission_spec.held_now is not None:
-                # A stop the recording already holds flies first.
-                try:
-                    _held = self.mission_spec.held_now(
-                        [(str(_it.get("target_fid") or ""), _stop_xy(_it)) for _it in _queue])
-                except Exception as _exc:  # noqa: BLE001 — the order is a convenience, never a fault
-                    log.warning("%s pass: held_now failed: %s", self.rid_tag, _summarise_exc(_exc))
-                    _held = []
-                _pick = next((_i for _i, _h in enumerate(_held) if _h), 0)
-                if _pick:
-                    log.info("%s pass: %s taken first, the recording holds it",
-                             self.rid_tag, _queue[_pick].get("target_fid"))
-            _item = _queue.pop(_pick)
+            _item = _queue.pop(self._pick_next(_queue, cover))
             if cover is not None:
                 # The rest of the pass rides every stop, for the crew.
                 _item["pass_ahead"] = [[float(_xy[0]), float(_xy[1])]
-                                       for _xy in map(_stop_xy, _queue) if _xy]
+                                       for _xy in map(self._stop_xy, _queue) if _xy]
             if self.mission_flights >= self.mission_spec.flight_budget:
                 log.warning("%s flight backstop hit (%d flights)",
                             self.rid_tag, self.mission_spec.flight_budget)
@@ -785,22 +873,7 @@ class _Mission:
                 _item_errors.append({"target_fid": _item["target_fid"],
                                      "error": "not flown."})
                 continue
-            _snap_from = None
-            _pt = parse_xy_token(_item["target_fid"])
-            if _pt is not None:
-                # Snap a point within 1 m of a row to that row's fid.
-                _best, _bd = None, 1.0
-                for _bf, _brow in self._ns_rows.items():
-                    _bxy = look_xy(_brow)
-                    if _bxy is None:
-                        continue
-                    _d = ((_bxy[0] - _pt[0]) ** 2
-                          + (_bxy[1] - _pt[1]) ** 2) ** 0.5
-                    if _d < _bd:
-                        _best, _bd = _bf, _d
-                if _best is not None:
-                    _snap_from = _item["target_fid"]
-                    _item["target_fid"] = _best
+            _snap_from = self._snap_to_row(_item)
             _fids_before = set(self._ns_rows)
             _report = self.mission_spec.fly(dict(_item))
             if not isinstance(_report, dict):
@@ -819,63 +892,10 @@ class _Mission:
                     _report["note"] = (f"{_report['note']} {_wl_note}"
                                        if _report.get("note")
                                        else _wl_note)
-                # THE FLIGHT SHOWS WHAT IT SAW: the target's own look,
-                # centred on the row it asked for (a stop flown again centres
-                # on the stop's point). A pass renders no per-stop view.
+                # A pass renders no per-stop view.
                 if _report.get("pose_xy") and cover is None:
-                    _tfid = str(_item.get("target_fid") or "")
-                    _trow = self._ns_rows.get(_tfid)
-                    _tout = look_outline(_trow)
-                    _txy = look_xy(_trow)
-                    try:
-                        _fv = self.look_renderer([{
-                            "center_fid": _tfid if _txy else "",
-                            "center_xy": (list(_txy) if _txy
-                                          else list(_report["pose_xy"])),
-                            "center_label": (
-                                look_label(_tfid, _trow, is_target=True)
-                                if _txy else (_tfid or "the stop")),
-                            "center_boundary": _tout if _txy else None,
-                            "annotate": False,
-                            "marks": [],
-                        }])
-                    except Exception as _exc:  # noqa: BLE001 — never crash a flight
-                        log.warning("%s flight view render failed: %s",
-                                    self.rid_tag, _summarise_exc(_exc))
-                        _fv = []
-                    _fj = [c["jpeg"] for c in (_fv or [])
-                           if isinstance(c, dict) and c.get("jpeg")]
-                    if _fj:
-                        _fv_text = _look_vision_text(_fv)
-                        _shown = not withheld("images")
-                        _fv_note = ("the view follows." if _shown else
-                                    "the view's caption follows.")
-                        if _shown:
-                            _deliver_frames(_fj, self._block_frames)
-                        self.pending_vision.append((_fv_text, _fj if _shown else []))
-                        _report["note"] = (
-                            f"{_report['note']} {_fv_note}"
-                            if _report.get("note") else _fv_note)
-                self.mission_flights += 1
-                _sid = _report.get("stop_id")
-                _pxy = _report.get("pose_xy")
-                if (_sid and isinstance(_pxy, (list, tuple))
-                        and len(_pxy) == 2):
-                    self._plan_stops[str(_sid).strip().lower()] = [
-                        float(_pxy[0]), float(_pxy[1])]
-                # The world stepped: refresh both surface views and bump
-                # the version.
-                self.ns.update(_surface_from_ctx(self.ctx))
-                self._rebuild_ns_rows()
-                self.carry.version += 1
-                # The flight's new rows (the surface diff) mint a handle; a
-                # pass mints once, around the whole of itself.
-                if cover is None:
-                    _m = self._mint_rows([_f for _f in self._ns_rows
-                                          if _f not in _fids_before], "flight")
-                    if _m is not None:
-                        _report["new_rows"] = _m[1]
-                self.preflight = False
+                    self._flight_view(_item, _report)
+                self._after_flight(_report, _fids_before, cover)
             _reports.append(_report)
         if cover is not None:
             return self._cover_ack(cover, _reports, _cover_before, _item_errors)
@@ -955,9 +975,7 @@ class _Mission:
                            "every later flight")
         if "error" not in res:
             # A retro boost ingests detections now: refresh like a flight.
-            self.ns.update(_surface_from_ctx(self.ctx))
-            self._rebuild_ns_rows()
-            self.carry.version += 1
+            self._world_moved()
         if res.get("error"):
             return self._plan_err({"boost": res}, str(res["error"]))
         return {"boost": res}
@@ -1083,13 +1101,10 @@ class _Mission:
     def _closest_names(self, what: str) -> str:
         """The 3 nearest named rows to a name that matched nothing."""
         names: dict[str, tuple] = {}
-        for _key in ("cands", "anchors"):
-            for _r in self.ns.get(_key) or []:
-                if not isinstance(_r, dict) or not _r.get("fid"):
-                    continue
-                _nm = str(_r.get("name") or "").strip()
-                if _nm:
-                    names.setdefault(_nm.lower(), (str(_r["fid"]), _nm))
+        for _f, _r in self._ns_rows.items():
+            _nm = str(_r.get("name") or "").strip()
+            if _nm:
+                names.setdefault(_nm.lower(), (_f, _nm))
         close = difflib.get_close_matches(
             (what or "").lower(), list(names), n=3, cutoff=0.55)
         if not close:
