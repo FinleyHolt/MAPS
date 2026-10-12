@@ -16,7 +16,7 @@ _CALCITY = Path(__file__).resolve().parents[3] / "configs" / "calcity.yaml"
 def test_the_rigs_footprint_prose_is_footprint_m_at_the_configs_agl():
     cfg = load_config(_CALCITY)
     sensor = resolve_sensor(cfg.sensor)
-    text = served_system_prompt(served_description(sensor, cfg.start_altitude_agl_m))
+    text = served_system_prompt(served_description(sensor, agl_m=cfg.start_altitude_agl_m))
     m = re.search(r"at the ([\d,]+) ft AGL this run flies, the footprint is ~(\d+) x (\d+) m", text)
     # VACUITY FLOOR: the rig block states a footprint at all.
     assert m, text

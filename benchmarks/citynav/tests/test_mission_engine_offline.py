@@ -170,3 +170,24 @@ def test_a_failing_boost_director_never_kills_a_flight(stub_session):
     report = session.fly({"target_fid": "detected_3"})
     assert "error" not in report and report["target"] == "detected_3"
     assert session.flights[-1]["provenance"] == "detected"
+
+
+def test_the_sensor_block_states_the_footprint_at_the_height_the_mission_flies(monkeypatch):
+    """The served footprint is the sensor's own at the mission's start height
+    above ground (after the altitude cap), not the config's nominal one."""
+    from types import SimpleNamespace
+
+    from benchmarks.citynav.run_benchmark import mission_engine as me
+    from maps.perception.geometry.sensor_spec import resolve_sensor
+
+    served = {}
+    monkeypatch.setattr(me, "endpoint_spec", lambda: SimpleNamespace(base_url="http://unused"))
+    monkeypatch.setattr(me, "run_mission", lambda **kw: served.update(kw))
+    session = me.MissionSession.__new__(me.MissionSession)
+    session.run_kwargs = {}
+    session.h = SimpleNamespace(sensor=resolve_sensor("oryx_orx32_25mm_nadir"),
+                                cfg=SimpleNamespace(start_altitude_agl_m=914.4),
+                                state=SimpleNamespace(altitude_m=600.0),
+                                search_loop=SimpleNamespace(_ortho_ground_z_m=100.0))
+    session.run("find it")
+    assert "at the 1,640 ft AGL this run flies" in served["sensor_description"], served["sensor_description"]

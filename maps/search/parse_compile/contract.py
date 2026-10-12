@@ -39,7 +39,7 @@ def assemble(sensor: str | None = None, agl_m: float | None = None) -> dict:
                 f"contract: unknown sensor '{sensor}' -- one of: "
                 + ", ".join(list_sensors())) from None
         try:
-            description = served_description(spec, agl_m)
+            description = served_description(spec, agl_m=agl_m)
         except ValueError as exc:
             raise SystemExit(f"contract: {exc} (pass --agl-m)") from exc
     system = prompts.served_system_prompt(description)
