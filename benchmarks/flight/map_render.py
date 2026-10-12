@@ -37,18 +37,19 @@ def load_raster(rgbd_dir: str | Path, map_name: str):
 
 @dataclass(frozen=True)
 class Terrain:
-    """A height raster in bake-local metres, row 0 the north edge, sampled by
-    nearest cell; a sample off the raster takes the nearest edge cell."""
+    """A height raster in bake-local metres, its cells counted from the
+    north-west corner ``(x_min, y_max)``, sampled by the cell a point lies in;
+    a sample off the raster takes the nearest edge cell."""
 
     grid: np.ndarray
     x_min: float
-    y_min: float
+    y_max: float
     cell_m: float
 
     def elevation(self, x, y) -> np.ndarray:
         h, w = self.grid.shape
-        col = np.round((np.asarray(x, dtype=np.float64) - self.x_min) / self.cell_m).astype(np.int64)
-        row = (h - 1) - np.round((np.asarray(y, dtype=np.float64) - self.y_min) / self.cell_m).astype(np.int64)
+        col = np.floor((np.asarray(x, dtype=np.float64) - self.x_min) / self.cell_m).astype(np.int64)
+        row = np.floor((self.y_max - np.asarray(y, dtype=np.float64)) / self.cell_m).astype(np.int64)
         return self.grid[np.clip(row, 0, h - 1), np.clip(col, 0, w - 1)].astype(np.float64)
 
 
@@ -66,7 +67,7 @@ def terrain(map_name: str, tiles_dir: str) -> Terrain | None:
     bounds = map_bounds(tiles_dir, map_name)
     if not np.isfinite(grid).all():
         grid = np.where(np.isfinite(grid), grid, float(np.nanmedian(grid)))
-    return Terrain(grid=grid, x_min=float(bounds.x_min), y_min=float(bounds.y_min), cell_m=cell)
+    return Terrain(grid=grid, x_min=float(bounds.x_min), y_max=float(bounds.y_max), cell_m=cell)
 
 
 def ground_msl(terrain: Terrain | None, floor_msl_m: float, xy) -> float:

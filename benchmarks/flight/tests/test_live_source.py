@@ -201,3 +201,12 @@ def test_a_truncated_ring_frame_is_refused_by_name_and_never_raised(built, make_
     assert live.last_refusal == "the mission's own"
     assert live.observe_area(_disc(built[0], 600.0, 600.0)) is None
     assert "the frame does not decode" in live.last_refusal
+
+
+def test_the_terrain_reads_the_cell_a_point_lies_in_counted_from_the_north_west_corner():
+    """Cells are 10 m from (x_min, y_max); the grid's south edge need not sit on y_min."""
+    grid = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    t = map_render.Terrain(grid=grid, x_min=0.0, y_max=20.4, cell_m=10.0)
+    x = np.array([0.1, 9.9, 10.1, 29.9, 4.0, 15.0])
+    y = np.array([20.3, 10.5, 10.3, 0.5, 10.6, -5.0])
+    assert t.elevation(x, y).tolist() == [1.0, 1.0, 5.0, 6.0, 1.0, 5.0]
