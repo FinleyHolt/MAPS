@@ -176,27 +176,22 @@ class Carry:
                 todo.extend(self._reads[i])
         if not need:
             return
-        try:
-            _sink: dict = {}
-            # Seed everything else (a flight-minted handle has no op).
-            _out = run_geom_program_tool(
-                {"program": {"ops": [
-                    op for op in self._history if op["ref"] in need]}},
-                namespace=self.ns, raw_sink=_sink,
-                seed_results={h: v for h, v in self.rows.items()
-                              if h not in need})
-            if isinstance(_out, dict) and _out.get("error"):
-                # A refused replay keeps the last rows, unclaimed.
-                log.debug("carry refresh refused; handles keep their last "
-                          "rows: %s", str(_out["error"])[:200])
-                return
-            self.rows.update(
-                {k: v for k, v in (_sink.get("results") or {}).items()
-                 if k in need})
-            self._fresh.update(need)
-        except Exception:  # noqa: BLE001 — a failed replay keeps the old rows
-            log.debug("carry refresh failed; handles keep their last rows",
-                      exc_info=True)
+        _sink: dict = {}
+        # Seed everything else (a flight-minted handle has no op).
+        _out = run_geom_program_tool(
+            {"program": {"ops": [
+                op for op in self._history if op["ref"] in need]}},
+            namespace=self.ns, raw_sink=_sink,
+            seed_results={h: v for h, v in self.rows.items()
+                          if h not in need})
+        if _out.get("error"):
+            # A refused replay keeps the last rows, unclaimed.
+            log.debug("carry refresh refused; handles keep their last "
+                      "rows: %s", str(_out["error"])[:200])
+            return
+        self.rows.update(
+            {k: v for k, v in _sink["results"].items() if k in need})
+        self._fresh.update(need)
 
     def read(self, ref):
         """A handle's rows, re-derived first when the version is armed."""

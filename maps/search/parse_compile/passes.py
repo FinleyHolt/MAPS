@@ -171,7 +171,7 @@ def _cover_set_items(_accepted_items: list, _said, *, spec, spacing,
     def _pct(_m):
         if not _m["walk"] or _span is None:
             return 1.0
-        return min(1.0, max(_m["kept"], 0) * _span / _m["walk"])
+        return min(1.0, _m["kept"] * _span / _m["walk"])
     _mm = ", ".join(f"{_m['tok']} {_pct(_m):.0%}" for _m in _chained[:8])
     _mm_more = (f", +{len(_chained) - 8} more"
                 if len(_chained) > 8 else "")
