@@ -138,10 +138,12 @@ def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] |
 
 
 def hydrate(*, episode_id: str, split: str, config: str,
-            start_xy: tuple[float, float] | None = None) -> Hydrated:
+            start_xy: tuple[float, float] | None = None, agl_m: float | None = None) -> Hydrated:
     """The engine for one mission, built by the bench's own
     :func:`build_episode`: the flown engine (no withhold), a sensor that
-    resolves, and the operator's start as given."""
+    resolves, the operator's start as given, and with ``agl_m`` the height
+    above ground the crew is commanded to fly in place of the config's start
+    height: the one height the served sensor block and every leg read."""
     from benchmarks.citynav.run_benchmark import load_config, load_episode_assets  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import build_episode  # noqa: PLC0415
@@ -152,7 +154,10 @@ def hydrate(*, episode_id: str, split: str, config: str,
     if resolve_sensor(cfg.sensor) is None:
         raise RuntimeError(f"cfg.sensor did not resolve a SensorSpec: {cfg.sensor!r}")
     episode = resolve_episode(episode_id, split, start_xy)
-    return build_episode(cfg, episode, load_episode_assets(episode.map_name))
+    h = build_episode(cfg, episode, load_episode_assets(episode.map_name))
+    if agl_m is not None:
+        h.state.altitude_m = float(h.search_loop._ortho_ground_z_m) + float(agl_m)
+    return h
 
 
 def leg_span_m(h: Hydrated) -> float:
@@ -202,7 +207,8 @@ class Mission:
     def __init__(self, *, episode_id: str, split: str, config: str, workdir: Path, live: LiveSource,
                  recorder: Any, close_log, instruction: str | None = None,
                  run_id: str | None = None, run_no: int | None = None,
-                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None) -> None:
+                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None,
+                 agl_m: float | None = None) -> None:
         self.episode_id = episode_id
         self.split = split
         self.config = config
@@ -210,6 +216,8 @@ class Mission:
         self.instruction_override = instruction
         #: A string the serve accepts; None flies the arm's.
         self.reasoning_effort = reasoning_effort
+        #: The height above ground the crew is commanded to fly; None flies the config's start height.
+        self.agl_m = agl_m
         self.run_id = run_id
         self.run_no = run_no
         self._start_xy = start_xy
@@ -631,7 +639,8 @@ class Mission:
             install_spec(discover_from_env())
             self._write_manifests()
 
-            h = hydrate(episode_id=self.episode_id, split=self.split, config=self.config, start_xy=self._start_xy)
+            h = hydrate(episode_id=self.episode_id, split=self.split, config=self.config, start_xy=self._start_xy,
+                        agl_m=self.agl_m)
             self._hydrated = h
             instruction = self.instruction_override or h.episode.description
             # The override IS the operator's instruction, so the episode

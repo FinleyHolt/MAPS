@@ -219,7 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     ep = open_episode_dir(sortie, episode_id=args.episode, run_no=1)
     mission = Mission(episode_id=args.episode, split=args.split, config=args.config, workdir=ep.dir, live=live,
                       instruction=args.instruction, recorder=ep.recorder, close_log=ep.close, run_id=stamp,
-                      run_no=1, start_xy=args.start_xy, reasoning_effort=args.reasoning_effort)
+                      run_no=1, start_xy=args.start_xy, reasoning_effort=args.reasoning_effort,
+                      agl_m=start_alt - ground_z)
     converse(mission, args.then)
     print(summary_line(mission))
     return 0 if mission.status == STATE_ENDED else 1
