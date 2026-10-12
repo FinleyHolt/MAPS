@@ -326,14 +326,12 @@ class Driver:
         return "timeout"
 
     def _run_attempt(self, worker_id: int, episode_id: str) -> dict:
-        """One attempt in a fresh child: its ledger row.
-
-        The child's ``episode.json`` plus ``worker_id``, ``workdir`` and the
-        wall measured here, with ``status`` overridden on the driver's paths:
-        ``timed_out`` for the cap; ``infra`` for a lost reasoner
-        (``vllm_down_midrun``), a child that died with no record
-        (``killed_midrun``), and one that exited clean with none
-        (``no_prediction_unclassified``).
+        """One attempt in a fresh child: its ledger row, the child's
+        ``episode.json`` plus ``worker_id``, ``workdir`` and the wall measured
+        here. ``status`` is ``infra`` for a lost reasoner (``vllm_down_midrun``),
+        a child that died with no record (``killed_midrun``) or exited clean
+        with none (``no_prediction_unclassified``); a record's own ``infra``
+        stands; otherwise ``timed_out`` at the cap, else ``ok``.
         """
         t0 = time.monotonic()
         worker_root = self.out_root / f"w{worker_id}"
@@ -372,48 +370,35 @@ class Driver:
             first = out.readline().strip()
         elapsed = time.monotonic() - t0
         workdir = Path(first) if first else None
-        where = {"workdir": str(workdir.relative_to(self.out_root))} if workdir else {}
-        killed = {
-            "episode_id": episode_id,
-            "worker_id": worker_id,
-            "status": episodes.STATUS_INFRA,
-            "elapsed_s": round(elapsed, 1),
-            "ts": round(time.time(), 1),
-            **where,
-        }
         landed = episodes.read_episode_json(workdir) if workdir else None
+        where = {"workdir": str(workdir.relative_to(self.out_root))} if workdir else {}
+        crashed = verdict == "exited" and landed is None and proc.returncode != 0
         if verdict == "vllm_dead":
-            # Re-queued: the attempt is pending until the reasoner is back.
             self.log(f"[w{worker_id}] VLLM-DEAD mid-episode {episode_id} after "
                      f"{elapsed:.0f}s; killed + re-queued (not scored)")
-            return {**killed, "error": "vllm_down_midrun"}
-        if verdict == "timeout":
+        elif verdict == "timeout":
             self.log(f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killed")
-        elif landed is None and proc.returncode != 0:
+        elif crashed:
             # SIGKILLed (a cgroup OOM) or crashed before landing a record.
             self.log(f"[w{worker_id}] CRASHED mid-episode {episode_id} after "
                      f"{elapsed:.0f}s (exit {proc.returncode}); re-queued (not scored)")
-            return {**killed, "error": "killed_midrun"}
+        if verdict == "vllm_dead" or crashed:
+            # Re-queued; a lost reasoner's attempt is pending until it is back.
+            return {"episode_id": episode_id, "worker_id": worker_id,
+                    "status": episodes.STATUS_INFRA, "elapsed_s": round(elapsed, 1),
+                    "ts": round(time.time(), 1), **where,
+                    "error": "vllm_down_midrun" if verdict == "vllm_dead" else "killed_midrun"}
         # The child's own verdict decides (dispatch classifies the episode's
         # exception chain); the driver adds only what it alone saw.
-        row = {
-            **(landed or {"episode_id": episode_id}),
-            "worker_id": worker_id,
-            "elapsed_s": round(elapsed, 1),
-            "ts": round(time.time(), 1),
-            **where,
-        }
+        row = {**(landed or {"episode_id": episode_id}), "worker_id": worker_id,
+               "elapsed_s": round(elapsed, 1), "ts": round(time.time(), 1), **where}
         if landed is None and verdict == "exited":
             # A child that exits clean with no record failed, unrecognised.
-            row["status"] = episodes.STATUS_INFRA
-            row["error"] = "no_prediction_unclassified"
-        elif row.get("status") == episodes.STATUS_INFRA:
-            pass
-        elif verdict == "timeout":
-            # Counted apart; a record is scored as recorded, and none is a miss.
-            row["status"] = episodes.STATUS_TIMED_OUT
-        else:
-            row["status"] = episodes.STATUS_OK
+            row |= {"status": episodes.STATUS_INFRA, "error": "no_prediction_unclassified"}
+        elif row.get("status") != episodes.STATUS_INFRA:
+            # A timeout is counted apart; its record is scored as recorded, and none is a miss.
+            row["status"] = (episodes.STATUS_TIMED_OUT if verdict == "timeout"
+                             else episodes.STATUS_OK)
         return row
 
     def run_one(self, worker_id: int, episode_id: str) -> None:
