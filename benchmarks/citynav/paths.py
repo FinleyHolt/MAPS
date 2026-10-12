@@ -141,37 +141,17 @@ def assert_available() -> None:
 
 
 def assert_current_tile_schema(features: dict, source: str) -> None:
-    """Refuse a loaded ``<block>_features.json`` of another schema.
-
-    The current bake writes one ``prior`` list whose rows carry mask and raw
-    tags. A run against another bake still completes with a wrong SR, so typed
-    class keys and ``prior_role``/``prior_source`` rows raise.
-    """
-    if not isinstance(features, dict) or not features:
-        return
-    _remedy = (
-        "Grounding against it silently produces a wrong SR. Point "
-        "SEARCH_CITYNAV_TILES at the current bake (tiles/citynav_2m_osmv3) "
-        "or re-bake with `benchmarks/citynav/data_prep/bake_tiles.sh`."
-    )
-    extra = sorted(set(features) - {"prior"})
-    if extra:
+    """Refuse a loaded ``<block>_features.json`` that is not the current bake's
+    one ``prior`` list of row dicts: a run against another bake still
+    completes, with a wrong SR."""
+    rows = features.get("prior", []) if isinstance(features, dict) else None
+    if (not isinstance(rows, list) or set(features) - {"prior"}
+            or not all(isinstance(r, dict) for r in rows)):
         raise RuntimeError(
-            f"{source} is a RETIRED tile bake: its features carry typed class "
-            f"keys {extra} instead of the one tags-verbatim 'prior' list. "
-            f"{_remedy}"
-        )
-    rows = features.get("prior") or []
-    if any(
-        not isinstance(r, dict)
-        or "prior_role" in r
-        or "prior_source" in r
-        for r in rows
-    ):
-        raise RuntimeError(
-            f"{source} is a RETIRED tile bake: its 'prior' rows mint "
-            f"prior_role/prior_source instead of the tags-verbatim contract. "
-            f"{_remedy}"
+            f"{source} is not the current tile bake (one 'prior' list of tag "
+            "rows); grounding against it silently produces a wrong SR. Point "
+            "SEARCH_CITYNAV_TILES at the current bake (tiles/citynav_2m_osmv3) "
+            "or re-bake with `benchmarks/citynav/data_prep/bake_tiles.sh`."
         )
 
 

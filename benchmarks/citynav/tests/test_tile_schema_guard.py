@@ -1,4 +1,4 @@
-"""The tile-schema guard refuses every retired bake shape and passes the tags-only one."""
+"""The tile-schema guard refuses another bake shape and passes the current one."""
 from __future__ import annotations
 
 import glob
@@ -13,25 +13,20 @@ from benchmarks.citynav.paths import assert_current_tile_schema
 _REPO = Path(__file__).resolve().parents[3]
 
 
-@pytest.mark.parametrize("payload, match", [
-    # The typed-class bake: class keys, rows minting prior_role.
-    ({"building": [{"cells": [[0, 0]], "source": "osm", "prior_role": "static_map"}],
-      "footpath": [{"cells": [[0, 1]], "source": "osm", "prior_role": "static_map"}]},
-     "typed class keys"),
-    ({"prior": [{"cells": [[0, 0]], "source": "osm", "prior_source": "osm"}]}, "prior_role"),
+@pytest.mark.parametrize("payload", [
+    {"building": [{"cells": [[0, 0]]}], "footpath": [{"cells": [[0, 1]]}]},
+    {"prior": [["cells", [0, 0]]]},
 ])
-def test_a_retired_bake_shape_is_refused(payload, match) -> None:
-    with pytest.raises(RuntimeError, match=match):
-        assert_current_tile_schema(payload, "tiles/retired")
+def test_another_bake_shape_is_refused(payload) -> None:
+    with pytest.raises(RuntimeError, match="not the current tile bake"):
+        assert_current_tile_schema(payload, "tiles/other")
 
 
 def test_current_tags_verbatim_shape_passes() -> None:
     assert_current_tile_schema(
         {"prior": [
-            {"cells": [[0, 0]], "source": "osm", "osm_id": "w1",
-             "highway": "residential"},
-            {"cells": [[1, 1]], "source": "cityrefer_landmark",
-             "name": "Parker's Piece"},
+            {"cells": [[0, 0]], "osm_id": "w1", "highway": "residential"},
+            {"cells": [[1, 1]], "name": "Parker's Piece"},
         ]},
         "tiles/citynav_2m_osmv3",
     )
