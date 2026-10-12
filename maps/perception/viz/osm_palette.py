@@ -24,7 +24,7 @@ _LABEL_TAG_KEYS = (
 # name a digest-derived hue: the model reads "residential=teal" beside the
 # teal region. Coarse on purpose -- a schematic's legend, not a color science.
 _HUE_WORDS = (
-    "red", "orange", "yellow", "olive", "green", "spring-green",
+    "red", "orange", "yellow", "yellow-green", "green", "spring-green",
     "cyan", "azure", "blue", "violet", "magenta", "pink",
 )
 
