@@ -139,3 +139,13 @@ def test_the_served_alias_is_not_the_served_build():
     # stop pairing against every column stored after it.
     fatal2, arm2 = comparability_issues(a, {**gt, "served_model": "inkling-small"})
     assert not fatal2 and not arm2
+
+
+def test_a_reasoning_effort_difference_is_an_arm_key():
+    """An E4 arm run without the control's effort is a second variable; unset reads as blank."""
+    a, b = _prov(), _prov()
+    a["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] = "0.99"
+    fatal, arm = comparability_issues(a, b)
+    assert fatal == [] and arm == ["reasoning effort (SEARCH_SAMPLING_REASONING_EFFORT) differs:  A=0.99  B=unset"]
+    b["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] = "0.99"
+    assert comparability_issues(a, b) == ([], [])

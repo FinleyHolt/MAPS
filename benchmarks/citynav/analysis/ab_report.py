@@ -142,9 +142,9 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
     ``fatal`` is the ground truth SR is scored against (split, tile bake):
     differing or unrecorded,
     no A/B exists, and nothing waives it. ``arm`` is code, config (apart from
-    its withholds where both manifests record it) and served model, which an
-    A/B is meant to vary; compared only where both sides recorded them, and
-    waived by ``--allow-provenance-mismatch``."""
+    its withholds where both manifests record it), served model and reasoning
+    effort (unset reads as blank), which an A/B is meant to vary; compared only
+    where both sides recorded them, and waived by ``--allow-provenance-mismatch``."""
     fatal: list[str] = []
     ga, gb = _ground_truth_keys(prov_a), _ground_truth_keys(prov_b)
     for key, label in (
@@ -177,6 +177,11 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
         va, vb = prov_a.get(key), prov_b.get(key)
         if va is not None and vb is not None and va != vb:
             arm.append(f"{label} differs:  A={va}  B={vb}")
+    fa, fb = prov_a.get("search_env_flags"), prov_b.get("search_env_flags")
+    if fa is not None and fb is not None:
+        ea, eb = (f.get("SEARCH_SAMPLING_REASONING_EFFORT") or "unset" for f in (fa, fb))
+        if ea != eb:
+            arm.append(f"reasoning effort (SEARCH_SAMPLING_REASONING_EFFORT) differs:  A={ea}  B={eb}")
     return fatal, arm
 
 

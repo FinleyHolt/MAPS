@@ -359,13 +359,14 @@ E4, the control and one root per withheld part, per model:
 
 ```sh
 for part in prior look_for look images mission_map system_turn; do
-  CITYNAV_BENCH_CONFIG=configs/withhold/$part.yaml \
+  SEARCH_SAMPLING_REASONING_EFFORT=<model's E1 effort> CITYNAV_BENCH_CONFIG=configs/withhold/$part.yaml \
     python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --sample-seed 1234 \
     --out-root output/e4/<model>/$part
 done
 ```
 
-The control is the model's E1 root.
+The control is the model's E1 root, so each arm runs at the model's E1 effort
+(blank for a model run with none); `ab_report` refuses a pair whose efforts differ.
 
 Read the results:
 
