@@ -308,6 +308,9 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
          " POINT or ONE SET"),
         ("sub", ", and binding it does not make it movable.",
          ", and go_to(corner) flies to it."),
+        ("sub", " A row's columns carry only what OSM recorded;",
+         " A row's columns carry only what was measured;"),
+        ("sub", 'h = "prior_3123"', 'h = "detected_12"'),
     ],
     "look_for": [
         ("sub", '  look_for("pool", "house")\n  explore("Mill Lane")\n'
