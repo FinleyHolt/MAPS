@@ -38,8 +38,8 @@ import numpy as np
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.flight.live_source import ortho_observation
 from benchmarks.flight.measures import _bases, _rows, tour_stops
-from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, Mission, activate_calcity, converse,
-                                       summary_line)
+from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, activate_calcity,
+                                       converse, summary_line)
 from benchmarks.flight.tile_georef import FLOOR_MSL_M
 
 log = logging.getLogger("flight.replay")
@@ -386,8 +386,12 @@ class ReplayMission(Mission):
         self._recorded_stops = stops
 
     def row(self) -> dict[str, Any]:
-        """The mission's row naming the run it replays, with no UTC start: the replay's clock is not the flight's."""
-        return {**super().row(), "started_at_utc": None, "replay_of": self.replay_of}
+        """The mission's row naming the run it replays."""
+        return {**super().row(), "replay_of": self.replay_of}
+
+    def _utc_now(self) -> None:
+        """No UTC start, and so no track: the replay's clock is not the flight's."""
+        return None
 
     def _held_now(self, h, stops: list) -> list[bool]:
         if self._recorded_stops is None:
@@ -488,7 +492,7 @@ def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
     if not alts and rec.row.get("started_at_utc"):
         t0 = float(rec.row["started_at_utc"])
         t1 = t0 + float(rec.row.get("elapsed_s") or 0.0)
-        alts = [float(f["alt_msl_m"]) - FLOOR_MSL_M[map_name] for f in _rows(rec.sortie / "flight_track.jsonl")
+        alts = [float(f["alt_msl_m"]) - FLOOR_MSL_M[map_name] for f in _rows(rec.sortie / TRACK_JSONL)
                 if f.get("alt_msl_m") is not None and t0 <= float(f["t_unix"]) <= t1]
     if not alts:
         raise ValueError(f"{rec.run_id}: the recording holds no height above ground: no observation and no GNSS "

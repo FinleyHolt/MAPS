@@ -293,16 +293,21 @@ def test_the_recorded_segmenter_keeps_a_recorded_object_id_of_zero():
     assert [m[2] for m in seen] == [3, 0]
 
 
-def test_a_replay_row_records_no_start_time(built, tmp_path):
-    """A replay's clock is not the flight's: its row carries no UTC start, so
-    the measures read it on SR and NE alone."""
-    live = R.BankSource([], tiles_dir=built[0], map_name="calcity", tile_ground_z=0.0)
+def test_a_replay_records_no_start_time_and_no_track(built, make_twin, make_live, tmp_path):
+    """A replay's clock is not the flight's: its row carries no UTC start and
+    it writes no track, so the measures read it on SR and NE alone."""
+    workdir = tmp_path / "sortie" / "run"
+    workdir.mkdir(parents=True)
     m = R.ReplayMission(replay_of={"mode": "frames"}, episode_id="calcity::t", split="calcity",
-                        config="configs/calcity.yaml", workdir=tmp_path, live=live, recorder=None,
+                        config="configs/calcity.yaml", workdir=workdir, live=make_live(make_twin()), recorder=None,
                         close_log=lambda: None, agl_m=world.AGL_M)
-    m.started_at, m.started_at_utc = 0.0, 1_789_157_838.6
-    row = m.row()
+    m.map_name, m._tiles_dir = "calcity", built[0]
+    m.started_at, m._t0, m.started_at_utc = 0.0, 0.0, m._utc_now()
+    m._live.vehicle.sleep(5.0)
+    m.bank()
+    row = json.loads((workdir.parent / "episodes.jsonl").read_text())
     assert row["started_at_utc"] is None and row["replay_of"] == {"mode": "frames"}
+    assert not (workdir.parent / "flight_track.jsonl").exists()
 
 
 def test_the_bank_reads_an_area_s_pixels_once_however_often_it_is_asked(built, tmp_path, monkeypatch):

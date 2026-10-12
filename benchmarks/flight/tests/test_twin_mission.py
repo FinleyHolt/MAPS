@@ -125,6 +125,25 @@ def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_run_carries(
     assert first["messages"][-1] == {"role": "user", "content": "The church at the end of the road."}
 
 
+def test_a_twin_sortie_scores_fully_on_the_closed_loop_measures(calcity, serves, tmp_path):
+    """The mission records the ownship track and its times on the vehicle's
+    one clock, so the measures read OSR off the track, SPL and time to ID."""
+    from benchmarks.flight import measures, twin
+
+    out = tmp_path / "out"
+    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
+                      "--out", str(out)]) == 0
+    sortie = next(out.iterdir())
+    rows, _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]),
+                                             tiles_dir=calcity.tiles)
+    (run,) = rows
+    assert run["success_area"] is True and run["track_source"] == "GNSS track", run
+    assert run["track_coverage"] == 1.0 and run["oracle_success"] is True and run["agl_ft"] is not None
+    assert 0.0 < run["spl"] <= 1.0 and run["path_ft"] > 0.0
+    # Leg 700 m north at the C-12's speed: the time to ID is the twin's flying time, not the host's.
+    assert 0.0 < run["time_to_id_s"] < 120.0
+
+
 def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity, serves, tmp_path, monkeypatch):
     """The flight wires the agent's watchlist channel exactly as the bench
     does: a watchlist change the director makes reaches the segmenter's

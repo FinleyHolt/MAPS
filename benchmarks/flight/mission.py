@@ -30,7 +30,7 @@ import numpy as np
 
 from benchmarks.flight.live_source import OBSERVATION_JPEG_QUALITY, LiveSource
 from benchmarks.flight.run_imagery import RunImagery
-from benchmarks.flight.tile_georef import local_to_lonlat
+from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.flight.vehicle import Leg
 from benchmarks.citynav.conversation import CONVERSATION_JSONL, ConversationLog
 
@@ -78,6 +78,10 @@ FRAME_WAIT_S = 30.0
 #: One row per observation a mission perceived, in the episode's directory:
 #: the key from the mission's reasoning back into the recording.
 FRAMES_JSONL = "frames.jsonl"
+#: The ownship track, one fix a second on the vehicle's clock, in the sortie's
+#: folder: the path :mod:`benchmarks.flight.measures` reads OSR and SPL off.
+TRACK_JSONL = "flight_track.jsonl"
+TRACK_PERIOD_S = 1.0
 #: Where each waypoint's observation goes: the pass fused aboard as one
 #: north-up image, ``<sha>.jpg``. Never ``frames/``, which is what the model saw.
 OBSERVATIONS_DIR = "observations"
@@ -178,7 +182,7 @@ def leg_area(h: Hydrated, token: str, xy) -> list[tuple[float, float]]:
 
 
 class _StampedLog(ConversationLog):
-    """The conversation log, each row stamped with ``t_s``, seconds since the mission started."""
+    """The conversation log, each row stamped with ``t_s``, vehicle seconds since the mission started."""
 
     def __init__(self, path: Path, elapsed) -> None:
         super().__init__(path)
@@ -221,18 +225,24 @@ class Mission:
         self.status = STATE_IDLE
         self.instruction = instruction or ""
         self.ended_by: str | None = None
-        #: When the conversation ended (the reply), so the row's ``elapsed_s``
-        #: is the mission's and not the park's.
-        self.ended_at: float | None = None
+        #: Vehicle seconds from the start to the reply, so the row's
+        #: ``elapsed_s`` is the mission's and not the park's.
+        self.ended_s: float | None = None
         self.error: str | None = None
         #: Model turns of the conversations that have ENDED; :meth:`_turns` adds the one in flight.
         self.turns_used = 0
         #: How many reports the model has made.
         self.replies = 0
         self._turn_diag: dict[str, Any] = {}
+        #: The host's wall clock at the start (the row's ``ts``).
         self.started_at: float | None = None
+        #: The vehicle's clock at the start: every time the mission records
+        #: (``t_s``, ``elapsed_s``, the track) is vehicle seconds from here.
+        self._t0: float | None = None
         #: The same instant on the receiver's clock (UTC, unix seconds), what a replay anchors on.
         self.started_at_utc: float | None = None
+        #: How many track fixes have been written.
+        self._tracked = 0
         #: Every row lands in ``<workdir>/conversation.jsonl`` as it happens.
         self.transcript: list[dict] = _StampedLog(self.workdir / CONVERSATION_JSONL, self.elapsed_s)
         self.flights: list[dict] = []
@@ -582,8 +592,8 @@ class Mission:
     # -- lifecycle ---------------------------------------------------------
 
     def elapsed_s(self) -> float | None:
-        """Seconds since the mission started, or None before: the axis a transcript row is stamped on."""
-        return None if self.started_at is None else time.time() - self.started_at
+        """Vehicle seconds since the mission started, or None before: the axis a transcript row is stamped on."""
+        return None if self._t0 is None else self._vehicle.now() - self._t0
 
     def _utc_now(self) -> float | None:
         """The receiver's UTC now, unix seconds, or None without a fix."""
@@ -599,6 +609,7 @@ class Mission:
         if self._thread is not None:
             raise RuntimeError("mission already started")
         self.started_at = time.time()
+        self._t0 = self._vehicle.now()
         self.started_at_utc = self._utc_now()
         self._thread = threading.Thread(target=self._run, name=f"mission-{self.episode_id}", daemon=True)
         self._thread.start()
@@ -678,7 +689,7 @@ class Mission:
                 with self._lock:
                     self.status = STATE_FLYING
                     self.ended_by = None
-                    self.ended_at = None
+                    self.ended_s = None
                 turn += 1
                 reply = continue_mission(reasoner=reasoner, instruction=nxt, diag=self._turn_diag,
                                          rid_tag=f"m{turn}", **heard, **session.run_kwargs)
@@ -738,7 +749,7 @@ class Mission:
     def _record_reply(self, reply) -> None:
         with self._lock:
             self.ended_by = reply.ended_by
-            self.ended_at = time.time()
+            self.ended_s = self.elapsed_s()
             self.turns_used += int(reply.turns_used)
             self._turn_diag.clear()
             self.replies += 1
@@ -807,13 +818,13 @@ class Mission:
             "search_env_flags": arm_env_stamp(),
             "ts": self.started_at,
             "started_at_utc": self.started_at_utc,
-            "elapsed_s": ((self.ended_at or time.time()) - self.started_at) if self.started_at else None,
+            "elapsed_s": self.ended_s if self.ended_s is not None else self.elapsed_s(),
         }
 
     def bank(self) -> None:
         """The run's row in ``episode.json`` and as ONE line of the sortie's
-        ``episodes.jsonl``, replaced at every report; a row that will not land
-        is logged, never raised."""
+        ``episodes.jsonl``, replaced at every report, then the track flown
+        since; a row that will not land is logged, never raised."""
         from benchmarks.citynav.episodes import upsert_row, write_episode_json  # noqa: PLC0415
 
         try:
@@ -821,8 +832,34 @@ class Mission:
             sortie = self.workdir.parent
             write_episode_json(self.workdir, row)
             upsert_row(sortie, {**row, "workdir": str(self.workdir.relative_to(sortie))})
+            self._record_track()
         except Exception:  # noqa: BLE001 -- a mission is not failed by its paperwork
             log.exception("the row for %s did not land", self.episode_id)
+
+    def _record_track(self) -> None:
+        """The ownship's fixes since the last one written, one a second on the
+        vehicle's clock, appended to the sortie's ``flight_track.jsonl``:
+        ``t_unix`` is ``started_at_utc`` plus vehicle seconds from the start,
+        the axis ``started_at_utc + t_s`` reads every transcript row on. No
+        UTC start, no track. ponytail: written at each report and at the end,
+        so a process killed mid-turn loses the fixes since the last report;
+        a writer on its own thread is the upgrade if that ever matters."""
+        if self._t0 is None or self.started_at_utc is None or self._tiles_dir is None:
+            return
+        lines = []
+        while (t := self._t0 + self._tracked * TRACK_PERIOD_S) <= self._vehicle.now() + 1e-9:
+            self._tracked += 1
+            pose = self._vehicle.pose(t)
+            xy = None if pose is None else lonlat_to_local(self._tiles_dir, self.map_name, pose.lon, pose.lat)
+            if xy is not None:
+                lines.append(json.dumps({
+                    "t_unix": round(self.started_at_utc + (t - self._t0), 3), "x": round(xy[0], 2),
+                    "y": round(xy[1], 2), "alt_msl_m": round(pose.alt_msl_m, 2),
+                    "alt_agl_m": round(pose.alt_msl_m - self._live.ground_msl(xy), 2),
+                    "track_deg": round(pose.track_deg, 2), "ground_speed_mps": round(pose.speed_mps, 3)}))
+        if lines:
+            with (self.workdir.parent / TRACK_JSONL).open("a", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
 
 
 def converse(mission: Mission, taskings: list[str], *, ended=None) -> None:

@@ -3,7 +3,7 @@
     python -m benchmarks.flight.measures --root <sortie>... --truth <adjudications dir> [<split.json>]
         --tiles <Cal City bake whose calcity_features.json holds the flown prior> [--json] [--check runs_all.csv]
 
-A root is a flown sortie (``episodes.jsonl`` beside ``flight_track.jsonl``)
+A root is a flown or twin sortie (``episodes.jsonl`` beside ``flight_track.jsonl``)
 or a replay's (:mod:`benchmarks.flight.replay`, its sortie folder named for
 the recorded one, so the same truth scores both; a replay records no start
 time and no track, so it reads SR and NE only). Per run, from three things
@@ -57,7 +57,7 @@ from pathlib import Path
 from benchmarks.citynav.analysis.rows import is_infra_abort
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
-from benchmarks.flight.mission import FRAMES_JSONL
+from benchmarks.flight.mission import FRAMES_JSONL, TRACK_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.search.analyze_scene.geom_compute import point_in_polygon
 from typing import Any
@@ -619,7 +619,7 @@ def outline_rejected(rows: list[dict[str, Any]], prior: list[dict[str, Any]] | N
 def collect(roots: list[Path], truth: Truth, *, tiles_dir: Path) -> tuple[list[dict[str, Any]], float, int]:
     """Every run under ``roots``, with the crews' turn radius over them all."""
     prior = load_prior(tiles_dir)
-    tracks = [sorted(_rows(r / "flight_track.jsonl"), key=lambda f: f["t_unix"]) for r in roots]
+    tracks = [sorted(_rows(r / TRACK_JSONL), key=lambda f: f["t_unix"]) for r in roots]
     radius, turns = flown_turn_radius_m(tracks, [routed_windows(r) for r in roots])
     radius = radius or TURN_RADIUS_FALLBACK_M
     out = []
