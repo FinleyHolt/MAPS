@@ -369,22 +369,21 @@ class LiveSource:
         if self.corrector is not None:
             self.corrector.stop()
 
-    def _posed(self, jpeg: bytes, t_host: float, *, pose: Pose | None = None):
+    def _posed(self, jpeg: bytes, t_host: float, *, pose: Pose | None = None) -> SimpleNamespace | str:
         """The frame decoded and its camera posed through the calibrated chain,
-        or None with ``last_refusal`` set. ``pose`` is the frame's own tag;
-        without one, the vehicle's pose at ``t_host``."""
+        or why it cannot be, a string the caller decides whether to keep (the
+        corrector's thread must not overwrite the mission's ``last_refusal``).
+        ``pose`` is the frame's own tag; without one, the vehicle's pose at ``t_host``."""
         pose = pose if pose is not None else self.pose_now(t_host)
         if pose is None:
-            self.last_refusal = f"no pose for the frame: {self.vehicle.last_error or 'no fix'}"
-            return None
+            return f"no pose for the frame: {self.vehicle.last_error or 'no fix'}"
         roll = float(pose.roll_deg)
         pitch_proj = -float(pose.pitch_deg)
         pose_xy, alt_msl, yaw = self.camera_pose(pose)
         try:
             rgb = np.asarray(Image.open(BytesIO(jpeg)).convert("RGB"), dtype=np.uint8)
         except (OSError, ValueError) as exc:
-            self.last_refusal = f"the frame does not decode: {exc}"
-            return None
+            return f"the frame does not decode: {exc}"
         h, w = rgb.shape[:2]
         sensor = locator.sized(self.boresight.sensor, w, h)
         camera_z = self.tile_ground_z + (alt_msl - self.floor_msl_m)
@@ -394,8 +393,7 @@ class LiveSource:
             corners = ground_corners_xy(sensor, pose_xy, agl, yaw, airframe_roll_deg=roll,
                                         airframe_pitch_deg=pitch_proj, ground_z=ground_tile)
         except ValueError as exc:
-            self.last_refusal = f"no ground under the frame: {exc}"
-            return None
+            return f"no ground under the frame: {exc}"
         return SimpleNamespace(pose=pose, pose_xy=pose_xy, alt_msl=alt_msl, yaw=yaw, roll=roll,
                                pitch_proj=pitch_proj, rgb=rgb, sensor=sensor, agl=agl, camera_z=camera_z,
                                corners=corners, ground_tile=ground_tile)
@@ -417,7 +415,8 @@ class LiveSource:
             return
         jpeg, t_host, _log_time, seq, _tag = got
         posed = self._posed(jpeg, t_host)
-        if posed is None:
+        if isinstance(posed, str):
+            log.debug("corrector: frame %s refused: %s", seq, posed)
             return
         with self._correcting:
             if self.graph is None:
@@ -598,7 +597,8 @@ class LiveSource:
                 self.last_refusal = f"ring frame {seq} carries no pose"
                 continue
             posed = self._posed(jpeg, t_host, pose=pose)
-            if posed is None:
+            if isinstance(posed, str):
+                self.last_refusal = posed
                 continue
             corners = posed.corners
             if self.register is not None:
