@@ -12,7 +12,7 @@ _ANCHORS = [
     # for EVERY >=2-cell node, so this shape carries one despite being areal.
     {"fid": "lot_1", "name": "Corner Lot", "xy": [20.0, 20.0],
      "class": "parking", "centerline": [[15.0, 20.0], [25.0, 20.0]],
-     "aspect_ratio": 1.4, "footprint_area_m2": 1875.0},
+     "footprint_area_m2": 1875.0},
 ]
 
 

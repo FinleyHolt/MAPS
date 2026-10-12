@@ -679,8 +679,7 @@ class _CueSortedRows(list):
 # The grid's leading columns after ``fid``; attached columns follow in
 # first-seen order.
 _GRID_COL_PRIORITY = (
-    "class", "color", "color_conf", "name", "tags", "xy",
-    "footprint_area_m2", "aspect_ratio", "axis_length_m",
+    "class", "color", "name", "tags", "xy", "footprint_area_m2",
 )
 
 # Repeat the header row every N data rows on a long dump.
@@ -701,8 +700,7 @@ _TAG_RENDER_DROP = frozenset({
 
 # Row fields the grid does not render.
 _GRID_COL_DROP = frozenset({
-    "aspect_ratio", "axis_length_m", "color_conf",
-    "name_match", "score",
+    "axis_length_m", "color_conf", "name_match", "score",
 })
 
 # The column names the model never sees on any channel: the grid, the

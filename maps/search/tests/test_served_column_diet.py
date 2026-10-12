@@ -23,7 +23,6 @@ ROW = {
              "surface": "paved"},
     "xy": [316.25, 473.0],
     "footprint_area_m2": 139.91,
-    "aspect_ratio": 1.02,
     "axis_length_m": 18.15,
     "color": "gray",
     "color_conf": 0.87,
@@ -132,12 +131,6 @@ def test_a_footprint_carries_its_area_and_no_unserved_shape_column():
     assert contour_shape_features([box[0][:-1]]) is None
 
 
-def test_shape_scalars_are_gone_from_the_mission_surface():
-    """aspect_ratio is a lossy min-rect proxy for shape, answered by the crop channel."""
-    header = _render_grid_rows([ROW]).splitlines()[0]
-    assert "aspect_ratio" not in header, header
-
-
 def test_the_row_path_obeys_the_same_diet_as_the_grid():
     """A render cut is not a diet while a second render path exists."""
     from maps.search.analyze_scene.geom_program import (
@@ -150,8 +143,8 @@ def test_the_row_path_obeys_the_same_diet_as_the_grid():
     for col in _RENDER_INPUT_ROW_FIELDS:
         assert col in _ROW_HIDDEN, col
     # Vacuity floor: an emptied drop set would satisfy the loops above.
-    assert len(_GRID_COL_DROP) >= 5, _GRID_COL_DROP
-    assert {"name_match", "score", "aspect_ratio"} <= _ROW_HIDDEN
+    assert len(_GRID_COL_DROP) >= 4, _GRID_COL_DROP
+    assert {"name_match", "score"} <= _ROW_HIDDEN
 
 
 @pytest.mark.parametrize("op", [
