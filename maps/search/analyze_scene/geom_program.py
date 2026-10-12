@@ -548,6 +548,7 @@ class Result(list):
     ordered: bool = False
     name_set: bool = False
     op_cols: list = []
+    notes: list = []
     cut_stats: dict = {}
     refs: list = []
     columns: list = []
@@ -661,7 +662,7 @@ def _cut_stands_at(v, body: list, capped: list) -> str | None:
     the score of the first row past it, so a plateau reads differently from
     a real gap. The composite, since no single key is monotone in a
     multi-key sort."""
-    if getattr(v, "kind", None) != "sorted" or len(capped) >= len(body):
+    if v.kind != "sorted" or len(capped) >= len(body):
         return None
 
     def _num(row):
@@ -673,7 +674,7 @@ def _cut_stands_at(v, body: list, capped: list) -> str | None:
         return None
     nxt = next((x for x in (_num(r) for r in body[len(capped):])
                 if x is not None), None)
-    keys = [k for k in (getattr(v, "op_cols", None) or []) if isinstance(k, str)]
+    keys = [k for k in v.op_cols if isinstance(k, str)]
     what = " + ".join(f"'{k}'" for k in keys) or "this ordering"
     span = f"{min(head):.6g}..{max(head):.6g}"
     if nxt is None:
@@ -931,8 +932,7 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
                 "the rN keeps them all") if n_cut else None
 
     def env(v):
-        notes = getattr(v, "notes", None) or []
-        kind = getattr(v, "kind", None)
+        notes, kind = v.notes, v.kind
         cut = v.cut_stats if kind == "cut" else None
         capped = v[:_BROAD_HEAD_ROWS] if len(v) > _BROAD_DUMP_SOFT_ROWS else v
         if kind == "compare":
@@ -949,7 +949,7 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
             if cut:
                 head["cut_stats"] = cut
             head["hint"] = join_hints(
-                getattr(v, "empty_condition", None)
+                v.empty_condition
                 or "this op returned NO items: nothing met its condition.",
                 *notes,
                 "this retrieval searched every surface row"
@@ -957,14 +957,14 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
                 + " and matched nothing."
                 if kind == "miss" else "")
             return head
-        elif not getattr(v, "ordered", False):
+        elif not v.ordered:
             counts, named = _census_counts(v)
             head = {"len": len(v), "census": _top(counts, 12), "named": named}
             if cut:
                 head["cut_stats"] = cut
             head["hint"] = join_hints(*notes, _NO_ORDER_HINT)
             return head
-        elif getattr(v, "name_set", False):
+        elif v.name_set:
             # A name's ways tie, so a head would be an arbitrary prefix
             # served as a ranking: the shape renders instead.
             head = {"len": len(v), "name": str(v[0].get("name") or "")}
@@ -1005,7 +1005,7 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
             head = {"len": len(v),
                     "fids": [str(r["fid"]) for r in capped if r.get("fid")]}
             hint = join_hints(more, table(head, capped,
-                                          getattr(v, "op_cols", None)),
+                                          v.op_cols),
                               cover, *notes)
         if hint:
             head["hint"] = hint
