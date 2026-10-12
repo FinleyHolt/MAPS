@@ -5,7 +5,7 @@ What the model is served at this sha, from the owners a run serves through
 log records what a real run sent. Diff two shas by dumping at each.
 
   python -m maps.search.parse_compile.contract
-  python -m maps.search.parse_compile.contract --sensor <rig> [--agl-m <m>]
+  python -m maps.search.parse_compile.contract --sensor <rig> [--agl-m <m>]   # Cal City's height by default
   python -m maps.search.parse_compile.contract --withhold look,images
   python -m maps.search.parse_compile.contract --rendered   # template bytes
 
@@ -19,11 +19,15 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
+
+import yaml
 
 from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor, served_description
 from maps.search.parse_compile import prompts
 
 _SAMPLE_INSTRUCTION = "<operator cue>"
+_CALCITY = Path(__file__).resolve().parents[3] / "configs" / "calcity.yaml"
 
 
 def assemble(sensor: str | None = None, agl_m: float | None = None) -> dict:
@@ -102,9 +106,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sensor", metavar="RIG",
                     help="append this rig's sensor block, as a run does; "
                          "one of the sensor_spec registry names")
-    ap.add_argument("--agl-m", type=float, default=None,
+    ap.add_argument("--agl-m", type=float,
+                    default=yaml.safe_load(_CALCITY.read_text())["start_altitude_agl_m"],
                     help="the height above ground the run flies, for a rig that "
-                         "states its footprint (configs/calcity.yaml: 914.4)")
+                         "states its footprint (default: configs/calcity.yaml's "
+                         "start_altitude_agl_m)")
     ap.add_argument("--rendered", action="store_true",
                     help="print the chat-template render instead of the "
                          "sectioned dump; token count goes to stderr")

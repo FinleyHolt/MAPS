@@ -68,3 +68,8 @@ def test_the_dump_surface_section_names_every_call_the_namespace_serves():
             assert n in line, (call, n)
             kws += p.kind is p.KEYWORD_ONLY or p.default is not p.empty
     assert kws >= 9, kws                              # vacuity floor
+
+
+def test_a_footprint_rig_dumps_at_the_cal_city_height_by_default(capsys):
+    assert contract.main(["--sensor", "oryx_orx32_25mm_nadir"]) == 0
+    assert "at the 3,000 ft AGL this run flies" in capsys.readouterr().out
