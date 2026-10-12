@@ -14,29 +14,10 @@ from maps.util.mask_codec import encode_mask_record
 from tests.serves import SegmentServe
 
 
-def _build_segment_payload(
-    *,
-    object_ids: list[int],
-    masks: list[np.ndarray],
-    scores: list[float],
-    concepts: list[str],
-    image_shape: tuple[int, int],
-) -> dict:
+def _build_segment_payload(*, masks: list[np.ndarray], scores: list[float], concepts: list[str]) -> dict:
     """A ``POST /segment`` answer built with the server's own mask encoder."""
-    detections = []
-    for oid, mask, score, label in zip(object_ids, masks, scores, concepts):
-        detections.append(
-            {
-                "object_id": int(oid),
-                "label": label,
-                "score": float(score),
-                **encode_mask_record(mask),
-            }
-        )
-    return {
-        "image_shape_hw": list(image_shape),
-        "detections": detections,
-    }
+    return {"detections": [{"label": label, "score": float(score), **encode_mask_record(mask)}
+                           for mask, score, label in zip(masks, scores, concepts)]}
 
 
 def _build_observation(rgb: np.ndarray) -> Observation:
@@ -87,8 +68,7 @@ def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):
     obs = _build_observation(_square_frame())
     mask = _block_mask(404, 604, 404, 604)
     serve.answers = [
-        (200, _build_segment_payload(object_ids=[7], masks=[mask], scores=[score], concepts=["building"],
-                                     image_shape=(_SAM_INPUT_SIZE, _SAM_INPUT_SIZE)), {})
+        (200, _build_segment_payload(masks=[mask], scores=[score], concepts=["building"]), {})
         for score in (0.9, 0.88)
     ]
     dets_first = adapter.detect(obs)
@@ -113,11 +93,9 @@ def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):
 def test_each_kept_mask_gets_its_own_ids(adapter, serve):
     obs = _build_observation(_square_frame())
     payload = _build_segment_payload(
-        object_ids=[1, 42],
         masks=[_block_mask(100, 250, 100, 250), _block_mask(700, 850, 700, 850)],
         scores=[0.6, 0.6],
         concepts=["building", "building"],
-        image_shape=(_SAM_INPUT_SIZE, _SAM_INPUT_SIZE),
     )
     serve.answers = [(200, payload, {})]
     dets = adapter.detect(obs)
@@ -137,8 +115,7 @@ def test_a_frame_under_a_tile_is_padded_not_resampled(adapter, serve):
 
     rgb = np.random.default_rng(0).integers(0, 256, (600, 800, 3), dtype=np.uint8)
     serve.answers = [(200, _build_segment_payload(
-        object_ids=[3], masks=[_block_mask(500, 700, 700, 900)], scores=[0.9], concepts=["building"],
-        image_shape=(_SAM_INPUT_SIZE, _SAM_INPUT_SIZE)), {})]
+        masks=[_block_mask(500, 700, 700, 900)], scores=[0.9], concepts=["building"]), {})]
     dets = adapter.detect(_build_observation(rgb))
 
     posted = np.asarray(Image.open(io.BytesIO(base64.b64decode(serve.bodies[0]["image_b64"]))).convert("RGB"))

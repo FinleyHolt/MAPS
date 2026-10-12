@@ -24,7 +24,6 @@ class SamDetection:
     score: float
     pixel_mask: np.ndarray
     pixel_bbox_rcrc: tuple[int, int, int, int]
-    object_id: int
 
 
 @dataclass
@@ -386,7 +385,6 @@ def _forward_chunk(
         # the reasoner ("the Nth car from the intersection"); only the total
         # ``max_per_image`` backstop bounds a pathological frame.
         per_tile: list[SamDetection] = []
-        next_object_id = 0
         for concept, qid in zip(tile_concepts, qids):
             rec = results[qid]
             scores_t = rec.get("scores")
@@ -450,10 +448,8 @@ def _forward_chunk(
                             int(r_max_np[k]),
                             int(c_max_np[k]),
                         ),
-                        object_id=next_object_id,
                     )
                 )
-                next_object_id += 1
                 if len(per_tile) >= max_per_image:
                     break
             if len(per_tile) >= max_per_image:

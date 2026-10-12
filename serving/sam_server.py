@@ -19,10 +19,10 @@ Endpoints
 ``POST /segment`` (stateless, single image)
     body = {image_b64, concepts, score_threshold, min_area_px,
             max_per_image, resolution}
-    response = {detections: [...], image_shape_hw}
+    response = {detections: [...]}
 
-Each detection is ``{label, score, object_id}`` plus the bbox-cropped mask
-record of :mod:`maps.util.mask_codec`.
+Each detection is ``{label, score}`` plus the bbox-cropped mask record of
+:mod:`maps.util.mask_codec`.
 
 A ``threading.Lock`` serializes GPU access: one forward at a time. A
 bounded admission semaphore (``SAM_MAX_INFLIGHT``, default 2) is acquired
@@ -93,7 +93,6 @@ def _detections_to_wire(dets: list) -> list[dict]:
             {
                 "label": str(d.label),
                 "score": float(d.score),
-                "object_id": int(d.object_id),
                 **record,
             }
         )
@@ -189,8 +188,7 @@ def segment(req: SegmentRequest, _gate: None = Depends(_admission)) -> dict:
             max_per_image=req.max_per_image,
             resolution=req.resolution,
         )
-    H, W = rgb.shape[:2]
-    return {"detections": _detections_to_wire(dets), "image_shape_hw": [int(H), int(W)]}
+    return {"detections": _detections_to_wire(dets)}
 
 
 def main() -> None:

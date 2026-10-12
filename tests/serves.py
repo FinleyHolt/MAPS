@@ -87,4 +87,4 @@ class SegmentServe(_Serve):
 
     path = "/segment"
 
-    default = (200, {"detections": [], "image_shape_hw": [1008, 1008]}, {})
+    default = (200, {"detections": []}, {})

@@ -113,10 +113,10 @@ def test_encode_from_crop_matches_full_frame_encode():
 # ── End-to-end: the masks _segment decodes equal the full-frame reference ──
 
 
-def _tile_det(mask_1008, label, score, oid):
+def _tile_det(mask_1008, label, score):
     rec = encode_mask_record(mask_1008)
     assert rec is not None
-    return {**rec, "label": label, "score": score, "object_id": oid}
+    return {**rec, "label": label, "score": score}
 
 
 def _tile_b64(rgb, bound):
@@ -143,20 +143,20 @@ def _build_tile_case():
 
     # tile 0: one clean object + the seam object (frame cols 600:700)
     t0 = [
-        _tile_det(tile_mask(100, 50, 140, 120), "car", 0.9, 0),
-        _tile_det(tile_mask(300, 600, 340, 700), "car", 0.8, 1),
+        _tile_det(tile_mask(100, 50, 140, 120), "car", 0.9),
+        _tile_det(tile_mask(300, 600, 340, 700), "car", 0.8),
     ]
     # tile 1 (c0=504): seam duplicate (frame cols 600:700 -> local 96:196,
     # lower score -> NMS drops it), a tie pair, and a sub-min-area speck
     t1 = [
-        _tile_det(tile_mask(300, 96, 340, 196), "car", 0.7, 0),
-        _tile_det(tile_mask(500, 700, 560, 800), "car", 0.85, 1),
-        _tile_det(tile_mask(700, 100, 760, 200), "building", 0.85, 2),
-        _tile_det(tile_mask(10, 10, 12, 12), "car", 0.99, 3),  # 4 px < MIN_AREA_PX
+        _tile_det(tile_mask(300, 96, 340, 196), "car", 0.7),
+        _tile_det(tile_mask(500, 700, 560, 800), "car", 0.85),
+        _tile_det(tile_mask(700, 100, 760, 200), "building", 0.85),
+        _tile_det(tile_mask(10, 10, 12, 12), "car", 0.99),  # 4 px < MIN_AREA_PX
     ]
     payloads = [
-        {"detections": t0, "image_shape_hw": [1008, 1008]},
-        {"detections": t1, "image_shape_hw": [1008, 1008]},
+        {"detections": t0},
+        {"detections": t1},
     ]
 
     ref_full = []
