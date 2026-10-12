@@ -78,17 +78,16 @@ def cardinal(a, b) -> str:
 # Half-width of the cardinal band, in metres: wide enough that a block-scale
 # target still sees the road, narrow enough that a distant limb of the same
 # name does not vote.
-DEFAULT_BAND_M = 150.0
+BAND_M = 150.0
 
 
-def cardinal_offset(cells_xy, at_xy, direction: str,
-                    band_m: float = DEFAULT_BAND_M) -> float | None:
+def cardinal_offset(cells_xy, at_xy, direction: str) -> float | None:
     """Signed metres the point lies in ``direction`` (one of
     :data:`CARDINALS`) from an extended reference, or ``None`` when there is
     no side to name.
 
     The reference's points (``cells_xy``, every member way of a merged
-    feature) are cut to the band of ``band_m`` around the point on the axis
+    feature) are cut to the band of :data:`BAND_M` around the point on the axis
     orthogonal to ``direction`` ("east of the road where the road is, at my
     latitude"), then compared along it. Positive: the clearance past the
     band's near edge in that direction. ``None`` when the band holds no
@@ -104,7 +103,7 @@ def cardinal_offset(cells_xy, at_xy, direction: str,
     u = np.asarray(COMPASS_UNIT[d], dtype=float)
     q = np.asarray(at_xy, dtype=float)
     orth = np.array([-u[1], u[0]], dtype=float)
-    near = pts[np.abs((pts - q) @ orth) <= float(band_m)]
+    near = pts[np.abs((pts - q) @ orth) <= BAND_M]
     if not len(near):
         return None
     along = near @ u
@@ -115,9 +114,10 @@ def cardinal_offset(cells_xy, at_xy, direction: str,
     return here - hi if here >= hi else here - lo
 
 
-def densify_segments(seg_a, seg_b, step: float = 2.0):
+def densify_segments(seg_a, seg_b):
     """Segment endpoints -> a point cloud at the bake's 2 m pitch, so a band
     around a point halfway along a two-vertex road still holds the road."""
+    step = 2.0
     a = np.asarray(seg_a, dtype=float)
     b = np.asarray(seg_b, dtype=float)
     if not len(a):

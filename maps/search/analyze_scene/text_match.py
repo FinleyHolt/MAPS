@@ -174,11 +174,11 @@ def _colors_read(rows) -> set:
         if isinstance(r, dict) and isinstance(r.get("color"), str))))
 
 
-def unmatched_query_tokens(query: str, rows, min_len: int = 3):
-    """Query tokens (at least ``min_len`` long) no matched row carries,
+def unmatched_query_tokens(query: str, rows):
+    """Query tokens (at least 3 long) no matched row carries,
     longest first, one per prefix family; a palette word the rows were
     perceived as counts as carried."""
-    qt = {t for t in _fuzzy_expand_tokens(query) if len(t) >= min_len}
+    qt = {t for t in _fuzzy_expand_tokens(query) if len(t) >= 3}
     if not qt:
         return []
     rows = list(rows)

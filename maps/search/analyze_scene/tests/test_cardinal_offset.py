@@ -72,8 +72,11 @@ def test_empty_reference_abstains_and_a_diagonal_refuses():
         cardinal_offset(road_ns(), (0.0, 0.0), "northeast")
 
 
-def test_band_width_is_not_load_bearing():
+def test_band_width_is_not_load_bearing(monkeypatch):
+    from maps.search.analyze_scene import geom_compute
     road = road_ns()
-    got = {w: cardinal_offset(road, (-80.0, 0.0), "west", band_m=w)
-           for w in (50, 150, 1000)}
-    assert set(got.values()) == {80.0}
+    got = set()
+    for w in (50.0, 150.0, 1000.0):
+        monkeypatch.setattr(geom_compute, "BAND_M", w)
+        got.add(cardinal_offset(road, (-80.0, 0.0), "west"))
+    assert got == {80.0}

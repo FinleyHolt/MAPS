@@ -277,7 +277,7 @@ def _is_script_block(message: dict) -> bool:
 
 def _drop_spent_turns(
     messages: list[dict], *, shed_tokens: int, model: str,
-    tools: list[dict] | None = None,
+    tools: list[dict] | None,
 ) -> tuple[list[dict], int, int]:
     """``(messages, n_turns_folded, tokens_freed)``: the oldest foldable
     turns replaced, in place, by one script block until ``shed_tokens`` are
