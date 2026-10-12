@@ -379,7 +379,11 @@ class LiveSource:
         roll = float(pose.roll_deg)
         pitch_proj = -float(pose.pitch_deg)
         pose_xy, alt_msl, yaw = self.camera_pose(pose)
-        rgb = np.asarray(Image.open(BytesIO(jpeg)).convert("RGB"), dtype=np.uint8)
+        try:
+            rgb = np.asarray(Image.open(BytesIO(jpeg)).convert("RGB"), dtype=np.uint8)
+        except (OSError, ValueError) as exc:
+            self.last_refusal = f"the frame does not decode: {exc}"
+            return None
         h, w = rgb.shape[:2]
         sensor = locator.sized(self.boresight.sensor, w, h)
         camera_z = self.tile_ground_z + (alt_msl - self.floor_msl_m)

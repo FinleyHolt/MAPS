@@ -185,3 +185,17 @@ def test_the_mosaic_marks_imaged_only_the_ground_a_frame_lands_on():
     assert placed == 1
     share = float((alpha > 0).mean())
     assert abs(share - 0.5) < 0.03, share
+
+
+def test_a_truncated_ring_frame_is_refused_by_name_and_never_raised(built, make_twin, make_live):
+    """A JPEG torn over the link neither kills the corrector nor raises out of
+    the observation: the frame is refused with its reason."""
+    twin = make_twin()
+    live = make_live(twin, register=True)
+    _fly_over(twin, (600.0, 600.0), 8.0)
+    fetch = twin.frame
+    twin.frame = lambda seq: (lambda g: None if g is None else (g[0][: len(g[0]) // 3],) + g[1:])(fetch(seq))
+    live.correct(twin.frame(0))
+    assert live.last_refusal.startswith("the frame does not decode")
+    assert live.observe_area(_disc(built[0], 600.0, 600.0)) is None
+    assert "the frame does not decode" in live.last_refusal
