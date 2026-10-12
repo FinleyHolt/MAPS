@@ -25,7 +25,7 @@ GROUND_Z = 10.0
 
 def _req(center_xy, marks_xy=(), target_xy=None, fid="c0"):
     """One resolved crop spec, marks in the caller's order, target LAST — the same shape
-    (and target position) ``_build_crop_requests`` emits."""
+    (and target position) ``views.crop_requests`` emits."""
     marks = [{"fid": f"m{i}", "xy": list(xy), "boundary": None,
               "label": f"car m{i}", "is_target": False}
              for i, xy in enumerate(marks_xy)]

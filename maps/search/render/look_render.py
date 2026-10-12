@@ -257,7 +257,7 @@ def render_candidate_crops(
     rgbd_dir: str,
     imagery=None,
 ) -> list[dict]:
-    """One crop record per request (``reasoner_loop._build_crop_requests``),
+    """One crop record per request (``views.crop_requests``),
     in order: the window is sized and centred here, then
     ``render_look_from_spec`` renders it. ``imagery`` (``gsd_m`` and
     ``ortho(window)``) is the run's own captures under a live station; unset,

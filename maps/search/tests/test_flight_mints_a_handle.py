@@ -94,7 +94,7 @@ def test_a_flight_that_adds_nothing_mints_nothing():
 def test_a_row_gone_from_the_surface_is_not_reported_as_out_of_frame():
     # A requested mark goes undrawn for four different reasons and only ONE
     # of them is distance. Here a row the handle still holds is gone from
-    # the live surface, so _build_crop_requests SKIPS it before the renderer
+    # the live surface, so views.crop_requests SKIPS it before the renderer
     # ever sees it: it is not out of frame, the vision legend never names
     # it, and it may be metres from the subject. A requested-minus-drawn
     # residual would report it as "outside the frame" -- the same false
