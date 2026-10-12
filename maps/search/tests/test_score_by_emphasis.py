@@ -4,7 +4,7 @@ from __future__ import annotations
 from maps.search.analyze_scene.geom_program import run_program, ProgramError
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.parse_compile.reasoner_loop import (
-    run_geom_program_tool,
+    run_ops,
 )
 
 # Four cars at distinct positions; three white (color_white high), one gray. A
@@ -79,7 +79,7 @@ def test_emphasis_sign_controls_order():
 def test_surfaced_order_is_the_programs_own_order():
     ns = {"cands": [dict(c) for c in _CANDS], "anchors": []}
     prog = _score_by([{"key": "bearing from xy", "w": 1}])   # agent's own weighted order
-    out = run_geom_program_tool({"program": prog}, namespace=ns)
+    out = run_ops(prog["ops"], namespace=ns)
     assert "error" not in out
     # the surfaced order is the AGENT's brg-weighted order verbatim -- the
     # harness applies no composite reorder to any terminal.
@@ -91,7 +91,7 @@ def test_compare_terminal_order_is_input_order():
     # a compare terminal (an attach, not a sort) surfaces INPUT order — no
     # harness reorder fires even though d_ columns are on the rows.
     ns = {"cands": [dict(c) for c in _CANDS], "anchors": []}
-    out = run_geom_program_tool({"program": {"ops": _BASE}}, namespace=ns)
+    out = run_ops(_BASE, namespace=ns)
     assert "error" not in out
     # read the order off the GRID, which is what the model sees -- the
     # duplicate `fids` array beside it is gone
@@ -106,7 +106,7 @@ def test_compare_terminal_order_is_input_order():
 def test_reorder_is_a_commit_safe_permutation():
     ns = {"cands": [dict(c) for c in _CANDS], "anchors": []}
     prog = _score_by([{"key": "distance to xy", "w": -5}])
-    out = run_geom_program_tool({"program": prog}, namespace=ns)
+    out = run_ops(prog["ops"], namespace=ns)
     surfaced = out["results"]["r2"]["fids"]
     # PERMUTATION of the input candidate fids: none invented, none lost.
     assert sorted(surfaced) == sorted(c["fid"] for c in _CANDS)

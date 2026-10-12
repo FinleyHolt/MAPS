@@ -7,7 +7,7 @@ from maps.search.analyze_scene.geom_program import (
 )
 from maps.search.parse_compile.carry import (
     _preflight_color_note,
-    run_geom_program_tool,
+    run_ops,
 )
 
 # Three cars strung along a road with a stored centerline, plus a plain
@@ -83,13 +83,13 @@ _PRIOR_NS = {"cands": [],
 def test_preflight_color_note_on_emphasis_only_attach():
     # The NEW lazy path -- no find{color} anywhere: a pre-takeoff emphasis
     # naming color_red must state the phase fact, not just "no color".
-    out = run_geom_program_tool(
-        {"program": {"ops": [
+    out = run_ops(
+        [
             {"ref": "r0", "op": "find", "args": {}},
             {"ref": "r1", "op": "score_by",
              "args": {"items": "r0",
                       "emphasis": [{"key": "color_red", "w": 1}]}},
-        ]}}, namespace=_PRIOR_NS, preflight=True)
+        ], namespace=_PRIOR_NS, preflight=True)
     assert _preflight_color_note() in str(out.get("error")), out
 
 
@@ -97,11 +97,11 @@ def test_per_stop_round_serves_no_phase_note():
     # the note is PREFLIGHT-only: the same program per-stop stays clean.
     ns = {"cands": [dict(c) for c in _CANDS],
           "anchors": [dict(a) for a in _ANCHORS], "cell_m": 1.0}
-    out = run_geom_program_tool(
-        {"program": {"ops": [
+    out = run_ops(
+        [
             {"ref": "r0", "op": "find", "args": {}},
             {"ref": "r1", "op": "score_by",
              "args": {"items": "r0",
                       "emphasis": [{"key": "color_red", "w": 1}]}},
-        ]}}, namespace=ns)
+        ], namespace=ns)
     assert _preflight_color_note() not in str(out), out

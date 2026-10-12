@@ -46,27 +46,22 @@ def _color_words_of_op(op: dict) -> list[str]:
     return words
 
 
-def _program_requests_color(program: dict) -> bool:
-    return any(_color_words_of_op(op) for op in program["ops"])
-
-
-def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
-                          raw_sink: dict | None = None,
-                          seed_results: dict | None = None,
-                          preflight: bool = False,
-                          answer_ref: str = "") -> dict:
-    """Run one op-program over the namespace's ``(cands, anchors)`` surface
+def run_ops(ops: list, *, namespace: dict,
+            raw_sink: dict | None = None,
+            seed_results: dict | None = None,
+            preflight: bool = False,
+            answer_ref: str = "") -> dict:
+    """Run one op list over the namespace's ``(cands, anchors)`` surface
     (and its standing viewpoint) and compact the results for serving.
 
     ``raw_sink["results"]`` receives the pre-compaction results. A refused
     program returns ``{"error": ...}``, never raises.
     """
-    program = args["program"]
-    ns = namespace or {}
+    ns = namespace
     cands = ns.get("cands") or []
     anchors = ns.get("anchors") or []
     try:
-        out = _run_program(cands, anchors, program,
+        out = _run_program(cands, anchors, {"ops": ops},
                            seed_results=seed_results,
                            staged=ns.get("staged"),
                            standing=ns.get("standing"))
@@ -74,7 +69,7 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
         _err = str(exc)
         if raw_sink is not None:
             raw_sink["error_op"] = getattr(exc, "op", "")
-        if preflight and _program_requests_color(program):
+        if preflight and any(_color_words_of_op(op) for op in ops):
             # The color request errored before any envelope existed (e.g.
             # the emphasis absent-color guard) -- the phase fact rides the
             # error so "no color" reads as WHEN, not broken.
@@ -91,7 +86,7 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
     if preflight:
         # A color-column request whose raw rows carry none of its columns
         # gets the phase note.
-        for _op in program["ops"]:
+        for _op in ops:
             _words = _color_words_of_op(_op)
             if not _words:
                 continue
@@ -106,11 +101,10 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
     return out
 
 
-def _program_dedup_key(program: dict) -> str | None:
-    """Canonical identity of a SELF-CONTAINED program (each ref renamed to
+def _program_dedup_key(ops: list) -> str | None:
+    """Canonical identity of a SELF-CONTAINED op list (each ref renamed to
     its emission index), or ``None`` when it reads a handle it does not
     define and is therefore never deduped."""
-    ops = program.get("ops") or []
     if not ops:
         return None
     ren = {op["ref"]: f"r{i}" for i, op in enumerate(ops)}
@@ -125,9 +119,8 @@ def _refs_read(op: dict) -> set:
                           json.dumps(op["args"], default=str))) - {op["ref"]}
 
 
-def program_reads(program: dict) -> set:
-    """The carry handles a program reads and does not define."""
-    ops = program["ops"]
+def program_reads(ops: list) -> set:
+    """The carry handles an op list reads and does not define."""
     return set().union(*(_refs_read(o) for o in ops)) - {o["ref"] for o in ops}
 
 
@@ -173,9 +166,8 @@ class Carry:
             return
         _sink: dict = {}
         # Seed everything else (a flight-minted handle has no op).
-        _out = run_geom_program_tool(
-            {"program": {"ops": [
-                op for op in self._history if op["ref"] in need]}},
+        _out = run_ops(
+            [op for op in self._history if op["ref"] in need],
             namespace=self.ns, raw_sink=_sink,
             seed_results={h: v for h, v in self.rows.items()
                           if h not in need})

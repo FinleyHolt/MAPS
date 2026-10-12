@@ -52,7 +52,7 @@ from maps.search.parse_compile.carry import (
     Carry,
     _program_dedup_key,
     program_reads,
-    run_geom_program_tool,
+    run_ops,
 )
 from maps.search.parse_compile.prompts import served_tools
 from maps.search.parse_compile.reasoner_agent import Reasoner
@@ -653,14 +653,14 @@ class _Mission:
             return self._repeated_rejection_state(err, _n, _consec)
         return err + self._loop_breaker_facts(_n)
 
-    def _dispatch_analyze_scene(self, a, *, answer_ref=""):
-        _key = _program_dedup_key(a["program"])
+    def _dispatch_analyze_scene(self, ops, *, answer_ref=""):
+        _key = _program_dedup_key(ops)
         _prev = self._programs_seen.get(_key) if _key is not None else None
         if _prev is not None and _prev[0] == self.carry.version:
             # A one-line reference, never a payload; the emission's own
             # labels alias the stored handles so nothing downstream can tell
             # it from a re-run.
-            self.carry.alias(_prev[2], a["program"]["ops"])
+            self.carry.alias(_prev[2], ops)
             if self._dedup_key == _key:
                 self._dedup_n += 1
             else:
@@ -674,12 +674,12 @@ class _Mission:
                     counts=_live_counts(_c_n, _a_n), cols=_cols_s)}
             return {"note": _DEDUP_NOTE.format(turn=_prev[1])}
         _raw_sink: dict = {}
-        self.carry.ensure_fresh(program_reads(a["program"]))
-        out = run_geom_program_tool(a, namespace=self.ns,
-                                    raw_sink=_raw_sink,
-                                    seed_results=self.carry.rows,
-                                    preflight=self.preflight,
-                                    answer_ref=answer_ref)
+        self.carry.ensure_fresh(program_reads(ops))
+        out = run_ops(ops, namespace=self.ns,
+                      raw_sink=_raw_sink,
+                      seed_results=self.carry.rows,
+                      preflight=self.preflight,
+                      answer_ref=answer_ref)
         if "error" in out:
             # The failing op keeps one op's errors their own class.
             _err = str(out["error"])
@@ -690,8 +690,8 @@ class _Mission:
             self._dedup_key, self._dedup_n = None, 0
             if _key is not None:
                 self._programs_seen[_key] = (self.carry.version, self.turn_idx,
-                                             a["program"]["ops"])
-            self.carry.record(a["program"]["ops"], _raw_sink["results"])
+                                             ops)
+            self.carry.record(ops, _raw_sink["results"])
             for _rows in _raw_sink["results"].values():
                 for _row in _rows:
                     if _row.get("fid"):
@@ -1105,11 +1105,9 @@ class _Mission:
         if not names:
             return {"ties": ties}
         _sink: dict = {}
-        g_out = run_geom_program_tool(
-            {"program": {"ops": [
-                {"ref": f"r{i}", "op": "find",
-                 "args": {"query": q.lower()}}
-                for i, q in enumerate(names)]}},
+        g_out = run_ops(
+            [{"ref": f"r{i}", "op": "find", "args": {"query": q.lower()}}
+             for i, q in enumerate(names)],
             namespace=self.ns,
             raw_sink=_sink, preflight=self.preflight)
         if "error" in g_out:
@@ -1175,8 +1173,7 @@ class _Mission:
                     f"{_h}.order(nearest=\"<fid>\"), "
                     f"{_h}.filter(within=\"<place>\"))"
                     + ("." if withheld("look") else f" or look({_h}).")))
-        out = self._dispatch_analyze_scene({"program": {"ops": ops}},
-                                           answer_ref=str(answer or ""))
+        out = self._dispatch_analyze_scene(ops, answer_ref=str(answer or ""))
         if "error" in out:
             return {"error": out["error"]}
         self.plan_rn[0] = max(self.plan_rn[0], int(rn_end or 0))

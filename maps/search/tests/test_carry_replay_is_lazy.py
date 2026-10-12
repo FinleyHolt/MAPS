@@ -85,11 +85,10 @@ def test_a_replay_the_executor_refuses_leaves_the_handle_stale_and_unclaimed(
         monkeypatch):
     """An executor refusal on the replay is a failed replay: the handle keeps the rows
     it held and is NOT marked fresh, so the next read tries again."""
-    orig = rl.run_geom_program_tool
+    orig = rl.run_ops
     refused = [0]
 
-    def _refusing(args, **kw):
-        ops = ((args or {}).get("program") or {}).get("ops") or []
+    def _refusing(ops, **kw):
         # a replay is the only program that re-runs the find over a
         # NON-EMPTY seed (the mission's own first find sees an empty
         # carry); refuse exactly those, twice
@@ -99,9 +98,9 @@ def test_a_replay_the_executor_refuses_leaves_the_handle_stale_and_unclaimed(
                 for op in ops) and refused[0] < 2:
             refused[0] += 1
             return {"error": "cannot resolve a POINT-LIST from 'r103'"}
-        return orig(args, **kw)
+        return orig(ops, **kw)
 
-    monkeypatch.setattr(rl, "run_geom_program_tool", _refusing)
+    monkeypatch.setattr(rl, "run_ops", _refusing)
     results, _graph, added = grow_drive([
         [run('cars = find("car")')],
         [run('go_to(prior_7)')],
