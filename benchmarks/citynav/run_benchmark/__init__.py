@@ -1,12 +1,12 @@
-"""CityNav benchmark runner (the ``maps-bench`` entry point).
+"""CityNav benchmark runner.
 
 The episode engine is a package of purpose-named modules: ``cli`` (main),
 ``dispatch`` -> ``episode_runner`` (per-episode flow) -> ``mission_engine``
 (the one-conversation fly-on-request executor) -> ``trajectory`` (discrete
 replay), with ``assets`` / ``osm_prior`` as leaves and ``config``
 alongside. This
-surface re-exports the names external callers (serving, the citynav tests,
-the console entry point) depend on.
+surface re-exports the names external callers (serving, the citynav tests)
+depend on.
 """
 
 from benchmarks.citynav.run_benchmark.assets import (

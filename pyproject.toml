@@ -31,10 +31,6 @@ dependencies = [
 recording = ["mcap"]
 dev = ["pytest==9.1.1", "ruff==0.17.0", "mcap"]
 
-[project.scripts]
-maps-bench = "benchmarks.citynav.run_benchmark:main"
-calcity-bench = "benchmarks.calcity.run_benchmark:main"
-
 [tool.setuptools.packages.find]
 include = ["maps*", "benchmarks*"]
 exclude = ["*tests*"]

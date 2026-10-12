@@ -5,6 +5,6 @@ Five subpackages: ``sws`` (the structured world-state graph), ``perception``
 extractor), ``search`` (the single persistent reasoner, the ``analyze``
 op-program, and the commit), ``llm`` (the LLM/VLM transport), and ``util``
 (cross-cutting plumbing). The eval harness lives in ``benchmarks.citynav``
-(the ``maps-bench`` CLI and the canonical SR readers under
+(the bench runner and the canonical SR readers under
 ``benchmarks.citynav.analysis``).
 """
