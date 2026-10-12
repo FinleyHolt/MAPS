@@ -39,7 +39,8 @@ determination, plus the way back to the commit a crew flies (one turn and a
 straight, or a teardrop, at the median radius the crews turned on routed
 legs), ``l`` the straight from the loiter waypoint to the target; undefined
 for a success the recording holds under 95% of. A run with an ``excluded``
-reason is out of every rate.
+reason is out of every rate; an entry is keyed by episode id, so it speaks for
+every run of its sortie flown under that id.
 """
 
 from __future__ import annotations
