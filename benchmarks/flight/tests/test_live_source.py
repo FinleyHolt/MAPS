@@ -223,3 +223,31 @@ def test_a_raster_directory_without_the_pair_loads_none_and_the_live_source_name
     with pytest.raises(ValueError, match="calcity_rgb.tif .or calcity.png. beside calcity.tif"):
         open_live(vehicle=make_twin(), tiles_dir=built[0], map_name="calcity", sensor=built[3],
                   register_raster=tmp_path)
+
+
+def test_the_simulated_clock_asks_a_frame_that_cannot_be_fetched_once():
+    """Under the simulated clock each recorded frame is asked once: a frame
+    that cannot be fetched is passed over, not asked again at every sleep."""
+    import types
+
+    from benchmarks.flight.live_source import LiveSource
+
+    class Ring:
+        def __init__(self):
+            self.rows, self.asked = [], 0
+
+        def index(self, since=None):
+            return [r for r in self.rows if since is None or r["log_time"] >= since]
+
+        def frame(self, seq):
+            self.asked += 1
+            return None if self.rows[seq]["off"] else (b"", 0.0, self.rows[seq]["log_time"], seq, {})
+
+    ring = Ring()
+    src = types.SimpleNamespace(vehicle=ring, correct=lambda got: None, _clocked_since=None)
+    src._correct_since = types.MethodType(LiveSource._correct_since, src)
+    step = types.MethodType(LiveSource._correct_through_now, src)
+    for i in range(105):
+        ring.rows.append({"seq": i, "log_time": i * 100, "off": i >= 5})
+        step()
+    assert ring.asked == 105

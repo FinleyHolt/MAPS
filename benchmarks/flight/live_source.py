@@ -360,12 +360,15 @@ class LiveSource:
     def _correct_since(self, since: int | None, *, newest_only: bool = False) -> int | None:
         """:meth:`correct` each frame the index holds past log time ``since``,
         in log-time order (only the newest with ``newest_only``); the log time
-        past the last frame fetched, else ``since``."""
+        past the last frame asked (fetched, with ``newest_only``), else ``since``."""
         rows = sorted(self.vehicle.index(since=since) or [], key=lambda r: int(r["log_time"]))
         for row in rows[-1:] if newest_only else rows:
             got = self.vehicle.frame(int(row["seq"]))
-            if got is not None:
+            # The wall clock asks the newest frame again until it is served;
+            # the simulated clock asks each frame once.
+            if got is not None or not newest_only:
                 since = int(row["log_time"]) + 1
+            if got is not None:
                 self.correct(got)
         return since
 
