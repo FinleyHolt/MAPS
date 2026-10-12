@@ -567,8 +567,8 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     at = _at(track, t_end_run)
     if xy is not None and (at is None or math.dist(at, xy) > (out["hfov_width_ft"] or 0.0) / FT_PER_M / 2.0):
         leg = return_leg_m(track, t_end_run, xy, turn_radius_m)
-    p = sum(math.dist((a["x"], a["y"]), (b["x"], b["y"])) for a, b in zip(_window(track, p0, t_end_run),
-                                                                         _window(track, p0, t_end_run)[1:]))
+    w = _window(track, p0, t_end_run)
+    p = sum(math.dist((a["x"], a["y"]), (b["x"], b["y"])) for a, b in zip(w, w[1:]))
     shortest = math.dist(origin, target)
     out["path_ft"], out["final_leg_ft"] = round(p * FT_PER_M, 1), round(leg * FT_PER_M, 1)
     out["shortest_ft"] = round(shortest * FT_PER_M, 1)
