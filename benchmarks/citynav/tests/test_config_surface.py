@@ -58,6 +58,7 @@ def test_base_resolves_relative_to_the_file_and_merges(tmp_path):
     ("spawn: random\n", "spawn must be one of"),
     ("withhold: [pictures]\n", "withhold must be"),
     ("withhold: [look, look]\n", "withhold must be"),
+    ("sensor: no_such_sensor\n", ".yaml: sensor: "),
 ])
 def test_a_bad_key_or_value_is_refused_with_its_name(tmp_path, body, needle):
     with pytest.raises(ValueError) as e:

@@ -148,7 +148,11 @@ def _check(data: dict, schema: dict, src: Path) -> None:
         if not isinstance(v, types) or (isinstance(v, bool) and bool not in types):
             names = "/".join("null" if t is _NONE else t.__name__ for t in types)
             raise ValueError(f"{src}: {key} must be {names}, got {v!r}")
-        if not ok(v):
+        try:
+            passed = ok(v)
+        except ValueError as e:
+            raise ValueError(f"{src}: {key}: {e}") from e
+        if not passed:
             raise ValueError(f"{src}: {key} must be {says}, got {v!r}")
 
 
