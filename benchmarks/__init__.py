@@ -1,8 +1,7 @@
 """The ``benchmarks`` package root: the run provenance every bench entry point records.
 
-``repo_provenance`` says which code ran (git commit and dirty flag, and the
-path each installed package resolves to, so ``maps`` and ``benchmarks`` bound
-to different checkouts show) and under what run context.
+``repo_provenance`` says which code ran (git commit and dirty flag) and under
+what run context.
 """
 
 from __future__ import annotations
@@ -31,21 +30,7 @@ def _git_provenance() -> dict:
         if status.returncode == 0:
             out["git_dirty"] = bool(status.stdout.strip())
     except Exception:
-        pass  # git absent / not a repo -> leave None; the package path still pins code
-    return out
-
-
-def _resolved_package_paths() -> dict:
-    """Each package's origin as ``import <pkg>`` will bind it, found without importing it."""
-    import importlib.util
-
-    out: dict = {}
-    for pkg in ("maps", "benchmarks"):
-        try:
-            spec = importlib.util.find_spec(pkg)
-            out[pkg] = spec.origin if spec is not None else None
-        except Exception:
-            out[pkg] = None
+        pass  # git absent / not a repo -> leave None
     return out
 
 
@@ -59,12 +44,8 @@ def repo_provenance(
     served_model: str | None = None,
     served_build: str | None = None,
 ) -> dict:
-    """The provenance record: git, package paths, and each run fact given."""
-    prov: dict = {
-        "repo_root": str(_REPO_ROOT),
-        **_git_provenance(),
-        "packages": _resolved_package_paths(),
-    }
+    """The provenance record: git, and each run fact given."""
+    prov: dict = _git_provenance()
     if config_path is not None:
         prov["config"] = str(config_path)
         from benchmarks.citynav.run_benchmark.config import config_sha256  # noqa: PLC0415

@@ -35,8 +35,8 @@ def set_run_context(*, config_path: str | None, split: str, limit: int | None) -
 
 
 def _cached_run_provenance(search_flags: dict) -> dict:
-    """Process-cached provenance (git commit + resolved package paths + config
-    sha256 + DISCOVERED served model + flag set) embedded into every episode
+    """Process-cached provenance (git commit + config sha256 + DISCOVERED
+    served model + flag set) embedded into every episode
     row so "which code ran" is auditable from disk alone. The git subprocess
     runs ONCE per worker process, not once per episode."""
     global _RUN_PROVENANCE
