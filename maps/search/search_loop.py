@@ -300,15 +300,14 @@ class SearchLoop:
         with self._lock:
             self.state.perception_director.record_flown(flown)
 
-    def declare_mission_concepts(self, cleaned: list[dict]) -> dict:
+    def declare_mission_concepts(self, cleaned: list[dict]) -> str | None:
         """Set the segmenter's classes to the declared ``[{class, role}]``
         list's union and diff the director's watchlist to it. Returns the
-        receipt the mission serves, carrying a setter failure as its error."""
+        error the mission serves when the setter failed, else None."""
         # The classes SAM segments (it reads no roles), canonical, first seen
         # first; a placeholder class is no class.
         union = list(dict.fromkeys(
-            c for c in (canon_concept(e.get("class")) if isinstance(e.get("class"), str) else ""
-                        for e in cleaned or [])
+            c for c in (canon_concept(e["class"]) for e in cleaned)
             if c and c not in _NULL_CONCEPTS))
         setter_err: str | None = None
         with self._lock:
@@ -325,17 +324,10 @@ class SearchLoop:
             rems = [c for c in d.watchlist if c not in union]
             if adds or rems:
                 d.watchlist_apply(adds, rems)
-        rcpt = {
-            "declared": [
-                f"{c.get('class')} ({c.get('role')})" for c in (cleaned or [])
-            ]
-        }
         if setter_err:
-            rcpt["error"] = (
-                "the segmenter did not take this declaration "
-                f"({setter_err}); say it again"
-            )
-        return rcpt
+            return (f"the segmenter did not take this declaration "
+                    f"({setter_err}); say it again")
+        return None
 
     def update_perception(self, detections: list, projected_masks: dict[int, object]) -> list[dict]:
         """Fold one flight's detections into the runtime graph: tracked ones

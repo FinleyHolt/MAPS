@@ -86,8 +86,7 @@ def _bare_loop():
 
 def test_declare_arms_the_director_on_first_call():
     loop, pushes = _bare_loop()
-    receipt = loop.declare_mission_concepts([{"class": "car", "role": "target"}])
-    assert receipt == {"declared": ["car (target)"]}
+    assert loop.declare_mission_concepts([{"class": "car", "role": "target"}]) is None
     d = loop.state.perception_director
     assert d is not None
     assert d.watchlist == ["car"]

@@ -59,7 +59,7 @@ def _round(monkeypatch, faults: int, *, cancel_event=None, transcript=None,
         mission_spec=MissionSpec(
             fly=lambda item: {"stop_id": "stop_000", "target": item["target_fid"],
                               "pose_xy": [0.0, 0.0], "new_detections": 0},
-            declare_concepts=lambda items: {"declared": []},
+            declare_concepts=lambda items: None,
             flight_budget=4, turn_cap=16)).converse("find the car")
 
 

@@ -149,8 +149,7 @@ def test_dynamic_mission_output_is_commensurate():
         look_renderer=lambda reqs: [],
         mission_spec=rl.MissionSpec(
             fly=fly,
-            declare_concepts=lambda items: {"declared": [
-                f"{i['class']} ({i['role']})" for i in items]},
+            declare_concepts=lambda items: None,
             flight_budget=1, turn_cap=48),
     ).converse("instruction")
     assert isinstance(reply, rl.MissionReply)
@@ -184,7 +183,7 @@ def test_the_transcript_says_what_json_says():
         diag={},
         mission_spec=rl.MissionSpec(
             fly=lambda i: {"error": "unused"},
-            declare_concepts=lambda i: {"declared": []}),
+            declare_concepts=lambda i: None),
     ).converse("i")
     kinds = {t.get("kind") for t in tr}
     assert "run" in kinds, kinds

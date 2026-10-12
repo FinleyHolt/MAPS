@@ -196,11 +196,12 @@ class MissionSpec:
 
     ``fly`` executes ONE move item (``{"target_fid": <fid or "[x, y]">}``)
     now and returns the flight report, or ``{"error": ...}``;
-    ``declare_concepts`` arms the full watchlist and returns its receipt.
+    ``declare_concepts`` arms the full watchlist and returns the error a
+    failed arming serves, or None.
     """
 
     fly: "Callable[[dict], dict]"
-    declare_concepts: "Callable[[list[dict]], dict]"
+    declare_concepts: "Callable[[list[dict]], str | None]"
     # ``coverage_stops(fid, spacing_m)``: an explore's stops over that fid's
     # footprint, or None when it carries no cells.
     coverage_stops: "Callable[[str, float], list | None] | None" = None
@@ -928,11 +929,11 @@ class _Mission:
             self.mission_sam[:] = [c for c in self.mission_sam
                                    if c["class"] != _e["class"]]
             self.mission_sam.append(_e)
-        _rcpt = self.mission_spec.declare_concepts(list(self.mission_sam))
+        _err = self.mission_spec.declare_concepts(list(self.mission_sam))
         ack: dict = {"now": [f"{c['class']} ({c['role']})"
                              for c in self.mission_sam]}
-        if isinstance(_rcpt, dict) and "error" in _rcpt:
-            ack["error"] = _rcpt["error"]
+        if _err:
+            ack["error"] = _err
         _names = {s for s in (
             str(n.name or "").strip().lower()
             for n in self.ctx.graph.nodes.copy().values()) if s}

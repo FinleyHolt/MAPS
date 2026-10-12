@@ -127,7 +127,7 @@ def unarmed_boost(concepts, where):
     return {"error": "boost queueing is not armed this episode"}
 
 
-def drive(script, *, fly=None, declare=None, flight_budget=8, turn_cap=48,
+def drive(script, *, fly=None, flight_budget=8, turn_cap=48,
           transcript=None, cands=None, retask=None, look_renderer=None,
           **loop_kw):
     """One mission over a still surface. Returns (reply, reasoner, flights,
@@ -152,9 +152,6 @@ def drive(script, *, fly=None, declare=None, flight_budget=8, turn_cap=48,
 
     def _declare(items):
         declared.append(list(items))
-        if declare is not None:
-            return declare(items)
-        return {"declared": [f"{i['class']} ({i['role']})" for i in items]}
 
     fr = FakeReasoner(script)
     loop_kw.setdefault("boost_queue", unarmed_boost)
@@ -235,7 +232,7 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
         obs_minor_m=obs_minor_m,
         look_renderer=_renderer if with_renderer else None,
         mission_spec=MissionSpec(held_now=held_now,
-            fly=_fly, declare_concepts=lambda i: {"declared": []},
+            fly=_fly, declare_concepts=lambda i: None,
             coverage_stops=_stops, flight_budget=32, turn_cap=48,
             deadline_epoch=deadline_epoch),
     ).converse("Find the goal object.")
@@ -335,8 +332,7 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
              "marks_dropped": 0, "marks_out_of_view": [],
              "marks_unbadged_in_frame": []}
             for r in reqs],
-        mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: {
-            "declared": []}),
+        mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: None),
     ).converse("Find the goal object.")
     return tool_results(fr), graph, added
 
@@ -377,7 +373,7 @@ def map_mission(script, renderer=None, finds=1, extra_priors=None, spread=False)
         rid_tag="m0", transcript=[],
         compute_namespace={"cands": cands, "anchors": anchors, "cell_m": 1.0},
         diag={}, look_renderer=renderer or (lambda reqs: []),
-        mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: {"declared": []}),
+        mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: None),
     ).converse("Find the car.")
     return tool_results(fr), fr.vision
 
@@ -428,7 +424,7 @@ def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
         diag={},
         look_renderer=renderer,
         mission_spec=MissionSpec(fly=lambda i: {"error": "unused"},
-                                 declare_concepts=lambda i: {"declared": []}),
+                                 declare_concepts=lambda i: None),
     ).converse("find the car")
     vision = [str(m.get("content")) for m in fr.messages
               if m.get("role") == "user" and "badge legend" in

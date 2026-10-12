@@ -39,14 +39,12 @@ def test_setter_failure_reaches_the_receipt():
 
     rcpt = search_loop(sam_setter=_boom).declare_mission_concepts(
         [{"class": "house", "role": "target"}])
-    assert "sam server gone" in rcpt["error"]
-    assert rcpt["declared"] == ["house (target)"]      # what DID happen
+    assert "sam server gone" in rcpt
 
 
 def test_clean_setter_keeps_a_clean_receipt():
-    rcpt = search_loop(sam_setter=lambda cs: None).declare_mission_concepts(
-        [{"class": "house", "role": "target"}])
-    assert "error" not in rcpt
+    assert search_loop(sam_setter=lambda cs: None).declare_mission_concepts(
+        [{"class": "house", "role": "target"}]) is None
 
 
 def test_the_placed_form_also_arms_the_standing_watchlist():
