@@ -14,6 +14,9 @@ detections into the graph) and returns the flight report the model reads.
 | Concept | Module |
 |---|---|
 | The mission conversation: one persistent reasoner, one served tool, the turn loop, operator taskings | `search/parse_compile/reasoner_loop.py` |
+| Result handles: the op-program runner, each handle re-derived over the current surface | `search/parse_compile/carry.py` |
+| What a look and a map render and the captions their pictures carry | `search/parse_compile/views.py` |
+| An explore's stops over a place or a set | `search/parse_compile/passes.py` |
 | The request each turn sends: model, messages, tools, `max_tokens` | `search/parse_compile/reasoner_agent.py` |
 | The served text: system turn, the `run` tool's description and schema | `search/parse_compile/prompts.py` |
 | Printing the served contract | `search/parse_compile/contract.py` |
