@@ -7,8 +7,8 @@ leg straight on through the rest of the pass at the C-12's speed, wings level,
 and records a pose-tagged frame at the camera's rate, its pixels rendered on
 request off the ortho (``<map>_rgb.tif`` beside ``<map>.tif``) at the camera
 pose the live source places it by. The endpoints come from the environment as
-the bench's do; the run lands under ``--out/<UTC stamp>/`` with the records a
-flown sortie carries.
+the bench's do; the run lands under ``--out/<UTC stamp>/`` with the run
+records a flown run carries.
 
 ponytail: the twin's clock moves only while the harness waits on it, so the
 aircraft holds still while the model thinks; a real-time clock is the

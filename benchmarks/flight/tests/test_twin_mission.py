@@ -97,7 +97,7 @@ def serves(monkeypatch):
     return sent
 
 
-def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_sortie_carries(calcity, serves, tmp_path):
+def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_run_carries(calcity, serves, tmp_path):
     from benchmarks.citynav.analysis import run_report
     from benchmarks.flight import twin
 

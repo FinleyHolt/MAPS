@@ -85,7 +85,7 @@ The twin flies each leg straight at the C-12's speed, wings level at the
 mission's height, and renders frames from the raster pair on request.
 `--then` speaks taskings after each report, `--boresight` applies a solve,
 and `--register <raster dir>` registers each frame. The run lands under
-`output/flight/<UTC stamp>/` with the records a flown sortie carries.
+`output/flight/<UTC stamp>/` with the run records a flown run carries.
 
 ## Replay a flown run
 
