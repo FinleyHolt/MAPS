@@ -79,7 +79,7 @@ def test_an_empty_set_fails_loud_and_names_the_handle_and_the_fix():
         gp.run_program([], [_house("prior_1", 0.0)], {"ops": ops})
     msg = str(exc.value)
     assert "pools is empty" in msg, msg          # the model's own name
-    assert "r0" not in msg.split("; signature")[0], msg
+    assert "r0" not in msg, msg
     assert "look_for" in msg and "flight" in msg, msg
 
 

@@ -72,32 +72,6 @@ def _attach_color_column(items, canon):
     return out
 
 
-# An op's ProgramError ends with "; signature: <op>": the analyze path serves
-# the error cut there, and the op name keeps one op's errors their own
-# repeated-error class. A grounding find's error is served whole, so find's
-# marker carries its text.
-_FIND_SIGNATURE = ("find([query]) -- SEARCH the world-state: "
-                   "query=fuzzy free text over each row's name + tags (priors) or "
-                   "detector class (detections); returns THE MATCH SET best-first "
-                   "(len = the match count; sub-threshold rows stay out -- a "
-                   "query-less find browses the full surface). Match quality is "
-                   "tiered-lexical, best-first: an exact name, then the full "
-                   "MULTI-WORD query phrase word-bounded inside the name, then "
-                   "an exact tag hit (a key=value pair, or the whole query equal "
-                   "to one tag key/value), then token/typo fuzz -- a single-word "
-                   "query scores names only through the fuzz band (the word "
-                   "inside a longer proper name is a mention, not a hit), so its "
-                   "exact tag hit outranks any name mention. A NAME that hits "
-                   "answers alone: the lesser tiers are cut, and the set of its "
-                   "ways IS the street -- a VIEW of them, like dict.keys(): it "
-                   "re-reads the world, so len() grows as flights fold ground "
-                   "in, and it does not subscript, because ties have no first. "
-                   "list() freezes it. A key=value "
-                   "query matches tag keys AND values; the literal UPPERCASE token OR "
-                   "separates alternatives (scored as the max over them).")
-_SIGNED_OPS = ("stratum", "crossings", "compare", "score_by", "filter_items")
-
-
 _COLOR_WORDS = ("white", "black", "gray", "silver", "red", "blue", "green",
                 "yellow", "orange", "brown", "tan", "beige", "gold", "maroon", "purple")
 
@@ -1166,11 +1140,6 @@ class _Run:
         self.results: dict = {}
         self.op = None
 
-    def sig(self) -> str:
-        if self.op == "find":
-            return f"; signature: {_FIND_SIGNATURE}"
-        return f"; signature: {self.op}" if self.op in _SIGNED_OPS else ""
-
     def avail(self, kind: str) -> str:
         """The live handles and fids (bounded) a refusal names."""
         def _cap(fids):
@@ -1216,7 +1185,7 @@ class _Args(dict):
 
     def __missing__(self, key):
         raise ProgramError(
-            f"op {_quote(self._cx.op)} is missing required arg {_quote(key)}{self._cx.sig()}")
+            f"op {_quote(self._cx.op)} is missing required arg {_quote(key)}")
 
 
 def _window(cur, win, token):
@@ -1253,7 +1222,7 @@ def _as_rows(cx, arg):
         raise ProgramError(
             f"cannot resolve rows from {_quote(arg)}: items is an rN ref, a "
             f"fid on this surface, an [x,y], or a list of them. "
-            f"{cx.avail('list')}{cx.sig()}")
+            f"{cx.avail('list')}")
     if all(isinstance(it, dict) and is_xy(it.get("xy")) for it in v):
         return v
     out = []
@@ -1270,7 +1239,7 @@ def _as_rows(cx, arg):
             raise ProgramError(
                 f"cannot resolve a point in the list from item {_quote(it)}: each item must "
                 f"be a fid in this surface, a {{'fid':...}} dict, an [x,y], or an rN. "
-                f"{cx.avail('point')}{cx.sig()}")
+                f"{cx.avail('point')}")
     return out
 
 
@@ -1376,7 +1345,7 @@ def _find(cx, a):
                 f"c=d' -- the exact-tag tier scores by pairs "
                 f"matched). OSM multi-value tag VALUES use ';' "
                 f"(cuisine=pizza;kebab) -- to match one, query that "
-                f"single value ('cuisine=pizza').{cx.sig()}")
+                f"single value ('cuisine=pizza').")
         q_data = T.fuzzy_prepare_query(_q_raw)
         _searched_rows = list(rows)
         _memo = _find_memo(cx.cands, cx.anchors)
@@ -1538,7 +1507,7 @@ def _find(cx, a):
                     + (f" and matches {_quote(_q_raw)}" if _q_raw else "")
                     + ". A name is matched as a NAME, never fuzzily "
                     "-- check the spelling, or drop the class word "
-                    f"and say find({_quote(_want)}).{cx.sig()}")
+                    f"and say find({_quote(_want)}).")
             if len(_named) < len(rows):
                 _q_notes.append(
                     f"name={_quote(_want)} kept {len(_named)} of "
@@ -1604,7 +1573,7 @@ def _crossings(cx, a):
             raise ProgramError(
                 f"crossings ref {_quote(_el)} names no geometry on this "
                 f"surface -- a crossing needs two features that HAVE "
-                f"a shape. {cx.avail('point')}{cx.sig()}")
+                f"a shape. {cx.avail('point')}")
         sides.append((_x_label(_nodes, _el), _polys,
                       {str(n.get("fid")) for n in _nodes}))
     # A row on both sides would hand back its own corners.
@@ -1617,7 +1586,7 @@ def _crossings(cx, a):
             f"({', '.join(sorted(_shared)[:4])}), and nothing crosses "
             f"itself -- a feature's own corners are not crossings. "
             f"Name two DIFFERENT features (find each one and read its "
-            f"row).{cx.sig()}")
+            f"row).")
     (la, fa), (lb, fb) = ((sides[0][0], sides[0][2]),
                           (sides[1][0], sides[1][2]))
     xpts, nearest = G.polyline_crossings(sides[0][1], sides[1][1])
@@ -1666,7 +1635,7 @@ def _crossings(cx, a):
             f"{nearest:.1f} m, and a crossing is where they "
             f"TOUCH.{_sib} A point near one of them is not their "
             f"intersection; relate to ONE of them instead "
-            f"('... near <feature>').{cx.sig()}")
+            f"('... near <feature>').")
     rows = _BroadRows()
     # Whole metres: the fid is the coordinate, and the model spells whole
     # numbers only.
@@ -1700,7 +1669,7 @@ def _ends(cx, a):
         if not _nodes:
             raise ProgramError(
                 f"ends ref {_quote(_el)} names no row on this surface. "
-                f"{cx.avail('point')}{cx.sig()}")
+                f"{cx.avail('point')}")
         for _nd in _nodes:
             _cl = _nd.get("centerline")
             if not (isinstance(_cl, list) and len(_cl) >= 2):
@@ -1722,7 +1691,7 @@ def _ends(cx, a):
             f"{_named} have no line geometry on this surface, so "
             f"no termini exist for them. ends reads a centerline; "
             f"end0_xy/end1_xy on a row is the same fact served as "
-            f"columns.{cx.sig()}")
+            f"columns.")
     rows.ordered = True
     rows.notes = [
         f"{len(rows)} terminus rows; each is its OWN row with its "
@@ -1964,8 +1933,7 @@ def _compare_specs(cx, refs):
                                    "is segmented until look_for "
                                    "names the class and a flight "
                                    "goes over the place -- arm it, "
-                                   "fly, then find them again.")
-                                + f"{cx.sig()}")
+                                   "fly, then find them again."))
                         if len(_got) > _UNION_MAX_MEMBERS:
                             raise ProgramError(
                                 f"{_lbl} "
@@ -1976,15 +1944,14 @@ def _compare_specs(cx, refs):
                                 f"whole-map scan per row. Narrow it "
                                 f"first (within=, a cardinal, or a "
                                 f"tighter query), then measure to "
-                                f"what is left.{cx.sig()}")
+                                f"what is left.")
                         _members.extend(_got)
                         continue
                     _mnode = cx.by_fid.get(x)
                     if _mnode is None:
                         raise ProgramError(
                             f"union ref member {_quote(x)} is not a fid on "
-                            f"this surface. {cx.avail('point')}"
-                            f"{cx.sig()}")
+                            f"this surface. {cx.avail('point')}")
                     _members.append(_mnode)
                 specs.append(("union", _members, as_label))
                 continue
@@ -1995,8 +1962,7 @@ def _compare_specs(cx, refs):
         if not isinstance(ref_el, str):
             raise ProgramError(
                 f"compare refs element {_quote(ref_el)} must be a bare fid string, "
-                f"an rN result, an [x,y] literal, or {{ref:..., as:...}}."
-                f"{cx.sig()}")
+                f"an rN result, an [x,y] literal, or {{ref:..., as:...}}.")
         node = cx.by_fid.get(ref_el)
         if node is None and ref_el in cx.staged:
             # A staged viewpoint attaches its side columns.
@@ -2006,7 +1972,7 @@ def _compare_specs(cx, refs):
         if node is None:
             raise ProgramError(
                 f"compare ref {_quote(ref_el)} is not a fid on this "
-                f"surface. {cx.avail('point')}{cx.sig()}")
+                f"surface. {cx.avail('point')}")
         specs.append(("row", node, as_label))
     return specs, standing
 
@@ -2255,6 +2221,10 @@ def run_program(cands, anchors, program, seed_results=None,
         cx.op = op["op"]
         # A null arg is an absent one: a handle bound to a row without a fid
         # compiles to items=None.
-        cx.results[op["ref"]] = OPS[op["op"]](cx, _Args(
-            {k: v for k, v in op["args"].items() if v is not None}, cx))
+        try:
+            cx.results[op["ref"]] = OPS[op["op"]](cx, _Args(
+                {k: v for k, v in op["args"].items() if v is not None}, cx))
+        except ProgramError as exc:
+            exc.op = cx.op  # the caller's repeated-error class
+            raise
     return {"results": cx.results}

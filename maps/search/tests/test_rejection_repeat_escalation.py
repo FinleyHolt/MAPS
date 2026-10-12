@@ -62,10 +62,17 @@ def test_shape_errors_keep_the_short_count_line():
 
 
 def test_a_signed_op_error_repeats_with_the_census_too():
-    # find's refusal of ';' carries the op-signature marker the analyze path
-    # strips; the repeat still gets its count and the live census.
+    # find's refusal of ';' repeats with its count and the live census.
     served = drive_blocks(['a = find("cuisine=pizza;kebab")\na'] * 2)
     assert "signature" not in served[0]["error"], served[0]
     err = served[1]["error"]
     assert "not a query operator" in err and "signature" not in err, err
     assert "occurred 2x." in err and "Live surface:" in err, err
+
+
+def test_a_grounding_refusal_serves_no_op_signature():
+    # go_to grounds its name through a plumbing find; that find's refusal is
+    # served whole, so it must carry only the refusal.
+    served = drive_blocks(['go_to("cuisine=pizza;kebab")'])
+    err = served[0]["error"]
+    assert "not a query operator" in err and "signature" not in err, err

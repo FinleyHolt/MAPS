@@ -669,6 +669,8 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
                            standing=ns.get("standing"))
     except _ProgramError as exc:
         _err = str(exc)
+        if raw_sink is not None:
+            raw_sink["error_op"] = getattr(exc, "op", "")
         if preflight and _program_requests_color(program):
             # The color request errored before any envelope existed (e.g.
             # the emphasis absent-color guard) -- the phase fact rides the
@@ -1787,12 +1789,10 @@ def advance_reasoner_one_round(
                                     preflight=preflight,
                                     answer_ref=answer_ref)
         if isinstance(out, dict) and "error" in out:
-            # The op-signature tail teaches op names this surface cannot
-            # spell: it is cut before the repeat facts join, and it still
-            # keeps one op's errors their own repeated-error class.
+            # The failing op keeps one op's errors their own class.
             _err = str(out.get("error"))
             out = {**out, "error": _loop_broken_error(
-                _err.split("; signature: ")[0], sig_of=_err)}
+                _err, sig_of=f"{_err}|{_raw_sink.get('error_op', '')}")}
         if isinstance(out, dict) and "error" not in out:
             # a fresh successful program ends the CONSECUTIVE-rejection
             # streak: the next same-class error serves its full text again.
