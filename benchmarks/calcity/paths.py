@@ -43,13 +43,6 @@ CALCITY_NATIVE_RGBD_DIR = _env_path(
 )
 TILES_DIR = _env_path("SEARCH_CALCITY_TILES", PACKAGE_ROOT / "tiles")
 
-# WHAT COUNTS AS ARRIVING here: landing inside the target's own annotated
-# footprint. Every row of the corpus resolves one -- a hand-drawn
-# ``target_mask`` or a linked object's contour -- so ``success_radius_m`` is
-# a fallback that fires on no episode. The twin of
-# ``benchmarks.citynav.paths.SUCCESS_CRITERION``; the bridge rebinds it.
-SUCCESS_CRITERION = "shape"
-
 # ONE dataset over the one unified map.
 SPLIT_FILES: dict[str, str] = {
     "calcity": "calcity.json",

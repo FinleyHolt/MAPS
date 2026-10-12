@@ -4,8 +4,8 @@ The Cal City benchmark: target search over California City, CA, the area the
 C-12 flew. It runs the same engine and flight contract as
 [CityNav](../citynav/README.md) over a 2D world: the block's map raster on a
 flat height plane, an OpenStreetMap prior, and an authored corpus. An episode
-succeeds when its commit lands inside the target's own annotated footprint
-(the shape criterion, `paths.SUCCESS_CRITERION`).
+succeeds when the final pose of its six-action replay lands inside the
+target's own annotated footprint (the shape criterion).
 
 ## What ships and what you supply
 
@@ -74,9 +74,9 @@ Read a root with [`benchmarks/citynav/analysis`](../citynav/analysis/README.md).
 
 | Module | Role |
 |---|---|
-| `paths.py` | The file layout and the success criterion. |
-| `_citynav_bridge.py` | Restates the Cal City contract in the shared engine's variables. |
-| `bench_fullset.py`, `run_benchmark/` | The CityNav driver and runner under the Cal City contract. |
+| `__init__.py` | `use()`: selects Cal City for the CityNav engine (`SEARCH_BENCHMARK_NAME` and the `SEARCH_CITYNAV_*` roots). |
+| `paths.py` | The file layout. |
+| `bench_fullset.py`, `run_benchmark/` | The CityNav driver and runner with Cal City selected. |
 | `data_prep/aoi.py` | The area, its local metric frame and the flat ground plane. |
 | `data_prep/bundle.py` | Reads the world bundle. |
 | `data_prep/build_objects_json.py`, `data_prep/build_rgbd_ortho.py`, `data_prep/bake_tiles.py` | The build steps. |

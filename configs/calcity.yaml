@@ -3,7 +3,7 @@
 # flat height plane (GROUND_LEVEL = 0.0, so pose.z reads as AGL), the OSM
 # tile bake (SEARCH_CALCITY_TILES) and the authored corpus
 # (benchmarks/calcity/data). Success is landing inside the target's own
-# annotated footprint (paths.SUCCESS_CRITERION = "shape").
+# annotated footprint (the "shape" criterion, benchmarks/citynav/paths.py).
 #
 # Observation: the hole-free ortho crop over the C-12 Oryx's ground
 # footprint at the cruise AGL (2 * AGL * tan(fov/2) per axis, ~258 x 194 m at

@@ -1,4 +1,8 @@
-"""CityNav filesystem paths, each overridable by environment.
+"""Filesystem paths of the benchmark this process runs, each overridable by environment.
+
+``SEARCH_BENCHMARK_NAME`` (read at import, default ``citynav``) picks the
+success criterion, default split and split files; ``benchmarks.calcity.use``
+sets it and points the four roots below at Cal City's data.
 
 - ``SEARCH_CITYNAV_DATA`` (else ``CITYNAV_ROOT``, else ``~/datasets/citynav-arxiv``):
   the ``citynav-arxiv`` checkout (``data/citynav``, ``data/cityrefer``, ``data/rgbd_upstream``).
@@ -10,7 +14,6 @@
 - ``SEARCH_CITYNAV_RGBD_DIR`` (else ``data/rgbd_upstream``): upstream's 0.1 m/px
   nadir rasters, from ``data_prep/rasterize_citynav_native.sh``.
 """
-
 from __future__ import annotations
 
 import hashlib
@@ -79,27 +82,29 @@ TILES_DIR = (
     .resolve()
 )
 
-# What counts as arriving on this bench (``eval.score_arrival``): "ring" for
-# CityNav, rebound to "shape" by ``benchmarks.calcity._citynav_bridge``. Read it
-# as ``paths.SUCCESS_CRITERION`` at call time: a ``from`` import keeps the ring.
-SUCCESS_CRITERION = "ring"
+BENCHMARK = os.environ.get("SEARCH_BENCHMARK_NAME", "").strip() or "citynav"
 
-SPLIT_FILES: dict[str, str] = {
-    # No test_seen split exists; easy/medium/hard are trajectory-length tiers.
-    "train_seen": "citynav_train_seen.json",
-    "val_seen": "citynav_val_seen.json",
-    "val_seen_easy": "citynav_val_seen_easy.json",
-    "val_seen_medium": "citynav_val_seen_medium.json",
-    "val_seen_hard": "citynav_val_seen_hard.json",
-    "val_unseen": "citynav_val_unseen.json",
-    "val_unseen_easy": "citynav_val_unseen_easy.json",
-    "val_unseen_medium": "citynav_val_unseen_medium.json",
-    "val_unseen_hard": "citynav_val_unseen_hard.json",
-    "test_unseen": "citynav_test_unseen.json",
-    "test_unseen_easy": "citynav_test_unseen_easy.json",
-    "test_unseen_medium": "citynav_test_unseen_medium.json",
-    "test_unseen_hard": "citynav_test_unseen_hard.json",
-}
+# What counts as arriving (``eval.score_arrival``), the runner's default split,
+# and the split files, per benchmark.
+SUCCESS_CRITERION, DEFAULT_SPLIT, SPLIT_FILES = {
+    "citynav": ("ring", "val_seen", {
+        # No test_seen split exists; easy/medium/hard are trajectory-length tiers.
+        "train_seen": "citynav_train_seen.json",
+        "val_seen": "citynav_val_seen.json",
+        "val_seen_easy": "citynav_val_seen_easy.json",
+        "val_seen_medium": "citynav_val_seen_medium.json",
+        "val_seen_hard": "citynav_val_seen_hard.json",
+        "val_unseen": "citynav_val_unseen.json",
+        "val_unseen_easy": "citynav_val_unseen_easy.json",
+        "val_unseen_medium": "citynav_val_unseen_medium.json",
+        "val_unseen_hard": "citynav_val_unseen_hard.json",
+        "test_unseen": "citynav_test_unseen.json",
+        "test_unseen_easy": "citynav_test_unseen_easy.json",
+        "test_unseen_medium": "citynav_test_unseen_medium.json",
+        "test_unseen_hard": "citynav_test_unseen_hard.json",
+    }),
+    "calcity": ("shape", "calcity", {"calcity": "calcity.json"}),
+}[BENCHMARK]
 
 
 def split_path(split: str) -> Path:
@@ -115,6 +120,11 @@ def tile_stem(map_name: str) -> str:
 
 def assert_available() -> None:
     """Raise with the fetch recipe when the splits or ``objects.json`` are missing."""
+    if BENCHMARK == "calcity":
+        from benchmarks.calcity import paths as calcity_paths  # noqa: PLC0415
+
+        calcity_paths.assert_available()
+        return
     missing = [p for p in (SPLITS_DIR, OBJECTS_JSON) if not p.exists()]
     if missing:
         recipe = (

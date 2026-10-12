@@ -55,8 +55,8 @@ BUNDLE_BBOX_WGS84: tuple[float, float, float, float] = (
     35.1684,
 )
 
-# Flat-world ground plane (see module docstring). GROUND_LEVEL and the DSM
-# constant must agree; both read this.
+# Flat-world ground plane (see module docstring), the DSM constant;
+# ``GROUND_LEVEL["calcity"]`` carries the same value.
 GROUND_LEVEL_M = 0.0
 
 # Tile grid resolution for the feature-cell grid (the CityNav 2 m

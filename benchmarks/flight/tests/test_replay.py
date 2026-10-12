@@ -65,10 +65,10 @@ def test_ground_no_recorded_observation_holds_leaves_the_flight_without_one(buil
 def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers(built, floor, tmp_path, monkeypatch):
     from types import SimpleNamespace
 
-    from benchmarks.calcity import _citynav_bridge
+    import benchmarks.calcity
     from benchmarks.citynav import episode_workdir
 
-    monkeypatch.setattr(_citynav_bridge, "activate", lambda: None)
+    monkeypatch.setattr(benchmarks.calcity, "use", lambda: None)
     monkeypatch.setattr(episode_workdir, "open_episode_dir",
                         lambda *a, **k: SimpleNamespace(dir=tmp_path, recorder=None, close=lambda: None))
     modes = []

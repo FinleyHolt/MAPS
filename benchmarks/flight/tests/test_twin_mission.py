@@ -22,8 +22,8 @@ def calcity(tmp_path, monkeypatch):
     bench's paths pointed at them and put back afterwards."""
     from shapely.geometry import Polygon
 
+    import benchmarks.calcity
     from benchmarks.calcity import paths
-    from benchmarks.calcity._citynav_bridge import _replacements, compat_env
     from benchmarks.calcity.data_prep import bake_tiles
     from benchmarks.citynav import paths as shared_paths
     from maps.perception.ortho.ground_level import GROUND_LEVEL
@@ -47,14 +47,17 @@ def calcity(tmp_path, monkeypatch):
     rgbd.mkdir(parents=True)
     world.write_raster_pair(rgbd, world.texture(2000, 3000), 1.0)
 
+    objects = root / "data" / "cityrefer" / "objects.json"
     for name, value in (("CALCITY_ROOT", root), ("DATA_DIR", root / "data"), ("SPLITS_DIR", splits),
-                        ("OBJECTS_JSON", root / "data" / "cityrefer" / "objects.json"), ("TILES_DIR", tiles),
-                        ("CALCITY_NATIVE_RGBD_DIR", rgbd)):
+                        ("OBJECTS_JSON", objects), ("TILES_DIR", tiles), ("CALCITY_NATIVE_RGBD_DIR", rgbd)):
         monkeypatch.setattr(paths, name, value)
-    for name, value in _replacements().items():
-        monkeypatch.setattr(shared_paths, name, getattr(shared_paths, name))
-    for name in compat_env():
-        monkeypatch.setenv(name, "")
+    # What benchmarks.calcity.use() gives a fresh process, on the already-imported CityNav paths.
+    for name, value in (("CITYNAV_ROOT", root), ("DATA_DIR", root / "data"), ("SPLITS_DIR", splits),
+                        ("OBJECTS_JSON", objects), ("TILES_DIR", tiles), ("CITYNAV_NATIVE_RGBD_DIR", rgbd),
+                        ("BENCHMARK", "calcity"), ("SUCCESS_CRITERION", "shape"), ("DEFAULT_SPLIT", "calcity"),
+                        ("SPLIT_FILES", {"calcity": "calcity.json"})):
+        monkeypatch.setattr(shared_paths, name, value)
+    monkeypatch.setattr(benchmarks.calcity, "use", lambda: None)
     monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
     monkeypatch.setitem(GROUND_LEVEL, "calcity", 0.0)
     return SimpleNamespace(root=root, tiles=tiles, rgbd=rgbd)

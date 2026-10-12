@@ -105,11 +105,10 @@ STATE_FAILED = "failed"
 
 
 def activate_calcity() -> None:
-    """The Cal City bench's bridge, active for every flight entry point."""
-    os.environ["SEARCH_BENCHMARK_NAME"] = "calcity"
-    from benchmarks.calcity._citynav_bridge import activate  # noqa: PLC0415
+    """Select the Cal City bench (``benchmarks.calcity.use``) for every flight entry point."""
+    from benchmarks.calcity import use  # noqa: PLC0415
 
-    activate()
+    use()
 
 
 def authored_episode(episode_id: str, start_xy: tuple[float, float]):

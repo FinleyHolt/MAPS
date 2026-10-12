@@ -8,7 +8,7 @@ Example:
 from __future__ import annotations
 
 from benchmarks.citynav.adapter import find_row, load_objects, load_split, parse_episode
-from benchmarks.citynav.paths import OBJECTS_JSON, assert_available, split_path
+from benchmarks.citynav.paths import DEFAULT_SPLIT, OBJECTS_JSON, assert_available, split_path
 from benchmarks.citynav.run_benchmark.config import (
     export_withhold,
     load_config,
@@ -94,28 +94,19 @@ def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
     )
 
 
-def main(
-    *,
-    label: str = "CityNav",
-    default_split: str = "val_seen",
-    output_root: str = "output/citynav",
-) -> int:
-    """The runner's CLI. A peer benchmark that reuses the engine
-    (``benchmarks.calcity.run_benchmark``) passes its own label, default
-    split and output root."""
-    # THIS entry point is CityNav's own; a peer benchmark that reuses the
-    # engine (benchmarks/calcity) declares its name before calling in, so
-    # setdefault leaves the peer's word standing. Nothing further down
-    # guesses: episode_workdir.benchmark() refuses an undeclared process.
+def main() -> int:
+    """The runner's CLI, for the benchmark ``paths.BENCHMARK`` names."""
+    # benchmarks.calcity.use() declares Cal City before calling in;
+    # episode_workdir.benchmark() refuses an undeclared process.
     os.environ.setdefault("SEARCH_BENCHMARK_NAME", "citynav")
 
     from benchmarks import stamp_repo_provenance
 
     stamp_repo_provenance()  # loud EVAL-PROVENANCE audit line -> run.log (which code ran)
     parser = argparse.ArgumentParser(
-        description=f"Run the {label} navigation benchmark."
+        description=f"Run the {benchmark()} navigation benchmark."
     )
-    parser.add_argument("--split", default=default_split)
+    parser.add_argument("--split", default=DEFAULT_SPLIT)
     parser.add_argument("--config", default=None, help="Path to YAML under configs/")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument(
@@ -124,8 +115,8 @@ def main(
         help=(
             "The run root: run_manifest.json, episodes.jsonl and one "
             "maps_<stamp>_<benchmark>_<slug>/ directory per episode land "
-            f"here. Default {output_root}/"
-            "<benchmark>_<split>_<date>_<time>, a fresh root per invocation."
+            "here. Default output/<benchmark>/<benchmark>_<split>_<date>_<time>, "
+            "a fresh root per invocation."
         ),
     )
     parser.add_argument(
@@ -221,7 +212,7 @@ def main(
 
     out_root = Path(
         args.out
-        or f"{output_root}/{benchmark()}_{args.split}_"
+        or f"output/{benchmark()}/{benchmark()}_{args.split}_"
         f"{datetime.now():%Y-%m-%d_%H-%M-%S}"
     ).resolve()
     out_root.mkdir(parents=True, exist_ok=True)

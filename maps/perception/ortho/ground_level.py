@@ -2,8 +2,8 @@
 # (``side = 2*(altitude - GROUND_LEVEL[map])``, ``observation.crop_observation``).
 # The CityNav block values are the lowest-point-percentile ground extraction
 # from each SensatUrban PLY, from water-cookie/citynav
-# ``gsamllavanav/mapdata.py`` (MIT, Copyright (c) 2024); the Cal City bridge
-# adds its map at activation (``benchmarks/calcity/_citynav_bridge.py``).
+# ``gsamllavanav/mapdata.py`` (MIT, Copyright (c) 2024). Cal City's one map
+# is flat at 0.0 (``benchmarks.calcity.data_prep.aoi.GROUND_LEVEL_M``).
 GROUND_LEVEL = {
     'birmingham_block_8': 9.767633576781428,
     'birmingham_block_5': 9.035724612581797,
@@ -44,5 +44,6 @@ GROUND_LEVEL = {
     'cambridge_block_15': 37.940351251848824,
     'cambridge_block_3': 37.80057158222191,
     'birmingham_block_2': 7.0204973115052995,
-    'cambridge_block_23': 34.436207572934606
+    'cambridge_block_23': 34.436207572934606,
+    'calcity': 0.0,
 }

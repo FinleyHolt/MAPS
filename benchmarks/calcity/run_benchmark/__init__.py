@@ -1,18 +1,15 @@
-"""Cal City CLI backed by the shared navigation execution engine."""
+"""Cal City CLI: the CityNav runner with Cal City selected."""
 
 from __future__ import annotations
 
-import os
-
-from benchmarks.calcity._citynav_bridge import activate
+from benchmarks.calcity import use
 
 
 def main() -> int:
-    os.environ["SEARCH_BENCHMARK_NAME"] = "calcity"
-    activate()
+    use()
     from benchmarks.citynav.run_benchmark.cli import main as shared_main
 
-    return shared_main(label="Cal City", default_split="calcity", output_root="output/calcity")
+    return shared_main()
 
 
 __all__ = ["main"]

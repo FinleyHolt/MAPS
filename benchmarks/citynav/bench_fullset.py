@@ -31,30 +31,11 @@ from benchmarks.citynav import episodes
 from benchmarks.citynav.analysis import rows as _rows
 
 REPO = Path(__file__).resolve().parents[2]
-
-
-# A peer benchmark reuses this harness by naming its adapter here (e.g.
-# benchmarks.calcity._citynav_bridge): the module's ``activate()`` rebinds
-# ``benchmarks.citynav.paths`` to the peer's contract before any split or
-# preflight read. Unset = CityNav, no-op.
-def _activate_bridge_from_env() -> None:
-    bridge = os.environ.get("SEARCH_BENCHMARK_BRIDGE", "").strip()
-    if bridge:
-        import importlib
-
-        importlib.import_module(bridge).activate()
-
-
-_activate_bridge_from_env()
-
 CONFIG = REPO / (os.environ.get("CITYNAV_BENCH_CONFIG", "").strip() or "configs/citynav.yaml")
 
 DEFAULT_WORKERS = 6
-# The runner each worker process spawns; a peer benchmark names its own
-# (which self-activates its bridge).
-RUNNER_MODULE = os.environ.get(
-    "SEARCH_BENCHMARK_RUNNER_MODULE", "benchmarks.citynav.run_benchmark"
-)
+# The runner each attempt child runs.
+RUNNER_MODULE = "benchmarks.citynav.run_benchmark"
 # The ITERATION split. test_unseen is reserved for the one final run and
 # must be NAMED on the command line, never inherited from a default.
 DEFAULT_SPLIT = "train_seen"
