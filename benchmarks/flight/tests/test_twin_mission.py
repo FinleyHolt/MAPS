@@ -311,3 +311,13 @@ def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, ser
                                                tiles_dir=calcity.tiles)
     assert run["end"] == "reply" and run["success_area"] is True
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
+
+
+def test_an_authored_start_without_the_operators_words_is_refused(calcity, serves, tmp_path):
+    from benchmarks.flight import twin
+
+    out = tmp_path / "out"
+    with pytest.raises(SystemExit) as refused:
+        twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::authored", "--start-xy", "1000,300",
+                   "--ortho", str(calcity.rgbd), "--out", str(out)])
+    assert refused.value.code == 2 and not out.exists() and not serves

@@ -180,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--episode", required=True, help="the episode id; with --start-xy, an operator-authored mission's")
     ap.add_argument("--ortho", required=True, type=Path, help="the raster directory the twin's frames are rendered off")
     ap.add_argument("--instruction", default=None, help="the operator's words in place of the episode's")
-    ap.add_argument("--start-xy", type=_xy, default=None, help="x,y: fly a mission with no row from here")
+    ap.add_argument("--start-xy", type=_xy, default=None, help="x,y: fly a mission with no row from here, under --instruction")
     ap.add_argument("--then", action="append", default=[], help="a tasking spoken after each report, in order")
     ap.add_argument("--reasoning-effort", default=None)
     ap.add_argument("--boresight", type=Path, default=None, help="a boresight solve; unset flies the datasheet camera")
@@ -188,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="the raster directory each frame is registered against; unset registers nothing")
     ap.add_argument("--out", type=Path, default=Path("output/flight"))
     args = ap.parse_args(argv)
+    if args.start_xy is not None and not args.instruction:
+        ap.error("--start-xy flies an operator-authored mission: give its words with --instruction")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
 
     from benchmarks.flight.mission import (STATE_ENDED, Mission, activate_calcity, converse,  # noqa: PLC0415
