@@ -440,7 +440,7 @@ class Driver:
 
         infra = Counter(_infra_cause(r)
                         for r in _rows.iter_json_rows(self.episodes_file)
-                        if r.get("status") == episodes.STATUS_INFRA)
+                        if _rows.is_infra_abort(r))
         lines = [
             f"split: {self.split}   workers: {self.workers}   "
             f"episode_cap: {self.episode_timeout_s}s",
