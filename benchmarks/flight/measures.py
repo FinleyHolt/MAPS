@@ -78,7 +78,7 @@ FLYING_MPS = 50.0
 ORBIT_DEG = 300.0
 #: The radius the way back is turned at when no turn was read.
 TURN_RADIUS_FALLBACK_M = 1500.0
-#: Crew ends that are not runs of the model.
+#: Crew ends: the run is a miss unless the adjudication excludes it.
 NOT_A_RUN = ("stopped", "abort", "dropped")
 
 
