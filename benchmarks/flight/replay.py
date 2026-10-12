@@ -39,7 +39,7 @@ from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
 from benchmarks.flight.live_source import ortho_observation
-from benchmarks.flight.measures import read_jsonl, run_bases, tour_stops
+from benchmarks.flight.measures import run_bases, tour_stops
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, activate_calcity,
                                        converse, flight_config, summary_line)
 from benchmarks.flight.tile_georef import FLOOR_MSL_M
@@ -97,6 +97,26 @@ class Recording:
         return path if path is not None and path.is_file() else None
 
 
+def read_records(path: Path) -> list[dict[str, Any]]:
+    """Every row of a recorded ``.jsonl``, none when the file is absent; a line
+    that is not a JSON object is refused by file and line, since a replay
+    answers from every row."""
+    if not path.is_file():
+        return []
+    rows = []
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{path}:{n}: a torn recording line ({exc})") from exc
+        if not isinstance(row, dict):
+            raise ValueError(f"{path}:{n}: a recording line that is not a JSON object")
+        rows.append(row)
+    return rows
+
+
 def _messages(new: Any) -> list[dict[str, Any]]:
     # Some flown transcripts wrote the list's repr rather than the list.
     return ast.literal_eval(new) if isinstance(new, str) else list(new)
@@ -110,7 +130,7 @@ def read_transcript(path: Path) -> tuple[dict[str, Any], list[list[dict]], list[
     requests: list[list[dict]] = []
     ids: list[str] = []
     answers: dict[str, dict] = {}
-    for rec in read_jsonl(path):
+    for rec in read_records(path):
         if rec.get("kind") == "params":
             params = rec.get("params") or {}
         elif rec.get("kind") == "request":
@@ -133,12 +153,12 @@ def open_recording(run_dir: Path) -> Recording:
     sortie = run_dir.parent
     if sortie.parent.name.endswith("_grnd"):
         sortie = sortie.parent.parent / sortie.name
-    row = next((r for r in read_jsonl(sortie / EPISODES_JSONL) if r.get("workdir") == run_dir.name), None)
+    row = next((r for r in read_records(sortie / EPISODES_JSONL) if r.get("workdir") == run_dir.name), None)
     if row is None:
         raise ValueError(f"{sortie / EPISODES_JSONL} names no run {run_dir.name}")
     params, requests, responses = read_transcript(run_dir / "flight" / "llm" / TRANSCRIPT_JSONL)
     detections: dict[int, list[dict]] = {}
-    for d in read_jsonl(run_dir / DETECTIONS_JSONL):
+    for d in read_records(run_dir / DETECTIONS_JSONL):
         detections.setdefault(int(d.get("step", -1)), []).append(d)
     window = DEFAULT_WINDOW
     logged = re.search(r"endpoint spec installed: model_id=\S+ max_model_len=(\d+)",
@@ -146,8 +166,8 @@ def open_recording(run_dir: Path) -> Recording:
     if logged:
         window = int(logged.group(1))
     return Recording(sortie=sortie, run_dir=run_dir, row=row, params=params, requests=requests,
-                     responses=responses, conversation=read_jsonl(run_dir / CONVERSATION_JSONL),
-                     frames=read_jsonl(run_dir / FRAMES_JSONL), window=window, detections=detections)
+                     responses=responses, conversation=read_records(run_dir / CONVERSATION_JSONL),
+                     frames=read_records(run_dir / FRAMES_JSONL), window=window, detections=detections)
 
 
 def flown_runs(sorties: Path) -> list[Path]:
@@ -155,7 +175,7 @@ def flown_runs(sorties: Path) -> list[Path]:
     order flown: the aircraft's copy of its folder, else the ground station's."""
     out = []
     for ledger in sorted(Path(sorties).glob(f"*Z/{EPISODES_JSONL}")):
-        for row in read_jsonl(ledger):
+        for row in read_records(ledger):
             found = next((b for b in run_bases(ledger.parent, row)
                           if (b / "flight" / "llm" / TRANSCRIPT_JSONL).is_file()), None)
             if found is not None:
@@ -496,7 +516,7 @@ def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
     if not alts and rec.row.get("started_at_utc"):
         t0 = float(rec.row["started_at_utc"])
         t1 = t0 + float(rec.row.get("elapsed_s") or 0.0)
-        alts = [float(f["alt_msl_m"]) - FLOOR_MSL_M[map_name] for f in read_jsonl(rec.sortie / TRACK_JSONL)
+        alts = [float(f["alt_msl_m"]) - FLOOR_MSL_M[map_name] for f in read_records(rec.sortie / TRACK_JSONL)
                 if f.get("alt_msl_m") is not None and t0 <= float(f["t_unix"]) <= t1]
     if not alts:
         raise ValueError(f"{rec.run_id}: the recording holds no height above ground: no observation and no GNSS "

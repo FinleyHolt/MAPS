@@ -330,3 +330,15 @@ def _disc_lonlat(tiles, x, y):
     from benchmarks.flight.tile_georef import local_to_lonlat
 
     return [local_to_lonlat(tiles, "calcity", x + dx, y + dy) for dx, dy in ((0, 0), (50, 0), (0, 50), (-50, 0))]
+
+
+def test_a_torn_line_in_a_recorded_transcript_is_refused_by_file_and_line(tmp_path):
+    rows = [{"kind": "params", "params": {"model": "m"}},
+            {"kind": "request", "request_id": "a", "n_prefix": 0, "new_messages": [{"role": "user", "content": "go"}]},
+            {"kind": "response", "request_id": "a", "response": {"x": 1}}]
+    lines = [json.dumps(r) for r in rows]
+    lines[1] = lines[1][:25]
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(lines) + "\n")
+    with pytest.raises(ValueError, match=f"{path}:2"):
+        R.read_transcript(path)
