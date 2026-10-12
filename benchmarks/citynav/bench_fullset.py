@@ -27,7 +27,7 @@ import urllib.request
 from collections import Counter, deque
 from pathlib import Path
 
-from benchmarks.citynav import episodes
+from benchmarks.citynav import episodes, paths
 from benchmarks.citynav.analysis import rows as _rows
 
 REPO = Path(__file__).resolve().parents[2]
@@ -36,9 +36,6 @@ CONFIG = REPO / (os.environ.get("CITYNAV_BENCH_CONFIG", "").strip() or "configs/
 DEFAULT_WORKERS = 6
 # The runner each attempt child runs.
 RUNNER_MODULE = "benchmarks.citynav.run_benchmark"
-# The ITERATION split. test_unseen is reserved for the one final run and
-# must be NAMED on the command line, never inherited from a default.
-DEFAULT_SPLIT = "train_seen"
 DEFAULT_EPISODE_TIMEOUT_S = 4 * 3600
 # Share of the episode cap held back from flying, so the model still has
 # turns to reply and commit after the mission's wall-clock backstop fires.
@@ -69,11 +66,10 @@ _log_lock = threading.Lock()
 
 def _enumerate_split(split: str) -> list[str]:
     from benchmarks.citynav.adapter import episode_ids, load_split
-    from benchmarks.citynav.paths import SPLIT_FILES, split_path
 
-    if split not in SPLIT_FILES:
-        raise SystemExit(f"unknown split {split!r}; known: {sorted(SPLIT_FILES)}")
-    return episode_ids(enumerate(load_split(split_path(split))))
+    if split not in paths.SPLIT_FILES:
+        raise SystemExit(f"unknown split {split!r}; known: {sorted(paths.SPLIT_FILES)}")
+    return episode_ids(enumerate(load_split(paths.split_path(split))))
 
 
 # One thread per native pool (BLAS, OpenCV, Rayon) and two malloc arenas per
@@ -121,8 +117,6 @@ def _missing_block_assets(episode_ids: list[str]) -> list[Path]:
     """The files the selected episodes' blocks need and do not have: the
     bake's per-block files, and ``<map>.tif`` beside ``<map>_rgb.tif`` or
     ``<map>.png``."""
-    from benchmarks.citynav import paths  # noqa: PLC0415
-
     missing: list[Path] = []
     for map_name in sorted({e.split("::", 1)[0] for e in episode_ids}):
         stem = paths.tile_stem(map_name)
@@ -657,7 +651,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="python -m benchmarks.citynav.bench_fullset",
         description="Continuous full-test-set CityNav benchmark at fixed concurrency.",
     )
-    p.add_argument("--split", default=DEFAULT_SPLIT, help=f"(default {DEFAULT_SPLIT})")
+    p.add_argument("--split", default=paths.DEFAULT_SPLIT, help=f"(default {paths.DEFAULT_SPLIT})")
     p.add_argument(
         "--workers",
         type=int,

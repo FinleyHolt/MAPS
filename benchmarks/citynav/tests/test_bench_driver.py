@@ -312,3 +312,9 @@ def test_a_sigkilled_driver_takes_its_attempt_with_it() -> None:
             os.kill(child, signal.SIGKILL)
         except ProcessLookupError:
             pass
+
+
+def test_the_split_defaults_to_the_benchmarks_own() -> None:
+    from benchmarks.citynav import paths
+
+    assert bf._build_parser().parse_args([]).split == paths.DEFAULT_SPLIT
