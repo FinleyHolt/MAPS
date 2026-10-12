@@ -1648,8 +1648,7 @@ def advance_reasoner_one_round(
                     and prev["ref"] in carry_results:
                 carry_results[cur["ref"]] = carry_results[prev["ref"]]
 
-    def _dispatch_analyze_scene(a, _ns=(compute_namespace or {}), *,
-                                answer_ref=""):
+    def _dispatch_analyze_scene(a, *, answer_ref=""):
         _key = _program_dedup_key(a["program"])
         _prev = _programs_seen.get(_key) if _key is not None else None
         if _prev is not None and _prev[0] == _surface_version[0]:
@@ -1683,7 +1682,8 @@ def advance_reasoner_one_round(
         # Re-derive every handle this program reads against the CURRENT
         # surface first, so it reads the world as it is, not as it was.
         _ensure_fresh(_program_reads(a["program"]))
-        out = run_geom_program_tool(a, namespace=_ns, raw_sink=_raw_sink,
+        out = run_geom_program_tool(a, namespace=compute_namespace or {},
+                                    raw_sink=_raw_sink,
                                     seed_results=carry_results,
                                     preflight=preflight,
                                     answer_ref=answer_ref)
