@@ -195,6 +195,13 @@ def test_an_images_withhold_serves_each_picture_as_its_caption(call, monkeypatch
     assert vision[0][0].startswith(_PICTURE_CALLS[call])
 
 
+@pytest.mark.parametrize("call", ["show_map(around=prior_7)", "look(prior_7)"])
+def test_an_images_withhold_counts_no_picture_delivered(call, monkeypatch):
+    results, _ = _map_mission([call], monkeypatch, "images", renderer=_crops)
+    served = json.dumps(results)
+    assert '"delivered": 0' in served and '"delivered": 1' not in served, served
+
+
 def test_a_look_for_withhold_serves_no_watchlist(monkeypatch):
     script = ["go_to(prior_7)", "a = explore(prior_1)", "show_map(around=prior_7)"]
     for finds in (1, 0):

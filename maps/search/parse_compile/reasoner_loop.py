@@ -2600,6 +2600,7 @@ def advance_reasoner_one_round(
         vis_text = _map_vision_text(maps)
         ack["delivered"] = len(jpegs)
         if jpegs and withheld("images"):
+            ack["delivered"] = 0
             ack["note"] = ("the map's caption follows in the next message; "
                            "its picture is not served on this run")
             pending_vision.append((vis_text, []))
