@@ -23,15 +23,16 @@ from benchmarks.flight.nav_track import Pose
 class Leg:
     """One leg as posted: ``point`` first, then the rest of the pass this stop
     belongs to (``ahead``), all in the tile's local metres. ``area`` is the
-    ground the leg is flown for, (lon, lat) samples, and ``coverage_floor`` the
-    share of it the recording must hold; ``revision`` counts the times a short
-    pass asked it again, and ``note`` says why."""
+    ground the leg is flown for, (lon, lat) samples; ``revision`` counts the
+    times a short pass asked it again, and ``note`` says why. The twin flies
+    ``point`` and ``ahead``; ``target``, ``step``, ``area``, ``revision`` and
+    ``note`` are the hand-off a vehicle for another aircraft shows its crew or
+    acts on."""
 
     target: str
     point: tuple[float, float]
     step: int
     area: list[tuple[float, float]] | None = None
-    coverage_floor: float | None = None
     ahead: list[tuple[float, float]] = field(default_factory=list)
     revision: int = 0
     note: str | None = None

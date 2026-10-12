@@ -65,7 +65,7 @@ def test_a_flight_over_unflown_ground_posts_the_leg_and_serves_the_pass_that_hel
 
     m._fly_live(_session(h, inner), {"target_fid": "[600, 600]"})
     assert [leg.point for leg in twin.legs] == [(600.0, 600.0)]
-    assert twin.legs[0].coverage_floor == M.COVERED_FRACTION and len(twin.legs[0].area) == 19
+    assert len(twin.legs[0].area) == 19
     assert served[0] is not None and served[0].ortho_view_corners_xy is not None
     assert "arrived" in _legs(m)[-1]
     assert list((m.workdir / M.OBSERVATIONS_DIR).glob("*.jpg"))

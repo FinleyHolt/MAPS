@@ -363,8 +363,7 @@ class Mission:
         if self._cancel.is_set():
             return None
         step = len(self.flights)
-        self._vehicle.post(Leg(target=token, point=(xy[0], xy[1]), step=step, area=area_ll,
-                               coverage_floor=COVERED_FRACTION, ahead=ahead))
+        self._vehicle.post(Leg(target=token, point=(xy[0], xy[1]), step=step, area=area_ll, ahead=ahead))
         # The leg's reach: how far from the point the aircraft is still over
         # the area. A pass that came inside it and left with the area part
         # held is short.
@@ -379,7 +378,7 @@ class Mission:
             shorts += 1
             moved, note = self._short_pass(token, xy, area, shorts)
             self._vehicle.post(Leg(target=token, point=(moved[0], moved[1]), step=step, area=area_ll,
-                                   coverage_floor=COVERED_FRACTION, ahead=ahead, revision=shorts, note=note))
+                                   ahead=ahead, revision=shorts, note=note))
         waited = self._wait_departure(xy) if outcome == "arrived" else 0.0
         if self._cancel.is_set():
             return None

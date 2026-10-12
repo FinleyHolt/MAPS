@@ -73,7 +73,10 @@ class Vehicle(Protocol):
 `{"seq", "log_time", "t_host", "pose"}` rows with no pixels; `frame` returns
 one frame's JPEG and its pose tag. The vehicle owns the clock the harness
 waits on. Two implementations exist: the twin (`twin.py`) and a camera
-recording read back (`recorded_ring.py`).
+recording read back (`recorded_ring.py`). A `Leg` carries `point` and
+`ahead`, which the twin flies, and `target`, `step`, `area`, `revision` and
+`note`: the hand-off a vehicle for your own aircraft reads to show the crew
+(on the C-12, the cockpit display) or to drive an autopilot.
 
 ## Fly the twin
 
