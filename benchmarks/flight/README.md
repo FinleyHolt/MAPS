@@ -21,8 +21,8 @@ reads:
    the crew flew it off the cockpit display.
 3. **Every frame is registered as it arrives.** The `Corrector` thread
    (`live_source.py`) reads the newest frame off `Vehicle.index` and
-   `Vehicle.frame`, places it by its tagged pose (`nav_track.py`) through the
-   boresight, registers it against the map rendered at that pose
+   `Vehicle.frame`, places it by the vehicle's pose at its stamp, the timing
+   offset applied (`nav_track.py`), through the boresight, registers it against the map rendered at that pose
    (`register_frame`, `frame_offset.py`, `map_render.py`, `locator.py`), and
    ties it to the frame before it in the pose graph (`pose_graph.py`,
    `frame_ties.py`, `tie_adjust.py`).
