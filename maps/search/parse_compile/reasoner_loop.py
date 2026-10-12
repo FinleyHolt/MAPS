@@ -1112,7 +1112,7 @@ class _Mission:
                 for i, q in enumerate(names)]}},
             namespace=self.ns,
             raw_sink=_sink, preflight=self.preflight)
-        if isinstance(g_out, dict) and "error" in g_out:
+        if "error" in g_out:
             return self._plan_err({}, str(g_out["error"]))
         g_res = _sink.get("results") or {}
         _WHY_VERB = {"stage": "standing at", "move": "flying",
@@ -1120,7 +1120,7 @@ class _Mission:
                      "boost": "looking around", "facing": "facing"}
         for i, (q, why) in enumerate(names.items()):
             rows = [r for r in (g_res.get(f"r{i}") or [])
-                    if isinstance(r, dict) and r.get("fid")]
+                    if r.get("fid")]
             rows = [r for r in rows
                     if r.get("name_match") is None
                     or float(r["name_match"]) >= _FUZZY_FLOOR]
@@ -1183,11 +1183,10 @@ class _Mission:
         # The column this call ordered by, so _finish can say when the
         # ordering separated nothing.
         _sb = next((o for o in reversed(ops) if o["op"] == "score_by"), None)
-        _em = ((_sb["args"].get("emphasis") or [None])[0]) if _sb else None
         self._call.update(answer=answer, page=page,
                           rows=self.carry.rows.get(answer),
-                          order=str(_em["key"]) if isinstance(_em, dict)
-                          and _em.get("key") else None)
+                          order=str(_sb["args"]["emphasis"][0]["key"])
+                          if _sb else None)
         return {"result": out}
 
     def _stand(self, at: str, facing: str) -> dict:
