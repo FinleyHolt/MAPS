@@ -362,6 +362,7 @@ def test_the_out_root_and_the_usage_name_the_benchmark(monkeypatch) -> None:
     monkeypatch.setattr(bf.paths, "BENCHMARK", "calcity")
     assert bf._build_parser().parse_args([]).out_root == "output/calcity_fullset"
     assert bf._build_parser().prog == "python -m benchmarks.calcity.bench_fullset"
+    assert bf._build_parser().description == "Continuous full-split calcity benchmark at fixed concurrency."
 
 
 def test_the_summary_names_an_errorless_infra_row_as_the_driver_counts_it(driver) -> None:

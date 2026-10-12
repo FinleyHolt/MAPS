@@ -609,7 +609,7 @@ class Driver:
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog=f"python -m benchmarks.{paths.BENCHMARK}.bench_fullset",
-        description="Continuous full-test-set CityNav benchmark at fixed concurrency.",
+        description=f"Continuous full-split {paths.BENCHMARK} benchmark at fixed concurrency.",
     )
     p.add_argument("--split", default=paths.DEFAULT_SPLIT, help=f"(default {paths.DEFAULT_SPLIT})")
     p.add_argument(
