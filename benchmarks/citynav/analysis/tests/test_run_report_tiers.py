@@ -176,3 +176,13 @@ def test_failed_tiles_are_reported_beside_the_sr(tmp_path, capsys):
     write_ledger(tmp_path, ledger_row("a", "s", metrics={"SR": 0, "sam_tiles_failed": 0}))
     report(tmp_path)
     assert "SAHI tiles failed" not in capsys.readouterr().out
+
+
+def test_help_is_an_option_not_a_root(capsys):
+    import pytest
+
+    from benchmarks.citynav.analysis import run_report
+
+    with pytest.raises(SystemExit) as done:
+        run_report.main(["--help"])
+    assert done.value.code == 0 and "--allow-partial" in capsys.readouterr().out

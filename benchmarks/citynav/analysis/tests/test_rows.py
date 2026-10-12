@@ -284,13 +284,13 @@ def test_every_reader_refuses_a_partial_root_naming_the_shortfall(tmp_path, caps
     root = _partial_run(tmp_path, 3)
     monkeypatch.setattr(sys, "argv", ["ab_report", str(root), str(root)])
     want = "scores 1 of the 3 episodes its manifest selects (1 only ever infrastructure casualties, 1 never landed a row)"
-    for read in (lambda: run_report.main(["run_report", str(root)]),
+    for read in (lambda: run_report.main([str(root)]),
                  lambda: arm_table.main([str(root)]),
                  ab_report.main):
         with pytest.raises(SystemExit, match=re.escape(want)) as refused:
             read()
         assert "resume" in str(refused.value) and "--max-infra-attempts" in str(refused.value)
-    assert run_report.main(["run_report", str(root), "--allow-partial"]) == 0
+    assert run_report.main([str(root), "--allow-partial"]) == 0
     assert arm_table.main(["--allow-partial", str(root)]) == 0
     assert f"*** PARTIAL (--allow-partial): {root}: {want} ***" in capsys.readouterr().err
 

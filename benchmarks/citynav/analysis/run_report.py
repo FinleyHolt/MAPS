@@ -9,8 +9,8 @@ unless ``--allow-partial`` (``rows.load_attempts``).
 
 from __future__ import annotations
 
+import argparse
 import statistics
-import sys
 from collections import Counter
 from pathlib import Path, PurePosixPath
 
@@ -223,16 +223,15 @@ def _label(name: str, suc: int, tot: int) -> str:
     return f"{name}:{suc}/{tot}({100 * suc / tot:.0f}%)" if tot else f"{name}:0"
 
 
-def main(argv: list[str]) -> int:
-    allow_partial = "--allow-partial" in argv[1:]
-    args = [Path(a) for a in argv[1:] if a != "--allow-partial"]
-    if not args:
-        print(__doc__)
-        return 2
-    for root in args:
-        report(root, allow_partial=allow_partial)
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("roots", type=Path, nargs="+", help="run roots")
+    _rows.add_allow_partial(ap)
+    args = ap.parse_args(argv)
+    for root in args.roots:
+        report(root, allow_partial=args.allow_partial)
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(main())
