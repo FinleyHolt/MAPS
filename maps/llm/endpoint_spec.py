@@ -114,15 +114,14 @@ def _output_reserve_for(max_model_len: int) -> int:
 
 def _get_json(url: str, *, bearer: str | None = None) -> object:
     """GET ``url`` (``bearer`` as an Authorization header) and parse the JSON
-    body; raise EndpointDiscoveryError on transport failure, non-2xx, or a
-    non-JSON body."""
+    body; raise EndpointDiscoveryError on transport failure (a non-2xx reply
+    is urllib's HTTPError, a URLError) or a non-JSON body."""
     req = urllib.request.Request(url)
     if bearer:
         req.add_header("Authorization", f"Bearer {bearer}")
     for attempt in range(1, _PROBE_TRIES + 1):
         try:
             with urllib.request.urlopen(req, timeout=_PROBE_TIMEOUT_S) as resp:
-                status = resp.status
                 body = resp.read()
             break
         except (urllib.error.URLError, OSError, ValueError, TimeoutError) as exc:
@@ -132,10 +131,6 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
                 ) from exc
             log.warning("discovery: GET %s failed (%s); asking again in %.0f s", url, exc, _PROBE_RETRY_S)
             time.sleep(_PROBE_RETRY_S)
-    if not (200 <= status < 300):
-        raise EndpointDiscoveryError(
-            f"endpoint unhealthy: GET {url} returned HTTP {status}"
-        )
     try:
         return json.loads(body)
     except ValueError as exc:
@@ -374,7 +369,7 @@ _SPEC: EndpointSpec | None = None
 _SPEC_LOCK = threading.Lock()
 
 
-def install_spec(new_spec: EndpointSpec) -> EndpointSpec:
+def install_spec(new_spec: EndpointSpec) -> None:
     """Install the process-wide spec; a second install must be identical."""
     global _SPEC
     with _SPEC_LOCK:
@@ -394,7 +389,6 @@ def install_spec(new_spec: EndpointSpec) -> EndpointSpec:
                 f"divergent second install_spec: installed={_SPEC} "
                 f"new={new_spec}"
             )
-        return _SPEC
 
 
 def spec() -> EndpointSpec:

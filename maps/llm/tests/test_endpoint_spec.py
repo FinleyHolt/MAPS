@@ -300,7 +300,7 @@ def test_spec_before_install_raises():
 
 def test_install_then_read_back():
     s = _spec()
-    assert E.install_spec(s) is s
+    E.install_spec(s)
     assert E.spec() is s
     assert E.spec_installed() is True
     E.install_spec(_spec())  # equal fields: idempotent
@@ -324,8 +324,6 @@ def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
     calls: list[int] = []
 
     class _Resp(io.BytesIO):
-        status = 200
-
         def __enter__(self):
             return self
 
