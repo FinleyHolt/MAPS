@@ -5,7 +5,8 @@
 
 A root is a flown sortie (``episodes.jsonl`` beside ``flight_track.jsonl``)
 or a replay's (:mod:`benchmarks.flight.replay`, its sortie folder named for
-the recorded one, so the same truth scores both). Per run, from three things
+the recorded one, so the same truth scores both; a replay records no start
+time and no track, so it reads SR and NE only). Per run, from three things
 the record holds:
 
 * **The commit**: the target of the run's last flight (``commit_xy``, else

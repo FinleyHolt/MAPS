@@ -103,7 +103,8 @@ python -m benchmarks.flight.replay <sortie>/<run dir> --frames <sensors.mcap> --
 The station registered frames against NAIP 2024 imagery (the `calcity.png`
 of the v5 Cal City data release beside the flown bake); pass its directory as
 `--raster`. A replay's ledger row names the run it replays (`replay_of`) and
-is scored by `measures`, not by the bench reader. The recordings are not
+is scored by `measures` on SR and NE (it records no start time and no
+track), not by the bench reader. The recordings are not
 distributed.
 
 ## Closed-loop measures
