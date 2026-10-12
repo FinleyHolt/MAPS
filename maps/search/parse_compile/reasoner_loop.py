@@ -536,8 +536,9 @@ def _named_feature_note(classes: list[str], names: set[str]) -> str | None:
 # keep room; the note pages the rest.
 _CATCH_CROPS = 8
 # What a look and a pass's catch say under the ``images`` withhold.
-_PICTURE_WITHHELD = ("the crop's caption follows in the next message; "
-                     "its picture is not served on this run")
+_PICTURE_WITHHELD_OF = ("the {}'s caption follows in the next message; "
+                        "its picture is not served on this run")
+_PICTURE_WITHHELD = _PICTURE_WITHHELD_OF.format("crop")
 
 
 def _mission_sanitize_moves(raw: list[str]) -> tuple[list[dict], list[dict]]:
@@ -1091,6 +1092,16 @@ def advance_reasoner_one_round(
                      f"and maps render its facing up."),
         }
 
+    def _standing_frame() -> tuple[list | None, str]:
+        """The STANDING viewpoint's image-up and the caption note stating it
+        (never a silent rotation); ``(None, "")`` with no stance."""
+        if standing_handle[0] is None:
+            return None, ""
+        _sv = staged_viewpoints[standing_handle[0]]
+        return (list(_sv["up_unit"]),
+                f"image-up = {_sv['handle']}'s facing "
+                f"(bearing {_sv['bearing_deg']})")
+
     def _look_strs(v: object) -> list[str]:
         return [str(x) for x in v if isinstance(x, str) and x.strip()] \
             if isinstance(v, list) else []
@@ -1202,15 +1213,7 @@ def advance_reasoner_one_round(
             # The crop is centred on this fid; the renderer gets the fid's own
             # label + footprint to bracket-and-label the CENTER subject
             # without occluding it.
-            frame_up = None
-            frame_note = ""
-            if standing_handle[0] is not None:
-                # the STANDING viewpoint orients every unframed view; the
-                # caption + band state it (never a silent rotation).
-                _sv = staged_viewpoints[standing_handle[0]]
-                frame_up = list(_sv["up_unit"])
-                frame_note = (f"image-up = {_sv['handle']}'s facing "
-                              f"(bearing {_sv['bearing_deg']})")
+            frame_up, frame_note = _standing_frame()
             requests.append({
                 "center_fid": f,
                 "center_xy": xy,
@@ -1370,12 +1373,9 @@ def advance_reasoner_one_round(
             "center_boundary": _cb,
             "marks": marks,
         }
-        if standing_handle[0] is not None:
-            _sv = staged_viewpoints[standing_handle[0]]
-            spec["frame_up"] = list(_sv["up_unit"])
-            spec["frame_note"] = (
-                f"image-up = {_sv['handle']}'s facing "
-                f"(bearing {_sv['bearing_deg']})")
+        frame_up, frame_note = _standing_frame()
+        if frame_up is not None:
+            spec["frame_up"], spec["frame_note"] = frame_up, frame_note
         return spec, skipped
 
     def _map_vision_text(maps: list[dict]) -> str:
@@ -2349,6 +2349,24 @@ def advance_reasoner_one_round(
             return _plan_err({"boost": res}, str(res["error"]))
         return {"boost": res}
 
+    def _ship(ack: dict, kind: str, jpegs: list, vis_text: str) -> bool:
+        """Queue one look's or map's pictures (or, under the images
+        withhold, its caption alone) for the next message; ``ack`` states
+        what follows. True when pictures shipped."""
+        ack["delivered"] = len(jpegs)
+        if jpegs and withheld("images"):
+            ack["delivered"] = 0
+            ack["note"] = _PICTURE_WITHHELD_OF.format(kind)
+            pending_vision.append((vis_text, []))
+            return False
+        if jpegs:
+            ack["note"] = f"the {kind} follows in the next message"
+            _deliver_frames(jpegs, _block_frames)
+            pending_vision.append((vis_text, jpegs))
+            return True
+        ack["error"] = f"render returned no image bytes; no {kind} will follow"
+        return False
+
     def _crops_of(fid, marks: list | None = None,
                    preamble: str = "") -> dict:
         # A LIST asks for one crop PER ROW -- each its own subject, each at
@@ -2387,34 +2405,22 @@ def advance_reasoner_one_round(
         # afterwards is worth much less than one whose badges are the rows
         # of a handle the model already holds.
         vis_text = preamble + _look_vision_text(crops)
-        ack["delivered"] = len(jpegs)
-        if jpegs and withheld("images"):
-            ack["delivered"] = 0
-            ack["note"] = _PICTURE_WITHHELD
-            pending_vision.append((vis_text, []))
-        elif jpegs:
-            ack["note"] = "the crop follows in the next message"
-            _deliver_frames(jpegs, _block_frames)
-            pending_vision.append((vis_text, jpegs))
-            if marks:
-                # DRAWN, not requested, and only on a crop that SHIPPED.
-                # The renderer CLIPS at the window: a mark outside the
-                # delivered frame is named in the legend text and no badge
-                # is drawn for it. The legend IS the drawn set, so count it.
-                ack["badged"] = sum(
-                    len(c.get("legend") or []) for c in crops
-                    if isinstance(c, dict) and c.get("jpeg"))
-                # A requested mark goes undrawn for FOUR different reasons
-                # and only ONE of them is distance, so serve the renderer's
-                # own out-of-frame list rather than requested-minus-badged
-                # (a surface eviction is ``skipped``, already on this ack).
-                ack["not_drawn"] = [
-                    str(f) for c in crops
-                    if isinstance(c, dict) and c.get("jpeg")
-                    for f in (c.get("marks_out_of_view") or [])][:20]
-        else:
-            ack["error"] = ("render returned no image bytes; no crop "
-                            "will follow")
+        if _ship(ack, "crop", jpegs, vis_text) and marks:
+            # DRAWN, not requested, and only on a crop that SHIPPED. The
+            # renderer CLIPS at the window: a mark outside the delivered frame
+            # is named in the legend text and no badge is drawn for it. The
+            # legend IS the drawn set, so count it.
+            ack["badged"] = sum(
+                len(c.get("legend") or []) for c in crops
+                if isinstance(c, dict) and c.get("jpeg"))
+            # A requested mark goes undrawn for FOUR different reasons and
+            # only ONE of them is distance, so serve the renderer's own
+            # out-of-frame list rather than requested-minus-badged (a surface
+            # eviction is ``skipped``, already on this ack).
+            ack["not_drawn"] = [
+                str(f) for c in crops
+                if isinstance(c, dict) and c.get("jpeg")
+                for f in (c.get("marks_out_of_view") or [])][:20]
         return ack
 
     def _crops_set(handle: str, marks: list | None = None) -> dict:
@@ -2474,20 +2480,7 @@ def advance_reasoner_one_round(
                         _summarise_exc(exc))
             return {"error": f"map render failed: {_summarise_exc(exc)}"}
         jpegs = [m["jpeg"] for m in maps if m.get("jpeg")]
-        vis_text = _map_vision_text(maps)
-        ack["delivered"] = len(jpegs)
-        if jpegs and withheld("images"):
-            ack["delivered"] = 0
-            ack["note"] = ("the map's caption follows in the next message; "
-                           "its picture is not served on this run")
-            pending_vision.append((vis_text, []))
-        elif jpegs:
-            ack["note"] = "the map follows in the next message"
-            _deliver_frames(jpegs, _block_frames)
-            pending_vision.append((vis_text, jpegs))
-        else:
-            ack["error"] = ("render returned no image bytes; no map "
-                            "will follow")
+        _ship(ack, "map", jpegs, _map_vision_text(maps))
         return ack
 
     def _plan_err(ack: dict, msg: str) -> dict:
