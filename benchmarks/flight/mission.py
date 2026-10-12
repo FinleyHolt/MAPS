@@ -188,10 +188,8 @@ class _StampedLog(ConversationLog):
         super().__init__(path)
         self._elapsed = elapsed
 
-    def append(self, item) -> None:
-        if isinstance(item, dict) and "t_s" not in item:
-            item = {**item, "t_s": self._elapsed()}
-        super().append(item)
+    def append(self, item: dict) -> None:
+        super().append({**item, "t_s": self._elapsed()})
 
 
 class Mission:
@@ -497,10 +495,9 @@ class Mission:
     @staticmethod
     def _held_words(last: dict[str, Any]) -> str:
         """The leg row's account of what held the area: the share, the frames, the nearest to nadir."""
-        cov = last.get("coverage") or {}
-        seqs = cov.get("seqs") or ([last["seq"]] if last.get("seq") is not None else [])
+        cov = last["coverage"]
         short = f", {cov['fetch_failed']} of them not fetched" if cov.get("fetch_failed") else ""
-        return (f"the pass held {float(cov.get('fraction', 1.0)):.0%} of it in {len(seqs)} frame(s){short}, "
+        return (f"the pass held {cov['fraction']:.0%} of it in {len(cov['seqs'])} frame(s){short}, "
                 f"the nearest {last.get('seq')} at {last.get('off_nadir_deg')} deg off nadir")
 
     def _held_frame(self, area: list[tuple[float, float]], xy, after: float | None = None
