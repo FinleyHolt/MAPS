@@ -247,7 +247,8 @@ class BankSource:
 
     ``forced`` is the mission's flight count, read live: each flight is
     then answered by what the recording served that flight, in order, and the
-    coverage rule is not asked.
+    coverage rule is not asked. The bank keeps no clock, so a read ``after``
+    a time is a read of the whole bank.
     """
 
     def __init__(self, bank: list[Held], *, tiles_dir, map_name: str, tile_ground_z: float, forced=None,
@@ -297,7 +298,7 @@ class BankSource:
                 best, best_held = i, held
         return best, best_held
 
-    def coverage(self, points) -> dict[str, Any]:
+    def coverage(self, points, after=None) -> dict[str, Any]:
         best, held = self._best(points)
         n = sum(held)
         self.last_refusal = ""
@@ -307,7 +308,7 @@ class BankSource:
     def coverage_of_each(self, areas) -> list[dict[str, Any]]:
         return [self.coverage(a) for a in areas]
 
-    def observe_area(self, points):
+    def observe_area(self, points, after=None):
         best, held = self._best(points)
         if best is None or not any(held):
             self.last_refusal = f"no recorded observation holds any of the area's {len(points)} points"

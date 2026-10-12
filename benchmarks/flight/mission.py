@@ -323,6 +323,8 @@ class Mission:
             at = f"{token} at ({xy[0]:.0f}, {xy[1]:.0f})"
             cov, unread = self._coverage_before_leg(area_ll)
             held = self._held_frame(area, xy) if cov and cov["fraction"] >= COVERED_FRACTION else None
+            # Frames recorded after this vehicle time are the leg's own; None counts the whole ring.
+            after = None
             if held is not None:
                 self._said(f"{at} is held by the pass already: {self._held_words(held[1])}; no leg is flown")
             else:
@@ -338,6 +340,8 @@ class Mission:
                 elif cov is not None:
                     self._said(f"{at} is held by the pass ({cov['fraction']:.0%}), but no frame of it could be "
                                f"served ({self._live.last_refusal or 'no reason recorded'}); the leg is flown")
+                    # The ring already holds the area, so only a pass after the post can arrive.
+                    after = self._vehicle.now()
                 ahead = [(float(x), float(y)) for x, y in (item.get("pass_ahead") or [])]
                 leg = Leg(target=token, point=(xy[0], xy[1]), step=step, area=area_ll,
                           coverage_floor=COVERED_FRACTION, ahead=ahead)
@@ -349,7 +353,7 @@ class Mission:
                 shorts = 0
                 self._closest_m = float("inf")
                 while True:
-                    outcome = self._wait_arrival(xy, area=area_ll, timeout_s=ARRIVAL_TIMEOUT_S,
+                    outcome = self._wait_arrival(xy, area=area_ll, timeout_s=ARRIVAL_TIMEOUT_S, after=after,
                                                  reach_m=reach if shorts < SHORT_PASS_REQUESTS else None)
                     if outcome != "short":
                         break
@@ -359,7 +363,7 @@ class Mission:
                                        coverage_floor=leg.coverage_floor, ahead=ahead, revision=shorts, note=note))
                 if outcome == "arrived":
                     waited = self._wait_departure(xy)
-                    held = self._held_frame(area, xy)
+                    held = self._held_frame(area, xy, after)
                     if held is not None:
                         last = held[1]
                         reg = last.get("registration") or {}
@@ -372,7 +376,7 @@ class Mission:
                                    f"({self._live.last_refusal or 'no reason recorded'}); "
                                    f"the flight has no observation")
                 elif outcome == "lost":
-                    held = self._held_frame(area, xy)
+                    held = self._held_frame(area, xy, after)
                     if held is not None:
                         self._said(f"the leg to {at} never arrived in {ARRIVAL_TIMEOUT_S:.0f} s (closest "
                                    f"{self._closest_m:.0f} m); {self._held_words(held[1])}, "
@@ -381,7 +385,7 @@ class Mission:
                         self._said(f"the leg to {at} never arrived in {ARRIVAL_TIMEOUT_S:.0f} s (closest "
                                    f"{self._closest_m:.0f} m); no frame held any of it, "
                                    f"and the flight has no observation")
-            self._held, self._held_area = held, (area, xy)
+            self._held, self._held_area = held, (area, xy, after)
         try:
             return session.fly(item)
         finally:
@@ -410,10 +414,11 @@ class Mission:
             self._vehicle.sleep(0.25)
         return self._vehicle.now() - t0
 
-    def _coverage(self, area_lonlat: list[tuple[float, float]]) -> dict[str, Any] | None:
-        """How much of the area the recording holds now, poses only; None when
-        it cannot be asked."""
-        cov = self._live.coverage(area_lonlat)
+    def _coverage(self, area_lonlat: list[tuple[float, float]], after: float | None = None
+                  ) -> dict[str, Any] | None:
+        """How much of the area the recording holds now (the frames recorded
+        after ``after`` when given), poses only; None when it cannot be asked."""
+        cov = self._live.coverage(area_lonlat, after)
         if cov is not None:
             self._last_coverage = cov
         return cov
@@ -494,11 +499,12 @@ class Mission:
         return (f"the pass held {float(cov.get('fraction', 1.0)):.0%} of it in {len(seqs)} frame(s){short}, "
                 f"the nearest {last.get('seq')} at {last.get('off_nadir_deg')} deg off nadir")
 
-    def _held_frame(self, area: list[tuple[float, float]], xy) -> tuple[Any, dict[str, Any]] | None:
+    def _held_frame(self, area: list[tuple[float, float]], xy, after: float | None = None
+                    ) -> tuple[Any, dict[str, Any]] | None:
         """The ground the pass held over ``area`` (tile metres, about ``xy``) as
-        the observation, with the live source's record of it; None when no
-        frame held any of it."""
-        obs = self._live.observe_area(self._area_lonlat(area))
+        the observation, from the frames recorded after ``after`` when given,
+        with the live source's record of it; None when no frame held any of it."""
+        obs = self._live.observe_area(self._area_lonlat(area), after)
         last, refusal = dict(self._live.last or {}), self._live.last_refusal
         if obs is None:
             log.info("no frame in the recording held the area about (%.0f, %.0f): %s",
@@ -527,9 +533,10 @@ class Mission:
         return sha
 
     def _wait_arrival(self, xy: Any, *, area: list[tuple[float, float]] | None, timeout_s: float,
-                      reach_m: float | None = None) -> str:
+                      reach_m: float | None = None, after: float | None = None) -> str:
         """``arrived`` when the recording holds ``area`` at ``COVERED_FRACTION``
-        (asked as it grows, poses only); ``short`` when ``reach_m`` is given and
+        (asked as it grows, poses only, over the frames recorded after
+        ``after`` when given); ``short`` when ``reach_m`` is given and
         the pass came inside it, left (``SHORT_PASS_LEAVE_M`` for
         ``SHORT_PASS_LEAVE_S``) with the area part held; ``lost`` when
         ``timeout_s`` ran out airborne; ``cancel`` when the mission was stopped."""
@@ -541,7 +548,7 @@ class Mission:
         while not self._cancel.is_set():
             # The recording decides arrival; the aircraft's own pose only the
             # short pass and the timeout's start.
-            cov = self._coverage(area)
+            cov = self._coverage(area, after)
             fraction = float((cov or {}).get("fraction") or 0.0)
             if fraction >= COVERED_FRACTION:
                 return "arrived"

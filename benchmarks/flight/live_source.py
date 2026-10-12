@@ -518,15 +518,18 @@ class LiveSource:
         pose_xy, alt_msl, _yaw = self.camera_pose(pose)
         return {"x": pose_xy[0], "y": pose_xy[1], "agl_m": alt_msl - self.floor_msl_m, "utc": pose.utc}
 
-    def coverage(self, points: list[tuple[float, float]]) -> dict[str, Any] | None:
+    def coverage(self, points: list[tuple[float, float]], after: float | None = None) -> dict[str, Any] | None:
         """How much of an area, ``points`` its (lon, lat) samples, the ring's
-        index holds through the solved camera's field of view: ``fraction`` the
+        index holds through the solved camera's field of view, over the frames
+        stamped after ``after`` (vehicle seconds) when given: ``fraction`` the
         share some frame held, ``best`` per point the ``(off-nadir degrees,
         sequence)`` of the frame nearest nadir or None. None with
         ``last_refusal`` when the ring cannot be asked."""
         rows = self._ring_rows(None)
         if rows is None:
             return None
+        if after is not None:
+            rows = [r for r in rows if float(r["t_host"]) > after]
         return self._held_by(rows, points)
 
     def coverage_of_each(self, areas: list[list[tuple[float, float]]]) -> list[dict[str, Any] | None] | None:
@@ -579,16 +582,16 @@ class LiveSource:
         return {"points": len(points), "held": held,
                 "fraction": (held / len(points)) if points else 0.0, "best": best, "frames": len(rows)}
 
-    def observe_area(self, points: list[tuple[float, float]]) -> Observation | None:
+    def observe_area(self, points: list[tuple[float, float]], after: float | None = None) -> Observation | None:
         """The ground the pass held over an AREA, as one north-up observation on
-        the map grid: the frames that saw each of ``points`` nearest nadir,
-        fused (:meth:`_fused`). ``last["coverage"]`` says how much of the area
+        the map grid: the frames (stamped after ``after`` when given) that saw
+        each of ``points`` nearest nadir, fused (:meth:`_fused`). ``last["coverage"]`` says how much of the area
         was held and by which frames; a partial pass is served as the part it
         held. None with ``last_refusal`` when no frame held any of it. Off
         nadir is the one rank (attitude is in the angle already), and only the
         frames that win a point are fetched.
         """
-        cov = self.coverage(points)
+        cov = self.coverage(points, after)
         if cov is None:
             return None
         if not cov["held"]:

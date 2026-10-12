@@ -150,6 +150,26 @@ def test_the_flight_refuses_a_config_that_withholds_a_part(tmp_path):
         mission.hydrate(episode_id="calcity::0#0", split="calcity", config=str(arm))
 
 
+def test_ground_held_by_frames_that_cannot_be_fetched_is_flown_again_and_served_from_the_new_pass(
+        built, make_mission):
+    """The ring's index holds the area, but none of its frames comes over the
+    link: the leg is flown, arrival waits for frames recorded after it was
+    posted, and the observation is fused from those."""
+    m, twin = make_mission()
+    twin.post(M.Leg(target="t", point=(600.0, 700.0), step=0))
+    twin.sleep(10.0)
+    n_old = len(twin.rows)
+    fetch = twin.frame
+    twin.frame = lambda seq: None if seq < n_old else fetch(seq)
+    served = []
+    m._fly_live(_session(_hydrated(built[3]), lambda item: served.append(m._held) or {}),
+                {"target_fid": "[600, 600]"})
+    assert len(twin.legs) == 2
+    assert served[0] is not None, _legs(m)
+    assert min(served[0][1]["mosaic"]["seqs"]) >= n_old
+    assert "arrived" in _legs(m)[-1]
+
+
 def test_a_leg_arrives_on_the_recording_while_the_aircraft_s_own_pose_cannot_be_read(built, make_mission):
     m, twin = make_mission()
     twin.post(M.Leg(target="t", point=(600.0, 700.0), step=0))

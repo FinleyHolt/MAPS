@@ -30,7 +30,8 @@ reads:
    pose a frame, no pixels; `footprint.py`) and reports the share of the
    area's points some frame holds. The leg has arrived at 90 %
    (`mission.COVERED_FRACTION`), or after `ARRIVAL_TIMEOUT_S` with what the
-   pass held.
+   pass held. When the index holds the area but none of its frames could be
+   fetched, the leg is flown and only the frames recorded after it count.
 5. **The observation is fused.** `LiveSource.observe_area` fetches, for each
    area point, the frame that saw it nearest nadir, places each by its pose
    and registration, composites them on one north-up grid (`composite`),
