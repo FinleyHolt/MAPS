@@ -104,6 +104,11 @@ STATE_ENDED = "ended"
 STATE_FAILED = "failed"
 
 
+def _holds(cov: dict[str, Any] | None) -> bool:
+    """Whether a coverage answer holds its area: the arrival rule, ``COVERED_FRACTION`` of it."""
+    return bool(cov) and float(cov.get("fraction") or 0.0) >= COVERED_FRACTION
+
+
 def activate_calcity() -> None:
     """Select the Cal City bench (``benchmarks.calcity.use``) for every flight entry point."""
     from benchmarks.calcity import use  # noqa: PLC0415
@@ -213,7 +218,6 @@ class Mission:
         self.split = split
         self.config = config
         self.workdir = Path(workdir)
-        self.instruction_override = instruction
         #: A string the serve accepts; None flies the arm's.
         self.reasoning_effort = reasoning_effort
         #: The height above ground the crew is commanded to fly; None flies the config's start height.
@@ -330,7 +334,7 @@ class Mission:
             step = len(self.flights)
             at = f"{token} at ({xy[0]:.0f}, {xy[1]:.0f})"
             cov, unread = self._coverage_before_leg(area_ll)
-            held = self._held_frame(area, xy) if cov and cov["fraction"] >= COVERED_FRACTION else None
+            held = self._held_frame(area, xy) if _holds(cov) else None
             # Frames recorded after this vehicle time are the leg's own; None counts the whole ring.
             after = None
             if held is not None:
@@ -341,7 +345,7 @@ class Mission:
                                 "in %d reads: %s", token, xy[0], xy[1], COVERAGE_TRIES, unread)
                     self._said(f"{at} may be held by the pass already, but the recording could not be asked "
                                f"in {COVERAGE_TRIES} reads ({unread}); the leg is flown")
-                elif cov is not None and cov["fraction"] < COVERED_FRACTION:
+                elif cov is not None and not _holds(cov):
                     log.info("the pass holds %.0f%% of %s at (%.0f, %.0f) (%d of %d points, %d frames), short "
                              "of %.0f%%; the leg is flown", 100.0 * cov["fraction"], token, xy[0], xy[1],
                              cov["held"], cov["points"], cov["frames"], 100.0 * COVERED_FRACTION)
@@ -465,7 +469,7 @@ class Mission:
             idx.append(i)
         covs = self._live.coverage_of_each(areas) if areas else None
         for i, cov in zip(idx, covs or []):
-            out[i] = bool(cov and float(cov.get("fraction") or 0.0) >= COVERED_FRACTION)
+            out[i] = _holds(cov)
         return out
 
     def _short_pass(self, token: str, xy, area: list[tuple[float, float]], n: int) -> tuple[list[float], str]:
@@ -557,9 +561,9 @@ class Mission:
             # The recording decides arrival; the aircraft's own pose only the
             # short pass and the timeout's start.
             cov = self._coverage(area, after)
-            fraction = float((cov or {}).get("fraction") or 0.0)
-            if fraction >= COVERED_FRACTION:
+            if _holds(cov):
                 return "arrived"
+            fraction = float((cov or {}).get("fraction") or 0.0)
             pose = self._live.ownship()
             if pose is not None:
                 d = math.hypot(pose["x"] - float(xy[0]), pose["y"] - float(xy[1]))
@@ -642,7 +646,7 @@ class Mission:
             h = hydrate(episode_id=self.episode_id, split=self.split, config=self.config, start_xy=self._start_xy,
                         agl_m=self.agl_m)
             self._hydrated = h
-            instruction = self.instruction_override or h.episode.description
+            instruction = self.instruction or h.episode.description
             # The override IS the operator's instruction, so the episode
             # carries no second copy: a flight echoes the description back as
             # the flight report's cue and hints the detector with it, and the
