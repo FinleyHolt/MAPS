@@ -83,9 +83,8 @@ def _modal_attr(n, key):
     return max(cc.items(), key=lambda kv: kv[1])[0] if cc else None
 
 
-# Tag keys no model-facing text carries: the ground-truth ``description``
-# tags the instructions are sampled from, and the bake's ``source``.
-_SEARCH_TAG_DENYLIST = frozenset({"description", "descriptions", "source"})
+# Tag keys no model-facing text carries: the bake's ``source``.
+_SEARCH_TAG_DENYLIST = frozenset({"source"})
 
 
 def _row_tags(n) -> dict:

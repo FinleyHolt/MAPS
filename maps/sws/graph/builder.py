@@ -10,10 +10,10 @@ import numpy as np
 from maps.sws.graph.model import MapObject, ObjectGraph
 
 # Feature keys that never become tags: the geometry the builder reads, ``name``
-# (its own field), OSM's ``orientation`` (not served) and ``descriptions``
-# (the GT-label wall). Everything else rides into ``MapObject.tags`` verbatim.
+# (its own field) and OSM's ``orientation`` (not served). Everything else rides
+# into ``MapObject.tags`` verbatim.
 _TAG_SKIP_KEYS = frozenset(
-    {"cells", "world_contour", "centroid_row", "centroid_col", "orientation", "name", "descriptions"}
+    {"cells", "world_contour", "centroid_row", "centroid_col", "orientation", "name"}
 )
 
 
