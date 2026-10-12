@@ -1933,8 +1933,28 @@ def _compare(cx, a):
 
     notes: list = []
     used_labels: set = set()
-    headers: list = []
-    col_specs: list = []   # (kind, payload, label)
+    all_col_keys: dict = {}     # every attached key, op-wide
+
+    # ``(geom, centre)`` of a row: its mask, else its point. Geometry is
+    # re-read by fid, since op output rows carry no mask.
+    def _row_geom_center(node):
+        if isinstance(node, dict):
+            node = cx.by_fid.get(node.get("fid")) or node
+        _cxy = node.get("xy") if is_xy(node.get("xy")) else None
+        m = node.get("mask")
+        if m:
+            g, c = _mask_geom_center(m)
+            return (g, node.get("mask_centroid") or c)
+        return (G.mask_geom([[_cxy]] if _cxy else []), _cxy)
+
+    # The cardinals asked for per ref (named by fid or label).
+    _card_req: dict = {}
+    for _el in (a.get("cardinals") or []):
+        _card_req.setdefault(str(_el.get("ref")), []).append(_el["dir"])
+
+    # One entry per ref: its header, label, geometry, cardinals and the
+    # keys it attached (its header's ``cols``).
+    refs: list[dict] = []
     for kind, payload, label_base in specs:
         label = label_base or (_sanitize_token(payload["fid"])
                                if kind == "row" else "ref")
@@ -1955,49 +1975,22 @@ def _compare(cx, a):
             if payload.get("color_conf") is not None:
                 hdr["ref_color"] = payload.get("color")
                 hdr["ref_color_conf"] = payload["color_conf"]
+            geom, center = _row_geom_center(payload)
         elif kind == "point":
             hdr = {"ref_name": lab, "kind": "point",
                    "xy": [round(payload[0], 2), round(payload[1], 2)]}
+            geom, center = G.mask_geom([[payload]]), payload
         else:
             hdr = {"ref_name": lab, "kind": "union",
                    "members": [n.get("fid") or [round(n["xy"][0], 2),
                                                 round(n["xy"][1], 2)]
                                for n in payload]}
-        headers.append(hdr)
-        col_specs.append((kind, payload, lab))
-
-    # Every attached key, per ref (its header's ``cols``) and op-wide.
-    ref_col_keys: list[dict] = [{} for _ in col_specs]
-    all_col_keys: dict = {}
-
-    def _put(row, k, val, ci):
-        row[k] = val
-        all_col_keys[k] = None
-        ref_col_keys[ci][k] = None
-
-    # ``(geom, centre)`` of a row: its mask, else its point. Geometry is
-    # re-read by fid, since op output rows carry no mask.
-    def _row_geom_center(node):
-        if isinstance(node, dict):
-            node = cx.by_fid.get(node.get("fid")) or node
-        _cxy = node.get("xy") if is_xy(node.get("xy")) else None
-        m = node.get("mask")
-        if m:
-            g, c = _mask_geom_center(m)
-            return (g, node.get("mask_centroid") or c)
-        return (G.mask_geom([[_cxy]] if _cxy else []), _cxy)
-
-    col_geoms: list = []
-    for kind, payload, _lab in col_specs:
-        if kind == "row":
-            col_geoms.append(_row_geom_center(payload))
-        elif kind == "union":
-            _geoms: list = []
+            geom = []
             _wx = _wy = _wa = 0.0
             _ucs: list = []
             for node in payload:
                 g, c = _row_geom_center(node)
-                _geoms.append(g)
+                geom.append(g)
                 if c is not None:
                     _ucs.append(c)
                     a_m = G.loops_area(node.get("mask") or [])
@@ -2005,43 +1998,20 @@ def _compare(cx, a):
                     _wy += a_m * float(c[1])
                     _wa += a_m
             if _wa > 0:
-                u_c = [_wx / _wa, _wy / _wa]
+                center = [_wx / _wa, _wy / _wa]
             elif _ucs:
-                u_c = [sum(float(c[0]) for c in _ucs) / len(_ucs),
-                       sum(float(c[1]) for c in _ucs) / len(_ucs)]
+                center = [sum(float(c[0]) for c in _ucs) / len(_ucs),
+                          sum(float(c[1]) for c in _ucs) / len(_ucs)]
             else:
-                u_c = None
-            col_geoms.append((_geoms, u_c))
-        else:  # constructed point
-            col_geoms.append((G.mask_geom([[payload]]), payload))
-
-    # The cardinals asked for per ref (named by fid or label), with the
-    # ref's point cloud built once.
-    _card_req: dict = {}
-    for _el in (a.get("cardinals") or []):
-        _card_req.setdefault(str(_el.get("ref")), []).append(_el["dir"])
-    col_cards: list = []
-    for ci, (kind, payload, lab) in enumerate(col_specs):
-        want = []
-        if _card_req:
-            _fid = payload.get("fid") if kind == "row" else None
-            for _k in (_fid, lab):
-                if _k and _k in _card_req:
-                    want = _card_req[_k]
-                    break
-        if not want:
-            col_cards.append(None)
-            continue
-        _g = col_geoms[ci][0]
-        _pts = G.points_from_geoms(_g if isinstance(_g, list) else [_g])
-        col_cards.append((want, _pts) if _pts is not None else None)
-
-    # A window-covering ref's gap columns would be 0 on every row: one
-    # note says so instead.
-    col_covers: list = []
-    for (kind, payload, lab) in col_specs:
+                center = None
+        _fid = payload.get("fid") if kind == "row" else None
+        want = next((_card_req[_k] for _k in (_fid, lab)
+                     if _k and _k in _card_req), None)
+        _pts = G.points_from_geoms(geom if isinstance(geom, list)
+                                   else [geom]) if want else None
+        # A window-covering ref's gap columns would be 0 on every row: one
+        # note says so instead.
         covers = bool(kind == "row" and payload.get("covers_window"))
-        col_covers.append(covers)
         if covers:
             notes.append(
                 f"ref {lab} "
@@ -2053,38 +2023,45 @@ def _compare(cx, a):
                 f"those two columns are not stamped; "
                 f"'center distance to {lab}'/"
                 f"'bearing from {lab}' (centroid vector) ride per-row.")
+        refs.append({"kind": kind, "payload": payload, "lab": lab, "hdr": hdr,
+                     "geom": geom, "center": center, "covers": covers,
+                     "cards": (want, _pts) if _pts is not None else None,
+                     "bb": None, "keys": {}, "contains": []})
 
-    # Rows whose own mask contains a ref, per ref, named in one note.
-    contains_rows: dict[int, list[str]] = {}
+    def _put(row, k, val, ref):
+        row[k] = val
+        all_col_keys[k] = None
+        ref["keys"][k] = None
+
     out_rows: list = []
-    col_member_bb: dict = {}
     for i, it in enumerate(items):
         row = {k: v for k, v in it.items() if k not in _MODEL_HIDDEN_ROW_FIELDS}
         # Items resolve like refs, so a ref compared to itself is exactly 0.
         item_geom, it_c = _row_geom_center(it)
-        for ci, (kind, payload, lab) in enumerate(col_specs):
-            if col_cards[ci] is not None and it_c is not None:
-                _dirs, _rpts = col_cards[ci]
+        for ref in refs:
+            kind, payload, lab = ref["kind"], ref["payload"], ref["lab"]
+            if ref["cards"] is not None and it_c is not None:
+                _dirs, _rpts = ref["cards"]
                 for _d in _dirs:
                     _v = G.cardinal_offset(_rpts, it_c, _d)
                     # Absent, never 0.0, when there is no side to name.
                     if _v is not None:
-                        _put(row, f"{_d} of {lab}", round(_v, 1), ci)
-            ref_geom, center = col_geoms[ci]
-            if col_covers[ci]:
+                        _put(row, f"{_d} of {lab}", round(_v, 1), ref)
+            ref_geom, center = ref["geom"], ref["center"]
+            if ref["covers"]:
                 d = None
             elif kind == "union":
-                if ci not in col_member_bb:
-                    col_member_bb[ci] = G.stack_bboxes(ref_geom)
-                d, wr, wi = G.set_gap(ref_geom, col_member_bb[ci], item_geom)
+                if ref["bb"] is None:
+                    ref["bb"] = G.stack_bboxes(ref_geom)
+                d, wr, wi = G.set_gap(ref_geom, ref["bb"], item_geom)
             else:
                 d, wr, wi = G.gap_witness(ref_geom, item_geom)
             if d is not None:
                 dr = round(d, 2)
-                _put(row, f"distance to {lab}", dr, ci)
+                _put(row, f"distance to {lab}", dr, ref)
                 if dr > 0.0 and wr is not None:
                     # The witness pair runs ref->item; a row faces item->ref.
-                    _put(row, f"facing {lab}", G.cardinal(wi, wr), ci)
+                    _put(row, f"facing {lab}", G.cardinal(wi, wr), ref)
                 elif (dr == 0.0
                       and not isinstance(ref_geom, list)
                       and item_geom["closed"]
@@ -2095,18 +2072,18 @@ def _compare(cx, a):
                                == str(row.get("fid")))
                       and bool(G.mask_contains(item_geom, ref_geom["V"]).all())):
                     # every ref vertex inside the row's own mask
-                    _put(row, f"contains {lab}", True, ci)
-                    contains_rows.setdefault(ci, []).append(
-                        str(row.get("fid") or f"item[{i}]"))
+                    _put(row, f"contains {lab}", True, ref)
+                    ref["contains"].append(str(row.get("fid") or f"item[{i}]"))
             if center is not None and it_c is not None:
                 dcr = round(G.dist(center, it_c), 2)
-                _put(row, f"center distance to {lab}", dcr, ci)
+                _put(row, f"center distance to {lab}", dcr, ref)
                 if dcr > 0.0:
                     _put(row, f"bearing from {lab}",
-                         round(G.bearing(center, it_c), 1), ci)
+                         round(G.bearing(center, it_c), 1), ref)
         out_rows.append(row)
-    for ci, (kind, payload, lab) in enumerate(col_specs):
-        _cf = contains_rows.get(ci)
+    # Rows whose own mask contains a ref, per ref, named in one note.
+    for ref in refs:
+        _cf, lab = ref["contains"], ref["lab"]
         if _cf:
             _cfs = f"{_cf[:8]}" + (
                 f" (+{len(_cf) - 8} more)" if len(_cf) > 8 else "")
@@ -2118,9 +2095,8 @@ def _compare(cx, a):
                 f"carries 'contains {lab}'=true. distance reads 0 on ANY "
                 f"mask contact, so a 0 in a nearest-first read "
                 f"spans touching neighbors AND containers.")
-    for hdr, keys in zip(headers, ref_col_keys):
-        if keys:
-            hdr["cols"] = list(keys)
+        if ref["keys"]:
+            ref["hdr"]["cols"] = list(ref["keys"])
     for _h in _standing_ref_handles:
         out_rows = _attach_standing_columns(
             out_rows, cx.staged[_h], with_distance=True)
@@ -2130,7 +2106,7 @@ def _compare(cx, a):
             f"'distance to {_h}' (meters from where you stand) "
             f"ride every row.")
     r = Result(out_rows, "compare")
-    r.refs = headers
+    r.refs = [ref["hdr"] for ref in refs]
     r.columns = list(all_col_keys)
     r.notes = notes
     r.ordered = _in_ordered
