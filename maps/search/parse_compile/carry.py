@@ -20,15 +20,17 @@ from maps.search.analyze_scene.geom_program import (
     join_hints,
     run_program as _run_program,
 )
+from maps.search.withhold import withheld
 
 log = logging.getLogger(__name__)
 
-# Served on a preflight color-column request that attached to no row:
-# before landing no row carries perceived color.
-_PREFLIGHT_COLOR_NOTE = (
-    "priors carry no perceived color before landing, so no color column "
-    "attaches yet; color enriches per-stop after arrival."
-)
+def _preflight_color_note() -> str:
+    """Served on a preflight color-column request that attached to no row:
+    before landing no row carries perceived color."""
+    return (("nothing is detected before landing" if withheld("prior")
+             else "priors carry no perceived color before landing")
+            + ", so no color column attaches yet; color enriches per-stop "
+              "after arrival.")
 
 
 def _color_words_of_op(op: dict) -> list[str]:
@@ -78,7 +80,7 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
             # The color request errored before any envelope existed (e.g.
             # the emphasis absent-color guard) -- the phase fact rides the
             # error so "no color" reads as WHEN, not broken.
-            _err = join_hints(_err, _PREFLIGHT_COLOR_NOTE)
+            _err = join_hints(_err, _preflight_color_note())
         return {"error": _err}
     except Exception as exc:  # noqa: BLE001  — surface the failure to the agent, don't crash the round
         return {"error": f"program failed: {exc}"}
@@ -103,7 +105,7 @@ def run_geom_program_tool(args: dict, *, namespace: dict | None = None,
             _env = out["results"].get(_op.get("ref"))
             if not _attached and isinstance(_env, dict):
                 _env["hint"] = join_hints(_env.get("hint"),
-                                          _PREFLIGHT_COLOR_NOTE)
+                                          _preflight_color_note())
     return out
 
 

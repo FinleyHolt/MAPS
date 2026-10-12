@@ -6,7 +6,7 @@ from maps.search.analyze_scene.geom_program import (
     run_program,
 )
 from maps.search.parse_compile.carry import (
-    _PREFLIGHT_COLOR_NOTE,
+    _preflight_color_note,
     run_geom_program_tool,
 )
 
@@ -90,7 +90,7 @@ def test_preflight_color_note_on_emphasis_only_attach():
              "args": {"items": "r0",
                       "emphasis": [{"key": "color_red", "w": 1}]}},
         ]}}, namespace=_PRIOR_NS, preflight=True)
-    assert _PREFLIGHT_COLOR_NOTE in str(out.get("error")), out
+    assert _preflight_color_note() in str(out.get("error")), out
 
 
 def test_per_stop_round_serves_no_phase_note():
@@ -104,4 +104,4 @@ def test_per_stop_round_serves_no_phase_note():
              "args": {"items": "r0",
                       "emphasis": [{"key": "color_red", "w": 1}]}},
         ]}}, namespace=ns)
-    assert _PREFLIGHT_COLOR_NOTE not in str(out), out
+    assert _preflight_color_note() not in str(out), out

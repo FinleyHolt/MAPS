@@ -401,27 +401,35 @@ def map_vision_text(maps: list[dict]) -> str:
     """The map message's text: what the picture is (world state, not
     imagery), and each map's window, badge legend and class colors."""
     order = ", ".join(str(m.get("center_fid") or "map") for m in maps)
-    base = (f"World-state maps -- the survey plus everything detected "
-            f"so far, not a photograph: light-gray lines are roads, "
-            f"tan shapes are surveyed buildings, muted regions are "
-            f"landuse by class, dark is nothing recorded. Detections "
-            f"are the bright class-colored shapes, each carrying a "
-            f"small dN chip -- dN is detection fid detected_N, so any "
-            f"one of them can be named. Surveyed buildings big enough "
-            f"at this zoom carry their own pNNNN chip: pNNNN is "
-            f"prior fid prior_NNNN (narrow the window to chip more of "
-            f"them). A detection lying on a surveyed footprint shows "
-            f"tan hatching through its fill, and that survey's "
-            f"pNNNN chip sits stacked under the dN chip -- "
-            f"co-location drawn, identity still the graph's call. "
-            f"The survey part does NOT have "
-            f"the shape of a cul-de-sac bulb, a driveway, a pool, a "
-            f"car, or anything built since the survey -- no zoom "
-            f"shows those; what has been DETECTED is drawn where it "
-            f"was found. To see what is actually there, "
-            f"{'fly: ' if withheld('look') else 'fly and look: '}"
-            f"the camera is the live check on this. One per item in "
-            f"order: [{order}]. Numbered badges; per-map legend:")
+    _dn = ("Detections are the bright class-colored shapes, each carrying a "
+           "small dN chip -- dN is detection fid detected_N, so any "
+           "one of them can be named. ")
+    if withheld("prior"):
+        base = (f"World-state maps -- everything detected so far, not a "
+                f"photograph; this run has no prior map, so dark is "
+                f"nothing recorded. {_dn}Nothing undetected has a shape "
+                f"here; what has been DETECTED is drawn where it "
+                f"was found. To see what is actually there, ")
+    else:
+        base = (f"World-state maps -- the survey plus everything detected "
+                f"so far, not a photograph: light-gray lines are roads, "
+                f"tan shapes are surveyed buildings, muted regions are "
+                f"landuse by class, dark is nothing recorded. {_dn}"
+                f"Surveyed buildings big enough "
+                f"at this zoom carry their own pNNNN chip: pNNNN is "
+                f"prior fid prior_NNNN (narrow the window to chip more of "
+                f"them). A detection lying on a surveyed footprint shows "
+                f"tan hatching through its fill, and that survey's "
+                f"pNNNN chip sits stacked under the dN chip -- "
+                f"co-location drawn, identity still the graph's call. "
+                f"The survey part does NOT have "
+                f"the shape of a cul-de-sac bulb, a driveway, a pool, a "
+                f"car, or anything built since the survey -- no zoom "
+                f"shows those; what has been DETECTED is drawn where it "
+                f"was found. To see what is actually there, ")
+    base += (f"{'fly: ' if withheld('look') else 'fly and look: '}"
+             f"the camera is the live check on this. One per item in "
+             f"order: [{order}]. Numbered badges; per-map legend:")
     for k, m in enumerate(maps):
         entries = m.get("legend") or []
         line = _legend_line(entries)

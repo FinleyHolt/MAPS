@@ -275,3 +275,16 @@ def test_a_prior_withhold_empty_find_names_no_prior(monkeypatch):
     monkeypatch.setenv(W.ENV, "prior")
     assert "searched every surface row and matched nothing" in hint()
     assert "prior" not in hint()
+
+
+def test_a_prior_withhold_map_caption_and_color_note_name_no_survey(monkeypatch):
+    from maps.search.parse_compile.carry import _preflight_color_note
+    from maps.search.parse_compile.views import map_vision_text
+
+    assert "pNNNN" in map_vision_text([]) and "priors" in _preflight_color_note()
+    monkeypatch.setenv(W.ENV, "prior")
+    caption = map_vision_text([])
+    for word in ("survey", "pNNNN", "roads", "hatching", "landuse"):
+        assert word not in caption, (word, caption)
+    assert "detected_N" in caption and "no prior map" in caption
+    assert "prior" not in _preflight_color_note().replace("no prior map", "")
