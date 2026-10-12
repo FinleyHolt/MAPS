@@ -41,8 +41,8 @@ def _compact(msgs, target):
 
 
 def _grid(fids, filler=0) -> str:
-    lines = ["| fid | class | color | color_conf |", "| --- | --- | --- | --- |"]
-    lines += [f"| {f} | car | red? | 0.4 |" for f in fids]
+    lines = ["| fid | class | color |", "| --- | --- | --- |"]
+    lines += [f"| {f} | car | red? |" for f in fids]
     return "\n".join(lines) + ("\n" + "z" * filler if filler else "")
 
 
@@ -153,7 +153,7 @@ def test_stale_dumps_clear_to_fids_with_their_colors_and_the_live_dump_stays():
     out = _compact(msgs, _est(msgs) - 1500)
     stale = _body(out[3])
     assert stale["fids"] == ["a1", "a2"] and "rows" not in stale
-    assert "legend" not in stale and stale["colors"] == "a1=red?@0.4; a2=red?@0.4"
+    assert "legend" not in stale and stale["colors"] == "a1=red?; a2=red?"
     assert "re-run analyze" in stale["hint"]
     assert json.loads(out[3]["content"])["said"] == "cars  # a"
     assert out[5] == msgs[5]                   # the live view
@@ -221,4 +221,4 @@ def test_only_a_served_dump_is_selected_and_degraded():
     assert C._dump_result_indices(msgs) == [3, 5]   # the trailing error is no dump
     assert C._degrade_tool_result_content(error["content"]) is None
     assert C._degrade_tool_result_content("not json") is None
-    assert C._rows_color_entries(_grid(["f1"])) == ["f1=red?@0.4"]
+    assert C._rows_color_entries(_grid(["f1"])) == ["f1=red?"]

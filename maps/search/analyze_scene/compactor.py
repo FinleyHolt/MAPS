@@ -384,9 +384,9 @@ def _iter_op_heads(obj: dict):
 
 
 def _rows_color_entries(rows: str) -> list[str]:
-    """``fid=color[@conf]`` per data row of a ``rows`` grid."""
+    """``fid=color`` per data row of a ``rows`` grid."""
     entries: list[str] = []
-    fid_i = col_i = conf_i = None
+    fid_i = col_i = None
     for line in rows.splitlines():
         if not line.startswith("|"):
             continue
@@ -394,7 +394,6 @@ def _rows_color_entries(rows: str) -> list[str]:
         if "fid" in cells:  # a header row (repeats down the grid)
             fid_i = cells.index("fid")
             col_i = cells.index("color") if "color" in cells else None
-            conf_i = cells.index("color_conf") if "color_conf" in cells else None
             continue
         if fid_i is None or col_i is None or fid_i >= len(cells):
             continue
@@ -402,8 +401,7 @@ def _rows_color_entries(rows: str) -> list[str]:
         # skip blanks, "-" absent-cells AND the "---" markdown separator row
         if not fid.strip("-") or not col.strip("-"):
             continue
-        conf = cells[conf_i] if conf_i is not None and conf_i < len(cells) else ""
-        entries.append(f"{fid}={col}" + (f"@{conf}" if conf and conf != "-" else ""))
+        entries.append(f"{fid}={col}")
     return entries
 
 
