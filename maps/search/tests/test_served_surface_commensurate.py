@@ -134,10 +134,9 @@ def test_dynamic_mission_output_is_commensurate():
                 "pose_xy": [0.0, 0.0], "new_detections": 0, "cue": "cue"}
 
     fr = FakeReasoner(script)
-    reply = rl.advance_reasoner_one_round(
+    reply = rl._Mission(
         boost_queue=unarmed_boost,
         reasoner=fr,
-        user_message="instruction",
         ctx=bare_ctx(),
         rid_tag="m0",
         transcript=[],
@@ -153,7 +152,7 @@ def test_dynamic_mission_output_is_commensurate():
             declare_concepts=lambda items: {"declared": [
                 f"{i['class']} ({i['role']})" for i in items]},
             flight_budget=1, turn_cap=48),
-    )
+    ).converse("instruction")
     assert isinstance(reply, rl.MissionReply)
     served = [m["content"] for m in fr.messages
               if m.get("role") in ("tool", "user")
@@ -177,16 +176,16 @@ def test_the_transcript_says_what_json_says():
     # The kind vocabulary the mission loop writes is the run surface's.
     tr: list[dict] = []
     fr = FakeReasoner([[("run", {"code": 'look_for("car")'})], "over"])
-    rl.advance_reasoner_one_round(
+    rl._Mission(
         boost_queue=unarmed_boost,
-        reasoner=fr, user_message="i", ctx=bare_ctx(),
+        reasoner=fr, ctx=bare_ctx(),
         rid_tag="m0", transcript=tr,
         compute_namespace={"cands": [], "anchors": [], "cell_m": 1.0},
         diag={},
         mission_spec=rl.MissionSpec(
             fly=lambda i: {"error": "unused"},
             declare_concepts=lambda i: {"declared": []}),
-    )
+    ).converse("i")
     kinds = {t.get("kind") for t in tr}
     assert "run" in kinds, kinds
     assert not (kinds & {"program", "say", "act", "view"}), kinds

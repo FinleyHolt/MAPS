@@ -130,11 +130,11 @@ def drive(script, *, fly=None, declare=None, flight_budget=8, turn_cap=48,
           transcript=None, cands=None, retask=None, look_renderer=None,
           **loop_kw):
     """One mission over a still surface. Returns (reply, reasoner, flights,
-    declared); ``loop_kw`` reaches ``advance_reasoner_one_round``."""
+    declared); ``loop_kw`` reaches ``_Mission``."""
     from maps.search.parse_compile.reasoner_loop import (
         MissionReply,
         MissionSpec,
-        advance_reasoner_one_round,
+        _Mission,
     )
 
     flights: list[dict] = []
@@ -157,9 +157,8 @@ def drive(script, *, fly=None, declare=None, flight_budget=8, turn_cap=48,
 
     fr = FakeReasoner(script)
     loop_kw.setdefault("boost_queue", unarmed_boost)
-    reply = advance_reasoner_one_round(
+    reply = _Mission(
         reasoner=fr,
-        user_message="Find the goal object.",
         ctx=bare_ctx(),
         rid_tag="m0",
         transcript=transcript,
@@ -172,7 +171,7 @@ def drive(script, *, fly=None, declare=None, flight_budget=8, turn_cap=48,
         retask=retask,
         look_renderer=look_renderer,
         **loop_kw,
-    )
+    ).converse("Find the goal object.")
     assert isinstance(reply, MissionReply)
     return reply, fr, flights, declared
 
@@ -191,7 +190,7 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
     fid. Returns (reply, tool results, flights, stops asked, rendered)."""
     from maps.search.parse_compile.reasoner_loop import (
         MissionSpec,
-        advance_reasoner_one_round,
+        _Mission,
     )
     from maps.util.xy_token import parse_xy_token
 
@@ -225,10 +224,9 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
                 for r in reqs]
 
     fr = FakeReasoner(script)
-    reply = advance_reasoner_one_round(
+    reply = _Mission(
         boost_queue=unarmed_boost,
-        reasoner=fr, user_message="Find the goal object.",
-        ctx=bare_ctx(pose_xy=(START[0], START[1])),
+        reasoner=fr, ctx=bare_ctx(pose_xy=(START[0], START[1])),
         rid_tag="m0",
         compute_namespace={"cands": list(CANDS if cands is None else cands),
                            "anchors": [], "cell_m": 1.0},
@@ -239,7 +237,7 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
             fly=_fly, declare_concepts=lambda i: {"declared": []},
             coverage_stops=_stops, flight_budget=32, turn_cap=48,
             deadline_epoch=deadline_epoch),
-    )
+    ).converse("Find the goal object.")
     return reply, tool_results(fr), flights, asked, rendered
 
 
@@ -292,7 +290,7 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
     from maps.search.analyze_scene.geom_program import build_surface_from_graph
     from maps.search.parse_compile.reasoner_loop import (
         MissionSpec,
-        advance_reasoner_one_round,
+        _Mission,
     )
 
     graph = SimpleNamespace(nodes={**priors(), **(extra_priors or {})})
@@ -318,10 +316,9 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
     cands, anchors = build_surface_from_graph(
         graph.nodes.items(), (0.0, 0.0), 1.0)
     fr = FakeReasoner(script)
-    advance_reasoner_one_round(
+    _Mission(
         boost_queue=unarmed_boost,
         reasoner=fr,
-        user_message="Find the goal object.",
         ctx=bare_ctx(graph=graph),
         rid_tag="m0",
         transcript=[],
@@ -342,7 +339,7 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
             for r in reqs],
         mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: {
             "declared": []}),
-    )
+    ).converse("Find the goal object.")
     return tool_results(fr), graph, added
 
 
@@ -353,7 +350,7 @@ def map_mission(script, renderer=None, finds=1, extra_priors=None, spread=False)
     from maps.search.analyze_scene.geom_program import build_surface_from_graph
     from maps.search.parse_compile.reasoner_loop import (
         MissionSpec,
-        advance_reasoner_one_round,
+        _Mission,
     )
 
     graph = SimpleNamespace(nodes={**priors(), **(extra_priors or {})})
@@ -376,14 +373,14 @@ def map_mission(script, renderer=None, finds=1, extra_priors=None, spread=False)
 
     cands, anchors = build_surface_from_graph(graph.nodes.items(), (0.0, 0.0), 1.0)
     fr = FakeReasoner([[run(c)] for c in script] + ["done"])
-    advance_reasoner_one_round(
+    _Mission(
         boost_queue=unarmed_boost,
-        reasoner=fr, user_message="Find the car.",
-        ctx=bare_ctx(graph=graph, grid_shape=(100, 100)),
+        reasoner=fr, ctx=bare_ctx(graph=graph, grid_shape=(100, 100)),
         rid_tag="m0", transcript=[],
         compute_namespace={"cands": cands, "anchors": anchors, "cell_m": 1.0},
         diag={}, look_renderer=renderer or (lambda reqs: []),
-        mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: {"declared": []}))
+        mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: {"declared": []}),
+    ).converse("Find the car.")
     return tool_results(fr), fr.vision
 
 
@@ -408,7 +405,7 @@ def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
     vision texts)."""
     from maps.search.parse_compile.reasoner_loop import (
         MissionSpec,
-        advance_reasoner_one_round,
+        _Mission,
     )
     from maps.search.render.look_render import render_candidate_crops
 
@@ -422,10 +419,9 @@ def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
         return recs
 
     fr = FakeReasoner(script)
-    advance_reasoner_one_round(
+    _Mission(
         boost_queue=unarmed_boost,
         reasoner=fr,
-        user_message="find the car",
         ctx=bare_ctx(),
         rid_tag="m0",
         transcript=[],
@@ -435,7 +431,7 @@ def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
         look_renderer=renderer,
         mission_spec=MissionSpec(fly=lambda i: {"error": "unused"},
                                  declare_concepts=lambda i: {"declared": []}),
-    )
+    ).converse("find the car")
     vision = [str(m.get("content")) for m in fr.messages
               if m.get("role") == "user" and "badge legend" in
               str(m.get("content"))]

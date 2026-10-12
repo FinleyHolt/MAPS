@@ -71,13 +71,12 @@ def test_run_mission_hands_the_word_to_the_reasoner_it_builds(monkeypatch):
     construction; nothing downstream can put it back."""
     seen: dict = {}
 
-    def _round(*, reasoner, **kw):
-        seen["reasoner"] = reasoner
+    def _converse(mission, user_message):
+        seen["reasoner"] = mission.reasoner
         return MissionReply(ended_by="reply")
 
     monkeypatch.setattr(
-        "maps.search.parse_compile.reasoner_loop.advance_reasoner_one_round",
-        _round)
+        "maps.search.parse_compile.reasoner_loop._Mission.converse", _converse)
     _reply, reasoner = run_mission(
         instruction="find the truck",
         reasoner_url="http://unused",

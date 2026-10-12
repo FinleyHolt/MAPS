@@ -357,7 +357,7 @@ def run_mission(
     **turn,
 ) -> tuple[MissionReply, Reasoner]:
     """THE mission entry: build the Reasoner and run the first operator turn
-    (``turn`` is :func:`advance_reasoner_one_round`'s). Returns the reply and
+    (``turn`` is :class:`_Mission`'s). Returns the reply and
     the Reasoner, for :func:`continue_mission`."""
     reasoner = Reasoner(
         reasoner_url=reasoner_url,
@@ -378,23 +378,9 @@ def continue_mission(*, reasoner: Reasoner, instruction: str,
     """One operator turn on the mission's Reasoner, over the surface ``ctx``
     holds now. After the first, a turn follows a reply (the field path: the
     reply is a report) and keeps every earlier turn."""
-    return advance_reasoner_one_round(
-        reasoner=reasoner, user_message=instruction.strip(), ctx=ctx,
-        rid_tag=rid_tag, compute_namespace=_surface_from_ctx(ctx),
-        preflight=preflight, **turn)
-
-
-def advance_reasoner_one_round(*, user_message: str, **mission) -> MissionReply:
-    """The mission's turn loop: append ``user_message``, then serve ``run``
-    until the model's plain reply or a harness ending (``mission`` is
-    :class:`_Mission`'s).
-
-    An empty turn, a reply that is a block of code and a reply with zero
-    flights behind it are repaired before a repeat is accepted as the
-    ending. ``retask`` (the field console) yields operator turns drained at
-    the top of each turn; ``diag["turns_used"]`` is stamped every turn.
-    """
-    return _Mission(**mission).converse(user_message)
+    return _Mission(reasoner=reasoner, ctx=ctx, rid_tag=rid_tag,
+                    compute_namespace=_surface_from_ctx(ctx), preflight=preflight,
+                    **turn).converse(instruction.strip())
 
 
 class _Mission:
@@ -1426,7 +1412,14 @@ class _Mission:
         return MissionReply(ended_by=ended_by, turns_used=int(turns))
 
     def converse(self, user_message: str) -> MissionReply:
-        """Append ``user_message`` and run the turn loop to its ending."""
+        """The mission's turn loop: append ``user_message``, then serve
+        ``run`` until the model's plain reply or a harness ending.
+
+        An empty turn, a reply that is a block of code and a reply with zero
+        flights behind it are repaired before a repeat is accepted as the
+        ending. ``retask`` (the field console) yields operator turns drained
+        at the top of each turn; ``diag["turns_used"]`` is stamped every turn.
+        """
         if self.reasoner.compaction_infeasible:
             return self._mission_end("compaction_infeasible")
         self.reasoner.append_user(user_message)

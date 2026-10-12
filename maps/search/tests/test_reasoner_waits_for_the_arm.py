@@ -12,7 +12,7 @@ from maps.search.parse_compile.reasoner_loop import (
     _RETRIABLE_LLM_ERRORS,
     MissionReply,
     MissionSpec,
-    advance_reasoner_one_round,
+    _Mission,
 )
 from maps.search.tests.fakes import TEST_SPEC, bare_ctx, unarmed_boost
 
@@ -51,16 +51,16 @@ def _round(monkeypatch, faults: int, *, cancel_event=None, transcript=None,
                  cancel_event=cancel_event)
     r.step_tool_call = _step
 
-    return advance_reasoner_one_round(
+    return _Mission(
         boost_queue=unarmed_boost,
-        reasoner=r, user_message="find the car", ctx=bare_ctx(),
+        reasoner=r, ctx=bare_ctx(),
         compute_namespace={"cands": [], "anchors": []},
         rid_tag="h0", transcript=transcript,
         mission_spec=MissionSpec(
             fly=lambda item: {"stop_id": "stop_000", "target": item["target_fid"],
                               "pose_xy": [0.0, 0.0], "new_detections": 0},
             declare_concepts=lambda items: {"declared": []},
-            flight_budget=4, turn_cap=16))
+            flight_budget=4, turn_cap=16)).converse("find the car")
 
 
 def test_a_live_mission_outlasts_the_bench_budget_and_resumes(monkeypatch):
