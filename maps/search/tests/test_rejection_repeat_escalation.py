@@ -1,6 +1,8 @@
 """A re-served rejection carries its repeat count and the live census."""
 from __future__ import annotations
 
+import json
+
 from maps.search.tests.fakes import drive, run, tool_results
 
 # Colour never cuts, so this block is refused every time it is served.
@@ -76,3 +78,16 @@ def test_a_grounding_refusal_serves_no_op_signature():
     served = drive_blocks(['go_to("cuisine=pizza;kebab")'])
     err = served[0]["error"]
     assert "not a query operator" in err and "signature" not in err, err
+
+
+def test_a_prior_withhold_census_counts_no_prior_rows(monkeypatch):
+    blocks = ['a = find("cuisine=pizza;kebab")\na'] * 3 + [_COLOR_FILTER_BLOCK] * 3
+    flown = json.dumps(drive_blocks(blocks))
+    # the census on a rejection's 2nd and 3rd serve, and on a repeated dedup
+    n = flown.count("prior map row fid(s)")
+    assert n >= 3, flown
+    assert all(m in flown for m in ("Live surface:", "rejected again", "still nothing new"))
+    monkeypatch.setenv("SEARCH_WITHHOLD", "prior")
+    served = json.dumps(drive_blocks(blocks))
+    assert served.count("detection fid(s)") == n, served
+    assert "prior map row" not in served, served

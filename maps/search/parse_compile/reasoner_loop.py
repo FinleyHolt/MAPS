@@ -186,9 +186,14 @@ _DEDUP_NOTE = (
 _DEDUP_REPEAT_NOTE = (
     "still nothing new, a {n} time: the world has not moved since that turn, "
     "so no program can answer differently until something enters it -- a "
-    "flight folds new detections. Live now: {c_n} detection fid(s), {a_n} "
-    "prior map row fid(s){cols}."
+    "flight folds new detections. Live now: {counts}{cols}."
 )
+
+
+def _live_counts(c_n: int, a_n: int, sep: str = ",") -> str:
+    """The census's fid counts; the prior term only when the prior is served."""
+    return f"{c_n} detection fid(s)" + (
+        "" if withheld("prior") else f"{sep} {a_n} prior map row fid(s)")
 
 
 def _ordinal(n: int) -> str:
@@ -1542,8 +1547,7 @@ def advance_reasoner_one_round(
         parts = [
             f" This error class has now occurred {_n}x.",
             # Counts only: a fid sample is noise.
-            f" Live surface: {c_n} detection fid(s);"
-            f" {a_n} prior map row fid(s).",
+            f" Live surface: {_live_counts(c_n, a_n, ';')}.",
         ]
         if cols:
             parts.append(
@@ -1589,8 +1593,8 @@ def advance_reasoner_one_round(
             f"live-surface census at its 2nd (both above in this "
             f"conversation, unchanged). The executor is deterministic on "
             f"the same surface: re-issuing the same call unchanged "
-            f"returns exactly this rejection. Live now: {c_n} "
-            f"detection fid(s), {a_n} prior map row fid(s)"
+            f"returns exactly this rejection. Live now: "
+            f"{_live_counts(c_n, a_n)}"
             + (f"; columns computed on rows: {_cols_s}." if cols else "."))
 
     def _loop_broken_error(err: str, sig_of: str | None = None) -> str:
@@ -1766,8 +1770,8 @@ def advance_reasoner_one_round(
                 _cols_s = ("; columns live: " + ", ".join(_dcols[:12])
                            if _dcols else "")
                 return {"note": _DEDUP_REPEAT_NOTE.format(
-                    n=_ordinal(_dedup_streak["n"]), c_n=_c_n, a_n=_a_n,
-                    cols=_cols_s)}
+                    n=_ordinal(_dedup_streak["n"]),
+                    counts=_live_counts(_c_n, _a_n), cols=_cols_s)}
             # name the live handles so the reference is actionable
             _prev_out = _prev[1] if isinstance(_prev[1], dict) else {}
             _hs = sorted((k for k in {**_prev_out,
