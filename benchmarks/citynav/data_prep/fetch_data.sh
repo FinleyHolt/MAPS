@@ -10,13 +10,13 @@
 #   $CITYNAV_ROOT/raw_ply/{train,test}/<block>.ply   (SensatUrban)
 #
 # Usage:
-#   CITYNAV_ROOT=./data/citynav-arxiv benchmarks/citynav/data_prep/fetch_data.sh
+#   CITYNAV_ROOT=~/datasets/citynav-arxiv benchmarks/citynav/data_prep/fetch_data.sh
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
-CITYNAV_ROOT="${SEARCH_CITYNAV_DATA:-${CITYNAV_ROOT:-./data/citynav-arxiv}}"
+CITYNAV_ROOT="${SEARCH_CITYNAV_DATA:-${CITYNAV_ROOT:-$HOME/datasets/citynav-arxiv}}"
 
 echo "== 1/4: upstream CityNav checkout -> ${CITYNAV_ROOT}"
 if [[ -d "${CITYNAV_ROOT}/.git" ]]; then
