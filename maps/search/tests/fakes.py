@@ -15,7 +15,7 @@ TEST_SPEC = EndpointSpec(
     model_id="inkling-small",
     max_model_len=262144,
     tokenizer_name="qwen",
-    output_reserve=40000,
+    max_output_tokens=40000,
 )
 
 

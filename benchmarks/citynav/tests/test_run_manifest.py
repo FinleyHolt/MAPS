@@ -18,7 +18,7 @@ STUB_SPEC = EndpointSpec(
     model_id="stub-model",
     max_model_len=32768,
     tokenizer_name="stub-tokenizer",
-    output_reserve=4096,
+    max_output_tokens=4096,
 )
 
 

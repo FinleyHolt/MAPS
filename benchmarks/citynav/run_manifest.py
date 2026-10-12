@@ -125,7 +125,6 @@ def _endpoint_section() -> dict:
         "model_id": s.model_id,
         "max_model_len": s.max_model_len,
         "tokenizer": s.tokenizer_name,
-        "output_reserve": s.output_reserve,
         "input_budget": s.input_budget,
         "max_output_tokens": s.max_output_tokens,
         "sam_url": s.sam_url,

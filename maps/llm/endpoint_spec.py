@@ -87,7 +87,7 @@ class EndpointSpec:
     model_id: str
     max_model_len: int
     tokenizer_name: str
-    output_reserve: int
+    max_output_tokens: int  # the request's output cap
     sam_url: str = ""
 
     @property
@@ -96,11 +96,6 @@ class EndpointSpec:
         fits the served window."""
         return (self.max_model_len - self.max_output_tokens
                 - _WINDOW_MARGIN_TOKENS)
-
-    @property
-    def max_output_tokens(self) -> int:
-        """The request's output cap: the output reserve."""
-        return self.output_reserve
 
 
 def _output_reserve_for(max_model_len: int) -> int:
@@ -325,7 +320,6 @@ def discover(
             check_effort(model_id, effort)
         except ValueError as exc:
             raise EndpointDiscoveryError(f"SEARCH_SAMPLING_REASONING_EFFORT: {exc}") from exc
-    output_reserve = _output_reserve_for(max_model_len)
     tokenizer_name = _require_tokenizer(model_id)
 
     spec = EndpointSpec(
@@ -333,7 +327,7 @@ def discover(
         model_id=model_id,
         max_model_len=max_model_len,
         tokenizer_name=tokenizer_name,
-        output_reserve=output_reserve,
+        max_output_tokens=_output_reserve_for(max_model_len),
         sam_url=sam_url,
     )
     if spec.input_budget < _MIN_INPUT_BUDGET:

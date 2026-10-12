@@ -120,7 +120,7 @@ def test_the_system_turn_withhold_serves_no_system_message(monkeypatch):
     monkeypatch.setenv(W.ENV, "system_turn")
     assert prompts.served_system_prompt("RGB, nadir.") == ""
     spec = EndpointSpec(base_url="http://unused", model_id="inkling-small", max_model_len=262144,
-                        tokenizer_name="qwen", output_reserve=40000)
+                        tokenizer_name="qwen", max_output_tokens=40000)
     r = ra.Reasoner(reasoner_url="http://unused", endpoint_spec=spec,
                     sensor_description="RGB, nadir.")
     assert r.messages == []

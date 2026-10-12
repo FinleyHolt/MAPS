@@ -68,7 +68,6 @@ def test_discover_single_endpoint(monkeypatch):
     assert s.base_url == _URL_A
     assert s.model_id == "gemma4-e4b"
     assert s.max_model_len == 262144
-    assert s.output_reserve == 40000
     assert s.input_budget == 262144 - 40000 - 1024
     assert s.max_output_tokens == 40000
 
@@ -80,7 +79,6 @@ def test_small_window_derivation(monkeypatch):
         {f"{_URL_A}/models": _models_payload("gemma4-26b-a4b-nvfp4", 32768)},
     )
     s = discover(_URL_A)
-    assert s.output_reserve == 8192
     assert s.input_budget == 32768 - 8192 - 1024
     assert s.max_output_tokens == 8192
 
@@ -286,7 +284,7 @@ def _spec(**kw) -> EndpointSpec:
         model_id="gemma4-e4b",
         max_model_len=262144,
         tokenizer_name="Qwen/Qwen3.6-35B-A3B",
-        output_reserve=40000,
+        max_output_tokens=40000,
     )
     base.update(kw)
     return EndpointSpec(**base)
