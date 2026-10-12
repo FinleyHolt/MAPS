@@ -61,7 +61,7 @@ def test_a_look_under_a_live_station_is_cut_from_the_runs_imagery_and_says_what_
     left, right = img[h // 2, w // 8], img[h // 2, w - w // 8]
     assert int(left[1]) > 120 and int(right.max()) < 40, (left, right)
     # The partly imaged window says how much is unobserved, by that word.
-    from maps.search.parse_compile.reasoner_loop import _look_vision_text
+    from maps.search.parse_compile.views import _look_vision_text
 
     assert "not imaged" in _look_vision_text(crops) and "raster" not in _look_vision_text(crops)
     # And a subject on ground the run never flew reads unobserved, by name.

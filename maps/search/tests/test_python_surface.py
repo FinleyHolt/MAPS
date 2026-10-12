@@ -387,7 +387,7 @@ def test_a_failed_unpack_unbinds_every_target():
 
 
 def test_a_crop_token_falls_back_to_the_rows_own_xy():
-    from maps.search.parse_compile.reasoner_loop import _crop_token_of
+    from maps.search.parse_compile.views import _crop_token_of
 
     live_row = {"fid": "detected_9", "xy": [10.0, 20.0]}
     end_row = {"fid": "end_0", "xy": [3.0, 4.5]}

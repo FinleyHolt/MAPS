@@ -236,7 +236,7 @@ def test_targetless_map_marks_start_at_digit_2():
 
 
 def test_the_map_frame_follows_what_was_asked_about():
-    from maps.search.parse_compile.reasoner_loop import (
+    from maps.search.parse_compile.views import (
         _MAP_FRAME_MARGIN,
         _MAP_FRAME_MIN_M,
     )

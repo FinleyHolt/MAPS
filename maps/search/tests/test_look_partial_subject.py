@@ -45,7 +45,7 @@ def test_a_subject_inside_its_frame_is_not_flagged(ortho_dir):
 
 
 def test_the_caption_states_the_extent_and_calls_the_ink_a_fragment():
-    from maps.search.parse_compile.reasoner_loop import _look_vision_text
+    from maps.search.parse_compile.views import _look_vision_text
 
     text = _look_vision_text([{
         "center_fid": "f0", "center_label": "f0",

@@ -2,7 +2,7 @@
 LABELS normalized out of the key."""
 from __future__ import annotations
 
-from maps.search.parse_compile.reasoner_loop import _program_dedup_key
+from maps.search.parse_compile.carry import _program_dedup_key
 from maps.search.tests.fakes import drive, ops_of_block, run, tool_results
 
 _BLOCK = 'r1 = find("car")\nr2 = r1.order(nearest="prior_1")\n'

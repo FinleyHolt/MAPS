@@ -1,7 +1,7 @@
 """The delivered-image caption states each view's TRUE orientation."""
 from __future__ import annotations
 
-from maps.search.parse_compile.reasoner_loop import _look_vision_text
+from maps.search.parse_compile.views import _look_vision_text
 
 _LEGEND = [{"digit": 1, "label": "car c1", "role": "center"}]
 
