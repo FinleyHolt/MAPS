@@ -3,11 +3,12 @@
 
 A prior is exactly what OSM gives: the realised mask (area -> cells inside the
 polygon, way -> buffered polyline, node -> its cell) clipped to the cells the
-block imagery covers, ALL raw tags verbatim, the ``name`` when present, the
-``osm_id``, and ``world_contour``: the source geometry's exact vertices in
-CityNav local meters at 2 dp (a polygon's exterior ring closed, a way open, a
-node's one vertex), which ``build_surface`` serves as the row ``mask``. Nothing
-is classified, named or dropped beyond "rasterizes to no covered cell".
+block imagery covers, every raw tag verbatim except the ground-truth label keys
+(``_PRIVILEGED_KEYS``), the ``name`` when present, the ``osm_id``, and
+``world_contour``: the source geometry's exact vertices in CityNav local meters
+at 2 dp (a polygon's exterior ring closed, a way open, a node's one vertex),
+which ``build_surface`` serves as the row ``mask``. Nothing is classified or
+named, and no feature is dropped beyond "rasterizes to no covered cell".
 ``meta.json`` carries the grid (``bounds``, ``grid_shape``, ``cell_size_m``),
 a caller's ``coordinate_frame`` and ``georef``, and for a city-cache bake ``provenance``: cache name +
 sha256, record count and the cache's georef residuals.
@@ -467,8 +468,8 @@ def _feature_entry(
     world_contour: list[list[float]] | None,
     coverage: np.ndarray | None,
 ) -> dict[str, Any]:
-    """One baked prior: mask, every raw tag verbatim, the name when present
-    and the osm_id. The centroid is the cell mean, snapped to the nearest
+    """One baked prior: mask, every raw tag verbatim except
+    ``_PRIVILEGED_KEYS``, the name when present and the osm_id. The centroid is the cell mean, snapped to the nearest
     kept cell when it lands over no-data (it becomes the surface xy and the
     viewpoint target, both over imagery)."""
     ordered_cells = [[int(r), int(c)] for r, c in sorted(cells)]

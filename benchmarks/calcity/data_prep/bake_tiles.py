@@ -2,10 +2,10 @@
 """Bake Cal City's OSM prior with the streamlined CityNav baker.
 
 The bundle's OSM goes STRAIGHT to the baker: reprojected into the AOI's local
-metric frame, tags verbatim, geometry kind intact, nothing classified and
-nothing dropped. That is the same contract CityNav bakes under -- see
-``benchmarks.citynav.bake.city._read_geojson_cache``, "Every feature with a
-geometry is kept -- no classification, no drop-gate."
+metric frame, tags verbatim except the ground-truth label keys
+(``benchmarks.citynav.bake.city._PRIVILEGED_KEYS``), geometry kind intact,
+nothing classified and no feature dropped. That is the contract CityNav bakes
+under (``benchmarks.citynav.bake.city``).
 
 ``objects.json``, the CityRefer catalog, is the ground-truth and authoring
 substrate (episode ``object_ids``); the prior is baked from the bundle alone.
