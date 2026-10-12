@@ -15,8 +15,9 @@ class ReasonerUnionConceptProvider:
     replacement: the mission's declared class union
     (``search_loop.declare_mission_concepts``) and the agent-owned watchlist
     (the ``PerceptionDirector`` pushes the full current set, watchlist plus
-    active boost concepts, on every change). Empty is valid and the common
-    state before the model declares anything: ``detect`` then returns ``[]``.
+    the classes of the boosts riding a flight, on every change). Empty is
+    valid and the common state before the model declares anything:
+    ``detect`` then returns ``[]``.
     """
 
     concepts: list[str] = field(default_factory=list)

@@ -166,7 +166,7 @@ def test_a_failing_boost_director_never_kills_a_flight(stub_session):
     def boom(*a, **k):
         raise RuntimeError("director down")
 
-    session = stub_session(activate_pending_boosts=boom, retire_boosts_after_round=boom)
+    session = stub_session(start_flight=boom, record_flown_stop=boom)
     report = session.fly({"target_fid": "detected_3"})
     assert "error" not in report and report["target"] == "detected_3"
     assert session.flights[-1]["provenance"] == "detected"

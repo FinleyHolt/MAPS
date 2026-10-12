@@ -122,8 +122,7 @@ CANDS = [
 
 
 def unarmed_boost(concepts, where):
-    """The boost channel of a run with no armed perception director: the
-    answer ``SearchLoop._boost_queue_cb`` gives then."""
+    """A boost channel that refuses every boost."""
     return {"error": "boost queueing is not armed this episode"}
 
 

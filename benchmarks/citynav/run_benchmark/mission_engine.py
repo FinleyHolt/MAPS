@@ -211,9 +211,6 @@ class MissionSession:
             if markers else None
         )
         loop = h.search_loop
-        # Arm the perception-direction surface (empty watchlist) so
-        # view{watchlist}/view{boost} are live from the first turn.
-        loop.declare_mission_concepts([])
         with loop._lock:
             self.ctx = loop._tool_ctx_for_examiner()
         state = h.state
@@ -302,11 +299,11 @@ class MissionSession:
         new_alt = float(min(max(float(state.altitude_m), _g + 1.0), float(h.cfg.altitude_cap_m)))
         new_heading = float(state.heading_deg)
 
-        # Pending view{boost} vocabulary activates for THIS flight's /segment.
+        # Queued boosts segment on THIS flight.
         try:
-            loop.activate_pending_boosts()
+            loop.start_flight()
         except Exception:  # noqa: BLE001 — perception direction never kills a flight
-            log.exception("boost activation failed; flight proceeds un-boosted")
+            log.exception("boost start failed; flight proceeds un-boosted")
 
         step_idx = len(self.flights)
         stop_id = f"stop_{step_idx:03d}"
@@ -373,21 +370,12 @@ class MissionSession:
             # the stop is the target asked for, as on the bench.
             new_xy = (float(target_xy[0]), float(target_xy[1]))
             state.pose_xy = new_xy
-        # The flight is perceived: retire matched boosts, log the flown stop
-        # into the retrospective address space, re-push the plain watchlist.
+        # The flight is perceived: a boost can now address this stop.
         try:
-            loop.retire_boosts_after_round(
-                [
-                    {
-                        "pose_xy": new_xy,
-                        "alt_m": new_alt,
-                        "stop_id": stop_id,
-                        "target_fids": [token] if token else [],
-                    }
-                ]
-            )
+            loop.record_flown_stop({"pose_xy": new_xy, "alt_m": new_alt, "stop_id": stop_id,
+                                    "target_fids": [token] if token else []})
         except Exception:  # noqa: BLE001 — perception direction never kills a flight
-            log.exception("boost retirement failed (non-fatal)")
+            log.exception("flown-stop record failed (non-fatal)")
 
         self.flights.append(
             {

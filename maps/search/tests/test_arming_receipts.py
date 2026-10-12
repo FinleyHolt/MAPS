@@ -77,7 +77,27 @@ def test_a_quoted_point_boost_re_segments_the_flown_stop_it_falls_on():
     from maps.search.parse_compile.perception_director import PerceptionDirector
 
     d = PerceptionDirector(retro_perceiver=lambda flown, cs: {"n_dets": 1, "stop": flown["stop_id"]})
-    d.retire_after_round([{"pose_xy": (100.0, 200.0), "stop_id": "stop_000", "target_fids": ["prior_1"]}])
+    d.record_flown({"pose_xy": (100.0, 200.0), "stop_id": "stop_000", "target_fids": ["prior_1"]})
     ack = d.boost_queue(["pool"], ["[110, 205]"])
     assert ack["retro"] == [{"where": [110.0, 205.0], "n_dets": 1, "stop": "stop_000"}], ack
     assert "queued" not in ack
+
+
+def test_a_queued_boost_segments_its_flights_in_watchlist_order_until_its_target_flies():
+    from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+
+    prov = ReasonerUnionConceptProvider()
+    loop = search_loop(sam_setter=prov.set_concepts)
+    car, pool = {"class": "car", "role": "target"}, {"class": "pool", "role": "target"}
+    loop.declare_mission_concepts([car, pool])
+    assert loop._boost_queue_cb(["pool"], ["prior_1"])["queued"] == ["pool"]
+    loop.declare_mission_concepts([pool, car])  # a re-declaration reorders the union
+    assert prov.concepts == ["pool", "car"]
+    for target in ("prior_2", "prior_1"):  # the boost rides until prior_1 flies
+        loop.start_flight()
+        assert prov.concepts == ["car", "pool"]
+        loop.record_flown_stop({"pose_xy": (0.0, 0.0), "stop_id": "s", "target_fids": [target]})
+        loop.declare_mission_concepts([car, pool])
+        loop.declare_mission_concepts([pool, car])
+    loop.start_flight()
+    assert prov.concepts == ["pool", "car"]

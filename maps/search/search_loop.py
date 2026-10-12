@@ -29,7 +29,7 @@ class _State:
     # {fid, class, xy, conf} the last update_perception folded: the flight
     # report serves them.
     last_flight_detections: list[dict] = field(default_factory=list)
-    # The PerceptionDirector; None until the first concept declaration.
+    # The PerceptionDirector: the watchlist and the boost.
     perception_director: Any = None
     # Prior-colour enrichment frames that raised; the warning prints on the
     # first and every 50th.
@@ -74,8 +74,14 @@ class SearchLoop:
         self._lock = threading.RLock()
 
     def start(self, graph) -> None:
-        """Bind the episode's graph: the prior seed every detection folds into."""
-        self._state = _State(runtime_graph=graph)
+        """Bind the episode's graph (the prior seed every detection folds
+        into) and an empty watchlist."""
+        from maps.search.parse_compile.perception_director import (  # noqa: PLC0415
+            PerceptionDirector,
+        )
+
+        self._state = _State(runtime_graph=graph,
+                             perception_director=PerceptionDirector(push=self._sam_setter))
 
     @property
     def _cell_size_m(self) -> float:
@@ -270,82 +276,33 @@ class SearchLoop:
             raise RuntimeError("SearchLoop.start must be called before update.")
         return self._state
 
-    # ------------------------------------------------------------------ #
-    # PerceptionDirector plumbing
-    # ------------------------------------------------------------------ #
-
-    def _arm_perception_director(self, concepts: list) -> None:
-        """(Re)build the per-episode PerceptionDirector with ``concepts`` as
-        the initial live watchlist. Called under ``self._lock`` by the
-        first ``declare_mission_concepts``."""
-        from maps.search.parse_compile.perception_director import (
-            PerceptionDirector,
-        )
-
-        if self._sam_setter is None:
-            log.info(
-                "PerceptionDirector armed WITHOUT a live watchlist channel "
-                "(no sam_watchlist_setter): view{watchlist}/boost mutate "
-                "engine state only"
-            )
-        director = PerceptionDirector(push=self._sam_setter)
-        director.retro_perceiver = getattr(self, "_retro_perceiver_fn", None)
-        director.init_watchlist([str(c) for c in (concepts or [])])
-        self.state.perception_director = director
-
     def _boost_queue_cb(self, concepts, where) -> dict:
-        """``view{boost}`` channel handed to the per-stop round."""
+        """The boost channel the mission's ``look_for(..., at=)`` calls."""
         with self._lock:
-            d = self.state.perception_director
-            if d is None:
-                return {"error": "boost queueing is not armed this episode"}
-            return d.boost_queue(concepts, where)
+            return self.state.perception_director.boost_queue(concepts, where)
 
     def set_retro_perceiver(self, fn) -> None:
-        """Install the RETROSPECTIVE-perception executor: the
-        runtime closure that re-renders a flown stop's recorded pose,
-        re-segments it with a boost vocabulary, ingests through the normal
-        upsert path, and returns the delta. Threaded onto the live director
-        (and any director armed later)."""
-        self._retro_perceiver_fn = fn
+        """Install the retrospective executor: re-render a flown stop's
+        recorded pose, re-segment it with the boost's classes, fold it, and
+        return the delta."""
         with self._lock:
-            if self._state is not None:
-                d = self._state.perception_director
-                if d is not None:
-                    d.retro_perceiver = fn
+            self.state.perception_director.retro_perceiver = fn
 
-    def activate_pending_boosts(self) -> list[str]:
-        """Runtime hook (run_benchmark, top of each perception round): move
-        pending boosts to ACTIVE and push watchlist+boost concepts live.
-        Returns the activated concepts ([] when none pending)."""
+    def start_flight(self) -> None:
+        """Put the queued boosts' classes on the coming flight's segmenter."""
         with self._lock:
-            if self._state is None:
-                return []
-            d = self._state.perception_director
-            if d is None:
-                return []
-            activated = d.activate_pending()
-            if activated:
-                log.info("boost activation: +%s for this round", activated)
-            return activated
+            self.state.perception_director.start_flight()
 
-    def retire_boosts_after_round(self, flown: list[dict]) -> None:
-        """Runtime hook (run_benchmark, after a round's Phase-A perception):
-        consume matched/where-less active boosts, return unmatched targeted
-        boosts to pending, mark flown pending stops, and re-push the live
-        concept set."""
+    def record_flown_stop(self, flown: dict) -> None:
+        """Log a perceived flight's stop for the boost to address, and
+        re-push the watchlist."""
         with self._lock:
-            if self._state is None:
-                return
-            d = self._state.perception_director
-            if d is not None:
-                d.retire_after_round(flown)
+            self.state.perception_director.record_flown(flown)
 
     def declare_mission_concepts(self, cleaned: list[dict]) -> dict:
         """Set the segmenter's classes to the declared ``[{class, role}]``
-        list's union and diff the director's watchlist to it (armed on the
-        first declaration). Returns the receipt the mission serves, carrying
-        a setter failure as its error."""
+        list's union and diff the director's watchlist to it. Returns the
+        receipt the mission serves, carrying a setter failure as its error."""
         # The classes SAM segments (it reads no roles), canonical, first seen
         # first; a placeholder class is no class.
         union = list(dict.fromkeys(
@@ -363,14 +320,10 @@ class SearchLoop:
                     log.warning("sam concept setter failed: %s", e)
                     setter_err = str(e)
             d = self.state.perception_director
-            if d is None:
-                self._arm_perception_director(union)
-            else:
-                have = list(getattr(d, "watchlist", []) or [])
-                adds = [c for c in union if c not in have]
-                rems = [c for c in have if c not in union]
-                if adds or rems:
-                    d.watchlist_apply(adds, rems)
+            adds = [c for c in union if c not in d.watchlist]
+            rems = [c for c in d.watchlist if c not in union]
+            if adds or rems:
+                d.watchlist_apply(adds, rems)
         rcpt = {
             "declared": [
                 f"{c.get('class')} ({c.get('role')})" for c in (cleaned or [])

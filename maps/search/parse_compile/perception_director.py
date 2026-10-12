@@ -4,9 +4,9 @@ The WATCHLIST is the class set every later flight segments; each change is
 pushed whole to the live concept provider. A BOOST (``look_for(..., at=)``)
 whose target is a flown stop, a fid a flown stop targeted, or a point near a
 flown pose re-segments that stop now through ``retro_perceiver`` and returns
-the delta. A boost on a target not yet flown (or on none) queues: the next
-flight activates it, pushing its classes beside the watchlist, and retires
-it after; a targeted boost whose target did not fly returns to pending.
+the delta. A boost on a target not yet flown (or on none) queues: every
+flight segments its classes beside the watchlist until a flight reaches its
+target (a where-less boost rides one flight).
 """
 
 from __future__ import annotations
@@ -53,19 +53,33 @@ def _xy_of(v) -> tuple[float, float] | None:
     return None
 
 
+def _find_flown(w: dict, stops: list[dict]) -> dict | None:
+    """The stop a where entry addresses: by stop id, by a fid it targeted, or
+    by a pose within the match radius of a point."""
+    sid = w.get("stop")
+    if sid:
+        return next((f for f in stops if sid == f["stop_id"]), None)
+    fid = w.get("fid")
+    if fid:
+        return next((f for f in stops if fid in f["target_fids"]), None)
+    wxy = w["xy"]
+    return next((f for f in stops if f["pose_xy"] is not None and math.hypot(
+        wxy[0] - f["pose_xy"][0], wxy[1] - f["pose_xy"][1]) <= BOOST_MATCH_RADIUS_M), None)
+
+
 @dataclass
 class _Boost:
     concepts: list[str]
-    # Resolved where entries: {"kind": "stop"|"fid"|"xy", "stop": stop id?,
-    # "fid": str?, "xy": (x, y)?}. Empty = where-less (next flown stops).
-    where: list[dict] = field(default_factory=list)
-    active: bool = False
+    # {"fid": str} or {"xy": (x, y)} entries; empty = where-less.
+    where: list[dict]
+    # Set from the flight's start until its stop is recorded.
+    riding: bool = False
 
 
 @dataclass
 class PerceptionDirector:
-    """The watchlist, the boosts, the flown stops and the retrospective
-    executor."""
+    """The watchlist, the queued boosts, the flown stops and the
+    retrospective executor."""
 
     # The live concept provider's setter; None keeps changes state-only.
     push: Callable[[list[str]], None] | None = None
@@ -79,11 +93,6 @@ class PerceptionDirector:
     # Every flown stop: {"pose_xy", "alt_m", "stop_id", "target_fids"}.
     flown_log: list[dict] = field(default_factory=list)
 
-    def init_watchlist(self, concepts) -> None:
-        """Set the first declared watchlist and push it."""
-        self.watchlist = _dedup_concepts(concepts)
-        self._push_live()
-
     def watchlist_apply(self, add, remove) -> None:
         """Remove then add classes (canonical-deduped) and push the result."""
         remove_keys = {canon_concept(s) for s in (remove or []) if canon_concept(s)}
@@ -93,182 +102,106 @@ class PerceptionDirector:
                                  if canon_concept(a) not in existing]
         self._push_live()
 
-    def _push_live(self) -> str:
-        """Push the watchlist plus active boost classes to the provider:
-        ``"ok"``, ``"no_channel"`` or ``"failed"``."""
+    def _push_live(self) -> None:
         if self.push is None:
-            return "no_channel"
+            return
         try:
-            active = [c for b in self.boosts if b.active for c in b.concepts]
-            self.push(_dedup_concepts(list(self.watchlist) + active))
-            return "ok"
+            self.push(_dedup_concepts(
+                self.watchlist + [c for b in self.boosts if b.riding for c in b.concepts]))
         except Exception:  # noqa: BLE001 — a push failure must not kill the round
             log.exception("PerceptionDirector: live concept push failed")
-            return "failed"
 
-    def _find_flown(self, w: dict) -> dict | None:
-        """The flown stop a where entry addresses: by stop id, by a fid it
-        targeted, or by a pose within the match radius of a point."""
-        sid = w.get("stop")
-        if sid:
-            for f in self.flown_log:
-                if sid == f.get("stop_id"):
-                    return f
-            return None
-        fid = w.get("fid")
-        if fid:
-            for f in self.flown_log:
-                if fid in (f.get("target_fids") or []):
-                    return f
-            return None
-        wxy = w.get("xy")
-        if wxy is not None:
-            for f in self.flown_log:
-                fxy = _xy_of(f.get("pose_xy"))
-                if fxy is not None and math.hypot(
-                        wxy[0] - fxy[0], wxy[1] - fxy[1]) <= BOOST_MATCH_RADIUS_M:
-                    return f
-        return None
+    def _retro(self, flown: dict, concepts: list[str], token) -> dict:
+        if self.retro_perceiver is None:
+            return {"where": token,
+                    "error": ("retrospective re-segmentation is not wired "
+                              "on this run; the flown observation cannot "
+                              "be re-analyzed")}
+        try:
+            res = self.retro_perceiver(dict(flown), list(concepts))
+        except Exception as exc:  # noqa: BLE001 — surfaced, never a round crash
+            log.exception("retro perceiver raised")
+            res = {"error": f"retrospective re-segmentation failed: "
+                            f"{type(exc).__name__}: {exc}"}
+        rec = {"where": token}
+        if isinstance(res, dict):
+            rec.update(res)
+        else:
+            rec["error"] = "retrospective re-segmentation returned nothing"
+        return rec
 
     def boost_queue(self, concepts, where) -> dict:
         """One boost: each flown target re-segments now; an unflown fid or
-        point (or no target at all) queues; an unknown stop id is named."""
+        point (or no target at all) is acknowledged as queued; an unknown
+        stop id is named."""
         concepts = _dedup_concepts(concepts)
         if not concepts:
             return {"error": "boost needs a non-empty 'concepts' list"}
-        resolved: list[dict] = []
-        unresolved: list = []
+        queued: list = []
+        entries: list[dict] = []
+        retro: list[dict] = []
+        unknown: list[str] = []
         for w in where or []:
             xy = _xy_of(w) or parse_xy_token(w)
-            if xy is not None:
-                resolved.append({"kind": "xy", "xy": xy})
-                continue
             token = str(w or "").strip()
-            if not token:
+            if xy is not None:
+                entry, token = {"xy": xy}, [round(xy[0], 1), round(xy[1], 1)]
+            elif not token:
                 continue
-            if token.startswith(("qstop_", "stop_")):
-                resolved.append({"kind": "stop", "stop": token,
-                                 "fid": "", "xy": None})
+            elif token.startswith(("qstop_", "stop_")):
+                entry = {"stop": token}
             else:
-                resolved.append({"kind": "fid", "fid": token})
-        retro_results: list[dict] = []
-        queue_where: list[dict] = []
-        for w in resolved:
-            flown = self._find_flown(w)
-            token = (w.get("stop") or w.get("fid")
-                     or [round(w["xy"][0], 1), round(w["xy"][1], 1)])
-            if flown is None:
-                if w["kind"] == "stop":
-                    unresolved.append(w["stop"])
-                    continue
-                queue_where.append(w)
-                continue
-            if self.retro_perceiver is None:
-                retro_results.append({
-                    "where": token,
-                    "error": ("retrospective re-segmentation is not wired "
-                              "on this run; the flown observation cannot "
-                              "be re-analyzed"),
-                })
-                continue
-            try:
-                res = self.retro_perceiver(dict(flown), list(concepts))
-            except Exception as exc:  # noqa: BLE001 — surfaced, never a round crash
-                log.exception("retro perceiver raised")
-                res = {"error": f"retrospective re-segmentation failed: "
-                                f"{type(exc).__name__}: {exc}"}
-            rec = {"where": token}
-            if isinstance(res, dict):
-                rec.update(res)
+                entry = {"fid": token}
+            flown = _find_flown(entry, self.flown_log)
+            if flown is not None:
+                retro.append(self._retro(flown, concepts, token))
+            elif "stop" in entry:
+                unknown.append(token)
             else:
-                rec["error"] = "retrospective re-segmentation returned nothing"
-            retro_results.append(rec)
-        ack: dict = {"queued": [], "where": []}
-        if queue_where or not (where or []):
-            self.boosts.append(_Boost(concepts=concepts, where=queue_where))
-            ack["queued"] = concepts
-            ack["where"] = [
-                (w["stop"] if w["kind"] == "stop"
-                 else w["fid"] if w["kind"] == "fid"
-                 else [round(w["xy"][0], 1), round(w["xy"][1], 1)])
-                for w in queue_where
-            ]
-        if retro_results:
-            ack["retro"] = retro_results
-        if unresolved:
-            ack["unknown_where"] = unresolved
-        if not ack["queued"]:
-            del ack["queued"], ack["where"]
-        if "queued" not in ack and "retro" not in ack:
+                queued.append(token)
+                entries.append(entry)
+        ack: dict = {}
+        if queued or not (where or []):
+            self.boosts.append(_Boost(concepts, entries))
+            ack = {"queued": concepts, "where": queued}
+        elif not retro:
             # A targeted boost none of whose targets resolved says so rather
             # than becoming a where-less one.
             return {
                 "error": ("no boost target resolved; nothing was queued or "
                           "re-segmented"),
-                "unknown_where": unresolved,
+                "unknown_where": unknown,
                 "pending": [],
             }
+        if retro:
+            ack["retro"] = retro
+        if unknown:
+            ack["unknown_where"] = unknown
         return ack
 
-    def activate_pending(self) -> list[str]:
-        """Activate every pending boost for the next flight and push; returns
-        their classes. A failed push leaves them pending."""
-        pending = [b for b in self.boosts if not b.active]
-        if not pending:
-            return []
-        for b in pending:
-            b.active = True
-        if self._push_live() == "failed":
-            for b in pending:
-                b.active = False
-            log.warning(
-                "boost activation reverted: live concept push failed; "
-                "%d boost(s) stay pending for the next round", len(pending),
-            )
-            return []
-        return _dedup_concepts([c for b in pending for c in b.concepts])
+    def start_flight(self) -> None:
+        """Every queued boost rides the coming flight: push its classes
+        beside the watchlist when one has not ridden yet."""
+        if any(not b.riding for b in self.boosts):
+            for b in self.boosts:
+                b.riding = True
+            self._push_live()
 
-    def _where_matches_flown(self, w: dict, flown: list[dict]) -> bool:
-        for f in flown:
-            fids = {str(x) for x in (f.get("target_fids") or []) if x}
-            fxy = _xy_of(f.get("pose_xy"))
-            sid = f.get("stop_id")
-            if w.get("stop") and sid and w["stop"] == sid:
-                return True
-            if w["kind"] in ("fid", "stop") and w.get("fid") and w["fid"] in fids:
-                return True
-            wxy = w.get("xy")
-            if wxy is not None and fxy is not None and (
-                math.hypot(wxy[0] - fxy[0], wxy[1] - fxy[1])
-                <= BOOST_MATCH_RADIUS_M
-            ):
-                return True
-        return False
-
-    def retire_after_round(self, flown: list[dict]) -> None:
-        """Log the flown stops, then consume each active boost that was
-        where-less or whose target flew (the rest return to pending), and
-        push."""
-        flown = [f for f in (flown or []) if isinstance(f, dict)]
-        for f in flown:
-            self.flown_log.append({
-                "pose_xy": _xy_of(f.get("pose_xy")),
-                "alt_m": f.get("alt_m"),
-                "stop_id": (str(f.get("stop_id")).strip()
-                            if f.get("stop_id") else None),
-                "target_fids": [str(x) for x in (f.get("target_fids") or [])
-                                if x],
-            })
-        survivors: list[_Boost] = []
+    def record_flown(self, flown: dict) -> None:
+        """Log one flown stop for a boost to address, drop the riding boosts
+        it satisfied (where-less, or its target is this stop), and push the
+        watchlist."""
+        stop = {
+            "pose_xy": _xy_of(flown.get("pose_xy")),
+            "alt_m": flown.get("alt_m"),
+            "stop_id": (str(flown.get("stop_id")).strip()
+                        if flown.get("stop_id") else None),
+            "target_fids": [str(x) for x in (flown.get("target_fids") or [])
+                            if x],
+        }
+        self.flown_log.append(stop)
+        self.boosts = [b for b in self.boosts if not b.riding or (
+            b.where and not any(_find_flown(w, [stop]) for w in b.where))]
         for b in self.boosts:
-            if not b.active:
-                survivors.append(b)
-                continue
-            if not b.where:
-                continue  # where-less: consumed by the round it rode
-            if any(self._where_matches_flown(w, flown) for w in b.where):
-                continue  # its target flew: consumed
-            b.active = False  # target did not fly: back to pending
-            survivors.append(b)
-        self.boosts = survivors
+            b.riding = False
         self._push_live()
