@@ -807,12 +807,9 @@ class _Mission:
         """A flight that flew: count it, record its stop, re-derive the
         surface, and (outside a pass) mint the rows it added."""
         self.mission_flights += 1
-        _sid = _report.get("stop_id")
-        _pxy = _report.get("pose_xy")
-        if (_sid and isinstance(_pxy, (list, tuple))
-                and len(_pxy) == 2):
-            self._plan_stops[str(_sid).strip().lower()] = [
-                float(_pxy[0]), float(_pxy[1])]
+        _pxy = _report["pose_xy"]
+        self._plan_stops[str(_report["stop_id"]).strip().lower()] = [
+            float(_pxy[0]), float(_pxy[1])]
         self._world_moved()
         # The flight's new rows (the surface diff) mint a handle; a pass
         # mints once, around the whole of itself.
@@ -865,8 +862,6 @@ class _Mission:
             _snap_from = self._snap_to_row(_item)
             _fids_before = set(self._ns_rows)
             _report = self.mission_spec.fly(dict(_item))
-            if not isinstance(_report, dict):
-                _report = {"error": str(_report)}
             if _snap_from:
                 _report.setdefault(
                     "note",
@@ -882,7 +877,7 @@ class _Mission:
                                        if _report.get("note")
                                        else _wl_note)
                 # A pass renders no per-stop view.
-                if _report.get("pose_xy") and cover is None:
+                if cover is None:
                     self._flight_view(_item, _report)
                 self._after_flight(_report, _fids_before, cover)
             _reports.append(_report)
@@ -900,9 +895,8 @@ class _Mission:
         """One explore's flight reports -> the one ack of the pass. The ack
         states that the standing answer is the pass's last stop."""
         _ok = [r for r in _reports if "error" not in r]
-        _stops = [r for r in _reports if r.get("pose_xy")]
-        _ack: dict = {"explored": cover, "stops": len(_stops)}
-        if _stops:
+        _ack: dict = {"explored": cover, "stops": len(_ok)}
+        if _ok:
             _ack["answer_if_you_reply_now"] = (
                 f"the last stop of the pass over {cover}; go_to() the row "
                 f"you mean before you reply")
@@ -1211,7 +1205,7 @@ class _Mission:
         _accepted, _item_errors = _mission_sanitize_moves([tok])
         mv = self._fly_moves(_accepted, _item_errors)
         _ok = [r for r in mv.get("flown") or [] if "error" not in r]
-        if not (_ok and _accepted):
+        if not _ok:
             # nothing flew: the failure is the result
             _msg = next(
                 (str(r["error"]) for r in mv.get("flown") or []
@@ -1263,9 +1257,9 @@ class _Mission:
         if _segs > 1:
             mv["segments"] = _segs
         # A truncated pass reads as truncated.
-        if mv.get("stops", len(_accepted)) < len(_accepted):
+        if mv["stops"] < len(_accepted):
             _cov_note = (f"the pass ended after "
-                         f"{mv.get('stops', 0)} of its stops.")
+                         f"{mv['stops']} of its stops.")
         if _cov_note:
             mv["note"] = (f"{_cov_note} {mv['note']}"
                           if mv.get("note") else _cov_note)

@@ -165,11 +165,8 @@ def detected_digest(dets: list[dict]) -> dict:
 def echo_pose(ctx, report: dict) -> None:
     """After a successful flight the ToolContext's pose follows the drone.
     The context already holds the live ``state.runtime_graph``."""
-    if not isinstance(report, dict) or "error" in report:
-        return
-    pxy = report.get("pose_xy") or ()
-    if len(pxy) == 2:
-        ctx.pose_xy = (float(pxy[0]), float(pxy[1]))
+    if "error" not in report:
+        ctx.pose_xy = (float(report["pose_xy"][0]), float(report["pose_xy"][1]))
 
 
 def perceive(h, obs, detections) -> list[dict]:
