@@ -19,8 +19,6 @@ _REPO = Path(__file__).resolve().parents[3]
       "footpath": [{"cells": [[0, 1]], "source": "osm", "prior_role": "static_map"}]},
      "typed class keys"),
     ({"prior": [{"cells": [[0, 0]], "source": "osm", "prior_source": "osm"}]}, "prior_role"),
-    # The oldest: one prior bucket, no provenance on rows.
-    ({"prior": [{"cells": [[0, 0]], "name": "Common"}]}, "source provenance"),
 ])
 def test_a_retired_bake_shape_is_refused(payload, match) -> None:
     with pytest.raises(RuntimeError, match=match):

@@ -198,7 +198,8 @@ def _normalise_props(raw: dict[str, Any] | None) -> dict[str, Any]:
             continue
         if clean == "source":
             # OSM's own `source` tag (imagery/survey provenance, e.g. "Bing")
-            # rides as `source_tag`: `source` is the bake's channel, "osm".
+            # rides as `source_tag`, a key the search text drops
+            # (geom_program._SEARCH_PROVENANCE_DROP).
             clean = "source_tag"
         props[clean] = value
     return props
@@ -482,7 +483,6 @@ def _feature_entry(
         "cells": ordered_cells,
         "centroid_row": round(cr, 1),
         "centroid_col": round(cc, 1),
-        "source": "osm",
     }
     name = _safe_text(props.get("name"))
     if name:

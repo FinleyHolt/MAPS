@@ -143,10 +143,9 @@ def assert_available() -> None:
 def assert_current_tile_schema(features: dict, source: str) -> None:
     """Refuse a loaded ``<block>_features.json`` of another schema.
 
-    The current bake writes one ``prior`` list whose rows carry mask, raw tags
-    and ``source``. A run against another bake still completes with a wrong
-    SR, so typed class keys, ``prior_role``/``prior_source`` rows and rows
-    without ``source`` raise.
+    The current bake writes one ``prior`` list whose rows carry mask and raw
+    tags. A run against another bake still completes with a wrong SR, so typed
+    class keys and ``prior_role``/``prior_source`` rows raise.
     """
     if not isinstance(features, dict) or not features:
         return
@@ -167,13 +166,12 @@ def assert_current_tile_schema(features: dict, source: str) -> None:
         not isinstance(r, dict)
         or "prior_role" in r
         or "prior_source" in r
-        or not r.get("source")
         for r in rows
     ):
         raise RuntimeError(
             f"{source} is a RETIRED tile bake: its 'prior' rows mint "
-            f"prior_role/prior_source or carry no source provenance, instead "
-            f"of the tags-verbatim contract. {_remedy}"
+            f"prior_role/prior_source instead of the tags-verbatim contract. "
+            f"{_remedy}"
         )
 
 

@@ -83,18 +83,12 @@ def _modal_attr(n, key):
     return max(cc.items(), key=lambda kv: kv[1])[0] if cc else None
 
 
-# Tag keys no model-facing text carries: the bake's ``source``.
-_SEARCH_TAG_DENYLIST = frozenset({"source"})
-
-
 def _row_tags(n) -> dict:
-    """A prior row's tags: the node's string-valued OSM tags minus
-    _SEARCH_TAG_DENYLIST."""
+    """A prior row's tags: the node's string-valued OSM tags."""
     tags = getattr(n, "tags", None) or {}
     if not isinstance(tags, dict):
         return {}
-    return {str(k): v for k, v in tags.items()
-            if isinstance(v, str) and str(k).lower() not in _SEARCH_TAG_DENYLIST}
+    return {str(k): v for k, v in tags.items() if isinstance(v, str)}
 
 
 # Bake bookkeeping kept out of the free search text only: stamped on every
