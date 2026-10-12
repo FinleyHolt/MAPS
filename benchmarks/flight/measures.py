@@ -28,9 +28,11 @@ SR is read two ways: the committed area contains the centroid
 (``success_area``), and the commit lies within 20 m of it
 (``success_radius``). NE is the committed area's centroid (the commit
 where no area is recovered) to the target centroid. OSR: the path came within
-one camera HFOV ground width of the centroid, at the height above ground at
-the closest approach (``agl_ft``); a run that did not, on a recording holding
-under 95% of it, reads unknown. Time to identification runs from the tasking to the
+one camera HFOV ground width of the centroid, at the height above ground
+``agl_ft`` (the height of the fix nearest the centroid, else the run's median
+keyframe height, else its median commanded waypoint height; ``agl_source``
+names which); a run that did not, on a recording holding under 95% of it,
+reads unknown. Time to identification runs from the tasking to the
 determination. SPL is ``S * l / max(p, l)``: ``p`` the GNSS path from the
 crew's last pass of the loiter waypoint before the first leg to the
 determination, plus the way back to the commit a crew flies (one turn and a
