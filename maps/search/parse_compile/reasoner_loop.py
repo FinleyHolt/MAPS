@@ -530,8 +530,7 @@ class _Mission:
             return _rejected(f"at {at_tok!r} is not a live surface fid or an "
                              f"[x, y] world point")
         if facing_tok.strip().lower() in COMPASS_UNIT:
-            facing_desc = facing_tok.strip().lower()
-            up = list(COMPASS_UNIT[facing_desc])
+            up = list(COMPASS_UNIT[facing_tok.strip().lower()])
         else:
             f_xy = self._resolve_stage_point(facing_tok)
             if f_xy is None:
@@ -546,15 +545,12 @@ class _Mission:
                 return _rejected("at and facing coincide -- no look "
                                  "direction")
             up = [dx / n, dy / n]
-            facing_desc = facing_tok.strip()
         h = f"v{len(self.staged_viewpoints) + 1}"
         brg = round(up_bearing_deg(up)) % 360
         self.staged_viewpoints[h] = {
             "handle": h,
             "from_xy": at_xy,
             "up_unit": [round(up[0], 4), round(up[1], 4)],
-            "at": at_tok.strip(),
-            "facing": facing_desc,
             "bearing_deg": brg,
         }
         self.standing_handle = h
