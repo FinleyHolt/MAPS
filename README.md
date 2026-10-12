@@ -253,7 +253,7 @@ reply and the token meter; it starts no run. Fly an arm as any other,
 for example the reviewed Cal City episodes at one effort:
 
 ```sh
-SEARCH_SAMPLING_REASONING_EFFORT=medium SEARCH_CALCITY_RGBD_DIR=<raster dir> \
+SEARCH_SAMPLING_REASONING_EFFORT=medium \
   python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_episodes.txt \
   --out-root output/e3/gpt56-sol-medium
 ```
@@ -299,6 +299,9 @@ python -m benchmarks.calcity.data_prep.build_objects_json
 python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <map>_rgb.tif
 python -m benchmarks.calcity.data_prep.bake_tiles
 ```
+
+The raster pair lands in `<root>/data/rgbd_upstream`, `<root>` being
+`SEARCH_CALCITY_DATA` (default `~/datasets/calcity`), where the bench reads it.
 
 The flight harness also reads the block's bare-earth surface, as the flown
 bake carried it: `calcity_dem.tif` beside `calcity_meta.json` under
@@ -351,11 +354,11 @@ E3, the reviewed Cal City episodes per effort rung:
 ```sh
 mkdir -p output && python -m benchmarks.calcity.data_prep.reviewed > output/reviewed_episodes.txt
 for e in 0.0 0.3 0.6 0.9 0.99; do
-  SEARCH_SAMPLING_REASONING_EFFORT=$e SEARCH_CALCITY_RGBD_DIR=<raster dir> \
+  SEARCH_SAMPLING_REASONING_EFFORT=$e \
     python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_episodes.txt \
     --out-root output/e3/inkling-small-e$e
 done
-SEARCH_CALCITY_RGBD_DIR=<raster dir> python -m benchmarks.calcity.bench_fullset \
+python -m benchmarks.calcity.bench_fullset \
   --episode-allowlist output/reviewed_episodes.txt --out-root output/e3/gemma4-26b-a4b
 ```
 
@@ -405,7 +408,7 @@ The twin is a kinematic `Vehicle` over a raster pair, so you can fly a Cal
 City mission end to end without an aircraft:
 
 ```sh
-python -m benchmarks.flight.twin --config configs/calcity.yaml --episode 'calcity::6#6' --ortho <raster dir>
+python -m benchmarks.flight.twin --config configs/calcity.yaml --episode 'calcity::6#6' --ortho <root>/data/rgbd_upstream
 ```
 
 The twin, the live source and the frame registration stand each frame on

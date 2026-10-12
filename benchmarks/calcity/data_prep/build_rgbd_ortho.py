@@ -6,7 +6,8 @@
 The imagery the bench crops is the block's own map (the C-12's, at the
 collection's native cell, laid on the block's grid and written lossless as
 ``<stem>_rgb.tif``). The repo ships none; the user supplies the path. For each
-block this writes, under ``<root>/data/rgbd_upstream`` (``SEARCH_CALCITY_RGBD_DIR``):
+block this writes, under ``<root>/data/rgbd_upstream`` (where ``SEARCH_CALCITY_RGBD_DIR``
+defaults):
 
   * ``<map>_rgb.tif`` -- the raster, copied as it is.
   * ``<map>.tif`` -- a constant height plane at ``aoi.GROUND_LEVEL_M`` (the
