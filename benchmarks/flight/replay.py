@@ -36,11 +36,14 @@ from typing import Any
 import numpy as np
 
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
+from benchmarks.citynav.episodes import EPISODES_JSONL
+from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
 from benchmarks.flight.live_source import ortho_observation
 from benchmarks.flight.measures import read_jsonl, run_bases, tour_stops
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, activate_calcity,
                                        converse, summary_line)
 from benchmarks.flight.tile_georef import FLOOR_MSL_M
+from maps.llm.http import TRANSCRIPT_JSONL
 
 log = logging.getLogger("flight.replay")
 
@@ -130,12 +133,12 @@ def open_recording(run_dir: Path) -> Recording:
     sortie = run_dir.parent
     if sortie.parent.name.endswith("_grnd"):
         sortie = sortie.parent.parent / sortie.name
-    row = next((r for r in read_jsonl(sortie / "episodes.jsonl") if r.get("workdir") == run_dir.name), None)
+    row = next((r for r in read_jsonl(sortie / EPISODES_JSONL) if r.get("workdir") == run_dir.name), None)
     if row is None:
-        raise ValueError(f"{sortie / 'episodes.jsonl'} names no run {run_dir.name}")
-    params, requests, responses = read_transcript(run_dir / "flight" / "llm" / "transcript.jsonl")
+        raise ValueError(f"{sortie / EPISODES_JSONL} names no run {run_dir.name}")
+    params, requests, responses = read_transcript(run_dir / "flight" / "llm" / TRANSCRIPT_JSONL)
     detections: dict[int, list[dict]] = {}
-    for d in read_jsonl(run_dir / "detections.jsonl"):
+    for d in read_jsonl(run_dir / DETECTIONS_JSONL):
         detections.setdefault(int(d.get("step", -1)), []).append(d)
     window = DEFAULT_WINDOW
     logged = re.search(r"endpoint spec installed: model_id=\S+ max_model_len=(\d+)",
@@ -151,10 +154,10 @@ def flown_runs(sorties: Path) -> list[Path]:
     """Every run under a sorties root that holds a reasoner transcript, in the
     order flown: the aircraft's copy of its folder, else the ground station's."""
     out = []
-    for ledger in sorted(Path(sorties).glob("*Z/episodes.jsonl")):
+    for ledger in sorted(Path(sorties).glob(f"*Z/{EPISODES_JSONL}")):
         for row in read_jsonl(ledger):
             found = next((b for b in run_bases(ledger.parent, row)
-                          if (b / "flight" / "llm" / "transcript.jsonl").is_file()), None)
+                          if (b / "flight" / "llm" / TRANSCRIPT_JSONL).is_file()), None)
             if found is not None:
                 out.append(found)
     return out
@@ -425,7 +428,7 @@ def _text(message: dict[str, Any]) -> tuple[str, list[str]]:
 def diff(rec: Recording, replay_dir: Path) -> dict[str, Any]:
     """The replay against the recording: the params, every message of every
     request (``first`` the first that differs), the flights and the commit."""
-    params, requests, answers = read_transcript(replay_dir / "flight" / "llm" / "transcript.jsonl")
+    params, requests, answers = read_transcript(replay_dir / "flight" / "llm" / TRANSCRIPT_JSONL)
     # A request past the recording's last, left unanswered, is where the crew's stop fell.
     extra = requests[len(rec.requests):]
     stopped_there = len(extra) <= 1 and all(a is None for a in answers[len(rec.requests):])

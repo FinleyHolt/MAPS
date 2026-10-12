@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from .http import TRANSCRIPT_JSONL
 from .model_cards import speaks_openai
 from .tokenizer import _tokenizer
 
@@ -143,7 +144,7 @@ def summarize(flight_dir: Path) -> dict:
     """One episode's LLM activity from its flight dir; :func:`blank` when it
     kept no transcript. Never raises: it runs on the episode's way out."""
     out = blank()
-    transcript = Path(flight_dir) / "llm" / "transcript.jsonl"
+    transcript = Path(flight_dir) / "llm" / TRANSCRIPT_JSONL
     try:
         _scan_transcript(transcript, out)
     except OSError:

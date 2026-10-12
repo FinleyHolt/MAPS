@@ -210,12 +210,16 @@ def _scrub_image_parts(messages: list) -> list:
     return out
 
 
+#: The reasoner's record of a run: every request, response and its params, one a line.
+TRANSCRIPT_JSONL = "transcript.jsonl"
+
+
 def _append_flight_record(directory: Path, record: dict) -> None:
     """Append one record line to ``<directory>/transcript.jsonl``, flushed. A
     filesystem error is logged and swallowed: recording never fails a call."""
     try:
         directory.mkdir(parents=True, exist_ok=True)
-        with (directory / "transcript.jsonl").open(
+        with (directory / TRANSCRIPT_JSONL).open(
             "a", encoding="utf-8"
         ) as fh:
             fh.write(json.dumps(record, default=str) + "\n")

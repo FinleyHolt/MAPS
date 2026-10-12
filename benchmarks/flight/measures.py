@@ -56,8 +56,10 @@ from pathlib import Path
 
 from benchmarks.citynav.analysis.rows import is_infra_abort
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
+from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
 from benchmarks.flight.mission import FRAMES_JSONL, TRACK_JSONL
+from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.search.analyze_scene.geom_compute import point_in_polygon
 from typing import Any
@@ -416,7 +418,7 @@ def return_leg_m(track, t: float, q, r: float) -> float:
 def routed_windows(root: Path) -> list[tuple[float, float]]:
     """When the crews flew to a waypoint: from each waypoint handed to the next leg line, per run."""
     out = []
-    for row in read_jsonl(root / "episodes.jsonl"):
+    for row in read_jsonl(root / EPISODES_JSONL):
         t0 = row.get("started_at_utc")
         if not t0 or not row.get("workdir"):
             continue
@@ -487,7 +489,7 @@ def tokens(bases: list[Path]) -> dict[str, Any]:
     """The run's reasoner use off its transcript (``maps.llm.flight_summary``)."""
     from maps.llm.flight_summary import summarize  # noqa: PLC0415
 
-    flight = next((b / "flight" for b in bases if (b / "flight" / "llm" / "transcript.jsonl").is_file()), None)
+    flight = next((b / "flight" for b in bases if (b / "flight" / "llm" / TRANSCRIPT_JSONL).is_file()), None)
     llm = summarize(flight) if flight else {}
     keys = ("prompt_tokens", "completion_tokens", "reasoning_tokens", "total_tokens")
     if not llm.get("requests"):
@@ -506,7 +508,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     area = committed_area(bases, fid, xy, prior)
     determined = end == "reply" and xy is not None
     reason = entry.get("excluded")
-    params = next((r.get("params") or {} for b in bases for r in read_jsonl(b / "flight" / "llm" / "transcript.jsonl")
+    params = next((r.get("params") or {} for b in bases for r in read_jsonl(b / "flight" / "llm" / TRANSCRIPT_JSONL)
                    if r.get("kind") == "params"), {})
     ring, truth_source = truth.ring(entry, row)
     target = centroid(ring) if ring else None
@@ -627,7 +629,7 @@ def collect(roots: list[Path], truth: Truth, *, tiles_dir: Path) -> tuple[list[d
     out = []
     for root, track in zip(roots, tracks):
         entries = truth.entries(root.name)
-        for row in read_jsonl(root / "episodes.jsonl"):
+        for row in read_jsonl(root / EPISODES_JSONL):
             out.append(run_measures(root, row, entry=entries.get(str(row.get("episode_id") or "")) or {},
                                     truth=truth, track=track, prior=prior, turn_radius_m=radius))
     out.sort(key=lambda r: (r["sortie"], int(r["run_no"] or 0)))
@@ -697,7 +699,7 @@ def main(argv: list[str] | None = None) -> int:
         from benchmarks.calcity.paths import TILES_DIR  # noqa: PLC0415
 
         args.tiles = TILES_DIR
-    roots = sorted(r for r in args.root if (r / "episodes.jsonl").is_file())
+    roots = sorted(r for r in args.root if (r / EPISODES_JSONL).is_file())
     rows, radius, turns = collect(roots, Truth(args.truth), tiles_dir=args.tiles)
     rejected = outline_rejected(rows, load_prior(args.tiles))
     doc = {"turn_radius_m": radius, "turns_read": turns, "summary": summarize(rows),
