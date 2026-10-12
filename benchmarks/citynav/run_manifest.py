@@ -39,7 +39,6 @@ ARM_ENV_PREFIXES = ("SEARCH_COMPACT_",)
 # The ambient env the manifest records when set: the arm flags, the vars that
 # select what runs, and the endpoints.
 AUDITED_ENV = ARM_ENV_FLAGS + (
-    "BENCH_SAMPLE_SEED",
     "CITYNAV_BENCH_CONFIG",
     "CITYNAV_ROOT",
     "SEARCH_BENCHMARK_NAME",

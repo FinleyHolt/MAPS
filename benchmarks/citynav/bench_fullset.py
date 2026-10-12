@@ -666,9 +666,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--sample-seed",
         type=int,
-        default=int(os.environ.get("BENCH_SAMPLE_SEED", "1234")),
-        help="seed for the pre-limit episode shuffle (default from "
-        "BENCH_SAMPLE_SEED, else 1234). Fixes WHICH N episodes run so "
+        default=1234,
+        help="seed for the pre-limit episode shuffle (default %(default)s). "
+        "Fixes WHICH N episodes run so "
         "an A/B across code versions is on the identical subset.",
     )
     p.add_argument(
