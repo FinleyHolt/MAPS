@@ -551,12 +551,6 @@ def _top(counts: dict, n: int) -> dict:
     return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:n])
 
 
-def _surface_census(rows) -> tuple[dict, int]:
-    """The top 12 census counts of a row set, and its named count."""
-    counts, named = _census_counts(rows)
-    return _top(counts, 12), named
-
-
 def _query_matched_census(counts: dict, query: str) -> dict:
     """The census entries sharing a token (or a close spelling) with the
     query, top 8: the long tail a global top cut hides."""
@@ -588,7 +582,7 @@ def _query_matched_census(counts: dict, query: str) -> dict:
 def _census_note(rows, *, query: str | None = None) -> str:
     """The census note a missed or thin find serves: the tags sharing
     tokens with the query, the top tags and a few names."""
-    counts, _named = _census_counts(rows)
+    counts = _census_counts(rows)[0]
     top = _top(counts, 12)
     parts = ", ".join(f"{k}({v})" for k, v in top.items())
     names: list[str] = []
@@ -949,8 +943,8 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
                 if isinstance(v, _EmptyFindMiss) else "")
             return head
         elif not getattr(v, "ordered", False):
-            census, named = _surface_census(v)
-            head = {"len": len(v), "census": census, "named": named}
+            counts, named = _census_counts(v)
+            head = {"len": len(v), "census": _top(counts, 12), "named": named}
             if cut:
                 head["cut_stats"] = cut
             head["hint"] = join_hints(*notes, _NO_ORDER_HINT)
@@ -1265,7 +1259,7 @@ def _relate_ran(key, items) -> bool:
     return any(isinstance(it, dict) and sib in it for it in items)
 
 
-def _contact_fact(cx, key, items) -> str:
+def _contact_fact(cx, key) -> str:
     """For an absent 'distance to' / 'facing' a <fid> whose mask contains
     the whole surface window: why neither is stamped. Returns the fact, or
     ''."""
@@ -1726,7 +1720,7 @@ def _score_by(cx, a):
             raise ProgramError(
                 f"nothing orders by {_quote(_k)} here: no row carries a "
                 f"numeric {_quote(_k)}. "
-                f"{_contact_fact(cx, _k, items)}"
+                f"{_contact_fact(cx, _k)}"
                 f"{_present_keys_hint(items, True)}")
     for _k in _dropped_color:
         _sb_notes.append(
@@ -1755,7 +1749,7 @@ def _filter_items(cx, a):
             raise ProgramError(
                 f"filter_items op {_quote(opr)} on key {_quote(key)}: no item "
                 f"carries a numeric {_quote(key)}. "
-                f"{_contact_fact(cx, key, items)}"
+                f"{_contact_fact(cx, key)}"
                 f"{_present_keys_hint(items, True)}")
     elif (items
           and not any(isinstance(it, dict) and key in it for it in items)
@@ -1763,7 +1757,7 @@ def _filter_items(cx, a):
         raise ProgramError(
             f"filter_items op {_quote(opr)} on key {_quote(key)}: no item carries "
             f"{_quote(key)}. "
-            f"{_contact_fact(cx, key, items)}"
+            f"{_contact_fact(cx, key)}"
             f"{_present_keys_hint(items, False)}")
     if opr == "in_or_blank":
         # The caller passes every word that counts (south: southeast,
