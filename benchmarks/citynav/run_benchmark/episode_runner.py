@@ -1,5 +1,5 @@
 """One episode's engine and, on the bench, its run: build the search stack
-(shared with the flight station), fly the mission conversation, replay the
+(shared with the flight mission), fly the mission conversation, replay the
 flown stops in the six-action alphabet, and score the final pose.
 """
 
@@ -171,7 +171,7 @@ def score_episode(cfg, episode, objects_by_map: dict, final_xy, trajectory, *, f
     """The episode's metrics for an agent that ended at ``final_xy`` over
     ``trajectory``, under this bench's success mask (``eval.score_arrival``).
     The one scoring call of the bench row, its zero-flight row, the
-    commit's would-score check and the flight station's mission row."""
+    commit's would-score check and the flight mission's row."""
     criterion, mask = _success_mask(cfg, episode, objects_by_map)
     return score_arrival(
         criterion=criterion,
@@ -187,7 +187,7 @@ def score_episode(cfg, episode, objects_by_map: dict, final_xy, trajectory, *, f
 @dataclass
 class Hydrated:
     """The search stack for one episode, built once by :func:`build_episode`
-    for the bench and the flight station alike."""
+    for the bench and the flight mission alike."""
 
     cfg: RunConfig
     state: EpisodeState

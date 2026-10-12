@@ -100,7 +100,7 @@ def upsert_row(root: Path, row: dict) -> None:
     number in this ledger), replacing an earlier row for the same run.
 
     A field mission's row lands when the model reports and again when the
-    run flies on; the station numbers the next run off the ledger's length
+    run flies on; the flight mission numbers the next run off the ledger's length
     and the readers count a run once. The file is rewritten under the
     append's lock. A row naming no run is appended.
     """

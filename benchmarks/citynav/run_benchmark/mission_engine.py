@@ -68,7 +68,7 @@ def _write_tour_cursor(tour: FeatureTour) -> None:
 
 
 # The wall-clock backstop: an absolute epoch the bench driver exports. Unset
-# (the field station, a bare smoke) means no clock.
+# (the flight mission, a bare smoke) means no clock.
 MISSION_DEADLINE_ENV = "CITYNAV_EPISODE_DEADLINE_EPOCH"
 
 
@@ -185,10 +185,10 @@ def perceive(h, obs, detections) -> list[dict]:
 class MissionSession:
     """The engine's half of one mission conversation over a hydrated
     episode (``episode_runner.Hydrated``): the ToolContext, the MissionSpec
-    its verbs call back into, and the flights. The field station re-tasks a
+    its verbs call back into, and the flights. The flight mission re-tasks a
     mission by driving another turn over the same session.
 
-    ``observe`` (the live station's) returns the camera's current posed
+    ``observe`` (the flight mission's) returns the camera's current posed
     frame or ``None``; a flight then perceives that frame from its own pose
     and still serves the target as the stop. The bench passes none and
     renders the raster crop at the target.

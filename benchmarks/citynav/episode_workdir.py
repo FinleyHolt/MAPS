@@ -9,7 +9,7 @@
         flight/            the engine's working files: llm/transcript.jsonl (the wire
                            log), look/ (the look audit), tour_cursor.json
 
-The runner and the field station open their attempt directories through
+The runner and the flight mission open their attempt directories through
 ``open_episode_dir``. The stamp is the attempt's start, which the readers
 order attempts by, so a retry is a new directory.
 """
@@ -38,7 +38,7 @@ WORKDIR_PREFIX = "maps"
 def benchmark() -> str:
     """Which benchmark this process flies: ``SEARCH_BENCHMARK_NAME``, one of
     ``BENCHMARKS``, read at call time. There is no default: the bench CLIs and
-    the station declare it, and a process that has not raises.
+    the flight mission declare it, and a process that has not raises.
     """
     name = os.environ.get("SEARCH_BENCHMARK_NAME", "").strip()
     if name not in BENCHMARKS:
@@ -46,7 +46,8 @@ def benchmark() -> str:
             f"SEARCH_BENCHMARK_NAME is {name or 'unset'!r}: an episode "
             f"directory is named for its benchmark, one of "
             f"{', '.join(BENCHMARKS)}. Declare it where the benchmark is "
-            f"known -- the bench CLI's own package, or the station's site."
+            f"known -- the bench CLI's own package, or benchmarks.calcity.use() "
+            f"(the flight mission calls it)."
         )
     return name
 
@@ -57,7 +58,7 @@ def _slug(s: str) -> str:
 
 def mint_workdir(root: Path, episode_id: str, run_no: int | None = None) -> Path:
     """``<root>/maps_<stamp>[_run<NN>]_<benchmark>_<slug>``, this attempt's
-    directory (not created). A station flight carries its run number in the
+    directory (not created). A flight mission carries its run number in the
     sortie, the link to its ledger row; a bench attempt carries none.
     """
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")

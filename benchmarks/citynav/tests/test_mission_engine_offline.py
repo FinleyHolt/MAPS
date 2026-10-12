@@ -132,7 +132,7 @@ def test_the_mission_deadline_is_read_per_call_and_optional(monkeypatch):
 
 
 def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):
-    """Under the station's ``observe`` the observation is the aircraft's
+    """Under the flight mission's ``observe`` the observation is the aircraft's
     frame, perceived from the pose it was taken at, and the stop the model
     is served is the target it named: the report, the flight record and the
     engine's pose all carry the target's own point, and no note says where

@@ -1,8 +1,8 @@
 """The run's record: ``run_manifest.json`` at the run root, written before the first episode flies.
 
 Identity fields are measured (served model and window off the installed
-endpoint spec, the bake off its bytes) and the config is inlined. The field
-station writes one at the sortie root and one per mission workdir
+endpoint spec, the bake off its bytes) and the config is inlined. The flight
+mission writes one at the sortie root and one per mission workdir
 (``mission=``). Write-once: a resume into the same root is refused on
 ``IDENTITY_KEYS`` drift and records git drift as a ``resumes`` entry.
 """
@@ -154,7 +154,7 @@ def build_manifest(
     episodes: list[str],
     mission: dict | None = None,
 ) -> dict:
-    """The resolved record. ``mission`` is the field station's per-mission
+    """The resolved record. ``mission`` is the flight mission's per-mission
     stamp, recorded whole; a ``reasoning_effort`` it names replaces the arm's
     in ``search_env_flags``, since the mission's requests carried it."""
     arm = arm_env_stamp()
