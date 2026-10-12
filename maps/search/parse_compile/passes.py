@@ -80,7 +80,8 @@ def _cover_set_items(_accepted_items: list, _said, *, spec, spacing,
     """The multi-member half of ``cover_items``: each member's own walk,
     chained greedily by nearest endpoint from the live pose (a member
     reversed when its far end is nearer), dropping a stop within half a
-    spacing of one already kept."""
+    spacing of one already kept; a chain longer than the flight budget
+    keeps that many evenly spaced stops, its first among them."""
     # ponytail: O(n*m) greedy chaining, not a TSP; order the members
     # optimally if a pass's flown length ever matters.
     _span = spacing
@@ -143,10 +144,9 @@ def _cover_set_items(_accepted_items: list, _said, *, spec, spacing,
             _flat.append((_m, _mv))
             if _p is not None:
                 _kept_pts.append(_p)
-    _set_cap = spec.flight_budget
-    if len(_flat) > _set_cap:
-        _n = _set_cap
-        _stride = (len(_flat) - 1) / (_n - 1)
+    _n = spec.flight_budget
+    if len(_flat) > _n:
+        _stride = (len(_flat) - 1) / max(_n - 1, 1)
         _keep = sorted({int(round(_i * _stride)) for _i in range(_n)})
         _flat = [_flat[_i] for _i in _keep]
     for _m in _chained:

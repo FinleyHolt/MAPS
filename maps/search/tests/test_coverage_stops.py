@@ -169,3 +169,15 @@ def test_a_narrow_shape_keeps_the_one_dimensional_walk_exactly():
     lp = _loop_over(_ROAD)
     assert (_cover(lp, "prior_9", 20.0, minor_spacing_m=240.0)
             == _cover(lp, "prior_9", 20.0))
+
+
+def test_a_set_pass_over_a_one_flight_budget_keeps_its_first_stop():
+    from types import SimpleNamespace
+
+    from maps.search.parse_compile.passes import cover_items
+
+    items, _note, _subject, segs = cover_items(
+        [{"target_fid": "[0, 0]"}, {"target_fid": "[100, 0]"}], "",
+        spec=SimpleNamespace(coverage_stops=None, flight_budget=1),
+        spacing=10.0, rows={}, covered=set(), pose_xy=(0.0, 0.0))
+    assert items == [{"target_fid": "[0, 0]"}] and segs == 2
