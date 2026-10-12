@@ -483,7 +483,7 @@ def tokens(bases: list[Path]) -> dict[str, Any]:
 
 
 def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], truth: Truth, track,
-                 prior: list[dict[str, Any]] | None, turn_radius_m: float, radius_m: float = SUCCESS_RADIUS_M) -> dict[str, Any]:
+                 prior: list[dict[str, Any]] | None, turn_radius_m: float) -> dict[str, Any]:
     bases = _bases(root, row)
     events = _conversation(bases)
     end = ended(row)
@@ -525,7 +525,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         out["ne_from"] = "committed area centroid" if area else "commit point"
         out["ne_ft"] = round(math.dist(point, target) * FT_PER_M, 1)
         out["success_area"] = bool(area and point_in_polygon(target, area))
-        out["success_radius"] = math.dist(xy, target) <= radius_m
+        out["success_radius"] = math.dist(xy, target) <= SUCCESS_RADIUS_M
     else:
         out["success_area"] = out["success_radius"] = False
     if t_start is None:

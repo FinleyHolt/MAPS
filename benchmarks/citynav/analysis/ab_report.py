@@ -19,8 +19,9 @@ from pathlib import Path
 from benchmarks.citynav.analysis import rows as _rows
 
 
-def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    """Wilson score interval for k/n (95% at z=1.96)."""
+def wilson_ci(k: int, n: int) -> tuple[float, float]:
+    """The 95% Wilson score interval for k/n."""
+    z = 1.96
     if n <= 0:
         return (float("nan"), float("nan"))
     p = k / n
@@ -30,24 +31,17 @@ def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     return (max(0.0, center - half), min(1.0, center + half))
 
 
-def _bootstrap_ci(
-    diffs: list[float], *, iters: int = 10000, seed: int = 12345, alpha: float = 0.05,
-) -> tuple[float, float]:
-    """Seeded percentile bootstrap CI for the mean of per-episode (b - a)."""
+def _bootstrap_ci(diffs: list[float]) -> tuple[float, float]:
+    """Seeded 95% percentile bootstrap CI (10,000 draws) for the mean of per-episode (b - a)."""
     import random
 
     n = len(diffs)
     if n == 0:
         return (float("nan"), float("nan"))
-    rng = random.Random(seed)
-    means = []
-    for _ in range(iters):
-        draw = [diffs[rng.randrange(n)] for _ in range(n)]
-        means.append(sum(draw) / n)
-    means.sort()
-    lo = means[int((alpha / 2) * iters)]
-    hi = means[min(iters - 1, int((1 - alpha / 2) * iters))]
-    return (lo, hi)
+    iters = 10000
+    rng = random.Random(12345)
+    means = sorted(sum(diffs[rng.randrange(n)] for _ in range(n)) / n for _ in range(iters))
+    return means[int(0.025 * iters)], means[int(0.975 * iters)]
 
 
 def _mcnemar(pairs: list[tuple[int, int]]) -> dict:

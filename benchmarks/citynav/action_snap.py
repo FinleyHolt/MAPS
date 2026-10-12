@@ -15,7 +15,7 @@ target height. Altitude is the last phase so the drone never descends until
 it is over the target XY (the standard quadcopter waypoint pattern).
 The achieved pose may differ from the requested end pose when the
 discrete action set cannot reach it exactly or the sequence hits
-``max_actions``; in that case the next hop re-plans from the achieved
+:data:`MAX_ACTIONS`; in that case the next hop re-plans from the achieved
 pose.
 """
 
@@ -135,20 +135,18 @@ NEAR_M: float = 10.0
 ARRIVAL_BOUND_M: float = SNAP_XY_TOL_M / math.cos(math.radians(ALIGN_TOL_DEG))
 
 
-def snap_to_actions(
-    start: Pose,
-    end: Pose,
-    *,
-    xy_tol_m: float = SNAP_XY_TOL_M,
-    alt_tol_m: float = 1.0,
-    max_actions: int = 1024,
-) -> tuple[list[CityNavAction], Pose]:
+#: Altitude error a leg leaves open.
+SNAP_ALT_TOL_M: float = 1.0
+#: A runaway guard that never binds: the runner's ``_drive_to`` loop holds
+#: the per-episode budget.
+MAX_ACTIONS: int = 1024
+
+
+def snap_to_actions(start: Pose, end: Pose) -> tuple[list[CityNavAction], Pose]:
     """Greedy decomposition of one compiler hop into CityNav actions.
 
     Returns ``(actions, achieved_pose)``. ``achieved_pose`` may differ
     from ``end`` when the discrete action set cannot exactly reach it.
-    ``max_actions`` is a non-binding runaway guard; the per-episode
-    budget is enforced one level up by the runner's ``_drive_to`` loop.
     """
     actions: list[CityNavAction] = []
     pose = start
@@ -156,7 +154,7 @@ def snap_to_actions(
 
     def _emit(action: CityNavAction) -> bool:
         nonlocal pose
-        if len(actions) >= max_actions:
+        if len(actions) >= MAX_ACTIONS:
             return False
         actions.append(action)
         pose = _apply(pose, action)
@@ -167,12 +165,12 @@ def snap_to_actions(
     # within one forward step at a bearing no 30-degree heading aligns with
     # would otherwise be paced around until the runaway guard.
     xy_stuck = False
-    while len(actions) < max_actions:
+    while len(actions) < MAX_ACTIONS:
         dx = target_xy[0] - pose.x
         dy = target_xy[1] - pose.y
         xy_err = math.hypot(dx, dy)
         alt_err = end.altitude_m - pose.altitude_m
-        xy_open = xy_err > xy_tol_m and not xy_stuck
+        xy_open = xy_err > SNAP_XY_TOL_M and not xy_stuck
         bearing = (
             bearing_deg((pose.x, pose.y), target_xy)
             if xy_open
@@ -180,7 +178,7 @@ def snap_to_actions(
         )
         heading_err = _wrap_signed(bearing - pose.heading_deg)
 
-        if not xy_open and abs(alt_err) <= alt_tol_m:
+        if not xy_open and abs(alt_err) <= SNAP_ALT_TOL_M:
             break
         heading_tol_deg = CRUISE_TOL_DEG if moved and xy_err > NEAR_M else ALIGN_TOL_DEG
         if xy_open and abs(heading_err) > heading_tol_deg:
@@ -202,7 +200,7 @@ def snap_to_actions(
                 break
             moved = True
             continue
-        if abs(alt_err) > alt_tol_m:
+        if abs(alt_err) > SNAP_ALT_TOL_M:
             if not _emit(
                 CityNavAction.ASCEND if alt_err > 0 else CityNavAction.DESCEND
             ):
