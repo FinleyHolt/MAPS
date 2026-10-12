@@ -114,21 +114,14 @@ class Driver:
         self.episode_timeout_s = int(args.episode_timeout_s)
         self.max_infra_attempts = max(1, int(args.max_infra_attempts))
         self._infra_errors: dict[str, Counter] = {}
-        self.out_root = Path(args.out_root)
-        if not self.out_root.is_absolute():
-            self.out_root = (REPO / self.out_root).resolve()
+        self.out_root = Path(args.out_root).resolve()
         self.out_root.mkdir(parents=True, exist_ok=True)
         self.episodes_file = self.out_root / episodes.EPISODES_JSONL
         self.driver_log = self.out_root / "driver.log"
         self.summary_file = self.out_root / "summary.txt"
         self.limit = int(args.limit)
         self.sample_seed = int(args.sample_seed)
-        self.allowlist_path: Path | None = None
-        if args.episode_allowlist:
-            ap = Path(args.episode_allowlist)
-            if not ap.is_absolute():
-                ap = (REPO / ap).resolve()
-            self.allowlist_path = ap
+        self.allowlist_path = Path(args.episode_allowlist).resolve() if args.episode_allowlist else None
         # Guarded by _dispatch_lock.
         self._selection: list[str] = []
         self._cursor = 0

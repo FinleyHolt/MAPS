@@ -394,3 +394,10 @@ def test_the_dry_run_counts_a_persistent_infra_episode_as_left_out(driver, tmp_p
     assert d.dry_run() == 0
     out = capsys.readouterr().out
     assert "pending: 1" in out and "[PEND] ep1" in out and "[PEND] ep0" not in out, out
+
+
+def test_relative_paths_resolve_against_the_working_directory(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    d = bf.Driver(bf._build_parser().parse_args(["--out-root", "runs/a", "--episode-allowlist", "ids.txt"]))
+    assert d.out_root == tmp_path / "runs" / "a" and d.out_root.is_dir()
+    assert d.allowlist_path == tmp_path / "ids.txt"
