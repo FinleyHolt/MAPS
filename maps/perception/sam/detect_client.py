@@ -55,7 +55,9 @@ class SamRequestRefused(RuntimeError):
 
 #: 4xx statuses that are the serve's weather, not a request built wrong: a
 #: request timeout and a rate limit. They move the call to another replica
-#: like a 5xx.
+#: like a 5xx. Kept apart from ``maps.llm.http.TRANSIENT_CLIENT_STATUS``,
+#: whose 402 is a hosted reasoner's quota check: the self-hosted segmenter's
+#: 402 is a refusal.
 _SAM_TRANSIENT_CLIENT_STATUSES = (408, 429)
 
 
