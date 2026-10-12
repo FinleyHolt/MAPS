@@ -38,6 +38,7 @@ import numpy as np
 from benchmarks.flight.live_source import ortho_observation
 from benchmarks.flight.measures import _bases, _rows, tour_stops
 from benchmarks.flight.mission import Mission, activate_calcity, converse, summary_line
+from benchmarks.flight.tile_georef import FLOOR_MSL_M
 
 log = logging.getLogger("flight.replay")
 
@@ -462,6 +463,30 @@ def _arm_env(rec: Recording, *, forced: bool) -> None:
         os.environ[k] = str(v)
 
 
+def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
+    """The height above ground a replay flies at, the one the served sensor
+    block and every leg read. Forced, the config's start height, where the
+    flown engine was hydrated; else the recorded run's: the median camera
+    height of its observations, else of its GNSS track over the run."""
+    if forced:
+        from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
+
+        return float(load_config(config).start_altitude_agl_m)
+    from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
+
+    map_name = str(rec.row.get("map_name") or "calcity")
+    alts = [float(f["altitude_m"]) - GROUND_LEVEL[map_name] for f in rec.frames if f.get("altitude_m") is not None]
+    if not alts and rec.row.get("started_at_utc"):
+        t0 = float(rec.row["started_at_utc"])
+        t1 = t0 + float(rec.row.get("elapsed_s") or 0.0)
+        alts = [float(f["alt_msl_m"]) - FLOOR_MSL_M[map_name] for f in _rows(rec.sortie / "flight_track.jsonl")
+                if f.get("alt_msl_m") is not None and t0 <= float(f["t_unix"]) <= t1]
+    if not alts:
+        raise ValueError(f"{rec.run_id}: the recording holds no height above ground: no observation and no GNSS "
+                         f"fix over the run")
+    return float(np.median(alts))
+
+
 def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | None = None, live=None,
         config: str = "configs/calcity.yaml", taskings: list[str] | None = None,
         reasoning_effort: str | None = None) -> tuple[ReplayMission, Path]:
@@ -520,7 +545,8 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         stops=rec.stops if forced else None, episode_id=episode_id, split=str(row.get("split") or "calcity"),
         config=config, workdir=ep.dir, live=live, instruction=str(row.get("description") or ""),
         recorder=ep.recorder, close_log=ep.close, run_id=f"replay-{rec.sortie.name}", run_no=run_no,
-        start_xy=tuple(row["start_xy"]), reasoning_effort=None if effort is None else str(effort))
+        start_xy=tuple(row["start_xy"]), reasoning_effort=None if effort is None else str(effort),
+        agl_m=replay_agl_m(rec, forced=forced, config=config))
     if script is not None:
         script.mission = mission
     converse(mission, taskings or [], ended=None if script is None else (lambda: script.ended))

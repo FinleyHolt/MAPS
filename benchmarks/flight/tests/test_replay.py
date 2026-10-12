@@ -12,6 +12,7 @@ from PIL import Image
 
 from benchmarks.flight import mission as M
 from benchmarks.flight import replay as R
+from benchmarks.flight.tests import world
 from benchmarks.flight.tests.conftest import _recording_legs
 from benchmarks.flight.tests.test_mission import _hydrated, _session
 
@@ -34,7 +35,8 @@ def bank_mission(built, tmp_path):
         workdir = tmp_path / "sortie" / "run"
         workdir.mkdir(parents=True)
         m = M.Mission(episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,
-                      live=live, recorder=None, close_log=lambda: None, run_no=1)
+                      live=live, recorder=None, close_log=lambda: None, run_no=1,
+                      agl_m=world.AGL_M)
         m.map_name, m._tiles_dir = "calcity", built[0]
         return m, live
     return make
@@ -76,16 +78,41 @@ def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers(bu
     modes = []
 
     def named(**kw):
-        modes.append(kw["replay_of"]["mode"])
+        modes.append((kw["replay_of"]["mode"], kw["agl_m"]))
         raise StopIteration
 
     monkeypatch.setattr(R, "ReplayMission", named)
     rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run", row={"episode_id": "calcity::t", "start_xy": [0, 0]},
-                      params={}, requests=[], responses=[], conversation=[], frames=[])
+                      params={}, requests=[], responses=[], conversation=[],
+                      frames=[{"altitude_m": 1980.0}, {"altitude_m": 2000.0}, {"altitude_m": 1990.0}])
     for live in (None, object()):
         with pytest.raises(StopIteration):
             R.fly(rec, tmp_path, bank=[], live=live)
-    assert modes == ["bank", "frames"]
+    assert modes == [("bank", 1990.0), ("frames", 1990.0)]
+
+
+def test_a_replay_flies_at_the_recorded_height_and_a_forced_one_at_the_config_s(tmp_path):
+    """The recorded run's height above ground: its observations' camera
+    heights, else its GNSS track over the run; forced, the config's start
+    height, where the flown engine was hydrated."""
+    sortie = tmp_path / "s"
+    sortie.mkdir()
+    floor = R.FLOOR_MSL_M["calcity"]
+    (sortie / "flight_track.jsonl").write_text("".join(
+        json.dumps({"t_unix": t, "alt_msl_m": floor + agl}) + "\n" for t, agl in ((5, 50.0), (10, 990.0), (20, 1010.0),
+                                                                                   (30, 1000.0), (99, 50.0))))
+    row = {"map_name": "calcity", "started_at_utc": 10.0, "elapsed_s": 20.0}
+
+    def rec(frames):
+        return R.Recording(sortie=sortie, run_dir=sortie / "run", row=row, params={}, requests=[], responses=[],
+                           conversation=[], frames=frames)
+
+    assert R.replay_agl_m(rec([{"altitude_m": 1980.0}]), forced=False, config="configs/calcity.yaml") == 1980.0
+    assert R.replay_agl_m(rec([]), forced=False, config="configs/calcity.yaml") == pytest.approx(1000.0)
+    assert R.replay_agl_m(rec([{"altitude_m": 1980.0}]), forced=True, config="configs/calcity.yaml") == 914.4
+    row["started_at_utc"] = 500.0
+    with pytest.raises(ValueError, match="no height above ground"):
+        R.replay_agl_m(rec([]), forced=False, config="configs/calcity.yaml")
 
 
 # -- the forced diff -------------------------------------------------------------

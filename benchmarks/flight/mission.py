@@ -130,10 +130,10 @@ def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] |
     return parse_episode(found[1], row_index=found[0])
 
 
-def hydrate(*, episode_id: str, split: str, config: str,
-            start_xy: tuple[float, float] | None = None, agl_m: float | None = None) -> Hydrated:
+def hydrate(*, episode_id: str, split: str, config: str, agl_m: float,
+            start_xy: tuple[float, float] | None = None) -> Hydrated:
     """The engine for one mission, built by the bench's :func:`build_episode`,
-    at the operator's start and, with ``agl_m``, at the crew's commanded height
+    at the operator's start and at ``agl_m``, the crew's commanded height
     above ground: the one height the served sensor block and every leg read."""
     from benchmarks.citynav.run_benchmark import load_config, load_episode_assets  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
@@ -146,8 +146,7 @@ def hydrate(*, episode_id: str, split: str, config: str,
         raise RuntimeError(f"cfg.sensor did not resolve a SensorSpec: {cfg.sensor!r}")
     episode = resolve_episode(episode_id, split, start_xy)
     h = build_episode(cfg, episode, load_episode_assets(episode.map_name))
-    if agl_m is not None:
-        h.state.altitude_m = float(h.search_loop._ortho_ground_z_m) + float(agl_m)
+    h.state.altitude_m = float(h.search_loop._ortho_ground_z_m) + float(agl_m)
     return h
 
 
@@ -195,18 +194,17 @@ class Mission:
     """A mission in the seat: its thread, its tasking queue, its record."""
 
     def __init__(self, *, episode_id: str, split: str, config: str, workdir: Path, live: LiveSource,
-                 recorder: Any, close_log, instruction: str | None = None,
+                 recorder: Any, close_log, agl_m: float, instruction: str | None = None,
                  run_id: str | None = None, run_no: int | None = None,
-                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None,
-                 agl_m: float | None = None) -> None:
+                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None) -> None:
         self.episode_id = episode_id
         self.split = split
         self.config = config
         self.workdir = Path(workdir)
         #: A string the serve accepts; None flies the arm's.
         self.reasoning_effort = reasoning_effort
-        #: The height above ground the crew is commanded to fly; None flies the config's start height.
-        self.agl_m = agl_m
+        #: The height above ground the crew is commanded to fly.
+        self.agl_m = float(agl_m)
         self.run_id = run_id
         self.run_no = run_no
         self._start_xy = start_xy

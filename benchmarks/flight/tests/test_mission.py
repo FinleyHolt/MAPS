@@ -19,7 +19,8 @@ def make_mission(built, make_twin, make_live, tmp_path):
         workdir = tmp_path / "sortie" / "run"
         workdir.mkdir(parents=True)
         m = M.Mission(episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,
-                      live=live, recorder=None, close_log=lambda: None, run_no=1)
+                      live=live, recorder=None, close_log=lambda: None, run_no=1,
+                      agl_m=world.AGL_M)
         m.map_name, m._tiles_dir = "calcity", built[0]
         return m, twin
     return make
@@ -147,7 +148,7 @@ def test_the_flight_refuses_a_config_that_withholds_a_part(tmp_path):
     arm = tmp_path / "arm.yaml"
     arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nwithhold: [images]\n")
     with pytest.raises(ValueError, match="bench ablation"):
-        mission.hydrate(episode_id="calcity::0#0", split="calcity", config=str(arm))
+        mission.hydrate(episode_id="calcity::0#0", split="calcity", config=str(arm), agl_m=914.4)
 
 
 def test_ground_held_by_frames_that_cannot_be_fetched_is_flown_again_and_served_from_the_new_pass(
