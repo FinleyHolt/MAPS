@@ -969,7 +969,7 @@ class MissionPython:
         # per-block state
         self._out: dict = {}
         self._code = ""
-        self._printed: list = []
+        self._printed = ""
         self._lines = 0
         self._deadline = 0.0
         self._block_shown: set = set()
@@ -1527,8 +1527,11 @@ class MissionPython:
 
     # -- display -----------------------------------------------------------
 
-    def _print(self, *parts, sep=" ", end=""):
-        self._printed.append(sep.join(str(p)[:2_000] for p in parts))
+    def _print(self, *parts, sep=" ", end="\n", flush=False):
+        # print()'s own signature; the block's output is one text, cut into
+        # lines when the block ends.
+        self._printed += ((" " if sep is None else sep).join(
+            str(p)[:2_000] for p in parts) + ("\n" if end is None else end))
 
     def _call_show(self, *xs):
         """``show(r1)`` renders exactly what ``r1`` on its own line does."""
@@ -1556,15 +1559,15 @@ class MissionPython:
         elif isinstance(value, Row):
             self._out.setdefault("shown", {})[label] = value.bind
         else:
-            self._printed.append(f"{label} = {value!r}"
-                                 if label != repr(value) else repr(value))
+            self._printed += (f"{label} = {value!r}" if label != repr(value)
+                              else repr(value)) + "\n"
 
     # -- the block runner --------------------------------------------------
 
     def run_block(self, code: str) -> dict:
         self._out = out = {"said": code.strip()}
         self._code = code
-        self._printed = []
+        self._printed = ""
         self._lines = 0
         self._block_shown: set = set()
         self._get_noted.clear()
@@ -1625,7 +1628,7 @@ class MissionPython:
 
     def _finish(self, out: dict) -> dict:
         if self._printed:
-            lines = self._printed
+            lines = self._printed.splitlines()
             if len(lines) > PRINT_LINE_CAP:
                 kept = lines[:PRINT_LINE_CAP - 8] + [
                     f"... [{len(lines) - PRINT_LINE_CAP + 3} printed "

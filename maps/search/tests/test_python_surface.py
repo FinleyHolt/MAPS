@@ -172,6 +172,16 @@ def test_printing_a_whole_city_is_capped_like_a_notebook():
     assert printed.count("\n") < 70, printed.count("\n")
 
 
+
+def test_print_takes_prints_own_keywords():
+    from maps.search.parse_compile.python_surface import MissionPython
+
+    out = MissionPython(quiet_env()).run_block(
+        'print("a", end="")\nprint("b", flush=True)\nprint("c", "d", sep="-")\n')
+    assert "error" not in out, out
+    assert out["printed"] == "ab\nc-d", out["printed"]
+
+
 def test_a_move_returns_the_rows_it_arrived_over():
     results, _g, added = grow_drive([
         [run('look_for("car")\n')],
