@@ -240,7 +240,7 @@ def test_every_shared_fixture_case():
         assert set(scored) == set(want["picks"]) | set(want["unscored"]), run_name
         assert no_metrics == want["no_metrics"], run_name
         for eid in want["unscored"]:
-            assert scored[eid] == {"SR": 0}, \
+            assert scored[eid]["SR"] == 0 and scored[eid].get("OSR", 0) == 0, \
                 f"{run_name}: {eid} keeps its slot and scores a miss"
         for eid in want["never_landed"]:
             assert eid not in picked, f"{run_name}: {eid} has no ledger row"
@@ -261,7 +261,7 @@ def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_pa
     )
     scored, _ = load_run(root)
     assert sorted(scored) == ["e1", "e2", "e3", "e4"]
-    assert scored["e3"] == {"SR": 0}
+    assert scored["e3"]["SR"] == 0 and scored["e3"].get("OSR", 0) == 0
     assert len(run_report.report(root)) == 4
     row = arm_table.arm_row(root)
     assert (row["n"], row["SR_n"], row["SR"]) == (4, 1, 0.25)
@@ -299,3 +299,14 @@ def test_a_sortie_root_selecting_no_episodes_reads_whole(tmp_path):
     missions are flown one at a time, so no count bounds the read."""
     picked, _ = rows.load_attempts(_partial_run(tmp_path, 0))
     assert set(picked) == {"e1"}
+
+
+def test_a_metricless_pick_is_an_osr_miss_on_a_ring_run():
+    """A crash or an unrecorded timeout is a miss in OSR's denominator as in
+    SR's, so OSR and SR are rates over the same episodes."""
+    def pick(metrics):
+        return rows.Attempt("e", {}, metrics, "20260725_110000", 0, True)
+    picked = {"a": pick({"SR": 1, "OSR": 1}), "b": pick({})}
+    assert rows.scored_metrics(picked)["b"] == {"SR": 0, "OSR": 0}
+    shape = {"a": pick({"SR": 1}), "b": pick({})}
+    assert rows.scored_metrics(shape)["b"] == {"SR": 0}
