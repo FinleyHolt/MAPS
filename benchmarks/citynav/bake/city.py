@@ -95,7 +95,7 @@ def _raster_bounds(block: str) -> tuple[float, float, float, float]:
     return (float(b.left), float(b.bottom), float(b.right), float(b.top))
 
 
-def _block_frame(name: str, tiles_dir: Path, *, imagery: bool = True
+def _block_frame(name: str, tiles_dir: Path, *, imagery: bool
                  ) -> tuple[dict[str, Any], WorldBounds, tuple[int, int], float]:
     """``(caller_keys, bounds, grid_shape, cell_size_m)``: the grid a block bakes over.
 

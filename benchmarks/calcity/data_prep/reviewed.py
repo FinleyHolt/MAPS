@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 
 import numpy as np
 
@@ -27,11 +26,11 @@ GROUND_TRUTH = PACKAGE_ROOT / "data_prep" / "authoring" / "ground_truth.json"
 TOL_M = 0.2
 
 
-def reviewed_episode_ids(corpus: Path | None = None, ground_truth: Path = GROUND_TRUTH) -> list[str]:
+def reviewed_episode_ids() -> list[str]:
     """Episode ids of the corpus rows that match a reviewed shape, in corpus order."""
-    rows = json.loads(Path(corpus or split_path("calcity")).read_text())
+    rows = json.loads(split_path("calcity").read_text())
     keys: dict[str, list[tuple[float, float]]] = {}
-    for key in json.loads(Path(ground_truth).read_text()):
+    for key in json.loads(GROUND_TRUTH.read_text()):
         map_name, _, xy = key.partition("::")
         x, _, y = xy.partition(":")
         keys.setdefault(map_name, []).append((float(x), float(y)))

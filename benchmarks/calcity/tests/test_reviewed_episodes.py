@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 
+from benchmarks.calcity.data_prep import reviewed
 from benchmarks.calcity.data_prep.reviewed import reviewed_episode_ids
 
 REVIEWED_N = 606
@@ -22,7 +23,7 @@ def test_the_derivation_on_the_shipped_corpus_is_the_reviewed_set():
     assert hashlib.sha256("\n".join(sorted(ids)).encode()).hexdigest() == REVIEWED_SHA256
 
 
-def test_a_row_matches_only_within_the_tolerance(tmp_path):
+def test_a_row_matches_only_within_the_tolerance(tmp_path, monkeypatch):
     import json
 
     corpus = tmp_path / "c.json"
@@ -34,4 +35,6 @@ def test_a_row_matches_only_within_the_tolerance(tmp_path):
         {**row, "ann_ids": [1], "target_positions": [[10.25, 20.0, 0.0]]},
     ]))
     gt.write_text(json.dumps({"calcity::10.0:20.0": {"object_id": None, "target_mask": []}}))
-    assert reviewed_episode_ids(corpus, gt) == ["calcity::0#0"]
+    monkeypatch.setattr(reviewed, "split_path", lambda split: corpus)
+    monkeypatch.setattr(reviewed, "GROUND_TRUTH", gt)
+    assert reviewed_episode_ids() == ["calcity::0#0"]

@@ -200,7 +200,7 @@ def test_a_geotiff_pair_is_streamed_into_the_cache_and_never_filled(tmp_path):
     assert not list(tmp_path.glob("ortho/*.tmp*"))
 
 
-def test_the_streamed_bake_matches_the_in_heap_bake_band_for_band(tmp_path):
+def test_the_streamed_bake_matches_the_in_heap_bake_band_for_band(tmp_path, monkeypatch):
     """Same contract as the PNG path where the map has pixels (the PNG path
     also fills enclosed holes): one band boundary must not shift a row."""
     from PIL import Image
@@ -208,7 +208,8 @@ def test_the_streamed_bake_matches_the_in_heap_bake_band_for_band(tmp_path):
     rgb = _geotiff_pair(tmp_path, H=41)
     Image.fromarray(rgb).save(tmp_path / "blk.png")
     heap = cm.bake_ortho_from_rasters(tmp_path, "blk")
-    cm._bake_geotiff_mmap(tmp_path, "blk", tmp_path / "s.mmap", _STAMP, band_rows=7)
+    monkeypatch.setattr(cm, "_BAND_ROWS", 7)
+    cm._bake_geotiff_mmap(tmp_path, "blk", tmp_path / "s.mmap", _STAMP)
     got = cm._read_ortho_mmap(tmp_path / "s.mmap", _STAMP)
     covered = rgb.max(axis=2) > 0
     for k in ("rgb", "alpha", "height"):

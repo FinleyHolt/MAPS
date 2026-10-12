@@ -133,8 +133,8 @@ def resolve_flight_target(
 _DETECTED_HEAD = 12
 
 
-def detected_digest(dets: list[dict], cap: int = _DETECTED_HEAD) -> dict:
-    """Report fields for THIS flight's folded detections: up to ``cap``
+def detected_digest(dets: list[dict]) -> dict:
+    """Report fields for THIS flight's folded detections: up to ``_DETECTED_HEAD``
     rows, round-robin over classes ordered by their strongest detection, each
     class's rows by confidence, so every class is represented;
     ``detected_more`` counts the rest.
@@ -153,9 +153,9 @@ def detected_digest(dets: list[dict], cap: int = _DETECTED_HEAD) -> dict:
     head: list = []
     for _rank in range(max((len(r) for r in lanes), default=0)):
         for rows in lanes:
-            if _rank < len(rows) and len(head) < cap:
+            if _rank < len(rows) and len(head) < _DETECTED_HEAD:
                 head.append(rows[_rank][1])
-        if len(head) >= cap:
+        if len(head) >= _DETECTED_HEAD:
             break
     out: dict = {"detected": [
         {"fid": d["fid"], "class": d["class"], "xy": list(d["xy"])}

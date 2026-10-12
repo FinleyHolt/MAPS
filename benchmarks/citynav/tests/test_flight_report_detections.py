@@ -74,10 +74,10 @@ def test_every_armed_class_reaches_the_head_however_the_fold_ordered_it():
 
 def test_within_a_class_the_head_takes_the_most_confident():
     """The head is the best of each class, not the first folded."""
-    dets = [{"fid": "weak", "class": "car", "xy": [0.0, 0.0], "conf": 0.31},
-            {"fid": "strong", "class": "car", "xy": [1.0, 0.0], "conf": 0.94}]
-    head = [d["fid"] for d in detected_digest(dets, cap=1)["detected"]]
-    assert head == ["strong"], head
+    dets = [{"fid": "weak", "class": "car", "xy": [0.0, 0.0], "conf": 0.31}]
+    dets += [{"fid": f"strong{i}", "class": "car", "xy": [1.0, float(i)], "conf": 0.94} for i in range(12)]
+    head = [d["fid"] for d in detected_digest(dets)["detected"]]
+    assert head == [f"strong{i}" for i in range(12)], head
 
 
 def test_no_confidences_leaves_the_fold_order_intact():

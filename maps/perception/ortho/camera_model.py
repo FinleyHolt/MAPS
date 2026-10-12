@@ -134,7 +134,11 @@ def raster_source_gsd_m(rgbd_dir, map_name: str) -> float | None:
         return float(abs(src.transform.a))
 
 
-def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, stamp: dict, band_rows: int = 1024) -> None:
+#: Rows the streamed bake reads per band.
+_BAND_ROWS = 1024
+
+
+def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, stamp: dict) -> None:
     """Stream ``<map>_rgb.tif`` + ``<map>.tif`` into the cache at ``d`` one
     band of rows at a time (the raster is gigapixels), recording ``stamp`` as
     its source. The height plane's affine gives the extent and cell; height
@@ -168,8 +172,8 @@ def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, stamp: dict, band_rows:
             rgb = open_memmap(tmp / "rgb.npy", mode="w+", dtype=np.uint8, shape=(H, W, 3))
             height = open_memmap(tmp / "height.npy", mode="w+", dtype=np.float32, shape=(H, W))
             alpha = open_memmap(tmp / "alpha.npy", mode="w+", dtype=np.uint8, shape=(H, W))
-            for r0 in range(0, H, band_rows):
-                n = min(band_rows, H - r0)
+            for r0 in range(0, H, _BAND_ROWS):
+                n = min(_BAND_ROWS, H - r0)
                 win = Window(0, r0, W, n)
                 band = np.ascontiguousarray(rgb_src.read([1, 2, 3], window=win).transpose(1, 2, 0))
                 covered = band.max(axis=2) > 0
