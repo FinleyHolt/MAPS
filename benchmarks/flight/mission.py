@@ -539,25 +539,26 @@ class Mission:
         # aircraft is still on the ground.
         t0 = self._vehicle.now()
         while not self._cancel.is_set():
+            # The recording decides arrival; the aircraft's own pose only the
+            # short pass and the timeout's start.
+            cov = self._coverage(area)
+            fraction = float((cov or {}).get("fraction") or 0.0)
+            if fraction >= COVERED_FRACTION:
+                return "arrived"
             pose = self._live.ownship()
             if pose is not None:
                 d = math.hypot(pose["x"] - float(xy[0]), pose["y"] - float(xy[1]))
                 best = min(best, d)
                 self._closest_m = best
-                cov = self._coverage(area)
-                holds = bool(cov and float(cov.get("fraction") or 0.0) >= COVERED_FRACTION)
-                part = bool(cov) and 0.0 < float(cov.get("fraction") or 0.0) < COVERED_FRACTION
                 # Over the area and gone, with part of it held: a short pass.
-                if reach_m is not None and part and best <= reach_m and d > best + SHORT_PASS_LEAVE_M:
+                if reach_m is not None and fraction > 0.0 and best <= reach_m and d > best + SHORT_PASS_LEAVE_M:
                     receding_since = receding_since or self._vehicle.now()
                     if self._vehicle.now() - receding_since >= SHORT_PASS_LEAVE_S:
                         log.info("short pass at (%.0f, %.0f): closest %.0f m, now %.0f m off, %.0f%% held",
-                                 float(xy[0]), float(xy[1]), best, d, 100.0 * float(cov.get("fraction") or 0.0))
+                                 float(xy[0]), float(xy[1]), best, d, 100.0 * fraction)
                         return "short"
                 else:
                     receding_since = None
-                if holds:
-                    return "arrived"
                 if pose["agl_m"] < AIRBORNE_AGL_M:
                     t0 = self._vehicle.now()
             if self._vehicle.now() - t0 > timeout_s:

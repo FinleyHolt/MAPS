@@ -148,3 +148,11 @@ def test_the_flight_refuses_a_config_that_withholds_a_part(tmp_path):
     arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nwithhold: [images]\n")
     with pytest.raises(ValueError, match="bench ablation"):
         mission.hydrate(episode_id="calcity::0#0", split="calcity", config=str(arm))
+
+
+def test_a_leg_arrives_on_the_recording_while_the_aircraft_s_own_pose_cannot_be_read(built, make_mission):
+    m, twin = make_mission()
+    twin.post(M.Leg(target="t", point=(600.0, 700.0), step=0))
+    m._live.ownship = lambda: None
+    area_ll = m._area_lonlat([(600.0, 600.0), (610.0, 600.0), (600.0, 610.0)])
+    assert m._wait_arrival((600.0, 600.0), area=area_ll, timeout_s=60.0) == "arrived"
