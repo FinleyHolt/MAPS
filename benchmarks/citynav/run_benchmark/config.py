@@ -46,7 +46,6 @@ _NONNEG = (lambda v: v >= 0), ">= 0"
 # reads an int too.
 _SCHEMA: dict[str, Any] = {
     "max_steps": (int, _POS),
-    "altitude_m": (_NUM, _POS),
     "success_radius_m": (_NUM, _POS),
     "spawn": (str, _one_of("episode", "uniform")),
     "spawn_seed": (int, _NONNEG),
@@ -65,7 +64,6 @@ class RunConfig:
     resolved from."""
 
     max_steps: int
-    altitude_m: float
     success_radius_m: float
     # "episode" flies the dataset's start pose; "uniform" a seeded uniform
     # point over the tile bounds, deterministic per (spawn_seed, episode_id).

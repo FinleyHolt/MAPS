@@ -38,12 +38,11 @@ VIEW_POSITION_MARKER = "marked_region"
 
 @dataclass(frozen=True)
 class TourViewpoint:
-    """One flown stop: the target token, its world point and its altitude
-    (m AGL; None falls back to ``cfg.altitude_m``)."""
+    """One flown stop: the target token, its world point and its altitude."""
 
     fid: str
     xy: tuple[float, float]
-    altitude_m: float | None = None
+    altitude_m: float
 
 
 @dataclass

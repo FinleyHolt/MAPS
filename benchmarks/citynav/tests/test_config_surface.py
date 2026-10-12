@@ -11,7 +11,7 @@ from benchmarks.citynav.run_benchmark.config import load_config, resolve_config
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 CITYNAV = {
-    "altitude_cap_m": 200.0, "altitude_m": 125.0, "max_steps": 200,
+    "altitude_cap_m": 200.0, "max_steps": 200,
     "sensor": "nadir_1008_90", "spawn": "episode", "spawn_seed": 0,
     "start_altitude_agl_m": None, "success_radius_m": 20.0, "withhold": [],
 }

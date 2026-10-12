@@ -57,8 +57,6 @@ def test_an_episode_starts_at_its_rows_z_held_to_the_flight_envelope():
     assert start_altitude_m(cfg, MAP, z) == (137.25, GROUND)
     assert start_altitude_m(cfg, MAP, GROUND - 30.0) == (GROUND + 1.0, GROUND)
     assert start_altitude_m(cfg, MAP, cfg.altitude_cap_m + 50.0) == (cfg.altitude_cap_m, GROUND)
-    cfg.altitude_m = 50.0  # the cruise fallback is not the start pose
-    assert start_altitude_m(cfg, MAP, 137.25)[0] == 137.25
 
 
 def test_a_height_above_ground_replaces_the_rows_z():

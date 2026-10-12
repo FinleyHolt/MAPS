@@ -51,8 +51,7 @@ def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, 
     cruise. The result is held to ``[ground + 1, altitude_cap_m]``.
 
     This pair IS the crop window's observation ceiling: the mission's
-    ``obs_span_m = 2 * (alt - ground)``. ``cfg.altitude_m`` is not the
-    start pose.
+    ``obs_span_m = 2 * (alt - ground)``.
     """
     from maps.perception.ortho.ground_level import (  # noqa: PLC0415
         GROUND_LEVEL,
@@ -203,8 +202,7 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
     if not (isinstance(pose_xy, (list, tuple)) and len(pose_xy) == 2):
         return {"error": "the flown observation's pose is unknown"}
     px, py = float(pose_xy[0]), float(pose_xy[1])
-    alt = flown_entry.get("alt_m")
-    alt = float(alt) if alt is not None else float(h.cfg.altitude_m)
+    alt = float(flown_entry["alt_m"])
     try:
         obs = crop_observation(
             (px, py),

@@ -61,7 +61,6 @@ def _replay(case, tmp_path, monkeypatch):
 
     cfg = load_config("configs/citynav.yaml")
     cfg.max_steps = case["max_steps"]
-    cfg.altitude_m = 50.0
     state = _State(case["commit"])
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
     steps = synthesize_compliant_trajectory(

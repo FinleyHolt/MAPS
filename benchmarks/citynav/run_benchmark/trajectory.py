@@ -51,8 +51,7 @@ def synthesize_compliant_trajectory(
     short, and that is logged.
     """
     tour_wps = [(float(vp.xy[0]), float(vp.xy[1])) for vp in feature_tour.viewpoints]
-    tour_alts = [float(vp.altitude_m) if vp.altitude_m is not None else float(cfg.altitude_m)
-                 for vp in feature_tour.viewpoints]
+    tour_alts = [float(vp.altitude_m) for vp in feature_tour.viewpoints]
     tour_fids = [str(vp.fid) for vp in feature_tour.viewpoints]
 
     descent_xy = state.confirmed_target_xy
