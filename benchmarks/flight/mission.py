@@ -242,6 +242,8 @@ class Mission:
         self.turns_used = 0
         #: How many reports the model has made.
         self.replies = 0
+        #: The last report's ``(ended_by, ended_s)``: a run that fails after it is scored there.
+        self._reported: tuple[str | None, float | None] = (None, None)
         self._turn_diag: dict[str, Any] = {}
         #: The host's wall clock at the start (the row's ``ts``).
         self.started_at: float | None = None
@@ -714,7 +716,13 @@ class Mission:
                 self._set(STATE_ENDED, ended_by="stopped")
             else:
                 log.exception("mission %s failed", self.episode_id)
-                self._set(STATE_FAILED, error=f"{type(exc).__name__}: {exc}", infra=is_infra_fault(exc))
+                error = f"{type(exc).__name__}: {exc}"
+                if self.replies:
+                    # The run stands at its last report, whatever failed after it.
+                    ended_by, ended_s = self._reported
+                    self._set(STATE_FAILED, error=error, ended_by=ended_by, ended_s=ended_s)
+                else:
+                    self._set(STATE_FAILED, error=error, infra=is_infra_fault(exc))
         finally:
             with self._lock:
                 summary = {"kind": "summary", "status": self.status,
@@ -761,6 +769,7 @@ class Mission:
         with self._lock:
             self.ended_by = reply.ended_by
             self.ended_s = self.elapsed_s()
+            self._reported = (self.ended_by, self.ended_s)
             self.turns_used += int(reply.turns_used)
             self._turn_diag.clear()
             self.replies += 1

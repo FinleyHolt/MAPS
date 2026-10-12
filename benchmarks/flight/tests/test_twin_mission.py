@@ -278,3 +278,36 @@ def test_a_reasoner_unreachable_at_discovery_is_infra(calcity, serves, tmp_path,
                       "--out", str(out)]) == 1
     (row,) = [json.loads(line) for line in (next(out.iterdir()) / "episodes.jsonl").read_text().splitlines()]
     assert row["status"] == "infra" and row["error"].startswith("EndpointUnreachable: endpoint unreachable")
+
+
+def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, serves, tmp_path, monkeypatch):
+    """The segmenter fails out on the retask: the report stands (its end and
+    time), the error is recorded, and the run is scored, never infra."""
+    from benchmarks.flight import measures, twin
+    from maps.llm import http
+    from maps.perception.sam.detect_client import SamServerOutage
+
+    codes = iter(["go_to(prior_0)\n", None, "fail"])
+
+    def reply(url, headers, body, *, timeout, cancel_event):
+        code = next(codes, None)
+        if code == "fail":
+            raise SamServerOutage("no tile answered")
+        if code is None:
+            message = {"content": "Reported.", "reasoning_content": "", "tool_calls": []}
+        else:
+            call = {"id": "c1", "type": "function", "function": {"name": "run", "arguments": json.dumps({"code": code})}}
+            message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
+        return {"choices": [{"finish_reason": "stop", "message": message}]}
+
+    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    out = tmp_path / "out"
+    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
+                      "--then", "Check the west side too.", "--out", str(out)]) == 1
+    sortie = next(out.iterdir())
+    (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
+    assert row["status"] == "ok" and row["ended_by"] == "reply" and row["error"] == "SamServerOutage: no tile answered"
+    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]),
+                                               tiles_dir=calcity.tiles)
+    assert run["end"] == "reply" and run["success_area"] is True
+    assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
