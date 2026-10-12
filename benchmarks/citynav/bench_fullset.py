@@ -463,7 +463,7 @@ class Driver:
         ``analysis.run_report.report`` over the root."""
         from benchmarks.citynav.analysis import run_report  # noqa: PLC0415
 
-        infra = Counter(str(r.get("error") or "?")
+        infra = Counter(_infra_cause(r)
                         for r in _rows.iter_json_rows(self.episodes_file)
                         if r.get("status") == episodes.STATUS_INFRA)
         lines = [

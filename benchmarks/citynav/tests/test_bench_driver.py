@@ -318,3 +318,10 @@ def test_the_split_defaults_to_the_benchmarks_own() -> None:
     from benchmarks.citynav import paths
 
     assert bf._build_parser().parse_args([]).split == paths.DEFAULT_SPLIT
+
+
+def test_the_summary_names_an_errorless_infra_row_as_the_driver_counts_it(driver) -> None:
+    d = driver()
+    episodes.append_row(d.out_root, {"episode_id": "ep0", "worker_id": 0, "status": "infra"})
+    d._write_summary()
+    assert "by cause: infra:1" in d.summary_file.read_text()
