@@ -233,8 +233,9 @@ def load_attempts(
     shortfall = _shortfall(root, picked, stats)
     if shortfall and not allow_partial:
         raise SystemExit(
-            f"{shortfall}. Resume the run into the same root to finish it, or pass "
-            "--allow-partial to read it as it stands."
+            f"{shortfall}. Finish it by a resume into the same root (an episode that "
+            "already spent bench_fullset's --max-infra-attempts needs a higher one), "
+            "or pass --allow-partial to read it as it stands."
         )
     if shortfall:
         print(f"*** PARTIAL (--allow-partial): {shortfall} ***", file=sys.stderr)

@@ -287,8 +287,9 @@ def test_every_reader_refuses_a_partial_root_naming_the_shortfall(tmp_path, caps
     for read in (lambda: run_report.main(["run_report", str(root)]),
                  lambda: arm_table.main([str(root)]),
                  ab_report.main):
-        with pytest.raises(SystemExit, match=re.escape(want)):
+        with pytest.raises(SystemExit, match=re.escape(want)) as refused:
             read()
+        assert "resume" in str(refused.value) and "--max-infra-attempts" in str(refused.value)
     assert run_report.main(["run_report", str(root), "--allow-partial"]) == 0
     assert arm_table.main(["--allow-partial", str(root)]) == 0
     assert f"*** PARTIAL (--allow-partial): {root}: {want} ***" in capsys.readouterr().err

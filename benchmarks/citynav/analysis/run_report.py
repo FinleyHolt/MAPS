@@ -146,7 +146,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
         f"replicates_discarded={stats.keyed - len(picked)}  "
         f"no_metrics(crash/timeout-no-record)={stats.no_metrics}  "
         f"timeouts(wall-clock)={stats.timed_out}  "
-        f"infra(re-queued)={stats.infra}"
+        f"infra(excluded)={stats.infra}"
     )
     print(f"criterion: {_CRITERION_LABEL.get(_criterion, _criterion)}")
     print(f"SR = {_pct(sr, n)}")

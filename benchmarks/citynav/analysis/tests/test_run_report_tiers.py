@@ -93,7 +93,7 @@ def test_the_report_counts_timeouts_and_infra_apart(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "scored=2" in out
     assert "timeouts(wall-clock)=1" in out
-    assert "infra(re-queued)=1" in out
+    assert "infra(excluded)=1" in out
 
 
 def test_an_all_no_commit_run_scores_every_episode_a_miss(tmp_path, capsys):
