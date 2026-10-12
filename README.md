@@ -106,20 +106,20 @@ these places, the served-text changes among them:
 
 The closed-loop measures are read from the flown sorties' own records by
 [`benchmarks/flight/measures.py`](benchmarks/flight/measures.py), over the
-analysts' adjudications as of commit `f20829494` of the development
-repository: of 87 runs, the 20 the infrastructure lost leave every rate, each
-with its evidence as the reason, and 67 are scored.
+analysts' adjudications as of commit `54135a3e7` of the development
+repository: of 87 runs, the 18 the infrastructure lost leave every rate, each
+with its evidence as the reason, and 69 are scored.
 
 | Measure | Value | Definition |
 |---|---|---|
-| SR | 38/67 | The commit point lies inside the target's hand-drawn mask (one run with none: its tasking footprint). |
-| OSR | 57/67 | The aircraft's path (GNSS track, else keyframe poses) came within one camera footprint width of the target centroid. |
+| SR | 40/69 | The commit point lies inside the target's hand-drawn mask (one run with none: its tasking footprint). |
+| OSR | 59/69 | The aircraft's path (GNSS track, else keyframe poses) came within one camera footprint width of the target centroid. |
 
 | Intel quality | Scored runs | SR | OSR |
 |---|---|---|---|
-| Good | 26 | 21/26 | 25/26 |
+| Good | 27 | 22/27 | 26/27 |
 | Medium | 32 | 13/32 | 25/32 |
-| Poor | 9 | 4/9 | 7/9 |
+| Poor | 10 | 5/10 | 8/10 |
 
 ```sh
 python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON>
