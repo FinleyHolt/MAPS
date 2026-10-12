@@ -153,7 +153,7 @@ def hydrate(*, episode_id: str, split: str, config: str,
     if resolve_sensor(cfg.sensor) is None:
         raise RuntimeError(f"cfg.sensor did not resolve a SensorSpec: {cfg.sensor!r}")
     episode = resolve_episode(episode_id, split, start_xy)
-    return build_episode(cfg, episode, load_episode_assets(episode.map_name, cfg.cell_size_m))
+    return build_episode(cfg, episode, load_episode_assets(episode.map_name))
 
 
 def leg_span_m(h: Hydrated) -> float:

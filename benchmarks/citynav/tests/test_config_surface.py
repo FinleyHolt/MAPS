@@ -11,7 +11,7 @@ from benchmarks.citynav.run_benchmark.config import load_config, resolve_config
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 CITYNAV = {
-    "altitude_cap_m": 200.0, "altitude_m": 125.0, "cell_size_m": 2.0, "max_steps": 200,
+    "altitude_cap_m": 200.0, "altitude_m": 125.0, "max_steps": 200,
     "sensor": "nadir_1008_90", "spawn": "episode", "spawn_seed": 0,
     "start_altitude_agl_m": None, "success_radius_m": 20.0, "withhold": [],
 }
@@ -85,3 +85,18 @@ def test_each_withhold_config_is_the_control_less_its_own_part():
     for path in shipped:
         resolved = resolve_config(path)[0]
         assert resolved == {**control, "withhold": [path.stem]}, path.name
+
+
+def test_a_blocks_cell_size_is_its_bakes(tmp_path, monkeypatch):
+    """The config carries no cell size: bounds and grid_shape in the meta are
+    computed against the bake's own."""
+    import json
+
+    from benchmarks.citynav.run_benchmark import assets
+
+    (tmp_path / "blk_meta.json").write_text(json.dumps({
+        "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 30.0, "y_max": 30.0},
+        "grid_shape": [10, 10], "cell_size_m": 3.0}))
+    (tmp_path / "blk_features.json").write_text("{}")
+    monkeypatch.setattr(assets, "tile_stem", lambda name: str(tmp_path / name))
+    assert assets.load_episode_assets("blk").cell_size_m == 3.0

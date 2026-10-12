@@ -260,7 +260,7 @@ def run_episode(
         log.warning("  skip %s: no CityRefer objects", episode.episode_id)
         return None
 
-    assets = load_episode_assets(episode.map_name, cfg.cell_size_m)
+    assets = load_episode_assets(episode.map_name)
     log.info("tile_stem=%s map_name=%s", tile_stem(episode.map_name), episode.map_name)
     if cfg.spawn == "uniform":
         # The FLOWN start replaces the dataset's on the episode itself, so

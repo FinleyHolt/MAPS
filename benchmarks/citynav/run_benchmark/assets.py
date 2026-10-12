@@ -26,7 +26,7 @@ class BlockAssets:
     base_features: dict  # Prebaked features dict, loaded once per block.
 
 
-def load_episode_assets(map_name: str, cell_size_m: float) -> BlockAssets:
+def load_episode_assets(map_name: str) -> BlockAssets:
     """Load the episode's per-block bakes."""
     stem = tile_stem(map_name)
     meta_path = Path(f"{stem}_meta.json")
@@ -44,10 +44,6 @@ def load_episode_assets(map_name: str, cell_size_m: float) -> BlockAssets:
     H, W = meta["grid_shape"]
     grid_shape = (int(H), int(W))
 
-    # The tile's baked cell_size_m is authoritative: bounds + grid_shape in
-    # the meta are computed against it.
-    cell_size_m = float(meta.get("cell_size_m", cell_size_m))
-
     # The features dict is the OSM bake's sidecar, never rebuilt from
     # objects.json (that would hand the reasoner ground-truth geometry); the
     # bake drops the CityRefer descriptions (bake/city.py _PRIVILEGED_KEYS).
@@ -63,7 +59,8 @@ def load_episode_assets(map_name: str, cell_size_m: float) -> BlockAssets:
     return BlockAssets(
         map_name=map_name,
         bounds=bounds,
-        cell_size_m=cell_size_m,
+        # bounds and grid_shape are computed against the bake's own cell size.
+        cell_size_m=float(meta["cell_size_m"]),
         grid_shape=grid_shape,
         base_features=base_features,
     )

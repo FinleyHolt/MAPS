@@ -24,7 +24,6 @@
 max_steps: 200
 # Inert fallback: the start altitude is the row's z.
 altitude_m: 125.0
-cell_size_m: 2.0
 success_radius_m: 20.0
 # Start: the dataset's recorded pose at its z (start_altitude_agl_m, when
 # set, replaces the z with that height above ground), held to [ground + 1 m,
