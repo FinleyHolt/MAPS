@@ -102,6 +102,22 @@ def test_a_predicate_and_a_cut_kwarg_read_one_refusal_on_every_receiver():
         assert str(e.value) == _PRED_OR_CUT, str(e.value)
 
 
+
+@pytest.mark.parametrize("call", [
+    '.filter("x")', '.order("x")', '.order(direction="north", reverse=True)',
+    '.order(lambda r: 1, nearest="A")', '.order(direction="north", nearest="A")'])
+def test_a_row_and_a_list_refuse_a_cut_or_sort_with_the_sets_own_text(call):
+    from maps.search.parse_compile.python_surface import Row, RowList
+    with pytest.raises(CodeError) as e:
+        _ops(f'r1 = find("car")\nr1{call}\n')
+    on_set = str(e.value)
+    row = Row({"fid": "detected_1"})
+    for rows in (row, RowList([row])):
+        with pytest.raises(CodeError) as e:
+            eval(f"rows{call}")
+        assert str(e.value) in on_set, (rows, str(e.value), on_set)
+
+
 def test_a_gapless_near_cut_points_at_an_ordering_the_surface_accepts():
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car")\nr2 = r1.filter(near="A")\n')
@@ -246,7 +262,7 @@ def test_a_predicate_filter_is_not_a_one_way_door():
                     Row({"fid": "detected_2", "class": "car"}, mp=mp)])
 
     assert rows.order(color="red") == "ordered"
-    assert seen[-1][0] == "order" and seen[-1][2] == {"color": "red"}
+    assert seen[-1][0] == "order" and seen[-1][2] == {"nearest": None, "color": "red"}
     assert len(seen[-1][1]) == 2          # the materialised subset, by row
 
     assert rows.filter(near="Poppy Boulevard", dwithin=25) == "cut"

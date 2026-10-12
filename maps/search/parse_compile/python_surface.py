@@ -379,31 +379,52 @@ def _diagonal_remedy(names) -> str:
 _FILTER_KWARGS = _CARDINAL_KWARGS | {"near", "within", "dwithin", "facing", "direction"}
 
 
-def _refuse_pred_and_cut(pred, kw: dict) -> None:
-    """A predicate and a cut kwarg together are refused, one text for every
-    filter."""
-    if pred is not None and any(v is not None for v in kw.values()):
-        raise CodeError("filter takes a predicate OR near=/within=/dwithin=/"
-                        "facing=/east_of=/north_of=/south_of=/west_of=, not both")
-
-
-def _refuse_filter_kwargs(names) -> None:
-    """A filter kwarg outside the set is refused, never ignored: one text
-    for every filter, and a colour cut gets its own reason."""
-    if "color" in names:
+def _check_filter(pred, kw: dict) -> None:
+    """The filter refusals, one text for every filter (a set, a list, a
+    row): a kwarg outside the set is refused, never ignored, and a colour
+    cut gets its own reason."""
+    if "color" in kw:
         raise CodeError(
             "colour never CUTS -- it orders. The same car reads red "
             "0.63 through a tight mask and 0.38 through its full one, "
             "so a colour threshold drops the right row on the width of "
             "its mask. Say rows.order(color=\"red\") and let the "
             "spatial cuts do the dropping.")
-    bad = sorted(k for k in names if k not in _FILTER_KWARGS)
+    bad = sorted(k for k in kw if k not in _FILTER_KWARGS)
     if bad:
         raise CodeError(
             f"filter takes near=/within=/dwithin=/facing=, "
             f"{'/'.join(sorted(_CARDINAL_KWARGS))} or a predicate; "
             f"{'=, '.join(bad)}= is none of them."
             + _diagonal_remedy(bad))
+    _refuse_metres_in_within(kw.get("within"))
+    if pred is not None and any(v is not None for v in kw.values()):
+        raise CodeError("filter takes a predicate OR near=/within=/dwithin=/"
+                        "facing=/east_of=/north_of=/south_of=/west_of=, not both")
+    if pred is not None and not callable(pred):
+        raise CodeError(
+            f"filter's first argument is a predicate and {pred!r} "
+            "is not callable: rows.filter(lambda r: r.distance(x) <= 25)")
+
+
+def _check_order(key, nearest, color, direction, reverse) -> None:
+    """The order refusals, one text for every order (a set, a list, a
+    row)."""
+    if key is None and direction is None:
+        return
+    if key is not None and direction is not None:
+        raise CodeError(
+            'order takes a key OR direction=, not both: '
+            'direction="north" IS the key.')
+    if nearest is not None or color is not None:
+        raise CodeError("order takes a key OR nearest=/color=, not both")
+    if direction is not None:
+        _refuse_reversed_direction(direction, reverse)
+        _direction_key(direction)
+    elif not callable(key):
+        raise CodeError(
+            f"order's first argument is a key function and {key!r} "
+            "is not callable: rows.order(lambda r: r.distance(x))")
 
 
 _MISSING = object()
@@ -435,25 +456,18 @@ class Row:
         return mp._call_distance(self, other)
 
     def filter(self, pred=None, **kw):
-        mp = object.__getattribute__(self, "_mp")
-        _refuse_filter_kwargs(kw)
-        _refuse_pred_and_cut(pred, kw)
+        _check_filter(pred, kw)
         if pred is not None:
             return RowList([self] if pred(self) else [])
-        return mp._rows_filter(self, **kw)
+        return object.__getattribute__(self, "_mp")._rows_filter(self, **kw)
 
-    def order(self, key=None, **kw):
-        mp = object.__getattribute__(self, "_mp")
-        if key is not None or "direction" in kw:
-            if kw and key is not None:
-                raise CodeError("order takes a key OR "
-                                "nearest=/color=/direction=, not both")
-            if "direction" in kw:
-                # validated, never ignored: one row is already in order,
-                # but a bad word must read the same here as anywhere
-                _direction_key(kw["direction"])
-            return RowList([self])
-        return mp._rows_order(self, **kw)
+    def order(self, key=None, *, nearest=None, color=None, direction=None,
+              reverse=False):
+        _check_order(key, nearest, color, direction, reverse)
+        if key is not None or direction is not None:
+            return RowList([self])      # one row is already in order
+        return object.__getattribute__(self, "_mp")._rows_order(
+            self, nearest=nearest, color=color)
 
     def _resolve_key(self, k):
         """The served column a Python spelling names, or None: the exact key,
@@ -606,8 +620,7 @@ class RowList(list):
     def filter(self, pred=None, **kw) -> "RowList | Rows":
         # A PREDICATE FILTER IS NOT A DEAD END: the served cut works on a
         # materialised subset exactly as it does on a handle.
-        _refuse_filter_kwargs(kw)
-        _refuse_pred_and_cut(pred, kw)
+        _check_filter(pred, kw)
         if pred is None:
             if not kw:
                 raise CodeError(
@@ -617,31 +630,17 @@ class RowList(list):
             return self._mp()._rows_filter(list(self), **kw)
         return RowList(r for r in self if pred(r))
 
-    def order(self, key=None, **kw) -> "RowList | Rows":
-        if key is None:
-            # A GLOBAL ORDERING NEEDS NO SERVER, so it answers here rather
-            # than compiling: the rows are in hand and the axis is the map's.
-            if "direction" in kw:
-                _refuse_reversed_direction(kw["direction"],
-                                           kw.pop("reverse", False))
-                if len(kw) > 1:
-                    raise CodeError(
-                        "order takes direction= OR nearest=/color=, not "
-                        'both: direction="north" IS the key.')
-                return RowList(sorted(self, key=_direction_key(
-                    kw["direction"])))
-            if not kw:
-                raise CodeError(
-                    "order needs a key or nearest=/color=/direction=: "
-                    "rows.order(lambda r: r.distance(<place>)), "
-                    'rows.order(nearest=<place>), or rows.order('
-                    'direction="north") for the map-fixed order.')
-            return self._mp()._rows_order(list(self), **kw)
-        rev = bool(kw.pop("reverse", False))
-        if kw:
-            raise CodeError("order takes a key OR nearest=/color=/direction=, "
-                            "not both")
-        return RowList(sorted(self, key=key, reverse=rev))
+    def order(self, key=None, *, nearest=None, color=None, direction=None,
+              reverse=False) -> "RowList | Rows":
+        _check_order(key, nearest, color, direction, reverse)
+        # A GLOBAL ORDERING NEEDS NO SERVER, so it answers here rather than
+        # compiling: the rows are in hand and the axis is the map's.
+        if direction is not None:
+            return RowList(sorted(self, key=_direction_key(direction)))
+        if key is not None:
+            return RowList(sorted(self, key=key, reverse=bool(reverse)))
+        return self._mp()._rows_order(list(self), nearest=nearest,
+                                      color=color)
 
 
 class Rows:
@@ -749,17 +748,11 @@ class Rows:
         place or a set): ``east_of=`` keeps what lies that way of it,
         ``facing=`` with ``direction=`` keeps what FACES it that way.
         """
-        _refuse_filter_kwargs(kw)
-        _refuse_metres_in_within(within)
-        _refuse_pred_and_cut(pred, dict(
-            near=near, within=within, dwithin=dwithin, facing=facing,
+        _check_filter(pred, dict(
+            kw, near=near, within=within, dwithin=dwithin, facing=facing,
             direction=direction, north_of=north_of, south_of=south_of,
             east_of=east_of, west_of=west_of))
         if pred is not None:
-            if not callable(pred):
-                raise CodeError(
-                    f"filter's first argument is a predicate and {pred!r} "
-                    "is not callable: rows.filter(lambda r: r.distance(x) <= 25)")
             return RowList(r for r in self if pred(r))
         src = self if not self.spec else self.mp._materialize(self)
         return self.mp._rows_filter(
@@ -775,21 +768,10 @@ class Rows:
         key sort, as ``sorted()`` does); ``nearest=`` and ``color=`` re-rank
         the whole set server-side, and relating to a place stamps ``facing
         <place>`` and ``distance to <place>``."""
-        if key is not None or direction is not None:
-            if key is not None and direction is not None:
-                raise CodeError(
-                    'order takes a key OR direction=, not both: '
-                    'direction="north" IS the key.')
-            if nearest is not None or color is not None:
-                raise CodeError("order takes a key OR nearest=/color=, "
-                                "not both")
-            if direction is not None:
-                _refuse_reversed_direction(direction, reverse)
-                return RowList(sorted(self, key=_direction_key(direction)))
-            if not callable(key):
-                raise CodeError(
-                    f"order's first argument is a key function and {key!r} "
-                    "is not callable: rows.order(lambda r: r.distance(x))")
+        _check_order(key, nearest, color, direction, reverse)
+        if direction is not None:
+            return RowList(sorted(self, key=_direction_key(direction)))
+        if key is not None:
             return RowList(sorted(self, key=key, reverse=bool(reverse)))
         src = self if not self.spec else self.mp._materialize(self)
         return self.mp._rows_order(src, nearest=nearest, color=color)
@@ -1307,7 +1289,6 @@ class MissionPython:
                      dwithin=None, facing=None, direction=None, **cards):
         # Which-arg validation lives in the compiler; every caller has
         # already refused a kwarg outside the set.
-        _refuse_metres_in_within(within)
         items = self._slot(items)
         within = self._slot(within) if within is not None else None
         near = self._slot(near) if near is not None else None
