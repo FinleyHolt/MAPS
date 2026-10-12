@@ -161,7 +161,7 @@ def test_the_summary_is_the_run_report_under_the_infra_lines(driver) -> None:
     (d.out_root / "empty").mkdir()
     empty = driver(d.out_root / "empty")
     empty._write_summary()
-    assert "no scored rows" in empty.summary_file.read_text()
+    assert empty.summary_file.read_text().splitlines()[1:] == ["infra attempts (excluded): 0"]
 
 
 @pytest.fixture

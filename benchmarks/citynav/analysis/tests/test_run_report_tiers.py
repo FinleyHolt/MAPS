@@ -37,11 +37,13 @@ def test_an_episode_json_beside_the_ledger_is_not_an_attempt(tmp_path):
     assert stats.rows == 1
 
 
-def test_a_root_without_a_ledger_reads_empty(tmp_path):
-    """No ledger, no run -- an episode.json alone is not one."""
+def test_a_root_without_a_ledger_is_refused(tmp_path):
+    """No ledger, no run -- an episode.json alone is not one, nor is a mistyped root."""
     write_ledger(tmp_path / "w0/maps_20260725_110000_citynav_e__1_1",
                  ledger_row("e::1#1", "20260725_110000", 1), name="episode.json")
-    assert load_run(tmp_path) == ({}, 0)
+    for root in (tmp_path, tmp_path / "typo"):
+        with pytest.raises(SystemExit, match=r": not a run root \(no episodes.jsonl\)"):
+            load_run(root)
 
 
 # --------------------------------------------------------------------------

@@ -228,7 +228,9 @@ def load_attempts(
 ) -> tuple[dict[str, Attempt], ReadStats]:
     """The one canonical read of a run root: episode -> its result. A root
     short of its manifest's selection raises unless ``allow_partial``,
-    which prints the shortfall to stderr."""
+    which prints the shortfall to stderr; a root with no ledger raises."""
+    if not (root / EPISODES_JSONL).is_file():
+        raise SystemExit(f"{root}: not a run root (no {EPISODES_JSONL})")
     attempts, stats = read_attempts(root / EPISODES_JSONL)
     picked = pick_attempts(attempts)
     shortfall = _shortfall(root, picked, stats)

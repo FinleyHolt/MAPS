@@ -435,7 +435,7 @@ class Driver:
 
     def _write_summary(self) -> None:
         """``summary.txt``: the driver's infra and abort lines above
-        ``analysis.run_report.report`` over the root."""
+        ``analysis.run_report.report`` over the root, once a row has landed."""
         from benchmarks.citynav.analysis import run_report  # noqa: PLC0415
 
         infra = Counter(_infra_cause(r)
@@ -451,6 +451,9 @@ class Driver:
             f"!! ABORTED: {self._abort}" if self._abort else "",
         ]
         buf = io.StringIO()
+        if not self.episodes_file.is_file():
+            self.summary_file.write_text("\n".join(x for x in lines if x) + "\n")
+            return
         # Under the log lock: redirect_stdout is process-wide, and log() is
         # the driver's only other stdout writer.
         with _log_lock, contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
