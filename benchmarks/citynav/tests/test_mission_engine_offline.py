@@ -120,7 +120,7 @@ def test_the_pose_echo_follows_a_flight_and_ignores_an_error():
 
 def test_the_mission_deadline_is_read_per_call_and_optional(monkeypatch):
     """Unset means NO clock, which is the field station's case and the
-    default; a malformed value flies unbounded."""
+    default."""
     from benchmarks.citynav.run_benchmark.mission_engine import (
         MISSION_DEADLINE_ENV, _mission_deadline_epoch)
 
@@ -129,11 +129,6 @@ def test_the_mission_deadline_is_read_per_call_and_optional(monkeypatch):
 
     monkeypatch.setenv(MISSION_DEADLINE_ENV, "1788050346.5")
     assert _mission_deadline_epoch() == 1788050346.5
-
-    # a wiring bug must not silently become "no clock" without saying so,
-    # and must not refuse to fly either
-    monkeypatch.setenv(MISSION_DEADLINE_ENV, "soon")
-    assert _mission_deadline_epoch() is None
 
 
 def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):

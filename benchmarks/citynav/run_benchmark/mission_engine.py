@@ -90,40 +90,8 @@ def _seed_base() -> int:
 def _mission_deadline_epoch() -> float | None:
     """The absolute epoch a pass must stop flying at, or ``None``."""
     raw = os.environ.get(MISSION_DEADLINE_ENV, "").strip()
-    if not raw:
-        return None
-    try:
-        return float(raw)
-    except ValueError:
-        # A malformed deadline is a wiring bug; refusing to fly would cost
-        # the episode, so say so and fly unbounded.
-        log.warning("%s=%r is not a number; flying with no wall-clock "
-                    "backstop", MISSION_DEADLINE_ENV, raw)
-        return None
-
-
-class _StopPhases:
-    """Where one stop's wall time went, as one log line per stop: a mark
-    between two statements per phase, so adding one never reindents the
-    code it measures."""
-
-    def __init__(self) -> None:
-        self._t0 = self._last = time.perf_counter()
-        self._marks: list[tuple[str, float]] = []
-
-    def at(self, name: str) -> None:
-        now = time.perf_counter()
-        self._marks.append((name, now - self._last))
-        self._last = now
-
-    def note(self, sub: dict | None) -> None:
-        """Fold a callee's own breakdown (``_build_frame_enrich``'s split)
-        into this stop's line."""
-        self._marks.extend((k, float(v)) for k, v in (sub or {}).items())
-
-    def line(self) -> str:
-        parts = " ".join(f"{n}={d:.2f}" for n, d in self._marks)
-        return f"{parts} total={self._last - self._t0:.2f}"
+    # The bench driver writes repr(float).
+    return float(raw) if raw else None
 
 
 def resolve_flight_target(
@@ -227,14 +195,13 @@ def echo_pose(ctx, report: dict) -> None:
         ctx.pose_xy = (float(pxy[0]), float(pxy[1]))
 
 
-def perceive(h, obs, detections, mark=lambda _phase: None) -> list[dict]:
+def perceive(h, obs, detections) -> list[dict]:
     """Project and stamp one observation's detections through its view square
     and fold them into the live world-state; returns the folded rows. The
     one ingest path a flight and the bench's retrospective boost share."""
     projected = dict(project_and_stamp_ortho_detections(
         detections, view_corners_xy=obs.ortho_view_corners_xy, rgb=obs.rgb, tile=h.tile_frame,
     )) if obs is not None else {}
-    mark("project")
     return h.search_loop.update_perception(detections=detections, projected_masks=projected)
 
 
@@ -382,7 +349,6 @@ class MissionSession:
         # only rotates the segmenter's input, the served captions promise
         # north-up pictures, and the retrospective re-render draws at yaw 0.
         # The pose keeps its heading: the replay's motion model still turns.
-        _ph = _StopPhases()
         if self.observe is None:
             obs = crop_observation(
                 new_xy,
@@ -392,18 +358,10 @@ class MissionSession:
                 rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
                 map_name=episode.map_name,
             )
-        _ph.at("render")
         if obs is not None:
             obs.tile = h.tile_frame
 
-        detections = (
-            h.perception.detect(obs)
-            if h.perception is not None
-            else []
-        )
-        _ph.at("segment")
-        step_detections = perceive(h, obs, detections, mark=_ph.at)
-        _ph.at("fold")
+        step_detections = perceive(h, obs, h.perception.detect(obs))
 
         if self.recorder is not None and obs is not None:
             try:
@@ -411,9 +369,7 @@ class MissionSession:
             except Exception as exc:  # noqa: BLE001
                 log.warning("mission step write failed step=%d: %s", step_idx, exc)
 
-        _ph.at("record")
         # Prior colour enrichment: one frame, upserted onto the named priors.
-        _built: dict | None = None
         if obs is not None and obs.rgb is not None:
             _built = _build_frame_enrich(
                 obs=obs,
@@ -437,8 +393,6 @@ class MissionSession:
                         exc_info=_built["prior_exc"],
                     )
 
-        _ph.at("enrich")
-        _ph.note(_built.get("phase_s") if _built else None)
         if self.observe is not None:
             # THE STOP IS THE THING ASKED FOR. The frame's own pose fed the
             # fold and the recorder above; from here the flight reads as on
@@ -493,13 +447,8 @@ class MissionSession:
             # RE2 cue echo: the operator instruction rides every flight report.
             "cue": episode.description,
         }
-        cp = getattr(h.perception, "concept_provider", None)
-        if cp is not None and hasattr(cp, "concepts") and not withheld("look_for"):
-            report["watchlist"] = list(cp.concepts)
-        _ph.at("report")
-        # One line per stop: a pass flies its stops back to back with no
-        # reasoner between them, so this is the only place a stop's cost is stated.
-        log.info("stop %s phases: %s", stop_id, _ph.line())
+        if not withheld("look_for"):
+            report["watchlist"] = list(h.perception.concept_provider.concepts)
         return report
 
 
