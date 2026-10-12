@@ -57,7 +57,7 @@ python -m maps.search.parse_compile.contract --sensor oryx_orx32_25mm_nadir
 ## The closed-loop flight
 
 MAPS flew 87 closed-loop runs on a C-12 over California City, CA, from 11 to
-18 September 2026, at 2,500 to 5,000 ft above ground. The reasoner ran off
+18 September 2026, at about 3,000 to 6,500 ft above ground. The reasoner ran off
 board over the datalink; SAM 3.1 ran on board. The station's method half is
 [`benchmarks/flight`](benchmarks/flight/README.md) in this repository.
 
