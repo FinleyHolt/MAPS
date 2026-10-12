@@ -589,27 +589,19 @@ def _code_reply(text: str) -> bool:
 def run_mission(
     *,
     instruction: str,
-    ctx: "ToolContext",
-    mission_spec: MissionSpec,
     reasoner_url: str,
     endpoint_spec,
     api_key: str = "EMPTY",
     seed: int | None = None,
     sensor_description: str = "",
     cancel_event: "threading.Event | None" = None,
-    look_renderer: "Callable[[list[dict]], list[dict]] | None" = None,
-    obs_span_m: float | None = None,
-    obs_minor_m: float | None = None,
-    boost_queue: "Callable[[list, list], dict]",
-    transcript: list[dict] | None = None,
-    diag: dict | None = None,
-    rid_tag: str = "m0",
-    retask: "Callable[[], str | None] | None" = None,
     reasoning_effort: str | None = None,
+    rid_tag: str = "m0",
+    **turn,
 ) -> tuple[MissionReply, Reasoner]:
-    """THE mission entry: build the Reasoner, append the instruction as the
-    one user message and run the conversation to its end. Returns the reply
-    and the Reasoner (for :func:`continue_mission`)."""
+    """THE mission entry: build the Reasoner and run the first operator turn
+    (``turn`` is :func:`advance_reasoner_one_round`'s). Returns the reply and
+    the Reasoner, for :func:`continue_mission`."""
     reasoner = Reasoner(
         reasoner_url=reasoner_url,
         endpoint_spec=endpoint_spec,
@@ -619,62 +611,20 @@ def run_mission(
         cancel_event=cancel_event,
         reasoning_effort=reasoning_effort,
     )
-    reply = advance_reasoner_one_round(
-        reasoner=reasoner,
-        user_message=instruction.strip(),
-        ctx=ctx,
-        rid_tag=rid_tag,
-        transcript=transcript,
-        compute_namespace=_surface_from_ctx(ctx),
-        diag=diag,
-        look_renderer=look_renderer,
-        obs_span_m=obs_span_m,
-        obs_minor_m=obs_minor_m,
-        boost_queue=boost_queue,
-        preflight=True,
-        mission_spec=mission_spec,
-        retask=retask,
-    )
-    assert isinstance(reply, MissionReply)
-    return reply, reasoner
+    return continue_mission(reasoner=reasoner, instruction=instruction,
+                            rid_tag=rid_tag, preflight=True, **turn), reasoner
 
 
-def continue_mission(
-    *,
-    reasoner: Reasoner,
-    instruction: str,
-    ctx: "ToolContext",
-    mission_spec: MissionSpec,
-    look_renderer: "Callable[[list[dict]], list[dict]] | None" = None,
-    obs_span_m: float | None = None,
-    obs_minor_m: float | None = None,
-    boost_queue: "Callable[[list, list], dict]",
-    transcript: list[dict] | None = None,
-    diag: dict | None = None,
-    rid_tag: str = "m1",
-    retask: "Callable[[], str | None] | None" = None,
-) -> MissionReply:
-    """Another operator turn on a mission that ended by reply (the field
-    path: the reply is a report). The same Reasoner keeps every earlier
-    turn, and the surface re-derives from ``ctx`` as it now stands."""
-    reply = advance_reasoner_one_round(
-        reasoner=reasoner,
-        user_message=instruction.strip(),
-        ctx=ctx,
-        rid_tag=rid_tag,
-        transcript=transcript,
-        compute_namespace=_surface_from_ctx(ctx),
-        diag=diag,
-        look_renderer=look_renderer,
-        obs_span_m=obs_span_m,
-        obs_minor_m=obs_minor_m,
-        boost_queue=boost_queue,
-        preflight=False,
-        mission_spec=mission_spec,
-        retask=retask,
-    )
-    assert isinstance(reply, MissionReply)
-    return reply
+def continue_mission(*, reasoner: Reasoner, instruction: str,
+                     ctx: "ToolContext", rid_tag: str = "m1",
+                     preflight: bool = False, **turn) -> MissionReply:
+    """One operator turn on the mission's Reasoner, over the surface ``ctx``
+    holds now. After the first, a turn follows a reply (the field path: the
+    reply is a report) and keeps every earlier turn."""
+    return advance_reasoner_one_round(
+        reasoner=reasoner, user_message=instruction.strip(), ctx=ctx,
+        rid_tag=rid_tag, compute_namespace=_surface_from_ctx(ctx),
+        preflight=preflight, **turn)
 
 
 def advance_reasoner_one_round(
