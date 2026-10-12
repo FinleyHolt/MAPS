@@ -300,13 +300,7 @@ class Corrector(threading.Thread):
     def run(self) -> None:
         while not self._halt.is_set():
             t0 = time.perf_counter()
-            rows = self.source.vehicle.index(since=self._since)
-            if rows:
-                newest = max(rows, key=lambda r: int(r["log_time"]))
-                got = self.source.vehicle.frame(int(newest["seq"]))
-                if got is not None:
-                    self._since = int(newest["log_time"]) + 1
-                    self.source.correct(got)
+            self._since = self.source._correct_since(self._since, newest_only=True)
             # What is left of the period after the frame, so the rate is the period's.
             self._halt.wait(max(0.0, CORRECTOR_PERIOD_S - (time.perf_counter() - t0)))
 
@@ -357,12 +351,19 @@ class LiveSource:
             self.corrector.start()
 
     def _correct_through_now(self) -> None:
-        rows = self.vehicle.index(since=self._clocked_since) or []
-        for row in sorted(rows, key=lambda r: int(r["log_time"])):
-            self._clocked_since = int(row["log_time"]) + 1
+        self._clocked_since = self._correct_since(self._clocked_since)
+
+    def _correct_since(self, since: int | None, *, newest_only: bool = False) -> int | None:
+        """:meth:`correct` each frame the index holds past log time ``since``,
+        in log-time order (only the newest with ``newest_only``); the log time
+        past the last frame fetched, else ``since``."""
+        rows = sorted(self.vehicle.index(since=since) or [], key=lambda r: int(r["log_time"]))
+        for row in rows[-1:] if newest_only else rows:
             got = self.vehicle.frame(int(row["seq"]))
             if got is not None:
+                since = int(row["log_time"]) + 1
                 self.correct(got)
+        return since
 
     def close(self) -> None:
         if self.corrector is not None:
