@@ -83,9 +83,6 @@ def save_graph(graph: ObjectGraph, path_stem: str) -> None:
         f"{path_stem}_graph.npz",
         fids=np.array(list(graph.nodes), dtype=object),
         cell_size_m=np.float32(graph.cell_size_m),
-        # Fixed members of the npz layout.
-        step_index=np.int64(0),
-        tau=np.float64(np.nan),
         schema_version=np.int32(GRAPH_SCHEMA_VERSION),
     )
     with open(f"{path_stem}_nodes.json", "w") as f:
