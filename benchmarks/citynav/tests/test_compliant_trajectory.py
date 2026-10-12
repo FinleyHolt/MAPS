@@ -16,7 +16,7 @@ def _replay(commit_xy, max_steps=60):
     tour = FeatureTour()
     tour.viewpoints.append(TourViewpoint(fid="far", xy=(0.0, 200.0), altitude_m=50.0))
     steps = synthesize_compliant_trajectory(
-        cfg=SimpleNamespace(max_steps=max_steps, altitude_m=50.0), state=state, episode=None,
+        cfg=SimpleNamespace(max_steps=max_steps, altitude_m=50.0), state=state,
         feature_tour=tour, start_pose_xyh=(0.0, 0.0, 0.0), start_alt=50.0)
     return steps, state
 

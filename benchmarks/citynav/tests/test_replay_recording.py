@@ -66,7 +66,6 @@ def _replay(case, tmp_path, monkeypatch):
     steps = synthesize_compliant_trajectory(
         cfg=cfg,
         state=state,
-        episode=SimpleNamespace(episode_id="unit::0"),
         feature_tour=SimpleNamespace(viewpoints=case["stops"]),
         start_pose_xyh=(0.0, 0.0, 0.0),
         start_alt=50.0,

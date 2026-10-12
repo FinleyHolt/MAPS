@@ -17,7 +17,6 @@ from benchmarks.citynav.action_snap import (
     apply_action,
     snap_to_actions,
 )
-from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.citynav.run_benchmark.config import RunConfig
 
 if TYPE_CHECKING:
@@ -30,7 +29,6 @@ def synthesize_compliant_trajectory(
     *,
     cfg: RunConfig,
     state: "EpisodeState",
-    episode: "CityNavEpisode",
     feature_tour,
     start_pose_xyh: tuple[float, float, float],
     start_alt: float,

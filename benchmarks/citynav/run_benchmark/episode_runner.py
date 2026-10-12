@@ -354,7 +354,7 @@ def run_episode(
     flights = session.flights
     if flights:
         steps_taken = synthesize_compliant_trajectory(
-            cfg=cfg, state=state, episode=episode, feature_tour=session.feature_tour,
+            cfg=cfg, state=state, feature_tour=session.feature_tour,
             start_pose_xyh=start_pose_xyh, start_alt=start_alt,
         )
         compile_s = round(time.monotonic() - t_start, 2)
