@@ -16,9 +16,8 @@ LOOK_CTX_MIN_PX: int = 150
 # A bare [x, y] subject asks about its surroundings: it gets a window that
 # holds them. A maskless fid keeps the tight floor.
 LOOK_POINT_CTX_M: float = 60.0
-# 1024 visual tokens = a 1024x1024 px image; the serve sets no pixel cap.
-LOOK_PIXEL_BUDGET_PX: int = 1024 * 1024
-# W x (W + 20 px band) <= BUDGET_PX solves at W = 1014, taken down to 1000.
+# 1024 visual tokens = a 1024x1024 px image and the serve sets no pixel cap:
+# W x (W + 20 px band) <= 1024 * 1024 solves at W = 1014, taken down to 1000.
 LOOK_CTX_BUDGET_PX: int = 1000
 # One car of margin around the hull. The floor must exceed it so the recenter
 # cap (half_ctx - margin/2) stays positive: MIN_PX clears it down to 0.04 m/px.

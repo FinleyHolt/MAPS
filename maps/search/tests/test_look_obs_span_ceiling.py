@@ -5,10 +5,12 @@ from __future__ import annotations
 import numpy as np
 
 from maps.search.render.look_render import (
-    LOOK_PIXEL_BUDGET_PX,
     look_window_bounds_m,
     render_candidate_crops,
 )
+
+# 1024 visual tokens = a 1024x1024 px image; the serve sets no pixel cap.
+LOOK_PIXEL_BUDGET_PX = 1024 * 1024
 
 # The bounds are pixel counts; the fixture ortho below is 0.1 m/px.
 _MIN_M, _BUDGET_M = look_window_bounds_m(0.1)
