@@ -17,6 +17,12 @@ from typing import Any
 
 import numpy as np
 
+#: The serve's fixed options: the score floor every detection meets, and the
+#: square every image is resized to, SAM 3.1's encoder input (the client's
+#: tiles are this size, so they go in 1:1).
+SCORE_THRESHOLD = 0.3
+RESOLUTION = 1008
+
 
 @dataclass
 class SamDetection:
@@ -38,7 +44,6 @@ class _LoadedSam:
     postprocess: Any  # callable that takes (output, find_metadatas) -> list of dicts
     copy_to_device: Any
     device: str
-    version: str
 
 
 _SAM_SINGLETON: _LoadedSam | None = None
@@ -62,9 +67,7 @@ def release() -> None:
 _TEXT_MEMO_MAX = 32
 
 
-def _ensure_sam(
-    version: str, device: str, resolution: int, confidence_threshold: float
-) -> _LoadedSam:
+def _ensure_sam(device: str) -> _LoadedSam:
     global _SAM_SINGLETON
     if _SAM_SINGLETON is not None:
         return _SAM_SINGLETON
@@ -84,18 +87,16 @@ def _ensure_sam(
     from sam3.model.utils.misc import copy_data_to_device
 
     print(
-        f"[sam3_engine] building sam3 image model on {device} (version={version})",
+        f"[sam3_engine] building sam3 image model on {device}",
         flush=True,
     )
     checkpoint_path = os.environ.get("SAM3_CHECKPOINT") or None
-    load_from_hf = checkpoint_path is None
-    if checkpoint_path is None and version == "sam3.1":
+    if checkpoint_path is None:
         checkpoint_path = download_ckpt_from_hf(version="sam3.1")
-        load_from_hf = False
     model = build_sam3_image_model(
         device=device,
         checkpoint_path=checkpoint_path,
-        load_from_HF=load_from_hf,
+        load_from_HF=False,
     )
     _dev = _torch.device(device)
     if _dev.type == "cuda" and any(p.device.type == "cpu" for p in model.parameters()):
@@ -138,8 +139,8 @@ def _ensure_sam(
     transform = ComposeAPI(
         transforms=[
             RandomResizeAPI(
-                sizes=resolution,
-                max_size=resolution,
+                sizes=RESOLUTION,
+                max_size=RESOLUTION,
                 square=True,
                 consistent_transform=False,
             ),
@@ -155,10 +156,10 @@ def _ensure_sam(
         convert_mask_to_rle=False,
         # The postprocessor filters by score BEFORE the full-resolution mask
         # upscale, so it never upsamples masks the engine would discard. Its
-        # cut is strict ``>`` against ``score_threshold - 1e-6`` where the
+        # cut is strict ``>`` against ``SCORE_THRESHOLD - 1e-6`` where the
         # engine's own is ``>=``: a detection at the floor itself can drop;
         # every retained one is unchanged.
-        detection_threshold=max(0.0, float(confidence_threshold) - 1e-6),
+        detection_threshold=max(0.0, SCORE_THRESHOLD - 1e-6),
         to_cpu=False,
     )
     _SAM_SINGLETON = _LoadedSam(
@@ -168,7 +169,6 @@ def _ensure_sam(
         postprocess=postprocess,
         copy_to_device=copy_data_to_device,
         device=device,
-        version=version,
     )
     print("[sam3_engine] sam3 image model ready", flush=True)
     return _SAM_SINGLETON
@@ -284,12 +284,9 @@ def segment(
     rgb: np.ndarray,
     concepts: list[str],
     *,
-    version: str = "sam3.1",
     device: str = "cuda",
-    score_threshold: float,
     min_area_px: int,
     max_per_image: int,
-    resolution: int = 1008,
 ) -> list[SamDetection]:
     """Run SAM 3.1 once on one frame: the backend of ``serving.sam_server``'s
     ``/segment``. ``pixel_mask`` is the full ``(H, W)`` frame mask and
@@ -299,12 +296,9 @@ def segment(
     return _segment_via_meta(
         [rgb],
         concepts,
-        version=version,
         device=device,
-        score_threshold=score_threshold,
         min_area_px=min_area_px,
         max_per_image=max_per_image,
-        resolution=resolution,
     )[0]
 
 
@@ -312,12 +306,9 @@ def _segment_via_meta(
     rgb_tiles: list[np.ndarray],
     concepts: list[str],
     *,
-    version: str,
     device: str,
-    score_threshold: float,
     min_area_px: int,
     max_per_image: int,
-    resolution: int,
 ) -> list[list[SamDetection]]:
     """Segment ``rgb_tiles`` through the Datapoint pipeline: a list aligned
     with ``rgb_tiles`` of per-concept-ordered detections. Tiles run in
@@ -325,7 +316,7 @@ def _segment_via_meta(
     per-forward peak memory; per-image outputs do not depend on the chunk."""
     import torch as _torch
 
-    loaded = _ensure_sam(version, device, resolution, score_threshold)
+    loaded = _ensure_sam(device)
     n_tiles = len(rgb_tiles)
     concepts_per_tile = [concepts] * n_tiles
 
@@ -342,7 +333,6 @@ def _segment_via_meta(
                 concepts_chunk,
                 dp_counter,
                 _torch,
-                score_threshold=score_threshold,
                 min_area_px=min_area_px,
                 max_per_image=max_per_image,
             )
@@ -357,7 +347,6 @@ def _forward_chunk(
     dp_counter: list[int],
     _torch: Any,
     *,
-    score_threshold: float,
     min_area_px: int,
     max_per_image: int,
 ) -> list[list[SamDetection]]:
@@ -392,7 +381,7 @@ def _forward_chunk(
             if scores_t is None or masks_t is None or scores_t.numel() == 0:
                 continue
             scores_t = scores_t.detach()
-            keep_score_t = scores_t >= score_threshold
+            keep_score_t = scores_t >= SCORE_THRESHOLD
             n_pass_score = int(keep_score_t.sum().item())
             if n_pass_score == 0:
                 continue

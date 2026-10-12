@@ -86,8 +86,7 @@ def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):
     assert len(serve.bodies) == 2
     for body in serve.bodies:
         assert body["concepts"] == ["building"]
-        assert "image_b64" in body
-        assert "session_id" not in body
+        assert set(body) == {"concepts", "min_area_px", "max_per_image", "image_b64"}
 
 
 def test_each_kept_mask_gets_its_own_ids(adapter, serve):

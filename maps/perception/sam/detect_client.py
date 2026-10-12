@@ -28,14 +28,15 @@ from maps.util.mask_region import MaskRegion
 
 DEFAULT_SAM_SERVER_URL = "http://127.0.0.1:8772"
 
-# SAM 3.1's encoder input: every tile is this square, fed 1:1.
+# SAM 3.1's encoder input (the serve's ``sam_engine.RESOLUTION``): every tile
+# is this square, fed 1:1.
 _SAM_INPUT_SIZE = 1008
 
-#: The segmenter's fixed options: the score and speckle floors the server
-#: applies, the per-frame detection backstop (no per-concept cap, so every
-#: same-class instance stays countable), and the tile overlap and cross-tile
-#: IoU-NMS threshold.
-SCORE_THRESHOLD = 0.3
+#: The segmenter's options the client sets: the speckle floor the server
+#: applies and the client again after the split, the per-frame detection
+#: backstop (no per-concept cap, so every same-class instance stays
+#: countable), and the tile overlap and cross-tile IoU-NMS threshold. The
+#: score floor is the serve's own (``sam_engine.SCORE_THRESHOLD``).
 MIN_AREA_PX = 32
 MAX_PER_STEP = 1024
 SAHI_OVERLAP = 0.2
@@ -402,10 +403,8 @@ class SamDetectClient:
         image = base64.b64encode(_png_wire_bytes(np.ascontiguousarray(tile, dtype=np.uint8))).decode("ascii")
         body = {
             "concepts": concepts,
-            "score_threshold": SCORE_THRESHOLD,
             "min_area_px": MIN_AREA_PX,
             "max_per_image": MAX_PER_STEP,
-            "resolution": _SAM_INPUT_SIZE,
             "image_b64": image,
         }
         return _post_segment(body)

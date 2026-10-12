@@ -17,12 +17,12 @@ Endpoints
     outage instead of a slow one.
 
 ``POST /segment`` (stateless, single image)
-    body = {image_b64, concepts, score_threshold, min_area_px,
-            max_per_image, resolution}
+    body = {image_b64, concepts, min_area_px, max_per_image}
     response = {detections: [...]}
 
 Each detection is ``{label, score}`` plus the bbox-cropped mask record of
-:mod:`maps.util.mask_codec`.
+:mod:`maps.util.mask_codec`. The score floor and the encoder's input size
+are the engine's own (``sam_engine.SCORE_THRESHOLD``, ``RESOLUTION``).
 
 A ``threading.Lock`` serializes GPU access: one forward at a time. A
 bounded admission semaphore (``SAM_MAX_INFLIGHT``, default 2) is acquired
@@ -102,10 +102,8 @@ def _detections_to_wire(dets: list) -> list[dict]:
 class SegmentRequest(BaseModel):
     image_b64: str
     concepts: list[str]
-    score_threshold: float = 0.3
     min_area_px: int = 32
     max_per_image: int = 1024
-    resolution: int = 1008
 
 
 app = FastAPI(title="sam3.1-image", version="0.1")
@@ -132,8 +130,7 @@ def _prewarm() -> None:
 
         rgb = np.zeros((720, 1280, 3), dtype=np.uint8)
         with _state_lock:
-            segment(rgb, ["car", "building", "road"], device=_DEVICE,
-                    score_threshold=0.3, min_area_px=32, max_per_image=4)
+            segment(rgb, ["car", "building", "road"], device=_DEVICE, min_area_px=32, max_per_image=4)
         log.info("prewarm: SAM 3.1 warm")
     except Exception as exc:  # noqa: BLE001
         log.warning("prewarm failed (%s); continuing without warmup", exc)
@@ -183,10 +180,8 @@ def segment(req: SegmentRequest, _gate: None = Depends(_admission)) -> dict:
             rgb,
             list(req.concepts),
             device=_DEVICE,
-            score_threshold=req.score_threshold,
             min_area_px=req.min_area_px,
             max_per_image=req.max_per_image,
-            resolution=req.resolution,
         )
     return {"detections": _detections_to_wire(dets)}
 
