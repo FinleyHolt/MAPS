@@ -78,8 +78,7 @@ def test_unnamed_features_are_unaffected(monkeypatch):
 
 
 def test_every_osm_tag_rides_through(monkeypatch):
-    """Tags outside the retired 7-key allowlist reach the object. `ref` and
-    `lanes` named a road; `building` said why it classed as a Building."""
+    """Every tag reaches the object."""
     objects = _build(
         [
             _rec(

@@ -134,9 +134,7 @@ def test_case_d_missing_max_model_len(monkeypatch):
 
 
 def test_case_e_comma_list_refused():
-    # The retired multi-endpoint convention: engine-native dp replaced it,
-    # so a comma-list reaching discovery is a stale env — refused BEFORE
-    # any probe (no HTTP fake installed here on purpose).
+    # A comma-list is refused before any probe.
     with pytest.raises(EndpointDiscoveryError, match="comma-list"):
         discover(f"{_URL_A},{_URL_B}")
 
