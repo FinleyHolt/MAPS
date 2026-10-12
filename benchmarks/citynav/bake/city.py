@@ -138,16 +138,11 @@ def _cell_coverage(
     *,
     imagery: bool = True,
 ) -> np.ndarray | None:
-    """Boolean ``grid_shape`` mask of where the block's IMAGERY has pixels.
-
-    Up to a third of a block's bounds rectangle is no-data a prior could sit
-    over unseen. A cell is covered iff any pixel of the filled ortho
-    (``load_ortho_or_rasters``) under it has ``alpha > 0``, the same no-data
-    rule the runtime observation uses. Ortho rows run north-down, cell rows
-    south-up, so the alpha is flipped before the reduce. ``None`` when no
-    ortho resolves, its geometry disagrees with the block bounds, or the block
-    has no CityNav imagery (``imagery=False``, Cal City): the rectangle is
-    then the rule.
+    """Boolean ``grid_shape`` mask of where the block's IMAGERY has pixels: a
+    cell is covered iff any pixel of the filled ortho under it has
+    ``alpha > 0``, the runtime observation's no-data rule. ``None`` (the
+    bounds rectangle is the coverage) when no ortho resolves, its geometry
+    disagrees with the block grid, or ``imagery=False`` (Cal City).
     """
     if not imagery:
         return None
@@ -258,9 +253,8 @@ def _record_bbox(geometry: dict[str, Any]) -> tuple[float, float, float, float] 
 
 def _chain_extent(chain: Sequence[tuple[float, float]]) -> float:
     """How much of the world a chain covers: enclosed area if it closes, else
-    path length, else 0 for a lone vertex. The one measure that ranks the
-    parts of a multi-part geometry without asking which kind they are (they
-    are all the same kind — a MultiPolygon holds polygons)."""
+    path length, else 0 for a lone vertex; it ranks a multi-part geometry's
+    parts."""
     if len(chain) >= 4 and chain[0] == chain[-1]:
         area = 0.0
         for i in range(len(chain) - 1):
@@ -277,10 +271,8 @@ def _world_contour_from_geometry(geometry: dict[str, Any]) -> list[list[float]] 
     A Polygon's exterior ring CLOSED (how a reader tells a ring from a way,
     ``geom_compute.is_closed_chain``), a LineString's vertices open, a Point's
     single vertex; a multi-part geometry contributes its largest part by
-    ``_chain_extent``. The chain is kept whole: ``_mask_fields`` prefers it
-    over the cell boundary, so it IS the footprint (``footprint_area_m2``) of
-    every areal prior. A 16-vertex stride would cost a median 13.4% of the
-    area on the 2.3% of Cal City rings past 16 vertices, at worst 99.1%.
+    ``_chain_extent``. The chain is kept whole: it is the footprint
+    (``footprint_area_m2``) of every areal prior.
     """
     best: list[tuple[float, float]] | None = None
     best_extent = -1.0
@@ -478,13 +470,10 @@ def _feature_entry(
     world_contour: list[list[float]] | None,
     coverage: np.ndarray | None,
 ) -> dict[str, Any]:
-    """One baked prior: mask + ALL raw tags verbatim + name-when-present +
-    osm_id. Nothing else is minted — no class, no role, no synthesized name.
-
-    The centroid is the cell mean; when a coverage-clipped mask is concave
-    the mean can land over no-data, so it snaps to the nearest kept cell —
-    the centroid is what becomes the surface xy and the viewpoint target,
-    and both must sit over imagery."""
+    """One baked prior: mask, every raw tag verbatim, the name when present
+    and the osm_id. The centroid is the cell mean, snapped to the nearest
+    kept cell when it lands over no-data (it becomes the surface xy and the
+    viewpoint target, both over imagery)."""
     ordered_cells = [[int(r), int(c)] for r, c in sorted(cells)]
     arr = np.asarray(ordered_cells, dtype=np.float64)
     cr = float(arr[:, 0].mean())
@@ -535,15 +524,9 @@ def _features_from_records(
 ) -> dict[str, list[dict[str, Any]]]:
     """Rasterize records into ``bounds``/``grid_shape`` sidecar data.
 
-    Every record whose geometry rasterizes to >= 1 COVERED cell is kept — the
-    ONLY exclusion is no-geometry-over-imagery (whole-city records against a
-    block window naturally keep the block's features). ``coverage`` is the
-    imagery mask from ``_cell_coverage``; a record's cells are clipped to it,
-    so a straddler keeps only its on-imagery mask and anything wholly over
-    no-data never becomes a prior the agent could request a viewpoint on.
-    ``coverage=None`` (no ortho) keeps every rasterized cell. A record whose
-    bbox misses the window (grown by the line buffer) rasterizes to nothing
-    and is skipped before the work.
+    A record's cells are clipped to ``coverage`` (``None`` keeps every
+    rasterized cell); every record keeping >= 1 cell is kept, nothing else is
+    dropped.
     """
     line_buffer_m = max(cell_size_m * 0.5, 1.0)
     pad = max(line_buffer_m, cell_size_m)
@@ -635,12 +618,8 @@ def _read_geojson_cache(
 
 
 def _bake_provenance() -> dict[str, Any]:
-    """WHO/WHEN stamp every bake writes into the block meta.
-
-    ``BAKE_GIT_SHA`` overrides for a tree without ``.git``; otherwise
-    best-effort ``git rev-parse`` from this repo, else
-    ``None`` (recorded, never guessed).
-    """
+    """The WHO/WHEN of a bake's provenance: ``BAKE_GIT_SHA``, else this
+    repo's ``git rev-parse``, else ``None``."""
     sha = os.environ.get("BAKE_GIT_SHA") or None
     if sha is None:
         try:
