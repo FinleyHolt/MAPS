@@ -193,3 +193,10 @@ def test_a_torn_last_ledger_line_is_skipped(tmp_path):
     (tiles / "calcity_features.json").write_text(json.dumps({"prior": [{"world_contour": TARGET}]}))
     got, _radius, _turns = Q.collect([root], Q.Truth([truth]), tiles_dir=tiles)
     assert [r["episode_id"] for r in got] == ["calcity::run1"]
+
+
+def test_a_mission_that_failed_off_the_serve_reads_failed():
+    """A mission that failed with no serve fault is a scored miss and reads
+    ``failed``, not ``no run``."""
+    assert Q.ended({"status": "ok", "ended_by": None, "error": "KeyError: 'x'"}) == "failed"
+    assert Q.ended({"status": "infra", "error": "SamServerOutage"}) == "no run"

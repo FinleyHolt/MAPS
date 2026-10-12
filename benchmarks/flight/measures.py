@@ -474,12 +474,15 @@ def _conversation(bases: list[Path]) -> list[dict[str, Any]]:
 
 
 def ended(row: dict[str, Any]) -> str:
-    """``no run`` (status not ``ok``), ``stopped`` (a crew end), else the row's
-    ``ended_by``: ``reply`` (the model's report) is the one end that scores."""
+    """``no run`` (status not ``ok``), ``stopped`` (a crew end), ``failed`` (a
+    mission that failed off the serve, a miss), else the row's ``ended_by``:
+    ``reply`` (the model's report) is the one end that scores."""
     if row.get("status") != "ok":
         return "no run"
     if row.get("ended_by") in CREW_ENDS:
         return "stopped"
+    if not row.get("ended_by") and row.get("error"):
+        return "failed"
     return str(row.get("ended_by") or "no run")
 
 
