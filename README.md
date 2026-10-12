@@ -270,7 +270,9 @@ PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh   # the OSM prior
 
 The rasterizer runs upstream's PDAL pipeline in an environment with `pdal`,
 `rasterio` and `pillow` (`RASTERIZE_PYTHON` names its interpreter). The bake
-writes `tiles/citynav_2m_osmv3`. See
+writes `tiles/citynav_2m_osmv3` (the blocks are the rasters it finds); every run
+manifest records its `bake_sha256`, which for these steps is
+`2eb397fe99afc6e6ec501a52730aa0f4977b48a0794a587da4727114c2415a9b`. See
 [`benchmarks/citynav`](benchmarks/citynav/README.md) for the variables that
 relocate each part.
 
