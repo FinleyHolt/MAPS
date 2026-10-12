@@ -90,6 +90,3 @@ def decode_mask_crop(record: dict) -> np.ndarray:
         .reshape((rows, cols))
         .astype(bool)
     )
-
-
-__all__ = ["decode_mask_crop", "encode_mask_record"]

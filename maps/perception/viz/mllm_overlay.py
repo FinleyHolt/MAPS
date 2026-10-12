@@ -9,10 +9,6 @@ from typing import Sequence
 import cv2
 import numpy as np
 
-__all__ = [
-    "render_look_overlay",
-]
-
 
 _LABEL_FONT = cv2.FONT_HERSHEY_SIMPLEX
 

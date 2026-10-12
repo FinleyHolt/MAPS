@@ -209,15 +209,3 @@ def snap_to_actions(start: Pose, end: Pose) -> tuple[list[CityNavAction], Pose]:
         break
 
     return actions, pose
-
-
-__all__ = [
-    "ALTITUDE_STEP_M",
-    "ARRIVAL_BOUND_M",
-    "FORWARD_STEP_M",
-    "TURN_STEP_DEG",
-    "CityNavAction",
-    "Pose",
-    "apply_action",
-    "snap_to_actions",
-]

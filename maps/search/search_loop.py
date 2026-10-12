@@ -540,8 +540,3 @@ def _json_safe(v):
     if isinstance(v, dict):
         return {str(k): _json_safe(x) for k, x in v.items()}
     return str(v)
-
-
-__all__ = [
-    "SearchLoop",
-]

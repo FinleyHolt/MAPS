@@ -660,10 +660,3 @@ def compact_transcript(
         latency,
     )
     return out
-
-
-__all__ = [
-    "CompactionInfeasible",
-    "CompactionInvariantError",
-    "compact_transcript",
-]

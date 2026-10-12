@@ -72,6 +72,3 @@ class MaskRegion:
         rr, cc = np.where(self.crop)
         r0, c0, _r1, _c1 = self.bbox
         return rr + r0, cc + c0
-
-
-__all__ = ["MaskRegion"]

@@ -435,9 +435,3 @@ def _forward_chunk(
                 break
         detections_per_tile.append(per_tile)
     return detections_per_tile
-
-
-__all__ = [
-    "SamDetection",
-    "segment",
-]

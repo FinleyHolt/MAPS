@@ -154,6 +154,3 @@ class WorldTracker:
         k = trk.p * (s / (s * s))  # Kalman gain, the closed-form 2x2 inverse's arithmetic
         trk.x = trk.x + k * (z - trk.x)
         trk.p = (1.0 - k) * trk.p
-
-
-__all__ = ["WorldTracker"]

@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import math
 
-__all__ = ["simplify_ring", "clip_ring_to_box"]
-
 
 def _dp(pts: list, tol: float) -> list:
     """Douglas-Peucker on an OPEN run; both endpoints are pinned."""
