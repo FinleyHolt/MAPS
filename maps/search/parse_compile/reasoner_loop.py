@@ -1045,8 +1045,10 @@ class _Mission:
         rows = [r for r in (self.carry.read(handle) or [])
                 if isinstance(r, dict) and r.get("fid")]
         if not rows:
-            return {"error": (f"{handle} holds no rows to look at; name a "
-                              "handle that has some, or find() one first")}
+            _mp = self._mission_py
+            _name = (_mp.ref_name(handle) or _mp.call_arg("look")) if _mp else None
+            return {"error": (f"{_name or handle} holds no rows to look at; "
+                              "name a handle that has some, or find() one first")}
         fids = [_crop_token_of(r, str(r["fid"]) in self._ns_rows) for r in rows]
         return self._crops_of(
             fids, marks=marks,

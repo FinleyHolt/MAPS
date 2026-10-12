@@ -984,6 +984,7 @@ class MissionPython:
         self._measure_calls = 0
         # per-block state
         self._out: dict = {}
+        self._code = ""
         self._printed: list = []
         self._lines = 0
         self._deadline = 0.0
@@ -1028,6 +1029,22 @@ class MissionPython:
                     and not k.startswith("__"):
                 return k
         return self._shown.get(ref) or self._labels.get(ref)
+
+    def call_arg(self, fn: str) -> str | None:
+        """The model's text for the first argument of the ``fn(...)`` call
+        its block is running, found at the block frame's live position."""
+        fr = sys._getframe()
+        while fr is not None and fr.f_code.co_filename != BLOCK_FILENAME:
+            fr = fr.f_back
+        if fr is None:
+            return None
+        at = inspect.getframeinfo(fr, context=0).positions
+        for node in ast.walk(ast.parse(self._code)):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == fn and node.args
+                    and (node.lineno, node.col_offset) == (at.lineno, at.col_offset)):
+                return ast.unparse(node.args[0])
+        return None
 
     def _held(self, name: str):
         """What a bound name holds, as an argument: a whole result, a row,
@@ -1314,7 +1331,7 @@ class MissionPython:
         if not isinstance(x, Rows) or x.spec:
             raise CodeError("more_of pages a RESULT a find or an ordering "
                             "left")
-        name = self.name_of(x) or x.ref
+        name = self.name_of(x) or self.call_arg("more_of") or x.ref
         lo = _BROAD_HEAD_ROWS + int(self.env.widened.get(x.ref) or 0)
         p = self._program(name)
         # The rows served are NOT the handle -- they are a window of it --
@@ -1361,7 +1378,7 @@ class MissionPython:
         if isinstance(x, Rows) and x.spec:
             # A SLICE is looked at through its window: two verbs, one
             # receipt, and the window is no answer of its own.
-            name = self.name_of(x) or x.ref
+            name = self.name_of(x) or self.ref_name(x.ref) or x.ref
             p = self._program(name, mk)
             ref = p.window(x.ref, x.spec)
             self._show_as(ref, f"{name}{x.spec}")
@@ -1558,6 +1575,7 @@ class MissionPython:
 
     def run_block(self, code: str) -> dict:
         self._out = out = {"said": code.strip()}
+        self._code = code
         self._printed = []
         self._lines = 0
         self._block_shown: set = set()

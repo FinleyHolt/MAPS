@@ -468,3 +468,22 @@ def test_a_folded_hint_the_answer_says_only_in_part_folds_whole():
     hint = tool_results(fr)[0]["result"]["results"]["b"]["hint"]
     assert "\na: this op returned NO items: nothing met its condition.\n" in hint, hint
 
+
+def test_a_looked_slice_rides_under_the_models_name_for_it():
+    from maps.search.tests.fakes import drive, run, tool_results
+
+    _reply, fr, _f, _d = drive([[run('b = find("depot")\na = find("car")\n')],
+                                [run('look(a[0:2])\n')], "done"])
+    assert list(tool_results(fr)[1]["result"]["results"]) == ["a[0:2]"]
+
+
+def test_refusals_over_an_unnamed_result_quote_the_models_own_text():
+    from maps.search.tests.fakes import drive, run, tool_results
+
+    _reply, fr, _f, _d = drive([[run('look(find("zeppelin"))\n')],
+                                [run('more_of(find("car").order(nearest="prior_1"))\n')],
+                                "done"])
+    look_err, page_err = (t["error"] for t in tool_results(fr)[:2])
+    assert look_err.startswith("find('zeppelin') holds no rows"), look_err
+    assert "row(s) of find('car').order(nearest='prior_1') are" in page_err, page_err
+    assert not re.search(r"\br\d+\b", look_err + page_err), (look_err, page_err)
