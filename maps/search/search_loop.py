@@ -69,6 +69,8 @@ class SearchLoop:
 
         self._world_tracker = WorldTracker()
         self._state: _State | None = None
+        # Each prior's served row point, built on first use.
+        self._prior_xy_cache: dict | None = None
         # Every public reader and writer of ``_State`` takes this lock;
         # re-entrant so a locked path may call another public method.
         self._lock = threading.RLock()
@@ -111,9 +113,8 @@ class SearchLoop:
         """``{fid: (x, y)}`` for every prior row as the surface serves it,
         built once (priors do not move; a rebuild costs ~10 s on Cal City).
         Under the lock."""
-        cached = getattr(self, "_prior_xy_cache", None)
-        if cached is not None:
-            return cached
+        if self._prior_xy_cache is not None:
+            return self._prior_xy_cache
         out: dict = {}
         g = self.state.runtime_graph
         if g is not None:
