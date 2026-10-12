@@ -203,3 +203,12 @@ def test_the_summary_line_counts_the_turns_the_row_counts(make_mission):
     m, _twin = make_mission()
     m.turns_used, m._turn_diag["turns_used"] = 2, 3
     assert f"{m.row()['turns_used']} turns" in M.summary_line(m) and m.row()["turns_used"] == 5
+
+
+def test_a_lost_leg_with_no_pose_read_says_so_rather_than_an_infinite_distance(make_mission):
+    m, _twin = make_mission()
+    m._live.ownship = lambda: None
+    area_ll = m._area_lonlat([(600.0, 1100.0), (610.0, 1100.0), (600.0, 1110.0)])
+    assert m._wait_arrival((600.0, 1100.0), area=area_ll, timeout_s=2.0) == "lost"
+    said = m._outcome_words("lost", "t at (600, 1100)", None, 0.0)
+    assert "(no pose read)" in said and "inf" not in said

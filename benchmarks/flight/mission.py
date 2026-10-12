@@ -399,7 +399,8 @@ class Mission:
             posed = (f"the map registered it{f' ({by})' if by else ''}" if reg.get("applied") else
                      f"the map did not register it: {reg.get('why') or 'the corrector is not running'}")
             return f"the leg to {at} arrived; {waited:.1f} s later {self._held_words(held[1])}; {posed}"
-        lost = f"the leg to {at} never arrived in {ARRIVAL_TIMEOUT_S:.0f} s (closest {self._closest_m:.0f} m); "
+        closest = f"closest {self._closest_m:.0f} m" if math.isfinite(self._closest_m) else "no pose read"
+        lost = f"the leg to {at} never arrived in {ARRIVAL_TIMEOUT_S:.0f} s ({closest}); "
         if held is None:
             return lost + "no frame held any of it, and the flight has no observation"
         return lost + f"{self._held_words(held[1])}, and those frames are the observation"
