@@ -15,14 +15,22 @@ def built(tmp_path_factory):
     return tiles, raster, map_render.load_raster(raster, "calcity"), resolve_sensor(world.SENSOR)
 
 
+def _recording_legs(vehicle):
+    """``vehicle`` with every leg posted to it kept in ``legs``, for a test to read."""
+    vehicle.legs, post = [], vehicle.post
+    vehicle.post = lambda leg: (vehicle.legs.append(leg), post(leg))[-1]
+    return vehicle
+
+
 @pytest.fixture
 def make_twin(built):
     def make(start_xy=(600.0, 100.0)):
         from benchmarks.flight.twin import Twin
 
         tiles, _raster, ortho, sensor = built
-        return Twin(tiles_dir=tiles, map_name="calcity", ortho=ortho, sensor=sensor, start_xy=start_xy,
+        twin = Twin(tiles_dir=tiles, map_name="calcity", ortho=ortho, sensor=sensor, start_xy=start_xy,
                     agl_m=world.AGL_M)
+        return _recording_legs(twin)
     return make
 
 

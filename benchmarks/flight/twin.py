@@ -65,7 +65,6 @@ class Twin:
         self.xy = (float(start_xy[0]), float(start_xy[1]))
         self.heading_deg = 0.0
         self.route: list[tuple[float, float]] = []
-        self.legs: list[Leg] = []
         #: Called after each sleep, once the clock has moved (the live source's corrector).
         self.on_sleep: list = []
         #: Every frame recorded: ``{"seq", "log_time", "t_host", "pose"}``.
@@ -79,7 +78,6 @@ class Twin:
         return map_render.ground_msl(self.terrain, self.floor_msl_m, xy)
 
     def post(self, leg: Leg) -> None:
-        self.legs.append(leg)
         self.route = [tuple(leg.point)] + [tuple(p) for p in leg.ahead]
 
     def now(self) -> float:

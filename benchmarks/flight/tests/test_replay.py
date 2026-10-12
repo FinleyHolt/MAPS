@@ -12,6 +12,7 @@ from PIL import Image
 
 from benchmarks.flight import mission as M
 from benchmarks.flight import replay as R
+from benchmarks.flight.tests.conftest import _recording_legs
 from benchmarks.flight.tests.test_mission import _hydrated, _session
 
 
@@ -29,6 +30,7 @@ def _held(tmp_path, name, extent, black_east=False):
 def bank_mission(built, tmp_path):
     def make(bank):
         live = R.BankSource(bank, tiles_dir=built[0], map_name="calcity", tile_ground_z=0.0)
+        _recording_legs(live.vehicle)
         workdir = tmp_path / "sortie" / "run"
         workdir.mkdir(parents=True)
         m = M.Mission(episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,

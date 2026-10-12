@@ -20,7 +20,7 @@ answers a flight:
   aircraft's ring (:class:`benchmarks.flight.recorded_ring.RecordedRing`) and
   re-fused by the live source at every waypoint.
 
-The bank answers at the live source's seam (the five calls the harness reads
+The bank answers at the live source's seam (the calls the harness reads
 ``LiveSource`` through), since a recorded observation is fused already. Every
 replay writes the records a flown run carries, its ledger row naming the run
 it replays (``replay_of``).
@@ -217,29 +217,17 @@ class Held:
 class Clock:
     """The vehicle a recording stands behind: it flies nothing, and its clock moves only while the harness waits."""
 
-    last_error = ""
-
     def __init__(self) -> None:
         self.t = 0.0
-        self.legs: list[Any] = []
 
     def post(self, leg) -> None:
-        self.legs.append(leg)
+        pass
 
     def now(self) -> float:
         return self.t
 
     def sleep(self, seconds: float) -> None:
         self.t += max(0.0, float(seconds))
-
-    def pose(self, t=None):
-        return None
-
-    def index(self, since=None):
-        return []
-
-    def frame(self, seq):
-        return None
 
 
 class BankSource:
@@ -271,9 +259,6 @@ class BankSource:
         return None
 
     def frame_transit_s(self):
-        return None
-
-    def in_frame(self, x: float, y: float):
         return None
 
     def _local(self, points) -> list[tuple[float, float]]:
