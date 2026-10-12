@@ -255,7 +255,7 @@ for example the reviewed Cal City episodes at one effort:
 ```sh
 SEARCH_SAMPLING_REASONING_EFFORT=medium \
   python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_episodes.txt \
-  --out-root output/e3/gpt56-sol-medium
+  --out-root output/gpt56-sol-medium
 ```
 
 ## Data
