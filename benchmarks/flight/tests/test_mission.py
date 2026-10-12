@@ -212,3 +212,21 @@ def test_a_lost_leg_with_no_pose_read_says_so_rather_than_an_infinite_distance(m
     assert m._wait_arrival((600.0, 1100.0), area=area_ll, timeout_s=2.0) == "lost"
     said = m._outcome_words("lost", "t at (600, 1100)", None, 0.0)
     assert "(no pose read)" in said and "inf" not in said
+
+
+def test_a_stop_while_a_short_pass_is_read_posts_no_refly(built, make_mission):
+    """A Stop that lands as a short pass is read posts no re-fly leg: after
+    Stop the mission posts nothing more."""
+    m, twin = make_mission()
+    waits = []
+
+    def wait(*a, **k):
+        waits.append(1)
+        if len(waits) == 1:
+            m.stop()
+            return "short"
+        return "cancel"
+    m._wait_arrival = wait
+    out = m._fly_live(_session(_hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
+    assert out == {"error": "the mission is stopped"}
+    assert [leg.revision for leg in twin.legs] == [0]

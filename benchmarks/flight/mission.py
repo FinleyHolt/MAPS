@@ -371,7 +371,7 @@ class Mission:
         while True:
             outcome = self._wait_arrival(xy, area=area_ll, timeout_s=ARRIVAL_TIMEOUT_S, after=after,
                                          reach_m=reach if shorts < SHORT_PASS_REQUESTS else None)
-            if outcome != "short":
+            if outcome != "short" or self._cancel.is_set():
                 break
             shorts += 1
             moved, note = self._short_pass(token, xy, area, shorts)
