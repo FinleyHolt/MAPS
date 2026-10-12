@@ -109,3 +109,14 @@ def test_a_split_no_root_carries_exits_nonzero_naming_the_splits_there_are(tmp_p
     assert plot_capability_effort.main([str(root), "--split", "calcity", "--out-dir", str(tmp_path / "f")]) == 2
     assert "test_unseen" in capsys.readouterr().err
     assert not (tmp_path / "f").exists()
+
+
+def test_a_root_that_is_not_there_is_named_not_dropped(tmp_path, capsys):
+    root = _arm(tmp_path, "q", "qwen36-35b-a3b", "0.9", [1, 0])
+    gone = str(tmp_path / "typo")
+    assert capability_effort_arms.main([str(root), gone, "--out", str(tmp_path / "a.json")]) == 0
+    assert json.loads((tmp_path / "a.json").read_text())["unmatched_roots"] == [gone]
+    assert gone in capsys.readouterr().err
+    assert plot_capability_effort.main([str(root), gone, "--split", "test_unseen",
+                                        "--out-dir", str(tmp_path / "f")]) == 0
+    assert gone in capsys.readouterr().err

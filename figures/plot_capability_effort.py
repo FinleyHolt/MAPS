@@ -24,7 +24,7 @@ from pathlib import Path
 
 from benchmarks.citynav.analysis import rows as _rows
 from figures import FONT, MONO, bench_label, esc, themes
-from figures.capability_effort_arms import build
+from figures.capability_effort_arms import build, note_unmatched
 
 W, H = 940, 540
 L, R = 74, 620
@@ -220,7 +220,8 @@ def main(argv: list[str] | None = None) -> int:
     _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)
 
-    data = build([r for r in args.roots if r.is_dir()], allow_partial=args.allow_partial)
+    data = build(args.roots, allow_partial=args.allow_partial)
+    note_unmatched(data)
     splits = sorted({str(r["split"]) for r in data["records"]})
     if args.split not in splits:
         print(f"plot_capability_effort: no root carries split {args.split!r}; the roots carry {splits}",

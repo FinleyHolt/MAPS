@@ -118,6 +118,13 @@ def build(roots: list[Path], *, allow_partial: bool = False) -> dict:
     }
 
 
+def note_unmatched(data: dict) -> None:
+    """Name on stderr each root whose run manifest names no served_model (a missing root included)."""
+    if data["unmatched_roots"]:
+        print("note: no served_model in the run manifest of " + ", ".join(data["unmatched_roots"]),
+              file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("roots", nargs="+", type=Path, help="run roots, one per arm")
@@ -125,16 +132,14 @@ def main(argv: list[str] | None = None) -> int:
     _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)
 
-    data = build([r for r in args.roots if r.is_dir()], allow_partial=args.allow_partial)
+    data = build(args.roots, allow_partial=args.allow_partial)
     text = json.dumps(data, indent=2)
     if args.out:
         args.out.write_text(text)
         print(f"{data['arms']} arms, {data['episodes']:,} episodes -> {args.out}")
     else:
         print(text)
-    if data["unmatched_roots"]:
-        print(f"note: {len(data['unmatched_roots'])} root(s) carry no served_model in their run manifest",
-              file=sys.stderr)
+    note_unmatched(data)
     return 0
 
 
