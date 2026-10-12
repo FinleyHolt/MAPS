@@ -4,7 +4,6 @@ and the episode wrapper."""
 from __future__ import annotations
 
 import logging
-import os
 import time
 import traceback
 from pathlib import Path
@@ -26,12 +25,12 @@ _RUN_PROVENANCE: dict | None = None
 _RUN_CONTEXT: dict = {}
 
 
-def set_run_context(*, config_path: str | None, limit: int | None) -> None:
+def set_run_context(*, config_path: str | None, split: str, limit: int | None) -> None:
     """Run facts only the CLI knows (its parsed argv): the config the runner
-    actually loaded and the row cap. Recorded once per process so row
-    provenance reads the resolved run, never ambient env (an env-carried
-    config path is null whenever the launching shell forgets the export)."""
+    actually loaded, the split and the row cap. Recorded once per process so
+    row provenance reads the resolved run, never ambient env."""
     _RUN_CONTEXT["config_path"] = config_path
+    _RUN_CONTEXT["split"] = split
     _RUN_CONTEXT["limit"] = limit
 
 
@@ -51,11 +50,9 @@ def _cached_run_provenance(search_flags: dict) -> dict:
         )
         model = _spec.model_id if _spec else None
         build = _spec.tokenizer_name if _spec else None
-        _seed = os.environ.get("CITYNAV_BENCH_SAMPLE_SEED")
         _RUN_PROVENANCE = repo_provenance(
             config_path=_RUN_CONTEXT.get("config_path"),
-            split=os.environ.get("CITYNAV_BENCH_SPLIT") or None,
-            seed=int(_seed) if (_seed or "").lstrip("-").isdigit() else None,
+            split=_RUN_CONTEXT.get("split"),
             limit=_RUN_CONTEXT.get("limit"),
             search_flags=search_flags,
             served_model=model,

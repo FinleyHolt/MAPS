@@ -111,8 +111,6 @@ class Driver:
     def __init__(self, args: argparse.Namespace) -> None:
         self.workers = max(1, int(args.workers))
         self.split = args.split
-        os.environ["CITYNAV_BENCH_SPLIT"] = str(self.split)
-        os.environ["CITYNAV_BENCH_SAMPLE_SEED"] = str(args.sample_seed)
         self.episode_timeout_s = int(args.episode_timeout_s)
         self.max_infra_attempts = max(1, int(args.max_infra_attempts))
         self._infra_errors: dict[str, Counter] = {}
