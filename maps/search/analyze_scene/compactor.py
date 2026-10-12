@@ -110,6 +110,20 @@ def _messages_for_tokenization(messages: list[dict]) -> list[dict]:
 _EVICTED_CROP_TEXT = "[earlier crop evicted from context]"
 
 
+def _with_content(message: dict, content) -> dict:
+    """A copy of ``message`` carrying ``content``."""
+    return {**message, "content": content}
+
+
+def _evict_parts(out: list[dict], slots) -> None:
+    """Replace each ``(message index, part index)`` crop of ``out`` with
+    :data:`_EVICTED_CROP_TEXT`, in place."""
+    for i, j in slots:
+        parts = list(out[i]["content"])
+        parts[j] = {"type": "text", "text": _EVICTED_CROP_TEXT}
+        out[i] = _with_content(out[i], parts)
+
+
 def _crop_slots(messages: list[dict]) -> list[tuple[int, int]]:
     """``(message index, part index)`` of every ``image_url`` part, in order."""
     return [
@@ -137,17 +151,18 @@ def _evict_crops(
     else:
         slots = [(i, j) for i, j in slots
                  if i < last and image_tokens_of(messages[i]["content"][j])]
-    out = list(messages)
-    freed = evicted = 0
+    taken: list[tuple[int, int]] = []
+    freed = 0
     for i, j in slots:
         if freed >= shed_tokens:
             break
-        freed += image_tokens_of(out[i]["content"][j])
-        evicted += 1
-        parts = list(out[i]["content"])
-        parts[j] = {"type": "text", "text": _EVICTED_CROP_TEXT}
-        out[i] = {**out[i], "content": parts}
-    return (out, evicted, freed) if evicted else (messages, 0, 0)
+        freed += image_tokens_of(messages[i]["content"][j])
+        taken.append((i, j))
+    if not taken:
+        return messages, 0, 0
+    out = list(messages)
+    _evict_parts(out, taken)
+    return out, len(taken), freed
 
 
 #: How far under ``max_images`` an eviction goes: more than one look delivers.
@@ -163,10 +178,7 @@ def bound_image_count(messages: list[dict], *, max_images: int) -> list[dict]:
         return messages
     excess = len(image_at) - max(max_images - _IMAGE_COUNT_HEADROOM, 1)
     out = list(messages)
-    for i, j in image_at[:excess]:
-        parts = list(out[i]["content"])
-        parts[j] = {"type": "text", "text": _EVICTED_CROP_TEXT}
-        out[i] = {**out[i], "content": parts}
+    _evict_parts(out, image_at[:excess])
     log.info("image bound: evicted the %d oldest of %d crops (limit %d)",
              excess, len(image_at), max_images)
     return out
@@ -454,9 +466,7 @@ def _degrade_oversized_tool_dumps(
         trimmed = _degrade_tool_result_content(out[i]["content"])
         if trimmed is None:
             continue
-        new_msg = dict(out[i])
-        new_msg["content"] = trimmed
-        out[i] = new_msg
+        out[i] = _with_content(out[i], trimmed)
         n_trimmed += 1
         est = _estimate_input_tokens(out, model=model, tools=tools)
         if est <= target_input_tokens:
@@ -533,9 +543,7 @@ def compact_transcript(
         stub = _degrade_tool_result_content(out[i]["content"], keep_color=True)
         if stub is None:
             continue
-        new_msg = dict(out[i])
-        new_msg["content"] = stub
-        out[i] = new_msg
+        out[i] = _with_content(out[i], stub)
         cleared.append(i)
         if '"colors":' in stub:
             colored.append(i)
@@ -551,9 +559,7 @@ def compact_transcript(
                 base[i]["content"], keep_color=False)
             if plain is None:
                 continue
-            new_msg = dict(out[i])
-            new_msg["content"] = plain
-            out[i] = new_msg
+            out[i] = _with_content(out[i], plain)
             color_tables_kept -= 1
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
             if output_tokens <= target_input_tokens:
@@ -581,7 +587,7 @@ def compact_transcript(
             body = out[i]["content"].rsplit(_FINDINGS_SEP, 1)[0]
             if body != out[i]["content"]:
                 out = list(out)
-                out[i] = {**out[i], "content": body}
+                out[i] = _with_content(out[i], body)
                 stripped_findings = True
         if stripped_findings:
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
