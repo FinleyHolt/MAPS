@@ -32,7 +32,6 @@ class _Way:
         self.centerline = None
         self.class_name = ""
         self.world_contour = contour
-        self.cell_count = len(self.cells)
         self.provenance = "prebaked"
 
 

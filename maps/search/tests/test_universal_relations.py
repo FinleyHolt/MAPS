@@ -17,7 +17,7 @@ def _compare(cands, anchors, refs):
 # (50,0); no mask (the polyline-only data kind).
 _ROAD = {"fid": "road_1", "name": "Main Street", "xy": [50.0, 0.0],
          "class": "road", "centerline": [[0.0, 0.0], [100.0, 0.0]],
-         "axis_length_m": 100.0, "axis_residual_m": 2.0}
+         "axis_length_m": 100.0}
 # A square lot footprint (exact one-loop mask) centered at (10, 10).
 _LOT = {"fid": "lot_1", "name": "Lot", "xy": [10.0, 10.0], "class": "parking",
         "mask": [[[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]]]}

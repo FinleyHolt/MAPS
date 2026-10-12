@@ -21,7 +21,6 @@ class _Way:
         self.centerline = None
         self.class_name = ""
         self.world_contour = None
-        self.cell_count = len(self.cells)
 
 
 def _road(name, c0, c1, row=10):

@@ -50,7 +50,6 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
             self.centerline = [[int(r), int(c)] for r, c in self.cells]
             self.class_name = ""
             self.world_contour = None
-            self.cell_count = len(self.cells)
             self.axis_length_m = 20.0
 
     n = _NAME_SET_SHAPE_ROWS + 2
