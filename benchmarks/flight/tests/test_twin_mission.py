@@ -283,13 +283,14 @@ def test_a_reasoner_unreachable_at_discovery_is_infra(calcity, serves, tmp_path,
 
 
 def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, serves, tmp_path, monkeypatch):
-    """The segmenter fails out on the retask: the report stands (its end and
-    time), the error is recorded, and the run is scored, never infra."""
+    """The segmenter fails out on the retask after it flew a second leg: the
+    report stands (its end, time and commit), the error is recorded, and the
+    run is scored, never infra."""
     from benchmarks.flight import measures, twin
     from maps.llm import http
     from maps.perception.sam.detect_client import SamServerOutage
 
-    codes = iter(["go_to(prior_0)\n", None, "fail"])
+    codes = iter(["go_to(prior_0)\n", None, "go_to(prior_1)\n", "fail"])
 
     def reply(url, headers, body, *, timeout, cancel_event):
         code = next(codes, None)
@@ -309,9 +310,10 @@ def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, ser
     sortie = next(out.iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
     assert row["status"] == "ok" and row["ended_by"] == "reply" and row["error"] == "SamServerOutage: no tile answered"
+    assert row["flights_flown"] == 2 and len(row["visited_xy"]) == 2
     (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]),
                                                tiles_dir=calcity.tiles)
-    assert run["end"] == "reply" and run["success_area"] is True
+    assert run["commit_fid"] == "prior_0" and run["end"] == "reply" and run["success_area"] is True
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
 

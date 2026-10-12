@@ -242,8 +242,10 @@ class Mission:
         self.turns_used = 0
         #: How many reports the model has made.
         self.replies = 0
-        #: The last report's ``(ended_by, ended_s)``: a run that fails after it is scored there.
-        self._reported: tuple[str | None, float | None] = (None, None)
+        #: The last report's ``(ended_by, ended_s, flights flown)``: a run that fails after it is scored there.
+        self._reported: tuple[str | None, float | None, int] = (None, None, 0)
+        #: How many flights the row scores; None scores every flight flown.
+        self._scored_flights: int | None = None
         self._turn_diag: dict[str, Any] = {}
         #: The host's wall clock at the start (the row's ``ts``).
         self.started_at: float | None = None
@@ -717,8 +719,9 @@ class Mission:
                 error = f"{type(exc).__name__}: {exc}"
                 if self.replies:
                     # The run stands at its last report, whatever failed after it.
-                    ended_by, ended_s = self._reported
-                    self._set(STATE_FAILED, error=error, ended_by=ended_by, ended_s=ended_s)
+                    ended_by, ended_s, flown = self._reported
+                    self._set(STATE_FAILED, error=error, ended_by=ended_by, ended_s=ended_s,
+                              _scored_flights=flown)
                 else:
                     self._set(STATE_FAILED, error=error, infra=is_infra_fault(exc))
         finally:
@@ -767,7 +770,7 @@ class Mission:
         with self._lock:
             self.ended_by = reply.ended_by
             self.ended_s = self.elapsed_s()
-            self._reported = (self.ended_by, self.ended_s)
+            self._reported = (self.ended_by, self.ended_s, len(self.flights))
             self.turns_used += int(reply.turns_used)
             self._turn_diag.clear()
             self.replies += 1
@@ -786,7 +789,7 @@ class Mission:
     # -- the record ----------------------------------------------------------
 
     def score(self, visited: list[list[float]]) -> dict[str, Any] | None:
-        """SR/OSR/NE/SPL through the bench's scorer, the last flown point the
+        """SR/OSR/NE/SPL through the bench's scorer, the last visited point the
         commit; None for an episode with no target."""
         h = self._hydrated
         if h is None or h.episode.target_xy is None or len(visited) < 1:
@@ -810,10 +813,11 @@ class Mission:
         episode = self._hydrated.episode if self._hydrated else None
         with self._lock:
             visited = [[float(episode.start_xy[0]), float(episode.start_xy[1])]] if episode else []
-            visited += [[float(f["resolved_xy"][0]), float(f["resolved_xy"][1])] for f in self.flights]
+            scored = self.flights[:self._scored_flights]
+            visited += [[float(f["resolved_xy"][0]), float(f["resolved_xy"][1])] for f in scored]
             infra, ended_by, error, turns = self.infra, self.ended_by, self.error, self._turns()
             flown = len(self.flights)
-            provenance = self.flights[-1].get("provenance") if self.flights else None
+            provenance = scored[-1].get("provenance") if scored else None
         last = visited[-1] if visited else None
         try:
             metrics = self.score(visited)
@@ -821,8 +825,8 @@ class Mission:
             log.exception("scoring failed for %s", self.episode_id)
             metrics = None
         if metrics is not None:
-            # The commit as the bench's row names it: the last flight's point and provenance.
-            metrics["committed_xy"] = last if flown else None
+            # The commit as the bench's row names it: the last scored flight's point and provenance.
+            metrics["committed_xy"] = last if scored else None
             metrics["committed_provenance"] = provenance
         return {
             "episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no, "split": self.split,
