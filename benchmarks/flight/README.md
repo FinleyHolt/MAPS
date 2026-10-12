@@ -44,7 +44,7 @@ reads:
    keeps what the run captured for `look` to crop.
 
 The calibration (boresight, GNSS bias, timing offset) is read from a
-`boresight.json` and applied in `live_source.py` alone; a station started
+`boresight.json` and applied in `live_source.py` alone; a run started
 with none flies the datasheet camera. `airframe.py` holds the C-12's
 antenna-to-camera geometry and `tile_georef.py` the bake's local metres to
 WGS84.
