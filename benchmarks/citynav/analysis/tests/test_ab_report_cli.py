@@ -11,14 +11,14 @@ from benchmarks.citynav.analysis.ab_report import main, wilson_ci
 from benchmarks.citynav.analysis.tests.ledger import write_ledger
 
 
-def _write_run(root: Path, sha: str, srs: dict[str, int]) -> None:
+def _write_run(root: Path, sha: str, srs: dict[str, int], criterion: str = "ring") -> None:
     prov = {
         "git_commit": sha,
         "split": "val_seen",
         "search_env_flags": {"SEARCH_CITYNAV_TILES": "tiles/citynav_2m_osmv2"},
     }
     write_ledger(root, *(
-        {"episode_id": eid, "status": "ok", "metrics": {"SR": sr}, "provenance": prov}
+        {"episode_id": eid, "status": "ok", "metrics": {"SR": sr, "success_criterion": criterion}, "provenance": prov}
         for eid, sr in srs.items()))
 
 
@@ -47,6 +47,14 @@ def test_cli_completes_silently_comparable(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "A/B paired" in out
     assert "override active" not in out
+
+
+def test_cli_refuses_runs_scored_under_different_criteria(tmp_path, monkeypatch):
+    _write_run(tmp_path / "a", "aaaaaaa", {"e1": 1, "e2": 0}, criterion="ring")
+    _write_run(tmp_path / "b", "aaaaaaa", {"e1": 0, "e2": 1}, criterion="shape")
+    monkeypatch.setattr(sys, "argv", ["ab_report", str(tmp_path / "a"), str(tmp_path / "b")])
+    with pytest.raises(SystemExit, match="the 20 m disc.*the target's own shape"):
+        main()
 
 
 def test_wilson_ci_bounds_and_midpoint():

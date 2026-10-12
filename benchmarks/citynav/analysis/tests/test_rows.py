@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -248,7 +249,7 @@ def test_every_shared_fixture_case():
 def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_path):
     """A wall-clock timeout before any commit is a miss inside the SR
     denominator; summary.txt counts it, so every reader must."""
-    from benchmarks.citynav.analysis import ab_report, arm_table, run_report
+    from benchmarks.citynav.analysis import arm_table, run_report
 
     root = write_ledger(
         tmp_path / "run",
@@ -264,7 +265,6 @@ def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_pa
     assert len(run_report.report(root)) == 4
     row = arm_table.arm_row(root)
     assert (row["n"], row["SR_n"], row["SR"]) == (4, 1, 0.25)
-    assert ab_report._sr_by_episode(root)["e3"] == 0
 
 
 def _partial_run(tmp_path: Path, episodes_n: int) -> Path:
@@ -278,19 +278,19 @@ def _partial_run(tmp_path: Path, episodes_n: int) -> Path:
     return root
 
 
-def test_every_reader_refuses_a_partial_root_naming_the_shortfall(tmp_path, capsys):
+def test_every_reader_refuses_a_partial_root_naming_the_shortfall(tmp_path, capsys, monkeypatch):
     from benchmarks.citynav.analysis import ab_report, arm_table, run_report
 
     root = _partial_run(tmp_path, 3)
+    monkeypatch.setattr(sys, "argv", ["ab_report", str(root), str(root)])
     want = "scores 1 of the 3 episodes its manifest selects (1 only ever infrastructure casualties, 1 never landed a row)"
     for read in (lambda: run_report.main(["run_report", str(root)]),
                  lambda: arm_table.main([str(root)]),
-                 lambda: ab_report._sr_by_episode(root)):
+                 ab_report.main):
         with pytest.raises(SystemExit, match=re.escape(want)):
             read()
     assert run_report.main(["run_report", str(root), "--allow-partial"]) == 0
     assert arm_table.main(["--allow-partial", str(root)]) == 0
-    assert ab_report._sr_by_episode(root, allow_partial=True) == {"e1": 1}
     assert f"*** PARTIAL (--allow-partial): {root}: {want} ***" in capsys.readouterr().err
 
 

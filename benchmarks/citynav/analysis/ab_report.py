@@ -4,7 +4,7 @@
 A change can trade successes for failures at a flat net SR, so the
 success->fail count is reported beside the delta. ``ab_stats`` takes
 (sr_a, sr_b) pairs over the shared episodes; the CLI pairs two run roots by
-episode_id. Stdlib only.
+episode_id and refuses two roots scored under different success criteria.
 
 Usage:
   python -m benchmarks.citynav.analysis.ab_report <run_a> <run_b> [--label "..."]
@@ -106,14 +106,6 @@ def render(st: dict) -> str:
     )
 
 
-def _sr_by_episode(run_root: Path, *, allow_partial: bool = False) -> dict[str, int]:
-    """The SR bit per episode, through the canonical pick."""
-    from benchmarks.citynav.analysis.run_report import load_run
-
-    scored, _ = load_run(run_root, allow_partial=allow_partial)
-    return {eid: int(bool(m.get("SR"))) for eid, m in scored.items()}
-
-
 def _run_provenance(run_root: Path) -> dict:
     """The first row's provenance block with the manifest's bake stamp attached, else {}."""
     for r in _rows.iter_json_rows(run_root / _rows.EPISODES_JSONL):
@@ -202,11 +194,19 @@ def main() -> None:
     _rows.add_allow_partial(ap)
     args = ap.parse_args()
 
-    a = _sr_by_episode(Path(args.run_a), allow_partial=args.allow_partial)
-    b = _sr_by_episode(Path(args.run_b), allow_partial=args.allow_partial)
+    from benchmarks.citynav.analysis.run_report import _CRITERION_LABEL, load_run, run_criterion
+
+    a, _ = load_run(Path(args.run_a), allow_partial=args.allow_partial)
+    b, _ = load_run(Path(args.run_b), allow_partial=args.allow_partial)
     shared = sorted(set(a) & set(b))
     if not shared:
         raise SystemExit("no shared scored episodes between the two runs")
+    crit_a, crit_b = (run_criterion([run[e] for e in shared]) for run in (a, b))
+    if crit_a != crit_b:
+        raise SystemExit(
+            f"INVALID A/B -- A is scored on {_CRITERION_LABEL.get(crit_a, crit_a)} and B on "
+            f"{_CRITERION_LABEL.get(crit_b, crit_b)}: the two numbers answer different questions."
+        )
 
     fatal, arm = comparability_issues(
         _run_provenance(Path(args.run_a)), _run_provenance(Path(args.run_b))
@@ -232,7 +232,7 @@ def main() -> None:
             "suspected; pass --allow-low-overlap to override"
         )
 
-    pairs = [(a[e], b[e]) for e in shared]
+    pairs = [(int(bool(a[e].get("SR"))), int(bool(b[e].get("SR")))) for e in shared]
     print(render(ab_stats(pairs, label=args.label)))
     print(f"shared={len(shared)}  only_a={len(set(a) - set(b))}  "
           f"only_b={len(set(b) - set(a))}")
