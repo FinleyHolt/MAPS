@@ -111,12 +111,10 @@ class Driver:
     def __init__(self, args: argparse.Namespace) -> None:
         self.workers = max(1, int(args.workers))
         self.split = args.split
-        # The split and seed stamp every row's provenance (dispatch).
         os.environ["CITYNAV_BENCH_SPLIT"] = str(self.split)
         os.environ["CITYNAV_BENCH_SAMPLE_SEED"] = str(args.sample_seed)
         self.episode_timeout_s = int(args.episode_timeout_s)
         self.max_infra_attempts = max(1, int(args.max_infra_attempts))
-        # episode_id -> its infra attempts' errors, counted.
         self._infra_errors: dict[str, Counter] = {}
         self.out_root = Path(args.out_root)
         if not self.out_root.is_absolute():
@@ -127,15 +125,13 @@ class Driver:
         self.summary_file = self.out_root / "summary.txt"
         self.limit = int(args.limit)
         self.sample_seed = int(args.sample_seed)
-        # Newline-delimited episode_ids, applied before the seeded shuffle.
         self.allowlist_path: Path | None = None
         if args.episode_allowlist:
             ap = Path(args.episode_allowlist)
             if not ap.is_absolute():
                 ap = (REPO / ap).resolve()
             self.allowlist_path = ap
-        # Guarded by _dispatch_lock. _recent is the mass-infra window as
-        # (cause or None, log path).
+        # Guarded by _dispatch_lock.
         self._selection: list[str] = []
         self._cursor = 0
         self._dispatch_lock = threading.Lock()
@@ -149,7 +145,6 @@ class Driver:
             time.monotonic() + self.max_wall_s if self.max_wall_s > 0 else None
         )
 
-    # -- logging / results -------------------------------------------------
 
     def log(self, msg: str) -> None:
         line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
@@ -226,7 +221,6 @@ class Driver:
                 f"{k}x). This run is not producing results; stopping instead "
                 f"of spending the rest of the allocation on it."
             )
-        # Outside the lock: self.log takes its own.
         self.log("!! ABORTING RUN — " + self._abort)
         self.log(f"!! by cause: {dict(counts.most_common())}")
         self.log(f"!! representative worker log: {log_path or '(none recorded)'}")
@@ -287,7 +281,6 @@ class Driver:
             f"--max-infra-attempts above {self.max_infra_attempts} flies them again"
         )
 
-    # -- health gate -------------------------------------------------------
 
     def _vllm_healthy(self) -> bool:
         """True when the reasoner endpoint answers its model list, at the URL
@@ -314,7 +307,6 @@ class Driver:
             time.sleep(120.0)
         self.log("vLLM back; resuming")
 
-    # -- one launch cycle --------------------------------------------------
 
     def _wait(self, proc: subprocess.Popen) -> str:
         """Block until the attempt child exits (``exited``), hits the episode
@@ -439,7 +431,6 @@ class Driver:
         self._append_result(row)
         self._write_summary()
 
-    # -- aggregate / summary ----------------------------------------------
 
     def _write_summary(self) -> None:
         """``summary.txt``: the driver's infra and abort lines above
@@ -469,7 +460,6 @@ class Driver:
         text = "\n".join(x for x in lines if x) + "\n" + buf.getvalue().lstrip("\n")
         self.summary_file.write_text(text)
 
-    # -- main loop ---------------------------------------------------------
 
     def worker_loop(self, worker_id: int) -> None:
         while (eid := self._next_claimed_episode()) is not None:
@@ -523,7 +513,7 @@ class Driver:
         return episodes
 
     def dry_run(self) -> int:
-        """Selection / dedup preview. Launches nothing."""
+        """Selection preview. Launches nothing."""
         episodes = self._select_episodes()
         self._absorb_ledger()
         done = self._done_cache
