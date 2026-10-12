@@ -1,6 +1,5 @@
-"""One-episode dispatch: run provenance and the shared batch-loop/server
-episode wrapper.
-"""
+"""One-episode dispatch: run provenance, the infra exception classifiers
+and the episode wrapper."""
 
 from __future__ import annotations
 
@@ -85,14 +84,8 @@ def _chain(exc: BaseException):
 
 
 def _exc_is_sam_infra(exc: BaseException) -> bool:
-    """True if any link in the chain is a ``SamServerOutage``.
-
-    A flight-time SAM ``/segment`` outage (server unreachable / 5xx /
-    terminal None after retries) is an infrastructure casualty, not a
-    grounding miss — the frame produced NO usable detections for a reason
-    the algorithm never controlled. Isinstance-based so it never catches a
-    real empty-result frame, which never raises.
-    """
+    """True if any link in the chain is a ``SamServerOutage`` (an empty
+    frame never raises)."""
     return any(isinstance(cur, SamServerOutage) for cur in _chain(exc))
 
 
@@ -132,13 +125,10 @@ def _dispatch_one(
     recorder: LiveRecorder | None,
     episode_dir: Path,
 ) -> dict:
-    """Run one episode and write its row to ``<episode_dir>/episode.json``,
-    shared by the batch loop and the persistent episode server.
-
-    Returns the row. Its ``status`` is ``ok`` for a scored attempt (a
-    method exception included) and ``infra`` when the algorithm never got a
-    fair run: an infrastructure fault raised, the mission ended
-    ``transient_failures``, or the runner produced no record. The batch loop appends the row to the run's ledger.
+    """Run one episode, write its row to ``<episode_dir>/episode.json`` and
+    return it. ``status`` is ``ok`` for a scored attempt (a method exception
+    included) and ``infra`` when an infrastructure fault raised, the mission
+    ended ``transient_failures``, or the runner produced no record.
     """
     t0 = time.monotonic()
     try:
@@ -146,11 +136,7 @@ def _dispatch_one(
     except Exception:
         _eid = f"row{orig_idx}"
 
-    # Stamp the experiment-arm identity onto every row. The SEARCH_* arm
-    # flags live only in the launching shell; without this, rows from
-    # different A/B arms are indistinguishable post hoc (a resume under a
-    # shell that forgot a flag silently flies the other arm with no on-disk
-    # trace).
+    # Every row carries the arm identity (the SEARCH_* flags of the shell).
     _arm_stamp = arm_env_stamp()
     _prov = _cached_run_provenance(_arm_stamp)
 
@@ -216,9 +202,7 @@ def _dispatch_one(
     })
     write_episode_json(episode_dir, out)
     log.info(
-        # ``%s`` on the verdict, not ``%d``: this line sits OUTSIDE the
-        # per-episode try above, so a null SR would take down the batch loop
-        # and the episode server rather than print oddly.
+        # ``%s`` on the verdict: a null SR must not raise outside the try.
         "[%d/%d] %s NE=%.1f SR[%s]=%s steps=%d commit=%s(%s) (%.1fs)",
         idx + 1,
         total,
@@ -227,9 +211,7 @@ def _dispatch_one(
         m.get("success_criterion") or "?",
         m["SR"],
         m["steps_taken"],
-        # The perceive-vs-prior signal: ``detected`` = committed a runtime
-        # SAM detection (e.g. a car, no longer in the prior), ``prior`` =
-        # committed a prebaked landmark.
+        # ``detected`` (a runtime detection) or ``prior`` (a baked landmark).
         m.get("committed_provenance") or "none",
         m.get("committed_fid") or "-",
         m["compile_s"],

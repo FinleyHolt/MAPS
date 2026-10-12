@@ -67,14 +67,11 @@ def _write_tour_cursor(tour: FeatureTour) -> None:
         log.debug("tour_cursor write failed; non-fatal", exc_info=True)
 
 
-# The mission's flight budget: a NEVER-SERVED liveness backstop (the model
-# hears about no budget; flights are bounded by turns anyway). Sits far
-# above every observed episode (max 10 flights over 1,100 flown missions).
+# The mission's flight budget: a liveness backstop the model is never told.
 MISSION_FLIGHT_BUDGET = 1000
 
-# The wall-clock half of the same backstop: an ABSOLUTE epoch the bench driver
-# exports, because it owns the episode start and the cap. Unset = no clock,
-# which is what the field station and a bare smoke get.
+# The wall-clock backstop: an absolute epoch the bench driver exports. Unset
+# (the field station, a bare smoke) means no clock.
 MISSION_DEADLINE_ENV = "CITYNAV_EPISODE_DEADLINE_EPOCH"
 
 
@@ -107,13 +104,7 @@ def resolve_flight_target(
     ((x, y), "detected"|"prior") | None`` over the LIVE graph), a
     view-position sentinel, or the canonical ``"[x, y]"`` world-point token.
     Returns ``{"xy": (x, y), "provenance": ...}`` or ``{"error": ...}`` (the
-    fid is on neither graph).
-
-    A NAMED THING FLIES ITS MIDDLE, with no aim to move it: probed with crops,
-    the model returned the crop's centre on 20/21 replies, and its aims landed
-    23-38 m off the footprint it named. A part of a region is reached by
-    covering it (``explore``) and flying to the row the segmenter put there
-    (a median 1.5 m from GT on 83% of rows).
+    fid is on neither graph). A named thing flies its middle; there is no aim.
     """
     xy = parse_xy_token(token)
     if xy is not None:
@@ -138,23 +129,15 @@ def resolve_flight_target(
             "provenance": str(provenance)}
 
 
-# The flight report serves what the flight just found, head-capped like a
-# rendered block (geom_program's 12-row head). Never a silent cap: the
-# report's ``new_detections`` count is the total, and ``detected_more``
-# names what the head left out.
+# The flight report's head of fresh detections (geom_program's 12-row head).
 _DETECTED_HEAD = 12
 
 
 def detected_digest(dets: list[dict], cap: int = _DETECTED_HEAD) -> dict:
-    """Report fields for THIS flight's folded detections, so acting on a
-    fresh detection is one step, not an analyze away.
-
-    EVERY ARMED CLASS IS REPRESENTED: classes ordered by their strongest
-    detection, then round-robin, each class's rows by detector confidence,
-    so one class with sixty rows cannot crowd out a class with one (a
-    ground-truth car folded on five flights once never reached a report
-    behind 52 houses). The count stays the total and ``detected_more``
-    names the remainder.
+    """Report fields for THIS flight's folded detections: up to ``cap``
+    rows, round-robin over classes ordered by their strongest detection, each
+    class's rows by confidence, so every class is represented;
+    ``detected_more`` counts the rest.
     """
     if not dets:
         return {}
@@ -162,8 +145,7 @@ def detected_digest(dets: list[dict], cap: int = _DETECTED_HEAD) -> dict:
     for _i, d in enumerate(dets):
         by_class.setdefault(str(d.get("class") or ""), []).append((_i, d))
     for rows in by_class.values():
-        # conf descending; fold order breaks a tie, so a run with no
-        # confidences is exactly the old head.
+        # conf descending; fold order breaks a tie.
         rows.sort(key=lambda t: (-float(t[1].get("conf") or 0.0), t[0]))
     lanes = sorted(by_class.values(),
                    key=lambda rows: (-float(rows[0][1].get("conf") or 0.0),
@@ -184,10 +166,8 @@ def detected_digest(dets: list[dict], cap: int = _DETECTED_HEAD) -> dict:
 
 
 def echo_pose(ctx, report: dict) -> None:
-    """After every successful flight the ToolContext's pose echo follows the
-    drone, so the loop's surface refresh reads the folded world from where
-    the drone is. The graph needs no following: the context holds the live
-    ``state.runtime_graph`` itself, which every fold mutates in place."""
+    """After a successful flight the ToolContext's pose follows the drone.
+    The context already holds the live ``state.runtime_graph``."""
     if not isinstance(report, dict) or "error" in report:
         return
     pxy = report.get("pose_xy") or ()
@@ -206,18 +186,15 @@ def perceive(h, obs, detections) -> list[dict]:
 
 
 class MissionSession:
-    """The engine's half of one mission conversation, built once over a
-    hydrated episode (``episode_runner.Hydrated``): the ToolContext the
-    model reasons against, the MissionSpec its verbs call back into, and
-    the flights. The field station re-tasks a live mission by driving
-    another turn over THIS session, which keeps the world-state the first
-    turn folded.
+    """The engine's half of one mission conversation over a hydrated
+    episode (``episode_runner.Hydrated``): the ToolContext, the MissionSpec
+    its verbs call back into, and the flights. The field station re-tasks a
+    mission by driving another turn over the same session.
 
-    ``observe`` is the live station's: a callable returning what the camera
-    sees NOW, posed by the receiver, or ``None`` when it has no frame or no
-    fix. With it a flight perceives the aircraft's frame from the pose it
-    was taken at, and the stop served is still the target the move named.
-    The bench passes none and renders the raster crop at the target.
+    ``observe`` (the live station's) returns the camera's current posed
+    frame or ``None``; a flight then perceives that frame from its own pose
+    and still serves the target as the stop. The bench passes none and
+    renders the raster crop at the target.
     """
 
     def __init__(self, h, *, recorder=None, t_start: float, observe=None) -> None:
@@ -345,10 +322,8 @@ class MissionSession:
         state.altitude_m = new_alt
         state.heading_deg = new_heading
 
-        # NORTH-UP, not the episode heading: over a nadir ortho the heading
-        # only rotates the segmenter's input, the served captions promise
-        # north-up pictures, and the retrospective re-render draws at yaw 0.
-        # The pose keeps its heading: the replay's motion model still turns.
+        # Rendered north-up (yaw 0), as the captions and the retrospective
+        # re-render are; the pose keeps its heading for the replay.
         if self.observe is None:
             obs = crop_observation(
                 new_xy,
@@ -394,11 +369,8 @@ class MissionSession:
                     )
 
         if self.observe is not None:
-            # THE STOP IS THE THING ASKED FOR. The frame's own pose fed the
-            # fold and the recorder above; from here the flight reads as on
-            # the bench, at the target's own point. Served, the pass geometry
-            # read as a miss to fix: one sortie re-requested a correct target
-            # six times over a 98-387 m offset (20260911T201524Z run03).
+            # The frame's own pose fed the fold and the recorder; from here
+            # the stop is the target asked for, as on the bench.
             new_xy = (float(target_xy[0]), float(target_xy[1]))
             state.pose_xy = new_xy
         # The flight is perceived: retire matched boosts, log the flown stop
@@ -439,12 +411,9 @@ class MissionSession:
             "alt_m": round(new_alt, 1),
             "new_detections": len(step_detections),
             **detected_digest(loop.last_flight_detections()),
-            # The commit is the LAST flight's target, verbatim: state the
-            # standing answer on every flight, so the fact the reply consumes
-            # is present at decision time (measured: 9/100 episodes committed
-            # a scouting point while the reply named an object).
+            # The commit is the last flight's target, verbatim.
             "answer_if_you_reply_now": token,
-            # RE2 cue echo: the operator instruction rides every flight report.
+            # The operator instruction rides every flight report.
             "cue": episode.description,
         }
         if not withheld("look_for"):

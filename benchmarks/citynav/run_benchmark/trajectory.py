@@ -115,10 +115,8 @@ def synthesize_compliant_trajectory(
         return False
 
     def _fly_descent() -> bool:
-        """The final transit to the commit. True when the budget truncated it.
-        It aims one snap tolerance PAST the commit: the approach stops
-        anywhere within the tolerance short of its target, which biased
-        arrivals away from the commit (knife-edge losses at NE 20.1-21.1 m)."""
+        """The final transit to the commit, aimed one snap tolerance past it
+        so the approach does not stop short. True when the budget truncated it."""
         if steps >= max_frames:
             return True
         final_target = descent_xy

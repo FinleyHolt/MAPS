@@ -106,14 +106,10 @@ def classify_referent(description: str) -> str:
 
 
 def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, float]:
-    """``(start altitude AMSL, block ground datum)`` for one episode.
-
-    The altitude is upstream's start z, the split row's ``trajectory[0]``
-    z; ``start_altitude_agl_m`` replaces it with a uniform above-ground
-    cruise. The result is held to ``[ground + 1, altitude_cap_m]``.
-
-    This pair IS the crop window's observation ceiling: the mission's
-    ``obs_span_m = 2 * (alt - ground)``.
+    """``(start altitude AMSL, block ground datum)`` for one episode: the
+    split row's start z, or ground + ``start_altitude_agl_m`` when set, held
+    to ``[ground + 1, altitude_cap_m]``. The pair sets the observation span,
+    ``2 * (alt - ground)``.
     """
     from maps.perception.ortho.ground_level import (  # noqa: PLC0415
         GROUND_LEVEL,
@@ -151,15 +147,10 @@ def _episode_graph(stem: str, assets):
 def _success_mask(cfg, episode, objects_by_map: dict) -> tuple[str, dict]:
     """``(criterion, mask kwargs)`` for ``eval.score_arrival``.
 
-    The criterion is the BENCH's, read off ``paths.SUCCESS_CRITERION`` at
-    call time so the Cal City bridge's rebind reaches it -- a
-    ``from ... import`` here would capture CityNav's ring and score every
-    Cal City run on it, silently.
-
-    The shape is the linked object's contour when the episode names one,
-    else its hand-drawn/derived mask. The fallback radius comes from the ROW
-    when the split states one per episode, else from the run config; on a
-    corpus where every row resolves a shape it never fires.
+    The criterion is read off ``paths.SUCCESS_CRITERION`` at call time, so
+    the Cal City bridge's rebind reaches it. The shape is the linked
+    object's contour when the episode names one, else its mask; the fallback
+    radius is the row's when it states one, else the config's.
     """
     from benchmarks.citynav import paths as bench_paths
 
@@ -253,13 +244,11 @@ def _detected_fids(search_loop) -> set[str]:
 
 
 def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
-    """The bench's retrospective perception: a view{boost} at a FLOWN stop
-    re-renders the raster crop at the recorded pose (north-up, as the flight
-    drew it), re-segments it with the boost vocabulary and folds it as a
-    flight does (:func:`mission_engine.perceive`); the delta is the tool
-    result. Zero flight: the ortho render is deterministic over the static
-    raster, so a visited pose stays re-analyzable. Bench-only, because the
-    flight's camera is not the raster."""
+    """The bench's retrospective perception: a view{boost} at a flown stop
+    re-renders the raster crop at the recorded pose (north-up), re-segments
+    it with the boost vocabulary and folds it as a flight does
+    (:func:`mission_engine.perceive`); the delta is the tool result.
+    Bench-only: the flight's camera is not the raster."""
     pose_xy = flown_entry.get("pose_xy")
     if not (isinstance(pose_xy, (list, tuple)) and len(pose_xy) == 2):
         return {"error": "the flown observation's pose is unknown"}
@@ -380,8 +369,7 @@ def run_episode(
 
     scores = score_episode(cfg, episode, objects_by_map, final_xy,
                            [(float(p[0]), float(p[1])) for p in visited], flew=bool(flights))
-    # ``referent_bucket`` is a NOISY TEXT PROXY (regex over the description;
-    # ~23% of building targets that mention a nearby car read "car").
+    # ``referent_bucket`` is a noisy text proxy (regex over the description).
     scores["referent_bucket"] = classify_referent(episode.description)
     scores["steps_taken"] = steps_taken
     scores["compile_s"] = compile_s
@@ -402,9 +390,8 @@ def run_episode(
         "turns_used": reply.turns_used,
         **({"no_call_turns": reply.no_call_turns} if flights else {}),
     }
-    # SELECTION CEILING: would the committed point itself score under this
-    # bench's mask? A miss whose commit would score is an execution/budget
-    # miss; one whose commit would not is a selection/grounding miss.
+    # Would the committed point itself score? Separates execution misses
+    # from selection misses.
     if flights:
         cxy = (float(last["resolved_xy"][0]), float(last["resolved_xy"][1]))
         scores["committed_xy"] = list(cxy)
