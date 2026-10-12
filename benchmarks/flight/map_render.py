@@ -23,10 +23,21 @@ from benchmarks.flight.tile_georef import Bounds, map_bounds
 TERRAIN_SUFFIX = "_dem.tif"
 
 
+def raster_pair(map_name: str) -> str:
+    """The files a raster directory holds for ``map_name``, as a refusal names them."""
+    return (f"{map_name}_rgb.tif (or {map_name}.png) beside {map_name}.tif, as "
+            f"benchmarks.calcity.data_prep.build_rgbd_ortho builds them")
+
+
 def load_raster(rgbd_dir: str | Path, map_name: str):
-    """``(rgb, bounds, px_per_m)`` for a raster directory, the rgb memory-mapped; None without one."""
+    """``(rgb, bounds, px_per_m)`` for a raster directory, the rgb memory-mapped;
+    None when it does not hold the pair (:func:`raster_pair`)."""
     from maps.perception.ortho.camera_model import load_ortho_or_rasters  # noqa: PLC0415
 
+    d = Path(rgbd_dir)
+    if not (d / f"{map_name}.tif").is_file() or not any(
+            (d / f"{map_name}{s}").is_file() for s in ("_rgb.tif", ".png")):
+        return None
     bake = load_ortho_or_rasters(map_name, rgbd_dir=str(rgbd_dir))
     if bake is None:
         return None

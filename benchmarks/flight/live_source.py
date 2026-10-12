@@ -682,7 +682,8 @@ def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresigh
     if register_raster is not None:
         ortho = map_render.load_raster(register_raster, map_name)
         if ortho is None:
-            raise ValueError(f"no {map_name} raster under {register_raster} to register the frames against")
+            raise ValueError(f"no {map_name} raster under {register_raster} to register the frames against: "
+                             f"a raster directory holds {map_render.raster_pair(map_name)}")
         register = Registration(ortho=ortho, render=map_render.renderer(ortho))
     source = LiveSource(tiles_dir=tiles_dir, map_name=map_name, boresight=boresight, vehicle=vehicle,
                         tile_ground_z=float(GROUND_LEVEL[map_name]), floor_msl_m=FLOOR_MSL_M[map_name],

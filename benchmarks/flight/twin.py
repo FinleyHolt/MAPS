@@ -206,7 +206,8 @@ def main(argv: list[str] | None = None) -> int:
     map_name = episode.map_name
     ortho = map_render.load_raster(args.ortho, map_name)
     if ortho is None:
-        print(f"no {map_name} raster under {args.ortho}", file=sys.stderr)
+        print(f"no {map_name} raster under {args.ortho}: a raster directory holds {map_render.raster_pair(map_name)}",
+              file=sys.stderr)
         return 2
     start_alt, ground_z = start_altitude_m(cfg, map_name, episode.start_z)
     twin = Twin(tiles_dir=TILES_DIR, map_name=map_name, ortho=ortho, sensor=sensor, start_xy=episode.start_xy,

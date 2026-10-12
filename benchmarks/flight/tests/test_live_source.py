@@ -210,3 +210,16 @@ def test_the_terrain_reads_the_cell_a_point_lies_in_counted_from_the_north_west_
     x = np.array([0.1, 9.9, 10.1, 29.9, 4.0, 15.0])
     y = np.array([20.3, 10.5, 10.3, 0.5, 10.6, -5.0])
     assert t.elevation(x, y).tolist() == [1.0, 1.0, 5.0, 6.0, 1.0, 5.0]
+
+
+def test_a_raster_directory_without_the_pair_loads_none_and_the_live_source_names_the_pair(built, make_twin,
+                                                                                           tmp_path):
+    import pytest
+
+    from benchmarks.flight.live_source import open_live
+
+    (tmp_path / "calcity_rgb.tif").write_bytes(b"")           # no calcity.tif beside it
+    assert map_render.load_raster(tmp_path, "calcity") is None
+    with pytest.raises(ValueError, match="calcity_rgb.tif .or calcity.png. beside calcity.tif"):
+        open_live(vehicle=make_twin(), tiles_dir=built[0], map_name="calcity", sensor=built[3],
+                  register_raster=tmp_path)
