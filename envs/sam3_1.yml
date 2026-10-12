@@ -1,7 +1,7 @@
 # sam3_1: the SAM 3.1 segmentation serve env (python -m serving.sam_server).
 #
 # Kept apart from the bench env: `sam3` requires numpy<2, while the bench's
-# tifffile requires numpy>=2.1. The two talk over SAM_SERVER_URL.
+# rasterio requires numpy>=2. The two talk over SAM_SERVER_URL.
 #
 # SAM 3.1 itself (`sam3`, imported by serving/sam_engine.py) is not on PyPI:
 # install it from Meta's SAM 3 source into this env. The checkpoint is gated
