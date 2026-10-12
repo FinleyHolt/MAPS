@@ -82,7 +82,7 @@ ORBIT_DEG = 300.0
 #: The radius the way back is turned at when no turn was read.
 TURN_RADIUS_FALLBACK_M = 1500.0
 #: Crew ends: the run is a miss unless the adjudication excludes it.
-NOT_A_RUN = ("stopped", "abort", "dropped")
+CREW_ENDS = ("stopped", "abort", "dropped")
 
 
 def _rows(path: Path) -> list[dict[str, Any]]:
@@ -468,12 +468,13 @@ def _conversation(bases: list[Path]) -> list[dict[str, Any]]:
 
 
 def ended(row: dict[str, Any]) -> str:
-    """``reply`` (the model's report, the one end that scores), ``stopped`` (the crew's stop), else ``no run``."""
+    """``no run`` (status not ``ok``), ``stopped`` (a crew end), else the row's
+    ``ended_by``: ``reply`` (the model's report) is the one end that scores."""
     if row.get("status") != "ok":
         return "no run"
-    if row.get("ended_by") in NOT_A_RUN:
+    if row.get("ended_by") in CREW_ENDS:
         return "stopped"
-    return "reply" if row.get("ended_by") == "reply" else "no run"
+    return str(row.get("ended_by") or "no run")
 
 
 def tokens(bases: list[Path]) -> dict[str, Any]:

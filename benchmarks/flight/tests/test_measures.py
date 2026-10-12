@@ -109,6 +109,7 @@ def test_a_run_the_serve_failed_under_is_out_of_every_rate_and_named(tmp_path):
     (truth / f"{root.name}.json").write_text(json.dumps(
         {f"calcity::run{k}": {"target_mask": TARGET} for k in (1, 2, 3)}))
     got, _radius, _turns = Q.collect([root], Q.Truth([truth]), tiles_dir=tiles)
+    assert [r["end"] for r in got] == ["reply", "transient_failures", "no run"]
     s = Q.summarize(got)
     assert (s["sr_20m"]["k"], s["sr_20m"]["n"]) == (1, 1)
     assert s["infra"] == [f"{root.name} run 2", f"{root.name} run 3"]
