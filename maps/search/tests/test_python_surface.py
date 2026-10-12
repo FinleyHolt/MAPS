@@ -456,6 +456,15 @@ def test_a_slice_rides_slots_and_slices_again():
     assert "1 car_1" in (out.get("printed") or ""), out
 
 
+def test_a_chained_index_refusal_names_what_it_indexed():
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nr1[0:2][999]["fid"]\n')],
+        "done",
+    ])
+    err = tool_results(fr)[0].get("error") or ""
+    assert "r1[0:2][999] did not bind: r1[0:2] served 2 row(s)" in err, err
+
+
 def test_an_explore_names_the_uncovered_sibling_segments():
     """A named street is many fragments; a pass covers one."""
     cands = [

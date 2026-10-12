@@ -1026,7 +1026,8 @@ class MissionPython:
         at = inspect.getframeinfo(fr, context=0).positions
         for node in ast.walk(ast.parse(self._code)):
             if not isinstance(node, (ast.Call, ast.Subscript)) or (
-                    node.lineno, node.col_offset) != (at.lineno, at.col_offset):
+                    node.lineno, node.end_lineno, node.col_offset,
+                    node.end_col_offset) != tuple(at):
                 continue
             if fn is None and isinstance(node, ast.Subscript):
                 return ast.unparse(node.value)
