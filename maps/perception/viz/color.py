@@ -96,8 +96,7 @@ def _survivors(rgb, region):
     keep = ((lum >= np.percentile(lum, _MIX_DARK_PCTL))
             & (lum <= np.percentile(lum, _MIX_BRIGHT_PCTL))
             & (lum >= _MIX_DARK_ABS_LUM))
-    surv = px[keep]
-    return surv, n_orig, int(surv.shape[0])
+    return px[keep]
 
 
 def _median_lab(surv):
@@ -123,10 +122,9 @@ def m6_attributes(rgb_crop, region) -> "dict[str, str] | None":
             f"m6_attributes takes a MaskRegion, got {type(region).__name__}"
         )
     try:
-        sp = _survivors(rgb_crop, region)
-        if sp is None or sp[2] == 0:
+        surv = _survivors(rgb_crop, region)
+        if surv is None or len(surv) == 0:
             return None
-        surv, n_orig, n_surv = sp
         L, C = _median_lab(surv)
         post = _posterior(surv).mean(axis=0)
         vdist = {}
