@@ -61,6 +61,8 @@ A run root holds:
 | `run_manifest.json` | The run's identity: commit, resolved config, split and selection, served model, tile bake hash, arm flags. |
 | `episodes.jsonl` | One row per attempt, its scored `metrics` included. |
 | `summary.txt` | `analysis.run_report` over the root under the driver's infra lines, refreshed after every attempt. |
+| `driver.log` | The driver's own lines: each attempt's start and end, crashes, timeouts, aborts. |
+| `w<id>/server.log` | Worker `<id>`'s attempt children's stderr, appended. |
 | `w<id>/maps_<stamp>_<benchmark>_<slug>/` | One directory per attempt: `episode.json`, `run.log`, `conversation.jsonl` and `flight/`. |
 
 Read a root with [`analysis/`](analysis/README.md); never parse
