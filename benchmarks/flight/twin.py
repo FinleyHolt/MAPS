@@ -11,8 +11,9 @@ the bench's do; the run lands under ``--out/<UTC stamp>/`` with the run
 records a flown run carries.
 
 ponytail: the twin's clock moves only while the harness waits on it, so the
-aircraft holds still while the model thinks; a real-time clock is the
-upgrade if a measure ever needs the aircraft's flying time.
+aircraft holds still while the model thinks and a twin sortie's time to
+identification and SPL path leave the thinking out; a real-time clock is the
+upgrade.
 """
 
 from __future__ import annotations
