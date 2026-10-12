@@ -67,7 +67,7 @@ def test_the_effort_reaches_no_served_byte(monkeypatch):
 
 
 def test_run_mission_hands_the_word_to_the_reasoner_it_builds(monkeypatch):
-    """THE mission entry owns the Reasoner, so the station's word has to survive that
+    """THE mission entry owns the Reasoner, so the flight mission's word has to survive that
     construction; nothing downstream can put it back."""
     seen: dict = {}
 

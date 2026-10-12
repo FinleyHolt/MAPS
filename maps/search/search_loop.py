@@ -179,7 +179,7 @@ class SearchLoop:
     def node_cells_xy(self, target_fid: str) -> list[tuple[float, float]] | None:
         """The ground this fid stands on, as the centres of its cells in
         world metres: the area a flight to it has to hold before it has
-        arrived (the station's arrival rule). None off the graph or
+        arrived (the flight mission's arrival rule). None off the graph or
         without cells."""
         with self._lock:
             return self._cells_xy_locked(target_fid)

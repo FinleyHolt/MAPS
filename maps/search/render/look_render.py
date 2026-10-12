@@ -256,7 +256,7 @@ def render_candidate_crops(
     """One crop record per request (``views.crop_requests``),
     in order: the window is sized and centred here, then
     ``render_look_from_spec`` renders it. ``imagery`` (``gsd_m`` and
-    ``ortho(window)``) is the run's own captures under a live station; unset,
+    ``ortho(window)``) is the run's own captures in a flight mission; unset,
     the raster is the camera. A failed crop is logged and skipped."""
     from maps.perception.ortho.camera_model import (  # noqa: PLC0415
         ortho_gsd_m,

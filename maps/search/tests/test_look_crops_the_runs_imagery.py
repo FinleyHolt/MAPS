@@ -1,4 +1,4 @@
-"""Under a live station a look crops what the run captured, never the bake."""
+"""In a flight mission a look crops what the run captured, never the bake."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class _Imagery:
                 "x_min": x0, "y_min": y0, "px_per_m": 1.0 / self.gsd_m}
 
 
-def test_a_look_under_a_live_station_is_cut_from_the_runs_imagery_and_says_what_is_unobserved(monkeypatch):
+def test_a_look_in_a_flight_mission_is_cut_from_the_runs_imagery_and_says_what_is_unobserved(monkeypatch):
     pytest.importorskip("cv2")
     from maps.perception.ortho import camera_model
 

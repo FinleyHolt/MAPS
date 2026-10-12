@@ -1272,8 +1272,8 @@ def test_a_looks_marks_reach_the_renderer_on_every_crop_of_a_set():
 
 def test_a_pass_hands_every_stop_the_stops_behind_it():
     """Each item an explore flies carries ``pass_ahead``, the stops the pass still has
-    to fly after it, so the station can post the whole pass to the crew from the
-    first leg."""
+    to fly after it, so the flight mission can post the whole pass to the vehicle
+    from the first leg."""
     _r, _o, flights, _a, _rend = explore_drive([
         [run('explore("prior_7")\n')],
         "done",
