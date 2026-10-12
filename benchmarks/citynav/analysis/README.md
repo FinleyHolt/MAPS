@@ -36,7 +36,7 @@ Every command runs from the repository root.
 | E1 OSR per model | `OSR_pct` per arm | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e1/*` |
 | E1 outcomes per model: reached (OSR), inside (SR 20 m) | `overall OSR` and the `OSRxSR` line | `run_report` | `python -m benchmarks.citynav.analysis.run_report output/e1/<model>` |
 | E2 SR and OSR per arm, CityNav `test_unseen`, 5,311 episodes | `SR_pct`, `OSR_pct`, `n` per arm | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e2/*` |
-| E3 SR per effort rung and Gemma, Cal City reviewed 596 | `SR_pct` (shape criterion), `n` per arm | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e3/*` |
+| E3 SR per effort rung and Gemma, Cal City reviewed 603 | `SR_pct` (shape criterion), `n` per arm | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e3/*` |
 | E3 effort-ladder figure: SR and median NE against effort | `SR_pct`, `NE_med` per arm with a numeric effort | `figures.plot_effort_ladder` over `arm_table` | `python -m figures.plot_effort_ladder output/e3/inkling-small-e*` |
 | E4 SR with one part withheld, per model (OSM prior, `look_for`, `look`, images, MISSION MAP, system turn) | `SR_pct` per arm, labelled `withhold=<part>` | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e1/<model> output/e4/<model>/*` |
 | E4 change in SR against the full harness | paired delta, its interval, flips | `ab_report` | `python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/e4/<model>/<part>` |

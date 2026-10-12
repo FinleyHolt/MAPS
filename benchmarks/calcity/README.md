@@ -48,7 +48,7 @@ defaults to `SEARCH_CALCITY_TILES`.
 
 The reviewed set is derived, not listed: a corpus row is reviewed when its
 first target position lies within 0.2 m of a position `ground_truth.json`
-lists on its own map. It holds 596 episodes.
+lists on its own map. It holds 603 episodes.
 
 ```sh
 mkdir -p output && python -m benchmarks.calcity.data_prep.reviewed > output/reviewed_episodes.txt
