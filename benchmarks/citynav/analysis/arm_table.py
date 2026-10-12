@@ -34,7 +34,6 @@ COLUMNS = (
     ("SR_by_shape_pct", "shape%", "{:>7}"),
     ("SR_by_radius_pct", "radius%", "{:>8}"),
     ("precise_shape_n", "shape_n", "{:>8}"),
-    ("precise_floored_n", "floored", "{:>8}"),
     ("NE_mean", "NE_mean", "{:>8}"),
     ("NE_med", "NE_med", "{:>7}"),
     ("no_metrics", "nometr", "{:>7}"),
@@ -45,7 +44,7 @@ COLUMNS = (
 
 #: Copied straight out of ``eval.aggregate``'s output, never recomputed.
 _AGG_KEYS = ("SR", "SR_pct", "OSR", "OSR_pct", "SR_by_shape", "SR_by_shape_pct", "SR_by_radius",
-             "SR_by_radius_pct", "precise_shape_n", "precise_radius_n", "precise_floored_n")
+             "SR_by_radius_pct", "precise_shape_n", "precise_radius_n")
 _METRIC_KEYS = (*_AGG_KEYS, "SR_n", "NE_mean", "NE_med")
 
 

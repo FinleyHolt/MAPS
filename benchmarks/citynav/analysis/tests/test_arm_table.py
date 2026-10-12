@@ -27,7 +27,6 @@ def _ledger(eid: str, stamp: str, sr: int, criterion: str = "shape",
             "episode_id": eid, "SR": sr, "NE": ne,
             "success_criterion": criterion,
             "precise_target": "shape",
-            "precise_floor_applied": False,
         },
     }
 

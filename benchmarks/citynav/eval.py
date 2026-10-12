@@ -72,69 +72,29 @@ def _as_polygon(polygon: list[tuple[float, float]]):
     return poly
 
 
-# Reaches are reported to the millimetre; a gain under that is solver noise.
-_FLOOR_EPS_M = 1e-3
-
-
-def _inradius_m(poly) -> float:
-    """Radius of the largest circle inside ``poly``: a long thin shape reads
-    as narrow however much area it covers."""
-    from shapely import maximum_inscribed_circle
-
-    return float(maximum_inscribed_circle(poly).length)
-
-
 def score_precise(
     *,
     final_xy: tuple[float, float],
     target_xy: tuple[float, float],
     gt_polygon: list[tuple[float, float]] | None,
     radius_m: float,
-    tolerance_m: float = 0.0,
-    floor_radius_m: float = 0.0,
 ) -> dict:
-    """``SR`` on a shape-criterion bench: did the agent end up on the target's real extent?
+    """``SR`` on a shape-criterion bench: did the agent end up inside the target's real extent?
 
     With a ``gt_polygon`` (the linked object's contour, else the episode's
-    ``target_mask``), success is landing within ``tolerance_m`` of the shape
-    (inside it at 0.0); without one, within a disc of ``radius_m``.
-
-    ``floor_radius_m`` is the tightest target worth asking for: a shape
-    narrower than a circle of that radius is widened until one fits.
+    ``target_mask``), success is the point inside the shape, as drawn;
+    without one, within a disc of ``radius_m``.
     """
     if gt_polygon and len(gt_polygon) >= 3:
         from shapely.geometry import Point
 
-        poly = _as_polygon(gt_polygon)
-        reach, floored = tolerance_m, False
-        if floor_radius_m > 0.0:
-            # _inradius_m is iterative: a sub-millimetre gain is solver noise.
-            widened = floor_radius_m - _inradius_m(poly)
-            if widened > reach + _FLOOR_EPS_M:
-                reach, floored = widened, True
-        distance = float(Point(final_xy).distance(poly))
-        return {
-            "SR": 1 if distance <= reach else 0,
-            "precise_target": "shape",
-            "precise_distance_m": round(distance, 3),
-            "precise_reach_m": round(reach, 3),
-            "precise_floor_applied": floored,
-        }
+        distance = float(Point(final_xy).distance(_as_polygon(gt_polygon)))
+        return {"SR": 1 if distance == 0.0 else 0, "precise_target": "shape",
+                "precise_distance_m": round(distance, 3)}
     distance = math.hypot(final_xy[0] - target_xy[0], final_xy[1] - target_xy[1])
-    return {
-        "SR": 1 if distance <= radius_m else 0,
-        "precise_target": "radius",
-        "precise_distance_m": round(distance, 3),
-        "precise_reach_m": round(radius_m, 3),
-        "precise_floor_applied": False,
-    }
+    return {"SR": 1 if distance <= radius_m else 0, "precise_target": "radius",
+            "precise_distance_m": round(distance, 3)}
 
-
-#: A shape-scored SR's reach: the margin around the target's footprint that
-#: counts as arriving (0.0 is strict containment), and the narrowest target
-#: radius scored (a narrower shape is widened until a circle this wide fits).
-PRECISE_TOLERANCE_M = 0.0
-PRECISE_FLOOR_RADIUS_M = 5.0
 
 #: Every key that is a success verdict or scales with one (SPL multiplies it):
 #: an episode that never flew has all of them zeroed together.
@@ -192,8 +152,6 @@ def score_arrival(
                 target_xy=target_xy,
                 gt_polygon=gt_polygon,
                 radius_m=success_dist_m if radius_m is None else radius_m,
-                tolerance_m=PRECISE_TOLERANCE_M,
-                floor_radius_m=PRECISE_FLOOR_RADIUS_M,
             )
         )
     scores["success_criterion"] = criterion
@@ -227,10 +185,6 @@ def aggregate(per_episode: list[dict]) -> dict:
         out[f"precise_{kind}_n"] = len(vals)
         if vals:
             out[f"SR_by_{kind}"] = round(float(np.mean(vals)), 4)
-    # Shapes too narrow to score as drawn: a high count makes SR a floor-radius number.
-    out["precise_floored_n"] = sum(
-        1 for r in per_episode if r.get("precise_floor_applied")
-    )
     # CityNav reports SR/OSR/SPL as percentages.
     for k in ("SR", "OSR", "spl_pos", "SR_by_shape", "SR_by_radius"):
         if k in out:

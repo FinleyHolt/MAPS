@@ -1,7 +1,7 @@
 """SR: arrival judged against the target's real extent.
 
-Where an episode has an annotated shape, success is landing inside it (or
-within a configured tolerance of its edge); where it has none, it falls back
+Where an episode has an annotated shape, success is landing inside it; where
+it has none, it falls back
 to a disc of the dataset's radius. Synthetic geometry throughout — the
 function is pure, so none of this needs a run.
 """
@@ -31,17 +31,6 @@ def test_just_outside_the_shape_fails_at_zero_tolerance():
     )
     assert out["SR"] == 0
     assert out["precise_distance_m"] == 1.0
-
-
-def test_tolerance_admits_a_margin_around_the_edge():
-    out = score_precise(
-        final_xy=(11.0, 5.0),
-        target_xy=(5.0, 5.0),
-        gt_polygon=BUILDING,
-        radius_m=15.0,
-        tolerance_m=2.0,
-    )
-    assert out["SR"] == 1
 
 
 def test_the_shape_beats_the_radius_when_both_are_available():
@@ -99,89 +88,8 @@ def test_zero_area_polygon_raises_rather_than_scoring_a_miss():
         )
 
 
-def test_floor_widens_a_narrow_shape_instead_of_replacing_it():
-    """A 4 m-wide road intersection is tighter than the agent can aim. The
-    floor buys it 3 m of reach (5 m floor less its 2 m inradius) without
-    moving the target: 3 m past the edge passes, 4 m still misses."""
+def test_a_narrow_shape_is_scored_as_drawn():
+    """A 4 m-wide road intersection gets no widening: 1 m past its edge misses."""
     crossing = [(0.0, 0.0), (12.0, 0.0), (12.0, 4.0), (0.0, 4.0)]
-    near = score_precise(
-        final_xy=(15.0, 2.0),
-        target_xy=(6.0, 2.0),
-        gt_polygon=crossing,
-        radius_m=15.0,
-        floor_radius_m=5.0,
-    )
-    assert near["SR"] == 1
-    assert near["precise_target"] == "shape"  # still scored on the footprint
-    assert near["precise_floor_applied"] is True
-    assert near["precise_reach_m"] == pytest.approx(3.0, abs=0.01)
-
-    far = score_precise(
-        final_xy=(16.0, 2.0),
-        target_xy=(6.0, 2.0),
-        gt_polygon=crossing,
-        radius_m=15.0,
-        floor_radius_m=5.0,
-    )
-    assert far["SR"] == 0
-
-
-def test_floor_measures_width_not_area():
-    """A long thin sliver has plenty of area and is still unaimable. Judging
-    the floor by equivalent radius would let this one through; judging it by
-    the largest circle that fits does not."""
-    sliver = [(0.0, 0.0), (100.0, 0.0), (100.0, 3.0), (0.0, 3.0)]
-    out = score_precise(
-        final_xy=(50.0, 1.5),
-        target_xy=(50.0, 1.5),
-        gt_polygon=sliver,
-        radius_m=15.0,
-        floor_radius_m=5.0,
-    )
-    assert out["precise_floor_applied"] is True
-    assert out["precise_reach_m"] == pytest.approx(3.5, abs=0.01)
-
-
-def test_floor_leaves_a_shape_wider_than_it_alone():
-    """The floor is a floor, not a buffer: a building that already holds a
-    5 m circle scores by strict containment exactly as before."""
-    out = score_precise(
-        final_xy=(11.0, 5.0),
-        target_xy=(5.0, 5.0),
-        gt_polygon=BUILDING,
-        radius_m=15.0,
-        floor_radius_m=5.0,
-    )
-    assert out["SR"] == 0
-    assert out["precise_floor_applied"] is False
-    assert out["precise_reach_m"] == 0.0
-
-
-def test_floor_never_tightens_an_explicit_tolerance():
-    """Tolerance and floor are both slack; the wider one wins rather than
-    the later one overwriting the earlier."""
-    out = score_precise(
-        final_xy=(5.0, 5.0),
-        target_xy=(5.0, 5.0),
-        gt_polygon=BUILDING,
-        radius_m=15.0,
-        tolerance_m=8.0,
-        floor_radius_m=5.0,
-    )
-    assert out["precise_reach_m"] == 8.0
-    assert out["precise_floor_applied"] is False
-
-
-def test_floor_does_not_touch_the_radius_fallback():
-    """An episode with no shape is already scored by a disc; the floor has
-    nothing to widen and must not shrink it either."""
-    out = score_precise(
-        final_xy=(5.0, 17.0),
-        target_xy=(5.0, 5.0),
-        gt_polygon=None,
-        radius_m=15.0,
-        floor_radius_m=5.0,
-    )
-    assert out["SR"] == 1
-    assert out["precise_reach_m"] == 15.0
-    assert out["precise_floor_applied"] is False
+    out = score_precise(final_xy=(13.0, 2.0), target_xy=(6.0, 2.0), gt_polygon=crossing, radius_m=15.0)
+    assert out["SR"] == 0 and out["precise_distance_m"] == 1.0

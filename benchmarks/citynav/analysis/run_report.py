@@ -71,9 +71,6 @@ def print_precise(metrics: list[dict], n: int) -> bool:
         if sub:
             hit = sum(1 for m in sub if m.get("SR"))
             parts.append(f"{label} {_pct(hit, len(sub))}")
-    floored = sum(1 for m in pr_scored if m.get("precise_floor_applied"))
-    if floored:
-        parts.append(f"floor-widened {floored}")
     if parts:
         print("  " + "   ".join(parts))
     return True

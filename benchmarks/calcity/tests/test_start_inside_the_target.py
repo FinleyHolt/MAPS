@@ -5,9 +5,8 @@ nothing was committed, so no success flag may be set, ``SR``/``OSR``
 included. No episode reaches a ring verdict from its start pose.
 
 Under the SHAPE criterion the distance that matters is to the footprint's
-boundary, not its centroid, and two rows of the shipped corpus start inside
-or within the precision floor of their own target. On those, a never-flown
-episode scored SR = 1.
+boundary, not its centroid, and rows of the shipped corpus start inside their
+own target. On those, a never-flown episode scored SR = 1.
 
 Derived from the corpus rather than hardcoded, so a rebuild that loses the
 case says so instead of leaving a test that passes on nothing.
@@ -21,8 +20,6 @@ import pytest
 
 from benchmarks.calcity import paths as calcity_paths
 from benchmarks.citynav import eval as cn_eval
-#: ``score_precise``'s floor, as ``score_arrival`` applies it.
-FLOOR_M = cn_eval.PRECISE_FLOOR_RADIUS_M
 
 
 def _episodes_that_start_on_their_target() -> list[tuple[int, float]]:
@@ -40,8 +37,6 @@ def _episodes_that_start_on_their_target() -> list[tuple[int, float]]:
             target_xy=(float(target[0]), float(target[1])),
             gt_polygon=mask,
             radius_m=float(row.get("success_radius_m") or 20.0),
-            tolerance_m=0.0,
-            floor_radius_m=FLOOR_M,
         )
         if scored["SR"]:
             out.append((i, scored["precise_distance_m"]))
@@ -63,8 +58,7 @@ def start_on_target() -> list[tuple[int, float]]:
 
 def test_the_corpus_still_holds_the_case(start_on_target):
     assert len(start_on_target) >= 1
-    # The tightest one is a containment, not a floor artifact.
-    assert min(d for _, d in start_on_target) == 0.0
+    assert all(d == 0.0 for _, d in start_on_target)
 
 
 def test_those_episodes_score_zero_when_nothing_flew(start_on_target):

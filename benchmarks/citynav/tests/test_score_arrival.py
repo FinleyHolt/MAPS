@@ -78,8 +78,7 @@ def test_a_ring_row_carries_no_shape_key():
     pass the test above and put a second arrival number on every CityNav
     row."""
     row = _score("ring", BOTH_YES)
-    for key in ("precise_target", "precise_distance_m", "precise_reach_m",
-                "precise_floor_applied"):
+    for key in ("precise_target", "precise_distance_m"):
         assert key not in row, key
     assert row["OSR"] in (0, 1)
     assert row["spl_pos"] is not None
@@ -88,18 +87,15 @@ def test_a_ring_row_carries_no_shape_key():
 def test_a_row_carries_each_measure_once():
     assert set(_score("ring", BOTH_YES)) == {"NE", "SR", "OSR", "spl_pos", "success_criterion"}
     assert set(_score("shape", BOTH_YES)) == {
-        "NE", "SR", "success_criterion", "precise_target", "precise_distance_m",
-        "precise_reach_m", "precise_floor_applied"}
+        "NE", "SR", "success_criterion", "precise_target", "precise_distance_m"}
 
 
-def test_a_shape_row_is_scored_at_the_eval_tolerance_and_floor():
-    """The shape mask's reach is the bench's, not a caller's: a 2 m strip is
-    widened to the 5 m floor, so a point 2 m off its edge arrives."""
+def test_a_shape_row_is_the_point_inside_the_mask_with_no_floor():
+    """A 2 m strip is scored as drawn: a point 2 m off its edge misses."""
     strip = [(0.0, 0.0), (100.0, 0.0), (100.0, 2.0), (0.0, 2.0)]
     row = cn_eval.score_arrival(criterion="shape", final_pos_xy=(50.0, 4.0), target_xy=(50.0, 1.0),
                                 gt_polygon=strip)
-    assert (cn_eval.PRECISE_TOLERANCE_M, cn_eval.PRECISE_FLOOR_RADIUS_M) == (0.0, 5.0)
-    assert row["SR"] == 1 and row["precise_floor_applied"] is True and row["precise_reach_m"] == 4.0
+    assert row["SR"] == 0 and row["precise_distance_m"] == 2.0
 
 
 def test_an_unknown_criterion_refuses():
