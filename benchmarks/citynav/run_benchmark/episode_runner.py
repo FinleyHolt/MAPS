@@ -372,12 +372,11 @@ def run_episode(
     scores["referent_bucket"] = classify_referent(episode.description)
     scores["steps_taken"] = steps_taken
     scores["compile_s"] = compile_s
-    if flights:
-        # What the episode spent on the LLM, at row size, read after the
-        # flight from its transcript.
-        flight_dir = os.environ.get("SEARCH_COMPILE_WORKDIR")
-        scores["llm"] = (flight_summary.summarize(Path(flight_dir) / "flight")
-                         if flight_dir else flight_summary.blank())
+    # What the episode spent on the LLM, at row size, read after the mission
+    # from its transcript; a mission that never flew spent turns too.
+    flight_dir = os.environ.get("SEARCH_COMPILE_WORKDIR")
+    scores["llm"] = (flight_summary.summarize(Path(flight_dir) / "flight")
+                     if flight_dir else flight_summary.blank())
     # Commit identity is the last flight's: it may be an "[x, y]" point
     # token (provenance "point"), which no fid prefix classifies.
     last = flights[-1] if flights else {}
