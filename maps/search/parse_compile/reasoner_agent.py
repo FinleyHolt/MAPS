@@ -251,8 +251,8 @@ class Reasoner:
         resp = _chat_completions_raw(self.reasoner_url, self.api_key, **kwargs)
         choice = resp["choices"][0]
         msg = choice.get("message", {})
-        # The reasoning rides the assistant turn back to the next request
-        # (vLLM 0.21 names it ``reasoning``, older serves ``reasoning_content``).
+        # The reasoning rides the assistant turn back to the next request (the
+        # serve names it ``reasoning`` or ``reasoning_content``).
         reasoning_text = msg.get("reasoning") or msg.get("reasoning_content") or ""
         text = msg.get("content") or ""
         finish_reason = str(choice.get("finish_reason") or "")

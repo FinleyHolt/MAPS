@@ -373,7 +373,7 @@ def _stream_chat_completions(
                 content_delta = delta.get("content")
                 if content_delta:
                     aggregated_text.append(content_delta)
-                # vLLM 0.21 names the span ``reasoning``, older serves ``reasoning_content``.
+                # The serve names the span ``reasoning`` or ``reasoning_content``.
                 reasoning_delta = delta.get("reasoning") or delta.get(
                     "reasoning_content"
                 )
