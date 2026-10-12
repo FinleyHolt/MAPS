@@ -27,4 +27,12 @@ def test_a_blank_sam_url_is_refused_by_the_client_and_by_discovery(monkeypatch, 
 
 def test_an_unset_sam_url_is_the_default_replica(monkeypatch):
     monkeypatch.delenv("SAM_SERVER_URL", raising=False)
+    monkeypatch.delenv("SAM_VIDEO_SERVER_URL", raising=False)
     assert dc.sam_endpoints() == [dc.DEFAULT_SAM_SERVER_URL]
+
+
+def test_the_flown_station_s_sam_variable_alone_is_refused_not_defaulted(monkeypatch):
+    monkeypatch.delenv("SAM_SERVER_URL", raising=False)
+    monkeypatch.setenv("SAM_VIDEO_SERVER_URL", "http://sam.example:8772")
+    with pytest.raises(ValueError, match="SAM_VIDEO_SERVER_URL is not read; set SAM_SERVER_URL"):
+        dc.sam_endpoints()

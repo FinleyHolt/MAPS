@@ -62,8 +62,11 @@ _SAM_TRANSIENT_CLIENT_STATUSES = (408, 429)
 def sam_endpoints() -> list[str]:
     """The segmenter's replica base URLs from ``SAM_SERVER_URL`` (a comma
     list spreads calls across replicas), the one resolver the client and
-    endpoint discovery read. Unset is the default replica; set but blank
-    raises ``ValueError``."""
+    endpoint discovery read. Unset is the default replica; set but blank,
+    or unset beside the flown station's ``SAM_VIDEO_SERVER_URL``, raises
+    ``ValueError``."""
+    if "SAM_SERVER_URL" not in os.environ and os.environ.get("SAM_VIDEO_SERVER_URL"):
+        raise ValueError("SAM_VIDEO_SERVER_URL is not read; set SAM_SERVER_URL")
     raw = os.environ.get("SAM_SERVER_URL", DEFAULT_SAM_SERVER_URL)
     eps = [u.strip().rstrip("/") for u in raw.split(",") if u.strip()]
     if not eps:
