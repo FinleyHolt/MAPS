@@ -10,7 +10,6 @@ caller flattens the graph to feature dicts; marks, band and JPEG come from
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 
@@ -21,9 +20,6 @@ log = logging.getLogger(__name__)
 MAP_MAX_PX = 1024
 
 _BG_BGR = (28, 28, 28)          # unrecorded space
-
-# Bump on any change to the pixels a given spec renders to.
-MAP_RENDERER_VERSION = 15
 
 
 def _n_cells(f) -> int:
@@ -482,13 +478,11 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                                   key=lambda kv: -kv[1]["cells"])]
     rec = {
         "jpeg": jp,
-        "sha256": hashlib.sha256(jp).hexdigest(),
         "kind": "map",
         "features_painted": int(sum(e["cells"] for e in counts.values())),
         # a glyph the placement could not fit is counted out
         "priors_chipped": int(n_prior_chips + n_stacked) - len(_undrawn),
         "priors_unchipped": int(n_prior_unchipped),
-        "renderer_version": MAP_RENDERER_VERSION,
         "center_boundary": spec.get("center_boundary"),
         "marks": spec.get("marks") or [],
         "center_fid": center_fid,

@@ -175,8 +175,7 @@ _FLIGHT_PARAMS_SEEN: dict[str, set[str]] = {}
 def _scrub_image_parts(messages: list) -> list:
     """``messages`` with every data-URL image part replaced by
     ``{"type": "image_ref", "media_type", "sha256", "bytes"}``, the sha of the
-    decoded bytes (the look manifest's per-crop ``sha256``). The input is not
-    mutated."""
+    decoded bytes. The input is not mutated."""
     out: list = []
     for msg in messages:
         content = msg.get("content") if isinstance(msg, dict) else None

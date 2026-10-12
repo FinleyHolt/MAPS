@@ -113,10 +113,6 @@ def _isect_y(a, b, y):
     return (a[0] + t * (b[0] - a[0]), y)
 
 
-# Bump on any change to the pixels a given spec renders to.
-LOOK_RENDERER_VERSION: int = 4
-
-
 def up_bearing_deg(up_unit) -> float:
     """Compass bearing (0 = N, clockwise) of a world up-unit."""
     import math  # noqa: PLC0415
@@ -355,9 +351,8 @@ def render_candidate_crops(
 def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | None:
     """Render one crop from its spec (``map_name, center_*, marks, world_xy,
     pose_xy, context_m``, optional ``frame_up``): ``{"jpeg": bytes, ...}``,
-    whose non-jpeg part is the persisted manifest record and re-renders to the
-    same ``sha256``. None (logged) on a malformed spec or a failed render."""
-    import hashlib  # noqa: PLC0415
+    whose non-jpeg part re-renders to the same bytes. None (logged) on a
+    malformed spec or a failed render."""
     import cv2  # noqa: PLC0415 — hard dep of the overlay renderer
     import numpy as np  # noqa: PLC0415
     from maps.perception.ortho.camera_model import raster_source_gsd_m  # noqa: PLC0415
@@ -433,9 +428,6 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         "center_boundary": req.get("center_boundary"),
         "marks": req.get("marks") or [],
         "map_name": map_name,
-        "renderer_version": LOOK_RENDERER_VERSION,
-        "renderer_env": {"cv2": str(cv2.__version__),
-                         "numpy": str(np.__version__)},
         "world_xy": [round(true_x, 2), round(true_y, 2)],
         "pose_xy": [round(pose_x, 2), round(pose_y, 2)],
         "context_m": _ctx,
@@ -551,7 +543,4 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     meta["marks_dropped"] = _dropped_marks
     meta["marks_out_of_view"] = _marks_out_of_view
     meta["marks_unbadged_in_frame"] = _marks_unbadged_in_frame
-    # the delivered bytes' fingerprint (cv2.imencode is deterministic per build)
-    jp = bytes(jp)
-    meta["sha256"] = hashlib.sha256(jp).hexdigest()
-    return {"jpeg": jp, **meta}
+    return {"jpeg": bytes(jp), **meta}

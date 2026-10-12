@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
-
 from maps.search.render.look_render import (
-    LOOK_RENDERER_VERSION,
     render_candidate_crops,
     render_look_from_spec,
 )
@@ -14,12 +11,11 @@ MAP = "unit_test_look_roundtrip_block"
 GROUND_Z = 10.0
 
 # The re-render contract: every key a crop record carries so
-# render_look_from_spec reproduces it (spec + verification), pinned by name.
+# render_look_from_spec reproduces it, pinned by name.
 SPEC_KEYS = (
     "map_name", "center_fid", "center_label", "center_boundary", "marks",
     "world_xy", "pose_xy", "context_m",
 )
-VERIFY_KEYS = ("sha256", "renderer_version", "renderer_env")
 
 
 def _requests() -> list[dict]:
@@ -57,16 +53,13 @@ def test_records_reproduce_their_bytes_and_carry_the_contract(ortho_dir):
     assert len(recs) == 2, recs
 
     for rec in recs:
-        for key in SPEC_KEYS + VERIFY_KEYS:
+        for key in SPEC_KEYS:
             assert key in rec, f"crop record lost its {key!r}"
-        assert rec["renderer_version"] == LOOK_RENDERER_VERSION
-        assert rec["sha256"] == hashlib.sha256(rec["jpeg"]).hexdigest()
 
         spec = {k: v for k, v in rec.items() if k != "jpeg"}
         rerendered = render_look_from_spec(spec, rgbd_dir=ortho_dir)
         assert rerendered is not None
         assert rerendered["jpeg"] == rec["jpeg"]
-        assert rerendered["sha256"] == rec["sha256"]
 
 
 def test_a_malformed_spec_returns_none_not_a_raise(ortho_dir):
@@ -89,10 +82,10 @@ def test_framed_crop_rotates_and_reproduces_bytes(ortho_dir):
     framed = render_candidate_crops(reqs, map_name=MAP, rgbd_dir=ortho_dir)[0]
     assert framed["frame_up"] == [1.0, 0.0]
     assert framed["frame_note"] == "image-up = east"
-    assert framed["sha256"] != base["sha256"]
+    assert framed["jpeg"] != base["jpeg"]
     spec = {k: v for k, v in framed.items() if k != "jpeg"}
     again = render_look_from_spec(spec, rgbd_dir=ortho_dir)
-    assert again["sha256"] == framed["sha256"], "framed re-render diverged"
+    assert again["jpeg"] == framed["jpeg"], "framed re-render diverged"
 
 
 def test_frame_up_angle_sign_lock():

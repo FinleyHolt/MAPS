@@ -99,7 +99,7 @@ def test_detection_carries_an_identity_chip():
     base = render_map_from_spec(
         {"center_xy": [10.0, 10.0], "context_m": 20.0,
          "center_label": "map center"}, [], **_TILE)
-    assert rec["sha256"] != base["sha256"]  # the chip + paint are real ink
+    assert rec["jpeg"] != base["jpeg"]  # the chip + paint are real ink
 
 
 def test_prior_fid_chips_only_where_the_pill_fits():
@@ -181,7 +181,7 @@ def test_render_record_carries_the_contract():
     assert rec is not None
     assert rec["kind"] == "map"
     assert rec["world_window"] == [0.0, 0.0, 20.0, 20.0]
-    assert rec["sha256"] and rec["jpeg"]
+    assert rec["jpeg"]
     assert [e["digit"] for e in rec["legend"]] == [1, 2]
     words = {c["label"]: c["color"] for c in rec["classes"]}
     assert words["residential"] == paint_word("residential", kind="area")
@@ -319,7 +319,7 @@ def test_marks_decide_who_is_chipped_not_footprint_size():
         {**spec, "marks": [{"fid": "prior_33", "xy": [0.7, 18.7]}]},
         feats, **_TILE)
     assert lead["priors_chipped"] == 1
-    assert lead["sha256"] != sel["sha256"]   # real, different ink
+    assert lead["jpeg"] != sel["jpeg"]   # real, different ink
 
 
 def test_a_label_is_never_buried_and_never_stacked():
@@ -391,7 +391,7 @@ def test_cells_as_arrays_render_the_same_bytes_as_cells_as_lists():
     rec_l = render_map_from_spec(spec, as_lists, **_TILE)
     rec_a = render_map_from_spec(spec, as_arrays, **_TILE)
     assert rec_l["jpeg"] == rec_a["jpeg"]
-    assert rec_l["sha256"] == rec_a["sha256"]
+    assert rec_l["jpeg"] == rec_a["jpeg"]
 
 
 def test_a_map_after_a_flight_paints_the_flight_and_a_repeat_paints_the_same():
