@@ -708,15 +708,12 @@ class _Mission:
                 self._programs_seen[_key] = (self.carry.version, self.turn_idx,
                                              a["program"]["ops"])
             self.carry.record(a["program"]["ops"], _raw_sink.get("results") or {})
-            try:
-                for _v in (_raw_sink.get("results") or {}).values():
-                    _rows = _v if isinstance(_v, list) else (
-                        [_v] if isinstance(_v, dict) else [])
-                    for _row in _rows:
-                        if isinstance(_row, dict) and _row.get("fid"):
-                            self.row_latest[str(_row["fid"])] = _row
-            except Exception:  # noqa: BLE001 — evidence plumbing never perturbs the round
-                pass
+            for _v in (_raw_sink.get("results") or {}).values():
+                _rows = _v if isinstance(_v, list) else (
+                    [_v] if isinstance(_v, dict) else [])
+                for _row in _rows:
+                    if isinstance(_row, dict) and _row.get("fid"):
+                        self.row_latest[str(_row["fid"])] = _row
         return out
 
     def _watching_trailer(self) -> list:
