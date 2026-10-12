@@ -107,8 +107,8 @@ def _ensure_sam(device: str) -> _LoadedSam:
     # `SegmentationHead._embed_pixels` runs it on every forward (no
     # `self.training` guard), and with no backward pass it only adds an
     # RNG-state stash and a sync. The pixel decoder has nothing random, so
-    # the output is identical. The class is named exactly so a sam3 version
-    # that renames it fails loudly.
+    # the output is identical. The class is named exactly, so a sam3 version
+    # that renames it says so in a warning.
     try:
         from sam3.model.maskformer_segmentation import SegmentationHead
 
@@ -182,8 +182,8 @@ def _memoize_text_encoder(model: Any) -> None:
     the same few lists over and over, so the same tensors come back every
     time. The tensors are cloned in and out so a downstream in-place write
     never reaches another call's copy. Bounded by ``_TEXT_MEMO_MAX`` and
-    cleared wholesale. The class is named exactly so a sam3 version that
-    renames it fails loudly.
+    cleared wholesale. The class is named exactly, so a sam3 version that
+    renames it says so in a warning.
     """
     try:
         from sam3.model.text_encoder_ve import VETextEncoder
@@ -241,7 +241,9 @@ def _build_datapoint(rgb: np.ndarray, concepts: list[str], dp_counter: list[int]
         InferenceMetadata,
     )
 
-    img_pil = _to_pil(rgb)
+    from PIL import Image
+
+    img_pil = Image.fromarray(rgb)
     dp = Datapoint(find_queries=[], images=[])
     h, w = rgb.shape[:2]
     dp.images = [SAMImage(data=img_pil, objects=[], size=[h, w])]
@@ -272,14 +274,6 @@ def _build_datapoint(rgb: np.ndarray, concepts: list[str], dp_counter: list[int]
     return dp, qids
 
 
-def _to_pil(rgb: np.ndarray):
-    from PIL import Image
-
-    if rgb.dtype != np.uint8:
-        rgb = rgb.astype(np.uint8)
-    return Image.fromarray(rgb)
-
-
 def segment(
     rgb: np.ndarray,
     concepts: list[str],
@@ -288,9 +282,9 @@ def segment(
     min_area_px: int,
     max_per_image: int,
 ) -> list[SamDetection]:
-    """Run SAM 3.1 once on one frame: the backend of ``serving.sam_server``'s
-    ``/segment``. ``pixel_mask`` is the full ``(H, W)`` frame mask and
-    ``pixel_bbox_rcrc`` its inclusive extent."""
+    """Run SAM 3.1 once on one ``uint8`` RGB frame: the backend of
+    ``serving.sam_server``'s ``/segment``. ``pixel_mask`` is the full
+    ``(H, W)`` frame mask and ``pixel_bbox_rcrc`` its inclusive extent."""
     if not concepts:
         return []
     return _segment_via_meta(
@@ -382,9 +376,6 @@ def _forward_chunk(
                 continue
             scores_t = scores_t.detach()
             keep_score_t = scores_t >= SCORE_THRESHOLD
-            n_pass_score = int(keep_score_t.sum().item())
-            if n_pass_score == 0:
-                continue
             sel_idx = _torch.nonzero(keep_score_t, as_tuple=False).flatten()
             sel_scores_t = scores_t.index_select(0, sel_idx)
             order = _torch.argsort(sel_scores_t, descending=True)
