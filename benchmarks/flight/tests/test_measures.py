@@ -5,6 +5,8 @@ from __future__ import annotations
 import csv
 import json
 
+import pytest
+
 from benchmarks.flight import measures as Q
 
 T0 = 1_800_000_000.0
@@ -66,6 +68,10 @@ def test_the_measures_score_the_commit_point_against_the_mask_and_the_track_agai
     assert Q.check(got, master) == []
     one["success"] = False
     assert Q.check(got, master) == [f"('{root.name}', 1) success: False here, 'True' in the master table"]
+    stale = tmp_path / "stale.csv"
+    stale.write_text("environment,sortie,run_no,success_area,success_radius,oracle_success\n")
+    with pytest.raises(SystemExit, match="no success column"):
+        Q.check(got, stale)
     assert Q.main(["--root", str(root), "--truth", str(truth), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["summary"]["sr"] == {"k": 2, "n": 4, "pct": 50.0}
 
