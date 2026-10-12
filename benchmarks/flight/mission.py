@@ -735,7 +735,7 @@ class Mission:
         with self._lock:
             self.ended_by = reply.ended_by
             self.ended_at = time.time()
-            self.turns_used += int(getattr(reply, "turns_used", 0) or 0)
+            self.turns_used += int(reply.turns_used)
             self._turn_diag.clear()
             self.replies += 1
             self.status = STATE_AWAITING
