@@ -29,9 +29,11 @@ def calcity(tmp_path, monkeypatch):
 
     x0, y0 = TARGET[0] - 20, TARGET[1] - 20
     church = Polygon([(x0, y0), (x0 + 40, y0), (x0 + 40, y0 + 40), (x0, y0 + 40)])
+    shed = Polygon([(x0 - 430, y0), (x0 - 400, y0), (x0 - 400, y0 + 30), (x0 - 430, y0 + 30)])
     monkeypatch.setattr(bake_tiles, "load_features_local", lambda bundle, lf: [
         {"layer": "test", "osm_id": 1, "tags": {"amenity": "place_of_worship", "name": "First Church",
-                                                "building": "church"}, "geom": church}])
+                                                "building": "church"}, "geom": church},
+        {"layer": "test", "osm_id": 2, "tags": {"name": "West Shed", "building": "shed"}, "geom": shed}])
     root = tmp_path / "calcity"
     tiles, splits, rgbd = root / "tiles", root / "splits", root / "data" / "rgbd_upstream"
     bake_tiles.bake_block(tmp_path / "bundle", tiles, "calcity")
@@ -220,3 +222,33 @@ def test_a_config_that_withholds_a_part_leaves_no_sortie(calcity, serves, tmp_pa
         twin.main(["--config", str(arm), "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                    "--out", str(out)])
     assert not out.exists()
+
+
+def test_a_retasked_mission_is_measured_to_its_last_report(calcity, serves, tmp_path, monkeypatch):
+    """A tasking after the report flies a second leg and reports again: the
+    measures stop the run at that last report, where its commit and
+    ``elapsed_s`` stand."""
+    from benchmarks.flight import measures, twin
+    from maps.llm import http
+
+    codes = iter(["go_to(prior_0)\n", None, "go_to(prior_1)\n", None])
+
+    def reply(url, headers, body, *, timeout, cancel_event):
+        code = next(codes, None)
+        if code is None:
+            message = {"content": "Reported.", "reasoning_content": "", "tool_calls": []}
+        else:
+            call = {"id": "c1", "type": "function", "function": {"name": "run", "arguments": json.dumps({"code": code})}}
+            message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
+        return {"choices": [{"finish_reason": "stop", "message": message}]}
+
+    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    out = tmp_path / "out"
+    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
+                      "--then", "Check the west side too.", "--out", str(out)]) == 0
+    sortie = next(out.iterdir())
+    (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
+    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]),
+                                               tiles_dir=calcity.tiles)
+    assert row["flights_flown"] == 2
+    assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
