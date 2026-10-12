@@ -187,8 +187,6 @@ def test_the_transcript_says_what_json_says():
             fly=lambda i: {"error": "unused"},
             declare_concepts=lambda i: {"declared": []}),
     )
-    stages = {t.get("stage") for t in tr}
-    assert stages == {"mission"}, stages
     kinds = {t.get("kind") for t in tr}
     assert "run" in kinds, kinds
     assert not (kinds & {"program", "say", "act", "view"}), kinds

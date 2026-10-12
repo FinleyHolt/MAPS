@@ -76,7 +76,6 @@ def test_a_live_mission_outlasts_the_bench_budget_and_resumes(monkeypatch):
     assert max(stop.waits) == 30.0
     faults = [r for r in rows if r["kind"] == "transient_error"]
     assert [r["attempt"] for r in faults] == list(range(1, 17))
-    assert len({r["since"] for r in faults}) == 1
 
 
 def test_stop_is_the_one_way_out_of_the_wait(monkeypatch):

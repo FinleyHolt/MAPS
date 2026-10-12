@@ -1731,7 +1731,6 @@ def advance_reasoner_one_round(
         return out
 
     transient_failures = 0
-    outage_since: float | None = None
     # The bench's budget. A LIVE mission (the reasoner carries a
     # cancel_event) has none: the arm going down mid-flight is a link to
     # bring back, not a verdict on the run, so the loop holds its turn
@@ -1742,7 +1741,6 @@ def advance_reasoner_one_round(
     # mission's model-owned ending is the plain reply; everything else here
     # is a harness liveness bound, named truthfully in ``ended_by``.
     mission_flights = 0
-    _tr_stage = "mission"
     mission_sam: list[dict] = []
 
     # THE SET IN SCOPE (the last non-empty result, or what the last flight
@@ -2866,7 +2864,7 @@ def advance_reasoner_one_round(
     def _mission_end(ended_by: str, reply_text: str = "",
                      turns: int = 0) -> MissionReply:
         if transcript is not None:
-            transcript.append({"stage": "mission", "kind": "mission_end",
+            transcript.append({"kind": "mission_end",
                                "ended_by": ended_by, "turns": int(turns)})
         return MissionReply(
             ended_by=ended_by, reply_text=reply_text, turns_used=int(turns),
@@ -2937,13 +2935,11 @@ def advance_reasoner_one_round(
                     rid_tag, _summarise_exc(exc))
                 if transcript is not None:
                     transcript.append({
-                        "stage": _tr_stage, "kind": "oversize_rejection",
+                        "kind": "oversize_rejection",
                         "error": _summarise_exc(exc),
                     })
                 return _mission_end("oversize_rejection", turns=turn_idx + 1)
             transient_failures += 1
-            if outage_since is None:
-                outage_since = time.time()
             cancel = getattr(reasoner, "cancel_event", None)
             log.warning(
                 "%s stop_round transient LLM error %d%s: %s",
@@ -2954,9 +2950,8 @@ def advance_reasoner_one_round(
             )
             if transcript is not None:
                 transcript.append({
-                    "stage": _tr_stage, "kind": "transient_error",
+                    "kind": "transient_error",
                     "attempt": transient_failures, "error": _summarise_exc(exc),
-                    "since": outage_since,
                 })
             if cancel is None:
                 if transient_failures >= MAX_ROUND_TRANSIENT:
@@ -2968,7 +2963,6 @@ def advance_reasoner_one_round(
                 raise CallCanceled("stopped while waiting for the reasoner")
             continue
         transient_failures = 0
-        outage_since = None
 
         if r["kind"] == "text":
             content = str(r.get("content") or "")
@@ -2980,8 +2974,7 @@ def advance_reasoner_one_round(
                 log.info("%s MALFORMED_ENVELOPE at turn %d -> repair",
                          rid_tag, turn_idx)
                 if transcript is not None:
-                    transcript.append({"stage": _tr_stage,
-                                       "kind": "malformed_envelope",
+                    transcript.append({"kind": "malformed_envelope",
                                        "turn_idx": turn_idx})
                 reasoner.append_repair(MALFORMED_ENVELOPE_NUDGE)
                 continue
@@ -2994,8 +2987,7 @@ def advance_reasoner_one_round(
                 no_call_turns += 1
                 no_call_streak += 1
                 if transcript is not None:
-                    transcript.append({"stage": _tr_stage,
-                                       "kind": "empty_turn",
+                    transcript.append({"kind": "empty_turn",
                                        "turn_idx": turn_idx,
                                        "streak": no_call_streak})
                 if no_call_streak < 2:
@@ -3013,8 +3005,7 @@ def advance_reasoner_one_round(
                 no_call_turns += 1
                 no_call_streak += 1
                 if transcript is not None:
-                    transcript.append({"stage": _tr_stage,
-                                       "kind": "code_shaped_reply",
+                    transcript.append({"kind": "code_shaped_reply",
                                        "turn_idx": turn_idx,
                                        "streak": no_call_streak})
                 if no_call_streak < 2:
@@ -3037,8 +3028,7 @@ def advance_reasoner_one_round(
             if no_call_streak == 0 and mission_flights == 0:
                 no_flight_streak += 1
                 if transcript is not None:
-                    transcript.append({"stage": _tr_stage,
-                                       "kind": "no_flight_reply",
+                    transcript.append({"kind": "no_flight_reply",
                                        "turn_idx": turn_idx,
                                        "streak": no_flight_streak})
                 if no_flight_streak < NO_FLIGHT_ABSTAIN_STREAK:
@@ -3077,7 +3067,7 @@ def advance_reasoner_one_round(
                 reasoner.append_tool_result(cid, "run", out)
                 if transcript is not None:
                     transcript.append({
-                        "stage": _tr_stage, "kind": "run",
+                        "kind": "run",
                         "turn_idx": turn_idx,
                         # The model's own reasoning-channel text, ahead of
                         # the code it decided on.
