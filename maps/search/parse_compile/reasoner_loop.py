@@ -496,8 +496,7 @@ class _Mission:
         self._ns_rows.clear()
         for _key in ("cands", "anchors"):
             for _r in self.ns.get(_key) or []:
-                if isinstance(_r, dict) and _r.get("fid"):
-                    self._ns_rows.setdefault(str(_r["fid"]), _r)
+                self._ns_rows.setdefault(str(_r["fid"]), _r)
 
     def _resolve_stage_point(self, tok) -> list[float] | None:
         """A stage at/facing slot -> [x, y]: a live surface fid, a flown
@@ -604,10 +603,8 @@ class _Mission:
 
     def _surface_census_counts(self) -> tuple[int, int, list[str]]:
         """Live counts: detections, priors, computed columns."""
-        c_n = sum(1 for r in (self.ns.get("cands") or [])
-                  if isinstance(r, dict) and r.get("fid"))
-        a_n = sum(1 for r in (self.ns.get("anchors") or [])
-                  if isinstance(r, dict) and r.get("fid"))
+        c_n = len(self.ns.get("cands") or [])
+        a_n = len(self.ns.get("anchors") or [])
         cols = sorted({k for _row in self.row_latest.values()
                        if isinstance(_row, dict)
                        for k, _v in _row.items()
@@ -707,8 +704,7 @@ class _Mission:
         """The armed watchlist with each class's live detection count."""
         counts: dict[str, int] = {}
         for _r in self.ns.get("cands") or []:
-            if isinstance(_r, dict) \
-                    and str(_r.get("fid") or "").startswith("detected_"):
+            if str(_r["fid"]).startswith("detected_"):
                 _c = str(_r.get("class") or "?")
                 counts[_c] = counts.get(_c, 0) + 1
         return [f"{c['class']} ({counts.get(c['class'], 0)} detected)"
