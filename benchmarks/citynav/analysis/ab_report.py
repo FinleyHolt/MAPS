@@ -186,7 +186,7 @@ def main() -> None:
     ap.add_argument("run_b", help="treatment run root")
     ap.add_argument("--label", default="A_vs_B")
     ap.add_argument("--min-overlap-frac", type=float, default=0.8,
-                    help="refuse if shared/min(n_a,n_b) is below this (coord-root/seed bug)")
+                    help="refuse if shared/min(n_a,n_b) is below this (a seed or limit mismatch)")
     ap.add_argument("--allow-low-overlap", action="store_true")
     ap.add_argument("--allow-provenance-mismatch", action="store_true",
                     help="permit comparing runs with different code/config/model (NOT a valid A/B)")
@@ -226,7 +226,7 @@ def main() -> None:
     if len(shared) < args.min_overlap_frac * min_n and not args.allow_low_overlap:
         raise SystemExit(
             f"low paired overlap shared={len(shared)} / min(n)={min_n} "
-            f"(< {args.min_overlap_frac:.0%}) -- coord-root theft or seed/limit mismatch "
+            f"(< {args.min_overlap_frac:.0%}) -- a seed or limit mismatch "
             "suspected; pass --allow-low-overlap to override"
         )
 
