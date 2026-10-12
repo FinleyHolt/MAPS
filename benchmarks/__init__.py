@@ -38,8 +38,6 @@ def repo_provenance(
     *,
     config_path: str | pathlib.Path | None = None,
     split: str | None = None,
-    seed: int | None = None,
-    limit: int | None = None,
     search_flags: dict | None = None,
     served_model: str | None = None,
     served_build: str | None = None,
@@ -54,8 +52,6 @@ def repo_provenance(
     # One served alias can name two quantizations; the tokenizer (served_build) tells them apart.
     for key, value in (
         ("split", split),
-        ("seed", seed),
-        ("limit", limit),
         ("search_env_flags", None if search_flags is None else dict(search_flags)),
         ("served_model", served_model),
         ("served_build", served_build),

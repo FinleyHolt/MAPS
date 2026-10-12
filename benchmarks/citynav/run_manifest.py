@@ -164,8 +164,6 @@ def build_manifest(
     prov = repo_provenance(
         config_path=str(config_path),
         split=split,
-        seed=sample_seed,
-        limit=limit,
         search_flags=arm,
         served_model=endpoints["model_id"],
         served_build=endpoints["tokenizer"],

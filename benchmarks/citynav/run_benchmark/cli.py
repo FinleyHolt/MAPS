@@ -149,12 +149,8 @@ def main() -> int:
     cfg = load_config(args.config)
     export_withhold(cfg)
     # Row provenance reads the run facts only this process's argv knows:
-    # the config the runner actually loaded, the split and the row cap.
-    set_run_context(
-        config_path=cfg.source_path,
-        split=args.split,
-        limit=args.limit if (args.limit and args.limit > 0) else None,
-    )
+    # the config the runner actually loaded and the split.
+    set_run_context(config_path=cfg.source_path, split=args.split)
     # Endpoint discovery — ONE probe per process, before any inference or
     # perception call. The served model id, context window (-> compaction
     # budget + max_tokens pin) and service URLs are DISCOVERED from the live

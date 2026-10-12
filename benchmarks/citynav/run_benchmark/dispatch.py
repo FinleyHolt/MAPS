@@ -25,13 +25,12 @@ _RUN_PROVENANCE: dict | None = None
 _RUN_CONTEXT: dict = {}
 
 
-def set_run_context(*, config_path: str | None, split: str, limit: int | None) -> None:
+def set_run_context(*, config_path: str | None, split: str) -> None:
     """Run facts only the CLI knows (its parsed argv): the config the runner
-    actually loaded, the split and the row cap. Recorded once per process so
-    row provenance reads the resolved run, never ambient env."""
+    actually loaded and the split. Recorded once per process so row
+    provenance reads the resolved run, never ambient env."""
     _RUN_CONTEXT["config_path"] = config_path
     _RUN_CONTEXT["split"] = split
-    _RUN_CONTEXT["limit"] = limit
 
 
 def _cached_run_provenance(search_flags: dict) -> dict:
@@ -53,7 +52,6 @@ def _cached_run_provenance(search_flags: dict) -> dict:
         _RUN_PROVENANCE = repo_provenance(
             config_path=_RUN_CONTEXT.get("config_path"),
             split=_RUN_CONTEXT.get("split"),
-            limit=_RUN_CONTEXT.get("limit"),
             search_flags=search_flags,
             served_model=model,
             served_build=build,
