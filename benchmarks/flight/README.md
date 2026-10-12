@@ -111,7 +111,7 @@ distributed.
 ## Closed-loop measures
 
 ```sh
-python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <tasking split JSON> --tiles <flown bake> [--json]
+python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON> --tiles <flown bake> [--json]
 ```
 
 Per run: SR two ways (the committed area contains the target centroid; the

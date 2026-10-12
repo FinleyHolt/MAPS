@@ -135,3 +135,20 @@ def test_the_tasking_set_scores_a_run_only_for_the_description_it_was_flown_on(t
     truth = Q.Truth([split])
     assert truth.ring({}, {"episode_id": "calcity::0#0", "description": "the Rite Aid"})[1] == "tasking set"
     assert truth.ring({}, {"episode_id": "calcity::0#0", "description": "the school"}) == (None, None)
+
+
+def test_the_tasking_set_finds_a_run_by_its_description_wherever_the_split_lists_it(tmp_path):
+    """A flown episode id is the run's position in that sortie's tasking, not
+    in the tasking file, so the description is the join; a description two
+    entries give different footprints scores nothing."""
+    def entry(desc, x):
+        ring = [[x, 0.0], [x + 10, 0.0], [x + 10, 10.0], [x, 10.0]]
+        return {"area": "calcity", "descriptions": [desc], "ann_ids": [0], "target_positions": [[x, 5.0, 0.0]],
+                "trajectory": [[0.0, 0.0, 125.0]], "target_mask": ring}
+    split = tmp_path / "split.json"
+    split.write_text(json.dumps([entry("the Rite Aid", 0.0), entry("the school", 500.0),
+                                 entry("the courts", 900.0), entry("the courts", 950.0)]))
+    truth = Q.Truth([split])
+    ring, source = truth.ring({}, {"episode_id": "calcity::0#0", "description": "the school"})
+    assert source == "tasking set" and ring[0] == [500.0, 0.0]
+    assert truth.ring({}, {"episode_id": "calcity::2#2", "description": "the courts"}) == (None, None)

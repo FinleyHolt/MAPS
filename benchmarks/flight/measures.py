@@ -113,12 +113,14 @@ def centroid(ring: list[list[float]]) -> tuple[float, float]:
 
 class Truth:
     """The analyst's entries by sortie name (a directory of ``<sortie>.json``)
-    and the tasking set's footprints by episode id and description (split
-    JSONs: a flown episode id names a different target in another sortie)."""
+    and the tasking set's footprints by description (split JSONs). A flown
+    episode id is the run's place in its sortie's tasking, not in the file, so
+    the description is the join; one two entries give different footprints
+    joins nothing."""
 
     def __init__(self, paths: list[Path]) -> None:
         self.dirs = [p for p in paths if p.is_dir()]
-        self.masks: dict[tuple[str, str], list[list[float]]] = {}
+        self.masks: dict[str, list[list[float]] | None] = {}
         for p in paths:
             if p.is_file():
                 from benchmarks.citynav.adapter import parse_episode  # noqa: PLC0415
@@ -126,8 +128,10 @@ class Truth:
                 for i, r in enumerate(json.loads(p.read_text())):
                     ep = parse_episode(r, row_index=i)
                     if ep.target_mask:
-                        self.masks[(ep.episode_id, ep.description)] = [[float(x), float(y)]
-                                                                       for x, y in ep.target_mask]
+                        ring = [[float(x), float(y)] for x, y in ep.target_mask]
+                        seen = self.masks.setdefault(ep.description, ring)
+                        if seen is not None and seen != ring:
+                            self.masks[ep.description] = None
 
     def entries(self, sortie: str) -> dict[str, dict[str, Any]]:
         for d in self.dirs:
@@ -139,7 +143,7 @@ class Truth:
         ring = entry.get("target_mask") or []
         if len(ring) >= 3:
             return [[float(p[0]), float(p[1])] for p in ring], "hand-drawn"
-        mask = self.masks.get((str(row.get("episode_id") or ""), str(row.get("description") or "")))
+        mask = self.masks.get(str(row.get("description") or ""))
         return (mask, "tasking set") if mask else (None, None)
 
 

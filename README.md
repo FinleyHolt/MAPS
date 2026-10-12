@@ -99,13 +99,17 @@ The closed-loop measures are read from the flown sorties' own records by
 
 | Measure | Value | Definition |
 |---|---|---|
-| SR, 20 m radius | 40/79 | The commit lies within 20 m of the target centroid. |
-| SR, committed area | 33/79 | The committed feature's outline contains the target centroid. |
-| OSR | 70/79 | The aircraft's path (GNSS track, else keyframe poses) came within one camera footprint width of the target centroid. |
+| SR, 20 m radius | 40/80 | The commit lies within 20 m of the target centroid. |
+| SR, committed area | 33/80 | The committed feature's outline contains the target centroid. |
+| OSR | 70/80 | The aircraft's path (GNSS track, else keyframe poses) came within one camera footprint width of the target centroid. |
 
 ```sh
-python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <tasking split JSON> --tiles <flown bake>
+python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON> --tiles <flown bake>
 ```
+
+The tasking JSON is the flight week's own tasking set (it scores a run with no
+hand-drawn mask, matched by the run's description); the released Cal City split
+is a different set of episodes.
 
 `--tiles` (default `SEARCH_CALCITY_TILES`) is the bake whose
 `calcity_features.json` holds the map features a run commits to; a run that
