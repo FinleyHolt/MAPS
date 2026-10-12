@@ -1222,8 +1222,9 @@ class MissionPython:
                            color=color)
         self._analyze(p, ref)
         self._near_miss_note(ref, query)
-        self._labels[ref] = f"find({query!r})"
-        return Rows(ref, self, label=self._labels[ref])
+        if q:
+            self._labels[ref] = f"find({query!r})"
+        return Rows(ref, self, label=f"find({query!r})")
 
     # find("pool", nearest=<street>) re-sorts a global name-match, so pools
     # 2.5 km away can read like "the pools near the street"; this note says
@@ -1656,16 +1657,20 @@ class MissionPython:
             # envelope folds to its hint under the model's name for it.
             keys = list(results)
             answer = keys[-1] if keys else None
+            _a = results.get(answer)
+            said = set(str(_a.get("hint") or "").splitlines()
+                       if isinstance(_a, dict) else ())
             folded = []
             for k in keys[:-1]:
                 if k in self._block_shown:
                     continue
                 env = results.pop(k)
-                if isinstance(env, dict) and env.get("hint"):
-                    # Under a name the model can read, else unprefixed.
+                hint = env.get("hint") if isinstance(env, dict) else None
+                # Under a name the model can read, else unprefixed; a hint
+                # the answer already says in full is dropped whole.
+                if hint and not set(hint.splitlines()) <= said:
                     name = mine.get(k) or self._labels.get(k)
-                    folded.append(f"{name}: {env['hint']}" if name
-                                  else env["hint"])
+                    folded.append(f"{name}: {hint}" if name else hint)
             if folded and isinstance(results.get(answer), dict):
                 a = dict(results[answer])
                 a["hint"] = "\n".join(

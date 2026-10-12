@@ -447,3 +447,24 @@ def test_a_folded_result_rides_under_a_name_the_model_can_read():
     hint = tool_results(fr)[0]["result"]["results"]["b"]["hint"]
     assert "find('zeppelin'): find matched nothing" in hint, hint
     assert not re.search(r"(?m)^r\d+: ", hint), hint
+
+
+def test_a_keyword_only_find_serves_its_hint_once_and_never_as_find_of_nothing():
+    from maps.search.tests.fakes import drive, run, tool_results
+
+    _reply, fr, _f, _d = drive([[run('find(near="prior_1", dwithin=60)\n')], "done"])
+    (env,) = tool_results(fr)[0]["result"]["results"].values()
+    lines = env["hint"].splitlines()
+    assert len(lines) == len(set(lines)), lines
+    assert "find('')" not in env["hint"], env["hint"]
+
+
+def test_a_folded_hint_the_answer_says_only_in_part_folds_whole():
+    from maps.search.tests.fakes import drive, run, tool_results
+
+    _reply, fr, _f, _d = drive([[run(
+        'a = find("zeppelin").filter(near="prior_1", dwithin=10)\n'
+        'b = find("car").filter(near="prior_1", dwithin=1)\n')], "done"])
+    hint = tool_results(fr)[0]["result"]["results"]["b"]["hint"]
+    assert "\na: this op returned NO items: nothing met its condition.\n" in hint, hint
+
