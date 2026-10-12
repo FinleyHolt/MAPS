@@ -7,7 +7,6 @@ every tag rides, and a geometry kind stays what OSM said it was.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 

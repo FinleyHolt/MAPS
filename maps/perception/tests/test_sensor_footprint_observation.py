@@ -10,7 +10,6 @@ pin the geometry, the replay identity, and the sensorless path's byte-parity.
 
 from __future__ import annotations
 
-import math
 
 import numpy as np
 import pytest

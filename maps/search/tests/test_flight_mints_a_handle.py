@@ -75,10 +75,6 @@ def test_the_minted_handle_gets_a_crop_per_row(_n=4):
     assert crop["delivered"] == crop["looked"] >= 1, crop
     assert "badged" not in crop, crop      # per-row crops, no frame badges
     assert crop["delivered"] == _n, crop
-    handle = _flown(results[0])["new_rows"].split(" ")[0]
-    # the per-row form has no frame to count badges in; the served
-    # fact is how many crops came back.
-    assert crop["delivered"] == _n, crop
 
 
 def test_a_flight_that_adds_nothing_mints_nothing():

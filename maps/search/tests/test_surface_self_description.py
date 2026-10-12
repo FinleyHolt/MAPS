@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 
-import pytest
 
 from maps.search.analyze_scene.geom_program import (
-    ProgramError,
     run_program,
 )
 
