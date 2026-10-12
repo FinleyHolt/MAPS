@@ -470,8 +470,6 @@ class Mission:
     def _held_now(self, h: Hydrated, stops: list) -> list[bool]:
         """Which of a pass's stops the recording holds already, off one index read (``MissionSpec.held_now``)."""
         out = [False] * len(stops)
-        if not stops:
-            return out
         areas, idx = [], []
         for i, (token, xy) in enumerate(stops):
             if xy is None:
