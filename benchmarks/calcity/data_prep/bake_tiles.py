@@ -35,7 +35,6 @@ def _write_meta(map_name: str, tiles_dir: Path) -> Path:
     width = round(frame.width_m / CELL_SIZE_M)
     height = round(frame.height_m / CELL_SIZE_M)
     payload = {
-        "block": map_name,
         "grid_shape": [height, width],
         "cell_size_m": CELL_SIZE_M,
         "coordinate_frame": {
@@ -53,8 +52,6 @@ def _write_meta(map_name: str, tiles_dir: Path) -> Path:
             "crs_utm_epsg": int(frame.crs_utm.to_epsg()),
             "origin_e": round(frame.origin_e, 4),
             "origin_n": round(frame.origin_n, 4),
-            "runtime_transform": "x=easting-origin_e; y=northing-origin_n",
-            "aoi_bbox_wgs84": list(AOI_BBOX),
         },
     }
     tiles_dir.mkdir(parents=True, exist_ok=True)

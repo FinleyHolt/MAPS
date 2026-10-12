@@ -18,8 +18,6 @@ CALCITY_GEOREF = {
     "crs_utm_epsg": 32611,
     "origin_e": 421234.5678,
     "origin_n": 3885432.1098,
-    "runtime_transform": "x=easting-origin_e; y=northing-origin_n",
-    "aoi_bbox_wgs84": [-118.010, 35.0988, -117.9385, 35.155],
 }
 
 
