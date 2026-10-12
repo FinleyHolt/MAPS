@@ -645,10 +645,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--max-wall-s",
         type=int,
         default=0,
-        help="continuous-run wall budget (default 0 = run until the "
-        "selection / --limit run-count budget is exhausted). >0: stop "
-        "claiming new episodes after this many seconds; in-flight "
-        "episodes finish and results are retained.",
+        help="wall budget in seconds (default 0 = none): past it no new "
+        "episode is claimed; in-flight attempts finish and their rows land",
     )
     p.add_argument(
         "--max-infra-attempts",
@@ -661,8 +659,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--limit",
         type=int,
         default=0,
-        help="cap episodes AFTER the seeded shuffle (0 = full split; "
-        "LIMIT=N + a fixed --sample-seed is the A/B subset selector)",
+        help="episodes kept after the seeded shuffle (default 0 = all); with "
+        "one --sample-seed, the same N episodes on every run",
     )
     p.add_argument(
         "--sample-seed",
