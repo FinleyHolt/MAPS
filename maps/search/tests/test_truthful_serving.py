@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from maps.search.analyze_scene import text_match as T
 from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
@@ -417,3 +419,31 @@ def test_dedup_note_is_a_reference_not_a_payload():
     assert "no new information since turn 3" in note
     assert "not re-rendered" in note
     assert "{args}" not in _DEDUP_NOTE and "arrived" not in note
+
+
+def test_a_calls_own_steps_ride_its_answer_unprefixed_and_once():
+    from maps.search.analyze_scene.geom_program import Result, compact_results
+
+    hint = compact_results({"r3": Result(kind="miss"), "r4": Result(kind="miss")},
+                           answer_ref="r4")["r4"]["hint"]
+    assert "r3" not in hint, hint
+    assert hint.count("this op returned NO items") == 1, hint
+
+
+def test_a_map_names_the_set_it_badges_as_the_model_does():
+    from maps.search.tests.fakes import map_mission
+
+    res, _vision = map_mission(['a = find("building")', "show_map(around=prior_7)",
+                                'find("building")\nshow_map(around=prior_7)'])
+    assert res[1]["map"]["badged_from"] == "a", res[1]
+    assert res[2]["map"]["badged_from"] == "find('building')", res[2]
+
+
+def test_a_folded_result_rides_under_a_name_the_model_can_read():
+    from maps.search.tests.fakes import drive, run, tool_results
+
+    _reply, fr, _f, _d = drive([[run('n = len(find("zeppelin"))\nb = find("car")\n')],
+                                "done"])
+    hint = tool_results(fr)[0]["result"]["results"]["b"]["hint"]
+    assert "find('zeppelin'): find matched nothing" in hint, hint
+    assert not re.search(r"(?m)^r\d+: ", hint), hint

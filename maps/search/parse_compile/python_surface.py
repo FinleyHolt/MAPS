@@ -972,6 +972,7 @@ class MissionPython:
         # Model spelling for every ref it was shown rows under, so the
         # served envelope is keyed by the model's own name.
         self._shown: dict = {}
+        self._labels: dict = {}         # ref -> the call that made it (find)
         self._picked: dict = {}         # fids the model's Row names hold
         self._unbound: dict = {}        # name -> why this mission removed it
         self._get_noted: set = set()    # .get near-miss keys noted, per block
@@ -1018,6 +1019,15 @@ class MissionPython:
             if v is obj and not k.startswith("__"):
                 return k
         return getattr(obj, "label", "") or None
+
+    def ref_name(self, ref: str) -> str | None:
+        """The model's name for a whole result: a bound name, else what it
+        was shown under or the call that made it; None when it has none."""
+        for k, v in self.ns.items():
+            if isinstance(v, Rows) and not v.spec and v.ref == ref \
+                    and not k.startswith("__"):
+                return k
+        return self._shown.get(ref) or self._labels.get(ref)
 
     def _held(self, name: str):
         """What a bound name holds, as an argument: a whole result, a row,
@@ -1212,7 +1222,8 @@ class MissionPython:
                            color=color)
         self._analyze(p, ref)
         self._near_miss_note(ref, query)
-        return Rows(ref, self, label=f"find({query!r})")
+        self._labels[ref] = f"find({query!r})"
+        return Rows(ref, self, label=self._labels[ref])
 
     # find("pool", nearest=<street>) re-sorts a global name-match, so pools
     # 2.5 km away can read like "the pools near the street"; this note says
@@ -1310,7 +1321,7 @@ class MissionPython:
         # with a name that would claim to be the whole set.
         return Rows(self._analyze(
             p, p.window(x.ref, f"[{lo}:{lo + _BROAD_HEAD_ROWS}]"),
-            shown=f"more_of({name})", page=(x.ref, lo)), self)
+            shown=f"more_of({name})", page=(x.ref, lo, name)), self)
 
     # -- measuring ---------------------------------------------------------
 
@@ -1654,7 +1665,10 @@ class MissionPython:
                     continue
                 env = results.pop(k)
                 if isinstance(env, dict) and env.get("hint"):
-                    folded.append(f"{mine.get(k, k)}: {env['hint']}")
+                    # Under a name the model can read, else unprefixed.
+                    name = mine.get(k) or self._labels.get(k)
+                    folded.append(f"{name}: {env['hint']}" if name
+                                  else env["hint"])
             if folded and isinstance(results.get(answer), dict):
                 a = dict(results[answer])
                 a["hint"] = "\n".join(

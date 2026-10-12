@@ -1168,11 +1168,12 @@ class _Mission:
 
     def _analyze(self, ops: list, rn_end: int, answer, page) -> dict:
         """Run one compiled program; ``answer`` names the ref whose envelope
-        is served, ``page`` the ``(ref, start)`` a more_of window pages."""
+        is served, ``page`` the ``(ref, start, the model's name for it)`` a
+        more_of window pages."""
         if page:
             # Paging a handle with nothing left to page is refused here.
-            _h, _lo = page
-            _held = len(self.carry.read(_h) or [])
+            _ref, _lo, _h = page
+            _held = len(self.carry.read(_ref) or [])
             if _held and (_held <= _BROAD_DUMP_SOFT_ROWS or _lo >= _held):
                 return self._plan_err({}, (
                     f"all {_held} row(s) of {_h} are already served -- there "
@@ -1311,11 +1312,13 @@ class _Mission:
         _mfids = [str(r["fid"]) for r in _mrows[:_MAP_MAX_MARKS]]
         mp = self._map_of(around, mark_fids=_mfids)
         if _mfids:
-            mp["badged_from"] = _h
+            # The set under the model's own name for it.
+            _name = self._mission_py.ref_name(_h) if self._mission_py else None
+            mp["badged_from"] = _name or "the set in scope"
             if len(_mrows) > len(_mfids):
                 mp.setdefault("ref_notes", []).append(
-                    f"{len(_mrows)} rows in {_h}; this map badges the "
-                    f"first {len(_mfids)}")
+                    f"{len(_mrows)} rows in {_name or 'the set in scope'}; "
+                    f"this map badges the first {len(_mfids)}")
         if mp.get("error") and not mp.get("delivered"):
             return self._plan_err({"map": mp}, str(mp["error"]))
         return {"map": mp}
@@ -1352,7 +1355,7 @@ class _Mission:
                            else "") + "; ".join(self._call["notes"])
         self._err_sig, self._err_n = None, 0
         if self._call.get("page"):
-            self._widened.update([self._call["page"]])
+            self._widened.update([self._call["page"][:2]])
         # The set in scope: the call's non-empty answer, or what its last
         # flight added.
         if self._call.get("answer") and self._call.get("rows"):

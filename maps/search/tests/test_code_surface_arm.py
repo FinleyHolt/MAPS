@@ -741,30 +741,32 @@ def test_more_of_pages_a_long_result_and_stops_at_the_end():
     wide = [{"fid": f"car_{i:03d}", "xy": [float(i), 0.0], "class": "car",
              "search_text": "car"} for i in range(3 * H)]
     reply, fr, _f, _d = drive([
-        [run('r1 = find("car")\n')],
-        [run("more_of(r1)\n")],
-        [run("more_of(r1)\n")],
-        [run("more_of(r1)\n")],
+        [run('cars = find("car")\n')],
+        [run("more_of(cars)\n")],
+        [run("more_of(cars)\n")],
+        [run("more_of(cars)\n")],
         "done",
     ], cands=wide)
     out = tool_results(fr)
     # The truncated head names the call that pages it.
     assert "more_of(<rN>) serves the next" in json.dumps(out[0]), out[0]
-    served = [out[0]["result"]["results"]["r1"]["fids"]]
+    served = [out[0]["result"]["results"]["cars"]["fids"]]
     for r in (out[1], out[2]):
         assert r.get("error") is None, r
-        # Labelled with what was ASKED FOR: the rows are a WINDOW of r1,
-        # not r1, so keying them "r1" would claim to be the whole set.
-        env = r["result"]["results"]["more_of(r1)"]
+        # Labelled with what was ASKED FOR: the rows are a WINDOW of cars,
+        # not cars, so keying them "cars" would claim to be the whole set.
+        env = r["result"]["results"]["more_of(cars)"]
         assert env["len"] == H and "rows" in env, env
         served.append(env["fids"])
     assert served[0] + served[1] + served[2] == [f"car_{i:03d}"
                                                  for i in range(3 * H)]
     end = out[3].get("error") or ""
     assert "already served" in end, out[3]
-    # ...and the narrowing it teaches is spelled in this surface's methods.
-    assert re.search(r'r\d+\.order\(color="<colour>"\)', end), end
-    assert re.search(r'r\d+\.filter\(within="<place>"\)', end), end
+    # ...and the narrowing it teaches is spelled in this surface's methods,
+    # on the model's own name for the set.
+    assert 'of cars are already served' in end, end
+    assert 'cars.order(color="<colour>")' in end, end
+    assert 'cars.filter(within="<place>")' in end, end
     assert "order_by(" not in end and "narrow(" not in end, end
 
     import pytest
@@ -779,7 +781,7 @@ def test_more_of_pages_a_long_result_and_stops_at_the_end():
     (_v, (op,), answer, page), _shown = calls_of_block(
         "more_of(r1)\n", {"r1": "r7"}, widened={"r7": B})
     assert op["args"]["items"] == f"r7[{2 * B}:{3 * B}]", op
-    assert answer == op["ref"] and page == ("r7", 2 * B), page
+    assert answer == op["ref"] and page == ("r7", 2 * B, "r1"), page
 
 
 def test_three_ordinary_python_forms_that_were_refused_outright():

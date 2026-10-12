@@ -1027,9 +1027,14 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
     if answer_ref not in out:
         return out
     answer = out[answer_ref]
-    answer["hint"] = join_hints(answer.get("hint"), *(
-        f"{k}: {e['hint']}" for k, e in out.items()
-        if k != answer_ref and e.get("hint")))
+    # The other ops are the call's own steps, refs the model never holds:
+    # their hints ride unprefixed, each line once.
+    own = str(answer.get("hint") or "").split("\n")
+    steps = dict.fromkeys(ln for k, e in out.items()
+                          if k != answer_ref and e.get("hint")
+                          for ln in str(e["hint"]).split("\n"))
+    answer["hint"] = join_hints(answer.get("hint"),
+                                *(ln for ln in steps if ln not in own))
     if not answer["hint"]:
         del answer["hint"]
     return {answer_ref: answer}
