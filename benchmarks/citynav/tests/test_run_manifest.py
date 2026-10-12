@@ -50,7 +50,7 @@ def stub_run(monkeypatch, tmp_path, bake):
 
 def test_the_selection_records_what_the_driver_applies(stub_run):
     assert set(stub_run["selection"]) == {
-        "sample_seed", "limit", "workers", "allowlist", "episodes_n", "selection_sha"}
+        "sample_seed", "limit", "allowlist", "episodes_n", "selection_sha"}
 
 
 def test_required_fields_nonempty(stub_run):

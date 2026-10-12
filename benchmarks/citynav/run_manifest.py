@@ -190,7 +190,6 @@ def build_manifest(
         "selection": {
             "sample_seed": sample_seed,
             "limit": limit,
-            "workers": workers,
             "allowlist": str(allowlist_path) if allowlist_path else None,
             "episodes_n": len(episodes),
             "selection_sha": hashlib.sha1(
