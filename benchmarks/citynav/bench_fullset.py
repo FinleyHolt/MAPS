@@ -33,27 +33,17 @@ from benchmarks.citynav.analysis import rows as _rows
 REPO = Path(__file__).resolve().parents[2]
 CONFIG = REPO / (os.environ.get("CITYNAV_BENCH_CONFIG", "").strip() or "configs/citynav.yaml")
 
-DEFAULT_WORKERS = 6
 # The runner each attempt child runs.
 RUNNER_MODULE = "benchmarks.citynav.run_benchmark"
-DEFAULT_EPISODE_TIMEOUT_S = 4 * 3600
 # Share of the episode cap held back from flying, so the model still has
 # turns to reply and commit after the mission's wall-clock backstop fires.
 _DEADLINE_RESERVE_FRAC = 0.1
 # How often the driver asks the reasoner's ``/models`` while an attempt
 # flies; two failures in a row kill the attempt as ``vllm_down_midrun``.
 VLLM_PROBE_S = 60.0
-# How long claiming waits between probes of a reasoner that is down.
-VLLM_PAUSE_S = 120.0
 # Pause between worker thread starts, so the first attempts do not all
 # cold-start at once.
 WORKER_STAGGER_S = 2.0
-# Infra attempts an episode gets before the run leaves it out and reports
-# it as persistent infra with its errors (``--max-infra-attempts``).
-MAX_INFRA_ATTEMPTS = 3
-# Wall-time budget for a continuous run (0 = unlimited; run until the
-# selection / run-count budget is exhausted).
-DEFAULT_MAX_WALL_S = 0
 # The run aborts when ABORT_FRACTION of the last ABORT_WINDOW completions are
 # infra casualties (a missing tile bake fails every episode in seconds). A
 # trailing window still fires after a healthy first hour; it must fill first.
@@ -95,22 +85,9 @@ def _runner_env() -> dict[str, str]:
     return env
 
 
-# "This attempt never got a fair run" (excluded from SR, re-queued): the
-# readers' predicate. A timeout is not one: it is a miss within the budget.
-_infra_casualty = _rows.is_infra_abort
-
-
 def _infra_cause(row: dict) -> str:
     """What killed this infra attempt: its ``error``."""
     return str(row.get("error") or "").strip() or "infra"
-
-
-def _done_qualify(row: dict) -> str | None:
-    """The episode_id when ``row`` marks its episode done (not infra), else ``None``."""
-    eid = row.get("episode_id")
-    if isinstance(eid, str) and not _infra_casualty(row):
-        return eid
-    return None
 
 
 def _missing_block_assets(episode_ids: list[str]) -> list[Path]:
@@ -171,7 +148,6 @@ class Driver:
         self._deadline = (
             time.monotonic() + self.max_wall_s if self.max_wall_s > 0 else None
         )
-        self.log(f"split={self.split} sample_seed={self.sample_seed}")
 
     # -- logging / results -------------------------------------------------
 
@@ -182,21 +158,33 @@ class Driver:
             with self.driver_log.open("a") as f:
                 f.write(line + "\n")
 
+    def _absorb(self, row: dict) -> None:
+        """Count a ledger row: its episode is done, or it is one more infra
+        attempt (``analysis.rows.is_infra_abort``: excluded from SR and
+        re-queued; a timeout is a miss, not one) with its cause."""
+        eid = row.get("episode_id")
+        if not isinstance(eid, str):
+            return
+        with self._dispatch_lock:
+            if _rows.is_infra_abort(row):
+                self._infra_errors.setdefault(eid, Counter())[_infra_cause(row)] += 1
+            else:
+                self._done_cache.add(eid)
+
+    def _absorb_ledger(self) -> None:
+        """Count every row this root's ledger already holds."""
+        for r in _rows.iter_json_rows(self.episodes_file):
+            self._absorb(r)
+
     def _append_result(self, row: dict) -> None:
-        episodes.append_row(self.out_root, row)
         # The write lands before the done-cache add, so a finished episode is
         # never claimed again.
-        eid = _done_qualify(row)
-        with self._dispatch_lock:
-            if eid is not None:
-                self._done_cache.add(eid)
-            elif _infra_casualty(row) and isinstance(row.get("episode_id"), str):
-                self._infra_errors.setdefault(row["episode_id"], Counter())[
-                    _infra_cause(row)] += 1
+        episodes.append_row(self.out_root, row)
+        self._absorb(row)
         self._check_mass_infra(row)
 
     @staticmethod
-    def _log_excerpt(log_path: str, n: int = 15) -> str:
+    def _log_excerpt(log_path: str) -> str:
         """The tail of a worker log, indented, for the abort message."""
         try:
             text = Path(log_path).read_text(errors="replace")
@@ -205,12 +193,12 @@ class Driver:
         lines = [ln.rstrip() for ln in text.splitlines() if ln.strip()]
         if not lines:
             return f"    ({log_path} is empty)"
-        return "\n".join(f"    | {ln}" for ln in lines[-n:])
+        return "\n".join(f"    | {ln}" for ln in lines[-15:])
 
     def _check_mass_infra(self, row: dict) -> None:
         """Stop claiming once ABORT_FRACTION of a full ABORT_WINDOW are infra
         casualties; every counted row is already re-queued for a resume."""
-        cause = _infra_cause(row) if _infra_casualty(row) else None
+        cause = _infra_cause(row) if _rows.is_infra_abort(row) else None
         # The log that explains the row: the attempt's own run.log, or the
         # worker's server.log for an attempt that never got a workdir.
         wd = row.get("workdir")
@@ -244,17 +232,12 @@ class Driver:
         self.log(f"!! representative worker log: {log_path or '(none recorded)'}")
         self.log(self._log_excerpt(log_path))
         scored = sum(1 for r in _rows.iter_json_rows(self.episodes_file)
-                     if not _infra_casualty(r))
+                     if not _rows.is_infra_abort(r))
         self.log(
             ("!! nothing was scored" if not scored else f"!! {scored} attempt(s) were scored")
             + f"; the {len(bad)} infra attempts are excluded and re-queued, so a "
             "resume into this out-root re-flies them once the cause is fixed."
         )
-
-    def _resume_done(self) -> set[str]:
-        """The episodes this root's ledger already answered."""
-        return {e for r in _rows.iter_json_rows(self.episodes_file)
-                if (e := _done_qualify(r)) is not None}
 
     def _wall_spent(self) -> bool:
         return self._deadline is not None and time.monotonic() >= self._deadline
@@ -286,11 +269,11 @@ class Driver:
     def _infra_attempts(self, eid: str) -> int:
         return self._infra_errors.get(eid, Counter()).total()
 
-    def _persistent_infra(self, episodes_: list[str]) -> str:
+    def _persistent_infra(self) -> str:
         """The line naming the selected episodes left out after
         ``max_infra_attempts`` infra attempts, errors counted, or ""."""
         with self._dispatch_lock:
-            stuck = [e for e in episodes_ if e not in self._done_cache
+            stuck = [e for e in self._selection if e not in self._done_cache
                      and self._infra_attempts(e) >= self.max_infra_attempts]
             errors: Counter = Counter()
             for e in stuck:
@@ -328,7 +311,7 @@ class Driver:
             return
         self.log("vLLM down; pausing launches until it returns")
         while not self._vllm_healthy():
-            time.sleep(VLLM_PAUSE_S)
+            time.sleep(120.0)
         self.log("vLLM back; resuming")
 
     # -- one launch cycle --------------------------------------------------
@@ -472,7 +455,7 @@ class Driver:
             f"infra (re-queued, not scored): {infra.total()}"
             + ("  by cause: " + ", ".join(f"{c}:{k}" for c, k in infra.most_common())
                if infra else ""),
-            self._persistent_infra(self._selection),
+            self._persistent_infra(),
             f"!! ABORTED: {self._abort}" if self._abort else "",
         ]
         buf = io.StringIO()
@@ -542,7 +525,8 @@ class Driver:
     def dry_run(self) -> int:
         """Selection / dedup preview. Launches nothing."""
         episodes = self._select_episodes()
-        done = self._resume_done()
+        self._absorb_ledger()
+        done = self._done_cache
         pending = [e for e in episodes if e not in done]
         print(
             f"sample_seed: {self.sample_seed}   split: {self.split}   "
@@ -604,15 +588,11 @@ class Driver:
         except _rm.ManifestIdentityError as exc:
             self.log(f"FATAL: {exc}")
             return 2
-        self._done_cache = self._resume_done()
-        for r in _rows.iter_json_rows(self.episodes_file):
-            if _infra_casualty(r) and isinstance(r.get("episode_id"), str):
-                self._infra_errors.setdefault(r["episode_id"], Counter())[
-                    _infra_cause(r)] += 1
+        self._absorb_ledger()
         pending = [e for e in episodes if e not in self._done_cache
                    and self._infra_attempts(e) < self.max_infra_attempts]
         self.log(
-            f"split={self.split} selection={len(episodes)} "
+            f"split={self.split} sample_seed={self.sample_seed} selection={len(episodes)} "
             f"done={len(self._done_cache & set(episodes))} pending={len(pending)} "
             f"workers={self.workers}"
         )
@@ -627,7 +607,7 @@ class Driver:
                 time.sleep(WORKER_STAGGER_S)
             for t in threads:
                 t.join()
-        persistent = self._persistent_infra(episodes)
+        persistent = self._persistent_infra()
         if persistent:
             self.log(persistent)
         if self._abort is not None:
@@ -655,8 +635,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--workers",
         type=int,
-        default=DEFAULT_WORKERS,
-        help=f"concurrency (default {DEFAULT_WORKERS}; empirical optimum)",
+        default=6,
+        help="concurrency (default %(default)s; empirical optimum)",
     )
     p.add_argument(
         "--out-root",
@@ -666,13 +646,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--episode-timeout-s",
         type=int,
-        default=DEFAULT_EPISODE_TIMEOUT_S,
-        help=f"per-episode wall cap (default {DEFAULT_EPISODE_TIMEOUT_S}s = 4h)",
+        default=4 * 3600,
+        help="per-episode wall cap (default %(default)ss = 4h)",
     )
     p.add_argument(
         "--max-wall-s",
         type=int,
-        default=DEFAULT_MAX_WALL_S,
+        default=0,
         help="continuous-run wall budget (default 0 = run until the "
         "selection / --limit run-count budget is exhausted). >0: stop "
         "claiming new episodes after this many seconds; in-flight "
@@ -681,9 +661,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--max-infra-attempts",
         type=int,
-        default=MAX_INFRA_ATTEMPTS,
+        default=3,
         help="infra attempts an episode gets before the run leaves it out and "
-        f"reports it as persistent infra (default {MAX_INFRA_ATTEMPTS})",
+        "reports it as persistent infra (default %(default)s)",
     )
     p.add_argument(
         "--limit",
