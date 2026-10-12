@@ -154,7 +154,7 @@ def _look_vision_text(crops: list[dict]) -> str:
         if int(c.get("marks_dropped") or 0):
             base += (f" ; +{int(c['marks_dropped'])} requested mark(s) "
                      f"not drawn (badge cap {LOOK_MAX_BADGES}/crop -- "
-                     f"request them in another crops call)")
+                     f"request them in another look())")
         _mof = c.get("marks_out_of_view") or []
         if _mof:
             base += (f" ; requested mark(s) {', '.join(_mof)} lie "
@@ -218,7 +218,7 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
                 f"only the first {LOOK_MAX_CROPS} crops of this call "
                 f"rendered ({len(fids) - _i} item(s) dropped); the "
                 f"server takes {LOOK_MAX_CROPS} images per request. "
-                "Ask for the rest in a later view call.")
+                "Ask for the rest in another look().")
             break
         f = f.strip()
         if not f:

@@ -154,7 +154,7 @@ def test_stale_dumps_clear_to_fids_with_their_colors_and_the_live_dump_stays():
     stale = _body(out[3])
     assert stale["fids"] == ["a1", "a2"] and "rows" not in stale
     assert "legend" not in stale and stale["colors"] == "a1=red?; a2=red?"
-    assert "re-run analyze" in stale["hint"]
+    assert "show the handle again" in stale["hint"]
     assert json.loads(out[3]["content"])["said"] == "cars  # a"
     assert out[5] == msgs[5]                   # the live view
 

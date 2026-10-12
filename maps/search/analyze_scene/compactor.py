@@ -431,8 +431,8 @@ def _degrade_tool_result_content(
             head["colors"] = "; ".join(colors)
         changed = True
         note = ("rows trimmed to fids+census for token budget (fids "
-                "preserved); the world-state graph is live — re-run analyze "
-                "to re-derive the full rows.")
+                "preserved); the world-state graph is live — show the handle "
+                "again to re-derive the full rows.")
         head["hint"] = join_hints(head.get("hint"), note)
     if not changed:
         return None
