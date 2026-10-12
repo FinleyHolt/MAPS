@@ -144,7 +144,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     print(
         f"scored={n}  attempts={stats.rows}  "
         f"replicates_discarded={stats.keyed - len(picked)}  "
-        f"no_metrics(crash/no-commit)={stats.no_metrics}  "
+        f"no_metrics(crash/timeout-no-record)={stats.no_metrics}  "
         f"timeouts(wall-clock)={stats.timed_out}  "
         f"infra(re-queued)={stats.infra}"
     )
