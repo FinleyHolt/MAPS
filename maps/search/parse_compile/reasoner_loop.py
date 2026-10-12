@@ -55,7 +55,9 @@ from maps.search.analyze_scene.geom_program import (
     join_hints,
     run_program as _run_program,
 )
+from maps.search.parse_compile.prompts import served_tools
 from maps.search.parse_compile.reasoner_agent import Reasoner
+from maps.search.render.look_render import LOOK_MAX_BADGES as _MAP_MAX_MARKS
 from maps.search.parse_compile import python_surface as _py_surface
 
 # Transient LLM-side errors: a retry, never the end of the reasoner (a
@@ -575,6 +577,12 @@ NO_FLIGHT_REPLY_NUDGE = (
     "one it is, go_to() it first, then reply."
 )
 
+# The bench's transient-error budget; a live mission (a reasoner with a
+# cancel_event) waits for the arm until it answers or the operator stops.
+_MAX_ROUND_TRANSIENT = 6
+# The server's per-request image cap.
+_LOOK_MAX_CROPS = 16
+
 _CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\n|\n```\s*$")
 
 
@@ -637,102 +645,163 @@ def continue_mission(*, reasoner: Reasoner, instruction: str,
         preflight=preflight, **turn)
 
 
-def advance_reasoner_one_round(
-    *,
-    reasoner: Reasoner,
-    user_message: str,
-    ctx: ToolContext,
-    rid_tag: str = "h?",
-    transcript: list[dict] | None = None,
-    compute_namespace: dict | None = None,
-    diag: dict | None = None,
-    look_renderer: Callable[[list[dict]], list[dict]] | None = None,
-    obs_span_m: float | None = None,
-    obs_minor_m: float | None = None,
-    boost_queue: Callable[[list, list], dict],
-    preflight: bool = False,
-    mission_spec: MissionSpec,
-    retask: Callable[[], str | None] | None = None,
-) -> MissionReply:
+def advance_reasoner_one_round(*, user_message: str, **mission) -> MissionReply:
     """The mission's turn loop: append ``user_message``, then serve ``run``
-    until the model's plain reply or a harness ending.
+    until the model's plain reply or a harness ending (``mission`` is
+    :class:`_Mission`'s).
 
     An empty turn, a reply that is a block of code and a reply with zero
     flights behind it are repaired before a repeat is accepted as the
     ending. ``retask`` (the field console) yields operator turns drained at
     the top of each turn; ``diag["turns_used"]`` is stamped every turn.
     """
-    # A thread the compactor declared infeasible stays so: no message grows
-    # it.
-    thread_infeasible = bool(getattr(reasoner, "compaction_infeasible", False))
-    if not thread_infeasible:
-        reasoner.append_user(user_message)
+    return _Mission(**mission).converse(user_message)
 
-    # Each fid's latest result-enriched row, for the rejection census.
-    row_latest: dict[str, dict] = {}
-    # Successful self-contained programs by ``_program_dedup_key`` ->
-    # ``(surface_version, turn, ops)``: a repeat under the same version gets
-    # the dedup note. A flight, a boost or a stance bumps the version.
-    _programs_seen: dict[str, tuple] = {}
-    _surface_version = [0]
 
-    no_call_streak = 0
-    # Consecutive zero-flight replies (NO_FLIGHT_ABSTAIN_STREAK); the
-    # no-call streak counts channel misses.
-    no_flight_streak = 0
+class _Mission:
+    """One operator turn's conversation state and the verbs the run surface
+    calls on it."""
 
-    # Surface rows by fid, rebuilt in place after every flight and boost.
-    _ns_rows: dict[str, dict] = {}
+    def __init__(
+        self,
+        *,
+        reasoner: Reasoner,
+        ctx: ToolContext,
+        compute_namespace: dict,
+        mission_spec: MissionSpec,
+        boost_queue: Callable[[list, list], dict],
+        rid_tag: str = "h?",
+        transcript: list[dict] | None = None,
+        diag: dict | None = None,
+        look_renderer: Callable[[list[dict]], list[dict]] | None = None,
+        obs_span_m: float | None = None,
+        obs_minor_m: float | None = None,
+        preflight: bool = False,
+        retask: Callable[[], str | None] | None = None,
+    ):
+        self.reasoner = reasoner
+        self.ctx = ctx
+        self.rid_tag = rid_tag
+        self.transcript = transcript
+        self.ns = compute_namespace
+        self.diag = diag
+        self.look_renderer = look_renderer
+        self.obs_span_m = obs_span_m
+        self.obs_minor_m = obs_minor_m
+        self.boost_queue = boost_queue
+        self.preflight = preflight
+        self.mission_spec = mission_spec
+        self.retask = retask
 
-    def _rebuild_ns_rows() -> None:
+        # Each fid's latest result-enriched row, for the rejection census.
+        self.row_latest: dict[str, dict] = {}
+        # Successful self-contained programs by ``_program_dedup_key`` ->
+        # ``(surface_version, turn, ops)``: a repeat under the same version gets
+        # the dedup note. A flight, a boost or a stance bumps the version.
+        self._programs_seen: dict[str, tuple] = {}
+        self._surface_version = 0
+
+        # Surface rows by fid, rebuilt in place after every flight and boost.
+        self._ns_rows: dict[str, dict] = {}
+
+        self._rebuild_ns_rows()
+        self.stop_tools = list(served_tools())
+        self.pending_vision: list[tuple[str, list[bytes]]] = []
+        self._block_frames: list[str] = []
+
+        # The staged viewpoints by vN handle; the latest is STANDING (its side
+        # columns ride every find row, its facing orients what renders).
+        self.staged_viewpoints: dict[str, dict] = {}
+        self.standing_handle: str | None = None
+        # The mission's flown stops, {stop_id: [x, y]}: each a sayable place.
+        self._plan_stops: dict[str, list] = {}
+
+        # The flatten is built once per surface version.
+        self._map_feats: list = [None, None]
+
+        # The escalating loop breaker's counts (see _loop_broken_error), and the
+        # dedup path's own consecutive streak.
+        self._err_class_counts: dict[str, int] = {}
+        self._err_streak: dict = {"sig": None, "n": 0}
+        self._dedup_streak: dict = {"key": None, "n": 0}
+
+        # Raw results of every successful program, by ref.
+        self.carry_results: dict = {}
+
+        # A HANDLE IS A QUERY, NOT A SNAPSHOT: after the surface moves, a read
+        # of a handle re-runs the ops that produced it (and those they read)
+        # over the current surface. A replay that fails keeps the old rows.
+        self._op_history: list = []           # every op, in execution order
+        self._op_reads: list = []             # per op: the handle bases its args name
+        self._producers: dict = {}            # ref -> indices into _op_history
+        # The surface version the carry is armed for: the first read under a new
+        # version claims it, and every read after re-derives what it reads.
+        self._carry_version = 0
+        self._fresh: set = set()              # refs re-derived, or written, under it
+        # A flight-minted handle records an event (the rows one flight added)
+        # and never re-derives.
+        self._event_handles: set = set()
+
+        self.mission_flights = 0
+        self.mission_sam: list[dict] = []
+
+        # The set in scope (the last non-empty result, or what the last flight
+        # added), the paging ledger, and the mission-global rN counter.
+        self._those: str | None = None
+        self._widened: dict = {}
+        self.plan_rn: list = [0]
+        # The lines of every accepted block, counted on each result.
+        self._script_lines = 0
+        # Every rN in play (bound handles and those the running block spells):
+        # the flight mint skips them.
+        self._code_names: set = set()
+        # The handles flights minted during the running block, for the code
+        # scope to bind.
+        self._code_minted: list = []
+        # The fids explore passes have covered this mission.
+        self._covered_fids: set = set()
+
+        # HALF THE OBSERVATION'S LONG SIDE: a pass's stop spacing. Half of
+        # ``obs_span_m`` (the footprint's long side) sits under the short side
+        # for any sensor below 2:1, so a ONE-DIMENSIONAL walk covers a shape that
+        # is not one: consecutive stops overlap on the minor axis too.
+        self._cover_spacing = (float(self.obs_span_m) / 2.0
+                               if isinstance(self.obs_span_m, (int, float))
+                               and self.obs_span_m > 0 else None)
+
+        # The call in flight: what _ground_names noted and _analyze answered,
+        # read by _finish.
+        self._call: dict = {}
+
+        self._mission_py = None
+
+    def _rebuild_ns_rows(self) -> None:
         # cands win on fid collision.
-        _ns_rows.clear()
+        self._ns_rows.clear()
         for _key in ("cands", "anchors"):
-            for _r in (compute_namespace or {}).get(_key) or []:
+            for _r in self.ns.get(_key) or []:
                 if isinstance(_r, dict) and _r.get("fid"):
-                    _ns_rows.setdefault(str(_r["fid"]), _r)
+                    self._ns_rows.setdefault(str(_r["fid"]), _r)
 
-    _rebuild_ns_rows()
-
-    # ONE served tool, `run`, with no decoder mask: the parser's refusals are
-    # ordinary tool results. Pictures ride a user turn after the turn's tool
-    # results.
-    from maps.search.parse_compile.prompts import served_tools
-    stop_tools = list(served_tools())
-    pending_vision: list[tuple[str, list[bytes]]] = []
-    _block_frames: list[str] = []
-    _LOOK_MAX_CROPS = 16
-    # How many of a set's rows a map badges: the crop renderer's cap.
-    from maps.search.render.look_render import (  # noqa: PLC0415
-        LOOK_MAX_BADGES as _MAP_MAX_MARKS,
-    )
-
-    # The staged viewpoints by vN handle; the latest is STANDING (its side
-    # columns ride every find row, its facing orients what renders).
-    staged_viewpoints: dict[str, dict] = {}
-    standing_handle: list = [None]
-    # The mission's flown stops, {stop_id: [x, y]}: each a sayable place.
-    _plan_stops: dict[str, list] = {}
-
-    def _resolve_stage_point(tok) -> list[float] | None:
+    def _resolve_stage_point(self, tok) -> list[float] | None:
         """A stage at/facing slot -> [x, y]: a live surface fid, a flown
         stop id, a staged handle, or the canonical '[x, y]' token; None
         otherwise."""
         if isinstance(tok, str):
-            row = _ns_rows.get(tok.strip())
+            row = self._ns_rows.get(tok.strip())
             if row is not None:
                 return look_xy(row)
-            sp = _plan_stops.get(tok.strip().lower())
+            sp = self._plan_stops.get(tok.strip().lower())
             if sp is not None:
                 return [round(sp[0], 2), round(sp[1], 2)]
-            sv = staged_viewpoints.get(tok.strip().lower())
+            sv = self.staged_viewpoints.get(tok.strip().lower())
             if sv is not None:
                 return [round(float(sv["from_xy"][0]), 2),
                         round(float(sv["from_xy"][1]), 2)]
             return _rounded_xy(tok)
         return None
 
-    def _stage_apply(at_tok: str, facing_tok: str) -> dict:
+    def _stage_apply(self, at_tok: str, facing_tok: str) -> dict:
         """stand(): mint a vN handle that becomes STANDING and bump the
         surface version (a program can answer differently under it)."""
         from maps.search.analyze_scene.geom_compute import COMPASS_UNIT  # noqa: PLC0415
@@ -740,7 +809,7 @@ def advance_reasoner_one_round(
         def _rejected(error: str) -> dict:
             return {"rejected": [{"index": 0, "error": error}]}
 
-        at_xy = _resolve_stage_point(at_tok)
+        at_xy = self._resolve_stage_point(at_tok)
         if at_xy is None:
             return _rejected(f"at {at_tok!r} is not a live surface fid or an "
                              f"[x, y] world point")
@@ -748,7 +817,7 @@ def advance_reasoner_one_round(
             facing_desc = facing_tok.strip().lower()
             up = list(COMPASS_UNIT[facing_desc])
         else:
-            f_xy = _resolve_stage_point(facing_tok)
+            f_xy = self._resolve_stage_point(facing_tok)
             if f_xy is None:
                 return _rejected(
                     f"facing {facing_tok!r} is not a live surface "
@@ -762,9 +831,9 @@ def advance_reasoner_one_round(
                                  "direction")
             up = [dx / n, dy / n]
             facing_desc = facing_tok.strip()
-        h = f"v{len(staged_viewpoints) + 1}"
+        h = f"v{len(self.staged_viewpoints) + 1}"
         brg = round(up_bearing_deg(up)) % 360
-        staged_viewpoints[h] = {
+        self.staged_viewpoints[h] = {
             "handle": h,
             "from_xy": at_xy,
             "up_unit": [round(up[0], 4), round(up[1], 4)],
@@ -772,11 +841,10 @@ def advance_reasoner_one_round(
             "facing": facing_desc,
             "bearing_deg": brg,
         }
-        standing_handle[0] = h
-        if compute_namespace is not None:
-            compute_namespace["staged"] = staged_viewpoints
-            compute_namespace["standing"] = h
-        _surface_version[0] += 1
+        self.standing_handle = h
+        self.ns["staged"] = self.staged_viewpoints
+        self.ns["standing"] = h
+        self._surface_version += 1
         return {
             "staged": [{"handle": h, "at_xy": at_xy,
                         "facing_bearing_deg": brg}],
@@ -786,22 +854,22 @@ def advance_reasoner_one_round(
                      f"and maps render its facing up."),
         }
 
-    def _standing_frame() -> tuple[list | None, str]:
+    def _standing_frame(self) -> tuple[list | None, str]:
         """The STANDING viewpoint's image-up and the caption note stating it
         (never a silent rotation); ``(None, "")`` with no stance."""
-        if standing_handle[0] is None:
+        if self.standing_handle is None:
             return None, ""
-        _sv = staged_viewpoints[standing_handle[0]]
+        _sv = self.staged_viewpoints[self.standing_handle]
         return (list(_sv["up_unit"]),
                 f"image-up = {_sv['handle']}'s facing "
                 f"(bearing {_sv['bearing_deg']})")
 
-    def _look_strs(v: object) -> list[str]:
+    def _look_strs(self, v: object) -> list[str]:
         return [str(x) for x in v if isinstance(x, str) and x.strip()] \
             if isinstance(v, list) else []
 
     def _build_crop_requests(
-            items: list) -> tuple[list[dict], list[str], list[str]]:
+            self, items: list) -> tuple[list[dict], list[str], list[str]]:
         """One look's items ``{fid, mark_fids?, target_fid?}`` -> per-crop
         render specs off ``_ns_rows``, capped at the server's 16 images:
         ``(requests, skipped_fids, ref_notes)``."""
@@ -814,12 +882,12 @@ def advance_reasoner_one_round(
         uncovered: list[str] = []
 
         def _covered(_xy) -> bool:
-            if not (isinstance(obs_minor_m, (int, float))
-                    and obs_minor_m > 0):
+            if not (isinstance(self.obs_minor_m, (int, float))
+                    and self.obs_minor_m > 0):
                 return True
-            _r = float(obs_minor_m) / 2.0
+            _r = float(self.obs_minor_m) / 2.0
             return any(math.dist(_xy, _p) <= _r
-                       for _p in _plan_stops.values())
+                       for _p in self._plan_stops.values())
         for _i, it in enumerate(items):
             if not isinstance(it, dict):
                 continue
@@ -836,7 +904,7 @@ def advance_reasoner_one_round(
             target_fid = it.get("target_fid")
             target_fid = (str(target_fid).strip()
                           if isinstance(target_fid, str) else "")
-            mark_fids = _look_strs(it.get("mark_fids"))
+            mark_fids = self._look_strs(it.get("mark_fids"))
             annotate = bool(mark_fids or target_fid)
             marks: list[dict] = []
             if annotate:
@@ -848,7 +916,7 @@ def advance_reasoner_one_round(
                     if re.fullmatch(r"r\d+", _mf):
                         _mfx.extend(
                             str(_r["fid"])
-                            for _r in (_carry_read(_mf) or [])
+                            for _r in (self._carry_read(_mf) or [])
                             if isinstance(_r, dict) and _r.get("fid"))
                     else:
                         _mfx.append(_mf)
@@ -858,7 +926,7 @@ def advance_reasoner_one_round(
                     if mf in seen_m:
                         continue
                     seen_m.add(mf)
-                    row = _ns_rows.get(mf)
+                    row = self._ns_rows.get(mf)
                     xy = look_xy(row)
                     if xy is None:
                         xy = _rounded_xy(mf)
@@ -873,7 +941,7 @@ def advance_reasoner_one_round(
                             mf, row, is_target=(mf == target_fid)),
                         "is_target": bool(mf == target_fid),
                     })
-            row = _ns_rows.get(f)
+            row = self._ns_rows.get(f)
             xy = look_xy(row)
             if xy is None:
                 xy = _rounded_xy(f)
@@ -883,7 +951,7 @@ def advance_reasoner_one_round(
             if not _covered(xy):
                 uncovered.append(f)
                 continue
-            frame_up, frame_note = _standing_frame()
+            frame_up, frame_note = self._standing_frame()
             requests.append({
                 "center_fid": f,
                 "center_xy": xy,
@@ -895,7 +963,7 @@ def advance_reasoner_one_round(
                 "annotate": annotate,
                 "marks": marks,
                 # The observation extent: the renderer's window ceiling.
-                "obs_span_m": obs_span_m,
+                "obs_span_m": self.obs_span_m,
             })
         if uncovered:
             _u = ", ".join(uncovered[:6])
@@ -908,7 +976,7 @@ def advance_reasoner_one_round(
                 "covers it, then look.")
         return requests, skipped, ref_notes
 
-    def _map_features_from_ctx() -> list[dict]:
+    def _map_features_from_ctx(self) -> list[dict]:
         """The live graph as the map painter's feature dicts: label and paint
         kind, cells, and a road's centerline or a building's contour in world
         metres."""
@@ -917,9 +985,9 @@ def advance_reasoner_one_round(
             osm_kind,
             osm_label,
         )
-        nodes = getattr(ctx.graph, "nodes", None) or {}
-        _ox, _oy = ctx.tile_origin_xy
-        _cs = float(ctx.cell_size_m)
+        nodes = getattr(self.ctx.graph, "nodes", None) or {}
+        _ox, _oy = self.ctx.tile_origin_xy
+        _cs = float(self.ctx.cell_size_m)
 
         def _grid_to_world(pts):
             # astype truncates toward zero, like int().
@@ -966,30 +1034,27 @@ def advance_reasoner_one_round(
             feats.append(feat)
         return feats
 
-    # The flatten is built once per surface version.
-    _map_feats: list = [None, None]
+    def _map_features_cached(self) -> list[dict]:
+        if self._map_feats[0] != self._surface_version:
+            self._map_feats[:] = [self._surface_version, self._map_features_from_ctx()]
+        return self._map_feats[1]
 
-    def _map_features_cached() -> list[dict]:
-        if _map_feats[0] != _surface_version[0]:
-            _map_feats[:] = [_surface_version[0], _map_features_from_ctx()]
-        return _map_feats[1]
-
-    def _map_spec(around: str, mark_fids: list) -> tuple[dict | None, list[str]]:
+    def _map_spec(self, around: str, mark_fids: list) -> tuple[dict | None, list[str]]:
         """One show_map's render spec, centred on ``around``, marks resolved
         off ``_ns_rows`` exactly like crops: ``(spec or None, skipped_fids)``."""
-        cxy = _resolve_stage_point(around)
+        cxy = self._resolve_stage_point(around)
         if cxy is None:
             return None, [str(around)]
         skipped: list[str] = []
         center_fid = (str(around).strip()
                       if isinstance(around, str)
-                      and str(around).strip() in _ns_rows else "")
-        center_label = (look_label(center_fid, _ns_rows.get(center_fid),
+                      and str(around).strip() in self._ns_rows else "")
+        center_label = (look_label(center_fid, self._ns_rows.get(center_fid),
                                    is_target=False)
                         if center_fid else f"[{cxy[0]}, {cxy[1]}]")
         marks: list[dict] = []
-        for mf in dict.fromkeys(_look_strs(mark_fids)):
-            row = _ns_rows.get(mf)
+        for mf in dict.fromkeys(self._look_strs(mark_fids)):
+            row = self._ns_rows.get(mf)
             xy = look_xy(row)
             if xy is None:
                 skipped.append(mf)
@@ -1000,7 +1065,7 @@ def advance_reasoner_one_round(
                           "is_target": False})
         # The frame follows the request: the marks' and centre's extent
         # derives the zoom; a bare point gets the floor.
-        _cb = look_outline(_ns_rows.get(center_fid)) if center_fid else None
+        _cb = look_outline(self._ns_rows.get(center_fid)) if center_fid else None
         _fpts: list = [m["xy"] for m in marks if m.get("xy")]
         for _src in [m.get("boundary") for m in marks] + [_cb]:
             for _b in (_src or []):
@@ -1023,12 +1088,12 @@ def advance_reasoner_one_round(
             "center_boundary": _cb,
             "marks": marks,
         }
-        frame_up, frame_note = _standing_frame()
+        frame_up, frame_note = self._standing_frame()
         if frame_up is not None:
             spec["frame_up"], spec["frame_note"] = frame_up, frame_note
         return spec, skipped
 
-    def _map_vision_text(maps: list[dict]) -> str:
+    def _map_vision_text(self, maps: list[dict]) -> str:
         """The map message's text: what the picture is (world state, not
         imagery), and each map's window, badge legend and class colors."""
         order = ", ".join(str(m.get("center_fid") or "map") for m in maps)
@@ -1079,17 +1144,11 @@ def advance_reasoner_one_round(
                          f"outside this map's window and are NOT drawn")
         return base
 
-    # The escalating loop breaker's counts (see _loop_broken_error), and the
-    # dedup path's own consecutive streak.
-    _err_class_counts: dict[str, int] = {}
-    _err_streak: dict = {"sig": None, "n": 0}
-    _dedup_streak: dict = {"key": None, "n": 0}
-
-    def _loop_breaker_facts(_ns, _n: int) -> str:
+    def _loop_breaker_facts(self, _ns, _n: int) -> str:
         def _cap(fids: list[str]) -> str:
             return f"{fids[:8]}" + (
                 f" (+{len(fids) - 8} more)" if len(fids) > 8 else "")
-        c_n, a_n, cols = _surface_census_counts(_ns)
+        c_n, a_n, cols = self._surface_census_counts(_ns)
         parts = [
             f" This error class has now occurred {_n}x.",
             f" Live surface: {_live_counts(c_n, a_n, ';')}.",
@@ -1099,31 +1158,31 @@ def advance_reasoner_one_round(
                 f" Columns computed on rows so far: {_cap(cols)}.")
         return "".join(parts)
 
-    def _err_class_sig(err: str) -> str:
+    def _err_class_sig(self, err: str) -> str:
         # Same-class signature: quoted tokens and numbers stripped.
         s = re.sub(r"'[^']*'", "'_'", str(err))
         s = re.sub(r"\d+", "_", s)
         return s[:100]
 
-    def _surface_census_counts(_ns) -> tuple[int, int, list[str]]:
+    def _surface_census_counts(self, _ns) -> tuple[int, int, list[str]]:
         """Live counts: detections, priors, computed columns."""
         c_n = sum(1 for r in (_ns.get("cands") or [])
                   if isinstance(r, dict) and r.get("fid"))
         a_n = sum(1 for r in (_ns.get("anchors") or [])
                   if isinstance(r, dict) and r.get("fid"))
-        cols = sorted({k for _row in row_latest.values()
+        cols = sorted({k for _row in self.row_latest.values()
                        if isinstance(_row, dict)
                        for k, _v in _row.items()
                        if k not in MODEL_UNSERVED_COLUMNS
                        and _v not in (None, "")})
         return c_n, a_n, cols
 
-    def _repeated_rejection_state(err: str, _n: int, _consec: int) -> str:
+    def _repeated_rejection_state(self, err: str, _n: int, _consec: int) -> str:
         """The 3rd-consecutive-rejection fact, served instead of the remedy
         and census again: the counts, the rejection's first clause and the
         live state."""
         _first = str(err).split(". ", 1)[0].strip().rstrip(".")
-        c_n, a_n, cols = _surface_census_counts(compute_namespace or {})
+        c_n, a_n, cols = self._surface_census_counts(self.ns)
         _cols_s = f"{cols[:12]}" + (
             f" (+{len(cols) - 12} more)" if len(cols) > 12 else "")
         return (
@@ -1137,19 +1196,19 @@ def advance_reasoner_one_round(
             f"{_live_counts(c_n, a_n)}"
             + (f"; columns computed on rows: {_cols_s}." if cols else "."))
 
-    def _loop_broken_error(err: str, sig_of: str | None = None) -> str:
+    def _loop_broken_error(self, err: str, sig_of: str | None = None) -> str:
         """A repeated same-class error, escalating: verbatim first, then with
         the live census, then (3rd consecutive on) the repetition fact
         alone. A shape error gets only its count. A successful call resets
         the consecutive streak, never the class count."""
-        _sig = _err_class_sig(err if sig_of is None else sig_of)
-        _n = _err_class_counts[_sig] = _err_class_counts.get(_sig, 0) + 1
-        if _err_streak["sig"] == _sig:
-            _err_streak["n"] += 1
+        _sig = self._err_class_sig(err if sig_of is None else sig_of)
+        _n = self._err_class_counts[_sig] = self._err_class_counts.get(_sig, 0) + 1
+        if self._err_streak["sig"] == _sig:
+            self._err_streak["n"] += 1
         else:
-            _err_streak["sig"] = _sig
-            _err_streak["n"] = 1
-        _consec = _err_streak["n"]
+            self._err_streak["sig"] = _sig
+            self._err_streak["n"] = 1
+        _consec = self._err_streak["n"]
         if _n < 2:
             return err
         _SHAPE_MARKERS = ("unknown ref", "is a result handle",
@@ -1157,56 +1216,39 @@ def advance_reasoner_one_round(
         if any(m in err for m in _SHAPE_MARKERS):
             return err + f" This error class has now occurred {_n}x."
         if _consec >= 3:
-            return _repeated_rejection_state(err, _n, _consec)
-        return err + _loop_breaker_facts(compute_namespace or {}, _n)
+            return self._repeated_rejection_state(err, _n, _consec)
+        return err + self._loop_breaker_facts(self.ns, _n)
 
-    # Raw results of every successful program, by ref.
-    carry_results: dict = {}
-
-    # A HANDLE IS A QUERY, NOT A SNAPSHOT: after the surface moves, a read
-    # of a handle re-runs the ops that produced it (and those they read)
-    # over the current surface. A replay that fails keeps the old rows.
-    _op_history: list = []           # every op, in execution order
-    _op_reads: list = []             # per op: the handle bases its args name
-    _producers: dict = {}            # ref -> indices into _op_history
-    # The surface version the carry is armed for: the first read under a new
-    # version claims it, and every read after re-derives what it reads.
-    _carry_version = [0]
-    _fresh: set = set()              # refs re-derived, or written, under it
-    # A flight-minted handle records an event (the rows one flight added)
-    # and never re-derives.
-    _event_handles: set = set()
-
-    def _refs_read(op: dict) -> set:
+    def _refs_read(self, op: dict) -> set:
         """The handles an op's args read (``rN`` or ``rN[a:b]``)."""
         return set(re.findall(r'"(r\d+)(?:\[[^"\]]*\])?"',
                               json.dumps(op["args"], default=str))) - {op["ref"]}
 
-    def _program_reads(program: dict) -> set:
+    def _program_reads(self, program: dict) -> set:
         """The carry handles a program reads and does not define."""
         ops = program["ops"]
-        return set().union(*(_refs_read(o) for o in ops)) \
+        return set().union(*(self._refs_read(o) for o in ops)) \
             - {o["ref"] for o in ops}
 
-    def _ensure_fresh(refs) -> None:
+    def _ensure_fresh(self, refs) -> None:
         """Re-derive ``refs`` and every op they read against the current
         surface, once per surface version."""
-        if _carry_version[0] != _surface_version[0]:
-            _carry_version[0] = _surface_version[0]
-            _fresh.clear()
-            _fresh.update(_event_handles)
+        if self._carry_version != self._surface_version:
+            self._carry_version = self._surface_version
+            self._fresh.clear()
+            self._fresh.update(self._event_handles)
         need: set = set()
-        todo = [r for r in refs if r not in _fresh]
+        todo = [r for r in refs if r not in self._fresh]
         while todo:
             r = todo.pop()
-            if r in need or r in _fresh:
+            if r in need or r in self._fresh:
                 continue
-            idxs = _producers.get(r)
+            idxs = self._producers.get(r)
             if not idxs:
                 continue    # an event handle, an alias, an unknown: nothing to re-derive
             need.add(r)
             for i in idxs:
-                todo.extend(_op_reads[i])
+                todo.extend(self._op_reads[i])
         if not need:
             return
         try:
@@ -1214,150 +1256,126 @@ def advance_reasoner_one_round(
             # Seed everything else (a flight-minted handle has no op).
             _out = run_geom_program_tool(
                 {"program": {"ops": [
-                    op for op in _op_history if op["ref"] in need]}},
-                namespace=compute_namespace or {}, raw_sink=_sink,
-                seed_results={h: v for h, v in carry_results.items()
+                    op for op in self._op_history if op["ref"] in need]}},
+                namespace=self.ns, raw_sink=_sink,
+                seed_results={h: v for h, v in self.carry_results.items()
                               if h not in need})
             if isinstance(_out, dict) and _out.get("error"):
                 # A refused replay keeps the last rows, unclaimed.
                 log.debug("carry refresh refused; handles keep their last "
                           "rows: %s", str(_out["error"])[:200])
                 return
-            carry_results.update(
+            self.carry_results.update(
                 {k: v for k, v in (_sink.get("results") or {}).items()
                  if k in need})
-            _fresh.update(need)
+            self._fresh.update(need)
         except Exception:  # noqa: BLE001 — a failed replay keeps the old rows
             log.debug("carry refresh failed; handles keep their last rows",
                       exc_info=True)
 
-    def _carry_read(ref):
+    def _carry_read(self, ref):
         """A handle's rows, re-derived first when the version is armed."""
-        if _carry_version[0] == _surface_version[0]:
-            _ensure_fresh([ref])
-        return carry_results.get(ref)
+        if self._carry_version == self._surface_version:
+            self._ensure_fresh([ref])
+        return self.carry_results.get(ref)
 
-    def _alias_deduped_refs(prev_ops, cur_ops) -> None:
+    def _alias_deduped_refs(self, prev_ops, cur_ops) -> None:
         """Point this emission's refs at the handles the first run stored,
         op by op; a label already live is never overwritten."""
         for prev, cur in zip(prev_ops, cur_ops):
-            if cur["ref"] not in carry_results \
-                    and prev["ref"] in carry_results:
-                carry_results[cur["ref"]] = carry_results[prev["ref"]]
+            if cur["ref"] not in self.carry_results \
+                    and prev["ref"] in self.carry_results:
+                self.carry_results[cur["ref"]] = self.carry_results[prev["ref"]]
 
-    def _dispatch_analyze_scene(a, *, answer_ref=""):
+    def _dispatch_analyze_scene(self, a, *, answer_ref=""):
         _key = _program_dedup_key(a["program"])
-        _prev = _programs_seen.get(_key) if _key is not None else None
-        if _prev is not None and _prev[0] == _surface_version[0]:
+        _prev = self._programs_seen.get(_key) if _key is not None else None
+        if _prev is not None and _prev[0] == self._surface_version:
             # A one-line reference, never a payload; the emission's own
             # labels alias the stored handles so nothing downstream can tell
             # it from a re-run.
-            _alias_deduped_refs(_prev[2], a["program"]["ops"])
-            if _dedup_streak["key"] == _key:
-                _dedup_streak["n"] += 1
+            self._alias_deduped_refs(_prev[2], a["program"]["ops"])
+            if self._dedup_streak["key"] == _key:
+                self._dedup_streak["n"] += 1
             else:
-                _dedup_streak["key"], _dedup_streak["n"] = _key, 1
-            if _dedup_streak["n"] >= 2:
-                _c_n, _a_n, _dcols = _surface_census_counts(
-                    compute_namespace or {})
+                self._dedup_streak["key"], self._dedup_streak["n"] = _key, 1
+            if self._dedup_streak["n"] >= 2:
+                _c_n, _a_n, _dcols = self._surface_census_counts(
+                    self.ns)
                 _cols_s = ("; columns live: " + ", ".join(_dcols[:12])
                            if _dcols else "")
                 return {"note": _DEDUP_REPEAT_NOTE.format(
-                    n=_ordinal(_dedup_streak["n"]),
+                    n=_ordinal(self._dedup_streak["n"]),
                     counts=_live_counts(_c_n, _a_n), cols=_cols_s)}
             return {"note": _DEDUP_NOTE.format(turn=_prev[1])}
         _raw_sink: dict = {}
-        _ensure_fresh(_program_reads(a["program"]))
-        out = run_geom_program_tool(a, namespace=compute_namespace or {},
+        self._ensure_fresh(self._program_reads(a["program"]))
+        out = run_geom_program_tool(a, namespace=self.ns,
                                     raw_sink=_raw_sink,
-                                    seed_results=carry_results,
-                                    preflight=preflight,
+                                    seed_results=self.carry_results,
+                                    preflight=self.preflight,
                                     answer_ref=answer_ref)
         if isinstance(out, dict) and "error" in out:
             # The failing op keeps one op's errors their own class.
             _err = str(out.get("error"))
-            out = {**out, "error": _loop_broken_error(
+            out = {**out, "error": self._loop_broken_error(
                 _err, sig_of=f"{_err}|{_raw_sink.get('error_op', '')}")}
         if isinstance(out, dict) and "error" not in out:
-            _err_streak["sig"] = None
-            _err_streak["n"] = 0
-            _dedup_streak["key"] = None
-            _dedup_streak["n"] = 0
+            self._err_streak["sig"] = None
+            self._err_streak["n"] = 0
+            self._dedup_streak["key"] = None
+            self._dedup_streak["n"] = 0
             if _key is not None:
-                _programs_seen[_key] = (_surface_version[0], turn_idx,
-                                        a["program"]["ops"])
-            carry_results.update(_raw_sink.get("results") or {})
-            _fresh.update(_raw_sink.get("results") or {})
+                self._programs_seen[_key] = (self._surface_version, self.turn_idx,
+                                             a["program"]["ops"])
+            self.carry_results.update(_raw_sink.get("results") or {})
+            self._fresh.update(_raw_sink.get("results") or {})
             for _op in a["program"]["ops"]:
-                _producers.setdefault(_op["ref"], []).append(len(_op_history))
-                _op_history.append(_op)
-                _op_reads.append(_refs_read(_op))
+                self._producers.setdefault(_op["ref"], []).append(len(self._op_history))
+                self._op_history.append(_op)
+                self._op_reads.append(self._refs_read(_op))
             try:
                 for _v in (_raw_sink.get("results") or {}).values():
                     _rows = _v if isinstance(_v, list) else (
                         [_v] if isinstance(_v, dict) else [])
                     for _row in _rows:
                         if isinstance(_row, dict) and _row.get("fid"):
-                            row_latest[str(_row["fid"])] = _row
+                            self.row_latest[str(_row["fid"])] = _row
             except Exception:  # noqa: BLE001 — evidence plumbing never perturbs the round
                 pass
         return out
 
-    transient_failures = 0
-    # The bench's budget; a live mission (a reasoner with a cancel_event)
-    # waits for the arm until it answers or the operator stops.
-    MAX_ROUND_TRANSIENT = 6
-
-    mission_flights = 0
-    mission_sam: list[dict] = []
-
-    # The set in scope (the last non-empty result, or what the last flight
-    # added), the paging ledger, and the mission-global rN counter.
-    _those: list = [None]
-    _widened: dict = {}
-    plan_rn: list = [0]
-    # The lines of every accepted block, counted on each result.
-    _script_lines = [0]
-    # Every rN in play (bound handles and those the running block spells):
-    # the flight mint skips them.
-    _code_names: set = set()
-    # The handles flights minted during the running block, for the code
-    # scope to bind.
-    _code_minted: list = []
-    # The fids explore passes have covered this mission.
-    _covered_fids: set = set()
-
-    def _watching_trailer() -> list:
+    def _watching_trailer(self) -> list:
         """The armed watchlist with each class's live detection count."""
         counts: dict[str, int] = {}
-        for _r in (compute_namespace or {}).get("cands") or []:
+        for _r in self.ns.get("cands") or []:
             if isinstance(_r, dict) \
                     and str(_r.get("fid") or "").startswith("detected_"):
                 _c = str(_r.get("class") or "?")
                 counts[_c] = counts.get(_c, 0) + 1
         return [f"{c['class']} ({counts.get(c['class'], 0)} detected)"
-                for c in mission_sam]
+                for c in self.mission_sam]
 
-    def _mint_rows(_new_fids: list, _what: str):
+    def _mint_rows(self, _new_fids: list, _what: str):
         """The rows a flight or a pass added -> ``(rN handle, the note
         naming it)``; None (and no handle) when nothing was added."""
         if not _new_fids:
             return None
-        while f"r{plan_rn[0]}" in _code_names:
-            plan_rn[0] += 1
-        _h = f"r{plan_rn[0]}"
-        plan_rn[0] += 1
-        _code_names.add(_h)
-        _code_minted.append(_h)
-        carry_results[_h] = [_ns_rows[_f] for _f in _new_fids]
-        _event_handles.add(_h)
-        _fresh.add(_h)
-        _those[0] = _h
+        while f"r{self.plan_rn[0]}" in self._code_names:
+            self.plan_rn[0] += 1
+        _h = f"r{self.plan_rn[0]}"
+        self.plan_rn[0] += 1
+        self._code_names.add(_h)
+        self._code_minted.append(_h)
+        self.carry_results[_h] = [self._ns_rows[_f] for _f in _new_fids]
+        self._event_handles.add(_h)
+        self._fresh.add(_h)
+        self._those = _h
         return _h, (f"{_h} — the {len(_new_fids)} rows this {_what} added; "
                     f"the handle is bound, so {_h}, {_h}[0] and "
                     f"{_h}.order(...) all reach them")
 
-    def _fly_moves(_accepted: list, _item_errors: list,
+    def _fly_moves(self, _accepted: list, _item_errors: list,
                    cover: str | None = None) -> dict:
         """Fly each entry in order; after each flight the surface re-derives
         and the rows it added mint an rN handle.
@@ -1365,43 +1383,42 @@ def advance_reasoner_one_round(
         ``cover`` (an explore) makes the loop ONE pass: no per-stop view,
         one handle over everything the pass folded, one ack.
         """
-        nonlocal mission_flights, preflight
         _reports: list[dict] = []
-        _cover_before = set(_ns_rows) if cover is not None else None
+        _cover_before = set(self._ns_rows) if cover is not None else None
         _clock_cut = False
 
         def _stop_xy(_it):
             _t = str(_it.get("target_fid") or "")
-            return parse_xy_token(_t) or look_xy(_ns_rows.get(_t) or {})
+            return parse_xy_token(_t) or look_xy(self._ns_rows.get(_t) or {})
 
         _queue = list(_accepted)
         while _queue:
             _pick = 0
-            if cover is not None and len(_queue) > 1 and mission_spec.held_now is not None:
+            if cover is not None and len(_queue) > 1 and self.mission_spec.held_now is not None:
                 # A stop the recording already holds flies first.
                 try:
-                    _held = mission_spec.held_now(
+                    _held = self.mission_spec.held_now(
                         [(str(_it.get("target_fid") or ""), _stop_xy(_it)) for _it in _queue])
                 except Exception as _exc:  # noqa: BLE001 — the order is a convenience, never a fault
-                    log.warning("%s pass: held_now failed: %s", rid_tag, _summarise_exc(_exc))
+                    log.warning("%s pass: held_now failed: %s", self.rid_tag, _summarise_exc(_exc))
                     _held = []
                 _pick = next((_i for _i, _h in enumerate(_held) if _h), 0)
                 if _pick:
                     log.info("%s pass: %s taken first, the recording holds it",
-                             rid_tag, _queue[_pick].get("target_fid"))
+                             self.rid_tag, _queue[_pick].get("target_fid"))
             _item = _queue.pop(_pick)
             if cover is not None:
                 # The rest of the pass rides every stop, for the crew.
                 _item["pass_ahead"] = [[float(_xy[0]), float(_xy[1])]
                                        for _xy in map(_stop_xy, _queue) if _xy]
-            if mission_flights >= mission_spec.flight_budget:
+            if self.mission_flights >= self.mission_spec.flight_budget:
                 log.warning("%s flight backstop hit (%d flights)",
-                            rid_tag, mission_spec.flight_budget)
+                            self.rid_tag, self.mission_spec.flight_budget)
                 _item_errors.append({"target_fid": _item["target_fid"],
                                      "error": "not flown."})
                 continue
-            if (mission_spec.deadline_epoch is not None
-                    and time.time() >= mission_spec.deadline_epoch):
+            if (self.mission_spec.deadline_epoch is not None
+                    and time.time() >= self.mission_spec.deadline_epoch):
                 # The wall-clock backstop stops the flying only; the model
                 # keeps its turns and its own commit.
                 # ponytail: checked between stops, so one slow stop still
@@ -1409,8 +1426,8 @@ def advance_reasoner_one_round(
                 if not _clock_cut:
                     log.warning(
                         "%s wall-clock backstop hit (%d flights, %.0f s past "
-                        "the deadline)", rid_tag, mission_flights,
-                        time.time() - mission_spec.deadline_epoch)
+                        "the deadline)", self.rid_tag, self.mission_flights,
+                        time.time() - self.mission_spec.deadline_epoch)
                 _clock_cut = True
                 _item_errors.append({"target_fid": _item["target_fid"],
                                      "error": "not flown."})
@@ -1420,7 +1437,7 @@ def advance_reasoner_one_round(
             if _pt is not None:
                 # Snap a point within 1 m of a row to that row's fid.
                 _best, _bd = None, 1.0
-                for _bf, _brow in _ns_rows.items():
+                for _bf, _brow in self._ns_rows.items():
                     _bxy = look_xy(_brow)
                     if _bxy is None:
                         continue
@@ -1431,8 +1448,8 @@ def advance_reasoner_one_round(
                 if _best is not None:
                     _snap_from = _item["target_fid"]
                     _item["target_fid"] = _best
-            _fids_before = set(_ns_rows)
-            _report = mission_spec.fly(dict(_item))
+            _fids_before = set(self._ns_rows)
+            _report = self.mission_spec.fly(dict(_item))
             if not isinstance(_report, dict):
                 _report = {"error": str(_report)}
             if _snap_from:
@@ -1441,7 +1458,7 @@ def advance_reasoner_one_round(
                     f"{_snap_from} is {_item['target_fid']}"
                     "'s own position -- flown as that fid.")
             if "error" not in _report:
-                if (not _report.get("new_detections") and not mission_sam
+                if (not _report.get("new_detections") and not self.mission_sam
                         and not withheld("look_for")):
                     _wl_note = ('the watchlist is empty -- nothing is '
                                 'segmented on any flight; call '
@@ -1454,11 +1471,11 @@ def advance_reasoner_one_round(
                 # on the stop's point). A pass renders no per-stop view.
                 if _report.get("pose_xy") and cover is None:
                     _tfid = str(_item.get("target_fid") or "")
-                    _trow = _ns_rows.get(_tfid)
+                    _trow = self._ns_rows.get(_tfid)
                     _tout = look_outline(_trow)
                     _txy = look_xy(_trow)
                     try:
-                        _fv = look_renderer([{
+                        _fv = self.look_renderer([{
                             "center_fid": _tfid if _txy else "",
                             "center_xy": (list(_txy) if _txy
                                           else list(_report["pose_xy"])),
@@ -1471,7 +1488,7 @@ def advance_reasoner_one_round(
                         }])
                     except Exception as _exc:  # noqa: BLE001 — never crash a flight
                         log.warning("%s flight view render failed: %s",
-                                    rid_tag, _summarise_exc(_exc))
+                                    self.rid_tag, _summarise_exc(_exc))
                         _fv = []
                     _fj = [c["jpeg"] for c in (_fv or [])
                            if isinstance(c, dict) and c.get("jpeg")]
@@ -1481,34 +1498,34 @@ def advance_reasoner_one_round(
                         _fv_note = ("the view follows." if _shown else
                                     "the view's caption follows.")
                         if _shown:
-                            _deliver_frames(_fj, _block_frames)
-                        pending_vision.append((_fv_text, _fj if _shown else []))
+                            _deliver_frames(_fj, self._block_frames)
+                        self.pending_vision.append((_fv_text, _fj if _shown else []))
                         _report["note"] = (
                             f"{_report['note']} {_fv_note}"
                             if _report.get("note") else _fv_note)
-                mission_flights += 1
+                self.mission_flights += 1
                 _sid = _report.get("stop_id")
                 _pxy = _report.get("pose_xy")
                 if (_sid and isinstance(_pxy, (list, tuple))
                         and len(_pxy) == 2):
-                    _plan_stops[str(_sid).strip().lower()] = [
+                    self._plan_stops[str(_sid).strip().lower()] = [
                         float(_pxy[0]), float(_pxy[1])]
                 # The world stepped: refresh both surface views and bump
                 # the version.
-                (compute_namespace or {}).update(_surface_from_ctx(ctx))
-                _rebuild_ns_rows()
-                _surface_version[0] += 1
+                self.ns.update(_surface_from_ctx(self.ctx))
+                self._rebuild_ns_rows()
+                self._surface_version += 1
                 # The flight's new rows (the surface diff) mint a handle; a
                 # pass mints once, around the whole of itself.
                 if cover is None:
-                    _m = _mint_rows([_f for _f in _ns_rows
-                                     if _f not in _fids_before], "flight")
+                    _m = self._mint_rows([_f for _f in self._ns_rows
+                                          if _f not in _fids_before], "flight")
                     if _m is not None:
                         _report["new_rows"] = _m[1]
-                preflight = False
+                self.preflight = False
             _reports.append(_report)
         if cover is not None:
-            return _cover_ack(cover, _reports, _cover_before, _item_errors)
+            return self._cover_ack(cover, _reports, _cover_before, _item_errors)
         _mv_ack: dict = {"flown": [_served_flight(r) for r in _reports]}
         if _item_errors:
             _mv_ack["rejected"] = _item_errors
@@ -1516,7 +1533,7 @@ def advance_reasoner_one_round(
             _mv_ack = {"error": "nothing to fly"}
         return _mv_ack
 
-    def _cover_ack(cover: str, _reports: list, _before: set,
+    def _cover_ack(self, cover: str, _reports: list, _before: set,
                    _item_errors: list) -> dict:
         """One explore's flight reports -> the one ack of the pass. The ack
         states that the standing answer is the pass's last stop."""
@@ -1531,7 +1548,7 @@ def advance_reasoner_one_round(
                 f"you mean before you reply")
         _ack["new_detections"] = sum(int(r.get("new_detections") or 0)
                                      for r in _ok)
-        _m = _mint_rows([_f for _f in _ns_rows if _f not in _before], "pass")
+        _m = self._mint_rows([_f for _f in self._ns_rows if _f not in _before], "pass")
         if _m is not None:
             _ack["new_rows"] = _m[1]
         _errs = [str(r["error"]) for r in _reports
@@ -1545,28 +1562,20 @@ def advance_reasoner_one_round(
                               else f"nothing of {cover} could be flown")}
         return _ack
 
-    # HALF THE OBSERVATION'S LONG SIDE: a pass's stop spacing. Half of
-    # ``obs_span_m`` (the footprint's long side) sits under the short side
-    # for any sensor below 2:1, so a ONE-DIMENSIONAL walk covers a shape that
-    # is not one: consecutive stops overlap on the minor axis too.
-    _cover_spacing = (float(obs_span_m) / 2.0
-                      if isinstance(obs_span_m, (int, float))
-                      and obs_span_m > 0 else None)
-
-    def _coverage_stops(_tok: str):
+    def _coverage_stops(self, _tok: str):
         """The engine's stops over one fid's footprint; None for a point,
         a fid with no cells, or a run without an observation extent."""
-        if (parse_xy_token(_tok) is None and _cover_spacing is not None
-                and mission_spec.coverage_stops is not None):
-            return mission_spec.coverage_stops(_tok, _cover_spacing)
+        if (parse_xy_token(_tok) is None and self._cover_spacing is not None
+                and self.mission_spec.coverage_stops is not None):
+            return self.mission_spec.coverage_stops(_tok, self._cover_spacing)
         return None
 
-    def _uncovered_segments(_nm: str) -> str:
+    def _uncovered_segments(self, _nm: str) -> str:
         """`` '<name>' has N more segment(s) no pass has covered (...).``,
         or "" when every segment bearing the name is covered."""
-        _sibs = sorted(f for f, r in _ns_rows.items()
+        _sibs = sorted(f for f, r in self._ns_rows.items()
                        if isinstance(r, dict) and r.get("name") == _nm
-                       and f not in _covered_fids)
+                       and f not in self._covered_fids)
         if not _sibs:
             return ""
         _head = ", ".join(_sibs[:6])
@@ -1574,17 +1583,17 @@ def advance_reasoner_one_round(
         return (f" {_nm!r} has {len(_sibs)} more segment(s) no pass has "
                 f"covered ({_head}{_more}).")
 
-    def _cover_items(_accepted_items: list, _said=None):
+    def _cover_items(self, _accepted_items: list, _said=None):
         """One explore -> ``(move items, note, subject, segments)``: the stops
         over the subject's footprint in shape order and nothing after them,
         and a note saying how much of the shape they reach. A set is one
         pass over the union (``_cover_set_items``)."""
         if len(_accepted_items) > 1:
-            return _cover_set_items(_accepted_items, _said)
+            return self._cover_set_items(_accepted_items, _said)
         _item = _accepted_items[0]
         _tok = str(_item.get("target_fid") or "")
-        _span = _cover_spacing
-        _stops = _coverage_stops(_tok)
+        _span = self._cover_spacing
+        _stops = self._coverage_stops(_tok)
         _note = ""
         if _stops:
             _walk = sum(math.dist(a, b) for a, b in zip(_stops, _stops[1:]))
@@ -1609,25 +1618,25 @@ def advance_reasoner_one_round(
             _items = [dict(_item)]
         # A named feature is often many segments: the note names those no
         # pass has covered.
-        _covered_fids.add(str(_tok))
-        _nm = (_ns_rows.get(str(_tok)) or {}).get("name")
+        self._covered_fids.add(str(_tok))
+        _nm = (self._ns_rows.get(str(_tok)) or {}).get("name")
         if _nm:
-            _note += _uncovered_segments(_nm)
+            _note += self._uncovered_segments(_nm)
         return _items, _note, _tok, 1
 
-    def _cover_set_items(_accepted_items: list, _said):
+    def _cover_set_items(self, _accepted_items: list, _said):
         """The multi-member half of ``_cover_items``: each member's own walk,
         chained greedily by nearest endpoint from the live pose (a member
         reversed when its far end is nearer), dropping a stop within half a
         spacing of one already kept."""
         # ponytail: O(n*m) greedy chaining, not a TSP; order the members
         # optimally if a pass's flown length ever matters.
-        _span = _cover_spacing
+        _span = self._cover_spacing
         _members: list[dict] = []
         for _it in _accepted_items:
             _tok = str(_it.get("target_fid") or "")
             _pt = parse_xy_token(_tok)
-            _stops = _coverage_stops(_tok)
+            _stops = self._coverage_stops(_tok)
             if _stops:
                 _pts = [[float(p[0]), float(p[1])] for p in _stops]
                 _members.append({
@@ -1638,7 +1647,7 @@ def advance_reasoner_one_round(
                                 for a, b in zip(_pts, _pts[1:]))})
             else:
                 # one stop; its recorded position anchors the chain.
-                _xy = ((_ns_rows.get(_tok) or {}).get("xy")
+                _xy = ((self._ns_rows.get(_tok) or {}).get("xy")
                        if _pt is None else list(_pt))
                 _p = ([float(_xy[0]), float(_xy[1])]
                       if isinstance(_xy, (list, tuple)) and len(_xy) == 2
@@ -1646,7 +1655,7 @@ def advance_reasoner_one_round(
                 _members.append({"tok": _tok, "pts": [_p] if _p else [],
                                  "items": [dict(_it)], "walk": 0.0})
         # greedy nearest-endpoint chain, seeded from where the drone is
-        _cur = ctx.pose_xy
+        _cur = self.ctx.pose_xy
         _cur = [float(_cur[0]), float(_cur[1])] if _cur else None
         _chained: list[dict] = []
         _rest = list(_members)
@@ -1682,7 +1691,7 @@ def advance_reasoner_one_round(
                 _flat.append((_m, _mv))
                 if _p is not None:
                     _kept_pts.append(_p)
-        _set_cap = mission_spec.flight_budget
+        _set_cap = self.mission_spec.flight_budget
         if len(_flat) > _set_cap:
             _n = _set_cap
             _stride = (len(_flat) - 1) / (_n - 1)
@@ -1715,49 +1724,49 @@ def advance_reasoner_one_round(
                     if len(_chained) > 8 else "")
         _note = f"{_note} ({_mm}{_mm_more})"
         for _m in _chained:
-            _covered_fids.add(_m["tok"])
-        _names = {(_ns_rows.get(_m["tok"]) or {}).get("name")
+            self._covered_fids.add(_m["tok"])
+        _names = {(self._ns_rows.get(_m["tok"]) or {}).get("name")
                   for _m in _chained}
         _names.discard(None)
         _names.discard("")
         for _nm in sorted(_names):
-            _note += _uncovered_segments(_nm)
+            _note += self._uncovered_segments(_nm)
         return ([_mv for _, _mv in _flat], _note, _subject, len(_chained))
 
-    def _watch_apply(adds: list) -> dict:
+    def _watch_apply(self, adds: list) -> dict:
         """look_for(): add classes to the watchlist (latest declaration of
         a class wins; the list only grows) and arm it with the engine."""
         adds = [dict(e) for e in adds]
         for _e in adds:
-            mission_sam[:] = [c for c in mission_sam
-                              if c["class"] != _e["class"]]
-            mission_sam.append(_e)
-        _rcpt = mission_spec.declare_concepts(list(mission_sam))
+            self.mission_sam[:] = [c for c in self.mission_sam
+                                   if c["class"] != _e["class"]]
+            self.mission_sam.append(_e)
+        _rcpt = self.mission_spec.declare_concepts(list(self.mission_sam))
         ack: dict = {"now": [f"{c['class']} ({c['role']})"
-                             for c in mission_sam]}
+                             for c in self.mission_sam]}
         if isinstance(_rcpt, dict) and "error" in _rcpt:
             ack["error"] = _rcpt["error"]
         _names = {s for s in (
             str(getattr(n, "name", "") or "").strip().lower()
-            for n in (getattr(ctx.graph, "nodes", None)
+            for n in (getattr(self.ctx.graph, "nodes", None)
                       or {}).copy().values()) if s}
         _note = _named_feature_note([c["class"] for c in adds], _names)
         if _note:
             ack["note"] = _note
-        log.info("%s SAY watch: +%s -> %s", rid_tag,
+        log.info("%s SAY watch: +%s -> %s", self.rid_tag,
                  [c["class"] for c in adds],
-                 [c["class"] for c in mission_sam])
+                 [c["class"] for c in self.mission_sam])
         return ack
 
-    def _boost(where: str, concepts: list) -> dict:
+    def _boost(self, where: str, concepts: list) -> dict:
         """look_for(..., at=) -- the targeted boost."""
-        res = boost_queue(list(concepts), [where]) or {}
+        res = self.boost_queue(list(concepts), [where]) or {}
         if "error" not in res and res.get("queued"):
             # The placed form also arms the class it names.
             _adds = [{"class": str(c), "role": "target"}
                      for c in concepts if c]
             if _adds:
-                _w = _watch_apply(_adds)
+                _w = self._watch_apply(_adds)
                 res["watching"] = _w.get("error") or _w.get("now")
             res["note"] = ("boost queued -- extra segmentation at the "
                            "asked spot fires on your next flight; the "
@@ -1765,14 +1774,14 @@ def advance_reasoner_one_round(
                            "every later flight")
         if "error" not in res:
             # A retro boost ingests detections now: refresh like a flight.
-            (compute_namespace or {}).update(_surface_from_ctx(ctx))
-            _rebuild_ns_rows()
-            _surface_version[0] += 1
+            self.ns.update(_surface_from_ctx(self.ctx))
+            self._rebuild_ns_rows()
+            self._surface_version += 1
         if res.get("error"):
-            return _plan_err({"boost": res}, str(res["error"]))
+            return self._plan_err({"boost": res}, str(res["error"]))
         return {"boost": res}
 
-    def _ship(ack: dict, kind: str, jpegs: list, vis_text: str) -> bool:
+    def _ship(self, ack: dict, kind: str, jpegs: list, vis_text: str) -> bool:
         """Queue one look's or map's pictures (or, under the images
         withhold, its caption alone) for the next message; ``ack`` states
         what follows. True when pictures shipped."""
@@ -1780,22 +1789,22 @@ def advance_reasoner_one_round(
         if jpegs and withheld("images"):
             ack["delivered"] = 0
             ack["note"] = _PICTURE_WITHHELD_OF.format(kind)
-            pending_vision.append((vis_text, []))
+            self.pending_vision.append((vis_text, []))
             return False
         if jpegs:
             ack["note"] = f"the {kind} follows in the next message"
-            _deliver_frames(jpegs, _block_frames)
-            pending_vision.append((vis_text, jpegs))
+            _deliver_frames(jpegs, self._block_frames)
+            self.pending_vision.append((vis_text, jpegs))
             return True
         ack["error"] = f"render returned no image bytes; no {kind} will follow"
         return False
 
-    def _crops_of(fid, marks: list | None = None,
+    def _crops_of(self, fid, marks: list | None = None,
                    preamble: str = "") -> dict:
         # A list asks for one crop per row.
         _fids = [str(f) for f in fid] if isinstance(fid, (list, tuple)) \
             else [str(fid)]
-        reqs, skipped, ref_notes = _build_crop_requests(
+        reqs, skipped, ref_notes = self._build_crop_requests(
             [{"fid": f, "target_fid": f,
               **({"mark_fids": list(marks)} if marks else {})}
              for f in _fids])
@@ -1810,15 +1819,15 @@ def advance_reasoner_one_round(
                                  "surface")
             return ack
         try:
-            crops = look_renderer(reqs)
+            crops = self.look_renderer(reqs)
         except Exception as exc:  # noqa: BLE001 — render never crashes the mission
-            log.warning("%s SAY crops render failed: %s", rid_tag,
+            log.warning("%s SAY crops render failed: %s", self.rid_tag,
                         _summarise_exc(exc))
             return {"error": f"crop render failed: {_summarise_exc(exc)}"}
         jpegs = [c["jpeg"] for c in crops
                  if isinstance(c, dict) and c.get("jpeg")]
         vis_text = preamble + _look_vision_text(crops)
-        if _ship(ack, "crop", jpegs, vis_text) and marks:
+        if self._ship(ack, "crop", jpegs, vis_text) and marks:
             # Badges drawn (the legend IS the drawn set) and the renderer's
             # own out-of-frame list, on a crop that shipped.
             ack["badged"] = sum(
@@ -1830,17 +1839,17 @@ def advance_reasoner_one_round(
                 for f in (c.get("marks_out_of_view") or [])][:20]
         return ack
 
-    def _crops_set(handle: str, marks: list | None = None) -> dict:
+    def _crops_set(self, handle: str, marks: list | None = None) -> dict:
         """look(rows): one crop per row of the handle, in its own order, each
         badged with the row it shows; the crop budget is stated when it
         bites."""
-        rows = [r for r in (_carry_read(handle) or [])
+        rows = [r for r in (self._carry_read(handle) or [])
                 if isinstance(r, dict) and r.get("fid")]
         if not rows:
             return {"error": (f"{handle} holds no rows to look at; name a "
                               "handle that has some, or find() one first")}
-        fids = [_crop_token_of(r, str(r["fid"]) in _ns_rows) for r in rows]
-        ack = _crops_of(
+        fids = [_crop_token_of(r, str(r["fid"]) in self._ns_rows) for r in rows]
+        ack = self._crops_of(
             fids, marks=marks,
             # No handle named: the executor's ref may be unbound.
             preamble=("One crop per row, in order, each badged with the "
@@ -1852,8 +1861,8 @@ def advance_reasoner_one_round(
                 "handle to see the rest")
         return ack
 
-    def _map_of(fid: str, mark_fids: list | None = None) -> dict:
-        spec, m_skipped = _map_spec(fid, mark_fids or [])
+    def _map_of(self, fid: str, mark_fids: list | None = None) -> dict:
+        spec, m_skipped = self._map_spec(fid, mark_fids or [])
         ack: dict = {"maps": int(spec is not None)}
         if m_skipped:
             ack["skipped"] = m_skipped[:20]
@@ -1865,40 +1874,40 @@ def advance_reasoner_one_round(
                 render_map_from_spec,
             )
             _m = render_map_from_spec(
-                spec, _map_features_cached(),
-                tile_origin_xy=ctx.tile_origin_xy,
-                cell_size_m=float(ctx.cell_size_m),
-                grid_shape=tuple(ctx.grid_shape))
+                spec, self._map_features_cached(),
+                tile_origin_xy=self.ctx.tile_origin_xy,
+                cell_size_m=float(self.ctx.cell_size_m),
+                grid_shape=tuple(self.ctx.grid_shape))
             maps = [_m] if _m is not None else []
         except Exception as exc:  # noqa: BLE001 — render never crashes the mission
-            log.warning("%s SAY map render failed: %s", rid_tag,
+            log.warning("%s SAY map render failed: %s", self.rid_tag,
                         _summarise_exc(exc))
             return {"error": f"map render failed: {_summarise_exc(exc)}"}
         jpegs = [m["jpeg"] for m in maps if m.get("jpeg")]
-        _ship(ack, "map", jpegs, _map_vision_text(maps))
+        self._ship(ack, "map", jpegs, self._map_vision_text(maps))
         return ack
 
-    def _plan_err(ack: dict, msg: str) -> dict:
+    def _plan_err(self, ack: dict, msg: str) -> dict:
         """A plan error, through the escalating loop breaker."""
-        return {**ack, "error": _loop_broken_error(str(msg))}
+        return {**ack, "error": self._loop_broken_error(str(msg))}
 
-    def _flown_stop(tok: str) -> tuple[str, str | None]:
+    def _flown_stop(self, tok: str) -> tuple[str, str | None]:
         """A flown stop id -> its recorded point; an unflown one is refused.
         ``(token, error)``."""
-        _sp = _plan_stops.get(tok.strip().lower())
+        _sp = self._plan_stops.get(tok.strip().lower())
         if _sp is not None:
             return format_xy_token(_sp[0], _sp[1]), None
         if re.fullmatch(r"stop_[0-9]{1,4}", tok.strip().lower()):
-            _known = ", ".join(sorted(_plan_stops)) or "none yet"
+            _known = ", ".join(sorted(self._plan_stops)) or "none yet"
             return tok, (f"{tok} has not been flown; the flown stops are: "
                          f"{_known}")
         return tok, None
 
-    def _closest_names(what: str) -> str:
+    def _closest_names(self, what: str) -> str:
         """The 3 nearest named rows to a name that matched nothing."""
         names: dict[str, tuple] = {}
         for _key in ("cands", "anchors"):
-            for _r in (compute_namespace or {}).get(_key) or []:
+            for _r in self.ns.get(_key) or []:
                 if not isinstance(_r, dict) or not _r.get("fid"):
                     continue
                 _nm = str(_r.get("name") or "").strip()
@@ -1911,21 +1920,17 @@ def advance_reasoner_one_round(
         return "; closest named rows: " + ", ".join(
             f"\"{names[c][1]}\" ({names[c][0]})" for c in close)
 
-    # The call in flight: what _ground_names noted and _analyze answered,
-    # read by _finish.
-    _call: dict = {}
-
-    def _call_minted():
+    def _call_minted(self):
         """The handle this call's last flight minted, or None."""
-        return (_code_minted[_call.get("minted", 0):] or [None])[-1]
+        return (self._code_minted[self._call.get("minted", 0):] or [None])[-1]
 
-    def _ground_names(names: dict) -> dict:
+    def _ground_names(self, names: dict) -> dict:
         """Open a call and ground its names (``{name: why}``) under the
         name-match floor: ``{"ties": {name: top-tie fids}}``, or the first
         refusal."""
-        _call.clear()
-        _call["notes"] = notes = []
-        _call["minted"] = len(_code_minted)   # this call's flights mint past it
+        self._call.clear()
+        self._call["notes"] = notes = []
+        self._call["minted"] = len(self._code_minted)   # this call's flights mint past it
         ties: dict = {}
         if not names:
             return {"ties": ties}
@@ -1935,10 +1940,10 @@ def advance_reasoner_one_round(
                 {"ref": f"r{i}", "op": "find",
                  "args": {"query": q.lower()}}
                 for i, q in enumerate(names)]}},
-            namespace=(compute_namespace or {}),
-            raw_sink=_sink, preflight=preflight)
+            namespace=self.ns,
+            raw_sink=_sink, preflight=self.preflight)
         if isinstance(g_out, dict) and "error" in g_out:
-            return _plan_err({}, str(g_out["error"]))
+            return self._plan_err({}, str(g_out["error"]))
         g_res = _sink.get("results") or {}
         _WHY_VERB = {"stage": "standing at", "move": "flying",
                      "map": "mapping around", "crops": "looking at",
@@ -1951,9 +1956,9 @@ def advance_reasoner_one_round(
                     or float(r["name_match"]) >= _FUZZY_FLOOR]
             _what = q.lower() or "that"
             if not rows:
-                return _plan_err({}, (
+                return self._plan_err({}, (
                     f"rule N: nothing named \"{_what}\" is on "
-                    f"this surface{_closest_names(_what)}; say it "
+                    f"this surface{self._closest_names(_what)}; say it "
                     "differently, say a fid off a served row, or "
                     "perceive more first"))
             # every name keeps only its top name_match tie group
@@ -1963,7 +1968,7 @@ def advance_reasoner_one_round(
                 or [str(rows[0]["fid"])]
             if why == "stage" and len(ties[q]) > 1:
                 _f = ", ".join(ties[q][:4])
-                return _plan_err({}, (
+                return self._plan_err({}, (
                     f"rule F: a viewpoint is one point; "
                     f"\"{_what}\" has {len(ties[q])} equally good "
                     f"name matches ({_f}); say which one — a fid "
@@ -1984,50 +1989,50 @@ def advance_reasoner_one_round(
                     "choose precisely")
         return {"ties": ties}
 
-    def _analyze(ops: list, rn_end: int, answer, page) -> dict:
+    def _analyze(self, ops: list, rn_end: int, answer, page) -> dict:
         """Run one compiled program; ``answer`` names the ref whose envelope
         is served, ``page`` the ``(ref, start)`` a more_of window pages."""
         if page:
             # Paging a handle with nothing left to page is refused here.
             _h, _lo = page
-            _held = len(_carry_read(_h) or [])
+            _held = len(self._carry_read(_h) or [])
             if _held and (_held <= _BROAD_DUMP_SOFT_ROWS or _lo >= _held):
-                return _plan_err({}, (
+                return self._plan_err({}, (
                     f"all {_held} row(s) of {_h} are already served -- there "
                     f"is no further block to serve. Narrow it "
                     f"({_h}.order(color=\"<colour>\"), "
                     f"{_h}.order(nearest=\"<fid>\"), "
                     f"{_h}.filter(within=\"<place>\"))"
                     + ("." if withheld("look") else f" or look({_h}).")))
-        out = _dispatch_analyze_scene({"program": {"ops": ops}},
-                                      answer_ref=str(answer or ""))
+        out = self._dispatch_analyze_scene({"program": {"ops": ops}},
+                                           answer_ref=str(answer or ""))
         if isinstance(out, dict) and "error" in out:
             return {"error": out["error"]}
-        plan_rn[0] = max(plan_rn[0], int(rn_end or 0))
+        self.plan_rn[0] = max(self.plan_rn[0], int(rn_end or 0))
         # The column this call ordered by, so _finish can say when the
         # ordering separated nothing.
         _sb = next((o for o in reversed(ops) if o["op"] == "score_by"), None)
         _em = ((_sb["args"].get("emphasis") or [None])[0]) if _sb else None
-        _call.update(answer=answer, page=page,
-                     rows=carry_results.get(answer),
-                     order=str(_em["key"]) if isinstance(_em, dict)
-                     and _em.get("key") else None)
+        self._call.update(answer=answer, page=page,
+                          rows=self.carry_results.get(answer),
+                          order=str(_em["key"]) if isinstance(_em, dict)
+                          and _em.get("key") else None)
         return {"result": out}
 
-    def _stand(at: str, facing: str) -> dict:
-        st = _stage_apply(at, facing)
+    def _stand(self, at: str, facing: str) -> dict:
+        st = self._stage_apply(at, facing)
         if not st.get("staged"):
-            return _plan_err({}, (
+            return self._plan_err({}, (
                 "rule F: the stance did not bind: "
                 + str(st.get("rejected") or st.get("error"))))
         return {"stance": st}
 
-    def _move_to(tok: str) -> dict:
-        tok, _stop_err = _flown_stop(tok)
+    def _move_to(self, tok: str) -> dict:
+        tok, _stop_err = self._flown_stop(tok)
         if _stop_err:
-            return _plan_err({}, _stop_err)
+            return self._plan_err({}, _stop_err)
         _accepted, _item_errors = _mission_sanitize_moves([tok])
-        mv = _fly_moves(_accepted, _item_errors)
+        mv = self._fly_moves(_accepted, _item_errors)
         _ok = [r for r in mv.get("flown") or []
                if isinstance(r, dict) and "error" not in r]
         if not (_ok and _accepted):
@@ -2039,10 +2044,10 @@ def advance_reasoner_one_round(
                 (str(e.get("error")) for e in mv.get("rejected") or []
                  if isinstance(e, dict) and e.get("error")),
                 None) or str(mv.get("error") or "nothing flew")
-            return _plan_err({"flown": mv}, _msg)
+            return self._plan_err({"flown": mv}, _msg)
         return {"flown": mv}
 
-    def _cover(members: list, said_to: str) -> dict:
+    def _cover(self, members: list, said_to: str) -> dict:
         """explore(): one pass of flights over a place or a set, whose
         members arrive as a name's top tie group (a list), a handle's rows
         or a token."""
@@ -2051,14 +2056,14 @@ def advance_reasoner_one_round(
             if isinstance(_t, list):
                 _raw_members.extend(_t)
                 continue
-            _t, _stop_err = _flown_stop(_t)
+            _t, _stop_err = self._flown_stop(_t)
             if _stop_err:
-                return _plan_err({}, _stop_err)
+                return self._plan_err({}, _stop_err)
             if _is_handle_token(_t):
-                _hr = [str(r["fid"]) for r in (_carry_read(_t) or [])
+                _hr = [str(r["fid"]) for r in (self._carry_read(_t) or [])
                        if isinstance(r, dict) and r.get("fid")]
                 if not _hr:
-                    return _plan_err({}, (
+                    return self._plan_err({}, (
                         f"{_t} holds 0 fid-bearing row(s) "
                         "here; there is nothing to cover."))
                 _raw_members.extend(_hr)
@@ -2067,17 +2072,17 @@ def advance_reasoner_one_round(
         _accepted, _item_errors = _mission_sanitize_moves(
             list(dict.fromkeys(_raw_members)))
         if not _accepted:
-            return _plan_err({}, next(
+            return self._plan_err({}, next(
                 (str(e.get("error")) for e in _item_errors
                  if isinstance(e, dict) and e.get("error")),
                 "nothing to cover"))
-        _accepted, _cov_note, _subject, _segs = _cover_items(
+        _accepted, _cov_note, _subject, _segs = self._cover_items(
             _accepted, _said=said_to)
         if not _accepted:
-            return _plan_err({}, _cov_note)
-        mv = _fly_moves(_accepted, _item_errors, cover=_subject)
+            return self._plan_err({}, _cov_note)
+        mv = self._fly_moves(_accepted, _item_errors, cover=_subject)
         if "error" in mv:
-            return _plan_err({"explored": mv}, str(mv["error"]))
+            return self._plan_err({"explored": mv}, str(mv["error"]))
         if _segs > 1:
             mv["segments"] = _segs
         # A truncated pass reads as truncated.
@@ -2088,44 +2093,44 @@ def advance_reasoner_one_round(
             mv["note"] = (f"{_cov_note} {mv['note']}"
                           if mv.get("note") else _cov_note)
         # THE PASS SHOWS ITS CATCH: one crop per row it added, pass order.
-        _h = _call_minted()
-        _rows = [r for r in (carry_results.get(_h) or [])
+        _h = self._call_minted()
+        _rows = [r for r in (self.carry_results.get(_h) or [])
                  if isinstance(r, dict) and r.get("fid")] if _h else []
         _catch = _rows[:_CATCH_CROPS]
         if _catch:
-            _cack = _crops_of(
-                [_crop_token_of(r, str(r["fid"]) in _ns_rows)
+            _cack = self._crops_of(
+                [_crop_token_of(r, str(r["fid"]) in self._ns_rows)
                  for r in _catch],
                 preamble=("The pass's catch, one crop per "
                           "row it added, in pass order: "))
             if not _cack.get("error"):
                 mv["catch"] = {k: _cack[k] for k in ("delivered", "not_drawn")
                                if k in _cack}
-                if len(_catch) < len(carry_results.get(_h) or []):
+                if len(_catch) < len(self.carry_results.get(_h) or []):
                     mv["catch"]["shown"] = (
                         f"first {len(_catch)} of "
-                        f"{len(carry_results[_h])}" + (
+                        f"{len(self.carry_results[_h])}" + (
                             "" if withheld("look") else
                             f" -- look({_h}[a:b]) pages the rest"))
                 if withheld("images"):
                     mv["catch"] = {"note": _PICTURE_WITHHELD}
         return {"explored": mv}
 
-    def _crops(of, fid, marks) -> dict:
+    def _crops(self, of, fid, marks) -> dict:
         _mk = [m for m in marks or [] if isinstance(m, str) and m.strip()]
-        crop = (_crops_set(str(of), marks=_mk or None) if of
-                else _crops_of(fid, marks=_mk or None))
+        crop = (self._crops_set(str(of), marks=_mk or None) if of
+                else self._crops_of(fid, marks=_mk or None))
         if crop.get("error") and not crop.get("delivered"):
-            return _plan_err({"crop": crop}, str(crop["error"]))
+            return self._plan_err({"crop": crop}, str(crop["error"]))
         return {"crop": crop}
 
-    def _map(around: str) -> dict:
+    def _map(self, around: str) -> dict:
         # The map badges the set in scope.
-        _h = _those[0]
-        _mrows = [r for r in (_carry_read(_h) or [])
+        _h = self._those
+        _mrows = [r for r in (self._carry_read(_h) or [])
                   if isinstance(r, dict) and r.get("fid")] if _h else []
         _mfids = [str(r["fid"]) for r in _mrows[:_MAP_MAX_MARKS]]
-        mp = _map_of(around, mark_fids=_mfids)
+        mp = self._map_of(around, mark_fids=_mfids)
         if _mfids:
             mp["badged_from"] = _h
             if len(_mrows) > len(_mfids):
@@ -2133,22 +2138,22 @@ def advance_reasoner_one_round(
                     f"{len(_mrows)} rows in {_h}; this map badges the "
                     f"first {len(_mfids)}")
         if mp.get("error") and not mp.get("delivered"):
-            return _plan_err({"map": mp}, str(mp["error"]))
+            return self._plan_err({"map": mp}, str(mp["error"]))
         return {"map": mp}
 
-    def _watch(concepts: list) -> dict:
-        w = _watch_apply([{"class": c, "role": "target"} for c in concepts])
+    def _watch(self, concepts: list) -> dict:
+        w = self._watch_apply([{"class": c, "role": "target"} for c in concepts])
         if w.get("error"):
-            return _plan_err({"watching": w}, str(w["error"]))
+            return self._plan_err({"watching": w}, str(w["error"]))
         return {"watching": w}
 
-    def _finish(ack: dict) -> dict:
+    def _finish(self, ack: dict) -> dict:
         """Close a call nothing refused: the tie note, the grounding notes,
         the streak reset, the scope and paging writes."""
         # An ordering that separated nothing says how many rows tie.
-        _ok_key = _call.get("order")
+        _ok_key = self._call.get("order")
         if _ok_key:
-            _rows = [r for r in (_call.get("rows") or [])
+            _rows = [r for r in (self._call.get("rows") or [])
                      if isinstance(r, dict)]
             if len(_rows) >= 2:
                 _v0 = _rows[0].get(_ok_key)
@@ -2163,24 +2168,22 @@ def advance_reasoner_one_round(
                               f"{_t} on '{_ok_key}' -- this ordering does "
                               f"not separate them, so its rank 0 is "
                               f"arbitrary among the tie")
-        if _call.get("notes"):
+        if self._call.get("notes"):
             ack["note"] = (f"{ack['note']}\n" if ack.get("note")
-                           else "") + "; ".join(_call["notes"])
-        _err_streak["sig"] = None
-        _err_streak["n"] = 0
-        if _call.get("page"):
-            _widened.update([_call["page"]])
+                           else "") + "; ".join(self._call["notes"])
+        self._err_streak["sig"] = None
+        self._err_streak["n"] = 0
+        if self._call.get("page"):
+            self._widened.update([self._call["page"]])
         # The set in scope: the call's non-empty answer, or what its last
         # flight added.
-        if _call.get("answer") and _call.get("rows"):
-            _those[0] = _call["answer"]
-        if _call_minted():
-            _those[0] = _call_minted()
+        if self._call.get("answer") and self._call.get("rows"):
+            self._those = self._call["answer"]
+        if self._call_minted():
+            self._those = self._call_minted()
         return ack
 
-    _mission_py: list = [None]
-
-    def _dispatch_run(args) -> dict:
+    def _dispatch_run(self, args) -> dict:
         """One code block, run in the mission's persistent namespace; an
         error costs the line it is on."""
         if "__args_parse_error" in (args or {}):
@@ -2189,189 +2192,197 @@ def advance_reasoner_one_round(
         code = (args or {}).get("code")
         if not isinstance(code, str) or not code.strip():
             return {"error": "run takes one block of code in code"}
-        if _mission_py[0] is None:
-            _mission_py[0] = _py_surface.MissionPython(_py_surface.MissionEnv(
+        if self._mission_py is None:
+            self._mission_py = _py_surface.MissionPython(_py_surface.MissionEnv(
                 # A read of a handle's rows re-derives it first.
                 rows_of_ref=lambda ref: (
-                    _ensure_fresh([ref]),
-                    [r for r in (carry_results.get(ref) or [])
+                    self._ensure_fresh([ref]),
+                    [r for r in (self.carry_results.get(ref) or [])
                      if isinstance(r, dict)])[1],
                 tied_of_ref=lambda ref: bool(
-                    getattr(_carry_read(ref), "name_set", False)),
-                plan_rn=plan_rn, widened=_widened, minted=_code_minted,
-                say_err=_plan_err, row_of_fid=_ns_rows.get,
-                ground=_ground_names, analyze=_analyze, stand=_stand,
-                move=_move_to, cover=_cover, crops=_crops, map=_map,
-                watch=_watch, boost=_boost, finish=_finish))
-        _code_names.clear()
-        _code_names.update(re.findall(r"\br\d+\b", code))
-        _code_names.update(
-            v.ref for v in _mission_py[0].ns.values()
+                    getattr(self._carry_read(ref), "name_set", False)),
+                plan_rn=self.plan_rn, widened=self._widened, minted=self._code_minted,
+                say_err=self._plan_err, row_of_fid=self._ns_rows.get,
+                ground=self._ground_names, analyze=self._analyze, stand=self._stand,
+                move=self._move_to, cover=self._cover, crops=self._crops, map=self._map,
+                watch=self._watch, boost=self._boost, finish=self._finish))
+        self._code_names.clear()
+        self._code_names.update(re.findall(r"\br\d+\b", code))
+        self._code_names.update(
+            v.ref for v in self._mission_py.ns.values()
             if isinstance(v, _py_surface.Rows))
-        _code_minted.clear()
-        _script_lines[0] += len(code.strip().splitlines())
-        out = _mission_py[0].run_block(code)
-        out["script_lines"] = _script_lines[0]
+        self._code_minted.clear()
+        self._script_lines += len(code.strip().splitlines())
+        out = self._mission_py.run_block(code)
+        out["script_lines"] = self._script_lines
         return out
 
-    def _mission_end(ended_by: str, turns: int = 0) -> MissionReply:
-        if transcript is not None:
-            transcript.append({"kind": "mission_end",
-                               "ended_by": ended_by, "turns": int(turns)})
+    def _mission_end(self, ended_by: str, turns: int = 0) -> MissionReply:
+        if self.transcript is not None:
+            self.transcript.append({"kind": "mission_end",
+                                    "ended_by": ended_by, "turns": int(turns)})
         return MissionReply(ended_by=ended_by, turns_used=int(turns))
 
-    if thread_infeasible:
-        return _mission_end("compaction_infeasible")
-
-    for turn_idx in itertools.count():
-        if diag is not None:
-            diag["turns_used"] = turn_idx + 1
-        # The operator's re-tasks land at the top of a turn, never between
-        # a turn's tool calls and their results.
-        if retask is not None:
-            while (operator_turn := retask()) is not None:
-                log.info("%s operator re-task at turn %d (%d chars)",
-                         rid_tag, turn_idx, len(operator_turn))
-                reasoner.append_user(operator_turn)
-        if turn_idx >= mission_spec.turn_cap:
-            log.info("%s mission turn cap (%d) reached", rid_tag,
-                     mission_spec.turn_cap)
-            return _mission_end("turn_cap", turns=turn_idx)
-        try:
-            r = reasoner.step_tool_call(stop_tools)
-        except (CompactionInfeasible, CompactionInvariantError) as exc:
-            # Terminal: flag the thread and drop this turn's unread message.
-            reasoner.compaction_infeasible = True
-            msgs = getattr(reasoner, "messages", None)
-            if (turn_idx == 0 and msgs
-                    and msgs[-1].get("role") == "user"
-                    and msgs[-1].get("content") == user_message):
-                msgs.pop()
-            log.warning(
-                "%s stop_round compaction-infeasible -> terminal carry "
-                "(thread flagged; remaining rounds skip): %s",
-                rid_tag, _summarise_exc(exc))
-            return _mission_end("compaction_infeasible", turns=turn_idx + 1)
-        except _RETRIABLE_LLM_ERRORS as exc:
-            if _is_oversize_rejection(exc):
+    def converse(self, user_message: str) -> MissionReply:
+        """Append ``user_message`` and run the turn loop to its ending."""
+        # A thread the compactor declared infeasible stays so: no message
+        # grows it.
+        if getattr(self.reasoner, "compaction_infeasible", False):
+            return self._mission_end("compaction_infeasible")
+        self.reasoner.append_user(user_message)
+        # Channel misses, consecutive zero-flight replies
+        # (NO_FLIGHT_ABSTAIN_STREAK), transient serve errors.
+        no_call_streak = no_flight_streak = transient_failures = 0
+        for turn_idx in itertools.count():
+            self.turn_idx = turn_idx
+            if self.diag is not None:
+                self.diag["turns_used"] = turn_idx + 1
+            # The operator's re-tasks land at the top of a turn, never between
+            # a turn's tool calls and their results.
+            if self.retask is not None:
+                while (operator_turn := self.retask()) is not None:
+                    log.info("%s operator re-task at turn %d (%d chars)",
+                             self.rid_tag, turn_idx, len(operator_turn))
+                    self.reasoner.append_user(operator_turn)
+            if turn_idx >= self.mission_spec.turn_cap:
+                log.info("%s mission turn cap (%d) reached", self.rid_tag,
+                         self.mission_spec.turn_cap)
+                return self._mission_end("turn_cap", turns=turn_idx)
+            try:
+                r = self.reasoner.step_tool_call(self.stop_tools)
+            except (CompactionInfeasible, CompactionInvariantError) as exc:
+                # Terminal: flag the thread and drop this turn's unread message.
+                self.reasoner.compaction_infeasible = True
+                msgs = getattr(self.reasoner, "messages", None)
+                if (turn_idx == 0 and msgs
+                        and msgs[-1].get("role") == "user"
+                        and msgs[-1].get("content") == user_message):
+                    msgs.pop()
                 log.warning(
-                    "%s stop_round request does not fit the served window "
-                    "-> terminal (retry would re-send the same bytes): %s",
-                    rid_tag, _summarise_exc(exc))
-                if transcript is not None:
-                    transcript.append({
-                        "kind": "oversize_rejection",
-                        "error": _summarise_exc(exc),
+                    "%s stop_round compaction-infeasible -> terminal carry "
+                    "(thread flagged; remaining rounds skip): %s",
+                    self.rid_tag, _summarise_exc(exc))
+                return self._mission_end("compaction_infeasible", turns=turn_idx + 1)
+            except _RETRIABLE_LLM_ERRORS as exc:
+                if _is_oversize_rejection(exc):
+                    log.warning(
+                        "%s stop_round request does not fit the served window "
+                        "-> terminal (retry would re-send the same bytes): %s",
+                        self.rid_tag, _summarise_exc(exc))
+                    if self.transcript is not None:
+                        self.transcript.append({
+                            "kind": "oversize_rejection",
+                            "error": _summarise_exc(exc),
+                        })
+                    return self._mission_end("oversize_rejection", turns=turn_idx + 1)
+                transient_failures += 1
+                cancel = getattr(self.reasoner, "cancel_event", None)
+                log.warning(
+                    "%s stop_round transient LLM error %d%s: %s",
+                    self.rid_tag,
+                    transient_failures,
+                    "" if cancel is not None else f"/{_MAX_ROUND_TRANSIENT}",
+                    _summarise_exc(exc),
+                )
+                if self.transcript is not None:
+                    self.transcript.append({
+                        "kind": "transient_error",
+                        "attempt": transient_failures, "error": _summarise_exc(exc),
                     })
-                return _mission_end("oversize_rejection", turns=turn_idx + 1)
-            transient_failures += 1
-            cancel = getattr(reasoner, "cancel_event", None)
-            log.warning(
-                "%s stop_round transient LLM error %d%s: %s",
-                rid_tag,
-                transient_failures,
-                "" if cancel is not None else f"/{MAX_ROUND_TRANSIENT}",
-                _summarise_exc(exc),
-            )
-            if transcript is not None:
-                transcript.append({
-                    "kind": "transient_error",
-                    "attempt": transient_failures, "error": _summarise_exc(exc),
-                })
-            if cancel is None:
-                if transient_failures >= MAX_ROUND_TRANSIENT:
-                    return _mission_end(
-                        "request_refused" if _is_refused_request(exc)
-                        else "transient_failures", turns=turn_idx + 1)
-                time.sleep(min(15.0, 0.5 + 2.0 * transient_failures))
-            elif cancel.wait(min(30.0, 0.5 + 2.0 * transient_failures)):
-                raise CallCanceled("stopped while waiting for the reasoner")
-            continue
-        transient_failures = 0
-
-        if r["kind"] == "text":
-            content = str(r.get("content") or "")
-            if _envelope_residue(content) or _envelope_residue(
-                    str(r.get("reasoning") or "")):
-                log.info("%s MALFORMED_ENVELOPE at turn %d -> repair",
-                         rid_tag, turn_idx)
-                if transcript is not None:
-                    transcript.append({"kind": "malformed_envelope",
-                                       "turn_idx": turn_idx})
-                reasoner.append_repair(MALFORMED_ENVELOPE_NUDGE)
+                if cancel is None:
+                    if transient_failures >= _MAX_ROUND_TRANSIENT:
+                        return self._mission_end(
+                            "request_refused" if _is_refused_request(exc)
+                            else "transient_failures", turns=turn_idx + 1)
+                    time.sleep(min(15.0, 0.5 + 2.0 * transient_failures))
+                elif cancel.wait(min(30.0, 0.5 + 2.0 * transient_failures)):
+                    raise CallCanceled("stopped while waiting for the reasoner")
                 continue
-            miss = _not_a_reply(content)
-            if miss is None:
-                no_call_streak = 0
-            else:
-                # Repaired once; a repeat (the streak is shared) is the
-                # ending.
-                kind, what, nudge = miss
-                no_call_streak += 1
-                if transcript is not None:
-                    transcript.append({"kind": kind, "turn_idx": turn_idx,
-                                       "streak": no_call_streak})
-                if no_call_streak < 2:
-                    log.info("%s %s %d -> repair", rid_tag, what, turn_idx)
-                    reasoner.append_repair(nudge)
-                    continue
-                log.info("%s %s %d repeated; mission ends", rid_tag, what,
-                         turn_idx)
-            # A clean prose reply before any flight answers nothing: hand
-            # the turn back, up to NO_FLIGHT_ABSTAIN_STREAK.
-            if no_call_streak == 0 and mission_flights == 0:
-                no_flight_streak += 1
-                if transcript is not None:
-                    transcript.append({"kind": "no_flight_reply",
-                                       "turn_idx": turn_idx,
-                                       "streak": no_flight_streak})
-                if no_flight_streak < NO_FLIGHT_ABSTAIN_STREAK:
-                    log.info("%s reply with ZERO flights at turn %d "
-                             "(streak %d) -> repair", rid_tag, turn_idx,
-                             no_flight_streak)
-                    reasoner.append_repair(NO_FLIGHT_REPLY_NUDGE)
-                    continue
-                log.info("%s reply with ZERO flights at turn %d, streak "
-                         "%d -- abstain", rid_tag, turn_idx,
-                         no_flight_streak)
-            log.info("%s mission ended by reply at turn %d (%d flights)",
-                     rid_tag, turn_idx, mission_flights)
-            return _mission_end("reply", turns=turn_idx + 1)
-        no_call_streak = 0
-        no_flight_streak = 0
+            transient_failures = 0
 
-        # Dispatch each call in order, answering every call id.
-        for tc in r["tool_calls"]:
-            name = (tc.get("function") or {}).get("name") or ""
-            cid = tc.get("id") or ""
-            args = json.loads(tc["function"]["arguments"])
-            if name == "run":
-                out = _dispatch_run(args)
-                if isinstance(out, dict) and not withheld("look_for"):
-                    out.setdefault("watching", (
-                        _watching_trailer()
-                        or "nothing -- no class is segmented on any flight "
-                           'until one is looked for; call look_for("<class>").'))
-                reasoner.append_tool_result(cid, "run", out)
-                if transcript is not None:
-                    transcript.append({
-                        "kind": "run",
-                        "turn_idx": turn_idx,
-                        "reasoning": str(r.get("reasoning") or "")[:4000],
-                        "said": str((args or {}).get("code") or "")[:400],
-                        # already capped (python_surface.PRINT_CHAR_CAP)
-                        "printed": (str(out.get("printed") or "")
-                                    if isinstance(out, dict) else ""),
-                        "errored": bool(isinstance(out, dict)
-                                        and "error" in out),
-                        # every image this block showed, by sha
-                        "frames": list(_block_frames)})
-                _block_frames.clear()
-            else:
-                # An unknown tool's id is answered, never executed.
-                reasoner.append_tool_result(cid, name or "unknown", {
-                    "error": f"unknown tool {name!r}; available: run"})
-        # Pictures ride a user turn after the turn's tool results.
-        for _vtext, _vjpegs in pending_vision:
-            reasoner.append_vision_user(_vtext, _vjpegs)
-        pending_vision.clear()
+            if r["kind"] == "text":
+                content = str(r.get("content") or "")
+                if _envelope_residue(content) or _envelope_residue(
+                        str(r.get("reasoning") or "")):
+                    log.info("%s MALFORMED_ENVELOPE at turn %d -> repair",
+                             self.rid_tag, turn_idx)
+                    if self.transcript is not None:
+                        self.transcript.append({"kind": "malformed_envelope",
+                                                "turn_idx": turn_idx})
+                    self.reasoner.append_repair(MALFORMED_ENVELOPE_NUDGE)
+                    continue
+                miss = _not_a_reply(content)
+                if miss is None:
+                    no_call_streak = 0
+                else:
+                    # Repaired once; a repeat (the streak is shared) is the
+                    # ending.
+                    kind, what, nudge = miss
+                    no_call_streak += 1
+                    if self.transcript is not None:
+                        self.transcript.append({"kind": kind, "turn_idx": turn_idx,
+                                                "streak": no_call_streak})
+                    if no_call_streak < 2:
+                        log.info("%s %s %d -> repair", self.rid_tag, what, turn_idx)
+                        self.reasoner.append_repair(nudge)
+                        continue
+                    log.info("%s %s %d repeated; mission ends", self.rid_tag, what,
+                             turn_idx)
+                # A clean prose reply before any flight answers nothing: hand
+                # the turn back, up to NO_FLIGHT_ABSTAIN_STREAK.
+                if no_call_streak == 0 and self.mission_flights == 0:
+                    no_flight_streak += 1
+                    if self.transcript is not None:
+                        self.transcript.append({"kind": "no_flight_reply",
+                                                "turn_idx": turn_idx,
+                                                "streak": no_flight_streak})
+                    if no_flight_streak < NO_FLIGHT_ABSTAIN_STREAK:
+                        log.info("%s reply with ZERO flights at turn %d "
+                                 "(streak %d) -> repair", self.rid_tag, turn_idx,
+                                 no_flight_streak)
+                        self.reasoner.append_repair(NO_FLIGHT_REPLY_NUDGE)
+                        continue
+                    log.info("%s reply with ZERO flights at turn %d, streak "
+                             "%d -- abstain", self.rid_tag, turn_idx,
+                             no_flight_streak)
+                log.info("%s mission ended by reply at turn %d (%d flights)",
+                         self.rid_tag, turn_idx, self.mission_flights)
+                return self._mission_end("reply", turns=turn_idx + 1)
+            no_call_streak = 0
+            no_flight_streak = 0
+
+            # Dispatch each call in order, answering every call id.
+            for tc in r["tool_calls"]:
+                name = (tc.get("function") or {}).get("name") or ""
+                cid = tc.get("id") or ""
+                args = json.loads(tc["function"]["arguments"])
+                if name == "run":
+                    out = self._dispatch_run(args)
+                    if isinstance(out, dict) and not withheld("look_for"):
+                        out.setdefault("watching", (
+                            self._watching_trailer()
+                            or "nothing -- no class is segmented on any flight "
+                               'until one is looked for; call look_for("<class>").'))
+                    self.reasoner.append_tool_result(cid, "run", out)
+                    if self.transcript is not None:
+                        self.transcript.append({
+                            "kind": "run",
+                            "turn_idx": turn_idx,
+                            "reasoning": str(r.get("reasoning") or "")[:4000],
+                            "said": str((args or {}).get("code") or "")[:400],
+                            # already capped (python_surface.PRINT_CHAR_CAP)
+                            "printed": (str(out.get("printed") or "")
+                                        if isinstance(out, dict) else ""),
+                            "errored": bool(isinstance(out, dict)
+                                            and "error" in out),
+                            # every image this block showed, by sha
+                            "frames": list(self._block_frames)})
+                    self._block_frames.clear()
+                else:
+                    # An unknown tool's id is answered, never executed.
+                    self.reasoner.append_tool_result(cid, name or "unknown", {
+                        "error": f"unknown tool {name!r}; available: run"})
+            # Pictures ride a user turn after the turn's tool results.
+            for _vtext, _vjpegs in self.pending_vision:
+                self.reasoner.append_vision_user(_vtext, _vjpegs)
+            self.pending_vision.clear()
