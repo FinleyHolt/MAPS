@@ -35,9 +35,11 @@ from typing import Any
 
 import numpy as np
 
+from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.flight.live_source import ortho_observation
 from benchmarks.flight.measures import _bases, _rows, tour_stops
-from benchmarks.flight.mission import Mission, activate_calcity, converse, summary_line
+from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, Mission, activate_calcity, converse,
+                                       summary_line)
 from benchmarks.flight.tile_georef import FLOOR_MSL_M
 
 log = logging.getLogger("flight.replay")
@@ -88,7 +90,7 @@ class Recording:
 
     def observation(self, frame: dict[str, Any]) -> Path | None:
         sha = frame.get("observation")
-        path = self.run_dir / "observations" / f"{sha}.jpg" if sha else None
+        path = self.run_dir / OBSERVATIONS_DIR / f"{sha}.jpg" if sha else None
         return path if path is not None and path.is_file() else None
 
 
@@ -141,8 +143,8 @@ def open_recording(run_dir: Path) -> Recording:
     if logged:
         window = int(logged.group(1))
     return Recording(sortie=sortie, run_dir=run_dir, row=row, params=params, requests=requests,
-                     responses=responses, conversation=_rows(run_dir / "conversation.jsonl"),
-                     frames=_rows(run_dir / "frames.jsonl"), window=window, detections=detections)
+                     responses=responses, conversation=_rows(run_dir / CONVERSATION_JSONL),
+                     frames=_rows(run_dir / FRAMES_JSONL), window=window, detections=detections)
 
 
 def flown_runs(sorties: Path) -> list[Path]:
