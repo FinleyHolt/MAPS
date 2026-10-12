@@ -21,11 +21,23 @@ if ! "$PY" -c 'import rasterio, scipy' >/dev/null 2>&1; then
 	exit 3
 fi
 
+# A city not yet rasterized is skipped, so a partial rasterization bakes what it has.
+RGBD_DIR="$("$PY" -c 'from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR as d; print(d)')"
+BAKED=0
 for CITY in birmingham cambridge; do
+	if ! compgen -G "$RGBD_DIR/${CITY}_block_*.tif" >/dev/null; then
+		echo "skip $CITY: no ${CITY}_block_<n>.tif under $RGBD_DIR" >&2
+		continue
+	fi
 	"$PY" -m benchmarks.citynav.bake.city --city "$CITY" \
 		--osm-cache "tiles/osm_cache/${CITY}_osm_local.geojson" \
 		--tiles-dir "$TILES_DIR"
+	BAKED=$((BAKED + 1))
 done
+if [ "$BAKED" -eq 0 ]; then
+	echo "error: no block raster under $RGBD_DIR (benchmarks/citynav/data_prep/rasterize_citynav_native.sh)" >&2
+	exit 3
+fi
 
 echo "Bake complete: $TILES_DIR"
 echo "Point the runner at it: export SEARCH_CITYNAV_TILES=$TILES_DIR"
