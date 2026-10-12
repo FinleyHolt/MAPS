@@ -275,8 +275,6 @@ def _surface_from_ctx(ctx) -> dict:
     from maps.search.analyze_scene.geom_program import build_surface_from_graph
 
     cell_m = float(ctx.cell_size_m)
-    if ctx.graph is None:
-        return {"cands": [], "anchors": [], "cell_m": cell_m}
     cands, anchors = build_surface_from_graph(
         ctx.graph.nodes.items(), ctx.tile_origin_xy, cell_m
     )
@@ -931,9 +929,8 @@ class _Mission:
         if isinstance(_rcpt, dict) and "error" in _rcpt:
             ack["error"] = _rcpt["error"]
         _names = {s for s in (
-            str(getattr(n, "name", "") or "").strip().lower()
-            for n in (getattr(self.ctx.graph, "nodes", None)
-                      or {}).copy().values()) if s}
+            str(n.name or "").strip().lower()
+            for n in self.ctx.graph.nodes.copy().values()) if s}
         _note = _named_feature_note([c["class"] for c in adds], _names)
         if _note:
             ack["note"] = _note

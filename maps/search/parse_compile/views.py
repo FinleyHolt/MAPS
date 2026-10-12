@@ -347,7 +347,7 @@ def map_features(ctx) -> list[dict]:
         osm_kind,
         osm_label,
     )
-    nodes = getattr(ctx.graph, "nodes", None) or {}
+    nodes = ctx.graph.nodes
     _ox, _oy = ctx.tile_origin_xy
     _cs = float(ctx.cell_size_m)
 
@@ -361,18 +361,18 @@ def map_features(ctx) -> list[dict]:
     feats: list[dict] = []
     for fid, node in nodes.copy().items():
         # The node's own cell array rides as is (no per-map list copy).
-        cells = getattr(node, "cells", None)
+        cells = node.cells
         if cells is None or len(cells) == 0:
-            c = getattr(node, "centroid", None)
+            c = node.centroid
             cells = ([[int(c[0]), int(c[1])]] if c is not None else [])
-        prov = getattr(node, "provenance", "prebaked")
-        tags = getattr(node, "tags", None) or {}
+        prov = node.provenance
+        tags = node.tags
         if prov == "detected":
-            label = str(getattr(node, "class_name", "") or "detection")
+            label = str(node.class_name or "detection")
             kind = "detection"
         else:
             label = osm_label(
-                tags, str(getattr(node, "class_name", "") or "prior"))
+                tags, str(node.class_name or "prior"))
             kind = osm_kind(tags)
         feat = {
             "fid": str(fid), "label": label, "kind": kind,
@@ -381,15 +381,15 @@ def map_features(ctx) -> list[dict]:
                            else "prebaked"),
         }
         # The name rides beside the class label the palette keys off.
-        _nm = tags.get("name") if isinstance(tags, dict) else None
+        _nm = tags.get("name")
         if _nm:
             feat["name"] = str(_nm)
         if kind == "road":
-            cl = getattr(node, "centerline", None)
+            cl = node.centerline
             if cl is not None and len(cl) >= 2:
                 feat["centerline"] = _grid_to_world(cl)
         elif kind == "building":
-            wc = getattr(node, "world_contour", None)
+            wc = node.world_contour
             if wc is not None and len(wc) >= 3:
                 feat["contour"] = [[float(x), float(y)]
                                    for x, y in wc]

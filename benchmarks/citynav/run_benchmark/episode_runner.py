@@ -157,17 +157,13 @@ def _success_mask(cfg, episode, objects_by_map: dict) -> tuple[str, dict]:
     if episode.target_object_ids:
         _tids = set(episode.target_object_ids)
         for _o in objects_by_map.get(episode.map_name, []) or []:
-            if getattr(_o, "id", None) in _tids:
-                contour = getattr(_o, "contour", None)
+            if _o.id in _tids:
+                contour = _o.contour
                 break
-    row_radius = getattr(episode, "success_radius_m", None)
+    row_radius = episode.success_radius_m
     return bench_paths.SUCCESS_CRITERION, {
-        "gt_polygon": contour if episode.target_object_ids else getattr(
-            episode, "target_mask", None
-        ),
-        "radius_m": float(
-            row_radius if row_radius is not None else cfg.success_radius_m
-        ),
+        "gt_polygon": contour if episode.target_object_ids else episode.target_mask,
+        "radius_m": float(row_radius if row_radius is not None else cfg.success_radius_m),
     }
 
 
@@ -239,7 +235,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
 
 def _detected_fids(search_loop) -> set[str]:
     return {nid for nid, node in search_loop.state.runtime_graph.nodes.items()
-            if str(getattr(node, "provenance", "")) == "detected"}
+            if node.provenance == "detected"}
 
 
 def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:

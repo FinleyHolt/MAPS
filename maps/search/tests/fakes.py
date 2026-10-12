@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from maps.llm.endpoint_spec import EndpointSpec
+from maps.sws.graph.model import MapObject
 
 TEST_SPEC = EndpointSpec(
     base_url="http://unused",
@@ -73,7 +74,7 @@ class FakeReasoner:
 
 
 def bare_ctx(graph=None, grid_shape=(10, 10), pose_xy=None):
-    return SimpleNamespace(graph=graph, cell_size_m=1.0,
+    return SimpleNamespace(graph=SimpleNamespace(nodes={}) if graph is None else graph, cell_size_m=1.0,
                            tile_origin_xy=(0.0, 0.0), grid_shape=grid_shape,
                            pose_xy=pose_xy)
 
@@ -243,16 +244,13 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
 
 # --- a graph the flight grows ----------------------------------------------
 
-class GraphNode:
-    """The attributes ``build_surface`` reads off a graph node."""
+class GraphNode(MapObject):
+    """A graph node at world point ``xy`` (cell_m 1, origin 0)."""
 
     def __init__(self, xy, class_name, provenance="detected"):
-        self.world_xy = [float(xy[0]), float(xy[1])]
-        self.centroid = (int(xy[1]), int(xy[0]))
-        self.centerline = None
-        self.class_name = class_name
-        self.name = None
-        self.provenance = provenance
+        super().__init__(class_name=class_name, name=None, tags={},
+                         centroid=(int(xy[1]), int(xy[0])), provenance=provenance,
+                         world_xy=[float(xy[0]), float(xy[1])])
 
 
 class Road(GraphNode):

@@ -138,13 +138,13 @@ class SearchLoop:
         node = self._node_for_fid_locked(target_fid)
         if node is None:
             return None
-        w = getattr(node, "world_xy", None)
+        w = node.world_xy
         if w is not None and len(w) >= 2:
             return (float(w[0]), float(w[1]))
         served = self._prior_surface_xy_locked().get(str(target_fid))
         if served is not None:
             return served
-        return self._grid_centroid_to_world_xy(getattr(node, "centroid", None))
+        return self._grid_centroid_to_world_xy(node.centroid)
 
     def node_xy(self, fid: str) -> tuple[tuple[float, float], str] | None:
         """``((x, y), "detected" | "prior")`` for a fid on the graph, the
@@ -167,7 +167,7 @@ class SearchLoop:
         the bake rasterized it; None off the graph or without cells. Under
         the lock."""
         node = self._node_for_fid_locked(target_fid)
-        cells = getattr(node, "cells", None) if node is not None else None
+        cells = node.cells if node is not None else None
         # cells is an (N, 2) array: its truth value raises, its length does not.
         if cells is None or len(cells) == 0:
             return None

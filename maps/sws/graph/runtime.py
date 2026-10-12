@@ -15,7 +15,7 @@ _BEST_VIEW_COLOR_KEYS = ("color", "color_conf", "color_shade", "color_flag", "co
 
 def _flat_color(node) -> dict:
     """Top-count color value per key off a freshly-built node's {value:count} buckets."""
-    sa = getattr(node, "semantic_attributes", None) or {}
+    sa = node.semantic_attributes
     out: dict = {}
     for key in _BEST_VIEW_COLOR_KEYS:
         bucket = sa.get(key)
@@ -39,7 +39,7 @@ def apply_best_view_color(node, color_attrs: dict, px: int) -> bool:
         px = int(px or 0)
     except (TypeError, ValueError):
         px = 0
-    if px <= 0 or px <= int(getattr(node, "best_view_px", 0) or 0):
+    if px <= 0 or px <= node.best_view_px:
         return False
     node.best_view_px = px
     for key in _BEST_VIEW_COLOR_KEYS:
@@ -59,11 +59,10 @@ def upsert_prior_percept(graph: ObjectGraph, fid: str, attrs: dict, *, px: int =
     ``{value: count}``. True when enriched (a non-empty colour read counts
     even when it lost the best view); a missing fid, a non-prebake node or
     empty ``attrs`` returns False."""
-    nodes = getattr(graph, "nodes", None)
-    if not isinstance(nodes, dict) or not attrs:
+    if not attrs:
         return False
-    node = nodes.get(str(fid))
-    if node is None or getattr(node, "provenance", None) != "prebaked":
+    node = graph.nodes.get(str(fid))
+    if node is None or node.provenance != "prebaked":
         return False
     color_attrs = {k: attrs[k] for k in attrs if k in _BEST_VIEW_COLOR_KEYS}
     other_attrs = {k: attrs[k] for k in attrs if k not in _BEST_VIEW_COLOR_KEYS}
@@ -165,15 +164,15 @@ def upsert_tracked_detected(
     node.centroid = centroid_rc
     _stamp_cells(node, hm_rows, hm_cols, graph.cell_size_m)
     # A contour-less repeat keeps the stored contour.
-    incoming_contour = getattr(base_node, "world_contour", None)
+    incoming_contour = base_node.world_contour
     if incoming_contour:
         node.world_contour = incoming_contour
-    incoming_wxy = getattr(base_node, "world_xy", None)
+    incoming_wxy = base_node.world_xy
     if incoming_wxy is not None:
         node.world_xy = (float(incoming_wxy[0]), float(incoming_wxy[1]))
     # base_node carries this frame's mask pixel count and color read.
     apply_best_view_color(
-        node, _flat_color(base_node), getattr(base_node, "best_view_px", 0)
+        node, _flat_color(base_node), base_node.best_view_px
     )
     return existing_fid
 
