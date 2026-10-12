@@ -481,8 +481,8 @@ def compile_filter(p: Program, items, *, within=None, near=None,
     if near is not None and dwithin is None:
         raise CodeError(
             "near= needs the gap to keep: r1.filter(near=<place>, "
-            "dwithin=<meters>). Without one it orders and drops "
-            "nothing, which is find(near=<place>).")
+            "dwithin=<meters>). Without one there is no cut; to rank "
+            "by nearness, rows.order(nearest=<place>).")
     # within= is the `distance to <anchor>` cut at 0 (contact); a stated gap
     # is the same cut at its value.
     value = 0

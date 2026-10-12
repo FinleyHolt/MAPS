@@ -86,6 +86,15 @@ def test_the_refusal_names_the_exit(src, phrase):
     assert phrase in str(e.value), str(e.value)
 
 
+def test_a_gapless_near_cut_points_at_an_ordering_the_surface_accepts():
+    with pytest.raises(CodeError) as e:
+        _ops('r1 = find("car")\nr2 = r1.filter(near="A")\n')
+    # find(near=) without dwithin= is refused too, so the exit is order()
+    assert "find(near=" not in str(e.value), str(e.value)
+    assert "rows.order(nearest=<place>)" in str(e.value), str(e.value)
+    _ops('r1 = find("car")\nr2 = r1.order(nearest="A")\n')
+
+
 # --------------------------------------------------------------------------
 # One ordering, many cuts
 # --------------------------------------------------------------------------
