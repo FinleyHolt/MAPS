@@ -111,7 +111,7 @@ distributed.
 ## Closed-loop measures
 
 ```sh
-python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON> --tiles <flown bake> [--json]
+python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON> --tiles <Cal City bake whose calcity_features.json holds the flown prior> [--json]
 ```
 
 Per run: SR two ways (the committed area contains the target centroid; the
@@ -119,5 +119,6 @@ commit lies within 20 m of it), NE, OSR (the aircraft's path, GNSS track,
 else keyframe poses, came within one camera footprint width of the target), time to identification, SPL, and
 tokens. A run the serve failed under (the bench's infra rule) is out of every
 rate and named. It prints the totals, the totals by intel quality and by model
-and reasoning effort, then one line per run. `--check <master table>` compares SR and OSR
+and reasoning effort, the count of `prior_<i>` commits whose outline in
+`--tiles` does not hold the commit (a sign of another bake), then one line per run. `--check <master table>` compares SR and OSR
 row by row against a table.

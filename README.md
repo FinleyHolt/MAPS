@@ -104,7 +104,7 @@ The closed-loop measures are read from the flown sorties' own records by
 | OSR | 70/80 | The aircraft's path (GNSS track, else keyframe poses) came within one camera footprint width of the target centroid. |
 
 ```sh
-python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON> --tiles <flown bake>
+python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON> --tiles <Cal City bake whose calcity_features.json holds the flown prior>
 ```
 
 The tasking JSON is the flight week's own tasking set (it scores a run with no
@@ -113,7 +113,9 @@ is a different set of episodes.
 
 `--tiles` (default `SEARCH_CALCITY_TILES`) is the bake whose
 `calcity_features.json` holds the map features a run commits to; a run that
-commits one with no such file there is refused.
+commits one with no such file there is refused, and the output counts the
+`prior_<i>` commits whose outline in that bake does not hold the commit (each
+sortie's `run_manifest.json` records the `bake_sha256` it flew).
 
 A run the analysts' adjudication marks excluded is out of every rate, and so
 is a run the serve failed under (the bench's infra rule, `rows.is_infra_abort`),

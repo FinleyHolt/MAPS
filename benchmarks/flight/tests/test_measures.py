@@ -24,7 +24,7 @@ def _run(root, wd, *, commit, reply=True, t_s=600.0):
             "start_xy": [0.0, -2000.0], "visited_xy": [[0.0, -2000.0], commit[1]], "flights_flown": 1, "turns_used": 4}
 
 
-def test_the_measures_score_the_commit_against_the_truth_and_the_track_against_the_hfov(tmp_path):
+def test_the_measures_score_the_commit_against_the_truth_and_the_track_against_the_hfov(tmp_path, capsys):
     root, truth, tiles = tmp_path / "20260101T000000Z", tmp_path / "truth", tmp_path / "tiles"
     tiles.mkdir()
     (tiles / "calcity_features.json").write_text(json.dumps({"prior": [{"world_contour": TARGET}]}))
@@ -64,6 +64,9 @@ def test_the_measures_score_the_commit_against_the_truth_and_the_track_against_t
     assert Q.check(got, master) == []
     one["success_area"] = False
     assert Q.check(got, master) == [f"('{root.name}', 1) success_area: False here, 'True' in the master table"]
+    # run 2 commits prior_9, which this bake does not hold.
+    assert Q.main(["--root", str(root), "--truth", str(truth), "--tiles", str(tiles), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["prior_outline_rejected"] == [f"{root.name} run 2"]
 
 
 def _thin_track_run(tmp_path, keyframe_xy):

@@ -1,7 +1,7 @@
 """The closed-loop measures of each run, from its records: SR, OSR, NE, time to identification, SPL.
 
     python -m benchmarks.flight.measures --root <sortie>... --truth <adjudications dir> [<split.json>]
-        --tiles <bake> [--json] [--check runs_all.csv]
+        --tiles <Cal City bake whose calcity_features.json holds the flown prior> [--json] [--check runs_all.csv]
 
 A root is a flown sortie (``episodes.jsonl`` beside ``flight_track.jsonl``)
 or a replay's (:mod:`benchmarks.flight.replay`, its sortie folder named for
@@ -591,10 +591,29 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     return out
 
 
+def load_prior(tiles_dir: Path) -> list[dict[str, Any]] | None:
+    """The bake's ``calcity_features.json`` rows, None when it holds none."""
+    path = Path(tiles_dir) / "calcity_features.json"
+    return json.loads(path.read_text())["prior"] if path.is_file() else None
+
+
+def outline_rejected(rows: list[dict[str, Any]], prior: list[dict[str, Any]] | None) -> list[str]:
+    """The determined ``prior_<i>`` commits the bake has no row for, or whose
+    outline (three or more vertices) does not hold the commit: a sign of another bake."""
+    out = []
+    for r in rows:
+        fid = str(r["commit_fid"] or "")
+        n = fid[len("prior_"):]
+        if prior is None or not fid.startswith("prior_") or not n.isdigit() or r["ne_from"] != "commit point":
+            continue
+        if int(n) >= len(prior) or len(prior[int(n)].get("world_contour") or []) >= 3:
+            out.append(f"{r['sortie']} run {r['run_no']}")
+    return out
+
+
 def collect(roots: list[Path], truth: Truth, *, tiles_dir: Path) -> tuple[list[dict[str, Any]], float, int]:
     """Every run under ``roots``, with the crews' turn radius over them all."""
-    prior_path = Path(tiles_dir) / "calcity_features.json"
-    prior = json.loads(prior_path.read_text())["prior"] if prior_path.is_file() else None
+    prior = load_prior(tiles_dir)
     tracks = [sorted(_rows(r / "flight_track.jsonl"), key=lambda f: f["t_unix"]) for r in roots]
     radius, turns = flown_turn_radius_m(tracks, [routed_windows(r) for r in roots])
     radius = radius or TURN_RADIUS_FALLBACK_M
@@ -662,8 +681,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--root", type=Path, nargs="+", required=True, help="flown or replay sortie roots")
     ap.add_argument("--truth", type=Path, nargs="+", required=True,
                     help="a directory of <sortie>.json analyst entries, and/or the tasking set's split JSON")
-    ap.add_argument("--tiles", type=Path, default=None, help="the bake whose features a prior_<i> commit names "
-                                                              "(default: SEARCH_CALCITY_TILES)")
+    ap.add_argument("--tiles", type=Path, default=None, help="the Cal City bake whose calcity_features.json holds "
+                                                              "the flown prior (default: SEARCH_CALCITY_TILES)")
     ap.add_argument("--check", type=Path, default=None, help="a master table to compare SR and OSR against")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
@@ -673,8 +692,10 @@ def main(argv: list[str] | None = None) -> int:
         args.tiles = TILES_DIR
     roots = sorted(r for r in args.root if (r / "episodes.jsonl").is_file())
     rows, radius, turns = collect(roots, Truth(args.truth), tiles_dir=args.tiles)
+    rejected = outline_rejected(rows, load_prior(args.tiles))
     doc = {"turn_radius_m": radius, "turns_read": turns, "summary": summarize(rows),
-           "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "model", "reasoning_effort"), "runs": rows}
+           "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "model", "reasoning_effort"),
+           "prior_outline_rejected": rejected, "runs": rows}
     if args.check is not None:
         doc["check"] = check(rows, args.check)
     if args.json:
@@ -689,6 +710,8 @@ def main(argv: list[str] | None = None) -> int:
         print(line("all", doc["summary"]))
         if doc["summary"]["infra"]:
             print(f"out of every rate (the serve failed under them): {', '.join(doc['summary']['infra'])}")
+        print(f"prior commits whose outline in {args.tiles} does not hold the commit: {len(rejected)}"
+              + (f" ({', '.join(rejected)})" if rejected else ""))
         for k, v in doc["by_intel_quality"].items():
             print(line(f"intel {k}", v))
         for k, v in doc["by_effort"].items():
