@@ -26,7 +26,7 @@ from typing import Callable
 
 import httpx
 
-from maps.llm.http import TRANSIENT_CLIENT_STATUS, CallCanceled, DegenerateCompletion
+from maps.llm.http import TRANSIENT_CLIENT_STATUS, CallCanceled
 from maps.search.analyze_scene.compactor import (
     CompactionInfeasible,
     CompactionInvariantError,
@@ -70,14 +70,14 @@ from maps.search.parse_compile.views import (
 )
 
 # Transient LLM-side errors: a retry, never the end of the reasoner (a
-# non-2xx, a link fault, a collapsed completion, an undecodable body).
+# non-2xx, a link fault, or a ValueError: an undecodable body or a collapsed
+# completion).
 _RETRIABLE_LLM_ERRORS: tuple[type[BaseException], ...] = (
     httpx.HTTPStatusError,
     httpx.ConnectError,
     httpx.ReadError,
     httpx.TimeoutException,
     httpx.RemoteProtocolError,
-    DegenerateCompletion,
     ValueError,
 )
 
