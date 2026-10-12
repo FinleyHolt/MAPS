@@ -13,8 +13,8 @@ from maps.search.render.look_render import (
 MAP = "unit_test_look_roundtrip_block"
 GROUND_Z = 10.0
 
-# The re-render contract: every key a manifest crop record must carry for
-# the dashboard route (spec + verification), pinned by name.
+# The re-render contract: every key a crop record carries so
+# render_look_from_spec reproduces it (spec + verification), pinned by name.
 SPEC_KEYS = (
     "map_name", "center_fid", "center_label", "center_boundary", "marks",
     "world_xy", "pose_xy", "context_m",

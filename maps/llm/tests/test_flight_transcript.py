@@ -4,7 +4,7 @@
 ``flight/llm/transcript.jsonl``: ``params`` (one per distinct
 tools/schema/sampling body), ``request`` (message delta with
 ``n_prefix``), ``response``. These tests pin the write-time contract the
-dashboard reader reconstructs from: exact prefix+delta round-trip, image
+replay reader reconstructs from: exact prefix+delta round-trip, image
 parts scrubbed to sha refs, params dedup, pending-then-closed ordering, and
 compaction (a shrunken history yields a shorter prefix, never a mis-slice).
 """

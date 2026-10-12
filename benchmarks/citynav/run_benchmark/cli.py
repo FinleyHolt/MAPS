@@ -183,7 +183,7 @@ def main() -> int:
     raw_rows = load_split(split_path(args.split))
     # Pair each row with its absolute split index so the row_index is
     # stable across filter / limit and parse_episode produces the same
-    # disambiguated episode_id the dashboard picked.
+    # disambiguated episode_id whatever the filter.
     indexed_rows: list[tuple[int, dict]] = list(enumerate(raw_rows))
     if args.episode_id:
         found = find_row(raw_rows, args.episode_id)

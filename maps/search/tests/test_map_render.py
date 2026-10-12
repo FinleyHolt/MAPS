@@ -216,7 +216,7 @@ def test_rotated_map_band_states_its_true_up():
     assert rec["frame_note"] == "up = east"
 
 
-def test_osm_label_rule_matches_the_dashboard():
+def test_osm_label_names_the_class_or_falls_back():
     assert osm_label({"highway": "residential"}) == "residential"
     assert osm_label({"building": "yes"}) == "building"
     assert osm_label({}) == "prior"
