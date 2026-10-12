@@ -1,12 +1,10 @@
 """The compiler behind the mission `run` block: one library call -> geom_program ops.
 
-``python_surface`` executes the model's Python; each library call compiles
-its arguments here onto ops the executor already runs -- ``find`` is find,
-``intersection`` is crossings, ``ends_of`` is ends, ``order`` is score_by,
-``filter`` is filter_items -- so the surface adds NO execution model. A
-:class:`Program` holds one call's ops; the loop grounds its named anchors
-and runs it. It holds no model call and no I/O.
-"""
+Each library call ``python_surface`` executes compiles here onto ops the
+executor already runs (``find`` is find, ``intersection`` crossings,
+``ends_of`` ends, ``order`` score_by, ``filter`` filter_items). A
+:class:`Program` holds one call's ops; the loop grounds its named anchors and
+runs it."""
 from __future__ import annotations
 
 import re
@@ -149,14 +147,10 @@ def rn_spelled(vals) -> set:
 
 
 class Program:
-    """One call's ops over the mission-global rN chain.
-
-    THE TWO NAMESPACES ARE KEPT DISJOINT. The executor's refs are rN and so
-    are the model's handles, and an `as` label rides IN the op's args, so a
-    program never mints an rN that a name in play (``taken``) spells.
-    ``live`` holds the executor refs the mission's handles hold: a bare rN
-    string naming one stays a ref, any other bare name is grounded.
-    """
+    """One call's ops over the mission-global rN chain. The executor's refs and
+    the model's handles are both rN, so a program never mints an rN a name in
+    play (``taken``) spells; ``live`` holds the executor refs the mission's
+    handles hold, and any other bare name is grounded."""
 
     def __init__(self, rn: int, taken: set, live: set):
         self.ops: list[dict] = []
@@ -270,16 +264,11 @@ class Program:
 
     def relate(self, items, near=(), cards=(), color=None,
                rank: bool = True) -> str:
-        """ONE compare carrying every anchor, a cut per cardinal, and -- when
-        ranking -- ONE score_by for every ordering constraint (a second sort
-        would undo the first).
-
-        A CARDINAL CUTS; PROXIMITY ORDERS: a cardinal cue means adjacent, so
-        the side is a filter and the ordering is nearness to the same
-        anchor. A ranking compare dedups its refs by label, since the
-        executor suffixes a repeated ref's label. A colour orders, in the
-        same emphasis as the distances.
-        """
+        """One compare carrying every anchor, a cut per cardinal and, when
+        ranking, one score_by for every ordering (a second sort would undo the
+        first). A cardinal cuts and proximity to the same anchor orders; a
+        ranking compare dedups its refs by label, and a colour orders in the
+        same emphasis as the distances."""
         refs, emphasis, seen = [], [], set()
         for a in [*near, *(a for _d, a in cards)]:
             lab = self.label(a)

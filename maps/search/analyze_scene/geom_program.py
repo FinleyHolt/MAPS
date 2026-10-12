@@ -259,14 +259,11 @@ def _rows_by_content(kind, nodes, build_row, geom):
 
 def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
     """The ``(cands, anchors)`` surface from detection and prior ``(fid,
-    node)`` iterables, both sorted by fid.
-
-    A row's xy is the node's ``world_xy``, else a point on its own geometry,
-    else its centroid cell's centre. Every node with a mask, detection or
-    prior, gets the same mask fields: the exact ``mask`` chains and
-    ``mask_centroid`` (hidden from the model) and the shape scalars.
-    Priors carry their centerline in world metres.
-    """
+    node)`` iterables, both sorted by fid. A row's xy is the node's
+    ``world_xy``, else a point on its geometry, else its centroid cell's
+    centre; every masked node gets the exact ``mask`` chains, the hidden
+    ``mask_centroid`` and the shape scalars, and priors carry their centerline
+    in world metres."""
     tx, ty = float(origin_xy[0]), float(origin_xy[1])
     cs = float(cell_m)
 
@@ -911,17 +908,13 @@ _NO_ORDER_HINT = (
 
 
 def compact_results(results: dict, *, answer_ref: str = "") -> dict:
-    """Each op result as its model-facing envelope.
-
-    An ordered list renders ``{len, fids, rows}`` (rows a markdown grid
-    under the render budget; past ``_BROAD_DUMP_SOFT_ROWS`` only the first
-    ``_BROAD_HEAD_ROWS``); an unordered one ``{len, census, named}``; an
-    empty one ``{len: 0, items: [], hint}``; a compare adds its ``refs`` and
-    ``columns``. The legend rides the response's first grid, and a census
-    served once is referenced after. With ``answer_ref`` the response is
-    that one envelope, carrying the other ops' hints. Every rN keeps its
-    full rows.
-    """
+    """Each op result as its model-facing envelope: an ordered list ``{len,
+    fids, rows}`` (a markdown grid, past ``_BROAD_DUMP_SOFT_ROWS`` only the
+    first ``_BROAD_HEAD_ROWS``), an unordered one ``{len, census, named}``, an
+    empty one ``{len: 0, items: [], hint}``; a compare adds ``refs`` and
+    ``columns``. The legend rides the first grid. With ``answer_ref`` the
+    response is that one envelope, carrying the other ops' hints. Every rN
+    keeps its full rows."""
     legend = [True]
 
     def table(head, rows, op_cols):
@@ -2208,13 +2201,10 @@ OPS = {
 def run_program(cands, anchors, program, seed_results=None,
                 staged=None, standing=None):
     """Run ``{"ops": [{ref, op, args}, ...]}`` (dependency order) over the
-    surface rows; returns ``{"results": {ref: rows}}``.
-
-    ``seed_results`` holds earlier calls' results, which a handle defined
-    here shadows. ``staged`` maps act.stage handles to ``{"handle",
-    "from_xy", "up_unit"}``; ``standing`` names the one whose side columns
-    ride every find result.
-    """
+    surface rows; returns ``{"results": {ref: rows}}``. A handle defined here
+    shadows its ``seed_results`` entry; ``staged`` maps act.stage handles to
+    ``{"handle", "from_xy", "up_unit"}`` and ``standing`` names the one whose
+    side columns ride every find."""
     cx = _Run(cands, anchors, seed_results, staged, standing)
     ops = program["ops"]
     for op in ops:

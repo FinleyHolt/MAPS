@@ -1,21 +1,11 @@
 """Real-Python front-end for the mission run channel.
 
-The model writes ordinary Python; this module executes it. Every mission
-call (`find`, `go_to`, `look_for`, ...) is a real function in one
-persistent per-mission namespace, so variables, arithmetic, f-strings,
-loops, comprehensions, `print()` and `len()` behave exactly as the model's
-priors say they do -- and an error costs the line it is on, never the
-lines that already ran.
-
-Each call compiles its arguments (``code_surface``) and runs on the loop's
-verbs (:class:`MissionEnv`), which own grounding, serving, flights and
-receipts.
-
-The guardrails hold at call time: the moving calls take a thing and never a
-coordinate, a whole result set cannot be flown to, and a move inside a loop
-is refused up front. The pure deterministic stdlib (``math``,
-``itertools``, ...) is loaded in the namespace.
-"""
+Every mission call (`find`, `go_to`, `look_for`, ...) is a real function in one
+persistent per-mission namespace, so the model's Python behaves as Python and
+an error costs only the line it is on. Each call compiles its arguments
+(``code_surface``) and runs on the loop's verbs (:class:`MissionEnv`). Moving
+calls take a thing, never a coordinate or a whole result set, and a move inside
+a loop is refused up front."""
 
 from __future__ import annotations
 
@@ -150,18 +140,10 @@ class _Stop(Exception):
 
 
 class MissionNamespace(dict):
-    """The exec globals: an undefined name that SPELLS a served fid IS
-    that fid.
-
-    Every receipt prints fids bare, so the model writes go_to(detected_192).
-    The name resolves to a :class:`Row` view of the live row when the
-    surface has it, else to the fid string. CPython honors __missing__ on a
-    dict-subclass globals for LOAD_NAME and LOAD_GLOBAL.
-
-    A name that misses entirely still answers: a name this mission UNBOUND
-    says why (a failed rebind removed it), and a near-miss of something
-    visible gets the did-you-mean.
-    """
+    """The exec globals (CPython honours ``__missing__`` on a dict-subclass
+    globals): an undefined name that spells a served fid is a :class:`Row` of
+    the live row, else the fid string; a name this mission unbound says why,
+    and a near-miss gets a did-you-mean."""
 
     mp: "MissionPython | None" = None
 
@@ -347,13 +329,9 @@ _ROW_HIDDEN = frozenset({
 
 
 def _norm_key(k: str) -> str:
-    """A column spelling, normalised the way the producer normalises labels.
-
-    ``geom_program._sanitize_token`` collapses ``[^a-z0-9]+`` to ``_`` on
-    every ref label (``"facing poppy_boulevard"``) while the model says
-    "Poppy Boulevard"; running BOTH sides through the same collapse lets it
-    spell a column by the name it was given.
-    """
+    """A column spelling collapsed the way ``geom_program._sanitize_token``
+    collapses ref labels, so "Poppy Boulevard" names the column "facing
+    poppy_boulevard"."""
     return re.sub(r"[^a-z0-9]+", "_", k.lower()).strip("_")
 
 
@@ -362,13 +340,9 @@ _CARDINAL_KWARGS = frozenset(f"{w}_of" for w in _CARDINALS)
 
 
 def _direction_key(word):
-    """A compass word -> the sort key that puts the FURTHEST that way first.
-
-    A DIRECTION ORDERS GLOBALLY: "the northernmost pool" is a fact about
-    the map frame, so this takes no anchor and reads the rows' own ``xy``
-    (+x runs EAST, +y runs NORTH) along the compass table's unit vector.
-    Client-side on the rows in hand, like the ``key=`` sort.
-    """
+    """A compass word -> the sort key that puts the furthest that way first:
+    the rows' own ``xy`` (+x east, +y north) along the compass unit vector. A
+    direction orders globally and takes no anchor."""
     w = str(word).strip().lower()
     if w not in COMPASS_UNIT:
         raise CodeError(
@@ -437,19 +411,11 @@ _MISSING = object()
 
 
 class Row:
-    """One selected row: what ``rows[i]`` binds, AND its served columns.
-
-    A Row is a read-only view of the columns the tables already serve:
-    attribute access, mapping access (spaced column names like "distance to
-    p0" go through ``r["..."]``; ``r.distance_to_p0`` aliases it),
-    ``.get``/``.keys``, ``print(r)``. Geometry blobs stay hidden -- the
-    coarse columns carry the geometry.
-
-    ``bind`` is what a slot takes -- the fid, or the [x, y] point for a
-    computed row (a crossing, a terminus) that no fid-slot reader knows.
-    ``src`` remembers where it was indexed from, so showing it renders
-    the ROW (a windowed frame keeps the ordering; a bare dict loses it).
-    """
+    """One selected row: a read-only view of its served columns (attributes,
+    ``r["spaced name"]``, ``.get``/``.keys``, ``print``), geometry blobs
+    hidden. ``bind`` is what a slot takes (the fid, or [x, y] for a computed
+    row); ``src`` is the (ref, index) it was indexed from, so showing it
+    renders the row."""
 
     __slots__ = ("bind", "fid", "name", "src", "_row", "_mp")
 
@@ -493,14 +459,9 @@ class Row:
         return mp._rows_order(self, **kw)
 
     def _resolve_key(self, k):
-        """The served column a Python spelling names, or None.
-
-        ONE resolver for attribute, item and ``.get`` access. A
-        REF-LABELLED COLUMN IS SPELLED BY ITS PLACE'S REAL NAME: both sides
-        are normalised the producer's way (:func:`_norm_key`), which covers
-        all three ref column families (``facing ``, ``distance to ``,
-        ``<dir> of ``). An ambiguous normalisation resolves to NOTHING.
-        """
+        """The served column a Python spelling names, or None: the exact key,
+        else the one column equal under :func:`_norm_key` (an ambiguous match
+        is None). Attribute, item and ``.get`` access all resolve here."""
         row = object.__getattribute__(self, "_row")
         if not isinstance(k, str) or k in _ROW_HIDDEN:
             return None
@@ -529,12 +490,9 @@ class Row:
         return _MISSING if d is None else d
 
     def _miss(self, k) -> str:
-        """Why this key is not here, and what writes it.
-
-        A RELATION COLUMN IS NOT MISSING, IT IS UNASKED-FOR. ``distance to
-        <ref>``, ``facing <ref>`` and ``<dir> of <ref>`` exist only where a
-        compare named that ref (``geom_program._AUTOATTACH_PREFIXES``), so
-        the remedy is the relate that writes it.
+        """Why this key is not here and what writes it: a relation column
+        exists only where a compare named its ref
+        (``geom_program._AUTOATTACH_PREFIXES``), so the remedy is the relate.
         """
         row = object.__getattribute__(self, "_row")
         pre = next((p for p in _AUTOATTACH_PREFIXES
@@ -817,16 +775,11 @@ class Rows:
 
     def order(self, key=None, *, nearest=None, color=None,
               direction=None, reverse=False) -> "Rows | RowList":
-        """Put the rows in ONE order. A table sorts by one column.
-
-        A DIRECTION ORDERS GLOBALLY: ``direction=`` and ``key=`` order the
-        rows IN HAND (``reverse=`` flips a key sort, as ``sorted()`` does);
-        ``nearest=`` and ``color=`` re-rank the whole set server-side.
-
-        Relating rows to a place stamps ``facing <place>`` and ``distance
-        to <place>``; the signed ``<dir> of <place>`` column rides a
-        cardinal CUT against that same place.
-        """
+        """Put the rows in one order; a table sorts by one column.
+        ``direction=`` and ``key=`` sort the rows in hand (``reverse=`` flips a
+        key sort, as ``sorted()`` does); ``nearest=`` and ``color=`` re-rank
+        the whole set server-side, and relating to a place stamps ``facing
+        <place>`` and ``distance to <place>``."""
         if key is not None or direction is not None:
             if key is not None and direction is not None:
                 raise CodeError(
@@ -905,13 +858,9 @@ def _tuple_xy(xy):
 
 
 def _places(v, who: str) -> tuple:
-    """A Python value -> the ``(fid, xy)`` places geometry measures over.
-
-    A SET IS ONE PLACE AND MEANS ITS NEAREST MEMBER. The fid rides so the
-    geometry measures the row's footprint, not its point; the point rides
-    because a COMPUTED row (a crossing, a terminus) is nowhere on the
-    surface and its position is its whole footprint.
-    """
+    """A Python value -> the ``(fid, xy)`` places geometry measures over. A set
+    is one place meaning its nearest member; the xy rides for a computed row (a
+    crossing, a terminus), whose point is its whole footprint."""
     if isinstance(v, Row):
         return ((v.fid, _tuple_xy(v.get("xy"))),)
     if isinstance(v, Rows):
@@ -976,18 +925,14 @@ def _look_tok(a) -> str:
 
 @dataclass
 class MissionEnv:
-    """The loop's verbs for this front-end, one per mission.
-
-    Every library call opens with ``ground(names)`` (``{name: why}`` ->
-    ``{"ties": {name: top-tie fids}}`` or an error), runs ONE verb
-    (``analyze`` a program, or an act) and, when nothing refused, closes
-    with ``finish(ack)``; a refusing ack part carries ``"error"``.
-    ``plan_rn`` is the shared ref counter, ``widened`` the paging ledger
-    (executor ref -> rows already asked past), ``minted`` the handles the
-    call's flights minted (drained here), ``say_err(ack, msg)`` the shared
-    refusal format; ``row_of_fid(fid)`` reads a live-surface row (None when
-    absent) and ``tied_of_ref(ref)`` says whether a ref holds a TIED view.
-    """
+    """The loop's verbs, one set per mission. A library call opens with
+    ``ground(names)`` (``{name: why}`` -> ``{"ties": {name: fids}}`` or an
+    error), runs one verb and, unless refused, closes with ``finish(ack)``; a
+    refusing ack part carries ``"error"``. ``plan_rn`` is the shared ref
+    counter, ``widened`` the paging ledger, ``minted`` the handles the call's
+    flights minted, ``say_err(ack, msg)`` the refusal format,
+    ``row_of_fid(fid)`` a live-row reader (None when absent) and
+    ``tied_of_ref(ref)`` whether a ref holds a tied view."""
 
     rows_of_ref: Callable
     plan_rn: list
@@ -1299,13 +1244,9 @@ class MissionPython:
                "flight covers it."))})
 
     def _rows_order(self, items, *, nearest=None, color=None):
-        """ONE sort key, the way a table sorts. Never two.
-
-        Two keys have to be combined to make one, and every way of
-        combining them can rank a row that is second on everything below
-        wrong rows. So this refuses rather than fuses, and what does not
-        order is a CUT -- .filter(near=..., dwithin=...).
-        """
+        """One sort key, never two: any way of combining two keys can rank a
+        row that is second on both below worse rows, so a second key is refused
+        and named as a cut."""
         if nearest is not None and color is not None:
             raise CodeError(
                 "order takes ONE key: a table sorts by one column. "
@@ -1388,15 +1329,8 @@ class MissionPython:
                 "member.")
 
     def _call_distance(self, a, b) -> float:
-        """Metres between two footprints. 0.0 on touch or containment.
-
-        Mask to mask, which is the quantity the ``distance to <ref>``
-        column has always carried and the one an ``xy`` cannot reach:
-        Poppy Boulevard is 1,198 m long, and the car parked against it is
-        7.0 m away where the two served points are 408 m apart. Either
-        side may be a set, and a set is ONE place meaning its nearest
-        member.
-        """
+        """Metres between two footprints, mask to mask; 0.0 on touch or
+        containment. Either side may be a set, meaning its nearest member."""
         self._measured("distance")
         return self._geom.distance(_places(a, "distance"),
                                    _places(b, "distance"))
@@ -1746,8 +1680,7 @@ class MissionPython:
 # --------------------------------------------------------------------------
 #
 # ``sys.monitoring`` delivers LINE events for exactly the block's code
-# objects, so the executor beneath the block runs untraced (a global
-# ``sys.settrace`` slowed one find from 1.26 s to 17.2 s).
+# objects, so the executor beneath the block runs untraced.
 
 _MON = sys.monitoring
 _MON_LOCK = threading.Lock()
