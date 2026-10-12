@@ -738,7 +738,7 @@ class Mission:
 
         sortie = self.workdir.parent
         common = dict(config_path=Path(self.config), split=self.split, sample_seed=None,
-                      limit=None, workers=None, allowlist_path=None)
+                      limit=None, allowlist_path=None)
         try:
             if not (sortie / MANIFEST_NAME).exists():
                 emit_or_verify(sortie, build_manifest(out_root=sortie, episodes=[], **common), log=log.info)

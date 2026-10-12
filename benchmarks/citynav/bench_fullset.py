@@ -557,7 +557,6 @@ class Driver:
                 split=self.split,
                 sample_seed=self.sample_seed,
                 limit=self.limit,
-                workers=self.workers,
                 allowlist_path=self.allowlist_path,
                 episodes=episodes,
             )

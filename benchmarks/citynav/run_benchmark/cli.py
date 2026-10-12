@@ -85,7 +85,6 @@ def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
             # never applied would be a fabricated field.
             sample_seed=0,
             limit=args.limit or 0,
-            workers=1,
             allowlist_path=None,
             episodes=episodes,
         ),

@@ -42,7 +42,6 @@ def stub_run(monkeypatch, tmp_path, bake):
         split="train_seen",
         sample_seed=1234,
         limit=3,
-        workers=2,
         allowlist_path=None,
         episodes=["ep_a", "ep_b", "ep_c"],
     )
@@ -145,7 +144,7 @@ def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tm
     monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
     common = dict(out_root=tmp_path, config_path=paths.REPO_ROOT / "configs/citynav.yaml", split="calcity_tmp",
-                  sample_seed=None, limit=None, workers=None, allowlist_path=None,
+                  sample_seed=None, limit=None, allowlist_path=None,
                   episodes=["calcity::1#1"])
     stamp = {"episode_id": "calcity::1#1", "run_id": "20260917T160207Z", "run_no": 3,
              "reasoning_effort": "0.3"}

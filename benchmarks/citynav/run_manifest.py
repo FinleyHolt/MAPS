@@ -149,7 +149,6 @@ def build_manifest(
     split: str,
     sample_seed: int,
     limit: int,
-    workers: int,
     allowlist_path: Path | None,
     episodes: list[str],
     mission: dict | None = None,
