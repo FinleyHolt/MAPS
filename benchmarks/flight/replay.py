@@ -391,7 +391,7 @@ def recorded_segmenter(rec: Recording, state_of):
         rows = rec.detections.get(int(state_of().step_idx), [])
         hw = obs.rgb.shape[:2]
         return client._detections(obs, [
-            (_record_region(d, hw), d["label"], int((d.get("metadata") or {}).get("sam3_1_object_id") or i),
+            (_record_region(d, hw), d["label"], int((d.get("metadata") or {}).get("sam3_1_object_id", i)),
              float((d.get("metadata") or {}).get("sam3_1_score", d.get("confidence"))))
             for i, d in enumerate(rows) if d.get("mask_zpacked_b64")])
 

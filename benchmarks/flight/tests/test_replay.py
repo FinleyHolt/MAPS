@@ -246,3 +246,19 @@ def test_a_torn_recording_serves_a_frame_from_its_own_chunk_without_reading_from
 
     monkeypatch.setattr(RR, "messages", streamed)
     assert ring.frame(10)[0] == jpegs[10]
+
+
+def test_the_recorded_segmenter_keeps_a_recorded_object_id_of_zero():
+    from types import SimpleNamespace
+
+    from maps.util.mask_codec import encode_mask_record
+
+    mask = np.zeros((8, 8), bool)
+    mask[2:5, 2:5] = True
+    record = encode_mask_record(mask, bbox_rcrc=(2, 2, 4, 4))
+    rows = [{"label": "car", "confidence": 0.9, "metadata": {"sam3_1_object_id": oid}, **record} for oid in (3, 0)]
+    rec = SimpleNamespace(detections={0: rows})
+    seen = []
+    client = SimpleNamespace(_detections=lambda obs, masks: seen.extend(masks) or [])
+    R.recorded_segmenter(rec, lambda: SimpleNamespace(step_idx=0))(client, SimpleNamespace(rgb=np.zeros((8, 8, 3))), [])
+    assert [m[2] for m in seen] == [3, 0]
