@@ -88,6 +88,7 @@ these places, the served-text changes among them:
 | The sensor block states the footprint at the height the mission commands (a flight `Mission` takes `agl_m`; the bench uses its start height). | The flown text quoted the 6,000 ft AGL band (~517 x 388 m) on every run, whatever the aircraft flew. |
 | The segmenter client has one retry layer: a connect error, 408, 429 or 5xx moves to the next replica after 3, 6 and 12 s (four attempts); a read timeout is never resent to the replica that timed out; one 900 s deadline bounds a tile. The serve owns its score floor (0.3) and resolution (1008); the request carries neither. | The flown client nested a urllib3 retry ladder inside a three-attempt loop, so a tile could be sent twelve times and resent after an 11-minute read timeout; the request carried the floor and resolution, which the serve read only on its first call. |
 | A leg whose ground the index holds but whose frames cannot be fetched is flown again; only frames recorded after the leg is posted arrive it and are fused. Arrival is asked of the recording at every poll, with or without an ownship pose. | The flown harness counted the old frames, so such a leg arrived at once and served no observation; a leg flown with no readable pose waited out the arrival timeout. |
+| A recorded camera frame that does not decode is refused by name and counts as an unplaced frame; a waypoint's observation is the pass its flight fetched. | A frame that did not decode killed the pose-correction thread or raised out of the flight; an empty pass was fetched and fused a second time. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -211,7 +212,7 @@ terms).
 | `SEARCH_REASONER_MODELS_URL` | client | Where the served models are listed, for an endpoint that lists them somewhere other than `SEARCH_REASONER_URL/models`. |
 | `SEARCH_SAMPLING_REASONING_EFFORT` | client | The arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`); discovery refuses a value the served model's card does not take. Unset sends none. |
 | `SEARCH_COMPACT_TOKENIZER_NAME` | client | The HF tokenizer repo, replacing the model card's. |
-| `SAM_SERVER_URL` | client | The SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset; a set but blank value is refused. |
+| `SAM_SERVER_URL` | client | The SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset; a set but blank value, or `SAM_VIDEO_SERVER_URL` set without it, is refused. |
 | `SAM_PORT`, `SAM_MODEL_ID`, `SAM_DEVICE`, `SAM_DTYPE` | serve | Port (8772), checkpoint id (`facebook/sam3.1`), device, dtype (`bfloat16`). |
 | `SAM3_CHECKPOINT` | serve | A local checkpoint file. |
 | `SAM_MAX_INFLIGHT`, `SAM_INFLIGHT_WAIT_S`, `SAM_GPU_CHUNK`, `SAM_PREWARM`, `SAM_HEALTH_MIN_FREE_GB` | serve | Admission, batching and health limits (`serving/sam_server.py`). |
