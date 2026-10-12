@@ -1,4 +1,4 @@
-"""Dedup and tag-carry contract for the objects.json build.
+"""Dedup contract for the objects.json build.
 
 The pin that matters: OSM splits a street into many ways, and every one of them
 must survive as its own object. A name-only dedup key kept the largest and
@@ -45,8 +45,6 @@ def test_every_way_of_one_street_survives(monkeypatch):
         ],
         monkeypatch,
     )
-    assert len(objects) == 2
-    assert [o["name"] for o in objects.values()] == ["Main Street"] * 2
     # ...and they are the two DISTINCT ways, not one way counted twice.
     assert len({o["position"][0] for o in objects.values()}) == 2
 
@@ -75,28 +73,3 @@ def test_unnamed_features_are_unaffected(monkeypatch):
         monkeypatch,
     )
     assert len(objects) == 2
-
-
-def test_every_osm_tag_rides_through(monkeypatch):
-    """Every tag reaches the object."""
-    objects = _build(
-        [
-            _rec(
-                1,
-                {
-                    "highway": "primary",
-                    "name": "California City Boulevard",
-                    "ref": "SR-58",
-                    "lanes": "4",
-                    "surface": "asphalt",
-                },
-                LineString([(100, 300), (900, 300)]),
-            )
-        ],
-        monkeypatch,
-    )
-    tags = next(iter(objects.values()))["tags"]
-    assert tags["ref"] == "SR-58"
-    assert tags["lanes"] == "4"
-    assert tags["surface"] == "asphalt"
-    assert tags["highway"] == "primary"

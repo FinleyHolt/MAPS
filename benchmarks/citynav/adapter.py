@@ -4,8 +4,8 @@ A split JSON (``data/citynav/citynav_<split>.json``) is a list of MTurk
 trajectory rows: ``area``, ``block``, ``descriptions``, ``target_positions``,
 ``marker_positions``, ``object_ids``, ``ann_ids``, ``trajectory``.
 ``data/cityrefer/objects.json`` maps a map name to objects carrying ``id``,
-``name``, ``object_type``, ``position`` (xyz centre), ``dimension`` and
-``contour`` (2D polygon): the scorer's answer key.
+``position`` (xyz centre), ``dimension`` and ``contour`` (2D polygon): the
+scorer's answer key, read as ``id`` and ``contour``.
 """
 
 from __future__ import annotations
@@ -21,14 +21,10 @@ import numpy as np
 
 @dataclass
 class CityRefObject:
-    """A single landmark / referred object from ``objects.json``."""
+    """A referred object from ``objects.json``: its id and 2D contour polygon."""
 
-    map_name: str
     id: int
-    name: str
-    object_type: str
-    position: tuple[float, float, float]  # (x, y, z) center, meters
-    contour: list[tuple[float, float]] = field(default_factory=list)  # 2D polygon
+    contour: list[tuple[float, float]] = field(default_factory=list)
 
 
 @dataclass
@@ -67,18 +63,16 @@ def load_objects(objects_json: Path) -> dict[str, list[CityRefObject]]:
 
     by_map: dict[str, list[CityRefObject]] = {}
 
-    def _mk(map_name: str, obj: dict) -> CityRefObject | None:
+    def _mk(obj: dict) -> CityRefObject | None:
         try:
+            # A CityRefer object carries an xyz position and a dimension; a row
+            # without them is refused.
             pos = obj["position"]
-            obj["dimension"]  # a CityRefer object carries one; a row without is refused
-            contour_raw = obj.get("contour", []) or []
+            float(pos[0]), float(pos[1]), float(pos[2])
+            obj["dimension"]
             return CityRefObject(
-                map_name=map_name,
                 id=int(obj["id"]),
-                name=str(obj.get("name") or obj.get("object_name") or ""),
-                object_type=str(obj.get("object_type") or obj.get("type") or ""),
-                position=(float(pos[0]), float(pos[1]), float(pos[2])),
-                contour=[(float(p[0]), float(p[1])) for p in contour_raw],
+                contour=[(float(p[0]), float(p[1])) for p in obj.get("contour", []) or []],
             )
         except (KeyError, TypeError, ValueError):
             return None
@@ -92,7 +86,7 @@ def load_objects(objects_json: Path) -> dict[str, list[CityRefObject]]:
             else:
                 iterator = entries
             for obj in iterator:
-                parsed = _mk(map_name, obj)
+                parsed = _mk(obj)
                 if parsed is not None:
                     objs.append(parsed)
             by_map[map_name] = objs
@@ -101,7 +95,7 @@ def load_objects(objects_json: Path) -> dict[str, list[CityRefObject]]:
             map_name = str(obj.get("map_name") or obj.get("scene_id") or "")
             if not map_name:
                 continue
-            parsed = _mk(map_name, obj)
+            parsed = _mk(obj)
             if parsed is not None:
                 by_map.setdefault(map_name, []).append(parsed)
 

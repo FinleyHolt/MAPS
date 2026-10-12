@@ -131,9 +131,9 @@ def build_local_frame(bbox: tuple[float, float, float, float]) -> LocalFrame:
 # OSM tag -> CityRefer object_type classification
 # --------------------------------------------------------------------------
 #
-# ``object_type`` must be one of the 13 SensatUrban / CityRefer classes so
-# ``benchmarks.citynav.adapter.object_label`` maps it to a scene label with no
-# code change. The rules read buildings, roads, landuse, water and aeroway
+# ``object_type`` is one of the 13 SensatUrban / CityRefer classes; the
+# objects.json build keeps only classified footprints and ranks co-located
+# duplicates by it. The rules read buildings, roads, landuse, water and aeroway
 # (the airport corner).
 
 _LEISURE_WATER = {"swimming_pool"}

@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """Build a CityRefer-schema ``objects.json`` from the world bundle's OSM.
 
-Each OSM footprint becomes one CityRefer object. Geometry is reprojected from
-the bundle's WGS84 GeoJSON into each block's local metric frame, overlapping
-footprints are deduped, heights come from OSM tags (the bundle stamps
-``worldkit:height_m`` on buildings), and the nested ``{map_name: {id: {...}}}``
-dict that ``benchmarks.citynav.adapter.load_objects`` reads is written for
-the one map, ``calcity``.
-
-The world is flat (``aoi.GROUND_LEVEL_M``), so object ``z`` is
-``GROUND_LEVEL_M + height/2`` with no DEM sampling.
+Each OSM footprint becomes one CityRefer object: ``id``, ``position`` (the
+footprint centroid at ``aoi.GROUND_LEVEL_M``, the world being flat),
+``dimension`` (the footprint's x and y extent) and ``contour``. Geometry is
+reprojected from the bundle's WGS84 GeoJSON into the map's local metric frame
+and overlapping footprints are deduped; the nested ``{map_name: {id: {...}}}``
+dict that ``benchmarks.citynav.adapter.load_objects`` reads is written for the
+one map, ``calcity``.
 
 Usage::
 
@@ -22,6 +20,7 @@ import argparse
 import json
 import logging
 import sys
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -44,46 +43,10 @@ logging.basicConfig(
 )
 log = logging.getLogger("build_objects_json")
 
-# Per-class fallback height (meters) when OSM carries no height tag. The town
-# is single-storey sprawl; open surfaces are ~flat.
-_DEFAULT_HEIGHT_M = {
-    "Building": 4.0,
-    "Ground": 0.3,
-    "Water": 0.0,
-    "Parking": 0.1,
-    "TrafficRoad": 0.2,
-    "Footpath": 0.1,
-    "HighVegetation": 4.0,
-}
 # Structures win when the same footprint is tagged multiple ways.
 _TYPE_RANK = {"Building": 4, "Water": 3, "Ground": 2, "Parking": 1}
 _CONTOUR_SIMPLIFY_M = 1.0
 _CONTOUR_MAX_PTS = 300
-
-
-def _parse_height_m(tags: dict) -> float | None:
-    """Best-effort height in meters from OSM and bundle tags."""
-    v = tag_value(tags, "worldkit:height_m")
-    if v is not None:
-        try:
-            return float(v)
-        except ValueError:
-            pass
-    for key in ("height", "building:height"):
-        v = tag_value(tags, key)
-        if v is None:
-            continue
-        try:
-            return float(str(v).split()[0])
-        except (ValueError, IndexError):
-            pass
-    levels = tag_value(tags, "building:levels")
-    if levels is not None:
-        try:
-            return max(1.0, float(levels)) * 3.0
-        except ValueError:
-            pass
-    return None
 
 
 def _largest_polygon(geom):
@@ -152,8 +115,6 @@ def build_block(bundle: Path, map_name: str, bbox) -> dict:
             "poly": poly,
             "name": name,
             "object_type": otype,
-            "tags": rec["tags"],
-            "osm_id": rec["osm_id"],
             "area": float(poly.area),
         }
         prev = best.get(key)
@@ -178,41 +139,17 @@ def build_block(bundle: Path, map_name: str, bbox) -> dict:
     objects: dict[str, dict] = {}
     for oid, f in enumerate(feats):
         poly = f["poly"]
-        otype = f["object_type"]
         minx, miny, maxx, maxy = poly.bounds
-        dx, dy = float(maxx - minx), float(maxy - miny)
-        h = _parse_height_m(f["tags"]) if otype == "Building" else None
-        if h is None:
-            h = _DEFAULT_HEIGHT_M.get(otype, 4.0)
-        cx, cy = float(poly.centroid.x), float(poly.centroid.y)
-        z_centroid = GROUND_LEVEL_M + h / 2.0
-        name = f["name"] or otype
-        # Every OSM tag rides through, as CityNav's baker does it:
-        # classify_object_type branches on ref / lanes / surface / building /
-        # natural / water / tourism / addr:* keys. The baker colon-escapes
-        # arbitrary keys (city._normalise_props) and walls the ground-truth
-        # ones off itself (city._PRIVILEGED_KEYS).
-        osm_tags: dict[str, str] = {}
-        for key in f["tags"]:
-            v = tag_value(f["tags"], key)
-            if v is not None:
-                osm_tags[str(key)] = v
-        obj = {
+        objects[str(oid)] = {
             "id": oid,
-            "name": name,
-            "object_type": otype,
-            "position": [round(cx, 3), round(cy, 3), round(z_centroid, 3)],
-            "dimension": [round(dx, 3), round(dy, 3), round(h, 3)],
+            "position": [round(float(poly.centroid.x), 3), round(float(poly.centroid.y), 3),
+                         round(GROUND_LEVEL_M, 3)],
+            "dimension": [round(float(maxx - minx), 3), round(float(maxy - miny), 3)],
             "contour": _contour_xy(poly),
-            "descriptions": [],
-            "tags": osm_tags,
         }
-        objects[str(oid)] = obj
 
-    by_type: dict[str, int] = {}
-    for o in objects.values():
-        by_type[o["object_type"]] = by_type.get(o["object_type"], 0) + 1
-    log.info("%s: %d objects, type counts %s", map_name, len(objects), by_type)
+    log.info("%s: %d objects, type counts %s", map_name, len(objects),
+             dict(Counter(f["object_type"] for f in feats)))
     return objects
 
 
