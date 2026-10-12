@@ -24,9 +24,9 @@ from maps.sws.graph.model import MapObject, ObjectGraph
 GRAPH_SCHEMA_VERSION = 3
 
 _FIELDS = dataclasses.fields(MapObject)
-# ``id`` through ``orientation_confidence`` are written on every node; every
-# later field only when it differs from its default.
-_ALWAYS = 9
+# ``class_name`` through ``centroid`` are written on every node; every later
+# field only when it differs from its default.
+_ALWAYS = 4
 # The JSON key where it is not the field name.
 _KEY = {"class_name": "category"}
 
@@ -40,20 +40,18 @@ def _floats(v):
 
 
 _TO_JSON = {
-    "centroid": list, "bbox": list, "best_view_px": int,
+    "centroid": list, "best_view_px": int,
     "semantic_attributes": lambda v: {k: dict(c) for k, c in v.items()},
     "cells": _pairs(int), "world_contour": _pairs(float), "centerline": _pairs(float),
-    "world_xy": _floats, "centerline_arc_m": _floats,
-    "axis_length_m": float, "axis_residual_m": float,
+    "world_xy": _floats, "axis_length_m": float,
 }
 _FROM_JSON = {
-    "centroid": tuple, "bbox": tuple,
+    "centroid": tuple,
     "semantic_attributes": lambda v: {k: {str(a): int(n) for a, n in c.items()} for k, c in v.items()},
     "cells": lambda v: np.asarray(v, dtype=np.int32).reshape(-1, 2),
     "world_contour": lambda v: _pairs(float)(v) or None,
     "world_xy": lambda v: (float(v[0]), float(v[1])) if v else None,
-    "centerline": _pairs(float), "centerline_arc_m": _floats,
-    "axis_length_m": float, "axis_residual_m": float,
+    "centerline": _pairs(float), "axis_length_m": float,
 }
 
 

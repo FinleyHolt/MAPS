@@ -19,12 +19,7 @@ def _seed_graph():
 
 
 def _node(class_name: str = "car") -> MapObject:
-    return MapObject(
-        id="detected_pending", class_name=class_name, name=None, tags={},
-        centroid=(0, 0), bbox=(0, 0, 0, 0), cell_count=1,
-        orientation=None, orientation_confidence=0.0, provenance="detected",
-        confidence=0.8, first_seen_t=0.0, last_seen_t=0.0, observation_count=0,
-    )
+    return MapObject(class_name=class_name, name=None, tags={}, centroid=(0, 0), provenance="detected")
 
 
 def _square_mask(r0, c0, side):
@@ -44,9 +39,8 @@ def _sparse(mask):
     return {"rows": rs.astype(np.int32), "cols": cs.astype(np.int32)}
 
 
-def _upsert(g, track_id, mask, *, class_name="car", now=0.0):
-    return upsert_tracked_detected(g, track_id=track_id, base_node=_node(class_name), **_sparse(mask),
-                                   confidence=0.8, now=now)
+def _upsert(g, track_id, mask, *, class_name="car"):
+    return upsert_tracked_detected(g, track_id=track_id, base_node=_node(class_name), **_sparse(mask))
 
 
 def test_fresh_detection_stores_cells_matching_projection():
@@ -56,16 +50,15 @@ def test_fresh_detection_stores_cells_matching_projection():
     assert node.cells.dtype == np.int32
     assert node.cells.shape == (9, 2)
     assert _cells_of(mask) == {(int(r), int(c)) for r, c in node.cells}
-    assert node.cell_count == 9
 
 
 def test_repeat_sighting_restamps_cells_and_keeps_one_node():
     g = _seed_graph()
     fid0 = _upsert(g, "t1", _square_mask(10, 12, 3))
     moved = _square_mask(14, 16, 4)
-    assert _upsert(g, "t1", moved, now=1.0) == fid0
+    assert _upsert(g, "t1", moved) == fid0
+    assert len(g.nodes) == 2
     node = g.nodes[fid0]
-    assert node.observation_count == 2
     assert _cells_of(moved) == {(int(r), int(c)) for r, c in node.cells}
 
 
@@ -74,7 +67,7 @@ def test_car_and_gray_car_stay_separate_layers():
     g = _seed_graph()
     mask = _square_mask(10, 10, 6)
     fid_car = _upsert(g, "t1", mask)
-    fid_gray = _upsert(g, "t2", mask, class_name="gray car", now=1.0)
+    fid_gray = _upsert(g, "t2", mask, class_name="gray car")
     assert (fid_car, fid_gray) == ("detected_0", "detected_1")
     assert g.nodes[fid_car].class_name == "car"
     assert g.nodes[fid_gray].class_name == "gray car"
@@ -86,7 +79,7 @@ def test_a_repeat_with_no_cells_returns_its_own_id():
 
     def upsert(tid, rows, cols):
         return upsert_tracked_detected(g, track_id=tid, base_node=_node(), rows=np.array(rows, dtype=np.int32),
-                                       cols=np.array(cols, dtype=np.int32), confidence=0.9, now=1.0)
+                                       cols=np.array(cols, dtype=np.int32))
 
     a = upsert("wt_a", [5, 5], [5, 6])
     b = upsert("wt_b", [9, 9], [9, 10])

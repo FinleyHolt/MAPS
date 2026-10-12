@@ -3,9 +3,6 @@ carrying its exact ``track_id`` or mints one; a prior gains perceived colour."""
 
 from __future__ import annotations
 
-import json
-import time
-
 import numpy as np
 
 from maps.sws.graph.builder import _mask_centerline
@@ -55,20 +52,13 @@ def apply_best_view_color(node, color_attrs: dict, px: int) -> bool:
     return True
 
 
-def upsert_prior_percept(
-    graph: ObjectGraph,
-    fid: str,
-    attrs: dict,
-    *,
-    px: int = 0,
-    now: float | None = None,
-) -> bool:
+def upsert_prior_percept(graph: ObjectGraph, fid: str, attrs: dict, *, px: int = 0) -> bool:
     """Merge a perceived attribute set (the colour read over the prior's
     footprint) onto a prebake node: colour keys follow
     :func:`apply_best_view_color` on ``px``, any other key accumulates as
-    ``{value: count}``, and a non-empty sighting bumps the observation
-    counters. True when enriched; a missing fid, a non-prebake node or empty
-    ``attrs`` returns False."""
+    ``{value: count}``. True when enriched (a non-empty colour read counts
+    even when it lost the best view); a missing fid, a non-prebake node or
+    empty ``attrs`` returns False."""
     nodes = getattr(graph, "nodes", None)
     if not isinstance(nodes, dict) or not attrs:
         return False
@@ -89,14 +79,7 @@ def upsert_prior_percept(
         bucket = node.semantic_attributes.setdefault(key_s, {})
         bucket[val_s] = bucket.get(val_s, 0) + 1
         touched = True
-    if not touched:
-        return False
-    now = now if now is not None else time.time()
-    if node.first_seen_t is None:
-        node.first_seen_t = now
-    node.last_seen_t = now
-    node.observation_count += 1
-    return True
+    return touched
 
 
 def _next_detected_id(graph: ObjectGraph) -> str:
@@ -105,31 +88,15 @@ def _next_detected_id(graph: ObjectGraph) -> str:
     return f"detected_{sum(fid.startswith('detected_') for fid in graph.nodes)}"
 
 
-def upsert_detected_centroid_only(
-    graph: ObjectGraph,
-    node: MapObject,
-    *,
-    now: float | None = None,
-) -> str:
+def upsert_detected_centroid_only(graph: ObjectGraph, node: MapObject) -> str:
     """Mint a node for a detection without a ``track_id``; its new id."""
     if node.provenance != "detected":
         raise ValueError(
             "upsert_detected_centroid_only only accepts provenance='detected' nodes"
         )
-    now = now if now is not None else time.time()
     fid = _next_detected_id(graph)
-    node.id = fid
-    node.first_seen_t = now
-    node.last_seen_t = now
-    node.observation_count = 1
     graph.nodes[fid] = node
     return fid
-
-
-# The dedup record stamped on a detected node's ``tags['dedup']``: a first
-# sighting, or a repeat re-identified by its exact track_id.
-_DEDUP_NEW = json.dumps({"status": "new"})
-_DEDUP_TRACK = json.dumps({"status": "confirmed_track", "primary": "track_id", "match_score": 1.0})
 
 
 def _cells_from_mask(hm_rows: np.ndarray, hm_cols: np.ndarray) -> np.ndarray:
@@ -153,8 +120,7 @@ def _stamp_cells(
         return
     geom = _mask_centerline(node.cells, cell_size_m=float(cell_size_m))
     if geom is not None:
-        (node.centerline, node.centerline_arc_m, node.axis_length_m,
-         node.axis_residual_m, node.centerline_method) = geom
+        node.centerline, node.axis_length_m = geom
 
 
 def upsert_tracked_detected(
@@ -164,8 +130,6 @@ def upsert_tracked_detected(
     base_node: MapObject,
     rows: np.ndarray,
     cols: np.ndarray,
-    confidence: float,
-    now: float | None = None,
 ) -> str:
     """Upsert a tracked detection from its footprint cells on the tile grid
     (``rows``/``cols``, row-major). A first sighting of ``track_id`` inserts
@@ -176,8 +140,6 @@ def upsert_tracked_detected(
             "upsert_tracked_detected only accepts provenance='detected' nodes"
         )
 
-    now = now if now is not None else time.time()
-
     hm_rows = np.asarray(rows)
     hm_cols = np.asarray(cols)
 
@@ -186,30 +148,14 @@ def upsert_tracked_detected(
     if hm_rows.size == 0:
         return existing_fid or ""
 
-    cell_count = int(hm_rows.size)
     centroid_rc = (int(round(float(hm_rows.mean()))), int(round(float(hm_cols.mean()))))
-    bbox = (
-        int(hm_rows.min()),
-        int(hm_cols.min()),
-        int(hm_rows.max()),
-        int(hm_cols.max()),
-    )
 
     if existing_fid is None:
         fid = _next_detected_id(graph)
-        base_node.id = fid
         base_node.track_id = track_id
         base_node.provenance = "detected"
         base_node.centroid = centroid_rc
-        base_node.bbox = bbox
-        base_node.cell_count = cell_count
         _stamp_cells(base_node, hm_rows, hm_cols, graph.cell_size_m)
-        base_node.confidence = float(confidence)
-        base_node.observation_count = 1
-        base_node.first_seen_t = now
-        base_node.last_seen_t = now
-        base_node.tags["dedup"] = _DEDUP_NEW
-
         graph.nodes[fid] = base_node
         return fid
 
@@ -217,8 +163,6 @@ def upsert_tracked_detected(
     node = graph.nodes[existing_fid]
     node.track_id = track_id
     node.centroid = centroid_rc
-    node.bbox = bbox
-    node.cell_count = cell_count
     _stamp_cells(node, hm_rows, hm_cols, graph.cell_size_m)
     # A contour-less repeat keeps the stored contour.
     incoming_contour = getattr(base_node, "world_contour", None)
@@ -231,16 +175,6 @@ def upsert_tracked_detected(
     apply_best_view_color(
         node, _flat_color(base_node), getattr(base_node, "best_view_px", 0)
     )
-    node.observation_count += 1
-    n_obs = node.observation_count
-    node.confidence = (
-        (node.confidence * (n_obs - 1) + float(confidence)) / n_obs
-        if n_obs > 0
-        else float(confidence)
-    )
-    node.last_seen_t = now
-    node.tags["dedup"] = _DEDUP_TRACK
-
     return existing_fid
 
 

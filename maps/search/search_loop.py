@@ -6,7 +6,6 @@ from __future__ import annotations
 import logging
 import os
 import threading
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -406,7 +405,7 @@ class SearchLoop:
 
         with self._lock:
             s = self.state
-            bounds_min, cell, now = self._tile_origin_xy, self._cell_size_m, time.time()
+            bounds_min, cell = self._tile_origin_xy, self._cell_size_m
             # The world tracker stamps each detection's stable cross-frame
             # ``track_id`` ('wt_<n>'), the upsert's sole re-id key.
             self._world_tracker.update(detections)
@@ -418,19 +417,17 @@ class SearchLoop:
                 upsert_ids[i] = upsert_tracked_detected(
                     s.runtime_graph,
                     track_id=self._detection_id(det),
-                    base_node=_detection_to_mapobject(det, bounds_min, cell, now),
+                    base_node=_detection_to_mapobject(det, bounds_min, cell),
                     # Sparse occupied cells, never a dense tile raster.
                     rows=tp.rows,
                     cols=tp.cols,
-                    confidence=float(det.confidence),
-                    now=now,
                 )
 
             step_detections: list[dict] = []
             for i, det in enumerate(detections):
                 if i not in upsert_ids:
-                    node = _detection_to_mapobject(det, bounds_min, cell, now)
-                    upsert_detected_centroid_only(s.runtime_graph, node, now=now)
+                    upsert_detected_centroid_only(
+                        s.runtime_graph, _detection_to_mapobject(det, bounds_min, cell))
                 det_record = {
                     "world_xy": list(det.world_xy),
                     "label": det.label,
@@ -521,7 +518,7 @@ class SearchLoop:
         return f"{det.label or '?'}@{float(xy[0]):.0f},{float(xy[1]):.0f}"
 
 
-def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
+def _detection_to_mapobject(det, bounds_min, cell_size_m):
     """One detection as a graph node: its cells (the stamped tile cells,
     else the cell under its world point), contour, attributes and world
     point."""
@@ -557,18 +554,8 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
             int(round(float(cells[:, 0].mean()))),
             int(round(float(cells[:, 1].mean()))),
         )
-        bbox = (
-            int(cells[:, 0].min()),
-            int(cells[:, 1].min()),
-            int(cells[:, 0].max()),
-            int(cells[:, 1].max()),
-        )
-        cell_count = int(cells.shape[0])
     else:
         centroid = (row, col)
-        bbox = (row, col, row, col)
-        cell_count = 1
-    fid_placeholder = "detected_pending"
     semantic_attributes: dict[str, dict[str, int]] = {
         key: {value: 1} for key, value in (det.attributes or {}).items()
     }
@@ -586,7 +573,6 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
         label_bucket = semantic_attributes.setdefault("sam_label", {})
         label_bucket[label] = label_bucket.get(label, 0) + 1
     return MapObject(
-        id=fid_placeholder,
         class_name=label or "object",
         name=det.label,
         tags={
@@ -594,16 +580,8 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m, now):
             "source_tier": det.source_tier,
         },
         centroid=centroid,
-        bbox=bbox,
-        cell_count=cell_count,
-        orientation=None,
-        orientation_confidence=0.0,
         provenance="detected",
-        first_seen_t=now,
-        last_seen_t=now,
-        observation_count=1,
         best_view_px=best_view_px,
-        confidence=float(det.confidence),
         # the tracked upsert stamps the node's own cells
         semantic_attributes=semantic_attributes,
         cells=None,

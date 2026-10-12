@@ -32,7 +32,7 @@ def _make_detection(
 def test_open_vocab_attributes_map_to_counter_format():
     """{"color": "red"} must land as {"color": {"red": 1}} on the node."""
     det = _make_detection(attributes={"color": "red", "material": "metal"})
-    node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0, now=100.0)
+    node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0)
 
     assert node.semantic_attributes == {
         "color": {"red": 1},
@@ -52,7 +52,7 @@ def test_arbitrary_keys_preserved_without_whitelist():
             "floors": "3",
         }
     )
-    node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0, now=0.0)
+    node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0)
     assert set(node.semantic_attributes) == {
         "color",
         "material",
@@ -65,7 +65,7 @@ def test_arbitrary_keys_preserved_without_whitelist():
 
 def test_empty_attributes_still_records_sam_label():
     det = _make_detection(attributes={})
-    node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0, now=0.0)
+    node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0)
     assert node.semantic_attributes == {"sam_label": {"truck": 1}}
 
 
@@ -73,21 +73,21 @@ def test_runtime_node_carries_fine_label():
     """A runtime detection's graph node carries its FINE SAM label as
     ``class_name``."""
     det = _make_detection(label="white car")
-    node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0, now=0.0)
+    node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0)
     assert node.class_name == "white car"
 
 
 def test_runtime_node_falls_back_to_object_when_unlabeled():
     """No SAM label -> the node is named "object"."""
     det = _make_detection(label="")
-    node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0, now=0.0)
+    node = _detection_to_mapobject(det, _BOUNDS, cell_size_m=5.0)
     assert node.class_name == "object"
 
 
 def test_label_and_source_tier_survive_onto_tags():
     det = _make_detection(label="fire_hydrant", attributes={"color": "yellow"})
     det.source_tier = "vlm"
-    node = _detection_to_mapobject(det, _BOUNDS, 5.0, now=0.0)
+    node = _detection_to_mapobject(det, _BOUNDS, 5.0)
     assert node.tags["label"] == "fire_hydrant"
     assert node.tags["source_tier"] == "vlm"
     assert node.tags == {"label": "fire_hydrant", "source_tier": "vlm"}
