@@ -113,7 +113,8 @@ class ReadStats:
     rows: int
     keyed: int
     no_metrics: int
-    # Attempts that hit the wall-clock cap: misses inside SR, counted apart.
+    # Attempts that hit the wall-clock cap, counted apart: one with a record
+    # is scored as recorded, one without is a miss.
     timed_out: int
     # Attempts stamped ``infra``: out of SR, counted so none leaves silently.
     infra: int

@@ -412,7 +412,7 @@ class Driver:
         elif row.get("status") == episodes.STATUS_INFRA:
             pass
         elif verdict == "timeout":
-            # The cap is an algorithm miss (in the denominator), record or not.
+            # Counted apart; a record is scored as recorded, and none is a miss.
             row["status"] = episodes.STATUS_TIMED_OUT
         else:
             row["status"] = episodes.STATUS_OK

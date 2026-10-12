@@ -80,7 +80,7 @@ def arm_row(root: Path, *, allow_partial: bool = False) -> dict:
 
 
 def _sort_key(row: dict) -> tuple[int, float, str]:
-    """Numeric label first (an effort ladder), then the rest by name."""
+    """Numeric effort first (an effort ladder), then the rest by label."""
     effort = row.get("effort")
     try:
         return (0, float(effort), row["label"])
