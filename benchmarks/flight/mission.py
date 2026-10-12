@@ -245,9 +245,6 @@ class Mission:
         self._imagery = RunImagery()
         #: The fused pass the flight in progress fetched when it held its area.
         self._held: tuple[Any, dict[str, Any]] | None = None
-        #: The area the flight in progress was flown for, about its point: what
-        #: the observation is asked over again when the fused pass is spent.
-        self._held_area: tuple[list[tuple[float, float]], Any] | None = None
         #: The nearest the pose came to the last leg's point.
         self._closest_m = float("inf")
         #: The recording's last answer over the leg's area: the unheld points a
@@ -386,14 +383,13 @@ class Mission:
                         self._said(f"the leg to {at} never arrived in {ARRIVAL_TIMEOUT_S:.0f} s (closest "
                                    f"{self._closest_m:.0f} m); no frame held any of it, "
                                    f"and the flight has no observation")
-            self._held, self._held_area = held, (area, xy, after)
+            self._held = held
         if self._cancel.is_set():
             return dict(STOPPED)
         try:
             return session.fly(item)
         finally:
-            # The fused pass is spent with the flight; the area stays, so a
-            # later observation in the turn is the pass over it again.
+            # The fused pass is spent with the flight.
             self._held = None
 
     def _said(self, text: str) -> None:
@@ -646,11 +642,8 @@ class Mission:
 
             def observe():
                 # The pass fused over the flight's area, fetched by the flight
-                # when it held it, else asked over again now; a waypoint's
-                # observation is that or nothing.
+                # when it held it; a waypoint's observation is that or nothing.
                 held, self._held = self._held, None
-                if held is None and self._held_area is not None:
-                    held = self._held_frame(*self._held_area)
                 if held is None:
                     log.warning("live observation refused: %s", self._live.last_refusal)
                     return None
