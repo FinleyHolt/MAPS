@@ -67,7 +67,7 @@ def _block_mask(r0: int, r1: int, c0: int, c1: int) -> np.ndarray:
 @pytest.fixture
 def serve(monkeypatch):
     with SegmentServe() as fake:
-        monkeypatch.setenv("SAM_VIDEO_SERVER_URL", fake.url)
+        monkeypatch.setenv("SAM_SERVER_URL", fake.url)
         yield fake
 
 

@@ -26,7 +26,7 @@ from maps.perception.observation import Observation
 from maps.util.mask_codec import decode_mask_crop
 from maps.util.mask_region import MaskRegion
 
-DEFAULT_SAM_VIDEO_SERVER_URL = "http://127.0.0.1:8772"
+DEFAULT_SAM_SERVER_URL = "http://127.0.0.1:8772"
 
 # SAM 3.1's encoder input: every tile is this square, fed 1:1.
 _SAM_INPUT_SIZE = 1008
@@ -70,16 +70,14 @@ def sam_endpoints() -> list[str]:
     """The segmenter's replica base URLs, the one resolver the client and
     endpoint discovery read.
 
-    ``SAM_VIDEO_SERVER_URL`` wins when set, otherwise ``SAM_SERVER_URL``,
-    otherwise the default replica. A comma-separated value spreads stateless
-    ``/segment`` calls across replicas. A set but blank value raises
-    ``ValueError``: only an unset variable means the default.
+    ``SAM_SERVER_URL``, else the default replica. A comma-separated value
+    spreads stateless ``/segment`` calls across replicas. A set but blank
+    value raises ``ValueError``: only an unset variable means the default.
     """
-    name = "SAM_VIDEO_SERVER_URL" if os.environ.get("SAM_VIDEO_SERVER_URL") else "SAM_SERVER_URL"
-    raw = os.environ.get(name, DEFAULT_SAM_VIDEO_SERVER_URL)
+    raw = os.environ.get("SAM_SERVER_URL", DEFAULT_SAM_SERVER_URL)
     eps = [u.strip().rstrip("/") for u in raw.split(",") if u.strip()]
     if not eps:
-        raise ValueError(f"{name} is empty")
+        raise ValueError("SAM_SERVER_URL is empty")
     return eps
 
 

@@ -88,7 +88,7 @@ def _ensure_sam(
         f"[sam3_engine] building sam3 image model on {device} (version={version})",
         flush=True,
     )
-    checkpoint_path = os.environ.get("SAM3_CHECKPOINT") or os.environ.get("SAM_CHECKPOINT")
+    checkpoint_path = os.environ.get("SAM3_CHECKPOINT") or None
     load_from_hf = checkpoint_path is None
     if checkpoint_path is None and version == "sam3.1":
         checkpoint_path = download_ckpt_from_hf(version="sam3.1")

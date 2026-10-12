@@ -16,7 +16,6 @@ from maps.perception.sam import detect_client as dc
 
 @pytest.mark.parametrize("blank", ["", " ", " , "])
 def test_a_blank_sam_url_is_refused_by_the_client_and_by_discovery(monkeypatch, blank):
-    monkeypatch.delenv("SAM_VIDEO_SERVER_URL", raising=False)
     monkeypatch.setenv("SAM_SERVER_URL", blank)
     # A reasoner nothing answers: discovery must refuse before probing it.
     monkeypatch.setenv("SEARCH_REASONER_URL", "http://127.0.0.1:9/v1")
@@ -27,6 +26,5 @@ def test_a_blank_sam_url_is_refused_by_the_client_and_by_discovery(monkeypatch, 
 
 
 def test_an_unset_sam_url_is_the_default_replica(monkeypatch):
-    monkeypatch.delenv("SAM_VIDEO_SERVER_URL", raising=False)
     monkeypatch.delenv("SAM_SERVER_URL", raising=False)
-    assert dc.sam_endpoints() == [dc.DEFAULT_SAM_VIDEO_SERVER_URL]
+    assert dc.sam_endpoints() == [dc.DEFAULT_SAM_SERVER_URL]

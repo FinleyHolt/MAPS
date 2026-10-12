@@ -31,7 +31,6 @@ def _post(*serves_or_urls):
     urls = [getattr(s, "url", s) for s in serves_or_urls]
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("SAM_SERVER_URL", ",".join(urls))
-        mp.delenv("SAM_VIDEO_SERVER_URL", raising=False)
         return dc.SamDetectClient(concept_provider=ReasonerUnionConceptProvider())._post_tile(
             np.zeros((8, 8, 3), np.uint8), ["car"])
 
