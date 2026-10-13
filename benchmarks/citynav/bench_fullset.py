@@ -182,7 +182,7 @@ class Driver:
         try:
             text = Path(log_path).read_text(errors="replace")
         except OSError as exc:
-            return f"    (no readable log at {log_path or '?'}: {exc})"
+            return f"    (no readable log at {log_path}: {exc})"
         lines = [ln.rstrip() for ln in text.splitlines() if ln.strip()]
         if not lines:
             return f"    ({log_path} is empty)"
@@ -209,9 +209,7 @@ class Driver:
                 return
             counts = Counter(c for c, _ in bad)
             top, k = counts.most_common(1)[0]
-            log_path = next(
-                (lp for c, lp in reversed(bad) if c == top and lp), ""
-            )
+            log_path = next(lp for c, lp in reversed(bad) if c == top)
             self._abort = (
                 f"mass instant failure: {len(bad)} of the last "
                 f"{ABORT_WINDOW} attempts produced no prediction and were "
@@ -221,7 +219,7 @@ class Driver:
             )
         self.log("!! ABORTING RUN — " + self._abort)
         self.log(f"!! by cause: {_causes(counts)}")
-        self.log(f"!! representative worker log: {log_path or '(none recorded)'}")
+        self.log(f"!! representative worker log: {log_path}")
         self.log(self._log_excerpt(log_path))
         scored = sum(1 for r in _rows.iter_json_rows(self.episodes_file)
                      if not _rows.is_infra_abort(r))
