@@ -16,6 +16,7 @@ from maps.search.tests.fakes import (
     calls_of_block,
     grounded_in_block,
     ops_of_block,
+    raising_ops_of_block,
     run,
     tool_results,
 )
@@ -329,6 +330,12 @@ def test_no_argument_is_dropped_on_the_floor():
     with pytest.raises(CodeError, match="order needs its key") as e:
         calls_of_block("r2 = r1.order()\n", {"r1": "r1"})
     assert 'rows.order(direction="north")' in str(e.value), str(e.value)
+
+
+def test_an_empty_colour_orders_by_nothing_and_is_refused():
+    from maps.search.parse_compile.python_surface import CodeError
+    with pytest.raises(CodeError, match="order ranks by nearest= or color="):
+        raising_ops_of_block('r1 = find("car")\nr2 = r1.order(color="")\n')
 
 
 def test_any_earlier_handle_stays_indexable_not_just_the_newest():

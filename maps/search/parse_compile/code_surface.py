@@ -382,6 +382,8 @@ def compile_order(p: Program, items, *, nearest=None, color=None) -> str:
     items = p.items_of(items)
     if nearest is not None:
         return p.relate(items, _anchors(nearest), (), color)
+    if not color:
+        raise CodeError("order ranks by nearest= or color=")
     return p.add("score_by", {"items": items, "emphasis": [
         {"key": f"color_{color}", "w": 1}]})
 
