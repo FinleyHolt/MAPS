@@ -23,6 +23,8 @@ _BG_BGR = (28, 28, 28)          # unrecorded space
 # chip glyphs at the badge floor, ~24 px delivered
 _CHIP_FS = 0.9
 _CHIP_TH = 2
+# prior chips per map, nearest the centre first
+_MAX_PRIOR_CHIPS = 25
 
 
 def _n_cells(f) -> int:
@@ -267,7 +269,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         key=lambda t: (t[0] - W / 2.0) ** 2 + (t[1] - H / 2.0) ** 2)
     for cx_, cy_, digits, bw, bh, pfid in prior_chip_cands:
         pw, ph, th = _pill(digits)
-        if n_prior_chips >= 25:
+        if n_prior_chips >= _MAX_PRIOR_CHIPS:
             n_prior_unchipped += 1
             continue
         de = next((d for d in det_entries
