@@ -83,6 +83,10 @@ class Recording:
         return f"{self.sortie.name}/run{int(self.row.get('run_no') or 0):02d}"
 
     @property
+    def map_name(self) -> str:
+        return str(self.row.get("map_name") or "calcity")
+
+    @property
     def taskings(self) -> list[str]:
         return [str(r["said"]) for r in self.conversation if r.get("kind") == "retask"]
 
@@ -511,7 +515,7 @@ def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
         return float(load_config(config).start_altitude_agl_m)
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
 
-    map_name = str(rec.row.get("map_name") or "calcity")
+    map_name = rec.map_name
     alts = [float(f["altitude_m"]) - GROUND_LEVEL[map_name] for f in rec.frames if f.get("altitude_m") is not None]
     if not alts and rec.row.get("started_at_utc"):
         t0 = float(rec.row["started_at_utc"])
@@ -537,7 +541,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
 
     row = rec.row
-    episode_id, map_name = str(row["episode_id"]), str(row.get("map_name") or "calcity")
+    episode_id, map_name = str(row["episode_id"]), rec.map_name
     script = None
     if forced:
         from benchmarks.citynav.run_benchmark import episode_runner  # noqa: PLC0415
@@ -565,10 +569,8 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     if not frames:
         by_flight: dict[int, list[Held]] = {}
         if forced:
-            for f in rec.frames:
-                h = Held.of(rec, f)
-                if h is not None:
-                    by_flight.setdefault(int(f.get("flight") or 0), []).append(h)
+            for h in bank_of([rec]):
+                by_flight.setdefault(int(h.frame.get("flight") or 0), []).append(h)
         live = BankSource(bank or [], tiles_dir=TILES_DIR, map_name=map_name,
                           tile_ground_z=float(GROUND_LEVEL[map_name]), by_flight=by_flight,
                           forced=(lambda: len(mission.flights)) if forced else None)
@@ -645,7 +647,7 @@ def main(argv: list[str] | None = None) -> int:
                             clock_ns=int(float(rec.row["started_at_utc"]) * 1e9))
         log.info("the ring over %s: %d frames kept, %.1f s to read", args.frames.name, len(ring.rows),
                  time.perf_counter() - t0)
-        live = open_live(vehicle=ring, tiles_dir=TILES_DIR, map_name=str(rec.row.get("map_name") or "calcity"),
+        live = open_live(vehicle=ring, tiles_dir=TILES_DIR, map_name=rec.map_name,
                          sensor=resolve_sensor(load_config(args.config).sensor), boresight_path=args.boresight,
                          register_raster=args.raster)
     if args.forced:
