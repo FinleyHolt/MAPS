@@ -771,7 +771,6 @@ class _Mission:
                     look_label(_tfid, _trow, is_target=True)
                     if _txy else (_tfid or "the stop")),
                 "center_boundary": look_outline(_trow) if _txy else None,
-                "annotate": False,
                 "marks": [],
             }])
         except Exception as _exc:  # noqa: BLE001 — never crash a flight
