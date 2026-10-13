@@ -30,7 +30,7 @@ recording = ["mcap"]
 dev = ["pytest==9.1.1", "ruff==0.17.0", "mcap"]
 
 [tool.setuptools.packages.find]
-include = ["maps*", "benchmarks*", "figures*"]
+include = ["maps*", "benchmarks*", "baselines*", "figures*"]
 exclude = ["*tests*"]
 namespaces = false
 
