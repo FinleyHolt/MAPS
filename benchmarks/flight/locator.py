@@ -55,7 +55,7 @@ def sized(sensor, width: int, height: int):
 
 def work_sensor(sensor, agl_m: float):
     """``(sensor, scale)``: the sensor binned to :data:`WORK_GSD_M`, and the
-    frame's pixels per binned pixel; the sensor itself and 1.0 for a frame no
+    binned pixels per frame pixel; the sensor itself and 1.0 for a frame no
     finer than that."""
     gsd = float(agl_m) / float(sensor.intrinsics.fx)   # the ground a pixel covers at the optical axis, m/px
     if gsd <= 0.0 or gsd * BIN_ABOVE >= WORK_GSD_M:
