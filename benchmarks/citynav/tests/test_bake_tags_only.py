@@ -127,3 +127,19 @@ def test_the_bake_keeps_whatever_geometry_it_is_given():
     assert wc({"type": "Polygon",
                "coordinates": [[[0.0, 0.0], [0.001, 0.0], [0.0, 0.001],
                                 [0.0, 0.0]]]}) is None
+
+
+def test_a_point_just_outside_the_window_is_dropped(tmp_path):
+    """A point 1 m west or south of the map lies in no cell; it is not
+    pulled onto the edge column or row."""
+    (tmp_path / "toy_meta.json").write_text(json.dumps({
+        "cell_size_m": 2.0, "grid_shape": [20, 20],
+        "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 40.0, "y_max": 40.0},
+    }))
+    bake_block("toy", [
+        ({"tourism": "artwork", "osm_id": "n1"}, {"type": "Point", "coordinates": [30, 30]}),
+        ({"tourism": "artwork", "osm_id": "w"}, {"type": "Point", "coordinates": [-1, 30]}),
+        ({"tourism": "artwork", "osm_id": "s"}, {"type": "Point", "coordinates": [30, -1]}),
+    ], tmp_path, imagery=False)
+    rows = json.loads((tmp_path / "toy_features.json").read_text())["prior"]
+    assert {e["osm_id"] for e in rows} == {"n1"}, rows

@@ -306,8 +306,8 @@ def _cell_for_xy(
     x: float, y: float, bounds: WorldBounds, grid_shape: tuple[int, int], cell_size_m: float
 ) -> tuple[int, int] | None:
     H, W = grid_shape
-    col = int((x - bounds.x_min) / cell_size_m)
-    row = int((y - bounds.y_min) / cell_size_m)
+    col = math.floor((x - bounds.x_min) / cell_size_m)
+    row = math.floor((y - bounds.y_min) / cell_size_m)
     if 0 <= row < H and 0 <= col < W:
         return row, col
     return None
