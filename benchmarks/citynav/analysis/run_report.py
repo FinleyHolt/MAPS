@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import statistics
+import sys
 from collections import Counter
 from pathlib import Path, PurePosixPath
 
@@ -215,9 +216,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("roots", type=Path, nargs="+", help="run roots")
     _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)
+    rc = 0
     for root in args.roots:
-        report(root, allow_partial=args.allow_partial)
-    return 0
+        try:
+            report(root, allow_partial=args.allow_partial)
+        except SystemExit as refused:  # a root it cannot report; the next is still read
+            print(refused, file=sys.stderr)
+            rc = 1
+    return rc
 
 
 if __name__ == "__main__":

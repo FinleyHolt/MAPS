@@ -187,3 +187,17 @@ def test_help_is_an_option_not_a_root(capsys):
     with pytest.raises(SystemExit) as done:
         run_report.main(["--help"])
     assert done.value.code == 0 and "--allow-partial" in capsys.readouterr().out
+
+
+def test_a_root_with_no_scored_row_does_not_stop_the_roots_after_it(tmp_path, capsys):
+    """Each root in turn: a refused root is named on stderr, the next is still reported, and the
+    exit code says one was refused."""
+    from benchmarks.citynav.analysis import run_report
+
+    empty = write_ledger(tmp_path / "empty", ledger_row("e::1#1", "20260725_110000", status="infra",
+                                                        error="vllm_down_midrun"))
+    good = write_ledger(tmp_path / "good", ledger_row("e::2#2", "20260725_110100", 1))
+    assert run_report.main([str(empty), str(good)]) == 1
+    out = capsys.readouterr()
+    assert f"no scored rows under {empty}" in out.err
+    assert f"=== {good} ===" in out.out
