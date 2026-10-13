@@ -146,11 +146,13 @@ def points_from_geoms(geoms):
 
 # Colour matches by FAMILY: perception's usual slip stays inside one (gray
 # reads silver under glare, red reads maroon).
+# Palette word -> family; key order is the order a label's colour is read in
+# (geom_program._color_of).
 _COLOR_FAMILY = {
-    "white": "achromatic", "silver": "achromatic", "gray": "achromatic", "black": "achromatic",
-    "red": "red", "maroon": "red",
+    "white": "achromatic", "black": "achromatic", "gray": "achromatic", "silver": "achromatic",
+    "red": "red", "blue": "blue", "green": "green", "yellow": "yellow",
     "orange": "warm", "brown": "warm", "tan": "warm", "beige": "warm", "gold": "warm",
-    "yellow": "yellow", "green": "green", "blue": "blue", "purple": "purple",
+    "maroon": "red", "purple": "purple",
 }
 
 
@@ -249,10 +251,7 @@ def compact_color_cell(color_str: str, *, shade: "str | None", uncertain: bool,
     second = None
     if rich and len(mix) > 1 and mix[1][1] >= 0.20 and mix[1][0] != word:
         w2 = mix[1][0]
-        w_ach = _COLOR_FAMILY.get(word) == "achromatic"
-        w2_ach = _COLOR_FAMILY.get(w2) == "achromatic"
-        if (w_ach != w2_ach) or (not w_ach and not w2_ach
-                                 and _COLOR_FAMILY.get(word) != _COLOR_FAMILY.get(w2)):
+        if _COLOR_FAMILY.get(word) != _COLOR_FAMILY.get(w2):
             second = w2
     head = f"{shade} " if shade else ""
     body = f"{word}/{second}" if second else word

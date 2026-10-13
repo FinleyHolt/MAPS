@@ -66,8 +66,7 @@ def _attach_color_column(items, canon):
     return out
 
 
-_COLOR_WORDS = ("white", "black", "gray", "silver", "red", "blue", "green",
-                "yellow", "orange", "brown", "tan", "beige", "gold", "maroon", "purple")
+_COLOR_WORDS = tuple(G._COLOR_FAMILY)
 
 
 def _color_of(label: str) -> str:
