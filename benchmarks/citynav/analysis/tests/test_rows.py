@@ -303,13 +303,13 @@ def test_a_sortie_root_selecting_no_episodes_reads_whole(tmp_path):
     assert set(picked) == {"e1"}
 
 
-def test_a_metricless_pick_is_an_osr_miss_on_a_ring_run():
-    """A crash or an unrecorded timeout is a miss in OSR's denominator as in
-    SR's, so OSR and SR are rates over the same episodes."""
+def test_a_metricless_pick_is_an_osr_and_spl_miss_on_a_ring_run():
+    """A crash or an unrecorded timeout is a miss in OSR's and spl_pos's
+    denominators as in SR's, so all three are rates over the same episodes."""
     def pick(metrics):
         return rows.Attempt("e", {}, metrics, "20260725_110000", 0, True)
-    picked = {"a": pick({"SR": 1, "OSR": 1}), "b": pick({})}
-    assert rows.scored_metrics(picked)["b"] == {"SR": 0, "OSR": 0}
+    picked = {"a": pick({"SR": 1, "OSR": 1, "spl_pos": 0.5}), "b": pick({})}
+    assert rows.scored_metrics(picked)["b"] == {"SR": 0, "OSR": 0, "spl_pos": 0.0}
     shape = {"a": pick({"SR": 1}), "b": pick({})}
     assert rows.scored_metrics(shape)["b"] == {"SR": 0}
 

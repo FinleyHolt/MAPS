@@ -253,6 +253,8 @@ def add_allow_partial(ap: argparse.ArgumentParser) -> None:
 
 def scored_metrics(picked: dict[str, Attempt]) -> dict[str, dict]:
     """episode_id -> the metrics every reader scores; a pick without metrics
-    is a miss inside every rate's denominator (SR, and OSR on a ring run)."""
-    miss = {"SR": 0, "OSR": 0} if any("OSR" in a.metrics for a in picked.values()) else {"SR": 0}
+    is a miss inside every rate's denominator (SR, and OSR and spl_pos on a
+    ring run)."""
+    ring = any("OSR" in a.metrics for a in picked.values())
+    miss = {"SR": 0, "OSR": 0, "spl_pos": 0.0} if ring else {"SR": 0}
     return {eid: a.metrics or dict(miss) for eid, a in picked.items()}
