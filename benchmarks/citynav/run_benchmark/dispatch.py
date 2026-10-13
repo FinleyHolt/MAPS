@@ -178,7 +178,8 @@ def _dispatch_one(
         m.get("success_criterion") or "?",
         m["SR"],
         m["steps_taken"],
-        # ``detected`` (a runtime detection) or ``prior`` (a baked landmark).
+        # ``detected`` (a runtime detection), ``prior`` (a baked landmark) or
+        # ``point`` (a world point).
         m.get("committed_provenance") or "none",
         out["elapsed_s"],
     )
