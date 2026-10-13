@@ -42,12 +42,11 @@ def cover_items(_accepted_items: list, _said, *, spec, spacing, rows: dict,
                                 covered=covered, pose_xy=pose_xy)
     _item = _accepted_items[0]
     _tok = str(_item.get("target_fid") or "")
-    _span = spacing
     _stops = _coverage_stops(_tok, spec, spacing)
     _note = ""
     if _stops:
         _walk = sum(math.dist(a, b) for a, b in zip(_stops, _stops[1:]))
-        _reached = min(1.0, len(_stops) * _span / _walk) if _walk else 1.0
+        _reached = min(1.0, len(_stops) * spacing / _walk) if _walk else 1.0
         if len(_stops) == 1:
             _note = (f"{_tok} fits inside one observation; covered it "
                      "from the middle in one stop.")
@@ -84,7 +83,6 @@ def _cover_set_items(_accepted_items: list, _said, *, spec, spacing,
     keeps that many evenly spaced stops, its first among them."""
     # ponytail: O(n*m) greedy chaining, not a TSP; order the members
     # optimally if a pass's flown length ever matters.
-    _span = spacing
     _members: list[dict] = []
     for _it in _accepted_items:
         _tok = str(_it.get("target_fid") or "")
@@ -137,8 +135,8 @@ def _cover_set_items(_accepted_items: list, _said, *, spec, spacing,
     for _m in _chained:
         for _i, _mv in enumerate(_m["items"]):
             _p = _m["pts"][_i] if _i < len(_m["pts"]) else None
-            if (_p is not None and _span is not None
-                    and any(math.dist(_p, _q) < _span / 2.0
+            if (_p is not None and spacing is not None
+                    and any(math.dist(_p, _q) < spacing / 2.0
                             for _q in _kept_pts)):
                 continue
             _flat.append((_m, _mv))
@@ -153,8 +151,8 @@ def _cover_set_items(_accepted_items: list, _said, *, spec, spacing,
         _m["kept"] = sum(1 for _f, _ in _flat if _f is _m)
     _total = sum(_m["walk"] for _m in _chained)
     _n_stops = len(_flat)
-    _reached = (min(1.0, _n_stops * _span / _total)
-                if _total and _span else 1.0)
+    _reached = (min(1.0, _n_stops * spacing / _total)
+                if _total and spacing else 1.0)
     _subject = str(_said) if _said else f"{len(_chained)} places"
     if _reached >= 1.0:
         _note = (
@@ -168,9 +166,9 @@ def _cover_set_items(_accepted_items: list, _said, *, spec, spacing,
                  f"{_total:.0f} m.")
 
     def _pct(_m):
-        if not _m["walk"] or _span is None:
+        if not _m["walk"] or spacing is None:
             return 1.0
-        return min(1.0, _m["kept"] * _span / _m["walk"])
+        return min(1.0, _m["kept"] * spacing / _m["walk"])
     _mm = ", ".join(f"{_m['tok']} {_pct(_m):.0%}" for _m in _chained[:8])
     _mm_more = (f", +{len(_chained) - 8} more"
                 if len(_chained) > 8 else "")
