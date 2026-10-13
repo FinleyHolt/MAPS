@@ -110,6 +110,11 @@ python -m benchmarks.flight.replay <sortie>/<run dir> --frames <sensors.mcap> --
 | Forced (`--forced`) | The recorded reasoner responses, observations and detections. Every request's text is diffed against the recording into `replay_diff.json`; differing pictures are counted (`pictures_differ`); a text divergence exits non-zero. No endpoint is contacted. | That this harness sends the flown request text turn for turn. |
 | Frames (`--frames`) | The camera recording as the aircraft's ring, re-fused through the live chain at every waypoint. Needs the `recording` extra. | The observation chain on the real frames. |
 
+The bank and frame tiers fly your arm's reasoning effort
+(`SEARCH_SAMPLING_REASONING_EFFORT`, or `--reasoning-effort`, which the
+served model's card checks like the environment's); the forced tier sends
+the recorded one.
+
 The station registered frames against NAIP 2024 imagery (the `calcity.png`
 of the v5 Cal City data release beside the flown bake); pass its directory as
 `--raster`. A replay's ledger row names the run it replays (`replay_of`) and

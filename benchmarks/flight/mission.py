@@ -625,6 +625,7 @@ class Mission:
         from benchmarks.citynav.run_manifest import settle_effort  # noqa: PLC0415
         from maps.llm.endpoint_spec import discover_from_env, install_spec, spec  # noqa: PLC0415
         from maps.llm.http import CallCanceled  # noqa: PLC0415
+        from maps.llm.model_cards import check_effort  # noqa: PLC0415
         from maps.search.parse_compile.reasoner_loop import continue_mission  # noqa: PLC0415
 
         try:
@@ -633,6 +634,8 @@ class Mission:
             # fails this mission, honestly.
             install_spec(discover_from_env())
             settle_effort(spec().model_id)
+            if (self.reasoning_effort or "").strip():
+                check_effort(spec().model_id, self.reasoning_effort.strip())
             self._write_manifests()
 
             h = hydrate(episode_id=self.episode_id, split=self.split, config=self.config, start_xy=self._start_xy,
