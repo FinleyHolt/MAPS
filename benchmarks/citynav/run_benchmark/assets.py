@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from benchmarks.citynav.eval import WorldBounds
-from benchmarks.citynav.paths import (
-    assert_current_tile_schema,
-    tile_stem,
-)
+import json
 from dataclasses import dataclass
 from pathlib import Path
-import json
+
+from benchmarks.citynav.eval import WorldBounds
+from benchmarks.citynav.paths import assert_current_tile_schema, tile_stem
 
 
 @dataclass
