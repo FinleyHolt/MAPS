@@ -79,7 +79,7 @@ def test_the_minted_handle_gets_a_crop_per_row(_n=4):
 
 def test_a_flight_that_adds_nothing_mints_nothing():
     # An empty handle that reads as live is this repo's named hazard, and
-    # rule T's own rule is non-empty-only: a zero-detection flight leaves
+    # the scope moves only to a non-empty set: a zero-detection flight leaves
     # the scope exactly where it was.
     results, _graph, added = grow_drive(
         [[run('go_to("prior_7")')], [run("look(r0)")], "done"],
