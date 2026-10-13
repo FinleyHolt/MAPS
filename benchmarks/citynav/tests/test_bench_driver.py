@@ -30,7 +30,7 @@ REPO = Path(bf.__file__).resolve().parents[2]
 OUTCOMES = {
     "ok": ("ok", None, True),
     "miss": ("ok", "RuntimeError: boom", True),
-    "infra": ("infra", "CITYNAV_EPISODE_INFRA_ABORT: SamServerOutage", True),
+    "infra": ("infra", "SamServerOutage: down", True),
     "sleep": ("timed_out", None, True),
     "kill": ("infra", "killed_midrun", True),
     "norow": ("infra", "no_prediction_unclassified", True),

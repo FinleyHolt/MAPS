@@ -27,13 +27,13 @@ def light(monkeypatch):
         lambda row, row_index=0: SimpleNamespace(episode_id="b::1#0"),
     )
     monkeypatch.setattr(dispatch, "arm_env_stamp", lambda: {"SEARCH_X": "1"})
-    monkeypatch.setattr(dispatch, "_cached_run_provenance", lambda flags: {"commit": "abc"})
+    monkeypatch.setattr(dispatch, "_cached_run_provenance", lambda flags, **kw: {"commit": "abc", "search_env_flags": flags})
 
 
 def _dispatch(tmp_path):
     return dispatch._dispatch_one(
         row={}, orig_idx=0, idx=0, total=1, objects_by_map={},
-        cfg=SimpleNamespace(withhold=["look"]), recorder=None, episode_dir=tmp_path,
+        cfg=SimpleNamespace(source_path="x.yaml"), split="test", recorder=None, episode_dir=tmp_path,
     )
 
 
@@ -59,7 +59,6 @@ def test_a_method_exception_lands_a_scored_miss(tmp_path, light, monkeypatch, ms
     assert row["error"] == f"RuntimeError: {msg}"
     assert "in boom" in row["traceback"] and msg in row["traceback"]
     assert "metrics" not in row
-    assert row["withhold"] == ["look"]
     assert episodes.read_episode_json(tmp_path) == row
 
 
@@ -70,14 +69,14 @@ def _status_error(code: int) -> Exception:
     return httpx.HTTPStatusError("x", request=req, response=httpx.Response(code, request=req))
 
 
-def test_a_serve_fault_carries_the_infra_token(tmp_path, light, monkeypatch):
+def test_a_serve_fault_is_infra_without_a_traceback(tmp_path, light, monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("compile failed") from _status_error(503)
 
     monkeypatch.setattr(dispatch, "run_episode", boom)
     row = _dispatch(tmp_path)
     assert row["status"] == episodes.STATUS_INFRA
-    assert row["error"].startswith("CITYNAV_EPISODE_INFRA_ABORT: RuntimeError")
+    assert row["error"] == "RuntimeError: compile failed" and "traceback" not in row
 
 
 @pytest.mark.parametrize("exc", [
@@ -120,8 +119,7 @@ def test_a_scored_record_is_ok_and_on_disk(tmp_path, light, monkeypatch):
     row = _dispatch(tmp_path)
     assert row["status"] == episodes.STATUS_OK
     assert row["error"] is None
-    assert row["search_env_flags"] == {"SEARCH_X": "1"}
-    assert row["provenance"] == {"commit": "abc"}
+    assert row["provenance"] == {"commit": "abc", "search_env_flags": {"SEARCH_X": "1"}}
     assert isinstance(row["elapsed_s"], float)
     assert episodes.read_episode_json(tmp_path) == row
 

@@ -23,35 +23,20 @@ from maps.perception.sam.detect_client import SamServerOutage
 log = logging.getLogger("run_benchmark")
 
 _RUN_PROVENANCE: dict | None = None
-_RUN_CONTEXT: dict = {}
 
 
-def set_run_context(*, config_path: str | None, split: str) -> None:
-    """Run facts only the CLI knows (its parsed argv): the config the runner
-    actually loaded and the split. Recorded once per process so row
-    provenance reads the resolved run, never ambient env."""
-    _RUN_CONTEXT["config_path"] = config_path
-    _RUN_CONTEXT["split"] = split
-
-
-def _cached_run_provenance(search_flags: dict) -> dict:
+def _cached_run_provenance(search_flags: dict, *, config_path: str | None, split: str) -> dict:
     """The provenance every episode row carries (git commit, config sha256,
     the discovered served model, the flag set), computed once per process."""
     global _RUN_PROVENANCE
     if _RUN_PROVENANCE is None:
-        _spec = (
-            endpoint_spec_module.spec()
-            if endpoint_spec_module.spec_installed()
-            else None
-        )
-        model = _spec.model_id if _spec else None
-        build = _spec.tokenizer_name if _spec else None
+        spec = endpoint_spec_module.spec()
         _RUN_PROVENANCE = repo_provenance(
-            config_path=_RUN_CONTEXT.get("config_path"),
-            split=_RUN_CONTEXT.get("split"),
+            config_path=config_path,
+            split=split,
             search_flags=search_flags,
-            served_model=model,
-            served_build=build,
+            served_model=spec.model_id,
+            served_build=spec.tokenizer_name,
         )
     return _RUN_PROVENANCE
 
@@ -118,6 +103,7 @@ def _dispatch_one(
     total: int,
     objects_by_map: dict,
     cfg: RunConfig,
+    split: str,
     recorder: LiveRecorder | None,
     episode_dir: Path,
 ) -> dict:
@@ -132,18 +118,11 @@ def _dispatch_one(
     except Exception:
         _eid = f"row{orig_idx}"
 
-    # Every row carries the arm identity (the SEARCH_* flags of the shell).
-    _arm_stamp = arm_env_stamp()
-    _prov = _cached_run_provenance(_arm_stamp)
+    # Every row's provenance carries the arm identity (the SEARCH_* flags of the shell).
+    _prov = _cached_run_provenance(arm_env_stamp(), config_path=cfg.source_path, split=split)
 
     def _stamp(rec: dict) -> dict:
-        return {
-            **rec,
-            "search_env_flags": rec.get("search_env_flags") or _arm_stamp,
-            "provenance": rec.get("provenance") or _prov,
-            "withhold": list(cfg.withhold),
-            "elapsed_s": round(time.monotonic() - t0, 1),
-        }
+        return {**rec, "provenance": _prov, "elapsed_s": round(time.monotonic() - t0, 1)}
 
     try:
         rec = run_episode(
@@ -157,21 +136,15 @@ def _dispatch_one(
         # exc_info lands the traceback in run.log through the root
         # handler; a bare print_exc reaches only stderr.
         log.error("  fail row %d: %s", idx, e, exc_info=True)
-        # The token names an infra death before commit: a SAM outage or a
-        # transient shared-server fault.
-        if is_infra_fault(e):
-            token = "CITYNAV_EPISODE_INFRA_ABORT"
-            log.error("%s episode_id=%s type=%s", token, _eid, type(e).__qualname__)
-        else:
-            token = None
-        err = f"{type(e).__name__}: {e}"
-        # Anything else the method raised is its own failure: a scored miss
-        # (no metrics reads SR 0) carrying its traceback.
+        # An infra death is excluded and re-queued; anything else the method
+        # raised is its own failure: a scored miss (no metrics reads SR 0)
+        # carrying its traceback.
+        infra = is_infra_fault(e)
         out = _stamp({
             "episode_id": _eid,
-            "status": STATUS_INFRA if token else STATUS_OK,
-            "error": f"{token}: {err}" if token else err,
-            **({} if token else {"traceback": traceback.format_exc()}),
+            "status": STATUS_INFRA if infra else STATUS_OK,
+            "error": f"{type(e).__name__}: {e}",
+            **({} if infra else {"traceback": traceback.format_exc()}),
         })
         write_episode_json(episode_dir, out)
         return out

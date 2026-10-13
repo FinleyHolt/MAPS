@@ -22,7 +22,6 @@ import os
 import signal
 from benchmarks.citynav.run_benchmark.dispatch import (
     _dispatch_one,
-    set_run_context,
 )
 from benchmarks.citynav import episodes
 from benchmarks.citynav import run_manifest as _rm
@@ -142,9 +141,6 @@ def main() -> int:
     assert_available()
     cfg = load_config(args.config)
     export_withhold(cfg)
-    # Row provenance reads the run facts only this process's argv knows:
-    # the config the runner actually loaded and the split.
-    set_run_context(config_path=cfg.source_path, split=args.split)
     # Endpoint discovery, once per process before any inference or
     # perception call: a fact it cannot discover stops the run here.
     try:
@@ -185,7 +181,7 @@ def main() -> int:
         print(ep.dir, flush=True)
         try:
             _dispatch_one(row=row, orig_idx=orig_idx, idx=0, total=1,
-                          objects_by_map=objects_by_map, cfg=cfg, recorder=ep.recorder,
+                          objects_by_map=objects_by_map, cfg=cfg, split=args.split, recorder=ep.recorder,
                           episode_dir=ep.dir)
         finally:
             ep.close()
@@ -225,6 +221,7 @@ def main() -> int:
                 total=len(indexed_rows),
                 objects_by_map=objects_by_map,
                 cfg=cfg,
+                split=args.split,
                 recorder=ep.recorder,
                 episode_dir=ep.dir,
             )
