@@ -179,7 +179,6 @@ def test_render_record_carries_the_contract():
                     "is_target": False}]},
         _FEATURES, **_TILE)
     assert rec is not None
-    assert rec["kind"] == "map"
     assert rec["world_window"] == [0.0, 0.0, 20.0, 20.0]
     assert rec["jpeg"]
     assert [e["digit"] for e in rec["legend"]] == [1, 2]

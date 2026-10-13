@@ -429,16 +429,11 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                                   key=lambda kv: -kv[1]["cells"])]
     rec = {
         "jpeg": bytes(jp),
-        "kind": "map",
         "features_painted": int(sum(e["cells"] for e in counts.values())),
         # a prior chip the placement could not fit is counted out
         "priors_chipped": n_prior_chips - len(undrawn),
         "priors_unchipped": n_prior_unchipped + len(undrawn),
-        "center_boundary": spec.get("center_boundary"),
-        "marks": spec.get("marks") or [],
         "center_fid": center_fid,
-        "center_label": center_label,
-        "center_xy": [round(cx, 2), round(cy, 2)],
         "context_m": round(span, 2),
         "world_window": [round(v, 2) for v in (x0, y0, x1, y1)],
         "legend": legend,
