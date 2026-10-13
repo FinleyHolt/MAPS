@@ -1,6 +1,7 @@
 """One episode's engine and, on the bench, its run: build the search stack
-(shared with the flight mission), fly the mission conversation, replay the
-flown stops in the six-action alphabet, and score the final pose.
+(shared with the flight mission), fly the mission conversation (or the
+config's baseline ``policy``), replay the flown stops in the six-action
+alphabet, and score the final pose.
 """
 
 from __future__ import annotations
@@ -8,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import hashlib
+import importlib
 import logging
 import os
 import re
@@ -327,9 +329,17 @@ def run_episode(
     start_pose_xyh = (float(state.pose_xy[0]), float(state.pose_xy[1]),
                       float(episode.start_heading_deg))
     start_alt = float(state.altitude_m)
-    session = MissionSession(h, recorder=recorder)
-    reply = run_mission_episode(session)
-    flights = session.flights
+    if cfg.policy is None:
+        session = MissionSession(h, recorder=recorder)
+        reply = run_mission_episode(session)
+        flights = session.flights
+        own = {"mission": {"ended_by": reply.ended_by}}
+    else:
+        # A published method chooses the stops; the replay, scoring and row
+        # are this function's. By name: benchmarks carries no static import
+        # of baselines.
+        flown = importlib.import_module("baselines.seam").fly(h, cfg.policy)
+        flights, own = flown.flights, flown.metrics
     if flights:
         steps_taken = synthesize_compliant_trajectory(
             cfg=cfg, state=state, flights=flights,
@@ -359,7 +369,8 @@ def run_episode(
     scores["llm"] = (flight_summary.summarize(Path(flight_dir) / "flight")
                      if flight_dir else flight_summary.blank())
     scores["committed_provenance"] = last.get("provenance")
-    scores["mission"] = {"ended_by": reply.ended_by}
+    # The mission's ending, or the baseline's policy, commit tier and numbers.
+    scores.update(own)
     # SAHI tiles the segmenter could not answer: their objects are missing
     # from those frames, which the episode survives.
     scores["sam_tiles_failed"] = int(h.perception.sahi_tiles_failed)
@@ -369,6 +380,10 @@ def run_episode(
         "map_name": episode.map_name,
         "description": episode.description,
         "start_xy": list(episode.start_xy),
+        "target_xy": list(episode.target_xy) if episode.target_xy is not None else None,
+        # The point the episode is judged at on a shape bench; None when it
+        # never flew. The ring scores the replay's final pose instead.
+        "commit_xy": list(commit_xy) if commit_xy is not None else None,
         "visited_xy": [list(p) for p in visited],
         "metrics": scores,
     }

@@ -5,12 +5,14 @@ every key) or an override: ``base: <file>`` names the file it changes,
 relative to itself, and the file holds only the keys it changes. Chains
 resolve and deep-merge; ``_SCHEMA`` is the one statement of every key, its
 type and its range, and the loader refuses an unknown key, a missing key or
-a bad value at load, naming the key and the file.
+a bad value at load, naming the key and the file. ``_OPTIONAL`` keys may be
+left out; an absent one takes its ``RunConfig`` default.
 """
 
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 from dataclasses import dataclass
@@ -36,6 +38,14 @@ def _sensor_ok(v: Any) -> bool:
     return True
 
 
+def _policy_ok(v: Any) -> bool:
+    # By name: benchmarks carries no static import of baselines.
+    try:
+        return importlib.util.find_spec(f"baselines.{v}.policy") is not None
+    except ModuleNotFoundError:
+        return False
+
+
 _POS = (lambda v: v > 0), "> 0"
 _NONNEG = (lambda v: v >= 0), ">= 0"
 
@@ -52,7 +62,10 @@ _SCHEMA: dict[str, Any] = {
     "withhold": (list, (
         lambda v: len(set(v)) == len(v) and all(n in WITHHOLDS for n in v),
         f"a list of distinct names from {sorted(WITHHOLDS)}")),
+    "policy": (str, (_policy_ok, "the name of a baselines/<policy>/policy.py")),
 }
+# Keys a config may leave out.
+_OPTIONAL = {"policy"}
 
 
 @dataclass
@@ -75,6 +88,9 @@ class RunConfig:
     # Bench-only ablation withholds (maps.search.withhold); empty serves the
     # flown text exactly.
     withhold: list
+    # A published method that chooses the stops in place of the mission
+    # conversation (baselines/<policy>/policy.py); None flies the mission.
+    policy: str | None = None
     # The resolved top-level YAML path, written by ``load_config``.
     source_path: str | None = None
 
@@ -87,7 +103,9 @@ def export_withhold(cfg: RunConfig) -> None:
 
 def assert_flight_config(cfg: RunConfig) -> None:
     """The flight mission flies the flown engine: refuse a config, or an
-    environment, that withholds any part of it."""
+    environment, that withholds any part of it or names a baseline policy."""
+    if cfg.policy is not None:
+        raise ValueError(f"{cfg.source_path}: the flight mission flies MAPS; policy={cfg.policy!r} is a bench arm")
     if cfg.withhold or os.environ.get(WITHHOLD_ENV, "").strip():
         raise ValueError(
             f"{cfg.source_path}: the flight mission serves the flown engine; "
@@ -133,12 +151,14 @@ def _read_chain(p: Path, seen: tuple[Path, ...] = ()) -> dict:
 
 def _check(data: dict, schema: dict, src: Path) -> None:
     unknown = sorted(set(data) - set(schema))
-    missing = sorted(set(schema) - set(data))
+    missing = sorted(set(schema) - set(data) - _OPTIONAL)
     if unknown:
         raise ValueError(f"{src}: unknown config key(s) {unknown}")
     if missing:
         raise ValueError(f"{src}: missing config key(s) {missing}")
     for key, rule in schema.items():
+        if key not in data:
+            continue
         v = data[key]
         types, (ok, says) = rule
         types = types if isinstance(types, tuple) else (types,)

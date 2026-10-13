@@ -421,6 +421,36 @@ Figures land in `output/figures/` as light and dark SVGs. Every claimed
 number and figure maps to its reader in
 [`benchmarks/citynav/analysis/README.md`](benchmarks/citynav/analysis/README.md).
 
+## Rerun the baselines
+
+[`baselines/`](baselines/README.md) holds the published methods the paper
+compares against. GeoNav, GeoNav as released, and the ViSA-inspired policy
+fly the bench in place of the mission conversation: a config's `policy:`
+hands each episode to the method, and the sensor, prior, budget, replay,
+scorer and row are the bench's. Each config in `configs/baselines/` is a
+control config plus `policy:`, so a baseline root reads as an arm of the
+MAPS root it shares a selection with:
+
+```sh
+for policy in geonav geonav_released visa; do
+  SEARCH_SAMPLING_REASONING_EFFORT=<model's E1 effort> CITYNAV_BENCH_CONFIG=configs/baselines/$policy.yaml \
+    python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --sample-seed 1234 \
+    --out-root output/baselines/<model>/$policy
+  SEARCH_SAMPLING_REASONING_EFFORT=<the E3 root's effort> CITYNAV_BENCH_CONFIG=configs/baselines/calcity_$policy.yaml \
+    python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_episodes.txt \
+    --out-root output/baselines/<model>/calcity_$policy
+done
+python -m benchmarks.citynav.analysis.run_report output/baselines/<model>/visa
+python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/baselines/<model>/visa
+```
+
+The released checkpoints (CityNav MGP, HETT, FlightGPT) run under their
+authors' own evaluators, from pinned clones, through
+`baselines/released/released.sh`; their rows read with `run_report` and pair
+against a MAPS root with `python -m baselines.released.outcome_rows pair`.
+[`baselines/released/README.md`](baselines/released/README.md) has the
+stages and every deviation from upstream.
+
 ## Fly the method
 
 [`benchmarks/flight`](benchmarks/flight/README.md) holds the flight harness:
@@ -470,9 +500,10 @@ directory as `--raster` to replay as flown.
 | [`benchmarks/calcity/`](benchmarks/calcity/README.md) | The Cal City bench: corpus, reviewed set, raster and bake build. |
 | [`benchmarks/flight/`](benchmarks/flight/README.md) | The flight harness, the twin, as-flown replay and the closed-loop measures. |
 | [`benchmarks/capacity/`](benchmarks/capacity/README.md) | The human-capacity study: seeded report streams and the finds-per-hour reader. |
+| [`baselines/`](baselines/README.md) | The published methods re-measured on the bench (GeoNav, ViSA) and the released checkpoints' runner. |
 | `figures/` | The effort-ladder and capability-effort figures. |
 | `serving/` | The SAM 3.1 serve. |
-| `configs/` | Bench configs: the CityNav control, Cal City, and the withhold arms. |
+| `configs/` | Bench configs: the CityNav control, Cal City, the withhold arms and the baseline arms. |
 | `envs/` | The SAM 3.1 serve environment. |
 
 ## Citation

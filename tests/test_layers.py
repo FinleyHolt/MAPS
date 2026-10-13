@@ -1,4 +1,4 @@
-"""Each layer imports only what sits below it (maps <- benchmarks; serving beside both), and every in-repo import resolves."""
+"""Each layer imports only what sits below it (maps <- benchmarks <- baselines; serving beside them), and every in-repo import resolves."""
 
 from __future__ import annotations
 
@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-FORBIDDEN = {"maps": {"benchmarks", "serving"}, "benchmarks": {"serving"}}
+FORBIDDEN = {
+    "maps": {"benchmarks", "baselines", "serving"},
+    "benchmarks": {"baselines", "serving"},
+    "baselines": {"serving"},
+}
 
 
 def _imports(layer: str) -> list[tuple[str, str]]:

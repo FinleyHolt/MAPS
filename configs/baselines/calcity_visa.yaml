@@ -1,0 +1,3 @@
+# baselines/visa.yaml on Cal City: calcity.yaml with policy visa.
+base: ../calcity.yaml
+policy: visa
