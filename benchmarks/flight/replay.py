@@ -39,7 +39,7 @@ from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
 from benchmarks.flight.live_source import ortho_observation
-from benchmarks.flight.measures import run_bases, tour_stops
+from benchmarks.flight.measures import run_bases
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, activate_calcity,
                                        converse, flight_config, summary_line)
 from benchmarks.flight.tile_georef import FLOOR_MSL_M
@@ -59,6 +59,16 @@ _PATH_FLAG = re.compile(r"_(TILES|RGBD_DIR)$")
 
 
 # -- the recording -----------------------------------------------------------
+
+
+def tour_stops(run_dir: Path) -> list[tuple[str, tuple[float, float]]]:
+    """The flights a run flew, in order: ``(target, xy)`` off its ``flight/tour_cursor.json``."""
+    try:
+        cursor = json.loads((run_dir / "flight" / "tour_cursor.json").read_text())
+    except (OSError, ValueError):
+        return []
+    return [(str(s.get("stop_id") or ""), (float(s["xy"][0]), float(s["xy"][1])))
+            for s in cursor.get("stops_visited") or [] if s.get("xy")]
 
 
 @dataclass

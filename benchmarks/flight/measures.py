@@ -153,16 +153,6 @@ def judged_xy(row: dict[str, Any]) -> tuple[float, float] | None:
     return (float(visited[-1][0]), float(visited[-1][1])) if len(visited) >= 2 else None
 
 
-def tour_stops(run_dir: Path) -> list[tuple[str, tuple[float, float]]]:
-    """The flights a run flew, in order: ``(target, xy)`` off its ``flight/tour_cursor.json``."""
-    try:
-        cursor = json.loads((run_dir / "flight" / "tour_cursor.json").read_text())
-    except (OSError, ValueError):
-        return []
-    return [(str(s.get("stop_id") or ""), (float(s["xy"][0]), float(s["xy"][1])))
-            for s in cursor.get("stops_visited") or [] if s.get("xy")]
-
-
 # -- the way back: Dubins paths at one turn radius -------------------------------
 # Tile metres, heading 0 = north, clockwise; sense +1 a right turn, -1 a left.
 
