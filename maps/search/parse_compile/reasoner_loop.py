@@ -61,6 +61,7 @@ from maps.search.render.look_render import LOOK_MAX_BADGES as _MAP_MAX_MARKS
 from maps.search.parse_compile import python_surface as _py_surface
 from maps.search.parse_compile.passes import cover_items
 from maps.search.parse_compile.views import (
+    LOOK_MAX_CROPS,
     _crop_token_of,
     _look_vision_text,
     _rounded_xy,
@@ -247,8 +248,8 @@ def _named_feature_note(classes: list[str], names: set[str]) -> str | None:
 
 
 # How many of a pass's new rows ride back as crops (its catch): half the
-# 16-image budget, so the model's own looks keep room.
-_CATCH_CROPS = 8
+# image budget, so the model's own looks keep room.
+_CATCH_CROPS = LOOK_MAX_CROPS // 2
 # What a look and a pass's catch say under the ``images`` withhold.
 _PICTURE_WITHHELD_OF = ("the {}'s caption follows in the next message; "
                         "its picture is not served on this run")
