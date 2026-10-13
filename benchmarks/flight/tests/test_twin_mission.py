@@ -42,7 +42,7 @@ def calcity(tmp_path, monkeypatch):
         "area": "calcity", "descriptions": ["The church at the end of the road."], "ann_ids": [0],
         "object_ids": [], "target_positions": [[*TARGET, 0.0]], "marker_positions": [],
         "trajectory": [[*START, 125.0]], "source": "authored",
-        "target_mask": [list(p) for p in church.exterior.coords[:-1]], "success_radius_m": 20.0}]))
+        "target_mask": [list(p) for p in church.exterior.coords[:-1]]}]))
     (root / "data" / "cityrefer").mkdir(parents=True)
     (root / "data" / "cityrefer" / "objects.json").write_text(json.dumps({"calcity": {}}))
     rgbd.mkdir(parents=True)
