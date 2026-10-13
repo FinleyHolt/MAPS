@@ -1816,91 +1816,93 @@ def _stratum(cx, a):
     return r
 
 
-def _compare_specs(cx, refs):
-    """compare refs -> ``(specs, staged handles)``, a spec ``(kind, payload,
-    as-label)``: 'row' (a surface row), 'point' (an [x, y]) or 'union' (the
-    member rows of ``{ref: [fid | rN | [x, y], ...]}``, measured as one
-    ref)."""
-    specs: list = []
-    standing: list = []
-    for el in refs:
-        as_label = None
-        ref_el = el
-        if isinstance(el, dict):
-            if el.get("as"):
-                as_label = _sanitize_token(el["as"])
-            ref_el = el["ref"]
-            if (isinstance(ref_el, (list, tuple)) and ref_el
-                    and not is_xy(ref_el)
-                    and all(isinstance(x, str) or is_xy(x) for x in ref_el)):
-                _members = []
-                for x in ref_el:
-                    if is_xy(x):
-                        _members.append({"xy": [float(x[0]), float(x[1])]})
-                        continue
-                    if cx.is_ref(x):
-                        # A row off the surface (a crossing) rides its own xy.
-                        _got = [cx.by_fid.get(r.get("fid"), r)
-                                for r in cx.resolve(x)
-                                if isinstance(r, dict)
-                                and (r.get("fid") in cx.by_fid
-                                     or is_xy(r.get("xy")))]
-                        _lbl = as_label or _sanitize_token(x)
-                        if not _got:
-                            raise ProgramError(
-                                f"{_lbl} is empty, so 'distance to "
-                                f"{_lbl}' is undefined on every row "
-                                f"and the ordering would be "
-                                f"meaningless."
-                                + ("" if withheld("look_for") else
-                                   " If these are things the map "
-                                   "does not carry (a pool, solar "
-                                   "panels, a shed, a car), nothing "
-                                   "is segmented until look_for "
-                                   "names the class and a flight "
-                                   "goes over the place -- arm it, "
-                                   "fly, then find them again."))
-                        if len(_got) > _UNION_MAX_MEMBERS:
-                            raise ProgramError(
-                                f"{_lbl} "
-                                f"holds {len(_got)} rows and a union "
-                                f"folds at most "
-                                f"{_UNION_MAX_MEMBERS}: measuring to "
-                                f"the nearest of that many is a "
-                                f"whole-map scan per row. Narrow it "
-                                f"first (within=, a cardinal, or a "
-                                f"tighter query), then measure to "
-                                f"what is left.")
-                        _members.extend(_got)
-                        continue
-                    _mnode = cx.by_fid.get(x)
-                    if _mnode is None:
-                        raise ProgramError(
-                            f"union ref member {_quote(x)} is not a fid on "
-                            f"this surface. {cx.avail('point')}")
-                    _members.append(_mnode)
-                specs.append(("union", _members, as_label))
-                continue
-        if is_xy(ref_el):
-            specs.append(("point", [float(ref_el[0]), float(ref_el[1])],
-                          as_label or "xy"))
+def _union_members(cx, ref_el, as_label) -> list:
+    """The member rows of a union ref ``[fid | rN | [x, y], ...]``: a fid's
+    row, a handle's rows (a row off the surface, a crossing, rides its own
+    xy) and an ``[x, y]`` as an xy-only row."""
+    members: list = []
+    for x in ref_el:
+        if is_xy(x):
+            members.append({"xy": [float(x[0]), float(x[1])]})
             continue
-        if not isinstance(ref_el, str):
-            raise ProgramError(
-                f"compare refs element {_quote(ref_el)} must be a bare fid string, "
-                f"an rN result, an [x,y] literal, or {{ref:..., as:...}}.")
-        node = cx.by_fid.get(ref_el)
-        if node is None and ref_el in cx.staged:
-            # A staged viewpoint attaches its side columns.
-            if ref_el not in standing:
-                standing.append(ref_el)
+        if cx.is_ref(x):
+            got = [cx.by_fid.get(r.get("fid"), r) for r in cx.resolve(x)
+                   if isinstance(r, dict)
+                   and (r.get("fid") in cx.by_fid or is_xy(r.get("xy")))]
+            lbl = as_label or _sanitize_token(x)
+            if not got:
+                raise ProgramError(
+                    f"{lbl} is empty, so 'distance to {lbl}' is undefined on "
+                    f"every row and the ordering would be meaningless."
+                    + ("" if withheld("look_for") else
+                       " If these are things the map does not carry (a "
+                       "pool, solar panels, a shed, a car), nothing is "
+                       "segmented until look_for names the class and a "
+                       "flight goes over the place -- arm it, fly, then "
+                       "find them again."))
+            if len(got) > _UNION_MAX_MEMBERS:
+                raise ProgramError(
+                    f"{lbl} holds {len(got)} rows and a union folds at most "
+                    f"{_UNION_MAX_MEMBERS}: measuring to the nearest of that "
+                    f"many is a whole-map scan per row. Narrow it first "
+                    f"(within=, a cardinal, or a tighter query), then "
+                    f"measure to what is left.")
+            members.extend(got)
             continue
+        node = cx.by_fid.get(x)
         if node is None:
             raise ProgramError(
-                f"compare ref {_quote(ref_el)} is not a fid on this "
-                f"surface. {cx.avail('point')}")
-        specs.append(("row", node, as_label))
-    return specs, standing
+                f"union ref member {_quote(x)} is not a fid on this surface. "
+                f"{cx.avail('point')}")
+        members.append(node)
+    return members
+
+
+def _row_geom_center(cx, node):
+    """``(geom, centre)`` of a row: its mask, else its point. Geometry is
+    re-read by fid, since op output rows carry no mask."""
+    if isinstance(node, dict):
+        node = cx.by_fid.get(node.get("fid")) or node
+    _cxy = node.get("xy") if is_xy(node.get("xy")) else None
+    m = node.get("mask")
+    if m:
+        g, c = _mask_geom_center(m)
+        return (g, node.get("mask_centroid") or c)
+    return (G.mask_geom([[_cxy]] if _cxy else []), _cxy)
+
+
+def _union_center(cx, members):
+    """``(member geoms, centre)`` of a union: the centre is the members'
+    area-weighted centroid, else the mean of their centres, else None."""
+    geoms: list = []
+    wx = wy = wa = 0.0
+    ucs: list = []
+    for node in members:
+        g, c = _row_geom_center(cx, node)
+        geoms.append(g)
+        if c is not None:
+            ucs.append(c)
+            a_m = G.loops_area(node.get("mask") or [])
+            wx += a_m * float(c[0])
+            wy += a_m * float(c[1])
+            wa += a_m
+    if wa > 0:
+        return geoms, [wx / wa, wy / wa]
+    if ucs:
+        return geoms, [sum(float(c[0]) for c in ucs) / len(ucs),
+                       sum(float(c[1]) for c in ucs) / len(ucs)]
+    return geoms, None
+
+
+def _unique_label(label, used: set, fid=None) -> str:
+    """``label``, or on a collision ``label_<fid>`` (a row ref) and then
+    ``label_<n>`` counting from 2."""
+    lab, k = label, 2
+    while lab in used:
+        lab = f"{label}_{fid}" if fid is not None and k == 2 else f"{label}_{k}"
+        k += 1
+    used.add(lab)
+    return lab
 
 
 def _compare(cx, a):
@@ -1908,28 +1910,18 @@ def _compare(cx, a):
     'distance to' (footprint gap, 0.0 on contact), 'facing' (the compass
     word of the gap vector, absent on contact), 'center distance to' and
     'bearing from' (centroid to centroid), and a signed '<dir> of' column
-    per requested cardinal."""
+    per requested cardinal. A ref is a surface row, an [x, y], a staged
+    viewpoint, or ``{ref: [fid | rN | [x, y], ...]}``, a union measured as
+    one place."""
     items = _as_rows(cx, a["items"])
     _src = cx.resolve(a["items"]) if cx.is_ref(a["items"]) else a["items"]
     _in_ordered = bool(getattr(_src, "ordered", False))
-    specs, _standing_ref_handles = _compare_specs(cx, a.get("refs") or [])
 
     notes: list = []
     set_notes: list = []        # the notes naming rows
     used_labels: set = set()
     all_col_keys: dict = {}     # every attached key, op-wide
-
-    # ``(geom, centre)`` of a row: its mask, else its point. Geometry is
-    # re-read by fid, since op output rows carry no mask.
-    def _row_geom_center(node):
-        if isinstance(node, dict):
-            node = cx.by_fid.get(node.get("fid")) or node
-        _cxy = node.get("xy") if is_xy(node.get("xy")) else None
-        m = node.get("mask")
-        if m:
-            g, c = _mask_geom_center(m)
-            return (g, node.get("mask_centroid") or c)
-        return (G.mask_geom([[_cxy]] if _cxy else []), _cxy)
+    standing: list = []         # staged viewpoint handles, in ref order
 
     # The cardinals asked for per ref (named by fid or label).
     _card_req: dict = {}
@@ -1939,19 +1931,47 @@ def _compare(cx, a):
     # One entry per ref: its header, label, geometry, cardinals and the
     # keys it attached (its header's ``cols``).
     refs: list[dict] = []
-    for kind, payload, label_base in specs:
-        label = label_base or (_sanitize_token(payload["fid"])
-                               if kind == "row" else "ref")
-        lab = label
-        _k = 2
-        while lab in used_labels:  # collision -> fid suffix, then counter
-            if kind == "row" and _k == 2:
-                lab = f"{label}_{payload['fid']}"
-            else:
-                lab = f"{label}_{_k}"
-            _k += 1
-        used_labels.add(lab)
-        if kind == "row":
+    for el in a.get("refs") or []:
+        as_label = None
+        ref_el = el
+        if isinstance(el, dict):
+            if el.get("as"):
+                as_label = _sanitize_token(el["as"])
+            ref_el = el["ref"]
+        if (isinstance(el, dict) and isinstance(ref_el, (list, tuple))
+                and ref_el and not is_xy(ref_el)
+                and all(isinstance(x, str) or is_xy(x) for x in ref_el)):
+            kind, payload = "union", _union_members(cx, ref_el, as_label)
+            lab = _unique_label(as_label or "ref", used_labels)
+            hdr = {"ref_name": lab, "kind": "union",
+                   "members": [n.get("fid") or [round(n["xy"][0], 2),
+                                                round(n["xy"][1], 2)]
+                               for n in payload]}
+            geom, center = _union_center(cx, payload)
+        elif is_xy(ref_el):
+            kind, payload = "point", [float(ref_el[0]), float(ref_el[1])]
+            lab = _unique_label(as_label or "xy", used_labels)
+            hdr = {"ref_name": lab, "kind": "point",
+                   "xy": [round(payload[0], 2), round(payload[1], 2)]}
+            geom, center = G.mask_geom([[payload]]), payload
+        else:
+            if not isinstance(ref_el, str):
+                raise ProgramError(
+                    f"compare refs element {_quote(ref_el)} must be a bare fid string, "
+                    f"an rN result, an [x,y] literal, or {{ref:..., as:...}}.")
+            payload = cx.by_fid.get(ref_el)
+            if payload is None and ref_el in cx.staged:
+                # A staged viewpoint attaches its side columns.
+                if ref_el not in standing:
+                    standing.append(ref_el)
+                continue
+            if payload is None:
+                raise ProgramError(
+                    f"compare ref {_quote(ref_el)} is not a fid on this "
+                    f"surface. {cx.avail('point')}")
+            kind = "row"
+            lab = _unique_label(as_label or _sanitize_token(payload["fid"]),
+                                used_labels, payload["fid"])
             hdr = {"ref_fid": payload["fid"],
                    "ref_name": str(payload.get("name") or payload.get("class")
                                    or payload["fid"])}
@@ -1959,35 +1979,7 @@ def _compare(cx, a):
             if payload.get("color_conf") is not None:
                 hdr["ref_color"] = payload.get("color")
                 hdr["ref_color_conf"] = payload["color_conf"]
-            geom, center = _row_geom_center(payload)
-        elif kind == "point":
-            hdr = {"ref_name": lab, "kind": "point",
-                   "xy": [round(payload[0], 2), round(payload[1], 2)]}
-            geom, center = G.mask_geom([[payload]]), payload
-        else:
-            hdr = {"ref_name": lab, "kind": "union",
-                   "members": [n.get("fid") or [round(n["xy"][0], 2),
-                                                round(n["xy"][1], 2)]
-                               for n in payload]}
-            geom = []
-            _wx = _wy = _wa = 0.0
-            _ucs: list = []
-            for node in payload:
-                g, c = _row_geom_center(node)
-                geom.append(g)
-                if c is not None:
-                    _ucs.append(c)
-                    a_m = G.loops_area(node.get("mask") or [])
-                    _wx += a_m * float(c[0])
-                    _wy += a_m * float(c[1])
-                    _wa += a_m
-            if _wa > 0:
-                center = [_wx / _wa, _wy / _wa]
-            elif _ucs:
-                center = [sum(float(c[0]) for c in _ucs) / len(_ucs),
-                          sum(float(c[1]) for c in _ucs) / len(_ucs)]
-            else:
-                center = None
+            geom, center = _row_geom_center(cx, payload)
         _fid = payload.get("fid") if kind == "row" else None
         want = next((_card_req[_k] for _k in (_fid, lab)
                      if _k and _k in _card_req), None)
@@ -1998,19 +1990,17 @@ def _compare(cx, a):
         covers = bool(kind == "row" and payload.get("covers_window"))
         if covers:
             notes.append(
-                f"ref {lab} "
-                f"('{payload.get('name') or payload['fid']}'): its "
-                f"mask contains the whole surface window, so "
-                f"'distance to {lab}'=0 for EVERY row (containment, not "
-                f"proximity) and 'facing {lab}' has no "
-                f"direction -- "
-                f"those two columns are not stamped; "
-                f"'center distance to {lab}'/"
-                f"'bearing from {lab}' (centroid vector) ride per-row.")
+                f"ref {lab} ('{payload.get('name') or payload['fid']}'): its "
+                f"mask contains the whole surface window, so 'distance to "
+                f"{lab}'=0 for EVERY row (containment, not proximity) and "
+                f"'facing {lab}' has no direction -- those two columns are "
+                f"not stamped; 'center distance to {lab}'/'bearing from "
+                f"{lab}' (centroid vector) ride per-row.")
         refs.append({"kind": kind, "payload": payload, "lab": lab, "hdr": hdr,
                      "geom": geom, "center": center, "covers": covers,
                      "cards": (want, _pts) if _pts is not None else None,
-                     "bb": None, "keys": {}, "contains": []})
+                     "bb": G.stack_bboxes(geom) if kind == "union" else None,
+                     "keys": {}, "contains": []})
 
     def _put(row, k, val, ref):
         row[k] = val
@@ -2021,7 +2011,7 @@ def _compare(cx, a):
     for i, it in enumerate(items):
         row = {k: v for k, v in it.items() if k not in _MODEL_HIDDEN_ROW_FIELDS}
         # Items resolve like refs, so a ref compared to itself is exactly 0.
-        item_geom, it_c = _row_geom_center(it)
+        item_geom, it_c = _row_geom_center(cx, it)
         for ref in refs:
             kind, payload, lab = ref["kind"], ref["payload"], ref["lab"]
             if ref["cards"] is not None and it_c is not None:
@@ -2035,8 +2025,6 @@ def _compare(cx, a):
             if ref["covers"]:
                 d = None
             elif kind == "union":
-                if ref["bb"] is None:
-                    ref["bb"] = G.stack_bboxes(ref_geom)
                 d, wr, wi = G.set_gap(ref_geom, ref["bb"], item_geom)
             else:
                 d, wr, wi = G.gap_witness(ref_geom, item_geom)
@@ -2073,23 +2061,21 @@ def _compare(cx, a):
                 f" (+{len(_cf) - 8} more)" if len(_cf) > 8 else "")
             set_notes.append(
                 f"ref {lab}: row(s) {_cfs} read 'distance to {lab}'=0 because "
-                f"their OWN mask CONTAINS {lab} (every vertex of "
-                f"the ref sits inside the row's footprint -- "
-                f"containment, not adjacency); each such row "
-                f"carries 'contains {lab}'=true. distance reads 0 on ANY "
-                f"mask contact, so a 0 in a nearest-first read "
-                f"spans touching neighbors AND containers.")
+                f"their OWN mask CONTAINS {lab} (every vertex of the ref sits "
+                f"inside the row's footprint -- containment, not adjacency); "
+                f"each such row carries 'contains {lab}'=true. distance reads "
+                f"0 on ANY mask contact, so a 0 in a nearest-first read spans "
+                f"touching neighbors AND containers.")
             notes.append(set_notes[-1])
         if ref["keys"]:
             ref["hdr"]["cols"] = list(ref["keys"])
-    for _h in _standing_ref_handles:
+    for _h in standing:
         out_rows = _attach_standing_columns(
             out_rows, cx.staged[_h], with_distance=True)
         notes.append(
-            f"ref {_h} is your staged viewpoint: its side columns "
-            f"('left of/right of/ahead of/behind {_h}') + "
-            f"'distance to {_h}' (meters from where you stand) "
-            f"ride every row.")
+            f"ref {_h} is your staged viewpoint: its side columns ('left "
+            f"of/right of/ahead of/behind {_h}') + 'distance to {_h}' "
+            f"(meters from where you stand) ride every row.")
     r = Result(out_rows, "compare")
     r.refs = [ref["hdr"] for ref in refs]
     r.columns = list(all_col_keys)
