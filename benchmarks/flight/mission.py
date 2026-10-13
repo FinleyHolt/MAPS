@@ -266,9 +266,6 @@ class Mission:
         self._held: tuple[Any, dict[str, Any]] | None = None
         #: The nearest the pose came to the last leg's point.
         self._closest_m = float("inf")
-        #: The recording's last answer over the leg's area: the unheld points a
-        #: short pass is re-asked toward.
-        self._last_coverage: dict[str, Any] | None = None
 
         from benchmarks import _git_provenance  # noqa: PLC0415
 
@@ -380,12 +377,12 @@ class Mission:
         shorts = 0
         self._closest_m = float("inf")
         while True:
-            outcome = self._wait_arrival(xy, area=area_ll, timeout_s=ARRIVAL_TIMEOUT_S, after=after,
-                                         reach_m=reach if shorts < SHORT_PASS_REQUESTS else None)
+            outcome, last_cov = self._wait_arrival(xy, area=area_ll, timeout_s=ARRIVAL_TIMEOUT_S, after=after,
+                                                   reach_m=reach if shorts < SHORT_PASS_REQUESTS else None)
             if outcome != "short" or self._cancel.is_set():
                 break
             shorts += 1
-            moved, note = self._short_pass(token, xy, area, shorts)
+            moved, note = self._short_pass(token, xy, area, last_cov, shorts)
             self._post(Leg(target=token, point=(moved[0], moved[1]), step=step, area=area_ll,
                            ahead=ahead, revision=shorts, note=note))
         waited = self._wait_departure(xy) if outcome == "arrived" else 0.0
@@ -438,22 +435,13 @@ class Mission:
             self._vehicle.sleep(0.25)
         return self._vehicle.now() - t0
 
-    def _coverage(self, area_lonlat: list[tuple[float, float]], after: float | None = None
-                  ) -> dict[str, Any] | None:
-        """How much of the area the recording holds now (the frames recorded
-        after ``after`` when given), poses only; None when it cannot be asked."""
-        cov = self._live.coverage(area_lonlat, after)
-        if cov is not None:
-            self._last_coverage = cov
-        return cov
-
     def _coverage_before_leg(self, area_lonlat) -> tuple[dict[str, Any] | None, str | None]:
-        """:meth:`_coverage` asked up to ``COVERAGE_TRIES`` times, since only a
-        read that answers decides whether a leg is flown: ``(coverage,
-        refusal)``."""
+        """How much of the area the recording holds, asked up to
+        ``COVERAGE_TRIES`` times, since only a read that answers decides
+        whether a leg is flown: ``(coverage, refusal)``."""
         refusal = None
         for k in range(1, COVERAGE_TRIES + 1):
-            cov = self._coverage(area_lonlat)
+            cov = self._live.coverage(area_lonlat)
             if cov is not None:
                 return cov, None
             refusal = self._live.last_refusal or "no reason recorded"
@@ -479,11 +467,12 @@ class Mission:
             out[i] = _holds(cov)
         return out
 
-    def _short_pass(self, token: str, xy, area: list[tuple[float, float]], n: int) -> tuple[list[float], str]:
+    def _short_pass(self, token: str, xy, area: list[tuple[float, float]], cov: dict[str, Any],
+                    n: int) -> tuple[list[float], str]:
         """Where a short pass is asked again, and the note for why: the area's
-        centroid moved toward the unheld points' centroid by the missing
-        ground's extent, no further than the leg's reach."""
-        cov = self._last_coverage or {}
+        centroid moved toward the unheld points' centroid (off ``cov``, the
+        recording's answer that read the pass short) by the missing ground's
+        extent, no further than the leg's reach."""
         best = cov.get("best") or []
         unheld = [p for p, b in zip(area, best) if b is None] or list(area)
         cx, cy = (sum(p[0] for p in area) / len(area), sum(p[1] for p in area) / len(area))
@@ -546,22 +535,25 @@ class Mission:
         return sha
 
     def _wait_arrival(self, xy: Any, *, area: list[tuple[float, float]], timeout_s: float,
-                      reach_m: float | None = None, after: float | None = None) -> str:
-        """``arrived`` when the recording (the frames after ``after`` when
-        given) holds ``area``; ``short`` when the pass came inside ``reach_m``
-        and left with the area part held; ``lost`` when ``timeout_s`` ran out
-        airborne; ``cancel`` when the mission was stopped."""
+                      reach_m: float | None = None, after: float | None = None
+                      ) -> tuple[str, dict[str, Any] | None]:
+        """``(outcome, the recording's last answer)``: ``arrived`` when the
+        recording (the frames after ``after`` when given) holds ``area``;
+        ``short`` when the pass came inside ``reach_m`` and left with the area
+        part held; ``lost`` when ``timeout_s`` ran out airborne; ``cancel``
+        when the mission was stopped."""
         best = math.inf
         receding_since: float | None = None
         # The clock runs on the FLIGHT: it does not spend its timeout while the
         # aircraft is still on the ground.
         t0 = self._vehicle.now()
+        cov = None
         while not self._cancel.is_set():
             # The recording decides arrival; the aircraft's own pose only the
             # short pass and the timeout's start.
-            cov = self._coverage(area, after)
+            cov = self._live.coverage(area, after)
             if _holds(cov):
-                return "arrived"
+                return "arrived", cov
             fraction = float((cov or {}).get("fraction") or 0.0)
             pose = self._live.ownship()
             if pose is not None:
@@ -574,7 +566,7 @@ class Mission:
                     if self._vehicle.now() - receding_since >= SHORT_PASS_LEAVE_S:
                         log.info("short pass at (%.0f, %.0f): closest %.0f m, now %.0f m off, %.0f%% held",
                                  float(xy[0]), float(xy[1]), best, d, 100.0 * fraction)
-                        return "short"
+                        return "short", cov
                 else:
                     receding_since = None
                 if pose["agl_m"] < AIRBORNE_AGL_M:
@@ -582,9 +574,9 @@ class Mission:
             if self._vehicle.now() - t0 > timeout_s:
                 log.warning("no arrival at (%.0f, %.0f) in %.0f s, closest %.0f m: the leg is lost",
                             float(xy[0]), float(xy[1]), timeout_s, best)
-                return "lost"
+                return "lost", cov
             self._vehicle.sleep(1.0)
-        return "cancel"
+        return "cancel", cov
 
     def _note_frame(self, last: dict[str, Any], obs) -> None:
         """One ``frames.jsonl`` row: the observation, keyed to the recording by its newest frame."""

@@ -113,7 +113,7 @@ def test_a_leg_whose_area_the_aircraft_never_reaches_is_lost(built, make_mission
     twin.route = []
     twin.heading_deg = 180.0           # flying away from the area
     area_ll = m._area_lonlat([(600.0, 1100.0), (610.0, 1100.0), (600.0, 1110.0)])
-    assert m._wait_arrival((600.0, 1100.0), area=area_ll, timeout_s=5.0) == "lost"
+    assert m._wait_arrival((600.0, 1100.0), area=area_ll, timeout_s=5.0)[0] == "lost"
 
 
 def test_a_report_banks_one_ledger_row_and_a_second_report_replaces_it(built, make_mission):
@@ -176,7 +176,7 @@ def test_a_leg_arrives_on_the_recording_while_the_aircraft_s_own_pose_cannot_be_
     twin.post(M.Leg(target="t", point=(600.0, 700.0), step=0))
     m._live.ownship = lambda: None
     area_ll = m._area_lonlat([(600.0, 600.0), (610.0, 600.0), (600.0, 610.0)])
-    assert m._wait_arrival((600.0, 600.0), area=area_ll, timeout_s=60.0) == "arrived"
+    assert m._wait_arrival((600.0, 600.0), area=area_ll, timeout_s=60.0)[0] == "arrived"
 
 
 @pytest.mark.parametrize("stop_in_wait", [False, True])
@@ -209,7 +209,7 @@ def test_a_lost_leg_with_no_pose_read_says_so_rather_than_an_infinite_distance(m
     m, _twin = make_mission()
     m._live.ownship = lambda: None
     area_ll = m._area_lonlat([(600.0, 1100.0), (610.0, 1100.0), (600.0, 1110.0)])
-    assert m._wait_arrival((600.0, 1100.0), area=area_ll, timeout_s=2.0) == "lost"
+    assert m._wait_arrival((600.0, 1100.0), area=area_ll, timeout_s=2.0)[0] == "lost"
     said = m._outcome_words("lost", "t at (600, 1100)", None, 0.0)
     assert "(no pose read)" in said and "inf" not in said
 
@@ -224,8 +224,8 @@ def test_a_stop_while_a_short_pass_is_read_posts_no_refly(built, make_mission):
         waits.append(1)
         if len(waits) == 1:
             m.stop()
-            return "short"
-        return "cancel"
+            return "short", {}
+        return "cancel", None
     m._wait_arrival = wait
     out = m._fly_live(_session(_hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
     assert out == {"error": "the mission is stopped"}
