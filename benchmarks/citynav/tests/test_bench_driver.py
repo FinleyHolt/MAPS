@@ -347,8 +347,11 @@ _INTERRUPTED = (
 
 def test_an_interrupted_driver_exits_with_its_workers(tmp_path) -> None:
     """Ctrl-C releases the root, so a worker left flying would fly beside the next launch."""
+    # A shell that ignores SIGINT hands that to its children; the driver is
+    # launched with the default handler, as from a terminal.
     proc = subprocess.Popen([sys.executable, "-c", _INTERRUPTED, str(tmp_path)], cwd=REPO,
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                            preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))
     try:
         flying = (line for line in iter(proc.stdout.readline, "") if line == "flying\n")
         assert next(flying) and next(flying)
