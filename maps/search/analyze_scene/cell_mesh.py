@@ -1,5 +1,5 @@
 """The cells a row occupies: the bake's 2 m ``(row, col)`` grid record every
-graph node persists, from which its centerline and mask loops are derived."""
+graph node persists."""
 
 from __future__ import annotations
 
