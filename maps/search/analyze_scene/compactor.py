@@ -283,21 +283,19 @@ def _is_script_block(message: dict) -> bool:
 
 
 def _drop_spent_turns(
-    messages: list[dict], *, shed_tokens: int, model: str,
+    messages: list[dict], *, before: int, shed_tokens: int, model: str,
     tools: list[dict] | None,
 ) -> tuple[list[dict], int, int]:
     """``(messages, n_turns_folded, tokens_freed)``: the oldest foldable
-    turns replaced by one script block until ``shed_tokens`` are
-    freed. Earlier blocks are never touched; nothing folded returns the
-    input."""
+    turns of ``messages`` (``before`` input tokens) replaced by one script
+    block until ``shed_tokens`` are freed. Earlier blocks are never
+    touched; nothing folded returns the input."""
     units = _turn_units(messages)
     head = _protected_head(messages)
     droppable = [(a, b) for (a, b) in units if a >= head]
     if len(droppable) <= _KEEP_TAIL_UNITS:
         return messages, 0, 0
     candidates = droppable[:-_KEEP_TAIL_UNITS]
-
-    before = _estimate_input_tokens(messages, model=model, tools=tools)
 
     folded: list[tuple[int, int]] = []
     sources: list[str] = []
@@ -308,10 +306,10 @@ def _drop_spent_turns(
         folded.append((a, b))
         sources.extend(_run_code_of(messages[a]))
         findings.extend(_folded_findings(messages, (a, b)))
-        head = messages[:folded[0][0]]
+        prefix = messages[:folded[0][0]]
         tail = [m for i, m in enumerate(messages)
                 if i >= folded[0][0] and not any(x <= i < y for x, y in folded)]
-        out = head + [_script_block(sources, len(folded), findings)] + tail
+        out = prefix + [_script_block(sources, len(folded), findings)] + tail
         after = _estimate_input_tokens(out, model=model, tools=tools)
         freed = before - after
         if freed >= shed_tokens:
@@ -509,10 +507,11 @@ def compact_transcript(
                     min(8000, target_input_tokens))
     output_tokens = input_tokens
     out, folded_turns, freed_fold = _drop_spent_turns(
-        messages, shed_tokens=input_tokens - low_water, model=model, tools=tools,
+        messages, before=input_tokens, shed_tokens=input_tokens - low_water,
+        model=model, tools=tools,
     )
     if folded_turns:
-        output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
+        output_tokens = input_tokens - freed_fold
         log.info(
             "compaction folded %d spent turn(s) into a script block, "
             "freed ~%d tok -> %s/%d",
@@ -547,7 +546,6 @@ def compact_transcript(
         # single-line findings cannot.
         body = out[i]["content"].rsplit(_FINDINGS_SEP, 1)[0]
         if body != out[i]["content"]:
-            out = list(out)
             out[i] = _with_content(out[i], body)
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
             log.info("compaction stripped block findings -> %s/%d",
