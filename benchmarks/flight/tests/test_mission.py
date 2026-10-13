@@ -39,7 +39,7 @@ def _session(h, fly):
     from benchmarks.citynav.run_benchmark.mission_engine import resolve_flight_target
 
     return SimpleNamespace(h=h, fly=fly, resolve=lambda token: resolve_flight_target(
-        token, node_xy=lambda fid: None, pose_xy=h.state.pose_xy, marker_xy=None))
+        token, node_xy=lambda fid: None))
 
 
 def _legs(m):

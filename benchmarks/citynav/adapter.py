@@ -41,7 +41,6 @@ class CityNavEpisode:
     target_xy: tuple[float, float] | None
     target_object_ids: list[int]
     target_mask: list[tuple[float, float]] | None  # hand-labeled GT polygon
-    marker_positions: list[tuple[float, float, float]]
     #: Upstream's start yaw as a heading (:func:`start_heading_deg`).
     start_heading_deg: float = 0.0
 
@@ -153,10 +152,6 @@ def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
         raise ValueError(f"Episode {episode_id} has no trajectory")
     start_xy = (float(trajectory[0][0]), float(trajectory[0][1]))
 
-    markers = [
-        (float(p[0]), float(p[1]), float(p[2]))
-        for p in (row.get("marker_positions") or [])
-    ]
     _raw_mask = row.get("target_mask")
     target_mask = (
         [(float(p[0]), float(p[1])) for p in _raw_mask]
@@ -174,7 +169,6 @@ def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
         target_xy=(tx, ty),
         target_object_ids=list(row.get("object_ids") or []),
         target_mask=target_mask,
-        marker_positions=markers,
     )
 
 

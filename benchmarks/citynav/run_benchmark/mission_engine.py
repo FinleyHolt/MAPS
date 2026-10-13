@@ -29,12 +29,6 @@ from maps.util.xy_token import parse_xy_token
 
 log = logging.getLogger("run_benchmark")
 
-#: The two non-feature tokens a flight target can carry: the drone's current
-#: position and the marked region.
-VIEW_POSITION_CURRENT = "current_position"
-VIEW_POSITION_MARKER = "marked_region"
-
-
 def _write_tour_cursor(flights: list[dict]) -> None:
     """Persist the flown stops (id and xy, in flight order) to
     ``<workdir>/flight/tour_cursor.json``, the record ``replay.tour_stops``
@@ -70,36 +64,18 @@ def _mission_deadline_epoch() -> float | None:
     return float(raw) if raw else None
 
 
-def resolve_flight_target(
-    token: str,
-    *,
-    node_xy,
-    pose_xy: tuple[float, float],
-    marker_xy: tuple[float, float] | None,
-) -> dict:
+def resolve_flight_target(token: str, *, node_xy) -> dict:
     """Resolve one viewpoint target token to a world point + provenance.
 
     ``token`` is the item's ``target_fid``: a literal fid (``node_xy(fid) ->
-    ((x, y), "detected"|"prior") | None`` over the LIVE graph), a
-    view-position sentinel, or the canonical ``"[x, y]"`` world-point token.
+    ((x, y), "detected"|"prior") | None`` over the LIVE graph) or the
+    canonical ``"[x, y]"`` world-point token.
     Returns ``{"xy": (x, y), "provenance": ...}`` or ``{"error": ...}`` (the
     fid is on neither graph). A named thing flies its middle; there is no aim.
     """
     xy = parse_xy_token(token)
     if xy is not None:
         return {"xy": (float(xy[0]), float(xy[1])), "provenance": "point"}
-    if token == VIEW_POSITION_CURRENT:
-        return {
-            "xy": (float(pose_xy[0]), float(pose_xy[1])),
-            "provenance": "point",
-        }
-    if token == VIEW_POSITION_MARKER:
-        if marker_xy is None:
-            return {"error": "no marked region on this episode"}
-        return {
-            "xy": (float(marker_xy[0]), float(marker_xy[1])),
-            "provenance": "point",
-        }
     resolved = node_xy(token)
     if resolved is None:
         return {"error": f"unknown fid {token!r}; it is not on the surface"}
@@ -181,12 +157,6 @@ class MissionSession:
         # Prior-colour enrichment frames that raised; the warning prints on
         # the first and every 50th.
         self.prior_enrich_fails = 0
-        markers = h.episode.marker_positions or []
-        self.marker_xy = (
-            (float(sum(p[0] for p in markers) / len(markers)),
-             float(sum(p[1] for p in markers) / len(markers)))
-            if markers else None
-        )
         loop = h.search_loop
         with loop._lock:
             self.ctx = loop._tool_ctx_for_examiner()
@@ -245,8 +215,7 @@ class MissionSession:
 
     def resolve(self, token: str) -> dict:
         """``token`` as :func:`resolve_flight_target` resolves it over the live graph."""
-        return resolve_flight_target(token, node_xy=self.h.search_loop.node_xy, pose_xy=self.h.state.pose_xy,
-                                     marker_xy=self.marker_xy)
+        return resolve_flight_target(token, node_xy=self.h.search_loop.node_xy)
 
     def fly(self, item: dict) -> dict:
         """One flight (``MissionSpec.fly``), then the pose echo follows it."""

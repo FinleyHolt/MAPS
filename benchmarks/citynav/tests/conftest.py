@@ -53,7 +53,7 @@ STUB_GRAPH = {
 @pytest.fixture
 def stub_session(monkeypatch: pytest.MonkeyPatch):
     """A ``MissionSession`` over a SearchLoop holding ``STUB_GRAPH``, a live
-    ``observe`` frame and no render: ``make(**loop_overrides, markers=,
+    ``observe`` frame and no render: ``make(**loop_overrides,
     pose_xy=, rgb=)``."""
     from types import SimpleNamespace
 
@@ -63,7 +63,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(me, "_write_tour_cursor", lambda *a, **k: None)
 
-    def make(*, markers=(), pose_xy=(10.0, 20.0), rgb=None, **loop_overrides) -> me.MissionSession:
+    def make(*, pose_xy=(10.0, 20.0), rgb=None, **loop_overrides) -> me.MissionSession:
         loop = search_loop({
             fid: SimpleNamespace(world_xy=xy, provenance="detected" if prov == "detected" else "prebaked")
             for fid, (xy, prov) in STUB_GRAPH.items()})
@@ -76,8 +76,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
             state=EpisodeState(pose_xy=pose_xy, altitude_m=100.0),
             assets=SimpleNamespace(bounds=SimpleNamespace(x_min=0.0, y_min=0.0), cell_size_m=2.0,
                                    grid_shape=(10, 10)),
-            episode=SimpleNamespace(map_name="calcity", description="the largest building",
-                                    marker_positions=list(markers)),
+            episode=SimpleNamespace(map_name="calcity", description="the largest building"),
             sensor=None, tile_frame=None, search_loop=loop,
             perception=SimpleNamespace(detect=lambda obs: [], concept_provider=SimpleNamespace(concepts=[])))
         return me.MissionSession(h, observe=lambda: frame)

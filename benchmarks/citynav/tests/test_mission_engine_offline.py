@@ -1,7 +1,7 @@
 """Offline contracts for the mission engine's pure parts.
 
 No SAM, no render, no LLM: :func:`resolve_flight_target` (fid / xy token /
-view-position sentinel / unknown) against a stubbed graph resolver.
+unknown) against a stubbed graph resolver.
 """
 
 from benchmarks.citynav.run_benchmark.mission_engine import resolve_flight_target
@@ -16,14 +16,8 @@ def _node_xy(fid):
     return _GRAPH.get(fid)
 
 
-_POSE = (10.0, 20.0)
-_MARKER = (300.0, 400.0)
-
-
-def _resolve(token, marker_xy=_MARKER):
-    return resolve_flight_target(
-        token, node_xy=_node_xy, pose_xy=_POSE, marker_xy=marker_xy
-    )
+def _resolve(token):
+    return resolve_flight_target(token, node_xy=_node_xy)
 
 
 def test_prior_fid_resolves_to_centroid():
@@ -52,22 +46,6 @@ def test_bare_xy_token_matches_the_one_grammar():
     # maps.util.xy_token accepts the bracket-less form too.
     out = _resolve("1530.5, -12")
     assert out == {"xy": (1530.5, -12.0), "provenance": "point"}
-
-
-def test_current_position_resolves_to_the_pose():
-    out = _resolve("current_position")
-    assert out == {"xy": _POSE, "provenance": "point"}
-
-
-def test_marked_region_resolves_to_the_marker():
-    out = _resolve("marked_region")
-    assert out == {"xy": _MARKER, "provenance": "point"}
-
-
-def test_marked_region_without_a_marker_is_an_error():
-    out = _resolve("marked_region", marker_xy=None)
-    assert "xy" not in out
-    assert "marked region" in out["error"]
 
 
 # ---------------------------------------------------------------------------
@@ -156,17 +134,6 @@ def test_a_live_flight_with_no_frame_says_the_recording_served_none(stub_session
     assert session.fly({"target_fid": "building_7"}) == {
         "error": "no observation: the aircraft's recording served no frame of this flight's ground"}
     assert session.flights == []
-
-
-def test_a_view_position_flight_flies_the_pose_or_the_marked_region(stub_session):
-    session = stub_session(markers=[(300.0, 400.0, 0.0), (500.0, 600.0, 0.0)])
-    session.fly({"target_fid": "current_position"})
-    assert session.flights[-1]["resolved_xy"] == [10.0, 20.0]
-    assert session.flights[-1]["provenance"] == "point"
-    session.fly({"target_fid": "marked_region"})
-    assert session.flights[-1]["resolved_xy"] == [400.0, 500.0]
-    unmarked = stub_session()
-    assert "error" in unmarked.fly({"target_fid": "marked_region"}) and not unmarked.flights
 
 
 def test_a_failing_boost_director_never_kills_a_flight(stub_session):
