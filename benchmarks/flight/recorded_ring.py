@@ -192,6 +192,18 @@ def _extrapolate(fix: dict, dt_s: float) -> dict:
     return out
 
 
+def _bracket(times: list[float], t: float) -> tuple[int, int, float] | None:
+    """``(lo, hi, w)``: ``t`` a fraction ``w`` from ``times[lo]`` to ``times[hi]`` when they are ``MAX_GAP_S``
+    or less apart, else ``(j, j, 0.0)`` for the nearer sample within ``MAX_GAP_S``; None past it."""
+    i = bisect.bisect_left(times, t)
+    lo, hi = i - 1, i
+    if lo >= 0 and hi < len(times) and times[hi] - times[lo] <= MAX_GAP_S:
+        span = times[hi] - times[lo]
+        return lo, hi, (t - times[lo]) / span if span > 0 else 1.0
+    j = min((k for k in (lo, hi) if 0 <= k < len(times)), key=lambda k: abs(times[k] - t))
+    return (j, j, 0.0) if abs(times[j] - t) <= MAX_GAP_S else None
+
+
 class NavTrack:
     """Fixes and attitudes on one time axis (seconds of log time), answering ``pose_at``.
 
@@ -226,16 +238,11 @@ class NavTrack:
         t = float(t)
         if not self._fix:
             return None
-        i = bisect.bisect_left(self._fix_t, t)
-        lo, hi = i - 1, i
-        if lo >= 0 and hi < len(self._fix) and self._fix_t[hi] - self._fix_t[lo] <= MAX_GAP_S:
-            span = self._fix_t[hi] - self._fix_t[lo]
-            fix = _interpolate(self._fix[lo], self._fix[hi], (t - self._fix_t[lo]) / span if span > 0 else 1.0)
-        else:
-            j = min((k for k in (lo, hi) if 0 <= k < len(self._fix)), key=lambda k: abs(self._fix_t[k] - t))
-            if abs(self._fix_t[j] - t) > MAX_GAP_S:
-                return None
-            fix = _extrapolate(self._fix[j], t - self._fix_t[j])
+        got = _bracket(self._fix_t, t)
+        if got is None:
+            return None
+        lo, hi, w = got
+        fix = _interpolate(self._fix[lo], self._fix[hi], w) if lo != hi else _extrapolate(self._fix[lo], t - self._fix_t[lo])
         if float(fix["accuracyMeters"]) > MAX_H_ACC_M:
             return None
         heading, roll, pitch, attitude = float(fix["trackDeg"]), 0.0, 0.0, "track"
@@ -268,11 +275,11 @@ class NavTrack:
     def _attitude_at(self, t: float) -> tuple[float, float, float, str] | None:
         if not self._att:
             return None
-        i = bisect.bisect_left(self._att_t, t)
-        lo, hi = i - 1, i
-        if lo >= 0 and hi < len(self._att) and self._att_t[hi] - self._att_t[lo] <= MAX_GAP_S:
-            span = self._att_t[hi] - self._att_t[lo]
-            w = (t - self._att_t[lo]) / span if span > 0 else 1.0
+        got = _bracket(self._att_t, t)
+        if got is None:
+            return None
+        lo, hi, w = got
+        if lo != hi:
             a, b = self._att[lo], self._att[hi]
             ha, hb = math.radians(float(a["heading_deg"])), math.radians(float(b["heading_deg"]))
             e = math.sin(ha) + (math.sin(hb) - math.sin(ha)) * w
@@ -281,10 +288,7 @@ class NavTrack:
                     float(a["roll_deg"]) + (float(b["roll_deg"]) - float(a["roll_deg"])) * w,
                     float(a["pitch_deg"]) + (float(b["pitch_deg"]) - float(a["pitch_deg"])) * w,
                     str((b if w >= 0.5 else a).get("attitude") or "fusion"))
-        j = min((k for k in (lo, hi) if 0 <= k < len(self._att)), key=lambda k: abs(self._att_t[k] - t))
-        if abs(self._att_t[j] - t) > MAX_GAP_S:
-            return None
-        a = self._att[j]
+        a = self._att[lo]
         return float(a["heading_deg"]) % 360.0, float(a["roll_deg"]), float(a["pitch_deg"]), str(a.get("attitude") or "fusion")
 
 
