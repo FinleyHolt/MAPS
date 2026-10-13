@@ -217,7 +217,7 @@ LOOK_OUTLINE_MAX_VERTS: int = 256
 
 def look_label(fid: str, row: object, *, is_target: bool) -> str:
     """The legend text for one fid: name or class, the fid itself (what the
-    next call has to say), and the detector's confidence and area."""
+    next call has to say), and its footprint area."""
     name = row.get("name") if isinstance(row, dict) else None
     cls = str(row.get("class") or "") if isinstance(row, dict) else ""
     if name:
@@ -226,16 +226,9 @@ def look_label(fid: str, row: object, *, is_target: bool) -> str:
         base = f"{cls} {fid}".strip()
     else:
         base = fid
-    bits: list = []
-    if isinstance(row, dict):
-        _c = row.get("confidence")
-        if isinstance(_c, (int, float)) and not isinstance(_c, bool):
-            bits.append(f"{float(_c):.2f} conf")
-        _a = row.get("footprint_area_m2")
-        if isinstance(_a, (int, float)) and not isinstance(_a, bool) and _a:
-            bits.append(f"{float(_a):.0f} m2")
-    if bits:
-        base = f"{base} — {', '.join(bits)}"
+    _a = row.get("footprint_area_m2") if isinstance(row, dict) else None
+    if isinstance(_a, (int, float)) and not isinstance(_a, bool) and _a:
+        base = f"{base} — {float(_a):.0f} m2"
     return f"TARGET {base}" if is_target else base
 
 
