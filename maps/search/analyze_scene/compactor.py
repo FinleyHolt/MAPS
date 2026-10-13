@@ -250,7 +250,7 @@ def _folded_findings(messages: list[dict], span: tuple[int, int]) -> list[str]:
         if msg.get("role") != "tool":
             continue
         content = msg.get("content")
-        stub = _degrade_tool_result_content(content, keep_color=True)
+        stub, _ = _degrade_tool_result_content(content, keep_color=True)
         carried = stub if stub else (content if isinstance(content, str) else None)
         if carried:
             out.append(carried)
@@ -411,17 +411,18 @@ def _rows_color_entries(rows: str) -> list[str]:
 
 def _degrade_tool_result_content(
     content: str, *, keep_color: bool = False
-) -> str | None:
-    """One tool result's stub: every head's render keys dropped (with
-    ``keep_color``, a colour table kept) and a hint that the rows re-derive;
-    ``None`` when there is nothing to trim."""
+) -> tuple[str | None, bool]:
+    """``(stub, had_colors)``: one tool result with every head's render keys
+    dropped (with ``keep_color``, a colour table kept) and a hint that the
+    rows re-derive, ``None`` when there is nothing to trim; ``had_colors``
+    when a colour table was kept."""
     try:
         obj = json.loads(content)
     except (TypeError, ValueError):
-        return None
+        return None, False
     if not isinstance(obj, dict):
-        return None
-    changed = False
+        return None, False
+    changed = had_colors = False
     for head in _iter_op_heads(obj):
         present = [k for k in _TRIM_RENDER_KEYS if k in head]
         if not present:
@@ -433,42 +434,37 @@ def _degrade_tool_result_content(
             head.pop(k, None)
         if colors:
             head["colors"] = "; ".join(colors)
+            had_colors = True
         changed = True
         note = ("rows trimmed to fids+census for token budget (fids "
                 "preserved); the world-state graph is live — show the handle "
                 "again to re-derive the full rows.")
         head["hint"] = join_hints(head.get("hint"), note)
     if not changed:
-        return None
-    return json.dumps(obj, default=str)
+        return None, had_colors
+    return json.dumps(obj, default=str), had_colors
 
 
-def _degrade_oversized_tool_dumps(
-    messages: list[dict],
-    *,
-    model: str,
-    tools: list[dict] | None,
-    target_input_tokens: int,
-) -> tuple[list[dict], int]:
-    """``(messages, n_trimmed)``: dumps stubbed largest first, the newest
-    last, until the transcript fits ``target_input_tokens``."""
-    idxs = _dump_result_indices(messages)
-    newest = max(idxs) if idxs else None
-    idxs.sort(key=lambda i: len(messages[i]["content"]), reverse=True)
-    if newest is not None:
-        idxs = [i for i in idxs if i != newest] + [newest]
-    out = list(messages)
-    n_trimmed = 0
+def _stub_until(out, idxs, *, keep_color, source, bound, tokens, model, tools):
+    """``(stubbed, colored, tokens)``: each of ``idxs`` in turn rewritten in
+    ``out`` as the stub of ``source[i]``, until ``tokens`` is at or under
+    ``bound``; the indices stubbed, those that kept a colour table, and the
+    new estimate."""
+    stubbed: list[int] = []
+    colored: list[int] = []
     for i in idxs:
-        trimmed = _degrade_tool_result_content(out[i]["content"])
-        if trimmed is None:
-            continue
-        out[i] = _with_content(out[i], trimmed)
-        n_trimmed += 1
-        est = _estimate_input_tokens(out, model=model, tools=tools)
-        if est <= target_input_tokens:
+        if tokens <= bound:
             break
-    return out, n_trimmed
+        stub, had_colors = _degrade_tool_result_content(
+            source[i]["content"], keep_color=keep_color)
+        if stub is None:
+            continue
+        out[i] = _with_content(out[i], stub)
+        stubbed.append(i)
+        if had_colors:
+            colored.append(i)
+        tokens = _estimate_input_tokens(out, model=model, tools=tools)
+    return stubbed, colored, tokens
 
 
 def _carries_dump(content: object) -> bool:
@@ -527,52 +523,26 @@ def compact_transcript(
             folded_turns, freed_fold, output_tokens, target_input_tokens,
         )
 
-    # Step 2.
-    idxs = _dump_result_indices(out)
-    stale = idxs[:-1]
+    # Steps 2-4.
     base = out
     out = list(out)
-    cleared: list[int] = []
-    colored: list[int] = []
-    for i in stale:
-        if output_tokens <= low_water:
-            break
-        stub = _degrade_tool_result_content(out[i]["content"], keep_color=True)
-        if stub is None:
-            continue
-        out[i] = _with_content(out[i], stub)
-        cleared.append(i)
-        if '"colors":' in stub:
-            colored.append(i)
-        output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
-        if output_tokens <= low_water:
-            break
-    color_tables_kept = len(colored)
-
-    # Step 3.
-    if output_tokens > target_input_tokens:
-        for i in colored:
-            plain = _degrade_tool_result_content(
-                base[i]["content"], keep_color=False)
-            if plain is None:
-                continue
-            out[i] = _with_content(out[i], plain)
-            color_tables_kept -= 1
-            output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
-            if output_tokens <= target_input_tokens:
-                break
-
-    # Step 4.
-    degraded_dumps = 0
-    if output_tokens > target_input_tokens:
-        out, degraded_dumps = _degrade_oversized_tool_dumps(
-            out,
-            model=model,
-            tools=tools,
-            target_input_tokens=target_input_tokens,
-        )
-        if degraded_dumps:
-            output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
+    _est = {"model": model, "tools": tools}
+    cleared, colored, output_tokens = _stub_until(
+        out, _dump_result_indices(out)[:-1], keep_color=True, source=base,
+        bound=low_water, tokens=output_tokens, **_est)
+    plain, _, output_tokens = _stub_until(
+        out, colored, keep_color=False, source=base,
+        bound=target_input_tokens, tokens=output_tokens, **_est)
+    color_tables_kept = len(colored) - len(plain)
+    idxs = _dump_result_indices(out)
+    # Largest first, the newest last.
+    order = sorted(idxs, key=lambda i: len(out[i]["content"]), reverse=True)
+    if idxs:
+        order = [i for i in order if i != idxs[-1]] + [idxs[-1]]
+    degraded, _, output_tokens = _stub_until(
+        out, order, keep_color=False, source=out,
+        bound=target_input_tokens, tokens=output_tokens, **_est)
+    degraded_dumps = len(degraded)
 
     # Step 5, on the block this fire made: earlier blocks are served prefix.
     stripped_findings = False

@@ -219,6 +219,6 @@ def test_only_a_served_dump_is_selected_and_degraded():
         {"said": "bad()", "error": "line 1: no such call"})}
     msgs = _head() + _units(2) + [_call(["e"]), error]
     assert C._dump_result_indices(msgs) == [3, 5]   # the trailing error is no dump
-    assert C._degrade_tool_result_content(error["content"]) is None
-    assert C._degrade_tool_result_content("not json") is None
+    assert C._degrade_tool_result_content(error["content"]) == (None, False)
+    assert C._degrade_tool_result_content("not json") == (None, False)
     assert C._rows_color_entries(_grid(["f1"])) == ["f1=red?"]
