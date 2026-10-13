@@ -131,10 +131,7 @@ def _ensure_sam(device: str) -> _LoadedSam:
     _memoize_text_encoder(model)
 
     # Precision is bf16 autocast over fp32 master weights, the pattern the
-    # model's internal `.to(torch.bfloat16)` calls expect. On an L40S,
-    # torch.compile of the vision backbone moved detections past the parity
-    # gate, and torchao weight quantization does not dispatch on the
-    # backbone's custom ops; any speed change passes that gate before it ships.
+    # model's internal `.to(torch.bfloat16)` calls expect.
     transform = ComposeAPI(
         transforms=[
             RandomResizeAPI(
@@ -224,7 +221,7 @@ def _memoize_text_encoder(model: Any) -> None:
 
     print(
         f"[sam3_engine] text encoder memoized on {n_wrapped} module(s) "
-        "(pure in the concept phrases; ~13% of a call)",
+        "(pure in the concept phrases)",
         flush=True,
     )
 

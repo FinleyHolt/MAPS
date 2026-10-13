@@ -438,9 +438,9 @@ def _spread(seq: list, k: int) -> list:
 
 
 def _detection_to_mapobject(det, bounds_min, cell_size_m):
-    """One detection as a graph node: its cells (the stamped tile cells,
-    else the cell under its world point), contour, attributes and world
-    point."""
+    """One detection as a graph node without cells (the tracked upsert stamps
+    them): its centroid (the mean of its stamped tile cells, else the cell
+    under its world point), contour, attributes and world point."""
     meta = det.metadata or {}
     raw_cells = meta.get("tile_cells")
     cells: np.ndarray | None = None

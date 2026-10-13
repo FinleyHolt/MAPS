@@ -10,8 +10,7 @@ Every reader refuses a root that scores fewer episodes than its manifest
 selected (`selection.episodes_n`) and names the shortfall: episodes only ever
 an infrastructure casualty, and episodes that never landed a row. Resuming the
 run into the same root finishes it; `--allow-partial` reads it as it stands
-and prints the shortfall to stderr. A sortie root selects no episodes up front
-and is read as it stands.
+and prints the shortfall to stderr.
 
 | Reader | Reads | Prints |
 |---|---|---|

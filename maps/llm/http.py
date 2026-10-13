@@ -491,8 +491,6 @@ def _chat_completions_raw(
         # without it a stream carries no token counts
         body["stream_options"] = {"include_usage": True}
         body["stream"] = True
-        # vLLM's streaming qwen3_xml tool parser can emit invalid JSON for several
-        # functions in one call; the reasoner's _normalize_tool_call_arguments repairs it.
 
     attempt = 0
     rate_limit_attempt = 0

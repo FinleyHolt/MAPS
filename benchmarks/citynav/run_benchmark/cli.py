@@ -57,12 +57,8 @@ def _die_with_parent() -> None:
 def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
     """Write this run's receipt at the run root.
 
-    THE BAKE STAMP IS WHY THIS EXISTS. Two tile bakes of the same blocks
-    live at the same path under the same name and pass every check that
-    compares NAMES; a run flown against the wrong one scores a different
-    SR with nothing failing. ``perception.bake_sha256`` is the content hash that tells
-    them apart after the fact, and ``run_report`` prints
-    ``bake: UNVERIFIED`` for any run that carries none.
+    ``perception.bake_sha256`` tells two bakes at one path apart;
+    ``run_report`` prints ``bake: UNVERIFIED`` without it.
 
     A direct run's root is one run, so the write-once identity check
     refuses a root reused under another config. The fleet driver emits at

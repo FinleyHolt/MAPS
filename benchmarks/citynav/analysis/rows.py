@@ -211,7 +211,7 @@ def read_manifest(root: Path) -> dict:
 
 def _shortfall(root: Path, picked: dict[str, Attempt], stats: ReadStats) -> str | None:
     """Why the picked episodes are fewer than the manifest selected, else
-    ``None`` (a sortie selects none up front)."""
+    ``None``."""
     selected = (read_manifest(root).get("selection") or {}).get("episodes_n")
     if not selected or len(picked) >= selected:
         return None

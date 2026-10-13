@@ -158,7 +158,7 @@ def models_url(base_url: str) -> str:
 
 
 def _probe_models(base_url: str) -> list[dict]:
-    """``GET {base_url}/v1/models`` -> the ``data`` model list (non-empty)."""
+    """``GET models_url(base_url)`` -> the ``data`` model list (non-empty)."""
     payload = _get_json(
         models_url(base_url),
         bearer=os.environ.get("SEARCH_REASONER_API_KEY") or None,

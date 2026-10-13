@@ -37,9 +37,8 @@ VIEW_POSITION_MARKER = "marked_region"
 
 def _write_tour_cursor(flights: list[dict]) -> None:
     """Persist the flown stops (id and xy, in flight order) to
-    ``<workdir>/flight/tour_cursor.json``, the record the flight readers
-    (``benchmarks.flight.measures`` and ``replay``) take a run's flights
-    from. No-op without ``SEARCH_COMPILE_WORKDIR``."""
+    ``<workdir>/flight/tour_cursor.json``, the record ``replay.tour_stops``
+    takes a run's flights from. No-op without ``SEARCH_COMPILE_WORKDIR``."""
     workdir_env = os.environ.get("SEARCH_COMPILE_WORKDIR")
     if not workdir_env:
         return
@@ -109,7 +108,7 @@ def resolve_flight_target(
             "provenance": str(provenance)}
 
 
-# The flight report's head of fresh detections (geom_program's 12-row head).
+# The flight report's head of fresh detections.
 _DETECTED_HEAD = 12
 
 
