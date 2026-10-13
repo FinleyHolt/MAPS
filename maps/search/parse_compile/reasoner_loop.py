@@ -1006,7 +1006,7 @@ class _Mission:
         rows = [r for r in (self.carry.read(handle) or []) if r.get("fid")]
         if not rows:
             _mp = self._mission_py
-            _name = (_mp.ref_name(handle) or _mp.call_arg("look")) if _mp else None
+            _name = _mp.ref_name(handle) or _mp.call_arg("look")
             return {"error": (f"{_name or handle} holds no rows to look at; "
                               "name a handle that has some, or find() one first")}
         fids = [_crop_token_of(r, str(r["fid"]) in self._ns_rows) for r in rows]
@@ -1175,7 +1175,7 @@ class _Mission:
         if not st.get("staged"):
             return self._plan_err({}, (
                 "rule F: the stance did not bind: "
-                + str(st.get("rejected") or st.get("error"))))
+                + str(st["rejected"])))
         return {"stance": st}
 
     def _move_to(self, tok: str) -> dict:
@@ -1287,7 +1287,7 @@ class _Mission:
         mp = self._map_of(around, mark_fids=_mfids)
         if _mfids:
             # The set under the model's own name for it.
-            _name = self._mission_py.ref_name(_h) if self._mission_py else None
+            _name = self._mission_py.ref_name(_h)
             mp["badged_from"] = _name or "the set in scope"
             if len(_mrows) > len(_mfids):
                 mp.setdefault("ref_notes", []).append(
