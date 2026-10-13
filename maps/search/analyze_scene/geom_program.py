@@ -83,8 +83,7 @@ def _modal_attr(n, key):
     return max(cc.items(), key=lambda kv: kv[1])[0] if cc else None
 
 
-# A bake written before the release (the flown ones the as-flown replays read)
-# stamps ``source`` on every row; it is never served.
+# Some bakes stamp ``source`` on every row; it is never served.
 _UNSERVED_TAG = "source"
 
 
