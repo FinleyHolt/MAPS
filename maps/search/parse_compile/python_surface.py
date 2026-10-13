@@ -145,24 +145,26 @@ class MissionNamespace(dict):
     the live row, else the fid string; a name this mission unbound says why,
     and a near-miss gets a did-you-mean."""
 
-    mp: "MissionPython | None" = None
+    def __init__(self, mp: "MissionPython", base: dict):
+        super().__init__(base)
+        self.mp = mp
 
     def __missing__(self, k):
         mp = self.mp
         if _fid_like(k):
-            row = mp.env.row_of_fid(k) if mp else None
+            row = mp.env.row_of_fid(k)
             return Row(row, mp=mp) if isinstance(row, dict) else k
         # A plain KeyError is what lets LOAD_GLOBAL fall through to
         # __builtins__.
         if k in (dict.get(self, "__builtins__") or {}):
             raise KeyError(k)
-        if mp and k in mp._unbound:
+        if k in mp._unbound:
             raise CodeError(f"{k} is unbound: {mp._unbound[k]}")
         # A near-miss of a LIVE fid names the correction (detect_59 ->
         # detected_59), but ONLY when the prefix is a near-miss of a fid
         # family: a `corner_5` typo falls through to the bound handles.
         m = re.fullmatch(r"([A-Za-z]+)_(\d+)", k)
-        if m and mp:
+        if m:
             for pref in ("detected", "prior", "stop"):
                 if not difflib.get_close_matches(
                         m.group(1), [pref], n=1, cutoff=0.75):
@@ -927,8 +929,7 @@ class MissionPython:
     def __init__(self, env: MissionEnv):
         self.env = env
         self.ns: dict = MissionNamespace(
-            {"__builtins__": dict(_SAFE_BUILTINS)})
-        self.ns.mp = self
+            self, {"__builtins__": dict(_SAFE_BUILTINS)})
         self.ns["__builtins__"]["print"] = self._print
         self.ns["__builtins__"]["__import__"] = _safe_import
         self.ns["__show__"] = self._show
