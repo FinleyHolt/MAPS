@@ -1875,8 +1875,7 @@ def _compare(cx, a):
     viewpoint, or ``{ref: [fid | rN | [x, y], ...]}``, a union measured as
     one place."""
     items = _as_rows(cx, a["items"])
-    _src = cx.resolve(a["items"]) if cx.is_ref(a["items"]) else a["items"]
-    _in_ordered = bool(getattr(_src, "ordered", False))
+    _in_ordered = bool(getattr(items, "ordered", False))
 
     notes: list = []
     used_labels: set = set()
