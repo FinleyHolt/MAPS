@@ -381,7 +381,7 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
 
     map_name = str(spec.get("map_name") or "")
     if map_name not in GROUND_LEVEL:
-        log.warning("look: map %r not in upstream GROUND_LEVEL; no crop",
+        log.warning("look: map %r not in GROUND_LEVEL; no crop",
                     map_name)
         return None
     ground = float(GROUND_LEVEL[map_name])
