@@ -511,7 +511,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         out["oracle_success"] = None  # a thin recording cannot show the aircraft never came near
     if len(flown) < 2:
         return out
-    loiter = row.get("start_xy") or (row.get("visited_xy") or [None])[0]
+    loiter = row.get("start_xy")
     first = next((t_start + float(e["t_s"]) for e in events if e.get("kind") == "leg"), t_end_run)
     passed = last_pass(track, (float(loiter[0]), float(loiter[1])), t_start, first, LOITER_PASS_M) if loiter else None
     p0 = passed[0] if passed else t_start
