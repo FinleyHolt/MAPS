@@ -75,7 +75,7 @@ def run_ops(ops: list, *, namespace: dict,
             # error so "no color" reads as WHEN, not broken.
             _err = join_hints(_err, _preflight_color_note())
         return {"error": _err}
-    except Exception as exc:  # noqa: BLE001  — surface the failure to the agent, don't crash the round
+    except Exception as exc:  # noqa: BLE001 -- served to the model; never crash the turn
         return {"error": f"program failed: {exc}"}
     _raw_results = out["results"]
     if raw_sink is not None:

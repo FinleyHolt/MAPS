@@ -108,7 +108,7 @@ class PerceptionDirector:
         try:
             self.push(_dedup_concepts(
                 self.watchlist + [c for b in self.boosts if b.riding for c in b.concepts]))
-        except Exception:  # noqa: BLE001 — a push failure must not kill the round
+        except Exception:  # noqa: BLE001 -- a push failure never crashes the turn
             log.exception("PerceptionDirector: live concept push failed")
 
     def _retro(self, flown: dict, concepts: list[str], token) -> dict:
@@ -119,7 +119,7 @@ class PerceptionDirector:
                               "be re-analyzed")}
         try:
             res = self.retro_perceiver(dict(flown), list(concepts))
-        except Exception as exc:  # noqa: BLE001 — surfaced, never a round crash
+        except Exception as exc:  # noqa: BLE001 -- served to the model; never crash the turn
             log.exception("retro perceiver raised")
             res = {"error": f"retrospective re-segmentation failed: "
                             f"{type(exc).__name__}: {exc}"}
