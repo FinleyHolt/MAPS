@@ -637,7 +637,8 @@ def main(argv: list[str] | None = None) -> int:
             print(line(f"intel {k}", v))
         for k, v in doc["by_effort"].items():
             print(line(f"effort {k}", v))
-        print(f"turn radius flown (median) {radius} m over {turns} turns")
+        print(f"turn radius flown (median) {radius} m over {turns} turns" if turns
+              else f"turn radius {radius} m (fallback: no turn read)")
         for r in rows:
             print(f"  {r['sortie']} run {r['run_no']}: {r['end']}, SR {r['success']}, OSR {r['oracle_success']}, NE {r['ne_ft']} ft, "
                   f"time to ID {r['time_to_id_s']} s, {r['flights']} flights / {r['turns']} turns, SPL {r['spl']}"

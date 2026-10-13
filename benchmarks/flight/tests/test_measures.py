@@ -74,6 +74,9 @@ def test_the_measures_score_the_commit_point_against_the_mask_and_the_track_agai
         Q.check(got, stale)
     assert Q.main(["--root", str(root), "--truth", str(truth), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["summary"]["sr"] == {"k": 2, "n": 4, "pct": 50.0}
+    # The track flies straight: no turn is read, and the radius is the fallback's.
+    assert Q.main(["--root", str(root), "--truth", str(truth)]) == 0
+    assert f"turn radius {Q.TURN_RADIUS_FALLBACK_M} m (fallback: no turn read)" in capsys.readouterr().out
 
 
 def _thin_track_run(tmp_path, keyframe_xy, gnss_agl_m=600.0):
