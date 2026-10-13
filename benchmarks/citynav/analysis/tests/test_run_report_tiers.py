@@ -105,7 +105,7 @@ def test_an_all_no_commit_run_scores_every_episode_a_miss(tmp_path, capsys):
          "workdir": f"w0/maps_2026072{i}_110000_citynav_e__{i}_{i}"}
         for i in range(5)
     ])
-    assert load_run(root) == ({f"e::{i}#{i}": {"SR": 0} for i in range(5)}, 5)
+    assert load_run(root) == {f"e::{i}#{i}": {"SR": 0} for i in range(5)}
     report(root)
     assert "SR = 0/5" in capsys.readouterr().out
 

@@ -236,9 +236,8 @@ def test_every_shared_fixture_case():
             for eid, w in want["picks"].items()
         }, run_name
 
-        scored, no_metrics = load_run(root)
+        scored = load_run(root)
         assert set(scored) == set(want["picks"]) | set(want["unscored"]), run_name
-        assert no_metrics == want["no_metrics"], run_name
         for eid in want["unscored"]:
             assert scored[eid]["SR"] == 0 and scored[eid].get("OSR", 0) == 0, \
                 f"{run_name}: {eid} keeps its slot and scores a miss"
@@ -259,7 +258,7 @@ def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_pa
         {"episode_id": "e4", "status": "infra", "error": "serve_down"},
         ledger_row("e4", "20260101_000005", 0),
     )
-    scored, _ = load_run(root)
+    scored = load_run(root)
     assert sorted(scored) == ["e1", "e2", "e3", "e4"]
     assert scored["e3"]["SR"] == 0 and scored["e3"].get("OSR", 0) == 0
     assert len(run_report.report(root)) == 4

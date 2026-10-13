@@ -19,11 +19,10 @@ from benchmarks.citynav.analysis import rows as _rows
 from benchmarks.citynav.analysis.rows import read_manifest
 
 
-def load_run(root: Path, *, allow_partial: bool = False) -> tuple[dict[str, dict], int]:
-    """(episode_id -> scored metrics, no_metrics) where ``no_metrics`` counts
-    ROWS: one episode can have both a crash row and a scored row."""
-    picked, stats = _rows.load_attempts(root, allow_partial=allow_partial)
-    return _rows.scored_metrics(picked), stats.no_metrics
+def load_run(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
+    """episode_id -> scored metrics for the run at ``root``."""
+    picked, _ = _rows.load_attempts(root, allow_partial=allow_partial)
+    return _rows.scored_metrics(picked)
 
 
 def _pct(num: int, den: int) -> str:

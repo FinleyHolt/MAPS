@@ -209,8 +209,8 @@ def main() -> None:
 
     from benchmarks.citynav.analysis.run_report import _CRITERION_LABEL, load_run, run_criterion
 
-    a, _ = load_run(Path(args.run_a), allow_partial=args.allow_partial)
-    b, _ = load_run(Path(args.run_b), allow_partial=args.allow_partial)
+    a = load_run(Path(args.run_a), allow_partial=args.allow_partial)
+    b = load_run(Path(args.run_b), allow_partial=args.allow_partial)
     shared = sorted(set(a) & set(b))
     if not shared:
         raise SystemExit("no shared scored episodes between the two runs")
