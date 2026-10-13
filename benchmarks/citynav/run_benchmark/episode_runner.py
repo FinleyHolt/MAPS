@@ -167,11 +167,12 @@ def _success_mask(cfg, episode, objects_by_map: dict) -> tuple[str, dict]:
     }
 
 
-def score_episode(cfg, episode, objects_by_map: dict, final_xy, trajectory, *, flew: bool = True) -> dict:
+def score_episode(cfg, episode, objects_by_map: dict, final_xy, trajectory, *,
+                  commit_xy=None, flew: bool = True) -> dict:
     """The episode's metrics for an agent that ended at ``final_xy`` over
-    ``trajectory``, under this bench's success mask (``eval.score_arrival``).
-    The one scoring call of the bench row, its zero-flight row, the
-    commit's would-score check and the flight mission's row."""
+    ``trajectory``, having committed at ``commit_xy``, under this bench's
+    success mask (``eval.score_arrival``). The one scoring call of the bench
+    row, its zero-flight row and the flight mission's row."""
     criterion, mask = _success_mask(cfg, episode, objects_by_map)
     return score_arrival(
         criterion=criterion,
@@ -179,6 +180,7 @@ def score_episode(cfg, episode, objects_by_map: dict, final_xy, trajectory, *, f
         target_xy=episode.target_xy,
         pos_trajectory=trajectory,
         success_dist_m=cfg.success_radius_m,
+        commit_xy=commit_xy,
         flew=flew,
         **mask,
     )
@@ -362,8 +364,13 @@ def run_episode(
         final_xy = (float(episode.start_xy[0]), float(episode.start_xy[1]))
         visited = [final_xy, final_xy]
 
+    # Commit identity is the last flight's: it may be an "[x, y]" point
+    # token (provenance "point"), which no fid prefix classifies.
+    last = flights[-1] if flights else {}
+    commit_xy = (float(last["resolved_xy"][0]), float(last["resolved_xy"][1])) if flights else None
     scores = score_episode(cfg, episode, objects_by_map, final_xy,
-                           [(float(p[0]), float(p[1])) for p in visited], flew=bool(flights))
+                           [(float(p[0]), float(p[1])) for p in visited],
+                           commit_xy=commit_xy, flew=bool(flights))
     # ``referent_bucket`` is a noisy text proxy (regex over the description).
     scores["referent_bucket"] = classify_referent(episode.description)
     scores["steps_taken"] = steps_taken
@@ -373,20 +380,9 @@ def run_episode(
     flight_dir = os.environ.get("SEARCH_COMPILE_WORKDIR")
     scores["llm"] = (flight_summary.summarize(Path(flight_dir) / "flight")
                      if flight_dir else flight_summary.blank())
-    # Commit identity is the last flight's: it may be an "[x, y]" point
-    # token (provenance "point"), which no fid prefix classifies.
-    last = flights[-1] if flights else {}
     scores["committed_fid"] = last.get("target")
     scores["committed_provenance"] = last.get("provenance")
     scores["mission"] = {"ended_by": reply.ended_by}
-    # Would the committed point itself score? Separates execution misses
-    # from selection misses.
-    if flights:
-        cxy = (float(last["resolved_xy"][0]), float(last["resolved_xy"][1]))
-        scores["committed_xy"] = list(cxy)
-        scores["commit_would_score"] = bool(score_episode(cfg, episode, objects_by_map, cxy, [cxy])["SR"])
-    else:
-        scores["committed_xy"] = scores["commit_would_score"] = None
     # SAHI tiles the segmenter could not answer: their objects are missing
     # from those frames, which the episode survives.
     scores["sam_tiles_failed"] = int(h.perception.sahi_tiles_failed)

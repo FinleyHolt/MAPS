@@ -4,8 +4,8 @@ The Cal City benchmark: target search over California City, CA, the area the
 C-12 flew. It runs the same engine and flight contract as
 [CityNav](../citynav/README.md) over a 2D world: the block's map raster on a
 flat height plane, an OpenStreetMap prior, and an authored corpus. An episode
-succeeds when the final pose of its six-action replay lands inside the
-target's own annotated footprint (the shape criterion).
+succeeds when its commit point lies inside the target's own annotated
+footprint, the same test as the flight measures (the shape criterion).
 
 ## What ships and what you supply
 

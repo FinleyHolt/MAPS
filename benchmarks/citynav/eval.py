@@ -100,13 +100,15 @@ def score_arrival(
     success_dist_m: float = 20.0,
     gt_polygon: list[tuple[float, float]] | None = None,
     radius_m: float | None = None,
+    commit_xy: tuple[float, float] | None = None,
     flew: bool = True,
 ) -> dict:
     """One episode's metrics under this bench's success mask; every scored row is written here.
 
     ``criterion`` (``paths.SUCCESS_CRITERION``): ``"ring"`` scores ``SR`` 1
     within ``success_dist_m`` of the target point, ``"shape"`` inside the
-    target's annotated footprint. ``SR`` is the verdict either way, and the
+    target's annotated footprint at ``commit_xy`` (the commit point; the final
+    pose when there is none). ``SR`` is the verdict either way, and the
     row is stamped ``success_criterion``. ``NE`` measures to the target
     centroid on every row.
 
@@ -134,7 +136,7 @@ def score_arrival(
             scores.pop(key, None)
         scores.update(
             score_precise(
-                final_xy=final_pos_xy,
+                final_xy=final_pos_xy if commit_xy is None else commit_xy,
                 target_xy=target_xy,
                 gt_polygon=gt_polygon,
                 radius_m=success_dist_m if radius_m is None else radius_m,

@@ -187,14 +187,3 @@ def test_help_is_an_option_not_a_root(capsys):
     with pytest.raises(SystemExit) as done:
         run_report.main(["--help"])
     assert done.value.code == 0 and "--allow-partial" in capsys.readouterr().out
-
-
-def test_the_fails_line_reads_the_commit_against_the_run_s_own_criterion(tmp_path, capsys):
-    """``commit_would_score`` is scored under the bench's success mask (a ring
-    or a shape), so the line names the verdict, not a radius."""
-    a = tmp_path / "a"
-    fail = ledger_row("e::1#1", "20260725_110000", 0)
-    fail["metrics"]["commit_would_score"] = True
-    write_ledger(a, fail)
-    report(a)
-    assert "fails=1: commit_would_score=1  commit_would_miss=0  (no commit_xy=0)" in capsys.readouterr().out

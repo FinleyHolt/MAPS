@@ -200,16 +200,6 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     # Commit provenance (prior landmark vs runtime detection vs none).
     prov = Counter(m.get("committed_provenance") or "none" for m in scored.values())
     print("provenance: " + "  ".join(f"{k}={v}" for k, v in prov.most_common()))
-
-    # Among scored fails: would the committed xy itself have scored, under the
-    # run's own success criterion (a ring or a shape)?
-    fails = [m for m in scored.values() if not m.get("SR")]
-    would = sum(1 for m in fails if m.get("commit_would_score") is True)
-    miss = sum(1 for m in fails if m.get("commit_would_score") is False)
-    print(
-        f"fails={len(fails)}: commit_would_score={would}  "
-        f"commit_would_miss={miss}  (no commit_xy={len(fails) - would - miss})"
-    )
     return scored
 
 
