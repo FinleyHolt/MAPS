@@ -105,6 +105,8 @@ these places, the served-text changes among them:
 | A bare `filter()` reads one refusal on a set, a row and a list of rows. | A list of rows served its own refusal text for a bare `filter()`. |
 | A fused ring frame is posed as the corrector poses every frame, by the vehicle's pose at its stamp plus the boresight's timing offset (its tag only where the vehicle has no pose then), so its registration and the pose graph share one time base. | Ring frames were posed by their tag at the stamp without the timing offset the corrector applied; under a nonzero offset a correct ring fit could be refused. The flown boresight's offset was 0. |
 | Bake bookkeeping tags (`osm_id`, `worldkit_layer`, `worldkit_height_m`, `source_tag`) stay out of the census, the Best/Head labels, the grid and the search text by one rule. | The census and match labels skipped only `osm_id`, so an unnamed Cal City row served `worldkit_layer=buildings` there while the grid hid it. |
+| A bench attempt that loses its reasoner mid-episode is infra `reasoner_down_midrun`. | The flown driver named it `vllm_down_midrun`. |
+| On a ring run a crash or an unrecorded timeout scores `spl_pos` 0, so `run_report`'s mean SPL covers every scored episode. | The mean covered recorded rows only. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
