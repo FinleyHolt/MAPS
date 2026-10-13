@@ -104,7 +104,8 @@ def _run_provenance(run_root: Path) -> dict:
     the tile-bake content hash (every Cal City bake sits at
     ``benchmarks/calcity/tiles``, so the path the rows carry cannot tell two
     apart), the arm's withholds, the sha256 of the resolved config
-    without them (``config_body``: an E4 arm differs from E1 only there),
+    without them or a baseline ``policy`` (``config_body``: an E4 arm differs
+    from E1 only in its withholds, a baseline arm only in its policy),
     and ``resume_commits`` when the run's start and resumes name more than
     one code commit."""
     prov = next((r["provenance"] for r in _rows.iter_json_rows(run_root / _rows.EPISODES_JSONL)
@@ -121,7 +122,7 @@ def _run_provenance(run_root: Path) -> dict:
     if bake:
         prov["bake_sha256"] = bake
     if manifest.get("config_yaml"):
-        body = {k: v for k, v in yaml.safe_load(manifest["config_yaml"]).items() if k != "withhold"}
+        body = {k: v for k, v in yaml.safe_load(manifest["config_yaml"]).items() if k not in ("withhold", "policy")}
         prov["config_body"] = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
     return prov
 
@@ -144,8 +145,9 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
     ``fatal`` is the ground truth SR is scored against (split, tile bake):
     differing or unrecorded,
     no A/B exists, and nothing waives it. ``arm`` is code, config (apart from
-    its withholds where both manifests record it), served model and reasoning
-    effort (unset reads as blank), which an A/B is meant to vary; compared only
+    its withholds and baseline policy where both manifests record it), served
+    model and reasoning effort (unset reads as blank), which an A/B is meant
+    to vary; compared only
     where both sides recorded them, and waived by ``--allow-provenance-mismatch``.
     A side whose resumes ran other code is an ``arm`` mismatch on its own."""
     fatal: list[str] = []
@@ -169,7 +171,7 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
         )
 
     arm: list[str] = []
-    config = (("config_body", "config apart from its withholds (sha256)")
+    config = (("config_body", "config apart from its withholds and policy (sha256)")
               if prov_a.get("config_body") and prov_b.get("config_body") else ("config_sha256", "config (sha256)"))
     for key, label in (
         ("git_commit", "code (git_commit)"),
