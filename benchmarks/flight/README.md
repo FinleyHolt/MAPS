@@ -19,9 +19,10 @@ reads:
 2. **The leg goes to the aircraft.** `Vehicle.post(Leg)` (`vehicle.py`) hands
    the point, the rest of the pass and the area to the aircraft. On the C-12
    the crew flew it off the cockpit display.
-3. **Every frame is registered as it arrives.** The corrector
-   (`LiveSource.start_corrector`, `live_source.py`) reads the newest frame off `Vehicle.index` and
-   `Vehicle.frame`, places it by the vehicle's pose at its stamp, the timing
+3. **Frames are registered as they arrive.** The corrector
+   (`LiveSource.start_corrector`, `live_source.py`) reads frames off `Vehicle.index` and
+   `Vehicle.frame` (a simulated vehicle registers every frame up to its clock; a real one the newest each
+   `CORRECTOR_PERIOD_S`, skipping to it when behind), places each by the vehicle's pose at its stamp, the timing
    offset applied (`nav_track.py`), through the boresight, registers it against the map rendered at that pose
    (`register_frame`, `frame_offset.py`, `map_render.py`, `locator.py`), and
    ties it to the frame before it in the pose graph (`pose_graph.py`,
