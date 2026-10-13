@@ -100,7 +100,6 @@ def irls_fit(A, b: np.ndarray, *, groups: np.ndarray) -> np.ndarray:
             cut[groups == g] = HUBER_K * max(_huber_scale(norms[groups == g]), SCALE_FLOOR)
         new_weights = np.where(norms <= cut, 1.0, cut / np.maximum(norms, 1e-12))
         if np.allclose(new_weights, weights, atol=1e-9):
-            weights = new_weights
             break
         weights = new_weights
     return x
