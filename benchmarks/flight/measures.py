@@ -77,8 +77,6 @@ FLYING_MPS = 50.0
 ORBIT_DEG = 300.0
 #: The radius the way back is turned at when no turn was read.
 TURN_RADIUS_FALLBACK_M = 1500.0
-#: Crew ends: the run is a miss unless the adjudication excludes it.
-CREW_ENDS = ("stopped", "abort", "dropped")
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -444,7 +442,7 @@ def ended(row: dict[str, Any]) -> str:
     ``reply`` (the model's report) is the one end that scores."""
     if row.get("status") != "ok":
         return "no run"
-    if row.get("ended_by") in CREW_ENDS:
+    if row.get("ended_by") == "stopped":
         return "stopped"
     if not row.get("ended_by") and row.get("error"):
         return "failed"
