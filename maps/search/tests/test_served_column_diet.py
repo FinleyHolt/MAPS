@@ -9,6 +9,7 @@ from maps.search.analyze_scene.geom_program import (
     ProgramError,
     _grid_cell,
     _render_grid_rows,
+    compact_results,
     run_program,
 )
 
@@ -142,3 +143,12 @@ def test_an_absent_key_refusal_names_only_served_columns(op):
     msg = str(e.value)
     assert "footprint_area_m2" in msg, msg
     assert not any(k in msg for k in _GRID_COL_DROP), msg
+
+
+def test_bake_bookkeeping_tags_ride_no_census_and_no_match_label():
+    rows = [{"fid": f"prior_{i}", "name": "", "xy": [float(i), 0.0],
+             "tags": {"building": "yes", "worldkit_layer": "buildings", "osm_id": str(i)},
+             "search_text": "building yes"} for i in range(5)]
+    for args in ({"query": "zzzqqq"}, {}, {"query": "building"}):
+        out = run_program([], rows, {"ops": [{"ref": "r0", "op": "find", "args": args}]})
+        assert "worldkit" not in repr(compact_results(out["results"])), args

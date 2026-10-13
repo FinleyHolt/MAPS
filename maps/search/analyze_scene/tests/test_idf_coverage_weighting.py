@@ -9,8 +9,6 @@ import pytest
 
 from maps.search.analyze_scene import text_match as T
 from maps.search.analyze_scene.geom_program import (
-    _SEARCH_PROVENANCE_DROP,
-    _TAG_RENDER_DROP,
     build_surface_from_graph,
     run_program,
 )
@@ -20,13 +18,6 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", "..", ".."))
 _TILES = (os.environ.get("SEARCH_CALCITY_TILES")
           or os.path.join(_REPO, "benchmarks", "calcity", "tiles"))
-
-
-def test_the_searchable_drop_is_a_subset_of_what_the_model_never_reads():
-    """Withheld from the HAYSTACK only where it is already withheld from the EYES."""
-    assert _SEARCH_PROVENANCE_DROP <= _TAG_RENDER_DROP, (
-        _SEARCH_PROVENANCE_DROP - _TAG_RENDER_DROP)
-    assert len(_SEARCH_PROVENANCE_DROP) == 4, _SEARCH_PROVENANCE_DROP
 
 
 def _find(rows, query):

@@ -96,18 +96,19 @@ def _row_tags(n) -> dict:
     return {str(k): v for k, v in tags.items() if isinstance(v, str) and str(k).lower() != _UNSERVED_TAG}
 
 
-# Bake bookkeeping kept out of the free search text only: stamped on every
-# row, they would act as fuzzy-match stopwords (``osm_id`` donates ``way``).
-_SEARCH_PROVENANCE_DROP = frozenset({
+# Bake bookkeeping tags: never served, and kept out of the free search text
+# (stamped on every row, they would act as fuzzy-match stopwords: ``osm_id``
+# donates ``way``).
+_PROVENANCE_TAGS = frozenset({
     "osm_id", "worldkit_layer", "worldkit_height_m", "source_tag"})
 
 
 def _anchor_search_text(n) -> str:
     """A prior row's search text: its name and its tag keys and values,
-    minus _SEARCH_PROVENANCE_DROP."""
+    minus _PROVENANCE_TAGS."""
     parts = [str(n.name or "")]
     for k, v in _row_tags(n).items():
-        if str(k) in _SEARCH_PROVENANCE_DROP:
+        if str(k) in _PROVENANCE_TAGS:
             continue
         parts.append(str(k).replace("_", " "))
         parts.append(str(v).replace("_", " "))
@@ -577,7 +578,7 @@ def _census_counts(rows) -> tuple[dict, int]:
         tags = it.get("tags")
         if isinstance(tags, dict):
             for k, v in tags.items():
-                if str(k) == "osm_id":
+                if str(k) in _PROVENANCE_TAGS:
                     continue
                 key = f"{k}={v}"
                 counts[key] = counts.get(key, 0) + 1
@@ -682,15 +683,13 @@ _GRID_HEADER_EVERY = 50
 # A tags cell renders its first N tags and counts the rest.
 _TAG_RENDER_HEAD = 12
 
-# Tag keys the grid does not render (ids, postal and import bookkeeping);
-# find still searches them.
-_TAG_RENDER_DROP = frozenset({
-    "osm_id", "source_tag", "addr_postcode", "addr_city", "oneway",
-    "ref_GB_uprn",
+# Tag keys the grid does not render: bake bookkeeping, and postal and import
+# keys find still searches.
+_TAG_RENDER_DROP = _PROVENANCE_TAGS | {
+    "addr_postcode", "addr_city", "oneway", "ref_GB_uprn",
     "tiger_reviewed", "tiger_cfcc", "tiger_source", "tiger_tlid",
-    "tiger_separated", "tiger_county", "worldkit_layer",
-    "worldkit_height_m", "calcity_object_id", "source_lanes",
-})
+    "tiger_separated", "tiger_county", "calcity_object_id", "source_lanes",
+}
 
 # Row fields the grid does not render.
 _GRID_COL_DROP = frozenset({
@@ -1301,7 +1300,7 @@ def _match_label(r):
     if isinstance(tags, dict) and tags:
         out: list = []
         for k, v in tags.items():
-            if str(k) == "osm_id":
+            if str(k) in _PROVENANCE_TAGS:
                 continue
             pair = f"{k}={v}"
             if sum(len(x) + 2 for x in out) + len(pair) > 40:
