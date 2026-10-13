@@ -190,7 +190,7 @@ class MissionSession:
     def run(self, instruction: str, **extra):
         """The conversation's first turn: ``run_mission`` over this session,
         the installed endpoint and the rig's served description. Returns
-        ``(reply, reasoner)``."""
+        ``(reply, mission)``, the mission for ``continue_mission``."""
         h = self.h
         spec = endpoint_spec()
         return run_mission(
