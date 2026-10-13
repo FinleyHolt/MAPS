@@ -1,1 +1,1 @@
-"""World state: the spatial graph and feature queries for drone autonomy."""
+"""The world-state graph (graph)."""

@@ -1,5 +1,2 @@
-"""Rendering the reasoner looks at — currently the nadir ``look`` crop renderer.
-
-Pure functions over resolved crop specs + the block raster; no loop state, so
-live and offline-replay crops are byte-identical by construction.
-"""
+"""The pictures the reasoner reads: look_render crops the nadir ortho,
+map_render draws the world state as a schematic."""

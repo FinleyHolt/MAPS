@@ -88,7 +88,7 @@ def cardinal_offset(cells_xy, at_xy, direction: str) -> float | None:
     feature) are cut to the band of :data:`BAND_M` around the point on the axis
     orthogonal to ``direction`` ("east of the road where the road is, at my
     latitude"), then compared along it. Positive: the clearance past the
-    band's near edge in that direction. ``None`` when the band holds no
+    band's farthest reference point in that direction. ``None`` when the band holds no
     reference point, or the reference straddles the point inside it."""
     d = str(direction or "").strip().lower()
     if d not in CARDINALS:

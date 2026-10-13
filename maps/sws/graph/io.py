@@ -2,8 +2,7 @@
 
 ``{stem}_graph.npz`` + ``{stem}_nodes.json``: the npz carries the fid index
 + graph scalars; the per-node JSON carries the ``MapObject`` metadata, one
-key per field in field order. Graphs are nodes-only; packed edge columns an
-npz may carry are never read.
+key per field in field order.
 """
 
 from __future__ import annotations
