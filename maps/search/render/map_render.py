@@ -322,8 +322,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
 
     center_fid = str(spec.get("center_fid") or "")
     center_label = str(spec.get("center_label") or center_fid or "map center")
-    legend = [{"digit": 1, "fid": center_fid, "label": center_label,
-               "role": "center"}]
+    legend = [{"label": center_label, "role": "center"}]
     neighbor_px: list = []
     neighbor_polys: list = []
     _name_cands: list = []
@@ -333,13 +332,10 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         _mlab = str(mk.get("label") or "").strip()
         if _mlab and _mlab != mfid:
             _name_cands.append((px, py, _mlab))
-        # every mark is context (a map request names no target): digits
-        # are 1 = center, then the marks in caller order
+        # every mark is context: a map request names no target
         neighbor_px.append((px, py))
         neighbor_polys.append(frame_arcs(mk.get("boundary"), _w2p, W, H))
-        legend.append({"digit": 1 + len(neighbor_px), "fid": mfid,
-                       "label": str(mk.get("label") or mfid),
-                       "role": "context"})
+        legend.append({"label": str(mk.get("label") or mfid), "role": "context"})
 
     # Names: each mark's label and each named road in the window, one label
     # per name, drawn after the chips so a name never takes an id's pixels.
@@ -425,8 +421,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     # label -> the colour word painted, biggest class first
     classes = [{"label": k,
                 "color": paint_word(k, kind=e["kind"],
-                                    detected=(e["kind"] == "detection")),
-                "kind": e["kind"], "cells": e["cells"]}
+                                    detected=(e["kind"] == "detection"))}
                for k, e in sorted(counts.items(),
                                   key=lambda kv: -kv[1]["cells"])]
     rec = {

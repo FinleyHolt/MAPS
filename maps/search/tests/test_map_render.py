@@ -181,7 +181,7 @@ def test_render_record_carries_the_contract():
     assert rec is not None
     assert rec["world_window"] == [0.0, 0.0, 20.0, 20.0]
     assert rec["jpeg"]
-    assert [e["digit"] for e in rec["legend"]] == [1, 2]
+    assert [e["role"] for e in rec["legend"]] == ["center", "context"]
     words = {c["label"]: c["color"] for c in rec["classes"]}
     assert words["residential"] == paint_word("residential", kind="area")
     assert words["car"] == paint_word("car", detected=True)
@@ -222,7 +222,7 @@ def test_osm_label_names_the_class_or_falls_back():
     assert osm_label(None, "car") == "car"
 
 
-def test_targetless_map_marks_start_at_digit_2():
+def test_targetless_map_marks_are_context():
     rec = render_map_from_spec(
         {"center_xy": [10.0, 10.0], "context_m": 20.0,
          "center_label": "map center",
@@ -230,7 +230,8 @@ def test_targetless_map_marks_start_at_digit_2():
                     "boundary": None, "label": "car detected_0",
                     "is_target": False}]},
         _FEATURES, **_TILE)
-    assert [e["digit"] for e in rec["legend"]] == [1, 2]
+    assert rec["legend"] == [{"label": "map center", "role": "center"},
+                             {"label": "car detected_0", "role": "context"}]
     assert rec["features_painted"] > 0
 
 

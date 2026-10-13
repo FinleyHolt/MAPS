@@ -32,11 +32,10 @@ def test_the_set_look_delivers_one_crop_per_row(ortho_dir):
     legend = rec["legend"]
     # one entry per crop, and every entry names its own fid
     assert len(legend) == 1, legend
-    assert legend[0]["fid"] in legend[0]["label"], legend
-    assert legend[0]["role"] == "center" and legend[0]["fid"] == "detected_0"
+    assert legend[0]["role"] == "center" and "detected_0" in legend[0]["label"]
     assert [e["digit"] for e in legend] == [1], legend
-    assert [r["legend"][0]["fid"] for r in recs[0]] == [
-        c["fid"] for c in cands]
+    assert [r["center_fid"] for r in recs[0]] == [c["fid"] for c in cands]
+    assert all(r["center_fid"] in r["legend"][0]["label"] for r in recs[0])
     assert rec["marks_dropped"] == 0 and rec["marks_out_of_view"] == [], rec
 
     # Each crop is at single-look scale, not the set's hull.
@@ -109,8 +108,7 @@ def test_the_one_id_look_is_the_request_it_always_was(ortho_dir):
     assert [m["fid"] for m in req["marks"]] == ["detected_1"], req
     rec = recs[0][0]
     assert rec["context_m"] == _MIN_M, rec["context_m"]
-    assert rec["legend"] == [{"digit": 1, "fid": "detected_1",
-                              "label": "TARGET car detected_1",
+    assert rec["legend"] == [{"digit": 1, "label": "TARGET car detected_1",
                               "role": "center"}], rec["legend"]
     assert results[0]["crop"]["delivered"] == 1, results[0]
 

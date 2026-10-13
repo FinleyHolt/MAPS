@@ -436,10 +436,7 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
     neighbor_polys_px: list = []
     # digits as the overlay draws them: 1 centre, 2 target, 3.. the rest;
     # marks past LOOK_MAX_BADGES are dropped and counted
-    legend: list[dict] = [{
-        "digit": 1, "fid": str(center_fid or ""),
-        "label": center_label, "role": "center",
-    }]
+    legend: list[dict] = [{"digit": 1, "label": center_label, "role": "center"}]
     _dropped_marks = 0
     shown, _marks_out_of_view, _marks_unbadged_in_frame = frame_marks(
         marks, center_fid, _w2p, W, H, window=meta["world_window"])
@@ -448,15 +445,13 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
             target_px = (px, py)
             target_label = str(mk.get("label") or mfid)
             target_poly_px = frame_arcs(mk.get("boundary"), _w2p, W, H)
-            legend.append({"digit": 2, "fid": mfid,
-                           "label": target_label, "role": "target"})
+            legend.append({"digit": 2, "label": target_label, "role": "target"})
         elif len(neighbor_px) >= LOOK_MAX_BADGES - 2:
             _dropped_marks += 1
         else:
             neighbor_px.append((px, py))
             neighbor_polys_px.append(frame_arcs(mk.get("boundary"), _w2p, W, H))
             legend.append({"digit": 2 + len(neighbor_px),
-                           "fid": mfid,
                            "label": str(mk.get("label") or mfid),
                            "role": "context"})
 

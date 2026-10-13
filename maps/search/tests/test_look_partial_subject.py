@@ -53,8 +53,7 @@ def test_the_caption_states_the_extent_and_calls_the_ink_a_fragment():
         "subject_in_window": True, "subject_centroid_in_window": True,
         "subject_on_data": True, "window_valid_frac": 1.0,
         "subject_extent_m": [900.0, 1200.0], "subject_outline_cut": True,
-        "legend": [{"digit": 1, "fid": "f0", "label": "f0",
-                    "role": "center"}],
+        "legend": [{"digit": 1, "label": "f0", "role": "center"}],
     }])
     assert "900 x 1200 m" in text, text
     assert "fragment" in text, text

@@ -111,7 +111,7 @@ def test_single_id_keeps_the_tight_crop(ortho_dir):
     rec = _render_one(ortho_dir, _req((100.0, 100.0)))
     assert rec["context_m"] == _MIN_M, rec["context_m"]
     assert _img_side(rec) == LOOK_TARGET_PX, rec
-    assert rec["legend"] == [{"digit": 1, "fid": "c0", "label": "car c0",
+    assert rec["legend"] == [{"digit": 1, "label": "car c0",
                               "role": "center"}], rec["legend"]
 
 

@@ -33,5 +33,5 @@ def test_a_point_subject_is_named_by_its_legend_label():
     # A flight view of a point target carries no fid: its legend centre
     # label (the point) names it.
     t = _look_vision_text([{"center_fid": "", "legend": [
-        {"digit": 1, "fid": "", "label": "[3411, 1468]", "role": "center"}]}])
+        {"digit": 1, "label": "[3411, 1468]", "role": "center"}]}])
     assert "in order: [[3411, 1468]]" in t

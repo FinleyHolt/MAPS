@@ -220,8 +220,7 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
     def _renderer(reqs):
         rendered.append(list(reqs))
         return [{"jpeg": b"x", "center_fid": r["center_fid"],
-                 "legend": [{"digit": 1, "fid": r["center_fid"],
-                             "label": "car", "role": "center"}],
+                 "legend": [{"digit": 1, "label": "car", "role": "center"}],
                  "context_m": 30.0, "world_window": [0, 0, 200, 200]}
                 for r in reqs]
 
@@ -326,10 +325,8 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
         diag={},
         look_renderer=lambda reqs: [
             {"jpeg": b"x", "center_fid": r["center_fid"], "legend": [
-                {"digit": 1, "fid": r["center_fid"], "label": "car",
-                 "role": "center"}] + [
-                {"digit": 3 + i, "fid": m["fid"], "label": "car",
-                 "role": "context"}
+                {"digit": 1, "label": "car", "role": "center"}] + [
+                {"digit": 3 + i, "label": "car", "role": "context"}
                 for i, m in enumerate(r["marks"])
                 if m["fid"] != r["center_fid"]],
              "context_m": 30.0, "world_window": [0, 0, 200, 200],
