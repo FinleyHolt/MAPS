@@ -176,6 +176,34 @@ def frame_arcs(boundary, w2p, w: int, h: int):
     return clip_ring_to_box(pts, (-2.0, -2.0, w + 2.0, h + 2.0)) or None
 
 
+def frame_marks(marks, center_fid: str, w2p, w: int, h: int, window=None):
+    """``(shown, out_of_view, unbadged)`` for a picture's marks: the
+    well-formed marks other than the centre whose point lands in the w x h
+    frame, as ``(mark, fid, px, py)``; the fids of the rest. With the world
+    ``window``, a fid whose footprint still reaches into it is ``unbadged``
+    (in the image, unlabeled) rather than out of view."""
+    shown: list = []
+    out_of_view: list[str] = []
+    unbadged: list[str] = []
+    for mk in marks or []:
+        mxy = mk.get("xy") if isinstance(mk, dict) else None
+        if not (isinstance(mxy, (list, tuple)) and len(mxy) == 2):
+            continue
+        mfid = str(mk.get("fid") or "")
+        if mfid and mfid == center_fid:
+            continue
+        px, py = w2p(mxy[0], mxy[1])
+        if 0.0 <= px <= w and 0.0 <= py <= h:
+            shown.append((mk, mfid, px, py))
+        elif mfid:
+            if window is not None and subject_window_containment(
+                    window, mxy, mk.get("boundary"))[0]:
+                unbadged.append(mfid)
+            else:
+                out_of_view.append(mfid)
+    return shown, out_of_view, unbadged
+
+
 def frame_echo(spec: dict) -> dict:
     """The record's echo of a declared view (``frame_up`` + ``frame_note``)."""
     fu = spec.get("frame_up")
@@ -451,37 +479,18 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         "label": center_label, "role": "center",
     }]
     _dropped_marks = 0
-    _marks_out_of_view: list[str] = []
-    _marks_unbadged_in_frame: list[str] = []
-    for mk in (marks or []):
-        mxy = mk.get("xy") if isinstance(mk, dict) else None
-        if not (isinstance(mxy, (list, tuple)) and len(mxy) == 2):
-            continue
-        px, py = _w2p(mxy[0], mxy[1])
-        if not (0.0 <= px <= W and 0.0 <= py <= H):
-            # out of view unless part of its footprint is in frame
-            _min, _ = subject_window_containment(
-                meta["world_window"], mxy, mk.get("boundary"))
-            _mof = str(mk.get("fid") or "")
-            if _mof and _mof != center_fid:
-                if _min:
-                    _marks_unbadged_in_frame.append(_mof)
-                else:
-                    _marks_out_of_view.append(_mof)
-            continue
-        mfid = str(mk.get("fid") or "")
-        if mfid and mfid == center_fid:
-            continue
+    shown, _marks_out_of_view, _marks_unbadged_in_frame = frame_marks(
+        marks, center_fid, _w2p, W, H, window=meta["world_window"])
+    for mk, mfid, px, py in shown:
         if bool(mk.get("is_target")) and target_px is None:
             target_px = (px, py)
             target_label = str(mk.get("label") or mfid)
             target_poly_px = frame_arcs(mk.get("boundary"), _w2p, W, H)
             legend.append({"digit": 2, "fid": mfid,
                            "label": target_label, "role": "target"})
+        elif len(neighbor_px) >= LOOK_MAX_BADGES - 2:
+            _dropped_marks += 1
         else:
-            if len(neighbor_px) >= LOOK_MAX_BADGES - 2:
-                _dropped_marks += 1
-                continue
             neighbor_px.append((px, py))
             neighbor_polys_px.append(frame_arcs(mk.get("boundary"), _w2p, W, H))
             legend.append({"digit": 2 + len(neighbor_px),

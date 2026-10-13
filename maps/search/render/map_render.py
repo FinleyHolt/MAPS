@@ -105,6 +105,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     from maps.search.render.look_render import (  # noqa: PLC0415
         frame_arcs,
         frame_echo,
+        frame_marks,
         pixel_mapper,
         view_rotation,
         xy_list,
@@ -324,19 +325,9 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     neighbor_px: list = []
     neighbor_polys: list = []
     _name_cands: list = []
-    marks_out_of_view: list[str] = []
-    for mk in spec.get("marks") or []:
-        mxy = mk.get("xy") if isinstance(mk, dict) else None
-        if not (isinstance(mxy, (list, tuple)) and len(mxy) == 2):
-            continue
-        px, py = _w2p(mxy[0], mxy[1])
-        mfid = str(mk.get("fid") or "")
-        if mfid and mfid == center_fid:
-            continue
-        if not (0.0 <= px <= W and 0.0 <= py <= H):
-            if mfid:
-                marks_out_of_view.append(mfid)
-            continue
+    shown, marks_out_of_view, _ = frame_marks(
+        spec.get("marks"), center_fid, _w2p, W, H)
+    for mk, mfid, px, py in shown:
         _mlab = str(mk.get("label") or "").strip()
         if _mlab and _mlab != mfid:
             _name_cands.append((px, py, _mlab))
