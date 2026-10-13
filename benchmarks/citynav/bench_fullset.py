@@ -7,6 +7,13 @@ re-run into the same ``--out-root`` resumes: an episode with a non-infra row in
 ``--max-infra-attempts``. The run stops when nothing is left, the wall budget
 (``--max-wall-s``) is spent, or a window of infra casualties aborts it (exit 3).
 The out-root's layout is in ``benchmarks/citynav/README.md``.
+
+``--arrivals <stream.json>`` (``benchmarks.capacity.streams``) flies a
+capacity session instead: the stream's episodes in arrival order, each
+claimable only once its ``arrival_s`` has passed on the session clock, so a
+report that lands while every worker is busy waits its turn. Each row then
+carries ``arrival_s`` and ``claimed_s`` (session seconds), and the stream is
+copied to ``<out-root>/arrivals.json`` for ``benchmarks.capacity.reader``.
 """
 
 from __future__ import annotations
@@ -14,7 +21,9 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import json
 import logging
+import shutil
 import os
 import random
 import signal
@@ -129,6 +138,10 @@ class Driver:
         self.limit = args.limit
         self.sample_seed = args.sample_seed
         self.allowlist_path = Path(args.episode_allowlist).resolve() if args.episode_allowlist else None
+        self.arrivals_path = Path(args.arrivals).resolve() if args.arrivals else None
+        # episode -> arrival_s, and the session clock's zero; a capacity session only.
+        self._arrival: dict[str, float] = {}
+        self._t0: float | None = None
         # Guarded by _dispatch_lock.
         self._selection: list[str] = []
         self._cursor = 0
@@ -235,25 +248,36 @@ class Driver:
         """The next episode not done, not in flight and not past its infra
         attempts; ``None`` once nothing is left, the wall budget is spent, or
         the run aborted (in-flight attempts finish)."""
-        if self._wall_spent() or self._abort is not None:
-            return None
-        with self._dispatch_lock:
-            done = self._done_cache
-            n = len(self._selection)
-            scanned = 0
-            while scanned < n:
-                eid = self._selection[self._cursor % n]
-                self._cursor += 1
-                scanned += 1
-                if (
-                    eid in done
-                    or eid in self._in_flight
-                    or self._infra_attempts(eid) >= self.max_infra_attempts
-                ):
-                    continue
-                self._in_flight.add(eid)
-                return eid
-            return None
+        while not self._wall_spent() and self._abort is None:
+            # The earliest report still to arrive, which a worker with nothing released waits for.
+            due = float("inf")
+            with self._dispatch_lock:
+                done = self._done_cache
+                n = len(self._selection)
+                scanned = 0
+                while scanned < n:
+                    eid = self._selection[self._cursor % n]
+                    self._cursor += 1
+                    scanned += 1
+                    if (
+                        eid in done
+                        or eid in self._in_flight
+                        or self._infra_attempts(eid) >= self.max_infra_attempts
+                    ):
+                        continue
+                    if self._session_s() < self._arrival.get(eid, 0.0):
+                        due = min(due, self._arrival[eid])
+                        continue
+                    self._in_flight.add(eid)
+                    return eid
+            if due == float("inf"):
+                return None
+            time.sleep(max(0.0, min(due - self._session_s(), 1.0)))
+        return None
+
+    def _session_s(self) -> float:
+        """Seconds on the capacity session's clock; 0 before it starts."""
+        return 0.0 if self._t0 is None else time.monotonic() - self._t0
 
     def _infra_attempts(self, eid: str) -> int:
         return self._infra_errors.get(eid, Counter()).total()
@@ -411,7 +435,10 @@ class Driver:
     def run_one(self, worker_id: int, episode_id: str) -> None:
         """Fly one attempt and land its row."""
         self.log(f"[w{worker_id}] START {episode_id}")
+        claimed = self._session_s()
         row = self._run_attempt(worker_id, episode_id)
+        if episode_id in self._arrival:
+            row |= {"arrival_s": self._arrival[episode_id], "claimed_s": round(claimed, 1)}
         m = row.get("metrics") or {}
         summary = ("" if _rows.is_infra_abort(row)
                    else f" NE={m.get('NE')} SR={m.get('SR')}" if m else " MISSING")
@@ -481,6 +508,14 @@ class Driver:
                     self._in_flight.discard(eid)
 
     def _select_episodes(self) -> list[str]:
+        if self.arrivals_path is not None:
+            reports = json.loads(self.arrivals_path.read_text())["reports"]
+            self._arrival = {r["episode_id"]: float(r["arrival_s"]) for r in reports}
+            unknown = set(self._arrival) - set(_enumerate_split(self.split))
+            if unknown:
+                raise RuntimeError(f"--arrivals names {len(unknown)} episodes not in the {self.split} "
+                                   f"split, e.g. {sorted(unknown)[0]}")
+            return sorted(self._arrival, key=self._arrival.get)
         episodes = _enumerate_split(self.split)
         if self.allowlist_path is not None:
             try:
@@ -570,6 +605,13 @@ class Driver:
             self.log(f"FATAL: {exc}")
             return 2
         self._absorb_ledger()
+        if self.arrivals_path is not None:
+            # A session's clock cannot resume: its reports would arrive against a fresh zero.
+            if self.episodes_file.exists() and self.episodes_file.stat().st_size:
+                self.log(f"FATAL: {self.out_root} already holds a ledger; a capacity session flies "
+                         f"into a fresh --out-root")
+                return 2
+            shutil.copyfile(self.arrivals_path, self.out_root / "arrivals.json")
         pending = self._pending(episodes)
         self.log(
             f"split={self.split} sample_seed={self.sample_seed} selection={len(episodes)} "
@@ -582,11 +624,14 @@ class Driver:
         # none flies on once an interrupt has released the root.
         if pending and not self._wall_spent():
             threads = []
+            self._t0 = time.monotonic()
             for wid in range(self.workers):
                 t = threading.Thread(target=self.worker_loop, args=(wid,), daemon=True)
                 t.start()
                 threads.append(t)
-                time.sleep(WORKER_STAGGER_S)
+                # A session's arrivals stagger its starts, and a held worker would delay a report.
+                if self.arrivals_path is None:
+                    time.sleep(WORKER_STAGGER_S)
             for t in threads:
                 t.join()
         persistent = self._persistent_infra()
@@ -675,6 +720,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "seeded shuffle + --limit still apply on top of the allowlist.",
     )
     p.add_argument(
+        "--arrivals",
+        default=None,
+        help="a capacity session's report stream (benchmarks.capacity.streams): its "
+        "episodes, each released at its arrival time; refused with --episode-allowlist, "
+        "--limit or --sample-seed",
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="print seed, selected episodes and done/pending; launch nothing",
@@ -689,7 +741,12 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)-5s %(message)s",
         datefmt="%H:%M:%S",
     )
-    args = _build_parser().parse_args(argv)
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    if args.arrivals and (args.episode_allowlist or args.limit
+                          or args.sample_seed != parser.get_default("sample_seed")):
+        parser.error("--arrivals selects the session's episodes; drop --episode-allowlist, --limit "
+                     "and --sample-seed")
     driver = Driver(args)
     if args.dry_run:
         return driver.dry_run()

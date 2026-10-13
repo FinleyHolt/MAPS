@@ -45,6 +45,8 @@ episodes (after `--episode-allowlist`) are shuffled by `--sample-seed`
 same episodes on every run.
 `--episode-allowlist` keeps only the listed ids. Rerunning a command resumes
 its root. `--dry-run` prints the selection and launches nothing.
+`--arrivals <stream.json>` flies a capacity session in place of the shuffle
+(`benchmarks/capacity/README.md`).
 `CITYNAV_BENCH_CONFIG` names the config (default `configs/citynav.yaml`).
 
 A run holds its root for its lifetime (`.bench.lock`); a second run into it
