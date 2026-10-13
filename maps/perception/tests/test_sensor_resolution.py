@@ -42,3 +42,13 @@ def test_unknown_name_names_what_is_registered():
     assert "no_such_sensor" in str(exc.value)
     for name in list_sensors():
         assert name in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    ("spec", "key"),
+    [({"base": "nadir_1008_9"}, "base"), ({"hfov_deg": [1, 2]}, "hfov_deg"), ({"max_range_m": "far"}, "max_range_m"), ({"name": ["a"]}, "name")],
+)
+def test_a_bad_override_value_is_a_value_error_naming_its_key(spec, key):
+    """The config loader reports a ValueError as a refused key."""
+    with pytest.raises(ValueError, match=key):
+        resolve_sensor(spec)

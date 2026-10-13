@@ -263,12 +263,21 @@ def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
     unknown = sorted(set(spec) - _INLINE_KEYS)
     if unknown:
         raise ValueError(f"unknown sensor override key(s) {unknown}; known: {sorted(_INLINE_KEYS)}")
-    base_name = spec.get("base")
-    base = _REGISTRY[str(base_name)] if base_name is not None else _REGISTRY["nadir_1008_90"]
+    base_name = "nadir_1008_90" if spec.get("base") is None else spec["base"]
+    if not isinstance(base_name, str) or base_name not in _REGISTRY:
+        raise ValueError(f"sensor base {base_name!r} is not registered: {list_sensors()}")
+    base = _REGISTRY[base_name]
     over = {}
     for k, v in spec.items():
-        if k not in ("base", "name", *_IGNORED_KEYS):
+        if k not in ("base", *_IGNORED_KEYS):
             held = base.intrinsics if k in _INTRINSIC_KEYS else base
-            over[k] = type(getattr(held, k))(v)  # the type the base value carries
+            want = type(getattr(held, k))  # the type the base value carries
+            try:
+                if not isinstance(v, (str, int, float)):
+                    raise TypeError
+                over[k] = want(v)
+            except (TypeError, ValueError):
+                raise ValueError(f"sensor {k} must be a {want.__name__}, got {v!r}") from None
     intr = replace(base.intrinsics, **{k: over.pop(k) for k in _INTRINSIC_KEYS if k in over})
-    return replace(base, name=str(spec.get("name", base.name + "_override")), intrinsics=intr, **over)
+    over.setdefault("name", base.name + "_override")
+    return replace(base, intrinsics=intr, **over)
