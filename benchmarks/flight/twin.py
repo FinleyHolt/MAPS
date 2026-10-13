@@ -35,8 +35,6 @@ from benchmarks.flight.nav_track import Pose, camera_pose_local, pose_tag
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, local_to_lonlat
 from benchmarks.flight.vehicle import Leg
 
-log = logging.getLogger("flight.twin")
-
 #: The recorder's frame rate: two frames a second.
 CAMERA_HZ = 2.0
 #: A twin frame's JPEG quality, the recorder's own.
