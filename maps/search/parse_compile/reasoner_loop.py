@@ -695,8 +695,8 @@ class _Mission:
                 for c in self.mission_sam]
 
     def _mint_rows(self, _new_fids: list, _what: str):
-        """The rows a flight or a pass added -> ``(rN handle, the note
-        naming it)``; None (and no handle) when nothing was added."""
+        """The rows a flight or a pass added -> the note naming their new rN
+        handle; None (and no handle) when nothing was added."""
         if not _new_fids:
             return None
         while f"r{self.plan_rn[0]}" in self._code_names:
@@ -707,7 +707,7 @@ class _Mission:
         self._code_minted.append(_h)
         self.carry.mint(_h, [self._ns_rows[_f] for _f in _new_fids])
         self._those = _h
-        return _h, (f"{_h} — the {len(_new_fids)} rows this {_what} added; "
+        return (f"{_h} — the {len(_new_fids)} rows this {_what} added; "
                     f"the handle is bound, so {_h}, {_h}[0] and "
                     f"{_h}.order(...) all reach them")
 
@@ -804,7 +804,7 @@ class _Mission:
             _m = self._mint_rows([_f for _f in self._ns_rows
                                   if _f not in _fids_before], "flight")
             if _m is not None:
-                _report["new_rows"] = _m[1]
+                _report["new_rows"] = _m
         self.preflight = False
 
     def _fly_moves(self, _accepted: list, _item_errors: list,
@@ -891,7 +891,7 @@ class _Mission:
                                      for r in _ok)
         _m = self._mint_rows([_f for _f in self._ns_rows if _f not in _before], "pass")
         if _m is not None:
-            _ack["new_rows"] = _m[1]
+            _ack["new_rows"] = _m
         _errs = [str(r["error"]) for r in _reports if r.get("error")]
         if _errs:
             _ack["not_flown"] = _errs[:4]
