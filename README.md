@@ -115,7 +115,7 @@ mask), and 69 are scored.
 | Measure | Value | Definition |
 |---|---|---|
 | SR | 40/69 | The commit point lies inside the target's hand-drawn mask (one run with none: its tasking footprint). |
-| OSR | 59/69 | The aircraft's path (GNSS track, else keyframe poses) came within one camera footprint width of the target centroid. |
+| OSR | 59/69 | The aircraft's path (GNSS track, else the centres of the observations the run fused) came within one camera footprint width of the target centroid. |
 
 | Intel quality | Scored runs | SR | OSR |
 |---|---|---|---|
@@ -165,6 +165,8 @@ Or with pip:
 ```sh
 python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 ```
+
+The commands below run in the activated environment (`source .venv/bin/activate`).
 
 Extras:
 
