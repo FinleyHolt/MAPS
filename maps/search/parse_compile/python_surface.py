@@ -1185,6 +1185,8 @@ class MissionPython:
                 'find takes ONE query -- find("89th Street") then '
                 'find("Fuchsia Avenue"), or intersection("89th Street", '
                 '"Fuchsia Avenue") for where they cross.')
+        if name is not None and query == "":
+            raise CodeError(f"the name IS the query: find({name!r})")
         # near=[one thing] is the thing
         if isinstance(nearest, (list, tuple)) and len(nearest) == 1 \
                 and not is_xy(nearest):

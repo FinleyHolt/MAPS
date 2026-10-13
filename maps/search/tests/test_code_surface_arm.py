@@ -267,6 +267,13 @@ def test_a_name_constraint_gates_or_fails_loud_never_vanishes():
     assert "find('Desert Song Foursquare Church')" in err, err
 
 
+def test_a_name_with_no_query_is_refused_as_the_query_itself():
+    """``find(name=X)`` alone browsed every row; the name is the query."""
+    from maps.search.parse_compile.python_surface import CodeError
+    with pytest.raises(CodeError, match=r"the name IS the query: find\('Mill Lane'\)"):
+        raising_ops_of_block('r1 = find(name="Mill Lane")\n')
+
+
 def test_the_vision_calls_are_the_sentence_surface_s_own_steps():
     """look / the looking question / the map compile to the SAME steps."""
     import pytest
