@@ -98,6 +98,7 @@ these places, the served-text changes among them:
 | The map legend names the 90-120 degree hue bucket yellow-green, the colour it paints. | The flown legend called it olive. |
 | Every read of a result re-derives it over the current surface, so `look`, `explore` and the map's badges see a flight's rows in the first block after it. | The flown loop re-derived a result on such a read only after something else in the block had read one; otherwise that first read served the rows from before the flight. |
 | A row and a python list of rows refuse a cut or a sort with the result set's own texts (a non-callable predicate or key, a reversed direction, two keys, an order with no key, whose refusal names nearest=, color=, direction= and a key function); a predicate beside a numeric within= gets the metres refusal; print in a block takes end=, sep= and flush=, and its 60-line cap counts printed lines. | A row and a list raised raw TypeErrors or silently accepted these; print refused flush= and ignored end=, and the flown cap counted print calls, so one print of joined lines passed whole up to 8,000 characters. |
+| Endpoint discovery that gets no answer, a 5xx, a 402, 408 or 429, or a truncated body raises `EndpointUnreachable`, a serve fault under the infra rule; any other refusal is a config error. | Every discovery failure, an unanswered endpoint included, was one config error. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -107,8 +108,9 @@ these places, the served-text changes among them:
 The closed-loop measures are read from the flown sorties' own records by
 [`benchmarks/flight/measures.py`](benchmarks/flight/measures.py), over the
 analysts' adjudications as of commit `54135a3e7` of the development
-repository: of 87 runs, the 18 the infrastructure lost leave every rate, each
-with its evidence as the reason, and 69 are scored.
+repository: of 87 runs, 18 leave every rate with their evidence as the reason
+(13 lost to the infrastructure, 4 stopped by the crew, 1 whose target has no
+mask), and 69 are scored.
 
 | Measure | Value | Definition |
 |---|---|---|
