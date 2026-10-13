@@ -72,11 +72,11 @@ _FUZZY_ABBREVS: dict[str, str] = {**_GENERAL_ABBREVS, **_STREET_ABBREVS}
 FUZZY_THRESHOLD = 0.45
 
 # The tier bands of the module docstring.
-_TOKEN_BAG_CEIL = 0.75
-_KV_TIER_BASE = 0.80
-_NAME_PHRASE_TIER_BASE = 0.90
+TOKEN_BAG_CEIL = 0.75
+KV_TIER_BASE = 0.80
+NAME_PHRASE_TIER_BASE = 0.90
 # At or above: the row matched as a NAME.
-NAME_TIER_FLOOR = _NAME_PHRASE_TIER_BASE
+NAME_TIER_FLOOR = NAME_PHRASE_TIER_BASE
 
 # A tag-family hit (:func:`tag_family_keys`): retrieved, below every exact tier.
 TAG_FAMILY_SCORE = 0.5
@@ -96,7 +96,7 @@ def tag_family_keys(q_data: tuple, rows) -> frozenset:
                      or {}).items():
             sv = str(v)
             if sv not in norm:
-                norm[sv] = _fuzzy_normalize(sv)
+                norm[sv] = fuzzy_normalize(sv)
             if norm[sv] in want:
                 out.add(str(k))
     return frozenset(out)
@@ -117,7 +117,7 @@ def token_idf(rows) -> dict[str, float]:
     return {t: math.log(1 + n / (1 + d)) for t, d in df.items()}
 
 
-def _fuzzy_normalize(text: str) -> str:
+def fuzzy_normalize(text: str) -> str:
     """Lowercase, punctuation out, ``_-/=`` as spaces, abbreviations expanded."""
     text = text.lower()
     text = re.sub(r"[_\-/=]", " ", text)
@@ -125,7 +125,7 @@ def _fuzzy_normalize(text: str) -> str:
     return " ".join(_FUZZY_ABBREVS.get(t, t) for t in text.split())
 
 
-def _singularize(word: str) -> str:
+def singularize(word: str) -> str:
     """One best-guess English singular."""
     if word.endswith("ies") and len(word) > 4:
         return word[:-3] + "y"
@@ -138,7 +138,7 @@ def _singularize(word: str) -> str:
 
 def _singular_forms(word: str) -> set[str]:
     """Every plausible singular: ``-ses`` gives both "bus" and "house"."""
-    out = {word, _singularize(word)}
+    out = {word, singularize(word)}
     if word.endswith("ses") and len(word) > 3:
         out.add(word[:-1])          # houses -> house, beside buses -> bus
     return out
@@ -146,14 +146,14 @@ def _singular_forms(word: str) -> set[str]:
 
 def _fuzzy_expand_tokens(text: str) -> set[str]:
     """Token set after normalization + singularization."""
-    tokens = set(_fuzzy_normalize(text).split())
+    tokens = set(fuzzy_normalize(text).split())
     return {f for t in tokens for f in _singular_forms(t)}
 
 
 def _word_forms(text: str) -> tuple:
     """One frozenset of spellings per word, so coverage counts words."""
     return tuple(frozenset(_singular_forms(t))
-                 for t in dict.fromkeys(_fuzzy_normalize(text).split()))
+                 for t in dict.fromkeys(fuzzy_normalize(text).split()))
 
 
 COLORS = frozenset(COLOR_ENUM)
@@ -184,7 +184,7 @@ def unmatched_query_tokens(query: str, rows):
     rows = list(rows)
     read = _colors_read(rows)
     if read:
-        qt = {t for t in qt if _singularize(t) not in read}
+        qt = {t for t in qt if singularize(t) not in read}
         if not qt:
             return []
     carried: set = set()
@@ -204,10 +204,10 @@ def unmatched_query_tokens(query: str, rows):
     return sorted(kept, key=lambda t: (-len(t), t))
 
 
-def _edit_distance(a: str, b: str) -> int:
+def edit_distance(a: str, b: str) -> int:
     """Levenshtein distance."""
     if len(a) < len(b):
-        return _edit_distance(b, a)
+        return edit_distance(b, a)
     if not b:
         return len(a)
     prev = list(range(len(b) + 1))
@@ -230,7 +230,7 @@ def _extract_kv_pairs(clause: str) -> tuple:
         if "=" not in tok or tok.startswith("=") or tok.endswith("="):
             continue
         k, v = tok.split("=", 1)
-        kn, vn = _fuzzy_normalize(k), _fuzzy_normalize(v)
+        kn, vn = fuzzy_normalize(k), fuzzy_normalize(v)
         if not (kn and vn):
             continue
         forms = [(kn, vn)]
@@ -239,7 +239,7 @@ def _extract_kv_pairs(clause: str) -> tuple:
             if "=" in nxt:
                 break
             ext = f"{ext} {nxt}"
-            en = _fuzzy_normalize(ext)
+            en = fuzzy_normalize(ext)
             if en and (kn, en) != forms[-1]:
                 forms.append((kn, en))
         groups.append(tuple(forms))
@@ -253,18 +253,18 @@ def fuzzy_prepare_query(query: str) -> tuple:
         or [query or ""]
     out = []
     for c in clauses:
-        out.append((_fuzzy_normalize(c), _fuzzy_expand_tokens(c),
+        out.append((fuzzy_normalize(c), _fuzzy_expand_tokens(c),
                     _word_forms(c), _extract_kv_pairs(c)))
     return tuple(out)
 
 
 def fuzzy_match_score(clause: tuple, candidate: str, idf: dict) -> float:
     """1.0 when the clause equals ``candidate``; else the share of the
-    clause's idf mass the candidate covers, capped at ``_TOKEN_BAG_CEIL``. A
+    clause's idf mass the candidate covers, capped at ``TOKEN_BAG_CEIL``. A
     word weighs the idf of its commonest spelling, and a word no row carries
     leaves the denominator."""
     q_norm, qw = clause[0], clause[2]
-    c = _fuzzy_normalize(candidate)
+    c = fuzzy_normalize(candidate)
     if not q_norm or not c:
         return 0.0
     if q_norm == c:
@@ -280,14 +280,14 @@ def fuzzy_match_score(clause: tuple, candidate: str, idf: dict) -> float:
             num += w
     if not num or not den:
         return 0.0
-    return min(num / den, _TOKEN_BAG_CEIL)
+    return min(num / den, TOKEN_BAG_CEIL)
 
 
 def find_score(q_data: tuple, search_text: str, name: str | None = None,
                tags: dict | None = None, *, idf: dict) -> float:
     """The tiered score (module docstring) of a prepared query over one row,
     max over its clauses; ``idf`` is :func:`token_idf` of the rows scored."""
-    name_norm = _fuzzy_normalize(name) if name else ""
+    name_norm = fuzzy_normalize(name) if name else ""
     tag_pairs = None  # normalized lazily, once, only when a clause has k=v
     tag_tokens = None  # normalized whole keys/values, lazily, once
     best = 0.0
@@ -300,26 +300,26 @@ def find_score(q_data: tuple, search_text: str, name: str | None = None,
             elif (len(q_norm.split()) >= 2
                     and re.search(r"\b" + re.escape(q_norm) + r"\b",
                                   name_norm)):
-                s = _NAME_PHRASE_TIER_BASE + 0.09 * (len(q_norm)
+                s = NAME_PHRASE_TIER_BASE + 0.09 * (len(q_norm)
                                                      / len(name_norm))
         if s < 1.0 and kv and tags:
             if tag_pairs is None:
                 tag_pairs = {
-                    (_fuzzy_normalize(str(k)), _fuzzy_normalize(str(v)))
+                    (fuzzy_normalize(str(k)), fuzzy_normalize(str(v)))
                     for k, v in tags.items()}
             matched = sum(
                 1 for grp in kv if any(p in tag_pairs for p in grp))
             if matched:
-                s = max(s, _KV_TIER_BASE + 0.09 * (matched / len(kv)))
-        if s < _KV_TIER_BASE and q_norm and tags:
+                s = max(s, KV_TIER_BASE + 0.09 * (matched / len(kv)))
+        if s < KV_TIER_BASE and q_norm and tags:
             if tag_tokens is None:
                 tag_tokens = set()
                 for k, v in tags.items():
-                    tag_tokens.add(_fuzzy_normalize(str(k)))
-                    tag_tokens.add(_fuzzy_normalize(str(v)))
+                    tag_tokens.add(fuzzy_normalize(str(k)))
+                    tag_tokens.add(fuzzy_normalize(str(v)))
             if q_norm in tag_tokens:
-                s = max(s, _KV_TIER_BASE)
-        if s < _KV_TIER_BASE:
+                s = max(s, KV_TIER_BASE)
+        if s < KV_TIER_BASE:
             f = fuzzy_match_score(clause, search_text or "", idf)
             if name:
                 f = max(f, fuzzy_match_score(clause, name, idf))

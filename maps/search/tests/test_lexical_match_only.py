@@ -51,7 +51,7 @@ def test_lexical_token_overlap_reaches_tag_vocabulary():
     assert "lot" not in idf
     (clause,) = T.fuzzy_prepare_query("parking lot")
     assert T.fuzzy_match_score(clause, "amenity parking", idf) \
-        == T._TOKEN_BAG_CEIL
+        == T.TOKEN_BAG_CEIL
     # ...and dropping it is not "ignore the word": a query of ONLY
     # unsatisfiable words still scores nothing.
     (none_of_it,) = T.fuzzy_prepare_query("lot")
@@ -79,13 +79,13 @@ def test_containment_fuzz_never_enters_the_exact_tier_bands():
     below the fuzz ceiling, never inside the k=v (0.80+) or name-phrase (0.90+) bands
     the served docs declare."""
     from maps.search.analyze_scene.text_match import (
-        _TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query)
+        TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query)
     q = fuzzy_prepare_query("Museum of Cambridge")
     idf = _flat("boundary administrative cambridge",
                 "tourism museum the museum of cambridge")
     squatter = find_score(q, "boundary=administrative", name="Cambridge",
                           tags={"boundary": "administrative"}, idf=idf)
-    assert 0.0 < squatter <= _TOKEN_BAG_CEIL
+    assert 0.0 < squatter <= TOKEN_BAG_CEIL
     named = find_score(q, "tourism=museum", name="The Museum of Cambridge",
                        tags={"tourism": "museum"}, idf=idf)
     assert named > 0.9
@@ -118,7 +118,7 @@ def test_a_query_is_scored_by_what_it_found_not_by_the_haystack_length():
     # ...the fuzz ceiling still holds, so no fuzz path reaches an exact tier.
     assert max(T.fuzzy_match_score(q, c, idf) for c in
                ("leisure=swimming_pool", "pool house", "swimming pool")) \
-        <= T._TOKEN_BAG_CEIL
+        <= T.TOKEN_BAG_CEIL
     # ...and a query with nothing in common still scores nothing.
     assert T.fuzzy_match_score(q, "highway=residential", idf) == 0.0
 
@@ -126,17 +126,17 @@ def test_a_query_is_scored_by_what_it_found_not_by_the_haystack_length():
 def test_single_token_generic_query_never_enters_name_phrase_tier():
     """Query 'building' stays out of the name-phrase band (>=0.90) for 'Baker Building'."""
     from maps.search.analyze_scene.text_match import (
-        _KV_TIER_BASE, _TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query)
+        KV_TIER_BASE, TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query)
     q = fuzzy_prepare_query("building")
     idf = _flat("baker building", "building terrace")
     name_mention = find_score(
         q, "baker building", name="Baker Building",
         tags={"amenity": "university"}, idf=idf)
-    assert name_mention <= _TOKEN_BAG_CEIL, name_mention
+    assert name_mention <= TOKEN_BAG_CEIL, name_mention
     tag_hit = find_score(
         q, "building terrace", name=None, tags={"building": "terrace"},
         idf=idf)
-    assert _KV_TIER_BASE <= tag_hit < 0.90, tag_hit
+    assert KV_TIER_BASE <= tag_hit < 0.90, tag_hit
     assert tag_hit > name_mention
 
 

@@ -76,7 +76,7 @@ def test_the_family_score_is_retrieved_and_ranked_under_every_exact_tier():
     # The only two constraints on the constant. Below it the family is not
     # retrieved at all; at or above the exact tiers it outranks the rows the
     # query actually names.
-    assert T.FUZZY_THRESHOLD < T.TAG_FAMILY_SCORE < T._KV_TIER_BASE
+    assert T.FUZZY_THRESHOLD < T.TAG_FAMILY_SCORE < T.KV_TIER_BASE
 
 
 def test_a_name_query_is_untouched_by_the_widening():

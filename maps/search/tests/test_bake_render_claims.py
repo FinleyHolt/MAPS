@@ -50,7 +50,7 @@ def test_a_cue_sorted_head_is_not_told_its_own_order_is_arbitrary():
         lines = [a for a in anchors if a.get("centerline")]
         if not lines:
             continue
-        ref = max(lines, key=lambda a: G._arc_lengths(a["centerline"])[-1])
+        ref = max(lines, key=lambda a: G.arc_lengths(a["centerline"])[-1])
         out = run_program(cands, anchors, {"ops": [
             {"ref": "r0", "op": "find", "args": {"query": "building"}},
             {"ref": "r1", "op": "compare",
@@ -92,7 +92,7 @@ def test_no_rendered_hint_teaches_the_op_json_register():
         lines = [a for a in anchors if a.get("centerline")]
         if not lines:
             continue
-        ref = max(lines, key=lambda a: G._arc_lengths(a["centerline"])[-1])
+        ref = max(lines, key=lambda a: G.arc_lengths(a["centerline"])[-1])
         out = run_program(cands, anchors, {"ops": [
             {"ref": "r0", "op": "find", "args": {"query": "building"}},
             {"ref": "r1", "op": "compare",

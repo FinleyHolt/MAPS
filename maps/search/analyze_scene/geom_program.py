@@ -67,7 +67,7 @@ def _attach_color_column(items, canon):
     return out
 
 
-_COLOR_WORDS = tuple(G._COLOR_FAMILY)
+_COLOR_WORDS = tuple(G.COLOR_FAMILY)
 
 
 def _color_of(label: str) -> str:
@@ -563,8 +563,8 @@ def _query_matched_census(counts: dict, query: str) -> dict:
     q_long = [t for t in q_tokens if len(t) >= 4]
     matched: dict[str, int] = {}
     for key, n in counts.items():
-        toks = set(T._fuzzy_normalize(key).split())
-        toks |= {T._singularize(t) for t in toks}
+        toks = set(T.fuzzy_normalize(key).split())
+        toks |= {T.singularize(t) for t in toks}
         if toks & q_tokens:
             matched[key] = n
             continue
@@ -573,7 +573,7 @@ def _query_matched_census(counts: dict, query: str) -> dict:
             for ct in toks:
                 if len(ct) < 4:
                     continue
-                if 1.0 - T._edit_distance(qt, ct) / max(len(qt),
+                if 1.0 - T.edit_distance(qt, ct) / max(len(qt),
                                                         len(ct)) >= 0.7:
                     hit = True
                     break
@@ -1039,7 +1039,7 @@ def _present_keys_hint(items, numeric: bool) -> str:
 
 def _polyline_arc_midpoint(verts) -> list:
     """The arc-length midpoint of a world-meter polyline."""
-    arcs = G._arc_lengths(verts)
+    arcs = G.arc_lengths(verts)
     half = arcs[-1] / 2.0
     for i in range(len(verts) - 1):
         if arcs[i + 1] >= half:
@@ -1300,7 +1300,7 @@ def _match_band(scored) -> tuple[int, int]:
     n_proper = sum(1 for r in scored if r["name_match"] >= T.NAME_TIER_FLOOR
                    and str(r.get("name") or "").strip())
     n_exact = n_named if n_proper else sum(
-        1 for r in scored if r["name_match"] > T._TOKEN_BAG_CEIL)
+        1 for r in scored if r["name_match"] > T.TOKEN_BAG_CEIL)
     return n_exact, n - n_exact
 
 
@@ -1332,7 +1332,7 @@ def _match_notes(scored, n, band_cut) -> list:
              + (f"; {rest} sub-threshold row(s) NOT in this rN" if rest else "")
              + ")."]
     n_ex = sum(1 for x in vals if x >= T.NAME_TIER_FLOOR)
-    n_tg = sum(1 for x in vals if T._KV_TIER_BASE <= x < T.NAME_TIER_FLOOR)
+    n_tg = sum(1 for x in vals if T.KV_TIER_BASE <= x < T.NAME_TIER_FLOOR)
     if n_ex and n - n_ex:
         notes.append(f"tiers: {n_ex} exact, {n_tg} tagged, {n - n_ex - n_tg} "
                      "fuzzy -- .exact / .tagged / .fuzzy on this result hold "
@@ -1356,7 +1356,7 @@ def _name_cut(rows, want, query, idf) -> tuple[list, str | None]:
     named = [r for r in rows if isinstance(r, dict)
              and T.find_score(nq, r.get("search_text") or "", r.get("name"),
                               r.get("tags"), idf=idf)
-             >= T._NAME_PHRASE_TIER_BASE]
+             >= T.NAME_PHRASE_TIER_BASE]
     if not named:
         raise ProgramError(
             f"nothing found is NAMED {_quote(want)} and matches {_quote(query)}"
@@ -1764,8 +1764,8 @@ def _stratum(cx, a):
                " A pass's minted rows are all THE thing the "
                "watchlist named; there is nothing to stratify."))
     _lo, _hi = {"exact": (T.NAME_TIER_FLOOR, None),
-                "tagged": (T._KV_TIER_BASE, T.NAME_TIER_FLOOR),
-                "fuzzy": (None, T._KV_TIER_BASE)}[tier]
+                "tagged": (T.KV_TIER_BASE, T.NAME_TIER_FLOOR),
+                "fuzzy": (None, T.KV_TIER_BASE)}[tier]
 
     def _in_tier(it):
         v = it.get("name_match")

@@ -148,7 +148,7 @@ def points_from_geoms(geoms):
 # reads silver under glare, red reads maroon).
 # Palette word -> family; key order is the order a label's colour is read in
 # (geom_program._color_of).
-_COLOR_FAMILY = {
+COLOR_FAMILY = {
     "white": "achromatic", "black": "achromatic", "gray": "achromatic", "silver": "achromatic",
     "red": "red", "blue": "blue", "green": "green", "yellow": "yellow",
     "orange": "warm", "brown": "warm", "tan": "warm", "beige": "warm", "gold": "warm",
@@ -163,7 +163,7 @@ def _color_word_raw(a: str, b: str) -> float:
         return 0.5
     if a == b:
         return 1.0
-    fa, fb = _COLOR_FAMILY.get(a), _COLOR_FAMILY.get(b)
+    fa, fb = COLOR_FAMILY.get(a), COLOR_FAMILY.get(b)
     if fa is not None and fb is not None:
         return 0.8 if fa == fb else 0.0
     return 1.0 if (a in b or b in a) else 0.0  # unknown words: substring fallback
@@ -251,14 +251,14 @@ def compact_color_cell(color_str: str, *, shade: "str | None", uncertain: bool,
     second = None
     if rich and len(mix) > 1 and mix[1][1] >= 0.20 and mix[1][0] != word:
         w2 = mix[1][0]
-        if _COLOR_FAMILY.get(word) != _COLOR_FAMILY.get(w2):
+        if COLOR_FAMILY.get(word) != COLOR_FAMILY.get(w2):
             second = w2
     head = f"{shade} " if shade else ""
     body = f"{word}/{second}" if second else word
     return f"{head}{body}?" if uncertain else f"{head}{body}"
 
 
-def _arc_lengths(poly_en):
+def arc_lengths(poly_en):
     out = [0.0]
     for i in range(len(poly_en) - 1):
         out.append(out[-1] + math.hypot(poly_en[i + 1][0] - poly_en[i][0],
