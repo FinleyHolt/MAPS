@@ -324,3 +324,12 @@ def test_a_prior_withhold_empty_cut_and_semicolon_refusal_name_no_survey(monkeyp
     assert "nothing_on_that_side" in got and "nothing_reads_those_words" in got, got
     for word in ("prior", "surveyed", "OSM"):
         assert word not in got, (word, got)
+
+
+def test_a_look_withhold_coordinate_refusal_names_no_looking(monkeypatch):
+    from maps.search.parse_compile.code_surface import act_needs_a_thing
+
+    assert "Points are for RELATING and LOOKING --" in act_needs_a_thing(name="go_to", got="1, 2")
+    monkeypatch.setenv(W.ENV, "look")
+    text = act_needs_a_thing(name="go_to", got="1, 2")
+    assert "Points are for RELATING --" in text and "LOOKING" not in text, text
