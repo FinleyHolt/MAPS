@@ -108,6 +108,7 @@ these places, the served-text changes among them:
 | A bench attempt that loses its reasoner mid-episode is infra `reasoner_down_midrun`. | The flown driver named it `vllm_down_midrun`. |
 | On a ring run a crash or an unrecorded timeout scores `spl_pos` 0, so `run_report`'s mean SPL covers every scored episode. | The mean covered recorded rows only. |
 | The closed-loop measures name the path the closest approach came off (`track_source`: GNSS track or keyframe poses) and label the median-height fallback `keyframes (median)`; the mission stamps the reasoning effort stripped, as its requests carry it. | `track_source` read "GNSS track" whenever the window held a fix, `keyframes` named both heights, and the raw environment effort was stamped. |
+| The map caption's "N buildings carry fid chips, M more in frame are unchipped" counts prior building chips only; a stacked prior chip that cannot be placed counts as unchipped. | Dropped detection chips were added to the unchipped building count ("0 buildings carry fid chips, 531 more ... unchipped" in a window with none), and a stacked prior chip that was not drawn still counted as chipped. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
