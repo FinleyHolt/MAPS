@@ -284,7 +284,7 @@ before it ran and stands. Names persist for the whole mission.
 """
 
 
-# Each bench withhold's edits to the flown text (maps.search.withhold). An edit is
+# Each bench withhold's edits to the served text (maps.search.withhold). An edit is
 # ("sub", old, new): replace text written once; ("drop", opening): remove the
 # one entry that opens so; ("cut", start, end): remove from start up to end.
 # In the description an entry is a line; in the system turn it is a bullet,
