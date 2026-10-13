@@ -815,7 +815,6 @@ class Mission:
             visited += [[float(f["resolved_xy"][0]), float(f["resolved_xy"][1])] for f in scored]
             infra, ended_by, error, turns = self.infra, self.ended_by, self.error, self._turns()
             provenance = scored[-1].get("provenance") if scored else None
-        last = visited[-1] if visited else None
         try:
             metrics = self.score(visited)
         except Exception:  # noqa: BLE001 -- an unscored row still lands
@@ -827,10 +826,7 @@ class Mission:
         return {
             "episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no, "split": self.split,
             "map_name": self.map_name, "description": self.instruction, "reasoning_effort": self.reasoning_effort,
-            "start_xy": visited[0] if episode else None,
-            "target_xy": ([float(episode.target_xy[0]), float(episode.target_xy[1])]
-                          if episode is not None and episode.target_xy is not None else None),
-            "final_pos_xy": last, "visited_xy": visited,
+            "start_xy": visited[0] if episode else None, "visited_xy": visited,
             # The bench's infra rule: only a serve fault is infra; any other failure is a scored miss.
             "status": STATUS_INFRA if infra else STATUS_OK,
             "error": error, "ended_by": ended_by, "turns_used": turns, "flights_flown": len(scored),
