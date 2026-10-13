@@ -35,6 +35,7 @@ from typing import Any
 
 import numpy as np
 
+from benchmarks.citynav.analysis.rows import iter_json_rows
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
@@ -104,11 +105,6 @@ class Recording:
     def stops(self) -> list[tuple[str, tuple[float, float]]]:
         """The flights flown, in order: ``(target, xy)`` off ``flight/tour_cursor.json``."""
         return tour_stops(self.run_dir)
-
-    def observation(self, frame: dict[str, Any]) -> Path | None:
-        sha = frame.get("observation")
-        path = self.run_dir / OBSERVATIONS_DIR / f"{sha}.jpg" if sha else None
-        return path if path is not None and path.is_file() else None
 
 
 def read_records(path: Path) -> list[dict[str, Any]]:
@@ -221,10 +217,10 @@ class Held:
     frame: dict[str, Any] = field(compare=False, hash=False)
 
     @classmethod
-    def of(cls, rec: Recording, frame: dict[str, Any]) -> "Held | None":
-        path = rec.observation(frame)
-        corners = frame.get("corners_xy")
-        if path is None or not corners:
+    def of(cls, run_dir: Path, frame: dict[str, Any]) -> "Held | None":
+        sha, corners = frame.get("observation"), frame.get("corners_xy")
+        path = run_dir / OBSERVATIONS_DIR / f"{sha}.jpg" if sha else None
+        if path is None or not path.is_file() or not corners:
             return None
         xs, ys = [float(c[0]) for c in corners], [float(c[1]) for c in corners]
         return cls(path=path, extent=(min(xs), min(ys), max(xs), max(ys)), camera_z=float(frame["altitude_m"]),
@@ -348,8 +344,9 @@ class BankSource:
         return ortho_observation(rgb, alpha, h.extent, h.camera_z, tile_ground_z=self.tile_ground_z, tile=self.tile)
 
 
-def bank_of(recordings: list[Recording]) -> list[Held]:
-    return [h for rec in recordings for h in (Held.of(rec, f) for f in rec.frames) if h is not None]
+def bank_of(run_dir: Path, frames) -> list[Held]:
+    """The observations of the run in ``run_dir`` that ``frames`` (its ``frames.jsonl`` rows) name."""
+    return [h for h in (Held.of(run_dir, f) for f in frames) if h is not None]
 
 
 # -- forced: the recorded reasoner and segmenter ----------------------------
@@ -581,7 +578,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     if not frames:
         by_flight: dict[int, list[Held]] = {}
         if forced:
-            for h in bank_of([rec]):
+            for h in bank_of(rec.run_dir, rec.frames):
                 by_flight.setdefault(int(h.frame.get("flight") or 0), []).append(h)
         live = BankSource(bank or [], tiles_dir=TILES_DIR, map_name=map_name,
                           tile_ground_z=float(GROUND_LEVEL[map_name]), by_flight=by_flight,
@@ -674,9 +671,13 @@ def main(argv: list[str] | None = None) -> int:
         print(_say(d))
         return 0 if d["reproduced"] else 1
     if live is None:
-        recs = [rec] if args.bank == "run" else [open_recording(p) for p in flown_runs(rec.sortie.parent)]
-        bank = bank_of(recs)
-        log.info("observation bank: %d observations from %d run(s)", len(bank), len(recs))
+        if args.bank == "run":
+            runs, bank = 1, bank_of(rec.run_dir, rec.frames)
+        else:
+            # The other runs serve only their observations: a torn line there is skipped, not refused.
+            week = flown_runs(rec.sortie.parent)
+            runs, bank = len(week), [h for p in week for h in bank_of(p, iter_json_rows(p / FRAMES_JSONL))]
+        log.info("observation bank: %d observations from %d run(s)", len(bank), runs)
     mission, run = fly(rec, out, bank=bank, live=live, config=args.config, taskings=rec.taskings,
                        reasoning_effort=args.reasoning_effort)
     print(summary_line(mission))

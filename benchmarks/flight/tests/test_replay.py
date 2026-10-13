@@ -373,3 +373,27 @@ def test_a_replay_refuses_a_flag_its_tier_would_ignore(flags, capsys):
     with pytest.raises(SystemExit) as exc:
         R.main(["run", *flags])
     assert exc.value.code == 2 and flags[-2] in capsys.readouterr().err
+
+
+def test_a_week_bank_serves_every_run_s_observations_past_a_torn_line_in_another_run(tmp_path, monkeypatch):
+    """The week's other runs serve only their observations: a torn line in
+    one's records skips that line, not the replay."""
+    from types import SimpleNamespace
+
+    frame = {"corners_xy": [[0, 0], [100, 0], [100, 100], [0, 100]], "altitude_m": 900.0}
+    runs = []
+    for sortie, sha in (("20260101T000000Z", "aa"), ("20260102T000000Z", "bb")):
+        run = _run(tmp_path / sortie, "maps_run01", "flew to prior_1")
+        (run / "observations").mkdir()
+        (run / "observations" / f"{sha}.jpg").write_bytes(b"jpeg")
+        (run / "frames.jsonl").write_text(json.dumps({**frame, "observation": sha}) + "\n")
+        (run.parent / "episodes.jsonl").write_text(json.dumps({"run_no": 1, "workdir": "maps_run01"}) + "\n")
+        runs.append(run)
+    for name in ("frames.jsonl", "flight/llm/transcript.jsonl"):
+        with (runs[1] / name).open("a") as f:
+            f.write('{"torn\n')
+    banks = []
+    monkeypatch.setattr(R, "fly", lambda rec, out, *, bank, **kw: banks.append(bank) or (SimpleNamespace(error=None), None))
+    monkeypatch.setattr(R, "summary_line", lambda mission: "")
+    R.main([str(runs[0]), "--bank", "week", "--out", str(tmp_path / "out")])
+    assert [h.path.parent.parent for h in banks[0]] == runs
