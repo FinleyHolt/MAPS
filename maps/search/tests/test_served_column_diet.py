@@ -9,7 +9,6 @@ from maps.search.analyze_scene.geom_program import (
     ProgramError,
     _grid_cell,
     _render_grid_rows,
-    compact_results,
     run_program,
 )
 
@@ -18,9 +17,9 @@ from maps.search.analyze_scene.geom_program import (
 ROW = {
     "fid": "prior_52",
     "name": "Willmore Road",
-    "tags": {"osm_id": "('way', 161692721)", "addr_city": "Birmingham",
+    "tags": {"addr_city": "Birmingham",
              "addr_postcode": "B20 3JL", "addr_street": "Willmore Road",
-             "building": "residential", "source_tag": "bing",
+             "building": "residential", "tiger_cfcc": "A41",
              "surface": "paved"},
     "xy": [316.25, 473.0],
     "footprint_area_m2": 139.91,
@@ -72,7 +71,7 @@ def test_dropped_tag_keys_do_not_render_and_kept_ones_do():
 def test_a_row_whose_tags_are_all_dropped_renders_the_absent_marker():
     """Not an empty cell, which would column-break nothing but reads as a tag set that
     exists and is blank."""
-    assert _grid_cell({"osm_id": "1", "source_tag": "bing"}) == "-"
+    assert _grid_cell({"addr_city": "Birmingham", "tiger_cfcc": "A41"}) == "-"
 
 
 def test_the_drop_is_a_render_cut_not_a_data_cut():
@@ -145,10 +144,13 @@ def test_an_absent_key_refusal_names_only_served_columns(op):
     assert not any(k in msg for k in _GRID_COL_DROP), msg
 
 
-def test_bake_bookkeeping_tags_ride_no_census_and_no_match_label():
-    rows = [{"fid": f"prior_{i}", "name": "", "xy": [float(i), 0.0],
-             "tags": {"building": "yes", "worldkit_layer": "buildings", "osm_id": str(i)},
-             "search_text": "building yes"} for i in range(5)]
-    for args in ({"query": "zzzqqq"}, {}, {"query": "building"}):
-        out = run_program([], rows, {"ops": [{"ref": "r0", "op": "find", "args": args}]})
-        assert "worldkit" not in repr(compact_results(out["results"])), args
+def test_bake_bookkeeping_tags_never_reach_a_row():
+    from maps.search.analyze_scene.geom_program import _anchor_search_text, _row_tags
+
+    class _Node:
+        name = ""
+        tags = {"building": "yes", "worldkit_layer": "buildings", "osm_id": "way/1",
+                "worldkit_height_m": "6", "source_tag": "bing", "Source": "survey"}
+
+    assert _row_tags(_Node()) == {"building": "yes"}
+    assert _anchor_search_text(_Node()) == "building yes"

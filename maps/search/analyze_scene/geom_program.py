@@ -82,32 +82,25 @@ def _modal_attr(n, key):
     return max(cc.items(), key=lambda kv: kv[1])[0] if cc else None
 
 
-# Some bakes stamp ``source`` on every row; it is never served.
-_UNSERVED_TAG = "source"
+# Bake bookkeeping some bakes stamp on every row: never served, and never
+# searched (as stopwords on every row, ``osm_id`` would donate ``way``).
+_UNSERVED_TAGS = frozenset({
+    "source", "osm_id", "worldkit_layer", "worldkit_height_m", "source_tag"})
 
 
 def _row_tags(n) -> dict:
-    """A prior row's tags: the node's string-valued OSM tags but _UNSERVED_TAG."""
+    """A prior row's tags: the node's string-valued OSM tags but _UNSERVED_TAGS."""
     tags = n.tags or {}
     if not isinstance(tags, dict):
         return {}
-    return {str(k): v for k, v in tags.items() if isinstance(v, str) and str(k).lower() != _UNSERVED_TAG}
-
-
-# Bake bookkeeping tags: never served, and kept out of the free search text
-# (stamped on every row, they would act as fuzzy-match stopwords: ``osm_id``
-# donates ``way``).
-_PROVENANCE_TAGS = frozenset({
-    "osm_id", "worldkit_layer", "worldkit_height_m", "source_tag"})
+    return {str(k): v for k, v in tags.items()
+            if isinstance(v, str) and str(k).lower() not in _UNSERVED_TAGS}
 
 
 def _anchor_search_text(n) -> str:
-    """A prior row's search text: its name and its tag keys and values,
-    minus _PROVENANCE_TAGS."""
+    """A prior row's search text: its name and its tag keys and values."""
     parts = [str(n.name or "")]
     for k, v in _row_tags(n).items():
-        if str(k) in _PROVENANCE_TAGS:
-            continue
         parts.append(str(k).replace("_", " "))
         parts.append(str(v).replace("_", " "))
     return " ".join(p for p in parts if p).lower()
@@ -562,8 +555,6 @@ def _census_counts(rows) -> tuple[dict, int]:
         tags = it.get("tags")
         if isinstance(tags, dict):
             for k, v in tags.items():
-                if str(k) in _PROVENANCE_TAGS:
-                    continue
                 key = f"{k}={v}"
                 counts[key] = counts.get(key, 0) + 1
     return counts, named
@@ -667,13 +658,13 @@ _GRID_HEADER_EVERY = 50
 # A tags cell renders its first N tags and counts the rest.
 _TAG_RENDER_HEAD = 12
 
-# Tag keys the grid does not render: bake bookkeeping, and postal and import
-# keys find still searches.
-_TAG_RENDER_DROP = _PROVENANCE_TAGS | {
+# Tag keys the grid does not render: postal and import keys find still
+# searches.
+_TAG_RENDER_DROP = frozenset({
     "addr_postcode", "addr_city", "oneway", "ref_GB_uprn",
     "tiger_reviewed", "tiger_cfcc", "tiger_source", "tiger_tlid",
     "tiger_separated", "tiger_county", "calcity_object_id", "source_lanes",
-}
+})
 
 # Row fields the grid does not render.
 _GRID_COL_DROP = frozenset({
@@ -1281,8 +1272,6 @@ def _match_label(r):
     if isinstance(tags, dict) and tags:
         out: list = []
         for k, v in tags.items():
-            if str(k) in _PROVENANCE_TAGS:
-                continue
             pair = f"{k}={v}"
             if sum(len(x) + 2 for x in out) + len(pair) > 40:
                 break
