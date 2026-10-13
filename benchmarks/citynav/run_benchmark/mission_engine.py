@@ -212,10 +212,10 @@ class MissionSession:
         self.run_kwargs = dict(
             ctx=self.ctx,
             mission_spec=self.mission_spec,
-            look_renderer=loop._render_candidate_crops,
+            look_renderer=loop.render_candidate_crops,
             obs_span_m=obs_span_m,
             obs_minor_m=self.obs_minor_m,
-            boost_queue=loop._boost_queue_cb,
+            boost_queue=loop.boost_queue,
         )
 
     def run(self, instruction: str, **extra):

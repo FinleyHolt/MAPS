@@ -235,11 +235,11 @@ class SearchLoop:
                     on_it.append(q)
             return on_it
 
-    def _render_candidate_crops(self, requests: list[dict]) -> list[dict]:
+    def render_candidate_crops(self, requests: list[dict]) -> list[dict]:
         """The ``look`` renderer, bound to this episode's map and imagery."""
-        from maps.search.render.look_render import render_candidate_crops  # noqa: PLC0415
+        from maps.search.render import look_render  # noqa: PLC0415
 
-        return render_candidate_crops(
+        return look_render.render_candidate_crops(
             requests,
             map_name=self._map_name,
             rgbd_dir=self._rgbd_dir,
@@ -252,7 +252,7 @@ class SearchLoop:
             raise RuntimeError("SearchLoop.start must be called before update.")
         return self._state
 
-    def _boost_queue_cb(self, concepts, where) -> dict:
+    def boost_queue(self, concepts, where) -> dict:
         """The boost channel the mission's ``look_for(..., at=)`` calls."""
         with self._lock:
             return self.state.perception_director.boost_queue(concepts, where)

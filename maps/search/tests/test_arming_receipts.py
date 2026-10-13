@@ -96,7 +96,7 @@ def test_a_queued_boost_segments_its_flights_in_watchlist_order_until_its_target
     loop = search_loop(sam_setter=prov.set_concepts)
     car, pool = {"class": "car", "role": "target"}, {"class": "pool", "role": "target"}
     loop.declare_mission_concepts([car, pool])
-    assert loop._boost_queue_cb(["pool"], ["prior_1"])["queued"] == ["pool"]
+    assert loop.boost_queue(["pool"], ["prior_1"])["queued"] == ["pool"]
     loop.declare_mission_concepts([pool, car])  # a re-declaration reorders the union
     assert prov.concepts == ["pool", "car"]
     for target in ("prior_2", "prior_1"):  # the boost rides until prior_1 flies
