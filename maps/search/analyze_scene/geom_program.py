@@ -71,10 +71,9 @@ _COLOR_WORDS = ("white", "black", "gray", "silver", "red", "blue", "green",
 
 
 def _color_of(label: str) -> str:
-    for w in _COLOR_WORDS:
-        if w in (label or "").lower():
-            return w
-    return ""
+    """The first palette word the label carries as a whole word, else ""."""
+    words = set(re.findall(r"[a-z]+", (label or "").lower()))
+    return next((w for w in _COLOR_WORDS if w in words), "")
 
 
 def _modal_attr(n, key):
