@@ -1,8 +1,7 @@
 """Shared AOI definitions + local metric frame for the Cal City map.
 
 Cal City is ONE map: the California City, CA area of operations, which
-holds the town's developed core. The ortho raster cache holds it once (the
-loaders lift PIL's decompression-bomb ceiling deliberately).
+holds the town's developed core.
 
 Runtime frame
 -------------
@@ -26,7 +25,7 @@ imagery cannot resolve anyway; a constant plane is the honest encoding of a
 World source
 ------------
 OSM vectors come from a world bundle (``osm/<layer>.geojson``), located
-via ``CALCITY_BUNDLE`` (default ``~/datasets/calcity/bundle``); the imagery
+via ``CALCITY_BUNDLE`` (default ``bundle/`` under the Cal City root); the imagery
 is the program's own map of the block, ``data/rgbd_upstream/<map>_rgb.tif``.
 The bundle must cover ``BUNDLE_BBOX_WGS84``, which is slightly larger than the map bbox
 because a lon/lat rectangle is not axis-aligned after projection to UTM.
@@ -62,6 +61,7 @@ GROUND_LEVEL_M = 0.0
 # default). The RGB raster is baked far finer (imagery-native ~0.5 m) in
 # build_rgbd_ortho; this scalar sizes the _features.json cell grid.
 CELL_SIZE_M = 2.0
+
 
 def bundle_root() -> Path:
     """The world bundle directory (``CALCITY_BUNDLE`` env override), else
