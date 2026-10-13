@@ -39,9 +39,10 @@ python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --out
 ```
 
 `bench_fullset` runs a split at a fixed worker count (`--workers`, default 6),
-one fresh `run_benchmark --attempt-root` child per attempt. The pending
-episodes are shuffled by `--sample-seed` (default 1234) before `--limit`
-applies, so a seed and a limit select the same episodes on every run.
+one fresh `run_benchmark --attempt-root` child per attempt. The split's
+episodes (after `--episode-allowlist`) are shuffled by `--sample-seed`
+(default 1234) before `--limit` applies, so a seed and a limit select the
+same episodes on every run.
 `--episode-allowlist` keeps only the listed ids. Rerunning a command resumes
 its root. `--dry-run` prints the selection and launches nothing.
 `CITYNAV_BENCH_CONFIG` names the config (default `configs/citynav.yaml`).
