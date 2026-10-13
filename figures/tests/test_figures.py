@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from figures import capability_effort_arms, plot_capability_effort, plot_effort_ladder
 from figures.plot_capability_effort import LABEL_PITCH, render, spread
 
@@ -143,3 +145,14 @@ def test_a_partial_root_is_read_and_reported_once(tmp_path, capsys):
     rec = capability_effort_arms.read_root(root, allow_partial=True)
     assert rec["n"] == 2
     assert capsys.readouterr().err.count("PARTIAL") == 1
+
+
+def test_wilson_ci_bounds_and_midpoint():
+    lo, hi = capability_effort_arms.wilson_ci(0, 20)
+    assert lo == 0.0 and 0.0 < hi < 0.25  # k=0 pins the floor, hi stays real
+    lo, hi = capability_effort_arms.wilson_ci(20, 20)
+    assert hi == 1.0 and 0.75 < lo < 1.0
+    lo, hi = capability_effort_arms.wilson_ci(50, 100)
+    assert (lo, hi) == (pytest.approx(0.4038, abs=1e-3),
+                        pytest.approx(0.5962, abs=1e-3))
+    assert capability_effort_arms.wilson_ci(0, 0) == (pytest.approx(float("nan"), nan_ok=True),) * 2

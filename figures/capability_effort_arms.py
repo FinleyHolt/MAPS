@@ -1,7 +1,7 @@
 """The capability x effort figure's data, re-derived from run roots every call.
 
 One record per run root, from the readers: SR from ``arm_table.arm_row``,
-the interval from ``ab_report.wilson_ci``, the bake line from
+the 95% Wilson interval (:func:`wilson_ci`), the bake line from
 ``run_report.bake_line``, and cost off the same picked attempts. An arm is
 identified by its run manifest (``served_model``, ``split``, the effort its
 requests carried); a root naming no ``served_model`` is listed as unmatched.
@@ -16,14 +16,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 import sys
 from pathlib import Path
 
 from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.analysis.ab_report import wilson_ci
 from benchmarks.citynav.analysis.arm_table import arm_row
 from benchmarks.citynav.analysis.run_report import bake_line
+
+
+def wilson_ci(k: int, n: int) -> tuple[float, float]:
+    """The 95% Wilson score interval for k/n."""
+    z = 1.96
+    if n <= 0:
+        return (float("nan"), float("nan"))
+    p = k / n
+    denom = 1.0 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return (max(0.0, center - half), min(1.0, center + half))
 
 
 def _median(values: list[float]) -> float | None:
