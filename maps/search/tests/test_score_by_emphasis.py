@@ -87,17 +87,11 @@ def test_surfaced_order_is_the_programs_own_order():
     assert out["results"]["r2"]["fids"] == agent_order
 
 
-def test_compare_terminal_order_is_input_order():
-    # a compare terminal (an attach, not a sort) surfaces INPUT order — no
-    # harness reorder fires even though d_ columns are on the rows.
-    ns = {"cands": [dict(c) for c in _CANDS], "anchors": []}
-    out = run_ops(_BASE, namespace=ns)
-    assert "error" not in out
-    # read the order off the GRID, which is what the model sees -- the
-    # duplicate `fids` array beside it is gone
-    _rows = out["results"]["r1"]["rows"].splitlines()
-    _order = [ln.split("|")[1].strip() for ln in _rows[2:] if ln.startswith("|")]
-    assert _order == ["d0", "d1", "d2", "d3"], _order
+def test_compare_keeps_input_order():
+    # a compare attaches columns and never sorts, even though d_ columns are
+    # on the rows.
+    out = run_program([dict(c) for c in _CANDS], [], {"ops": _BASE})
+    assert [r["fid"] for r in out["results"]["r1"]] == ["d0", "d1", "d2", "d3"]
 
 
 # --- NEVER-TOUCHES-COMMIT: permutation only, no fid added/dropped/mutated ----

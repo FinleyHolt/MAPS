@@ -16,11 +16,6 @@ def _run(ops, cands=None, anchors=None):
                        [dict(a) for a in (anchors or _ANCHORS)], {"ops": ops})
 
 
-def _cmp_headers(out, ref):
-    res = out["results"][ref]
-    return res.refs if hasattr(res, "refs") else None
-
-
 # --------------------------------------------------------------------------- #
 # find rows carry name_match (the NAME matched, not the instance)              #
 # --------------------------------------------------------------------------- #
@@ -39,24 +34,3 @@ def test_query_find_rows_carry_name_match():
     for r in rows:
         assert "name_match" in r, r
         assert "match_score" not in r, r
-
-
-# --------------------------------------------------------------------------- #
-# render: the name_match column never renders (the attached value stays)       #
-# --------------------------------------------------------------------------- #
-
-
-# --------------------------------------------------------------------------- #
-# compare header carries name_match (not match_score)                          #
-# --------------------------------------------------------------------------- #
-
-
-def test_unscored_ref_carries_no_name_match():
-    out = _run([
-        {"ref": "r1", "op": "find", "args": {}},
-        {"ref": "r2", "op": "compare", "args": {"items": "r1", "refs": ["z_solo"]}},
-    ])
-    hdrs = _cmp_headers(out, "r2")
-    assert hdrs, hdrs
-    assert all("name_match" not in h and "match_score" not in h
-               for h in hdrs), hdrs

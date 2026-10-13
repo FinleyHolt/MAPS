@@ -320,11 +320,13 @@ def test_compare_grid_joins_identity_and_relational_columns():
          "args": {"query": "building"}},
         {"ref": "r1", "op": "compare", "args": {"items": "r0",
                                                 "refs": ["prior_000"]}},
+        {"ref": "r2", "op": "score_by", "args": {"items": "r1", "emphasis": [
+            {"key": "distance to prior_000", "w": -1}]}},
     ]})
-    envs = compact_results(out["results"])
-    r1_header = envs["r1"]["rows"].splitlines()[0]
-    assert "tags" in r1_header and "xy" in r1_header
-    assert "distance to prior_000" in r1_header
+    envs = compact_results(out["results"], answer_ref="r2")
+    r2_header = envs["r2"]["rows"].splitlines()[0]
+    assert "tags" in r2_header and "xy" in r2_header
+    assert "distance to prior_000" in r2_header
     # raw compare rows keep every column (render shape only, never a cut)
     assert all("tags" in r for r in out["results"]["r1"]
                if isinstance(r, dict))
@@ -364,8 +366,10 @@ def test_render_budget_elides_column_tail_never_rows():
         {"ref": "r0", "op": "find",
          "args": {"query": "building"}},
         {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": refs}},
+        {"ref": "r2", "op": "score_by", "args": {"items": "r1", "emphasis": [
+            {"key": "distance to prior_001", "w": -1}]}},
     ]})
-    env = compact_results(out["results"])["r1"]
+    env = compact_results(out["results"], answer_ref="r2")["r2"]
     assert len(env["rows"]) <= _RENDER_CHAR_BUDGET
     # a program-named column survives the cut; the raw rows keep every one
     assert "distance to prior_001" in env["rows"].splitlines()[0]

@@ -280,9 +280,6 @@ def test_union_d_is_exact_min_gap_over_disjoint_members():
     # segments -> their midpoint (50, 0)).
     assert abs(rows["d0"]["center distance to st_peters"]
                - (40.0 ** 2 + 10.0 ** 2) ** 0.5) < 0.1, rows["d0"]
-    hdr = out["results"]["r1"].refs[0]
-    assert hdr["kind"] == "union", hdr
-    assert hdr["members"] == ["road_86", "road_88"], hdr
 
 
 def test_union_brg_gap_witness_is_the_argmin_members():

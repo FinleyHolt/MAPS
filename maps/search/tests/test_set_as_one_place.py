@@ -184,7 +184,6 @@ def test_a_fid_less_member_is_measured_by_its_own_point():
                       "refs": [{"ref": ["r1"], "as": "spot"}]}}]})
     by = {r["fid"]: r["distance to spot"] for r in out["results"]["r2"]}
     assert by == {"h_a": pytest.approx(10.0), "h_b": pytest.approx(90.0)}, by
-    assert out["results"]["r2"].refs[0]["members"] == [[10.0, 0.0]]
 
 
 def _fids_printed(code):

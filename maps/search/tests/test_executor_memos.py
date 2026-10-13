@@ -30,9 +30,10 @@ def _surface(n=40):
 
 
 def _served(cands, anchors, program) -> str:
+    """The rows every rN holds and their envelopes."""
     out = gp.run_program(cands, anchors, program)
-    return json.dumps(gp.compact_results(out["results"]), sort_keys=True,
-                      default=str)
+    return json.dumps([out["results"], gp.compact_results(out["results"])],
+                      sort_keys=True, default=str)
 
 
 _COMPARE = {"ops": [

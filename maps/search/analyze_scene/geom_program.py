@@ -506,8 +506,6 @@ class Result(list):
     notes: list = []
     set_notes: list = []
     cut_stats: dict = {}
-    refs: list = []
-    columns: list = []
     empty_condition: "str | None" = None
 
     def __init__(self, rows=(), kind: str = "broad", **attrs):
@@ -864,8 +862,8 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
     """Each op result as its model-facing envelope: an ordered list ``{len,
     fids, rows}`` (a markdown grid, past ``_BROAD_DUMP_SOFT_ROWS`` only the
     first ``_BROAD_HEAD_ROWS``), an unordered one ``{len, census, named}``, an
-    empty one ``{len: 0, items: [], hint}``; a compare adds ``refs`` and
-    ``columns``. The legend rides the first grid. With ``answer_ref`` the
+    empty one ``{len: 0, items: [], hint}``; a compare, always a step a later
+    op reads, only ``{len, hint}``. The legend rides the first grid. With ``answer_ref`` the
     response is that one envelope, carrying the other ops' hints. Every rN
     keeps its full rows."""
     legend = [True]
@@ -882,13 +880,10 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
     def env(v):
         notes, kind = v.notes, v.kind
         cut = v.cut_stats if kind == "cut" else None
-        capped = v[:_BROAD_HEAD_ROWS] if len(v) > _BROAD_DUMP_SOFT_ROWS else v
         if kind == "compare":
-            head = {"refs": list(v.refs), "len": len(v)}
-            if v.columns:
-                head["columns"] = list(v.columns)
+            head = {"len": len(v)}
             hint = join_hints(
-                table(head, capped, v.columns) if v else
+                "" if v else
                 "compare received NO items -- the items ref resolved to an "
                 "empty list.",
                 *notes)
@@ -1883,7 +1878,6 @@ def _compare(cx, a):
 
     notes: list = []
     used_labels: set = set()
-    all_col_keys: dict = {}     # every attached key, op-wide
     standing: list = []         # staged viewpoint handles, in ref order
 
     # The cardinals asked for per ref (named by fid or label).
@@ -1891,8 +1885,7 @@ def _compare(cx, a):
     for _el in (a.get("cardinals") or []):
         _card_req.setdefault(str(_el.get("ref")), []).append(_el["dir"])
 
-    # One entry per ref: its header, label, geometry, cardinals and the
-    # keys it attached (its header's ``cols``).
+    # One entry per ref: its label, geometry and cardinals.
     refs: list[dict] = []
     for el in a.get("refs") or []:
         as_label = None
@@ -1906,16 +1899,10 @@ def _compare(cx, a):
                 and all(isinstance(x, str) or is_xy(x) for x in ref_el)):
             kind, payload = "union", _union_members(cx, ref_el, as_label)
             lab = _unique_label(as_label or "ref", used_labels)
-            hdr = {"ref_name": lab, "kind": "union",
-                   "members": [n.get("fid") or [round(n["xy"][0], 2),
-                                                round(n["xy"][1], 2)]
-                               for n in payload]}
             geom, center = _union_center(cx, payload)
         elif is_xy(ref_el):
             kind, payload = "point", [float(ref_el[0]), float(ref_el[1])]
             lab = _unique_label(as_label or "xy", used_labels)
-            hdr = {"ref_name": lab, "kind": "point",
-                   "xy": [round(payload[0], 2), round(payload[1], 2)]}
             geom, center = G.mask_geom([[payload]]), payload
         else:
             if not isinstance(ref_el, str):
@@ -1935,13 +1922,6 @@ def _compare(cx, a):
             kind = "row"
             lab = _unique_label(as_label or _sanitize_token(payload["fid"]),
                                 used_labels, payload["fid"])
-            hdr = {"ref_fid": payload["fid"],
-                   "ref_name": str(payload.get("name") or payload.get("class")
-                                   or payload["fid"])}
-            # A colour-described ref is as trustworthy as its colour read.
-            if payload.get("color_conf") is not None:
-                hdr["ref_color"] = payload.get("color")
-                hdr["ref_color_conf"] = payload["color_conf"]
             geom, center = _row_geom_center(cx, payload)
         _fid = payload.get("fid") if kind == "row" else None
         want = next((_card_req[_k] for _k in (_fid, lab)
@@ -1959,16 +1939,11 @@ def _compare(cx, a):
                 f"'facing {lab}' has no direction -- those two columns are "
                 f"not stamped; 'center distance to {lab}'/'bearing from "
                 f"{lab}' (centroid vector) ride per-row.")
-        refs.append({"kind": kind, "payload": payload, "lab": lab, "hdr": hdr,
+        refs.append({"kind": kind, "payload": payload, "lab": lab,
                      "geom": geom, "center": center, "covers": covers,
                      "cards": (want, _pts) if _pts is not None else None,
                      "bb": G.stack_bboxes(geom) if kind == "union" else None,
-                     "keys": {}, "contains": []})
-
-    def _put(row, k, val, ref):
-        row[k] = val
-        all_col_keys[k] = None
-        ref["keys"][k] = None
+                     "contains": []})
 
     out_rows: list = []
     for i, it in enumerate(items):
@@ -1983,7 +1958,7 @@ def _compare(cx, a):
                     _v = G.cardinal_offset(_rpts, it_c, _d)
                     # Absent, never 0.0, when there is no side to name.
                     if _v is not None:
-                        _put(row, f"{_d} of {lab}", round(_v, 1), ref)
+                        row[f"{_d} of {lab}"] = round(_v, 1)
             ref_geom, center = ref["geom"], ref["center"]
             if ref["covers"]:
                 d = None
@@ -1993,10 +1968,10 @@ def _compare(cx, a):
                 d, wr, wi = G.gap_witness(ref_geom, item_geom)
             if d is not None:
                 dr = round(d, 2)
-                _put(row, f"distance to {lab}", dr, ref)
+                row[f"distance to {lab}"] = dr
                 if dr > 0.0 and wr is not None:
                     # The witness pair runs ref->item; a row faces item->ref.
-                    _put(row, f"facing {lab}", G.cardinal(wi, wr), ref)
+                    row[f"facing {lab}"] = G.cardinal(wi, wr)
                 elif (dr == 0.0
                       and not isinstance(ref_geom, list)
                       and item_geom["closed"]
@@ -2007,14 +1982,13 @@ def _compare(cx, a):
                                == str(row.get("fid")))
                       and bool(G.mask_contains(item_geom, ref_geom["V"]).all())):
                     # every ref vertex inside the row's own mask
-                    _put(row, f"contains {lab}", True, ref)
+                    row[f"contains {lab}"] = True
                     ref["contains"].append(str(row.get("fid") or f"item[{i}]"))
             if center is not None and it_c is not None:
                 dcr = round(G.dist(center, it_c), 2)
-                _put(row, f"center distance to {lab}", dcr, ref)
+                row[f"center distance to {lab}"] = dcr
                 if dcr > 0.0:
-                    _put(row, f"bearing from {lab}",
-                         round(G.bearing(center, it_c), 1), ref)
+                    row[f"bearing from {lab}"] = round(G.bearing(center, it_c), 1)
         out_rows.append(row)
     # Rows whose own mask contains a ref, per ref, named in one note; it
     # states a fact of each row it names, so it outlives a later cut or sort.
@@ -2030,8 +2004,6 @@ def _compare(cx, a):
                 f"each such row carries 'contains {lab}'=true. distance reads "
                 f"0 on ANY mask contact, so a 0 in a nearest-first read spans "
                 f"touching neighbors AND containers.")
-        if ref["keys"]:
-            ref["hdr"]["cols"] = list(ref["keys"])
     for _h in standing:
         out_rows = _attach_standing_columns(
             out_rows, cx.staged[_h], with_distance=True)
@@ -2040,8 +2012,6 @@ def _compare(cx, a):
             f"of/right of/ahead of/behind {_h}') + 'distance to {_h}' "
             f"(meters from where you stand) ride every row.")
     r = Result(out_rows, "compare")
-    r.refs = [ref["hdr"] for ref in refs]
-    r.columns = list(all_col_keys)
     r.notes = notes
     r.ordered = _in_ordered
     return r
