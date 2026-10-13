@@ -107,6 +107,7 @@ these places, the served-text changes among them:
 | Bake bookkeeping tags (`osm_id`, `worldkit_layer`, `worldkit_height_m`, `source_tag`) stay out of the census, the Best/Head labels, the grid and the search text by one rule. | The census and match labels skipped only `osm_id`, so an unnamed Cal City row served `worldkit_layer=buildings` there while the grid hid it. |
 | A bench attempt that loses its reasoner mid-episode is infra `reasoner_down_midrun`. | The flown driver named it `vllm_down_midrun`. |
 | On a ring run a crash or an unrecorded timeout scores `spl_pos` 0, so `run_report`'s mean SPL covers every scored episode. | The mean covered recorded rows only. |
+| The closed-loop measures name the path the closest approach came off (`track_source`: GNSS track or keyframe poses) and label the median-height fallback `keyframes (median)`; the mission stamps the reasoning effort stripped, as its requests carry it. | `track_source` read "GNSS track" whenever the window held a fix, `keyframes` named both heights, and the raw environment effort was stamped. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
