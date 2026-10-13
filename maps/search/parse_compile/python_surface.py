@@ -918,7 +918,7 @@ class MissionEnv:
     boost: Callable
     finish: Callable
     row_of_fid: Callable
-    tied_of_ref: Callable = lambda _ref: False
+    tied_of_ref: Callable
 
 
 class MissionPython:
