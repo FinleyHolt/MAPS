@@ -47,10 +47,6 @@ def messages(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def _section_heading(name: str) -> str:
-    return f"# The `{name}` tool"
-
-
 def fit_tool_descriptions(
     tools: list[dict[str, Any]], sent: list[dict[str, Any]]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -66,7 +62,7 @@ def fit_tool_descriptions(
         if len(doc) <= DESCRIPTION_MAX_CHARS:
             fitted.append(tool)
             continue
-        heading = _section_heading(fn["name"])
+        heading = f"# The `{fn['name']}` tool"
         sections.append(f"{heading}\n\n{doc}")
         fitted.append({**tool, "function": {**fn, "description": f"Documented in the system message under \"{heading}\"."}})
     if not sections:
