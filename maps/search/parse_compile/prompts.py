@@ -311,6 +311,10 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
         ("sub", " A row's columns carry only what OSM recorded;",
          " A row's columns carry only what was measured;"),
         ("sub", 'h = "prior_3123"', 'h = "detected_12"'),
+        ("sub", " If nothing surveyed is on that side it says so -- the map holds"
+                " no answer there and only looking will.",
+         " If nothing is on that side it says so -- only a flight can put a"
+         " row there."),
     ],
     "look_for": [
         ("sub", '  look_for("pool", "house")\n  explore("Mill Lane")\n'
