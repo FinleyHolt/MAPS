@@ -1356,7 +1356,7 @@ def _name_cut(rows, want, query, idf) -> tuple[list, str | None]:
     named = [r for r in rows if isinstance(r, dict)
              and T.find_score(nq, r.get("search_text") or "", r.get("name"),
                               r.get("tags"), idf=idf)
-             >= T.NAME_PHRASE_TIER_BASE]
+             >= T.NAME_TIER_FLOOR]
     if not named:
         raise ProgramError(
             f"nothing found is NAMED {_quote(want)} and matches {_quote(query)}"

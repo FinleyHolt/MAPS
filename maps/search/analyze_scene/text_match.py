@@ -74,9 +74,8 @@ FUZZY_THRESHOLD = 0.45
 # The tier bands of the module docstring.
 TOKEN_BAG_CEIL = 0.75
 KV_TIER_BASE = 0.80
-NAME_PHRASE_TIER_BASE = 0.90
 # At or above: the row matched as a NAME.
-NAME_TIER_FLOOR = NAME_PHRASE_TIER_BASE
+NAME_TIER_FLOOR = 0.90
 
 # A tag-family hit (:func:`tag_family_keys`): retrieved, below every exact tier.
 TAG_FAMILY_SCORE = 0.5
@@ -300,8 +299,7 @@ def find_score(q_data: tuple, search_text: str, name: str | None = None,
             elif (len(q_norm.split()) >= 2
                     and re.search(r"\b" + re.escape(q_norm) + r"\b",
                                   name_norm)):
-                s = NAME_PHRASE_TIER_BASE + 0.09 * (len(q_norm)
-                                                     / len(name_norm))
+                s = NAME_TIER_FLOOR + 0.09 * (len(q_norm) / len(name_norm))
         if s < 1.0 and kv and tags:
             if tag_pairs is None:
                 tag_pairs = {
