@@ -78,11 +78,6 @@ ORBIT_DEG = 300.0
 TURN_RADIUS_FALLBACK_M = 1500.0
 
 
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    """Every well-formed row of a ``.jsonl`` (a torn line skipped); none when the file is absent."""
-    return list(iter_json_rows(path))
-
-
 def _utc(t: float | None) -> str:
     return "" if t is None else dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")[:-5] + "Z"
 
@@ -277,7 +272,7 @@ def keyframe_poses(bases: list[Path], t0: float, t1: float, map_name: str) -> li
     above ``map_name``'s ground (``altitude_m`` is on the tile frame), as track fixes."""
     for b in bases:
         out = []
-        for f in read_jsonl(b / FRAMES_JSONL):
+        for f in iter_json_rows(b / FRAMES_JSONL):
             xy, utc = f.get("pose_xy"), f.get("utc")
             if xy and utc:
                 t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
@@ -299,7 +294,7 @@ def _agl(fix, bases: list[Path], events, map_name: str) -> tuple[float | None, s
     """Height above ground at ``fix``: its own (a GNSS fix or an observation's), else the observations' median, else the waypoints' commanded."""
     if fix.get("alt_agl_m") is not None:
         return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
-    alts = [_frame_agl(f, map_name) for b in bases for f in read_jsonl(b / FRAMES_JSONL) if f.get("altitude_m") is not None]
+    alts = [_frame_agl(f, map_name) for b in bases for f in iter_json_rows(b / FRAMES_JSONL) if f.get("altitude_m") is not None]
     if alts:
         return statistics.median(alts), "keyframes (median)"
     asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]
@@ -347,7 +342,7 @@ def return_leg_m(track, t: float, q, r: float) -> float:
 def routed_windows(root: Path) -> list[tuple[float, float]]:
     """When the crews flew to a waypoint: from each waypoint handed to the next leg line, per run."""
     out = []
-    for row in read_jsonl(root / EPISODES_JSONL):
+    for row in iter_json_rows(root / EPISODES_JSONL):
         t0 = row.get("started_at_utc")
         if not t0 or not row.get("workdir"):
             continue
@@ -401,7 +396,7 @@ def run_bases(root: Path, row: dict[str, Any]) -> list[Path]:
 
 
 def _conversation(bases: list[Path]) -> list[dict[str, Any]]:
-    return next((read_jsonl(b / CONVERSATION_JSONL) for b in bases if (b / CONVERSATION_JSONL).is_file()), [])
+    return next((list(iter_json_rows(b / CONVERSATION_JSONL)) for b in bases if (b / CONVERSATION_JSONL).is_file()), [])
 
 
 def ended(row: dict[str, Any]) -> str:
@@ -438,7 +433,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     xy = judged_xy(row)
     determined = end == "reply" and xy is not None
     reason = entry.get("excluded")
-    params = next((r.get("params") or {} for b in bases for r in read_jsonl(b / "flight" / "llm" / TRANSCRIPT_JSONL)
+    params = next((r.get("params") or {} for b in bases for r in iter_json_rows(b / "flight" / "llm" / TRANSCRIPT_JSONL)
                    if r.get("kind") == "params"), {})
     ring, truth_source = truth.ring(entry, row)
     target = centroid(ring) if ring else None
@@ -530,13 +525,13 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
 
 def collect(roots: list[Path], truth: Truth) -> tuple[list[dict[str, Any]], float, int]:
     """Every run under ``roots``, with the crews' turn radius over them all."""
-    tracks = [sorted(read_jsonl(r / TRACK_JSONL), key=lambda f: f["t_unix"]) for r in roots]
+    tracks = [sorted(iter_json_rows(r / TRACK_JSONL), key=lambda f: f["t_unix"]) for r in roots]
     radius, turns = flown_turn_radius_m(tracks, [routed_windows(r) for r in roots])
     radius = radius or TURN_RADIUS_FALLBACK_M
     out = []
     for root, track in zip(roots, tracks):
         entries = truth.entries(root.name)
-        for row in read_jsonl(root / EPISODES_JSONL):
+        for row in iter_json_rows(root / EPISODES_JSONL):
             out.append(run_measures(root, row, entry=entries.get(str(row.get("episode_id") or "")) or {},
                                     truth=truth, track=track, turn_radius_m=radius))
     out.sort(key=lambda r: (r["sortie"], int(r["run_no"] or 0)))
