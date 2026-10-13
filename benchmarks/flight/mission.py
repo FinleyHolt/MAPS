@@ -710,11 +710,6 @@ class Mission:
                 # A run that has reported stands at its report, whatever failed after it.
                 self._set(STATE_FAILED, error=error, infra=not self.replies and is_infra_fault(exc))
         finally:
-            with self._lock:
-                summary = {"kind": "summary", "status": self.status,
-                           "ended_by": self.ended_by, "turns_used": self._turns(),
-                           "flights_flown": len(self.flights), "error": self.error}
-            self.transcript.append(summary)
             self.bank()
             self.close_log()
 
