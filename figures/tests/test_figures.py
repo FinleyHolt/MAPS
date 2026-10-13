@@ -133,3 +133,13 @@ def test_an_arm_left_off_a_figure_is_named(tmp_path, capsys):
     assert plot_capability_effort.main([str(roots[0]), str(unpriced), "--split", "test_unseen",
                                         "--out-dir", str(tmp_path / "g")]) == 0
     assert f"{unpriced} left out" in capsys.readouterr().err
+
+
+def test_a_partial_root_is_read_and_reported_once(tmp_path, capsys):
+    root = _arm(tmp_path, "q", "qwen36-35b-a3b", "0.9", [1, 0])
+    man = json.loads((root / "run_manifest.json").read_text())
+    man["selection"] = {"episodes_n": 3}
+    (root / "run_manifest.json").write_text(json.dumps(man))
+    rec = capability_effort_arms.read_root(root, allow_partial=True)
+    assert rec["n"] == 2
+    assert capsys.readouterr().err.count("PARTIAL") == 1

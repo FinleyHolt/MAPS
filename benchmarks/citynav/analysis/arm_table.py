@@ -48,9 +48,12 @@ _AGG_KEYS = ("SR", "SR_pct", "OSR", "OSR_pct", "SR_by_shape", "SR_by_shape_pct",
 _METRIC_KEYS = (*_AGG_KEYS, "SR_n", "NE_mean", "NE_med")
 
 
-def arm_row(root: Path, *, allow_partial: bool = False) -> dict:
-    """One arm's summary; an arm with no scored episode still gets its row."""
-    picked, stats = _rows.load_attempts(root, allow_partial=allow_partial)
+def arm_row(root: Path, *, allow_partial: bool = False,
+            attempts: tuple[dict, _rows.ReadStats] | None = None) -> dict:
+    """One arm's summary; an arm with no scored episode still gets its row.
+    ``attempts`` is the root's ``rows.load_attempts`` result when the caller
+    already read it."""
+    picked, stats = attempts or _rows.load_attempts(root, allow_partial=allow_partial)
     scored = list(_rows.scored_metrics(picked).values())
     manifest = _rows.read_manifest(root)
     withhold = list(manifest.get("withhold") or [])

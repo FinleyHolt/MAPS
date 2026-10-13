@@ -34,9 +34,8 @@ def _mean(values: list[float]) -> float | None:
     return round(statistics.fmean(values), 1) if values else None
 
 
-def _cost(root: Path, *, allow_partial: bool) -> dict:
+def _cost(picked: dict[str, _rows.Attempt]) -> dict:
     """Price the attempts arm_row scored that kept a transcript; ``priced_n`` counts them."""
-    picked, _ = _rows.load_attempts(root, allow_partial=allow_partial)
     keys = ("completion_tokens", "total_tokens", "reasoning_tokens", "turns")
     seen: dict[str, list[float]] = {k: [] for k in keys}
     wall: list[float] = []
@@ -78,7 +77,8 @@ def read_root(root: Path, *, allow_partial: bool = False) -> dict | None:
     model = man.get("served_model")
     if not model:
         return None
-    row = arm_row(root, allow_partial=allow_partial)
+    attempts = _rows.load_attempts(root, allow_partial=allow_partial)
+    row = arm_row(root, attempts=attempts)
     n, k = row["n"], row["SR_n"]
     rec = {
         "model": str(model).rstrip("/").rsplit("/", 1)[-1],
@@ -92,7 +92,7 @@ def read_root(root: Path, *, allow_partial: bool = False) -> dict | None:
         "timed_out": row["timed_out"], "infra": row["infra"],
         "root": str(root),
         "sr_lo": None, "sr_hi": None,
-        **_cost(root, allow_partial=allow_partial),
+        **_cost(attempts[0]),
     }
     if n and isinstance(k, int):
         lo, hi = wilson_ci(k, n)
