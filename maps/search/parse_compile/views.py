@@ -407,11 +407,13 @@ def map_vision_text(maps: list[dict]) -> str:
                 f"tan shapes are surveyed buildings, muted regions are "
                 f"landuse by class, dark is nothing recorded. {_dn}"
                 f"Surveyed buildings big enough "
-                f"at this zoom carry their own pNNNN chip: pNNNN is "
+                f"at this zoom carry their own NNNN chip of bare digits "
+                f"(a map around a fid or with marks chips only its centre "
+                f"and marks): NNNN is "
                 f"prior fid prior_NNNN (narrow the window to chip more of "
                 f"them). A detection lying on a surveyed footprint shows "
                 f"tan hatching through its fill, and that survey's "
-                f"pNNNN chip sits stacked under the dN chip -- "
+                f"NNNN chip sits stacked under the dN chip -- "
                 f"co-location drawn, identity still the graph's call. "
                 f"The survey part does NOT have "
                 f"the shape of a cul-de-sac bulb, a driveway, a pool, a "
@@ -420,10 +422,11 @@ def map_vision_text(maps: list[dict]) -> str:
                 f"was found. To see what is actually there, ")
     base += (f"{'fly: ' if withheld('look') else 'fly and look: '}"
              f"the camera is the live check on this. One per item in "
-             f"order: [{order}]. Numbered badges; per-map legend:")
+             f"order: [{order}]. A white outline or ring marks the "
+             f"centre; per-map legend:")
     for k, m in enumerate(maps):
-        entries = m.get("legend") or []
-        line = _legend_line(entries)
+        line = " ; ".join(f"{e['label']} ({e['role']})"
+                          for e in m.get("legend") or [])
         _span = _window_caption(m)
         base += f"\n  map {k + 1}{_span}: {line}" if line else \
             f"\n  map {k + 1}{_span}:"
