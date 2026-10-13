@@ -54,6 +54,7 @@ from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.flight.mission import FRAMES_JSONL, TRACK_JSONL
 from maps.llm.http import TRANSCRIPT_JSONL
+from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.search.analyze_scene.geom_compute import point_in_polygon
 
@@ -271,8 +272,9 @@ def last_pass(track, xy, t0: float, t1: float, within_m: float) -> tuple[float, 
     return best
 
 
-def keyframe_poses(bases: list[Path], t0: float, t1: float) -> list[dict[str, Any]]:
-    """The centre of each observation the run fused (``frames.jsonl`` ``pose_xy``) and its camera height, as track fixes."""
+def keyframe_poses(bases: list[Path], t0: float, t1: float, map_name: str) -> list[dict[str, Any]]:
+    """The centre of each observation the run fused (``frames.jsonl`` ``pose_xy``) and its camera height
+    above ``map_name``'s ground (``altitude_m`` is on the tile frame), as track fixes."""
     for b in bases:
         out = []
         for f in read_jsonl(b / FRAMES_JSONL):
@@ -281,17 +283,23 @@ def keyframe_poses(bases: list[Path], t0: float, t1: float) -> list[dict[str, An
                 t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
                 if t0 <= t <= t1:
                     out.append({"t_unix": t, "x": float(xy[0]), "y": float(xy[1]),
-                                "alt_agl_m": f.get("altitude_m"), "src": "keyframes"})
+                                "alt_agl_m": _frame_agl(f, map_name), "src": "keyframes"})
         if out:
             return sorted(out, key=lambda f: f["t_unix"])
     return []
 
 
-def _agl(fix, bases: list[Path], events) -> tuple[float | None, str | None]:
+def _frame_agl(frame: dict[str, Any], map_name: str) -> float | None:
+    """An observation's camera height above the map's ground; None when it records none."""
+    alt = frame.get("altitude_m")
+    return None if alt is None else float(alt) - GROUND_LEVEL[map_name]
+
+
+def _agl(fix, bases: list[Path], events, map_name: str) -> tuple[float | None, str | None]:
     """Height above ground at ``fix``: its own (a GNSS fix or an observation's), else the observations' median, else the waypoints' commanded."""
     if fix.get("alt_agl_m") is not None:
         return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
-    alts = [float(f["altitude_m"]) for b in bases for f in read_jsonl(b / FRAMES_JSONL) if f.get("altitude_m") is not None]
+    alts = [_frame_agl(f, map_name) for b in bases for f in read_jsonl(b / FRAMES_JSONL) if f.get("altitude_m") is not None]
     if alts:
         return statistics.median(alts), "keyframes (median)"
     asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]
@@ -476,7 +484,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     # The observations are centred on ground the camera held: beside a thin
     # recording they can still show the target came within the width.
     thin = out["track_coverage"] < SPL_MIN_COVERAGE
-    poses = keyframe_poses(bases, t_start, t_end_run) if thin else []
+    poses = keyframe_poses(bases, t_start, t_end_run, row.get("map_name")) if thin else []
     if success and len(flown) < 2:
         out["spl_note"] = "undefined: the recording does not cover the run"
     paths = [(name, p) for name, p in (("GNSS track", flown), ("keyframe poses", poses)) if p]
@@ -487,7 +495,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     (d, nearest), out["track_source"] = min(((closest_approach(p, target), name) for name, p in paths),
                                             key=lambda c: c[0][0])
     out["closest_approach_ft"] = round(d * FT_PER_M, 1)
-    agl, out["agl_source"] = _agl(nearest, bases, events)
+    agl, out["agl_source"] = _agl(nearest, bases, events, row.get("map_name"))
     if agl is not None:
         out["agl_ft"] = round(agl * FT_PER_M, 1)
         hfov_deg = resolve_sensor(C12_SENSOR).intrinsics.hfov_deg

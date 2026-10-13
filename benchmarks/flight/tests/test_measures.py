@@ -21,7 +21,7 @@ def _run(root, wd, *, commit, reply=True, t_s=600.0):
     (run / "flight" / "llm" / "transcript.jsonl").write_text(
         json.dumps({"kind": "params", "params": {"model": "m", "reasoning_effort": "0.9"}}) + "\n")
     (run / "conversation.jsonl").write_text(json.dumps({"kind": "leg", "said": "arrived", "t_s": 100.0}) + "\n")
-    return {"episode_id": f"calcity::{wd}", "run_no": int(wd[-1]), "workdir": wd, "status": "ok",
+    return {"episode_id": f"calcity::{wd}", "map_name": "calcity", "run_no": int(wd[-1]), "workdir": wd, "status": "ok",
             "ended_by": "reply" if reply else "stopped", "started_at_utc": T0, "elapsed_s": t_s,
             "start_xy": [0.0, -2000.0], "visited_xy": [[0.0, -2000.0], commit[1]], "flights_flown": 1, "turns_used": 4}
 
@@ -109,6 +109,13 @@ def test_osr_reads_the_keyframe_poses_beside_a_thin_recording(tmp_path):
 def test_a_gnss_fix_with_no_height_reads_the_keyframes_median_height(tmp_path):
     got = _thin_track_run(tmp_path, [9000.0, 9000.0], gnss_agl_m=None)
     assert (got["track_source"], got["agl_source"]) == ("GNSS track", "keyframes (median)")
+
+
+def test_an_observation_s_height_above_ground_is_its_altitude_over_the_map_s_ground_level(tmp_path, monkeypatch):
+    monkeypatch.setitem(Q.GROUND_LEVEL, "calcity", 100.0)
+    for keyframe_xy, gnss_agl_m in (([120.0, 100.0], 600.0), ([9000.0, 9000.0], None)):
+        got = _thin_track_run(tmp_path / str(gnss_agl_m), keyframe_xy, gnss_agl_m=gnss_agl_m)
+        assert got["agl_ft"] == round(500.0 * Q.FT_PER_M, 1), got["agl_source"]
 
 
 def test_a_thin_recording_with_no_pose_near_the_target_cannot_show_a_miss(tmp_path):
