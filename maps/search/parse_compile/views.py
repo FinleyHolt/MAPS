@@ -57,16 +57,10 @@ def _window_caption(c: dict) -> str:
 def _look_vision_text(crops: list[dict]) -> str:
     # The digit -> fid binding lives in this text legend; color is left to
     # the pixels, and each crop line states its delivered span.
-    # The caption names the subject: center_fid, else (a stop id on a flight
-    # view, or absent) the legend's own center entry.
     def _subject(c):
-        f = c.get("center_fid")
-        if f and not str(f).startswith("stop_"):
-            return str(f)
-        for e in c.get("legend") or []:
-            if e.get("role") == "center" and e.get("fid"):
-                return str(e["fid"])
-        return str(f) if f else "?"
+        return str(c.get("center_fid") or next(
+            (e["label"] for e in c.get("legend") or []
+             if e.get("role") == "center" and e.get("label")), "?"))
 
     order = ", ".join(_subject(c) for c in crops)
     # GSD from the crop records themselves, never a literal.

@@ -27,3 +27,11 @@ def test_south_up_bearing_is_180():
                             "context_m": 20.0,
                             "frame_up": [0.0, -1.0]}])
     assert "up 180 deg" in t
+
+
+def test_a_point_subject_is_named_by_its_legend_label():
+    # A flight view of a point target carries no fid: its legend centre
+    # label (the point) names it.
+    t = _look_vision_text([{"center_fid": "", "legend": [
+        {"digit": 1, "fid": "", "label": "[3411, 1468]", "role": "center"}]}])
+    assert "in order: [[3411, 1468]]" in t
