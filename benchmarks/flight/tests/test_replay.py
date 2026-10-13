@@ -66,7 +66,8 @@ def test_ground_no_recorded_observation_holds_leaves_the_flight_without_one(buil
     assert "no frame held any of it" in [r["said"] for r in m.transcript if r.get("kind") == "leg"][-1]
 
 
-def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers(built, tmp_path, monkeypatch):
+def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers_and_flies_the_caller_s_effort(
+        built, tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     import benchmarks.calcity
@@ -78,17 +79,17 @@ def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers(bu
     modes = []
 
     def named(**kw):
-        modes.append((kw["replay_of"]["mode"], kw["agl_m"]))
+        modes.append((kw["replay_of"]["mode"], kw["agl_m"], kw["reasoning_effort"]))
         raise StopIteration
 
     monkeypatch.setattr(R, "ReplayMission", named)
     rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run", row={"episode_id": "calcity::t", "start_xy": [0, 0]},
-                      params={}, requests=[], responses=[], conversation=[],
+                      params={"reasoning_effort": "0.99"}, requests=[], responses=[], conversation=[],
                       frames=[{"altitude_m": 1980.0}, {"altitude_m": 2000.0}, {"altitude_m": 1990.0}])
     for live in (None, object()):
         with pytest.raises(StopIteration):
             R.fly(rec, tmp_path, bank=[], live=live)
-    assert modes == [("bank", 1990.0), ("frames", 1990.0)]
+    assert modes == [("bank", 1990.0, None), ("frames", 1990.0, None)]
 
 
 def test_a_replay_flies_at_the_recorded_height_and_a_forced_one_at_the_config_s(tmp_path):
