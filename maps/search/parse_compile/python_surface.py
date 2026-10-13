@@ -370,6 +370,8 @@ def _diagonal_remedy(names) -> str:
 
 
 _FILTER_KWARGS = _CARDINAL_KWARGS | {"near", "within", "dwithin", "facing", "direction"}
+_FILTER_SAY = ("near=/within=/dwithin=/facing= with direction=, "
+               + "/".join(f"{k}=" for k in sorted(_CARDINAL_KWARGS)))
 
 
 def _check_filter(pred, kw: dict) -> None:
@@ -386,14 +388,12 @@ def _check_filter(pred, kw: dict) -> None:
     bad = sorted(k for k in kw if k not in _FILTER_KWARGS)
     if bad:
         raise CodeError(
-            f"filter takes near=/within=/dwithin=/facing=, "
-            f"{'/'.join(sorted(_CARDINAL_KWARGS))} or a predicate; "
+            f"filter takes {_FILTER_SAY} or a predicate; "
             f"{'=, '.join(bad)}= is none of them."
             + _diagonal_remedy(bad))
     _refuse_metres_in_within(kw.get("within"))
     if pred is not None and any(v is not None for v in kw.values()):
-        raise CodeError("filter takes a predicate OR near=/within=/dwithin=/"
-                        "facing=/east_of=/north_of=/south_of=/west_of=, not both")
+        raise CodeError(f"filter takes a predicate OR {_FILTER_SAY}, not both")
     if pred is not None and not callable(pred):
         raise CodeError(
             f"filter's first argument is a predicate and {pred!r} "

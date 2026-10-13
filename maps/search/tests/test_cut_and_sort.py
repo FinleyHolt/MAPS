@@ -86,8 +86,15 @@ def test_the_refusal_names_the_exit(src, phrase):
     assert phrase in str(e.value), str(e.value)
 
 
-_PRED_OR_CUT = ("filter takes a predicate OR near=/within=/dwithin=/facing=/"
-                "east_of=/north_of=/south_of=/west_of=, not both")
+_CUTS = ("near=/within=/dwithin=/facing= with direction=, "
+         "east_of=/north_of=/south_of=/west_of=")
+_PRED_OR_CUT = f"filter takes a predicate OR {_CUTS}, not both"
+
+
+def test_an_unknown_filter_keyword_reads_the_same_cut_list_as_the_predicate_refusal():
+    with pytest.raises(CodeError) as e:
+        _ops('r1 = find("car")\nr2 = r1.filter(beside="A")\n')
+    assert f"filter takes {_CUTS} or a predicate; beside= is none of them." in str(e.value), str(e.value)
 
 
 def test_a_bare_filter_reads_one_refusal_on_every_receiver():
