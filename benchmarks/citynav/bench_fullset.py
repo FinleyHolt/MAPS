@@ -368,7 +368,6 @@ class Driver:
                     "status": episodes.STATUS_INFRA,
                     "error": f"attempt spawn: {type(exc).__name__}: {exc}",
                     "elapsed_s": round(time.monotonic() - t0, 1),
-                    "ts": round(time.time(), 1),
                 }
             verdict = self._wait(proc)
             if verdict != "exited":
@@ -394,14 +393,13 @@ class Driver:
         if verdict == "reasoner_dead" or crashed:
             # Re-queued; a lost reasoner's attempt is pending until it is back.
             return {"episode_id": episode_id, "worker_id": worker_id,
-                    "status": episodes.STATUS_INFRA, "elapsed_s": round(elapsed, 1),
-                    "ts": round(time.time(), 1), **where,
+                    "status": episodes.STATUS_INFRA, "elapsed_s": round(elapsed, 1), **where,
                     "error": ("vllm_down_midrun" if verdict == "reasoner_dead" else "killed_midrun"
                               if proc.returncode < 0 else f"exited {proc.returncode} with no record")}
         # The child's own verdict decides (dispatch classifies the episode's
         # exception chain); the driver adds only what it alone saw.
         row = {**(landed or {"episode_id": episode_id}), "worker_id": worker_id,
-               "elapsed_s": round(elapsed, 1), "ts": round(time.time(), 1), **where}
+               "elapsed_s": round(elapsed, 1), **where}
         if landed is None and verdict == "exited":
             # A child that exits clean with no record failed, unrecognised.
             row |= {"status": episodes.STATUS_INFRA, "error": "no_prediction_unclassified"}
@@ -470,7 +468,6 @@ class Driver:
                         "worker_id": worker_id,
                         "status": episodes.STATUS_INFRA,
                         "error": f"{type(exc).__name__}: {exc}",
-                        "ts": round(time.time(), 1),
                     })
                 except OSError as werr:
                     # No worker can land a result: the run stops.

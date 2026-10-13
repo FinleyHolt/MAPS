@@ -146,7 +146,6 @@ def _dispatch_one(
             "provenance": rec.get("provenance") or _prov,
             "withhold": list(cfg.withhold),
             "elapsed_s": round(time.monotonic() - t0, 1),
-            "ts": round(time.time(), 1),
         }
 
     try:

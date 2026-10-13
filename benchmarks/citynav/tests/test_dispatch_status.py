@@ -122,7 +122,7 @@ def test_a_scored_record_is_ok_and_on_disk(tmp_path, light, monkeypatch):
     assert row["error"] is None
     assert row["search_env_flags"] == {"SEARCH_X": "1"}
     assert row["provenance"] == {"commit": "abc"}
-    assert isinstance(row["elapsed_s"], float) and isinstance(row["ts"], float)
+    assert isinstance(row["elapsed_s"], float)
     assert episodes.read_episode_json(tmp_path) == row
 
 
