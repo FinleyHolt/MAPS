@@ -218,34 +218,16 @@ class SearchLoop:
                     row = sorted(rows[ridx], key=_maj,
                                  reverse=bool(ri % 2))
                     r_reach = abs(_maj(row[-1]) - _maj(row[0]))
-                    rk = max(1, min(int(max_stops),
-                                    int(r_reach // span) + 1, len(row)))
-                    if rk == 1:
-                        picks.append(row[(len(row) - 1) // 2])
-                    else:
-                        stride = (len(row) - 1) / (rk - 1)
-                        picks.extend(row[int(round(i * stride))]
-                                     for i in range(rk))
-                if len(picks) > int(max_stops) > 1:
-                    stride = (len(picks) - 1) / (int(max_stops) - 1)
-                    picks = [picks[int(round(i * stride))]
-                             for i in range(int(max_stops))]
+                    picks.extend(_spread(row, min(int(max_stops), int(r_reach // span) + 1)))
+                if len(picks) > int(max_stops):
+                    picks = _spread(picks, int(max_stops))
             else:
                 along = sorted(zip(xs, ys),
                                key=(lambda p: p[0])
                                if (x1 - x0) >= (y1 - y0)
                                else (lambda p: p[1]))
                 reach = max(x1 - x0, y1 - y0)
-                k = max(1, min(int(max_stops), int(reach // span) + 1))
-                k = min(k, len(along))
-                if k == 1:
-                    # the median cell along the dominant axis: an end would
-                    # see half the shape
-                    picks = [along[(len(along) - 1) // 2]]
-                else:
-                    stride = (len(along) - 1) / (k - 1)
-                    picks = [along[int(round(i * stride))]
-                             for i in range(k)]
+                picks = _spread(along, min(int(max_stops), int(reach // span) + 1))
             on_it: list = []
             for px, py in picks:
                 q = [round(px), round(py)]
@@ -445,6 +427,17 @@ class SearchLoop:
             return track
         xy = det.world_xy or (0.0, 0.0)
         return f"{det.label or '?'}@{float(xy[0]):.0f},{float(xy[1]):.0f}"
+
+
+def _spread(seq: list, k: int) -> list:
+    """``k`` (clamped to 1 .. ``len(seq)``) items of ``seq`` at an even stride,
+    both ends kept; one item is the middle one, since an end would see half
+    the shape."""
+    k = max(1, min(k, len(seq)))
+    if k == 1:
+        return [seq[(len(seq) - 1) // 2]]
+    stride = (len(seq) - 1) / (k - 1)
+    return [seq[int(round(i * stride))] for i in range(k)]
 
 
 def _detection_to_mapobject(det, bounds_min, cell_size_m):

@@ -181,3 +181,10 @@ def test_a_set_pass_over_a_one_flight_budget_keeps_its_first_stop():
         spec=SimpleNamespace(coverage_stops=None, flight_budget=1),
         spacing=10.0, rows={}, covered=set(), pose_xy=(0.0, 0.0))
     assert items == [{"target_fid": "[0, 0]"}] and segs == 2
+
+
+def test_a_one_stop_bound_holds_on_a_serpentine_too():
+    """Over the bound the stops thin on either branch; one stop is the middle."""
+    block = [[i, j] for i in range(0, 60) for j in range(0, 60)]
+    stops = _loop_over(block).node_coverage_stops("prior_9", 20.0, max_stops=1, minor_spacing_m=40.0)
+    assert len(stops) == 1 and _on_the_shape(stops, block), stops
