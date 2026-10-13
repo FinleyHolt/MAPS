@@ -167,6 +167,15 @@ def test_an_unstamped_run_refuses_to_elect_a_headline(tmp_path, capsys):
     assert "quote neither" in out, out
 
 
+def test_a_root_with_no_recorded_metrics_claims_no_disc_sr(tmp_path, capsys):
+    """Timeouts with no record carry no SR to call the 20 m disc."""
+    write_ledger(tmp_path, ledger_row("e::1#1", "20260725_110000", status="timed_out"))
+    report(tmp_path)
+    out = capsys.readouterr().out
+    assert "SR = 0/1" in out and "criterion: UNRECORDED" in out, out
+    assert "quote neither" not in out, out
+
+
 def test_failed_tiles_are_reported_beside_the_sr(tmp_path, capsys):
     write_ledger(tmp_path, *(
         ledger_row(eid, "s", metrics={"SR": 0, "NE": 10.0, "sam_tiles_failed": n})

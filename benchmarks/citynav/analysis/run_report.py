@@ -163,9 +163,9 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
         print(f"SAHI tiles failed = {sum(tiles)} over {sum(1 for t in tiles if t)} "
               f"of {n} scored episode(s)")
     shaped = print_precise(list(scored.values()), n)
-    if _criterion is None:
-        # Unstamped rows: neither reading is the headline, and the note names
-        # the shape line only when one printed.
+    if _criterion is None and any(a.metrics for a in picked.values()):
+        # Unstamped recorded rows: neither reading is the headline, and the
+        # note names the shape line only when one printed.
         print("  ^ these rows carry no criterion stamp: the SR above is the "
               "20 m disc"
               + (", and the shape line beside it is the other reading. Which "
