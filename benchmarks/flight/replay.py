@@ -461,7 +461,8 @@ def _text(message: dict[str, Any]) -> tuple[str, list[str]]:
 
 def diff(rec: Recording, replay_dir: Path) -> dict[str, Any]:
     """The replay against the recording: the params, every message of every
-    request (``first`` the first that differs), the flights and the commit."""
+    request (``first`` the first that differs) and the flights, the last of
+    them the commit."""
     params, requests, answers = read_transcript(replay_dir / "flight" / "llm" / TRANSCRIPT_JSONL)
     # A request past the recording's last, left unanswered, is where the crew's stop fell.
     extra = requests[len(rec.requests):]
@@ -491,10 +492,8 @@ def diff(rec: Recording, replay_dir: Path) -> dict[str, Any]:
         fa == fb and abs(xa[0] - xb[0]) < 0.5 and abs(xa[1] - xb[1]) < 0.5
         for (fa, xa), (fb, xb) in zip(flown, replayed))
     out["flights"] = {"same": same, "recorded": [f for f, _ in flown], "replay": [f for f, _ in replayed]}
-    out["commit"] = {"same": (flown[-1][0] if flown else None) == (replayed[-1][0] if replayed else None),
-                     "recorded": flown[-1][0] if flown else None, "replay": replayed[-1][0] if replayed else None}
     out["reproduced"] = (out["first"] is None and not out["params"] and out["flights"]["same"]
-                         and out["commit"]["same"] and len(requests) >= len(rec.requests) and stopped_there)
+                         and len(requests) >= len(rec.requests) and stopped_there)
     return out
 
 
