@@ -431,7 +431,8 @@ class _Mission:
         self._map_feats: list[dict] = []
 
         self.carry = Carry(compute_namespace)
-        self.mission_sam: list[dict] = []
+        # The watched classes, in declaration order.
+        self.mission_sam: list[str] = []
         self._new_turn()
 
         # The set in scope (the last non-empty result, or what the last flight
@@ -691,8 +692,7 @@ class _Mission:
             if str(_r["fid"]).startswith("detected_"):
                 _c = str(_r.get("class") or "?")
                 counts[_c] = counts.get(_c, 0) + 1
-        return [f"{c['class']} ({counts.get(c['class'], 0)} detected)"
-                for c in self.mission_sam]
+        return [f"{c} ({counts.get(c, 0)} detected)" for c in self.mission_sam]
 
     def _mint_rows(self, _new_fids: list, _what: str):
         """The rows a flight or a pass added -> the note naming their new rN
@@ -898,28 +898,24 @@ class _Mission:
                               else f"nothing of {cover} could be flown")}
         return _ack
 
-    def _watch_apply(self, adds: list) -> dict:
-        """look_for(): add classes to the watchlist (latest declaration of
-        a class wins; the list only grows) and arm it with the engine."""
-        adds = [dict(e) for e in adds]
-        for _e in adds:
-            self.mission_sam[:] = [c for c in self.mission_sam
-                                   if c["class"] != _e["class"]]
-            self.mission_sam.append(_e)
-        _err = self.mission_spec.declare_concepts(list(self.mission_sam))
-        ack: dict = {"now": [f"{c['class']} ({c['role']})"
-                             for c in self.mission_sam]}
+    def _watch_apply(self, adds: list[str]) -> dict:
+        """look_for(): add classes to the watchlist (a class declared again
+        moves to the end; the list only grows) and arm it with the engine."""
+        for _c in adds:
+            self.mission_sam[:] = [c for c in self.mission_sam if c != _c]
+            self.mission_sam.append(_c)
+        _err = self.mission_spec.declare_concepts(
+            [{"class": c, "role": "target"} for c in self.mission_sam])
+        ack: dict = {"now": [f"{c} (target)" for c in self.mission_sam]}
         if _err:
             ack["error"] = _err
         _names = {s for s in (
             str(n.name or "").strip().lower()
             for n in self.ctx.graph.nodes.copy().values()) if s}
-        _note = _named_feature_note([c["class"] for c in adds], _names)
+        _note = _named_feature_note(list(adds), _names)
         if _note:
             ack["note"] = _note
-        log.info("%s SAY watch: +%s -> %s", self.rid_tag,
-                 [c["class"] for c in adds],
-                 [c["class"] for c in self.mission_sam])
+        log.info("%s SAY watch: +%s -> %s", self.rid_tag, adds, self.mission_sam)
         return ack
 
     def _boost(self, where: str, concepts: list) -> dict:
@@ -927,8 +923,7 @@ class _Mission:
         res = self.boost_queue(list(concepts), [where]) or {}
         if "error" not in res and res.get("queued"):
             # The placed form also arms the class it names.
-            _adds = [{"class": str(c), "role": "target"}
-                     for c in concepts if c]
+            _adds = [str(c) for c in concepts if c]
             if _adds:
                 _w = self._watch_apply(_adds)
                 res["watching"] = _w.get("error") or _w.get("now")
@@ -1297,7 +1292,7 @@ class _Mission:
         return {"map": mp}
 
     def _watch(self, concepts: list) -> dict:
-        w = self._watch_apply([{"class": c, "role": "target"} for c in concepts])
+        w = self._watch_apply(list(concepts))
         if w.get("error"):
             return self._plan_err({"watching": w}, str(w["error"]))
         return {"watching": w}
