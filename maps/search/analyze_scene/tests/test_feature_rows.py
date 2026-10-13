@@ -69,7 +69,7 @@ def test_every_row_is_one_place_and_may_claim_a_centre():
 
 
 def test_a_row_that_is_STILL_several_places_orients_no_side():
-    """The ``_mask_center`` law, on the one shape that can still reach it: a
+    """The ``mask_center`` law, on the one shape that can still reach it: a
     reference that is several places serves its gap and no centre column."""
     speckled = _way(None, [[10, c] for c in range(0, 10)]
                     + [[10, c] for c in range(400, 410)])

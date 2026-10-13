@@ -22,6 +22,34 @@ def chains_of(row) -> list:
     return []
 
 
+def mask_center(mask):
+    """The mask's area centroid when it is one connected piece, else None:
+    several disjoint places have no centre to measure from."""
+    return (G.loops_area_centroid(mask)
+            if mask and G.one_place(mask) else None)
+
+
+# A mask list's (G.mask_geom, centre), keyed on the list's identity; the
+# entry pins the list so the id cannot be reused. Dropped whole at its cap.
+_MASK_GEOM: dict = {}
+_MASK_GEOM_MAX = 50_000
+
+
+def geom_of(row) -> tuple:
+    """``(geom, centre)`` of a surface row: its mask, built once per mask
+    list, else its point."""
+    m = row.get("mask")
+    if not m:
+        xy = row.get("xy") if is_xy(row.get("xy")) else None
+        return G.mask_geom([[xy]] if xy else []), xy
+    hit = _MASK_GEOM.get(id(m))
+    if hit is None or hit[0] is not m:
+        if len(_MASK_GEOM) >= _MASK_GEOM_MAX:
+            _MASK_GEOM.clear()
+        hit = _MASK_GEOM[id(m)] = (m, G.mask_geom(m), mask_center(m))
+    return hit[1], row.get("mask_centroid") or hit[2]
+
+
 class SurfaceGeometry:
     """Mask geometry by fid off the LIVE surface, cached per block.
 
@@ -45,10 +73,11 @@ class SurfaceGeometry:
         if got is None:
             fid, xy = place
             row = self.row_of_fid(fid) if fid else None
-            chains = chains_of(row)
-            if not chains and is_xy(xy):
-                chains = [[[float(xy[0]), float(xy[1])]]]
-            got = self._geoms[place] = G.mask_geom(chains)
+            if chains_of(row):
+                got = geom_of(row)[0]
+            else:
+                got = G.mask_geom([[[float(xy[0]), float(xy[1])]]] if is_xy(xy) else [])
+            self._geoms[place] = got
         return got
 
     def geom(self, places: tuple):

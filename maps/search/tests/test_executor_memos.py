@@ -7,6 +7,7 @@ import json
 import numpy as np
 
 from maps.search.analyze_scene import geom_program as gp
+from maps.search.analyze_scene import row_geometry as RG
 from maps.sws.graph.model import MapObject
 
 
@@ -51,9 +52,9 @@ _COMPARE = {"ops": [
 
 def test_mask_geometry_memo_serves_the_same_bytes_cold_and_warm():
     cands, anchors = _surface()
-    gp._MASK_GEOM.clear()
+    RG._MASK_GEOM.clear()
     cold = _served(cands, anchors, _COMPARE)
-    assert len(gp._MASK_GEOM) >= 40, len(gp._MASK_GEOM)    # it was filled
+    assert len(RG._MASK_GEOM) >= 40, len(RG._MASK_GEOM)    # it was filled
     warm = _served(cands, anchors, _COMPARE)
     assert warm == cold
     # a rebuild hands back the same mask lists for unchanged nodes, so the

@@ -17,7 +17,7 @@ import numpy as np
 from maps.search.analyze_scene import cell_mesh
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene import text_match as T
-from maps.search.analyze_scene.row_geometry import chains_of
+from maps.search.analyze_scene.row_geometry import chains_of, geom_of, mask_center
 from maps.search.render.look_render import LOOK_SET_ROWS
 from maps.util.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld
@@ -137,13 +137,6 @@ def _color_fields(n) -> dict:
     return fields
 
 
-def _mask_center(mask):
-    """The mask's area centroid when it is one connected piece, else None:
-    several disjoint places have no centre to measure from."""
-    return (G.loops_area_centroid(mask)
-            if mask and G.one_place(mask) else None)
-
-
 def representative_point(chains) -> list:
     """A point ON the geometry, the row's flight target, at 2 dp: a closed
     chain's area centroid when it lies inside the mask, else the arc
@@ -164,11 +157,6 @@ def representative_point(chains) -> list:
 # returns fresh node objects. Each cache is dropped whole at its cap.
 _ROW_CACHE: "dict[tuple, dict | None]" = {}
 _ROW_CACHE_MAX = 50_000
-
-# A mask list's (G.mask_geom, centre), keyed on the list's identity; the
-# entry pins the list so the id cannot be reused.
-_MASK_GEOM: dict = {}
-_MASK_GEOM_MAX = 50_000
 
 
 class _FindMemo:
@@ -224,18 +212,6 @@ def _find_memo(cands, anchors) -> _FindMemo:
     if _FIND_MEMO.key != key:
         _FIND_MEMO.reset(key, (cands, anchors))
     return _FIND_MEMO
-
-
-def _mask_geom_center(m):
-    """``(geom, centre)`` of one mask list, built once."""
-    hit = _MASK_GEOM.get(id(m))
-    if hit is not None and hit[0] is m:
-        return hit[1], hit[2]
-    if len(_MASK_GEOM) >= _MASK_GEOM_MAX:
-        _MASK_GEOM.clear()
-    g, c = G.mask_geom(m), _mask_center(m)
-    _MASK_GEOM[id(m)] = (m, g, c)
-    return g, c
 
 
 def _content_key(v):
@@ -339,7 +315,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         chains = _exact_chains(n)
         # A one-vertex chain (a POI) draws nothing: the cell boundary does.
         def _masked(m) -> dict:
-            _c = _mask_center(m)
+            _c = mask_center(m)
             return {"mask": m, **({"mask_centroid": [round(v, 2) for v in _c]}
                                   if _c is not None else {})}
         if any(len(ch) >= 2 for ch in chains):
@@ -1818,14 +1794,7 @@ def _union_members(cx, ref_el, as_label) -> list:
 def _row_geom_center(cx, node):
     """``(geom, centre)`` of a row: its mask, else its point. Geometry is
     re-read by fid, since op output rows carry no mask."""
-    if isinstance(node, dict):
-        node = cx.by_fid.get(node.get("fid")) or node
-    _cxy = node.get("xy") if is_xy(node.get("xy")) else None
-    m = node.get("mask")
-    if m:
-        g, c = _mask_geom_center(m)
-        return (g, node.get("mask_centroid") or c)
-    return (G.mask_geom([[_cxy]] if _cxy else []), _cxy)
+    return geom_of(cx.by_fid.get(node.get("fid")) or node)
 
 
 def _union_center(cx, members):
