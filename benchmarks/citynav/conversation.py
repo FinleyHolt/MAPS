@@ -1,7 +1,7 @@
 """The mission's conversation, on disk as it happens.
 
 ``ConversationLog`` is the transcript list the loop appends to (a row per
-turn, the reasons a turn was not a block, the closing ``summary``); every
+turn and the reasons a turn was not a block); every
 ``append`` also lands the row in ``<workdir>/conversation.jsonl``, opened per
 append, so a mission killed between turns keeps every turn it flew.
 ``path=None`` is a plain list.

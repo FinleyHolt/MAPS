@@ -19,9 +19,9 @@ def test_every_append_is_on_disk_before_the_next(tmp_path):
     log = ConversationLog(path)
     log.append({"kind": "run", "turn_idx": 0, "said": "x = 1"})
     assert _lines(path) == [{"kind": "run", "turn_idx": 0, "said": "x = 1"}]
-    log.append({"kind": "summary", "ended_by": "reply", "when": object()})
+    log.append({"kind": "retask", "said": "look north", "when": object()})
     rows = _lines(path)
-    assert len(rows) == 2 and rows[1]["kind"] == "summary"
+    assert len(rows) == 2 and rows[1]["kind"] == "retask"
     assert "object" in rows[1]["when"], "an unserializable value lands as its string"
     assert log[0] == rows[0]
 

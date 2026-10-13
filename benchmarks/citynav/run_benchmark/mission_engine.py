@@ -425,12 +425,4 @@ def run_mission_episode(session: MissionSession):
             "mission ended with ZERO flights (ended_by=%s); honest zero",
             reply.ended_by,
         )
-    transcript.append(
-        {
-            "kind": "summary",
-            "ended_by": reply.ended_by,
-            "turns_used": reply.turns_used,
-            "flights_flown": len(flights),
-        }
-    )
     return reply
