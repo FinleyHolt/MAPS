@@ -360,8 +360,6 @@ class SearchLoop:
             seen: dict[str, dict] = {}
             for i, fid in sorted(upsert_ids.items()):
                 det = detections[i]
-                if det.world_xy is None:
-                    continue
                 seen.setdefault(fid, {
                     "fid": fid,
                     "class": str(det.label or ""),
@@ -425,8 +423,7 @@ class SearchLoop:
         track = (det.metadata or {}).get("track_id")
         if isinstance(track, str) and track.startswith("wt_"):
             return track
-        xy = det.world_xy or (0.0, 0.0)
-        return f"{det.label or '?'}@{float(xy[0]):.0f},{float(xy[1]):.0f}"
+        return f"{det.label or '?'}@{float(det.world_xy[0]):.0f},{float(det.world_xy[1]):.0f}"
 
 
 def _spread(seq: list, k: int) -> list:
