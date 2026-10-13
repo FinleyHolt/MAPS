@@ -11,8 +11,9 @@ from typing import Any
 
 import numpy as np
 
-from maps.search.parse_compile.perception_director import canon_concept
-from maps.sws.graph.model import GridDomain
+from maps.search.parse_compile.perception_director import (
+    PerceptionDirector, canon_concept)
+from maps.sws.graph.model import GridDomain, MapObject
 from maps.util.mask_codec import encode_mask_record
 
 
@@ -78,10 +79,6 @@ class SearchLoop:
     def start(self, graph) -> None:
         """Bind the episode's graph (the prior seed every detection folds
         into) and an empty watchlist."""
-        from maps.search.parse_compile.perception_director import (  # noqa: PLC0415
-            PerceptionDirector,
-        )
-
         self._state = _State(runtime_graph=graph,
                              perception_director=PerceptionDirector(push=self._sam_setter))
 
@@ -458,8 +455,6 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m):
     """One detection as a graph node: its cells (the stamped tile cells,
     else the cell under its world point), contour, attributes and world
     point."""
-    from maps.sws.graph.model import MapObject
-
     meta = det.metadata or {}
     raw_cells = meta.get("tile_cells")
     cells: np.ndarray | None = None
