@@ -12,3 +12,4 @@ dist/
 !/tiles/osm_cache/
 /benchmarks/calcity/tiles/
 /data/
+/.commit

@@ -12,8 +12,13 @@ import subprocess
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
+#: A copy deployed without git (an rsync of the tree) names its commit here.
+COMMIT_STAMP = _REPO_ROOT / ".commit"
+
+
 def _git_provenance() -> dict:
-    """Commit and dirty flag for this checkout, None where git cannot say."""
+    """Commit and dirty flag for this checkout, None where git cannot say. A
+    tree without git reads its commit from ``COMMIT_STAMP``; dirty stays None."""
     out: dict = {"git_commit": None, "git_dirty": None}
     try:
         commit = subprocess.run(
@@ -30,6 +35,8 @@ def _git_provenance() -> dict:
             out["git_dirty"] = bool(status.stdout.strip())
     except Exception:
         pass  # git absent / not a repo -> leave None
+    if out["git_commit"] is None and COMMIT_STAMP.is_file():
+        out["git_commit"] = COMMIT_STAMP.read_text().strip() or None
     return out
 
 
