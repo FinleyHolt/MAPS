@@ -112,6 +112,7 @@ these places, the served-text changes among them:
 | A detection's class label gives its colour only through a whole palette word. | Labels matched palette words as substrings: "water tank" read tan, "covered parking" red. |
 | `find(name="X")` with no query is refused ("the name IS the query"); refusals carry no `rule N:`/`rule F:` labels and name the real verbs (`look_for` + `fly`, or `fly` under the look_for withhold); an unresolved boost serves `error` and `unknown_where`. | A bare `find(name=)` ignored the name and served a count of every row; refusals were labelled with rules no served text defined and named a `perceive` verb that does not exist; the boost refusal also served `"pending": []`. |
 | A mission's own reasoning effort (the twin's or a replay's `--reasoning-effort`, a forced replay's recorded one) is checked against the served model's card before any request. | Only the environment's effort was checked; a mission's own was sent as given. |
+| The bench resolves `sensor: {}` to the default sensor's override and serves its block, as the flight mission does. | The bench read `sensor: {}` as no sensor. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -243,7 +244,7 @@ terms).
 | `SAM_SERVER_URL` | client | The SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset; a set but blank value, or `SAM_VIDEO_SERVER_URL` set without it, is refused. |
 | `SAM_PORT`, `SAM_MODEL_ID`, `SAM_DEVICE`, `SAM_DTYPE` | serve | Port (8772), checkpoint id (`facebook/sam3.1`), device, dtype (`bfloat16`). |
 | `SAM3_CHECKPOINT` | serve | A local checkpoint file. |
-| `SAM_MAX_INFLIGHT`, `SAM_INFLIGHT_WAIT_S`, `SAM_GPU_CHUNK`, `SAM_PREWARM`, `SAM_HEALTH_MIN_FREE_GB` | serve | Admission, batching and health limits (`serving/sam_server.py`). |
+| `SAM_MAX_INFLIGHT`, `SAM_INFLIGHT_WAIT_S`, `SAM_PREWARM`, `SAM_HEALTH_MIN_FREE_GB` | serve | Admission, prewarm and health limits (`serving/sam_server.py`). |
 
 ### GPT-5.6 Sol on Amazon Bedrock
 
