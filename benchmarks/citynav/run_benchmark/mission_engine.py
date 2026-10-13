@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import os
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from benchmarks.citynav.episodes import atomic_write_json
@@ -36,23 +35,7 @@ VIEW_POSITION_CURRENT = "current_position"
 VIEW_POSITION_MARKER = "marked_region"
 
 
-@dataclass(frozen=True)
-class TourViewpoint:
-    """One flown stop: the target token, its world point and its altitude."""
-
-    fid: str
-    xy: tuple[float, float]
-    altitude_m: float
-
-
-@dataclass
-class FeatureTour:
-    """The stops flown so far, in flight order."""
-
-    viewpoints: list[TourViewpoint] = field(default_factory=list)
-
-
-def _write_tour_cursor(tour: FeatureTour) -> None:
+def _write_tour_cursor(flights: list[dict]) -> None:
     """Persist the flown stops (id and xy, in flight order) to
     ``<workdir>/flight/tour_cursor.json``, the record the flight readers
     (``benchmarks.flight.measures`` and ``replay``) take a run's flights
@@ -62,7 +45,7 @@ def _write_tour_cursor(tour: FeatureTour) -> None:
         return
     try:
         atomic_write_json(Path(workdir_env) / "flight" / "tour_cursor.json", {
-            "stops_visited": [{"stop_id": vp.fid, "xy": list(vp.xy)} for vp in tour.viewpoints]})
+            "stops_visited": [{"stop_id": f["target"], "xy": f["resolved_xy"]} for f in flights]})
     except Exception:
         log.debug("tour_cursor write failed; non-fatal", exc_info=True)
 
@@ -196,7 +179,6 @@ class MissionSession:
         self.recorder = recorder
         self.observe = observe
         self.flights: list[dict] = []
-        self.feature_tour = FeatureTour()
         markers = h.episode.marker_positions or []
         self.marker_xy = (
             (float(sum(p[0] for p in markers) / len(markers)),
@@ -274,8 +256,8 @@ class MissionSession:
         """Resolve -> teleport -> render -> segment -> fold -> enrich for ONE
         move, the moment it lands. Returns the model-facing flight report, or
         ``{"error": ...}`` when the target does not resolve. Appends the flight
-        to ``flights`` (the commit reads the last) and to ``feature_tour`` (the
-        discrete replay flies the same stops)."""
+        to ``flights``: the commit reads the last, and the discrete replay
+        flies them all."""
         h = self.h
         state, episode, loop = h.state, h.episode, h.search_loop
         token = str(item.get("target_fid") or "")
@@ -373,12 +355,10 @@ class MissionSession:
                 "target": token,
                 "resolved_xy": [float(new_xy[0]), float(new_xy[1])],
                 "provenance": str(resolved.get("provenance", "unresolved")),
+                "altitude_m": new_alt,
             }
         )
-        self.feature_tour.viewpoints.append(
-            TourViewpoint(fid=token, xy=(float(new_xy[0]), float(new_xy[1])), altitude_m=new_alt)
-        )
-        _write_tour_cursor(self.feature_tour)
+        _write_tour_cursor(self.flights)
 
         report: dict = {
             "stop_id": stop_id,

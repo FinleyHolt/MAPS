@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import math
 import random
-from types import SimpleNamespace
 
 from benchmarks.citynav.action_snap import (
     CityNavAction,
@@ -102,11 +101,10 @@ def test_a_leg_never_orbits_its_target(monkeypatch, tmp_path):
     cfg.max_steps = 100_000
     state = _State()
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
-    vp = SimpleNamespace(xy=target, altitude_m=100.0, heading_deg=None, fid="s0")
     steps = synthesize_compliant_trajectory(
         cfg=cfg,
         state=state,
-        feature_tour=SimpleNamespace(viewpoints=[vp]),
+        flights=[{"target": "s0", "resolved_xy": list(target), "altitude_m": 100.0}],
         start_pose_xyh=(0.0, 0.0, 180.0),
         start_alt=100.0,
     )

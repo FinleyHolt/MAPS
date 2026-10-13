@@ -24,7 +24,7 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
         return h
 
     def session(h, **kw):
-        return SimpleNamespace(h=h, flights=flights, feature_tour=[],
+        return SimpleNamespace(h=h, flights=flights,
                                run=lambda text, transcript: (MissionReply(ended_by="reply", turns_used=3), None))
 
     def fly(*, state, **kw):

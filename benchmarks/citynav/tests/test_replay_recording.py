@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -30,23 +29,23 @@ class _State:
         self.visited_xy.append(self.pose_xy)
 
 
-def _vp(xy, alt, heading, fid):
-    return SimpleNamespace(xy=xy, altitude_m=alt, heading_deg=heading, fid=fid)
+def _vp(xy, alt, fid):
+    return {"target": fid, "resolved_xy": list(xy), "altitude_m": alt}
 
 
 CASES = {
     "tour_then_commit": dict(
         stops=[
-            _vp((120.0, 0.0), 60.0, 90.0, "f1"),
-            _vp((120.0, 90.0), 40.0, 0.0, "f2"),
-            _vp((-30.0, 60.0), 50.0, 270.0, "f3"),
+            _vp((120.0, 0.0), 60.0, "f1"),
+            _vp((120.0, 90.0), 40.0, "f2"),
+            _vp((-30.0, 60.0), 50.0, "f3"),
         ],
         commit=(45.0, -25.0),
         max_steps=400,
     ),
     "commit_only": dict(stops=[], commit=(200.0, 150.0), max_steps=400),
     "budget_truncated": dict(
-        stops=[_vp((500.0, 500.0), 80.0, 45.0, "f1")],
+        stops=[_vp((500.0, 500.0), 80.0, "f1")],
         commit=(900.0, 900.0),
         max_steps=40,
     ),
@@ -66,7 +65,7 @@ def _replay(case, tmp_path, monkeypatch):
     steps = synthesize_compliant_trajectory(
         cfg=cfg,
         state=state,
-        feature_tour=SimpleNamespace(viewpoints=case["stops"]),
+        flights=case["stops"],
         start_pose_xyh=(0.0, 0.0, 0.0),
         start_alt=50.0,
     )

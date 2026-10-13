@@ -29,11 +29,11 @@ def synthesize_compliant_trajectory(
     *,
     cfg: RunConfig,
     state: "EpisodeState",
-    feature_tour,
+    flights: list[dict],
     start_pose_xyh: tuple[float, float, float],
     start_alt: float,
 ) -> int:
-    """Replay the mission's flown stops (``feature_tour``) and its commit
+    """Replay the mission's flights (``MissionSession.flights``) and its commit
     (``state.confirmed_target_xy``) through the six-action
     snap under the ``cfg.max_steps`` budget, writing the submittable
     ``state.visited_xy`` and final pose. Returns the action count.
@@ -51,9 +51,9 @@ def synthesize_compliant_trajectory(
     budget is reserved. Only a commit beyond the budget from the start ends
     short, and that is logged.
     """
-    tour_wps = [(float(vp.xy[0]), float(vp.xy[1])) for vp in feature_tour.viewpoints]
-    tour_alts = [float(vp.altitude_m) for vp in feature_tour.viewpoints]
-    tour_fids = [str(vp.fid) for vp in feature_tour.viewpoints]
+    tour_wps = [(float(f["resolved_xy"][0]), float(f["resolved_xy"][1])) for f in flights]
+    tour_alts = [float(f["altitude_m"]) for f in flights]
+    tour_fids = [str(f["target"]) for f in flights]
 
     descent_xy = state.confirmed_target_xy
     if descent_xy is not None:
