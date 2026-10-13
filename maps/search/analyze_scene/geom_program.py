@@ -458,7 +458,7 @@ _RENDER_INPUT_ROW_FIELDS = ("color_shade", "color_flag")
 _COLOR_CONF_FLOOR = 0.15
 
 
-def _mask_noise_color(row):
+def _render_color_cell(row):
     """The row with its color rendered ``[dk|lt ]word[/word2][?]`` (``?``
     for a below-floor conf or ``color_flag='look'``) and the shade/flag
     inputs removed."""
@@ -489,7 +489,7 @@ def _model_facing_row(row):
     """A row as the model sees it: hidden fields dropped, color rendered."""
     if isinstance(row, dict) and any(k in row for k in _MODEL_HIDDEN_ROW_FIELDS):
         row = {k: val for k, val in row.items() if k not in _MODEL_HIDDEN_ROW_FIELDS}
-    return _mask_noise_color(row)
+    return _render_color_cell(row)
 
 
 class Result(list):
