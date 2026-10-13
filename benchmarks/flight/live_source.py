@@ -257,7 +257,7 @@ def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor, g
     taken to the ground through the projector's Jacobian; the record carries
     the shift or ``why``, the measurement is ``(east, north, response)`` or
     None. ``ground`` is the height under the nadir in ``pose``'s datum."""
-    record: dict[str, Any] = {"applied": False, "source": None, "shift_yaw_deg": 0.0}
+    record: dict[str, Any] = {"applied": False, "source": None}
     measured: tuple[float, float, float] | None = None
     try:
         intr = sensor.intrinsics
@@ -437,9 +437,7 @@ class LiveSource:
                 record.update(applied=False, source=None,
                               why=f"disagrees with the graph's nearest node by {far:.1f} m, past {INNOVATION_CAP_M:.0f}")
         if not record["applied"] and est is not None:
-            # The node's shift and no yaw: the record's own yaw is the refused fit's.
-            record.update(applied=True, source="nearest", shift_e_m=est["e_m"], shift_n_m=est["n_m"],
-                          shift_yaw_deg=0.0)
+            record.update(applied=True, source="nearest", shift_e_m=est["e_m"], shift_n_m=est["n_m"])
         return record
 
     def pose_now(self, t: float | None = None) -> Pose | None:
@@ -650,8 +648,8 @@ class LiveSource:
                        "fetch_failed": unfetched, "fit": fit, "seqs": [f.seq for f in placed],
                        "off_nadir_deg": [round(f.angle, 2) for f in placed],
                        "registrations": [{k: r.get(k) for k in ("seq", "applied", "source", "why", "shift_e_m",
-                                                                 "shift_n_m", "shift_yaw_deg", "heading_deg",
-                                                                 "track_deg", "attitude")} for r in records]},
+                                                                 "shift_n_m", "heading_deg", "track_deg",
+                                                                 "attitude")} for r in records]},
             "off_nadir_deg": round(min(f.angle for f in placed), 2),
         }
         self.last_refusal = ""
