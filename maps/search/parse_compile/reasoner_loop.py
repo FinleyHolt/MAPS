@@ -658,8 +658,8 @@ class _Mission:
                     counts=_live_counts(_c_n, _a_n), cols=_cols_s)}
             _lf = not withheld("look_for")
             return {"note": _DEDUP_NOTE.format(
-                turn=_prev[1], no_look_for=", no look_for" if _lf else "",
-                look_for=", look_for" if _lf else "")}
+                turn=_prev[1], no_look_for=", no look_for(..., at=)" if _lf else "",
+                look_for=", look_for(..., at=)" if _lf else "")}
         _raw_sink: dict = {}
         self.carry.ensure_fresh(program_reads(ops))
         out = run_ops(ops, namespace=self.ns,

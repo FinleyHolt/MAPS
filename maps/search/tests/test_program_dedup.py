@@ -49,3 +49,13 @@ def test_a_deduped_reissue_answers_under_its_own_labels():
     out = tool_results(fr)
     assert "no new information since turn" in out[1]["result"]["note"], out[1]
     assert flights == [{"target_fid": "car_1"}], flights
+
+
+def test_the_dedup_note_after_a_plain_look_for_names_only_the_placed_form():
+    """A plain look_for arms a class and adds no row, so the note may fire
+    after one; it names the placed form, the one that changes the world."""
+    _, fr, _, _ = drive([[run('a = find("car")\n')], [run('look_for("car")\n')],
+                         [run('b = find("car")\n')], "done"])
+    note = tool_results(fr)[2]["result"]["note"]
+    assert "no flight, no look_for(..., at=) --" in note, note
+    assert "(fly, look_for(..., at=))" in note, note
