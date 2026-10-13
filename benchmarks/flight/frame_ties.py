@@ -145,7 +145,7 @@ class TieMatcher:
         if key not in self._cache:
             if len(self._cache) >= CACHED_FRAMES:
                 del self._cache[next(iter(self._cache))]
-            self._cache[key] = locator._pool.submit(make)
+            self._cache[key] = locator.pool.submit(make)
         return self._cache[key]
 
     def warm(self, key, pose: Pose, gray: np.ndarray) -> None:
@@ -182,7 +182,7 @@ class TieMatcher:
         e = cv2.warpPerspective(gray_j, warp, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
         edges_e = locator.edge_maps(e)
         _a, edges_a = own.result()
-        found = locator._pool.map(lambda c: locator.locate_edges(edges_a, edges_e, c), centres)
+        found = locator.pool.map(lambda c: locator.locate_edges(edges_a, edges_e, c), centres)
         hits = [(c, hit[0], hit[1], hit[2]) for c, hit in zip(centres, found) if hit is not None]
         inv_s, inv_warp = np.linalg.inv(s_i), np.linalg.inv(warp)
         out = []

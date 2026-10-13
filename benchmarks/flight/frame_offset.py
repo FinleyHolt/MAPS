@@ -62,10 +62,10 @@ def offset(frame_rgb: np.ndarray, render_rgb: np.ndarray) -> tuple[float, float,
     _c, h, w = a.shape
     th, tw = int(h * TEMPLATE_FRACTION), int(w * TEMPLATE_FRACTION)
     y0, x0 = (h - th) // 2, (w - tw) // 2
-    score = locator._joint_ncc(b, a[:, y0:y0 + th, x0:x0 + tw])
+    score = locator.joint_ncc(b, a[:, y0:y0 + th, x0:x0 + tw])
     if score is None:
         return 0.0, 0.0, 0.0
-    at, peak, _margin = locator._peak(score, max(1, locator.UNIQUE_RADIUS // DOWN))
+    at, peak, _margin = locator.unique_peak(score, max(1, locator.UNIQUE_RADIUS // DOWN))
     return float(at[0] - x0) * DOWN, float(at[1] - y0) * DOWN, float(peak)
 
 

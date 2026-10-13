@@ -5,7 +5,7 @@ the frame's own noise floor and squared into its structure tensor) forgets
 brightness, contrast and the sign of every edge, so a camera frame and the
 map's render can be correlated without either one's intensities meeting the
 other's. :func:`locate_edges` finds where a template of one structure sits in
-the other, and :func:`_peak` says how unique the peak is.
+the other, and :func:`unique_peak` says how unique the peak is.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ WORK_GSD_M = 0.261
 BIN_ABOVE = 1.25
 #: Correlations run this many at a time: the operators release the interpreter.
 LOCATE_THREADS = 4
-_pool = ThreadPoolExecutor(max_workers=LOCATE_THREADS, thread_name_prefix="locate")
+pool = ThreadPoolExecutor(max_workers=LOCATE_THREADS, thread_name_prefix="locate")
 
 
 def sized(sensor, width: int, height: int):
@@ -76,7 +76,7 @@ def gray(rgb: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(np.ascontiguousarray(a[..., :3]), cv2.COLOR_RGB2GRAY)
 
 
-def _peak(score: np.ndarray, radius: int = UNIQUE_RADIUS) -> tuple[tuple[int, int], float, float]:
+def unique_peak(score: np.ndarray, radius: int = UNIQUE_RADIUS) -> tuple[tuple[int, int], float, float]:
     """``(at, peak, margin)``: the best score and by how much it beats everything ``radius`` away."""
     import cv2  # noqa: PLC0415
 
@@ -109,7 +109,7 @@ def edge_maps(gray: np.ndarray, *, template_half: int = EDGE_TEMPLATE_HALF) -> n
     return out
 
 
-def _joint_ncc(window: np.ndarray, template: np.ndarray) -> np.ndarray | None:
+def joint_ncc(window: np.ndarray, template: np.ndarray) -> np.ndarray | None:
     """Normalised cross-correlation of a stack of maps, the mean and the norm
     taken over the whole stack: the cosine between the two stacks at every
     window position."""
@@ -162,5 +162,5 @@ def locate_edges(edges_actual: np.ndarray, edges_expected: np.ndarray, predicted
     if score is None:
         return None
     score /= n
-    at, peak, margin = _peak(score)
+    at, peak, margin = unique_peak(score)
     return (predicted[0] + at[0] - reach, predicted[1] + at[1] - reach), peak, margin
