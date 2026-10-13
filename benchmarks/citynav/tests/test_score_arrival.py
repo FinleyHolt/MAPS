@@ -32,7 +32,6 @@ def _score(criterion: str, xy, **kw):
         pos_trajectory=[(0.0, 0.0), xy],
         success_dist_m=20.0,
         gt_polygon=SHAPE,
-        radius_m=20.0,
         **kw,
     )
 

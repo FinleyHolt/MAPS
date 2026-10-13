@@ -144,45 +144,32 @@ def _episode_graph(stem: str, assets):
         )
 
 
-def _success_mask(cfg, episode, objects_by_map: dict) -> tuple[str, dict]:
-    """``(criterion, mask kwargs)`` for ``eval.score_arrival``.
-
-    The criterion is the bench's ``paths.SUCCESS_CRITERION``. The shape is the linked
-    object's contour when the episode names one, else its mask; the fallback
-    radius is the row's when it states one, else the config's.
-    """
-    from benchmarks.citynav import paths as bench_paths
-
-    contour = None
-    if episode.target_object_ids:
-        _tids = set(episode.target_object_ids)
-        for _o in objects_by_map.get(episode.map_name, []) or []:
-            if _o.id in _tids:
-                contour = _o.contour
-                break
-    row_radius = episode.success_radius_m
-    return bench_paths.SUCCESS_CRITERION, {
-        "gt_polygon": contour if episode.target_object_ids else episode.target_mask,
-        "radius_m": float(row_radius if row_radius is not None else cfg.success_radius_m),
-    }
+def _success_shape(episode, objects_by_map: dict):
+    """The shape ``eval.score_arrival`` tests: the linked object's contour
+    when the episode names one, else its mask."""
+    if not episode.target_object_ids:
+        return episode.target_mask
+    tids = set(episode.target_object_ids)
+    return next((o.contour for o in objects_by_map.get(episode.map_name, []) or [] if o.id in tids), None)
 
 
 def score_episode(cfg, episode, objects_by_map: dict, final_xy, trajectory, *,
                   commit_xy=None, flew: bool = True) -> dict:
     """The episode's metrics for an agent that ended at ``final_xy`` over
     ``trajectory``, having committed at ``commit_xy``, under this bench's
-    success mask (``eval.score_arrival``). The one scoring call of the bench
+    success criterion (``paths.SUCCESS_CRITERION``). The one scoring call of the bench
     row, its zero-flight row and the flight mission's row."""
-    criterion, mask = _success_mask(cfg, episode, objects_by_map)
+    from benchmarks.citynav import paths as bench_paths
+
     return score_arrival(
-        criterion=criterion,
+        criterion=bench_paths.SUCCESS_CRITERION,
         final_pos_xy=final_xy,
         target_xy=episode.target_xy,
         pos_trajectory=trajectory,
         success_dist_m=cfg.success_radius_m,
+        gt_polygon=_success_shape(episode, objects_by_map),
         commit_xy=commit_xy,
         flew=flew,
-        **mask,
     )
 
 

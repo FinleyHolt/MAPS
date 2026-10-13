@@ -99,7 +99,6 @@ def score_arrival(
     pos_trajectory: list[tuple[float, float]] | None = None,
     success_dist_m: float = 20.0,
     gt_polygon: list[tuple[float, float]] | None = None,
-    radius_m: float | None = None,
     commit_xy: tuple[float, float] | None = None,
     flew: bool = True,
 ) -> dict:
@@ -139,7 +138,7 @@ def score_arrival(
                 final_xy=final_pos_xy if commit_xy is None else commit_xy,
                 target_xy=target_xy,
                 gt_polygon=gt_polygon,
-                radius_m=success_dist_m if radius_m is None else radius_m,
+                radius_m=success_dist_m,
             )
         )
     scores["success_criterion"] = criterion

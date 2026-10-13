@@ -36,7 +36,7 @@ def _episodes_that_start_on_their_target() -> list[int]:
             final_xy=start,
             target_xy=(float(target[0]), float(target[1])),
             gt_polygon=mask,
-            radius_m=float(row.get("success_radius_m") or 20.0),
+            radius_m=20.0,
         )
         if scored["SR"]:
             out.append(i)
@@ -71,18 +71,15 @@ def test_those_episodes_score_zero_when_nothing_flew(start_on_target):
             float(row["target_positions"][0][0]),
             float(row["target_positions"][0][1]),
         )
-        mask = {
-            "gt_polygon": row["target_mask"],
-            "radius_m": float(row.get("success_radius_m") or 20.0),
-        }
+        mask = row["target_mask"]
         flown = cn_eval.score_arrival(
             criterion="shape", final_pos_xy=start,
-            target_xy=target, pos_trajectory=[start, start], **mask)
+            target_xy=target, pos_trajectory=[start, start], gt_polygon=mask)
         assert flown["SR"] == 1, (
             f"row {idx}: the fixture must win when it flies, or the zero "
             "below proves nothing"
         )
         grounded = cn_eval.score_arrival(
             criterion="shape", final_pos_xy=start,
-            target_xy=target, pos_trajectory=[start, start], flew=False, **mask)
+            target_xy=target, pos_trajectory=[start, start], flew=False, gt_polygon=mask)
         assert grounded["SR"] == 0, f"row {idx}: never flew, must not score"

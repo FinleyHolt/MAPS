@@ -44,9 +44,6 @@ class CityNavEpisode:
     marker_positions: list[tuple[float, float, float]]
     #: Upstream's start yaw as a heading (:func:`start_heading_deg`).
     start_heading_deg: float = 0.0
-    success_radius_m: float | None = None
-    """The row's own fallback success radius (Cal City publishes a 20 m and a
-    precise dataset); ``None`` leaves the run config's in charge."""
 
 
 def load_split(split_file: Path) -> list[dict]:
@@ -167,8 +164,6 @@ def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
         else None
     )
 
-    _raw_radius = row.get("success_radius_m")
-
     return CityNavEpisode(
         map_name=map_name,
         episode_id=episode_id,
@@ -180,9 +175,6 @@ def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
         target_object_ids=list(row.get("object_ids") or []),
         target_mask=target_mask,
         marker_positions=markers,
-        success_radius_m=(
-            float(_raw_radius) if _raw_radius is not None else None
-        ),
     )
 
 
