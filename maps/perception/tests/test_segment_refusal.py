@@ -8,11 +8,9 @@ from __future__ import annotations
 import itertools
 from types import SimpleNamespace
 
-import numpy as np
 import pytest
 
 import maps.perception.sam.detect_client as dc
-from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from tests.serves import SegmentServe
 
 _REFUSED = {"detail": "concepts: too many items"}
@@ -31,8 +29,7 @@ def _post(*serves_or_urls):
     urls = [getattr(s, "url", s) for s in serves_or_urls]
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("SAM_SERVER_URL", ",".join(urls))
-        return dc.SamDetectClient(concept_provider=ReasonerUnionConceptProvider())._post_tile(
-            np.zeros((8, 8, 3), np.uint8), ["car"])
+        return dc._post_segment({"concepts": ["car"], "image_b64": ""})
 
 
 def test_a_refused_request_raises_at_once_and_is_not_an_outage():

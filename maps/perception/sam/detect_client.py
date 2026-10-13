@@ -174,6 +174,7 @@ def _interior_mask(region) -> "np.ndarray":
 # Per-colour reliability prior on the colour confidence: chromatic car colours
 # read unreliably off dark, low-contrast nadir masks, achromatic ones reliably.
 _COLOR_RELIABILITY_PRIOR_DEFAULT = 0.35  # chromatic seed
+_COLOR_RELIABILITY_PRIOR_ACHROMATIC = 0.82
 _COLOR_ACHROMATIC = frozenset({"white", "black", "gray"})
 
 
@@ -193,17 +194,9 @@ def _dominant_color(rgb: np.ndarray, region: MaskRegion) -> tuple[str, list[int]
     d1 = float(np.sqrt(max(0.0, dists[0][0])))
     d2 = float(np.sqrt(max(0.0, dists[1][0])))
     margin = (d2 - d1) / (d2 + d1) if (d1 + d2) > 0.0 else 0.0
-    prior = 0.82 if name in _COLOR_ACHROMATIC else _COLOR_RELIABILITY_PRIOR_DEFAULT
+    prior = _COLOR_RELIABILITY_PRIOR_ACHROMATIC if name in _COLOR_ACHROMATIC else _COLOR_RELIABILITY_PRIOR_DEFAULT
     conf = round(max(0.0, min(1.0, margin * prior)), 3)
     return name, [int(med[0]), int(med[1]), int(med[2])], conf
-
-
-def _set_color_attr(attrs: dict, rgb, region) -> None:
-    """``attrs['color']``, ``['color_rgb']`` and ``['color_conf']`` (strings) from the region's pixels."""
-    name, med, conf = _dominant_color(rgb, region)
-    attrs["color"] = name
-    attrs["color_rgb"] = f"{med[0]},{med[1]},{med[2]}"
-    attrs["color_conf"] = f"{conf:.3f}"
 
 
 # Per-instance split: SAM 3.x emits one mask per query with no instance
@@ -335,17 +328,6 @@ class SamDetectClient:
         concepts = list(self.concept_provider.concepts)
         return self._segment(obs, concepts) if concepts else []
 
-    def _post_tile(self, tile: np.ndarray, concepts: list[str]) -> dict | None:
-        """POST one native tile to ``/segment``; ``None`` when the poster gave up."""
-        image = base64.b64encode(_png_wire_bytes(np.ascontiguousarray(tile, dtype=np.uint8))).decode("ascii")
-        body = {
-            "concepts": concepts,
-            "min_area_px": MIN_AREA_PX,
-            "max_per_image": MAX_PER_STEP,
-            "image_b64": image,
-        }
-        return _post_segment(body)
-
     @staticmethod
     def _tile_bounds(H: int, W: int) -> "list[tuple[int, int, int, int]]":
         """``(r0, r1, c0, c1)`` of the ``_SAM_INPUT_SIZE`` tiles covering an
@@ -407,7 +389,13 @@ class SamDetectClient:
         def _one_tile(bound) -> "list[tuple[MaskRegion, str, float]] | None":
             """One tile's ``(region, label, score)`` items, or ``None`` when its ``/segment`` failed."""
             r0, r1, c0, c1 = bound
-            payload = self._post_tile(canvas[r0:r1, c0:c1], concepts)
+            tile = np.ascontiguousarray(canvas[r0:r1, c0:c1], dtype=np.uint8)
+            payload = _post_segment({
+                "concepts": concepts,
+                "min_area_px": MIN_AREA_PX,
+                "max_per_image": MAX_PER_STEP,
+                "image_b64": base64.b64encode(_png_wire_bytes(tile)).decode("ascii"),
+            })
             if payload is None:
                 return None
             tile_out = []
@@ -511,8 +499,8 @@ class SamDetectClient:
             )
             if projected is None:
                 return None
-            attrs: dict[str, str] = {}
-            _set_color_attr(attrs, obs.rgb, region)
+            color, med, conf = _dominant_color(obs.rgb, region)
+            attrs = {"color": color, "color_rgb": f"{med[0]},{med[1]},{med[2]}", "color_conf": f"{conf:.3f}"}
             # Unique per split component until the world tracker re-stamps it.
             suffix = f"_c{comp_idx}" if n_comp > 1 else ""
             track_id = f"sam3_1_img_{det_idx}{suffix}"
