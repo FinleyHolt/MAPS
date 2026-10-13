@@ -303,7 +303,7 @@ NO_FLIGHT_REPLY_NUDGE = (
 
 # The bench's transient-error budget; a live mission (a reasoner with a
 # cancel_event) waits for the arm until it answers or the operator stops.
-_MAX_ROUND_TRANSIENT = 6
+_MAX_TRANSIENT = 6
 
 _CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\n|\n```\s*$")
 
@@ -1416,31 +1416,31 @@ class _Mission:
                         and msgs[-1].get("content") == user_message):
                     msgs.pop()
                 log.warning(
-                    "%s stop_round compaction-infeasible -> terminal carry "
-                    "(thread flagged; remaining rounds skip): %s",
+                    "%s compaction infeasible -> mission ends "
+                    "(thread flagged): %s",
                     self.rid_tag, _summarise_exc(exc))
                 return self._mission_end("compaction_infeasible", turns=turn_idx + 1)
             except _RETRIABLE_LLM_ERRORS as exc:
                 if _is_oversize_rejection(exc):
                     log.warning(
-                        "%s stop_round request does not fit the served window "
-                        "-> terminal (retry would re-send the same bytes): %s",
+                        "%s request does not fit the served window "
+                        "-> mission ends (retry would re-send the same bytes): %s",
                         self.rid_tag, _summarise_exc(exc))
                     self._log("oversize_rejection", error=_summarise_exc(exc))
                     return self._mission_end("oversize_rejection", turns=turn_idx + 1)
                 transient_failures += 1
                 cancel = self.reasoner.cancel_event
                 log.warning(
-                    "%s stop_round transient LLM error %d%s: %s",
+                    "%s transient LLM error %d%s: %s",
                     self.rid_tag,
                     transient_failures,
-                    "" if cancel is not None else f"/{_MAX_ROUND_TRANSIENT}",
+                    "" if cancel is not None else f"/{_MAX_TRANSIENT}",
                     _summarise_exc(exc),
                 )
                 self._log("transient_error", attempt=transient_failures,
                           error=_summarise_exc(exc))
                 if cancel is None:
-                    if transient_failures >= _MAX_ROUND_TRANSIENT:
+                    if transient_failures >= _MAX_TRANSIENT:
                         return self._mission_end(
                             "request_refused" if _is_refused_request(exc)
                             else "transient_failures", turns=turn_idx + 1)
