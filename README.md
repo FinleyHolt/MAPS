@@ -113,6 +113,8 @@ these places, the served-text changes among them:
 | `find(name="X")` with no query is refused ("the name IS the query"); refusals carry no `rule N:`/`rule F:` labels and name the real verbs (`look_for` + `fly`, or `fly` under the look_for withhold); an unresolved boost serves `error` and `unknown_where`. | A bare `find(name=)` ignored the name and served a count of every row; refusals were labelled with rules no served text defined and named a `perceive` verb that does not exist; the boost refusal also served `"pending": []`. |
 | A mission's own reasoning effort (the twin's or a replay's `--reasoning-effort`, a forced replay's recorded one) is checked against the served model's card before any request. | Only the environment's effort was checked; a mission's own was sent as given. |
 | The bench resolves `sensor: {}` to the default sensor's override and serves its block, as the flight mission does. | The bench read `sensor: {}` as no sensor. |
+| A crop caption names a point subject (a flight view of an intersection point, or any go_to under the prior withhold) by its point label. | The caption named it `[?]`. |
+| The map caption describes the prior chips the renderer draws (bare-digit `NNNN`; on a map around a fid or with marks, only the centre and marks), says a white outline or ring marks the centre, and lists the legend without digits. | The caption promised `pNNNN` chips on every big-enough building, numbered badges and a `1 = ...` legend the map never drew; the pixels are the same. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
