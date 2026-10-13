@@ -80,3 +80,16 @@ def test_three_replies_in_a_row_with_no_flight_is_a_confident_abstain():
               if m.get("role") == "user" and "flown nowhere" in
               str(m.get("content"))]
     assert len(nudges) == 2, nudges
+
+
+def test_a_reply_after_a_retask_answers_with_the_missions_last_flight():
+    """A re-task turn that replies without flying still holds the earlier
+    turn's flight: no zero-flight nudge, no abstain."""
+    _, fr, flights, _ = drive([[run("go_to(prior_7)\n")], "the depot."])
+    assert len(flights) == 1
+    reply, fr, flights, _ = drive(["the north side holds nothing new."],
+                                  reasoner=fr)
+    assert reply.ended_by == "reply"
+    assert reply.turns_used == 1
+    assert not [m for m in fr.messages if "flown nowhere" in
+                str(m.get("content"))]

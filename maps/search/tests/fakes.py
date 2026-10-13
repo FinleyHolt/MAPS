@@ -31,6 +31,7 @@ class FakeReasoner:
         self.messages = [{"role": "system", "content": "sys"}]
         self.vision: list[tuple[str, list]] = []
         self.compaction_infeasible = False
+        self.flights = 0
         self.cancel_event = None
         self.model = "test"
 
@@ -129,9 +130,10 @@ def unarmed_boost(concepts, where):
 
 def drive(script, *, fly=None, flight_budget=8, turn_cap=48,
           transcript=None, cands=None, retask=None, look_renderer=None,
-          **loop_kw):
-    """One mission over a still surface. Returns (reply, reasoner, flights,
-    declared); ``loop_kw`` reaches ``_Mission``."""
+          reasoner=None, **loop_kw):
+    """One operator turn over a still surface. Returns (reply, reasoner,
+    flights, declared); ``reasoner`` (a returned one) continues its mission
+    with ``script``; ``loop_kw`` reaches ``_Mission``."""
     from maps.search.parse_compile.reasoner_loop import (
         MissionReply,
         MissionSpec,
@@ -153,7 +155,9 @@ def drive(script, *, fly=None, flight_budget=8, turn_cap=48,
     def _declare(items):
         declared.append(list(items))
 
-    fr = FakeReasoner(script)
+    fr = FakeReasoner(script) if reasoner is None else reasoner
+    if reasoner is not None:
+        fr.turns += list(script)
     loop_kw.setdefault("boost_queue", unarmed_boost)
     reply = _Mission(
         reasoner=fr,

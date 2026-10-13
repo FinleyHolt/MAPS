@@ -452,7 +452,9 @@ class _Mission:
 
         self.carry = Carry(compute_namespace)
 
-        self.mission_flights = 0
+        # This turn's flights (the backstop's count); the mission's are the
+        # reasoner's.
+        self.turn_flights = 0
         self.mission_sam: list[dict] = []
 
         # The set in scope (the last non-empty result, or what the last flight
@@ -806,7 +808,8 @@ class _Mission:
                       cover: str | None) -> None:
         """A flight that flew: count it, record its stop, re-derive the
         surface, and (outside a pass) mint the rows it added."""
-        self.mission_flights += 1
+        self.turn_flights += 1
+        self.reasoner.flights += 1
         _pxy = _report["pose_xy"]
         self._plan_stops[str(_report["stop_id"]).strip().lower()] = [
             float(_pxy[0]), float(_pxy[1])]
@@ -838,7 +841,7 @@ class _Mission:
                 # The rest of the pass rides every stop, for the crew.
                 _item["pass_ahead"] = [[float(_xy[0]), float(_xy[1])]
                                        for _xy in map(self._stop_xy, _queue) if _xy]
-            if self.mission_flights >= self.mission_spec.flight_budget:
+            if self.turn_flights >= self.mission_spec.flight_budget:
                 log.warning("%s flight backstop hit (%d flights)",
                             self.rid_tag, self.mission_spec.flight_budget)
                 _item_errors.append({"target_fid": _item["target_fid"],
@@ -853,7 +856,7 @@ class _Mission:
                 if not _clock_cut:
                     log.warning(
                         "%s wall-clock backstop hit (%d flights, %.0f s past "
-                        "the deadline)", self.rid_tag, self.mission_flights,
+                        "the deadline)", self.rid_tag, self.turn_flights,
                         time.time() - self.mission_spec.deadline_epoch)
                 _clock_cut = True
                 _item_errors.append({"target_fid": _item["target_fid"],
@@ -1490,7 +1493,7 @@ class _Mission:
                              turn_idx)
                 # A clean prose reply before any flight answers nothing: hand
                 # the turn back, up to NO_FLIGHT_ABSTAIN_STREAK.
-                if no_call_streak == 0 and self.mission_flights == 0:
+                if no_call_streak == 0 and self.reasoner.flights == 0:
                     no_flight_streak += 1
                     self._log("no_flight_reply", turn_idx=turn_idx,
                               streak=no_flight_streak)
@@ -1504,7 +1507,7 @@ class _Mission:
                              "%d -- abstain", self.rid_tag, turn_idx,
                              no_flight_streak)
                 log.info("%s mission ended by reply at turn %d (%d flights)",
-                         self.rid_tag, turn_idx, self.mission_flights)
+                         self.rid_tag, turn_idx, self.turn_flights)
                 return self._mission_end("reply", turns=turn_idx + 1)
             no_call_streak = 0
             no_flight_streak = 0
