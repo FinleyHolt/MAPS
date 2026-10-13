@@ -63,8 +63,7 @@ def _mcnemar(pairs: list[tuple[int, int]]) -> dict:
         return {"b_loss": b, "c_win": c, "p_value": round(p, 4), "method": "binomial_exact"}
     chi2 = (abs(b - c) - 1) ** 2 / n
     p = math.erfc(math.sqrt(chi2 / 2))
-    return {"b_loss": b, "c_win": c, "p_value": round(p, 4),
-            "chi2": round(chi2, 3), "method": "chi2_1df"}
+    return {"b_loss": b, "c_win": c, "p_value": round(p, 4), "method": "chi2_1df"}
 
 
 def ab_stats(pairs: list[tuple[int, int]], *, label: str = "") -> dict:
@@ -82,8 +81,6 @@ def ab_stats(pairs: list[tuple[int, int]], *, label: str = "") -> dict:
         "SR_b": round(sr_b, 4),
         "delta": round(sr_b - sr_a, 4),
         "delta_ci95": [round(lo, 4), round(hi, 4)],
-        "wins_fail_to_success": mc["c_win"],
-        "losses_success_to_fail": mc["b_loss"],
         "mcnemar": mc,
         "significant_95": bool(mc["p_value"] < 0.05),
     }
@@ -96,8 +93,8 @@ def render(st: dict) -> str:
         f"A/B paired ({st['label']}): n={st['n']}  "
         f"SR_a={st['SR_a']:.3f}  SR_b={st['SR_b']:.3f}  "
         f"Δ={st['delta']:+.3f}  95%CI[{ci[0]:+.3f},{ci[1]:+.3f}]\n"
-        f"  wins(fail->success)={st['wins_fail_to_success']}  "
-        f"losses(success->fail)={st['losses_success_to_fail']}  "
+        f"  wins(fail->success)={st['mcnemar']['c_win']}  "
+        f"losses(success->fail)={st['mcnemar']['b_loss']}  "
         f"McNemar p={st['mcnemar']['p_value']} ({st['mcnemar']['method']}) -> {sig}"
     )
 
