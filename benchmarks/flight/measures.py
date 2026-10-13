@@ -10,9 +10,7 @@ time and no track, so it reads SR and NE only). Per run, from three things
 the record holds:
 
 * **The commit**: the point the run's last scored flight resolved to, the
-  last of its ``visited_xy``, named by the flight that resolved there (the
-  ground station's ``mission.json`` where one was kept, else the run's
-  ``flight/tour_cursor.json``).
+  last of its ``visited_xy``.
 * **The truth**: the analyst's hand-drawn mask (``<sortie>.json`` in a truth
   directory, ``{episode_id: {"target_mask", "excluded", "intel_quality"}}``),
   else the tasking set's footprint for the run's episode id and description
@@ -152,21 +150,6 @@ def judged_xy(row: dict[str, Any]) -> tuple[float, float] | None:
     return (float(visited[-1][0]), float(visited[-1][1])) if len(visited) >= 2 else None
 
 
-def flights_named(bases: list[Path]) -> list[tuple[str, tuple[float, float]]]:
-    """Every flight as ``(target, xy)``: the ground's ``mission.json`` where one
-    was kept, else the run's ``flight/tour_cursor.json``."""
-    for b in bases[1:]:
-        try:
-            doc = json.loads((b / "mission.json").read_text())
-        except (OSError, ValueError):
-            continue
-        out = [(str(f.get("target")), (float(xy[0]), float(xy[1]))) for f in doc.get("flights") or []
-               if (xy := f.get("resolved_xy") or f.get("pose_xy"))]
-        if out:
-            return out
-    return tour_stops(bases[0])
-
-
 def tour_stops(run_dir: Path) -> list[tuple[str, tuple[float, float]]]:
     """The flights a run flew, in order: ``(target, xy)`` off its ``flight/tour_cursor.json``."""
     try:
@@ -175,14 +158,6 @@ def tour_stops(run_dir: Path) -> list[tuple[str, tuple[float, float]]]:
         return []
     return [(str(s.get("stop_id") or ""), (float(s["xy"][0]), float(s["xy"][1])))
             for s in cursor.get("stops_visited") or [] if s.get("xy")]
-
-
-def commit_fid(bases: list[Path], xy: tuple[float, float] | None) -> str | None:
-    """The target of the last flight that resolved to the commit."""
-    if xy is None:
-        return None
-    named = [f for f, p in flights_named(bases) if abs(p[0] - xy[0]) < 1.0 and abs(p[1] - xy[1]) < 1.0]
-    return named[-1] if named else None
 
 
 # -- the way back: Dubins paths at one turn radius -------------------------------
@@ -463,7 +438,6 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     events = _conversation(bases)
     end = ended(row)
     xy = judged_xy(row)
-    fid = commit_fid(bases, xy) if bases else None
     determined = end == "reply" and xy is not None
     reason = entry.get("excluded")
     params = next((r.get("params") or {} for b in bases for r in read_jsonl(b / "flight" / "llm" / TRANSCRIPT_JSONL)
@@ -482,7 +456,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         "reasoning_effort": params.get("reasoning_effort"), "intel_quality": quality[0],
         "end": end, "excluded": " ".join(str(reason).split()) or None if reason else None,
         "infra": is_infra_abort(row),
-        "determination": determined, "commit_fid": fid,
+        "determination": determined,
         "commit_xy": None if xy is None else [round(xy[0], 2), round(xy[1], 2)],
         "truth_xy": None if target is None else [round(target[0], 2), round(target[1], 2)],
         "truth_source": truth_source, "flights": row.get("flights_flown"), "turns": row.get("turns_used"),
@@ -659,7 +633,7 @@ def main(argv: list[str] | None = None) -> int:
             print(line(f"effort {k}", v))
         print(f"turn radius flown (median) {radius} m over {turns} turns")
         for r in rows:
-            print(f"  {r['sortie']} run {r['run_no']}: {r['end']}, commit {r['commit_fid']}, SR {r['success']}, OSR {r['oracle_success']}, NE {r['ne_ft']} ft, "
+            print(f"  {r['sortie']} run {r['run_no']}: {r['end']}, SR {r['success']}, OSR {r['oracle_success']}, NE {r['ne_ft']} ft, "
                   f"time to ID {r['time_to_id_s']} s, {r['flights']} flights / {r['turns']} turns, SPL {r['spl']}"
                   + (f", excluded: {r['excluded']}" if r["excluded"] else ""))
         if args.check is not None:

@@ -309,7 +309,7 @@ def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, ser
     assert row["status"] == "ok" and row["ended_by"] == "reply" and row["error"] == "SamServerOutage: no tile answered"
     assert row["flights_flown"] == 2 and len(row["visited_xy"]) == 2
     (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
-    assert run["commit_fid"] == "prior_0" and run["end"] == "reply" and run["success"] is True
+    assert run["commit_xy"] == pytest.approx(row["visited_xy"][-1], abs=0.01) and run["end"] == "reply" and run["success"] is True
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
 
