@@ -89,7 +89,7 @@ def test_the_report_counts_timeouts_and_infra_apart(tmp_path, capsys):
         root,
         ledger_row("e::1#1", "20260725_110000", 1),
         ledger_row("e::2#2", "20260725_110100", 0, status="timed_out"),
-        ledger_row("e::3#3", "20260725_110200", status="infra", error="vllm_down_midrun"),
+        ledger_row("e::3#3", "20260725_110200", status="infra", error="reasoner_down_midrun"),
     )
     report(root)
     out = capsys.readouterr().out
@@ -204,7 +204,7 @@ def test_a_root_with_no_scored_row_does_not_stop_the_roots_after_it(tmp_path, ca
     from benchmarks.citynav.analysis import run_report
 
     empty = write_ledger(tmp_path / "empty", ledger_row("e::1#1", "20260725_110000", status="infra",
-                                                        error="vllm_down_midrun"))
+                                                        error="reasoner_down_midrun"))
     good = write_ledger(tmp_path / "good", ledger_row("e::2#2", "20260725_110100", 1))
     assert run_report.main([str(empty), str(good)]) == 1
     out = capsys.readouterr()

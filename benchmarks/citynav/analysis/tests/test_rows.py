@@ -90,7 +90,7 @@ def test_an_infra_abort_never_represents_its_episode(tmp_path):
     not occupy the episode's slot even as a last resort -- otherwise an
     infra casualty lands in the coverage denominator as a false zero."""
     root = write_ledger(tmp_path / "run", ledger_row(
-        "e::5#5", "20260725_110000", status="infra", error="vllm_down_midrun"))
+        "e::5#5", "20260725_110000", status="infra", error="reasoner_down_midrun"))
     picked, stats = rows.load_attempts(root)
     assert "e::5#5" not in picked
     assert stats.infra == 1

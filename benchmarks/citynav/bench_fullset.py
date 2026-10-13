@@ -39,7 +39,7 @@ RUNNER_MODULE = "benchmarks.citynav.run_benchmark"
 # turns to reply and commit after the mission's wall-clock backstop fires.
 _DEADLINE_RESERVE_FRAC = 0.1
 # How often the driver asks the reasoner's ``/models`` while an attempt
-# flies; two failures in a row kill the attempt as ``vllm_down_midrun``.
+# flies; two failures in a row kill the attempt as ``reasoner_down_midrun``.
 REASONER_PROBE_S = 60.0
 # How often a launch held for a reasoner that is down asks again.
 REASONER_WAIT_S = 120.0
@@ -336,7 +336,7 @@ class Driver:
     def _run_attempt(self, worker_id: int, episode_id: str) -> dict:
         """One attempt in a fresh child: its ledger row, the child's
         ``episode.json`` plus ``worker_id``, ``workdir`` and the wall measured
-        here. ``status`` is ``infra`` for a lost reasoner (``vllm_down_midrun``),
+        here. ``status`` is ``infra`` for a lost reasoner (``reasoner_down_midrun``),
         a child that a signal killed with no record (``killed_midrun``), that
         exited nonzero with none (``exited N with no record``) or exited clean
         with none (``no_prediction_unclassified``); a record's own ``infra``
@@ -394,7 +394,7 @@ class Driver:
             # Re-queued; a lost reasoner's attempt is pending until it is back.
             return {"episode_id": episode_id, "worker_id": worker_id,
                     "status": episodes.STATUS_INFRA, "elapsed_s": round(elapsed, 1), **where,
-                    "error": ("vllm_down_midrun" if verdict == "reasoner_dead" else "killed_midrun"
+                    "error": ("reasoner_down_midrun" if verdict == "reasoner_dead" else "killed_midrun"
                               if proc.returncode < 0 else f"exited {proc.returncode} with no record")}
         # The child's own verdict decides (dispatch classifies the episode's
         # exception chain); the driver adds only what it alone saw.

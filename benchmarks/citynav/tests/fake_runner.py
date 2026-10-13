@@ -23,7 +23,7 @@ elif kind == "miss":
     row["error"] = "RuntimeError: boom"
 elif kind == "infra":
     row.update(status="infra", error="CITYNAV_EPISODE_INFRA_ABORT: SamServerOutage")
-elif kind in ("sleep", "vllm"):
+elif kind in ("sleep", "reasoner"):
     time.sleep(60)
 elif kind == "kill":
     os.kill(os.getpid(), signal.SIGKILL)

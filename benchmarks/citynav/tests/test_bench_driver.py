@@ -34,7 +34,7 @@ OUTCOMES = {
     "sleep": ("timed_out", None, True),
     "kill": ("infra", "killed_midrun", True),
     "norow": ("infra", "no_prediction_unclassified", True),
-    "vllm": ("infra", "vllm_down_midrun", True),
+    "reasoner": ("infra", "reasoner_down_midrun", True),
     "exit": ("infra", "exited 3 with no record", True),
     "nodir": ("infra", "exited 2 with no record", False),
 }
@@ -49,10 +49,10 @@ def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
     monkeypatch.setattr(bf, "REASONER_PROBE_S", 0.2)
     d = driver(selection=[f"{k}::1#{i}" for i, k in enumerate(OUTCOMES)])
     d.episode_timeout_s, d.max_infra_attempts = 3, 1
-    # The reasoner is down exactly while the "vllm" episode flies.
+    # The reasoner is down exactly while the "reasoner" episode flies.
     monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
     monkeypatch.setattr(d, "_reasoner_answers",
-                        lambda: not any(e.startswith("vllm") for e in d._in_flight))
+                        lambda: not any(e.startswith("reasoner") for e in d._in_flight))
     t0 = time.time()
     d.worker_loop(0)
     rows = {r["episode_id"].split("::")[0]: r for r in iter_json_rows(d.episodes_file)}
@@ -159,11 +159,11 @@ def test_the_summary_is_the_run_report_under_the_infra_lines(driver) -> None:
         ledger_row("c::3#6534", "20260725_111500", 0),
         ledger_row("c::3#6534", "20260725_110958", 1),
         ledger_row("e::1#1", "20260725_110000", 1),
-        ledger_row("g::2#2", "20260725_110100", status="infra", error="vllm_down_midrun"),
+        ledger_row("g::2#2", "20260725_110100", status="infra", error="reasoner_down_midrun"),
     )))
     d._write_summary()
     out = d.summary_file.read_text()
-    assert "infra attempts (excluded): 1  by cause: vllm_down_midrun (1)" in out
+    assert "infra attempts (excluded): 1  by cause: reasoner_down_midrun (1)" in out
     # The first-STARTED attempt of c scores, not the one that finished last.
     assert "SR = 2/2 (100.0%)" in out, out
 
