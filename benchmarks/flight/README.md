@@ -140,7 +140,8 @@ the mask's centroid), OSR (the aircraft's path, GNSS
 track, else keyframe poses, came within one camera footprint width of the
 target), time to identification, SPL, and tokens. A run the serve failed
 under before its first report (the bench's infra rule) is out of every rate
-and named; a run that failed after a report is scored at that report. It
+and named; a run that ends after a report without a new one (the crew's
+Stop, a harness ending, a failure) is scored at that report. It
 prints the totals, the totals by intel quality and by model and reasoning
 effort, then one line per run. `--check <master table>` compares SR
 (`success`) and OSR (`oracle_success`) row by row against a table that

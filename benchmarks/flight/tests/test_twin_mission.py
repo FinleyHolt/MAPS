@@ -314,6 +314,59 @@ def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, ser
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
 
+@pytest.mark.parametrize("end", ["stopped", "turn_cap"])
+def test_a_follow_up_that_ends_without_a_new_report_scores_the_run_at_that_report(
+        calcity, serves, tmp_path, monkeypatch, end):
+    """The retask flies a second leg and ends with no new report, by the
+    crew's Stop or at the turn cap: the report stands (its end and commit)
+    and both flights are counted."""
+    from benchmarks.citynav.run_benchmark import mission_engine
+    from benchmarks.flight import measures, twin
+    from benchmarks.flight import mission as M
+    from maps.llm import http
+
+    missions = []
+    start = M.Mission.start
+    monkeypatch.setattr(M.Mission, "start", lambda self: (missions.append(self), start(self))[1])
+
+    class Capped(mission_engine.MissionSession):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.mission_spec.turn_cap = 2
+
+    monkeypatch.setattr(mission_engine, "MissionSession", Capped)
+    codes = iter(["go_to(prior_0)\n", None, "go_to(prior_1)\n"])
+
+    def reply(url, headers, body, *, timeout, cancel_event):
+        code = next(codes, "x = 1\n")
+        if code == "x = 1\n" and end == "stopped":
+            missions[0].stop()
+            raise http.CallCanceled("stopped")
+        if code is None:
+            message = {"content": "Reported.", "reasoning_content": "", "tool_calls": []}
+        else:
+            call = {"id": "c1", "type": "function", "function": {"name": "run", "arguments": json.dumps({"code": code})}}
+            message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
+        return {"choices": [{"finish_reason": "stop", "message": message}]}
+
+    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    out = tmp_path / "out"
+    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
+                      "--then", "Check the west side too.", "--out", str(out)]) == 0
+    sortie = next(out.iterdir())
+    (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
+    run_dir = sortie / row["workdir"]
+    conversation = [json.loads(line) for line in (run_dir / "conversation.jsonl").read_text().splitlines()]
+    ends = [r["ended_by"] for r in conversation if r.get("kind") == "mission_end"]
+    assert ends == ["reply"] + (["turn_cap"] if end == "turn_cap" else [])
+    assert row["status"] == "ok" and row["ended_by"] == "reply" and row["error"] is None
+    assert row["flights_flown"] == 2 and len(row["visited_xy"]) == 2
+    second_leg = [r for r in conversation if r.get("kind") == "leg"][-1]
+    assert row["elapsed_s"] < second_leg["t_s"]
+    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
+    assert run["end"] == "reply" and run["success"] is True
+
+
 def test_an_authored_start_without_the_operators_words_is_refused(calcity, serves, tmp_path):
     from benchmarks.flight import twin
 

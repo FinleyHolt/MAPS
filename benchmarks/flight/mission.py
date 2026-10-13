@@ -240,11 +240,9 @@ class Mission:
         self.infra = False
         #: Model turns of the conversations that have ENDED; :meth:`_turns` adds the one in flight.
         self.turns_used = 0
-        #: How many reports the model has made.
+        #: How many conversations have ended and parked the mission.
         self.replies = 0
-        #: The last report's ``(ended_by, ended_s, flights flown)``: a run that fails after it is scored there.
-        self._reported: tuple[str | None, float | None, int] = (None, None, 0)
-        #: How many flights the row scores; None scores every flight flown.
+        #: How many flights the row scores: those flown by the last report; None scores every flight flown.
         self._scored_flights: int | None = None
         self._turn_diag: dict[str, Any] = {}
         #: The host's wall clock at the start (the row's ``ts``).
@@ -298,13 +296,11 @@ class Mission:
 
     def stop(self) -> None:
         """End the mission. The loop's cancel event does the work; a mission
-        parked on its report ended at the reply, and keeps its ``ended_by``."""
+        that has reported stands at its report (:meth:`_record_reply`)."""
         self._cancel.set()
         with self._lock:
             if self.status in (STATE_FLYING, STATE_AWAITING):
-                if self.status == STATE_FLYING:
-                    self.ended_by = "stopped"
-                self.status = STATE_ENDED
+                self._stopped()
 
     def wait(self, timeout: float | None = None) -> None:
         if self._thread is not None:
@@ -701,7 +697,7 @@ class Mission:
                 nxt = self._await_tasking()
                 if nxt is None:
                     break
-                self._set(STATE_FLYING, ended_by=None, ended_s=None)
+                self._set(STATE_FLYING)
                 turn += 1
                 reply = continue_mission(reasoner=reasoner, instruction=nxt, diag=self._turn_diag,
                                          rid_tag=f"m{turn}", **heard, **session.run_kwargs)
@@ -709,21 +705,18 @@ class Mission:
             self._set(STATE_ENDED)
         except CallCanceled:
             # Stop, pressed while the reasoner call was in flight.
-            self._set(STATE_ENDED, ended_by="stopped")
+            with self._lock:
+                self._stopped()
         except Exception as exc:  # noqa: BLE001 -- the operator must see why
             if self._cancel.is_set():
                 log.info("mission %s: %s after the stop", self.episode_id, type(exc).__name__)
-                self._set(STATE_ENDED, ended_by="stopped")
+                with self._lock:
+                    self._stopped()
             else:
                 log.exception("mission %s failed", self.episode_id)
                 error = f"{type(exc).__name__}: {exc}"
-                if self.replies:
-                    # The run stands at its last report, whatever failed after it.
-                    ended_by, ended_s, flown = self._reported
-                    self._set(STATE_FAILED, error=error, ended_by=ended_by, ended_s=ended_s,
-                              _scored_flights=flown)
-                else:
-                    self._set(STATE_FAILED, error=error, infra=is_infra_fault(exc))
+                # A run that has reported stands at its report, whatever failed after it.
+                self._set(STATE_FAILED, error=error, infra=not self.replies and is_infra_fault(exc))
         finally:
             with self._lock:
                 summary = {"kind": "summary", "status": self.status,
@@ -766,11 +759,23 @@ class Mission:
         """Model turns taken: the conversations that have ended plus the turn the one in flight is on."""
         return self.turns_used + int(self._turn_diag.get("turns_used") or 0)
 
+    def _stopped(self) -> None:
+        """Ended by the crew's Stop, under the lock: ``stopped``, unless the run stands at a report."""
+        self.status = STATE_ENDED
+        if not self.replies:
+            self.ended_by = "stopped"
+
     def _record_reply(self, reply) -> None:
+        """A conversation's end parks the mission. The first end, and each
+        plain reply after it, is the run's REPORT: the row takes its
+        ``ended_by``, its time, and the flights flown by then. Every end after
+        a report without a new one (a harness ending, the crew's Stop, a
+        failure) leaves the row standing at the last report."""
         with self._lock:
-            self.ended_by = reply.ended_by
-            self.ended_s = self.elapsed_s()
-            self._reported = (self.ended_by, self.ended_s, len(self.flights))
+            if not self.replies or reply.ended_by == "reply":
+                self.ended_by = reply.ended_by
+                self.ended_s = self.elapsed_s()
+                self._scored_flights = len(self.flights)
             self.turns_used += int(reply.turns_used)
             self._turn_diag.clear()
             self.replies += 1
