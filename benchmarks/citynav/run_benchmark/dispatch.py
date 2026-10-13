@@ -8,6 +8,7 @@ import time
 import traceback
 from pathlib import Path
 
+from benchmarks import repo_provenance
 from benchmarks.citynav.adapter import parse_episode
 from benchmarks.citynav.analysis import rows as _rows
 from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
@@ -34,14 +35,10 @@ def set_run_context(*, config_path: str | None, split: str) -> None:
 
 
 def _cached_run_provenance(search_flags: dict) -> dict:
-    """Process-cached provenance (git commit + config sha256 + DISCOVERED
-    served model + flag set) embedded into every episode
-    row so "which code ran" is auditable from disk alone. The git subprocess
-    runs ONCE per worker process, not once per episode."""
+    """The provenance every episode row carries (git commit, config sha256,
+    the discovered served model, the flag set), computed once per process."""
     global _RUN_PROVENANCE
     if _RUN_PROVENANCE is None:
-        from benchmarks import repo_provenance
-
         _spec = (
             endpoint_spec_module.spec()
             if endpoint_spec_module.spec_installed()
