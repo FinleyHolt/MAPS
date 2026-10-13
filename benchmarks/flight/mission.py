@@ -3,7 +3,7 @@
 The search stack is hydrated as the bench hydrates it and the conversation
 flies on a worker thread. Two things differ from the bench. The reply is a
 REPORT: the session parks in ``awaiting_tasking`` and the operator's answer
-goes to ``continue_mission`` on the same reasoner. The operator speaks
+goes to ``continue_mission`` on the same mission. The operator speaks
 whenever: taskings queue and the loop drains them at the top of each turn.
 A flight is a leg flown for an AREA (:meth:`Mission._fly_live`); it arrives
 when the recording holds the area, and its observation is the frames that
