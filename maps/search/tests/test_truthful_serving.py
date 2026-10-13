@@ -509,3 +509,20 @@ def test_refusals_over_a_keyword_only_find_quote_the_models_own_text():
     page_err, index_err = (t["error"] for t in tool_results(fr)[:2])
     assert "find(nearest='prior_1')" in page_err, page_err
     assert "find(nearest='prior_1')[999] did not bind" in index_err, index_err
+
+
+def test_a_cut_steps_hints_do_not_ride_the_answer():
+    # find -> compare -> filter -> sort: the find's count line and head name
+    # the 40 cars it matched, not the 6 the answer holds.
+    from maps.search.tests.fakes import drive, run, tool_results
+
+    cands = [{"fid": "prior_7", "xy": [0.0, 0.0], "class": "depot", "search_text": "depot"},
+             {"fid": "prior_1", "xy": [100.0, 0.0], "class": "gate", "search_text": "gate"}]
+    cands += [{"fid": f"car_{i}", "xy": [float(i * 3), 1.0], "class": "car", "search_text": "car"}
+              for i in range(40)]
+    _r, fr, _f, _d = drive([[run('nc = find("car", nearest=prior_1, dwithin=10)')], "done"],
+                           cands=cands)
+    env = tool_results(fr)[0]["result"]["results"]["nc"]
+    hint = env.get("hint", "")
+    assert set(re.findall(r"car_\d+", hint)) <= set(env["fids"]), hint
+    assert "rows matched" not in hint, hint

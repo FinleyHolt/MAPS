@@ -526,12 +526,16 @@ class Result(list):
     and would admit, render with it), ``compare`` (one grid under the per-ref
     ``refs`` headers and the ``columns`` it attached) or ``sorted``
     (score_by). ``ordered`` when its order is real, ``name_set`` when it is
-    one name's tied ways, ``op_cols`` the columns its op attached."""
+    one name's tied ways, ``op_cols`` the columns its op attached,
+    ``set_notes`` the notes that describe these rows and ``consumed`` when a
+    later op of the same program read them."""
 
     ordered: bool = False
     name_set: bool = False
+    consumed: bool = False
     op_cols: list = []
     notes: list = []
+    set_notes: list = []
     cut_stats: dict = {}
     refs: list = []
     columns: list = []
@@ -1013,11 +1017,18 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
         return out
     answer = out[answer_ref]
     # The other ops are the call's own steps, refs the model never holds:
-    # their hints ride unprefixed, each line once.
+    # their hints ride unprefixed, each line once. A step whose rows a later
+    # op cut, sorted or measured serves only the notes not about those rows.
     own = str(answer.get("hint") or "").split("\n")
-    steps = dict.fromkeys(ln for k, e in out.items()
-                          if k != answer_ref and e.get("hint")
-                          for ln in str(e["hint"]).split("\n"))
+
+    def _step_hint(k):
+        v = results[k]
+        if v.consumed and v:
+            return join_hints(*(n for n in v.notes if n not in v.set_notes))
+        return out[k].get("hint")
+    steps = dict.fromkeys(ln for k in out if k != answer_ref
+                          if (h := _step_hint(k))
+                          for ln in str(h).split("\n"))
     answer["hint"] = join_hints(answer.get("hint"),
                                 *(ln for ln in steps if ln not in own))
     if not answer["hint"]:
@@ -1150,6 +1161,7 @@ class _Run:
         base, _, win = tok.partition("[")
         if base in self.results:
             v = self.results[base]
+            v.consumed = True
         elif base in self.seed:
             v = self.seed[base]
         else:
@@ -1404,6 +1416,7 @@ def _find(cx, a):
     """Search the surface: a query returns its match set best-first; no
     query browses every row."""
     notes: list = []
+    set_notes: list = []  # the notes about the matched rows
     matched = False      # a query ran and matched (the rN is ordered)
     name_set = False     # tied ways of one name: render the shape
     empty_cond = None
@@ -1440,7 +1453,8 @@ def _find(cx, a):
             n, band_cut = _match_band(rows)
             name_set = _is_name_set(rows[:n])
             if not name_set:
-                notes += _match_notes(rows, n, band_cut)
+                set_notes += _match_notes(rows, n, band_cut)
+                notes += set_notes
             rows, matched = rows[:n], True
             # Name the query words no matched row carries.
             dead = memo.dead_words(q_raw, rows)
@@ -1453,6 +1467,7 @@ def _find(cx, a):
         want = str(a.get("name") or "").strip()
         if want:
             rows, note = _name_cut(rows, want, q_raw, memo.idf)
+            set_notes += [note] if note else []
             notes += [note] if note else []
             matched = True
     op_cols = []
@@ -1464,7 +1479,7 @@ def _find(cx, a):
     if not rows and query:
         return Result(kind="miss", notes=notes, empty_condition=empty_cond)
     return Result(rows, ordered=matched, name_set=name_set, op_cols=op_cols,
-                  notes=notes)
+                  notes=notes, set_notes=set_notes)
 
 
 def _x_polys(node):
@@ -1583,6 +1598,7 @@ def _crossings(cx, a):
            " -- each is its OWN row with its OWN fid, so narrow to the "
            "one you mean (order or cut this set) rather than averaging "
            "them; a point between crossings is at none of them.")]
+    rows.set_notes = rows.notes
     return rows
 
 
@@ -1623,6 +1639,7 @@ def _ends(cx, a):
     rows.notes = [
         f"{len(rows)} terminus rows; each is its OWN row with its "
         f"own fid, so index the one you mean."]
+    rows.set_notes = rows.notes
     return rows
 
 
@@ -1917,6 +1934,7 @@ def _compare(cx, a):
     specs, _standing_ref_handles = _compare_specs(cx, a.get("refs") or [])
 
     notes: list = []
+    set_notes: list = []        # the notes naming rows
     used_labels: set = set()
     all_col_keys: dict = {}     # every attached key, op-wide
 
@@ -2072,7 +2090,7 @@ def _compare(cx, a):
         if _cf:
             _cfs = f"{_cf[:8]}" + (
                 f" (+{len(_cf) - 8} more)" if len(_cf) > 8 else "")
-            notes.append(
+            set_notes.append(
                 f"ref {lab}: row(s) {_cfs} read 'distance to {lab}'=0 because "
                 f"their OWN mask CONTAINS {lab} (every vertex of "
                 f"the ref sits inside the row's footprint -- "
@@ -2080,6 +2098,7 @@ def _compare(cx, a):
                 f"carries 'contains {lab}'=true. distance reads 0 on ANY "
                 f"mask contact, so a 0 in a nearest-first read "
                 f"spans touching neighbors AND containers.")
+            notes.append(set_notes[-1])
         if ref["keys"]:
             ref["hdr"]["cols"] = list(ref["keys"])
     for _h in _standing_ref_handles:
@@ -2094,6 +2113,7 @@ def _compare(cx, a):
     r.refs = [ref["hdr"] for ref in refs]
     r.columns = list(all_col_keys)
     r.notes = notes
+    r.set_notes = set_notes
     r.ordered = _in_ordered
     return r
 
