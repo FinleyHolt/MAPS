@@ -377,9 +377,6 @@ class SearchLoop:
         with self._lock:
             return [dict(d) for d in self.state.last_flight_detections]
 
-
-
-
     def upsert_prior_percept(self, fid: str, attrs: dict, *, px: int = 0) -> bool:
         """Merge attributes perceived inside a prior's projected footprint
         (e.g. ``{"color": "gray", "color_rgb": "128,130,131"}``) onto its
