@@ -24,7 +24,7 @@ CITYNAV_ROOT="${SEARCH_CITYNAV_DATA:-${CITYNAV_ROOT:-$HOME/datasets/citynav-arxi
 TARGET_DIR="${TARGET_DIR:-${SEARCH_CITYNAV_RGBD_DIR:-$CITYNAV_ROOT/data/rgbd_upstream}}"
 RASTERIZE_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_vendor_citynav_rasterize.py"
 RASTERIZE_ENV_NAME="${RASTERIZE_ENV_NAME:-rasterize}"
-RASTERIZE_PYTHON="${RASTERIZE_PYTHON:-${RASTERIZE_ENV:-}}"
+RASTERIZE_PYTHON="${RASTERIZE_PYTHON:-}"
 BLOCK_FILTERS=()
 
 while [[ $# -gt 0 ]]; do
@@ -73,16 +73,11 @@ else
 	exit 1
 fi
 
-# Upstream runs rasterize.py once per PLY split dir. Accept every layout
-# the runtime raw_ply() resolver supports so a complete dataset is not
-# silently skipped because the PLYs are stored at the root or in raw_ply_fast.
-declare -A SEEN_PLY_DIRS=()
+# Upstream runs rasterize.py once per PLY split dir.
 PLY_DIRS=()
 TOTAL_PLYS=0
-for d in "$CITYNAV_ROOT/raw_ply/train" "$CITYNAV_ROOT/raw_ply/test" "$CITYNAV_ROOT/raw_ply" "$CITYNAV_ROOT/raw_ply_fast"; do
+for d in "$CITYNAV_ROOT/raw_ply/train" "$CITYNAV_ROOT/raw_ply/test"; do
 	[[ -d "$d" ]] || continue
-	[[ -z "${SEEN_PLY_DIRS[$d]:-}" ]] || continue
-	SEEN_PLY_DIRS[$d]=1
 	if [[ "${#BLOCK_FILTERS[@]}" -gt 0 ]]; then
 		n=0
 		for block in "${BLOCK_FILTERS[@]}"; do
@@ -106,8 +101,6 @@ if [[ "$TOTAL_PLYS" -eq 0 ]]; then
 		echo "[citynav-rasterize] ERROR: no SensatUrban .ply files found under:" >&2
 	fi
 	echo "[citynav-rasterize]   $CITYNAV_ROOT/raw_ply/{train,test}" >&2
-	echo "[citynav-rasterize]   $CITYNAV_ROOT/raw_ply" >&2
-	echo "[citynav-rasterize]   $CITYNAV_ROOT/raw_ply_fast" >&2
 	echo "[citynav-rasterize] Fetch the SensatUrban PLYs, then rerun this script." >&2
 	exit 1
 fi
