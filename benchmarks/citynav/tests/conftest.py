@@ -73,7 +73,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
                                 sensor=None, ortho_view_corners_xy=None)
         h = SimpleNamespace(
             cfg=SimpleNamespace(altitude_cap_m=1000.0),
-            state=EpisodeState(pose_xy=pose_xy, altitude_m=100.0, graph=None),
+            state=EpisodeState(pose_xy=pose_xy, altitude_m=100.0),
             assets=SimpleNamespace(bounds=SimpleNamespace(x_min=0.0, y_min=0.0), cell_size_m=2.0,
                                    grid_shape=(10, 10)),
             episode=SimpleNamespace(map_name="calcity", description="the largest building",

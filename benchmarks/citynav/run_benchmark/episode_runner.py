@@ -38,19 +38,18 @@ from maps.search.search_loop import SearchLoop
 from maps.search.withhold import withheld
 from maps.sws.graph.builder import build_object_graph
 from maps.sws.graph.io import load_graph
-from maps.sws.graph.model import GridDomain, ObjectGraph
+from maps.sws.graph.model import GridDomain
 
 log = logging.getLogger("run_benchmark")
 
 
 @dataclass
 class EpisodeState:
-    """The harness's pose, visit history, prior graph and bound commit; the
-    runtime graph lives on the ``SearchLoop``."""
+    """The harness's pose, visit history and bound commit; the graph lives
+    on the ``SearchLoop``."""
 
     pose_xy: tuple[float, float]
     altitude_m: float
-    graph: ObjectGraph  # frozen prior graph (prebaked OSM/CityRefer)
     visited_xy: list[tuple[float, float]] = field(default_factory=list)
     step_idx: int = 0
     heading_deg: float = 0.0  # 0 = facing north (+y); derived from motion vector.
@@ -195,9 +194,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
     boost pushes), and the started SearchLoop."""
     graph = _episode_graph(tile_stem(episode.map_name), assets)
     start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.start_z)
-    # Runtime observations accumulate in this same graph; ``provenance``
-    # separates them from the prebaked nodes.
-    state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m, graph=graph)
+    state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m)
     state.record_visit()
     # A module global looked up at call time: the flight's forced replay swaps it.
     perception = make_perception()
@@ -212,6 +209,8 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
         # The look tool's crop raster (a live run crops its own imagery).
         rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
     )
+    # Runtime observations accumulate in this same graph; ``provenance``
+    # separates them from the prebaked nodes.
     search_loop.start(graph)
     return Hydrated(
         cfg=cfg, state=state, assets=assets, episode=episode,
