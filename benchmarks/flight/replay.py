@@ -542,7 +542,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     activate_calcity()
     flight_config(config)
     from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
-    from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
+    from benchmarks.citynav.paths import DEFAULT_SPLIT, TILES_DIR  # noqa: PLC0415
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
 
     row = rec.row
@@ -589,7 +589,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         replay_of={"sortie": rec.sortie.name, "run_no": run_no, "run_id": row.get("run_id"),
                    "workdir": rec.run_dir.name,
                    "mode": " ".join(m for m, on in (("forced", forced), ("frames", frames)) if on) or "bank"},
-        stops=rec.stops if forced else None, episode_id=episode_id, split=str(row.get("split") or "calcity"),
+        stops=rec.stops if forced else None, episode_id=episode_id, split=str(row.get("split") or DEFAULT_SPLIT),
         config=config, workdir=ep.dir, live=live, instruction=str(row.get("description") or ""),
         recorder=ep.recorder, close_log=ep.close, run_id=f"replay-{rec.sortie.name}", run_no=run_no,
         start_xy=tuple(row["start_xy"]), reasoning_effort=None if effort is None else str(effort),

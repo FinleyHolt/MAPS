@@ -171,7 +171,7 @@ def _xy(text: str) -> tuple[float, float]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config", default="configs/calcity.yaml")
-    ap.add_argument("--split", default="calcity")
+    ap.add_argument("--split", default=None, help="the split the episode is read from (default: the Cal City bench's)")
     ap.add_argument("--episode", required=True, help="the episode id; with --start-xy, an operator-authored mission's")
     ap.add_argument("--ortho", required=True, type=Path, help="the raster directory the twin's frames are rendered off")
     ap.add_argument("--instruction", default=None, help="the operator's words in place of the episode's")
@@ -192,14 +192,15 @@ def main(argv: list[str] | None = None) -> int:
 
     activate_calcity()
     from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
-    from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
+    from benchmarks.citynav.paths import DEFAULT_SPLIT, TILES_DIR  # noqa: PLC0415
     from benchmarks.flight.live_source import open_live  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
     from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
 
+    split = args.split or DEFAULT_SPLIT
     cfg = flight_config(args.config)
     sensor = resolve_sensor(cfg.sensor)
-    episode = resolve_episode(args.episode, args.split, args.start_xy)
+    episode = resolve_episode(args.episode, split, args.start_xy)
     map_name = episode.map_name
     ortho = map_render.load_raster(args.ortho, map_name)
     if ortho is None:
@@ -215,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     sortie = args.out / stamp
     ep = open_episode_dir(sortie, episode_id=args.episode, run_no=1)
-    mission = Mission(episode_id=args.episode, split=args.split, config=args.config, workdir=ep.dir, live=live,
+    mission = Mission(episode_id=args.episode, split=split, config=args.config, workdir=ep.dir, live=live,
                       instruction=args.instruction, recorder=ep.recorder, close_log=ep.close, run_id=stamp,
                       run_no=1, start_xy=args.start_xy, reasoning_effort=args.reasoning_effort,
                       agl_m=start_alt - ground_z)
