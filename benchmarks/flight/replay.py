@@ -38,12 +38,12 @@ import numpy as np
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
-from benchmarks.flight.live_source import ortho_observation
+from benchmarks.flight.live_source import open_live, ortho_observation
 from benchmarks.flight.measures import run_bases
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, activate_calcity,
                                        converse, flight_config, summary_line)
-from benchmarks.flight.tile_georef import FLOOR_MSL_M
-from maps.llm.http import TRANSCRIPT_JSONL
+from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
+from maps.llm.http import TRANSCRIPT_JSONL, CallCanceled
 
 log = logging.getLogger("flight.replay")
 
@@ -291,8 +291,6 @@ class BankSource:
         return None
 
     def _local(self, points) -> list[tuple[float, float]]:
-        from benchmarks.flight.tile_georef import lonlat_to_local  # noqa: PLC0415
-
         return [tuple(lonlat_to_local(self.tiles_dir, self.map_name, lon, lat)) for lon, lat in points]
 
     def _best(self, points) -> tuple[int | None, list[bool]]:
@@ -380,8 +378,6 @@ class Script:
                    and not m["content"].startswith("[Repair]"))
 
     def __call__(self, url, headers, body, *, timeout, cancel_event):
-        from maps.llm.http import CallCanceled  # noqa: PLC0415
-
         k, self.asked = self.asked, self.asked + 1
         answer = self.rec.responses[k] if k < len(self.rec.responses) else None
         if answer is None:
@@ -645,7 +641,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.frames is not None:
         activate_calcity()
         from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
-        from benchmarks.flight.live_source import open_live  # noqa: PLC0415
         from benchmarks.flight.recorded_ring import RecordedRing, run_window  # noqa: PLC0415
         from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
         from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415

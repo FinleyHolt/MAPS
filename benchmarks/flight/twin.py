@@ -31,7 +31,7 @@ import numpy as np
 
 from benchmarks.flight import map_render
 from benchmarks.flight.airframe import C12_LEVER_M, C12_SPEED_MPS
-from benchmarks.flight.nav_track import Pose, camera_pose_local, pose_tag
+from benchmarks.flight.nav_track import Pose, camera_pose_local, pose_tag, tag_pose
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, local_to_lonlat
 from benchmarks.flight.vehicle import Leg
 
@@ -145,8 +145,6 @@ class Twin:
         """``(jpeg, t_host, log_time, seq, tag)``: the frame rendered off the
         ortho at the camera pose the tag places it at; None off the ortho."""
         from PIL import Image  # noqa: PLC0415
-
-        from benchmarks.flight.nav_track import tag_pose  # noqa: PLC0415
 
         row = dict(self.rows[seq]) if 0 <= seq < len(self.rows) else None
         if row is None:
