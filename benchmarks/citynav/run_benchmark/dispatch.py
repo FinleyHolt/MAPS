@@ -179,9 +179,8 @@ def _dispatch_one(
         write_episode_json(episode_dir, out)
         return out
     if rec is None:
-        # The runner exited clean with no record (no objects for the map,
-        # the reasoner unreachable pre-flight): not a scored attempt, so it
-        # is excluded and re-queued.
+        # The runner skipped the episode (its map has no CityRefer objects):
+        # not a scored attempt, so it is excluded and re-queued.
         out = _stamp({
             "episode_id": _eid,
             "status": STATUS_INFRA,
