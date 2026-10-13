@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import math
+import random
 from pathlib import Path
 
 import yaml
@@ -37,8 +38,6 @@ def wilson_ci(k: int, n: int) -> tuple[float, float]:
 
 def _bootstrap_ci(diffs: list[float]) -> tuple[float, float]:
     """Seeded 95% percentile bootstrap CI (10,000 draws) for the mean of per-episode (b - a)."""
-    import random
-
     n = len(diffs)
     if n == 0:
         return (float("nan"), float("nan"))

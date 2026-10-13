@@ -7,14 +7,13 @@ what run context.
 from __future__ import annotations
 
 import pathlib
+import subprocess
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def _git_provenance() -> dict:
     """Commit and dirty flag for this checkout, None where git cannot say."""
-    import subprocess
-
     out: dict = {"git_commit": None, "git_dirty": None}
     try:
         commit = subprocess.run(
