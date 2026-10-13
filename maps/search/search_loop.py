@@ -108,8 +108,7 @@ class SearchLoop:
 
     def _prior_surface_xy_locked(self) -> dict:
         """``{fid: (x, y)}`` for every prior row as the surface serves it,
-        built once (priors do not move; a rebuild costs ~10 s on Cal City).
-        Under the lock."""
+        built once (priors do not move). Under the lock."""
         if self._prior_xy_cache is not None:
             return self._prior_xy_cache
         out: dict = {}

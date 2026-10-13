@@ -3,9 +3,7 @@
 Every mission call (`find`, `go_to`, `look_for`, ...) is a real function in one
 persistent per-mission namespace, so the model's Python behaves as Python and
 an error costs only the line it is on. Each call compiles its arguments
-(``code_surface``) and runs on the loop's verbs (:class:`MissionEnv`). Moving
-calls take a thing, never a coordinate or a whole result set, and a move inside
-a loop is refused up front."""
+(``code_surface``) and runs on the loop's verbs (:class:`MissionEnv`)."""
 
 from __future__ import annotations
 
@@ -631,7 +629,7 @@ class RowList(list):
 
 
 class Rows:
-    """A result set behind an executor ref. Lives for the whole mission.
+    """A result set behind an executor ref.
 
     Indexing gives a :class:`Row`; a slice is a window over the same ref
     (order preserved); ``len()`` counts the rows the ref holds now.
@@ -721,10 +719,6 @@ class Rows:
             shown=f"{src.ref}.{tier}"), self.mp)
 
     # -- cut and order: many filters, ONE ordering ------------------------
-    #
-    # The kwarg form is SERVED: it compiles to a `distance to <anchor>`
-    # column and a cut on it, a footprint gap to a set's nearest member.
-    # The predicate form runs any Python over the rows in hand.
     def filter(self, pred=None, *, near=None, within=None, dwithin=None,
                north_of=None, south_of=None, east_of=None, west_of=None,
                facing=None, direction=None,

@@ -39,8 +39,7 @@ def _degenerate_reason(*, text: str, reasoning: str, calls: list) -> str:
     """Why this completion is a serve fault, or ``""``: a callless
     completion whose content, or (with no content) whose reasoning, ends in
     a repeated-character run. Content is checked first because a prose reply
-    ends the mission. A length clip with no content is not a fault: it takes
-    the empty-turn repair."""
+    ends the mission."""
     if calls:
         return ""
     if _COLLAPSE_RUN.search(text):
@@ -205,13 +204,9 @@ class Reasoner:
         "text", "tool_calls"?, "content", "reasoning", "finish_reason"}``.
         A degenerate completion raises ``DegenerateCompletion`` unappended.
         """
-        # The compactor bounds crops in TOKENS; a card's ``max_images`` (a
-        # hosted endpoint's per-request limit) also bounds their COUNT by
-        # evicting the oldest. That rewrites history, which a self-hosted
-        # radix prefix would not survive; Bedrock caches a prompt only on its
-        # Responses API, so on chat completions there is no cached prefix to
-        # lose. It runs BEFORE the compactor, which would otherwise price
-        # crops about to go and fold text to make room for them.
+        # A card's ``max_images`` (a hosted endpoint's per-request limit)
+        # bounds the crop COUNT by evicting the oldest; it runs BEFORE the
+        # compactor, which would otherwise price crops about to go.
         max_images = card_for(self.model).get("max_images")
         if max_images:
             self.messages = bound_image_count(self.messages, max_images=max_images)

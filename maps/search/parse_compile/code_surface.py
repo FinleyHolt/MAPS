@@ -1,10 +1,7 @@
-"""The compiler behind the mission `run` block: one library call -> geom_program ops.
-
-Each library call ``python_surface`` executes compiles here onto ops the
-executor already runs (``find`` is find, ``intersection`` crossings,
-``ends_of`` ends, ``order`` score_by, ``filter`` filter_items). A
-:class:`Program` holds one call's ops; the loop grounds its named anchors and
-runs it."""
+"""The compiler behind the mission `run` block: each library call
+``python_surface`` executes compiles onto geom_program ops the executor
+already runs. A :class:`Program` holds one call's ops; the loop grounds its
+named anchors and runs it."""
 from __future__ import annotations
 
 import re
