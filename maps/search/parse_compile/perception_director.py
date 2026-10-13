@@ -148,7 +148,7 @@ class PerceptionDirector:
                 entry, token = {"xy": xy}, [round(xy[0], 1), round(xy[1], 1)]
             elif not token:
                 continue
-            elif token.startswith(("qstop_", "stop_")):
+            elif token.startswith("stop_"):
                 entry = {"stop": token}
             else:
                 entry = {"fid": token}

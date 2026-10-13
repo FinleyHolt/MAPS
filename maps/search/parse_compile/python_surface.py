@@ -163,7 +163,7 @@ class MissionNamespace(dict):
         # family: a `corner_5` typo falls through to the bound handles.
         m = re.fullmatch(r"([A-Za-z]+)_(\d+)", k)
         if m:
-            for pref in ("detected", "prior", "stop"):
+            for pref in ("detected", "prior"):
                 if not difflib.get_close_matches(
                         m.group(1), [pref], n=1, cutoff=0.75):
                     continue
