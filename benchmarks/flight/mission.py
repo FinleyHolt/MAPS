@@ -789,7 +789,7 @@ class Mission:
         """SR/OSR/NE/SPL through the bench's scorer, the last visited point the
         commit; None for an episode with no target."""
         h = self._hydrated
-        if h is None or h.episode.target_xy is None or len(visited) < 1:
+        if h is None or h.episode.target_xy is None:
             return None
         from benchmarks.citynav.adapter import load_objects  # noqa: PLC0415
         from benchmarks.citynav.paths import OBJECTS_JSON  # noqa: PLC0415
