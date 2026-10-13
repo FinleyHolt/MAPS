@@ -52,6 +52,13 @@ def test_a_list_where_one_place_goes_is_refused_by_its_slot():
     assert "error" not in point, point
 
 
+def test_a_stance_that_cannot_bind_says_why_in_words():
+    _, fr, _, _ = drive([[run("stand(at=[1, 2], facing=[1, 2])")], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert err.endswith(
+        "the stance did not bind: at and facing coincide -- no look direction"), err
+
+
 def test_a_block_flies_and_then_queries_what_the_pass_found():
     reply, out, flights, _asked, _rend = explore_drive([
         [run('look_for("pool")\n'

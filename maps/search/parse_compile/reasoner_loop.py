@@ -510,28 +510,23 @@ class _Mission:
         surface version (a program can answer differently under it)."""
         from maps.search.analyze_scene.geom_compute import COMPASS_UNIT  # noqa: PLC0415
 
-        def _rejected(error: str) -> dict:
-            return {"rejected": [{"index": 0, "error": error}]}
-
         at_xy = self._resolve_stage_point(at_tok)
         if at_xy is None:
-            return _rejected(f"at {at_tok!r} is not a live surface fid or an "
-                             f"[x, y] world point")
+            return {"error": f"at {at_tok!r} is not a live surface fid or an "
+                             f"[x, y] world point"}
         if facing_tok.strip().lower() in COMPASS_UNIT:
             up = list(COMPASS_UNIT[facing_tok.strip().lower()])
         else:
             f_xy = self._resolve_stage_point(facing_tok)
             if f_xy is None:
-                return _rejected(
-                    f"facing {facing_tok!r} is not a live surface "
-                    f"fid, an [x, y] point, or one of "
-                    f"{'|'.join(COMPASS_UNIT)}")
+                return {"error": (f"facing {facing_tok!r} is not a live surface "
+                                  f"fid, an [x, y] point, or one of "
+                                  f"{'|'.join(COMPASS_UNIT)}")}
             dx = f_xy[0] - at_xy[0]
             dy = f_xy[1] - at_xy[1]
             n = (dx * dx + dy * dy) ** 0.5
             if n < 1e-6:
-                return _rejected("at and facing coincide -- no look "
-                                 "direction")
+                return {"error": "at and facing coincide -- no look direction"}
             up = [dx / n, dy / n]
         h = f"v{len(self.staged_viewpoints) + 1}"
         brg = round(up_bearing_deg(up)) % 360
@@ -1178,10 +1173,8 @@ class _Mission:
 
     def _stand(self, at: str, facing: str) -> dict:
         st = self._stage_apply(at, facing)
-        if not st.get("staged"):
-            return self._plan_err({}, (
-                "the stance did not bind: "
-                + str(st["rejected"])))
+        if "error" in st:
+            return self._plan_err({}, f"the stance did not bind: {st['error']}")
         return {"stance": st}
 
     def _move_to(self, tok: str) -> dict:
