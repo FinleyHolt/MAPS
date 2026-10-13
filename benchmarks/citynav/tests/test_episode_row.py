@@ -48,7 +48,7 @@ def test_a_flying_episode_records_its_commit_and_final_pose(monkeypatch, tmp_pat
     flights = [{"target": "prior_7", "resolved_xy": [5.0, 6.0], "provenance": "prior"}]
     row = _run(monkeypatch, tmp_path, flights)
     m = row["metrics"]
-    assert row["final_pos_xy"] == [5.0, 6.0]
+    assert row["visited_xy"][-1] == [5.0, 6.0]
     assert m["steps_taken"] == 7
     assert (m["committed_fid"], m["committed_provenance"]) == ("prior_7", "prior")
     assert m["mission"] == {"ended_by": "reply"}
@@ -69,5 +69,5 @@ def test_a_shape_row_scores_the_commit_not_the_snapped_final_pose(monkeypatch, t
     strip = [[4.0, 5.0], [6.0, 5.0], [6.0, 7.0], [4.0, 7.0]]
     flights = [{"target": "prior_7", "resolved_xy": [5.0, 6.0], "provenance": "prior"}]
     row = _run(monkeypatch, tmp_path, flights, row={**_ROW, "target_mask": strip}, snap=3.0)
-    assert row["final_pos_xy"] == [8.0, 6.0]
+    assert row["visited_xy"][-1] == [8.0, 6.0]
     assert row["metrics"]["SR"] == 1
