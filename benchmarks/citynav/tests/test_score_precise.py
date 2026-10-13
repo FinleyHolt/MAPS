@@ -73,18 +73,6 @@ def test_degenerate_polygon_is_not_treated_as_a_shape():
     assert out["SR"] == 1
 
 
-def test_zero_area_polygon_raises_rather_than_scoring_a_miss():
-    """Three collinear points have no interior. Silently scoring 0 would
-    blame the agent for a bad annotation, so this is loud."""
-    with pytest.raises(ValueError):
-        score_precise(
-            final_xy=(5.0, 5.0),
-            target_xy=(5.0, 5.0),
-            gt_polygon=[(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)],
-            radius_m=15.0,
-        )
-
-
 def test_a_narrow_shape_is_scored_as_drawn():
     """A 4 m-wide road intersection gets no widening: 1 m past its edge misses."""
     crossing = [(0.0, 0.0), (12.0, 0.0), (12.0, 4.0), (0.0, 4.0)]

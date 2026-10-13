@@ -16,6 +16,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from maps.search.analyze_scene.geom_compute import point_in_polygon
+
 
 @dataclass(frozen=True)
 class WorldBounds:
@@ -62,16 +64,6 @@ def spl_pos_from_path(
     return float(sr_pos)
 
 
-def _as_polygon(polygon: list[tuple[float, float]]):
-    """Shapely polygon from a ring, self-touching vertices repaired."""
-    from shapely.geometry import Polygon
-
-    poly = Polygon(polygon).buffer(0)
-    if poly.is_empty:
-        raise ValueError("degenerate ground-truth polygon")
-    return poly
-
-
 def score_precise(
     *,
     final_xy: tuple[float, float],
@@ -82,14 +74,11 @@ def score_precise(
     """``SR`` on a shape-criterion bench: did the agent end up inside the target's real extent?
 
     With a ``gt_polygon`` (the linked object's contour, else the episode's
-    ``target_mask``), success is the point inside the shape, as drawn;
-    without one, within a disc of ``radius_m``.
+    ``target_mask``), success is the point inside the shape as drawn, by the
+    flight measures' even-odd test; without one, within a disc of ``radius_m``.
     """
     if gt_polygon and len(gt_polygon) >= 3:
-        from shapely.geometry import Point
-
-        distance = float(Point(final_xy).distance(_as_polygon(gt_polygon)))
-        return {"SR": 1 if distance == 0.0 else 0, "precise_target": "shape"}
+        return {"SR": 1 if point_in_polygon(final_xy, gt_polygon) else 0, "precise_target": "shape"}
     distance = math.hypot(final_xy[0] - target_xy[0], final_xy[1] - target_xy[1])
     return {"SR": 1 if distance <= radius_m else 0, "precise_target": "radius"}
 

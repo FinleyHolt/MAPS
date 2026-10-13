@@ -47,3 +47,20 @@ def test_a_row_matches_only_within_the_tolerance(tmp_path, monkeypatch):
     monkeypatch.setattr(reviewed, "split_path", lambda split: corpus)
     monkeypatch.setattr(reviewed, "GROUND_TRUTH", gt)
     assert reviewed_episode_ids() == ["calcity::0#0"]
+
+
+def test_a_commit_inside_a_self_crossing_reviewed_mask_scores():
+    """calcity::177#175's drawn mask crosses itself; a point inside a lobe (even-odd, the flight
+    measures' test) is inside the mask as drawn."""
+    import json
+
+    from benchmarks.calcity.paths import split_path
+    from benchmarks.citynav.adapter import parse_episode
+    from benchmarks.citynav.eval import score_arrival
+
+    rows = json.loads(split_path("calcity").read_text())
+    ep = next(e for e in (parse_episode(r, row_index=i) for i, r in enumerate(rows))
+              if e.episode_id == "calcity::177#175")
+    row = score_arrival(criterion="shape", final_pos_xy=(3740.64, 5826.91), target_xy=ep.target_xy,
+                        gt_polygon=ep.target_mask)
+    assert row["SR"] == 1

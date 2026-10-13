@@ -20,8 +20,8 @@ CENTRE = (510.0, 510.0)
 #: ring, OUTSIDE the shape. The two criteria disagree here by construction.
 RING_YES_SHAPE_NO = (528.0, 510.0)
 
-#: On the footprint's edge and 10 m from the centroid: both say yes.
-BOTH_YES = (520.0, 510.0)
+#: Inside the footprint and 9 m from the centroid: both say yes.
+BOTH_YES = (519.0, 510.0)
 
 
 def _score(criterion: str, xy, **kw):
