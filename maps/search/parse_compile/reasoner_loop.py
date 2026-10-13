@@ -940,7 +940,8 @@ class _Mission:
                            "class is also on the standing watchlist for "
                            "every later flight")
         if "error" not in res:
-            # A retro boost ingests detections now: refresh like a flight.
+            # Any accepted boost refreshes the surface and bumps its version,
+            # as a flight does (a retro boost has ingested detections).
             self._world_moved()
         if res.get("error"):
             return self._plan_err({"boost": res}, str(res["error"]))

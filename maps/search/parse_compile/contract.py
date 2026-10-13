@@ -48,13 +48,9 @@ def assemble(sensor: str | None = None, agl_m: float | None = None) -> dict:
 
 
 def surface_lines() -> list[str]:
-    """Every call the namespace serves, with its real signature.
-
-    Read off the executing functions themselves (``MissionPython._call_*``
-    over ``_LIBRARY_CALLS``), so a call the legend advertises and the
-    surface does not serve shows up as a row that reads wrong rather than
-    as nothing at all.
-    """
+    """Every call the namespace serves, with its real signature, read off
+    the executing functions themselves (``MissionPython._call_*`` for each
+    served call, then the ``Rows`` methods)."""
     from maps.search.parse_compile.python_surface import (
         MissionPython, Rows, served_calls)
 
@@ -64,7 +60,7 @@ def surface_lines() -> list[str]:
 
     out = [f"  {call}({_params(getattr(MissionPython, f'_call_{call}'))})"
            for call in served_calls()]
-    # A cut and a sort are METHODS on a result, not _LIBRARY_CALLS.
+    # A cut, a sort and a distance are methods on a result.
     out += [f"  <rows>.{name}({_params(getattr(Rows, name))})"
             for name in ("filter", "order", "distance")]
     return out
