@@ -513,7 +513,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     out["path_ft"], out["final_leg_ft"] = round(p * FT_PER_M, 1), round(leg * FT_PER_M, 1)
     out["shortest_ft"] = round(shortest * FT_PER_M, 1)
     if success:
-        if out["track_coverage"] < SPL_MIN_COVERAGE:
+        if thin:
             out["spl_note"] = f"undefined: the recording holds {out['track_coverage']:.0%} of the run"
         else:
             out["spl"] = round(shortest / max(p + leg, shortest), 4) if max(p + leg, shortest) > 0 else None
