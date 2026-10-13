@@ -115,6 +115,7 @@ these places, the served-text changes among them:
 | The bench resolves `sensor: {}` to the default sensor's override and serves its block, as the flight mission does. | The bench read `sensor: {}` as no sensor. |
 | A crop caption names a point subject (a flight view of an intersection point, or any go_to under the prior withhold) by its point label. | The caption named it `[?]`. |
 | The map caption describes the prior chips the renderer draws (bare-digit `NNNN`; on a map around a fid or with marks, only the centre and marks), says a white outline or ring marks the centre, and lists the legend without digits. | The caption promised `pNNNN` chips on every big-enough building, numbered badges and a `1 = ...` legend the map never drew; the pixels are the same. |
+| The bake places an OSM vertex in the cell it falls in (floored); a vertex up to one cell west or south of the block lies in no cell, so the CityNav bake holds 69 fewer edge priors over 23 of 34 blocks, with `prior_<i>` renumbered there. | The bake truncated toward zero, baking such a vertex as a phantom prior in column or row 0; the Cal City bake is unaffected. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -306,7 +307,7 @@ The rasterizer runs upstream's PDAL pipeline in an environment with `pdal`,
 `rasterio` and `pillow` (`RASTERIZE_PYTHON` names its interpreter). The bake
 writes `tiles/citynav_2m_osmv3` (the blocks are the rasters it finds); every run
 manifest records its `bake_sha256`, which for these steps is
-`c1e6a32cbd329d9e9413218be60fe7667eb225151dc0867238e1a37212ca8b8b`. See
+`12d699d686c1d68270f0b98e0e2c7e54397b1528fa61e304ce3e16b2f960b76e`. See
 [`benchmarks/citynav`](benchmarks/citynav/README.md) for the variables that
 relocate each part.
 
