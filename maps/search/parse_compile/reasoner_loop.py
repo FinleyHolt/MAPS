@@ -203,7 +203,7 @@ class MissionSpec:
     """
 
     fly: "Callable[[dict], dict]"
-    declare_concepts: "Callable[[list[dict]], str | None]"
+    declare_concepts: "Callable[[list[str]], str | None]"
     # ``coverage_stops(fid, spacing_m)``: an explore's stops over that fid's
     # footprint, or None when it carries no cells.
     coverage_stops: "Callable[[str, float], list | None] | None" = None
@@ -904,8 +904,7 @@ class _Mission:
         for _c in adds:
             self.mission_sam[:] = [c for c in self.mission_sam if c != _c]
             self.mission_sam.append(_c)
-        _err = self.mission_spec.declare_concepts(
-            [{"class": c, "role": "target"} for c in self.mission_sam])
+        _err = self.mission_spec.declare_concepts(list(self.mission_sam))
         ack: dict = {"now": [f"{c} (target)" for c in self.mission_sam]}
         if _err:
             ack["error"] = _err

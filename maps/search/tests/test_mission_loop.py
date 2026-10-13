@@ -116,4 +116,4 @@ def test_a_followup_turn_keeps_the_missions_names_stops_and_watchlist():
     named, stood = tool_results(fr)[n:]
     assert "error" not in named and named["watching"] == ["car (0 detected)"], named
     assert stood["stance"]["staged"][0]["at_xy"] == [1.0, 2.0], stood
-    assert declared == [[{"class": "car", "role": "target"}]]
+    assert declared == [["car"]]

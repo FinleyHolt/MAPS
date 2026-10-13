@@ -38,13 +38,13 @@ def test_setter_failure_reaches_the_receipt():
         raise RuntimeError("sam server gone")
 
     rcpt = search_loop(sam_setter=_boom).declare_mission_concepts(
-        [{"class": "house", "role": "target"}])
+        ["house"])
     assert "sam server gone" in rcpt
 
 
 def test_clean_setter_keeps_a_clean_receipt():
     assert search_loop(sam_setter=lambda cs: None).declare_mission_concepts(
-        [{"class": "house", "role": "target"}]) is None
+        ["house"]) is None
 
 
 def test_the_placed_form_also_arms_the_standing_watchlist():
@@ -57,17 +57,15 @@ def test_the_placed_form_also_arms_the_standing_watchlist():
     _, fr, _, declared = drive([[run('look_for("pool", at="the depot")\n')], "done"],
                                boost_queue=_boost)
     assert [c for c, _w in boosts] == [["pool"]]
-    assert {"class": "pool", "role": "target"} in declared[-1], declared
+    assert "pool" in declared[-1], declared
     ack = json.dumps(tool_results(fr)[0])
     assert "standing watchlist for every later flight" in ack, ack
 
 
 def test_the_declared_union_is_canonical_and_keeps_first_seen_order():
     pushed = []
-    search_loop(sam_setter=pushed.append).declare_mission_concepts([
-        {"class": "Red  Car", "role": "target"}, {"class": "tree", "role": "target"},
-        {"class": "None", "role": "target"}, {"class": "red car", "role": "anchor"},
-        {"class": None, "role": "target"}])
+    search_loop(sam_setter=pushed.append).declare_mission_concepts(
+        ["Red  Car", "tree", "None", "red car", None])
     assert pushed[0] == ["red car", "tree"]
 
 
@@ -94,7 +92,7 @@ def test_a_queued_boost_segments_its_flights_in_watchlist_order_until_its_target
 
     prov = ReasonerUnionConceptProvider()
     loop = search_loop(sam_setter=prov.set_concepts)
-    car, pool = {"class": "car", "role": "target"}, {"class": "pool", "role": "target"}
+    car, pool = "car", "pool"
     loop.declare_mission_concepts([car, pool])
     assert loop.boost_queue(["pool"], ["prior_1"])["queued"] == ["pool"]
     loop.declare_mission_concepts([pool, car])  # a re-declaration reorders the union

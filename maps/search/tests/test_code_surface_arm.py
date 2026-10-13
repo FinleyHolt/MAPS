@@ -683,9 +683,7 @@ def test_look_for_arms_the_segmenter_the_footer_already_advertises():
     assert out[0]["watching"] == {"now": ["pool (target)"]}, out[0]
     assert out[1]["watching"]["now"] == [
         "pool (target)", "car (target)", "parking lot (target)"], out[1]
-    assert declared[-1] == [{"class": "pool", "role": "target"},
-                            {"class": "car", "role": "target"},
-                            {"class": "parking lot", "role": "target"}]
+    assert declared[-1] == ["pool", "car", "parking lot"]
     # ...and free means loop-legal: the pre-scan cuts the MOVING calls out
     # of a loop body and nothing else.
     from maps.search.parse_compile.python_surface import scan_block

@@ -161,7 +161,7 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity,
     endpoint_spec.install_spec(endpoint_spec.discover_from_env())
     M.activate_calcity()
     h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=914.4)
-    h.search_loop.declare_mission_concepts([{"class": "car", "role": "target"}])
+    h.search_loop.declare_mission_concepts(["car"])
     h.search_loop.state.perception_director.watchlist_apply(["tree"], [])
     assert h.perception.concept_provider.concepts == ["car", "tree"]
 

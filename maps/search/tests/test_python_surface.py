@@ -33,9 +33,7 @@ def test_the_147_145_block_arms_the_watch_despite_the_map_refusal():
     assert "around= takes ONE place" in (out.get("error") or ""), out
     # The two lines before the refusal RAN: the watch is armed (with its
     # runtime detection count riding the trailer) and the handle is bound.
-    assert declared and declared[-1] == [
-        {"class": "house", "role": "target"},
-        {"class": "pool", "role": "target"}], declared
+    assert declared and declared[-1] == ["house", "pool"], declared
     assert out["watching"] == {"now": ["house (target)", "pool (target)"]}, \
         out["watching"]
     assert "street" in (out.get("handles") or []), out

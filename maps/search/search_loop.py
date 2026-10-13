@@ -275,14 +275,14 @@ class SearchLoop:
         with self._lock:
             self.state.perception_director.record_flown(flown)
 
-    def declare_mission_concepts(self, cleaned: list[dict]) -> str | None:
-        """Set the segmenter's classes to the declared ``[{class, role}]``
-        list's union and diff the director's watchlist to it. Returns the
-        error the mission serves when the setter failed, else None."""
-        # The classes SAM segments (it reads no roles), canonical, first seen
-        # first; a placeholder class is no class.
+    def declare_mission_concepts(self, classes: list[str]) -> str | None:
+        """Set the segmenter's classes to the declared list of classes and
+        diff the director's watchlist to it. Returns the error the mission
+        serves when the setter failed, else None."""
+        # The classes SAM segments, canonical, first seen first; a placeholder
+        # class is no class.
         union = list(dict.fromkeys(
-            c for c in (canon_concept(e["class"]) for e in cleaned)
+            c for c in (canon_concept(x) for x in classes)
             if c and c not in _NULL_CONCEPTS))
         setter_err: str | None = None
         with self._lock:

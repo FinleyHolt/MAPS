@@ -64,7 +64,7 @@ def _bare_loop():
 
 def test_declare_arms_the_director_on_first_call():
     loop, pushes = _bare_loop()
-    assert loop.declare_mission_concepts([{"class": "car", "role": "target"}]) is None
+    assert loop.declare_mission_concepts(["car"]) is None
     d = loop.state.perception_director
     assert d is not None
     assert d.watchlist == ["car"]
@@ -73,9 +73,9 @@ def test_declare_arms_the_director_on_first_call():
 
 def test_redeclare_is_latest_wins_via_diff_not_rebuild():
     loop, pushes = _bare_loop()
-    loop.declare_mission_concepts([{"class": "car", "role": "target"}])
+    loop.declare_mission_concepts(["car"])
     director_first = loop.state.perception_director
-    loop.declare_mission_concepts([{"class": "building", "role": "anchor"}])
+    loop.declare_mission_concepts(["building"])
     d = loop.state.perception_director
     assert d is director_first, "a redeclare diffs the live director, never rebuilds"
     assert d.watchlist == ["building"]
