@@ -7,7 +7,7 @@ Example:
 
 from __future__ import annotations
 
-from benchmarks.citynav.adapter import find_row, load_objects, load_split, parse_episode
+from benchmarks.citynav.adapter import episode_ids, find_row, load_objects, load_split, parse_episode
 from benchmarks.citynav.paths import DEFAULT_SPLIT, OBJECTS_JSON, assert_available, split_path
 from benchmarks.citynav.run_benchmark.config import (
     export_withhold,
@@ -20,13 +20,12 @@ import argparse
 import ctypes
 import os
 import signal
-import sys
 from benchmarks.citynav.run_benchmark.dispatch import (
     _dispatch_one,
     set_run_context,
 )
 from benchmarks.citynav import episodes
-from benchmarks.citynav.run_manifest import settle_effort
+from benchmarks.citynav import run_manifest as _rm
 from benchmarks.citynav.episode_workdir import (
     benchmark,
     open_episode_dir,
@@ -70,10 +69,6 @@ def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
     refuses a root reused under another config. The fleet driver emits at
     the fleet root; its attempt children return before reaching here.
     """
-    from benchmarks.citynav.adapter import episode_ids
-    from benchmarks.citynav import run_manifest as _rm
-
-    episodes = episode_ids(indexed_rows)
     _rm.emit_or_verify(
         out_root,
         _rm.build_manifest(
@@ -86,7 +81,7 @@ def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
             sample_seed=0,
             limit=args.limit or 0,
             allowlist_path=None,
-            episodes=episodes,
+            episodes=episode_ids(indexed_rows),
         ),
         log=log.info,
     )
@@ -150,21 +145,15 @@ def main() -> int:
     # Row provenance reads the run facts only this process's argv knows:
     # the config the runner actually loaded and the split.
     set_run_context(config_path=cfg.source_path, split=args.split)
-    # Endpoint discovery — ONE probe per process, before any inference or
-    # perception call. The served model id, context window (-> compaction
-    # budget + max_tokens pin) and service URLs are DISCOVERED from the live
-    # endpoints and frozen; any divergence (unreachable endpoint, >1 served
-    # model, missing window, unloadable tokenizer, dead/foreign service)
-    # aborts HERE, naming the fact — never a silent mid-episode 404/400.
-    # Offline/replay runs declare SEARCH_ENDPOINT_OFFLINE=1 + the explicit
-    # SEARCH_ENDPOINT_SPEC_OVERRIDE pin.
+    # Endpoint discovery, once per process before any inference or
+    # perception call: a fact it cannot discover stops the run here.
     try:
         spec = endpoint_spec_module.discover_from_env()
     except endpoint_spec_module.EndpointDiscoveryError as exc:
         log.error("endpoint discovery failed: %s", exc)
         return 2
     endpoint_spec_module.install_spec(spec)
-    settle_effort(spec.model_id)
+    _rm.settle_effort(spec.model_id)
     log.info(
         "MISSION: one reasoner conversation per episode -- requested "
         "viewpoints fly the moment they land, the plain reply ends the "
@@ -183,7 +172,7 @@ def main() -> int:
             log.error("No episode with id=%s in split=%s", args.episode_id, args.split)
             return 2
         indexed_rows = [found]
-    if args.limit and args.limit > 0:
+    if args.limit > 0:
         indexed_rows = indexed_rows[: args.limit]
     log.info("Loaded %d episodes from split=%s", len(indexed_rows), args.split)
 
@@ -214,11 +203,9 @@ def main() -> int:
         log.error("%s", exc)
         return 2
 
-    from benchmarks.citynav.run_manifest import ManifestIdentityError
-
     try:
         _emit_run_manifest(args, out_root=out_root, indexed_rows=indexed_rows)
-    except ManifestIdentityError as exc:
+    except _rm.ManifestIdentityError as exc:
         log.error("%s", exc)
         return 2
 
@@ -247,7 +234,3 @@ def main() -> int:
             ep.close()
 
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
