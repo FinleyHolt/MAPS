@@ -193,7 +193,7 @@ def _normalise_props(raw: dict[str, Any] | None) -> dict[str, Any]:
         if clean == "source":
             # OSM's own `source` tag (imagery/survey provenance, e.g. "Bing")
             # rides as `source_tag`, a key the search text drops
-            # (geom_program._PROVENANCE_TAGS).
+            # (geom_program._UNSERVED_TAGS).
             clean = "source_tag"
         props[clean] = value
     return props
