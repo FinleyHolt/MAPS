@@ -107,14 +107,20 @@ def _run_provenance(run_root: Path) -> dict:
     """The first row's provenance block, else {}, with what the manifest adds:
     the tile-bake content hash (every Cal City bake sits at
     ``benchmarks/calcity/tiles``, so the path the rows carry cannot tell two
-    apart), the arm's withholds, and the sha256 of the resolved config
-    without them (``config_body``: an E4 arm differs from E1 only there)."""
+    apart), the arm's withholds, the sha256 of the resolved config
+    without them (``config_body``: an E4 arm differs from E1 only there),
+    and ``resume_commits`` when the run's start and resumes name more than
+    one code commit."""
     prov = next((r["provenance"] for r in _rows.iter_json_rows(run_root / _rows.EPISODES_JSONL)
                  if r.get("provenance")), None)
     if not prov:
         return {}
     manifest = _rows.read_manifest(run_root)
     prov = dict(prov, withhold=manifest.get("withhold"))
+    commits = {prov.get("git_commit"), manifest.get("git_commit"),
+               *(r.get("git_commit") for r in manifest.get("resumes") or [])} - {None}
+    if len(commits) > 1:
+        prov["resume_commits"] = sorted(commits)
     bake = (manifest.get("perception") or {}).get("bake_sha256")
     if bake:
         prov["bake_sha256"] = bake
@@ -144,7 +150,8 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
     no A/B exists, and nothing waives it. ``arm`` is code, config (apart from
     its withholds where both manifests record it), served model and reasoning
     effort (unset reads as blank), which an A/B is meant to vary; compared only
-    where both sides recorded them, and waived by ``--allow-provenance-mismatch``."""
+    where both sides recorded them, and waived by ``--allow-provenance-mismatch``.
+    A side whose resumes ran other code is an ``arm`` mismatch on its own."""
     fatal: list[str] = []
     ga, gb = _ground_truth_keys(prov_a), _ground_truth_keys(prov_b)
     for key, label in (
@@ -177,6 +184,9 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
         va, vb = prov_a.get(key), prov_b.get(key)
         if va is not None and vb is not None and va != vb:
             arm.append(f"{label} differs:  A={va}  B={vb}")
+    for side, prov in (("A", prov_a), ("B", prov_b)):
+        if prov.get("resume_commits"):
+            arm.append(f"code (git_commit) differs across resumes of {side}:  {' '.join(prov['resume_commits'])}")
     fa, fb = prov_a.get("search_env_flags"), prov_b.get("search_env_flags")
     if fa is not None and fb is not None:
         ea, eb = (f.get("SEARCH_SAMPLING_REASONING_EFFORT") or "unset" for f in (fa, fb))

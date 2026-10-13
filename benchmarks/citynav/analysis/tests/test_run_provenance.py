@@ -41,3 +41,19 @@ def test_a_run_without_a_ledger_has_no_provenance(tmp_path):
     write_ledger(tmp_path / "w0/maps_20260101_000000_citynav_x",
                  {"episode_id": "e1", "status": "ok", "provenance": _PROV}, name="episode.json")
     assert _run_provenance(tmp_path) == {}
+
+
+def test_a_run_resumed_under_other_code_is_an_arm_mismatch(tmp_path):
+    """The first row names one commit; a resume the manifest records under another means the run's
+    rows came from two codes, which an A/B against a one-code run must not wave through."""
+    import json
+
+    from benchmarks.citynav.analysis.ab_report import comparability_issues
+
+    a, b = tmp_path / "a", tmp_path / "b"
+    for root, resumes in ((a, [{"git_commit": "def5678"}]), (b, [])):
+        write_ledger(root, {"episode_id": "e1", "status": "ok", "provenance": _PROV})
+        (root / "run_manifest.json").write_text(json.dumps({"git_commit": "abc1234", "resumes": resumes}))
+    _, arm = comparability_issues(_run_provenance(a), _run_provenance(b))
+    assert any("code (git_commit) differs across resumes" in m for m in arm), arm
+    assert comparability_issues(_run_provenance(b), _run_provenance(b)) == ([], [])
