@@ -1,6 +1,5 @@
-"""The ``look`` crop renderer: pure functions of resolved crop specs and the
-raster (or the run's own imagery), so a live crop and its re-render are the
-same bytes."""
+"""The ``look`` crop renderer: pure functions of resolved crop requests and
+the raster (or the run's own imagery)."""
 
 from __future__ import annotations
 
@@ -279,19 +278,24 @@ def render_candidate_crops(
     rgbd_dir: str,
     imagery=None,
 ) -> list[dict]:
-    """One crop record per request (``views.crop_requests``),
-    in order: the window is sized and centred here, then
-    ``render_look_from_spec`` renders it. ``imagery`` (``gsd_m`` and
-    ``ortho(window)``) is the run's own captures in a flight mission; unset,
-    the raster is the camera. A failed crop is logged and skipped."""
+    """One crop record per request (``views.crop_requests``), in order: the
+    window is sized and centred here, then ``_crop_record`` renders it.
+    ``imagery`` (``gsd_m`` and ``ortho(window)``) is the run's own captures
+    in a flight mission; unset, the raster is the camera. A failed crop is
+    logged and skipped."""
     from maps.perception.ortho.camera_model import (  # noqa: PLC0415
         ortho_gsd_m,
         ortho_world_bounds,
     )
+    from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
+
+    if map_name not in GROUND_LEVEL:
+        log.warning("look: map %r not in GROUND_LEVEL; no crop", map_name)
+        return []
 
     # The raster extent a near-edge window shifts inside (the run's imagery
     # has no edge). An unreadable ortho renders no crops, so the 0.1 m/px
-    # fallback only sizes specs that then fail.
+    # fallback only sizes windows that then fail.
     _wb = None
     if imagery is None:
         try:
@@ -315,7 +319,6 @@ def render_candidate_crops(
         cxy = req.get("center_xy")
         if not (isinstance(cxy, (list, tuple)) and len(cxy) == 2):
             continue
-        center_fid = str(req.get("center_fid") or "")
         true_x, true_y = float(cxy[0]), float(cxy[1])
         pts = [(true_x, true_y)]
         for _m in (req.get("marks") or []):
@@ -347,31 +350,22 @@ def render_candidate_crops(
             (true_x, true_y),
             ((max(_xs) + min(_xs)) / 2.0, (max(_ys) + min(_ys)) / 2.0),
             _wb, half_ctx, LOOK_CAR_MARGIN_M)
-        # built from the rounded values it persists: a byte-exact re-render
-        rec = render_look_from_spec({
-            "map_name": map_name,
-            "center_fid": center_fid,
-            "center_label": str(req.get("center_label")
-                                or center_fid or "candidate"),
-            "center_boundary": req.get("center_boundary"),
-            "marks": req.get("marks") or [],
-            "world_xy": [round(true_x, 2), round(true_y, 2)],
-            "pose_xy": [round(pose_x, 2), round(pose_y, 2)],
-            "context_m": _ctx,
-            **({"frame_up": req["frame_up"],
-                "frame_note": req.get("frame_note") or ""}
-               if req.get("frame_up") is not None else {}),
-        }, rgbd_dir=rgbd_dir, imagery=imagery)
+        # the window is placed off the 2 dp values the record states
+        rec = _crop_record(
+            req, map_name=map_name,
+            true_xy=(round(true_x, 2), round(true_y, 2)),
+            pose_xy=(round(pose_x, 2), round(pose_y, 2)), ctx=_ctx,
+            rgbd_dir=rgbd_dir, imagery=imagery)
         if rec is not None:
             out.append(rec)
     return out
 
 
-def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | None:
-    """Render one crop from its spec (``map_name, center_*, marks, world_xy,
-    pose_xy, context_m``, optional ``frame_up``): ``{"jpeg": bytes, ...}``,
-    whose non-jpeg part re-renders to the same bytes. None (logged) on a
-    malformed spec or a failed render."""
+def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
+                 rgbd_dir: str, imagery) -> dict | None:
+    """Render one crop of the ``ctx`` m square at ``pose_xy`` around the
+    subject at ``true_xy``: ``{"jpeg": bytes, ...}`` with the caption's
+    facts, or None (logged) on a failed render."""
     import cv2  # noqa: PLC0415 — hard dep of the overlay renderer
     import numpy as np  # noqa: PLC0415
     from maps.perception.ortho.camera_model import raster_source_gsd_m  # noqa: PLC0415
@@ -379,29 +373,12 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     from maps.perception.viz.mllm_overlay import render_look_overlay  # noqa: PLC0415
     from maps.perception.observation import crop_ortho_observation  # noqa: PLC0415
 
-    map_name = str(spec.get("map_name") or "")
-    if map_name not in GROUND_LEVEL:
-        log.warning("look: map %r not in GROUND_LEVEL; no crop",
-                    map_name)
-        return None
     ground = float(GROUND_LEVEL[map_name])
-    wxy = spec.get("world_xy")
-    pxy = spec.get("pose_xy")
-    try:
-        _ctx = float(spec.get("context_m") or 0.0)
-    except (TypeError, ValueError):
-        _ctx = 0.0
-    if not (isinstance(wxy, (list, tuple)) and len(wxy) == 2
-            and isinstance(pxy, (list, tuple)) and len(pxy) == 2
-            and _ctx > 0.0):
-        log.warning("look: malformed crop spec (world_xy/pose_xy/context_m); "
-                    "no crop")
-        return None
-    true_x, true_y = float(wxy[0]), float(wxy[1])
-    pose_x, pose_y = float(pxy[0]), float(pxy[1])
-    half_ctx = _ctx / 2.0
-    center_fid = str(spec.get("center_fid") or "")
-    req = spec
+    true_x, true_y = true_xy
+    pose_x, pose_y = pose_xy
+    half_ctx = ctx / 2.0
+    center_fid = str(req.get("center_fid") or "")
+    center_label = str(req.get("center_label") or center_fid or "candidate")
     try:
         _window = (pose_x - half_ctx, pose_y - half_ctx, pose_x + half_ctx, pose_y + half_ctx)
         oc = crop_ortho_observation(
@@ -430,26 +407,20 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
     # valid fraction.
     # ponytail: whole-image warp (corners go black); a sqrt(2) over-crop
     # upgrade keeps full coverage if framed crops prove load-bearing.
-    _rotM, band_text = view_rotation(spec.get("frame_up"), W, H)
+    _rotM, band_text = view_rotation(req.get("frame_up"), W, H)
     validity0 = validity
     if _rotM is not None:
         rgb = cv2.warpAffine(rgb, _rotM, (W, H))
         _Hv0, _Wv0 = validity.shape[:2]
         validity = cv2.warpAffine(
             validity.astype(np.uint8),
-            view_rotation(spec.get("frame_up"), _Wv0, _Hv0)[0], (_Wv0, _Hv0),
+            view_rotation(req.get("frame_up"), _Wv0, _Hv0)[0], (_Wv0, _Hv0),
             flags=cv2.INTER_NEAREST)
     x0, y0, x1, y1 = oc["world_window"]
     meta = {
         "center_fid": center_fid,
-        "center_label": str(req.get("center_label")
-                            or center_fid or "candidate"),
-        "center_boundary": req.get("center_boundary"),
-        "marks": req.get("marks") or [],
-        "map_name": map_name,
-        "world_xy": [round(true_x, 2), round(true_y, 2)],
-        "pose_xy": [round(pose_x, 2), round(pose_y, 2)],
-        "context_m": _ctx,
+        "world_xy": [true_x, true_y],
+        "context_m": ctx,
         "gsd_m_per_px": round((x1 - x0) / max(W, 1), 4),
         "side_px": int(W),
         # what the camera resolved: the live imager's, or the raster's cell
@@ -458,12 +429,11 @@ def render_look_from_spec(spec: dict, *, rgbd_dir: str, imagery=None) -> dict | 
         "source": "run" if imagery is not None else "bake",
         "world_window": [round(float(v), 2) for v in (x0, y0, x1, y1)],
     }
-    meta.update(frame_echo(spec))
+    meta.update(frame_echo(req))
     sx = (x1 - x0) or 1.0
     sy = (y1 - y0) or 1.0
     _w2p = pixel_mapper(x0, y1, sx, sy, W, H, _rotM)
     center_px = _w2p(true_x, true_y)
-    center_label = meta["center_label"]
 
     marks = req.get("marks") or None
     target_px: tuple[float, float] | None = None

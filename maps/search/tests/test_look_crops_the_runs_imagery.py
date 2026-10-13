@@ -146,10 +146,14 @@ def test_subject_on_data_samples_the_north_up_row(monkeypatch):
 
     monkeypatch.setattr(observation, "crop_ortho_observation", north_half_imaged)
     run = _Imagery()
-    spec = {"map_name": next(iter(GROUND_LEVEL)), "center_fid": "b1",
-            "pose_xy": [0.0, 0.0], "context_m": 60.0}
-    north = look_render.render_look_from_spec({**spec, "world_xy": [0.0, 20.0]},
-                                              rgbd_dir="/nowhere", imagery=run)
-    south = look_render.render_look_from_spec({**spec, "world_xy": [0.0, -20.0]},
-                                              rgbd_dir="/nowhere", imagery=run)
+
+    def crop(subject_y):
+        # a mark on the far side centres the window between the two
+        mark = {"fid": "m", "xy": [0.0, -subject_y], "label": "m", "is_target": False}
+        (rec,) = look_render.render_candidate_crops(
+            [{"center_fid": "b1", "center_xy": [0.0, subject_y], "marks": [mark]}],
+            map_name=next(iter(GROUND_LEVEL)), rgbd_dir="/nowhere", imagery=run)
+        return rec
+
+    north, south = crop(20.0), crop(-20.0)
     assert (north["subject_on_data"], south["subject_on_data"]) == (True, False)
