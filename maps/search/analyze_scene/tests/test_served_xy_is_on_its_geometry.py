@@ -1,4 +1,4 @@
-"""A row's served ``xy`` is the ``act.move`` FLIGHT TARGET, so it is a place."""
+"""A row's served ``xy`` is the ``go_to``/``explore`` FLIGHT TARGET, so it is a place."""
 from __future__ import annotations
 
 import math

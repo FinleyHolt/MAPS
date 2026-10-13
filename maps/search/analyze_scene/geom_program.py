@@ -172,10 +172,8 @@ _MASK_GEOM_MAX = 50_000
 
 
 class _FindMemo:
-    """A find's work per query (scored rows, dead words, census note) and the
-    surface's word rarity, for the surface lists it was built on (their
-    identities; ``lists`` pins them so an id cannot be reused, and a rebuild
-    replaces them). Results get copies."""
+    """A find's per-query work and word rarity for the surface lists it was
+    built on; ``lists`` pins them so their ids cannot be reused."""
 
     def __init__(self):
         self.reset(None, None)
@@ -280,11 +278,8 @@ def _rows_by_content(kind, nodes, build_row, geom):
 
 def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
     """The ``(cands, anchors)`` surface from detection and prior ``(fid,
-    node)`` iterables, both sorted by fid. A row's xy is the node's
-    ``world_xy``, else a point on its geometry, else its centroid cell's
-    centre; every masked node gets the exact ``mask`` chains, the hidden
-    ``mask_centroid`` and the shape scalars, and priors carry their centerline
-    in world metres."""
+    node)`` iterables, both sorted by fid: one row per node, with its mask
+    chains and shape scalars when masked and a prior's world centerline."""
     tx, ty = float(origin_xy[0]), float(origin_xy[1])
     cs = float(cell_m)
 
@@ -292,8 +287,9 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         return [round(tx + (int(rc[1]) + 0.5) * cs, 2), round(ty + (int(rc[0]) + 0.5) * cs, 2)]
 
     def _xy(n, mask=None):
-        """The row's served point, the ``act.move`` flight target: the
-        tracker's ``world_xy``, else :func:`representative_point`."""
+        """The row's served point, the ``go_to``/``explore`` flight target: the
+        tracker's ``world_xy``, else the mask's :func:`representative_point`,
+        else the centroid cell's centre."""
         w = n.world_xy
         if w is not None and len(w) >= 2:
             return [round(float(w[0]), 2), round(float(w[1]), 2)]
@@ -498,15 +494,10 @@ def _model_facing_row(row):
 
 class Result(list):
     """An op's rows and how :func:`compact_results` renders them, by
-    ``kind``: ``broad`` (find, crossings, ends), ``miss`` (a find query that
-    matched nothing: always empty, its hint states the rows it searched),
-    ``cut`` (filter_items, stratum: ``cut_stats``, what the cut kept, dropped
-    and would admit, render with it), ``compare`` (one grid under the per-ref
-    ``refs`` headers and the ``columns`` it attached) or ``sorted``
-    (score_by). ``ordered`` when its order is real, ``name_set`` when it is
-    one name's tied ways, ``op_cols`` the columns its op attached,
-    ``set_notes`` the notes that describe these rows and ``consumed`` when a
-    later op of the same program read them."""
+    ``kind``: ``broad`` (find, crossings, ends), ``miss`` (an empty find),
+    ``cut`` (filter_items, stratum), ``compare`` or ``sorted`` (score_by).
+    ``consumed`` marks rows a later op read; the other attributes are render
+    inputs its op sets."""
 
     ordered: bool = False
     name_set: bool = False
@@ -2086,7 +2077,7 @@ def run_program(cands, anchors, program, seed_results=None,
                 staged=None, standing=None):
     """Run ``{"ops": [{ref, op, args}, ...]}`` (dependency order) over the
     surface rows; returns ``{"results": {ref: rows}}``. A handle defined here
-    shadows its ``seed_results`` entry; ``staged`` maps act.stage handles to
+    shadows its ``seed_results`` entry; ``staged`` maps stand() handles to
     ``{"handle", "from_xy", "up_unit"}`` and ``standing`` names the one whose
     side columns ride every find."""
     cx = _Run(cands, anchors, seed_results, staged, standing)

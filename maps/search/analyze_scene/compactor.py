@@ -289,7 +289,7 @@ def _drop_spent_turns(
     tools: list[dict] | None,
 ) -> tuple[list[dict], int, int]:
     """``(messages, n_turns_folded, tokens_freed)``: the oldest foldable
-    turns replaced, in place, by one script block until ``shed_tokens`` are
+    turns replaced by one script block until ``shed_tokens`` are
     freed. Earlier blocks are never touched; nothing folded returns the
     input."""
     units = _turn_units(messages)
