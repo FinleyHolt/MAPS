@@ -32,11 +32,10 @@ import numpy as np
 from benchmarks.flight import map_render
 from benchmarks.flight.airframe import C12_LEVER_M, C12_SPEED_MPS
 from benchmarks.flight.nav_track import Pose, camera_pose_local, pose_tag, tag_pose
+from benchmarks.flight.recorded_ring import RING_HZ
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, local_to_lonlat
 from benchmarks.flight.vehicle import Leg
 
-#: The recorder's frame rate: two frames a second.
-CAMERA_HZ = 2.0
 #: A twin frame's JPEG quality, the recorder's own.
 FRAME_JPEG_QUALITY = 90
 #: The receiver's clock at the twin's time zero.
@@ -83,13 +82,13 @@ class Twin:
         return self.t
 
     def sleep(self, seconds: float) -> None:
-        """Fly ``seconds`` of the route on the twin's clock, a camera tick at a time."""
-        dt_s = 1.0 / CAMERA_HZ
+        """Fly ``seconds`` of the route on the twin's clock, one frame of the recorder's ring at a time."""
+        dt_s = 1.0 / RING_HZ
         self._owed += max(0.0, float(seconds))
         while self._owed >= dt_s - 1e-9:
             self._advance(dt_s)
             self._owed -= dt_s
-            self.t = len(self._track) / CAMERA_HZ
+            self.t = len(self._track) / RING_HZ
             self._track.append((self.t, *self.xy, self.heading_deg))
             self._record()
         for hook in self.on_sleep:
@@ -133,7 +132,7 @@ class Twin:
         track = self._track
         if t >= track[-1][0]:
             return self._pose_at_track(t, *track[-1][1:])
-        i = max(0, min(len(track) - 2, int(t * CAMERA_HZ)))
+        i = max(0, min(len(track) - 2, int(t * RING_HZ)))
         (t0, x0, y0, h0), (t1, x1, y1, h1) = track[i], track[i + 1]
         w = min(max((t - t0) / (t1 - t0), 0.0), 1.0)
         return self._pose_at_track(t, x0 + (x1 - x0) * w, y0 + (y1 - y0) * w, h1 if w >= 0.5 else h0)
