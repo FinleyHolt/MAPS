@@ -123,52 +123,52 @@ def synthesize_compliant_trajectory(
         steps = 0
         state.pose_xy = (float(start_pose_xyh[0]), float(start_pose_xyh[1]))
         state.altitude_m = float(start_alt)
-        react_descent_starved = _walk_tour(max_frames - descent_reserve, descent_reserve)
+        tail_dropped = _walk_tour(max_frames - descent_reserve, descent_reserve)
         descent_truncated = _fly_descent()
         if not descent_truncated:
             break
-        _short_m = math.hypot(float(state.pose_xy[0]) - descent_xy[0],
-                              float(state.pose_xy[1]) - descent_xy[1])
+        short_m = math.hypot(float(state.pose_xy[0]) - descent_xy[0],
+                             float(state.pose_xy[1]) - descent_xy[1])
         if descent_reserve >= max_frames:
             log.error(
-                "COMPLIANT-PARALLEL: commit descent UNREACHABLE within the "
+                "replay: commit descent UNREACHABLE within the "
                 "action budget even with the FULL budget reserved (whole "
                 "tour dropped): the final pose stays %.1fm short of the committed "
                 "target %s (steps=%d/%d, replans=%d)",
-                _short_m, descent_xy, steps, int(max_frames),
+                short_m, descent_xy, steps, int(max_frames),
                 descent_replans,
             )
             break
         descent_replans += 1
-        _new_reserve = min(
+        new_reserve = min(
             max_frames,
             max(2 * descent_reserve,
-                descent_reserve + int(_short_m / FORWARD_STEP_M) + 12,
+                descent_reserve + int(short_m / FORWARD_STEP_M) + 12,
                 16),
         )
         log.warning(
-            "COMPLIANT-PARALLEL: commit descent truncated %.1fm short of "
+            "replay: commit descent truncated %.1fm short of "
             "the committed target %s (steps=%d/%d, reserve=%d) -> "
             "re-synthesizing the replay with reserve=%d (replan %d; the "
             "stop tail is already perceived, the commit transit is not "
             "optional)",
-            _short_m, descent_xy, steps, int(max_frames),
-            descent_reserve, _new_reserve, descent_replans,
+            short_m, descent_xy, steps, int(max_frames),
+            descent_reserve, new_reserve, descent_replans,
         )
-        descent_reserve = _new_reserve
+        descent_reserve = new_reserve
 
     final_pos_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
     log.info(
-        "COMPLIANT-PARALLEL trajectory (discrete 6-action): %d tour stops %s "
+        "replay trajectory (discrete 6-action): %d tour stops %s "
         "descent=%s frames=%d final_pos_xy=%s (budget=%d) "
-        "descent_starved=%s descent_truncated=%s",
+        "tail_dropped=%s descent_truncated=%s",
         len(tour_fids),
         tour_fids,
         descent_xy,
         steps,
         final_pos_xy,
         int(max_frames),
-        react_descent_starved,
+        tail_dropped,
         descent_truncated,
     )
     return steps
