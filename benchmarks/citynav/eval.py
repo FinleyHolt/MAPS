@@ -150,14 +150,10 @@ def score_arrival(
 
 
 def aggregate(per_episode: list[dict]) -> dict:
-    """Macro-average episode-level metrics into a single summary dict."""
-    if not per_episode:
-        return {"n_episodes": 0}
-    n = len(per_episode)
-    keys_mean = ["NE", "SR", "OSR", "spl_pos"]
-    out: dict = {"n_episodes": n}
-    for k in keys_mean:
-        # A None (``spl_pos`` on a single-pose record) never poisons the mean.
+    """Macro-average a non-empty list of episode metrics into one summary dict."""
+    out: dict = {}
+    for k in ("NE", "SR", "OSR"):
+        # A key a row lacks (OSR on a shape-scored row) stays out of the mean.
         vals = [r[k] for r in per_episode if r.get(k) is not None]
         if vals:
             out[k] = round(float(np.mean(vals)), 4)
@@ -172,8 +168,8 @@ def aggregate(per_episode: list[dict]) -> dict:
         out[f"precise_{kind}_n"] = len(vals)
         if vals:
             out[f"SR_by_{kind}"] = round(float(np.mean(vals)), 4)
-    # CityNav reports SR/OSR/SPL as percentages.
-    for k in ("SR", "OSR", "spl_pos", "SR_by_shape", "SR_by_radius"):
+    # CityNav reports its rates as percentages.
+    for k in ("SR", "OSR", "SR_by_shape", "SR_by_radius"):
         if k in out:
             out[k + "_pct"] = round(out[k] * 100.0, 2)
     return out
