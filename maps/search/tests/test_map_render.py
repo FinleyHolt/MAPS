@@ -408,3 +408,15 @@ def test_a_map_after_a_flight_paints_the_flight_and_a_repeat_paints_the_same():
     assert before != after, "the map after the flight did not change"
     assert after == again, "a repeat under one version is not the same bytes"
     assert "car=" in maps[1][0] and "car=" not in maps[0][0]
+
+
+def test_dropped_detection_chips_are_not_counted_as_unchipped_buildings():
+    """Only prior chips count toward the caption's building tally: dN chips
+    that cannot all fit leave it at zero when no building is in frame."""
+    dets = [{"fid": f"detected_{i}", "label": "car", "provenance": "detected",
+             "cells": [[50, 50]]} for i in range(12)]
+    rec = render_map_from_spec(
+        {"center_xy": [101.0, 101.0], "context_m": 60.0}, dets,
+        tile_origin_xy=(0.0, 0.0), cell_size_m=2.0, grid_shape=(200, 200))
+    assert rec["features_painted"] == 12
+    assert (rec["priors_chipped"], rec["priors_unchipped"]) == (0, 0)

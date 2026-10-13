@@ -248,9 +248,8 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     def _draw_glyphs(queue):
         """Draw queued glyphs in order, never overlapping: a colliding glyph
         takes the least crowded diagonal offset, a moved one a leader, and
-        one with no free offset is dropped, counted and its tag recorded. A
-        pill backdrop draws only off the chip's own colour."""
-        dropped = 0
+        one with no free offset is dropped, its prior tag recorded. A pill
+        backdrop draws only off the chip's own colour."""
         for x0_, y0_, pw_, ph_, txt_, th_, fill_, tag_ in queue:
             ax_, ay_ = float(x0_ + pw_ / 2.0), float(y0_ + ph_ / 2.0)
             cands = [(x0_, y0_)]
@@ -270,7 +269,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                 scored.append((crowd, bb))
             crowd, box = min(scored, key=lambda c: c[0])
             if crowd > 0:
-                dropped += 1
                 if tag_ is not None:
                     _undrawn.add(tag_)
                 continue
@@ -297,7 +295,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
             cv2.putText(rgb, txt_, (x0_ + 4, y0_ + th_ + 4),
                         cv2.FONT_HERSHEY_SIMPLEX, _CHIP_FS, (0, 0, 0),
                         _CHIP_TH, cv2.LINE_AA)
-        return dropped
 
     _placed_boxes: list = []
     _undrawn: set = set()
@@ -331,7 +328,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
             if de["stacked"]:
                 n_prior_unchipped += 1  # one stack slot per detection
             else:
-                de["stacked"].append(digits)
+                de["stacked"].append((digits, str(pfid)))
                 n_stacked += 1
             continue
         _fits = not (pw > bw + 4 or ph > bh + 4)
@@ -373,13 +370,14 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         bx0 = int(min(max(cpx - (tw + 8) / 2.0, 1), W - tw - 9))
         by0 = int(min(max(cpy - (th + 8) / 2.0, 1), H - th - 9))
         _chip(bx0, by0, tw + 8, th + 8, chip, th, det_color)
-        for digits in de["stacked"]:
+        for digits, sfid in de["stacked"]:
             (tw2, th2), _ = cv2.getTextSize(digits, cv2.FONT_HERSHEY_SIMPLEX,
                                             _CHIP_FS, _CHIP_TH)
             pw2, ph2 = tw2 + 8, th2 + 8
             sx0 = int(min(max(cpx - pw2 / 2.0, 1), W - pw2 - 1))
             sy0 = int(min(by0 + th + 10, H - ph2 - 1))
-            _chip(sx0, sy0, pw2, ph2, digits, th2, _tan)
+            _chip(sx0, sy0, pw2, ph2, digits, th2, _tan,
+                  tag_=("prior", sfid))
 
     center_fid = str(spec.get("center_fid") or "")
     center_label = str(spec.get("center_label") or center_fid or "map center")
@@ -426,7 +424,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         _my = sum(float(p_[1]) for p_ in _inw) / len(_inw)
         _name_cands.append((*_w2p(_mx, _my), str(_f["name"])))
 
-    n_prior_unchipped += _draw_glyphs(_glyphs)
+    _draw_glyphs(_glyphs)
 
     _seen_names: set = set()
     for _px, _py, _lab in _name_cands:
@@ -480,9 +478,9 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         "jpeg": jp,
         "kind": "map",
         "features_painted": int(sum(e["cells"] for e in counts.values())),
-        # a glyph the placement could not fit is counted out
+        # a prior chip the placement could not fit is counted out
         "priors_chipped": int(n_prior_chips + n_stacked) - len(_undrawn),
-        "priors_unchipped": int(n_prior_unchipped),
+        "priors_unchipped": int(n_prior_unchipped) + len(_undrawn),
         "center_boundary": spec.get("center_boundary"),
         "marks": spec.get("marks") or [],
         "center_fid": center_fid,
