@@ -42,9 +42,7 @@ def cw(v):
 
 
 def _xy(p):
-    """``(x, y)`` floats of ``[x, y]`` or ``{"xy": [x, y]}``."""
-    if isinstance(p, dict):
-        p = p.get("xy")
+    """``(x, y)`` floats of ``[x, y]``."""
     return float(p[0]), float(p[1])
 
 
@@ -139,8 +137,6 @@ def points_from_geoms(geoms):
     vertices when it has none), or ``None``."""
     out = []
     for g in geoms:
-        if not isinstance(g, dict):
-            continue
         if len(g.get("A", ())):
             out.append(densify_segments(g["A"], g["B"]))
         elif len(g.get("V", ())):
@@ -198,10 +194,7 @@ def color_match(cand_color: str, cue_color: str, conf: float | None = None) -> f
     b = (cue_color or "").strip().lower()
     mix = _parse_color_mixture(cand_color or "")
     if mix is not None:
-        if not b:
-            raw = 0.5
-        else:
-            raw = max(0.5 + frac * (_color_word_raw(w, b) - 0.5) for w, frac in mix)
+        raw = max(0.5 + frac * (_color_word_raw(w, b) - 0.5) for w, frac in mix)
     else:
         a = (cand_color or "").strip().lower()
         raw = _color_word_raw(a, b)
@@ -240,11 +233,11 @@ def normalize_color(word: str) -> str:
 COLOR_COLUMNS = frozenset("color_" + w for w in COLOR_ENUM)
 
 
-def compact_color_cell(color_str: str, shade: "str | None" = None, uncertain: bool = False,
-                       rich: bool = True) -> str:
-    """The rendered colour cell ``[dk|lt ]word[/word2][?]`` of a mixture:
-    ``word2`` when ``rich`` and the second component crosses a family, ``?``
-    on an uncertain read."""
+def compact_color_cell(color_str: str, *, shade: "str | None", uncertain: bool,
+                       rich: bool) -> str:
+    """The rendered colour cell ``[dk|lt ]word[/word2][?]`` of a mixture
+    (``shade`` is ``dk``, ``lt`` or None): ``word2`` when ``rich`` and the
+    second component crosses a family, ``?`` on an uncertain read."""
     s = (color_str or "").strip()
     if not s or s == "?":
         return "?"
@@ -261,7 +254,7 @@ def compact_color_cell(color_str: str, shade: "str | None" = None, uncertain: bo
         if (w_ach != w2_ach) or (not w_ach and not w2_ach
                                  and _COLOR_FAMILY.get(word) != _COLOR_FAMILY.get(w2)):
             second = w2
-    head = f"{shade} " if shade in ("dk", "lt") else ""
+    head = f"{shade} " if shade else ""
     body = f"{word}/{second}" if second else word
     return f"{head}{body}?" if uncertain else f"{head}{body}"
 
@@ -526,9 +519,8 @@ def stack_bboxes(geoms) -> np.ndarray:
     """``(M, 4)`` of the members' boxes, ``nan`` where one has none."""
     out = np.full((len(geoms), 4), np.nan, dtype=float)
     for i, g in enumerate(geoms):
-        bb = g["BB"] if isinstance(g, dict) else None
-        if bb is not None:
-            out[i] = bb
+        if g["BB"] is not None:
+            out[i] = g["BB"]
     return out
 
 
@@ -537,7 +529,7 @@ def bbox_bounds(stacked: np.ndarray, g) -> np.ndarray:
     box reads 0.0."""
     if len(stacked) == 0:
         return np.zeros(0, dtype=float)
-    bb = g["BB"] if isinstance(g, dict) else None
+    bb = g["BB"]
     if bb is None:
         return np.zeros(len(stacked), dtype=float)
     dx = np.maximum(0.0, np.maximum(stacked[:, 0] - bb[2],
@@ -601,8 +593,6 @@ _PRUNE_PAIRS = 100_000
 def _min_pt_to_segs(P, A, B):
     """``(d, i, foot)``: the least distance from points ``P`` to segments
     ``A``->``B``, its point index and its foot."""
-    if len(P) == 0 or len(A) == 0:
-        return float("inf"), -1, None
     if len(P) * len(A) > _PRUNE_PAIRS:
         return _min_pt_to_segs_pruned(P, A, B)
     return _min_pt_to_segs_all(P, A, B)
