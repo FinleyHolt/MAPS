@@ -1056,7 +1056,7 @@ def _attach_standing_columns(items, frame, with_distance=False):
     'ahead of'/'behind <h>' in metres, the key present naming the side (0
     lands right/ahead). With ``with_distance``, 'distance to <h>' from the
     stand point."""
-    h = str(frame.get("handle") or "v")
+    h = str(frame["handle"])
     fx, fy = (float(frame["from_xy"][0]), float(frame["from_xy"][1]))
     ux, uy = (float(frame["up_unit"][0]), float(frame["up_unit"][1]))
     rx, ry = G.cw((ux, uy))
@@ -1429,7 +1429,7 @@ def _find(cx, a):
     op_cols = []
     if cx.standing is not None and rows:
         rows = _attach_standing_columns(rows, cx.standing)
-        h = str(cx.standing.get("handle") or "v")
+        h = str(cx.standing["handle"])
         op_cols = [f"left of {h}", f"right of {h}", f"ahead of {h}",
                    f"behind {h}"]
     if not rows and query:
@@ -1617,13 +1617,13 @@ def _score_by(cx, a):
     for _k in emphasis:
         # Naming a color column attaches it.
         if _is_color_column_key(_k) and not any(
-                isinstance(it, dict) and it.get(_k) is not None for it in items):
+                it.get(_k) is not None for it in items):
             items = _attach_color_column(items, _k[len("color_"):])
     # A key no row carries would be a silent constant term.
     _dropped_color: list = []
     for _k in list(emphasis):
         if items and not any(isinstance(it.get(_k), (int, float))
-                             for it in items if isinstance(it, dict)):
+                             for it in items):
             if _is_color_column_key(_k):
                 # Nothing has a perceived colour before a flight sees it: the
                 # term drops, unless it is the only one.
@@ -1671,9 +1671,39 @@ def _filter_items(cx, a):
                 f"carries a numeric {_quote(key)}. "
                 f"{_contact_fact(cx, key)}"
                 f"{_present_keys_hint(items, True)}")
-    elif (items
-          and not any(isinstance(it, dict) and key in it for it in items)
-          and not _relate_ran(key, items)):
+        # The nearest excluded row, the bound that would admit it and how
+        # many rows that bound admits.
+        kept: list = []
+        excluded: list = []
+        for it in items:
+            v = it.get(key)
+            (kept if v is not None and v <= val else excluded).append(it)
+
+        def _eff(it):
+            v = it.get(key)
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                return None
+            return v
+
+        stats = {"cut": f"{len(items)}->{len(kept)}"}
+        _excl_vals = [(e, it) for it in excluded if (e := _eff(it)) is not None]
+        if _excl_vals:
+            ne_v, ne_it = min(_excl_vals, key=lambda t: t[0])
+            stats["nearest_excluded"] = {
+                "fid": str(ne_it.get("fid") or "?"),
+                key: round(float(ne_it.get(key)), 3),
+            }
+            stats["admit_at"] = round(float(ne_v), 3)
+            stats["n_at_admit"] = sum(
+                1 for it in items
+                if (v := _eff(it)) is not None and v <= ne_v)
+        r = Result(kept, "cut")
+        r.cut_stats = stats
+        r.ordered = _in_ordered
+        r.op_cols = [key]
+        return r
+    if (items and not any(key in it for it in items)
+            and not _relate_ran(key, items)):
         raise ProgramError(
             f"filter_items op {_quote(opr)} on key {_quote(key)}: no item carries "
             f"{_quote(key)}. "
@@ -1683,8 +1713,7 @@ def _filter_items(cx, a):
         # The caller passes every word that counts (south: southeast,
         # southwest too).
         _on = [it for it in items if it.get(key) is None or it.get(key) in val]
-        _blank = sum(1 for it in _on
-                     if (it.get(key) if isinstance(it, dict) else None) is None)
+        _blank = sum(1 for it in _on if it.get(key) is None)
         _want = list(val) if isinstance(val, (list, tuple)) else [val]
         stats = {
             "cut": f"{len(items)}->{len(_on)}",
@@ -1708,9 +1737,7 @@ def _filter_items(cx, a):
             return v is None or (isinstance(v, (int, float))
                                  and not isinstance(v, bool) and v > 0)
         _on = [it for it in items if _ok(it)]
-        _blank = sum(1 for it in _on
-                     if not isinstance((it.get(key) if isinstance(it, dict)
-                                        else None), (int, float)))
+        _blank = sum(1 for it in _on if it.get(key) is None)
         stats = {
             "cut": f"{len(items)}->{len(_on)}",
             "on_side": len(_on) - _blank,
@@ -1726,36 +1753,6 @@ def _filter_items(cx, a):
                    "segment it"))
         r = Result(_on, "cut")
         r.cut_stats = stats
-    elif opr == "le":
-        # The nearest excluded row, the bound that would admit it and how
-        # many rows that bound admits.
-        kept: list = []
-        excluded: list = []
-        for it in items:
-            v = it.get(key)
-            (kept if v is not None and v <= val else excluded).append(it)
-
-        def _eff(it):
-            v = it.get(key) if isinstance(it, dict) else None
-            if isinstance(v, bool) or not isinstance(v, (int, float)):
-                return None
-            return v
-
-        stats = {"cut": f"{len(items)}->{len(kept)}"}
-        _excl_vals = [(e, it) for it in excluded if (e := _eff(it)) is not None]
-        if _excl_vals:
-            ne_v, ne_it = min(_excl_vals, key=lambda t: t[0])
-            stats["nearest_excluded"] = {
-                "fid": str((ne_it.get("fid") if isinstance(ne_it, dict)
-                            else "") or "?"),
-                key: round(float(ne_it.get(key)), 3),
-            }
-            stats["admit_at"] = round(float(ne_v), 3)
-            stats["n_at_admit"] = sum(
-                1 for it in items
-                if (v := _eff(it)) is not None and v <= ne_v)
-        r = Result(kept, "cut")
-        r.cut_stats = stats
     else:  # truthy
         r = Result((it for it in items if it.get(key)), "cut")
     r.ordered = _in_ordered
@@ -1768,9 +1765,7 @@ def _stratum(cx, a):
     order."""
     items = _as_rows(cx, a["items"])
     tier = str(a["tier"]).strip().lower()
-    if not any(isinstance(it, dict)
-               and isinstance(it.get("name_match"), (int, float))
-               for it in items):
+    if not any(isinstance(it.get("name_match"), (int, float)) for it in items):
         raise ProgramError(
             "these rows carry no match tiers -- strata come off a "
             "find's own result."
@@ -1782,7 +1777,7 @@ def _stratum(cx, a):
                 "fuzzy": (None, T._KV_TIER_BASE)}[tier]
 
     def _in_tier(it):
-        v = it.get("name_match") if isinstance(it, dict) else None
+        v = it.get("name_match")
         if not isinstance(v, (int, float)):
             return False
         return (_lo is None or v >= _lo) and (_hi is None or v < _hi)
