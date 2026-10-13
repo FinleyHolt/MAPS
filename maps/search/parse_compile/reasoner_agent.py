@@ -256,24 +256,15 @@ class Reasoner:
         reasoning_text = msg.get("reasoning") or msg.get("reasoning_content") or ""
         text = msg.get("content") or ""
         finish_reason = str(choice.get("finish_reason") or "")
-        assistant_msg: dict[str, Any] = {
-            "role": "assistant",
-            "content": text,
-            "reasoning_content": reasoning_text,
-        }
-        raw_calls = [
-            {
-                "id": tc.get("id"),
-                "type": tc.get("type") or "function",
-                "function": {
-                    "name": tc.get("function", {}).get("name", ""),
-                    "arguments": tc.get("function", {}).get("arguments", ""),
-                },
-            }
-            for tc in (msg.get("tool_calls") or [])
-        ]
         # An unknown tool name stays on history: the loop answers its id.
-        calls = [_normalize_tool_call_arguments(tc) for tc in raw_calls]
+        calls = [_normalize_tool_call_arguments({
+            "id": tc.get("id"),
+            "type": tc.get("type") or "function",
+            "function": {
+                "name": tc.get("function", {}).get("name", ""),
+                "arguments": tc.get("function", {}).get("arguments", ""),
+            },
+        }) for tc in (msg.get("tool_calls") or [])]
         # raised before the append, so a collapse never reaches the prefix
         degenerate = _degenerate_reason(
             text=text, reasoning=reasoning_text, calls=calls,
@@ -289,9 +280,10 @@ class Reasoner:
                 f"(finish_reason={finish_reason!r}, "
                 f"reasoning_chars={len(reasoning_text)})"
             )
-        if calls:
-            assistant_msg["tool_calls"] = calls
-        self.messages.append(assistant_msg)
+        self.messages.append({
+            "role": "assistant", "content": text,
+            "reasoning_content": reasoning_text,
+            **({"tool_calls": calls} if calls else {})})
         return {"kind": "tool_call" if calls else "text",
                 **({"tool_calls": calls} if calls else {}),
                 "content": text, "reasoning": reasoning_text,
