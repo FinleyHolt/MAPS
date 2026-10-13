@@ -16,6 +16,7 @@ sample instruction and the tools, with its token count on stderr.
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import os
 import sys
@@ -58,23 +59,18 @@ def surface_lines() -> list[str]:
     surface does not serve shows up as a row that reads wrong rather than
     as nothing at all.
     """
-    import inspect
-
     from maps.search.parse_compile.python_surface import (
         MissionPython, Rows, served_calls)
 
-    out = []
-    for call in served_calls():
-        sig = inspect.signature(getattr(MissionPython, f"_call_{call}"))
-        params = ", ".join(
-            str(p) for n, p in sig.parameters.items() if n != "self")
-        out.append(f"  {call}({params})")
+    def _params(fn) -> str:
+        return ", ".join(str(p) for n, p in
+                         inspect.signature(fn).parameters.items() if n != "self")
+
+    out = [f"  {call}({_params(getattr(MissionPython, f'_call_{call}'))})"
+           for call in served_calls()]
     # A cut and a sort are METHODS on a result, not _LIBRARY_CALLS.
-    for name in ("filter", "order", "distance"):
-        sig = inspect.signature(getattr(Rows, name))
-        params = ", ".join(
-            str(p) for n, p in sig.parameters.items() if n != "self")
-        out.append(f"  <rows>.{name}({params})")
+    out += [f"  <rows>.{name}({_params(getattr(Rows, name))})"
+            for name in ("filter", "order", "distance")]
     return out
 
 
