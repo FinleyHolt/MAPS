@@ -103,3 +103,17 @@ def test_a_reply_after_a_retask_answers_with_the_missions_last_flight():
     assert reply.turns_used == 1
     assert not [m for m in fr.messages if "flown nowhere" in
                 str(m.get("content"))]
+
+
+def test_a_followup_turn_keeps_the_missions_names_stops_and_watchlist():
+    """An operator turn after a report is an UPDATE to one mission: what the
+    first turn bound, flew and watched is still there."""
+    _, fr, _, declared = drive(
+        [[run('cars = find("car")\nlook_for("car")\ngo_to("prior_7")')], "report"])
+    n = len(tool_results(fr))
+    drive([[run("print(len(cars))")],
+           [run('stand(at="stop_000", facing="north")')], "report"], reasoner=fr)
+    named, stood = tool_results(fr)[n:]
+    assert "error" not in named and named["watching"] == ["car (0 detected)"], named
+    assert stood["stance"]["staged"][0]["at_xy"] == [1.0, 2.0], stood
+    assert declared == [[{"class": "car", "role": "target"}]]

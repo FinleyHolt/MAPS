@@ -77,7 +77,7 @@ def test_run_mission_hands_the_word_to_the_reasoner_it_builds(monkeypatch):
 
     monkeypatch.setattr(
         "maps.search.parse_compile.reasoner_loop._Mission.converse", _converse)
-    _reply, reasoner = run_mission(
+    _reply, mission = run_mission(
         instruction="find the truck",
         reasoner_url="http://unused",
         endpoint_spec=TEST_SPEC,
@@ -86,5 +86,5 @@ def test_run_mission_hands_the_word_to_the_reasoner_it_builds(monkeypatch):
         boost_queue=unarmed_boost,
         reasoning_effort="0.6",
     )
-    assert seen["reasoner"] is reasoner
-    assert reasoner.reasoning_effort == "0.6"
+    assert seen["reasoner"] is mission.reasoner
+    assert mission.reasoner.reasoning_effort == "0.6"

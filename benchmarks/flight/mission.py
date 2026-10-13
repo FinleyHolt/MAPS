@@ -678,8 +678,8 @@ class Mission:
             session.mission_spec.fly = functools.partial(self._fly_live, session)
             session.mission_spec.held_now = functools.partial(self._held_now, h)
             heard = dict(transcript=self.transcript, retask=self._next_tasking)
-            reply, reasoner = session.run(instruction, cancel_event=self._cancel, diag=self._turn_diag,
-                                          reasoning_effort=self.reasoning_effort, **heard)
+            reply, conversation = session.run(instruction, cancel_event=self._cancel, diag=self._turn_diag,
+                                              reasoning_effort=self.reasoning_effort, **heard)
             self._record_reply(reply)
 
             # THE REPLY IS A REPORT, NOT AN ENDING: park and wait for the
@@ -691,8 +691,7 @@ class Mission:
                     break
                 self._set(STATE_FLYING)
                 turn += 1
-                reply = continue_mission(reasoner=reasoner, instruction=nxt, diag=self._turn_diag,
-                                         rid_tag=f"m{turn}", **heard, **session.run_kwargs)
+                reply = continue_mission(conversation, nxt, rid_tag=f"m{turn}")
                 self._record_reply(reply)
             self._set(STATE_ENDED)
         except CallCanceled:

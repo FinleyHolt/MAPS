@@ -339,10 +339,10 @@ def run_mission(
     reasoning_effort: str | None = None,
     rid_tag: str = "m0",
     **turn,
-) -> tuple[MissionReply, Reasoner]:
-    """THE mission entry: build the Reasoner and run the first operator turn
-    (``turn`` is :class:`_Mission`'s). Returns the reply and
-    the Reasoner, for :func:`continue_mission`."""
+) -> tuple[MissionReply, "_Mission"]:
+    """THE mission entry: build the Reasoner and the mission over it, and run
+    the first operator turn (``turn`` is :class:`_Mission`'s). Returns the
+    reply and the mission, for :func:`continue_mission`."""
     reasoner = Reasoner(
         reasoner_url=reasoner_url,
         endpoint_spec=endpoint_spec,
@@ -352,24 +352,26 @@ def run_mission(
         cancel_event=cancel_event,
         reasoning_effort=reasoning_effort,
     )
-    return continue_mission(reasoner=reasoner, instruction=instruction,
-                            rid_tag=rid_tag, preflight=True, **turn), reasoner
+    mission = _Mission(reasoner=reasoner, rid_tag=rid_tag, preflight=True,
+                       compute_namespace=_surface_from_ctx(turn["ctx"]), **turn)
+    return mission.converse(instruction.strip()), mission
 
 
-def continue_mission(*, reasoner: Reasoner, instruction: str,
-                     ctx: "ToolContext", rid_tag: str = "m1",
-                     preflight: bool = False, **turn) -> MissionReply:
-    """One operator turn on the mission's Reasoner, over the surface ``ctx``
-    holds now. After the first, a turn follows a reply (the field path: the
-    reply is a report) and keeps every earlier turn."""
-    return _Mission(reasoner=reasoner, ctx=ctx, rid_tag=rid_tag,
-                    compute_namespace=_surface_from_ctx(ctx), preflight=preflight,
-                    **turn).converse(instruction.strip())
+def continue_mission(mission: "_Mission", instruction: str, *,
+                     rid_tag: str) -> MissionReply:
+    """One more operator turn on the same mission: it follows a reply (the
+    field path: the reply is a report), reads the surface the mission's
+    ``ctx`` holds now, and keeps every name, handle, flown stop, staged view
+    and watched class of the turns before it."""
+    mission.rid_tag = rid_tag
+    mission.preflight = False
+    mission._world_moved()
+    return mission.converse(instruction.strip())
 
 
 class _Mission:
-    """One operator turn's conversation state and the verbs the run surface
-    calls on it."""
+    """One mission's conversation state, across every operator turn, and the
+    verbs the run surface calls on it."""
 
     def __init__(
         self,
@@ -428,18 +430,9 @@ class _Mission:
         self._map_feats_version = None
         self._map_feats: list[dict] = []
 
-        # The escalating loop breaker's counts (see _loop_broken_error), and the
-        # dedup path's own consecutive streak.
-        self._err_class_counts: dict[str, int] = {}
-        self._err_sig, self._err_n = None, 0
-        self._dedup_key, self._dedup_n = None, 0
-
         self.carry = Carry(compute_namespace)
-
-        # This turn's flights (the backstop's count); the mission's are the
-        # reasoner's.
-        self.turn_flights = 0
         self.mission_sam: list[dict] = []
+        self._new_turn()
 
         # The set in scope (the last non-empty result, or what the last flight
         # added), the paging ledger, and the mission-global rN counter.
@@ -470,6 +463,15 @@ class _Mission:
         self._call: dict = {}
 
         self._mission_py = None
+
+    def _new_turn(self) -> None:
+        """An operator turn's own state: its flight budget (the backstop's
+        count; the mission's flights are the reasoner's), its escalating loop
+        breaker (see _loop_broken_error) and its dedup streak."""
+        self.turn_flights = 0
+        self._err_class_counts: dict[str, int] = {}
+        self._err_sig, self._err_n = None, 0
+        self._dedup_key, self._dedup_n = None, 0
 
     def _world_moved(self) -> None:
         """The world stepped: refresh both surface views and bump the
@@ -1385,6 +1387,7 @@ class _Mission:
         ``run`` until the model's plain reply or a harness ending; an empty
         turn, a block of code and a reply with no flight behind it are
         repaired before a repeat is accepted as the ending."""
+        self._new_turn()
         if self.reasoner.compaction_infeasible:
             return self._mission_end("compaction_infeasible")
         self.reasoner.append_user(user_message)

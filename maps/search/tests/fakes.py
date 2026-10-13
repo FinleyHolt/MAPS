@@ -133,12 +133,22 @@ def drive(script, *, fly=None, flight_budget=8, turn_cap=48,
           reasoner=None, **loop_kw):
     """One operator turn over a still surface. Returns (reply, reasoner,
     flights, declared); ``reasoner`` (a returned one) continues its mission
-    with ``script``; ``loop_kw`` reaches ``_Mission``."""
+    with ``script`` as the next operator turn (its flights and declarations
+    keep landing in the first turn's lists); ``loop_kw`` reaches
+    ``_Mission``."""
     from maps.search.parse_compile.reasoner_loop import (
         MissionReply,
         MissionSpec,
         _Mission,
+        continue_mission,
     )
+
+    if reasoner is not None:
+        reasoner.turns += list(script)
+        mission, flights, declared = reasoner.mission
+        reply = continue_mission(mission, "Find the goal object.", rid_tag="m1")
+        assert isinstance(reply, MissionReply)
+        return reply, reasoner, flights, declared
 
     flights: list[dict] = []
 
@@ -155,11 +165,9 @@ def drive(script, *, fly=None, flight_budget=8, turn_cap=48,
     def _declare(items):
         declared.append(list(items))
 
-    fr = FakeReasoner(script) if reasoner is None else reasoner
-    if reasoner is not None:
-        fr.turns += list(script)
+    fr = FakeReasoner(script)
     loop_kw.setdefault("boost_queue", unarmed_boost)
-    reply = _Mission(
+    mission = _Mission(
         reasoner=fr,
         ctx=bare_ctx(),
         rid_tag="m0",
@@ -173,7 +181,9 @@ def drive(script, *, fly=None, flight_budget=8, turn_cap=48,
         retask=retask,
         look_renderer=look_renderer,
         **loop_kw,
-    ).converse("Find the goal object.")
+    )
+    fr.mission = (mission, flights, declared)
+    reply = mission.converse("Find the goal object.")
     assert isinstance(reply, MissionReply)
     return reply, fr, flights, declared
 
