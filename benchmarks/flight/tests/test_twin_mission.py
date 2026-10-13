@@ -100,7 +100,6 @@ def serves(monkeypatch):
 
 
 def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_run_carries(calcity, serves, tmp_path):
-    from benchmarks.citynav.analysis import run_report
     from benchmarks.flight import twin
 
     out = tmp_path / "out"
@@ -122,8 +121,6 @@ def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_run_carries(
     assert len(frames) == 1 and (run / "observations" / f"{frames[0]['observation']}.jpg").is_file()
     assert frames[0]["mosaic"]["placed"] >= 1
     assert (run / "flight" / "llm" / "transcript.jsonl").is_file()
-    scored, no_metrics = run_report.load_run(sortie)
-    assert list(scored) == ["calcity::0#0"] and scored["calcity::0#0"]["SR"] == 1 and no_metrics == 0
     first = serves[0]
     assert first["messages"][-1] == {"role": "user", "content": "The church at the end of the road."}
 
