@@ -5,6 +5,7 @@ same bytes."""
 from __future__ import annotations
 
 import logging
+import math
 
 log = logging.getLogger(__name__)
 
@@ -114,7 +115,6 @@ def _isect_y(a, b, y):
 
 def up_bearing_deg(up_unit) -> float:
     """Compass bearing (0 = N, clockwise) of a world up-unit."""
-    import math  # noqa: PLC0415
     return math.degrees(math.atan2(float(up_unit[0]),
                                    float(up_unit[1]))) % 360.0
 
@@ -123,9 +123,8 @@ def frame_up_angle_deg(ux: float, uy: float) -> float:
     """The cv2.getRotationMatrix2D angle (deg) that brings world direction
     ``(ux, uy)`` to image-up on a north-up image: atan2(ux, uy), since the
     screen vector of a world direction is (ux, -uy). East -> +90."""
-    import math as _m
-    n = _m.hypot(ux, uy) or 1.0
-    return _m.degrees(_m.atan2(ux / n, uy / n))
+    n = math.hypot(ux, uy) or 1.0
+    return math.degrees(math.atan2(ux / n, uy / n))
 
 
 def xy_list(pts) -> list[tuple[float, float]]:
