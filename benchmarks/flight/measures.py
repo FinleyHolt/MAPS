@@ -17,14 +17,15 @@ the record holds:
   (a split JSON given as a truth path). Its area centroid is the target
   centroid.
 * **The path**: the aircraft's GNSS track beside the sortie
-  (``flight_track.jsonl``, 1 Hz), else the keyframes' poses.
+  (``flight_track.jsonl``, 1 Hz), else the centres of the observations the
+  run fused (``frames.jsonl`` ``pose_xy``).
 
 SR: the commit point lies inside the truth's mask (``success``). NE is the
-commit point to the target centroid. OSR: the path came within
-one camera HFOV ground width of the centroid, at the height above ground
-``agl_ft`` (the height of the fix nearest the centroid, else the run's median
-keyframe height, else its median commanded waypoint height; ``agl_source``
-names which); a run that did not, on a recording holding under 95% of it,
+commit point to the target centroid. OSR: the path came within one camera
+HFOV ground width of the centroid, at the height above ground ``agl_ft``
+(the height of the fix nearest the centroid, else the median camera height
+of the run's observations, else its median commanded waypoint height;
+``agl_source`` names which); a run that did not, on a recording holding under 95% of it,
 reads unknown. Time to identification runs from the tasking to the
 determination. SPL is ``S * l / max(p, l)``: ``p`` the GNSS path from the
 crew's last pass of the loiter waypoint before the first leg to the
@@ -282,7 +283,7 @@ def last_pass(track, xy, t0: float, t1: float, within_m: float) -> tuple[float, 
 
 
 def keyframe_poses(bases: list[Path], t0: float, t1: float) -> list[dict[str, Any]]:
-    """The live navigation's pose at each keyframe the run captured, as track fixes."""
+    """The centre of each observation the run fused (``frames.jsonl`` ``pose_xy``) and its camera height, as track fixes."""
     for b in bases:
         out = []
         for f in read_jsonl(b / FRAMES_JSONL):
@@ -298,7 +299,7 @@ def keyframe_poses(bases: list[Path], t0: float, t1: float) -> list[dict[str, An
 
 
 def _agl(fix, bases: list[Path], events) -> tuple[float | None, str | None]:
-    """Height above ground at ``fix``: its own (a GNSS fix or a keyframe pose), else the keyframes', else the waypoints' commanded."""
+    """Height above ground at ``fix``: its own (a GNSS fix or an observation's), else the observations' median, else the waypoints' commanded."""
     if fix.get("alt_agl_m") is not None:
         return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
     alts = [float(f["altitude_m"]) for b in bases for f in read_jsonl(b / FRAMES_JSONL) if f.get("altitude_m") is not None]
@@ -480,8 +481,8 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         out["spl"] = 0.0
     out["track_coverage"] = track_coverage(track, t_start, t_end_run)
     flown = _window(track, t_start, t_end_run) if track else []
-    # The keyframes carry the live navigation's pose: beside a thin
-    # recording they can still show the aircraft came within the width.
+    # The observations are centred on ground the camera held: beside a thin
+    # recording they can still show the target came within the width.
     thin = out["track_coverage"] < SPL_MIN_COVERAGE
     poses = keyframe_poses(bases, t_start, t_end_run) if thin else []
     out["track_source"] = "GNSS track" if flown else "keyframe poses" if poses else "none"
