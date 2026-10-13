@@ -363,3 +363,13 @@ def test_a_torn_line_in_a_recorded_transcript_is_refused_by_file_and_line(tmp_pa
     path.write_text("\n".join(lines) + "\n")
     with pytest.raises(ValueError, match=f"{path}:2"):
         R.read_transcript(path)
+
+
+@pytest.mark.parametrize("flags", [["--forced", "--bank", "week"], ["--frames", "x.mcap", "--bank", "week"],
+                                   ["--forced", "--reasoning-effort", "high"]])
+def test_a_replay_refuses_a_flag_its_tier_would_ignore(flags, capsys):
+    """``--bank`` chooses the bank tier's observations and ``--reasoning-effort``
+    the effort of the tiers your reasoner answers: a tier that reads neither refuses them."""
+    with pytest.raises(SystemExit) as exc:
+        R.main(["run", *flags])
+    assert exc.value.code == 2 and flags[-2] in capsys.readouterr().err

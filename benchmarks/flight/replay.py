@@ -591,7 +591,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     ep = open_episode_dir(sortie, episode_id=episode_id, run_no=run_no)
     # The recorded effort stands only where the recorded reasoner answers;
     # the bank and frame tiers fly the caller's arm.
-    effort = reasoning_effort or (rec.params.get("reasoning_effort") or row.get("reasoning_effort") if forced else None)
+    effort = (rec.params.get("reasoning_effort") or row.get("reasoning_effort")) if forced else reasoning_effort
     mission = ReplayMission(
         replay_of={"sortie": rec.sortie.name, "run_no": run_no, "run_id": row.get("run_id"),
                    "workdir": rec.run_dir.name,
@@ -641,6 +641,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--reasoning-effort", default=None)
     ap.add_argument("--out", type=Path, default=Path("output/replay"))
     args = ap.parse_args(argv)
+    if args.bank == "week" and (args.forced or args.frames is not None):
+        ap.error("--bank week chooses the bank tier's observations; --forced and --frames answer from the recording")
+    if args.forced and args.reasoning_effort is not None:
+        ap.error("--reasoning-effort is your reasoner's; --forced sends the recorded one")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
 
     rec = open_recording(args.run)
