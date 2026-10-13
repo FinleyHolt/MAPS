@@ -233,8 +233,6 @@ def _turn_units(messages: list[dict]) -> list[tuple[int, int]]:
                 j += 1
             if ids and answered == ids:
                 units.append((i, j))
-                i = j
-                continue
             i = j
             continue
         i += 1
@@ -425,8 +423,6 @@ def _degrade_tool_result_content(
     changed = had_colors = False
     for head in _iter_op_heads(obj):
         present = [k for k in _TRIM_RENDER_KEYS if k in head]
-        if not present:
-            continue
         colors: list[str] = []
         if keep_color and isinstance(head.get("rows"), str):
             colors = _rows_color_entries(head["rows"])
@@ -545,7 +541,6 @@ def compact_transcript(
     degraded_dumps = len(degraded)
 
     # Step 5, on the block this fire made: earlier blocks are served prefix.
-    stripped_findings = False
     if output_tokens > target_input_tokens and folded_turns:
         i = _newest_script_block(out)
         # rsplit: the agent's code may contain the separator, the
@@ -554,8 +549,6 @@ def compact_transcript(
         if body != out[i]["content"]:
             out = list(out)
             out[i] = _with_content(out[i], body)
-            stripped_findings = True
-        if stripped_findings:
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
             log.info("compaction stripped block findings -> %s/%d",
                      output_tokens, target_input_tokens)
