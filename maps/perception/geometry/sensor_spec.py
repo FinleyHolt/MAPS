@@ -243,7 +243,7 @@ _INLINE_KEYS = frozenset({"base", *_INTRINSIC_KEYS, *(f.name for f in fields(Sen
 
 
 def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
-    """``cfg.sensor`` as a ``SensorSpec``: ``None`` for none or empty, the
+    """``cfg.sensor`` as a ``SensorSpec``: ``None`` for ``None`` or ``""``, the
     registry entry for a name, or for an inline dict its ``base`` entry
     (default ``nadir_1008_90``) with the other keys overriding it, each cast to
     the type the base value carries. An unknown key raises.
