@@ -183,17 +183,14 @@ def _system(anchors: list[Anchor], ties: list[TieRow], columns: dict, yaw_cols: 
         cols.append(col)
         data.append(val)
 
-    priors = 0
-    for col in sorted(set(yaw_cols.values())):
-        put(n, col, 1.0 / YAW_PRIOR_DEG)
+    # The window's one yaw column and one scale column, each held to its prior.
+    prior_rows = ([(0, c, 1.0 / YAW_PRIOR_DEG) for c in set(yaw_cols.values())]
+                  + [(1, c, 1.0 / SCALE_PRIOR) for c in set(scale_cols.values())])
+    for row, col, val in prior_rows:
+        put(n + row, col, val)
         b.extend([0.0, 0.0])
         n += 2
-        priors += 1
-    for col in sorted(set(scale_cols.values())):
-        put(n + 1, col, 1.0 / SCALE_PRIOR)
-        b.extend([0.0, 0.0])
-        n += 2
-        priors += 1
+    priors = len(prior_rows)
     for a in anchors:
         base = columns[a.frame]
         s = 1.0 / a.sigma_m
@@ -265,13 +262,10 @@ def solve(nodes: dict, anchors: list[Anchor], ties: list[TieRow]) -> dict:
         for f in solved:
             columns[f] = width
             width += 2
-        yaw_cols, scale_cols = {}, {}
-        if rotated:
-            yaw_cols = {f: width for f in rotated}
-            width += 1
-        if scaled:
-            scale_cols = {f: width for f in scaled}
-            width += 1
+        yaw_cols = {f: width for f in rotated}
+        width += bool(rotated)
+        scale_cols = {f: width for f in scaled}
+        width += bool(scaled)
         a, b, priors = _system(anchors, ties, columns, yaw_cols, scale_cols, width)
         x = irls_fit(a, b, groups=np.r_[np.full(priors, 2, dtype=np.int64),
                                                 np.zeros(len(anchors), dtype=np.int64),
