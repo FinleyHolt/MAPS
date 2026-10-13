@@ -1,0 +1,3 @@
+# baselines/geonav.yaml on Cal City: calcity.yaml with policy geonav.
+base: ../calcity.yaml
+policy: geonav

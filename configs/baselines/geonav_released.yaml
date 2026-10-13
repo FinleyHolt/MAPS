@@ -1,0 +1,4 @@
+# GeoNav as released on CityNav: the geonav port under the released token
+# caps with thinking off (baselines/geonav_released/).
+base: ../citynav.yaml
+policy: geonav_released
