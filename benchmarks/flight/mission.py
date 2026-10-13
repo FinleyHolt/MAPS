@@ -7,7 +7,7 @@ goes to ``continue_mission`` on the same reasoner. The operator speaks
 whenever: taskings queue and the loop drains them at the top of each turn.
 A flight is a leg flown for an AREA (:meth:`Mission._fly_live`); it arrives
 when the recording holds the area, and its observation is the frames that
-held it, fused. The row is scored after the reply.
+held it, fused. The row is banked at each report and scored by ``measures``.
 """
 
 from __future__ import annotations
@@ -790,23 +790,9 @@ class Mission:
 
     # -- the record ----------------------------------------------------------
 
-    def score(self, visited: list[list[float]]) -> dict[str, Any] | None:
-        """SR/OSR/NE/SPL through the bench's scorer, the last visited point the
-        commit; None for an episode with no target."""
-        h = self._hydrated
-        if h is None or h.episode.target_xy is None:
-            return None
-        from benchmarks.citynav.adapter import load_objects  # noqa: PLC0415
-        from benchmarks.citynav.paths import OBJECTS_JSON  # noqa: PLC0415
-        from benchmarks.citynav.run_benchmark.episode_runner import score_episode  # noqa: PLC0415
-
-        trajectory = [(float(p[0]), float(p[1])) for p in visited]
-        return score_episode(h.cfg, h.episode, load_objects(OBJECTS_JSON), trajectory[-1], trajectory,
-                             flew=len(trajectory) > 1)
-
     def row(self) -> dict[str, Any]:
-        """The mission as a ledger row with a bench row's keys, which
-        ``measures`` reads."""
+        """The mission as a ledger row with a bench row's keys, the ones
+        ``measures`` reads among them: the commit is the last of ``visited_xy``."""
         from benchmarks.citynav import paths  # noqa: PLC0415
         from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK  # noqa: PLC0415
         from benchmarks.citynav.run_manifest import arm_env_stamp  # noqa: PLC0415
@@ -818,15 +804,6 @@ class Mission:
             scored = self.flights[:self._scored_flights]
             visited += [[float(f["resolved_xy"][0]), float(f["resolved_xy"][1])] for f in scored]
             infra, ended_by, error, turns = self.infra, self.ended_by, self.error, self._turns()
-            provenance = scored[-1].get("provenance") if scored else None
-        try:
-            metrics = self.score(visited)
-        except Exception:  # noqa: BLE001 -- an unscored row still lands
-            log.exception("scoring failed for %s", self.episode_id)
-            metrics = None
-        if metrics is not None:
-            # The commit's provenance as the bench's row names it: the last scored flight's.
-            metrics["committed_provenance"] = provenance
         return {
             "episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no, "split": self.split,
             "map_name": self.map_name, "description": self.instruction, "reasoning_effort": self.reasoning_effort,
@@ -834,7 +811,6 @@ class Mission:
             # The bench's infra rule: only a serve fault is infra; any other failure is a scored miss.
             "status": STATUS_INFRA if infra else STATUS_OK,
             "error": error, "ended_by": ended_by, "turns_used": turns, "flights_flown": len(scored),
-            "metrics": metrics,
             "provenance": {"git_commit": self.git_commit, "git_dirty": self.git_dirty,
                            "served_model": spec().model_id if spec_installed() else None,
                            "bake_sha256": paths.bake_sha256()},

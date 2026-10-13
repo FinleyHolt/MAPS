@@ -112,8 +112,6 @@ def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_run_carries(
     run = sortie / rows[0]["workdir"]
     assert run.name.startswith("maps_") and "_run01_calcity_" in run.name
     assert rows[0]["flights_flown"] == 1
-    assert rows[0]["metrics"]["SR"] == 1          # the last flight is the church
-    assert rows[0]["metrics"]["committed_provenance"] == "prior"
     conversation = [json.loads(line) for line in (run / "conversation.jsonl").read_text().splitlines()]
     legs = [r["said"] for r in conversation if r.get("kind") == "leg"]
     assert any("arrived" in s for s in legs), legs
