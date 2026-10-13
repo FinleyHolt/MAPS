@@ -50,7 +50,7 @@ def test_a_flying_episode_records_its_commit_and_final_pose(monkeypatch, tmp_pat
     m = row["metrics"]
     assert row["visited_xy"][-1] == [5.0, 6.0]
     assert m["steps_taken"] == 7
-    assert (m["committed_fid"], m["committed_provenance"]) == ("prior_7", "prior")
+    assert m["committed_provenance"] == "prior"
     assert m["mission"] == {"ended_by": "reply"}
 
 

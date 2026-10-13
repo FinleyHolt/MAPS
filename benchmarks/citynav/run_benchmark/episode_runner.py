@@ -11,7 +11,6 @@ import hashlib
 import logging
 import os
 import re
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -324,7 +323,6 @@ def run_episode(
     )
     h.search_loop.set_retro_perceiver(functools.partial(retro_perceive, h))
 
-    t_start = time.monotonic()
     # The takeoff pose, before the mission moves the drone: the replay flies
     # from exactly here, facing upstream's start heading.
     start_pose_xyh = (float(state.pose_xy[0]), float(state.pose_xy[1]),
@@ -338,12 +336,11 @@ def run_episode(
             cfg=cfg, state=state, flights=flights,
             start_pose_xyh=start_pose_xyh, start_alt=start_alt,
         )
-        compile_s = round(time.monotonic() - t_start, 2)
         final_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
         visited = state.visited_xy
     else:
         # ZERO flights: the drone never took off and nothing was committed.
-        steps_taken, compile_s = 0, 0.0
+        steps_taken = 0
         final_xy = (float(episode.start_xy[0]), float(episode.start_xy[1]))
         visited = [final_xy, final_xy]
 
@@ -357,13 +354,11 @@ def run_episode(
     # ``referent_bucket`` is a noisy text proxy (regex over the description).
     scores["referent_bucket"] = classify_referent(episode.description)
     scores["steps_taken"] = steps_taken
-    scores["compile_s"] = compile_s
     # What the episode spent on the LLM, at row size, read after the mission
     # from its transcript; a mission that never flew spent turns too.
     flight_dir = os.environ.get("SEARCH_COMPILE_WORKDIR")
     scores["llm"] = (flight_summary.summarize(Path(flight_dir) / "flight")
                      if flight_dir else flight_summary.blank())
-    scores["committed_fid"] = last.get("target")
     scores["committed_provenance"] = last.get("provenance")
     scores["mission"] = {"ended_by": reply.ended_by}
     # SAHI tiles the segmenter could not answer: their objects are missing

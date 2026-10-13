@@ -197,7 +197,7 @@ def _dispatch_one(
     write_episode_json(episode_dir, out)
     log.info(
         # ``%s`` on the verdict: a null SR must not raise outside the try.
-        "[%d/%d] %s NE=%.1f SR[%s]=%s steps=%d commit=%s(%s) (%.1fs)",
+        "[%d/%d] %s NE=%.1f SR[%s]=%s steps=%d commit=%s (%.1fs)",
         idx + 1,
         total,
         rec["episode_id"],
@@ -207,7 +207,6 @@ def _dispatch_one(
         m["steps_taken"],
         # ``detected`` (a runtime detection) or ``prior`` (a baked landmark).
         m.get("committed_provenance") or "none",
-        m.get("committed_fid") or "-",
-        m["compile_s"],
+        out["elapsed_s"],
     )
     return out
