@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,8 +21,6 @@ from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.search.withhold import ENV as WITHHOLD_ENV
 from maps.search.withhold import WITHHOLDS
 
-
-log = logging.getLogger("run_benchmark")
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _NUM = (int, float)

@@ -10,9 +10,6 @@ from benchmarks.citynav.paths import (
 from dataclasses import dataclass
 from pathlib import Path
 import json
-import logging
-
-log = logging.getLogger("run_benchmark")
 
 
 @dataclass

@@ -23,7 +23,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-log = logging.getLogger("run_benchmark")
 
 RUN_LOG = "run.log"
 
