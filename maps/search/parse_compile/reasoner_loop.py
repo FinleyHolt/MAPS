@@ -46,6 +46,7 @@ from maps.search.analyze_scene.text_match import (
 )
 from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
+    build_surface_from_graph,
     MODEL_UNSERVED_COLUMNS,
 )
 from maps.search.parse_compile.carry import (
@@ -257,8 +258,6 @@ _PICTURE_WITHHELD = _PICTURE_WITHHELD_OF.format("crop")
 def _surface_from_ctx(ctx) -> dict:
     """The ``{cands, anchors, cell_m}`` surface of a :class:`ToolContext`'s
     graph."""
-    from maps.search.analyze_scene.geom_program import build_surface_from_graph
-
     cell_m = float(ctx.cell_size_m)
     cands, anchors = build_surface_from_graph(
         ctx.graph.nodes.items(), ctx.tile_origin_xy, cell_m
