@@ -1338,13 +1338,7 @@ class MissionPython:
                 marks if isinstance(marks, (list, tuple)) else [marks])]
         # The marks ride the SAME crop request as its subject, so the
         # renderer's frame decision and its mark projection see one window.
-        def msites():
-            return [(self._site(m, "marks"), "marks") for m in mk or []]
-
-        def crops(ties, marks, of=None, fid=None):
-            return self.env.crops(of, fid, [_tok(s, ties) for s, _w in marks]
-                                  if mk else None)
-
+        lead: list = []
         if isinstance(x, Rows) and x.spec:
             # A SLICE is looked at through its window: two verbs, one
             # receipt, and the window is no answer of its own.
@@ -1352,28 +1346,28 @@ class MissionPython:
             p = self._program(name, mk)
             ref = p.window(x.ref, x.spec)
             self._show_as(ref, f"{name}{x.spec}")
-            marks = msites()
-            ties = self._ground(marks)
+        else:
+            x = self._slot(x)
+            if isinstance(x, (list, tuple)) and not is_xy(x):
+                # look([a, b, c]) crops EACH element.
+                fids = [_look_tok(a) for a in x]
+            elif not isinstance(x, Ref):
+                site = self._site(x, "crops")
+                lead = [(site, "crops")]
+        marks = [(self._site(m, "marks"), "marks") for m in mk or []]
+        ties = self._ground(lead + marks)
+        toks = [_tok(s, ties) for s, _w in marks] if mk else None
+        if isinstance(x, Rows):
             ack = self.env.analyze(p.ops, p.rn, None, None)
             if "error" not in ack:
-                ack.update(crops(ties, marks, of=ref))
-            self._end(ack)
-            return None
-        x = self._slot(x)
-        if isinstance(x, (list, tuple)) and not is_xy(x):
-            # look([a, b, c]) crops EACH element.
-            fids = [_look_tok(a) for a in x]
-            marks = msites()
-            self._end(crops(self._ground(marks), marks, fid=fids))
+                ack.update(self.env.crops(ref, None, toks))
         elif isinstance(x, Ref):
             # A SET look is the badged frame over its rows.
-            marks = msites()
-            self._end(crops(self._ground(marks), marks, of=x.ref))
+            ack = self.env.crops(x.ref, None, toks)
         else:
-            site = self._site(x, "crops")
-            marks = msites()
-            ties = self._ground([(site, "crops")] + marks)
-            self._end(crops(ties, marks, fid=_tok(site, ties)))
+            ack = self.env.crops(None, _tok(site, ties) if lead else fids,
+                                 toks)
+        self._end(ack)
         return None
 
     def _call_show_map(self, around=None):
