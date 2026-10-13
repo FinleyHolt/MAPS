@@ -1544,7 +1544,7 @@ class MissionPython:
         self._code = code
         self._printed = ""
         self._lines = 0
-        self._block_shown: set = set()
+        self._block_shown = set()
         self._get_noted.clear()
         self._geom.clear()
         self._measure_calls = 0

@@ -151,8 +151,7 @@ class Reasoner:
     reasoner_url: str
     endpoint_spec: EndpointSpec
     api_key: str = "EMPTY"
-    timeout: float = field(
-        default_factory=lambda: _reasoner_timeout_s())
+    timeout: float = field(default_factory=_reasoner_timeout_s)
     seed: int | None = None
     messages: list[dict] = field(default_factory=list)
     sensor_description: str = ""
