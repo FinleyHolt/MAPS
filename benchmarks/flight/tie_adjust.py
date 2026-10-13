@@ -226,17 +226,17 @@ def _system(anchors: list[Anchor], ties: list[TieRow], columns: dict, yaw_cols: 
     return a, np.asarray(b, dtype=np.float64), priors
 
 
-def rows_from(geometry: dict, measurements: dict, ties) -> tuple[dict, list[Anchor], list[TieRow]]:
-    """``(nodes, anchors, tie_rows)`` from each frame's ``FrameGeometry`` (by
-    key, the nodes themselves), the registrations ``key -> (east, north,
-    response)`` and the ties ``(key_i, key_j, uv_i, uv_j)``."""
+def rows_from(geometry: dict, measurements: dict, ties) -> tuple[list[Anchor], list[TieRow]]:
+    """``(anchors, tie_rows)`` from each frame's ``FrameGeometry`` (by key),
+    the registrations ``key -> (east, north, response)`` and the ties
+    ``(key_i, key_j, uv_i, uv_j)``."""
     anchors = [Anchor(k, (float(e), float(n)), ANCHOR_SIGMA_M / float(response), geometry[k].lever(geometry[k].centre),
                       geometry[k].radial(geometry[k].centre))
                for k, (e, n, response) in measurements.items() if response > 0.0]
     tie_rows = [TieRow(i, j, geometry[i].ground(uv_i), geometry[j].ground(uv_j), geometry[i].lever(uv_i),
                        geometry[j].lever(uv_j), geometry[i].radial(uv_i), geometry[j].radial(uv_j))
                 for i, j, uv_i, uv_j in ties]
-    return geometry, anchors, tie_rows
+    return anchors, tie_rows
 
 
 def solve(nodes: dict, anchors: list[Anchor], ties: list[TieRow]) -> dict:

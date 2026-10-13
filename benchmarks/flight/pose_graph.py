@@ -101,7 +101,8 @@ class PoseGraph:
                 self.measurements[seq] = (float(e), float(n), float(response))
         if len(self.measurements) >= MIN_ANCHORS:
             geometry = {s: f.geometry for s, f in self.frames.items()}
-            for s, (e, n) in tie_adjust.solve(*tie_adjust.rows_from(geometry, self.measurements, self.ties)).items():
+            anchors, tie_rows = tie_adjust.rows_from(geometry, self.measurements, self.ties)
+            for s, (e, n) in tie_adjust.solve(geometry, anchors, tie_rows).items():
                 self.nodes[s] = {"e_m": e, "n_m": n, "t": self.frames[s].t}
         # This frame's work grid and edge maps, made now for the pair its
         # successor opens, at the placement the solve just gave it.
