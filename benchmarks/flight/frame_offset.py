@@ -99,8 +99,8 @@ def similarity(frame_rgb: np.ndarray, render_rgb: np.ndarray, *, yaw_reach_deg: 
 
 
 def _jacobian(pose, sensor, *, altitude_m: float, ground_z: float, at_xy: tuple[float, float]
-              ) -> tuple[np.ndarray, np.ndarray] | None:
-    """``(pixel of at_xy, d pixel / d (east, north))`` through the projector at ``pose``, or None off it.
+              ) -> np.ndarray | None:
+    """``d pixel / d (east, north)`` at ``at_xy`` through the projector at ``pose``, or None off it.
 
     ``pose`` carries ``pose_xy``, ``yaw_deg``, ``roll_deg`` and ``pitch_deg``
     in aerospace signs; the projector's pitch is nose down, so it enters negated.
@@ -115,8 +115,7 @@ def _jacobian(pose, sensor, *, altitude_m: float, ground_z: float, at_xy: tuple[
         dtype=np.float64).reshape(-1, 2)
     if not np.all(np.isfinite(uv)):
         return None
-    o = uv[0]
-    return o, np.column_stack([uv[1] - o, uv[2] - o])
+    return np.column_stack([uv[1] - uv[0], uv[2] - uv[0]])
 
 
 def ground_correction(pose, sensor, *, altitude_m: float, ground_z: float, d_px: tuple[float, float]
@@ -127,10 +126,9 @@ def ground_correction(pose, sensor, *, altitude_m: float, ground_z: float, d_px:
     nominal pose N and at frame pixel ``q + d`` under the true pose T, so
     ``T - N = -J^-1 d``.
     """
-    jac = _jacobian(pose, sensor, altitude_m=altitude_m, ground_z=ground_z, at_xy=tuple(pose.pose_xy))
-    if jac is None:
+    j = _jacobian(pose, sensor, altitude_m=altitude_m, ground_z=ground_z, at_xy=tuple(pose.pose_xy))
+    if j is None:
         return float("nan"), float("nan")
-    _o, j = jac
     try:
         de, dn = -np.linalg.solve(j, np.asarray(d_px, dtype=np.float64))
     except np.linalg.LinAlgError:
