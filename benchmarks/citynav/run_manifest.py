@@ -127,8 +127,6 @@ def _endpoint_section() -> dict:
         "input_budget": s.input_budget,
         "max_output_tokens": s.max_output_tokens,
         "sam_url": s.sam_url,
-        "offline": os.environ.get("SEARCH_ENDPOINT_OFFLINE") or None,
-        "spec_override": os.environ.get("SEARCH_ENDPOINT_SPEC_OVERRIDE") or None,
     }
 
 
