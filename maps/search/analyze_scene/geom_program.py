@@ -1395,9 +1395,11 @@ def _find(cx, a):
                 f"max over them); to require BOTH, put the k=v "
                 f"pairs in one query separated by a space ('a=b "
                 f"c=d' -- the exact-tag tier scores by pairs "
-                f"matched). OSM multi-value tag VALUES use ';' "
-                f"(cuisine=pizza;kebab) -- to match one, query that "
-                f"single value ('cuisine=pizza').")
+                f"matched)."
+                + ("" if withheld("prior") else
+                   " OSM multi-value tag VALUES use ';' "
+                   "(cuisine=pizza;kebab) -- to match one, query that "
+                   "single value ('cuisine=pizza')."))
         q_data = T.fuzzy_prepare_query(q_raw)
         memo = _find_memo(cx.cands, cx.anchors)
         rows = memo.scored_rows(q_raw, q_data, surface)
@@ -1715,7 +1717,8 @@ def _filter_items(cx, a):
         }
         if not (len(_on) - _blank):
             stats["nothing_reads_those_words"] = (
-                f"no surveyed row reads any of {_want} in {_quote(key)}; "
+                f"no {'' if withheld('prior') else 'surveyed '}row reads "
+                f"any of {_want} in {_quote(key)}; "
                 f"the rows kept are the ones the geometry never "
                 f"measured (a row TOUCHING the reference has no "
                 f"facing word). Widen, or read the column and "
@@ -1737,8 +1740,9 @@ def _filter_items(cx, a):
         }
         if not (len(_on) - _blank):
             stats["nothing_on_that_side"] = (
-                "the prior map holds nothing on that side -- what is "
-                "there has to be SEEN"
+                ("no row lies on that side" if withheld("prior") else
+                 "the prior map holds nothing on that side")
+                + " -- what is there has to be SEEN"
                 + ("" if withheld("look_for") else
                    ": look_for the class, then explore the place to "
                    "segment it"))

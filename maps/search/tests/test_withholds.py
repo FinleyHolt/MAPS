@@ -288,3 +288,39 @@ def test_a_prior_withhold_map_caption_and_color_note_name_no_survey(monkeypatch)
         assert word not in caption, (word, caption)
     assert "detected_N" in caption and "no prior map" in caption
     assert "prior" not in _preflight_color_note().replace("no prior map", "")
+
+
+def test_a_prior_withhold_empty_cut_and_semicolon_refusal_name_no_survey(monkeypatch):
+    from maps.search.analyze_scene import geom_program as gp
+    from maps.search.analyze_scene.geom_program import ProgramError
+
+    road = {"fid": "prior_R", "xy": [0.0, 0.0], "name": "Orchid Drive",
+            "mask": [[[-5.0, -500.0], [5.0, -500.0], [5.0, 500.0], [-5.0, 500.0]]],
+            "centerline": None, "cells": [], "search_text": "orchid drive"}
+    west = [{"fid": "w", "xy": [-300.0, 10.0], "class": "car",
+             "mask": [[[-305.0, 5.0], [-295.0, 5.0], [-295.0, 15.0], [-305.0, 15.0]]],
+             "centerline": None, "cells": [], "search_text": "car"}]
+    cmp = {"ref": "r1", "op": "compare", "args": {
+        "items": ["w"], "refs": [{"ref": "prior_R", "as": "orchid_drive"}],
+        "cardinals": [{"dir": "east", "ref": "orchid_drive"}]}}
+    side = {"ref": "r2", "op": "filter_items", "args": {
+        "items": "r1", "key": "east of orchid_drive", "op": "on_side"}}
+    facing = {"ref": "r2", "op": "filter_items", "args": {
+        "items": "r1", "key": "facing orchid_drive", "op": "in_or_blank",
+        "value": ["west"]}}
+
+    def served():
+        stats = [gp.run_program(west, [road], {"ops": [cmp, cut]})["results"]["r2"].cut_stats
+                 for cut in (side, facing)]
+        with pytest.raises(ProgramError) as e:
+            gp.run_program(west, [road], {"ops": [{"ref": "r1", "op": "find", "args": {
+                "query": "cuisine=pizza;kebab"}}]})
+        return json.dumps(stats) + str(e.value)
+
+    flown = served()
+    assert "prior map" in flown and "surveyed" in flown and "OSM" in flown, flown
+    monkeypatch.setenv(W.ENV, "prior")
+    got = served()
+    assert "nothing_on_that_side" in got and "nothing_reads_those_words" in got, got
+    for word in ("prior", "surveyed", "OSM"):
+        assert word not in got, (word, got)
