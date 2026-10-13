@@ -211,7 +211,7 @@ class _FindMemo:
 
     def census_note(self, query, rows) -> str:
         if query not in self.census:
-            self.census[query] = _census_note(rows, query=query)
+            self.census[query] = _census_note(rows, query)
         return self.census[query]
 
 
@@ -584,7 +584,7 @@ def _query_matched_census(counts: dict, query: str) -> dict:
     return _top(matched, 8)
 
 
-def _census_note(rows, *, query: str | None = None) -> str:
+def _census_note(rows, query: str) -> str:
     """The census note a missed or thin find serves: the tags sharing
     tokens with the query, the top tags and a few names."""
     counts = _census_counts(rows)[0]
@@ -598,14 +598,10 @@ def _census_note(rows, *, query: str | None = None) -> str:
                 names.append(nm)
         if len(names) >= 4:
             break
-    note = "surface census -- "
-    if query:
-        qm = _query_matched_census(counts, query)
-        qparts = ", ".join(f"{k}({v})" for k, v in qm.items())
-        note += (f"tags sharing tokens with your query: {qparts or 'none'}; "
-                 f"top tags overall: {parts or 'none'}")
-    else:
-        note += f"top tags: {parts or 'none'}"
+    qm = _query_matched_census(counts, query)
+    qparts = ", ".join(f"{k}({v})" for k, v in qm.items())
+    note = (f"surface census -- tags sharing tokens with your query: "
+            f"{qparts or 'none'}; top tags overall: {parts or 'none'}")
     if names:
         note += "; named e.g. " + ", ".join(repr(n) for n in names)
     return note + "."
