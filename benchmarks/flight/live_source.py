@@ -7,9 +7,15 @@ grid, each frame registered into the pose graph as it arrives
 (:meth:`LiveSource.start_corrector`) and placed through the calibration
 (``boresight.json``, applied here alone; without one the datasheet camera
 flies). A pose's roll and pitch are aerospace (right wing down, nose up);
-the projector's pitch is nose down, so it is carried negated. ponytail: flat
-ground at the bake's floor under the composite; relief needs a height raster
-under ``ground_corners_xy``.
+the projector's pitch is nose down, so it is carried negated. ponytail: each
+frame is projected onto flat ground at its nadir's height (the bake's DEM,
+else its floor); relief within a frame needs a height raster under
+``ground_corners_xy``. ponytail: two heights above ground: the
+ownship, the frame tests and the arrival rule (:meth:`LiveSource.ownship`,
+``in_frame``, ``frame_transit_s``, ``coverage``) stand on the bake's floor,
+the projector (``_posed``) and the mission's track on the ground under the
+camera (``ground_msl``); one camera-now height on ``ground_msl(xy)`` makes
+them one rule.
 """
 
 from __future__ import annotations
