@@ -85,18 +85,17 @@ def resolve_window_center(
     (None: unshifted), with its total offset from the subject ``true_xy``
     capped per axis at ``half_ctx - car_margin_m / 2`` so the subject stays
     in frame; past the cap the off-raster part renders black."""
-    cx, cy = float(ctr_xy[0]), float(ctr_xy[1])
+    px, py = float(ctr_xy[0]), float(ctr_xy[1])
     tx, ty = float(true_xy[0]), float(true_xy[1])
-    if bounds is None:
-        return cx, cy
-    bx0, by0, bx1, by1 = (float(v) for v in bounds)
+    if bounds is not None:
+        bx0, by0, bx1, by1 = (float(v) for v in bounds)
 
-    def _clamp(c: float, lo: float, hi: float) -> float:
-        # a raster narrower than the window centres it
-        return (lo + hi) / 2.0 if hi < lo else max(lo, min(hi, c))
+        def _clamp(c: float, lo: float, hi: float) -> float:
+            # a raster narrower than the window centres it
+            return (lo + hi) / 2.0 if hi < lo else max(lo, min(hi, c))
 
-    px = _clamp(cx, bx0 + half_ctx, bx1 - half_ctx)
-    py = _clamp(cy, by0 + half_ctx, by1 - half_ctx)
+        px = _clamp(px, bx0 + half_ctx, bx1 - half_ctx)
+        py = _clamp(py, by0 + half_ctx, by1 - half_ctx)
     keep = max(0.0, half_ctx - car_margin_m / 2.0)
     px = min(max(px, tx - keep), tx + keep)
     py = min(max(py, ty - keep), ty + keep)
@@ -315,19 +314,12 @@ def render_candidate_crops(
             _ctx = min(_ctx, max(_min_m, float(_span)))
         _ctx = min(_ctx, _budget_m)
         half_ctx = _ctx / 2.0
-        if len(pts) > 1:
-            # the hull centre (the window is sized off the hull, so only its
-            # centre is sure to contain it), capped so the subject keeps a
-            # half-car margin inside each edge
-            ctr_x = (max(_xs) + min(_xs)) / 2.0
-            ctr_y = (max(_ys) + min(_ys)) / 2.0
-            _keep = max(0.0, half_ctx - LOOK_CAR_MARGIN_M / 2.0)
-            ctr_x = min(max(ctr_x, true_x - _keep), true_x + _keep)
-            ctr_y = min(max(ctr_y, true_y - _keep), true_y + _keep)
-        else:
-            ctr_x, ctr_y = true_x, true_y
+        # the hull centre: the window is sized off the hull, so only its
+        # centre is sure to contain it
         pose_x, pose_y = resolve_window_center(
-            (true_x, true_y), (ctr_x, ctr_y), _wb, half_ctx, LOOK_CAR_MARGIN_M)
+            (true_x, true_y),
+            ((max(_xs) + min(_xs)) / 2.0, (max(_ys) + min(_ys)) / 2.0),
+            _wb, half_ctx, LOOK_CAR_MARGIN_M)
         # built from the rounded values it persists: a byte-exact re-render
         rec = render_look_from_spec({
             "map_name": map_name,
