@@ -197,7 +197,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
         bs[b] += bool(m.get("SR"))
     print("by bucket: " + "   ".join(_label(k, bs[k], bt[k]) for k in _BUCKETS if bt[k]))
 
-    # Commit provenance (prior landmark vs runtime detection vs none).
+    # Commit provenance (prior landmark, runtime detection, world point, or none).
     prov = Counter(m.get("committed_provenance") or "none" for m in scored.values())
     print("provenance: " + "  ".join(f"{k}={v}" for k, v in prov.most_common()))
     return scored
@@ -207,7 +207,7 @@ _BUCKETS = ("car", "building", "other", "?")
 
 
 def _label(name: str, suc: int, tot: int) -> str:
-    return f"{name}:{suc}/{tot}({100 * suc / tot:.0f}%)" if tot else f"{name}:0"
+    return f"{name}:{suc}/{tot}({100 * suc / tot:.0f}%)"
 
 
 def main(argv: list[str] | None = None) -> int:
