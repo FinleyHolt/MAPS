@@ -445,7 +445,10 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
                    if r.get("kind") == "params"), {})
     ring, truth_source = truth.ring(entry, row)
     target = centroid(ring) if ring else None
-    t_end = next((float(e["t_s"]) for e in reversed(events) if e.get("kind") == "mission_end"), None)
+    # The end the row stands at (``Mission._record_reply``): the first, or a later plain reply.
+    ends = [e for e in events if e.get("kind") == "mission_end"]
+    stands = ends[:1] + [e for e in ends[1:] if e.get("ended_by") == "reply"]
+    t_end = float(stands[-1]["t_s"]) if stands else None
     if t_end is None and row.get("elapsed_s"):
         t_end = float(row["elapsed_s"])
     t_start = float(row["started_at_utc"]) if row.get("started_at_utc") else None

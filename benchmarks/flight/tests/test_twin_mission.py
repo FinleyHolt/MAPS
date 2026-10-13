@@ -364,6 +364,7 @@ def test_a_follow_up_that_ends_without_a_new_report_scores_the_run_at_that_repor
     assert row["elapsed_s"] < second_leg["t_s"]
     (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
     assert run["end"] == "reply" and run["success"] is True
+    assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
 
 def test_an_authored_start_without_the_operators_words_is_refused(calcity, serves, tmp_path):
