@@ -4,8 +4,8 @@
 the recording holds (the arrival rule); :meth:`LiveSource.observe_area` fuses
 the frames that saw it nearest nadir into ONE north-up orthophoto on the map
 grid. Every frame is registered into the pose graph as it arrives
-(:class:`Corrector`); an older ring frame is registered on its own pixels,
-gated by the graph's node nearest it in time. The calibration
+(:meth:`LiveSource.start_corrector`); an older ring frame is registered on
+its own pixels, gated by the graph's node nearest it in time. The calibration
 (``boresight.json``) is applied here alone; without one the datasheet camera
 flies. A pose's roll and pitch are aerospace (right wing down, nose up); the
 projector's pitch is nose down, so it is carried negated. ``floor_msl_m`` is
@@ -286,28 +286,6 @@ def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor, g
     return record, measured
 
 
-class Corrector(threading.Thread):
-    """Registers every frame the vehicle records, as it arrives, into the pose
-    graph. When it falls behind it takes the newest frame."""
-
-    def __init__(self, source: "LiveSource") -> None:
-        super().__init__(name="corrector", daemon=True)
-        self.source = source
-        self._halt = threading.Event()
-        #: The log time past the newest frame registered: the index is asked for what came since.
-        self._since: int | None = None
-
-    def run(self) -> None:
-        while not self._halt.is_set():
-            t0 = time.perf_counter()
-            self._since = self.source._correct_since(self._since, newest_only=True)
-            # What is left of the period after the frame, so the rate is the period's.
-            self._halt.wait(max(0.0, CORRECTOR_PERIOD_S - (time.perf_counter() - t0)))
-
-    def stop(self) -> None:
-        self._halt.set()
-
-
 class LiveSource:
     """The vehicle's recorded frames, posed and registered, as coverage and observations."""
 
@@ -338,21 +316,33 @@ class LiveSource:
         #: The frames placed together, built on the first frame at its size.
         self.graph: PoseGraph | None = None
         self._correcting = threading.Lock()
-        self.corrector: Corrector | None = None
+        #: Set to stop the wall-clock corrector; None until it starts.
+        self._halt: threading.Event | None = None
         #: The log time past the newest frame a simulated vehicle's clock has corrected.
         self._clocked_since: int | None = None
 
     def start_corrector(self) -> None:
         """Register frames as the vehicle records them: a simulated vehicle
         (``on_sleep``) corrects every frame up to its clock before a sleep
-        returns, a real one runs the wall-clock :class:`Corrector`."""
+        returns; a real one runs a wall-clock thread that each
+        ``CORRECTOR_PERIOD_S`` takes the newest frame, so when it falls
+        behind it skips to the newest."""
         hooks = getattr(self.vehicle, "on_sleep", None)
         if hooks is not None:
             if self._correct_through_now not in hooks:
                 hooks.append(self._correct_through_now)
-        elif self.corrector is None:
-            self.corrector = Corrector(self)
-            self.corrector.start()
+        elif self._halt is None:
+            halt = self._halt = threading.Event()
+
+            def run() -> None:
+                since = None
+                while not halt.is_set():
+                    t0 = time.perf_counter()
+                    since = self._correct_since(since, newest_only=True)
+                    # What is left of the period after the frame, so the rate is the period's.
+                    halt.wait(max(0.0, CORRECTOR_PERIOD_S - (time.perf_counter() - t0)))
+
+            threading.Thread(target=run, name="corrector", daemon=True).start()
 
     def _correct_through_now(self) -> None:
         self._clocked_since = self._correct_since(self._clocked_since)
@@ -373,8 +363,8 @@ class LiveSource:
         return since
 
     def close(self) -> None:
-        if self.corrector is not None:
-            self.corrector.stop()
+        if self._halt is not None:
+            self._halt.set()
 
     def _posed(self, jpeg: bytes, t_host: float, *, pose: Pose | None = None) -> SimpleNamespace | str:
         """The frame decoded and its camera posed through the calibrated chain,
