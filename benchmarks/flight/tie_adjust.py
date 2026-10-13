@@ -57,14 +57,6 @@ IRLS_ITERATIONS = 8
 
 
 @dataclass(frozen=True)
-class Node:
-    """A frame in the solve: its nadir, and its footprint's half-diagonal on the floor."""
-
-    nadir_xy: tuple[float, float]
-    half_diagonal_m: float
-
-
-@dataclass(frozen=True)
 class Anchor:
     """A frame's registration: the metres to add to the chain pose, and the levers at the centre."""
 
@@ -236,22 +228,22 @@ def _system(anchors: list[Anchor], ties: list[TieRow], columns: dict, yaw_cols: 
 
 def rows_from(geometry: dict, measurements: dict, ties) -> tuple[dict, list[Anchor], list[TieRow]]:
     """``(nodes, anchors, tie_rows)`` from each frame's ``FrameGeometry`` (by
-    key), the registrations ``key -> (east, north, response)`` and the ties
-    ``(key_i, key_j, uv_i, uv_j)``."""
-    nodes = {k: Node(g.nadir_xy, g.half_diagonal_m) for k, g in geometry.items()}
+    key, the nodes themselves), the registrations ``key -> (east, north,
+    response)`` and the ties ``(key_i, key_j, uv_i, uv_j)``."""
     anchors = [Anchor(k, (float(e), float(n)), ANCHOR_SIGMA_M / float(response), geometry[k].lever(geometry[k].centre),
                       geometry[k].radial(geometry[k].centre))
                for k, (e, n, response) in measurements.items() if response > 0.0]
     tie_rows = [TieRow(i, j, geometry[i].ground(uv_i), geometry[j].ground(uv_j), geometry[i].lever(uv_i),
                        geometry[j].lever(uv_j), geometry[i].radial(uv_i), geometry[j].radial(uv_j))
                 for i, j, uv_i, uv_j in ties]
-    return nodes, anchors, tie_rows
+    return geometry, anchors, tie_rows
 
 
 def solve(nodes: dict, anchors: list[Anchor], ties: list[TieRow]) -> dict:
     """Each reached frame's correction ``frame -> (east, north)`` over
-    ``nodes`` (``frame -> Node``) from its anchors and ties, the window's yaw
-    and scale fitted with them.
+    ``nodes`` (``frame -> FrameGeometry``: its ``nadir_xy`` and
+    ``half_diagonal_m``) from its anchors and ties, the window's yaw and
+    scale fitted with them.
 
     A frame in no row, or in a tie component no anchor reaches, gets no
     correction here; the caller keeps what it had.
