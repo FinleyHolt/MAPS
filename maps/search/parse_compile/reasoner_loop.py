@@ -254,22 +254,6 @@ _PICTURE_WITHHELD_OF = ("the {}'s caption follows in the next message; "
 _PICTURE_WITHHELD = _PICTURE_WITHHELD_OF.format("crop")
 
 
-def _mission_sanitize_moves(raw: list[str]) -> tuple[list[dict], list[dict]]:
-    """The move targets as ``{"target_fid": token}`` items, a result handle
-    refused: ``(accepted, errors)``, each error carrying its index."""
-    accepted: list[dict] = []
-    errors: list[dict] = []
-    for i, token in enumerate(raw):
-        token = token.strip()
-        if _is_handle_token(token):
-            errors.append({"index": i, "error": (
-                f"{token!r} is a result handle; move takes a literal fid "
-                "off the rows, a flown stop id, or an [x, y] world point")})
-            continue
-        accepted.append({"target_fid": token})
-    return accepted, errors
-
-
 def _surface_from_ctx(ctx) -> dict:
     """The ``{cands, anchors, cell_m}`` surface of a :class:`ToolContext`'s
     graph."""
@@ -1201,8 +1185,13 @@ class _Mission:
         tok, _stop_err = self._flown_stop(tok)
         if _stop_err:
             return self._plan_err({}, _stop_err)
-        _accepted, _item_errors = _mission_sanitize_moves([tok])
-        mv = self._fly_moves(_accepted, _item_errors)
+        tok = tok.strip()
+        if _is_handle_token(tok):
+            mv = self._fly_moves([], [{"index": 0, "error": (
+                f"{tok!r} is a result handle; move takes a literal fid "
+                "off the rows, a flown stop id, or an [x, y] world point")}])
+        else:
+            mv = self._fly_moves([{"target_fid": tok}], [])
         _ok = [r for r in mv.get("flown") or [] if "error" not in r]
         if not _ok:
             # nothing flew: the failure is the result
@@ -1238,19 +1227,17 @@ class _Mission:
                 _raw_members.extend(_hr)
                 continue
             _raw_members.append(_t)
-        _accepted, _item_errors = _mission_sanitize_moves(
-            list(dict.fromkeys(_raw_members)))
+        _accepted = [{"target_fid": _t.strip()}
+                     for _t in dict.fromkeys(_raw_members)]
         if not _accepted:
-            return self._plan_err({}, next(
-                (str(e["error"]) for e in _item_errors if e.get("error")),
-                "nothing to cover"))
+            return self._plan_err({}, "nothing to cover")
         _accepted, _cov_note, _subject, _segs = cover_items(
             _accepted, said_to, spec=self.mission_spec,
             spacing=self._cover_spacing, rows=self._ns_rows,
             covered=self._covered_fids, pose_xy=self.ctx.pose_xy)
         if not _accepted:
             return self._plan_err({}, _cov_note)
-        mv = self._fly_moves(_accepted, _item_errors, cover=_subject)
+        mv = self._fly_moves(_accepted, [], cover=_subject)
         if "error" in mv:
             return self._plan_err({"explored": mv}, str(mv["error"]))
         if _segs > 1:
