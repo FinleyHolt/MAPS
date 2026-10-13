@@ -65,7 +65,6 @@ def synthesize_compliant_trajectory(
             for action in actions[: limit - steps]:
                 pose = apply_action(pose, action)
                 state.pose_xy = (pose.x, pose.y)
-                state.heading_deg = pose.heading_deg
                 state.altitude_m = pose.altitude_m
                 state.record_visit()
                 steps += 1
@@ -123,7 +122,6 @@ def synthesize_compliant_trajectory(
         state.visited_xy = []
         steps = 0
         state.pose_xy = (float(start_pose_xyh[0]), float(start_pose_xyh[1]))
-        state.heading_deg = float(start_pose_xyh[2])
         state.altitude_m = float(start_alt)
         react_descent_starved = _walk_tour(max_frames - descent_reserve, descent_reserve)
         descent_truncated = _fly_descent()

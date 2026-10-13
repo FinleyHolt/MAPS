@@ -44,14 +44,13 @@ log = logging.getLogger("run_benchmark")
 
 @dataclass
 class EpisodeState:
-    """The harness's pose, visit history and bound commit; the graph lives
-    on the ``SearchLoop``."""
+    """The harness's pose and visit history; the graph lives on the
+    ``SearchLoop``."""
 
     pose_xy: tuple[float, float]
     altitude_m: float
     visited_xy: list[tuple[float, float]] = field(default_factory=list)
     step_idx: int = 0
-    heading_deg: float = 0.0  # 0 = facing north (+y); derived from motion vector.
 
     def record_visit(self) -> None:
         self.visited_xy.append(self.pose_xy)

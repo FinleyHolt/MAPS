@@ -21,7 +21,6 @@ class _State:
     def __init__(self):
         self.pose_xy = (0.0, 0.0)
         self.altitude_m = 50.0
-        self.heading_deg = 0.0
         self.visited_xy = []
 
     def record_visit(self):
@@ -79,7 +78,6 @@ def test_the_replay_flies_the_recorded_trajectory_exactly(name, tmp_path, monkey
     assert list(state.pose_xy) == recorded["final_pos_xy"]
     flown = [[round(p[0], 9), round(p[1], 9)] for p in state.visited_xy]
     assert flown == recorded["visited_xy"]
-    assert round(state.heading_deg, 9) == recorded["heading_deg"]
     assert round(state.altitude_m, 9) == recorded["altitude_m"]
 
 
