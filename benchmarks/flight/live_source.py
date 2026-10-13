@@ -380,7 +380,7 @@ class LiveSource:
         """The frame decoded and its camera posed through the calibrated chain,
         or why it cannot be, a string the caller decides whether to keep (the
         corrector's thread must not overwrite the mission's ``last_refusal``).
-        ``pose`` is the frame's own tag; without one, the vehicle's pose at ``t_host``."""
+        Without ``pose``, the vehicle's pose at ``t_host`` (:meth:`pose_now`)."""
         pose = pose if pose is not None else self.pose_now(t_host)
         if pose is None:
             return f"no pose for the frame: {self.vehicle.last_error or 'no fix'}"
@@ -586,7 +586,7 @@ class LiveSource:
 
     def _fused(self, want: list[tuple[float, int]], *, ranked: int, about: str) -> Observation | None:
         """``want``'s frames, ``(off-nadir degrees, -seq)``, fetched, each placed
-        by its tagged pose and registration, composited at their median GSD."""
+        by its pose and registration, composited at their median GSD."""
         placed: list[Any] = []
         records: list[dict[str, Any]] = []
         unfetched = 0
@@ -599,7 +599,9 @@ class LiveSource:
                                      f"{self.vehicle.last_error or 'no reason recorded'}")
                 continue
             jpeg, t_host, log_time, seq, tag = got
-            pose = tag_pose(tag, t_host)
+            # Posed as the corrector poses it, so its registration and the
+            # graph's nodes share a time base; the tag where the vehicle has no pose then.
+            pose = self.pose_now(t_host) or tag_pose(tag, t_host)
             if pose is None:
                 self.last_refusal = f"ring frame {seq} carries no pose"
                 continue

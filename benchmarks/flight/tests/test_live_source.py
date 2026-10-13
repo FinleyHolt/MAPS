@@ -152,6 +152,23 @@ def test_a_simulated_vehicle_corrects_every_frame_up_to_its_clock_in_order(built
         live.close()
 
 
+def test_a_ring_frame_is_posed_on_the_corrector_s_time_base(built, make_twin, make_live):
+    """With a boresight timing offset the corrector poses each frame at its
+    stamp plus the offset; a ring frame posed the same way registers where
+    the graph's nodes do and keeps its own measurement."""
+    from dataclasses import replace
+
+    twin = make_twin()
+    live = make_live(twin, register=True)
+    live.boresight = replace(live.boresight, time_offset_s=0.6)
+    _fly_over(twin, (600.0, 600.0), 4.0)
+    for seq in range(len(twin.rows)):
+        live.correct(twin.frame(seq))
+    assert live._fused([(0.0, -(len(twin.rows) // 2))], ranked=1, about="a frame mid-pass") is not None
+    (record,) = live.last["mosaic"]["registrations"]
+    assert record["applied"] and record["source"] == "measured", record
+
+
 def test_a_ring_frame_reads_the_graph_under_the_corrector_s_lock(built, make_twin, make_live):
     from benchmarks.flight.nav_track import tag_pose
 
