@@ -21,6 +21,9 @@ from benchmarks.citynav import run_manifest as rm
 from benchmarks.citynav.analysis.rows import iter_json_rows
 from benchmarks.citynav.analysis.tests.ledger import ledger_row
 
+# A pytest.fail inside a worker thread fails its test instead of only warning.
+pytestmark = pytest.mark.filterwarnings("error::pytest.PytestUnhandledThreadExceptionWarning")
+
 REPO = Path(bf.__file__).resolve().parents[2]
 
 # map -> (status, error, has a workdir)
