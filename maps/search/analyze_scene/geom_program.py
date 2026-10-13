@@ -1917,7 +1917,6 @@ def _compare(cx, a):
     _in_ordered = bool(getattr(_src, "ordered", False))
 
     notes: list = []
-    set_notes: list = []        # the notes naming rows
     used_labels: set = set()
     all_col_keys: dict = {}     # every attached key, op-wide
     standing: list = []         # staged viewpoint handles, in ref order
@@ -2052,20 +2051,20 @@ def _compare(cx, a):
                     _put(row, f"bearing from {lab}",
                          round(G.bearing(center, it_c), 1), ref)
         out_rows.append(row)
-    # Rows whose own mask contains a ref, per ref, named in one note.
+    # Rows whose own mask contains a ref, per ref, named in one note; it
+    # states a fact of each row it names, so it outlives a later cut or sort.
     for ref in refs:
         _cf, lab = ref["contains"], ref["lab"]
         if _cf:
             _cfs = f"{_cf[:8]}" + (
                 f" (+{len(_cf) - 8} more)" if len(_cf) > 8 else "")
-            set_notes.append(
+            notes.append(
                 f"ref {lab}: row(s) {_cfs} read 'distance to {lab}'=0 because "
                 f"their OWN mask CONTAINS {lab} (every vertex of the ref sits "
                 f"inside the row's footprint -- containment, not adjacency); "
                 f"each such row carries 'contains {lab}'=true. distance reads "
                 f"0 on ANY mask contact, so a 0 in a nearest-first read spans "
                 f"touching neighbors AND containers.")
-            notes.append(set_notes[-1])
         if ref["keys"]:
             ref["hdr"]["cols"] = list(ref["keys"])
     for _h in standing:
@@ -2079,7 +2078,6 @@ def _compare(cx, a):
     r.refs = [ref["hdr"] for ref in refs]
     r.columns = list(all_col_keys)
     r.notes = notes
-    r.set_notes = set_notes
     r.ordered = _in_ordered
     return r
 
