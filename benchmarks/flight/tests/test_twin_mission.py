@@ -375,3 +375,20 @@ def test_an_authored_start_without_the_operators_words_is_refused(calcity, serve
         twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::authored", "--start-xy", "1000,300",
                    "--ortho", str(calcity.rgbd), "--out", str(out)])
     assert refused.value.code == 2 and not out.exists() and not serves
+
+
+def test_the_mission_stamps_the_effort_its_requests_carry(calcity, serves, tmp_path, monkeypatch):
+    """The arm's effort rides the requests stripped; the mission's manifest
+    and its row's flags carry the same spelling."""
+    from benchmarks.flight import twin
+
+    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", " 0.9 ")
+    out = tmp_path / "out"
+    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
+                      "--out", str(out)]) == 0
+    sortie = next(out.iterdir())
+    (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
+    manifest = json.loads((sortie / row["workdir"] / "run_manifest.json").read_text())
+    assert serves[0]["reasoning_effort"] == "0.9"
+    assert manifest["mission"]["reasoning_effort"] == "0.9"
+    assert row["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.9"

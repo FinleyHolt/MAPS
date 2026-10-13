@@ -622,7 +622,8 @@ class Mission:
         from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
         from benchmarks.citynav.run_benchmark.dispatch import is_infra_fault  # noqa: PLC0415
         from benchmarks.citynav.run_benchmark.mission_engine import MissionSession  # noqa: PLC0415
-        from maps.llm.endpoint_spec import discover_from_env, install_spec  # noqa: PLC0415
+        from benchmarks.citynav.run_manifest import settle_effort  # noqa: PLC0415
+        from maps.llm.endpoint_spec import discover_from_env, install_spec, spec  # noqa: PLC0415
         from maps.llm.http import CallCanceled  # noqa: PLC0415
         from maps.search.parse_compile.reasoner_loop import continue_mission  # noqa: PLC0415
 
@@ -631,6 +632,7 @@ class Mission:
             # One probe per process, before any inference call: a dead reasoner
             # fails this mission, honestly.
             install_spec(discover_from_env())
+            settle_effort(spec().model_id)
             self._write_manifests()
 
             h = hydrate(episode_id=self.episode_id, split=self.split, config=self.config, start_xy=self._start_xy,
@@ -737,8 +739,10 @@ class Mission:
             log.exception("run_manifest not written for %s", self.workdir)
 
     def _mission_stamp(self) -> dict[str, Any]:
-        """The mission's grain of the run manifest: which mission, and the reasoning effort its requests carry."""
-        effort = self.reasoning_effort or os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT") or None
+        """The mission's grain of the run manifest: which mission, and the
+        reasoning effort its requests carry (``model_cards.sampling_kwargs``'s rule)."""
+        effort = (self.reasoning_effort if self.reasoning_effort is not None
+                  else os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "")).strip() or None
         return {"episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no,
                 "reasoning_effort": effort}
 
