@@ -369,6 +369,10 @@ def run_episode(
         "map_name": episode.map_name,
         "description": episode.description,
         "start_xy": list(episode.start_xy),
+        "target_xy": list(episode.target_xy) if episode.target_xy is not None else None,
+        # The point the episode is judged at on a shape bench; None when it
+        # never flew. The ring scores the replay's final pose instead.
+        "commit_xy": list(commit_xy) if commit_xy is not None else None,
         "visited_xy": [list(p) for p in visited],
         "metrics": scores,
     }

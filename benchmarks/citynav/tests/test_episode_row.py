@@ -49,13 +49,16 @@ def test_a_flying_episode_records_its_commit_and_final_pose(monkeypatch, tmp_pat
     row = _run(monkeypatch, tmp_path, flights)
     m = row["metrics"]
     assert row["visited_xy"][-1] == [5.0, 6.0]
+    assert row["commit_xy"] == [5.0, 6.0] and row["target_xy"] == [5.0, 5.0]
     assert m["steps_taken"] == 7
     assert m["committed_provenance"] == "prior"
     assert m["mission"] == {"ended_by": "reply"}
 
 
 def test_a_zero_flight_episode_records_its_llm_spend(monkeypatch, tmp_path) -> None:
-    m = _run(monkeypatch, tmp_path, [])["metrics"]
+    row = _run(monkeypatch, tmp_path, [])
+    m = row["metrics"]
+    assert row["commit_xy"] is None
     assert m["llm"] == {"calls": 2}
     assert m["mission"] == {"ended_by": "reply"}
     assert m["steps_taken"] == 0 and m["SR"] == 0
@@ -70,6 +73,7 @@ def test_a_shape_row_scores_the_commit_not_the_snapped_final_pose(monkeypatch, t
     flights = [{"target": "prior_7", "resolved_xy": [5.0, 6.0], "provenance": "prior"}]
     row = _run(monkeypatch, tmp_path, flights, row={**_ROW, "target_mask": strip}, snap=3.0)
     assert row["visited_xy"][-1] == [8.0, 6.0]
+    assert row["commit_xy"] == [5.0, 6.0]
     assert row["metrics"]["SR"] == 1
 
 
