@@ -3,40 +3,37 @@
     python -m benchmarks.flight.measures --root <sortie>... --truth <adjudications dir> [<split.json>]
         [--json] [--check runs_all.csv]
 
-A root is a flown or twin sortie (``episodes.jsonl`` beside ``flight_track.jsonl``)
-or a replay's (:mod:`benchmarks.flight.replay`, its sortie folder named for
-the recorded one, so the same truth scores both; a replay records no start
-time and no track, so it reads SR and NE only). Per run, from three things
-the record holds:
+The flight README says what each measure is; this is how each is read off
+the records. A root is a flown or twin sortie (``episodes.jsonl`` beside
+``flight_track.jsonl``) or a replay's (its sortie folder named for the
+recorded one, so the same truth scores both; it records no start time and
+no track, so it reads SR and NE only).
 
-* **The commit**: the point the run's last scored flight resolved to, the
-  last of its ``visited_xy``.
-* **The truth**: the analyst's hand-drawn mask (``<sortie>.json`` in a truth
-  directory, ``{episode_id: {"target_mask", "excluded", "intel_quality"}}``),
-  else the tasking set's footprint for the run's episode id and description
-  (a split JSON given as a truth path). Its area centroid is the target
-  centroid.
-* **The path**: the aircraft's GNSS track beside the sortie
-  (``flight_track.jsonl``, 1 Hz) and, on a recording holding under 95% of
-  the run, the centres of the observations the run fused (``frames.jsonl``
-  ``pose_xy``) beside it; ``track_source`` names the one the closest
-  approach came off.
+* **The commit**: the last of the row's ``visited_xy``.
+* **The truth**: the analyst's entry (``<sortie>.json`` in a truth
+  directory, ``{episode_id: {"target_mask", "excluded", "intel_quality"}}``,
+  keyed by episode id, so it speaks for every run of its sortie flown under
+  that id; a run reads its first tasking's quality, ``intel_quality[0]``):
+  its hand-drawn mask, else the tasking set's footprint for the run's
+  description (a split JSON given as a truth path). The mask's area
+  centroid is the target.
+* **The path**: the GNSS track (``flight_track.jsonl``, 1 Hz) and, on a
+  recording holding under 95% of the run, the fused observations' centres
+  (``frames.jsonl`` ``pose_xy``) beside it; ``track_source`` names the one
+  the closest approach came off.
 
-SR: the commit point lies inside the truth's mask (``success``). NE is the
-commit point to the target centroid. OSR: the path came within one camera
-HFOV ground width of the centroid, at the height above ground ``agl_ft``
-(the height of the fix nearest the centroid, else the median camera height
-of the run's observations, ``keyframes (median)``, else its median
-commanded waypoint height; ``agl_source`` names which); a run that did not, on a recording holding under 95% of it,
-reads unknown. Time to identification runs from the tasking to the
-determination. SPL is ``S * l / max(p, l)``: ``p`` the GNSS path from the
-crew's last pass of the loiter waypoint before the first leg to the
-determination, plus the way back to the commit a crew flies (one turn and a
+OSR's width is one camera HFOV ground width at the height ``agl_ft``: the
+fix nearest the target's, else the observations' median camera height
+(``keyframes (median)``), else the median commanded waypoint height
+(``agl_source`` names which); a miss on a recording holding under 95% of
+the run reads unknown. Time to identification runs from the tasking to the
+end the row stands at. SPL is ``S * l / max(p, l)``: ``p`` the GNSS path
+from the crew's last pass of the loiter waypoint before the first leg to
+that end, plus the way back to the commit a crew flies (one turn and a
 straight, or a teardrop, at the median radius the crews turned on routed
 legs), ``l`` the straight from the loiter waypoint to the target; undefined
 for a success the recording holds under 95% of. A run with an ``excluded``
-reason is out of every rate; an entry is keyed by episode id, so it speaks for
-every run of its sortie flown under that id.
+reason is out of every rate.
 """
 
 from __future__ import annotations
