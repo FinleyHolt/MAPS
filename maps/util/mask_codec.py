@@ -25,9 +25,6 @@ import zlib
 
 import numpy as np
 
-# Deflate level: zlib's default.
-_DEFLATE_LEVEL = 6
-
 
 def _extent(mask: np.ndarray) -> tuple[int, int, int, int] | None:
     """Inclusive ``(r0, c0, r1, c1)`` of a 2-D bool mask's set pixels; ``None`` when empty."""
@@ -75,9 +72,7 @@ def encode_mask_record(
     return {
         "pixel_bbox_rcrc": [r0, c0, r1, c1],
         "mask_shape": [int(crop.shape[0]), int(crop.shape[1])],
-        "mask_zpacked_b64": base64.b64encode(
-            zlib.compress(packed, _DEFLATE_LEVEL)
-        ).decode("ascii"),
+        "mask_zpacked_b64": base64.b64encode(zlib.compress(packed)).decode("ascii"),
     }
 
 
