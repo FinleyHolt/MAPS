@@ -21,7 +21,6 @@ from maps.llm.endpoint_spec import spec as endpoint_spec
 from maps.perception.geometry.sensor_spec import served_description
 from maps.perception.observation import crop_observation, ground_sides_m
 from maps.perception.ortho.detection_stamping import project_and_stamp_ortho_detections
-from maps.perception.ortho.ground_level import GROUND_LEVEL
 from benchmarks.citynav.conversation import CONVERSATION_JSONL, ConversationLog
 from maps.search.parse_compile.reasoner_loop import MissionSpec, run_mission
 from maps.search.withhold import withheld
@@ -238,9 +237,8 @@ class MissionSession:
         target_xy = resolved["xy"]
         new_xy = target_xy
 
-        # Hold the cruise altitude, clamped ground+1 .. cap.
-        _g = float(GROUND_LEVEL.get(episode.map_name, 0.0))
-        new_alt = float(min(max(float(state.altitude_m), _g + 1.0), float(h.cfg.altitude_cap_m)))
+        # Hold the cruise altitude (clamped once, at hydrate).
+        new_alt = float(state.altitude_m)
 
         # Queued boosts segment on THIS flight.
         try:
