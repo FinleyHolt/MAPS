@@ -1,4 +1,4 @@
-"""What a look and a map put in front of the model: the render specs they
+"""What a look and a map put in front of the model: the render requests they
 resolve off the surface rows and the captions that ride their pictures."""
 
 from __future__ import annotations
@@ -191,7 +191,7 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
                   stops: dict, obs_minor_m: float | None,
                   obs_span_m: float | None,
                   frame: tuple) -> tuple[list[dict], list[str], list[str]]:
-    """One look's fids -> per-crop render specs off ``rows``: each crop
+    """One look's fids -> per-crop render requests off ``rows``: each crop
     centred on its fid, badged as the target, with ``marks`` (fids, points
     or handles) drawn beside it, capped at the server's 16 images.
     ``(requests, skipped_fids, ref_notes)``."""
