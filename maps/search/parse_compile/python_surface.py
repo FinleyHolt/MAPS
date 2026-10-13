@@ -263,7 +263,8 @@ def scan_block(code: str) -> ast.Module:
                     f"{node.id} is a loaded module -- binding over it "
                     f"would shadow it for the rest of the mission. Pick "
                     "another name.")
-        in_loop = isinstance(node, (ast.For, ast.While, ast.AsyncFor))
+        in_loop = isinstance(node, (ast.For, ast.While, ast.AsyncFor, ast.ListComp,
+                                    ast.SetComp, ast.DictComp, ast.GeneratorExp))
         if in_loop:
             loop_depth += 1
         if (loop_depth and isinstance(node, ast.Call)

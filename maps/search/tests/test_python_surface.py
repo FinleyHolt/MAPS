@@ -141,6 +141,10 @@ def test_the_prescan_refusals():
         scan_block("for c in r1:\n    go_to(c)\n")
     with pytest.raises(CodeError, match="cannot go inside a loop"):
         scan_block("while x:\n    explore(x)\n")
+    for comp in ("[go_to(r) for r in r1]", "{explore(r) for r in r1}",
+                 "{r: go_to(r) for r in r1}", "list(go_to(r) for r in r1)"):
+        with pytest.raises(CodeError, match="cannot go inside a loop"):
+            scan_block(f"{comp}\n")
     with pytest.raises(CodeError, match="syntax error"):
         scan_block("r1 = find(\n")
     # ...and ordinary Python is not refused.
