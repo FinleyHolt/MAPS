@@ -211,7 +211,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
     search_loop.start(graph)
     return Hydrated(
         cfg=cfg, state=state, assets=assets, episode=episode,
-        sensor=resolve_sensor(cfg.sensor) if cfg.sensor else None,
+        sensor=resolve_sensor(cfg.sensor),
         tile_frame=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
                              cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape)),
         perception=perception, search_loop=search_loop,

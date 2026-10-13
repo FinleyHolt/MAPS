@@ -71,3 +71,19 @@ def test_a_shape_row_scores_the_commit_not_the_snapped_final_pose(monkeypatch, t
     row = _run(monkeypatch, tmp_path, flights, row={**_ROW, "target_mask": strip}, snap=3.0)
     assert row["visited_xy"][-1] == [8.0, 6.0]
     assert row["metrics"]["SR"] == 1
+
+
+def test_the_bench_resolves_its_sensor_as_the_flight_does(monkeypatch) -> None:
+    """``sensor: {}`` is the default sensor's override, never no sensor."""
+    from maps.perception.geometry.sensor_spec import resolve_sensor
+
+    loop = SimpleNamespace(start=lambda g: None)
+    monkeypatch.setattr(er, "_episode_graph", lambda stem, assets: None)
+    monkeypatch.setattr(er, "start_altitude_m", lambda cfg, m, z: (100.0, 0.0))
+    monkeypatch.setattr(er, "make_perception", lambda: SimpleNamespace(concept_provider=SimpleNamespace(set_concepts=None)))
+    monkeypatch.setattr(er, "SearchLoop", lambda *a, **kw: loop)
+    assets = SimpleNamespace(grid_shape=(2, 2), cell_size_m=1.0, map_name="b_block_1",
+                             bounds=SimpleNamespace(x_min=0.0, y_min=0.0))
+    episode = SimpleNamespace(map_name="b_block_1", start_z=100.0, start_xy=(0.0, 0.0))
+    h = er.build_episode(SimpleNamespace(sensor={}), episode, assets)
+    assert h.sensor == resolve_sensor({})
