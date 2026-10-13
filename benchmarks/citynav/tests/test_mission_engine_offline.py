@@ -144,7 +144,7 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):
     assert report["pose_xy"] == [100.0, 200.0] and "note" not in report
     assert report["answer_if_you_reply_now"] == "building_7"
     flights = session.flights
-    assert flights[-1]["pose_xy"] == flights[-1]["resolved_xy"] == [100.0, 200.0]
+    assert flights[-1]["resolved_xy"] == [100.0, 200.0]
     assert session.h.state.pose_xy == (100.0, 200.0)
     assert session.ctx.pose_xy == (100.0, 200.0), "the pose echo follows the flight"
     assert "error" in session.fly({"target_fid": "nowhere"}) and len(flights) == 1

@@ -370,12 +370,9 @@ class MissionSession:
 
         self.flights.append(
             {
-                "stop_id": stop_id,
                 "target": token,
-                "pose_xy": [float(new_xy[0]), float(new_xy[1])],
                 "resolved_xy": [float(new_xy[0]), float(new_xy[1])],
                 "provenance": str(resolved.get("provenance", "unresolved")),
-                "step_idx": step_idx,
             }
         )
         self.feature_tour.viewpoints.append(
