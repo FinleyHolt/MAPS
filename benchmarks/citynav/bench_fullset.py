@@ -221,8 +221,7 @@ class Driver:
         self.log(f"!! by cause: {_causes(counts)}")
         self.log(f"!! representative worker log: {log_path}")
         self.log(self._log_excerpt(log_path))
-        scored = sum(1 for r in _rows.iter_json_rows(self.episodes_file)
-                     if not _rows.is_infra_abort(r))
+        scored = len(self._done_cache)
         self.log(
             ("!! nothing was scored" if not scored else f"!! {scored} attempt(s) were scored")
             + f"; the {len(bad)} infra attempts are excluded and re-queued, so a "
