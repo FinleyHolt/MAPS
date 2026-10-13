@@ -14,7 +14,7 @@ from serving.sam_engine import _build_datapoint  # noqa: E402
 
 @pytest.mark.parametrize("h,w", [(1536, 2048), (2048, 1536)])
 def test_original_size_is_height_then_width(h: int, w: int) -> None:
-    dp, qids = _build_datapoint(np.zeros((h, w, 3), np.uint8), ["car", "pool"], [0])
+    dp, qids = _build_datapoint(np.zeros((h, w, 3), np.uint8), ["car", "pool"])
 
     assert len(qids) == 2, "one query per concept"
     assert dp.images[0].size == [h, w]

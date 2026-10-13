@@ -229,10 +229,10 @@ def _memoize_text_encoder(model: Any) -> None:
     )
 
 
-def _build_datapoint(rgb: np.ndarray, concepts: list[str], dp_counter: list[int]):
-    """One Datapoint with one image and a text query per concept.
-    ``dp_counter`` is a one-element list holding the next query id; each
-    query's ``coco_image_id`` aligns its results back to its concept."""
+def _build_datapoint(rgb: np.ndarray, concepts: list[str]):
+    """One Datapoint with one image and a text query per concept, and the
+    query ids (1, 2, ...): each query's ``coco_image_id`` aligns its results
+    back to its concept."""
     from sam3.train.data.sam3_image_dataset import (
         Datapoint,
         FindQueryLoaded,
@@ -242,14 +242,10 @@ def _build_datapoint(rgb: np.ndarray, concepts: list[str], dp_counter: list[int]
 
     from PIL import Image
 
-    img_pil = Image.fromarray(rgb)
-    dp = Datapoint(find_queries=[], images=[])
     h, w = rgb.shape[:2]
-    dp.images = [SAMImage(data=img_pil, objects=[], size=[h, w])]
-    qids: list[int] = []
-    for concept in concepts:
-        cid = dp_counter[0]
-        dp_counter[0] += 1
+    qids = list(range(1, len(concepts) + 1))
+    dp = Datapoint(find_queries=[], images=[SAMImage(data=Image.fromarray(rgb), objects=[], size=[h, w])])
+    for concept, cid in zip(concepts, qids):
         dp.find_queries.append(
             FindQueryLoaded(
                 query_text=concept,
@@ -269,7 +265,6 @@ def _build_datapoint(rgb: np.ndarray, concepts: list[str], dp_counter: list[int]
                 ),
             )
         )
-        qids.append(cid)
     return dp, qids
 
 
@@ -281,157 +276,66 @@ def segment(
     min_area_px: int,
     max_per_image: int,
 ) -> list[SamDetection]:
-    """Run SAM 3.1 once on one ``uint8`` RGB frame: the backend of
-    ``serving.sam_server``'s ``/segment``. ``pixel_mask`` is the full
-    ``(H, W)`` frame mask and ``pixel_bbox_rcrc`` its inclusive extent."""
+    """Run SAM 3.1 once on one ``uint8`` RGB frame, one ``model(batch)``
+    forward for every concept: the backend of ``serving.sam_server``'s
+    ``/segment``. Detections come per concept, best score first; ``pixel_mask``
+    is the full ``(H, W)`` frame mask and ``pixel_bbox_rcrc`` its inclusive
+    extent."""
     if not concepts:
         return []
-    return _segment_via_meta(
-        [rgb],
-        concepts,
-        device=device,
-        min_area_px=min_area_px,
-        max_per_image=max_per_image,
-    )[0]
-
-
-def _segment_via_meta(
-    rgb_tiles: list[np.ndarray],
-    concepts: list[str],
-    *,
-    device: str,
-    min_area_px: int,
-    max_per_image: int,
-) -> list[list[SamDetection]]:
-    """Segment ``rgb_tiles`` through the Datapoint pipeline: a list aligned
-    with ``rgb_tiles`` of per-concept-ordered detections. Tiles run in
-    collated forwards of ``SAM_GPU_CHUNK`` (env, default 8), which bounds the
-    per-forward peak memory; per-image outputs do not depend on the chunk."""
     import torch as _torch
 
     loaded = _ensure_sam(device)
-    n_tiles = len(rgb_tiles)
-    concepts_per_tile = [concepts] * n_tiles
-
-    gpu_chunk = max(1, int(os.environ.get("SAM_GPU_CHUNK", "8")))
-    dp_counter = [1]
-    detections_per_tile: list[list[SamDetection]] = []
-    for start in range(0, n_tiles, gpu_chunk):
-        rgb_chunk = rgb_tiles[start : start + gpu_chunk]
-        concepts_chunk = concepts_per_tile[start : start + gpu_chunk]
-        detections_per_tile.extend(
-            _forward_chunk(
-                loaded,
-                rgb_chunk,
-                concepts_chunk,
-                dp_counter,
-                _torch,
-                min_area_px=min_area_px,
-                max_per_image=max_per_image,
-            )
-        )
-    return detections_per_tile
-
-
-def _forward_chunk(
-    loaded: _LoadedSam,
-    rgb_chunk: list[np.ndarray],
-    concepts_chunk: list[list[str]],
-    dp_counter: list[int],
-    _torch: Any,
-    *,
-    min_area_px: int,
-    max_per_image: int,
-) -> list[list[SamDetection]]:
-    """One collated ``model(batch)`` forward over one GPU chunk of tiles.
-    ``dp_counter`` stays monotonic across chunks so query ids are unique."""
-    dps = []
-    qids_per_tile: list[list[int]] = []
-    for rgb, tile_concepts in zip(rgb_chunk, concepts_chunk):
-        dp, qids = _build_datapoint(rgb, tile_concepts, dp_counter)
-        dps.append(loaded.transform(dp))
-        qids_per_tile.append(qids)
-
-    batch = loaded.collate(dps, dict_key="x")["x"]
-    batch = loaded.copy_to_device(
-        batch, _torch.device(loaded.device), non_blocking=True
-    )
-
+    dp, qids = _build_datapoint(rgb, concepts)
+    batch = loaded.collate([loaded.transform(dp)], dict_key="x")["x"]
+    batch = loaded.copy_to_device(batch, _torch.device(loaded.device), non_blocking=True)
     with _torch.inference_mode(), _torch.autocast("cuda", dtype=_torch.bfloat16):
         out = loaded.model(batch)
         results = loaded.postprocess.process_results(out, batch.find_metadatas)
 
-    detections_per_tile: list[list[SamDetection]] = []
-    for tile_concepts, qids in zip(concepts_chunk, qids_per_tile):
-        # No per-concept cap: every same-class instance stays countable for
-        # the reasoner ("the Nth car from the intersection"); only the total
-        # ``max_per_image`` backstop bounds a pathological frame.
-        per_tile: list[SamDetection] = []
-        for concept, qid in zip(tile_concepts, qids):
-            rec = results[qid]
-            scores_t = rec.get("scores")
-            masks_t = rec.get("masks")
-            if scores_t is None or masks_t is None or scores_t.numel() == 0:
-                continue
-            scores_t = scores_t.detach()
-            keep_score_t = scores_t >= SCORE_THRESHOLD
-            sel_idx = _torch.nonzero(keep_score_t, as_tuple=False).flatten()
-            sel_scores_t = scores_t.index_select(0, sel_idx)
-            order = _torch.argsort(sel_scores_t, descending=True)
-            sel_idx = sel_idx.index_select(0, order)
-            sel_scores_t = sel_scores_t.index_select(0, order)
+    # No per-concept cap: every same-class instance stays countable for the
+    # reasoner ("the Nth car from the intersection"); only the total
+    # ``max_per_image`` backstop bounds a pathological frame.
+    dets: list[SamDetection] = []
+    for concept, qid in zip(concepts, qids):
+        rec = results[qid]
+        scores_t = rec.get("scores")
+        masks_t = rec.get("masks")
+        if scores_t is None or masks_t is None or scores_t.numel() == 0:
+            continue
+        scores_t = scores_t.detach()
+        sel_idx = _torch.nonzero(scores_t >= SCORE_THRESHOLD, as_tuple=False).flatten()
+        order = _torch.argsort(scores_t.index_select(0, sel_idx), descending=True)
+        sel_idx = sel_idx.index_select(0, order)
+        sel_scores_t = scores_t.index_select(0, sel_idx)
+        masks_sel_t = masks_t.detach().index_select(0, sel_idx)
+        if masks_sel_t.ndim == 4:
+            masks_sel_t = masks_sel_t[:, 0]
+        masks_bool_t = masks_sel_t > 0
+        keep_idx_t = _torch.nonzero(masks_bool_t.sum(dim=(1, 2)) >= min_area_px, as_tuple=False).flatten()
+        if keep_idx_t.numel() == 0:
+            continue
+        masks_bool_t = masks_bool_t.index_select(0, keep_idx_t)
+        sel_scores_t = sel_scores_t.index_select(0, keep_idx_t)
 
-            masks_t_sel = masks_t.detach().index_select(0, sel_idx)
-            if masks_t_sel.ndim == 4:
-                masks_t_sel = masks_t_sel[:, 0]
-            masks_bool_t = masks_t_sel > 0
-            areas_t = masks_bool_t.sum(dim=(1, 2))
-            keep_area_t = areas_t >= min_area_px
-            keep_idx_t = _torch.nonzero(keep_area_t, as_tuple=False).flatten()
-            if keep_idx_t.numel() == 0:
-                continue
-            masks_bool_t = masks_bool_t.index_select(0, keep_idx_t)
-            sel_scores_t = sel_scores_t.index_select(0, keep_idx_t)
-
-            rows_any_t = masks_bool_t.any(dim=2)
-            cols_any_t = masks_bool_t.any(dim=1)
-            H = masks_bool_t.shape[1]
-            W = masks_bool_t.shape[2]
-            r_min_t = rows_any_t.float().argmax(dim=1)
-            c_min_t = cols_any_t.float().argmax(dim=1)
-            r_max_t = (H - 1) - rows_any_t.flip(dims=[1]).float().argmax(dim=1)
-            c_max_t = (W - 1) - cols_any_t.flip(dims=[1]).float().argmax(dim=1)
-
-            # The four bbox bounds move to the host in one transfer: each
-            # ``.cpu()`` is a CUDA sync.
-            bounds_t = _torch.stack([r_min_t, c_min_t, r_max_t, c_max_t], dim=0)
-            bounds_np = bounds_t.cpu().numpy()
-            r_min_np, c_min_np, r_max_np, c_max_np = (
-                bounds_np[0],
-                bounds_np[1],
-                bounds_np[2],
-                bounds_np[3],
-            )
-            scores_np = sel_scores_t.to(_torch.float32).cpu().numpy()
-            masks_np_bool = masks_bool_t.cpu().numpy()
-
-            for k in range(int(masks_np_bool.shape[0])):
-                per_tile.append(
-                    SamDetection(
-                        label=concept,
-                        score=float(scores_np[k]),
-                        pixel_mask=masks_np_bool[k],
-                        pixel_bbox_rcrc=(
-                            int(r_min_np[k]),
-                            int(c_min_np[k]),
-                            int(r_max_np[k]),
-                            int(c_max_np[k]),
-                        ),
-                    )
-                )
-                if len(per_tile) >= max_per_image:
-                    break
-            if len(per_tile) >= max_per_image:
-                break
-        detections_per_tile.append(per_tile)
-    return detections_per_tile
+        rows_any_t = masks_bool_t.any(dim=2)
+        cols_any_t = masks_bool_t.any(dim=1)
+        H, W = masks_bool_t.shape[1], masks_bool_t.shape[2]
+        # The four bbox bounds move to the host in one transfer: each
+        # ``.cpu()`` is a CUDA sync.
+        r_min, c_min, r_max, c_max = _torch.stack([
+            rows_any_t.float().argmax(dim=1),
+            cols_any_t.float().argmax(dim=1),
+            (H - 1) - rows_any_t.flip(dims=[1]).float().argmax(dim=1),
+            (W - 1) - cols_any_t.flip(dims=[1]).float().argmax(dim=1),
+        ], dim=0).cpu().numpy()
+        scores_np = sel_scores_t.to(_torch.float32).cpu().numpy()
+        masks_np = masks_bool_t.cpu().numpy()
+        for k in range(int(masks_np.shape[0])):
+            dets.append(SamDetection(
+                label=concept, score=float(scores_np[k]), pixel_mask=masks_np[k],
+                pixel_bbox_rcrc=(int(r_min[k]), int(c_min[k]), int(r_max[k]), int(c_max[k])),
+            ))
+            if len(dets) >= max_per_image:
+                return dets
+    return dets
