@@ -830,8 +830,7 @@ class Mission:
             log.exception("scoring failed for %s", self.episode_id)
             metrics = None
         if metrics is not None:
-            # The commit as the bench's row names it: the last scored flight's point and provenance.
-            metrics["committed_xy"] = last if scored else None
+            # The commit's provenance as the bench's row names it: the last scored flight's.
             metrics["committed_provenance"] = provenance
         return {
             "episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no, "split": self.split,

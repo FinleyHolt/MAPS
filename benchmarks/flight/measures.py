@@ -9,8 +9,8 @@ the recorded one, so the same truth scores both; a replay records no start
 time and no track, so it reads SR and NE only). Per run, from three things
 the record holds:
 
-* **The commit**: the point the run's last flight was sent to (``commit_xy``,
-  else the last visited point), named by the flight that resolved there (the
+* **The commit**: the point the run's last scored flight resolved to, the
+  last of its ``visited_xy``, named by the flight that resolved there (the
   ground station's ``mission.json`` where one was kept, else the run's
   ``flight/tour_cursor.json``).
 * **The truth**: the analyst's hand-drawn mask (``<sortie>.json`` in a truth
@@ -147,14 +147,9 @@ class Truth:
 
 
 def judged_xy(row: dict[str, Any]) -> tuple[float, float] | None:
-    """The commit: ``commit_xy``, else the last visited point; None when nothing flew."""
-    commit = row.get("commit_xy") or (row.get("metrics") or {}).get("committed_xy")
-    if commit:
-        return float(commit[0]), float(commit[1])
+    """The commit: the last visited point; None when nothing flew (the start alone)."""
     visited = row.get("visited_xy") or []
-    if len(visited) < 2:
-        return None
-    return float(visited[-1][0]), float(visited[-1][1])
+    return (float(visited[-1][0]), float(visited[-1][1])) if len(visited) >= 2 else None
 
 
 def flights_named(bases: list[Path]) -> list[tuple[str, tuple[float, float]]]:
