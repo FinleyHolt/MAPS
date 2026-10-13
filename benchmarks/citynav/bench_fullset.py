@@ -638,7 +638,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--episode-timeout-s",
-        type=int,
+        type=_at_least_one,
         default=4 * 3600,
         help="per-episode wall cap (default %(default)ss = 4h)",
     )

@@ -428,7 +428,7 @@ def test_a_reasoner_that_never_answers_stops_at_the_wall_budget(driver, monkeypa
     assert not d.episodes_file.exists()
 
 
-@pytest.mark.parametrize("flag", ["--workers", "--max-infra-attempts"])
+@pytest.mark.parametrize("flag", ["--workers", "--max-infra-attempts", "--episode-timeout-s"])
 def test_the_parser_refuses_a_count_below_one(flag, capsys) -> None:
     with pytest.raises(SystemExit) as done:
         bf._build_parser().parse_args([flag, "0"])
