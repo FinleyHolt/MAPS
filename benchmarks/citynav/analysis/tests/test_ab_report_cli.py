@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.citynav.analysis.ab_report import main
+from benchmarks.citynav.analysis.ab_report import main, wilson_ci
 from benchmarks.citynav.analysis.tests.ledger import write_ledger
 
 
@@ -76,3 +76,14 @@ def test_a_withhold_arm_compares_without_a_waiver_and_names_its_treatment(tmp_pa
         "withhold": ["look"], "config_yaml": yaml.safe_dump({"max_steps": 100, "withhold": ["look"]})}))
     with pytest.raises(SystemExit, match="config apart from its withholds"):
         main()
+
+
+def test_wilson_ci_bounds_and_midpoint():
+    lo, hi = wilson_ci(0, 20)
+    assert lo == 0.0 and 0.0 < hi < 0.25  # k=0 pins the floor, hi stays real
+    lo, hi = wilson_ci(20, 20)
+    assert hi == 1.0 and 0.75 < lo < 1.0
+    lo, hi = wilson_ci(50, 100)
+    assert (lo, hi) == (pytest.approx(0.4038, abs=1e-3),
+                        pytest.approx(0.5962, abs=1e-3))
+    assert wilson_ci(0, 0) == (pytest.approx(float("nan"), nan_ok=True),) * 2
