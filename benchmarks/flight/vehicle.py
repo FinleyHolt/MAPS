@@ -1,7 +1,7 @@
 """The aircraft as the flight harness sees it: legs go out, poses and recorded frames come back.
 
-The flown station spoke to the recorder and the cockpit display over HTTP;
-these are the semantics it read off them, and nothing else. A leg is posted
+On the C-12 the station speaks to the recorder and the cockpit display over
+HTTP; these are the semantics it reads off them, and nothing else. A leg is posted
 for an area and flown however the vehicle flies it (on the C-12, by the crew
 off the cockpit display). The vehicle records frames as it flies, each tagged
 with the pose the aircraft had at its stamp (``nav_track.pose_tag``), and

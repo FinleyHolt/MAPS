@@ -3,17 +3,13 @@
 :meth:`LiveSource.coverage` reads off the ring's index how much of an area
 the recording holds (the arrival rule); :meth:`LiveSource.observe_area` fuses
 the frames that saw it nearest nadir into ONE north-up orthophoto on the map
-grid. Every frame is registered into the pose graph as it arrives
-(:meth:`LiveSource.start_corrector`); an older ring frame is registered on
-its own pixels, gated by the graph's node nearest it in time. The calibration
-(``boresight.json``) is applied here alone; without one the datasheet camera
-flies. A pose's roll and pitch are aerospace (right wing down, nose up); the
-projector's pitch is nose down, so it is carried negated. ``floor_msl_m`` is
-the ground in the receiver's orthometric datum, ``tile_ground_z`` the tile
-frame's floor (``GROUND_LEVEL``).
-
-ponytail: flat ground at the bake's floor under the composite; relief needs a
-height raster under ``ground_corners_xy``.
+grid, each frame registered into the pose graph as it arrives
+(:meth:`LiveSource.start_corrector`) and placed through the calibration
+(``boresight.json``, applied here alone; without one the datasheet camera
+flies). A pose's roll and pitch are aerospace (right wing down, nose up);
+the projector's pitch is nose down, so it is carried negated. ponytail: flat
+ground at the bake's floor under the composite; relief needs a height raster
+under ``ground_corners_xy``.
 """
 
 from __future__ import annotations
@@ -287,7 +283,9 @@ def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor, g
 
 
 class LiveSource:
-    """The vehicle's recorded frames, posed and registered, as coverage and observations."""
+    """The vehicle's recorded frames, posed and registered, as coverage and
+    observations. ``floor_msl_m`` is the ground in the receiver's orthometric
+    datum, ``tile_ground_z`` the tile frame's floor (``GROUND_LEVEL``)."""
 
     def __init__(self, *, tiles_dir: str | Path, map_name: str, boresight: Boresight, vehicle,
                  tile_ground_z: float, floor_msl_m: float, register: Registration | None = None) -> None:
