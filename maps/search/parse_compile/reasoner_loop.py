@@ -124,9 +124,9 @@ def _summarise_exc(exc: BaseException) -> str:
 # whenever it fires.
 _DEDUP_NOTE = (
     "no new information since turn {turn}: nothing has entered the world "
-    "since then -- no flight, no perceive -- so every program returns what "
+    "since then -- no flight{no_look_for} -- so every program returns what "
     "it returned then, and this one is not re-rendered. Its handles stay "
-    "live for later ops. Change the world (fly, perceive) or "
+    "live for later ops. Change the world (fly{look_for}) or "
     "ask something different."
 )
 _DEDUP_REPEAT_NOTE = (
@@ -657,7 +657,10 @@ class _Mission:
                 return {"note": _DEDUP_REPEAT_NOTE.format(
                     n=_ordinal(self._dedup_n),
                     counts=_live_counts(_c_n, _a_n), cols=_cols_s)}
-            return {"note": _DEDUP_NOTE.format(turn=_prev[1])}
+            _lf = not withheld("look_for")
+            return {"note": _DEDUP_NOTE.format(
+                turn=_prev[1], no_look_for=", no look_for" if _lf else "",
+                look_for=", look_for" if _lf else "")}
         _raw_sink: dict = {}
         self.carry.ensure_fresh(program_reads(ops))
         out = run_ops(ops, namespace=self.ns,
@@ -1108,10 +1111,11 @@ class _Mission:
             _what = q.lower() or "that"
             if not rows:
                 return self._plan_err({}, (
-                    f"rule N: nothing named \"{_what}\" is on "
+                    f"nothing named \"{_what}\" is on "
                     f"this surface{self._closest_names(_what)}; say it "
                     "differently, say a fid off a served row, or "
-                    "perceive more first"))
+                    + ("fly" if withheld("look_for") else "look_for + fly")
+                    + " more first"))
             # every name keeps only its top name_match tie group
             _top = rows[0].get("name_match")
             ties[q] = [str(r["fid"]) for r in rows
@@ -1120,7 +1124,7 @@ class _Mission:
             if why == "stage" and len(ties[q]) > 1:
                 _f = ", ".join(ties[q][:4])
                 return self._plan_err({}, (
-                    f"rule F: a viewpoint is one point; "
+                    f"a viewpoint is one point; "
                     f"\"{_what}\" has {len(ties[q])} equally good "
                     f"name matches ({_f}); say which one — a fid "
                     "works"))
@@ -1173,7 +1177,7 @@ class _Mission:
         st = self._stage_apply(at, facing)
         if not st.get("staged"):
             return self._plan_err({}, (
-                "rule F: the stance did not bind: "
+                "the stance did not bind: "
                 + str(st["rejected"])))
         return {"stance": st}
 

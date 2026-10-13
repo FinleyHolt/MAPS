@@ -53,7 +53,8 @@ def test_the_watchlist_and_the_loud_errors_are_the_same_ones():
         "done",
     ])
     out = tool_results(fr)
-    assert "error" in out[0] and "rule N" in out[0]["error"], out[0]
+    assert "error" in out[0] and "nothing named" in out[0]["error"], out[0]
+    assert out[0]["error"].endswith("or look_for + fly more first"), out[0]
     assert out[0]["watching"], out[0]
 
 
@@ -419,7 +420,7 @@ def test_a_selected_crossing_can_anchor_the_next_call():
     # The anchor went in as a POINT, so compare labelled its columns after
     # the handle. Bound as a string it takes the grounding path instead and
     # the columns come back named 'distance to 10_20' -- the same shape
-    # that fails rule N on a real bake, where no row is named "[10, 20]".
+    # that names nothing on a real bake, where no row is named "[10, 20]".
     assert "distance to r2" in out[0]["result"]["results"]["r3"]["rows"], \
         out[0]["result"]["results"]["r3"]["rows"]
 

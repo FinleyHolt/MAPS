@@ -415,9 +415,11 @@ def test_dedup_note_is_a_reference_not_a_payload():
     # The hit serves one line naming the original turn; the rN handles stay live in
     # carry_results, so nothing is locked away — a new program slices them.
     from maps.search.parse_compile.reasoner_loop import _DEDUP_NOTE
-    note = _DEDUP_NOTE.format(turn=3, handles=' (r0)')
+    note = _DEDUP_NOTE.format(turn=3, no_look_for=", no look_for",
+                              look_for=", look_for")
     assert "no new information since turn 3" in note
     assert "not re-rendered" in note
+    assert "no flight, no look_for" in note and "(fly, look_for)" in note
     assert "{args}" not in _DEDUP_NOTE and "arrived" not in note
 
 
