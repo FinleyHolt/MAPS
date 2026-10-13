@@ -17,15 +17,17 @@ the record holds:
   (a split JSON given as a truth path). Its area centroid is the target
   centroid.
 * **The path**: the aircraft's GNSS track beside the sortie
-  (``flight_track.jsonl``, 1 Hz), else the centres of the observations the
-  run fused (``frames.jsonl`` ``pose_xy``).
+  (``flight_track.jsonl``, 1 Hz) and, on a recording holding under 95% of
+  the run, the centres of the observations the run fused (``frames.jsonl``
+  ``pose_xy``) beside it; ``track_source`` names the one the closest
+  approach came off.
 
 SR: the commit point lies inside the truth's mask (``success``). NE is the
 commit point to the target centroid. OSR: the path came within one camera
 HFOV ground width of the centroid, at the height above ground ``agl_ft``
 (the height of the fix nearest the centroid, else the median camera height
-of the run's observations, else its median commanded waypoint height;
-``agl_source`` names which); a run that did not, on a recording holding under 95% of it,
+of the run's observations, ``keyframes (median)``, else its median
+commanded waypoint height; ``agl_source`` names which); a run that did not, on a recording holding under 95% of it,
 reads unknown. Time to identification runs from the tasking to the
 determination. SPL is ``S * l / max(p, l)``: ``p`` the GNSS path from the
 crew's last pass of the loiter waypoint before the first leg to the
@@ -304,7 +306,7 @@ def _agl(fix, bases: list[Path], events) -> tuple[float | None, str | None]:
         return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
     alts = [float(f["altitude_m"]) for b in bases for f in read_jsonl(b / FRAMES_JSONL) if f.get("altitude_m") is not None]
     if alts:
-        return statistics.median(alts), "keyframes"
+        return statistics.median(alts), "keyframes (median)"
     asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]
     return (statistics.median(asked), "waypoint altitude") if asked else (None, None)
 
@@ -488,12 +490,15 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     # recording they can still show the target came within the width.
     thin = out["track_coverage"] < SPL_MIN_COVERAGE
     poses = keyframe_poses(bases, t_start, t_end_run) if thin else []
-    out["track_source"] = "GNSS track" if flown else "keyframe poses" if poses else "none"
     if success and len(flown) < 2:
         out["spl_note"] = "undefined: the recording does not cover the run"
-    if not flown and not poses:
+    paths = [(name, p) for name, p in (("GNSS track", flown), ("keyframe poses", poses)) if p]
+    if not paths:
+        out["track_source"] = "none"
         return out
-    d, nearest = min((closest_approach(p, target) for p in (flown, poses) if p), key=lambda c: c[0])
+    # The path the closest approach came off names the track.
+    (d, nearest), out["track_source"] = min(((closest_approach(p, target), name) for name, p in paths),
+                                            key=lambda c: c[0][0])
     out["closest_approach_ft"] = round(d * FT_PER_M, 1)
     agl, out["agl_source"] = _agl(nearest, bases, events)
     if agl is not None:
