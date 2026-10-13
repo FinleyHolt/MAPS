@@ -27,15 +27,10 @@ def test_the_prior_withhold_builds_no_prior_colour(monkeypatch, stub_session):
     from benchmarks.citynav.run_benchmark import mission_engine as me
 
     asked: list = []
-
-    def _enrich(**kw):
-        asked.append(kw["build_prior"])
-        return {"prior": [], "prior_exc": None}
-
-    monkeypatch.setattr(me, "_build_frame_enrich", _enrich)
+    monkeypatch.setattr(me, "prior_percepts", lambda *a: asked.append(a) or [])
     session = stub_session(rgb=np.zeros((4, 4, 3), np.uint8))
     monkeypatch.delenv("SEARCH_WITHHOLD", raising=False)
     session.fly({"target_fid": "building_7"})
     monkeypatch.setenv("SEARCH_WITHHOLD", "prior")
     session.fly({"target_fid": "building_7"})
-    assert asked == [True, False]
+    assert len(asked) == 1

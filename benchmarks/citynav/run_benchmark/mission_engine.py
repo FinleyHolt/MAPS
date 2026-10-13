@@ -16,7 +16,7 @@ from pathlib import Path
 
 from benchmarks.citynav.episodes import atomic_write_json
 from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
-from benchmarks.citynav.run_benchmark.osm_prior import _build_frame_enrich
+from benchmarks.citynav.run_benchmark.osm_prior import prior_percepts
 from maps.llm.endpoint_spec import spec as endpoint_spec
 from maps.perception.geometry.sensor_spec import served_description
 from maps.perception.observation import crop_observation, ground_sides_m
@@ -315,28 +315,16 @@ class MissionSession:
                 log.warning("mission step write failed step=%d: %s", step_idx, exc)
 
         # Prior colour enrichment: one frame, upserted onto the named priors.
-        if obs is not None and obs.rgb is not None:
-            _built = _build_frame_enrich(
-                obs=obs,
-                step_idx=step_idx,
-                view_corners=(tuple(obs.ortho_view_corners_xy)
-                              if obs.ortho_view_corners_xy is not None else None),
-                assets=h.assets,
-                build_prior=not withheld("prior"),
-            )
-            for pfid, pattrs, ppx in _built["prior"]:
-                loop.upsert_prior_percept(pfid, pattrs, px=ppx)
-            if _built["prior_exc"] is not None:
+        if obs is not None and obs.rgb is not None and not withheld("prior"):
+            try:
+                for pfid, pattrs, ppx in prior_percepts(obs, h.assets, step_idx):
+                    loop.upsert_prior_percept(pfid, pattrs, px=ppx)
+            except Exception as exc:  # noqa: BLE001 — colour enrichment never kills a flight
                 loop.state.prior_enrich_fails += 1
                 _nfail = loop.state.prior_enrich_fails
                 if _nfail == 1 or _nfail % 50 == 0:
-                    log.warning(
-                        "prior percept enrichment failed (n=%d) step=%d: %s",
-                        _nfail,
-                        step_idx,
-                        _built["prior_exc"],
-                        exc_info=_built["prior_exc"],
-                    )
+                    log.warning("prior percept enrichment failed (n=%d) step=%d: %s",
+                                _nfail, step_idx, exc, exc_info=exc)
 
         if self.observe is not None:
             # The frame's own pose fed the fold and the recorder; from here

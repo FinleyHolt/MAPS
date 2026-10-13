@@ -41,35 +41,30 @@ def _prior_fids_in_view(assets, view_corners_xy) -> list[str]:
     return out
 
 
-def _build_frame_enrich(*, obs, step_idx: int, view_corners, assets, build_prior: bool) -> dict:
-    """One frame's prior enrichment, everything but the graph apply:
-    ``{"prior": [(fid, colour attrs, mask px)], "prior_exc"}``.
-    A failure is carried in ``prior_exc`` with the items done before it, so
-    the flight's apply warns and counts it."""
-    out: dict = {"prior": [], "prior_exc": None}
+def prior_percepts(obs, assets, step_idx: int):
+    """Yield ``(fid, colour attrs, mask px)`` for each prior footprint in the
+    frame's view that M6 colours; an M6 failure raises after the items
+    before it were yielded. A footprint projection that fails is logged and
+    yields nothing."""
     rgb_arr = np.asarray(obs.rgb)
-    if build_prior:
-        try:
-            enrich_fids = _prior_fids_in_view(assets, view_corners)
-            if rgb_arr.ndim == 3 and enrich_fids:
-                try:
-                    prior_polys = build_prior_polys_ortho(
-                        rgb_shape=(int(rgb_arr.shape[0]), int(rgb_arr.shape[1])),
-                        features=assets.base_features,
-                        bounds=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
-                                         cell_size_m=float(assets.cell_size_m),
-                                         grid_shape=tuple(assets.grid_shape)),
-                        view_corners_xy=view_corners,
-                        fids_to_render=enrich_fids,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    log.warning("catalog prior overlay build failed step=%d anchor=?: %s", step_idx, exc)
-                    prior_polys = []
-                for pfid, pmask in prior_polys:
-                    # Priors get the M6 colour detections get, over the projected footprint.
-                    pattrs = m6_attributes(rgb_arr, pmask)
-                    if pattrs:
-                        out["prior"].append((pfid, pattrs, pmask.area))
-        except Exception as exc:  # noqa: BLE001 - carried to the apply
-            out["prior_exc"] = exc
-    return out
+    view_corners = obs.ortho_view_corners_xy
+    enrich_fids = _prior_fids_in_view(assets, view_corners)
+    if rgb_arr.ndim != 3 or not enrich_fids:
+        return
+    try:
+        prior_polys = build_prior_polys_ortho(
+            rgb_shape=(int(rgb_arr.shape[0]), int(rgb_arr.shape[1])),
+            features=assets.base_features,
+            bounds=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
+                             cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape)),
+            view_corners_xy=view_corners,
+            fids_to_render=enrich_fids,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("catalog prior overlay build failed step=%d: %s", step_idx, exc)
+        return
+    for pfid, pmask in prior_polys:
+        # Priors get the M6 colour detections get, over the projected footprint.
+        pattrs = m6_attributes(rgb_arr, pmask)
+        if pattrs:
+            yield pfid, pattrs, pmask.area
