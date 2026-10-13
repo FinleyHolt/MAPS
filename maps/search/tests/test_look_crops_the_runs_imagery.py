@@ -42,7 +42,7 @@ def test_a_look_in_a_flight_mission_is_cut_from_the_runs_imagery_and_says_what_i
     run = _Imagery()
     # The subject sits in the imaged half; a mark sits in the unimaged half.
     crops = look_render.render_candidate_crops(
-        [{"center_fid": "b1", "center_xy": [1000.0, 2000.0], "center_label": "b1", "annotate": True, "marks": []}],
+        [{"center_fid": "b1", "center_xy": [1000.0, 2000.0], "center_label": "b1", "marks": []}],
         map_name=map_name, rgbd_dir="/nowhere", imagery=run)
     assert len(crops) == 1 and run.asked, "no crop, or the run's imagery was never asked"
     rec = crops[0]
@@ -66,7 +66,7 @@ def test_a_look_in_a_flight_mission_is_cut_from_the_runs_imagery_and_says_what_i
     assert "not imaged" in _look_vision_text(crops) and "raster" not in _look_vision_text(crops)
     # And a subject on ground the run never flew reads unobserved, by name.
     far = look_render.render_candidate_crops(
-        [{"center_fid": "b2", "center_xy": [1000.0, 2000.0], "center_label": "b2", "annotate": True, "marks": []}],
+        [{"center_fid": "b2", "center_xy": [1000.0, 2000.0], "center_label": "b2", "marks": []}],
         map_name=map_name, rgbd_dir="/nowhere", imagery=_Imagery(0.0))
     words = _look_vision_text(far)
     assert far[0]["source"] == "run" and far[0]["subject_on_data"] is False and "unobserved" in words, words
@@ -90,7 +90,7 @@ def test_the_bench_still_crops_the_bake(monkeypatch):
     monkeypatch.setattr(look_render, "ortho_world_bounds", lambda *a, **k: (900.0, 1900.0, 1000.0, 2000.0), raising=False)
     map_name = next(iter(GROUND_LEVEL))
     crops = look_render.render_candidate_crops(
-        [{"center_fid": "b1", "center_xy": [950.0, 1950.0], "center_label": "b1", "annotate": True, "marks": []}],
+        [{"center_fid": "b1", "center_xy": [950.0, 1950.0], "center_label": "b1", "marks": []}],
         map_name=map_name, rgbd_dir="/somewhere")
     assert seen and crops and crops[0]["source"] == "bake"
 
@@ -115,7 +115,7 @@ def test_a_bake_crops_source_detail_is_the_configured_rasters_own_cell(monkeypat
 
     monkeypatch.setattr(camera_model, "load_ortho_or_rasters", loader)
     monkeypatch.setattr(look_render, "ortho_world_bounds", lambda *a, **k: (900.0, 1900.0, 1000.0, 2000.0), raising=False)
-    req = [{"center_fid": "b1", "center_xy": [950.0, 1950.0], "center_label": "b1", "annotate": True, "marks": []}]
+    req = [{"center_fid": "b1", "center_xy": [950.0, 1950.0], "center_label": "b1", "marks": []}]
 
     png_dir = tmp_path / "png"
     png_dir.mkdir()

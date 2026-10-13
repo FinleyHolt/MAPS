@@ -280,7 +280,7 @@ def test_a_picture_states_its_own_pixel_grid(ortho_dir):
 
     (look,) = render_candidate_crops(
         [{"center_fid": "", "center_xy": [100.0, 100.0], "center_label": "here",
-          "center_boundary": None, "annotate": False, "marks": []}],
+          "center_boundary": None, "marks": []}],
         map_name=ORTHO_MAP, rgbd_dir=ortho_dir)
     img = cv2.imdecode(np.frombuffer(look["jpeg"], np.uint8), cv2.IMREAD_COLOR)
     assert img.shape[1] == look["side_px"], (img.shape, look["side_px"])

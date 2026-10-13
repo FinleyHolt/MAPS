@@ -104,7 +104,6 @@ def test_the_one_id_look_is_the_request_it_always_was(ortho_dir):
         [[run('look("detected_1")')], "over"], cars(6), ortho_dir)
     (req,) = reqs[0]
     assert req["center_fid"] == "detected_1"
-    assert req["annotate"] is True
     # the target IS the center, so the ONE mark resolves onto the subject
     # and the frame keeps the tight appearance geometry
     assert [m["fid"] for m in req["marks"]] == ["detected_1"], req

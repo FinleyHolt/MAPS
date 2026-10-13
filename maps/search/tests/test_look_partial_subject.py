@@ -18,7 +18,7 @@ def _crop(ortho_dir, boundary):
     req = {"center_fid": "f0", "center_xy": [(min(xs) + max(xs)) / 2,
                                              (min(ys) + max(ys)) / 2],
            "center_label": "f0", "center_boundary": boundary,
-           "annotate": False, "marks": []}
+           "marks": []}
     recs = render_candidate_crops([req], map_name=MAP, rgbd_dir=ortho_dir)
     assert len(recs) == 1, recs
     return recs[0]

@@ -259,7 +259,6 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
             "frame_note": frame[1],
             "center_label": look_label(f, row, is_target=True),
             "center_boundary": look_outline(row),
-            "annotate": True,
             "marks": mark_list,
             # The observation extent: the renderer's window ceiling.
             "obs_span_m": obs_span_m,

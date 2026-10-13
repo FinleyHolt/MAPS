@@ -34,7 +34,7 @@ def _req(center_xy, marks_xy=(), target_xy=None, fid="c0"):
                       "label": "TARGET car", "is_target": True})
     return {"center_fid": fid, "center_xy": list(center_xy),
             "center_label": f"car {fid}", "center_boundary": None,
-            "annotate": bool(marks), "marks": marks}
+            "marks": marks}
 
 
 def _render_one(ortho_dir, req):
@@ -117,7 +117,7 @@ def test_single_id_keeps_the_tight_crop(ortho_dir):
 
 def test_mid_span_upscale_is_derived_not_moded(ortho_dir):
     # 24 m hull -> 30 m window -> 300 px native -> x2 -> 600 px delivered:
-    # the factor follows the span, not an annotate mode.
+    # the factor follows the span.
     rec = _render_one(ortho_dir, _req(
         (100.0, 100.0), marks_xy=[(88.0, 100.0), (112.0, 100.0)]))
     assert rec["context_m"] == 30.0, rec["context_m"]

@@ -39,7 +39,6 @@ def _render(ortho_dir, set_span_m: float, obs_span_m: float | None, n: int = 24)
         "center_xy": pts[0]["xy"],
         "center_label": "car",
         "center_boundary": None,
-        "annotate": True,
         "marks": [{"fid": p["fid"], "xy": p["xy"], "label": "car",
                    "is_target": False} for p in pts],
     }
