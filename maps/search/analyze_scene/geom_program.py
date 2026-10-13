@@ -156,18 +156,13 @@ def representative_point(chains) -> list:
     """A point ON the geometry, the row's flight target, at 2 dp: a closed
     chain's area centroid when it lies inside the mask, else the arc
     midpoint of the longest chain (a mean over a bent way lies off it)."""
-    if not any(chains):
-        return [0.0, 0.0]
     geom = G.mask_geom(chains)
     if geom["closed"]:
         c = G.loops_area_centroid([ch for ch in chains
                                    if G.is_closed_chain(ch)])
         if c is not None and bool(G.mask_contains(geom, [c])[0]):
             return [round(float(c[0]), 2), round(float(c[1]), 2)]
-    longest = max(chains, key=len)
-    if len(longest) < 2:
-        return [round(float(longest[0][0]), 2), round(float(longest[0][1]), 2)]
-    p = _polyline_arc_midpoint(longest)
+    p = _polyline_arc_midpoint(max(chains, key=len))
     return [round(float(p[0]), 2), round(float(p[1]), 2)]
 
 
@@ -371,9 +366,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         out = _masked(loops) if loops else {}
         # Below 6 cells the 2 m grid cannot express shape.
         if len(cells) >= 6:
-            shape = G.mask_shape_features(cells, cs)
-            if shape:
-                out.update(shape)
+            out.update(G.mask_shape_features(cells, cs))
         return out
 
     def _cand_row(f, n):
@@ -459,16 +452,9 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
 def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
     """:func:`build_surface` over a graph's ``(fid, node)`` pairs, split by
     ``node.provenance``."""
-    det, prior, seen = [], [], set()
+    det, prior = [], []
     for fid, node in nodes_iter:
-        fid = str(fid)
-        if fid in seen:
-            continue
-        seen.add(fid)
-        if node.provenance == "detected":
-            det.append((fid, node))
-            continue
-        prior.append((fid, node))
+        (det if node.provenance == "detected" else prior).append((fid, node))
     return build_surface(det, prior, origin_xy, cell_m)
 
 
@@ -1189,8 +1175,6 @@ def _window(cur, win, token):
     and ``op_cols``. Selecting none of a non-empty set raises."""
     part = "[" + win
     lo, hi = (int(b) for b in win[:-1].split(":"))
-    if not isinstance(cur, list):
-        cur = [cur]
     rows = cur[lo:hi]
     if isinstance(cur, Result):
         w = Result(rows, cur.kind)
@@ -1249,8 +1233,7 @@ def _named_rows(cx, el, need):
     for t in (el if isinstance(el, list) else [el]):
         vals = [t]
         if isinstance(t, str) and t not in cx.by_fid:
-            v = cx.resolve(t)
-            vals = v if isinstance(v, list) else [v]
+            vals = cx.resolve(t)
         for x in vals:
             n = None
             if isinstance(x, str):
