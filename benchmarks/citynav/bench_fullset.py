@@ -709,7 +709,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FATAL: endpoint discovery failed: {exc}", file=sys.stderr)
         return 2
     install_spec(spec)
-    settle_effort(spec.model_id)
+    settle_effort()
     return driver.run()
 
 

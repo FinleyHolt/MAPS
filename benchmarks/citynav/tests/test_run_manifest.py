@@ -174,14 +174,8 @@ def test_the_effort_is_stamped_as_it_flies(monkeypatch, raw, flown):
     """The request carries the stripped effort, so the stamp, a resume's
     comparison and every reader carry the same one spelling."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", raw)
-    run_manifest.settle_effort("inkling-small")
+    run_manifest.settle_effort()
     assert run_manifest.arm_env_stamp().get("SEARCH_SAMPLING_REASONING_EFFORT") == flown
-
-
-def test_an_effort_the_card_does_not_take_is_refused(monkeypatch):
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.90")
-    with pytest.raises(ValueError, match="'0.9'"):
-        run_manifest.settle_effort("inkling-small")
 
 
 def test_a_root_with_episodes_and_no_manifest_is_refused(stub_run, tmp_path):

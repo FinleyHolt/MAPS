@@ -145,7 +145,7 @@ def main() -> int:
         log.error("endpoint discovery failed: %s", exc)
         return 2
     endpoint_spec_module.install_spec(spec)
-    _rm.settle_effort(spec.model_id)
+    _rm.settle_effort()
     log.info(
         "MISSION: one reasoner conversation per episode -- requested "
         "viewpoints fly the moment they land, the plain reply ends the "

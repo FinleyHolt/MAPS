@@ -628,7 +628,7 @@ class Mission:
             # One probe per process, before any inference call: a dead reasoner
             # fails this mission, honestly.
             install_spec(discover_from_env())
-            settle_effort(spec().model_id)
+            settle_effort()
             if (self.reasoning_effort or "").strip():
                 check_effort(spec().model_id, self.reasoning_effort.strip())
             self._write_manifests()
