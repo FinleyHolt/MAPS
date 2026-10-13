@@ -1,16 +1,12 @@
 """Print the served LLM contract: system text + the mission tools.
 
-What the model is served at this sha, from the owners a run serves through
-(``prompts.served_system_prompt`` and ``prompts.served_tools``); the flight
-log records what a real run sent. Diff two shas by dumping at each.
+What the model is served at this sha, read from the owners a run serves
+through (``prompts``); diff two shas by dumping at each.
 
   python -m maps.search.parse_compile.contract
   python -m maps.search.parse_compile.contract --sensor <rig> [--agl-m <m>]   # Cal City's height by default
   python -m maps.search.parse_compile.contract --withhold look,images
   python -m maps.search.parse_compile.contract --rendered   # template bytes
-
-``--rendered`` prints the chat-template render of the system turn, one
-sample instruction and the tools, with its token count on stderr.
 """
 
 from __future__ import annotations
@@ -108,7 +104,8 @@ def main(argv: list[str] | None = None) -> int:
                          "states its footprint (default: configs/calcity.yaml's "
                          "start_altitude_agl_m)")
     ap.add_argument("--rendered", action="store_true",
-                    help="print the chat-template render instead of the "
+                    help="print the chat-template render of the system turn, "
+                         "one sample instruction and the tools instead of the "
                          "sectioned dump; token count goes to stderr")
     ap.add_argument("--model", default="inkling-small",
                     help="served-model alias for the --rendered tokenizer "
