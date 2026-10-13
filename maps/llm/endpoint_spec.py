@@ -34,6 +34,9 @@ from dataclasses import dataclass
 log = logging.getLogger(__name__)
 
 
+#: The reasoner's base URL when ``SEARCH_REASONER_URL`` is unset.
+DEFAULT_REASONER_URL = "http://127.0.0.1:8001/v1"
+
 _PROBE_TIMEOUT_S = 15.0
 # A transport failure is asked again before it is a verdict: a relayed link
 # that re-forms drops one connection.
@@ -362,7 +365,7 @@ def discover_from_env() -> EndpointSpec:
     except ValueError as exc:
         raise EndpointDiscoveryError(str(exc)) from exc
     return discover(
-        os.environ.get("SEARCH_REASONER_URL", "http://127.0.0.1:8001/v1"),
+        os.environ.get("SEARCH_REASONER_URL", DEFAULT_REASONER_URL),
         sam_url,
         offline=os.environ.get("SEARCH_ENDPOINT_OFFLINE", "").strip() == "1",
         override=parse_override(override_raw) if override_raw else None,

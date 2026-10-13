@@ -87,7 +87,12 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
     monkeypatch.delenv("SEARCH_REASONER_MODELS_URL")
     monkeypatch.setenv("SEARCH_REASONER_URL", "http://127.0.0.1:8001/v1")
     assert driver()._reasoner_answers()
-    assert asked == ["https://bedrock-mantle.us-east-1.api.aws/v1/models", "http://127.0.0.1:8001/v1/models"]
+    monkeypatch.delenv("SEARCH_REASONER_URL")  # unset: the gate asks where discovery did
+    assert driver()._reasoner_answers()
+    assert asked == ["https://bedrock-mantle.us-east-1.api.aws/v1/models", "http://127.0.0.1:8001/v1/models",
+                     "http://127.0.0.1:8001/v1/models"]
+    monkeypatch.setenv("SEARCH_REASONER_URL", "")  # no URL to ask is a reasoner that does not answer
+    assert not driver()._reasoner_answers()
 
 
 def test_a_window_of_infra_casualties_stops_the_run(driver, tmp_path: Path) -> None:

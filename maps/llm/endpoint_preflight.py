@@ -86,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     override = os.environ.get("SEARCH_ENDPOINT_SPEC_OVERRIDE", "").strip()
     try:
         spec = endpoint_spec.discover(
-            os.environ.get("SEARCH_REASONER_URL", "http://127.0.0.1:8001/v1"),
+            os.environ.get("SEARCH_REASONER_URL", endpoint_spec.DEFAULT_REASONER_URL),
             override=endpoint_spec.parse_override(override) if override else None)
     except endpoint_spec.EndpointDiscoveryError as exc:
         print(f"discovery refused: {exc}", file=sys.stderr)
