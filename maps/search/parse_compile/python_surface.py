@@ -532,7 +532,7 @@ class Row:
         if isinstance(k, int) and k in (0, -1):
             return self                  # one row indexes as itself
         if isinstance(k, slice):
-            return [self]
+            return RowList([self])
         v = self._column(k)
         if v is _MISSING:
             raise KeyError(self._miss(k))

@@ -648,3 +648,8 @@ def test_a_list_plus_rows_is_a_rowlist_either_way_round():
                                        ' hasattr([] + r1, "filter"))\n')], "done"])
     out = tool_results(fr)[0]
     assert (out.get("printed") or "").strip() == "True True", out
+
+
+def test_a_slice_of_one_row_chains_like_every_other_slice():
+    r = Row({"fid": "f1", "xy": [1.0, 2.0]})
+    assert r[0:1].order(lambda x: x.x) == [r]
