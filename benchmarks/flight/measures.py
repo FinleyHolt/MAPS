@@ -47,6 +47,7 @@ import statistics
 import sys
 from bisect import bisect_left
 from pathlib import Path
+from typing import Any
 
 from benchmarks.citynav.analysis.rows import is_infra_abort, iter_json_rows
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
@@ -55,7 +56,6 @@ from benchmarks.flight.mission import FRAMES_JSONL, TRACK_JSONL
 from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.search.analyze_scene.geom_compute import point_in_polygon
-from typing import Any
 
 FT_PER_M = 1.0 / 0.3048
 #: The C-12's camera, whose horizontal field of view is the width OSR reads.
