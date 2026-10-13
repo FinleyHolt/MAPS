@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from benchmarks.flight.live_source import OBSERVATION_JPEG_QUALITY, LiveSource
+from benchmarks.flight.live_source import LiveSource
 from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.flight.vehicle import Leg
@@ -75,6 +75,8 @@ AIRBORNE_AGL_M = 10.0
 #: The most a leg waits for its point to leave the frame after arriving.
 FRAME_WAIT_S = 30.0
 
+#: The quality a waypoint's observation is written at (``observations/<sha>.jpg``).
+OBSERVATION_JPEG_QUALITY = 90
 #: One row per observation a mission perceived, in the episode's directory:
 #: the key from the mission's reasoning back into the recording.
 FRAMES_JSONL = "frames.jsonl"

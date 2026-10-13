@@ -48,9 +48,6 @@ from maps.perception.ortho.sensor_frame import ground_corners_xy
 
 log = logging.getLogger(__name__)
 
-#: The quality a waypoint's observation is written at (``observations/<sha>.jpg``).
-OBSERVATION_JPEG_QUALITY = 90
-
 #: The mosaic's grid cell where the frames report none, metres.
 GSD_FLOOR_M = 0.3
 
