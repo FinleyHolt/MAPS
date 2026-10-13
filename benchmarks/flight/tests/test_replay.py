@@ -313,6 +313,26 @@ def test_a_replay_records_no_start_time_and_no_track(built, make_twin, make_live
     assert not (workdir.parent / "flight_track.jsonl").exists()
 
 
+def test_a_forced_replay_parked_with_no_recorded_tasking_ends_instead_of_waiting(built, make_twin, make_live,
+                                                                                 tmp_path):
+    """A forced replay that diverges into a report the recording holds no
+    operator answer to has nothing to wait for: it ends at that report."""
+    import threading
+
+    workdir = tmp_path / "sortie" / "run"
+    workdir.mkdir(parents=True)
+    m = R.ReplayMission(replay_of={"mode": "forced"}, stops=[], episode_id="calcity::t", split="calcity",
+                        config="configs/calcity.yaml", workdir=workdir, live=make_live(make_twin()), recorder=None,
+                        close_log=lambda: None, agl_m=world.AGL_M)
+    got = []
+    t = threading.Thread(target=lambda: got.append(m._await_tasking()), daemon=True)
+    t.start()
+    t.join(5.0)
+    assert not t.is_alive() and got == [None]
+    m.tasking("go on")
+    assert m._await_tasking() == "go on"
+
+
 def test_the_bank_reads_an_area_s_pixels_once_however_often_it_is_asked(built, tmp_path, monkeypatch):
     """Arrival polls the same area every simulated second: a week's bank
     answers the poll from memory, not by decoding every observation again."""

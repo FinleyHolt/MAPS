@@ -434,6 +434,13 @@ class ReplayMission(Mission):
         nxt = self._recorded_stops[k][0] if k < len(self._recorded_stops) else None
         return [str(token) == nxt for token, _xy in stops]
 
+    def _await_tasking(self) -> str | None:
+        """Forced, the recorded reasoner queues an operator's words before the
+        report they answer, so a report with none queued ends the replay."""
+        if self._recorded_stops is None:
+            return super()._await_tasking()
+        return self._next_tasking()
+
 
 # -- the diff ------------------------------------------------------------------
 
