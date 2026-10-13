@@ -110,26 +110,19 @@ def activate_calcity() -> None:
     use()
 
 
-def authored_episode(episode_id: str, start_xy: tuple[float, float]):
-    """The episode of a mission flown under the operator's own words: the map
-    its id names, the start given, and no target, so nothing scores it."""
-    from benchmarks.citynav.adapter import CityNavEpisode  # noqa: PLC0415
-
-    return CityNavEpisode(
-        map_name=episode_id.split("::")[0], episode_id=episode_id, description="",
-        start_xy=(float(start_xy[0]), float(start_xy[1])), start_z=None, target_xy=None,
-        target_object_ids=[], target_mask=None, marker_positions=[],
-    )
-
-
 def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] | None = None):
-    """The split's row named ``episode_id``, or with ``start_xy`` an
-    operator-authored mission with no row (:func:`authored_episode`)."""
-    from benchmarks.citynav.adapter import find_row, load_split, parse_episode  # noqa: PLC0415
+    """The split's row named ``episode_id``; with ``start_xy``, a mission
+    flown under the operator's own words: the map its id names, the start
+    given, and no target."""
+    from benchmarks.citynav.adapter import CityNavEpisode, find_row, load_split, parse_episode  # noqa: PLC0415
     from benchmarks.citynav.paths import split_path  # noqa: PLC0415
 
     if start_xy is not None:
-        return authored_episode(episode_id, start_xy)
+        return CityNavEpisode(
+            map_name=episode_id.split("::")[0], episode_id=episode_id, description="",
+            start_xy=(float(start_xy[0]), float(start_xy[1])), start_z=None, target_xy=None,
+            target_object_ids=[], target_mask=None, marker_positions=[],
+        )
     found = find_row(load_split(split_path(split)), episode_id)
     if found is None:
         raise ValueError(f"{split} holds no episode {episode_id}")
