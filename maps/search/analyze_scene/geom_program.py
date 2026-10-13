@@ -17,6 +17,7 @@ import numpy as np
 from maps.search.analyze_scene import cell_mesh
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene import text_match as T
+from maps.search.analyze_scene.row_geometry import chains_of
 from maps.search.render.look_render import LOOK_SET_ROWS
 from maps.util.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld
@@ -1437,15 +1438,6 @@ def _find(cx, a):
                   notes=notes, set_notes=set_notes)
 
 
-def _x_polys(node):
-    """A row's exact geometry as vertex chains (its mask), else its point."""
-    m = node.get("mask")
-    if m:
-        return list(m)
-    xy = node.get("xy")
-    return [[xy]] if xy else []
-
-
 def _x_label(nodes, el):
     names: list = []
     for n in nodes:
@@ -1465,7 +1457,7 @@ def _crossings(cx, a):
     sides = []
     for _el in a["refs"]:
         _nodes = _named_rows(cx, _el, "xy")
-        _polys = [p for n in _nodes for p in _x_polys(n)]
+        _polys = [p for n in _nodes for p in chains_of(n)]
         if not _polys:
             raise ProgramError(
                 f"crossings ref {_quote(_el)} names no geometry on this "
@@ -1506,7 +1498,7 @@ def _crossings(cx, a):
                 if _budget <= 0:
                     break
                 _budget -= 1
-                _px, _ = G.polyline_crossings(_x_polys(_ra), _x_polys(_rb))
+                _px, _ = G.polyline_crossings(chains_of(_ra), chains_of(_rb))
                 if _px:
                     _hx, _hy = (float(round(_px[0][0])),
                                 float(round(_px[0][1])))

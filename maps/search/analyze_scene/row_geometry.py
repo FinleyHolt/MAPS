@@ -45,7 +45,7 @@ class SurfaceGeometry:
         if got is None:
             fid, xy = place
             row = self.row_of_fid(fid) if fid else None
-            chains = chains_of(row) if isinstance(row, dict) else []
+            chains = chains_of(row)
             if not chains and is_xy(xy):
                 chains = [[[float(xy[0]), float(xy[1])]]]
             got = self._geoms[place] = G.mask_geom(chains)
