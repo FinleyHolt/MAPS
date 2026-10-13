@@ -34,6 +34,7 @@ decoded and resident at once; a request that waits past
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import io
 import logging
@@ -59,14 +60,21 @@ _DEVICE = os.environ.get("SAM_DEVICE", "cuda" if torch.cuda.is_available() else 
 _DTYPE_STR = os.environ.get("SAM_DTYPE", "bfloat16")
 
 _state_lock = threading.Lock()
+# The admission wait is async, so a waiter holds no thread. Sync handlers
+# and sync dependencies share starlette's 40-thread pool; a sync gate held
+# one per waiter, and once about 40 waited, admitted forwards and /health
+# could not get a thread and the replica served two requests per wait
+# window until the waiters timed out.
 _MAX_INFLIGHT = int(os.environ.get("SAM_MAX_INFLIGHT", "2"))
 _INFLIGHT_WAIT_S = float(os.environ.get("SAM_INFLIGHT_WAIT_S", "600"))
-_inflight_sem = threading.BoundedSemaphore(max(1, _MAX_INFLIGHT))
+_inflight_sem = asyncio.BoundedSemaphore(max(1, _MAX_INFLIGHT))
 
 
-def _admission():
+async def _admission():
     """FastAPI dependency: bound concurrent decoded-payload residency."""
-    if not _inflight_sem.acquire(timeout=_INFLIGHT_WAIT_S):
+    try:
+        await asyncio.wait_for(_inflight_sem.acquire(), _INFLIGHT_WAIT_S)
+    except asyncio.TimeoutError:
         raise HTTPException(
             503,
             detail={
@@ -74,7 +82,7 @@ def _admission():
                 "waited_s": _INFLIGHT_WAIT_S,
                 "max_inflight": _MAX_INFLIGHT,
             },
-        )
+        ) from None
     try:
         yield
     finally:
