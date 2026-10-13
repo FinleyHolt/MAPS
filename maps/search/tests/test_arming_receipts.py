@@ -81,6 +81,14 @@ def test_a_quoted_point_boost_re_segments_the_flown_stop_it_falls_on():
     assert "queued" not in ack
 
 
+def test_a_boost_at_an_unflown_stop_names_it_and_queues_nothing():
+    from maps.search.parse_compile.perception_director import PerceptionDirector
+
+    assert PerceptionDirector().boost_queue(["car"], ["stop_009"]) == {
+        "error": "no boost target resolved; nothing was queued or re-segmented",
+        "unknown_where": ["stop_009"]}
+
+
 def test_a_queued_boost_segments_its_flights_in_watchlist_order_until_its_target_flies():
     from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 

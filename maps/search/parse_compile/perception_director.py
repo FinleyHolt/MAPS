@@ -171,7 +171,6 @@ class PerceptionDirector:
                 "error": ("no boost target resolved; nothing was queued or "
                           "re-segmented"),
                 "unknown_where": unknown,
-                "pending": [],
             }
         if retro:
             ack["retro"] = retro
