@@ -89,11 +89,9 @@ def score_precise(
         from shapely.geometry import Point
 
         distance = float(Point(final_xy).distance(_as_polygon(gt_polygon)))
-        return {"SR": 1 if distance == 0.0 else 0, "precise_target": "shape",
-                "precise_distance_m": round(distance, 3)}
+        return {"SR": 1 if distance == 0.0 else 0, "precise_target": "shape"}
     distance = math.hypot(final_xy[0] - target_xy[0], final_xy[1] - target_xy[1])
-    return {"SR": 1 if distance <= radius_m else 0, "precise_target": "radius",
-            "precise_distance_m": round(distance, 3)}
+    return {"SR": 1 if distance <= radius_m else 0, "precise_target": "radius"}
 
 
 #: Every key that is a success verdict or scales with one (SPL multiplies it):
@@ -121,10 +119,9 @@ def score_arrival(
     within ``success_dist_m`` of the target point, ``"shape"`` inside the
     target's annotated footprint. ``SR`` is the verdict either way, and the
     row is stamped ``success_criterion``. ``NE`` measures to the target
-    centroid on every row;
-    ``precise_distance_m`` measures to the footprint boundary.
+    centroid on every row.
 
-    ``flew=False`` zeroes every success flag and keeps the distances.
+    ``flew=False`` zeroes every success flag and keeps ``NE``.
     """
     if criterion not in ("ring", "shape"):
         raise ValueError(f"unknown success criterion {criterion!r}")

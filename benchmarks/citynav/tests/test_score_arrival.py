@@ -70,7 +70,6 @@ def test_a_shape_row_carries_no_ring_key():
     assert "NE" in row
     # ...as does the mask's own detail.
     assert row["precise_target"] == "shape"
-    assert row["precise_distance_m"] is not None
 
 
 def test_a_ring_row_carries_no_shape_key():
@@ -78,8 +77,7 @@ def test_a_ring_row_carries_no_shape_key():
     pass the test above and put a second arrival number on every CityNav
     row."""
     row = _score("ring", BOTH_YES)
-    for key in ("precise_target", "precise_distance_m"):
-        assert key not in row, key
+    assert "precise_target" not in row
     assert row["OSR"] in (0, 1)
     assert row["spl_pos"] is not None
 
@@ -87,7 +85,7 @@ def test_a_ring_row_carries_no_shape_key():
 def test_a_row_carries_each_measure_once():
     assert set(_score("ring", BOTH_YES)) == {"NE", "SR", "OSR", "spl_pos", "success_criterion"}
     assert set(_score("shape", BOTH_YES)) == {
-        "NE", "SR", "success_criterion", "precise_target", "precise_distance_m"}
+        "NE", "SR", "success_criterion", "precise_target"}
 
 
 def test_a_shape_row_is_the_point_inside_the_mask_with_no_floor():
@@ -95,7 +93,7 @@ def test_a_shape_row_is_the_point_inside_the_mask_with_no_floor():
     strip = [(0.0, 0.0), (100.0, 0.0), (100.0, 2.0), (0.0, 2.0)]
     row = cn_eval.score_arrival(criterion="shape", final_pos_xy=(50.0, 4.0), target_xy=(50.0, 1.0),
                                 gt_polygon=strip)
-    assert row["SR"] == 0 and row["precise_distance_m"] == 2.0
+    assert row["SR"] == 0
 
 
 def test_an_unknown_criterion_refuses():

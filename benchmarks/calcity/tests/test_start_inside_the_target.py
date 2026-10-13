@@ -22,7 +22,7 @@ from benchmarks.calcity import paths as calcity_paths
 from benchmarks.citynav import eval as cn_eval
 
 
-def _episodes_that_start_on_their_target() -> list[tuple[int, float]]:
+def _episodes_that_start_on_their_target() -> list[int]:
     rows = json.loads(calcity_paths.split_path("calcity").read_text())
     out = []
     for i, row in enumerate(rows):
@@ -39,12 +39,12 @@ def _episodes_that_start_on_their_target() -> list[tuple[int, float]]:
             radius_m=float(row.get("success_radius_m") or 20.0),
         )
         if scored["SR"]:
-            out.append((i, scored["precise_distance_m"]))
+            out.append(i)
     return out
 
 
 @pytest.fixture(scope="module")
-def start_on_target() -> list[tuple[int, float]]:
+def start_on_target() -> list[int]:
     found = _episodes_that_start_on_their_target()
     # VACUITY FLOOR. Without the case this whole file passes on an empty
     # loop, and the bug it guards would be reachable again unnoticed.
@@ -58,14 +58,13 @@ def start_on_target() -> list[tuple[int, float]]:
 
 def test_the_corpus_still_holds_the_case(start_on_target):
     assert len(start_on_target) >= 1
-    assert all(d == 0.0 for _, d in start_on_target)
 
 
 def test_those_episodes_score_zero_when_nothing_flew(start_on_target):
     """What the zero-flight branch produces for them, through the one
     scorer it calls."""
     rows = json.loads(calcity_paths.split_path("calcity").read_text())
-    for idx, _ in start_on_target:
+    for idx in start_on_target:
         row = rows[idx]
         start = (float(row["trajectory"][0][0]), float(row["trajectory"][0][1]))
         target = (
@@ -87,6 +86,3 @@ def test_those_episodes_score_zero_when_nothing_flew(start_on_target):
             criterion="shape", final_pos_xy=start,
             target_xy=target, pos_trajectory=[start, start], flew=False, **mask)
         assert grounded["SR"] == 0, f"row {idx}: never flew, must not score"
-        # The distance stays honest -- it is 0 m because the start really is
-        # on the target, and that fact is not what was wrong.
-        assert grounded["precise_distance_m"] == flown["precise_distance_m"]
