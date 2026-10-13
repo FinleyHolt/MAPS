@@ -4,9 +4,8 @@ The zero-flight branch writes an honest zero: the drone never took off and
 nothing was committed, so no success flag may be set, ``SR``/``OSR``
 included. No episode reaches a ring verdict from its start pose.
 
-Under the SHAPE criterion the distance that matters is to the footprint's
-boundary, not its centroid, and rows of the shipped corpus start inside their
-own target. On those, a never-flown episode scored SR = 1.
+Rows of the shipped corpus start inside their own target; a never-flown
+episode on one must score SR = 0.
 
 Derived from the corpus rather than hardcoded, so a rebuild that loses the
 case says so instead of leaving a test that passes on nothing.
@@ -49,15 +48,10 @@ def start_on_target() -> list[int]:
     # VACUITY FLOOR. Without the case this whole file passes on an empty
     # loop, and the bug it guards would be reachable again unnoticed.
     assert found, (
-        "no Cal City episode starts on its own target any more -- the corpus "
-        "changed. Confirm the honest zero is still guarded before deleting "
-        "this file: the bug it caught was a never-flown episode scoring SR=1."
+        "no Cal City episode starts on its own target -- the corpus changed. "
+        "Confirm the zero-flight guard still has a case before deleting this file."
     )
     return found
-
-
-def test_the_corpus_still_holds_the_case(start_on_target):
-    assert len(start_on_target) >= 1
 
 
 def test_those_episodes_score_zero_when_nothing_flew(start_on_target):

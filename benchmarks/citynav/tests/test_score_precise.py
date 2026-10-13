@@ -22,7 +22,7 @@ def test_inside_the_shape_is_success():
     assert out["precise_target"] == "shape"
 
 
-def test_just_outside_the_shape_fails_at_zero_tolerance():
+def test_just_outside_the_shape_fails():
     """Strict containment is the point: 1 m from the wall is not arrival,
     even though it is 6 m from the centre and would pass any disc."""
     out = score_precise(
