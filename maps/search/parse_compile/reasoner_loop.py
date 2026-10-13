@@ -810,11 +810,8 @@ class _Mission:
     def _fly_moves(self, _accepted: list, _item_errors: list,
                    cover: str | None = None) -> dict:
         """Fly each entry in order; after each flight the surface re-derives
-        and the rows it added mint an rN handle.
-
-        ``cover`` (an explore) makes the loop ONE pass: no per-stop view,
-        one handle over everything the pass folded, one ack.
-        """
+        and the rows it added mint an rN handle. ``cover`` (an explore) makes
+        the loop ONE pass: no per-stop view, one handle, one ack."""
         _reports: list[dict] = []
         _cover_before = set(self._ns_rows) if cover is not None else None
         _clock_cut = False
@@ -1381,13 +1378,9 @@ class _Mission:
 
     def converse(self, user_message: str) -> MissionReply:
         """The mission's turn loop: append ``user_message``, then serve
-        ``run`` until the model's plain reply or a harness ending.
-
-        An empty turn, a reply that is a block of code and a reply with zero
-        flights behind it are repaired before a repeat is accepted as the
-        ending. ``retask`` (the field console) yields operator turns drained
-        at the top of each turn; ``diag["turns_used"]`` is stamped every turn.
-        """
+        ``run`` until the model's plain reply or a harness ending; an empty
+        turn, a block of code and a reply with no flight behind it are
+        repaired before a repeat is accepted as the ending."""
         if self.reasoner.compaction_infeasible:
             return self._mission_end("compaction_infeasible")
         self.reasoner.append_user(user_message)

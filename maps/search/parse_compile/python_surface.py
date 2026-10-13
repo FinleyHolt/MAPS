@@ -200,10 +200,8 @@ class MissionNamespace(dict):
 
 
 def scan_block(code: str) -> ast.Module:
-    """Parse and vet one block. Raises :class:`CodeError` with the reason.
-
-    A syntax error echoes the offending source line with a caret.
-    """
+    """Parse and vet one block, or raise :class:`CodeError` with the reason
+    (a syntax error echoes the offending source line with a caret)."""
     try:
         tree = ast.parse(code)
         # Some syntax errors (a repeated keyword argument) are raised by the
@@ -282,12 +280,9 @@ def scan_block(code: str) -> ast.Module:
 
 
 def _instrument(tree: ast.Module) -> ast.Module:
-    """Wrap top-level bare expressions in a show call, REPL-style.
-
-    ``pools`` on its own line shows the rows; ``len(pools)`` on its own
-    line prints the number. Everything else is untouched, so control flow
-    is exactly the model's.
-    """
+    """Wrap top-level bare expressions in a show call, REPL-style
+    (``pools`` alone shows the rows, ``len(pools)`` prints the number);
+    everything else, control flow included, is the model's."""
     for i, node in enumerate(tree.body):
         if isinstance(node, ast.Expr):
             label = ast.unparse(node.value)
@@ -301,11 +296,9 @@ def _instrument(tree: ast.Module) -> ast.Module:
 
 
 def looks_like_code(text: str) -> bool:
-    """A plain reply that is really a block: parses AND calls the library.
-
-    The repair nudge's detector; the library-call requirement separates
-    code written outside the tool from prose that happens to parse.
-    """
+    """A plain reply that is really a block: it parses AND calls the
+    library, which separates code written outside the tool from prose that
+    happens to parse."""
     try:
         tree = ast.parse(text)
     except SyntaxError:
@@ -598,12 +591,9 @@ class Row:
 
 
 class RowList(list):
-    """Rows the model narrowed in PYTHON: a plain list that still chains.
-
-    A predicate keeps an arbitrary subset, which no executor ref spans. A
-    list of :class:`Row` rides every slot element-wise, so the subset is
-    first-class; the subclass only keeps ``.filter``/``.order`` chaining.
-    """
+    """Rows the model narrowed in PYTHON (an arbitrary subset no executor
+    ref spans): a plain list of :class:`Row` that every slot takes
+    element-wise, kept a subclass only so ``.filter``/``.order`` chain."""
 
     __slots__ = ()
 
@@ -1603,11 +1593,9 @@ class MissionPython:
                 "split it across turns.")
 
     def _unbind_failed_assign(self, tree: ast.Module, line: int) -> None:
-        """A rebind that failed UNBINDS the name.
-
-        Python leaves the target holding its OLD value when the right-hand
-        side raises, and a stale pick that stays bound is a wrong commit.
-        """
+        """A rebind that failed UNBINDS the name: Python leaves the target
+        holding its OLD value when the right-hand side raises, and a stale
+        pick that stays bound is a wrong commit."""
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign) and node.lineno == line:
                 for t in node.targets:

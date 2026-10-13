@@ -26,15 +26,6 @@ from maps.search.parse_compile.prompts import served_system_prompt
 log = logging.getLogger(__name__)
 
 
-# Crops accumulate and the compactor bounds them in TOKENS, the resource the
-# served window actually spends. A card that declares ``max_images`` (a hosted
-# endpoint's per-request limit) also bounds their COUNT, by evicting the oldest
-# crops past it. That rewrites history, which a self-hosted radix prefix would
-# not survive; Bedrock caches a prompt only on its Responses API, so on chat
-# completions there is no cached prefix to lose. The bound runs BEFORE the
-# compactor, which would otherwise price crops about to go and fold text to
-# make room for them.
-
 _REASONER_TIMEOUT_DEFAULT_S = 240.0
 
 # One character repeated to the end of a channel: degenerate decode output.
@@ -214,6 +205,13 @@ class Reasoner:
         "text", "tool_calls"?, "content", "reasoning", "finish_reason"}``.
         A degenerate completion raises ``DegenerateCompletion`` unappended.
         """
+        # The compactor bounds crops in TOKENS; a card's ``max_images`` (a
+        # hosted endpoint's per-request limit) also bounds their COUNT by
+        # evicting the oldest. That rewrites history, which a self-hosted
+        # radix prefix would not survive; Bedrock caches a prompt only on its
+        # Responses API, so on chat completions there is no cached prefix to
+        # lose. It runs BEFORE the compactor, which would otherwise price
+        # crops about to go and fold text to make room for them.
         max_images = card_for(self.model).get("max_images")
         if max_images:
             self.messages = bound_image_count(self.messages, max_images=max_images)
