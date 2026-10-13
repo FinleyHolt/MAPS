@@ -34,7 +34,8 @@ reads:
    fetched, the leg is flown and only the frames recorded after it count.
 5. **The observation is fused.** `LiveSource.observe_area` fetches, for each
    area point, the frame that saw it nearest nadir, places each by its pose
-   and registration, composites them on one north-up grid (`composite`),
+   (as the corrector poses it; the frame's own tag where the vehicle has no
+   pose at its stamp) and registration, composites them on one north-up grid (`composite`),
    registers the mosaic on the map as one similarity (`register_mosaic`),
    and hands it over as an orthographic observation on flat ground at the
    bake's floor (`ortho_observation`).
