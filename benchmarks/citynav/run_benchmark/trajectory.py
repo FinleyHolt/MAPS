@@ -33,31 +33,19 @@ def synthesize_compliant_trajectory(
     start_pose_xyh: tuple[float, float, float],
     start_alt: float,
 ) -> int:
-    """Replay the mission's flights (``MissionSession.flights``) and its commit
-    (``state.confirmed_target_xy``) through the six-action
-    snap under the ``cfg.max_steps`` budget, writing the submittable
-    ``state.visited_xy`` and final pose. Returns the action count.
-
-    The final leg flies at cruise altitude: its target is 2D, so descending
-    never changes the scored position and only burns budget.
-
-    BUDGET RESERVE: the stop walk must not spend the actions the commit leg
-    needs, so the walk stops (between legs and mid-leg) at ``max_steps -
-    reserve``, the reserve sized to the planned last-stop -> commit distance
-    and capped at half the budget. A truncated walk leaves the drone
-    somewhere else, so when the commit leg still falls short the whole
-    replay runs again with a larger reserve, dropping more of the
-    already-perceived stop tail, until the commit is reached or the whole
-    budget is reserved. Only a commit beyond the budget from the start ends
-    short, and that is logged.
+    """Replay the mission's flights (``MissionSession.flights``, at least one)
+    through the six-action snap under the ``cfg.max_steps`` budget, writing the
+    submittable ``state.visited_xy`` and final pose; the commit is the last
+    flight's point, flown at cruise altitude with a reserve of
+    ``min(6, max_steps // 2)`` actions. When the commit leg still falls short,
+    the replay runs again with a larger reserve, dropping more of the stop tail,
+    until the commit is reached or the whole budget is reserved. Returns the
+    action count.
     """
     tour_wps = [(float(f["resolved_xy"][0]), float(f["resolved_xy"][1])) for f in flights]
     tour_alts = [float(f["altitude_m"]) for f in flights]
     tour_fids = [str(f["target"]) for f in flights]
-
-    descent_xy = state.confirmed_target_xy
-    if descent_xy is not None:
-        descent_xy = (float(descent_xy[0]), float(descent_xy[1]))
+    descent_xy = tour_wps[-1]
 
     max_frames = int(cfg.max_steps)
     pose = Pose(0.0, 0.0, 0.0, 0.0)  # set from the start pose per attempt
@@ -126,10 +114,7 @@ def synthesize_compliant_trajectory(
                             descent_xy[1] + SNAP_XY_TOL_M * dy / dist)
         return _drive_to(final_target, altitude_m=float(state.altitude_m), budget=max_frames)
 
-    descent_reserve = 0
-    if descent_xy is not None and tour_wps:
-        _dd = math.hypot(descent_xy[0] - tour_wps[-1][0], descent_xy[1] - tour_wps[-1][1])
-        descent_reserve = min(int(_dd / FORWARD_STEP_M) + 6, max_frames // 2)
+    descent_reserve = min(6, max_frames // 2)
     descent_replans = 0
     while True:
         # A fresh replay from the start pose per attempt.
@@ -140,8 +125,8 @@ def synthesize_compliant_trajectory(
         state.pose_xy = (float(start_pose_xyh[0]), float(start_pose_xyh[1]))
         state.heading_deg = float(start_pose_xyh[2])
         state.altitude_m = float(start_alt)
-        react_descent_starved = bool(tour_wps) and _walk_tour(max_frames - descent_reserve, descent_reserve)
-        descent_truncated = descent_xy is not None and _fly_descent()
+        react_descent_starved = _walk_tour(max_frames - descent_reserve, descent_reserve)
+        descent_truncated = _fly_descent()
         if not descent_truncated:
             break
         _short_m = math.hypot(float(state.pose_xy[0]) - descent_xy[0],

@@ -1,8 +1,8 @@
 """The replay of a flight is pinned pose for pose.
 
 ``fixtures/replay_trajectory.json`` records the replay's whole flight for a
-multi-stop tour with turns, a climb and a descent; a commit-only flight; and
-a flight the action budget truncates short of its commit. Equality against a
+multi-stop tour with turns, a climb and a descent; a one-flight mission; and
+a mission the action budget truncates short of its commit (the last flight). Equality against a
 recording fails OPEN if the recording is trivial, so every case also asserts
 a pose count, and the six-action alphabet is pinned by name.
 """
@@ -18,12 +18,11 @@ FIXTURE = Path(__file__).parent / "fixtures" / "replay_trajectory.json"
 
 
 class _State:
-    def __init__(self, commit):
+    def __init__(self):
         self.pose_xy = (0.0, 0.0)
         self.altitude_m = 50.0
         self.heading_deg = 0.0
         self.visited_xy = []
-        self.confirmed_target_xy = commit
 
     def record_visit(self):
         self.visited_xy.append(self.pose_xy)
@@ -39,14 +38,13 @@ CASES = {
             _vp((120.0, 0.0), 60.0, "f1"),
             _vp((120.0, 90.0), 40.0, "f2"),
             _vp((-30.0, 60.0), 50.0, "f3"),
+            _vp((45.0, -25.0), 50.0, "f4"),
         ],
-        commit=(45.0, -25.0),
         max_steps=400,
     ),
-    "commit_only": dict(stops=[], commit=(200.0, 150.0), max_steps=400),
+    "commit_only": dict(stops=[_vp((200.0, 150.0), 50.0, "f1")], max_steps=400),
     "budget_truncated": dict(
-        stops=[_vp((500.0, 500.0), 80.0, "f1")],
-        commit=(900.0, 900.0),
+        stops=[_vp((500.0, 500.0), 80.0, "f1"), _vp((900.0, 900.0), 80.0, "f2")],
         max_steps=40,
     ),
 }
@@ -60,7 +58,7 @@ def _replay(case, tmp_path, monkeypatch):
 
     cfg = load_config("configs/citynav.yaml")
     cfg.max_steps = case["max_steps"]
-    state = _State(case["commit"])
+    state = _State()
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
     steps = synthesize_compliant_trajectory(
         cfg=cfg,

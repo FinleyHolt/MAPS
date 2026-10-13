@@ -27,9 +27,9 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
         return SimpleNamespace(h=h, flights=flights,
                                run=lambda text, transcript: (MissionReply(ended_by="reply", turns_used=3), None))
 
-    def fly(*, state, **kw):
+    def fly(*, state, flights, **kw):
         # The six-action replay ends ``snap`` m east of the commit.
-        x, y = state.confirmed_target_xy
+        x, y = flights[-1]["resolved_xy"]
         state.pose_xy = (x + snap, y)
         state.visited_xy = [(0.0, 0.0), state.pose_xy]
         return 7

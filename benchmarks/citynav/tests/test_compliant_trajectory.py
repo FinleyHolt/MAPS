@@ -1,5 +1,5 @@
-"""The discrete replay reaches the commit within the action budget, dropping
-flown stops before it starves the commit leg."""
+"""The discrete replay reaches the commit (the last flight) within the action
+budget, dropping flown stops before it starves the commit leg."""
 
 from __future__ import annotations
 
@@ -11,10 +11,11 @@ def _replay(commit_xy, max_steps=60):
     from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 
     state = EpisodeState(pose_xy=(0.0, 0.0), altitude_m=50.0)
-    state.confirmed_target_xy = commit_xy
+    flights = [{"target": "far", "resolved_xy": [0.0, 200.0], "altitude_m": 50.0},
+               {"target": "commit", "resolved_xy": list(commit_xy), "altitude_m": 50.0}]
     steps = synthesize_compliant_trajectory(
-        cfg=SimpleNamespace(max_steps=max_steps, altitude_m=50.0), state=state,
-        flights=[{"target": "far", "resolved_xy": [0.0, 200.0], "altitude_m": 50.0}], start_pose_xyh=(0.0, 0.0, 0.0), start_alt=50.0)
+        cfg=SimpleNamespace(max_steps=max_steps), state=state,
+        flights=flights, start_pose_xyh=(0.0, 0.0, 0.0), start_alt=50.0)
     return steps, state
 
 

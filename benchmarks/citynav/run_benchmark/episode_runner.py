@@ -53,9 +53,6 @@ class EpisodeState:
     visited_xy: list[tuple[float, float]] = field(default_factory=list)
     step_idx: int = 0
     heading_deg: float = 0.0  # 0 = facing north (+y); derived from motion vector.
-    # The last flight's resolved point, bound when the mission ends; None
-    # when nothing flew. The trajectory replay flies to it.
-    confirmed_target_xy: tuple[float, float] | None = None
 
     def record_visit(self) -> None:
         self.visited_xy.append(self.pose_xy)
