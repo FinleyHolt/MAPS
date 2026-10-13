@@ -121,9 +121,9 @@ mask), and 69 are scored.
 | Measure | Value | Definition |
 |---|---|---|
 | SR | 40/69 | The commit point lies inside the target's hand-drawn mask (one run with none: its tasking footprint). |
-| OSR | 59/69 | The aircraft's path (GNSS track, else the centres of the observations the run fused) came within one camera footprint width of the target centroid. |
+| OSR | 59/69 | The aircraft's path (the GNSS track; beside a track holding under 95% of the run, also the centres of the observations the run fused) came within one camera footprint width of the target centroid. |
 
-| Intel quality | Scored runs | SR | OSR |
+| Intel quality (the run's first tasking) | Scored runs | SR | OSR |
 |---|---|---|---|
 | Good | 27 | 22/27 | 26/27 |
 | Medium | 32 | 13/32 | 25/32 |
