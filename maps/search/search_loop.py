@@ -32,9 +32,6 @@ class _State:
     last_flight_detections: list[dict] = field(default_factory=list)
     # The PerceptionDirector: the watchlist and the boost.
     perception_director: Any = None
-    # Prior-colour enrichment frames that raised; the warning prints on the
-    # first and every 50th.
-    prior_enrich_fails: int = 0
 
 
 class SearchLoop:

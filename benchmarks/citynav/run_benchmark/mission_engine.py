@@ -179,6 +179,9 @@ class MissionSession:
         self.recorder = recorder
         self.observe = observe
         self.flights: list[dict] = []
+        # Prior-colour enrichment frames that raised; the warning prints on
+        # the first and every 50th.
+        self.prior_enrich_fails = 0
         markers = h.episode.marker_positions or []
         self.marker_xy = (
             (float(sum(p[0] for p in markers) / len(markers)),
@@ -270,7 +273,6 @@ class MissionSession:
         # Hold the cruise altitude, clamped ground+1 .. cap.
         _g = float(GROUND_LEVEL.get(episode.map_name, 0.0))
         new_alt = float(min(max(float(state.altitude_m), _g + 1.0), float(h.cfg.altitude_cap_m)))
-        new_heading = float(state.heading_deg)
 
         # Queued boosts segment on THIS flight.
         try:
@@ -287,13 +289,11 @@ class MissionSession:
                 return {"error": "no observation: the aircraft's recording served no frame of this flight's ground"}
             new_xy = (float(obs.pose_xy[0]), float(obs.pose_xy[1]))
             new_alt = float(obs.altitude_m)
-            new_heading = float(obs.yaw_deg)
         state.pose_xy = new_xy
         state.altitude_m = new_alt
-        state.heading_deg = new_heading
 
         # Rendered north-up (yaw 0), as the captions and the retrospective
-        # re-render are; the pose keeps its heading for the replay.
+        # re-render are.
         if self.observe is None:
             obs = crop_observation(
                 new_xy,
@@ -320,11 +320,10 @@ class MissionSession:
                 for pfid, pattrs, ppx in prior_percepts(obs, h.assets, step_idx):
                     loop.upsert_prior_percept(pfid, pattrs, px=ppx)
             except Exception as exc:  # noqa: BLE001 — colour enrichment never kills a flight
-                loop.state.prior_enrich_fails += 1
-                _nfail = loop.state.prior_enrich_fails
-                if _nfail == 1 or _nfail % 50 == 0:
+                self.prior_enrich_fails += 1
+                if self.prior_enrich_fails == 1 or self.prior_enrich_fails % 50 == 0:
                     log.warning("prior percept enrichment failed (n=%d) step=%d: %s",
-                                _nfail, step_idx, exc, exc_info=exc)
+                                self.prior_enrich_fails, step_idx, exc, exc_info=exc)
 
         if self.observe is not None:
             # The frame's own pose fed the fold and the recorder; from here
@@ -342,7 +341,7 @@ class MissionSession:
             {
                 "target": token,
                 "resolved_xy": [float(new_xy[0]), float(new_xy[1])],
-                "provenance": str(resolved.get("provenance", "unresolved")),
+                "provenance": resolved["provenance"],
                 "altitude_m": new_alt,
             }
         )
