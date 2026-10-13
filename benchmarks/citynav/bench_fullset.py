@@ -40,9 +40,9 @@ RUNNER_MODULE = "benchmarks.citynav.run_benchmark"
 _DEADLINE_RESERVE_FRAC = 0.1
 # How often the driver asks the reasoner's ``/models`` while an attempt
 # flies; two failures in a row kill the attempt as ``vllm_down_midrun``.
-VLLM_PROBE_S = 60.0
+REASONER_PROBE_S = 60.0
 # How often a launch held for a reasoner that is down asks again.
-VLLM_WAIT_S = 120.0
+REASONER_WAIT_S = 120.0
 # Pause between worker thread starts, so the first attempts do not all
 # cold-start at once.
 WORKER_STAGGER_S = 2.0
@@ -282,7 +282,7 @@ class Driver:
         )
 
 
-    def _vllm_healthy(self) -> bool:
+    def _reasoner_answers(self) -> bool:
         """True when the reasoner endpoint answers its model list, at the URL
         discovery read it from (``endpoint_spec.models_url``), asked with the
         chat path's bearer (hosted endpoints auth ``/v1/models``)."""
@@ -299,38 +299,38 @@ class Driver:
         except (OSError, ValueError):
             return False
 
-    def _wait_for_vllm(self) -> bool:
+    def _wait_for_reasoner(self) -> bool:
         """Hold a launch until the reasoner answers; False once the wall
         budget is spent or the run aborted while it waited."""
-        if self._vllm_healthy():
+        if self._reasoner_answers():
             return True
-        self.log("vLLM down; pausing launches until it returns")
-        while not self._vllm_healthy():
+        self.log("reasoner down; pausing launches until it answers")
+        while not self._reasoner_answers():
             if self._wall_spent() or self._abort is not None:
                 return False
-            left = self._deadline - time.monotonic() if self._deadline is not None else VLLM_WAIT_S
-            time.sleep(max(0.0, min(VLLM_WAIT_S, left)))
-        self.log("vLLM back; resuming")
+            left = self._deadline - time.monotonic() if self._deadline is not None else REASONER_WAIT_S
+            time.sleep(max(0.0, min(REASONER_WAIT_S, left)))
+        self.log("reasoner back; resuming")
         return True
 
 
     def _wait(self, proc: subprocess.Popen) -> str:
         """Block until the attempt child exits (``exited``), hits the episode
         cap (``timeout``), or the reasoner fails two ``/models`` probes
-        ``VLLM_PROBE_S`` apart while it flies (``vllm_dead``)."""
+        ``REASONER_PROBE_S`` apart while it flies (``reasoner_dead``)."""
         deadline = time.monotonic() + self.episode_timeout_s
         down = 0
         while (left := deadline - time.monotonic()) > 0:
             try:
-                proc.wait(timeout=min(VLLM_PROBE_S, left))
+                proc.wait(timeout=min(REASONER_PROBE_S, left))
                 return "exited"
             except subprocess.TimeoutExpired:
                 pass
             if time.monotonic() >= deadline:
                 break
-            down = 0 if self._vllm_healthy() else down + 1
+            down = 0 if self._reasoner_answers() else down + 1
             if down >= 2:
-                return "vllm_dead"
+                return "reasoner_dead"
         return "timeout"
 
     def _run_attempt(self, worker_id: int, episode_id: str) -> dict:
@@ -382,8 +382,8 @@ class Driver:
         landed = episodes.read_episode_json(workdir) if workdir else None
         where = {"workdir": str(workdir.relative_to(self.out_root))} if workdir else {}
         crashed = verdict == "exited" and landed is None and proc.returncode != 0
-        if verdict == "vllm_dead":
-            self.log(f"[w{worker_id}] VLLM-DEAD mid-episode {episode_id} after "
+        if verdict == "reasoner_dead":
+            self.log(f"[w{worker_id}] REASONER-DEAD mid-episode {episode_id} after "
                      f"{elapsed:.0f}s; killed + re-queued (not scored)")
         elif verdict == "timeout":
             self.log(f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killed")
@@ -391,12 +391,12 @@ class Driver:
             # Killed by a signal (a cgroup OOM is SIGKILL) or exited with an error before landing a record.
             self.log(f"[w{worker_id}] CRASHED mid-episode {episode_id} after "
                      f"{elapsed:.0f}s (exit {proc.returncode}); re-queued (not scored)")
-        if verdict == "vllm_dead" or crashed:
+        if verdict == "reasoner_dead" or crashed:
             # Re-queued; a lost reasoner's attempt is pending until it is back.
             return {"episode_id": episode_id, "worker_id": worker_id,
                     "status": episodes.STATUS_INFRA, "elapsed_s": round(elapsed, 1),
                     "ts": round(time.time(), 1), **where,
-                    "error": ("vllm_down_midrun" if verdict == "vllm_dead" else "killed_midrun"
+                    "error": ("vllm_down_midrun" if verdict == "reasoner_dead" else "killed_midrun"
                               if proc.returncode < 0 else f"exited {proc.returncode} with no record")}
         # The child's own verdict decides (dispatch classifies the episode's
         # exception chain); the driver adds only what it alone saw.
@@ -460,7 +460,7 @@ class Driver:
     def worker_loop(self, worker_id: int) -> None:
         while (eid := self._next_claimed_episode()) is not None:
             try:
-                if self._wait_for_vllm():
+                if self._wait_for_reasoner():
                     self.run_one(worker_id, eid)
             except Exception as exc:  # noqa: BLE001
                 self.log(f"[w{worker_id}] FAIL {eid}: {type(exc).__name__}: {exc}")

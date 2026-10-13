@@ -43,12 +43,12 @@ def _infra(i: int, cause: str = "no_prediction_unclassified", **extra) -> dict:
 
 def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
     monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
-    monkeypatch.setattr(bf, "VLLM_PROBE_S", 0.2)
+    monkeypatch.setattr(bf, "REASONER_PROBE_S", 0.2)
     d = driver(selection=[f"{k}::1#{i}" for i, k in enumerate(OUTCOMES)])
     d.episode_timeout_s, d.max_infra_attempts = 3, 1
     # The reasoner is down exactly while the "vllm" episode flies.
-    monkeypatch.setattr(d, "_wait_for_vllm", lambda: True)
-    monkeypatch.setattr(d, "_vllm_healthy",
+    monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
+    monkeypatch.setattr(d, "_reasoner_answers",
                         lambda: not any(e.startswith("vllm") for e in d._in_flight))
     t0 = time.time()
     d.worker_loop(0)
@@ -83,10 +83,10 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
     monkeypatch.setattr(bf.urllib.request, "urlopen", _open)
     monkeypatch.setenv("SEARCH_REASONER_URL", "https://bedrock-mantle.us-east-1.api.aws/openai/v1")
     monkeypatch.setenv("SEARCH_REASONER_MODELS_URL", "https://bedrock-mantle.us-east-1.api.aws/v1/models")
-    assert driver()._vllm_healthy()
+    assert driver()._reasoner_answers()
     monkeypatch.delenv("SEARCH_REASONER_MODELS_URL")
     monkeypatch.setenv("SEARCH_REASONER_URL", "http://127.0.0.1:8001/v1")
-    assert driver()._vllm_healthy()
+    assert driver()._reasoner_answers()
     assert asked == ["https://bedrock-mantle.us-east-1.api.aws/v1/models", "http://127.0.0.1:8001/v1/models"]
 
 
@@ -259,7 +259,7 @@ def test_a_ledger_the_worker_cannot_write_stops_the_run(driver, monkeypatch) -> 
         raise RuntimeError("the attempt failed")
 
     monkeypatch.setattr(episodes, "append_row", full)
-    monkeypatch.setattr(d, "_wait_for_vllm", lambda: True)
+    monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
     monkeypatch.setattr(d, "run_one", boom)
     d.worker_loop(0)
     assert "No space left on device" in d._abort
@@ -411,7 +411,7 @@ def test_a_reasoner_that_never_answers_stops_at_the_wall_budget(driver, monkeypa
 
     d = driver(selection=["ep0"])
     d._deadline = time.monotonic() + 1
-    monkeypatch.setattr(d, "_vllm_healthy", lambda: False)
+    monkeypatch.setattr(d, "_reasoner_answers", lambda: False)
     monkeypatch.setattr(d, "run_one", lambda *a: pytest.fail("launched with no reasoner"))
     t = threading.Thread(target=d.worker_loop, args=(0,), daemon=True)
     t.start()

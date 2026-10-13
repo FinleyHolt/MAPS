@@ -86,7 +86,7 @@ def test_a_reclaimed_retry_supersedes_its_earlier_failure(
 
 
 def test_an_infra_abort_never_represents_its_episode(tmp_path):
-    """A vLLM death is not a fair run. It is audit-counted, but it must
+    """A lost reasoner is not a fair run. It is audit-counted, but it must
     not occupy the episode's slot even as a last resort -- otherwise an
     infra casualty lands in the coverage denominator as a false zero."""
     root = write_ledger(tmp_path / "run", ledger_row(

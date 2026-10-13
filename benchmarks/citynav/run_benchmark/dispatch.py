@@ -80,8 +80,8 @@ def _exc_is_sam_infra(exc: BaseException) -> bool:
     return any(isinstance(cur, SamServerOutage) for cur in _chain(exc))
 
 
-# HTTP-client modules that ONLY talk to the shared inference services (vLLM /
-# SAM). An exception whose type lives in one of these is a transport fault to
+# HTTP-client modules that ONLY talk to the shared inference services (the
+# reasoner and SAM). An exception whose type lives in one of these is a transport fault to
 # a shared server. Constrained to these modules on purpose: a bare builtin
 # ``TimeoutError`` / ``ConnectionError`` / ``OSError`` can be raised by
 # algorithm or file code, and misclassifying one as infra would drop a real
