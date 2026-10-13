@@ -273,12 +273,9 @@ def _script_block(sources: list[str], n_turns: int,
     }
 
 
-def _newest_script_block(messages: list[dict]) -> int | None:
-    """Index of the last script block, or None."""
-    for i in range(len(messages) - 1, -1, -1):
-        if _is_script_block(messages[i]):
-            return i
-    return None
+def _newest_script_block(messages: list[dict]) -> int:
+    """Index of the last script block."""
+    return max(i for i, m in enumerate(messages) if _is_script_block(m))
 
 
 def _is_script_block(message: dict) -> bool:
@@ -321,7 +318,7 @@ def _drop_spent_turns(
         freed = before - after
         if freed >= shed_tokens:
             break
-    if not folded or freed <= 0:
+    if freed <= 0:
         return messages, 0, 0
     return out, len(folded), freed
 
@@ -581,14 +578,13 @@ def compact_transcript(
     stripped_findings = False
     if output_tokens > target_input_tokens and folded_turns:
         i = _newest_script_block(out)
-        if i is not None:
-            # rsplit: the agent's code may contain the separator, the
-            # single-line findings cannot.
-            body = out[i]["content"].rsplit(_FINDINGS_SEP, 1)[0]
-            if body != out[i]["content"]:
-                out = list(out)
-                out[i] = _with_content(out[i], body)
-                stripped_findings = True
+        # rsplit: the agent's code may contain the separator, the
+        # single-line findings cannot.
+        body = out[i]["content"].rsplit(_FINDINGS_SEP, 1)[0]
+        if body != out[i]["content"]:
+            out = list(out)
+            out[i] = _with_content(out[i], body)
+            stripped_findings = True
         if stripped_findings:
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
             log.info("compaction stripped block findings -> %s/%d",
