@@ -133,6 +133,12 @@ _LOOP_MOVE_MSG = (
     "once to the place you chose.")
 
 
+# Each act's place slot as the model spells it, by the act's ``why``.
+_SITE_SLOT = {"map": "around=", "boost": "at=", "stage": "at=", "facing": "facing=",
+              "crops": "each look() place", "marks": "each mark",
+              "move": "go_to()", "cover": "each explore() place"}
+
+
 class _Stop(Exception):
     """A plan-level refusal already folded into the receipt: end the block."""
 
@@ -1100,9 +1106,13 @@ class MissionPython:
             if isinstance(b, (list, tuple)) and len(b) == 2:
                 return format_xy_token(float(b[0]), float(b[1]))
             return b if isinstance(b, str) else str(v.label)
-        if isinstance(v, (list, tuple)) and len(v) == 2:
+        if isinstance(v, (list, tuple)):
             v = _plain(v)
-            return format_xy_token(float(v[0]), float(v[1]))
+            if is_xy(v):
+                return format_xy_token(float(v[0]), float(v[1]))
+            raise CodeError(
+                f"{_SITE_SLOT[why]} takes ONE place and that is a list of "
+                f"{len(v)} -- index the one you mean, or give one [x, y] point.")
         # A QUOTED [x, y] IS A POINT: welcome in a relating slot, refused as
         # a COORDINATE in a moving one.
         pt = parse_xy_token(v) if isinstance(v, str) else None

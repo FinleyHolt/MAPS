@@ -41,6 +41,17 @@ def test_the_147_145_block_arms_the_watch_despite_the_map_refusal():
     assert "street" in (out.get("handles") or []), out
 
 
+def test_a_list_where_one_place_goes_is_refused_by_its_slot():
+    _, fr, _, _ = drive([[run('show_map(around=["prior_7", "prior_1"])')],
+                         [run('stand(at="prior_7", facing=["a", "b", "c"])')],
+                         [run("show_map(around=[3, 4])")], "done"])
+    two, three, point = tool_results(fr)
+    assert ("around= takes ONE place and that is a list of 2 -- index the one "
+            "you mean, or give one [x, y] point.") in two["error"], two
+    assert "facing= takes ONE place and that is a list of 3" in three["error"], three
+    assert "error" not in point, point
+
+
 def test_a_block_flies_and_then_queries_what_the_pass_found():
     reply, out, flights, _asked, _rend = explore_drive([
         [run('look_for("pool")\n'
