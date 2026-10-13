@@ -90,6 +90,14 @@ _PRED_OR_CUT = ("filter takes a predicate OR near=/within=/dwithin=/facing=/"
                 "east_of=/north_of=/south_of=/west_of=, not both")
 
 
+def test_a_bare_filter_reads_one_refusal_on_every_receiver():
+    for src in ('r1 = find("car")\nr2 = r1.filter()\n', 'r2 = a.filter()\n',
+                'r2 = a.filter(lambda r: True).filter()\n'):
+        with pytest.raises(CodeError) as e:
+            raising_ops_of_block(src, bound={"a": "detected_1"})
+        assert "filter needs what to cut against" in str(e.value), (src, str(e.value))
+
+
 def test_a_predicate_and_a_cut_kwarg_read_one_refusal_on_every_receiver():
     from maps.search.parse_compile.python_surface import Row, RowList
     with pytest.raises(CodeError) as e:

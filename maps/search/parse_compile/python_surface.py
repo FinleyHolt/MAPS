@@ -622,11 +622,6 @@ class RowList(list):
         # materialised subset exactly as it does on a handle.
         _check_filter(pred, kw)
         if pred is None:
-            if not kw:
-                raise CodeError(
-                    "filter needs a predicate or near=/within=/dwithin=: "
-                    "rows.filter(lambda r: r.distance(<place>) <= 25), or "
-                    "rows.filter(near=<place>, dwithin=25).")
             return self._mp()._rows_filter(list(self), **kw)
         return RowList(r for r in self if pred(r))
 
