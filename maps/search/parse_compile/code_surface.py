@@ -314,7 +314,7 @@ class Program:
                                "as": v}
 
 
-def _places(v) -> list:
+def _anchors(v) -> list:
     """``nearest=`` -> its anchors: a LIST of places is a set to fuse."""
     return list(v) if _is_place_list(v) else [v]
 
@@ -373,7 +373,7 @@ def compile_find(p: Program, query, *, name=None, near=None, nearest=None,
         # stays its own compare + filter ahead of every ordering.
         ref = p.cut_le(ref, within, 0)
     if nearest is not None or cards:
-        return p.relate(ref, [] if nearest is None else _places(nearest),
+        return p.relate(ref, [] if nearest is None else _anchors(nearest),
                         cards, color)
     if color:
         return p.add("score_by", {"items": ref, "emphasis": [
@@ -384,7 +384,7 @@ def compile_find(p: Program, query, *, name=None, near=None, nearest=None,
 def compile_order(p: Program, items, *, nearest=None, color=None) -> str:
     items = p.items_of(items)
     if nearest is not None:
-        return p.relate(items, _places(nearest), (), color)
+        return p.relate(items, _anchors(nearest), (), color)
     if not color:
         raise CodeError("order ranks by nearest= or color=")
     return p.add("score_by", {"items": items, "emphasis": [
