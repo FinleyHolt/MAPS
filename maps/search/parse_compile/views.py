@@ -186,11 +186,6 @@ def _rounded_xy(token) -> list[float] | None:
     return [round(p[0], 2), round(p[1], 2)] if p else None
 
 
-def look_strs(v: object) -> list[str]:
-    return [str(x) for x in v if isinstance(x, str) and x.strip()] \
-        if isinstance(v, list) else []
-
-
 def _mark(fid: str, row, xy, is_target: bool) -> dict:
     """One drawn mark: the row's point, outline and badge label."""
     return {"fid": fid, "xy": xy, "boundary": look_outline(row),
@@ -231,7 +226,7 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
                 out.append(t)
         return out
 
-    marked = _fids_of(look_strs(marks))
+    marked = _fids_of(marks or [])
     for _i, f in enumerate(fids):
         if len(requests) >= LOOK_MAX_CROPS:
             ref_notes.append(
@@ -302,7 +297,7 @@ def map_spec(around: str, mark_fids: list, *, rows: dict, resolve,
                                is_target=False)
                     if center_fid else f"[{cxy[0]}, {cxy[1]}]")
     marks: list[dict] = []
-    for mf in dict.fromkeys(look_strs(mark_fids)):
+    for mf in dict.fromkeys(mark_fids):
         row = rows.get(mf)
         xy = look_xy(row)
         if xy is None:
