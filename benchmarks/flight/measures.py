@@ -485,11 +485,10 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     thin = out["track_coverage"] < SPL_MIN_COVERAGE
     poses = keyframe_poses(bases, t_start, t_end_run) if thin else []
     out["track_source"] = "GNSS track" if flown else "keyframe poses" if poses else "none"
-    if not flown:
-        if success:
-            out["spl_note"] = "undefined: the recording does not cover the run"
-        if not poses:
-            return out
+    if success and len(flown) < 2:
+        out["spl_note"] = "undefined: the recording does not cover the run"
+    if not flown and not poses:
+        return out
     d, nearest = min((closest_approach(p, target) for p in (flown, poses) if p), key=lambda c: c[0])
     out["closest_approach_ft"] = round(d * FT_PER_M, 1)
     agl, out["agl_source"] = _agl(nearest, bases, events)
@@ -501,9 +500,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         out["oracle_success"] = d <= width
     if out["oracle_success"] is False and thin:
         out["oracle_success"] = None  # a thin recording cannot show the aircraft never came near
-    if out["track_source"] != "GNSS track" or len(flown) < 2:
-        if success and flown and out["spl_note"] is None:
-            out["spl_note"] = "undefined: the recording does not cover the run"
+    if len(flown) < 2:
         return out
     loiter = row.get("start_xy") or (row.get("visited_xy") or [None])[0]
     first = next((t_start + float(e["t_s"]) for e in events if e.get("kind") == "leg"), t_end_run)
