@@ -24,7 +24,19 @@ import yaml
 from benchmarks.citynav.analysis import rows as _rows
 
 
-def _bootstrap_ci(diffs: list[float]) -> tuple[float, float]:
+def wilson_ci(k: int, n: int) -> tuple[float, float]:
+    """The 95% Wilson score interval for k/n."""
+    z = 1.96
+    if n <= 0:
+        return (float("nan"), float("nan"))
+    p = k / n
+    denom = 1.0 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return (max(0.0, center - half), min(1.0, center + half))
+
+
+def bootstrap_ci(diffs: list[float]) -> tuple[float, float]:
     """Seeded 95% percentile bootstrap CI (10,000 draws) for the mean of per-episode (b - a)."""
     n = len(diffs)
     if n == 0:
@@ -60,7 +72,7 @@ def ab_stats(pairs: list[tuple[int, int]], *, label: str = "") -> dict:
     sr_a = sum(a for a, _ in pairs) / n if n else float("nan")
     sr_b = sum(b for _, b in pairs) / n if n else float("nan")
     diffs = [float(b - a) for a, b in pairs]
-    lo, hi = _bootstrap_ci(diffs)
+    lo, hi = bootstrap_ci(diffs)
     mc = _mcnemar(pairs)
     return {
         "label": label,

@@ -332,7 +332,7 @@ _INTERRUPTED = (
     "d.out_root, d.episodes_file, d.driver_log = root, root / 'episodes.jsonl', root / 'driver.log'\n"
     "d.summary_file, d.split, d.workers, d.max_wall_s, d._deadline = root / 'summary.txt', 's', 2, 0, None\n"
     "d._done_cache, d._infra_errors, d.max_infra_attempts, d._abort = set(), {}, 3, None\n"
-    "d.sample_seed, d.limit, d.allowlist_path = 1, 0, None\n"
+    "d.sample_seed, d.limit, d.allowlist_path, d.arrivals_path = 1, 0, None, None\n"
     "d._select_episodes = lambda: ['ep0']\n"
     "bf._missing_block_assets, bf.WORKER_STAGGER_S = (lambda eps: []), 0\n"
     "rm.build_manifest = lambda **kw: None\n"
@@ -436,3 +436,40 @@ def test_the_parser_refuses_a_count_below_one(flag, capsys) -> None:
     with pytest.raises(SystemExit) as done:
         bf._build_parser().parse_args([flag, "0"])
     assert done.value.code == 2 and flag in capsys.readouterr().err
+
+
+def test_a_session_releases_each_report_at_its_arrival(driver, tmp_path, monkeypatch) -> None:
+    stream = tmp_path / "stream.json"
+    stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "b"},
+                                              {"report": 1, "arrival_s": 0.6, "episode_id": "a"}]}))
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b", "c"])
+    d = driver()
+    d.arrivals_path = stream
+    d._selection = d._select_episodes()
+    assert d._selection == ["b", "a"], "the session flies its stream in arrival order"
+    d._t0 = time.monotonic()
+    assert d._next_claimed_episode() == "b"
+    assert d._next_claimed_episode() == "a" and d._session_s() >= 0.6, "a report was released early"
+    assert d._next_claimed_episode() is None
+
+    monkeypatch.setattr(d, "_run_attempt", lambda w, eid: {"episode_id": eid, "status": "ok", "elapsed_s": 1.0})
+    d.run_one(0, "a")
+    row = next(iter_json_rows(d.episodes_file))
+    assert row["arrival_s"] == 0.6 and row["claimed_s"] >= 0.6
+
+
+def test_a_session_refuses_a_root_that_already_holds_a_ledger(driver, tmp_path, monkeypatch, no_flight) -> None:
+    stream = tmp_path / "stream.json"
+    stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    episodes.append_row(tmp_path, {"episode_id": "z", "status": "ok"})
+    d = driver()
+    d.arrivals_path = stream
+    monkeypatch.setattr(d, "worker_loop", lambda w: pytest.fail("a resumed session flew"))
+    assert d.run() == 2 and "fresh --out-root" in d.driver_log.read_text()
+
+
+def test_arrivals_refuse_the_shuffle_flags(capsys) -> None:
+    with pytest.raises(SystemExit):
+        bf.main(["--arrivals", "s.json", "--limit", "5"])
+    assert "--arrivals selects" in capsys.readouterr().err

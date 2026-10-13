@@ -469,6 +469,7 @@ directory as `--raster` to replay as flown.
 | [`benchmarks/citynav/analysis/`](benchmarks/citynav/analysis/README.md) | The run readers every number is derived with. |
 | [`benchmarks/calcity/`](benchmarks/calcity/README.md) | The Cal City bench: corpus, reviewed set, raster and bake build. |
 | [`benchmarks/flight/`](benchmarks/flight/README.md) | The flight harness, the twin, as-flown replay and the closed-loop measures. |
+| [`benchmarks/capacity/`](benchmarks/capacity/README.md) | The human-capacity study: seeded report streams and the finds-per-hour reader. |
 | `figures/` | The effort-ladder and capability-effort figures. |
 | `serving/` | The SAM 3.1 serve. |
 | `configs/` | Bench configs: the CityNav control, Cal City, and the withhold arms. |
