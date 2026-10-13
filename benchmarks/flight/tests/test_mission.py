@@ -127,6 +127,26 @@ def test_a_report_banks_one_ledger_row_and_a_second_report_replaces_it(built, ma
     assert rows[0]["episode_id"] == "calcity::t" and rows[0]["status"] == "ok" and rows[0]["workdir"] == "run"
 
 
+def test_a_track_fix_is_where_the_aircraft_was_at_its_stamp_under_a_timing_offset(make_mission):
+    """The start's UTC is read through the boresight's timing offset, so every
+    fix of the track is read through it too: a fix stamped ``t_unix`` is the
+    pose whose UTC that is."""
+    import dataclasses
+    import datetime as dt
+
+    m, twin = make_mission()
+    m._live.boresight = dataclasses.replace(m._live.boresight, time_offset_s=10.0)
+    twin.sleep(30.0)
+    m._t0, m.started_at_utc = twin.now(), m._utc_now()
+    twin.sleep(20.0)
+    m._record_track()
+    first = json.loads((m.workdir.parent / M.TRACK_JSONL).read_text().splitlines()[0])
+    pose = m._live.pose_now(m._t0)
+    assert first["t_unix"] == pytest.approx(dt.datetime.fromisoformat(pose.utc).timestamp(), abs=1e-3)
+    x, y = M.lonlat_to_local(m._tiles_dir, m.map_name, pose.lon, pose.lat)
+    assert (first["x"], first["y"]) == pytest.approx((x, y), abs=0.01)
+
+
 def test_an_unknown_episode_is_refused_by_name(monkeypatch):
     import pytest
 

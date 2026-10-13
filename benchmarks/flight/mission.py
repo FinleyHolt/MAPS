@@ -861,7 +861,8 @@ class Mission:
 
     def _record_track(self) -> None:
         """The ownship's fixes since the last one written, one a second on the
-        vehicle's clock, appended to the sortie's ``flight_track.jsonl``:
+        vehicle's clock read through the timing offset as ``started_at_utc``
+        is, appended to the sortie's ``flight_track.jsonl``:
         ``t_unix`` is ``started_at_utc`` plus vehicle seconds from the start,
         the axis ``started_at_utc + t_s`` reads every transcript row on. No
         UTC start, no track. ponytail: written at each report and at the end,
@@ -872,7 +873,7 @@ class Mission:
         lines = []
         while (t := self._t0 + self._tracked * TRACK_PERIOD_S) <= self._vehicle.now() + 1e-9:
             self._tracked += 1
-            pose = self._vehicle.pose(t)
+            pose = self._live.pose_now(t)
             xy = None if pose is None else lonlat_to_local(self._tiles_dir, self.map_name, pose.lon, pose.lat)
             if xy is not None:
                 lines.append(json.dumps({
