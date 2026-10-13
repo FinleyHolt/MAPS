@@ -1,4 +1,4 @@
-"""The corrector's pose graph: the last seconds of frames placed together, each by its own registration and its ties to the frame before it.
+"""The corrector's pose graph: the last seconds of frames placed by their registrations and their ties.
 
 Every frame is a node in a window of the last :data:`WINDOW_S` seconds: its
 registration (``live_source.register_frame``) an anchor weighted by its
