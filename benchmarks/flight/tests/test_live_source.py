@@ -268,3 +268,54 @@ def test_the_simulated_clock_asks_a_frame_that_cannot_be_fetched_once():
         ring.rows.append({"seq": i, "log_time": i * 100, "off": i >= 5})
         step()
     assert ring.asked == 105
+
+
+def test_a_wall_clock_vehicle_registers_the_newest_frame_each_period_until_closed(built, make_live, monkeypatch):
+    """A vehicle without a simulated clock (no ``on_sleep``) is corrected on a
+    thread: each period it takes the newest frame the ring holds, asks it
+    again until it is served, and stops when the source closes."""
+    import time
+
+    from benchmarks.flight import live_source
+
+    monkeypatch.setattr(live_source, "CORRECTOR_PERIOD_S", 0.01)
+
+    class Ring:
+        last_error = ""
+
+        def __init__(self):
+            self.rows, self.served, self.asked = [], set(), []
+
+        def index(self, since=None):
+            return [r for r in self.rows if since is None or r["log_time"] >= since]
+
+        def frame(self, seq):
+            self.asked.append(seq)
+            return (b"", 0.0, self.rows[seq]["log_time"], seq, {}) if seq in self.served else None
+
+    def until(cond):
+        deadline = time.monotonic() + 5.0
+        while not cond():
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+
+    ring = Ring()
+    live = make_live(ring, register=True)
+    seen: list[int] = []
+    live.correct = lambda got: seen.append(got[3])
+    ring.rows += [{"seq": i, "log_time": i * 100} for i in range(3)]
+    live.start_corrector()
+    try:
+        until(lambda: ring.asked.count(2) >= 3)
+        assert set(ring.asked) == {2} and seen == []
+        ring.served.add(2)
+        until(lambda: seen == [2])
+        ring.rows += [{"seq": i, "log_time": i * 100} for i in (3, 4)]
+        ring.served.update((3, 4))
+        until(lambda: seen == [2, 4])
+    finally:
+        live.close()
+    time.sleep(0.05)                    # a period in flight at the close ends
+    asked = len(ring.asked)
+    time.sleep(0.05)
+    assert len(ring.asked) == asked and seen == [2, 4]
