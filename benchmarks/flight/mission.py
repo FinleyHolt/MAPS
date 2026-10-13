@@ -242,7 +242,7 @@ class Mission:
         self.turns_used = 0
         #: How many conversations have ended and parked the mission.
         self.replies = 0
-        #: How many flights the row scores: those flown by the last report; None scores every flight flown.
+        #: How many flights the row scores and counts: those flown by the last report; None, every flight flown.
         self._scored_flights: int | None = None
         self._turn_diag: dict[str, Any] = {}
         #: The host's wall clock at the start (the row's ``ts``).
@@ -762,7 +762,8 @@ class Mission:
         plain reply after it, is the run's REPORT: the row takes its
         ``ended_by``, its time, and the flights flown by then. Every end after
         a report without a new one (a harness ending, the crew's Stop, a
-        failure) leaves the row standing at the last report."""
+        failure) leaves the row standing at the last report; its turns keep
+        counting, as the run's cost."""
         with self._lock:
             if not self.replies or reply.ended_by == "reply":
                 self.ended_by = reply.ended_by
@@ -813,7 +814,6 @@ class Mission:
             scored = self.flights[:self._scored_flights]
             visited += [[float(f["resolved_xy"][0]), float(f["resolved_xy"][1])] for f in scored]
             infra, ended_by, error, turns = self.infra, self.ended_by, self.error, self._turns()
-            flown = len(self.flights)
             provenance = scored[-1].get("provenance") if scored else None
         last = visited[-1] if visited else None
         try:
@@ -833,7 +833,7 @@ class Mission:
             "final_pos_xy": last, "visited_xy": visited,
             # The bench's infra rule: only a serve fault is infra; any other failure is a scored miss.
             "status": STATUS_INFRA if infra else STATUS_OK,
-            "error": error, "ended_by": ended_by, "turns_used": turns, "flights_flown": flown,
+            "error": error, "ended_by": ended_by, "turns_used": turns, "flights_flown": len(scored),
             "metrics": metrics,
             "provenance": {"git_commit": self.git_commit, "git_dirty": self.git_dirty,
                            "served_model": spec().model_id if spec_installed() else None,

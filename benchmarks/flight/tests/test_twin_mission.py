@@ -281,7 +281,7 @@ def test_a_reasoner_unreachable_at_discovery_is_infra(calcity, serves, tmp_path,
 
 def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, serves, tmp_path, monkeypatch):
     """The segmenter fails out on the retask after it flew a second leg: the
-    report stands (its end, time and commit), the error is recorded, and the
+    report stands (its end, time, flights and commit), the error is recorded, and the
     run is scored, never infra."""
     from benchmarks.flight import measures, twin
     from maps.llm import http
@@ -307,7 +307,7 @@ def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, ser
     sortie = next(out.iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
     assert row["status"] == "ok" and row["ended_by"] == "reply" and row["error"] == "SamServerOutage: no tile answered"
-    assert row["flights_flown"] == 2 and len(row["visited_xy"]) == 2
+    assert row["flights_flown"] == 1 and len(row["visited_xy"]) == 2
     (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
     assert run["commit_xy"] == pytest.approx(row["visited_xy"][-1], abs=0.01) and run["end"] == "reply" and run["success"] is True
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
@@ -317,8 +317,8 @@ def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, ser
 def test_a_follow_up_that_ends_without_a_new_report_scores_the_run_at_that_report(
         calcity, serves, tmp_path, monkeypatch, end):
     """The retask flies a second leg and ends with no new report, by the
-    crew's Stop or at the turn cap: the report stands (its end and commit)
-    and both flights are counted."""
+    crew's Stop or at the turn cap: the report stands (its end, commit,
+    time and flights)."""
     from benchmarks.citynav.run_benchmark import mission_engine
     from benchmarks.flight import measures, twin
     from benchmarks.flight import mission as M
@@ -359,7 +359,7 @@ def test_a_follow_up_that_ends_without_a_new_report_scores_the_run_at_that_repor
     ends = [r["ended_by"] for r in conversation if r.get("kind") == "mission_end"]
     assert ends == ["reply"] + (["turn_cap"] if end == "turn_cap" else [])
     assert row["status"] == "ok" and row["ended_by"] == "reply" and row["error"] is None
-    assert row["flights_flown"] == 2 and len(row["visited_xy"]) == 2
+    assert row["flights_flown"] == 1 and len(row["visited_xy"]) == 2
     second_leg = [r for r in conversation if r.get("kind") == "leg"][-1]
     assert row["elapsed_s"] < second_leg["t_s"]
     (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
