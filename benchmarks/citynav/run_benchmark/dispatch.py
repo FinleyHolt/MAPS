@@ -68,7 +68,7 @@ def _exc_is_sam_infra(exc: BaseException) -> bool:
 # ``TimeoutError`` / ``ConnectionError`` / ``OSError`` can be raised by
 # algorithm or file code, and misclassifying one as infra would drop a real
 # CityNav failure from SR.
-_HTTP_CLIENT_MODULES = ("httpx", "httpcore", "requests", "urllib3", "aiohttp")
+_HTTP_CLIENT_MODULES = ("httpx", "httpcore", "requests", "urllib3")
 
 
 def _exc_is_transient_infra(exc: BaseException) -> bool:
