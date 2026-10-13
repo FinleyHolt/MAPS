@@ -47,7 +47,7 @@ def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
     d = driver(selection=[f"{k}::1#{i}" for i, k in enumerate(OUTCOMES)])
     d.episode_timeout_s, d.max_infra_attempts = 3, 1
     # The reasoner is down exactly while the "vllm" episode flies.
-    monkeypatch.setattr(d, "_wait_for_vllm", lambda: None)
+    monkeypatch.setattr(d, "_wait_for_vllm", lambda: True)
     monkeypatch.setattr(d, "_vllm_healthy",
                         lambda: not any(e.startswith("vllm") for e in d._in_flight))
     t0 = time.time()
@@ -259,7 +259,7 @@ def test_a_ledger_the_worker_cannot_write_stops_the_run(driver, monkeypatch) -> 
         raise RuntimeError("the attempt failed")
 
     monkeypatch.setattr(episodes, "append_row", full)
-    monkeypatch.setattr(d, "_wait_for_vllm", lambda: None)
+    monkeypatch.setattr(d, "_wait_for_vllm", lambda: True)
     monkeypatch.setattr(d, "run_one", boom)
     d.worker_loop(0)
     assert "No space left on device" in d._abort
@@ -402,3 +402,19 @@ def test_relative_paths_resolve_against_the_working_directory(tmp_path, monkeypa
     d = bf.Driver(bf._build_parser().parse_args(["--out-root", "runs/a", "--episode-allowlist", "ids.txt"]))
     assert d.out_root == tmp_path / "runs" / "a" and d.out_root.is_dir()
     assert d.allowlist_path == tmp_path / "ids.txt"
+
+
+def test_a_reasoner_that_never_answers_stops_at_the_wall_budget(driver, monkeypatch) -> None:
+    """The launch gate waits for the reasoner only while the wall budget lasts: past it the
+    worker claims nothing and launches nothing."""
+    import threading
+
+    d = driver(selection=["ep0"])
+    d._deadline = time.monotonic() + 1
+    monkeypatch.setattr(d, "_vllm_healthy", lambda: False)
+    monkeypatch.setattr(d, "run_one", lambda *a: pytest.fail("launched with no reasoner"))
+    t = threading.Thread(target=d.worker_loop, args=(0,), daemon=True)
+    t.start()
+    t.join(timeout=10)
+    assert not t.is_alive()
+    assert not d.episodes_file.exists()

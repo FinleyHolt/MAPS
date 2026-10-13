@@ -41,6 +41,8 @@ _DEADLINE_RESERVE_FRAC = 0.1
 # How often the driver asks the reasoner's ``/models`` while an attempt
 # flies; two failures in a row kill the attempt as ``vllm_down_midrun``.
 VLLM_PROBE_S = 60.0
+# How often a launch held for a reasoner that is down asks again.
+VLLM_WAIT_S = 120.0
 # Pause between worker thread starts, so the first attempts do not all
 # cold-start at once.
 WORKER_STAGGER_S = 2.0
@@ -299,13 +301,19 @@ class Driver:
         except (OSError, ValueError):
             return False
 
-    def _wait_for_vllm(self) -> None:
+    def _wait_for_vllm(self) -> bool:
+        """Hold a launch until the reasoner answers; False once the wall
+        budget is spent or the run aborted while it waited."""
         if self._vllm_healthy():
-            return
+            return True
         self.log("vLLM down; pausing launches until it returns")
         while not self._vllm_healthy():
-            time.sleep(120.0)
+            if self._wall_spent() or self._abort is not None:
+                return False
+            left = self._deadline - time.monotonic() if self._deadline is not None else VLLM_WAIT_S
+            time.sleep(max(0.0, min(VLLM_WAIT_S, left)))
         self.log("vLLM back; resuming")
+        return True
 
 
     def _wait(self, proc: subprocess.Popen) -> str:
@@ -454,8 +462,8 @@ class Driver:
     def worker_loop(self, worker_id: int) -> None:
         while (eid := self._next_claimed_episode()) is not None:
             try:
-                self._wait_for_vllm()
-                self.run_one(worker_id, eid)
+                if self._wait_for_vllm():
+                    self.run_one(worker_id, eid)
             except Exception as exc:  # noqa: BLE001
                 self.log(f"[w{worker_id}] FAIL {eid}: {type(exc).__name__}: {exc}")
                 try:
