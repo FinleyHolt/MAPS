@@ -116,18 +116,18 @@ def _missing_block_assets(episode_ids: list[str]) -> list[Path]:
 
 class Driver:
     def __init__(self, args: argparse.Namespace) -> None:
-        self.workers = max(1, int(args.workers))
+        self.workers = args.workers
         self.split = args.split
-        self.episode_timeout_s = int(args.episode_timeout_s)
-        self.max_infra_attempts = max(1, int(args.max_infra_attempts))
+        self.episode_timeout_s = args.episode_timeout_s
+        self.max_infra_attempts = args.max_infra_attempts
         self._infra_errors: dict[str, Counter] = {}
         self.out_root = Path(args.out_root).resolve()
         self.out_root.mkdir(parents=True, exist_ok=True)
         self.episodes_file = self.out_root / episodes.EPISODES_JSONL
         self.driver_log = self.out_root / "driver.log"
         self.summary_file = self.out_root / "summary.txt"
-        self.limit = int(args.limit)
-        self.sample_seed = int(args.sample_seed)
+        self.limit = args.limit
+        self.sample_seed = args.sample_seed
         self.allowlist_path = Path(args.episode_allowlist).resolve() if args.episode_allowlist else None
         # Guarded by _dispatch_lock.
         self._selection: list[str] = []
@@ -138,7 +138,7 @@ class Driver:
         self._recent: deque[tuple[str | None, str]] = deque(maxlen=ABORT_WINDOW)
         self._abort: str | None = None
         # --max-wall-s: stop claiming once spent; in-flight attempts finish.
-        self.max_wall_s = int(args.max_wall_s)
+        self.max_wall_s = args.max_wall_s
         self._deadline = (
             time.monotonic() + self.max_wall_s if self.max_wall_s > 0 else None
         )
@@ -612,6 +612,13 @@ class Driver:
         return 0
 
 
+def _at_least_one(value: str) -> int:
+    n = int(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {n}")
+    return n
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog=f"python -m benchmarks.{paths.BENCHMARK}.bench_fullset",
@@ -620,7 +627,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--split", default=paths.DEFAULT_SPLIT, help=f"(default {paths.DEFAULT_SPLIT})")
     p.add_argument(
         "--workers",
-        type=int,
+        type=_at_least_one,
         default=6,
         help="concurrency (default %(default)s)",
     )
@@ -644,7 +651,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--max-infra-attempts",
-        type=int,
+        type=_at_least_one,
         default=3,
         help="infra attempts an episode gets before the run leaves it out and "
         "reports it as persistent infra (default %(default)s)",
