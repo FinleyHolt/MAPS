@@ -12,6 +12,13 @@ event fires is never handed back or recorded.
 ``flight/llm/transcript.jsonl`` stores the conversation once: per-call
 message deltas, params written once per distinct body, image parts as sha
 refs.
+
+With ``MAPS_IMAGE_STORE_URL`` set (an image store standing one fast hop from
+the reasoner, for a slow link), each inline image crosses the wire once: its
+bytes are PUT to ``<store>/looks/<sha>`` and the request names it
+``sha256:<sha>``, which the store expands back to the same data URL beside
+the reasoner. The model reads the same bytes; the transcript keeps the body
+as built. A 409 naming shas the store does not hold sends them again.
 """
 
 from __future__ import annotations
@@ -209,6 +216,58 @@ def _scrub_image_parts(messages: list) -> list:
             changed = True
         out.append({**msg, "content": parts} if changed else msg)
     return out
+
+
+#: The image store a slow link sends each image to once (module docstring).
+IMAGE_STORE_ENV = "MAPS_IMAGE_STORE_URL"
+# shas the store holds; a 409 from it drops the ones it names.
+_IMAGE_STORE_HELD: set[str] = set()
+# Connect outlasts a radio dropout: a PUT that gives up inside one loses the
+# turn's images to a link that was about to come back.
+_IMAGE_STORE_TIMEOUT = httpx.Timeout(30.0, read=180.0, write=180.0)
+
+
+def _wire_body(body: dict, headers: dict[str, str]) -> dict:
+    """``body`` as it crosses the wire: with an image store set, every
+    data-URL image part rides as ``sha256:<sha>``, its bytes PUT once."""
+    base = os.environ.get(IMAGE_STORE_ENV, "").strip().rstrip("/")
+    if not base or not isinstance(body.get("messages"), list):
+        return body
+    messages = []
+    for msg in body["messages"]:
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if not isinstance(content, list):
+            messages.append(msg)
+            continue
+        parts = []
+        for part in content:
+            url = (part.get("image_url", {}).get("url", "")
+                   if isinstance(part, dict) and part.get("type") == "image_url" else "")
+            if not (isinstance(url, str) and url.startswith("data:")):
+                parts.append(part)
+                continue
+            head, _, b64 = url.partition(",")
+            raw = base64.b64decode(b64)
+            sha = hashlib.sha256(raw).hexdigest()
+            if sha not in _IMAGE_STORE_HELD:
+                httpx.put(f"{base}/looks/{sha}", content=raw,
+                          headers={**headers, "Content-Type": head[len("data:"):].split(";")[0] or "image/jpeg"},
+                          timeout=_IMAGE_STORE_TIMEOUT).raise_for_status()
+                _IMAGE_STORE_HELD.add(sha)
+            parts.append({**part, "image_url": {**part["image_url"], "url": f"sha256:{sha}"}})
+        messages.append({**msg, "content": parts})
+    return {**body, "messages": messages}
+
+
+def _forget_missing(resp: httpx.Response) -> bool:
+    """A 409 from the image store names the shas it does not hold (an
+    eviction, a restart): forget them, so the next send PUTs them."""
+    try:
+        missing = resp.json()["missing"]
+    except Exception:  # noqa: BLE001 - a 409 from anything but the store
+        return False
+    _IMAGE_STORE_HELD.difference_update(missing)
+    return True
 
 
 #: The reasoner's record of a run: every request, response and its params, one a line.
@@ -494,16 +553,18 @@ def _chat_completions_raw(
 
     attempt = 0
     rate_limit_attempt = 0
+    wire = body
     while True:
         try:
             if cancel_event is not None and cancel_event.is_set():
                 raise CallCanceled("canceled before dispatch")
+            wire = _wire_body(body, headers)
             if use_stream:
                 response_json = _stream_chat_completions(
-                    url, headers, body, timeout=timeout, cancel_event=cancel_event)
+                    url, headers, wire, timeout=timeout, cancel_event=cancel_event)
             else:
                 with httpx.Client(timeout=timeout) as client:
-                    r = client.post(url, headers=headers, json=body)
+                    r = client.post(url, headers=headers, json=wire)
                 r.raise_for_status()
                 response_json = r.json()
             if cancel_event is not None and cancel_event.is_set():
@@ -552,6 +613,10 @@ def _chat_completions_raw(
                     delay,
                 )
                 _backoff(delay, cancel_event)
+                continue
+            if (status == 409 and wire is not body and attempt < _MAX_RETRIES
+                    and _forget_missing(e.response)):
+                attempt += 1
                 continue
             if status == 404:
                 _raise_on_served_model_mismatch(base_url, body.get("model"), e.response.text)
