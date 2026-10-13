@@ -956,34 +956,31 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
             head["cut_stats"] = cut
         return head
 
-    order = ([answer_ref] + [k for k in results if k != answer_ref]
-             if answer_ref in results else list(results))
-    out, seen = {}, {}
-    for k in order:
-        e = out[k] = env(results[k])
-        if "census" in e:
-            sig = repr(sorted(e["census"].items()))
-            if sig in seen:
-                del e["census"], e["named"]
-                e["census_ref"] = (
-                    f"census identical to {seen[sig]}'s (served once above)")
-            else:
-                seen[sig] = str(k)
-    if answer_ref not in out:
+    if answer_ref not in results:
+        out, seen = {}, {}
+        for k, v in results.items():
+            e = out[k] = env(v)
+            if "census" in e:
+                sig = repr(sorted(e["census"].items()))
+                if sig in seen:
+                    del e["census"], e["named"]
+                    e["census_ref"] = (
+                        f"census identical to {seen[sig]}'s (served once above)")
+                else:
+                    seen[sig] = str(k)
         return out
-    answer = out[answer_ref]
+    answer = env(results[answer_ref])
     # The other ops are the call's own steps, refs the model never holds:
     # their hints ride unprefixed, each line once. A step whose rows a later
     # op cut, sorted or measured serves only the notes not about those rows.
     own = str(answer.get("hint") or "").split("\n")
 
-    def _step_hint(k):
-        v = results[k]
+    def _step_hint(v):
         if v.consumed and v:
             return join_hints(*(n for n in v.notes if n not in v.set_notes))
-        return out[k].get("hint")
-    steps = dict.fromkeys(ln for k in out if k != answer_ref
-                          if (h := _step_hint(k))
+        return env(v).get("hint")
+    steps = dict.fromkeys(ln for k, v in results.items() if k != answer_ref
+                          if (h := _step_hint(v))
                           for ln in str(h).split("\n"))
     answer["hint"] = join_hints(answer.get("hint"),
                                 *(ln for ln in steps if ln not in own))
