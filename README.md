@@ -124,6 +124,7 @@ these places, the served-text changes among them:
 | Under the images withhold a pass's catch keeps its delivered, shown and not-drawn facts beside the withheld note. | The whole catch was replaced by the note (withholds never flew). |
 | A baseline's thinking-off call sends `reasoning_effort: none` where the served card lists it, else `enable_thinking=false`, and an arm whose model has neither switch is refused before any request. | Baselines sent `reasoning_effort: none` on every card (a Qwen serve refused it; Gemma ignored it). |
 | ViSA plans over the search window held inside the block. | The port planned an unclipped 1,024 m square around the start when nothing matched, flying off a CityNav block. |
+| A detection without tile cells takes the graph cell its world point lies in (floored), and the compactor's stub hint says the rows were trimmed to fids. | The cell offset truncated toward zero, putting a point south or west of the tile origin one cell north-east; the stub hint claimed a census it did not carry. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
