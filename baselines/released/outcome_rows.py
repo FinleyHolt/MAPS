@@ -95,7 +95,7 @@ def stamp(method: str, checkpoint_id: str, dataset_version: str, split: str) -> 
         "served_model": f"{method}:{checkpoint_id}",
         # No tile bake: a released checkpoint reads its own rasters, so
         # ab_report's bake check refuses a stored-column pair with it by
-        # design; pair through run_report on the shared episodes instead.
+        # design; pair with outcome_rows pair instead.
         "search_env_flags": {},
     }
     return {**ident, "split": split, "provenance": provenance}
