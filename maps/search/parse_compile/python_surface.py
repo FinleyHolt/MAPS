@@ -256,7 +256,7 @@ def scan_block(code: str) -> ast.Module:
                     and id(node) not in called:
                 raise CodeError(
                     f"{node.id} is a move; call it once, {node.id}(<place>), "
-                    "outside any loop or function")
+                    "outside any loop or function.")
             if node.id.startswith("_"):
                 raise CodeError(f"no underscore names ({node.id})")
             if node.id in _FORBIDDEN_NAMES:

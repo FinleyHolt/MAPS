@@ -633,6 +633,9 @@ class _Mission:
         _consec = self._err_n
         if _n < 2:
             return err
+        # The escalation is a new sentence; a caret line is no sentence.
+        if not err.endswith((".", "!", "?", "^")):
+            err += "."
         _SHAPE_MARKERS = ("unknown ref", "is a result handle",
                           "syntax error")
         if any(m in err for m in _SHAPE_MARKERS):

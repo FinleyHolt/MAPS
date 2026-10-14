@@ -91,3 +91,9 @@ def test_a_prior_withhold_census_counts_no_prior_rows(monkeypatch):
     served = json.dumps(drive_blocks(blocks))
     assert served.count("detection fid(s)") == n, served
     assert "prior map row" not in served, served
+
+
+def test_an_escalation_after_an_unpunctuated_error_starts_a_new_sentence():
+    served = drive_blocks(['print(r9)\n'] * 2)
+    assert served[0]["error"].endswith("is not defined"), served[0]
+    assert "is not defined. This error class has now occurred 2x." in served[1]["error"], served[1]
