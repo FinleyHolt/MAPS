@@ -104,3 +104,13 @@ def test_a_line_prefixed_error_counts_with_its_unprefixed_class():
     served = drive_blocks(['r1 = find("car")\nr1', "r1[30:40]\n", "r1[0:5][3:1]\n"])
     assert "occurred" not in served[1]["error"], served[1]
     assert "This error class has now occurred 2x." in served[2]["error"], served[2]
+
+
+def test_a_column_list_of_another_length_is_the_same_class():
+    from maps.search.parse_compile.reasoner_loop import _Mission
+
+    def sig(cols):
+        return _Mission._err_class_sig(
+            None, f"line 5: AttributeError: row prior_1 carries no 'a'; "
+                  f"its columns are {cols}")
+    assert sig(["c", "d", "e", "f", "g", "h", "i"]) == sig(list("cdefghijklm"))
