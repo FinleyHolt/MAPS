@@ -133,6 +133,18 @@ def test_a_python_error_keeps_what_already_ran():
     assert out.get("result"), out
 
 
+
+def test_an_earlier_blocks_def_fails_at_the_current_blocks_line():
+    """The served line is in the block the model just sent: a def from an
+    earlier block that raises names the line that called it."""
+    _reply, fr, _f, _d = drive([
+        [run("def f(x):\n    return x + 'a'\n")],
+        [run("y = 1\nz = 2\nw = f(3)\n")],
+        "done",
+    ])
+    out = tool_results(fr)[1]
+    assert (out.get("error") or "").startswith("line 3: TypeError"), out
+
 # --------------------------------------------------------------------------
 # The pre-scan: what is refused, with the reasons served
 # --------------------------------------------------------------------------

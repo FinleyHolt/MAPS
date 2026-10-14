@@ -963,6 +963,7 @@ class MissionPython:
         # per-block state
         self._out: dict = {}
         self._code = ""
+        self._block_codes: set = set()
         self._printed = ""
         self._lines = 0
         self._deadline = 0.0
@@ -1013,7 +1014,7 @@ class MissionPython:
         its block is running (``fn`` None: for what the subscript it is
         running indexes), found at the block frame's live position."""
         fr = sys._getframe()
-        while fr is not None and fr.f_code.co_filename != BLOCK_FILENAME:
+        while fr is not None and fr.f_code not in self._block_codes:
             fr = fr.f_back
         if fr is None:
             return None
@@ -1564,7 +1565,9 @@ class MissionPython:
             compiled = compile(tree, BLOCK_FILENAME, "exec")
         except CodeError as e:
             return self.env.say_err(out, str(e))
-        self._codes.extend(_code_objects(compiled))
+        codes = _code_objects(compiled)
+        self._block_codes = set(codes)     # the block the model just sent
+        self._codes.extend(codes)
 
         self._deadline = time.monotonic() + TRACE_DEADLINE_S
         try:
@@ -1574,11 +1577,13 @@ class MissionPython:
             pass                     # the refusal is already in the receipt
         except CodeError as e:
             self._unbind_failed_assign(tree, _outer_block_line())
-            out.update(self.env.say_err({}, f"line {_block_line()}: {e}"))
+            out.update(self.env.say_err(
+                {}, f"line {_block_line(self._block_codes)}: {e}"))
         except Exception as e:                          # noqa: BLE001
             self._unbind_failed_assign(tree, _outer_block_line())
             out.update(self.env.say_err(
-                {}, f"line {_block_line()}: {type(e).__name__}: {e}"))
+                {}, f"line {_block_line(self._block_codes)}: "
+                f"{type(e).__name__}: {e}"))
         return self._finish(out)
 
     def _tick(self) -> None:
@@ -1751,13 +1756,14 @@ def _block_ceilings(mp: "MissionPython"):
                 _MON_ACTIVE.pop(id(c), None)
 
 
-def _block_line() -> int:
-    """The failing line of the MODEL's code, off the live traceback."""
+def _block_line(codes: set) -> int:
+    """The failing line of the block the model just sent (``codes``, its
+    code objects), off the live traceback."""
     _, _, tb = sys.exc_info()
     line = 0
-    for fr in traceback.extract_tb(tb):
-        if fr.filename == BLOCK_FILENAME:
-            line = fr.lineno or line
+    for fr, lineno in traceback.walk_tb(tb):
+        if fr.f_code in codes:
+            line = lineno or line
     return line
 
 
