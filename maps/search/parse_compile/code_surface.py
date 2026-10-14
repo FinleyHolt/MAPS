@@ -394,6 +394,10 @@ def compile_filter(p: Program, items, *, within=None, near=None,
                    dwithin=None, facing=None, direction=None,
                    cards=()) -> str:
     items = p.items_of(items)
+    if dwithin is not None and near is None:
+        raise CodeError(
+            "dwithin= is the gap of a near= cut: r1.filter(near=<place>, "
+            "dwithin=25); it rides no other relation.")
     # WHICH WAY A THING FACES A PLACE is a CUT on the `facing <ref>` compass
     # word every compare stamps, and it needs the anchor. The word rides as
     # DATA in direction=; four cardinals, a diagonal is two of them CHAINED.
@@ -461,11 +465,6 @@ def compile_filter(p: Program, items, *, within=None, near=None,
             "filter needs what to cut against: r1.filter(within=r0) "
             "keeps what touches r0, r1.filter(near=r0, dwithin=25) "
             "keeps what is within 25 m of it.")
-    if within is not None and dwithin is not None:
-        raise CodeError(
-            "within= is contact and takes no dwithin=: a gap is "
-            "near='s question. Say r1.filter(near=<place>, "
-            f"dwithin={dwithin!r}) to keep what is that close.")
     if near is not None and dwithin is None:
         raise CodeError(
             "near= needs the gap to keep: r1.filter(near=<place>, "
