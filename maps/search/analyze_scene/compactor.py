@@ -55,12 +55,8 @@ class CompactionInvariantError(RuntimeError):
 _IMAGE_PART_PLACEHOLDER = "[image crop]"
 
 
-def _flatten_multimodal_content(content: object) -> str:
+def _flatten_multimodal_content(content: list) -> str:
     """Multi-part content as one string, each image part a placeholder."""
-    if isinstance(content, str):
-        return content
-    if not isinstance(content, list):
-        return json.dumps(content, default=str)
     parts: list[str] = []
     for p in content:
         if isinstance(p, dict):
@@ -76,32 +72,30 @@ def _flatten_multimodal_content(content: object) -> str:
     return " ".join(x for x in parts if x)
 
 
+def _parsed_arguments(tc: dict) -> dict:
+    """``tc`` with string ``function.arguments`` parsed to a mapping (``{}``
+    when empty or not JSON); any other tool call as itself."""
+    fn = tc.get("function") or {}
+    args = fn.get("arguments")
+    if not isinstance(args, str):
+        return tc
+    try:
+        parsed = json.loads(args) if args else {}
+    except json.JSONDecodeError:
+        parsed = {}
+    return {**tc, "function": {**fn, "arguments": parsed}}
+
+
 def _messages_for_tokenization(messages: list[dict]) -> list[dict]:
     """A copy of ``messages`` as the server renders them: tool-call
     arguments parsed to a mapping, multi-part content flattened."""
     out: list[dict] = []
     for m in messages:
-        m2 = m
-        content = m.get("content")
-        if isinstance(content, list):
-            m2 = {**m2, "content": _flatten_multimodal_content(content)}
-        tcs = m.get("tool_calls")
-        if tcs:
-            new_tcs: list[dict] = []
-            for tc in tcs:
-                fn = tc.get("function") or {}
-                args = fn.get("arguments")
-                if isinstance(args, str):
-                    try:
-                        parsed = json.loads(args) if args else {}
-                    except json.JSONDecodeError:
-                        parsed = {}
-                    new_fn = dict(fn)
-                    new_fn["arguments"] = parsed
-                    new_tcs.append({**tc, "function": new_fn})
-                else:
-                    new_tcs.append(tc)
-            m2 = {**m2, "tool_calls": new_tcs}
+        m2 = dict(m)
+        if isinstance(m.get("content"), list):
+            m2["content"] = _flatten_multimodal_content(m["content"])
+        if m.get("tool_calls"):
+            m2["tool_calls"] = [_parsed_arguments(tc) for tc in m["tool_calls"]]
         out.append(m2)
     return out
 
