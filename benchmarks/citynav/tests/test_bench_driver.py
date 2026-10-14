@@ -5,6 +5,7 @@ The children are ``fake_runner``, whose behaviour is the episode id's map.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import signal
@@ -463,11 +464,24 @@ def test_a_session_refuses_a_root_that_already_holds_a_ledger(driver, tmp_path, 
     stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))
     monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
     episodes.append_row(tmp_path, {"episode_id": "z", "status": "ok"})
-    d = driver()
     monkeypatch.setattr(rm, "emit_or_verify", lambda *a, **k: pytest.fail("a refused session touched the manifest"))
+    d = driver()
     d.arrivals_path = stream
     monkeypatch.setattr(d, "worker_loop", lambda w: pytest.fail("a resumed session flew"))
     assert d.run() == 2 and "fresh --out-root" in d.driver_log.read_text()
+
+
+def test_a_session_s_manifest_names_the_stream_it_flies(driver, tmp_path, monkeypatch, no_flight) -> None:
+    stream = tmp_path / "stream.json"
+    stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    built = {}
+    monkeypatch.setattr(rm, "build_manifest", lambda **kw: built.update(kw) or {})
+    d = driver()
+    d.arrivals_path = stream
+    monkeypatch.setattr(d, "worker_loop", lambda w: None)
+    d.run()
+    assert built["arrivals"] == hashlib.sha256(stream.read_bytes()).hexdigest()
 
 
 def test_arrivals_refuse_the_shuffle_flags(capsys) -> None:

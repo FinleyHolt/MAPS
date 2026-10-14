@@ -60,6 +60,7 @@ IDENTITY_KEYS = (
     ("config_sha256",),
     ("split",),
     ("selection", "sample_seed"),
+    ("selection", "arrivals"),
     ("selection", "selection_sha"),
     ("endpoints", "model_id"),
     ("endpoints", "max_model_len"),
@@ -147,10 +148,13 @@ def build_manifest(
     allowlist_path: Path | None,
     episodes: list[str],
     mission: dict | None = None,
+    arrivals: str | None = None,
 ) -> dict:
     """The resolved record. ``mission`` is the flight mission's per-mission
     stamp, recorded whole; a ``reasoning_effort`` it names replaces the arm's
-    in ``search_env_flags``, since the mission's requests carried it."""
+    in ``search_env_flags``, since the mission's requests carried it.
+    ``arrivals`` is a capacity session's stream sha256: the stream, not a
+    seed, selects its episodes."""
     arm = arm_env_stamp()
     if mission is not None and mission.get("reasoning_effort") is not None:
         arm["SEARCH_SAMPLING_REASONING_EFFORT"] = str(mission["reasoning_effort"])
@@ -180,7 +184,7 @@ def build_manifest(
         # The arm's withholds (maps.search.withhold); readers group by it.
         "withhold": list(resolved["withhold"]),
         "selection": {
-            "sample_seed": sample_seed,
+            **({"arrivals": arrivals} if arrivals is not None else {"sample_seed": sample_seed}),
             "limit": limit,
             "allowlist": str(allowlist_path) if allowlist_path else None,
             "episodes_n": len(episodes),

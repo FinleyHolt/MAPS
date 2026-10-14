@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import io
 import json
 import logging
@@ -571,7 +572,6 @@ class Driver:
             lock.close()
 
     def _run(self) -> int:
-        episodes = self._select_episodes()
         # A session's clock cannot resume: its reports would arrive against a
         # fresh zero. Refused before the manifest records a resume.
         if (self.arrivals_path is not None and self.episodes_file.exists()
@@ -579,6 +579,7 @@ class Driver:
             self.log(f"FATAL: {self.out_root} already holds a ledger; a capacity session flies "
                      f"into a fresh --out-root")
             return 2
+        episodes = self._select_episodes()
         self._selection = episodes
         missing = _missing_block_assets(episodes)
         if missing:
@@ -606,6 +607,8 @@ class Driver:
                 limit=self.limit,
                 allowlist_path=self.allowlist_path,
                 episodes=episodes,
+                arrivals=(hashlib.sha256(self.arrivals_path.read_bytes()).hexdigest()
+                          if self.arrivals_path is not None else None),
             )
             _rm.emit_or_verify(self.out_root, fresh_manifest, log=self.log)
         except _rm.ManifestIdentityError as exc:
