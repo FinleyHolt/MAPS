@@ -26,7 +26,6 @@ def _build_observation(rgb: np.ndarray) -> Observation:
     return Observation(
         pose_xy=(0.0, 0.0),
         altitude_m=50.0,
-        yaw_deg=0.0,
         world_window=(-60.0, -60.0, 60.0, 60.0),
         rgb=rgb,
         depth=depth,

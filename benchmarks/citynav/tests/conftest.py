@@ -72,7 +72,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
             for fid, (xy, prov) in STUB_GRAPH.items()})
         for k, v in loop_overrides.items():
             setattr(loop, k, v)
-        frame = SimpleNamespace(pose_xy=(130.0, 240.0), altitude_m=900.0, yaw_deg=45.0, rgb=rgb,
+        frame = SimpleNamespace(pose_xy=(130.0, 240.0), altitude_m=900.0, rgb=rgb,
                                 sensor=None, ortho_view_corners_xy=None)
         h = SimpleNamespace(
             state=EpisodeState(pose_xy=pose_xy, altitude_m=100.0),

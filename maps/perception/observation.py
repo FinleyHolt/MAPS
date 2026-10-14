@@ -27,7 +27,6 @@ class Observation:
 
     pose_xy: tuple[float, float]
     altitude_m: float
-    yaw_deg: float  # body heading, 0=N, CW-positive
     world_window: tuple[float, float, float, float]  # (x_min, y_min, x_max, y_max)
     sensor: SensorSpec | None = None
     # The model-input crop the reasoner and SAM consume; marks/labels are
@@ -192,7 +191,6 @@ def crop_observation(
     return Observation(
         pose_xy=pose_xy,
         altitude_m=altitude_m,
-        yaw_deg=0.0,
         world_window=oc["world_window"],
         sensor=sensor,
         rgb=oc["rgb"],

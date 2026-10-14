@@ -26,7 +26,6 @@ def square_view(rgb: np.ndarray, depth: np.ndarray | None = None) -> Observation
     return Observation(
         pose_xy=(0.0, 0.0),
         altitude_m=100.0,
-        yaw_deg=0.0,
         world_window=(0.0, 0.0, 100.0, 100.0),
         rgb=rgb,
         depth=depth,
