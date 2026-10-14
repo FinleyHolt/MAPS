@@ -1,22 +1,21 @@
-"""GeoNav's prompts, byte for byte.
+"""The GeoNav prompts the port reads, verbatim.
 
 Sources (github.com/Xhtshr/geonav-official, commit of 2026-07-06, MIT
-licence, copyright (c) 2024): ``scenegraphnav/prompt/geonav_cot.py`` in full
-(the paper's default arm, ``--ablation full``; ``geonav.py`` is the
-``wo_cot`` ablation and is not carried) followed by ``LANDMARK_DESCRIPTION``
-and ``PLANNER_PROMPTV2`` from ``scenegraphnav/prompt/navgpt.py``. Nothing in
-the copied region is edited: the duplicated ``QUERY_OPERATION_CHAIN_PROMPT_V2``
-(the second definition wins, as upstream) and the ``\\put`` escape in the
-planner are upstream's.
+licence, copyright (c) 2024): the prompts of ``scenegraphnav/prompt/geonav_cot.py``
+the port sends (the paper's default arm, ``--ablation full``), followed by
+``LANDMARK_DESCRIPTION`` and ``PLANNER_PROMPTV2`` from
+``scenegraphnav/prompt/navgpt.py``. Each string is upstream's value; the
+planner's ``\\put`` is written as an escaped backslash so the value is the
+same without an invalid escape.
 
 ``EXTRACTION_PROMPT`` at the end is this port's, not upstream's: it stands in
 for the ``processed_descriptions.json`` upstream ships (per-episode
 ``target`` / ``landmarks`` / ``surroundings`` strings, which the paper
 attributes to a GPT-3.5 extraction step).
 """
-# ruff: noqa: F811, W605, W291, W293
+# ruff: noqa: W291, W293
 
-# --- scenegraphnav/prompt/geonav_cot.py, verbatim ---------------------------
+# --- scenegraphnav/prompt/geonav_cot.py, the prompts the port sends, verbatim ---
 
 GOAL_DESCRIPTION_NAV = """You are controlling an UAV to navigate in a city environment. Your task is to navigate to a specific landmark using a top-down sketch. 
 The map provides a simplified representation of the urban district, including a landmark layer and a path represented by a line with the arrow. Landmarks are outlined in gray and their names are annotated at the region centroids.
@@ -187,68 +186,6 @@ For "white car parked 1st from bottom in right column":
 JSON does not support annotations! Please output the json in legal format. Now analyze: {objects}
 """
 
-LOCAL_GRAPH_PROMPT_V2 = """
-You are a geospatial scene graph extractor analyzing a north-aligned satellite image.
-The description of the goal is {instruction}.
-To find this goal, your task is to recognize {objects} and their relationships into a structured JSON graph following these strict rules:
-
-**Node Requirements**
-1. Each node must have a unique `id`.
-2. Mandatory attributes for every node:
-- `object_type`: one of ["vehicle", "road", "building", "parking_lot", "green_space", etc]
-- `bbox`: bounding box coordinates [xmin, ymin, xmax, ymax]
-3. Optional attribute (only if clearly observable):
-- `color`: one of ["white", "black", "red", "gray", "blue", "green", "brown", "silver"]
-
-**Edge Requirements**
-Only use the following relationship labels, with these meanings:
-- **Topological**: 
-    - "contains" (one object is completely within another)
-    - "overlaps" (objects partially cover each other)
-    - "separates" (no contact between the two objects and there is a certain distance between them)
-    Only distinguish directions when there relationship is "separates":
-    - **Directional** (absolute, from aerial perspective):
-        - Primary: "north_of", "south_of", "east_of", "west_of"
-        - Diagonal: "northeast_of", "northwest_of", "southeast_of", "southwest_of"
-The relationships established should be as comprehensive as possible, encompassing relationships between objects of the same type as well as those between objects of different types.
-
-**Special Cases & Handling of Ambiguities**
-1. **Preset Landmarks**:
-- Names like "Leslie Road", "Bridgelands Way", "Livingstone Road", etc., are considered preset. Do not extract these from the image; focus solely on dynamic objects and visible spatial relations.
-2. **Ambiguity Reduction**:
-- Limit your relationship predicate set to the ones provided. This finite vocabulary helps eliminate ambiguity and ensures consistent mapping from natural language descriptions to spatial relationships.
-3. **Hierarchical and Iterative Extraction**:
-- First, build an initial graph based on absolute spatial cues (from the north-aligned image).
-- Then, refine relationships using explicit ordering and structural cues from the description.
-
-<Example Output>
-For "white car parked 1st from bottom in right column":
-{{
-"nodes": [
-    {{
-    "id": "White01", 
-    "object_type": "vehicle",
-    "color": "white",
-    "bbox": [320, 580, 360, 620]
-    }},
-    {{
-    "id": "ParkingLot07",
-    "object_type": "parking_lot",
-    "bbox": [300, 500, 700, 800]
-    }}
-],
-"edges": [
-    {{
-    "source": "White01",
-    "target": "ParkingLot07",
-    "relationship": "contains"
-    }}
-]
-}}
-</Example>
-JSON does not support annotations! Please output the json in legal format. Now analyze: {objects}
-"""
-
 QUERY_OPERATION_CHAIN_PROMPT  = """
     Converts navigation commands into a chain of query operations. Available operations:
     - get_geonode_by_name(name_pattern): finds geonodes based on a name pattern. If no name is provided, all geonodes are returned.
@@ -304,169 +241,6 @@ QUERY_OPERATION_CHAIN_PROMPT  = """
     Please output the chain of operations in JSON format:
     """
 
-QUERY_OPERATION_CHAIN_PROMPT_V2  = """
-    Converts navigation commands into a chain of query operations. 
-    Available operations:
-    - get_geonode_by_name(name_pattern): finds geonodes based on a name pattern. If no name is provided, you must return all geonodes.
-    - get_child_nodes(parent, relation_type): gets child nodes with the specified relation to the parent.
-      Available relation types are: "contains", "overlaps", "separates", "north_of", "south_of", "east_of", "west_of", "northeast_of", "northwest_of", "southeast_of", "southwest_of"
-      "contains" means one object is completely within another,"overlaps" means objects partially cover each other,"separates" means no contact between the two objects.
-      Only distinguish directions such as "north_of", "south_of", "east_of", "west_of", "northeast_of", "northwest_of", "southeast_of", "southwest_of" when there relationship is "separates"
-    - filter_by_class(obj_class): filters object nodes by class. One of ["vehicle", "road", "building", "parking_lot", "green_space", etc]
-    - filter_by_attribute(key, value): filters object nodes by attribute.
-
-    Notes:
-    1. The description "in front of" usually corresponds to the "north_of" or "separates" relation in north-up maps
-    2. The description "behind" usually corresponds to the "separates" or "south_of" relationship in north-up maps
-    3. For some expressions with ambiguous semantics, multiple relations can be queried to enhance robustness. For example, for "stop on the road", both "contains" and "overlaps" relations can be queried simultaneously
-    4. When describing the relative position of multiple objects, you need to find the relationship chain that connects these objects
-    5. When multiple chains of operations represent relative relationships, make sure that the chains of operations are coherent
-    
-    **Strict output format requirements**: - MUST return a JSON array directly, do not wrap the operation chain with additional keys.
-    
-    Example instruction: "Locate the brown house"
-    return operation chain:
-    [
-        {{"method": "get_geonode_by_name", "args": [""]}},  // if there is no clear description of the landmark, returns all geographic nodes
-        {{"method": "get_child_nodes", "kwargs": {{"relation_type": "contains, overlaps, separates"}}}},  // find objects that have topological relationships with geographic nodes
-        {{"method": "filter_by_class", "args": ["building"]}},
-        {{"method": "filter_by_attribute", "args": ["color", "brown"]}}
-    ]
-
-    Example instruction: "Find the red car in the north of the main entrance of the shopping mall"
-    return operation chain:
-    [
-        {{"method": "get_geonode_by_name", "args": ["shopping mall"]}},
-        {{"method": "get_child_nodes", "kwargs": {{"relation_type": "north_of"}}}},
-        {{"method": "filter_by_class", "args": ["vehicle"]}},
-        {{"method": "filter_by_attribute", "args": ["color", "red"]}}
-    ]
-
-    Example instruction: "Find the car next to the park"
-    return operation chain:
-    [
-        {{"method": "get_geonode_by_name", "args": ["park"]}},
-        {{"method": "get_child_nodes", "kwargs": {{"relation_type": "separates"}}}},  // "next to" can correspond to either "separates"
-        {{"method": "filter_by_class", "args": ["car"]}}
-    ]
-    
-    Example instruction: "This is a white car parked on Davey Road. There is a gray car parked in front of it facing the opposite direction."
-    return operation chain:
-    [
-        {{"method": "get_geonode_by_name", "args": ["Davey Road"]}},
-        {{"method": "get_child_nodes", "kwargs": {{"relation_type": "contains, overlaps"}}}},  // "parked on" can correspond to either "contains" or "overlaps"
-        {{"method": "filter_by_class", "args": ["vehicle"]}},
-        {{"method": "filter_by_attribute", "args": ["color", "white"]}}
-    ]
-    
-    Current instruction: {instruction}.
-    Please output the chain of operations in JSON format:
-    """
-
-QUERY_OPERATION_SUBCHAIN_PROMPT  = """
-    Convert the instruction referred to by "it" into a chain of query operations. 
-    Available operations:
-    - get_child_nodes(parent, relation_type): gets child nodes with the specified relation to the parent.
-      Available relation types are: "contains", "overlaps", "separates", "north_of", "south_of", "east_of", "west_of", "northeast_of", "northwest_of", "southeast_of", "southwest_of"
-      "contains" means one object is completely within another,"overlaps" means objects partially cover each other,"separates" means no contact between the two objects.
-      Only distinguish directions such as "north_of", "south_of", "east_of", "west_of", "northeast_of", "northwest_of", "southeast_of", "southwest_of" when there relationship is "separates"
-    - filter_by_class(obj_class): filters object nodes by class. One of ["vehicle", "road", "building", "parking_lot", "green_space", etc]
-    - filter_by_attribute(key, value): filters object nodes by attribute.
-    Please follow the order of get_child_nodes->filter_by_class->filter_by_attribute, and it is acceptable to omit one of them.
-
-    Notes:
-    1. The description "in front of" usually corresponds to the "north_of" and "separates" relation in north-up maps
-    2. The description "behind" usually corresponds to the "separates" and "south_of" relationship in north-up maps
-    3. For some expressions with ambiguous semantics, multiple relations can be queried to enhance robustness. For example, for "stop on the road", both "contains" and "overlaps" relations can be queried simultaneously
-    4. Centered around the object referred to by "it", describe its relationships
-    
-    **Strict output format requirements**: - MUST return a JSON array directly, do not wrap the operation chain with additional keys.
-    
-    Example instruction: "A black car is parked behind it"
-    return operation chain:
-    [
-        {{"method": "get_child_nodes", "kwargs": {{"relation_type": "separates, south_of"}}}},
-        {{"method": "filter_by_class", "args": ["vehicle"]}},
-        {{"method": "filter_by_attribute", "args": ["color", "black"]}}
-    ]
-
-    Example instruction: "Find the red car in the north of it"
-    return operation chain:
-    [
-        {{"method": "get_child_nodes", "kwargs": {{"relation_type": "north_of"}}}},
-        {{"method": "filter_by_class", "args": ["vehicle"]}},
-        {{"method": "filter_by_attribute", "args": ["color", "red"]}}
-    ]
-
-    Example instruction: "Find the car next to it"
-    return operation chain:
-    [
-        {{"method": "get_child_nodes", "kwargs": {{"relation_type": "separates"}}}},  // "next to" can correspond to either "separates"
-        {{"method": "filter_by_class", "args": ["vehicle"]}}
-    ]
-    
-    Current instruction: {instruction}.
-    Please output the chain of operations in JSON format:
-    """
-
-QUERY_OPERATION_CHAIN_PROMPT_V2  = """
-    Converts navigation commands into a chain of query operations. 
-    Available operations:
-    - get_geonode_by_name(name_pattern): finds geonodes based on a name pattern from {landmark}.
-    - get_child_nodes(parent, relation_type): gets child nodes with the specified relation to the parent.
-      Available relation types are: "contains", "overlaps", "separates", "north_of", "south_of", "east_of", "west_of", "northeast_of", "northwest_of", "southeast_of", "southwest_of"
-      "contains" means one object is completely within another,"overlaps" means objects partially cover each other,"separates" means no contact between the two objects.
-      Only distinguish directions such as "north_of", "south_of", "east_of", "west_of", "northeast_of", "northwest_of", "southeast_of", "southwest_of" when there relationship is "separates"
-    - filter_by_class(obj_class): filters object nodes by class. One of ["vehicle", "road", "building", "parking_lot", "green_space", etc]
-    - filter_by_attribute(key, value): filters object nodes by attribute.
-    - verify_spatial_relation(candidates, target): verify whether the candidate node conforms to the described relationship. Combine the target information from "filter_by_class" and "filter_by_attribute".
-    Please follow the order of get_geonode_by_name->get_child_nodes->filter_by_class->filter_by_attribute->verify_spatial_relation->select_target, and "filter_by_attribute" can have not.
-
-    Notes:
-    1. The description "in front of" usually corresponds to the "north_of" or "separates" relation in north-up maps
-    2. The description "behind" usually corresponds to the "separates" or "south_of" relationship in north-up maps
-    3. For some expressions with ambiguous semantics, multiple relations can be queried to enhance robustness. For example, for "stop on the road", both "contains" and "overlaps" relations can be queried simultaneously
-    4. After "get_geonode_by_name", select target nodes {target} through "get_child_nodes", "filter_by_class", and "filter_by_attribute" as candidates.
-    
-    **Strict output format requirements**: - MUST return a JSON array directly, do not wrap the operation chain with additional keys.
-    
-    Example instruction: "The row of grayish brown houses on Leslie Road to the left of the gray house at the intersection with Wellington Road"
-    return operation chain:
-    [
-        {{"method": "get_geonode_by_name", "args": ["Leslie Road"]}},  
-        {{"method": "get_child_nodes", "kwargs": {{"relation_type": "contains, overlaps, separates"}}}},  // "on Leslie Road" can correspond to multiple topological relationships
-        {{"method": "filter_by_class", "args": ["building"]}},
-        {{"method": "filter_by_attribute", "args": ["color", "grayish brown"]}},
-        {{"method": "verify_spatial_relation", "kwargs": {{"target": "building, color, grayish brown"}}}} // Combine the target information from "filter_by_class" and "filter_by_attribute"
-    ]
-
-    Example instruction: "A white car behind a black car, with a black car across from it on the opposite side of Willmore Road facing the edge of the map, in between two identical multi-housing units"
-    return operation chain:
-    [
-        {{"method": "get_geonode_by_name", "args": ["Willmore Road"]}},  
-        {{"method": "get_child_nodes", "kwargs": {{"relation_type": "contains, overlaps, separates"}}}},  // "on the opposite side of Willmore Road" can correspond to multiple topological relationships
-        {{"method": "filter_by_class", "args": ["vehicle"]}},
-        {{"method": "filter_by_attribute", "args": ["color", "white"]}},
-        {{"method": "verify_spatial_relation", "kwargs": {{"target": "vehicle, color, white"}}}} // Combine the target information from "filter_by_class" and "filter_by_attribute"
-    ]
-    
-    Current instruction: {instruction}.
-    Please output the chain of operations in JSON format:
-    """
-
-QUERY_OPERATION_PROMPT  = """
-    Based on the current nodes: {node_text}
-
-    Generate a new operation chain to further refine the search for the target object.
-    Available operations:
-    - get_child_nodes(parent, relation_type): Gets the child nodes with the specified relationship to the parent node.
-    Available relation types are: "contains", "adjacent_to", "near_corner", "north_of", "south_of", "east_of", "west_of", "northeast_of", "northwest_of", "southeast_of", "southwest_of"
-    - filter_by_class(obj_class): Filter object nodes by class.
-    - filter_by_attribute(key, value): Filter object nodes by attribute.
-
-    Return the operation chain in JSON format.
-    """
-
 # --- scenegraphnav/prompt/navgpt.py, LANDMARK_DESCRIPTION + PLANNER_PROMPTV2, verbatim ---
 
 LANDMARK_DESCRIPTION = """{landmark} """
@@ -480,7 +254,7 @@ Please decompose task into detailed subgoals and output the result in a structur
 <question>
 
 <thought>
-\put your thoughts here
+\\put your thoughts here
 <thought>
 
 <answer>
