@@ -313,7 +313,7 @@ class Mission:
             area = leg_area(session.h, token, xy)
             area_ll = self._area_lonlat(area)
             cov, unread = self._coverage_before_leg(area_ll)
-            held = self._held_frame(area, xy) if _holds(cov) else None
+            held = self._held_frame(area_ll, xy) if _holds(cov) else None
             if held is not None:
                 self._said(f"{token} at ({xy[0]:.0f}, {xy[1]:.0f}) is held by the pass already: "
                            f"{self._held_words(held[1])}; no leg is flown")
@@ -376,7 +376,7 @@ class Mission:
         waited = self._wait_departure(xy) if outcome == "arrived" else 0.0
         if self._cancel.is_set():
             return None
-        held = self._held_frame(area, xy, after)
+        held = self._held_frame(area_ll, xy, after)
         self._said(self._outcome_words(outcome, at, held, waited))
         return held
 
@@ -486,11 +486,11 @@ class Mission:
         return (f"the pass held {cov['fraction']:.0%} of it in {len(cov['seqs'])} frame(s){short}, "
                 f"the nearest {last.get('seq')} at {last.get('off_nadir_deg')} deg off nadir")
 
-    def _held_frame(self, area: list[tuple[float, float]], xy, after: float | None = None
+    def _held_frame(self, area_ll: list[tuple[float, float]], xy, after: float | None = None
                     ) -> tuple[Any, dict[str, Any]] | None:
-        """``(observation, record)`` of the ground the pass held over ``area``
-        (the frames after ``after`` when given); None when no frame held any."""
-        obs = self._live.observe_area(self._area_lonlat(area), after)
+        """``(observation, record)`` of the ground the pass held over ``area_ll``
+        (lon/lat; the frames after ``after`` when given); None when no frame held any."""
+        obs = self._live.observe_area(area_ll, after)
         last, refusal = dict(self._live.last or {}), self._live.last_refusal
         if obs is None:
             log.info("no frame in the recording held the area about (%.0f, %.0f): %s",
