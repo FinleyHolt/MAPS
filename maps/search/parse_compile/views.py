@@ -6,6 +6,7 @@ from __future__ import annotations
 import math
 import re
 
+from maps.search.analyze_scene.geom_compute import cell_centre_xy
 from maps.search.render.look_render import (
     LOOK_MAX_BADGES,
     look_label,
@@ -332,21 +333,11 @@ def map_features(ctx) -> list[dict]:
     """The live graph as the map painter's feature dicts: label and paint
     kind, cells, and a road's centerline or a building's contour in world
     metres."""
-    import numpy as np  # noqa: PLC0415
     from maps.perception.viz.osm_palette import (  # noqa: PLC0415
         osm_kind,
         osm_label,
     )
     nodes = ctx.graph.nodes
-    _ox, _oy = ctx.tile_origin_xy
-    _cs = float(ctx.cell_size_m)
-
-    def _grid_to_world(pts):
-        # astype truncates toward zero, like int().
-        a = np.asarray(pts, dtype=float).reshape(-1, 2).astype(np.int64)
-        return np.stack([float(_ox) + (a[:, 1] + 0.5) * _cs,
-                         float(_oy) + (a[:, 0] + 0.5) * _cs],
-                        axis=1).tolist()
 
     feats: list[dict] = []
     for fid, node in nodes.copy().items():
@@ -377,7 +368,9 @@ def map_features(ctx) -> list[dict]:
         if kind == "road":
             cl = node.centerline
             if cl is not None and len(cl) >= 2:
-                feat["centerline"] = _grid_to_world(cl)
+                feat["centerline"] = [
+                    list(cell_centre_xy(r, c, ctx.tile_origin_xy,
+                                        ctx.cell_size_m)) for r, c in cl]
         elif kind == "building":
             wc = node.world_contour
             if wc is not None and len(wc) >= 3:
