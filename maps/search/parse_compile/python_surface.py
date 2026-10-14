@@ -1203,13 +1203,6 @@ class MissionPython:
                 '"Fuchsia Avenue") for where they cross.')
         if name is not None and query == "":
             raise CodeError(f"the name IS the query: find({name!r})")
-        # near=[one thing] is the thing
-        if isinstance(nearest, (list, tuple)) and len(nearest) == 1 \
-                and not is_xy(nearest):
-            nearest = nearest[0]
-        if isinstance(near, (list, tuple)) and len(near) == 1 \
-                and not is_xy(near):
-            near = near[0]
         _refuse_metres_in_within(within)
         if isinstance(nearest, (list, tuple)) and not is_xy(nearest):
             nearest = [self._slot(a) for a in nearest]

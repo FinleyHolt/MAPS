@@ -350,16 +350,14 @@ def compile_find(p: Program, query, *, name=None, near=None, nearest=None,
                 "to measure from: find(<thing>, near=<place>, "
                 f"dwithin={dwithin!r}), or nearest=<place> to rank "
                 "against the same place while you cut.")
-        # A LIST OF ROWS in near= is one place, their union.
-        if isinstance(anchor, list) and not (
-                anchor is near
-                and all(isinstance(m, (Ref, Bind)) for m in anchor)):
+        # A LIST in near= is one place, its union; in nearest= it ranks by
+        # each member's distance.
+        if anchor is nearest and _is_place_list(nearest):
             raise CodeError(
                 "dwithin= cuts against ONE place, and a LIST in "
-                "near= fuses several distances into an ordering, so "
-                "there is no single gap to cut. Pass the set itself "
-                "-- near=find(\"house\") is one place meaning its "
-                "nearest member -- or cut once per anchor.")
+                "nearest= ranks by several distances, so there is no "
+                "single gap to cut. Say near=<the set> to cut against "
+                "its nearest member, or cut once per anchor.")
         wv = _metres(dwithin, "find(<thing>, near=<place>, dwithin=25). A "
                      "PLACE to touch is within=.")
         if wv < 0:

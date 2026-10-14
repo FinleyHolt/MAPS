@@ -310,6 +310,22 @@ def test_ddwithin_cuts_against_whichever_anchor_was_named():
     assert cut["value"] == 500.0, cut
 
 
+def test_a_list_in_near_cuts_against_its_nearest_member_as_filter_does():
+    ops = _ops('r1 = find("car", near=["prior_7", "prior_1"], dwithin=500)\n')
+    assert [o["op"] for o in ops] == ["find", "compare", "filter_items"], ops
+    cmp = [o for o in ops if o["op"] == "compare"][0]["args"]
+    assert cmp["refs"][0]["ref"] == ["prior_7", "prior_1"], cmp
+    assert _cut(ops)["value"] == 500.0
+
+
+def test_a_list_in_nearest_with_dwithin_refuses_and_names_near():
+    with pytest.raises(CodeError) as e:
+        _ops('r1 = find("car", nearest=["prior_7", "prior_1"], dwithin=500)\n')
+    msg = str(e.value)
+    assert "a LIST in nearest= ranks by several distances" in msg, msg
+    assert "near=<the set>" in msg, msg
+
+
 def test_ddwithin_with_no_anchor_at_all_still_refuses_and_names_both():
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("parking", dwithin=500)\n')
