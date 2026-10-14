@@ -113,7 +113,7 @@ class CognitiveMap:
         self.target = ColorLayer(self.shape, _TARGET_COLORS)
         self.surroundings = ColorLayer(self.shape, _SURROUNDINGS_COLORS)
         self.target_name = target_name.lower()
-        self.trajectory: list[tuple[float, float, float]] = []  # (x, y, yaw)
+        self.trajectory: list[tuple[float, float]] = []
 
     # --- geometry (gsamllavanav/maps/map.py) ---------------------------------
 
@@ -128,12 +128,12 @@ class CognitiveMap:
 
     # --- updates ---------------------------------------------------------------
 
-    def add_pose(self, xy, altitude_m: float, yaw: float = math.pi / 2, *, half_m: float | None = None) -> None:
+    def add_pose(self, xy, altitude_m: float, *, half_m: float | None = None) -> None:
         """One perceive: the trajectory point and the view square
         (``TrackingMap.mark_current_view_area``, half side = z - ground).
         ``half_m`` is the sensor's own half footprint where it is not the
         90-degree square upstream assumes."""
-        self.trajectory.append((float(xy[0]), float(xy[1]), float(yaw)))
+        self.trajectory.append((float(xy[0]), float(xy[1])))
         half = float(half_m) if half_m is not None else max(1.0, float(altitude_m) - self.ground_z)
         corners = [(xy[0] - half, xy[1] + half), (xy[0] + half, xy[1] + half),
                    (xy[0] + half, xy[1] - half), (xy[0] - half, xy[1] - half)]
@@ -183,14 +183,15 @@ class CognitiveMap:
                     bbox=dict(facecolor="white", alpha=0.8, boxstyle="round"))
         arrow_length = 15
         if len(self.trajectory) == 1:
-            x, y, yaw = self.trajectory[0]
-            r, c = self.to_row_col((x, y))
+            r, c = self.to_row_col(self.trajectory[0])
+            # released: the first pose's arrow points along a fixed yaw of pi/2.
+            yaw = math.pi / 2
             dx = arrow_length * np.cos(yaw)
             dy = -arrow_length * np.sin(yaw)
             # released: dx and dy are swapped into the arrow call.
             ax.arrow(x=c, y=r, dx=dy, dy=dx, width=3, head_width=8, head_length=10, fc="red", ec="yellow")
         elif len(self.trajectory) > 1:
-            pts = [self.to_row_col((x, y))[::-1] for x, y, _ in self.trajectory]
+            pts = [self.to_row_col((x, y))[::-1] for x, y in self.trajectory]
             xs, ys = zip(*pts)
             ax.plot(xs, ys, color="black", linestyle="--", linewidth=1.5, alpha=0.3)
             (px, py), (cx, cy) = pts[-2], pts[-1]

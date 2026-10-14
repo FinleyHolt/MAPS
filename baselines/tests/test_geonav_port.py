@@ -48,16 +48,16 @@ def test_opposite_move_guard_fires_only_on_a_bare_direction_word():
 
 def test_merge_rule_merges_under_a_metre_and_not_at_three():
     g = KnowledgeGraph()
-    a = g.add_object_node_with_attrs((0.0, 0.0), {"obj_class": "vehicle", "confidence": 1.0, "timestamp": 1})
-    b = g.add_object_node_with_attrs((0.5, 0.0), {"obj_class": "vehicle", "confidence": 1.0, "timestamp": 1})
-    c = g.add_object_node_with_attrs((3.0, 0.0), {"obj_class": "vehicle", "confidence": 1.0, "timestamp": 1})
+    a = g.add_object_node_with_attrs((0.0, 0.0), {"obj_class": "vehicle", "confidence": 1.0})
+    b = g.add_object_node_with_attrs((0.5, 0.0), {"obj_class": "vehicle", "confidence": 1.0})
+    c = g.add_object_node_with_attrs((3.0, 0.0), {"obj_class": "vehicle", "confidence": 1.0})
     assert a == b == "vehicle_0" and c == "vehicle_1" and len(g.nodes) == 2
 
 
 def test_query_ladder_keeps_the_previous_result_on_an_empty_filter():
     g = KnowledgeGraph()
     g.add_geo_node(_lm("Davey Road", 0.0, 0.0))
-    g.add_object_node_with_attrs((5.0, 0.0), {"obj_class": "vehicle", "confidence": 1.0, "timestamp": 1, "color": "white"})
+    g.add_object_node_with_attrs((5.0, 0.0), {"obj_class": "vehicle", "confidence": 1.0, "color": "white"})
     g.add_edge("landmark_Davey Road", "vehicle_0", "contains")
     e = QueryEngine(g)
     chain = [
@@ -73,8 +73,8 @@ def test_query_ladder_keeps_the_previous_result_on_an_empty_filter():
 def test_get_child_nodes_coerces_adjacent_to_into_contains():
     g = KnowledgeGraph()
     g.add_geo_node(_lm("Park", 0.0, 0.0))
-    g.add_object_node_with_attrs((30.0, 0.0), {"obj_class": "vehicle", "confidence": 1.0, "timestamp": 1})
-    g.add_object_node_with_attrs((5.0, 0.0), {"obj_class": "building", "confidence": 1.0, "timestamp": 1})
+    g.add_object_node_with_attrs((30.0, 0.0), {"obj_class": "vehicle", "confidence": 1.0})
+    g.add_object_node_with_attrs((5.0, 0.0), {"obj_class": "building", "confidence": 1.0})
     g.add_edge("landmark_Park", "vehicle_0", "adjacent_to")
     g.add_edge("landmark_Park", "building_0", "contains")
     e = QueryEngine(g)

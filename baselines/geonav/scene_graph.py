@@ -35,20 +35,19 @@ def _dist(p1, p2) -> float:
 
 
 class KnowledgeNode:
-    def __init__(self, node_id: str, node_type: str, position: tuple[float, float], timestamp: int) -> None:
+    def __init__(self, node_id: str, node_type: str, position: tuple[float, float]) -> None:
         self.id = node_id
         self.type = node_type
         self.position = (float(position[0]), float(position[1]))
-        self.timestamp = timestamp
 
 
 class GeoNode(KnowledgeNode):
-    """A landmark: ``{object_type}_{name}``, timestamp -1 (never expires)."""
+    """A landmark: ``{object_type}_{name}``."""
 
     def __init__(self, landmark: Landmark) -> None:
         # substitution: CityRefer's object_type is the OSM row's category here.
         object_type = str(landmark.tags.get("category") or "landmark")
-        super().__init__(f"{object_type}_{landmark.name}", "geo", landmark.centroid, -1)
+        super().__init__(f"{object_type}_{landmark.name}", "geo", landmark.centroid)
         self.name = landmark.name
         self.object_type = object_type
         ring = list(landmark.contour)
@@ -59,12 +58,11 @@ class GeoNode(KnowledgeNode):
 
 
 class ObjectNode(KnowledgeNode):
-    def __init__(self, detection_id, position, obj_class, confidence, timestamp=None, target=False, **attrs):
-        super().__init__(detection_id, "object", position, timestamp)
+    def __init__(self, detection_id, position, obj_class, confidence, target=False, **attrs):
+        super().__init__(detection_id, "object", position)
         self.obj_class = obj_class
         self.confidence = confidence
         self.target = target
-        self.attrs = attrs
         for key, value in attrs.items():
             setattr(self, key, value)
 
@@ -107,10 +105,9 @@ class KnowledgeGraph:
         attrs = dict(attrs)
         obj_class = attrs.pop("obj_class")
         confidence = attrs.pop("confidence")
-        timestamp = attrs.pop("timestamp")
         target = attrs.pop("target", False)
         node_id = f"{obj_class}_{self.class_counters[obj_class]}"
-        node = ObjectNode(node_id, position, obj_class, confidence, timestamp, target, **attrs)
+        node = ObjectNode(node_id, position, obj_class, confidence, target, **attrs)
         merged = self._add_node_v2(node, obj_class)
         return merged if merged else node_id
 
@@ -122,17 +119,17 @@ class KnowledgeGraph:
         self.nodes[node.id] = node
         return None
 
-    def _add_node_v2(self, node: KnowledgeNode, obj_class: str, query_radius=20.0, similarity_threshold=0.8) -> str | None:
-        self.spatial_threshold = query_radius / 5.0
+    def _add_node_v2(self, node: KnowledgeNode, obj_class: str) -> str | None:
+        self.spatial_threshold = 20.0 / 5.0
         merge_candidate = None
         max_score = -1.0
-        for n in self.query_radius(node.position, query_radius):
+        for n in self.query_radius(node.position, 20.0):
             # released: the semantic term compares node KIND ('geo'/'object'),
             # not class, so two object nodes score 1.0 there and merge iff the
             # spatial term alone clears 0.8, i.e. within ~0.95 m.
             score = self.alpha * self._spatial_similarity(n.position, node.position) \
                 + (1 - self.alpha) * self._semantic_similarity(n.type, node.type)
-            if score > max_score and score >= similarity_threshold:
+            if score > max_score and score >= 0.8:
                 max_score = score
                 merge_candidate = n
         if merge_candidate:
@@ -183,7 +180,7 @@ def object_geo_relations(object_pos, corners, geo_node: GeoNode) -> list[str]:
     return [f"{get_direction(geo_node.position, object_pos).lower()}_of"]
 
 
-def ingest_subgraph(graph: KnowledgeGraph, subgraph: dict, timestep: int, bbox_to_corners) -> int:
+def ingest_subgraph(graph: KnowledgeGraph, subgraph: dict, bbox_to_corners) -> int:
     """``llm_controller.build_scene_graph``: the extractor's nodes and edges
     into the graph. ``bbox_to_corners(bbox) -> [(x, y)] * 4`` is the frame
     geometry. Returns the number of nodes that landed."""
@@ -199,7 +196,7 @@ def ingest_subgraph(graph: KnowledgeGraph, subgraph: dict, timestep: int, bbox_t
         try:
             corners = bbox_to_corners(node["bbox"])
             pos = (sum(c[0] for c in corners) / 4, sum(c[1] for c in corners) / 4)
-            attrs = {"obj_class": node.get("object_type", "unknown"), "confidence": 1.0, "timestamp": timestep}
+            attrs = {"obj_class": node.get("object_type", "unknown"), "confidence": 1.0}
             attrs.update({k: v for k, v in node.items() if k not in ("id", "object_type", "bbox")})
             global_id = graph.add_object_node_with_attrs(pos, attrs)
             if global_id:

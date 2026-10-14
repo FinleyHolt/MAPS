@@ -265,7 +265,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
         ):
             sub = _understand(h, frame, instruction, [target_name] + surroundings, frame_px=obs.rgb.shape[:2], max_tokens=understand_cap)
             landed = ingest_subgraph(
-                graph, sub, t,
+                graph, sub,
                 lambda bbox, _o=obs: _bbox_corners_world(h, _o, bbox[1], bbox[0], bbox[3], bbox[2]),
             )
             engine = QueryEngine(graph)
