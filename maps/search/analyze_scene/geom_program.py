@@ -1105,20 +1105,22 @@ class _Args(dict):
             f"op {_quote(self._cx.op)} is missing required arg {_quote(key)}")
 
 
+def empty_window_refusal(part: str, n: int) -> str:
+    """The refusal for a window ``part`` that selects none of ``n`` rows."""
+    return (f"window {part} selected 0 of {n} rows: the set holds {n} row(s) "
+            "and the window begins at or past the end of them (or begins at "
+            "or after where it stops).")
+
+
 def _window(cur, win):
     """``rN[a:b]``: those rows, keeping the source's ``kind``, ``ordered``
     and ``op_cols``. Selecting none of a non-empty set raises."""
-    part = "[" + win
     lo, hi = (int(b) for b in win[:-1].split(":"))
     rows = cur[lo:hi]
     if isinstance(cur, Result):
         rows = Result(rows, cur.kind, ordered=cur.ordered, op_cols=cur.op_cols)
     if not rows and cur:
-        raise ProgramError(
-            f"window {part} selected 0 of {len(cur)} rows: the set holds "
-            f"{len(cur)} row(s) and "
-            f"the window begins at or past the end of them "
-            f"(or begins at or after where it stops).")
+        raise ProgramError(empty_window_refusal("[" + win, len(cur)))
     return rows
 
 

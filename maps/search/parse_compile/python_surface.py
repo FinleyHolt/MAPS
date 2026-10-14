@@ -32,7 +32,7 @@ from typing import Callable
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
     _AUTOATTACH_PREFIXES, _BROAD_HEAD_ROWS, _STANDING_SIDE_PREFIXES,
-    MODEL_UNSERVED_COLUMNS)
+    MODEL_UNSERVED_COLUMNS, empty_window_refusal)
 from maps.search.analyze_scene.row_geometry import SurfaceGeometry
 from maps.search.withhold import withheld
 from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
@@ -692,7 +692,11 @@ class Rows:
             if self.spec:
                 # a slice of a slice composes into absolute indices
                 p_lo, p_hi = (int(x) for x in self.spec[1:-1].split(":"))
-                s = range(len(self.mp.env.rows_of_ref(self.ref)))[p_lo:p_hi][lo:hi]
+                held = range(len(self.mp.env.rows_of_ref(self.ref)))[p_lo:p_hi]
+                s = held[lo:hi]
+                if held and not s:
+                    raise CodeError(
+                        empty_window_refusal(f"[{lo}:{hi}]", len(held)))
                 lo, hi = s.start, s.stop
             return Rows(self.ref, self.mp, f"[{lo}:{hi}]")
         rows = self._rows()

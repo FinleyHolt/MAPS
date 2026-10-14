@@ -728,3 +728,19 @@ def test_a_window_of_a_window_composes_the_python_way():
         [x["fid"] for x in rows[2:5][0:10]]
     assert [x.get("fid") for x in r[2:6][0:-1]] == \
         [x["fid"] for x in rows[2:6][0:-1]]
+
+
+def test_an_empty_window_of_a_window_names_its_own_span_and_parent():
+    """The refusal reads the window the model wrote and the rows its parent
+    holds, not the composed absolute span over the whole set."""
+    from maps.search.parse_compile.python_surface import MissionPython, Rows
+
+    rows = [{"fid": f"detected_{i}"} for i in range(20)]
+    env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
+    r = Rows("r1", MissionPython(env))
+    with pytest.raises(CodeError) as e:
+        r[2:5][5:8]
+    assert str(e.value) == (
+        "window [5:8] selected 0 of 3 rows: the set holds 3 row(s) and the "
+        "window begins at or past the end of them (or begins at or after "
+        "where it stops).")
