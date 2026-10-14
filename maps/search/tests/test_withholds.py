@@ -345,3 +345,15 @@ def test_a_look_withhold_coordinate_refusal_names_no_looking(monkeypatch):
     monkeypatch.setenv(W.ENV, "look")
     text = act_needs_a_thing(name="go_to", got="1, 2")
     assert "Points are for RELATING --" in text and "LOOKING" not in text, text
+
+
+def test_a_look_withhold_loop_move_refusal_names_no_looking(monkeypatch):
+    def refusal():
+        with pytest.raises(ps.CodeError) as e:
+            ps.scan_block("for r in find('car'):\n    go_to(r)\n")
+        return str(e.value)
+
+    assert "Loop to LOOK, then move once" in refusal()
+    monkeypatch.setenv(W.ENV, "look")
+    text = refusal()
+    assert "Loop to read the rows, then move once" in text and "LOOK" not in text, text
