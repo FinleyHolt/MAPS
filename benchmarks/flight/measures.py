@@ -270,18 +270,15 @@ def last_pass(track, xy, t0: float, t1: float, within_m: float) -> tuple[float, 
 def keyframe_poses(bases: list[Path], t0: float, t1: float, map_name: str) -> list[dict[str, Any]]:
     """The centre of each observation the run fused (``frames.jsonl`` ``pose_xy``) and its camera height
     above ``map_name``'s ground (``altitude_m`` is on the tile frame), as track fixes."""
-    for b in bases:
-        out = []
-        for f in iter_json_rows(b / FRAMES_JSONL):
-            xy, utc = f.get("pose_xy"), f.get("utc")
-            if xy and utc:
-                t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
-                if t0 <= t <= t1:
-                    out.append({"t_unix": t, "x": float(xy[0]), "y": float(xy[1]),
-                                "alt_agl_m": _frame_agl(f, map_name), "src": "keyframes"})
-        if out:
-            return sorted(out, key=lambda f: f["t_unix"])
-    return []
+    out = []
+    for f in _frames(bases):
+        xy, utc = f.get("pose_xy"), f.get("utc")
+        if xy and utc:
+            t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
+            if t0 <= t <= t1:
+                out.append({"t_unix": t, "x": float(xy[0]), "y": float(xy[1]),
+                            "alt_agl_m": _frame_agl(f, map_name), "src": "keyframes"})
+    return sorted(out, key=lambda f: f["t_unix"])
 
 
 def _frame_agl(frame: dict[str, Any], map_name: str) -> float | None:
@@ -294,7 +291,7 @@ def _agl(fix, bases: list[Path], events, map_name: str) -> tuple[float | None, s
     """Height above ground at ``fix``: its own (a GNSS fix or an observation's), else the observations' median, else the waypoints' commanded."""
     if fix.get("alt_agl_m") is not None:
         return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
-    alts = [_frame_agl(f, map_name) for b in bases for f in iter_json_rows(b / FRAMES_JSONL) if f.get("altitude_m") is not None]
+    alts = [_frame_agl(f, map_name) for f in _frames(bases) if f.get("altitude_m") is not None]
     if alts:
         return statistics.median(alts), "keyframes (median)"
     asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]
@@ -397,6 +394,11 @@ def run_bases(root: Path, row: dict[str, Any]) -> list[Path]:
 
 def _conversation(bases: list[Path]) -> list[dict[str, Any]]:
     return next((list(iter_json_rows(b / CONVERSATION_JSONL)) for b in bases if (b / CONVERSATION_JSONL).is_file()), [])
+
+
+def _frames(bases: list[Path]) -> list[dict[str, Any]]:
+    """The run's ``frames.jsonl`` off its first copy that holds one (:func:`run_bases`)."""
+    return next((list(iter_json_rows(b / FRAMES_JSONL)) for b in bases if (b / FRAMES_JSONL).is_file()), [])
 
 
 def ended(row: dict[str, Any]) -> str:
