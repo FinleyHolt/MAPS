@@ -24,7 +24,8 @@ def test_finds_per_hour_count_correct_finds_inside_the_window(tmp_path) -> None:
     s = reader.session(_session(tmp_path, 4, 1, [(0, 100, 1), (60, 400, 0), (120, 3000, 1), (200, 3700, 1)]))
     assert s["finds_per_h"] == 2, "a miss and a find past the hour count no find"
     assert s["answered"] == 4 and s["accuracy"] == 0.75
-    assert s["backlog"] == 1 and s["time_to_find_median_s"] == pytest.approx((100 + 2880) / 2)
+    # The time to find is over every correct report found, a late one too.
+    assert s["backlog"] == 1 and s["time_to_find_median_s"] == 2880
 
 
 def test_saturation_is_the_lightest_load_that_falls_short() -> None:

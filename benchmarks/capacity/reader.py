@@ -47,6 +47,7 @@ def session(root: Path, *, allow_partial: bool = False) -> dict[str, Any]:
     k = sum(r["correct"] for r in answered)
     lo, hi = wilson_ci(k, len(answered))
     finds = [r for r in reports if r["in_window"] and r["correct"]]
+    right = [r for r in answered if r["correct"]]
     return {
         "root": str(root), "load_per_h": float(stream["load_per_h"]), "seed": int(stream["seed"]),
         "hours": float(stream["hours"]), "offered": len(reports),
@@ -54,8 +55,8 @@ def session(root: Path, *, allow_partial: bool = False) -> dict[str, Any]:
         "finds_per_h": round(len(finds) / float(stream["hours"]), 2),
         "accuracy": round(k / len(answered), 3) if answered else None,
         "accuracy_ci95": [round(lo, 3), round(hi, 3)] if answered else None,
-        "time_to_find_median_s": (round(statistics.median(r["found_s"] - r["arrival_s"] for r in finds), 1)
-                                  if finds else None),
+        "time_to_find_median_s": (round(statistics.median(r["found_s"] - r["arrival_s"] for r in right), 1)
+                                  if right else None),
         "backlog": sum(1 for r in reports if not r["in_window"]),
         "reports": reports,
     }
