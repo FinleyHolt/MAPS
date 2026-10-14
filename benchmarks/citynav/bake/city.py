@@ -11,7 +11,7 @@ which ``build_surface`` serves as the row ``mask``. Nothing is classified or
 named, and no feature is dropped beyond "rasterizes to no covered cell".
 ``meta.json`` carries the grid (``bounds``, ``grid_shape``, ``cell_size_m``),
 a caller's ``coordinate_frame`` and ``georef``, and for a city-cache bake ``provenance``: cache name +
-sha256, record count and the cache's georef residuals.
+sha256, record count and the cache's georef.
 
 The source is the shipped OSM cache per city (``tiles/osm_cache``), already
 registered into CityNav local XY. Every ``<city>_block_<n>.tif`` raster
@@ -436,7 +436,7 @@ def _cells_for_geometry(
 def _tag_value(value: Any) -> str | list[str] | None:
     if isinstance(value, list):
         return sorted({str(v).strip() for v in value if str(v).strip()}) or None
-    return _safe_text(value) if value is None or isinstance(value, (str, int, float, bool)) else None
+    return _safe_text(value) if isinstance(value, (str, int, float, bool)) else None
 
 
 def _feature_entry(
