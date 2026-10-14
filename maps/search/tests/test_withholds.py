@@ -15,7 +15,10 @@ from maps.search.parse_compile import contract, prompts
 from maps.search.parse_compile import python_surface as ps
 from maps.search.parse_compile import reasoner_agent as ra
 from maps.search.parse_compile.code_surface import act_needs_a_thing
-from maps.search.parse_compile.reasoner_loop import _PICTURE_WITHHELD
+from maps.search.parse_compile.reasoner_loop import (
+    _PICTURE_WITHHELD,
+    _PICTURE_WITHHELD_OF,
+)
 from maps.search.tests.fakes import (
     quiet_env,
     cars,
@@ -200,6 +203,12 @@ def test_an_images_withhold_counts_no_picture_delivered(call, monkeypatch):
     results, _ = _map_mission([call], monkeypatch, "images", renderer=_crops)
     served = json.dumps(results)
     assert '"delivered": 0' in served and '"delivered": 1' not in served, served
+
+
+def test_an_images_withhold_flight_view_note_says_its_picture_is_not_served(monkeypatch):
+    results, _ = _map_mission(["go_to(prior_7)"], monkeypatch, "images", renderer=_crops)
+    stop = results[0]["flown"]["flown"][0]
+    assert stop["note"] == _PICTURE_WITHHELD_OF.format("view"), stop
 
 
 def test_an_images_withhold_keeps_the_catchs_text_facts(monkeypatch):

@@ -789,7 +789,7 @@ class _Mission:
         _fv_text = _look_vision_text(_fv)
         _shown = not withheld("images")
         _fv_note = ("the view follows." if _shown else
-                    "the view's caption follows.")
+                    _PICTURE_WITHHELD_OF.format("view"))
         if _shown:
             _deliver_frames(_fj, self._block_frames)
         self.pending_vision.append((_fv_text, _fj if _shown else []))
