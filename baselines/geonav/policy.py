@@ -337,6 +337,8 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
             target_pos = next_position(pose, mode, action_json, view_width, last_movement, history_actions)
             if mode == "Locate" and isinstance(action_json, dict) and "selected_pos" in action_json:
                 commit_label, commit_tier, locate_path = "geonav:selected_pos", "geonav:vlm_pos", "vlm_pos"
+            elif mode == "Locate":
+                commit_label, commit_tier, locate_path = "geonav:pose", "geonav:locate_pose", "pose"
 
         next_pos = clamp_to_bounds(target_pos if target_pos is not None else pose, bounds)
         if mode == "Locate":

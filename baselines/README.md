@@ -158,7 +158,8 @@ is marked `# released:` at the line. Substitutions are marked `# substitution:`.
 | the cognitive map spans the block (480 px over 410 m) | the map spans the search window at the same resolution, and teleports clamp to it | the window is the block on CityNav; the 13 km Cal City block sized the map past 16 GB |
 
 Commit tiers: `geonav:graph` (a scene-graph node answered the query),
-`geonav:vlm_pos` (the Locate prompt's `selected_pos`), `geonav:budget` (the
+`geonav:vlm_pos` (the Locate prompt's `selected_pos`), `geonav:locate_pose`
+(a Locate answered no position; the pose is the commit), `geonav:budget` (the
 budget ended the walk), `geonav:timeout` (the walk ended, at twenty
 iterations or the plan's last subgoal, without a Locate).
 

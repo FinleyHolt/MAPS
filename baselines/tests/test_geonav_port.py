@@ -96,9 +96,9 @@ def test_cognitive_map_renders_the_released_canvas():
     assert cmap.semantic_map_array().max() > 0
 
 
-def test_run_episode_over_a_stub_harness():
-    """The loop end to end with canned model replies: it plans, navigates,
-    searches, locates through the graph, and commits with a policy tier."""
+def _run_stub(**replies):
+    """The loop end to end over a stub harness with canned model replies,
+    each overridable by call site (an exception instance is raised there)."""
     from types import SimpleNamespace
 
     from PIL import Image
@@ -124,6 +124,7 @@ def test_run_episode_over_a_stub_harness():
             {"method": "filter_by_class", "args": ["vehicle"], "kwargs": {"relation_type": ""}},
         ]},
         "geonav_locate": {"reason": "r", "selected_pos": [120.0, 130.0]},
+        **replies,
     }
     calls: list[str] = []
 
@@ -170,6 +171,8 @@ def test_run_episode_over_a_stub_harness():
 
         def llm_json(self, messages, schema, name, **kw):
             calls.append(name)
+            if isinstance(canned[name], Exception):
+                raise canned[name]
             return dict(canned[name])
 
         def record(self, name, payload):
@@ -178,9 +181,26 @@ def test_run_episode_over_a_stub_harness():
         def save_image(self, name, rgb):
             return None
 
-    res = run_episode(Stub())
+    return run_episode(Stub()), calls
+
+
+def test_run_episode_over_a_stub_harness():
+    """It plans, navigates, searches, locates through the graph, and commits
+    with a policy tier."""
+    res, calls = _run_stub()
     assert calls[:2] == ["geonav_extract", "geonav_plan"]
     assert "geonav_action" in calls and "geonav_chain" in calls
     assert res.commit_tier in ("geonav:graph", "geonav:vlm_pos")
     assert res.stops and res.extra_metrics["landmarks_matched"] == 1
     assert res.lock_step is not None and res.commit_xy is not None
+
+
+def test_a_locate_with_no_answer_commits_the_pose_under_its_own_tier():
+    """A Locate whose graph query finds nothing and whose prompt yields no
+    position commits the pose, and the row says so rather than reading as a
+    walk that never reached Locate."""
+    res, calls = _run_stub(geonav_chain={"operations": []}, geonav_locate=RuntimeError("no JSON"))
+    assert "geonav_locate" in calls
+    assert (res.commit_tier, res.commit_label, res.extra_metrics["locate_path"]) == (
+        "geonav:locate_pose", "geonav:pose", "pose")
+    assert res.lock_step is not None
