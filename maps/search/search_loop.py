@@ -48,6 +48,7 @@ class SearchLoop:
         rgbd_dir: str,
     ):
         self._grid = grid
+        self._cell_size_m = float(grid.cell_size_m)
         self._tile_origin_xy = (
             float(tile_origin_xy[0]),
             float(tile_origin_xy[1]),
@@ -79,11 +80,6 @@ class SearchLoop:
         self._state = _State(runtime_graph=graph,
                              perception_director=PerceptionDirector(push=self._sam_setter))
 
-    @property
-    def _cell_size_m(self) -> float:
-        """The tile grid's cell size in metres."""
-        return float(self._grid.cell_size_m)
-
     def _grid_centroid_to_world_xy(
         self, centroid: object
     ) -> tuple[float, float] | None:
@@ -108,48 +104,37 @@ class SearchLoop:
 
         _c, anchors = build_surface_from_graph(
             self.state.runtime_graph.nodes.items(), self._tile_origin_xy,
-            float(self._cell_size_m))
+            self._cell_size_m)
         self._prior_xy_cache = {str(r["fid"]): (float(r["xy"][0]), float(r["xy"][1]))
                                 for r in anchors if r.get("xy")}
         return self._prior_xy_cache
 
-    def _world_xy_for_node_locked(self, target_fid: str) -> tuple[float, float] | None:
-        """Where the fid's row says it is, the point a flight to it flies:
-        a detection's ``world_xy``, else a prior's served row point, else
-        the node's cell centroid (a cluster member no row serves). The
-        precedence is ``geom_program.build_surface``'s. None off the graph
-        or without a position. Under the lock."""
-        node = self._node_for_fid_locked(target_fid)
-        if node is None:
-            return None
-        w = node.world_xy
-        if w is not None and len(w) >= 2:
-            return (float(w[0]), float(w[1]))
-        served = self._prior_surface_xy_locked().get(str(target_fid))
-        if served is not None:
-            return served
-        return self._grid_centroid_to_world_xy(node.centroid)
-
     def node_xy(self, fid: str) -> tuple[tuple[float, float], str] | None:
-        """``((x, y), "detected" | "prior")`` for a fid on the graph, the
-        position as :meth:`_world_xy_for_node_locked` resolves it; None off
-        the graph or without a position."""
+        """``((x, y), "detected" | "prior")`` for a fid on the graph, where
+        its row says it is, the point a flight to it flies: a detection's
+        ``world_xy``, else a prior's served row point, else the node's cell
+        centroid (a cluster member no row serves). The precedence is
+        ``geom_program.build_surface``'s. None off the graph or without a
+        position."""
         with self._lock:
-            xy = self._world_xy_for_node_locked(fid)
+            node = self.state.runtime_graph.nodes.get(fid)
+            if node is None:
+                return None
+            w = node.world_xy
+            if w is not None and len(w) >= 2:
+                xy = (float(w[0]), float(w[1]))
+            else:
+                xy = (self._prior_surface_xy_locked().get(str(fid))
+                      or self._grid_centroid_to_world_xy(node.centroid))
             if xy is None:
                 return None
-            node = self._node_for_fid_locked(fid)
             return xy, ("detected" if node.provenance == "detected" else "prior")
-
-    def _node_for_fid_locked(self, fid: str):
-        """The graph node for ``fid``, or None. Under the lock."""
-        return self.state.runtime_graph.nodes.get(fid)
 
     def _cells_xy_locked(self, target_fid: str) -> list[tuple[float, float]] | None:
         """The centres of this fid's cells in world metres, its footprint as
         the bake rasterized it; None off the graph or without cells. Under
         the lock."""
-        node = self._node_for_fid_locked(target_fid)
+        node = self.state.runtime_graph.nodes.get(target_fid)
         cells = node.cells if node is not None else None
         # cells is an (N, 2) array: its truth value raises, its length does not.
         if cells is None or len(cells) == 0:
