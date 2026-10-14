@@ -290,15 +290,14 @@ def render_candidate_crops(
     # has no edge). An unreadable ortho renders no crops, so the 0.1 m/px
     # fallback only sizes windows that then fail.
     _wb = None
-    if imagery is None:
+    if imagery is not None:
+        _gsd = float(imagery.gsd_m)
+    else:
         try:
             _wb = ortho_world_bounds(map_name, rgbd_dir=rgbd_dir)
         except Exception as exc:  # noqa: BLE001
             log.debug("look: no raster bounds for %s (%s); no edge-shift",
                       map_name, exc)
-    if imagery is not None:
-        _gsd = float(imagery.gsd_m)
-    else:
         try:
             _gsd = ortho_gsd_m(map_name, rgbd_dir=rgbd_dir)
         except Exception as exc:  # noqa: BLE001
@@ -479,12 +478,11 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
     meta["subject_centroid_in_window"] = _cin
     _cb = xy_list(req.get("center_boundary"))
     if len(_cb) >= 3:
-        _bw = max(p[0] for p in _cb) - min(p[0] for p in _cb)
-        _bh = max(p[1] for p in _cb) - min(p[1] for p in _cb)
-        meta["subject_extent_m"] = [round(_bw, 1), round(_bh, 1)]
+        _bx0, _bx1 = min(p[0] for p in _cb), max(p[0] for p in _cb)
+        _by0, _by1 = min(p[1] for p in _cb), max(p[1] for p in _cb)
+        meta["subject_extent_m"] = [round(_bx1 - _bx0, 1), round(_by1 - _by0, 1)]
         meta["subject_outline_cut"] = bool(
-            min(p[0] for p in _cb) < x0 or max(p[0] for p in _cb) > x1
-            or min(p[1] for p in _cb) < y0 or max(p[1] for p in _cb) > y1)
+            _bx0 < x0 or _bx1 > x1 or _by0 < y0 or _by1 > y1)
     else:
         meta["subject_extent_m"] = None
         meta["subject_outline_cut"] = False
