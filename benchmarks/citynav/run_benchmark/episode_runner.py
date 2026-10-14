@@ -148,11 +148,10 @@ def _success_shape(episode, objects_by_map: dict):
 
 
 def score_episode(cfg, episode, objects_by_map: dict, final_xy, trajectory, *,
-                  commit_xy=None, flew: bool = True) -> dict:
+                  commit_xy, flew: bool) -> dict:
     """The episode's metrics for an agent that ended at ``final_xy`` over
     ``trajectory``, having committed at ``commit_xy``, under this bench's
-    success criterion (``paths.SUCCESS_CRITERION``). The one scoring call of
-    the bench row and the flight mission's row."""
+    success criterion (``paths.SUCCESS_CRITERION``)."""
     from benchmarks.citynav import paths as bench_paths
 
     return score_arrival(
