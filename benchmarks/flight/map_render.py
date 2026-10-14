@@ -97,8 +97,9 @@ def window_render(window: tuple[float, float, float, float], shape: tuple[int, i
     rgb, bounds, ppm = ortho
     x0, y0, x1, y1 = window
     rows, cols = rgb.shape[:2]
-    c0, c1 = int(round((x0 - bounds.x_min) * ppm)), int(round((x1 - bounds.x_min) * ppm))
-    r0, r1 = int(round((rows - 1) - (y1 - bounds.y_min) * ppm)), int(round((rows - 1) - (y0 - bounds.y_min) * ppm))
+    # Pixel centres sit on the engine's grid (x_min + i/ppm), so a pixel's edges are half a pixel either side.
+    c0, c1 = (int(round((x - bounds.x_min) * ppm + 0.5)) for x in (x0, x1))
+    r0, r1 = (int(round(rows - 0.5 - (y - bounds.y_min) * ppm)) for y in (y1, y0))
     if c0 < 0 or r0 < 0 or c1 > cols or r1 > rows or c1 <= c0 or r1 <= r0:
         return None
     return cv2.resize(np.ascontiguousarray(rgb[r0:r1, c0:c1, :3]), (int(shape[1]), int(shape[0])),

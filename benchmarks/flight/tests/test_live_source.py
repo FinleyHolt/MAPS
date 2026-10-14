@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pytest
 
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import frame_pose, register_frame
@@ -218,6 +219,19 @@ def test_a_truncated_ring_frame_is_refused_by_name_and_never_raised(built, make_
     assert live.last_refusal == "the mission's own"
     assert live.observe_area(_disc(built[0], 600.0, 600.0)) is None
     assert "the frame does not decode" in live.last_refusal
+
+
+@pytest.mark.parametrize("off", [-0.1, 0.1])
+def test_the_window_render_slices_the_pixels_whose_centres_the_window_holds(off):
+    """The engine's raster convention: column i's centre is x_min + i/ppm,
+    row r's is y_min + (rows - 1 - r)/ppm. A window around the centres
+    x, y in {2, 3, 4} on a 1 m raster renders those nine pixels."""
+    from benchmarks.flight.tile_georef import Bounds
+
+    rgb = np.arange(8 * 8 * 3, dtype=np.uint8).reshape(8, 8, 3)
+    a, b = 1.5 + off, 4.5 + off
+    got = map_render.window_render((a, a, b, b), (3, 3), (rgb, Bounds(0.0, 0.0, 8.0, 8.0), 1.0))
+    assert np.array_equal(got, rgb[3:6, 2:5])
 
 
 def test_the_terrain_reads_the_cell_a_point_lies_in_counted_from_the_north_west_corner():
