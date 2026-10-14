@@ -721,7 +721,7 @@ class _Mission:
 
     def _stop_xy(self, _it) -> list[float] | None:
         _t = str(_it.get("target_fid") or "")
-        return parse_xy_token(_t) or look_xy(self._ns_rows.get(_t) or {})
+        return parse_xy_token(_t) or look_xy(self._ns_rows.get(_t))
 
     def _pick_next(self, _queue: list, cover: str | None) -> int:
         """The queue index to fly next: in a pass, a stop the recording
