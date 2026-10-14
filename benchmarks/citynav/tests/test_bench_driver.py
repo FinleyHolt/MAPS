@@ -540,3 +540,13 @@ def test_a_selection_naming_episodes_off_the_split_is_refused_fatal(driver, tmp_
     d.arrivals_path, d.allowlist_path = None, tmp_path / "absent.txt"
     with pytest.raises(SystemExit, match="^FATAL: --episode-allowlist read failed"):
         d._select_episodes()
+
+
+def test_a_refused_selection_exits_2_and_says_so_in_the_driver_log(driver, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    d = driver()
+    d.arrivals_path = tmp_path / "stream.json"
+    d.arrivals_path.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "z"}]}))
+    assert d.run() == 2
+    assert "FATAL: --arrivals names 1 episodes" in d.driver_log.read_text()
+

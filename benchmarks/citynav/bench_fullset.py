@@ -73,7 +73,7 @@ def _enumerate_split(split: str) -> list[str]:
     from benchmarks.citynav.adapter import episode_ids, load_split
 
     if split not in paths.SPLIT_FILES:
-        raise SystemExit(f"unknown split {split!r}; known: {sorted(paths.SPLIT_FILES)}")
+        raise SystemExit(f"FATAL: unknown split {split!r}; known: {sorted(paths.SPLIT_FILES)}")
     return episode_ids(enumerate(load_split(paths.split_path(split))))
 
 
@@ -579,7 +579,11 @@ class Driver:
             self.log(f"FATAL: {self.out_root} already holds a ledger; a capacity session flies "
                      f"into a fresh --out-root")
             return 2
-        episodes = self._select_episodes()
+        try:
+            episodes = self._select_episodes()
+        except SystemExit as exc:
+            self.log(str(exc))
+            return 2
         self._selection = episodes
         missing = _missing_block_assets(episodes)
         if missing:
