@@ -243,13 +243,13 @@ class ImageStoreError(ValueError):
 
 def _put_image(url: str, raw: bytes, media_type: str,
                cancel_event: threading.Event | None) -> None:
-    """PUT one image's bytes to the store, without the reasoner's key; the
+    """PUT one image's bytes to the store, its Content-Type the one header; the
     cancel event aborts it as it does the chat call."""
     watch = _CancelWatch(cancel_event) if cancel_event is not None else None
     try:
         with httpx.Client(timeout=_IMAGE_STORE_TIMEOUT) as client:
             client.put(url, content=raw,
-                       headers={**_request_headers(None), "Content-Type": media_type},
+                       headers={"Content-Type": media_type},
                        extensions={"trace": watch.trace} if watch is not None else None,
                        ).raise_for_status()
     except httpx.HTTPError as exc:

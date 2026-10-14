@@ -1,6 +1,6 @@
 """With an image store set, an image crosses the wire once, named by its sha;
-a 409 naming a sha the store lost sends it again. The PUT carries no reasoner
-key, a cancel aborts it, and a store fault is the store's, never an LLM status."""
+a 409 naming a sha the store lost sends it again. The PUT carries its
+Content-Type alone, a cancel aborts it, and a store fault is the store's, never an LLM status."""
 
 from __future__ import annotations
 
@@ -49,11 +49,12 @@ def _send(serve, messages=None, **kw) -> dict:
 
 def test_an_image_crosses_the_wire_once_by_its_sha(monkeypatch) -> None:
     puts = _store(monkeypatch)
+    monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "ep-1")
     with ChatServe() as serve:
         _send(serve)
         _send(serve)
     assert [u for u, _ in puts] == [f"http://store/looks/{_SHA}"]
-    assert puts[0][1]["Content-Type"] == "image/png"
+    assert puts[0][1] == {"Content-Type": "image/png"}
     assert all(b["messages"][0]["content"][1]["image_url"]["url"] == f"sha256:{_SHA}" for b in serve.bodies)
 
 
@@ -64,13 +65,6 @@ def test_a_sha_the_store_lost_is_sent_again(monkeypatch) -> None:
         _send(serve)
     assert [u for u, _ in puts] == [f"http://store/looks/{_SHA}"] * 2
     assert len(serve.bodies) == 3
-
-
-def test_the_store_put_carries_no_reasoner_key(monkeypatch) -> None:
-    puts = _store(monkeypatch)
-    with ChatServe() as serve:
-        _send(serve)
-    assert "Authorization" not in puts[0][1], puts[0][1]
 
 
 def test_an_undecodable_image_rides_inline(monkeypatch) -> None:
