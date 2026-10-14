@@ -316,15 +316,12 @@ def _flight_request_record(
     body: dict,
 ) -> None:
     """Append the params (if new) and request records for one dispatch, as it
-    fires. The full request is ``previous[:n_prefix] + new_messages``;
-    ``params`` (the body minus messages and stream flags) is written once per
-    distinct sha."""
+    fires, before the stream flags join the body. The full request is
+    ``previous[:n_prefix] + new_messages``; ``params`` (the body minus
+    messages) is written once per distinct sha."""
     with _FLIGHT_LOCK:
         try:
-            params = {
-                k: v for k, v in body.items()
-                if k not in ("messages", "stream", "stream_options")
-            }
+            params = {k: v for k, v in body.items() if k != "messages"}
             params_sha = hashlib.sha256(
                 json.dumps(params, sort_keys=True, default=str).encode("utf-8")
             ).hexdigest()[:16]
@@ -359,7 +356,7 @@ def _flight_request_record(
                 "n_messages": len(scrubbed),
                 "new_messages": scrubbed[n_prefix:],
             })
-        except Exception as exc:  # noqa: BLE001 — never fail the LLM call
+        except Exception as exc:  # noqa: BLE001 - never fail the LLM call
             log.warning("flight request record failed at %s: %s",
                         directory, exc)
 
@@ -547,7 +544,7 @@ def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusa
             f"served-model mismatch: this process discovered {requested!r} "
             f"at startup but {base_url} now serves {served} "
             f"(chat completion returned 404: {refusal[:200]!r}). The server "
-            f"behind the URL changed mid-run — drain and restart."
+            f"behind the URL changed mid-run; drain and restart."
         )
 
 

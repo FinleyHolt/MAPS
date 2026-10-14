@@ -116,11 +116,7 @@ def _ensure_sam(device: str) -> _LoadedSam:
             if isinstance(_m, SegmentationHead) and getattr(_m, "act_ckpt", False):
                 _m.act_ckpt = False
                 n_off += 1
-        print(
-            f"[sam3_engine] seg-head act_ckpt disabled on {n_off} module(s) "
-            "(inference: no backward, checkpoint is pure overhead)",
-            flush=True,
-        )
+        print(f"[sam3_engine] seg-head act_ckpt disabled on {n_off} module(s)", flush=True)
     except ImportError as exc:
         print(
             f"[sam3_engine] WARNING: could not import SegmentationHead "
