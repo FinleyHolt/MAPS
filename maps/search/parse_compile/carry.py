@@ -51,12 +51,9 @@ def run_ops(ops: list, *, namespace: dict,
             seed_results: dict | None = None,
             preflight: bool = False,
             answer_ref: str = "") -> dict:
-    """Run one op list over the namespace's ``(cands, anchors)`` surface
-    (and its standing viewpoint) and compact the results for serving.
-
-    ``raw_sink["results"]`` receives the pre-compaction results. A refused
-    program returns ``{"error": ...}``, never raises.
-    """
+    """Run one op list over the namespace's surface and compact the results
+    for serving (``raw_sink["results"]`` gets them raw); a refused program
+    returns ``{"error": ...}``."""
     ns = namespace
     cands = ns.get("cands") or []
     anchors = ns.get("anchors") or []

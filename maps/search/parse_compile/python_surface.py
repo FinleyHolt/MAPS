@@ -644,11 +644,8 @@ class RowList(list):
 
 
 class Rows:
-    """A result set behind an executor ref.
-
-    Indexing gives a :class:`Row`; a slice is a window over the same ref
-    (order preserved); ``len()`` counts the rows the ref holds now.
-    """
+    """A result set behind an executor ref: an index gives a :class:`Row`,
+    a slice a window over the same ref, ``len()`` the rows it holds now."""
 
     __slots__ = ("ref", "spec", "mp", "label")
 
@@ -739,12 +736,8 @@ class Rows:
                north_of=None, south_of=None, east_of=None, west_of=None,
                facing=None, direction=None,
                **kw) -> "Rows | RowList":
-        """Keep the rows that hold. Filters compose.
-
-        Every cut is a relation to a place, so each takes its anchor (one
-        place or a set): ``east_of=`` keeps what lies that way of it,
-        ``facing=`` with ``direction=`` keeps what FACES it that way.
-        """
+        """Keep the rows that hold; filters compose, and every cut is a
+        relation to its anchor (one place or a set)."""
         _check_filter(pred, dict(
             kw, near=near, within=within, dwithin=dwithin, facing=facing,
             direction=direction, north_of=north_of, south_of=south_of,

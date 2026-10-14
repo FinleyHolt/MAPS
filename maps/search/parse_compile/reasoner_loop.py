@@ -194,13 +194,10 @@ NO_FLIGHT_ABSTAIN_STREAK = 3
 
 @dataclass
 class MissionSpec:
-    """The engine half of the mission contract.
-
-    ``fly`` executes ONE move item (``{"target_fid": <fid or "[x, y]">}``)
-    now and returns the flight report, or ``{"error": ...}``;
-    ``declare_concepts`` arms the full watchlist and returns the error a
-    failed arming serves, or None.
-    """
+    """The engine half of the mission contract: ``fly`` flies one move item
+    (``{"target_fid": <fid or "[x, y]">}``) and returns its report or
+    ``{"error": ...}``; ``declare_concepts`` arms the watchlist and returns
+    the error a failed arming serves, or None."""
 
     fly: "Callable[[dict], dict]"
     declare_concepts: "Callable[[list[str]], str | None]"
