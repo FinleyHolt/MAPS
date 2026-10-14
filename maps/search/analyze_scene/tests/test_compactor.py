@@ -135,6 +135,20 @@ def test_a_later_fire_appends_a_block_and_never_rewrites_the_first():
     assert sum(C._is_script_block(m) for m in out) == 2
 
 
+def test_a_message_between_folded_turns_keeps_its_place():
+    follow_up = {"role": "user", "content": "now find the truck"}
+    later = [m for k in (2, 3, 4) for m in (_call([f"c{k}"]), _dump(f"c{k}", ["x"], 2000))]
+    msgs = _head() + _units(2) + [follow_up] + later
+    out, n, _ = C._drop_spent_turns(msgs, before=_est(msgs), shed_tokens=_est(msgs),
+                                    model="m", tools=None)
+    assert n == 3                               # every spent turn, as before
+    assert out[2]["content"].startswith("[script so far] (2 earlier turns folded")
+    assert out[3] == follow_up
+    assert out[4]["content"].startswith("[script so far] (1 earlier turns folded")
+    assert "# c2" in out[4]["content"] and "# c2" not in out[2]["content"]
+    assert out[5:] == msgs[9:]                  # the two newest units, verbatim
+
+
 def test_a_call_whose_results_are_not_contiguous_is_no_unit():
     msgs = _head() + [_call(["a", "b"]), _dump("a", ["x"]),
                       {"role": "user", "content": "between"}, _dump("b", ["y"])]

@@ -4,14 +4,15 @@ no model call.
 ``compact_transcript`` takes these steps in order, re-measuring after each and
 stopping once the transcript fits; re-derivable text goes before pixels:
 
-  1. fold the oldest spent turns into one script block (the agent's code
-     verbatim, plus the fids and census of what they found), keeping the
-     head and the two newest turns, down to a low-water mark below target;
+  1. fold the oldest spent turns into script blocks, one per run of
+     adjacent turns in that run's place (the agent's code verbatim, plus the
+     fids and census of what they found), keeping the head and the two
+     newest turns, down to a low-water mark below target;
   2. stub stale dumps (all but the newest) to fids, census and a colour
      table, oldest first, down to the low-water mark;
   3. drop those colour tables;
   4. stub the remaining dumps largest first, the newest last;
-  5. strip the findings from the block this fire made;
+  5. strip the findings from the blocks this fire made;
   6. evict stale crops oldest first, never the current turn's;
   7. thin the current turn's crops, keeping its newest;
 
@@ -268,9 +269,24 @@ def _script_block(sources: list[str], n_turns: int,
     }
 
 
-def _newest_script_block(messages: list[dict]) -> int:
-    """Index of the last script block."""
-    return max(i for i, m in enumerate(messages) if _is_script_block(m))
+def _folded(messages: list[dict], spans: list[tuple[int, int]]) -> list[dict]:
+    """``messages`` with each run of adjacent ``spans`` replaced by one
+    script block in its place; every message between runs stays."""
+    runs: list[list[tuple[int, int]]] = []
+    for a, b in spans:
+        if runs and runs[-1][-1][1] == a:
+            runs[-1].append((a, b))
+        else:
+            runs.append([(a, b)])
+    out: list[dict] = []
+    i = 0
+    for run in runs:
+        out += messages[i:run[0][0]]
+        out.append(_script_block(
+            [c for a, _ in run for c in _run_code_of(messages[a])], len(run),
+            [f for span in run for f in _folded_findings(messages, span)]))
+        i = run[-1][1]
+    return out + messages[i:]
 
 
 def _is_script_block(message: dict) -> bool:
@@ -284,9 +300,9 @@ def _drop_spent_turns(
     tools: list[dict] | None,
 ) -> tuple[list[dict], int, int]:
     """``(messages, n_turns_folded, tokens_freed)``: the oldest foldable
-    turns of ``messages`` (``before`` input tokens) replaced by one script
-    block until ``shed_tokens`` are freed. Earlier blocks are never
-    touched; nothing folded returns the input."""
+    turns of ``messages`` (``before`` input tokens) folded into script
+    blocks (:func:`_folded`) until ``shed_tokens`` are freed. Earlier blocks
+    are never touched; nothing folded returns the input."""
     units = _turn_units(messages)
     head = _protected_head(messages)
     droppable = [(a, b) for (a, b) in units if a >= head]
@@ -295,18 +311,11 @@ def _drop_spent_turns(
     candidates = droppable[:-_KEEP_TAIL_UNITS]
 
     folded: list[tuple[int, int]] = []
-    sources: list[str] = []
-    findings: list[str] = []
     out = messages
     freed = 0
-    for a, b in candidates:
-        folded.append((a, b))
-        sources.extend(_run_code_of(messages[a]))
-        findings.extend(_folded_findings(messages, (a, b)))
-        prefix = messages[:folded[0][0]]
-        tail = [m for i, m in enumerate(messages)
-                if i >= folded[0][0] and not any(x <= i < y for x, y in folded)]
-        out = prefix + [_script_block(sources, len(folded), findings)] + tail
+    for span in candidates:
+        folded.append(span)
+        out = _folded(messages, folded)
         after = _estimate_input_tokens(out, model=model, tools=tools)
         freed = before - after
         if freed >= shed_tokens:
@@ -536,14 +545,20 @@ def compact_transcript(
         bound=target_input_tokens, tokens=output_tokens, **_est)
     degraded_dumps = len(degraded)
 
-    # Step 5, on the block this fire made: earlier blocks are served prefix.
+    # Step 5, on the blocks this fire made: earlier blocks are served prefix.
     if output_tokens > target_input_tokens and folded_turns:
-        i = _newest_script_block(out)
-        # rsplit: the agent's code may contain the separator, the
-        # single-line findings cannot.
-        body = out[i]["content"].rsplit(_FINDINGS_SEP, 1)[0]
-        if body != out[i]["content"]:
-            out[i] = _with_content(out[i], body)
+        kept = {id(m) for m in messages}
+        stripped = False
+        for i, m in enumerate(out):
+            if not _is_script_block(m) or id(m) in kept:
+                continue
+            # rsplit: the agent's code may contain the separator, the
+            # single-line findings cannot.
+            body = m["content"].rsplit(_FINDINGS_SEP, 1)[0]
+            if body != m["content"]:
+                out[i] = _with_content(m, body)
+                stripped = True
+        if stripped:
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
             log.info("compaction stripped block findings -> %s/%d",
                      output_tokens, target_input_tokens)
