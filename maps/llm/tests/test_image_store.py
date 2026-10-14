@@ -58,3 +58,19 @@ def test_an_undecodable_image_rides_inline(monkeypatch) -> None:
         http_mod._chat_completions_raw(f"{serve.url}/v1", None, model="m", messages=bad, timeout=30.0)
     assert puts == []
     assert serve.bodies[0]["messages"] == bad
+
+
+def test_the_store_put_carries_no_reasoner_key(monkeypatch) -> None:
+    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
+    monkeypatch.setenv(http_mod.IMAGE_STORE_ENV, "http://store")
+    monkeypatch.setattr(http_mod, "_IMAGE_STORE_HELD", set())
+    seen: list[dict] = []
+
+    class _Ok:
+        def raise_for_status(self) -> None:
+            pass
+
+    monkeypatch.setattr(http_mod.httpx, "put", lambda url, **kw: (seen.append(kw["headers"]), _Ok())[1])
+    with ChatServe() as serve:
+        http_mod._chat_completions_raw(f"{serve.url}/v1", "sk-secret", model="m", messages=_MESSAGES, timeout=30.0)
+    assert "Authorization" not in seen[0], seen[0]

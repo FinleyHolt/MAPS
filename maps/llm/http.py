@@ -235,10 +235,11 @@ _IMAGE_STORE_HELD: set[str] = set()
 _IMAGE_STORE_TIMEOUT = httpx.Timeout(30.0, read=180.0, write=180.0)
 
 
-def _wire_body(body: dict, headers: dict[str, str]) -> dict:
+def _wire_body(body: dict) -> dict:
     """``body`` as it crosses the wire: with an image store set, every
-    data-URL image part rides as ``sha256:<sha>``, its bytes PUT once; a
-    part whose base64 does not decode rides inline."""
+    data-URL image part rides as ``sha256:<sha>``, its bytes PUT once
+    without the reasoner's key; a part whose base64 does not decode rides
+    inline."""
     base = os.environ.get(IMAGE_STORE_ENV, "").strip().rstrip("/")
     if not base or not isinstance(body.get("messages"), list):
         return body
@@ -249,7 +250,7 @@ def _wire_body(body: dict, headers: dict[str, str]) -> dict:
         sha = hashlib.sha256(raw).hexdigest()
         if sha not in _IMAGE_STORE_HELD:
             httpx.put(f"{base}/looks/{sha}", content=raw,
-                      headers={**headers, "Content-Type": media_type},
+                      headers={**_request_headers(None), "Content-Type": media_type},
                       timeout=_IMAGE_STORE_TIMEOUT).raise_for_status()
             _IMAGE_STORE_HELD.add(sha)
         return {**part, "image_url": {**part["image_url"], "url": f"sha256:{sha}"}}
@@ -556,7 +557,7 @@ def _chat_completions_raw(
         try:
             if cancel_event is not None and cancel_event.is_set():
                 raise CallCanceled("canceled before dispatch")
-            wire = _wire_body(body, headers)
+            wire = _wire_body(body)
             if use_stream:
                 response_json = _stream_chat_completions(
                     url, headers, wire, timeout=timeout, cancel_event=cancel_event)
