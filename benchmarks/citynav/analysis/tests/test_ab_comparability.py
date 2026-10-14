@@ -149,3 +149,10 @@ def test_a_reasoning_effort_difference_is_an_arm_key():
     assert fatal == [] and arm == ["reasoning effort (SEARCH_SAMPLING_REASONING_EFFORT) differs:  A=0.99  B=unset"]
     b["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] = "0.99"
     assert comparability_issues(a, b) == ([], [])
+
+
+def test_an_even_split_of_many_flips_reads_no_difference():
+    from benchmarks.citynav.analysis.ab_report import _mcnemar
+
+    mc = _mcnemar([(1, 0)] * 13 + [(0, 1)] * 13)
+    assert (mc["method"], mc["p_value"]) == ("chi2_1df", 1.0)

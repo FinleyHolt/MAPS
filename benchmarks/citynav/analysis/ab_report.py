@@ -61,7 +61,7 @@ def _mcnemar(pairs: list[tuple[int, int]]) -> dict:
         tail = sum(math.comb(n, i) for i in range(k + 1)) / (2 ** n)
         p = min(1.0, 2 * tail)
         return {"b_loss": b, "c_win": c, "p_value": round(p, 4), "method": "binomial_exact"}
-    chi2 = (abs(b - c) - 1) ** 2 / n
+    chi2 = max(abs(b - c) - 1, 0) ** 2 / n
     p = math.erfc(math.sqrt(chi2 / 2))
     return {"b_loss": b, "c_win": c, "p_value": round(p, 4), "method": "chi2_1df"}
 
