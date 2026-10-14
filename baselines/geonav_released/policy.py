@@ -1,6 +1,6 @@
 """The as-released GeoNav arm: ``baselines.geonav`` with ``released=True``.
 
-The seam sends ``reasoning_effort: none`` for this policy name and the
+The seam sends this policy name's calls with the dial off (``seam.dial_off``) and the
 episode runs under the released 800 / 2,048-token caps; prompts, loop, map,
 graph and query ladder are ``baselines/geonav``'s.
 """

@@ -9,7 +9,6 @@ candidate, "sends a closed-loop guidance signal back to the VPG ... and
 triggers a move primitive", and the next waypoint's perception "adjusts its
 attention based on the feedback". The decision is one of the paper's task
 primitives (stop, move, ascend, descend) with the optional signal beside it.
-``run_manifest.prompt_sha256`` hashes this file for a ``policy: visa`` run.
 """
 
 from __future__ import annotations
