@@ -102,15 +102,12 @@ def stamp(method: str, checkpoint_id: str, dataset_version: str, split: str) -> 
 
 
 def _row(eid: str, key: Key, path: list, description: str, scores: dict, ident: dict) -> dict:
-    final = list(path[-1])
     return {
         **ident,
         "episode_id": eid,
         "status": "ok",
         "upstream_key": list(key),
         "description": description,
-        "pred_xy": final,
-        "final_pos_xy": final,
         "visited_xy": [list(p) for p in path],
         "metrics": {"episode_id": eid, **scores},
     }
