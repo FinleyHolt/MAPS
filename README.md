@@ -131,6 +131,7 @@ these places, the served-text changes among them:
 | A mosaic is registered against the map cut on the engine's raster grid (a pixel's centre on its grid point); a pass's check of which stops the recording already holds reads the ring's index as it stands; a blank mission effort flies and stamps the arm's. | The reference was cut half a raster pixel north-west, so each registered mosaic sat half a pixel south-east (centimetres on the registration raster); the station kept index rows the ring had since evicted; a blank mission effort sent none while the arm's was stamped. |
 | An empty window `rN[a:b]` is refused as "window [a:b] selected 0 of N rows: the set holds N row(s) ...". | The refusal named the internal op ref ("in ref 'rK[a:b]'"), which the model's code could not use. |
 | A failing block names the line of the block just sent that led to the error, also when a function from an earlier block raised; an empty window of a window (`r1[0:2][5:8]`) is refused when written, naming that window and its parent's row count. | The earlier block's line was named; a nested empty window was refused only at first use, naming the composed span and the whole set's count. |
+| The closed-loop OSR reads the fused observation centres beside the GNSS track on every run; track coverage under 95% governs only an unknown miss and SPL; SPL holds a track's last fix for its gap, so a report a second after the last whole-second fix owes no way back. | The observation centres were read only beside a track holding under 95% of the run (E6 OSR 59/69); the position read nothing past the last fix and charged a return leg. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -147,13 +148,13 @@ mask), and 69 are scored.
 | Measure | Value | Definition |
 |---|---|---|
 | SR | 40/69 | The commit point lies inside the target's hand-drawn mask (one run with none: its tasking footprint). |
-| OSR | 59/69 | The aircraft's path (the GNSS track; beside a track holding under 95% of the run, also the centres of the observations the run fused) came within one camera footprint width of the target centroid. |
+| OSR | 60/69 | The aircraft's path (its GNSS track and the centres of the observations the run fused) came within one camera footprint width of the target centroid. |
 
 | Intel quality (the run's first tasking) | Scored runs | SR | OSR |
 |---|---|---|---|
 | Good | 27 | 22/27 | 26/27 |
 | Medium | 32 | 13/32 | 25/32 |
-| Poor | 10 | 5/10 | 8/10 |
+| Poor | 10 | 5/10 | 9/10 |
 
 ```sh
 python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON>
