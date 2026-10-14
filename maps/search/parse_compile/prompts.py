@@ -82,7 +82,7 @@ CODE_DOC = (
     " ORDERS globally -- it is a fact about the map, not about any place,"
     " so it takes no anchor. Relating to a place is the other question and"
     " it is a CUT: east_of= keeps what lies that way of it, facing= keeps"
-    " what faces it that way. Eight words here too.\n"
+    " what faces it that way.\n"
     "  FILTERS COMPOSE, ORDER DOES NOT. A cue names several things at"
     " once; each one is its own cut, and the last thing left is what you"
     " sort by. A cut you did not write is a thing you have not measured,"
