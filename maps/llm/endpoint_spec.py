@@ -78,7 +78,7 @@ def parse_override(raw: str) -> EndpointOverride:
     if not sep or not model_id.strip() or not window.strip().isdigit():
         raise EndpointDiscoveryError(
             f"SEARCH_ENDPOINT_SPEC_OVERRIDE={raw!r} is malformed; expected "
-            f"'<model_id>:<max_model_len>' (e.g. 'qwen36-35b-a3b:131072')"
+            f"'<model_id>:<max_model_len>'"
         )
     return EndpointOverride(
         model_id=model_id.strip(), max_model_len=int(window.strip())
@@ -110,11 +110,6 @@ def _output_reserve_for(max_model_len: int) -> int:
     return min(_OUTPUT_RESERVE_CAP, max_model_len // 4)
 
 
-# ---------------------------------------------------------------------------
-# Probing
-# ---------------------------------------------------------------------------
-
-
 def _get_json(url: str, *, bearer: str | None = None) -> object:
     """GET ``url`` (``bearer`` as an Authorization header) and parse the JSON
     body; raise EndpointUnreachable when nothing answers (no connection, a
@@ -130,7 +125,7 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
             with urllib.request.urlopen(req, timeout=_PROBE_TIMEOUT_S) as resp:
                 body = resp.read()
             break
-        except (urllib.error.URLError, OSError, ValueError, TimeoutError, http.client.HTTPException) as exc:
+        except (OSError, ValueError, http.client.HTTPException) as exc:
             if isinstance(exc, ValueError) or (isinstance(exc, urllib.error.HTTPError) and exc.code < 500
                                                and exc.code not in TRANSIENT_CLIENT_STATUS):
                 raise EndpointDiscoveryError(f"endpoint refused: GET {url} failed ({exc})") from exc
@@ -274,11 +269,6 @@ def _require_tokenizer(model_id: str) -> str:
             f"repo or directory that carries the model's chat template."
         ) from exc
     return tokenizer_name
-
-
-# ---------------------------------------------------------------------------
-# discover / install / read-back
-# ---------------------------------------------------------------------------
 
 
 def discover(
