@@ -925,17 +925,17 @@ class _Mission:
     def _boost(self, where: str, concepts: list) -> dict:
         """look_for(..., at=) -- the targeted boost."""
         res = self.boost_queue(list(concepts), [where]) or {}
-        if "error" not in res and res.get("queued"):
+        if "error" not in res:
             # The placed form also arms the class it names.
             _adds = [str(c) for c in concepts if c]
             if _adds:
                 _w = self._watch_apply(_adds)
                 res["watching"] = _w.get("error") or _w.get("now")
-            res["note"] = ("boost queued -- extra segmentation at the "
-                           "asked spot fires on your next flight; the "
-                           "class is also on the standing watchlist for "
-                           "every later flight")
-        if "error" not in res:
+            if res.get("queued"):
+                res["note"] = ("boost queued -- extra segmentation at the "
+                               "asked spot fires on your next flight; the "
+                               "class is also on the standing watchlist for "
+                               "every later flight")
             # Any accepted boost refreshes the surface and bumps its version,
             # as a flight does (a retro boost has ingested detections).
             self._world_moved()

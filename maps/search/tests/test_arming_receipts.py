@@ -62,6 +62,15 @@ def test_the_placed_form_also_arms_the_standing_watchlist():
     assert "standing watchlist for every later flight" in ack, ack
 
 
+def test_a_retro_boost_at_a_flown_stop_also_arms_the_standing_watchlist():
+    _, fr, _, declared = drive(
+        [[run('look_for("pool", at="stop_000")\n')], "done"],
+        boost_queue=lambda concepts, where: {"retro": [{"n_dets": 0}]})
+    assert "pool" in declared[-1], declared
+    ack = json.dumps(tool_results(fr)[0])
+    assert "pool (target)" in ack and "boost queued" not in ack, ack
+
+
 def test_the_declared_union_is_canonical_and_keeps_first_seen_order():
     pushed = []
     search_loop(sam_setter=pushed.append).declare_mission_concepts(
