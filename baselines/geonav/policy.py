@@ -204,10 +204,9 @@ def _default_plan(instruction: str) -> dict:
 def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
     """The episode. ``released`` selects the as-shipped arm: the released
     token caps under a thinking dial the seam sets to ``none``."""
-    # substitution: the released caps assumed a backbone with no reasoning
-    # span. Thinking tokens count against max_tokens here, so an 800-token call
-    # returns an empty object (measured on a recorded run). The headline arm
-    # takes the seam's free-call cap (None: the served output reserve).
+    # substitution: thinking tokens count against max_tokens here, so the
+    # released caps leave a reasoning call no answer; the headline arm takes
+    # the seam's free-call cap (None: the served output reserve).
     call_cap = CALL_MAX_TOKENS if released else None
     understand_cap = UNDERSTAND_MAX_TOKENS if released else None
     ep = h.episode
