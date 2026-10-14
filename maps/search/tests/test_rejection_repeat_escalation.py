@@ -97,3 +97,10 @@ def test_an_escalation_after_an_unpunctuated_error_starts_a_new_sentence():
     served = drive_blocks(['print(r9)\n'] * 2)
     assert served[0]["error"].endswith("is not defined"), served[0]
     assert "is not defined. This error class has now occurred 2x." in served[1]["error"], served[1]
+
+
+def test_a_line_prefixed_error_counts_with_its_unprefixed_class():
+    # A nested empty window carries its line; the plain one does not.
+    served = drive_blocks(['r1 = find("car")\nr1', "r1[30:40]\n", "r1[0:5][3:1]\n"])
+    assert "occurred" not in served[1]["error"], served[1]
+    assert "This error class has now occurred 2x." in served[2]["error"], served[2]

@@ -586,8 +586,9 @@ class _Mission:
         return "".join(parts)
 
     def _err_class_sig(self, err: str) -> str:
-        # Same-class signature: quoted tokens and numbers stripped.
-        s = re.sub(r"'[^']*'", "'_'", str(err))
+        # Same-class signature: line prefix, quoted tokens and numbers stripped.
+        s = re.sub(r"^line \d+: ", "", str(err))
+        s = re.sub(r"'[^']*'", "'_'", s)
         s = re.sub(r"\d+", "_", s)
         return s[:100]
 
