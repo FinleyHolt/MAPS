@@ -124,15 +124,13 @@ def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] |
 
 def flight_config(config: str):
     """The config a flight flies, refused (before any sortie is written) when
-    it withholds a part of the flown engine or names no sensor."""
+    it withholds a part of the flown engine; the loader refuses a missing or
+    unresolved sensor."""
     from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
-    from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
 
     cfg = load_config(str(config))
     assert_flight_config(cfg)
-    if resolve_sensor(cfg.sensor) is None:
-        raise RuntimeError(f"cfg.sensor did not resolve a SensorSpec: {cfg.sensor!r}")
     return cfg
 
 
