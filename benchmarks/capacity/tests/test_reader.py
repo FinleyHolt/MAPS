@@ -75,3 +75,13 @@ def test_two_sessions_on_one_stream_in_one_arm_are_refused(tmp_path) -> None:
     for alone, assist in (([one, two], [assisted]), ([assisted], [one, two])):
         with pytest.raises(SystemExit, match="a1.*a2"):
             reader.paired(alone, assist)
+
+
+def test_a_pairing_that_pairs_nothing_prints_strict_json_and_text(tmp_path, capsys) -> None:
+    b = _session(tmp_path / "b", 4, 1, [(0, 100, 1)])
+    other = _session(tmp_path / "a", 4, 2, [(0, 100, 1)])
+    assert reader.main(["--assisted", str(b), "--alone", str(other), "--json"]) == 0
+    out = json.loads(capsys.readouterr().out, parse_constant=lambda c: pytest.fail(f"{c} in the JSON"))
+    assert out["paired"]["sessions"] == 0 and out["paired"]["finds_per_h_delta_ci95"] is None
+    assert reader.main(["--assisted", str(b), "--alone", str(other)]) == 0
+    assert "paired over 0 sessions" in capsys.readouterr().out

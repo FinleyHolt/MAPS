@@ -29,6 +29,7 @@ from benchmarks.citynav.analysis.rows import add_allow_partial, load_attempts
 #: arm's accuracy at its lightest load.
 SATURATED_SHARE = 0.9
 
+
 def session(root: Path, *, allow_partial: bool = False) -> dict[str, Any]:
     """One session's capacity row, with its per-report ``reports``."""
     stream = json.loads((root / "arrivals.json").read_text())
@@ -131,8 +132,8 @@ def paired(alone: list[dict[str, Any]], assisted: list[dict[str, Any]]) -> dict[
              for a, b in pairs for ra, rb in zip(a["reports"], b["reports"])]
     return {"sessions": len(pairs),
             "finds_per_h_delta": round(statistics.fmean(diffs), 2) if diffs else None,
-            "finds_per_h_delta_ci95": [round(lo, 2), round(hi, 2)],
-            "reports": ab_stats(found, label="alone -> assisted")}
+            "finds_per_h_delta_ci95": [round(lo, 2), round(hi, 2)] if diffs else None,
+            "reports": ab_stats(found, label="alone -> assisted") if found else None}
 
 
 def _table(arm: str, sessions: list[dict[str, Any]], c: dict[str, Any]) -> str:
@@ -164,16 +165,17 @@ def main(argv: list[str] | None = None) -> int:
     if "alone" in arms:
         out["paired"] = paired(arms["alone"], arms["assisted"])
     if args.json:
-        print(json.dumps(out, indent=1))
+        print(json.dumps(out, indent=1, allow_nan=False))
         return 0
     for name, s in arms.items():
         print(_table(name, s, out[name]["curve"]))
     if "paired" in out:
         pr = out["paired"]
         st = pr["reports"]
-        print(f"paired over {pr['sessions']} sessions: assisted - alone = {pr['finds_per_h_delta']} finds/h "
-              f"95%CI{pr['finds_per_h_delta_ci95']}; per report {st['SR_a']:.3f} -> {st['SR_b']:.3f} "
-              f"(McNemar p={st['mcnemar']['p_value']}, n={st['n']})")
+        print(f"paired over {pr['sessions']} sessions" + (
+            f": assisted - alone = {pr['finds_per_h_delta']} finds/h 95%CI{pr['finds_per_h_delta_ci95']}; "
+            f"per report {st['SR_a']:.3f} -> {st['SR_b']:.3f} (McNemar p={st['mcnemar']['p_value']}, n={st['n']})"
+            if st else ""))
     return 0
 
 
