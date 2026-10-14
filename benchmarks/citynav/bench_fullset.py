@@ -615,6 +615,8 @@ class Driver:
         except _rm.ManifestIdentityError as exc:
             self.log(f"FATAL: {exc}")
             return 2
+        # A root with a manifest is a run root, flown or not: its ledger exists.
+        self.episodes_file.touch()
         self._absorb_ledger()
         if self.arrivals_path is not None:
             shutil.copyfile(self.arrivals_path, self.out_root / "arrivals.json")

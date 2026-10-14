@@ -502,3 +502,17 @@ def test_a_baseline_arm_whose_model_has_no_dial_off_is_refused_at_start(tmp_path
     assert bf.main(["--out-root", str(tmp_path / "r")]) == 2
     assert not (tmp_path / "r" / episodes.EPISODES_JSONL).exists()
     assert "gemma4-26b-a4b-nvfp4" in capsys.readouterr().err
+
+
+def test_a_session_with_no_reports_reads_as_offered_nothing(driver, tmp_path, monkeypatch, no_flight) -> None:
+    from benchmarks.capacity import reader
+
+    stream = tmp_path / "stream.json"
+    stream.write_text(json.dumps({"load_per_h": 0.5, "hours": 1.0, "seed": 3, "reports": []}))
+    d = driver(tmp_path / "s")
+    d.out_root.mkdir()
+    d.arrivals_path = stream
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    assert d.run() == 0
+    s = reader.session(d.out_root)
+    assert (s["offered"], s["finds_per_h"]) == (0, 0.0)
