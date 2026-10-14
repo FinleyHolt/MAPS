@@ -31,5 +31,6 @@ A session flies into a fresh `--out-root`: its clock cannot resume.
 
 A report is found at `claimed_s + elapsed_s`. It counts toward finds per hour
 when its SR is 1 and it is found inside the session's `hours`. Sessions pair
-across arms by `(load_per_h, seed, hours)`, and the reader refuses a pair whose
+across arms by `(load_per_h, seed, hours)`, one session per arm per stream;
+the reader refuses a second session on a stream in one arm and a pair whose
 reports differ.

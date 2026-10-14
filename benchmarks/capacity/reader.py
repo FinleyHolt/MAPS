@@ -97,18 +97,29 @@ def curve(sessions: list[dict[str, Any]]) -> dict[str, Any]:
     return {"points": points, "accuracy_light": None if p is None else round(p, 3),
             "capacity_finds_per_h": max(pt["finds_per_h"] for pt in points), "saturation_load_per_h": saturation}
 
+
 def paired(alone: list[dict[str, Any]], assisted: list[dict[str, Any]]) -> dict[str, Any]:
     """Alone against assisted over the sessions that flew the same stream,
-    paired by ``(load_per_h, seed, hours)``: the per-session difference in
-    finds per hour (assisted - alone) with its bootstrap interval, and the
-    per-report in-window correct finds through ``ab_stats`` (a = alone)."""
+    paired by ``(load_per_h, seed, hours)``, one session per arm per stream:
+    the per-session difference in finds per hour (assisted - alone) with its
+    bootstrap interval, and the per-report in-window correct finds through
+    ``ab_stats`` (a = alone)."""
     def key(s):
         return (s["load_per_h"], s["seed"], s["hours"])
 
-    by_key = {key(s): s for s in alone}
+    def by_key(arm):
+        out: dict = {}
+        for s in arm:
+            if key(s) in out:
+                raise SystemExit(f"{out[key(s)]['root']} and {s['root']} both fly stream {key(s)} in one arm")
+            out[key(s)] = s
+        return out
+
+    alone_by = by_key(alone)
+    by_key(assisted)
     pairs = []
     for b in assisted:
-        a = by_key.get(key(b))
+        a = alone_by.get(key(b))
         if a is None:
             continue
         if [r["episode_id"] for r in a["reports"]] != [r["episode_id"] for r in b["reports"]]:

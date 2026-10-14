@@ -66,3 +66,12 @@ def test_alone_and_assisted_pair_on_the_same_stream(tmp_path) -> None:
     stray = reader.session(_session(tmp_path / "d", 4, 1, [(0, 100, 1)]))
     with pytest.raises(SystemExit, match="different reports"):
         reader.paired([alone], [stray])
+
+
+def test_two_sessions_on_one_stream_in_one_arm_are_refused(tmp_path) -> None:
+    one = reader.session(_session(tmp_path / "a1", 4, 1, [(0, 100, 0)]))
+    two = reader.session(_session(tmp_path / "a2", 4, 1, [(0, 100, 1)]))
+    assisted = reader.session(_session(tmp_path / "b", 4, 1, [(0, 100, 1)]))
+    for alone, assist in (([one, two], [assisted]), ([assisted], [one, two])):
+        with pytest.raises(SystemExit, match="a1.*a2"):
+            reader.paired(alone, assist)
