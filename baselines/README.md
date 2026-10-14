@@ -75,7 +75,9 @@ python -m benchmarks.citynav.analysis.arm_table output/e1/<model> output/baselin
 `ab_report` reads a baseline root as an arm of the MAPS root: the two
 configs differ only in `policy`, which its config check sets aside as it sets
 aside `withhold`. It still refuses a pair across splits, tile bakes, code
-commits, served models or reasoning efforts.
+commits, served models or reasoning efforts. A `geonav_released` root's rows
+and manifest stamp `none`, the effort its requests carry, so its pair against
+a MAPS root runs only with `--allow-provenance-mismatch`.
 
 ## Cal City
 

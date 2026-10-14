@@ -15,7 +15,7 @@ from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK, write_episode_j
 from benchmarks.citynav.live_recorder import LiveRecorder
 from benchmarks.citynav.run_benchmark.config import RunConfig
 from benchmarks.citynav.run_benchmark.episode_runner import run_episode
-from benchmarks.citynav.run_manifest import arm_env_stamp
+from benchmarks.citynav.run_manifest import arm_stamp
 from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm.http import TRANSIENT_CLIENT_STATUS
 from maps.perception.sam.detect_client import SamServerOutage
@@ -118,8 +118,8 @@ def _dispatch_one(
     except Exception:
         _eid = f"row{orig_idx}"
 
-    # Every row's provenance carries the arm identity (the SEARCH_* flags of the shell).
-    _prov = _cached_run_provenance(arm_env_stamp(), config_path=cfg.source_path, split=split)
+    # Every row's provenance carries the arm identity, as the manifest stamps it.
+    _prov = _cached_run_provenance(arm_stamp(cfg.policy), config_path=cfg.source_path, split=split)
 
     def _stamp(rec: dict) -> dict:
         return {**rec, "provenance": _prov, "elapsed_s": round(time.monotonic() - t0, 1)}

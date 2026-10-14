@@ -23,7 +23,7 @@ from benchmarks.citynav.episodes import EPISODES_JSONL, atomic_write_json
 SCHEMA = "maps.run_manifest/v1"
 MANIFEST_NAME = "run_manifest.json"
 
-# The experiment-arm flags every row carries (``arm_env_stamp``). Set-only,
+# The experiment-arm flags every row carries (``arm_stamp``). Set-only,
 # except the tile bake, which is resolved.
 ARM_ENV_FLAGS = (
     "SEARCH_CITYNAV_TILES",
@@ -93,6 +93,19 @@ def arm_env_stamp() -> dict:
 _EFFORT = "SEARCH_SAMPLING_REASONING_EFFORT"
 
 
+def arm_stamp(policy: str | None) -> dict:
+    """The arm flags as the requests carry them: :func:`arm_env_stamp`, with a
+    baseline ``policy``'s fixed dial (``baselines.seam.REASONING_EFFORT``) in
+    place of the environment's effort. The manifest and every row stamp this."""
+    stamp = arm_env_stamp()
+    if policy:
+        # By name: benchmarks carries no static import of baselines.
+        fixed = importlib.import_module("baselines.seam").REASONING_EFFORT.get(policy)
+        if fixed is not None:
+            stamp[_EFFORT] = fixed
+    return stamp
+
+
 def settle_effort() -> None:
     """Write the arm's reasoning effort back to ``os.environ`` as the
     requests carry it (stripped; blank is unset). Endpoint discovery has
@@ -153,23 +166,17 @@ def build_manifest(
 ) -> dict:
     """The resolved record. ``mission`` is the flight mission's per-mission
     stamp, recorded whole; a ``reasoning_effort`` it names replaces the arm's
-    in ``search_env_flags``, since the mission's requests carried it, as does
-    the fixed dial of a config's baseline ``policy`` (``baselines.seam.REASONING_EFFORT``).
-    ``arrivals`` is a capacity session's stream sha256: the stream, not a
-    seed, selects its episodes."""
-    arm = arm_env_stamp()
-    if mission is not None and mission.get("reasoning_effort") is not None:
-        arm["SEARCH_SAMPLING_REASONING_EFFORT"] = str(mission["reasoning_effort"])
+    in ``search_env_flags`` (:func:`arm_stamp`), since the mission's requests
+    carried it. ``arrivals`` is a capacity session's stream sha256: the
+    stream, not a seed, selects its episodes."""
     import yaml  # noqa: PLC0415
 
     from benchmarks.citynav.run_benchmark.config import resolve_config  # noqa: PLC0415
 
     resolved = resolve_config(config_path)[0]
-    if resolved.get("policy"):
-        # By name: benchmarks carries no static import of baselines.
-        fixed = importlib.import_module("baselines.seam").REASONING_EFFORT.get(resolved["policy"])
-        if fixed is not None:
-            arm["SEARCH_SAMPLING_REASONING_EFFORT"] = fixed
+    arm = arm_stamp(resolved.get("policy"))
+    if mission is not None and mission.get("reasoning_effort") is not None:
+        arm[_EFFORT] = str(mission["reasoning_effort"])
     endpoints = _endpoint_section()
     prov = repo_provenance(
         config_path=str(config_path),
