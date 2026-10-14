@@ -333,10 +333,11 @@ def _window_centers(
     H, W = grid_shape
     xs = [p[0] for p in points]
     ys = [p[1] for p in points]
-    c0 = max(0, int(math.floor((min(xs) - pad_m - bounds.x_min) / cell_size_m)))
-    c1 = min(W - 1, int(math.floor((max(xs) + pad_m - bounds.x_min) / cell_size_m)))
-    r0 = max(0, int(math.floor((min(ys) - pad_m - bounds.y_min) / cell_size_m)))
-    r1 = min(H - 1, int(math.floor((max(ys) + pad_m - bounds.y_min) / cell_size_m)))
+    def cell(v, lo):
+        return int(math.floor((v - lo) / cell_size_m))
+
+    c0, c1 = max(0, cell(min(xs) - pad_m, bounds.x_min)), min(W - 1, cell(max(xs) + pad_m, bounds.x_min))
+    r0, r1 = max(0, cell(min(ys) - pad_m, bounds.y_min)), min(H - 1, cell(max(ys) + pad_m, bounds.y_min))
     if c1 < c0 or r1 < r0:
         return None
     cx = bounds.x_min + (np.arange(c0, c1 + 1) + 0.5) * cell_size_m

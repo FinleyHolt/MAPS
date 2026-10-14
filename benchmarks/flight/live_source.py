@@ -480,7 +480,7 @@ class LiveSource:
         over the frames stamped after ``after`` (vehicle seconds) when given:
         ``fraction``, and ``best`` per point ``(off-nadir degrees, seq)`` or
         None. None with ``last_refusal`` when the ring cannot be asked."""
-        rows = self._ring_rows(None)
+        rows = self._ring_rows()
         if rows is None:
             return None
         if after is not None:
@@ -490,11 +490,11 @@ class LiveSource:
     def coverage_of_each(self, areas: list[list[tuple[float, float]]]) -> list[dict[str, Any] | None] | None:
         """:meth:`coverage` of several areas off ONE read of the ring's index,
         in the areas' order. None when the ring cannot be asked."""
-        rows = self._ring_rows(None)
+        rows = self._ring_rows()
         return None if rows is None else [self._held_by(rows, area) for area in areas]
 
-    def _ring_rows(self, since: int | None) -> list[dict[str, Any]] | None:
-        rows = self.vehicle.index(since=since)
+    def _ring_rows(self) -> list[dict[str, Any]] | None:
+        rows = self.vehicle.index()
         if rows is None:
             self.last_refusal = f"the recorder's ring cannot be asked: {self.vehicle.last_error or 'no index'}"
         return rows

@@ -327,9 +327,9 @@ def return_leg_m(track, t: float, q, r: float) -> float:
     best = first_leg_m(xy, heading, q, r)
     eps = math.radians(ARC_EPS_DEG) * r
     for h in range(0, 360):
-        kind, (length, a0, _m, a1) = solve(xy, heading, q, float(h), r)
-        s0, _sm, s1 = SENSES[kind]
-        turns = [s for s, d in ((s0, a0), (_sm, _m), (s1, a1)) if s != 0 and d > eps]
+        kind, (length, d0, dm, d1) = solve(xy, heading, q, float(h), r)
+        s0, sm, s1 = SENSES[kind]
+        turns = [s for s, d in ((s0, d0), (sm, dm), (s1, d1)) if s != 0 and d > eps]
         if len(turns) == 2 and turns[0] != turns[1] and (best is None or length < best):
             best = length
     if best is None:

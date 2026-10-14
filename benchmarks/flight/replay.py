@@ -172,11 +172,10 @@ def open_recording(run_dir: Path) -> Recording:
     detections: dict[int, list[dict]] = {}
     for d in read_records(run_dir / DETECTIONS_JSONL):
         detections.setdefault(int(d.get("step", -1)), []).append(d)
-    window = DEFAULT_WINDOW
+    run_log = run_dir / "run.log"
     logged = re.search(r"endpoint spec installed: model_id=\S+ max_model_len=(\d+)",
-                       (run_dir / "run.log").read_text(errors="replace") if (run_dir / "run.log").is_file() else "")
-    if logged:
-        window = int(logged.group(1))
+                       run_log.read_text(errors="replace") if run_log.is_file() else "")
+    window = int(logged.group(1)) if logged else DEFAULT_WINDOW
     return Recording(sortie=sortie, run_dir=run_dir, row=row, params=params, requests=requests,
                      responses=responses, conversation=read_records(run_dir / CONVERSATION_JSONL),
                      frames=read_records(run_dir / FRAMES_JSONL), window=window, detections=detections)

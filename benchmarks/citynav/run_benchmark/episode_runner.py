@@ -144,7 +144,7 @@ def _success_shape(episode, objects_by_map: dict):
     if not episode.target_object_ids:
         return episode.target_mask
     tids = set(episode.target_object_ids)
-    return next((o.contour for o in objects_by_map.get(episode.map_name, []) or [] if o.id in tids), None)
+    return next((o.contour for o in objects_by_map.get(episode.map_name) or [] if o.id in tids), None)
 
 
 def score_episode(cfg, episode, objects_by_map: dict, final_xy, trajectory, *,
