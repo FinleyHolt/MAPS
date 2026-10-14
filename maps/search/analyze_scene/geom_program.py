@@ -1113,11 +1113,7 @@ def _window(cur, win, token):
     lo, hi = (int(b) for b in win[:-1].split(":"))
     rows = cur[lo:hi]
     if isinstance(cur, Result):
-        w = Result(rows, cur.kind)
-        for attr in ("ordered", "op_cols"):
-            if attr in vars(cur):
-                setattr(w, attr, getattr(cur, attr))
-        rows = w
+        rows = Result(rows, cur.kind, ordered=cur.ordered, op_cols=cur.op_cols)
     if not rows and cur:
         raise ProgramError(
             f"window {part} in ref {_quote(token)} selected 0 of "
