@@ -128,7 +128,7 @@ def run_episode(h: BaselineHarness) -> BaselineResult:
         "waypoints": plan.waypoints, "fov_m": plan.fov_m, "grid_step_m": plan.grid_step_m,
         "grid_points": plan.grid_points, "contours": plan.contours,
         "cells_total": plan.cells_total, "cells_covered": plan.cells_covered,
-        "cell_m": plan.cell_m, "stats": plan.stats, "start_xy": list(h.episode.start_xy),
+        "start_xy": list(h.episode.start_xy),
     })
 
     stops: list[tuple[tuple[float, float], float]] = []

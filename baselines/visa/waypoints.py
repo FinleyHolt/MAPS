@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import itertools
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import shapely
@@ -35,8 +35,6 @@ class CoveragePlan:
     contours: list[list[tuple[float, float]]]
     cells_total: int
     cells_covered: int
-    cell_m: float
-    stats: dict = field(default_factory=dict)
 
 
 def merged_region(landmarks: list[Landmark], bounds):
@@ -154,6 +152,4 @@ def plan_coverage(landmarks: list[Landmark], bounds, start_xy: tuple[float, floa
         contours=[list(lm.contour) for lm in landmarks],
         cells_total=int(gx.size),
         cells_covered=int(covered.sum()),
-        cell_m=cell,
-        stats={"region_area_m2": float(region.area), "candidates": len(grid)},
     )
