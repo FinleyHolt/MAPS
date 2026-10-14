@@ -78,6 +78,7 @@ def test_rows_pair_against_a_maps_run_on_shared_ids(tmp_path):
     want = sum(released[e]["SR"] for e in sets["evaluated"][:5]) / 5
     assert 0 < want < 1  # vacuity floor: the shared set holds a hit and a miss
     assert (st["n"], st["SR_a"], st["SR_b"]) == (5, want, 1.0)
+    assert (st["only_a"], st["only_b"]) == (len(sets["evaluated"]) - 5, 0)
 
 
 def test_capture_errors_are_dropped_with_their_reason(tmp_path):

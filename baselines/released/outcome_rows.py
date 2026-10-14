@@ -217,9 +217,10 @@ def write_run(out: Path, rows: list[dict], sets: dict) -> None:
 
 def pair(released: Path, other: Path) -> dict:
     """``ab_report.ab_stats`` over the episodes both runs scored, the released
-    run as A. ``ab_report``'s CLI refuses the pair because these rows record
-    no tile bake (a released checkpoint reads its own rasters), so the two
-    runs are paired here on episode id and success criterion alone."""
+    run as A, with ``only_a`` and ``only_b``, the episodes one run scored and
+    the other did not. ``ab_report``'s CLI refuses the pair because these rows
+    record no tile bake (a released checkpoint reads its own rasters), so the
+    two runs are paired here on episode id and success criterion alone."""
     from benchmarks.citynav.analysis import ab_report, run_report
 
     a, b = run_report.load_run(released), run_report.load_run(other)
@@ -230,7 +231,8 @@ def pair(released: Path, other: Path) -> dict:
     if len(crit) != 1:
         raise SystemExit(f"the two runs are scored on different criteria {sorted(map(str, crit))}")
     pairs = [(int(bool(a[e].get("SR"))), int(bool(b[e].get("SR")))) for e in shared]
-    return ab_report.ab_stats(pairs, label=f"{released.name} vs {other.name}")
+    return {**ab_report.ab_stats(pairs, label=f"{released.name} vs {other.name}"),
+            "only_a": len(set(a) - set(b)), "only_b": len(set(b) - set(a))}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -259,7 +261,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.bench == "pair":
         from benchmarks.citynav.analysis.ab_report import render
 
-        print(render(pair(args.released, args.other)))
+        st = pair(args.released, args.other)
+        print(render(st))
+        print(f"shared={st['n']}  only_a={st['only_a']}  only_b={st['only_b']}")
         return 0
 
     trajs, errors = read_natives(args.native)
