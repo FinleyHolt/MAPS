@@ -543,6 +543,8 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         reasoning_effort: str | None = None) -> tuple[ReplayMission, Path]:
     """Fly ``rec`` again under ``out/<sortie>/``; ``live`` is a live source (the
     frame tier), else the bank answers. Returns the mission, ended, and its folder."""
+    if not rec.row.get("start_xy"):
+        raise ValueError(f"{rec.run_id} records no start: the run never reached the reasoner")
     _arm_env(rec, forced=forced)
     activate_calcity()
     flight_config(config)
@@ -643,11 +645,11 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--bank week chooses the bank tier's observations; --forced and --frames answer from the recording")
     if args.forced and args.reasoning_effort is not None:
         ap.error("--reasoning-effort is your reasoner's; --forced sends the recorded one")
+    if args.frames is None and (args.raster or args.boresight or args.nav is not None):
+        ap.error("--raster, --boresight and --nav belong to the frame tier: give --frames")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
 
     rec = open_recording(args.run)
-    if args.frames is None and (args.raster or args.boresight or args.nav is not None):
-        ap.error("--raster, --boresight and --nav belong to the frame tier: give --frames")
     out = args.out / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     live = None
     bank: list[Held] | None = None

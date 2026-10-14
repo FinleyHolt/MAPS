@@ -421,3 +421,9 @@ def test_a_week_bank_reads_past_a_torn_ledger_line_in_another_sortie(tmp_path, m
     R.main([str(runs[0]), "--bank", "week", "--out", str(tmp_path / "out")])
     assert [h.path.parent.parent for h in banks[0]] == runs
 
+
+def test_a_replay_of_a_run_that_never_reached_the_reasoner_is_refused_by_name(tmp_path):
+    rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run", row={"episode_id": "calcity::t"},
+                      params={}, requests=[], responses=[], conversation=[], frames=[])
+    with pytest.raises(ValueError, match="never reached the reasoner"):
+        R.fly(rec, tmp_path, bank=[])
