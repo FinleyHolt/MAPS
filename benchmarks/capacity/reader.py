@@ -144,9 +144,10 @@ def paired(alone: list[dict[str, Any]], assisted: list[dict[str, Any]]) -> dict[
 
 
 def _table(arm: str, sessions: list[dict[str, Any]], c: dict[str, Any]) -> str:
-    lines = [f"{arm}: capacity {c['capacity_finds_per_h']} finds/h, saturates at "
-             f"{c['saturation_load_per_h'] or 'no load flown'}"
-             f"{'/h' if c['saturation_load_per_h'] else ''} (light-load accuracy {c['accuracy_light']})",
+    sat = c["saturation_load_per_h"]
+    lines = [f"{arm}: capacity {c['capacity_finds_per_h']} finds/h, "
+             f"{f'saturates at {sat}/h' if sat else 'no flown load saturates it'} "
+             f"(light-load accuracy {c['accuracy_light']})",
              f"  {'load/h':>7} {'seed':>5} {'offered':>7} {'finds/h':>8} {'accuracy':>9} {'ttf_med_s':>10} "
              f"{'backlog':>7} {'infra':>5}"]
     for s in sorted(sessions, key=lambda s: (s["load_per_h"], s["seed"])):
