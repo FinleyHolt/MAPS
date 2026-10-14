@@ -291,3 +291,16 @@ def test_the_vpg_record_counts_the_marks_drawn(tmp_path):
     run_episode(Maskless(d, ["stop"]))
     vpg = json.loads((d / "step_01_vpg.json").read_text())
     assert (vpg["n_detections"], vpg["n_marked"], len(vpg["marks"])) == (2, 1, 1)
+
+
+def test_figures_root_finds_attempts_under_a_bench_fullset_worker_dir(tmp_path, monkeypatch):
+    """bench_fullset lands each attempt under ``<root>/w<k>/<attempt>/``, so
+    ``--root`` finds a ``visa/`` folder at any depth."""
+    from baselines.visa import figures
+
+    attempt = tmp_path / "w0" / "maps_calcity__6_6"
+    (attempt / "visa").mkdir(parents=True)
+    seen: list = []
+    monkeypatch.setattr(figures, "render", lambda wd, out: seen.append(wd) or [])
+    figures.main(["--root", str(tmp_path)])
+    assert seen == [attempt]

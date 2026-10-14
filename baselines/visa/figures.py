@@ -132,7 +132,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if not a.workdir and not a.root:
         ap.error("give a workdir or --root")
-    roots = [Path(a.workdir)] if a.workdir else sorted(p.parent for p in Path(a.root).glob("*/visa"))
+    roots = [Path(a.workdir)] if a.workdir else sorted(p.parent for p in Path(a.root).rglob("visa") if p.is_dir())
     out = Path(a.out) if a.out else (Path(a.root) if a.root else Path(a.workdir)) / "figures"
     n = 0
     for wd in roots:
