@@ -166,19 +166,12 @@ class SearchLoop:
 
     def node_coverage_stops(self, target_fid: str, spacing_m: float, *,
                             max_stops: int, minor_spacing_m: float) -> list | None:
-        """Points on this fid's cells, in world metres, rounded: the stops an
-        ``explore`` flies, in shape order; None off the graph or without
-        cells. The stops come off the cells, never the box (a road fills
-        half its box at the median) or the unclipped OSM ring.
-
-        ``spacing_m`` is the length one stop covers and ``minor_spacing_m``
-        the footprint's short side, both from the run's observation extent.
-        A shape wider than ``minor_spacing_m`` on both axes tiles serpentine:
-        rows along the dominant axis at that pitch, alternating direction so
-        the pass stays one line. Any other shape is walked along its dominant
-        axis, ends included, and one shorter than a stop is covered from its
-        middle cell. Over ``max_stops`` the stops thin even-stride, ends kept.
-        """
+        """This fid's ``explore`` stops: points on its cells in world metres,
+        rounded, in shape order; None off the graph or without cells. A shape
+        wider than ``minor_spacing_m`` (the footprint's short side) on both
+        axes tiles in serpentine rows at that pitch; any other walks its
+        dominant axis, one stop per ``spacing_m``, a short one from its middle
+        cell. Over ``max_stops`` the stops thin even-stride, ends kept."""
         with self._lock:
             points = self._cells_xy_locked(target_fid)
             if points is None:

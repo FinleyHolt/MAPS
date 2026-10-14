@@ -137,7 +137,7 @@ def _post_segment(json_body: dict) -> dict | None:
 # Colour is an attribute of a bare-noun concept ("car", not "white car"),
 # served as the nearest palette name and the median RGB. White, gray, black,
 # red and blue are the median SAM-mask interiors on the CityNav nadir orthos,
-# the rest ideal sRGB; silver has none (white cars would snap to it).
+# the rest ideal sRGB.
 _COLOR_PALETTE: dict[str, tuple[int, int, int]] = {
     "white": (175, 183, 191), "black": (77, 86, 98), "gray": (121, 132, 145),
     "red": (135, 78, 88), "blue": (75, 101, 136), "green": (45, 130, 70),
@@ -282,8 +282,7 @@ def _png_wire_bytes(canvas: np.ndarray) -> bytes:
     return buf.tobytes()
 
 
-#: How long one /segment attempt waits to connect: it outlasts a radio
-#: dropout (about twenty seconds).
+#: How long one /segment attempt waits to connect: past a radio dropout.
 SEGMENT_CONNECT_TIMEOUT_S = 45
 #: How long one /segment attempt waits for the answer: past the server's
 #: ``_INFLIGHT_WAIT_S`` (600 s) admission wait, so a queued request is not abandoned.
