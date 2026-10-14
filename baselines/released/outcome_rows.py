@@ -170,7 +170,6 @@ def calcity_rows(
     errors: list[Key],
     manifest: dict,
     shapes: dict[str, dict],
-    descriptions: dict[str, str],
     criterion: str,
     ident: dict,
 ) -> tuple[list[dict], dict]:
@@ -188,7 +187,7 @@ def calcity_rows(
             criterion=criterion, final_pos_xy=path[-1], target_xy=tuple(shape["target_xy"]),
             pos_trajectory=path, gt_polygon=shape.get("gt_polygon"),
         )
-        rows.append(_row(eid, key, path, descriptions.get(eid, ""), scores, ident))
+        rows.append(_row(eid, key, path, shape["description"], scores, ident))
         evaluated.append(eid)
     errored = {k[0] for k in errors}
     scored = set(evaluated)
@@ -277,17 +276,12 @@ def main(argv: list[str] | None = None) -> int:
         from baselines.released.calcity_export import calcity_shapes
 
         shapes = calcity_shapes()  # selects Cal City for the shared paths
-        from benchmarks.calcity.paths import split_path
         from benchmarks.citynav import paths as shared_paths
-        from benchmarks.citynav.adapter import parse_episode
 
-        split_rows = json.loads(split_path("calcity").read_text())
-        episodes = [parse_episode(r, i) for i, r in enumerate(split_rows)]
-        descriptions = {ep.episode_id: ep.description for ep in episodes}
         ident = stamp(args.method, args.checkpoint_id, "calcity", "calcity")
         rows, sets = calcity_rows(
             trajs, errors, json.loads((args.export / "manifest.json").read_text()),
-            shapes, descriptions, shared_paths.SUCCESS_CRITERION,
+            shapes, shared_paths.SUCCESS_CRITERION,
             ident,
         )
     write_run(args.out, rows, sets)

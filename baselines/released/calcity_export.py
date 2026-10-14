@@ -276,7 +276,7 @@ def export(
     """Write the export under ``out``; return the manifest.
 
     ``shapes`` is :func:`calcity_shapes`'s
-    ``{episode_id: {gt_polygon, target_xy}}``, so the window holds the
+    ``{episode_id: {gt_polygon, target_xy, description}}``, so the window holds the
     same shape the outcome is later scored against. ``ortho_path=None``
     writes everything but the rasters (a dry run).
     """
@@ -370,9 +370,10 @@ def _write_json(path: Path, payload) -> None:
 
 
 def calcity_shapes() -> dict[str, dict]:
-    """``{episode_id: {gt_polygon, target_xy}}`` over the Cal City split: the
-    shape the bench scores each row against (``episode_runner._success_shape``)
-    and its target point. Selects Cal City for this process first."""
+    """``{episode_id: {gt_polygon, target_xy, description}}`` over the Cal City
+    split: the shape the bench scores each row against
+    (``episode_runner._success_shape``), its target point and the episode's
+    instruction. Selects Cal City for this process first."""
     import benchmarks.calcity
 
     benchmarks.calcity.use()
@@ -388,6 +389,7 @@ def calcity_shapes() -> dict[str, dict]:
         out[episode.episode_id] = {
             "gt_polygon": [list(map(float, p)) for p in shape] if shape is not None else None,
             "target_xy": episode.target_xy,
+            "description": episode.description,
         }
     return out
 

@@ -110,14 +110,14 @@ def test_calcity_rows_score_on_the_shape(tmp_path):
         "blocks": {f"calcity_block_{i}": {"episode_id": f"calcity::0#{i}"} for i in range(3)},
         "excluded": {"calcity::0#3": "start_and_target_exceed_block"},
     }
-    shapes = {f"calcity::0#{i}": {"gt_polygon": square, "target_xy": (100.0, 0.0)}
+    shapes = {f"calcity::0#{i}": {"gt_polygon": square, "target_xy": (100.0, 0.0), "description": f"target {i}"}
               for i in range(3)}
     trajs = {
         ("calcity_block_0", 9_999_999, 0): [(0.0, 0.0), (100.0, 0.0)],   # inside the shape
         ("calcity_block_1", 9_999_999, 0): [(0.0, 0.0), (115.0, 0.0)],   # in the 20 m ring, off the shape
     }
     out_rows, sets = orows.calcity_rows(
-        trajs, [], manifest, shapes, {}, "shape",
+        trajs, [], manifest, shapes, "shape",
         orows.stamp("hett", "x", "calcity", "calcity"),
     )
     orows.write_run(tmp_path / "run", out_rows, sets)
@@ -126,3 +126,4 @@ def test_calcity_rows_score_on_the_shape(tmp_path):
     assert scored["calcity::0#0"]["SR"] == 1 and scored["calcity::0#1"]["SR"] == 0
     assert sets["dropped"] == {"calcity::0#2": "upstream_loader_filter"}
     assert sets["excluded_by_export"] == manifest["excluded"]
+    assert [r["description"] for r in out_rows] == ["target 0", "target 1"]
