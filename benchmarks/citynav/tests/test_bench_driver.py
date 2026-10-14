@@ -528,3 +528,15 @@ def test_a_session_s_preview_names_its_stream_not_a_seed(driver, tmp_path, monke
     d.arrivals_path = stream
     assert d.dry_run() == 0
     assert capsys.readouterr().out.startswith(f"arrivals: {stream}   split:")
+
+
+def test_a_selection_naming_episodes_off_the_split_is_refused_fatal(driver, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    d = driver()
+    d.arrivals_path = tmp_path / "stream.json"
+    d.arrivals_path.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "z"}]}))
+    with pytest.raises(SystemExit, match="^FATAL: --arrivals names 1 episodes"):
+        d._select_episodes()
+    d.arrivals_path, d.allowlist_path = None, tmp_path / "absent.txt"
+    with pytest.raises(SystemExit, match="^FATAL: --episode-allowlist read failed"):
+        d._select_episodes()

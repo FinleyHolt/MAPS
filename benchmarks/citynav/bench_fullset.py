@@ -517,17 +517,15 @@ class Driver:
             self._arrival = {r["episode_id"]: float(r["arrival_s"]) for r in reports}
             unknown = set(self._arrival) - set(_enumerate_split(self.split))
             if unknown:
-                raise RuntimeError(f"--arrivals names {len(unknown)} episodes not in the {self.split} "
-                                   f"split, e.g. {sorted(unknown)[0]}")
+                raise SystemExit(f"FATAL: --arrivals names {len(unknown)} episodes not in the {self.split} "
+                                 f"split, e.g. {sorted(unknown)[0]}")
             return sorted(self._arrival, key=self._arrival.get)
         episodes = _enumerate_split(self.split)
         if self.allowlist_path is not None:
             try:
                 lines = self.allowlist_path.read_text().splitlines()
             except OSError as exc:
-                raise RuntimeError(
-                    f"--episode-allowlist read failed: {self.allowlist_path}: {exc}"
-                ) from exc
+                raise SystemExit(f"FATAL: --episode-allowlist read failed: {self.allowlist_path}: {exc}") from exc
             allowed = {ln.strip() for ln in lines if ln.strip()}
             before = len(episodes)
             episodes = [e for e in episodes if e in allowed]
