@@ -406,3 +406,43 @@ def test_visa_falls_back_to_an_attribute_matched_mark_before_a_pending_one(monke
     res = policy.run_episode(h)
 
     assert (res.commit_label, res.commit_tier) == ("mark_1@step1", "visa:pending")
+
+
+def test_a_mistyped_or_misshapen_answer_does_not_fit_and_is_reshaped(monkeypatch):
+    """The schema check reads scalar types and array lengths: ViSA marks
+    named as strings, a one-number GeoNav ``selected_pos`` and a boolean
+    standing for a number do not fit, so the answer goes to the reshape call
+    rather than into a policy that would crash on it."""
+    import maps.llm.http as http
+    from maps.llm import endpoint_spec
+
+    from baselines.geonav.policy import LOCATE_SCHEMA
+    from baselines.seam import _fits
+    from baselines.visa.prompts import VERIFY_SCHEMA
+
+    marks = {"attribute_match": {"candidate_marks": [3], "pending_marks": [], "reasoning": ""},
+             "spatial_topology": {"consistent_marks": [3], "reasoning": ""},
+             "geographic_boundary": {"valid_marks": [3], "reasoning": ""},
+             "verdict": "stop", "target_mark": 3, "guidance": "", "guidance_concepts": []}
+    assert _fits(marks, VERIFY_SCHEMA)
+    assert not _fits({**marks, "target_mark": "mark 3"}, VERIFY_SCHEMA)
+    assert not _fits({**marks, "attribute_match": {**marks["attribute_match"], "candidate_marks": ["3"]}},
+                     VERIFY_SCHEMA)
+    assert not _fits({**marks, "target_mark": True}, VERIFY_SCHEMA)
+    assert _fits({"reason": "r", "selected_pos": [1, 2.5]}, LOCATE_SCHEMA)
+    assert not _fits({"reason": "r", "selected_pos": [12.0]}, LOCATE_SCHEMA)
+    assert not _fits({"reason": "r", "selected_pos": [1.0, 2.0, 3.0]}, LOCATE_SCHEMA)
+    assert not _fits({"reason": "r", "selected_pos": [1.0, False]}, LOCATE_SCHEMA)
+
+    replies = iter(['{"reason": "r", "selected_pos": [12.0]}', '{"reason": "r", "selected_pos": [12.0, 4.0]}'])
+    monkeypatch.setattr(http, "_chat_completions_raw", lambda base_url, api_key, **kw: {
+        "choices": [{"message": {"content": next(replies)}, "finish_reason": "stop"}], "usage": {}})
+    monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
+        base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
+        tokenizer_name="qwen", max_output_tokens=40000))
+    h = BaselineHarness.__new__(BaselineHarness)
+    h.policy, h.cfg = "geonav", SimpleNamespace()
+    h.llm_calls = h.reasoning_tokens = h.extraction_calls = h.reasoning_truncated = 0
+    h.calls, h.phase_s = [], {"examine": 0.0}
+    assert h.llm_json([{"role": "user", "content": "where?"}], LOCATE_SCHEMA, "geonav_locate")["selected_pos"] == [12.0, 4.0]
+    assert h.calls[0]["mode"] == "free+extract"

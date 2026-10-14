@@ -291,7 +291,8 @@ class BaselineHarness:
         applies from the first token and the reasoning span never opens, so a
         constrained call would run every baseline without thinking whatever
         the dial says. The model reasons, then answers, and the answer is
-        parsed as JSON and checked against the schema (``_fits``). An answer
+        parsed as JSON and checked against the schema's keys, enums, scalar
+        types and array lengths (``_fits``). An answer
         that is not that JSON goes through a second, grammar-constrained call
         with the dial off that only reshapes it. A first call with no answer
         falls back to the constrained call at the policy's dial; one whose cap
@@ -549,9 +550,14 @@ def _with_answer_shape(messages: list[dict], schema: dict) -> list[dict]:
     return out
 
 
+_SCALAR = {"string": str, "integer": int, "number": (int, float), "boolean": bool}
+
+
 def _fits(value: Any, schema: dict) -> bool:
     """``value`` has the schema's shape: an enum holds it, an object carries
-    every required key and each property fits, an array's items each fit."""
+    every required key and each property fits, an array's length lies in
+    ``[minItems, maxItems]`` and its items each fit, a scalar has its type
+    (a boolean is never an integer or a number)."""
     if "enum" in schema:
         return value in schema["enum"]
     kind = schema.get("type")
@@ -559,7 +565,11 @@ def _fits(value: Any, schema: dict) -> bool:
         return (isinstance(value, dict) and all(k in value for k in schema.get("required") or ())
                 and all(_fits(value[k], sub) for k, sub in (schema.get("properties") or {}).items() if k in value))
     if kind == "array":
-        return isinstance(value, list) and all(_fits(v, schema.get("items") or {}) for v in value)
+        return (isinstance(value, list)
+                and schema.get("minItems", 0) <= len(value) <= schema.get("maxItems", len(value))
+                and all(_fits(v, schema.get("items") or {}) for v in value))
+    if kind in _SCALAR:
+        return isinstance(value, _SCALAR[kind]) and (kind == "boolean" or not isinstance(value, bool))
     return True
 
 
