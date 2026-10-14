@@ -321,7 +321,10 @@ class BaselineHarness:
         site = f"{self.policy}:{schema_name}"
 
         def call(msgs, *, dial, cap, response_format=None):
-            kw = sampling_kwargs(model, dial)
+            if dial == "none":
+                kw = {**sampling_kwargs(model, ""), **dial_off(model)}
+            else:
+                kw = sampling_kwargs(model, dial)
             # The card's envelope at the paper's temperature; an OpenAI-wire
             # card sends none (its reasoning models take only 1.0).
             if "temperature" in kw:
@@ -395,6 +398,29 @@ class BaselineHarness:
         else:
             Image.fromarray(np.asarray(rgb, dtype=np.uint8)).save(p)
         return p
+
+
+class NoDialOff(RuntimeError):
+    """The served model offers no way to switch its thinking off."""
+
+
+def dial_off(model: str) -> dict[str, Any]:
+    """The request keys that switch ``model``'s thinking off: ``reasoning_effort``
+    ``"none"`` where its card lists that rung, else the template's
+    ``enable_thinking`` switch, else :class:`NoDialOff`.
+
+    ponytail: a chat-template card that declares its effort rungs stands for a
+    template that reads ``enable_thinking`` (the Qwen card); the Gemma cards
+    declare none. A card field naming the switch replaces this reading."""
+    from maps.llm.model_cards import card_for
+
+    card = card_for(model)
+    if "none" in card.get("efforts", ()):
+        return {"reasoning_effort": "none"}
+    if "efforts" in card and card.get("wire") != "openai":
+        return {"chat_template_kwargs": {"enable_thinking": False}}
+    raise NoDialOff(f"served model {model!r} has no dial-off: its card lists no 'none' effort and its "
+                    "template reads no enable_thinking, so a baseline's dial-off calls cannot run on it")
 
 
 @dataclass(frozen=True)
@@ -700,6 +726,11 @@ def fly(h, policy: str) -> BaselineFlight:
     commit come back as flights for the runner's replay, and its record lands
     under ``<workdir>/<policy>/``.
     """
+    from maps.llm import endpoint_spec
+
+    # Every policy's reshape calls, and every geonav_released call, run with
+    # the dial off: refuse a model that has none before any request.
+    dial_off(endpoint_spec.spec().model_id)
     workdir = Path(os.environ.get("SEARCH_COMPILE_WORKDIR") or ".")
     start_xy = (float(h.episode.start_xy[0]), float(h.episode.start_xy[1]))
     harness = BaselineHarness(
@@ -775,6 +806,7 @@ __all__ = [
     "BaselineFlight",
     "BaselineResult",
     "Budget",
+    "NoDialOff",
     "Landmark",
     "fly",
 ]

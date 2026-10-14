@@ -15,6 +15,8 @@ import sys
 import types
 from types import SimpleNamespace
 
+import pytest
+
 from baselines.seam import (
     BaselineHarness,
     BaselineResult,
@@ -28,6 +30,16 @@ from baselines.seam import (
 from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
 from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 from maps.perception.geometry.sensor_spec import resolve_sensor
+
+
+@pytest.fixture(autouse=True)
+def _served_inkling(monkeypatch):
+    """fly() reads the served model's card; these tests serve Inkling."""
+    from maps.llm import endpoint_spec
+
+    monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
+        base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
+        tokenizer_name="qwen", max_output_tokens=40000))
 
 
 def _install_stub_policy(monkeypatch, name: str, run) -> None:
@@ -245,6 +257,59 @@ def test_an_answer_whose_nested_item_breaks_the_schema_is_reshaped(monkeypatch):
         h.calls, h.phase_s = [], {"examine": 0.0}
         assert h.llm_json([{"role": "user", "content": "plan"}], PLAN_SCHEMA, "geonav_plan") == good
         assert h.extraction_calls == 1
+
+
+def _dial_off_bodies(monkeypatch, model: str) -> list[dict]:
+    """The request bodies of one geonav_released llm_json call whose free
+    answer needs a reshape, on ``model``'s card."""
+    import maps.llm.http as http
+    from maps.llm import endpoint_spec
+
+    sent: list[dict] = []
+    replies = iter(["prose", '{"pick": 3}'])
+
+    def fake(base_url, api_key, **kw):
+        sent.append(kw)
+        return {"choices": [{"message": {"content": next(replies)}, "finish_reason": "stop"}], "usage": {}}
+
+    monkeypatch.setattr(http, "_chat_completions_raw", fake)
+    monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
+        base_url="http://serve.example:8001/v1", model_id=model, max_model_len=262144,
+        tokenizer_name="qwen", max_output_tokens=40000))
+    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "xhigh")
+    h = BaselineHarness.__new__(BaselineHarness)
+    h.policy, h.cfg = "geonav_released", SimpleNamespace()
+    h.llm_calls = h.reasoning_tokens = h.extraction_calls = h.reasoning_truncated = 0
+    h.calls, h.phase_s = [], {"examine": 0.0}
+    schema = {"type": "object", "properties": {"pick": {"type": "integer"}}, "required": ["pick"]}
+    assert h.llm_json([{"role": "user", "content": "which?"}], schema, "pick") == {"pick": 3}
+    return sent
+
+
+def test_a_dial_off_call_sends_none_where_the_card_lists_it(monkeypatch):
+    for body in _dial_off_bodies(monkeypatch, "inkling-small"):
+        assert body["reasoning_effort"] == "none"
+
+
+def test_a_dial_off_call_turns_the_template_s_thinking_off_where_none_is_not_a_rung(monkeypatch):
+    for body in _dial_off_bodies(monkeypatch, "qwen38-flash-next-nvfp4"):
+        assert "reasoning_effort" not in body
+        assert body["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+def test_a_model_with_no_dial_off_is_refused_before_the_policy_runs(tmp_path, monkeypatch):
+    from baselines.seam import NoDialOff
+    from maps.llm import endpoint_spec
+
+    monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
+    monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
+        base_url="http://serve.example:8001/v1", model_id="gemma4-26b-a4b-nvfp4", max_model_len=262144,
+        tokenizer_name="gemma", max_output_tokens=40000))
+    ran = []
+    _install_stub_policy(monkeypatch, "stub_g", lambda h: ran.append(h))
+    with pytest.raises(NoDialOff, match="gemma4-26b-a4b-nvfp4"):
+        fly(_hydrated(), "stub_g")
+    assert not ran
 
 
 def _window_harness(bounds):

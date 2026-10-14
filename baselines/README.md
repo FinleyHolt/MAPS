@@ -107,10 +107,12 @@ need more than 16 GB per episode. A Cal City row that starts more than about
   round instead. Read `run_report`'s infra count beside SR.
 * A baseline row carries no `metrics.mission` block: no mission conversation
   ran. `committed_provenance` reads `point`, the commit being a world point.
-* The reshaping call and every `geonav_released` call send
-  `reasoning_effort: none`, which needs a model card that takes `none`
-  (Inkling Small and GPT-5.6 Sol do; Qwen 3.8 Flash Next's does not, and its
-  serve refuses the request).
+* The reshaping call and every `geonav_released` call run with the dial off
+  (`seam.dial_off`): `reasoning_effort: none` where the model card lists that
+  rung (Inkling Small, GPT-5.6 Sol), else `chat_template_kwargs:
+  {enable_thinking: false}` where the template reads that switch (Qwen 3.8
+  Flash Next). A model with neither (the Gemma 4 cards) is refused at the
+  start of every baseline episode, before any request (`seam.NoDialOff`).
 * `<policy>_reasoning_tokens` is `maps.llm.flight_summary.reasoning_tokens_of`
   over each response; a reply with no reasoning span reads 0.
 
