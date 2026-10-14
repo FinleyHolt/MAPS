@@ -103,7 +103,7 @@ def _run_provenance(run_root: Path) -> dict:
     """The first row's provenance block, else {}, with what the manifest adds:
     the tile-bake content hash (every Cal City bake sits at
     ``benchmarks/calcity/tiles``, so the path the rows carry cannot tell two
-    apart), the arm's withholds, the sha256 of the resolved config
+    apart), the arm's withholds and baseline ``policy``, the sha256 of the resolved config
     without them or a baseline ``policy`` (``config_body``: an E4 arm differs
     from E1 only in its withholds, a baseline arm only in its policy),
     and ``resume_commits`` when the run's start and resumes name more than
@@ -122,7 +122,9 @@ def _run_provenance(run_root: Path) -> dict:
     if bake:
         prov["bake_sha256"] = bake
     if manifest.get("config_yaml"):
-        body = {k: v for k, v in yaml.safe_load(manifest["config_yaml"]).items() if k not in ("withhold", "policy")}
+        config = yaml.safe_load(manifest["config_yaml"])
+        prov["policy"] = config.get("policy")
+        body = {k: v for k, v in config.items() if k not in ("withhold", "policy")}
         prov["config_body"] = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
     return prov
 
@@ -247,8 +249,10 @@ def main() -> None:
     print(render(ab_stats(pairs, label=args.label)))
     print(f"shared={len(shared)}  only_a={len(set(a) - set(b))}  "
           f"only_b={len(set(b) - set(a))}")
-    if prov_a.get("withhold") is not None or prov_b.get("withhold") is not None:
-        print(f"treatment: withhold A={prov_a.get('withhold')} B={prov_b.get('withhold')}")
+    treatment = [f"{k} A={prov_a.get(k)} B={prov_b.get(k)}" for k in ("withhold", "policy")
+                 if prov_a.get(k) != prov_b.get(k)]
+    if treatment:
+        print("treatment: " + "; ".join(treatment))
     if arm and args.allow_provenance_mismatch:
         print("WARNING comparing non-comparable runs (override active):\n  - "
               + "\n  - ".join(arm))

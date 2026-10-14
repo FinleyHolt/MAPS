@@ -87,3 +87,19 @@ def test_wilson_ci_bounds_and_midpoint():
     assert (lo, hi) == (pytest.approx(0.4038, abs=1e-3),
                         pytest.approx(0.5962, abs=1e-3))
     assert wilson_ci(0, 0) == (pytest.approx(float("nan"), nan_ok=True),) * 2
+
+
+def test_a_baseline_arm_names_its_policy_as_the_treatment(tmp_path, monkeypatch, capsys):
+    import json
+
+    import yaml
+
+    for name, policy in (("a", None), ("b", "visa")):
+        _write_run(tmp_path / name, "aaaaaaa", {"e1": 1, "e2": 0})
+        config = {"max_steps": 200, "withhold": [], **({"policy": policy} if policy else {})}
+        (tmp_path / name / "run_manifest.json").write_text(json.dumps({
+            "withhold": [], "config_yaml": yaml.safe_dump(config)}))
+    monkeypatch.setattr(sys, "argv", ["ab_report", str(tmp_path / "a"), str(tmp_path / "b")])
+    main()
+    out = capsys.readouterr().out
+    assert "treatment: policy A=None B=visa" in out and "withhold A=" not in out
