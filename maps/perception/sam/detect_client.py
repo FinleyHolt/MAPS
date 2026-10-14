@@ -553,23 +553,19 @@ class SamDetectClient:
             pass2 = list(ex.map(_split_and_pack, decoded))
 
         out: list[DetectedObject] = []
-        hit_cap = False
-        n_union_fallback = 0
-        n_lost = 0
+        n_union_fallback = n_lost = 0
         for packs, fallback in pass2:
+            if len(out) >= MAX_PER_STEP:
+                break
             if not packs:
                 if fallback is None:
                     n_lost += 1  # no valid depth anywhere
                     continue
                 packs = [fallback]
                 n_union_fallback += 1
-            for d in packs:
-                out.append(d)
-                if len(out) >= MAX_PER_STEP:
-                    hit_cap = True
-                    break
-            if hit_cap:
-                break
+            out.extend(packs)
+        hit_cap = len(out) >= MAX_PER_STEP
+        out = out[:MAX_PER_STEP]
         # A binding cap prints on its own: a run truncating every stop must say so.
         if n_union_fallback or n_lost or hit_cap:
             print(
