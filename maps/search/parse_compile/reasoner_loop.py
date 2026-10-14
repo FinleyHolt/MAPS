@@ -232,6 +232,14 @@ def _served_flight(report: dict) -> dict:
     return {k: v for k, v in report.items() if k not in ("pose_xy", "alt_m")}
 
 
+def _add_note(d: dict, text: str, sep: str = " ", *,
+              before: bool = False) -> None:
+    """Join ``text`` onto ``d["note"]``, after it (or before it)."""
+    old = d.get("note")
+    d["note"] = ((f"{text}{sep}{old}" if before else f"{old}{sep}{text}")
+                 if old else text)
+
+
 def _named_feature_note(classes: list[str], names: set[str]) -> str | None:
     """A note when a watch class IS a world-state name (the watchlist takes
     visual classes); the arm stands as said."""
@@ -791,8 +799,7 @@ class _Mission:
         if _shown:
             _deliver_frames(_fj, self._block_frames)
         self.pending_vision.append((_fv_text, _fj if _shown else []))
-        _report["note"] = (f"{_report['note']} {_fv_note}"
-                           if _report.get("note") else _fv_note)
+        _add_note(_report, _fv_note)
 
     def _after_flight(self, _report: dict, _fids_before: set,
                       cover: str | None) -> None:
@@ -863,9 +870,7 @@ class _Mission:
                     _wl_note = ('the watchlist is empty -- nothing is '
                                 'segmented on any flight; call '
                                 'look_for("<class>") to see detections')
-                    _report["note"] = (f"{_report['note']} {_wl_note}"
-                                       if _report.get("note")
-                                       else _wl_note)
+                    _add_note(_report, _wl_note)
                 # A pass renders no per-stop view.
                 if cover is None:
                     self._flight_view(_item, _report)
@@ -1244,8 +1249,7 @@ class _Mission:
             _cov_note = (f"the pass ended after "
                          f"{mv['stops']} of its stops.")
         if _cov_note:
-            mv["note"] = (f"{_cov_note} {mv['note']}"
-                          if mv.get("note") else _cov_note)
+            _add_note(mv, _cov_note, before=True)
         # THE PASS SHOWS ITS CATCH: one crop per row it added, pass order.
         _h = self._call_minted()
         _rows = [r for r in (self.carry.rows.get(_h) or [])
@@ -1317,15 +1321,13 @@ class _Mission:
                     if len(_tied) >= 2:
                         _t = f"{_v0:g}" if isinstance(_v0, (int, float)) \
                             else str(_v0)
-                        ack["note"] = (
-                            (f"{ack['note']}\n" if ack.get("note") else "")
-                            + f"{len(_tied)} of {len(_rows)} rows tie at "
-                              f"{_t} on '{_ok_key}' -- this ordering does "
-                              f"not separate them, so its rank 0 is "
-                              f"arbitrary among the tie")
+                        _add_note(
+                            ack, f"{len(_tied)} of {len(_rows)} rows tie at "
+                            f"{_t} on '{_ok_key}' -- this ordering does "
+                            f"not separate them, so its rank 0 is "
+                            f"arbitrary among the tie", "\n")
         if self._call.get("notes"):
-            ack["note"] = (f"{ack['note']}\n" if ack.get("note")
-                           else "") + "; ".join(self._call["notes"])
+            _add_note(ack, "; ".join(self._call["notes"]), "\n")
         self._err_sig, self._err_n = None, 0
         if self._call.get("page"):
             self._widened.update([self._call["page"][:2]])
