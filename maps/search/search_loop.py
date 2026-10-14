@@ -109,20 +109,16 @@ class SearchLoop:
         built once (priors do not move). Under the lock."""
         if self._prior_xy_cache is not None:
             return self._prior_xy_cache
-        out: dict = {}
-        g = self.state.runtime_graph
-        if g is not None:
-            from maps.search.analyze_scene.geom_program import (  # noqa: PLC0415
-                build_surface_from_graph,
-            )
+        from maps.search.analyze_scene.geom_program import (  # noqa: PLC0415
+            build_surface_from_graph,
+        )
 
-            _c, anchors = build_surface_from_graph(
-                g.nodes.items(), self._tile_origin_xy,
-                float(self._cell_size_m))
-            out = {str(r["fid"]): (float(r["xy"][0]), float(r["xy"][1]))
-                   for r in anchors if r.get("xy")}
-        self._prior_xy_cache = out
-        return out
+        _c, anchors = build_surface_from_graph(
+            self.state.runtime_graph.nodes.items(), self._tile_origin_xy,
+            float(self._cell_size_m))
+        self._prior_xy_cache = {str(r["fid"]): (float(r["xy"][0]), float(r["xy"][1]))
+                                for r in anchors if r.get("xy")}
+        return self._prior_xy_cache
 
     def _world_xy_for_node_locked(self, target_fid: str) -> tuple[float, float] | None:
         """Where the fid's row says it is, the point a flight to it flies:
@@ -154,8 +150,7 @@ class SearchLoop:
 
     def _node_for_fid_locked(self, fid: str):
         """The graph node for ``fid``, or None. Under the lock."""
-        g = self.state.runtime_graph
-        return g.nodes.get(fid) if g is not None else None
+        return self.state.runtime_graph.nodes.get(fid)
 
     def _cells_xy_locked(self, target_fid: str) -> list[tuple[float, float]] | None:
         """The centres of this fid's cells in world metres, its footprint as
@@ -388,11 +383,8 @@ class SearchLoop:
             )
 
             with self._lock:
-                graph = self.state.runtime_graph
-                if graph is None:
-                    return False
                 return _upsert_prior_percept(
-                    graph, str(fid), dict(attrs or {}), px=px
+                    self.state.runtime_graph, str(fid), dict(attrs or {}), px=px
                 )
         except Exception:  # noqa: BLE001
             log.debug("upsert_prior_percept failed for %s", fid, exc_info=True)
