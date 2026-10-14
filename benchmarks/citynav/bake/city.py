@@ -455,6 +455,8 @@ def _feature_entry(
     cr = float(arr[:, 0].mean())
     cc = float(arr[:, 1].mean())
     if coverage is not None and not coverage[int(round(cr)), int(round(cc))]:
+        # ponytail: an exact distance tie goes to the set's iteration order;
+        # a (distance, cell) key orders it, at the cost of a new bake hash.
         cr, cc = min(cells, key=lambda rc: (rc[0] - cr) ** 2 + (rc[1] - cc) ** 2)
     entry: dict[str, Any] = {
         "cells": ordered_cells,
