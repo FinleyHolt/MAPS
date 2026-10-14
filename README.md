@@ -125,6 +125,7 @@ these places, the served-text changes among them:
 | A baseline's thinking-off call sends `reasoning_effort: none` where the served card lists it, else `enable_thinking=false`, and an arm whose model has neither switch is refused before any request. | Baselines sent `reasoning_effort: none` on every card (a Qwen serve refused it; Gemma ignored it). |
 | ViSA plans over the search window held inside the block. | The port planned an unclipped 1,024 m square around the start when nothing matched, flying off a CityNav block. |
 | A detection without tile cells takes the graph cell its world point lies in (floored), and the compactor's stub hint says the rows were trimmed to fids. | The cell offset truncated toward zero, putting a point south or west of the tile origin one cell north-east; the stub hint claimed a census it did not carry. |
+| A reasoner stream that closes with neither a finish reason nor `[DONE]` is a transport fault, re-sent within the transport retry budget. | Such a stream was read as a complete answer ending `stop`. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -255,7 +256,7 @@ terms).
 | `SEARCH_SAMPLING_REASONING_EFFORT` | client | The arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`); discovery refuses a value the served model's card does not take. Unset sends none. |
 | `SEARCH_COMPACT_TOKENIZER_NAME` | client | The HF tokenizer repo, replacing the model card's. |
 | `SAM_SERVER_URL` | client | The SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset; a set but blank value, or `SAM_VIDEO_SERVER_URL` set without it, is refused. |
-| `SAM_PORT`, `SAM_MODEL_ID`, `SAM_DEVICE`, `SAM_DTYPE` | serve | Port (8772), checkpoint id (`facebook/sam3.1`), device, dtype (`bfloat16`). |
+| `SAM_PORT`, `SAM_DEVICE` | serve | Port (8772), device. |
 | `SAM3_CHECKPOINT` | serve | A local checkpoint file. |
 | `SAM_MAX_INFLIGHT`, `SAM_INFLIGHT_WAIT_S`, `SAM_PREWARM`, `SAM_HEALTH_MIN_FREE_GB` | serve | Admission, prewarm and health limits (`serving/sam_server.py`). |
 | `MAPS_IMAGE_STORE_URL` | client | An image store one fast hop from the reasoner: each inline image is PUT once to `<store>/looks/<sha>` and rides as `sha256:<sha>`; a 409 naming missing shas re-sends them. |
