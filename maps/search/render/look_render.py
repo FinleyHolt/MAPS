@@ -51,7 +51,7 @@ def subject_window_containment(
         return True, True
     poly = xy_list(boundary)
     if len(poly) < 3:
-        return centroid_in, centroid_in
+        return False, False
     for inside, at in (
         (lambda p: p[0] >= wx0, lambda a, b: _isect_x(a, b, wx0)),
         (lambda p: p[0] <= wx1, lambda a, b: _isect_x(a, b, wx1)),
