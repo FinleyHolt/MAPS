@@ -180,41 +180,11 @@ Each shard (50 blocks by default) is a separate run root: every evaluator
 loads all of its rasters into memory at start, about 110 MB a block for MGP
 and HETT and twice that for FlightGPT.
 
-## Unverified
+## Setup checks
 
-* MGP on Cal City runs with `--splits test_unseen`, so its val_seen and
-  val_unseen lists load empty; whether upstream's eval loop tolerates an
-  empty split (it averages over it) is unverified.
-
-These upstream details could not be checked from the clones and stay open
-until a run settles them:
-
-- TODO: the HETT Dropbox folder's layout. Setup finds `best_val_unseen`,
-  `yolo_v3.cfg`, `best.pt` and the refined `citynav_test_unseen.json` by
-  name and fails loud if any is missing; whether the folder zip nests
-  further archives, and whether the refined split files carry
-  `area`/`block`/`object_ids`/`ann_ids` as the original do, is unknown.
-- TODO: whether the refined splits ship `val_seen` and `val_unseen` beside
-  `test_unseen` (`benchmarks/citynav/paths.py` says they do).
-- TODO: HETT's `requirements.txt` after the deny-list installs on Python 3.10;
-  some pins (`gradio`, `openai-whisper`, `cityscapesScripts`) are unused by
-  `multiagent/` and may fail to build.
-- TODO: MGP's env from unpinned `@package` / default-branch installs
-  (SEEM, Semantic-SAM, SoM, LLaVA, GroundingDINO, MobileSAM) and whether
-  `SoM/ops/make.sh` needs a CUDA toolkit module on the fsg node.
-- TODO: `download_weights.sh` ends with a Google Drive `gdown` for the
-  VLN-CE embeddings MGP does not read; setup tolerates its failure and
-  checks the three weights MGP does read.
-- TODO: the vLLM version for Qwen2.5-VL (`vllm==0.8.5`); FlightGPT's README
-  names none.
-- TODO: the prompt CityNav's authors used for `processed_descriptions.json`;
-  the Cal City parse prompt is ours.
-- TODO: MGP's GSAM call on a parse with no `surroundings` (an empty caption
-  list), which no CityNav row exercises if CityNav's parse always fills it.
-- TODO: that `--gsam_use_map_cache` is off in MGP's released eval (the
-  README eval command omits it, so GSAM runs live and needs no cache).
-- TODO: compute-node internet for the Hugging Face BERT and FlightGPT pulls;
-  setup pulls them in the setup stage.
-- TODO: whether the HF dataset's `citynav_*.json` are byte-identical to
-  CityNav's; their sizes match the local copies, which is what lets the
-  FlightGPT rows key against the same ids.
+Setup unpacks the HETT Dropbox folder, and any archive nested in it, and
+finds `best_val_unseen`, `yolo_v3.cfg`, `best.pt` and the refined
+`citynav_test_unseen.json` by name, stopping if any is missing. It tolerates
+a failure of MGP's `download_weights.sh` (its last step fetches VLN-CE
+embeddings MGP does not read) and then checks the three weights MGP reads.
+It pulls the Hugging Face BERT and FlightGPT weights in the setup stage.
