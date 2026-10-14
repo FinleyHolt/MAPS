@@ -269,8 +269,6 @@ def run_episode(h: BaselineHarness) -> BaselineResult:
         else:
             commit_label = "last_stop"
             commit_tier = commit_tier or "visa:exhausted"
-    h.record("result", {"commit_xy": commit_xy, "commit_label": commit_label, "commit_tier": commit_tier,
-                        "lock_step": lock_step, "stops": stops, "actions_priced": h.budget.used})
     return BaselineResult(
         stops=stops,
         commit_xy=commit_xy,
