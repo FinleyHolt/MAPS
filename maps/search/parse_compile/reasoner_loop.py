@@ -463,7 +463,15 @@ class _Mission:
         # read by _finish.
         self._call: dict = {}
 
-        self._mission_py = None
+        self._mission_py = _py_surface.MissionPython(_py_surface.MissionEnv(
+            rows_of_ref=lambda ref: list(self.carry.read(ref) or []),
+            tied_of_ref=lambda ref: bool(
+                getattr(self.carry.read(ref), "name_set", False)),
+            plan_rn=self.plan_rn, widened=self._widened, minted=self._code_minted,
+            say_err=self._plan_err, row_of_fid=self._ns_rows.get,
+            ground=self._ground_names, analyze=self._analyze, stand=self._stand,
+            move=self._move_to, cover=self._cover, crops=self._crops, map=self._map,
+            watch=self._watch, boost=self._boost, finish=self._finish))
 
     def _new_turn(self) -> None:
         """An operator turn's own state: its flight budget (the backstop's
@@ -1339,16 +1347,6 @@ class _Mission:
         code = args.get("code")
         if not isinstance(code, str) or not code.strip():
             return {"error": "run takes one block of code in code"}
-        if self._mission_py is None:
-            self._mission_py = _py_surface.MissionPython(_py_surface.MissionEnv(
-                rows_of_ref=lambda ref: list(self.carry.read(ref) or []),
-                tied_of_ref=lambda ref: bool(
-                    getattr(self.carry.read(ref), "name_set", False)),
-                plan_rn=self.plan_rn, widened=self._widened, minted=self._code_minted,
-                say_err=self._plan_err, row_of_fid=self._ns_rows.get,
-                ground=self._ground_names, analyze=self._analyze, stand=self._stand,
-                move=self._move_to, cover=self._cover, crops=self._crops, map=self._map,
-                watch=self._watch, boost=self._boost, finish=self._finish))
         self._code_names.clear()
         self._code_names.update(re.findall(r"\br\d+\b", code))
         self._code_names.update(
