@@ -4,7 +4,8 @@
 
 The twin is a :class:`benchmarks.flight.vehicle.Vehicle`: it flies each posted
 leg straight on through the rest of the pass at the C-12's speed, wings level,
-and records a pose-tagged frame at the camera's rate, its pixels rendered on
+and records a pose-tagged frame at the recorder ring's rate
+(``recorded_ring.RING_HZ``), its pixels rendered on
 request off the ortho (``<map>_rgb.tif`` beside ``<map>.tif``) at the camera
 pose the live source places it by. The endpoints come from the environment as
 the bench's do; the run lands under ``--out/<UTC stamp>/`` with the run
