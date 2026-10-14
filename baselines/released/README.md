@@ -85,7 +85,7 @@ success criterion and prints the same statistics.
 
 Every row carries `method`, `upstream_repo`, `upstream_sha`, `checkpoint`,
 `protocol: upstream_released`, `dataset_version` (`original`, `revised`, or
-`calcity`) and `upstream_key` at the top level and in `provenance`, plus
+`calcity`) at the top level and in `provenance`, plus `upstream_key` and
 `metrics.success_criterion`: `ring` on CityNav, `shape` on Cal City.
 
 `episode_sets.json` lists the ids upstream evaluated and every id it did
