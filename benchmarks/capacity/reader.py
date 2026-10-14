@@ -44,7 +44,7 @@ def session(root: Path) -> dict[str, Any]:
         row = a.row if a else {}
         found = (float(row["claimed_s"]) + float(row["elapsed_s"])
                  if row.get("claimed_s") is not None and row.get("elapsed_s") is not None else None)
-        correct = bool(a and a.metrics.get("SR"))
+        correct = found is not None and bool(a and a.metrics.get("SR"))
         reports.append({"report": r["report"], "episode_id": r["episode_id"], "arrival_s": r["arrival_s"],
                         "found_s": found, "correct": correct,
                         "in_window": found is not None and found <= window})

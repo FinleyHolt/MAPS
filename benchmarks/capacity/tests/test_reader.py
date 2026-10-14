@@ -120,3 +120,15 @@ def test_the_pairing_reads_the_same_whatever_order_the_roots_are_named() -> None
     alone = arm("a", (10, 12, 9, 14, 11, 8), [1, 0, 1, 0, 0])
     assisted = arm("b", (15, 13, 18, 12, 20, 16), [1, 1, 0, 1, 1])
     assert reader.paired(alone, assisted) == reader.paired(alone, assisted[::-1])
+
+
+def test_a_correct_row_with_no_find_time_is_not_a_correct_find(tmp_path) -> None:
+    root = _session(tmp_path, 4, 1, [(0, 100, 1), (60, 400, 1)])
+    ledger = root / "episodes.jsonl"
+    first, second = ledger.read_text().splitlines()
+    ledger.write_text(first + "\n" + json.dumps({k: v for k, v in json.loads(second).items() if k != "elapsed_s"})
+                      + "\n")
+    s = reader.session(root)
+    assert [r["correct"] for r in s["reports"]] == [True, False]
+    assert reader.curve([s])["capacity_finds_per_h"] == 1
+
