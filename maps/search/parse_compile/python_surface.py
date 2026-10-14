@@ -1253,8 +1253,8 @@ class MissionPython:
                "flight covers it."))})
 
     def _rows_order(self, items, *, nearest=None, color=None):
-        """One sort key, never two: any way of combining two keys can rank a
-        row that is second on both below worse rows, so a second key is refused
+        """A distance or a colour, never both: combining the two can rank a
+        row that is second on both below worse rows, so the second is refused
         and named as a cut."""
         if nearest is not None and color is not None:
             raise CodeError(
@@ -1270,8 +1270,8 @@ class MissionPython:
                 "rows.order(direction=\"north\") northernmost first, or "
                 "rows.order(<function>) for one you compute yourself.")
         if isinstance(nearest, (list, tuple)) and not is_xy(nearest):
-            # nearest=[A, B] is a SET -- one place, its nearest member --
-            # not two keys to average.
+            # nearest=[A, B] ranks by both distances in one score_by, as
+            # find's does.
             nearest = [self._slot(a) for a in nearest]
         elif nearest is not None:
             nearest = self._slot(nearest)
