@@ -389,6 +389,21 @@ def test_the_mission_stamps_the_effort_its_requests_carry(calcity, serves, tmp_p
     assert row["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.9"
 
 
+def test_a_blank_mission_effort_flies_the_arm_s(calcity, serves, tmp_path, monkeypatch):
+    """--reasoning-effort "" is no word of the mission's own: the requests
+    carry the arm's effort, as the manifest and row stamp it."""
+    from benchmarks.flight import twin
+
+    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.9")
+    out = tmp_path / "out"
+    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
+                      "--reasoning-effort", " ", "--out", str(out)]) == 0
+    sortie = next(out.iterdir())
+    (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
+    manifest = json.loads((sortie / row["workdir"] / "run_manifest.json").read_text())
+    assert serves[0].get("reasoning_effort") == manifest["mission"]["reasoning_effort"] == "0.9"
+
+
 def test_a_mission_s_own_effort_the_served_card_refuses_never_reaches_the_reasoner(calcity, serves, tmp_path,
                                                                                   monkeypatch):
     from benchmarks.flight import twin

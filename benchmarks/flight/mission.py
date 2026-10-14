@@ -207,8 +207,8 @@ class Mission:
         self.split = split
         self.config = config
         self.workdir = Path(workdir)
-        #: A string the serve accepts; None flies the arm's.
-        self.reasoning_effort = reasoning_effort
+        #: A string the serve accepts; None (or blank) flies the arm's.
+        self.reasoning_effort = (reasoning_effort or "").strip() or None
         #: The height above ground the crew is commanded to fly.
         self.agl_m = float(agl_m)
         self.run_id = run_id
@@ -623,8 +623,8 @@ class Mission:
             # fails this mission, honestly.
             install_spec(discover_from_env())
             settle_effort()
-            if (self.reasoning_effort or "").strip():
-                check_effort(spec().model_id, self.reasoning_effort.strip())
+            if self.reasoning_effort:
+                check_effort(spec().model_id, self.reasoning_effort)
             self._write_manifests()
 
             h = hydrate(episode_id=self.episode_id, split=self.split, config=self.config, start_xy=self._start_xy,
@@ -732,10 +732,8 @@ class Mission:
     def _mission_stamp(self) -> dict[str, Any]:
         """The mission's grain of the run manifest: which mission, and the
         reasoning effort its requests carry (``model_cards.sampling_kwargs``'s rule)."""
-        effort = (self.reasoning_effort if self.reasoning_effort is not None
-                  else os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "")).strip() or None
         return {"episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no,
-                "reasoning_effort": effort}
+                "reasoning_effort": self.reasoning_effort or os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT")}
 
     def _turns(self) -> int:
         """Model turns taken: the conversations that have ended plus the turn the one in flight is on."""
