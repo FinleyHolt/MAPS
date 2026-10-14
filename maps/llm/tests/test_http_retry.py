@@ -200,3 +200,24 @@ def test_a_404_for_a_model_no_longer_served_is_named_on_both_paths(transport, mo
     assert isinstance(result, RuntimeError), result
     assert "served-model mismatch" in str(result) and "another-model" in str(result)
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("tail,finish", [
+    (b"", None),
+    (b"data: [DONE]\n\n", "stop"),
+    (b'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n', "length"),
+], ids=["cut", "done", "finish"])
+def test_a_stream_cut_before_its_end_is_a_transport_fault(monkeypatch, tail, finish) -> None:
+    """A stream that closes with neither a finish_reason nor ``[DONE]`` was cut short: it raises
+    (and is retried) instead of reading as a whole answer that stopped."""
+    sse = b'data: {"choices":[{"delta":{"content":"half"}}]}\n\n' + tail
+    real = httpx.Client
+    mock = httpx.MockTransport(lambda _r: httpx.Response(200, content=sse))
+    monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=mock, **kw))
+    if finish is None:
+        with pytest.raises(httpx.RemoteProtocolError, match="without a finish_reason"):
+            http_mod._stream_chat_completions("http://e/v1/chat/completions", {}, {}, timeout=5.0)
+        return
+    out = http_mod._stream_chat_completions("http://e/v1/chat/completions", {}, {}, timeout=5.0)
+    assert out["choices"][0]["finish_reason"] == finish
+    assert out["choices"][0]["message"]["content"] == "half"

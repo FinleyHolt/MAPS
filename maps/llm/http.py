@@ -405,7 +405,9 @@ def _stream_chat_completions(
     cancel_event: threading.Event | None = None,
 ) -> dict:
     """POST with ``stream: true`` and reassemble the SSE deltas into the
-    non-streaming response shape. Streaming exists for cancellation."""
+    non-streaming response shape. Streaming exists for cancellation. A stream
+    that ends with neither a finish_reason nor ``[DONE]`` was cut short and
+    raises ``httpx.RemoteProtocolError``, a transport fault."""
     aggregated_text: list[str] = []
     aggregated_reasoning: list[str] = []
     aggregated_tool_calls: dict[int, dict] = {}
@@ -413,6 +415,7 @@ def _stream_chat_completions(
     usage: dict | None = None
     model: str | None = None
     role: str | None = None
+    saw_done = False
     # A server that streams nothing but empty deltas is a hung generation;
     # give up after _EMPTY_STREAM_S or _EMPTY_STREAM_CHUNKS, whichever first.
     empty_chunk_count = 0
@@ -434,7 +437,10 @@ def _stream_chat_completions(
                 if not raw_line or not raw_line.startswith("data:"):
                     continue
                 payload = raw_line[len("data:") :].strip()
-                if not payload or payload == "[DONE]":
+                if payload == "[DONE]":
+                    saw_done = True
+                    continue
+                if not payload:
                     continue
                 try:
                     event = json.loads(payload)
@@ -497,6 +503,8 @@ def _stream_chat_completions(
                         or empty_chunk_count >= _EMPTY_STREAM_CHUNKS):
                     raise httpx.ReadTimeout(
                         f"LLM stream emitted only empty deltas for {empty_chunk_count} chunks")
+            if finish_reason is None and not saw_done:
+                raise httpx.RemoteProtocolError("LLM stream ended without a finish_reason")
     except httpx.HTTPError:
         if cancel_event is not None and cancel_event.is_set():
             raise CallCanceled("canceled in flight") from None
