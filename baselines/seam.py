@@ -270,9 +270,8 @@ class BaselineHarness:
         )
         return buf.getvalue()
 
-    def user_message(self, text: str, images: list[np.ndarray | bytes] | None = None) -> dict:
-        """One user turn: the text, then each image as a JPEG data URI."""
-        jpegs = [im if isinstance(im, bytes) else self.jpeg(im) for im in (images or [])]
+    def user_message(self, text: str, jpegs: list[bytes]) -> dict:
+        """One user turn: the text, then each JPEG (``jpeg``) as a data URI."""
         return {"role": "user", "content": build_vision_user_content(text, jpegs)}
 
     def llm_json(self, messages: list[dict], schema: dict, schema_name: str, *, max_tokens: int | None = None) -> dict:

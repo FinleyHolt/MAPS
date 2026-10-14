@@ -321,12 +321,12 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
         action_json = None
         target_pos = None
         if mode == "Navigate":
-            img = cmap.render("landmark")
+            img = h.jpeg(cmap.render("landmark"))
             text = P.LANDMARK_NAVIGATION_PROMPT.format(geoinstruct=geoinstruct, goal=task["goal"], state=task["desired_state"])
         elif mode == "Search":
             objs = [(c["id"], graph.nodes[c["id"]].position, c["target"])
                     for c in engine.get_context(pose, radius=500.0) if c["type"] == "object"]
-            img = cmap.render("semantic", objs)
+            img = h.jpeg(cmap.render("semantic", objs))
             text = P.OBJECT_SEARCH_PROMPT.format(geoinstruct=geoinstruct, goal=task["goal"], state=task["desired_state"])
         else:  # Locate
             complex_query = is_complex_query(task["goal"])
@@ -344,7 +344,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
                 commit_label, commit_tier, locate_path = f"geonav:{best.id}", "geonav:graph", "graph"
                 img, text = None, None
             else:
-                img = obs.rgb
+                img = frame
                 text = P.TARGET_LOCATE_PROMPT.format(pos=pose, area=xyxy, goal=instruction)
 
         if text is not None:
@@ -356,7 +356,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
             except RuntimeError:
                 action_json = None  # released: three failed tries stay put
             if mode != "Locate":
-                h.save_image(f"{t:02d}_{mode.lower()}_map", h.jpeg(img))
+                h.save_image(f"{t:02d}_{mode.lower()}_map", img)
             h.record(f"{t:02d}_{mode.lower()}", {"prompt": text, "response": action_json, "pose": pose,
                                                   "geoinstruct": geo_text, "painted": painted})
             target_pos = next_position(pose, mode, action_json, view_width, last_movement, history_actions)

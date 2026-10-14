@@ -172,9 +172,10 @@ def run_episode(h: BaselineHarness) -> BaselineResult:
             landmarks=landmark_text(matched, obs.pose_xy, half),
             guidance_block=prompts.guidance_block(guidance),
         )
-        h.save_image(f"step_{step:02d}_marked", h.jpeg(marked))
+        jpeg = h.jpeg(marked)
+        h.save_image(f"step_{step:02d}_marked", jpeg)
         vm = h.llm_json(
-            [{"role": "system", "content": prompts.SYSTEM}, h.user_message(text, [marked])],
+            [{"role": "system", "content": prompts.SYSTEM}, h.user_message(text, [jpeg])],
             prompts.VERIFY_SCHEMA,
             "visa_verify",
         )
