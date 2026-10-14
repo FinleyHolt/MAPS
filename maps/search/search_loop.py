@@ -10,8 +10,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-import numpy as np
-
 from maps.search.parse_compile.perception_director import (
     PerceptionDirector, canon_concept)
 from maps.sws.graph.model import GridDomain, MapObject
@@ -431,49 +429,29 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m):
     them): its centroid (the mean of its stamped tile cells, else the cell
     under its world point), contour, attributes and world point."""
     meta = det.metadata or {}
-    raw_cells = meta.get("tile_cells")
-    cells: np.ndarray | None = None
-    if raw_cells is not None:
-        try:
-            cells_arr = np.asarray(raw_cells, dtype=np.int32).reshape(-1, 2)
-            if cells_arr.size > 0:
-                cells = cells_arr
-        except (TypeError, ValueError):
-            cells = None
-
-    # The footprint polygon in world metres the ortho projection stamped;
-    # the upsert re-stamps it on repeat sightings.
-    raw_contour = meta.get("world_contour")
-    world_contour: list[list[float]] | None = None
-    if raw_contour is not None:
-        try:
-            wc = [[float(p[0]), float(p[1])] for p in raw_contour]
-            if len(wc) >= 3:
-                world_contour = wc
-        except (TypeError, ValueError, IndexError):
-            world_contour = None
-
-    col = math.floor((det.world_xy[0] - bounds_min[0]) / cell_size_m)
-    row = math.floor((det.world_xy[1] - bounds_min[1]) / cell_size_m)
+    # The detect client's (N, 2) int32 cells, stamped only when N > 0.
+    cells = meta.get("tile_cells")
+    # The footprint ring in world metres the ortho stamping traced (>= 3
+    # vertices); the upsert re-stamps it on repeat sightings.
+    wc = meta.get("world_contour")
+    world_contour = [[float(x), float(y)] for x, y in wc] if wc else None
     if cells is not None:
         centroid = (
             int(round(float(cells[:, 0].mean()))),
             int(round(float(cells[:, 1].mean()))),
         )
     else:
-        centroid = (row, col)
+        centroid = (
+            math.floor((det.world_xy[1] - bounds_min[1]) / cell_size_m),
+            math.floor((det.world_xy[0] - bounds_min[0]) / cell_size_m),
+        )
     semantic_attributes: dict[str, dict[str, int]] = {
         key: {value: 1} for key, value in (det.attributes or {}).items()
     }
     # ``color_px`` (the mask's in-view pixel count) becomes best_view_px, not
     # an attribute: the upsert replaces colour only from a larger view.
-    best_view_px = 0
-    _bv_bucket = semantic_attributes.pop("color_px", None)
-    if _bv_bucket:
-        try:
-            best_view_px = int(next(iter(_bv_bucket)))
-        except (TypeError, ValueError):
-            best_view_px = 0
+    bv_bucket = semantic_attributes.pop("color_px", None)
+    best_view_px = int(next(iter(bv_bucket))) if bv_bucket else 0
     label = str(det.label or "").strip()
     if label:
         label_bucket = semantic_attributes.setdefault("sam_label", {})
