@@ -315,8 +315,8 @@ class BaselineHarness:
         and no reasoning under ``json_schema`` strict, 8,192 tokens of
         reasoning without it), so a constrained call would run every baseline
         without thinking whatever the dial says. The model reasons, then
-        answers, and the answer is parsed as JSON against the schema's
-        required keys. An answer that is not that JSON goes through a second,
+        answers, and the answer is parsed as JSON and checked against the
+        schema (``_fits``). An answer that is not that JSON goes through a second,
         grammar-constrained call with the dial off that only reshapes it. A
         first call whose cap the reasoning exhausted (no answer) falls back
         to the constrained call at the policy's dial and is counted under
@@ -334,7 +334,6 @@ class BaselineHarness:
         cap_key = OUTPUT_CAP_KEY if speaks_openai(model) else "max_tokens"
         api_key = os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY")
         site = f"{self.policy}:{schema_name}"
-        required = list(schema.get("required") or [])
 
         def call(msgs, *, dial, cap, response_format=None):
             kw = sampling_kwargs(model, dial)
@@ -366,7 +365,7 @@ class BaselineHarness:
                         _with_answer_shape(messages, schema), dial=effort, cap=max_tokens or spec.max_output_tokens,
                     )
                     parsed = _extract_json(text)
-                    if isinstance(parsed, dict) and all(k in parsed for k in required):
+                    if _fits(parsed, schema):
                         self.calls.append({"site": site, "mode": "free", "finish": finish,
                                            "reasoning_tokens": usage.reasoning_tokens, "completion_tokens": usage.completion_tokens})
                         return parsed
@@ -377,7 +376,7 @@ class BaselineHarness:
                             dial="none", cap=EXTRACTION_MAX_TOKENS, response_format=strict,
                         )
                         parsed = _extract_json(shaped)
-                        if isinstance(parsed, dict) and all(k in parsed for k in required):
+                        if _fits(parsed, schema):
                             self.extraction_calls += 1
                             self.calls.append({"site": site, "mode": "free+extract", "finish": finish,
                                                "reasoning_tokens": usage.reasoning_tokens,
@@ -388,7 +387,7 @@ class BaselineHarness:
                     self.reasoning_truncated += 1
                     shaped, finish3, usage3 = call(messages, dial=effort, cap=EXTRACTION_MAX_TOKENS, response_format=strict)
                     parsed = _extract_json(shaped)
-                    if isinstance(parsed, dict) and all(k in parsed for k in required):
+                    if _fits(parsed, schema):
                         self.calls.append({"site": site, "mode": "truncated+constrained", "finish": finish,
                                            "reasoning_tokens": usage.reasoning_tokens,
                                            "completion_tokens": usage.completion_tokens + usage3.completion_tokens})
@@ -556,6 +555,20 @@ def _with_answer_shape(messages: list[dict], schema: dict) -> list[dict]:
             m["content"] = list(c) + [{"type": "text", "text": shape}]
         break
     return out
+
+
+def _fits(value: Any, schema: dict) -> bool:
+    """``value`` has the schema's shape: an enum holds it, an object carries
+    every required key and each property fits, an array's items each fit."""
+    if "enum" in schema:
+        return value in schema["enum"]
+    kind = schema.get("type")
+    if kind == "object":
+        return (isinstance(value, dict) and all(k in value for k in schema.get("required") or ())
+                and all(_fits(value[k], sub) for k, sub in (schema.get("properties") or {}).items() if k in value))
+    if kind == "array":
+        return isinstance(value, list) and all(_fits(v, schema.get("items") or {}) for v in value)
+    return True
 
 
 def _extract_json(text: str) -> dict | None:
