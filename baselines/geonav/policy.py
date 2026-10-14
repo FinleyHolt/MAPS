@@ -403,8 +403,6 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
             if task_idx >= len(plan["sub_goals"]):
                 break
 
-    if commit_xy is None:
-        commit_xy = pose
     return BaselineResult(
         stops=stops,
         commit_xy=commit_xy,
