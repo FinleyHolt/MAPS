@@ -432,7 +432,9 @@ fly the bench in place of the mission conversation: a config's `policy:`
 hands each episode to the method, and the sensor, prior, budget, replay,
 scorer and row are the bench's. Each config in `configs/baselines/` is a
 control config plus `policy:`, so a baseline root reads as an arm of the
-MAPS root it shares a selection with:
+MAPS root it shares a selection with. The methods draw with matplotlib, which
+the `baselines` extra installs (`pip install -e '.[baselines]'`; `dev` carries
+it too):
 
 ```sh
 for policy in geonav geonav_released visa; do
