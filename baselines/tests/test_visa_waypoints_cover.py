@@ -30,7 +30,7 @@ def test_cover_reaches_every_cell():
     assert len(_LANDMARKS) >= 3  # vacuity floor
     bounds = WorldBounds(0.0, 0.0, 1200.0, 1200.0)
     start = (50.0, 50.0)
-    plan = plan_coverage(_LANDMARKS, bounds, start, altitude_m=125.0, ground_z_m=20.0)
+    plan = plan_coverage(_LANDMARKS, bounds, start, fov_m=210.0)
     assert plan.fov_m == pytest.approx(210.0)
     assert plan.grid_step_m == pytest.approx(147.0)
     assert 1 <= len(plan.waypoints) <= 20
@@ -56,7 +56,7 @@ def test_cover_reaches_every_cell():
 
 
 def test_no_landmark_falls_back_to_the_block():
-    plan = plan_coverage([], WorldBounds(0.0, 0.0, 400.0, 400.0), (0.0, 0.0), 125.0, 20.0)
+    plan = plan_coverage([], WorldBounds(0.0, 0.0, 400.0, 400.0), (0.0, 0.0), fov_m=210.0)
     assert plan.contours == [] and len(plan.waypoints) >= 4
 
 
@@ -246,6 +246,6 @@ def test_a_huge_landmark_is_planned_only_inside_the_window():
     road = Landmark(name="Long Road", contour=[(0.0, 0.0), (20000.0, 0.0), (20000.0, 30.0), (0.0, 30.0)],
                     centroid=(10000.0, 15.0), tags={})
     window = SimpleNamespace(x_min=-1000.0, y_min=-1000.0, x_max=1000.0, y_max=1000.0)
-    plan = plan_coverage([road], window, (0.0, 0.0), 150.0, 0.0)
+    plan = plan_coverage([road], window, (0.0, 0.0), fov_m=300.0)
     assert plan.waypoints
     assert all(-1000.0 <= x <= 1000.0 for x, _y in plan.waypoints)

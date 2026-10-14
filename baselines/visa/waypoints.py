@@ -1,11 +1,10 @@
 """ViSA's exploration path: the paper's Executor, step by step.
 
 Contour merge ``C_merged = union of landmark contours``; a grid over its
-bounding box with step ``delta = FOV(z) * (1 - r)`` where
-``FOV(z) = (z - z_ground) * alpha``; a greedy set cover of ``C_merged`` by
-FOV squares centred on grid points; a visitation order that minimises the
-open path from the start. alpha = 2.0 is the sensor itself here: the harness
-view square is ``2 * (altitude - ground)``.
+bounding box with step ``delta = FOV * (1 - r)``, where ``FOV`` is the side
+of the square the sensor surely covers at the flight altitude; a greedy set
+cover of ``C_merged`` by FOV squares centred on grid points; a visitation
+order that minimises the open path from the start.
 """
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ from shapely.ops import unary_union
 
 from baselines.seam import Landmark
 
-ALPHA = 2.0
 OVERLAP_R = 0.3
 MAX_STOPS = 20
 
@@ -106,23 +104,10 @@ def open_path_order(points: list[tuple[float, float]], start_xy) -> list[int]:
     return order
 
 
-def plan_coverage(
-    landmarks: list[Landmark],
-    bounds,
-    start_xy: tuple[float, float],
-    altitude_m: float,
-    ground_z_m: float,
-    *,
-    alpha: float = ALPHA,
-    r: float = OVERLAP_R,
-    max_stops: int = MAX_STOPS,
-    fov_m: float | None = None,
-) -> CoveragePlan:
+def plan_coverage(landmarks: list[Landmark], bounds, start_xy: tuple[float, float], *, fov_m: float) -> CoveragePlan:
     region = merged_region(landmarks, bounds)
-    # The paper's FOV(z) = (z - z_ground) * 2 is the 90-degree square;
-    # ``fov_m`` is the sensor's own footprint side where it is not.
-    fov = max(1.0, float(fov_m) if fov_m is not None else (float(altitude_m) - float(ground_z_m)) * alpha)
-    step = fov * (1.0 - r)
+    fov = max(1.0, float(fov_m))
+    step = fov * (1.0 - OVERLAP_R)
     minx, miny, maxx, maxy = region.bounds
     grid = [
         (x, y)
@@ -152,7 +137,7 @@ def plan_coverage(
     ]
     covered = np.zeros(gx.size, dtype=bool)
     chosen: list[int] = []
-    while len(chosen) < max_stops and not covered.all():
+    while len(chosen) < MAX_STOPS and not covered.all():
         gains = [int((c & ~covered).sum()) for c in covers]
         best = int(np.argmax(gains))
         if gains[best] == 0:
@@ -172,7 +157,3 @@ def plan_coverage(
         cell_m=cell,
         stats={"region_area_m2": float(region.area), "candidates": len(grid)},
     )
-
-
-def plan_waypoints(landmarks, bounds, start_xy, altitude_m, ground_z_m, **kw) -> list[tuple[float, float]]:
-    return plan_coverage(landmarks, bounds, start_xy, altitude_m, ground_z_m, **kw).waypoints
