@@ -199,7 +199,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
 
     # Commit provenance (prior landmark, runtime detection, world point, or none).
     prov = Counter(m.get("committed_provenance") or "none" for m in scored.values())
-    print("provenance: " + "  ".join(f"{k}={v}" for k, v in prov.most_common()))
+    print("provenance: " + "  ".join(f"{k}={v}" for k, v in sorted(prov.items(), key=lambda kv: (-kv[1], kv[0]))))
     return scored
 
 

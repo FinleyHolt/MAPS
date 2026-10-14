@@ -210,3 +210,13 @@ def test_a_root_with_no_scored_row_does_not_stop_the_roots_after_it(tmp_path, ca
     out = capsys.readouterr()
     assert f"no scored rows under {empty}" in out.err
     assert f"=== {good} ===" in out.out
+
+
+def test_the_provenance_line_orders_ties_by_name(tmp_path, capsys):
+    root = tmp_path / "run"
+    write_ledger(root, *(
+        ledger_row(f"e::{i}#{i}", f"20260725_1{i}0000",
+                   metrics={"SR": 1, "NE": 1.0, "committed_provenance": prov})
+        for i, prov in enumerate(("point", "detection", "point", "detection", "landmark"))))
+    report(root)
+    assert "provenance: detection=2  point=2  landmark=1" in capsys.readouterr().out
