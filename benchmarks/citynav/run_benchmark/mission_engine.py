@@ -277,7 +277,7 @@ class MissionSession:
             try:
                 for pfid, pattrs, ppx in prior_percepts(obs, h.assets, step_idx):
                     loop.upsert_prior_percept(pfid, pattrs, px=ppx)
-            except Exception as exc:  # noqa: BLE001 — colour enrichment never kills a flight
+            except Exception as exc:  # noqa: BLE001 - colour enrichment never kills a flight
                 self.prior_enrich_fails += 1
                 if self.prior_enrich_fails == 1 or self.prior_enrich_fails % 50 == 0:
                     log.warning("prior percept enrichment failed (n=%d) step=%d: %s",
@@ -292,7 +292,7 @@ class MissionSession:
         try:
             loop.record_flown_stop({"pose_xy": new_xy, "alt_m": new_alt, "stop_id": stop_id,
                                     "target_fids": [token] if token else []})
-        except Exception:  # noqa: BLE001 — perception direction never kills a flight
+        except Exception:  # noqa: BLE001 - perception direction never kills a flight
             log.exception("flown-stop record failed (non-fatal)")
 
         self.flights.append(
