@@ -164,9 +164,7 @@ class BaselineHarness:
             Pose(float(episode.start_xy[0]), float(episode.start_xy[1]), self.start_alt_m, 0.0),
         )
         # Wall time per phase, landed on the row as ``<policy>_phase_<name>_s``.
-        self.phase_s: dict[str, float] = {
-            "render": 0.0, "segment": 0.0, "project": 0.0, "fold": 0.0, "examine": 0.0,
-        }
+        self.phase_s: dict[str, float] = {"render": 0.0, "segment": 0.0, "examine": 0.0}
         self.llm_calls = 0
         self.reasoning_tokens = 0
         self.extraction_calls = 0
