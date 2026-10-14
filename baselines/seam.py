@@ -41,8 +41,8 @@ from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.observation import Observation, crop_observation
 
 #: The request-side thinking dial each policy sends on every call. ``None``
-#: sends the arm's ``SEARCH_SAMPLING_REASONING_EFFORT`` (none when unset), so
-#: the call rides the rung the headline arm flew. ``geonav_released`` is
+#: sends the arm's ``SEARCH_SAMPLING_REASONING_EFFORT`` (no key when unset:
+#: the template's own default), so the call rides the rung the headline arm flew. ``geonav_released`` is
 #: GeoNav as shipped, whose DashScope client disabled thinking; it is the arm
 #: that says how much of the gap a reasoning backbone closes for that method.
 REASONING_EFFORT: dict[str, str | None] = {"geonav": None, "geonav_released": "none", "visa": None}
@@ -253,18 +253,6 @@ class BaselineHarness:
 
     # -- the prior ----------------------------------------------------------
 
-    def prior_rows(self) -> list[dict]:
-        """Every OSM row of the block, flat, each carrying its bake category
-        (``roads``, ``buildings``, ``pois``, ...) under ``category``."""
-        out: list[dict] = []
-        for category, rows in (self.assets.base_features or {}).items():
-            if not isinstance(rows, list):
-                continue
-            for r in rows:
-                if isinstance(r, dict):
-                    out.append({**r, "category": category})
-        return out
-
     def landmarks(self) -> list[Landmark]:
         """The landmark prior: one landmark per OSM ``name``.
 
@@ -275,7 +263,12 @@ class BaselineHarness:
         way GeoNav's own loader keeps the largest object per name.
         """
         if self._landmarks is None:
-            self._landmarks = _landmarks_from_rows(self.prior_rows())
+            # Every OSM row of the block, flat, each carrying its bake category
+            # (``roads``, ``buildings``, ``pois``, ...) under ``category``.
+            rows = [{**r, "category": category}
+                    for category, rs in (self.assets.base_features or {}).items() if isinstance(rs, list)
+                    for r in rs if isinstance(r, dict)]
+            self._landmarks = _landmarks_from_rows(rows)
         return list(self._landmarks)
 
     # -- the model ----------------------------------------------------------
@@ -335,12 +328,10 @@ class BaselineHarness:
             )
             choice = resp["choices"][0]
             self.llm_calls += 1
-            usage = _Usage(
-                completion_tokens=int((resp.get("usage") or {}).get("completion_tokens") or 0),
-                reasoning_tokens=reasoning_tokens_of(resp, model=model),
-            )
-            self.reasoning_tokens += usage.reasoning_tokens
-            return ((choice.get("message") or {}).get("content") or ""), choice.get("finish_reason"), usage
+            reasoning = reasoning_tokens_of(resp, model=model)
+            self.reasoning_tokens += reasoning
+            return (((choice.get("message") or {}).get("content") or ""), choice.get("finish_reason"),
+                    int((resp.get("usage") or {}).get("completion_tokens") or 0), reasoning)
 
         def shaped(text):
             parsed = _extract_json(text)
@@ -352,29 +343,30 @@ class BaselineHarness:
         try:
             for _ in range(LLM_ATTEMPTS):
                 try:
-                    text, finish, usage = call(
+                    text, finish, completion, reasoning = call(
                         _with_answer_shape(messages, schema), dial=effort, cap=max_tokens or spec.max_output_tokens,
                     )
                     parsed, mode, more_tokens = shaped(text), "free", 0
                     if parsed is None and text.strip():
                         # The answer exists but is not the schema's JSON: reshape it.
-                        again, _, usage2 = call(
+                        again, _, more_tokens, _ = call(
                             [{"role": "user", "content": EXTRACTION_PROMPT.format(answer=text[:12000])}],
                             dial="none", cap=EXTRACTION_MAX_TOKENS, response_format=strict,
                         )
-                        parsed, mode, more_tokens = shaped(again), "free+extract", usage2.completion_tokens
+                        parsed, mode = shaped(again), "free+extract"
                     elif parsed is None:
                         # No answer at all: the reasoning span ate the cap.
                         self.reasoning_truncated += 1
-                        again, _, usage2 = call(messages, dial=effort, cap=EXTRACTION_MAX_TOKENS, response_format=strict)
-                        parsed, mode, more_tokens = shaped(again), "truncated+constrained", usage2.completion_tokens
+                        again, _, more_tokens, _ = call(messages, dial=effort, cap=EXTRACTION_MAX_TOKENS,
+                                                        response_format=strict)
+                        parsed, mode = shaped(again), "truncated+constrained"
                     if parsed is None:
                         raise ValueError(f"{site}: no schema JSON after the {mode} call")
                     if mode == "free+extract":
                         self.extraction_calls += 1
                     self.calls.append({"site": site, "mode": mode, "finish": finish,
-                                       "reasoning_tokens": usage.reasoning_tokens,
-                                       "completion_tokens": usage.completion_tokens + more_tokens})
+                                       "reasoning_tokens": reasoning,
+                                       "completion_tokens": completion + more_tokens})
                     return parsed
                 except ValueError as exc:
                     last = exc
@@ -420,15 +412,6 @@ def dial_off(model: str) -> dict[str, Any]:
         return {"chat_template_kwargs": {"enable_thinking": False}}
     raise NoDialOff(f"served model {model!r} has no dial-off: its card lists no 'none' effort and its "
                     "template reads no enable_thinking, so a baseline's dial-off calls cannot run on it")
-
-
-@dataclass(frozen=True)
-class _Usage:
-    """One call's completion tokens and the reasoning slice of them, read by
-    ``maps.llm.flight_summary.reasoning_tokens_of``."""
-
-    completion_tokens: int
-    reasoning_tokens: int
 
 
 # A point feature (a bus stop, a shop node) is given a 10 m disc so "beside
@@ -793,19 +776,3 @@ def fly(h, policy: str) -> BaselineFlight:
             **{f"{policy}_{k}": v for k, v in own.items()},
         },
     )
-
-
-__all__ = [
-    "landmark_distance",
-    "match_landmarks",
-    "pixel_bbox",
-    "REASONING_EFFORT",
-    "TEMPERATURE",
-    "BaselineHarness",
-    "BaselineFlight",
-    "BaselineResult",
-    "Budget",
-    "NoDialOff",
-    "Landmark",
-    "fly",
-]

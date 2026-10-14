@@ -34,11 +34,6 @@ CALL_MAX_TOKENS = 800
 # the DashScope default output cap (2,048 tokens for the qwen3-vl-plus API)
 # bounded it; the same bound, stated.
 UNDERSTAND_MAX_TOKENS = 2048
-# substitution: the released caps assumed a backbone with no reasoning span.
-# Thinking tokens count against max_tokens here, so an 800-token call returns
-# an empty object (measured on a recorded run). The headline arm takes the
-# seam's free-call cap; geonav_released keeps the released caps with the dial off.
-THINK_MAX_TOKENS = None  # the seam's free-call cap, the headline arm's output reserve
 # check_subgoals: Navigate ends past t=12 or with every landmark within 40 m;
 # Search ends 5 steps after the last Navigate check or on a flat entropy.
 NAVIGATE_MAX_T = 12
@@ -184,8 +179,12 @@ def _default_plan(instruction: str) -> dict:
 def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
     """The episode. ``released`` selects the as-shipped arm: the released
     token caps under a thinking dial the seam sets to ``none``."""
-    call_cap = CALL_MAX_TOKENS if released else THINK_MAX_TOKENS
-    understand_cap = UNDERSTAND_MAX_TOKENS if released else THINK_MAX_TOKENS
+    # substitution: the released caps assumed a backbone with no reasoning
+    # span. Thinking tokens count against max_tokens here, so an 800-token call
+    # returns an empty object (measured on a recorded run). The headline arm
+    # takes the seam's free-call cap (None: the served output reserve).
+    call_cap = CALL_MAX_TOKENS if released else None
+    understand_cap = UNDERSTAND_MAX_TOKENS if released else None
     ep = h.episode
     instruction = ep.description
 
@@ -325,7 +324,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
 
         if text is not None:
             schema, name = (LOCATE_SCHEMA, "geonav_locate") if mode == "Locate" else (ACTION_SCHEMA, "geonav_action")
-            # released: image part first, then text; the harness builds text first.
+            # substitution: the released client sends the image part first; the harness builds text first.
             messages = [{"role": "system", "content": sys_prompt}, h.user_message(text + JSON_SUFFIX, [img])]
             try:
                 action_json = h.llm_json(messages, schema, name, max_tokens=call_cap)

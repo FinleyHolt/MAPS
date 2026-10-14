@@ -21,9 +21,6 @@ from baselines.visa.som import legend, mark_frame, mark_world_xy
 from baselines.visa.waypoints import plan_coverage
 
 DELTA_Z_M = 10.0
-# None: the seam's free-call cap, the headline arm's output reserve.
-ANALYSIS_MAX_TOKENS = None
-VERIFY_MAX_TOKENS = None
 # ponytail: a frame cap on candidates. SAM 3.1 over a wide view proposes
 # hundreds of masks, and a Set-of-Mark frame with that many numbered discs is
 # unreadable. The paper's VLM-proposed candidates are bounded by what a VLM
@@ -114,7 +111,6 @@ def run_episode(h: BaselineHarness) -> BaselineResult:
         ],
         prompts.ANALYSIS_SCHEMA,
         "visa_instruction_analysis",
-        max_tokens=ANALYSIS_MAX_TOKENS,
     )
     target = analysis.get("target") or {}
     target_class = str(target.get("class") or "object")
@@ -182,7 +178,6 @@ def run_episode(h: BaselineHarness) -> BaselineResult:
             [{"role": "system", "content": prompts.SYSTEM}, h.user_message(text, [marked])],
             prompts.VERIFY_SCHEMA,
             "visa_verify",
-            max_tokens=VERIFY_MAX_TOKENS,
         )
         h.record(f"step_{step:02d}_vm", {"pose_xy": list(obs.pose_xy), "altitude_m": obs.altitude_m,
                                        "guidance_in": guidance, "prompt": text, "response": vm})
