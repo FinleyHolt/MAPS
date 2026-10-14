@@ -168,7 +168,7 @@ def _probe_models(base_url: str) -> list[dict]:
     if not isinstance(data, list) or not data:
         raise EndpointDiscoveryError(
             f"{models_url(base_url)} returned no served models "
-            f"(data={data!r}) — the server is up but serves nothing"
+            f"(data={data!r}): the server is up but serves nothing"
         )
     return [m for m in data if isinstance(m, dict)]
 
@@ -185,7 +185,7 @@ def _facts_from_endpoint(
         if override.model_id not in ids:
             raise EndpointDiscoveryError(
                 f"SEARCH_ENDPOINT_SPEC_OVERRIDE names {override.model_id!r} "
-                f"but {models_url(base_url)} serves {ids} — the pin does "
+                f"but {models_url(base_url)} serves {ids}: the pin does "
                 f"not match the live endpoint"
             )
         served_len = next(m for m in models if m.get("id") == override.model_id).get("max_model_len")
@@ -199,7 +199,7 @@ def _facts_from_endpoint(
     if len(models) != 1:
         raise EndpointDiscoveryError(
             f"{models_url(base_url)} serves {len(models)} models ({ids}); "
-            f"refusing to guess — set SEARCH_ENDPOINT_SPEC_OVERRIDE="
+            f"refusing to guess; set SEARCH_ENDPOINT_SPEC_OVERRIDE="
             f"'<model_id>:<max_model_len>' to pin one"
         )
     model = models[0]
@@ -212,7 +212,7 @@ def _facts_from_endpoint(
     if not max_model_len:
         raise EndpointDiscoveryError(
             f"{models_url(base_url)} reports no max_model_len for "
-            f"{model_id!r} — cannot derive a token budget. If this is a "
+            f"{model_id!r}: cannot derive a token budget. If this is a "
             f"non-vLLM endpoint, set SEARCH_ENDPOINT_SPEC_OVERRIDE="
             f"'<model_id>:<max_model_len>'"
         )
@@ -232,7 +232,7 @@ def _probe_sam_health(urls: str) -> None:
         identity = str(payload.get("service") or "").lower() if isinstance(payload, dict) else ""
         if identity and "sam" not in identity:
             raise EndpointDiscoveryError(
-                f"service 'sam' at {url} answered /health as {identity!r} — a "
+                f"service 'sam' at {url} answered /health as {identity!r}, a "
                 f"reachable-but-WRONG server; expected an identity containing 'sam'"
             )
 
@@ -297,7 +297,7 @@ def discover(
     url = str(base_url or "").strip().rstrip("/")
     if "," in url:
         raise EndpointDiscoveryError(
-            f"SEARCH_REASONER_URL={base_url!r} is a comma-list — the "
+            f"SEARCH_REASONER_URL={base_url!r} is a comma-list; the "
             f"reasoner endpoint is ONE URL: the serving engine load-balances "
             f"its own data-parallel replicas behind it, and no "
             f"client-side endpoint picking exists"
@@ -348,7 +348,7 @@ def discover(
         raise EndpointDiscoveryError(
             f"served window max_model_len={max_model_len} leaves "
             f"input_budget={spec.input_budget} after max_output_tokens="
-            f"{spec.max_output_tokens} + margin={_WINDOW_MARGIN_TOKENS} — "
+            f"{spec.max_output_tokens} + margin={_WINDOW_MARGIN_TOKENS}, "
             f"below the {_MIN_INPUT_BUDGET}-token reasoner minimum"
         )
     return spec
