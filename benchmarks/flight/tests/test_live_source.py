@@ -34,6 +34,19 @@ def test_coverage_holds_the_ground_a_pass_flew_and_not_the_ground_it_did_not(bui
     assert elsewhere["fraction"] == 0.0
 
 
+def test_coverage_of_each_reads_the_ring_as_it_stands_and_not_frames_it_has_evicted(built, make_twin, make_live):
+    tiles = built[0]
+    twin = make_twin()
+    live = make_live(twin)
+    _fly_over(twin, (600.0, 600.0), 8.0)
+    area = _disc(tiles, 600.0, 600.0)
+    (held,) = live.coverage_of_each([area])
+    assert held["fraction"] == 1.0
+    twin.rows.clear()                             # the ring has evicted every frame of that pass
+    (gone,) = live.coverage_of_each([area])
+    assert gone["fraction"] == 0.0 == live.coverage(area)["fraction"]
+
+
 def test_a_ring_that_cannot_be_asked_is_none_with_its_reason(built, make_twin, make_live):
     twin = make_twin()
     live = make_live(twin)

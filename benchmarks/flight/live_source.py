@@ -304,14 +304,6 @@ class LiveSource:
         #: The map's bare-earth surface, None where it carries none (:func:`map_render.terrain`).
         self.terrain = map_render.terrain(map_name, str(self.tiles_dir))
         self.last_refusal = ""
-        #: The ring's index as :meth:`coverage_of_each` has read it, and the
-        #: newest log time, so each later read asks for the frames since.
-        #: ponytail: rows the ring has since evicted stay here, so a pass's
-        #: order may favour a stop whose frames are gone; the flight itself
-        #: asks the ring afresh (:meth:`coverage`). Dropping rows older than
-        #: the ring is the upgrade.
-        self._index_rows: list[dict[str, Any]] = []
-        self._index_newest: int | None = None
         #: Provenance of the last observation: the recorded frames it stands on.
         self.last: dict[str, Any] = {}
         #: The frames placed together, built on the first frame at its size.
@@ -502,15 +494,8 @@ class LiveSource:
     def coverage_of_each(self, areas: list[list[tuple[float, float]]]) -> list[dict[str, Any] | None] | None:
         """:meth:`coverage` of several areas off ONE read of the ring's index,
         in the areas' order. None when the ring cannot be asked."""
-        newest = self._index_newest
-        rows = self._ring_rows(None if newest is None else newest + 1)
-        if rows is None:
-            return None
-        self._index_rows.extend(rows)
-        stamps = [int(r["log_time"]) for r in rows if r.get("log_time") is not None]
-        if stamps:
-            self._index_newest = max(stamps) if newest is None else max(newest, max(stamps))
-        return [self._held_by(self._index_rows, area) for area in areas]
+        rows = self._ring_rows(None)
+        return None if rows is None else [self._held_by(rows, area) for area in areas]
 
     def _ring_rows(self, since: int | None) -> list[dict[str, Any]] | None:
         rows = self.vehicle.index(since=since)
