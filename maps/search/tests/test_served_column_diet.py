@@ -8,6 +8,8 @@ from maps.search.analyze_scene.geom_program import (
     _TAG_RENDER_DROP,
     ProgramError,
     _grid_cell,
+    _grid_columns,
+    _model_facing_row,
     _render_grid_rows,
     run_program,
 )
@@ -37,7 +39,8 @@ def test_the_live_header_keeps_and_drops_by_name():
     """The header has no idx and none of the drop set (name_match and score by name),
     keeps the shape, colour and identity columns, and its separator and body match
     its width."""
-    header, sep, body = _render_grid_rows([ROW]).splitlines()[:3]
+    proj = [_model_facing_row(ROW)]
+    header, sep, body = _render_grid_rows(proj, _grid_columns(proj)).splitlines()[:3]
     assert header.startswith("| fid |"), header
     assert " idx " not in header
     assert header.count("|") == sep.count("|") == body.count("|")

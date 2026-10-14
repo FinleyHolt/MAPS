@@ -692,14 +692,11 @@ def _grid_cell(v) -> str:
 
 
 def _grid_columns(rows) -> list[str]:
-    """The non-empty gridable columns across the rows: priority columns,
-    then the rest in first-seen order."""
+    """The non-empty gridable columns across the model-facing rows: priority
+    columns, then the rest in first-seen order."""
     seen: list[str] = []
     seen_set: set = set()
     for row in rows:
-        if not isinstance(row, dict):
-            continue
-        row = _model_facing_row(row)
         for k, v in row.items():
             if (k == "fid" or k in seen_set or k in _GRID_COL_DROP
                     or v is None or v == ""
@@ -734,29 +731,22 @@ def _grid_columns(rows) -> list[str]:
     return prio + grouped
 
 
-def _render_grid_rows(rows, cols=None) -> str:
-    """The rows as a ``| fid | <cols...> |`` markdown grid, the header
-    repeated every _GRID_HEADER_EVERY rows."""
-    proj = [_model_facing_row(r) if isinstance(r, dict) else r for r in rows]
-    if cols is None:
-        cols = _grid_columns(proj)
+def _render_grid_rows(rows, cols) -> str:
+    """The model-facing rows as a ``| fid | <cols...> |`` markdown grid, the
+    header repeated every _GRID_HEADER_EVERY rows."""
     if cols:
         header = "| fid | " + " | ".join(cols) + " |"
         sep = "|" + " --- |" * (len(cols) + 1)
     else:
         header, sep = "| fid |", "| --- |"
     lines = [header, sep]
-    idx = 0
-    for row in proj:
-        if not isinstance(row, dict):
-            continue
+    for idx, row in enumerate(rows):
         if idx and idx % _GRID_HEADER_EVERY == 0:
             lines.extend((header, sep))
         cells = [_grid_cell(row.get(k)) for k in cols]
         body = " | ".join(cells)
         lines.append(f"| {row.get('fid') or '?'} | {body} |"
                      if cols else f"| {row.get('fid') or '?'} |")
-        idx += 1
     return "\n".join(lines)
 
 
@@ -800,11 +790,11 @@ _TABLE_LEGEND = (
 )
 
 
-def _budget_columns(rows_r, cols, op_cols) -> tuple[list, int]:
-    """``(kept, n_cut)``: ``cols`` cut to fit ``_RENDER_CHAR_BUDGET``, taken
-    in priority order (``op_cols``, identity, the rest) and skipping a
-    column that does not fit; at least one is kept, order unchanged."""
-    proj = [_model_facing_row(r) for r in rows_r if isinstance(r, dict)]
+def _budget_columns(proj, cols, op_cols) -> tuple[list, int]:
+    """``(kept, n_cut)``: ``cols`` of the model-facing rows cut to fit
+    ``_RENDER_CHAR_BUDGET``, taken in priority order (``op_cols``, identity,
+    the rest) and skipping a column that does not fit; at least one is kept,
+    order unchanged."""
     base = 20 * (len(proj) + 2)  # fid cell + pipes per line
     cost = {}
     for c in cols:
@@ -845,8 +835,9 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
     legend = [True]
 
     def table(head, rows, op_cols):
-        cols, n_cut = _budget_columns(rows, _grid_columns(rows), op_cols)
-        head["rows"] = _render_grid_rows(rows, cols)
+        proj = [_model_facing_row(r) for r in rows if isinstance(r, dict)]
+        cols, n_cut = _budget_columns(proj, _grid_columns(proj), op_cols)
+        head["rows"] = _render_grid_rows(proj, cols)
         if legend:
             head["legend"] = _TABLE_LEGEND
             legend.clear()
