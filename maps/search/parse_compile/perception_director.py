@@ -1,13 +1,8 @@
-"""Per-episode perception direction: the segmenter watchlist and the boost.
-
-The WATCHLIST is the class set every later flight segments; each change is
-pushed whole to the live concept provider. A BOOST (``look_for(..., at=)``)
-whose target is a flown stop, a fid a flown stop targeted, or a point near a
-flown pose re-segments that stop now through ``retro_perceiver`` and returns
-the delta. A boost on a target not yet flown (or on none) queues: every
-flight segments its classes beside the watchlist until a flight reaches its
-target (a where-less boost rides one flight).
-"""
+"""The segmenter watchlist (the classes every later flight segments, pushed
+whole to the concept provider) and the boost: ``look_for(..., at=)`` on a
+flown stop, a fid one targeted or a point near a flown pose re-segments that
+stop now; on anything else it queues beside the watchlist until a flight
+reaches its target (a where-less boost rides one flight)."""
 
 from __future__ import annotations
 
@@ -20,8 +15,7 @@ from maps.util.xy_token import parse_xy_token
 
 log = logging.getLogger(__name__)
 
-# How near a flown pose a point boost must fall to address that stop: about
-# half the ~100 m stop view square.
+# How near a flown pose a point boost must fall to address that stop.
 BOOST_MATCH_RADIUS_M: float = 50.0
 
 

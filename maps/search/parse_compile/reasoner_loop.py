@@ -734,7 +734,7 @@ class _Mission:
         try:
             _held = self.mission_spec.held_now(
                 [(str(_it.get("target_fid") or ""), self._stop_xy(_it)) for _it in _queue])
-        except Exception as _exc:  # noqa: BLE001 — the order is a convenience, never a fault
+        except Exception as _exc:  # noqa: BLE001 - the order is a convenience, never a fault
             log.warning("%s pass: held_now failed: %s", self.rid_tag, _summarise_exc(_exc))
             return 0
         _pick = next((_i for _i, _h in enumerate(_held) if _h), 0)
@@ -781,7 +781,7 @@ class _Mission:
                 "center_boundary": look_outline(_trow) if _txy else None,
                 "marks": [],
             }])
-        except Exception as _exc:  # noqa: BLE001 — never crash a flight
+        except Exception as _exc:  # noqa: BLE001 - never crash a flight
             log.warning("%s flight view render failed: %s",
                         self.rid_tag, _summarise_exc(_exc))
             _fv = []
@@ -985,7 +985,7 @@ class _Mission:
             return ack
         try:
             crops = self.look_renderer(reqs)
-        except Exception as exc:  # noqa: BLE001 — render never crashes the mission
+        except Exception as exc:  # noqa: BLE001 - render never crashes the mission
             log.warning("%s SAY crops render failed: %s", self.rid_tag,
                         _summarise_exc(exc))
             return {"error": f"crop render failed: {_summarise_exc(exc)}"}
@@ -1038,7 +1038,7 @@ class _Mission:
                 cell_size_m=float(self.ctx.cell_size_m),
                 grid_shape=tuple(self.ctx.grid_shape))
             maps = [_m] if _m is not None else []
-        except Exception as exc:  # noqa: BLE001 — render never crashes the mission
+        except Exception as exc:  # noqa: BLE001 - render never crashes the mission
             log.warning("%s SAY map render failed: %s", self.rid_tag,
                         _summarise_exc(exc))
             return {"error": f"map render failed: {_summarise_exc(exc)}"}

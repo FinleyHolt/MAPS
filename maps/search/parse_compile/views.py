@@ -277,8 +277,8 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
 
 def map_spec(around: str, mark_fids: list, *, rows: dict, resolve,
              frame: tuple) -> tuple[dict | None, list[str]]:
-    """One show_map's render spec, centred on ``around``, marks resolved
-    off ``rows`` exactly like crops: ``(spec or None, skipped_fids)``."""
+    """One show_map's render spec centred on ``around``, its marks resolved
+    off ``rows``: ``(spec or None, skipped_fids)``."""
     cxy = resolve(around)
     if cxy is None:
         return None, [str(around)]

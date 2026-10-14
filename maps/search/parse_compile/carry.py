@@ -1,10 +1,6 @@
-"""Result handles: the op-program runner and the carry that keeps every
-handle a query over the current surface.
-
-A handle is not a snapshot: after the surface moves, a read re-runs the
-ops that produced it (and the handles those read) over the surface as it
-now stands. A replay that fails keeps the last rows.
-"""
+"""The op-program runner and the carry: a result handle is a query, so a
+read after the surface moves re-runs the ops behind it (and the handles
+they read); a replay that fails keeps the last rows."""
 
 from __future__ import annotations
 
