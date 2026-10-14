@@ -152,7 +152,8 @@ is marked `# released:` at the line. Substitutions are marked `# substitution:`.
 
 Commit tiers: `geonav:graph` (a scene-graph node answered the query),
 `geonav:vlm_pos` (the Locate prompt's `selected_pos`), `geonav:budget` (the
-budget ended the walk), `geonav:timeout` (twenty iterations without a Locate).
+budget ended the walk), `geonav:timeout` (the walk ended, at twenty
+iterations or the plan's last subgoal, without a Locate).
 
 ### ViSA
 
