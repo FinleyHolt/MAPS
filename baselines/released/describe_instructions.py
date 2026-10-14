@@ -28,12 +28,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 import urllib.request
 from pathlib import Path
 
 from baselines.released.calcity_export import TARGET_OBJECT_ID
+from baselines.seam import _extract_json
 
 PROMPT = """\
 An aerial navigation instruction describes one target to find.
@@ -57,10 +57,9 @@ def parse_reply(text: str, block_landmarks: list[str]) -> dict:
     Landmarks outside the block's own names are dropped rather than snapped.
     Raises ``ValueError`` on a reply with no usable object.
     """
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
+    raw = _extract_json(text)
+    if raw is None:
         raise ValueError(f"no JSON object in reply: {text[:200]!r}")
-    raw = json.loads(match.group(0))
     target = str(raw.get("target") or "").strip()
     if not target:
         raise ValueError(f"reply names no target: {raw!r}")
@@ -103,9 +102,8 @@ def describe(export_dir: Path, base_url: str, model: str | None, api_key: str | 
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.0,
-            "max_tokens": 512,
         }, api_key)
-        parsed = parse_reply(reply["choices"][0]["message"]["content"], meta["landmarks"])
+        parsed = parse_reply(reply["choices"][0]["message"]["content"] or "", meta["landmarks"])
         done[block] = {str(TARGET_OBJECT_ID): [parsed]}
         tmp = out.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(done))

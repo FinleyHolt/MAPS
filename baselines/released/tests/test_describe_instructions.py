@@ -20,3 +20,8 @@ def test_a_reply_without_a_target_refuses():
         parse_reply('{"landmarks": []}', [])
     with pytest.raises(ValueError):
         parse_reply("no json here", [])
+
+
+def test_the_first_object_is_read_when_prose_after_it_has_braces():
+    reply = 'Here: {"target": "red car", "landmarks": [], "surroundings": []} (the {target} key is the car)'
+    assert parse_reply(reply, [])["target"] == "red car"
