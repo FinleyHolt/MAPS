@@ -1091,7 +1091,7 @@ class _Run:
                 f"as r0. Refs persist across your analyze calls (redefining one "
                 f"replaces it). "
                 f"valid refs so far: {_known or '(none)'}")
-        return _window(v, win, tok) if win else v
+        return _window(v, win) if win else v
 
 
 class _Args(dict):
@@ -1106,7 +1106,7 @@ class _Args(dict):
             f"op {_quote(self._cx.op)} is missing required arg {_quote(key)}")
 
 
-def _window(cur, win, token):
+def _window(cur, win):
     """``rN[a:b]``: those rows, keeping the source's ``kind``, ``ordered``
     and ``op_cols``. Selecting none of a non-empty set raises."""
     part = "[" + win
@@ -1116,8 +1116,8 @@ def _window(cur, win, token):
         rows = Result(rows, cur.kind, ordered=cur.ordered, op_cols=cur.op_cols)
     if not rows and cur:
         raise ProgramError(
-            f"window {part} in ref {_quote(token)} selected 0 of "
-            f"{len(cur)} rows: this ref holds {len(cur)} row(s) and "
+            f"window {part} selected 0 of {len(cur)} rows: the set holds "
+            f"{len(cur)} row(s) and "
             f"the window begins at or past the end of them "
             f"(or begins at or after where it stops).")
     return rows

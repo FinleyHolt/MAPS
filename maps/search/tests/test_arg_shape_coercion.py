@@ -26,8 +26,11 @@ def test_a_window_serves_its_span():
 
 
 def test_a_window_past_the_end_is_loud():
-    with pytest.raises(ProgramError, match="selected 0 of 3"):
+    with pytest.raises(ProgramError) as e:
         _window("[5:8]")
+    assert str(e.value) == (
+        "window [5:8] selected 0 of 3 rows: the set holds 3 row(s) and the window "
+        "begins at or past the end of them (or begins at or after where it stops).")
 
 
 @pytest.mark.parametrize("op, args", [
