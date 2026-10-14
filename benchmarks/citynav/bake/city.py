@@ -82,7 +82,7 @@ def _raster_bounds(block: str) -> tuple[float, float, float, float]:
     """World extent of a block's 0.1 m/px raster.
 
     The CityNav TIFFs carry no CRS, but they do carry an affine transform, so
-    the local-XY extent is exact. That extent is the block's imagery — the
+    the local-XY extent is exact. That extent is the block's imagery: the
     same line the raw point cloud and the baked ortho stop at.
     """
     tif = _raster_tif(block)
@@ -91,7 +91,7 @@ def _raster_bounds(block: str) -> tuple[float, float, float, float]:
 
         with rasterio.open(tif) as ds:
             b = ds.bounds
-    except Exception as exc:  # noqa: BLE001 — every failure is the same refusal
+    except Exception as exc:  # noqa: BLE001 - every failure is the same refusal
         raise BakeError(f"{block}: cannot read the block raster {tif} ({exc})") from exc
     return (float(b.left), float(b.bottom), float(b.right), float(b.top))
 
@@ -150,7 +150,7 @@ def _cell_coverage(
 
     try:
         ortho = load_ortho_or_rasters(block, rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR))
-    except Exception as exc:  # noqa: BLE001 — every failure is the same refusal
+    except Exception as exc:  # noqa: BLE001 - every failure is the same refusal
         raise BakeError(f"{block}: cannot read the block imagery under {CITYNAV_NATIVE_RGBD_DIR} ({exc})") from exc
     ppm = float(ortho["px_per_m"])
     step = int(round(cell_size_m * ppm))

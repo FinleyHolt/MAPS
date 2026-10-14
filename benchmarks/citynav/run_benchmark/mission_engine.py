@@ -29,6 +29,7 @@ from maps.util.xy_token import parse_xy_token
 
 log = logging.getLogger("run_benchmark")
 
+
 def _write_tour_cursor(flights: list[dict]) -> None:
     """Persist the flown stops (id and xy, in flight order) to
     ``<workdir>/flight/tour_cursor.json``, the record ``replay.tour_stops``
@@ -235,7 +236,7 @@ class MissionSession:
         # Queued boosts segment on THIS flight.
         try:
             loop.start_flight()
-        except Exception:  # noqa: BLE001 — perception direction never kills a flight
+        except Exception:  # noqa: BLE001 - perception direction never kills a flight
             log.exception("boost start failed; flight proceeds un-boosted")
 
         step_idx = len(self.flights)
@@ -247,12 +248,9 @@ class MissionSession:
                 return {"error": "no observation: the aircraft's recording served no frame of this flight's ground"}
             new_xy = (float(obs.pose_xy[0]), float(obs.pose_xy[1]))
             new_alt = float(obs.altitude_m)
-        state.pose_xy = new_xy
-        state.altitude_m = new_alt
-
-        # Rendered north-up (yaw 0), as the captions and the retrospective
-        # re-render are.
-        if self.observe is None:
+        else:
+            # Rendered north-up (yaw 0), as the captions and the retrospective
+            # re-render are.
             obs = crop_observation(
                 new_xy,
                 altitude_m=new_alt,
@@ -261,6 +259,8 @@ class MissionSession:
                 rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
                 map_name=episode.map_name,
             )
+        state.pose_xy = new_xy
+        state.altitude_m = new_alt
         if obs is not None:
             obs.tile = h.tile_frame
 

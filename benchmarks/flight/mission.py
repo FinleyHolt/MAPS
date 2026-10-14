@@ -783,8 +783,7 @@ class Mission:
     # -- the record ----------------------------------------------------------
 
     def row(self) -> dict[str, Any]:
-        """The mission as a ledger row with a bench row's keys, the ones
-        ``measures`` reads among them: the commit is the last of ``visited_xy``."""
+        """The mission as a ledger row with a bench row's keys; the commit is the last of ``visited_xy``."""
         from benchmarks.citynav import paths  # noqa: PLC0415
         from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK  # noqa: PLC0415
         from benchmarks.citynav.run_manifest import arm_env_stamp  # noqa: PLC0415
