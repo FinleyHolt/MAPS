@@ -434,17 +434,9 @@ def _cells_for_geometry(
 
 
 def _tag_value(value: Any) -> str | list[str] | None:
-    if value is None:
-        return None
-    if isinstance(value, float) and math.isnan(value):
-        return None
-    if isinstance(value, (str, int, float, bool)):
-        text = str(value).strip()
-        return text or None
     if isinstance(value, list):
-        vals = sorted({str(v).strip() for v in value if str(v).strip()})
-        return vals or None
-    return None
+        return sorted({str(v).strip() for v in value if str(v).strip()}) or None
+    return _safe_text(value) if value is None or isinstance(value, (str, int, float, bool)) else None
 
 
 def _feature_entry(
