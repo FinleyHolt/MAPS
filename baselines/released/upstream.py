@@ -23,7 +23,6 @@ PROTOCOL = "upstream_released"
 
 @dataclass(frozen=True)
 class Release:
-    method: str
     repo: str
     sha: str
     #: The interpreter the upstream README builds its environment on.
@@ -32,19 +31,16 @@ class Release:
 
 RELEASES: dict[str, Release] = {
     "mgp": Release(
-        method="mgp",
         repo="https://github.com/water-cookie/citynav",
         sha="372ecbd1df58b46ffaad91c118c4838b88b87710",
         python="3.10",
     ),
     "hett": Release(
-        method="hett",
         repo="https://github.com/crotonyl/HETT",
         sha="51eb86c3df1f4a5ce3ba1b1750d027971efa378e",
         python="3.10",
     ),
     "flightgpt": Release(
-        method="flightgpt",
         repo="https://github.com/Uavln/FlightGPT",
         sha="a1dd6760b7064a3b63e0ec4f75ae5921b3c95f92",
         python="3.11",
@@ -56,8 +52,8 @@ def main(argv: list[str]) -> int:
     if argv[1:] != ["pins"]:
         print(__doc__, file=sys.stderr)
         return 2
-    for r in RELEASES.values():
-        print(r.method, r.repo, r.sha, r.python)
+    for method, r in RELEASES.items():
+        print(method, r.repo, r.sha, r.python)
     return 0
 
 
