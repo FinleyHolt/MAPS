@@ -9,10 +9,9 @@ bench reaches it over ``SAM_SERVER_URL``::
 Endpoints
 ---------
 ``GET /health``
-    ``{"ok", "service": "sam", "version", "device", "dtype", "model_id",
-    "vram"}``. Endpoint discovery (``maps.llm.endpoint_spec``) checks
-    ``service`` so a foreign server answering on the SAM port aborts the
-    run at startup. A server whose free device memory falls under
+    ``{"ok", "service": "sam", "version", "device", "vram"}``. Endpoint
+    discovery (``maps.llm.endpoint_spec``) checks ``service`` so a foreign
+    server answering on the SAM port aborts the run at startup. A server whose free device memory falls under
     ``SAM_HEALTH_MIN_FREE_GB`` answers 503, so a wedged server reads as an
     outage instead of a slow one.
 
@@ -55,9 +54,7 @@ from maps.util.mask_codec import encode_mask_record
 log = logging.getLogger("sam_server")
 logging.basicConfig(level=logging.INFO)
 
-_MODEL_ID = os.environ.get("SAM_MODEL_ID", "facebook/sam3.1")
 _DEVICE = os.environ.get("SAM_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
-_DTYPE_STR = os.environ.get("SAM_DTYPE", "bfloat16")
 
 _state_lock = threading.Lock()
 # The admission wait is async, so a waiter holds no thread from the pool
@@ -159,8 +156,6 @@ def health() -> dict:
         "service": "sam",
         "version": "sam3.1-image",
         "device": str(_DEVICE),
-        "dtype": _DTYPE_STR,
-        "model_id": _MODEL_ID,
         "vram": vram,
     }
     floor = float(os.environ.get("SAM_HEALTH_MIN_FREE_GB", "1.0"))
