@@ -452,7 +452,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         "sortie": root.name, "run_no": row.get("run_no"), "episode_id": row.get("episode_id"),
         "replay_of": row.get("replay_of"), "model": params.get("model"),
         "reasoning_effort": params.get("reasoning_effort"), "intel_quality": quality[0],
-        "end": end, "excluded": " ".join(str(reason).split()) or None if reason else None,
+        "end": end, "excluded": " ".join(str(reason or "").split()) or None,
         "infra": is_infra_abort(row),
         "determination": determined,
         "commit_xy": None if xy is None else [round(xy[0], 2), round(xy[1], 2)],
