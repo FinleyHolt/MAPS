@@ -102,16 +102,14 @@ def classify_referent(description: str) -> str:
 
 
 def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, float]:
-    """``(start altitude AMSL, block ground datum)`` for one episode: the
-    split row's start z, or ground + ``start_altitude_agl_m`` when set, held
-    to ``[ground + 1, altitude_cap_m]``. The pair sets the observation span,
-    ``2 * (alt - ground)``.
-    """
+    """``(start altitude AMSL, block ground datum)`` for one episode: ground
+    + ``start_altitude_agl_m`` when set, else the split row's start z, held to
+    ``[ground + 1, altitude_cap_m]``."""
     from maps.perception.ortho.ground_level import (  # noqa: PLC0415
         GROUND_LEVEL,
     )
 
-    ground = float(GROUND_LEVEL.get(map_name, 0.0))
+    ground = float(GROUND_LEVEL[map_name])
     if cfg.start_altitude_agl_m is not None:
         alt = ground + float(cfg.start_altitude_agl_m)
     elif start_z is None:
@@ -298,30 +296,15 @@ def run_episode(
         episode = dataclasses.replace(episode, start_xy=uniform_spawn_xy(
             (float(b.x_min), float(b.y_min), float(b.x_max), float(b.y_max)),
             cfg.spawn_seed, episode.episode_id))
-        log.info(
-            "  uniform spawn: (%.1f, %.1f) (spawn_seed=%d, episode=%s)",
-            episode.start_xy[0],
-            episode.start_xy[1],
-            int(cfg.spawn_seed),
-            episode.episode_id,
-        )
+        log.info("  uniform spawn: (%.1f, %.1f) (spawn_seed=%d, episode=%s)",
+                 *episode.start_xy, int(cfg.spawn_seed), episode.episode_id)
     h = build_episode(cfg, episode, assets)
     state = h.state
     ground = h.search_loop._ortho_ground_z_m
-    log.info(
-        "  ortho start altitude: %.2f m (%s, ground=%.2f, "
-        "cap=%.0f, view_square=%.0fm, episode=%s)",
-        state.altitude_m,
-        (
-            f"AGL {cfg.start_altitude_agl_m:.0f} m"
-            if cfg.start_altitude_agl_m is not None
-            else f"row z={episode.start_z:.2f}"
-        ),
-        ground,
-        float(cfg.altitude_cap_m),
-        2.0 * (state.altitude_m - ground),
-        episode.episode_id,
-    )
+    agl = cfg.start_altitude_agl_m
+    log.info("  ortho start altitude: %.2f m (%s, ground=%.2f, cap=%.0f, view_square=%.0fm, episode=%s)",
+             state.altitude_m, f"AGL {agl:.0f} m" if agl is not None else f"row z={episode.start_z:.2f}",
+             ground, float(cfg.altitude_cap_m), 2.0 * (state.altitude_m - ground), episode.episode_id)
     h.search_loop.set_retro_perceiver(functools.partial(retro_perceive, h))
 
     # The takeoff pose, before the mission moves the drone: the replay flies
