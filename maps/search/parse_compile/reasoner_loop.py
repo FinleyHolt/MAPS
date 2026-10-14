@@ -579,17 +579,14 @@ class _Mission:
         return self._map_feats
 
     def _loop_breaker_facts(self, _n: int) -> str:
-        def _cap(fids: list[str]) -> str:
-            return f"{fids[:8]}" + (
-                f" (+{len(fids) - 8} more)" if len(fids) > 8 else "")
-        c_n, a_n, cols = self._surface_census_counts()
+        c_n, a_n, cols, more = self._census(8)
         parts = [
             f" This error class has now occurred {_n}x.",
             f" Live surface: {_live_counts(c_n, a_n, ';')}.",
         ]
         if cols:
             parts.append(
-                f" Columns computed on rows so far: {_cap(cols)}.")
+                f" Columns computed on rows so far: {cols}{more}.")
         return "".join(parts)
 
     def _err_class_sig(self, err: str) -> str:
@@ -598,24 +595,24 @@ class _Mission:
         s = re.sub(r"\d+", "_", s)
         return s[:100]
 
-    def _surface_census_counts(self) -> tuple[int, int, list[str]]:
-        """Live counts: detections, priors, computed columns."""
+    def _census(self, cap: int) -> tuple[int, int, list[str], str]:
+        """Live counts: detections, priors, the first ``cap`` computed
+        columns and the " (+N more)" past them."""
         c_n = len(self.ns.get("cands") or [])
         a_n = len(self.ns.get("anchors") or [])
         cols = sorted({k for _row in self.row_latest.values()
                        for k, _v in _row.items()
                        if k not in MODEL_UNSERVED_COLUMNS
                        and _v not in (None, "")})
-        return c_n, a_n, cols
+        more = f" (+{len(cols) - cap} more)" if len(cols) > cap else ""
+        return c_n, a_n, cols[:cap], more
 
     def _repeated_rejection_state(self, err: str, _n: int, _consec: int) -> str:
         """The 3rd-consecutive-rejection fact, served instead of the remedy
         and census again: the counts, the rejection's first clause and the
         live state."""
         _first = str(err).split(". ", 1)[0].strip().rstrip(".")
-        c_n, a_n, cols = self._surface_census_counts()
-        _cols_s = f"{cols[:12]}" + (
-            f" (+{len(cols) - 12} more)" if len(cols) > 12 else "")
+        c_n, a_n, cols, more = self._census(12)
         return (
             f"rejected again -- the same error class, {_consec}x "
             f"consecutively ({_n}x): {_first}. The full "
@@ -625,7 +622,7 @@ class _Mission:
             f"the same surface: re-issuing the same call unchanged "
             f"returns exactly this rejection. Live now: "
             f"{_live_counts(c_n, a_n)}"
-            + (f"; columns computed on rows: {_cols_s}." if cols else "."))
+            + (f"; columns computed on rows: {cols}{more}." if cols else "."))
 
     def _loop_broken_error(self, err: str, sig_of: str | None = None) -> str:
         """A repeated same-class error, escalating: verbatim first, then with
@@ -665,8 +662,8 @@ class _Mission:
             else:
                 self._dedup_key, self._dedup_n = _key, 1
             if self._dedup_n >= 2:
-                _c_n, _a_n, _dcols = self._surface_census_counts()
-                _cols_s = ("; columns live: " + ", ".join(_dcols[:12])
+                _c_n, _a_n, _dcols, _ = self._census(12)
+                _cols_s = ("; columns live: " + ", ".join(_dcols)
                            if _dcols else "")
                 return {"note": _DEDUP_REPEAT_NOTE.format(
                     n=_ordinal(self._dedup_n),
