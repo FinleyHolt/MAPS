@@ -293,7 +293,7 @@ def render_candidate_crops(
     if imagery is None:
         try:
             _wb = ortho_world_bounds(map_name, rgbd_dir=rgbd_dir)
-        except Exception as exc:  # noqa: BLE001 — no bounds -> just don't shift
+        except Exception as exc:  # noqa: BLE001
             log.debug("look: no raster bounds for %s (%s); no edge-shift",
                       map_name, exc)
     if imagery is not None:
@@ -359,7 +359,7 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
     """Render one crop of the ``ctx`` m square at ``pose_xy`` around the
     subject at ``true_xy``: ``{"jpeg": bytes, ...}`` with the caption's
     facts, or None (logged) on a failed render."""
-    import cv2  # noqa: PLC0415 — hard dep of the overlay renderer
+    import cv2  # noqa: PLC0415
     import numpy as np  # noqa: PLC0415
     from maps.perception.ortho.camera_model import raster_source_gsd_m  # noqa: PLC0415
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
@@ -383,7 +383,7 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
             rgbd_dir=rgbd_dir,
             ortho=imagery.ortho(_window) if imagery is not None else None,
         )
-    except Exception as exc:  # noqa: BLE001 — a render fail skips one crop
+    except Exception as exc:  # noqa: BLE001
         log.warning("look: crop render failed at %s: %s", (true_x, true_y),
                     exc)
         return None

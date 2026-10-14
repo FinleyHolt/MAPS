@@ -403,13 +403,10 @@ class SearchLoop:
 
     @staticmethod
     def _detection_id(det) -> str:
-        """The world tracker's ``wt_<n>`` id, else ``label@x,y``.
-
-        A FRAME-LOCAL INDEX IS NEVER A RE-ID KEY: the segmenter's per-frame
-        ``sam3_1_img_<n>`` id would exact-match the next stop's unrelated
-        detection n and re-home its node. ``label@x,y`` collides only on
-        genuine co-location, which is the fold the graph wants.
-        """
+        """The world tracker's ``wt_<n>`` id, else ``label@x,y``, which
+        collides only on co-location. The segmenter's frame-local
+        ``sam3_1_img_<n>`` id is never the key: it would match the next
+        stop's unrelated detection n."""
         track = (det.metadata or {}).get("track_id")
         if isinstance(track, str) and track.startswith("wt_"):
             return track
