@@ -692,8 +692,9 @@ class Rows:
             hi = int(i.stop)
             if self.spec:
                 # a slice of a slice composes into absolute indices
-                base = int(self.spec[1:-1].split(":")[0])
-                lo, hi = base + lo, base + hi
+                p_lo, p_hi = (int(x) for x in self.spec[1:-1].split(":"))
+                s = range(len(self.mp.env.rows_of_ref(self.ref)))[p_lo:p_hi][lo:hi]
+                lo, hi = s.start, s.stop
             return Rows(self.ref, self.mp, f"[{lo}:{hi}]")
         rows = self._rows()
         if not isinstance(i, int) or not (-len(rows) <= i < len(rows)):

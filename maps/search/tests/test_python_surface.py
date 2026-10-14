@@ -687,3 +687,16 @@ def test_a_move_reaching_a_loop_by_another_spelling_is_refused(code):
     _reply, fr, flights, _d = drive([[run(code)], "done"])
     assert not flights, (flights, tool_results(fr)[0])
 
+
+def test_a_window_of_a_window_composes_the_python_way():
+    """A window never grows past its parent, and a negative end counts from
+    the parent's end."""
+    from maps.search.parse_compile.python_surface import MissionPython, Rows
+
+    rows = [{"fid": f"detected_{i}"} for i in range(20)]
+    env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
+    r = Rows("r1", MissionPython(env))
+    assert [x.get("fid") for x in r[2:5][0:10]] == \
+        [x["fid"] for x in rows[2:5][0:10]]
+    assert [x.get("fid") for x in r[2:6][0:-1]] == \
+        [x["fid"] for x in rows[2:6][0:-1]]
