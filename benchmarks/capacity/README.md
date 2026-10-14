@@ -2,9 +2,8 @@
 
 How many correct finds per hour one operator lands as offered report load
 rises, flying the reports alone or with agents flying them (assisted). This
-package holds the headless pieces. The participant front end lives in
-MAPSInternal (`have_worlds/station/mission_console`) and writes the same
-session shape.
+package holds the headless pieces. The participant front end is not in this
+repository and writes the same session shape.
 
 | Piece | What it is |
 |---|---|
@@ -27,7 +26,7 @@ A session flies into a fresh `--out-root`: its clock cannot resume.
 ## Session shape (both arms)
 
 - `<root>/arrivals.json`: the stream as `streams.py` wrote it (`load_per_h`, `hours`, `seed`, `reports`).
-- `<root>/episodes.jsonl`: one row per report attempt, read through `benchmarks.citynav.analysis.rows.load_attempts`, carrying `episode_id`, `workdir`, `status`, `arrival_s`, `claimed_s`, `elapsed_s` (session seconds) and `metrics.SR`.
+- `<root>/episodes.jsonl`: one row per report attempt, read through `benchmarks.citynav.analysis.rows.load_attempts`, carrying `episode_id`, `workdir`, `status`, `arrival_s`, `claimed_s` (session seconds), `elapsed_s` (the attempt's wall seconds) and `metrics.SR`.
 
 A report is found at `claimed_s + elapsed_s`. It counts toward finds per hour
 when its SR is 1 and it is found inside the session's `hours`. A session

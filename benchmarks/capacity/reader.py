@@ -4,9 +4,9 @@ saturation load, and alone against assisted on the same streams.
 A session is one run root holding ``arrivals.json`` (the stream it flew,
 ``benchmarks.capacity.streams``) and the bench ledger read through
 ``benchmarks.citynav.analysis.rows.load_attempts``. Each report's row carries
-``arrival_s``, ``claimed_s`` and ``elapsed_s`` (session seconds) and the
-bench's ``SR`` metric; the alone arm's front end writes the same shape. A
-report is found at ``claimed_s + elapsed_s`` and counts toward the session's
+``arrival_s`` and ``claimed_s`` (session seconds), ``elapsed_s`` (the
+attempt's wall seconds) and the bench's ``SR`` metric; the alone arm's front
+end writes the same shape. A report is found at ``claimed_s + elapsed_s`` and counts toward the session's
 finds per hour when its SR is 1 and it lands inside the session's ``hours``::
 
     python -m benchmarks.capacity.reader --assisted <root>... [--alone <root>...] [--json]
