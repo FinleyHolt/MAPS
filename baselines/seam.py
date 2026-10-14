@@ -297,30 +297,19 @@ class BaselineHarness:
         jpegs = [im if isinstance(im, bytes) else self.jpeg(im) for im in (images or [])]
         return {"role": "user", "content": build_vision_user_content(text, jpegs)}
 
-    def llm_json(
-        self,
-        messages: list[dict],
-        schema: dict,
-        schema_name: str,
-        *,
-        max_tokens: int | None = None,
-        timeout: float = 1800.0,
-        attempts: int = 2,
-    ) -> dict:
+    def llm_json(self, messages: list[dict], schema: dict, schema_name: str, *, max_tokens: int | None = None) -> dict:
         """One JSON answer at the policy's temperature and thinking dial.
 
-        Two calls at most. The first carries no output grammar: on this serve
-        a grammar applies from the first token and the reasoning span never
-        opens (measured on a recorded GeoNav action call: 49 completion tokens
-        and no reasoning under ``json_schema`` strict, 8,192 tokens of
-        reasoning without it), so a constrained call would run every baseline
-        without thinking whatever the dial says. The model reasons, then
-        answers, and the answer is parsed as JSON and checked against the
-        schema (``_fits``). An answer that is not that JSON goes through a second,
-        grammar-constrained call with the dial off that only reshapes it. A
-        first call whose cap the reasoning exhausted (no answer) falls back
-        to the constrained call at the policy's dial and is counted under
-        ``reasoning_truncated``.
+        The first call carries no output grammar: on this serve a grammar
+        applies from the first token and the reasoning span never opens, so a
+        constrained call would run every baseline without thinking whatever
+        the dial says. The model reasons, then answers, and the answer is
+        parsed as JSON and checked against the schema (``_fits``). An answer
+        that is not that JSON goes through a second, grammar-constrained call
+        with the dial off that only reshapes it. A first call whose cap the
+        reasoning exhausted (no answer) falls back to the constrained call at
+        the policy's dial and is counted under ``reasoning_truncated``.
+        ``LLM_ATTEMPTS`` tries, then ``RuntimeError``.
         """
         from maps.llm import endpoint_spec
         from maps.llm.flight_summary import reasoning_tokens_of
@@ -344,7 +333,7 @@ class BaselineHarness:
             if response_format is not None:
                 kw["response_format"] = response_format
             resp = _chat_completions_raw(
-                spec.base_url, api_key, timeout=timeout, model=model, messages=msgs, **{cap_key: cap}, **kw,
+                spec.base_url, api_key, timeout=LLM_TIMEOUT_S, model=model, messages=msgs, **{cap_key: cap}, **kw,
             )
             choice = resp["choices"][0]
             self.llm_calls += 1
@@ -355,47 +344,43 @@ class BaselineHarness:
             self.reasoning_tokens += usage.reasoning_tokens
             return ((choice.get("message") or {}).get("content") or ""), choice.get("finish_reason"), usage
 
+        def shaped(text):
+            parsed = _extract_json(text)
+            return parsed if _fits(parsed, schema) else None
+
         strict = {"type": "json_schema", "json_schema": {"name": schema_name, "schema": schema, "strict": True}}
         t0 = time.perf_counter()
         last: Exception | None = None
         try:
-            for _ in range(max(1, attempts)):
+            for _ in range(LLM_ATTEMPTS):
                 try:
                     text, finish, usage = call(
                         _with_answer_shape(messages, schema), dial=effort, cap=max_tokens or spec.max_output_tokens,
                     )
-                    parsed = _extract_json(text)
-                    if _fits(parsed, schema):
-                        self.calls.append({"site": site, "mode": "free", "finish": finish,
-                                           "reasoning_tokens": usage.reasoning_tokens, "completion_tokens": usage.completion_tokens})
-                        return parsed
-                    if text.strip():
+                    parsed, mode, more_tokens = shaped(text), "free", 0
+                    if parsed is None and text.strip():
                         # The answer exists but is not the schema's JSON: reshape it.
-                        shaped, finish2, usage2 = call(
+                        again, _, usage2 = call(
                             [{"role": "user", "content": EXTRACTION_PROMPT.format(answer=text[:12000])}],
                             dial="none", cap=EXTRACTION_MAX_TOKENS, response_format=strict,
                         )
-                        parsed = _extract_json(shaped)
-                        if _fits(parsed, schema):
-                            self.extraction_calls += 1
-                            self.calls.append({"site": site, "mode": "free+extract", "finish": finish,
-                                               "reasoning_tokens": usage.reasoning_tokens,
-                                               "completion_tokens": usage.completion_tokens + usage2.completion_tokens})
-                            return parsed
-                        raise ValueError(f"{site}: the extraction call returned no schema JSON")
-                    # No answer at all: the reasoning span ate the cap.
-                    self.reasoning_truncated += 1
-                    shaped, finish3, usage3 = call(messages, dial=effort, cap=EXTRACTION_MAX_TOKENS, response_format=strict)
-                    parsed = _extract_json(shaped)
-                    if _fits(parsed, schema):
-                        self.calls.append({"site": site, "mode": "truncated+constrained", "finish": finish,
-                                           "reasoning_tokens": usage.reasoning_tokens,
-                                           "completion_tokens": usage.completion_tokens + usage3.completion_tokens})
-                        return parsed
-                    raise ValueError(f"{site}: no schema JSON after a truncated reasoning span")
+                        parsed, mode, more_tokens = shaped(again), "free+extract", usage2.completion_tokens
+                    elif parsed is None:
+                        # No answer at all: the reasoning span ate the cap.
+                        self.reasoning_truncated += 1
+                        again, _, usage2 = call(messages, dial=effort, cap=EXTRACTION_MAX_TOKENS, response_format=strict)
+                        parsed, mode, more_tokens = shaped(again), "truncated+constrained", usage2.completion_tokens
+                    if parsed is None:
+                        raise ValueError(f"{site}: no schema JSON after the {mode} call")
+                    if mode == "free+extract":
+                        self.extraction_calls += 1
+                    self.calls.append({"site": site, "mode": mode, "finish": finish,
+                                       "reasoning_tokens": usage.reasoning_tokens,
+                                       "completion_tokens": usage.completion_tokens + more_tokens})
+                    return parsed
                 except ValueError as exc:
                     last = exc
-            raise RuntimeError(f"{site}: no JSON after {attempts} attempts") from last
+            raise RuntimeError(f"{site}: no JSON after {LLM_ATTEMPTS} attempts") from last
         finally:
             self.phase_s["examine"] += time.perf_counter() - t0
 
@@ -528,6 +513,10 @@ JPEG_QUALITY = 85
 
 #: The reshaping call only restates an answer; it never reasons.
 EXTRACTION_MAX_TOKENS = 4096
+
+#: Each model call's HTTP timeout, and the tries ``llm_json`` makes at an answer.
+LLM_TIMEOUT_S = 1800.0
+LLM_ATTEMPTS = 2
 
 EXTRACTION_PROMPT = (
     "Restate the answer below as one JSON object matching the schema you are "
