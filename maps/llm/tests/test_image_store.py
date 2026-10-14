@@ -1,76 +1,102 @@
 """With an image store set, an image crosses the wire once, named by its sha;
-a 409 naming a sha the store lost sends it again."""
+a 409 naming a sha the store lost sends it again. The PUT carries no reasoner
+key, a cancel aborts it, and a store fault is the store's, never an LLM status."""
 
 from __future__ import annotations
 
 import base64
 import hashlib
+import socket
+import threading
+import time
+
+import httpx
+import pytest
 
 from maps.llm import http as http_mod
 from tests.serves import ChatServe
 
 _RAW = b"\x89PNG not really"
 _SHA = hashlib.sha256(_RAW).hexdigest()
-_MESSAGES = [{"role": "user", "content": [
-    {"type": "text", "text": "look"},
-    {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(_RAW).decode()}},
-]}]
 
 
-def _send(monkeypatch, answers) -> tuple[list[dict], list[str]]:
+def _messages(url: str = "data:image/png;base64," + base64.b64encode(_RAW).decode()) -> list[dict]:
+    return [{"role": "user", "content": [
+        {"type": "text", "text": "look"},
+        {"type": "image_url", "image_url": {"url": url}},
+    ]}]
+
+
+def _store(monkeypatch, url: str = "http://store") -> list[tuple[str, dict]]:
+    """Point the store at ``url`` with nothing held; when ``url`` is the
+    default, record each PUT's (url, headers) instead of sending it."""
     monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
-    monkeypatch.setenv(http_mod.IMAGE_STORE_ENV, "http://store")
+    monkeypatch.setenv(http_mod.IMAGE_STORE_ENV, url)
     monkeypatch.setattr(http_mod, "_IMAGE_STORE_HELD", set())
-    puts: list[str] = []
+    puts: list[tuple[str, dict]] = []
+    if url == "http://store":
+        def put(self, url, **kw):
+            puts.append((url, kw["headers"]))
+            return httpx.Response(200, request=httpx.Request("PUT", url))
+        monkeypatch.setattr(httpx.Client, "put", put)
+    return puts
 
-    class _Ok:
-        def raise_for_status(self) -> None:
-            pass
 
-    monkeypatch.setattr(http_mod.httpx, "put", lambda url, **kw: (puts.append(url), _Ok())[1])
-    with ChatServe(answers) as serve:
-        http_mod._chat_completions_raw(f"{serve.url}/v1", None, model="m", messages=_MESSAGES, timeout=30.0)
-        http_mod._chat_completions_raw(f"{serve.url}/v1", None, model="m", messages=_MESSAGES, timeout=30.0)
-    return serve.bodies, puts
+def _send(serve, messages=None, **kw) -> dict:
+    return http_mod._chat_completions_raw(
+        f"{serve.url}/v1", "sk-reasoner", model="m", messages=messages or _messages(), timeout=30.0, **kw)
 
 
 def test_an_image_crosses_the_wire_once_by_its_sha(monkeypatch) -> None:
-    bodies, puts = _send(monkeypatch, [])
-    assert puts == [f"http://store/looks/{_SHA}"]
-    assert all(b["messages"][0]["content"][1]["image_url"]["url"] == f"sha256:{_SHA}" for b in bodies)
-    assert _MESSAGES[0]["content"][1]["image_url"]["url"].startswith("data:")
+    puts = _store(monkeypatch)
+    with ChatServe() as serve:
+        _send(serve)
+        _send(serve)
+    assert [u for u, _ in puts] == [f"http://store/looks/{_SHA}"]
+    assert puts[0][1]["Content-Type"] == "image/png"
+    assert all(b["messages"][0]["content"][1]["image_url"]["url"] == f"sha256:{_SHA}" for b in serve.bodies)
 
 
 def test_a_sha_the_store_lost_is_sent_again(monkeypatch) -> None:
-    bodies, puts = _send(monkeypatch, [(409, {"missing": [_SHA]}, {})])
-    assert puts == [f"http://store/looks/{_SHA}"] * 2
-    assert len(bodies) == 3
-
-
-def test_an_undecodable_image_rides_inline(monkeypatch) -> None:
-    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
-    monkeypatch.setenv(http_mod.IMAGE_STORE_ENV, "http://store")
-    monkeypatch.setattr(http_mod, "_IMAGE_STORE_HELD", set())
-    puts: list[str] = []
-    monkeypatch.setattr(http_mod.httpx, "put", lambda url, **kw: puts.append(url))
-    bad = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]
-    with ChatServe() as serve:
-        http_mod._chat_completions_raw(f"{serve.url}/v1", None, model="m", messages=bad, timeout=30.0)
-    assert puts == []
-    assert serve.bodies[0]["messages"] == bad
+    puts = _store(monkeypatch)
+    with ChatServe([(409, {"missing": [_SHA]}, {})]) as serve:
+        _send(serve)
+        _send(serve)
+    assert [u for u, _ in puts] == [f"http://store/looks/{_SHA}"] * 2
+    assert len(serve.bodies) == 3
 
 
 def test_the_store_put_carries_no_reasoner_key(monkeypatch) -> None:
-    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
-    monkeypatch.setenv(http_mod.IMAGE_STORE_ENV, "http://store")
-    monkeypatch.setattr(http_mod, "_IMAGE_STORE_HELD", set())
-    seen: list[dict] = []
-
-    class _Ok:
-        def raise_for_status(self) -> None:
-            pass
-
-    monkeypatch.setattr(http_mod.httpx, "put", lambda url, **kw: (seen.append(kw["headers"]), _Ok())[1])
+    puts = _store(monkeypatch)
     with ChatServe() as serve:
-        http_mod._chat_completions_raw(f"{serve.url}/v1", "sk-secret", model="m", messages=_MESSAGES, timeout=30.0)
-    assert "Authorization" not in seen[0], seen[0]
+        _send(serve)
+    assert "Authorization" not in puts[0][1], puts[0][1]
+
+
+def test_an_undecodable_image_rides_inline(monkeypatch) -> None:
+    puts = _store(monkeypatch)
+    bad = "data:image/png;base64,abc"
+    with ChatServe() as serve:
+        _send(serve, _messages(bad))
+    assert puts == []
+    assert serve.bodies[0]["messages"][0]["content"][1]["image_url"]["url"] == bad
+
+
+def test_a_store_refusal_is_the_stores_error_and_reaches_no_reasoner(monkeypatch) -> None:
+    with ChatServe() as store:  # answers a PUT 501
+        _store(monkeypatch, store.url)
+        with ChatServe() as serve, pytest.raises(http_mod.ImageStoreError, match="image store"):
+            _send(serve)
+    assert serve.bodies == []
+
+
+def test_a_cancel_aborts_a_held_store_put(monkeypatch) -> None:
+    with socket.create_server(("127.0.0.1", 0)) as silent:  # takes the PUT, never answers
+        _store(monkeypatch, f"http://127.0.0.1:{silent.getsockname()[1]}")
+        cancel = threading.Event()
+        threading.Timer(0.5, cancel.set).start()
+        t0 = time.monotonic()
+        with ChatServe() as serve, pytest.raises(http_mod.CallCanceled):
+            _send(serve, cancel_event=cancel)
+        assert time.monotonic() - t0 < 2.0
+    assert serve.bodies == []
