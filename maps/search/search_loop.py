@@ -4,6 +4,7 @@ each flight's detections into, and the segmenter's class set."""
 from __future__ import annotations
 
 import logging
+import math
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -461,8 +462,8 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m):
         except (TypeError, ValueError, IndexError):
             world_contour = None
 
-    col = int((det.world_xy[0] - bounds_min[0]) / cell_size_m)
-    row = int((det.world_xy[1] - bounds_min[1]) / cell_size_m)
+    col = math.floor((det.world_xy[0] - bounds_min[0]) / cell_size_m)
+    row = math.floor((det.world_xy[1] - bounds_min[1]) / cell_size_m)
     if cells is not None:
         centroid = (
             int(round(float(cells[:, 0].mean()))),
