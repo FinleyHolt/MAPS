@@ -208,7 +208,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
         graph.add_geo_node(lm)
     engine = QueryEngine(graph)
     cmap = CognitiveMap((bounds.x_min, bounds.y_min, bounds.x_max, bounds.y_max), h.ground_z_m,
-                        matched, target_name, surroundings)
+                        matched, target_name)
 
     pose = (float(ep.start_xy[0]), float(ep.start_xy[1]))
     alt = h.start_alt_m  # released: altitude never changes

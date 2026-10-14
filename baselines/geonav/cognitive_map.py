@@ -92,7 +92,6 @@ class CognitiveMap:
         ground_z: float,
         landmarks: list[Landmark],
         target_name: str,
-        surroundings_names: list[str],
         px_per_m: float = PX_PER_M,
     ) -> None:
         self.x_min, self.y_min, self.x_max, self.y_max = (float(b) for b in bounds)

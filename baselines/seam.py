@@ -601,14 +601,18 @@ def _distinctive(name: str) -> tuple[list[str], bool]:
     return (kept, True) if kept else (tokens, False)
 
 
-def match_landmarks(names: list[str], landmarks: list[Landmark], *, floor: float = 0.6) -> list[Landmark]:
+#: The match ratio below which an instruction's place is left unmatched.
+MATCH_FLOOR = 0.6
+
+
+def match_landmarks(names: list[str], landmarks: list[Landmark]) -> list[Landmark]:
     """The instruction's named places, each to the OSM landmark it names.
 
     Both papers took their landmark strings from a curated file and matched
     on the full name; here the strings come from an extraction call, so the
     match is on the distinctive tokens (``difflib`` ratio, a shared
-    distinctive token counting as 0.8) with a floor below which a place is
-    honestly unmatched.
+    distinctive token counting as 0.8); a place under ``MATCH_FLOOR`` is
+    left unmatched.
     """
     out: list[Landmark] = []
     seen: set[str] = set()
@@ -633,7 +637,7 @@ def match_landmarks(names: list[str], landmarks: list[Landmark], *, floor: float
                     r = max(r, 0.8)
             if (r, full) > best_key:
                 best, best_key = lm, (r, full)
-        if best is not None and best_key[0] >= floor and best.name not in seen:
+        if best is not None and best_key[0] >= MATCH_FLOOR and best.name not in seen:
             out.append(best)
             seen.add(best.name)
     return out
@@ -662,18 +666,6 @@ def pixel_bbox(det) -> tuple[int, int, int, int] | None:
         return tuple(int(v) for v in mask.bbox)
     bb = (getattr(det, "metadata", None) or {}).get("pixel_bbox")
     return tuple(int(v) for v in bb) if bb else None
-
-
-def _centroid(pts: list[tuple[float, float]]) -> tuple[float, float]:
-    try:
-        from shapely.geometry import Polygon
-
-        c = Polygon(pts).centroid
-        if not c.is_empty:
-            return (float(c.x), float(c.y))
-    except Exception:  # noqa: BLE001 -- a degenerate ring falls back to the mean
-        pass
-    return (float(sum(p[0] for p in pts) / len(pts)), float(sum(p[1] for p in pts) / len(pts)))
 
 
 def _jsonable(o: Any) -> Any:

@@ -122,7 +122,6 @@ def citynav_rows(
     id_rows: list[dict],
     loaded_rows: list[dict],
     ident: dict,
-    success_dist_m: float = 20.0,
 ) -> tuple[list[dict], dict]:
     """Ring-scored rows plus the evaluated/dropped sets.
 
@@ -148,7 +147,7 @@ def citynav_rows(
         for ep in episodes[key]:
             scores = score_arrival(
                 criterion="ring", final_pos_xy=path[-1], target_xy=ep.target_xy,
-                pos_trajectory=path, success_dist_m=success_dist_m,
+                pos_trajectory=path,
             )
             row = _row(ep.episode_id, key, path, ep.description, scores, ident)
             if shared > 1:
@@ -177,7 +176,6 @@ def calcity_rows(
     descriptions: dict[str, str],
     criterion: str,
     ident: dict,
-    success_dist_m: float = 20.0,
 ) -> tuple[list[dict], dict]:
     """Rows scored on the Cal City contract, plus the evaluated/dropped sets.
     ``shapes`` is :func:`calcity_export.calcity_shapes`'s; the released
@@ -191,7 +189,7 @@ def calcity_rows(
         shape = shapes[eid]
         scores = score_arrival(
             criterion=criterion, final_pos_xy=path[-1], target_xy=tuple(shape["target_xy"]),
-            pos_trajectory=path, success_dist_m=success_dist_m, gt_polygon=shape.get("gt_polygon"),
+            pos_trajectory=path, gt_polygon=shape.get("gt_polygon"),
         )
         rows.append(_row(eid, key, path, descriptions.get(eid, ""), scores, ident))
         evaluated.append(eid)

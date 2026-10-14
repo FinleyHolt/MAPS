@@ -84,22 +84,21 @@ def place_block(
     imagery: tuple[float, float, float, float],
     rng: random.Random,
     side_m: float = BLOCK_SIDE_M,
-    margin_m: float = MARGIN_M,
 ) -> tuple[float, float] | str:
     """The window's ``(x_min, y_min)``, or the reason no window fits.
 
     ``points`` are the start and every vertex of the target shape. The
-    window holds them all ``margin_m`` from its edge and lies inside the
+    window holds them all ``MARGIN_M`` from its edge and lies inside the
     imagery ``(x_min, y_min, x_max, y_max)``.
     """
     origin = []
     for axis in (0, 1):
         lo_pt = min(p[axis] for p in points)
         hi_pt = max(p[axis] for p in points)
-        if hi_pt - lo_pt + 2 * margin_m > side_m:
+        if hi_pt - lo_pt + 2 * MARGIN_M > side_m:
             return "start_and_target_exceed_block"
-        lo = max(hi_pt + margin_m - side_m, imagery[axis])
-        hi = min(lo_pt - margin_m, imagery[axis + 2] - side_m)
+        lo = max(hi_pt + MARGIN_M - side_m, imagery[axis])
+        hi = min(lo_pt - MARGIN_M, imagery[axis + 2] - side_m)
         if hi < lo:
             return "window_leaves_imagery"
         origin.append(rng.uniform(lo, hi))
@@ -224,10 +223,9 @@ def write_block_rasters(
     window: tuple[float, float, float, float],
     png_path: Path,
     tif_path: Path,
-    resolution_m: float = RESOLUTION_M,
 ) -> None:
     """Cut ``window`` (local frame) out of the UTM ortho ``src`` at
-    ``resolution_m``; write the PNG and the flat height GeoTIFF on one grid.
+    ``RESOLUTION_M``; write the PNG and the flat height GeoTIFF on one grid.
 
     A windowed, resampled read: the full ortho never enters memory.
     Imagery the window runs past reads as black (the export only places
@@ -242,7 +240,7 @@ def write_block_rasters(
 
     x_min, y_min, x_max, y_max = window
     oe, on = utm_origin
-    size = round((x_max - x_min) / resolution_m)
+    size = round((x_max - x_min) / RESOLUTION_M)
     rgb = src.read(
         [1, 2, 3],
         window=from_bounds(x_min + oe, y_min + on, x_max + oe, y_max + on,
@@ -256,7 +254,7 @@ def write_block_rasters(
     Image.fromarray(np.ascontiguousarray(rgb.transpose(1, 2, 0))).save(png_path)
     with rasterio.open(
         tif_path, "w", driver="GTiff", width=size, height=size, count=1,
-        dtype="float32", transform=from_origin(x_min, y_max, resolution_m, resolution_m),
+        dtype="float32", transform=from_origin(x_min, y_max, RESOLUTION_M, RESOLUTION_M),
         compress="deflate",
     ) as dst:
         dst.write(np.zeros((1, size, size), dtype="float32"))
@@ -273,7 +271,6 @@ def export(
     imagery: tuple[float, float, float, float],
     seed: int = 0,
     side_m: float = BLOCK_SIDE_M,
-    margin_m: float = MARGIN_M,
     shard_size: int = SHARD_SIZE,
 ) -> dict:
     """Write the export under ``out``; return the manifest.
@@ -294,7 +291,7 @@ def export(
         target_xy = tuple(shape["target_xy"])
         points = [episode.start_xy, target_xy] + [tuple(p) for p in polygon or []]
         rng = random.Random(f"{seed}:{episode.episode_id}")
-        placed = place_block(points, imagery, rng, side_m, margin_m)
+        placed = place_block(points, imagery, rng, side_m)
         if isinstance(placed, str):
             excluded[episode.episode_id] = placed
             continue
@@ -348,7 +345,7 @@ def export(
     })
     manifest = {
         "params": {
-            "block_side_m": side_m, "margin_m": margin_m,
+            "block_side_m": side_m, "margin_m": MARGIN_M,
             "resolution_m": RESOLUTION_M, "seed": seed,
             "shard_size": shard_size, "target_object_id": TARGET_OBJECT_ID,
             "ortho": str(ortho_path) if ortho_path else None,

@@ -56,7 +56,6 @@ class GeoNode(KnowledgeNode):
             ring.append(ring[0])
         poly = Polygon(ring)
         self.contour_polygon = poly if poly.is_valid else make_valid(poly)
-        self.child_objects: list[str] = []
 
 
 class ObjectNode(KnowledgeNode):

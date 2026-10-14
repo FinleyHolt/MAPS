@@ -159,7 +159,6 @@ setup_hett() {
 	[ "$revised" != . ] || die "no refined citynav split in the HETT Dropbox folder"
 	sha_id "$ckpt" >"$root/checkpoint.id"
 	ln -sfn "$ckpt" "$root/best_val_unseen"
-	ln -sfn "$revised" "$root/refined_citynav"
 	for variant in original revised; do
 		local run="$root/run_$variant"
 		mkdir -p "$run/work" "$run/data" "$run/weights" "$run/checkpoints/multi"
