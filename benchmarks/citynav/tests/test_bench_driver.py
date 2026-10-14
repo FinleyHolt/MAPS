@@ -484,9 +484,11 @@ def test_a_session_s_manifest_names_the_stream_it_flies(driver, tmp_path, monkey
     assert built["arrivals"] == hashlib.sha256(stream.read_bytes()).hexdigest()
 
 
-def test_arrivals_refuse_the_shuffle_flags(capsys) -> None:
+@pytest.mark.parametrize("flags", [["--limit", "5"], ["--sample-seed", str(bf.SAMPLE_SEED)]])
+def test_arrivals_refuse_the_shuffle_flags(flags, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(bf, "Driver", lambda args: pytest.fail("a session took a shuffle flag"))
     with pytest.raises(SystemExit):
-        bf.main(["--arrivals", "s.json", "--limit", "5"])
+        bf.main(["--arrivals", "s.json", *flags])
     assert "--arrivals selects" in capsys.readouterr().err
 
 

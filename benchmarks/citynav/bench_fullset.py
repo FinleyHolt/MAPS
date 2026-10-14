@@ -62,6 +62,8 @@ WORKER_STAGGER_S = 2.0
 # trailing window still fires after a healthy first hour; it must fill first.
 ABORT_WINDOW = 12
 ABORT_FRACTION = 0.9
+# The pre-limit shuffle's seed when --sample-seed is not given.
+SAMPLE_SEED = 1234
 
 
 _log_lock = threading.Lock()
@@ -138,7 +140,7 @@ class Driver:
         self.driver_log = self.out_root / "driver.log"
         self.summary_file = self.out_root / "summary.txt"
         self.limit = args.limit
-        self.sample_seed = args.sample_seed
+        self.sample_seed = SAMPLE_SEED if args.sample_seed is None else args.sample_seed
         self.allowlist_path = Path(args.episode_allowlist).resolve() if args.episode_allowlist else None
         self.arrivals_path = Path(args.arrivals).resolve() if args.arrivals else None
         # episode -> arrival_s, and the session clock's zero; a capacity session only.
@@ -715,8 +717,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--sample-seed",
         type=int,
-        default=1234,
-        help="seed for the pre-limit episode shuffle (default %(default)s). "
+        default=None,
+        help=f"seed for the pre-limit episode shuffle (default {SAMPLE_SEED}). "
         "Fixes WHICH N episodes run so "
         "an A/B across code versions is on the identical subset.",
     )
@@ -752,7 +754,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     if args.arrivals and (args.episode_allowlist or args.limit
-                          or args.sample_seed != parser.get_default("sample_seed")):
+                          or args.sample_seed is not None):
         parser.error("--arrivals selects the session's episodes; drop --episode-allowlist, --limit "
                      "and --sample-seed")
     driver = Driver(args)
