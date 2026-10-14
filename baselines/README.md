@@ -111,8 +111,8 @@ need more than 16 GB per episode. A Cal City row that starts more than about
   (`seam.dial_off`): `reasoning_effort: none` where the model card lists that
   rung (Inkling Small, GPT-5.6 Sol), else `chat_template_kwargs:
   {enable_thinking: false}` where the template reads that switch (Qwen 3.8
-  Flash Next). A model with neither (the Gemma 4 cards) is refused at the
-  start of every baseline episode, before any request (`seam.NoDialOff`).
+  Flash Next). A baseline arm on a model with neither (the Gemma 4 cards) is
+  refused when the driver starts, before any episode (`seam.NoDialOff`).
 * `<policy>_reasoning_tokens` is `maps.llm.flight_summary.reasoning_tokens_of`
   over each response; a reply with no reasoning span reads 0.
 

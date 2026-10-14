@@ -488,3 +488,17 @@ def test_arrivals_refuse_the_shuffle_flags(capsys) -> None:
     with pytest.raises(SystemExit):
         bf.main(["--arrivals", "s.json", "--limit", "5"])
     assert "--arrivals selects" in capsys.readouterr().err
+
+
+def test_a_baseline_arm_whose_model_has_no_dial_off_is_refused_at_start(tmp_path, monkeypatch, capsys) -> None:
+    from types import SimpleNamespace
+
+    from maps.llm import endpoint_spec
+
+    monkeypatch.setattr(bf, "CONFIG", REPO / "configs/baselines/geonav.yaml")
+    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: SimpleNamespace(model_id="gemma4-26b-a4b-nvfp4"))
+    monkeypatch.setattr(endpoint_spec, "install_spec", lambda spec: None)
+    monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused arm flew"))
+    assert bf.main(["--out-root", str(tmp_path / "r")]) == 2
+    assert not (tmp_path / "r" / episodes.EPISODES_JSONL).exists()
+    assert "gemma4-26b-a4b-nvfp4" in capsys.readouterr().err

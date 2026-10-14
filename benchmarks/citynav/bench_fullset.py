@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import importlib
 import io
 import json
 import logging
@@ -772,6 +773,17 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     install_spec(spec)
     settle_effort()
+    from benchmarks.citynav.run_benchmark.config import resolve_config
+
+    if resolve_config(CONFIG)[0].get("policy"):
+        # Every baseline arm makes dial-off calls: an arm whose model has none
+        # is refused here, once, rather than scored a miss per episode.
+        seam = importlib.import_module("baselines.seam")  # by name: no static import of baselines
+        try:
+            seam.dial_off(spec.model_id)
+        except seam.NoDialOff as exc:
+            print(f"FATAL: {exc}", file=sys.stderr)
+            return 2
     return driver.run()
 
 
