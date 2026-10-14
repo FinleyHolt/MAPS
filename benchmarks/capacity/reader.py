@@ -23,10 +23,11 @@ from typing import Any
 from benchmarks.citynav.analysis.ab_report import ab_stats, bootstrap_ci, wilson_ci
 from benchmarks.citynav.analysis.rows import add_allow_partial, load_attempts
 
-#: A load saturates the arm when its finds per hour fall below this share of
-#: the reports it was offered per hour times the arm's accuracy at its lightest load.
+#: A load saturates the arm when the share of its due reports (those that
+#: arrived early enough to land inside the window at the lightest load's median
+#: time to find) found correct inside the window falls below this share of the
+#: arm's accuracy at its lightest load.
 SATURATED_SHARE = 0.9
-
 
 def session(root: Path, *, allow_partial: bool = False) -> dict[str, Any]:
     """One session's capacity row, with its per-report ``reports``."""
@@ -65,27 +66,36 @@ def session(root: Path, *, allow_partial: bool = False) -> dict[str, Any]:
 def curve(sessions: list[dict[str, Any]]) -> dict[str, Any]:
     """One arm's finds per hour by offered load (the mean over seeds), its
     capacity (the most finds per hour any load drew) and its saturation load
-    (the lightest load short of ``SATURATED_SHARE`` of what the arm's
-    lightest-load accuracy would find in the reports the streams actually
-    offered, not the nominal load a short Poisson stream misses); None when
-    no load saturates it.
+    (the lightest load whose due reports, the mean over seeds, are found
+    correct inside the window short of ``SATURATED_SHARE`` of the arm's
+    lightest-load accuracy); None when no load saturates it. A report too late
+    to land inside the window at the lightest load's median time to find is
+    not due, so the window's edge saturates no load.
 
     ponytail: a threshold knee, not a fitted ``min(load * p, mu)``; fit it if
     the paper needs an interval on the capacity."""
     loads = sorted({s["load_per_h"] for s in sessions})
+    light = [s for s in sessions if s["load_per_h"] == loads[0]]
+    base = [s["accuracy"] for s in light if s["accuracy"] is not None]
+    p = statistics.fmean(base) if base else None
+    lags = [r["found_s"] - r["arrival_s"] for s in light for r in s["reports"] if r["found_s"] is not None]
+    ttf = statistics.median(lags) if lags else None
     points = []
     for load in loads:
         at = [s for s in sessions if s["load_per_h"] == load]
+        yields = []
+        for s in at:
+            due = [r for r in s["reports"] if ttf is not None and r["arrival_s"] <= s["hours"] * 3600.0 - ttf]
+            if due:
+                yields.append(sum(r["in_window"] and r["correct"] for r in due) / len(due))
         points.append({"load_per_h": load, "sessions": len(at),
                        "offered_per_h": round(statistics.fmean(s["offered_per_h"] for s in at), 2),
-                       "finds_per_h": round(statistics.fmean(s["finds_per_h"] for s in at), 2)})
-    base = [s["accuracy"] for s in sessions if s["load_per_h"] == loads[0] and s["accuracy"] is not None]
-    p = statistics.fmean(base) if base else None
-    saturation = next((pt["load_per_h"] for pt in points
-                       if p is not None and pt["finds_per_h"] < SATURATED_SHARE * pt["offered_per_h"] * p), None)
+                       "finds_per_h": round(statistics.fmean(s["finds_per_h"] for s in at), 2),
+                       "due_yield": round(statistics.fmean(yields), 3) if yields else None})
+    saturation = next((pt["load_per_h"] for pt in points if p is not None and pt["due_yield"] is not None
+                       and pt["due_yield"] < SATURATED_SHARE * p), None)
     return {"points": points, "accuracy_light": None if p is None else round(p, 3),
             "capacity_finds_per_h": max(pt["finds_per_h"] for pt in points), "saturation_load_per_h": saturation}
-
 
 def paired(alone: list[dict[str, Any]], assisted: list[dict[str, Any]]) -> dict[str, Any]:
     """Alone against assisted over the sessions that flew the same stream,

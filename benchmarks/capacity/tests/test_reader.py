@@ -28,14 +28,31 @@ def test_finds_per_hour_count_correct_finds_inside_the_window(tmp_path) -> None:
     assert s["backlog"] == 1 and s["time_to_find_median_s"] == 2880
 
 
-def test_saturation_is_the_lightest_load_that_falls_short() -> None:
-    def at(load, finds):
-        return {"load_per_h": load, "offered_per_h": load, "finds_per_h": finds, "accuracy": 0.5}
-    c = reader.curve([at(10, 5), at(20, 9.5), at(40, 12), at(80, 12)])
-    assert c["saturation_load_per_h"] == 40 and c["capacity_finds_per_h"] == 12
-    assert reader.curve([at(10, 5), at(20, 10)])["saturation_load_per_h"] is None
-    # A light stream that happened to offer few reports is not saturated by finding them all.
-    assert reader.curve([{**at(10, 2), "offered_per_h": 4}])["saturation_load_per_h"] is None
+def _arm(root: Path, load: float, service_s: float, servers: int) -> dict:
+    """A session at ``load``: reports evenly spaced over the hour, flown FIFO by
+    ``servers`` missions of ``service_s`` each, every one correct."""
+    free = [0.0] * servers
+    done = []
+    for k in range(int(load)):
+        a = k * 3600.0 / load
+        start = max(min(free), a)
+        free[free.index(min(free))] = start + service_s
+        done.append((a, start + service_s, 1))
+    return reader.session(_session(root, load, 1, done))
+
+
+def test_saturation_is_the_lightest_load_that_falls_short(tmp_path) -> None:
+    # One server, 15-minute missions: four finds an hour at most.
+    light, heavy = _arm(tmp_path / "l", 2, 900, 1), _arm(tmp_path / "h", 40, 900, 1)
+    c = reader.curve([light, heavy])
+    assert c["saturation_load_per_h"] == 40 and c["capacity_finds_per_h"] == 4
+
+
+def test_an_idle_arm_is_not_saturated_by_the_reports_too_late_to_land(tmp_path) -> None:
+    # Spare servers at every load: the reports in the last 15 minutes cannot
+    # land inside the hour, which says nothing about the arm's capacity.
+    c = reader.curve([_arm(tmp_path / f"l{load}", load, 900, 40) for load in (10, 20, 40)])
+    assert c["saturation_load_per_h"] is None
 
 
 def test_alone_and_assisted_pair_on_the_same_stream(tmp_path) -> None:
