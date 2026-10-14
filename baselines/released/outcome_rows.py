@@ -212,15 +212,16 @@ def write_run(out: Path, rows: list[dict], sets: dict) -> None:
     (out / "episode_sets.json").write_text(json.dumps(sets, indent=1, sort_keys=True))
 
 
-def pair(released: Path, other: Path) -> dict:
+def pair(released: Path, other: Path, *, allow_partial: bool = False) -> dict:
     """``ab_report.ab_stats`` over the episodes both runs scored, the released
     run as A, with ``only_a`` and ``only_b``, the episodes one run scored and
     the other did not. ``ab_report``'s CLI refuses the pair because these rows
     record no tile bake (a released checkpoint reads its own rasters), so the
-    two runs are paired here on episode id and success criterion alone."""
+    two runs are paired here on episode id and success criterion alone;
+    ``allow_partial`` reads a run short of its manifest as it stands."""
     from benchmarks.citynav.analysis import ab_report, run_report
 
-    a, b = run_report.load_run(released), run_report.load_run(other)
+    a, b = (run_report.load_run(r, allow_partial=allow_partial) for r in (released, other))
     shared = sorted(set(a) & set(b))
     if not shared:
         raise SystemExit("no shared scored episodes between the two runs")
@@ -233,11 +234,14 @@ def pair(released: Path, other: Path) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from benchmarks.citynav.analysis import rows as _rows
+
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="bench", required=True)
     pr = sub.add_parser("pair", help="paired SR of a released run (A) against another run (B)")
     pr.add_argument("released", type=Path)
     pr.add_argument("other", type=Path)
+    _rows.add_allow_partial(pr)
     for name in ("citynav", "calcity"):
         p = sub.add_parser(name)
         p.add_argument("--method", choices=sorted(RELEASES), required=True)
@@ -258,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.bench == "pair":
         from benchmarks.citynav.analysis.ab_report import render
 
-        st = pair(args.released, args.other)
+        st = pair(args.released, args.other, allow_partial=args.allow_partial)
         print(render(st))
         print(f"shared={st['n']}  only_a={st['only_a']}  only_b={st['only_b']}")
         return 0

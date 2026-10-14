@@ -80,6 +80,11 @@ def test_rows_pair_against_a_maps_run_on_shared_ids(tmp_path):
     assert (st["n"], st["SR_a"], st["SR_b"]) == (5, want, 1.0)
     assert (st["only_a"], st["only_b"]) == (len(sets["evaluated"]) - 5, 0)
 
+    (maps_run / "run_manifest.json").write_text(json.dumps({"selection": {"episodes_n": 6}}))
+    with pytest.raises(SystemExit, match="allow-partial"):
+        orows.main(["pair", str(tmp_path / "baseline"), str(maps_run)])
+    assert orows.main(["pair", str(tmp_path / "baseline"), str(maps_run), "--allow-partial"]) == 0
+
 
 def test_capture_errors_are_dropped_with_their_reason(tmp_path):
     rows = _split_rows()[:4]
