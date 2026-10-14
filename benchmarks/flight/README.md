@@ -88,8 +88,8 @@ python -m benchmarks.flight.twin --config configs/calcity.yaml --episode 'calcit
 
 The twin flies each leg straight at the C-12's speed, wings level at the
 mission's height, and renders frames from the raster pair on request.
-`--then` speaks taskings after each report, `--boresight` applies a solve,
-and `--register <raster dir>` registers each frame. The run lands under
+`--then` speaks taskings after each report, and `--register <raster dir>`
+registers each frame. The run lands under
 `output/flight/<UTC stamp>/` with the run records a flown run carries, the
 ownship track (`flight_track.jsonl`, `Mission._record_track`) among them, and
 `measures` scores it as it scores a flown sortie. A mission records every

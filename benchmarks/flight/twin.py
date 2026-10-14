@@ -179,7 +179,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--start-xy", type=_xy, default=None, help="x,y: fly a mission with no row from here, under --instruction")
     ap.add_argument("--then", action="append", default=[], help="a tasking spoken after each report, in order")
     ap.add_argument("--reasoning-effort", default=None)
-    ap.add_argument("--boresight", type=Path, default=None, help="a boresight solve; unset flies the datasheet camera")
     ap.add_argument("--register", type=Path, default=None,
                     help="the raster directory each frame is registered against; unset registers nothing")
     ap.add_argument("--out", type=Path, default=Path("output/flight"))
@@ -213,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     twin = Twin(tiles_dir=TILES_DIR, map_name=map_name, ortho=ortho, sensor=sensor, start_xy=episode.start_xy,
                 agl_m=start_alt - ground_z, terrain=map_render.terrain(map_name, str(TILES_DIR)))
     live = open_live(vehicle=twin, tiles_dir=TILES_DIR, map_name=map_name, sensor=sensor,
-                     boresight_path=args.boresight, register_raster=args.register)
+                     register_raster=args.register)
 
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     sortie = args.out / stamp
