@@ -1578,10 +1578,10 @@ class MissionPython:
         except _Stop:
             pass                     # the refusal is already in the receipt
         except CodeError as e:
-            self._unbind_failed_assign(tree, _block_line())
+            self._unbind_failed_assign(tree, _outer_block_line())
             out.update(self.env.say_err({}, f"line {_block_line()}: {e}"))
         except Exception as e:                          # noqa: BLE001
-            self._unbind_failed_assign(tree, _block_line())
+            self._unbind_failed_assign(tree, _outer_block_line())
             out.update(self.env.say_err(
                 {}, f"line {_block_line()}: {type(e).__name__}: {e}"))
         return self._finish(out)
@@ -1605,7 +1605,8 @@ class MissionPython:
         holding its OLD value when the right-hand side raises, and a stale
         pick that stays bound is a wrong commit."""
         for node in ast.walk(tree):
-            if isinstance(node, ast.Assign) and node.lineno == line:
+            if (isinstance(node, ast.Assign)
+                    and node.lineno <= line <= node.end_lineno):
                 for t in node.targets:
                     # ast.walk reaches Names inside tuple/list unpacking
                     # too -- `a, b = <raises>` must unbind BOTH.
@@ -1763,3 +1764,13 @@ def _block_line() -> int:
         if fr.filename == BLOCK_FILENAME:
             line = fr.lineno or line
     return line
+
+
+def _outer_block_line() -> int:
+    """The line of the block's top-level statement that was running when it
+    raised: the first block frame of the live traceback."""
+    _, _, tb = sys.exc_info()
+    for fr in traceback.extract_tb(tb):
+        if fr.filename == BLOCK_FILENAME:
+            return fr.lineno or 0
+    return 0

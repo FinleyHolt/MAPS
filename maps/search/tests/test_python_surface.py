@@ -416,6 +416,20 @@ def test_a_failed_unpack_unbinds_every_target():
     assert "a is unbound" in (out[2].get("error") or ""), out[2]
 
 
+def test_a_rebind_that_fails_inside_a_def_or_a_later_line_unbinds():
+    for block in ('def f():\n    return [1][9]\n\npick = f()\n',
+                  'pick = (5 if len([]) else\n        [1][9])\n'):
+        reply, fr, _f, _d = drive([
+            [run('pick = 1\n')],
+            [run(block)],
+            [run('print(pick)\n')],
+            "done",
+        ])
+        out = tool_results(fr)
+        assert "IndexError" in (out[1].get("error") or ""), out[1]
+        assert "pick is unbound" in (out[2].get("error") or ""), out[2]
+
+
 def test_a_crop_token_falls_back_to_the_rows_own_xy():
     from maps.search.parse_compile.views import _crop_token_of
 
