@@ -337,6 +337,8 @@ class Mission:
         ``(observation, record)``, or None. ``cov`` and ``unread`` are the
         recording's answer before the leg. A stopped mission posts and
         fetches nothing more."""
+        if self._cancel.is_set():
+            return None
         at = f"{token} at ({xy[0]:.0f}, {xy[1]:.0f})"
         # Frames recorded after this vehicle time are the leg's own; None counts the whole ring.
         after = None
@@ -354,8 +356,6 @@ class Mission:
                        f"served ({self._live.last_refusal or 'no reason recorded'}); the leg is flown")
             # The ring already holds the area, so only a pass after the post can arrive.
             after = self._vehicle.now()
-        if self._cancel.is_set():
-            return None
         step = len(self.flights)
         self._post(Leg(target=token, point=(xy[0], xy[1]), step=step, area=area_ll, ahead=ahead))
         # The leg's reach: how far from the point the aircraft is still over

@@ -258,3 +258,12 @@ def test_a_short_pass_is_said_as_the_points_it_held():
                                   "seq": 5, "off_nadir_deg": 3.1})
     assert "held 17/19 points of it in 2 frame(s)" in said and "90%" not in said
 
+
+def test_a_stop_while_the_ring_is_asked_says_no_leg_is_flown(built, make_mission):
+    """A Stop that lands while the recording is asked again posts no leg and
+    writes no row saying the leg is flown."""
+    m, twin = make_mission()
+    twin.index = lambda since=None: m.stop()
+    out = m._fly_live(_session(_hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
+    assert out == {"error": "the mission is stopped"}
+    assert twin.legs == [] and not any("the leg is flown" in s for s in _legs(m)), _legs(m)
