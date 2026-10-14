@@ -518,3 +518,13 @@ def test_a_session_with_no_reports_reads_as_offered_nothing(driver, tmp_path, mo
     assert d.run() == 0
     s = reader.session(d.out_root)
     assert (s["offered"], s["finds_per_h"]) == (0, 0.0)
+
+
+def test_a_session_s_preview_names_its_stream_not_a_seed(driver, tmp_path, monkeypatch, capsys) -> None:
+    stream = tmp_path / "stream.json"
+    stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    d = driver()
+    d.arrivals_path = stream
+    assert d.dry_run() == 0
+    assert capsys.readouterr().out.startswith(f"arrivals: {stream}   split:")

@@ -543,16 +543,20 @@ class Driver:
             episodes = episodes[: self.limit]
         return episodes
 
+    def _selected_by(self) -> tuple[str, object]:
+        """What picks the selection: a session's stream, else the shuffle seed."""
+        if self.arrivals_path is not None:
+            return "arrivals", self.arrivals_path
+        return "sample_seed", self.sample_seed
+
     def dry_run(self) -> int:
         """Selection preview. Launches nothing."""
         episodes = self._select_episodes()
         self._absorb_ledger()
         done = self._done_cache
         pending = self._pending(episodes)
-        print(
-            f"sample_seed: {self.sample_seed}   split: {self.split}   "
-            f"limit: {self.limit}"
-        )
+        key, value = self._selected_by()
+        print(f"{key}: {value}   split: {self.split}   limit: {self.limit}")
         print(
             f"selected: {len(episodes)}   done: "
             f"{len(done & set(episodes))}   pending: {len(pending)}"
@@ -623,8 +627,9 @@ class Driver:
         if self.arrivals_path is not None:
             shutil.copyfile(self.arrivals_path, self.out_root / "arrivals.json")
         pending = self._pending(episodes)
+        key, value = self._selected_by()
         self.log(
-            f"split={self.split} sample_seed={self.sample_seed} selection={len(episodes)} "
+            f"split={self.split} {key}={value} selection={len(episodes)} "
             f"done={len(self._done_cache & set(episodes))} pending={len(pending)} "
             f"workers={self.workers}"
         )
