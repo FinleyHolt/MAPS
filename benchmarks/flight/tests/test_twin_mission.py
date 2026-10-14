@@ -30,10 +30,12 @@ def calcity(tmp_path, monkeypatch):
     x0, y0 = TARGET[0] - 20, TARGET[1] - 20
     church = Polygon([(x0, y0), (x0 + 40, y0), (x0 + 40, y0 + 40), (x0, y0 + 40)])
     shed = Polygon([(x0 - 430, y0), (x0 - 400, y0), (x0 - 400, y0 + 30), (x0 - 430, y0 + 30)])
+    barn = Polygon([(x0, y0 + 700), (x0 + 30, y0 + 700), (x0 + 30, y0 + 730), (x0, y0 + 730)])
     monkeypatch.setattr(bake_tiles, "load_features_local", lambda bundle, lf: [
         {"layer": "test", "osm_id": 1, "tags": {"amenity": "place_of_worship", "name": "First Church",
                                                 "building": "church"}, "geom": church},
-        {"layer": "test", "osm_id": 2, "tags": {"name": "West Shed", "building": "shed"}, "geom": shed}])
+        {"layer": "test", "osm_id": 2, "tags": {"name": "West Shed", "building": "shed"}, "geom": shed},
+        {"layer": "test", "osm_id": 3, "tags": {"name": "North Barn", "building": "barn"}, "geom": barn}])
     root = tmp_path / "calcity"
     tiles, splits, rgbd = root / "tiles", root / "splits", root / "data" / "rgbd_upstream"
     bake_tiles.bake_block(tmp_path / "bundle", tiles, "calcity")
@@ -412,3 +414,45 @@ def test_a_mission_s_own_effort_the_served_card_refuses_never_reaches_the_reason
     twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                "--reasoning-effort", "0.90", "--out", str(tmp_path / "out")])
     assert not serves
+
+
+def test_a_pass_flies_first_the_stop_the_recording_holds_and_its_replays_fly_it_so(calcity, serves, tmp_path,
+                                                                                 monkeypatch):
+    """Over the shed, then the barn north of the church, then one pass over
+    the church and the shed: the chain from the barn leads with the church,
+    the recording holds the shed, so the shed is taken first. The forced
+    replay takes its recorded stops in order; the bank, holding the whole
+    run with no clock, holds both and flies the chain's head first."""
+    from benchmarks.flight import replay, twin
+    from maps.llm import http
+
+    script = ["go_to(prior_2)\n", "go_to(prior_1)\n", "explore([prior_0, prior_2])\n"]
+    asked = []
+
+    def reply(url, headers, body, *, timeout, cancel_event):
+        n = sum(1 for m in body["messages"] if m["role"] == "assistant")
+        asked.append(n)
+        if n < len(script):
+            call = {"id": f"c{n}", "type": "function",
+                    "function": {"name": "run", "arguments": json.dumps({"code": script[n]})}}
+            message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
+        else:
+            message = {"content": "The church is under the pass.", "reasoning_content": "", "tool_calls": []}
+        return {"choices": [{"finish_reason": "stop", "message": message}]}
+
+    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    shed, church = [565.0, 995.0], [999.0, 1019.0]
+
+    def visited(out):
+        sortie = next(out.iterdir())
+        (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
+        return sortie / row["workdir"], row["visited_xy"][-2:]
+
+    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
+                      "--out", str(tmp_path / "flown")]) == 0
+    run, order = visited(tmp_path / "flown")
+    assert order == [shed, church]
+    for tier, flags, flies in (("bank", [], [church, shed]), ("forced", ["--forced"], [shed, church])):
+        out = tmp_path / tier
+        assert replay.main([str(run), *flags, "--out", str(out)]) == 0
+        assert visited(next(out.iterdir()))[1] == flies, tier

@@ -26,6 +26,7 @@ import difflib
 import functools
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -429,8 +430,11 @@ class ReplayMission(Mission):
         if self._recorded_stops is None:
             return super()._held_now(h, stops)
         k = len(self.flights)
-        nxt = self._recorded_stops[k][0] if k < len(self._recorded_stops) else None
-        return [str(token) == nxt for token, _xy in stops]
+        if k >= len(self._recorded_stops):
+            return [False] * len(stops)
+        # A point stop within 1 m of a row was flown, and recorded, as that row's fid (the engine's snap).
+        nxt, nxt_xy = self._recorded_stops[k]
+        return [str(token) == nxt or (xy is not None and math.dist(xy, nxt_xy) <= 1.0) for token, xy in stops]
 
     def _await_tasking(self) -> str | None:
         """Forced, the recorded reasoner queues an operator's words before the
