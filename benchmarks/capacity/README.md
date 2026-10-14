@@ -30,7 +30,9 @@ A session flies into a fresh `--out-root`: its clock cannot resume.
 - `<root>/episodes.jsonl`: one row per report attempt, read through `benchmarks.citynav.analysis.rows.load_attempts`, carrying `episode_id`, `workdir`, `status`, `arrival_s`, `claimed_s`, `elapsed_s` (session seconds) and `metrics.SR`.
 
 A report is found at `claimed_s + elapsed_s`. It counts toward finds per hour
-when its SR is 1 and it is found inside the session's `hours`. Sessions pair
+when its SR is 1 and it is found inside the session's `hours`. A session
+reads as it stands: a report whose every attempt was an infrastructure
+casualty is offered and never found, and `infra` counts it. Sessions pair
 across arms by `(load_per_h, seed, hours)`, one session per arm per stream;
 the reader refuses a second session on a stream in one arm and a pair whose
 reports differ.

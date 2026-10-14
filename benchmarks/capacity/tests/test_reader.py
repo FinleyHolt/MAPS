@@ -85,3 +85,14 @@ def test_a_pairing_that_pairs_nothing_prints_strict_json_and_text(tmp_path, caps
     assert out["paired"]["sessions"] == 0 and out["paired"]["finds_per_h_delta_ci95"] is None
     assert reader.main(["--assisted", str(b), "--alone", str(other)]) == 0
     assert "paired over 0 sessions" in capsys.readouterr().out
+
+
+def test_a_report_lost_to_the_infrastructure_is_offered_and_counted(tmp_path) -> None:
+    root = _session(tmp_path, 4, 1, [(0, 100, 1), (60, 400, 1)])
+    ledger = root / "episodes.jsonl"
+    rows = ledger.read_text().splitlines()
+    ledger.write_text(rows[0] + "\n" + json.dumps(ledger_row("calcity::1#1", "20260101_000001", status="infra"))
+                      + "\n")
+    (root / "run_manifest.json").write_text(json.dumps({"selection": {"episodes_n": 2}}))
+    s = reader.session(root)
+    assert (s["offered"], s["answered"], s["infra"], s["finds_per_h"]) == (2, 1, 1, 1)

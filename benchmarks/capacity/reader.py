@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from benchmarks.citynav.analysis.ab_report import ab_stats, bootstrap_ci, wilson_ci
-from benchmarks.citynav.analysis.rows import add_allow_partial, load_attempts
+from benchmarks.citynav.analysis.rows import load_attempts
 
 #: A load saturates the arm when the share of its due reports (those that
 #: arrived early enough to land inside the window at the lightest load's median
@@ -30,10 +30,13 @@ from benchmarks.citynav.analysis.rows import add_allow_partial, load_attempts
 SATURATED_SHARE = 0.9
 
 
-def session(root: Path, *, allow_partial: bool = False) -> dict[str, Any]:
-    """One session's capacity row, with its per-report ``reports``."""
+def session(root: Path) -> dict[str, Any]:
+    """One session's capacity row, with its per-report ``reports``. A session
+    cannot resume, so it reads as it stands: a report whose every attempt was
+    an infrastructure casualty is offered and never found, counted under
+    ``infra``."""
     stream = json.loads((root / "arrivals.json").read_text())
-    picked, _ = load_attempts(root, allow_partial=allow_partial)
+    picked, stats = load_attempts(root, allow_partial=True)
     window = float(stream["hours"]) * 3600.0
     reports = []
     for r in stream["reports"]:
@@ -60,6 +63,7 @@ def session(root: Path, *, allow_partial: bool = False) -> dict[str, Any]:
         "time_to_find_median_s": (round(statistics.median(r["found_s"] - r["arrival_s"] for r in right), 1)
                                   if right else None),
         "backlog": sum(1 for r in reports if not r["in_window"]),
+        "infra": sum(1 for r in reports if r["episode_id"] in stats.infra_episodes - picked.keys()),
         "reports": reports,
     }
 
@@ -141,12 +145,12 @@ def _table(arm: str, sessions: list[dict[str, Any]], c: dict[str, Any]) -> str:
              f"{c['saturation_load_per_h'] or 'no load flown'}"
              f"{'/h' if c['saturation_load_per_h'] else ''} (light-load accuracy {c['accuracy_light']})",
              f"  {'load/h':>7} {'seed':>5} {'offered':>7} {'finds/h':>8} {'accuracy':>9} {'ttf_med_s':>10} "
-             f"{'backlog':>7}"]
+             f"{'backlog':>7} {'infra':>5}"]
     for s in sorted(sessions, key=lambda s: (s["load_per_h"], s["seed"])):
         lines.append(f"  {s['load_per_h']:>7g} {s['seed']:>5} {s['offered']:>7} {s['finds_per_h']:>8} "
                      f"{s['accuracy'] if s['accuracy'] is not None else '-':>9} "
                      f"{s['time_to_find_median_s'] if s['time_to_find_median_s'] is not None else '-':>10} "
-                     f"{s['backlog']:>7}")
+                     f"{s['backlog']:>7} {s['infra']:>5}")
     return "\n".join(lines)
 
 
@@ -155,9 +159,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--assisted", type=Path, nargs="+", required=True, help="the assisted arm's session roots")
     ap.add_argument("--alone", type=Path, nargs="*", default=[], help="the alone arm's session roots")
     ap.add_argument("--json", action="store_true", help="print the report as JSON")
-    add_allow_partial(ap)
     args = ap.parse_args(argv)
-    arms = {name: [session(r, allow_partial=args.allow_partial) for r in roots]
+    arms = {name: [session(r) for r in roots]
             for name, roots in (("assisted", args.assisted), ("alone", args.alone)) if roots}
     out: dict[str, Any] = {name: {"curve": curve(s), "sessions": [{k: v for k, v in x.items() if k != "reports"}
                                                                    for x in s]}
