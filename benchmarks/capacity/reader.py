@@ -123,7 +123,7 @@ def paired(alone: list[dict[str, Any]], assisted: list[dict[str, Any]]) -> dict[
     alone_by = by_key(alone)
     by_key(assisted)
     pairs = []
-    for b in assisted:
+    for b in sorted(assisted, key=key):
         a = alone_by.get(key(b))
         if a is None:
             continue

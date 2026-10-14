@@ -108,3 +108,15 @@ def test_the_due_cut_reads_the_light_load_s_time_to_a_correct_find(tmp_path) -> 
     assert light["time_to_find_median_s"] == 300
     # 17 reports arrive by 3,300 s; the 14 that arrive by 2,600 s land inside the hour.
     assert reader.curve([light, heavy])["points"][1]["due_yield"] == round(14 / 17, 3)
+
+
+def test_the_pairing_reads_the_same_whatever_order_the_roots_are_named() -> None:
+    def arm(name: str, finds: tuple[int, ...], srs: list[int]) -> list[dict]:
+        return [{"root": f"{name}{seed}", "load_per_h": 30.0, "seed": seed, "hours": 1.0, "finds_per_h": f,
+                 "reports": [{"episode_id": f"e{seed}_{i}", "in_window": True, "correct": bool(sr)}
+                             for i, sr in enumerate(srs)]}
+                for seed, f in enumerate(finds)]
+
+    alone = arm("a", (10, 12, 9, 14, 11, 8), [1, 0, 1, 0, 0])
+    assisted = arm("b", (15, 13, 18, 12, 20, 16), [1, 1, 0, 1, 1])
+    assert reader.paired(alone, assisted) == reader.paired(alone, assisted[::-1])
