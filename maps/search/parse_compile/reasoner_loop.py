@@ -831,13 +831,11 @@ class _Mission:
                 # The rest of the pass rides every stop, for the crew.
                 _item["pass_ahead"] = [[float(_xy[0]), float(_xy[1])]
                                        for _xy in map(self._stop_xy, _queue) if _xy]
-            if self.turn_flights >= self.mission_spec.flight_budget:
+            _cut = self.turn_flights >= self.mission_spec.flight_budget
+            if _cut:
                 log.warning("%s flight backstop hit (%d flights)",
                             self.rid_tag, self.mission_spec.flight_budget)
-                _item_errors.append({"target_fid": _item["target_fid"],
-                                     "error": "not flown."})
-                continue
-            if (self.mission_spec.deadline_epoch is not None
+            elif (self.mission_spec.deadline_epoch is not None
                     and time.time() >= self.mission_spec.deadline_epoch):
                 # The wall-clock backstop stops the flying only; the model
                 # keeps its turns and its own commit.
@@ -848,7 +846,8 @@ class _Mission:
                         "%s wall-clock backstop hit (%d flights, %.0f s past "
                         "the deadline)", self.rid_tag, self.turn_flights,
                         time.time() - self.mission_spec.deadline_epoch)
-                _clock_cut = True
+                _cut = _clock_cut = True
+            if _cut:
                 _item_errors.append({"target_fid": _item["target_fid"],
                                      "error": "not flown."})
                 continue
