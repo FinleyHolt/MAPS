@@ -402,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--ortho", type=Path,
-                    default=paths.DATA_DIR / "rgbd_flown" / "calcity_rgb.tif",
+                    default=paths.CALCITY_NATIVE_RGBD_DIR / "calcity_rgb.tif",
                     help="the UTM ortho the blocks are cut from")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--shard-size", type=int, default=SHARD_SIZE)
