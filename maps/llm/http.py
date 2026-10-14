@@ -179,10 +179,10 @@ _FLIGHT_THREAD_DIGESTS: dict[str, list[str]] = {}
 _FLIGHT_PARAMS_SEEN: dict[str, set[str]] = {}
 
 
-def _scrub_image_parts(messages: list) -> list:
-    """``messages`` with every data-URL image part replaced by
-    ``{"type": "image_ref", "media_type", "sha256", "bytes"}``, the sha of the
-    decoded bytes. The input is not mutated."""
+def _map_image_parts(messages: list, fn) -> list:
+    """``messages`` with each data-URL image part replaced by
+    ``fn(part, media_type, raw)``, ``raw`` its decoded bytes (None when its
+    base64 does not decode). The input is not mutated."""
     out: list = []
     for msg in messages:
         content = msg.get("content") if isinstance(msg, dict) else None
@@ -201,21 +201,29 @@ def _scrub_image_parts(messages: list) -> list:
                 parts.append(part)
                 continue
             head, _, b64 = url.partition(",")
-            media_type = head[len("data:"):].split(";")[0] or "image/jpeg"
             try:
                 raw = base64.b64decode(b64)
             except (ValueError, binascii.Error):
-                raw = b64.encode("utf-8")  # undecodable: fingerprint as-is
-            sha = hashlib.sha256(raw).hexdigest()
-            parts.append({
-                "type": "image_ref",
-                "media_type": media_type,
-                "sha256": sha,
-                "bytes": len(raw),
-            })
+                raw = None
+            parts.append(fn(part, head[len("data:"):].split(";")[0] or "image/jpeg", raw))
             changed = True
         out.append({**msg, "content": parts} if changed else msg)
     return out
+
+
+def _image_ref(part: dict, media_type: str, raw: bytes | None) -> dict:
+    """The transcript's ref for one image part: the sha of its decoded bytes,
+    or of its base64 text when that does not decode."""
+    if raw is None:
+        raw = part["image_url"]["url"].partition(",")[2].encode("utf-8")
+    return {"type": "image_ref", "media_type": media_type,
+            "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+
+
+def _scrub_image_parts(messages: list) -> list:
+    """``messages`` with every data-URL image part replaced by
+    ``{"type": "image_ref", "media_type", "sha256", "bytes"}``."""
+    return _map_image_parts(messages, _image_ref)
 
 
 #: The image store a slow link sends each image to once (module docstring).
@@ -229,34 +237,24 @@ _IMAGE_STORE_TIMEOUT = httpx.Timeout(30.0, read=180.0, write=180.0)
 
 def _wire_body(body: dict, headers: dict[str, str]) -> dict:
     """``body`` as it crosses the wire: with an image store set, every
-    data-URL image part rides as ``sha256:<sha>``, its bytes PUT once."""
+    data-URL image part rides as ``sha256:<sha>``, its bytes PUT once; a
+    part whose base64 does not decode rides inline."""
     base = os.environ.get(IMAGE_STORE_ENV, "").strip().rstrip("/")
     if not base or not isinstance(body.get("messages"), list):
         return body
-    messages = []
-    for msg in body["messages"]:
-        content = msg.get("content") if isinstance(msg, dict) else None
-        if not isinstance(content, list):
-            messages.append(msg)
-            continue
-        parts = []
-        for part in content:
-            url = (part.get("image_url", {}).get("url", "")
-                   if isinstance(part, dict) and part.get("type") == "image_url" else "")
-            if not (isinstance(url, str) and url.startswith("data:")):
-                parts.append(part)
-                continue
-            head, _, b64 = url.partition(",")
-            raw = base64.b64decode(b64)
-            sha = hashlib.sha256(raw).hexdigest()
-            if sha not in _IMAGE_STORE_HELD:
-                httpx.put(f"{base}/looks/{sha}", content=raw,
-                          headers={**headers, "Content-Type": head[len("data:"):].split(";")[0] or "image/jpeg"},
-                          timeout=_IMAGE_STORE_TIMEOUT).raise_for_status()
-                _IMAGE_STORE_HELD.add(sha)
-            parts.append({**part, "image_url": {**part["image_url"], "url": f"sha256:{sha}"}})
-        messages.append({**msg, "content": parts})
-    return {**body, "messages": messages}
+
+    def by_sha(part: dict, media_type: str, raw: bytes | None) -> dict:
+        if raw is None:
+            return part
+        sha = hashlib.sha256(raw).hexdigest()
+        if sha not in _IMAGE_STORE_HELD:
+            httpx.put(f"{base}/looks/{sha}", content=raw,
+                      headers={**headers, "Content-Type": media_type},
+                      timeout=_IMAGE_STORE_TIMEOUT).raise_for_status()
+            _IMAGE_STORE_HELD.add(sha)
+        return {**part, "image_url": {**part["image_url"], "url": f"sha256:{sha}"}}
+
+    return {**body, "messages": _map_image_parts(body["messages"], by_sha)}
 
 
 def _forget_missing(resp: httpx.Response) -> bool:

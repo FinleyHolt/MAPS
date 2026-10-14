@@ -45,3 +45,16 @@ def test_a_sha_the_store_lost_is_sent_again(monkeypatch) -> None:
     bodies, puts = _send(monkeypatch, [(409, {"missing": [_SHA]}, {})])
     assert puts == [f"http://store/looks/{_SHA}"] * 2
     assert len(bodies) == 3
+
+
+def test_an_undecodable_image_rides_inline(monkeypatch) -> None:
+    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
+    monkeypatch.setenv(http_mod.IMAGE_STORE_ENV, "http://store")
+    monkeypatch.setattr(http_mod, "_IMAGE_STORE_HELD", set())
+    puts: list[str] = []
+    monkeypatch.setattr(http_mod.httpx, "put", lambda url, **kw: puts.append(url))
+    bad = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]
+    with ChatServe() as serve:
+        http_mod._chat_completions_raw(f"{serve.url}/v1", None, model="m", messages=bad, timeout=30.0)
+    assert puts == []
+    assert serve.bodies[0]["messages"] == bad
