@@ -194,6 +194,7 @@ Extras:
 |---|---|
 | `recording` | Reading a camera recording for the as-flown frame replay (`mcap`). |
 | `dev` | The test suite and linter. |
+| `baselines` | The GeoNav and ViSA baseline arms and the ViSA figures (`matplotlib`). |
 
 The SAM 3.1 serve runs in its own environment, because Meta's `sam3` package
 requires `numpy<2`:
@@ -251,6 +252,7 @@ terms).
 | `SAM_PORT`, `SAM_MODEL_ID`, `SAM_DEVICE`, `SAM_DTYPE` | serve | Port (8772), checkpoint id (`facebook/sam3.1`), device, dtype (`bfloat16`). |
 | `SAM3_CHECKPOINT` | serve | A local checkpoint file. |
 | `SAM_MAX_INFLIGHT`, `SAM_INFLIGHT_WAIT_S`, `SAM_PREWARM`, `SAM_HEALTH_MIN_FREE_GB` | serve | Admission, prewarm and health limits (`serving/sam_server.py`). |
+| `MAPS_IMAGE_STORE_URL` | client | An image store one fast hop from the reasoner: each inline image is PUT once to `<store>/looks/<sha>` and rides as `sha256:<sha>`; a 409 naming missing shas re-sends them. |
 
 ### GPT-5.6 Sol on Amazon Bedrock
 
