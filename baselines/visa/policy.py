@@ -196,7 +196,7 @@ def run_episode(h: BaselineHarness) -> BaselineResult:
         dets = sorted(dets, key=lambda d: (-mark_tier(str(d.label), target_terms, surround_terms), -float(d.confidence)))[:MAX_MARKS]
         marked, marks = mark_frame(obs.rgb, dets)
         h.record(f"step_{step + 1:02d}_vpg", {"concepts": _dedup(concepts + extra),
-                                              "n_detections": n_all, "n_marked": len(dets),
+                                              "n_detections": n_all, "n_marked": len(marks),
                                               "marks": marks, "pass": tag})
         return marked, marks
 

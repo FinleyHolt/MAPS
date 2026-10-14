@@ -271,3 +271,23 @@ def test_an_unmatched_instruction_is_planned_inside_the_block(tmp_path):
     run_episode(h)
     waypoints = json.loads((tmp_path / "plan.json").read_text())["waypoints"]
     assert waypoints and all(0.0 <= x <= 400.0 and 0.0 <= y <= 400.0 for x, y in waypoints)
+
+
+def test_the_vpg_record_counts_the_marks_drawn(tmp_path):
+    """A detection with no mask has no place on the frame, so it is not a mark."""
+    import json
+
+    from maps.perception.base import DetectedObject
+
+    from baselines.visa.policy import run_episode
+
+    class Maskless(_StubHarness):
+        def detect(self, obs, concepts):
+            return super().detect(obs, concepts) + [DetectedObject(
+                world_xy=obs.pose_xy, label="car", confidence=0.9, source_tier="sam3_1_image", mask=None)]
+
+    d = tmp_path / "visa"
+    d.mkdir()
+    run_episode(Maskless(d, ["stop"]))
+    vpg = json.loads((d / "step_01_vpg.json").read_text())
+    assert (vpg["n_detections"], vpg["n_marked"], len(vpg["marks"])) == (2, 1, 1)
