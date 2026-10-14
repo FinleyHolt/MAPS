@@ -59,6 +59,7 @@ def test_base_resolves_relative_to_the_file_and_merges(tmp_path):
     ("withhold: [pictures]\n", "withhold must be"),
     ("withhold: [look, look]\n", "withhold must be"),
     ("sensor: no_such_sensor\n", ".yaml: sensor: "),
+    ('sensor: ""\n', "sensor must be a registered sensor"),
     ("policy: no_such_method\n", "policy must be the name of a baselines/<policy>/policy.py"),
     ("policy: 3\n", "policy must be str"),
 ])

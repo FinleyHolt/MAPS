@@ -34,8 +34,7 @@ def _one_of(*allowed: object) -> tuple[Callable[[Any], bool], str]:
 
 
 def _sensor_ok(v: Any) -> bool:
-    resolve_sensor(v)  # raises, naming the problem
-    return True
+    return resolve_sensor(v) is not None  # a bad name or override raises, naming the problem
 
 
 def _policy_ok(v: Any) -> bool:
