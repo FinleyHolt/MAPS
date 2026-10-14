@@ -2,20 +2,10 @@
 
 :meth:`LiveSource.coverage` reads off the ring's index how much of an area
 the recording holds (the arrival rule); :meth:`LiveSource.observe_area` fuses
-the frames that saw it nearest nadir into ONE north-up orthophoto on the map
+the frames that saw it nearest nadir into one north-up orthophoto on the map
 grid, each frame registered into the pose graph as it arrives
 (:meth:`LiveSource.start_corrector`) and placed through the calibration
-(``boresight.json``, applied here alone; without one the datasheet camera
-flies). A pose's roll and pitch are aerospace (right wing down, nose up);
-the projector's pitch is nose down, so it is carried negated. ponytail: each
-frame is projected onto flat ground at its nadir's height (the bake's DEM,
-else its floor); relief within a frame needs a height raster under
-``ground_corners_xy``. ponytail: two heights above ground: the
-ownship, the frame tests and the arrival rule (:meth:`LiveSource.ownship`,
-``in_frame``, ``frame_transit_s``, ``coverage``) stand on the bake's floor,
-the projector (``_posed``) and the mission's track on the ground under the
-camera (``ground_msl``); one camera-now height on ``ground_msl(xy)`` makes
-them one rule.
+(``boresight.json``; without one the datasheet camera flies).
 """
 
 from __future__ import annotations
@@ -288,7 +278,12 @@ def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor, g
 class LiveSource:
     """The vehicle's recorded frames, posed and registered, as coverage and
     observations. ``floor_msl_m`` is the ground in the receiver's orthometric
-    datum, ``tile_ground_z`` the tile frame's floor (``GROUND_LEVEL``)."""
+    datum, ``tile_ground_z`` the tile frame's floor (``GROUND_LEVEL``).
+    ponytail: two heights above ground: the ownship, the frame tests and the
+    arrival rule (``ownship``, ``in_frame``, ``frame_transit_s``,
+    ``coverage``) stand on the bake's floor, the projector (``_posed``) and
+    the mission's track on the ground under the camera (``ground_msl``); one
+    camera-now height on ``ground_msl(xy)`` makes them one rule."""
 
     def __init__(self, *, tiles_dir: str | Path, map_name: str, boresight: Boresight, vehicle,
                  tile_ground_z: float, floor_msl_m: float, register: Registration | None = None) -> None:
@@ -367,6 +362,7 @@ class LiveSource:
         pose = pose if pose is not None else self.pose_now(t_host)
         if pose is None:
             return f"no pose for the frame: {self.vehicle.last_error or 'no fix'}"
+        # A pose's roll and pitch are aerospace (right wing down, nose up); the projector's pitch is nose down.
         roll = float(pose.roll_deg)
         pitch_proj = -float(pose.pitch_deg)
         pose_xy, alt_msl, yaw = self.camera_pose(pose)
@@ -379,6 +375,8 @@ class LiveSource:
         camera_z = self.tile_ground_z + (alt_msl - self.floor_msl_m)
         ground_tile = self.ground_tile_z(pose_xy)
         agl = camera_z - ground_tile
+        # ponytail: flat ground at the nadir's height (the bake's DEM, else its floor); relief
+        # within a frame needs a height raster under ground_corners_xy.
         try:
             corners = ground_corners_xy(sensor, pose_xy, agl, yaw, airframe_roll_deg=roll,
                                         airframe_pitch_deg=pitch_proj, ground_z=ground_tile)

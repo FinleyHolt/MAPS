@@ -612,8 +612,6 @@ class Mission:
 
         try:
             self._set(STATE_FLYING)
-            # One probe per process, before any inference call: a dead reasoner
-            # fails this mission, honestly.
             install_spec(discover_from_env())
             settle_effort()
             if self.reasoning_effort:
