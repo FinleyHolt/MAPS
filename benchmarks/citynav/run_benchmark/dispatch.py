@@ -17,7 +17,7 @@ from benchmarks.citynav.run_benchmark.config import RunConfig
 from benchmarks.citynav.run_benchmark.episode_runner import run_episode
 from benchmarks.citynav.run_manifest import arm_stamp
 from maps.llm import endpoint_spec as endpoint_spec_module
-from maps.llm.http import TRANSIENT_CLIENT_STATUS
+from maps.llm.http import TRANSIENT_CLIENT_STATUS, ImageStoreError
 from maps.perception.sam.detect_client import SamServerOutage
 
 log = logging.getLogger("run_benchmark")
@@ -89,10 +89,11 @@ def _exc_is_transient_infra(exc: BaseException) -> bool:
 
 def is_infra_fault(exc: BaseException) -> bool:
     """The infra rule for a raised attempt: a SAM outage, a transient
-    shared-server fault or a reasoner that did not answer discovery. Any other
-    exception is the method's own, a scored miss."""
+    shared-server fault, an image-store refusal or a reasoner that did not
+    answer discovery. Any other exception is the method's own, a scored miss."""
     return (_exc_is_sam_infra(exc) or _exc_is_transient_infra(exc)
-            or any(isinstance(cur, endpoint_spec_module.EndpointUnreachable) for cur in _chain(exc)))
+            or any(isinstance(cur, (ImageStoreError, endpoint_spec_module.EndpointUnreachable))
+                   for cur in _chain(exc)))
 
 
 def _dispatch_one(

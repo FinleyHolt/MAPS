@@ -97,6 +97,21 @@ def test_a_status_the_serve_may_clear_is_infra(code):
     assert _exc_is_transient_infra(_status_error(code)) is True
 
 
+@pytest.mark.parametrize("code", [404, 413])
+def test_an_image_store_refusal_is_infra(code):
+    """The image store is shared infrastructure: a PUT it refuses, under
+    whatever the policy raised from it, re-queues the episode."""
+    from maps.llm.http import ImageStoreError
+
+    try:
+        try:
+            raise ImageStoreError("image store PUT failed") from _status_error(code)
+        except ValueError as exc:
+            raise RuntimeError("no JSON after 2 attempts") from exc
+    except RuntimeError as exc:
+        assert dispatch.is_infra_fault(exc) is True
+
+
 def test_no_record_is_infra_not_a_scored_zero(tmp_path, light, monkeypatch):
     monkeypatch.setattr(dispatch, "run_episode", lambda *a, **k: None)
     row = _dispatch(tmp_path)
