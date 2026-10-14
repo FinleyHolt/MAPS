@@ -1213,13 +1213,13 @@ class MissionPython:
         _refuse_metres_in_within(within)
         if isinstance(nearest, (list, tuple)) and not is_xy(nearest):
             nearest = [self._slot(a) for a in nearest]
-        elif nearest is not None:
+        else:
             nearest = self._slot(nearest)
-        near = self._slot(near) if near is not None else None
-        within = self._slot(within) if within is not None else None
+        near = self._slot(near)
+        within = self._slot(within)
         cards = self._cards(north=north_of, south=south_of, east=east_of,
                             west=west_of)
-        q = str(query) if query != "" else ""
+        q = str(query)
         p = self._program(q, nearest, near, within, dwithin, color, name,
                           cards)
         ref = compile_find(p, q, name=name, near=near, nearest=nearest,
@@ -1278,7 +1278,7 @@ class MissionPython:
             # nearest=[A, B] ranks by both distances in one score_by, as
             # find's does.
             nearest = [self._slot(a) for a in nearest]
-        elif nearest is not None:
+        else:
             nearest = self._slot(nearest)
         items = self._slot(items)
         p = self._program(items, nearest, color)
@@ -1290,12 +1290,12 @@ class MissionPython:
         # Which-arg validation lives in the compiler; every caller has
         # already refused a kwarg outside the set.
         items = self._slot(items)
-        within = self._slot(within) if within is not None else None
-        near = self._slot(near) if near is not None else None
+        within = self._slot(within)
+        near = self._slot(near)
         # facing= is a PLACE and rides the slot resolver; direction= is the
         # compass WORD and rides verbatim, which is the whole point of
         # keeping the word out of the kwarg name.
-        facing = self._slot(facing) if facing is not None else None
+        facing = self._slot(facing)
         cards = self._cards(**{d[:-3]: v for d, v in cards.items()})
         p = self._program(items, within, near, dwithin, facing, direction,
                           cards)
@@ -1397,7 +1397,7 @@ class MissionPython:
                 "place in near=, within= and nearest=, where it means "
                 "the gap to its NEAREST member, but there is no one "
                 "point to centre on.)")
-        around = self._slot(around) if around is not None else None
+        around = self._slot(around)
         self._act(self.env.map, [(self._site(around, "map"), "map")])
         return None
 
@@ -1414,7 +1414,7 @@ class MissionPython:
         # look_for("parking lot") arm the same class.
         words = [w.strip().lower().replace("_", " ")
                  for w in classes if w.strip()]
-        at = self._slot(at) if at is not None else None
+        at = self._slot(at)
         if at is None:
             self._act(self.env.watch, [], words)
         else:
