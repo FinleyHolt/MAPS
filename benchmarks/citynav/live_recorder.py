@@ -13,21 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
-
-def _json_fallback(o: Any) -> Any:
-    if isinstance(o, np.ndarray):
-        return o.tolist()
-    if isinstance(o, (np.integer,)):
-        return int(o)
-    if isinstance(o, (np.floating,)):
-        return float(o)
-    return str(o)
+from benchmarks.citynav.episodes import _json_default
 
 
 def _append_jsonl(path: Path, record: Any) -> None:
-    line = json.dumps(record, default=_json_fallback) + "\n"
+    line = json.dumps(record, default=_json_default) + "\n"
     try:
         with path.open("a", encoding="utf-8") as fh:
             fh.write(line)
