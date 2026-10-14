@@ -38,9 +38,7 @@ def test_split_mismatch_is_fatal():
 
 
 def test_same_bake_under_different_site_roots_is_comparable():
-    """The bake's identity is its NAME: a cross-site pair (or one pool run's
-    own lanes) carries the same bake under each site's mount prefix, and the
-    retired-bake refusal must not fire on the prefix."""
+    """The bake's identity is its name: one bake under two mount prefixes is comparable."""
     fatal, arm = comparability_issues(
         _prov(tiles="/local/a/MAPS/tiles/citynav_2m_osmv2"),
         _prov(tiles="/scratch/b/MAPS/tiles/citynav_2m_osmv2"),
