@@ -188,10 +188,11 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--start-xy flies an operator-authored mission: give its words with --instruction")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
 
-    from benchmarks.flight.mission import (STATE_ENDED, Mission, activate_calcity, converse,  # noqa: PLC0415
-                                           flight_config, resolve_episode, summary_line)
+    import benchmarks.calcity  # noqa: PLC0415
+    from benchmarks.flight.mission import (STATE_ENDED, Mission, converse, flight_config,  # noqa: PLC0415
+                                           resolve_episode, summary_line)
 
-    activate_calcity()
+    benchmarks.calcity.use()
     from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
     from benchmarks.citynav.paths import DEFAULT_SPLIT, TILES_DIR  # noqa: PLC0415
     from benchmarks.flight.live_source import open_live  # noqa: PLC0415

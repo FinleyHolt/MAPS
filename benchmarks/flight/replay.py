@@ -36,14 +36,15 @@ from typing import Any
 
 import numpy as np
 
+import benchmarks.calcity
 from benchmarks.citynav.analysis.rows import iter_json_rows
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
 from benchmarks.flight.live_source import open_live, ortho_observation
 from benchmarks.flight.measures import run_bases
-from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, activate_calcity,
-                                       converse, flight_config, summary_line)
+from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, converse,
+                                       flight_config, summary_line)
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
 from maps.llm.http import TRANSCRIPT_JSONL, CallCanceled
 
@@ -548,7 +549,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     """Fly ``rec`` again under ``out/<sortie>/``; ``live`` is a live source (the
     frame tier), else the bank answers. Returns the mission, ended, and its folder."""
     _arm_env(rec, forced=forced)
-    activate_calcity()
+    benchmarks.calcity.use()
     flight_config(config)
     from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
     from benchmarks.citynav.paths import DEFAULT_SPLIT, TILES_DIR  # noqa: PLC0415
@@ -658,7 +659,7 @@ def main(argv: list[str] | None = None) -> int:
     live = None
     bank: list[Held] | None = None
     if args.frames is not None:
-        activate_calcity()
+        benchmarks.calcity.use()
         from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
         from benchmarks.flight.recorded_ring import RecordedRing, run_window  # noqa: PLC0415
         from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415

@@ -36,7 +36,7 @@ from benchmarks.citynav.conversation import CONVERSATION_JSONL, ConversationLog
 
 if TYPE_CHECKING:
     # Imported where used: the engine binds the bench's paths at import,
-    # after activate_calcity has selected Cal City.
+    # after benchmarks.calcity.use() has selected Cal City.
     from benchmarks.citynav.run_benchmark.episode_runner import Hydrated
 
 log = logging.getLogger("flight.mission")
@@ -101,13 +101,6 @@ STOPPED = {"error": "the mission is stopped"}
 def _holds(cov: dict[str, Any] | None) -> bool:
     """Whether a coverage answer holds its area: the arrival rule, ``COVERED_FRACTION`` of it."""
     return bool(cov) and float(cov.get("fraction") or 0.0) >= COVERED_FRACTION
-
-
-def activate_calcity() -> None:
-    """Select the Cal City bench (``benchmarks.calcity.use``) for every flight entry point."""
-    from benchmarks.calcity import use  # noqa: PLC0415
-
-    use()
 
 
 def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] | None = None):
