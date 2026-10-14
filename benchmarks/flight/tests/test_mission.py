@@ -250,3 +250,11 @@ def test_a_stop_while_a_short_pass_is_read_posts_no_refly(built, make_mission):
     out = m._fly_live(_session(_hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
     assert out == {"error": "the mission is stopped"}
     assert [leg.revision for leg in twin.legs] == [0]
+
+
+def test_a_short_pass_is_said_as_the_points_it_held():
+    """17 of 19 points is said as 17/19, never rounded up to a share that reads as held."""
+    said = M.Mission._held_words({"coverage": {"fraction": 0.895, "held": 17, "points": 19, "seqs": [4, 5]},
+                                  "seq": 5, "off_nadir_deg": 3.1})
+    assert "held 17/19 points of it in 2 frame(s)" in said and "90%" not in said
+
