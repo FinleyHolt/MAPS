@@ -182,10 +182,11 @@ def open_recording(run_dir: Path) -> Recording:
 
 def flown_runs(sorties: Path) -> list[Path]:
     """Every run under a sorties root that holds a reasoner transcript, in the
-    order flown: the aircraft's copy of its folder, else the ground station's."""
+    order flown: the aircraft's copy of its folder, else the ground station's.
+    A torn ledger line skips that run, as the week bank's other records do."""
     out = []
     for ledger in sorted(Path(sorties).glob(f"*Z/{EPISODES_JSONL}")):
-        for row in read_records(ledger):
+        for row in iter_json_rows(ledger):
             found = next((b for b in run_bases(ledger.parent, row)
                           if (b / "flight" / "llm" / TRANSCRIPT_JSONL).is_file()), None)
             if found is not None:

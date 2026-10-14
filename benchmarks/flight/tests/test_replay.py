@@ -398,3 +398,26 @@ def test_a_week_bank_serves_every_run_s_observations_past_a_torn_line_in_another
     monkeypatch.setattr(R, "summary_line", lambda mission: "")
     R.main([str(runs[0]), "--bank", "week", "--out", str(tmp_path / "out")])
     assert [h.path.parent.parent for h in banks[0]] == runs
+
+
+def test_a_week_bank_reads_past_a_torn_ledger_line_in_another_sortie(tmp_path, monkeypatch):
+    """A torn line in another sortie's ``episodes.jsonl`` skips that line, not the replay."""
+    from types import SimpleNamespace
+
+    frame = {"corners_xy": [[0, 0], [100, 0], [100, 100], [0, 100]], "altitude_m": 900.0}
+    runs = []
+    for sortie, sha in (("20260101T000000Z", "aa"), ("20260102T000000Z", "bb")):
+        run = _run(tmp_path / sortie, "maps_run01", "flew to prior_1")
+        (run / "observations").mkdir()
+        (run / "observations" / f"{sha}.jpg").write_bytes(b"jpeg")
+        (run / "frames.jsonl").write_text(json.dumps({**frame, "observation": sha}) + "\n")
+        (run.parent / "episodes.jsonl").write_text(json.dumps({"run_no": 1, "workdir": "maps_run01"}) + "\n")
+        runs.append(run)
+    with (runs[1].parent / "episodes.jsonl").open("a") as f:
+        f.write('{"torn\n')
+    banks = []
+    monkeypatch.setattr(R, "fly", lambda rec, out, *, bank, **kw: banks.append(bank) or (SimpleNamespace(error=None), None))
+    monkeypatch.setattr(R, "summary_line", lambda mission: "")
+    R.main([str(runs[0]), "--bank", "week", "--out", str(tmp_path / "out")])
+    assert [h.path.parent.parent for h in banks[0]] == runs
+
