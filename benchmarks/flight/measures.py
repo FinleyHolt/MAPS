@@ -17,10 +17,9 @@ no track, so it reads SR and NE only).
   its hand-drawn mask, else the tasking set's footprint for the run's
   description (a split JSON given as a truth path). The mask's area
   centroid is the target.
-* **The path**: the GNSS track (``flight_track.jsonl``, 1 Hz) and, on a
-  recording holding under 95% of the run, the fused observations' centres
-  (``frames.jsonl`` ``pose_xy``) beside it; ``track_source`` names the one
-  the closest approach came off.
+* **The path**: the GNSS track (``flight_track.jsonl``, 1 Hz) and the fused
+  observations' centres (``frames.jsonl`` ``pose_xy``) beside it;
+  ``track_source`` names the one the closest approach came off.
 
 OSR's width is one camera HFOV ground width at the height ``agl_ft``: the
 fix nearest the target's, else the observations' median camera height
@@ -478,10 +477,10 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         out["spl"] = 0.0
     out["track_coverage"] = track_coverage(track, t_start, t_end_run)
     flown = _window(track, t_start, t_end_run) if track else []
-    # The observations are centred on ground the camera held: beside a thin
-    # recording they can still show the target came within the width.
+    # The observations are centred on ground the camera held: they can show the
+    # target came within the width where the track does not.
     thin = out["track_coverage"] < SPL_MIN_COVERAGE
-    poses = keyframe_poses(bases, t_start, t_end_run, row.get("map_name")) if thin else []
+    poses = keyframe_poses(bases, t_start, t_end_run, row.get("map_name"))
     if success and len(flown) < 2:
         out["spl_note"] = "undefined: the recording does not cover the run"
     paths = [(name, p) for name, p in (("GNSS track", flown), ("keyframe poses", poses)) if p]

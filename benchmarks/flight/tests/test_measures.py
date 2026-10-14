@@ -79,8 +79,8 @@ def test_the_measures_score_the_commit_point_against_the_mask_and_the_track_agai
     assert f"turn radius {Q.TURN_RADIUS_FALLBACK_M} m (fallback: no turn read)" in capsys.readouterr().out
 
 
-def _thin_track_run(tmp_path, keyframe_xy, gnss_agl_m=600.0):
-    """A run whose recording holds 5 s far from the target (its fixes' height
+def _keyframe_run(tmp_path, keyframe_xy, gnss_agl_m=600.0, fixes=5):
+    """A run whose recording holds ``fixes`` s far from the target (its fixes' height
     ``gnss_agl_m``, None for none), plus one keyframe pose at ``keyframe_xy``."""
     import datetime as dt
 
@@ -89,7 +89,7 @@ def _thin_track_run(tmp_path, keyframe_xy, gnss_agl_m=600.0):
     (root / "episodes.jsonl").write_text(json.dumps(row) + "\n")
     (root / "flight_track.jsonl").write_text("".join(
         json.dumps({"t_unix": T0 + k, "x": 5000.0, "y": 0.0, "alt_agl_m": gnss_agl_m, "track_deg": 0.0,
-                    "ground_speed_mps": 100.0}) + "\n" for k in range(5)))
+                    "ground_speed_mps": 100.0}) + "\n" for k in range(fixes)))
     utc = dt.datetime.fromtimestamp(T0 + 300.0, dt.timezone.utc).isoformat()
     (root / "run1" / "frames.jsonl").write_text(json.dumps({"pose_xy": keyframe_xy, "utc": utc,
                                                             "altitude_m": 600.0}) + "\n")
@@ -100,26 +100,33 @@ def _thin_track_run(tmp_path, keyframe_xy, gnss_agl_m=600.0):
 
 
 def test_osr_reads_the_keyframe_poses_beside_a_thin_recording(tmp_path):
-    got = _thin_track_run(tmp_path, [120.0, 100.0])
+    got = _keyframe_run(tmp_path, [120.0, 100.0])
     assert got["track_coverage"] < Q.SPL_MIN_COVERAGE
     assert got["oracle_success"] is True
     assert (got["track_source"], got["agl_source"]) == ("keyframe poses", "keyframes")
 
 
+def test_osr_reads_the_keyframe_poses_beside_a_full_recording(tmp_path):
+    got = _keyframe_run(tmp_path, [120.0, 100.0], fixes=601)
+    assert got["track_coverage"] == 1.0
+    assert (got["oracle_success"], got["track_source"]) == (True, "keyframe poses")
+    assert _keyframe_run(tmp_path / "far", [3000.0, 3000.0], fixes=601)["oracle_success"] is False
+
+
 def test_a_gnss_fix_with_no_height_reads_the_keyframes_median_height(tmp_path):
-    got = _thin_track_run(tmp_path, [9000.0, 9000.0], gnss_agl_m=None)
+    got = _keyframe_run(tmp_path, [9000.0, 9000.0], gnss_agl_m=None)
     assert (got["track_source"], got["agl_source"]) == ("GNSS track", "keyframes (median)")
 
 
 def test_an_observation_s_height_above_ground_is_its_altitude_over_the_map_s_ground_level(tmp_path, monkeypatch):
     monkeypatch.setitem(Q.GROUND_LEVEL, "calcity", 100.0)
     for keyframe_xy, gnss_agl_m in (([120.0, 100.0], 600.0), ([9000.0, 9000.0], None)):
-        got = _thin_track_run(tmp_path / str(gnss_agl_m), keyframe_xy, gnss_agl_m=gnss_agl_m)
+        got = _keyframe_run(tmp_path / str(gnss_agl_m), keyframe_xy, gnss_agl_m=gnss_agl_m)
         assert got["agl_ft"] == round(500.0 * Q.FT_PER_M, 1), got["agl_source"]
 
 
 def test_a_thin_recording_with_no_pose_near_the_target_cannot_show_a_miss(tmp_path):
-    assert _thin_track_run(tmp_path, [3000.0, 3000.0])["oracle_success"] is None
+    assert _keyframe_run(tmp_path, [3000.0, 3000.0])["oracle_success"] is None
 
 
 def test_a_run_the_serve_failed_under_is_out_of_every_rate_and_named(tmp_path):

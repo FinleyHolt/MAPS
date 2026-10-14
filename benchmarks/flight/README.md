@@ -148,8 +148,9 @@ python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications d
 
 Per run: SR (the commit point lies inside the target's mask: the analyst's
 hand-drawn one, else the tasking set's footprint), NE (the commit point to
-the mask's centroid), OSR (the aircraft's path came within one camera
-footprint width of the target), time to identification, SPL, and tokens;
+the mask's centroid), OSR (the aircraft's path, its GNSS track or the
+centres of the observations it fused, came within one camera footprint width
+of the target), time to identification, SPL, and tokens;
 the module's docstring says how each is read off the records. A run the
 serve failed under before its first report (the bench's infra rule) is out
 of every rate and named; a run that ends after a report without a new one
