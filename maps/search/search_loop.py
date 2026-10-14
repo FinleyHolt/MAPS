@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from maps.search.analyze_scene.geom_compute import cell_centre_xy
 from maps.search.parse_compile.perception_director import (
     PerceptionDirector, canon_concept)
 from maps.sws.graph.model import GridDomain, MapObject
@@ -91,16 +92,10 @@ class SearchLoop:
         if not isinstance(centroid, (list, tuple)) or len(centroid) != 2:
             return None
         try:
-            row = int(centroid[0])
-            col = int(centroid[1])
+            row, col = int(centroid[0]), int(centroid[1])
         except (TypeError, ValueError):
             return None
-        cell = self._cell_size_m
-        tx, ty = self._tile_origin_xy
-        return (
-            float(tx) + (col + 0.5) * cell,
-            float(ty) + (row + 0.5) * cell,
-        )
+        return cell_centre_xy(row, col, self._tile_origin_xy, self._cell_size_m)
 
     def _prior_surface_xy_locked(self) -> dict:
         """``{fid: (x, y)}`` for every prior row as the surface serves it,
@@ -159,9 +154,7 @@ class SearchLoop:
         # cells is an (N, 2) array: its truth value raises, its length does not.
         if cells is None or len(cells) == 0:
             return None
-        cell = self._cell_size_m
-        tx, ty = self._tile_origin_xy
-        return [(float(tx) + (int(c[1]) + 0.5) * cell, float(ty) + (int(c[0]) + 0.5) * cell) for c in cells]
+        return [cell_centre_xy(c[0], c[1], self._tile_origin_xy, self._cell_size_m) for c in cells]
 
     def node_cells_xy(self, target_fid: str) -> list[tuple[float, float]] | None:
         """The ground this fid stands on, as the centres of its cells in

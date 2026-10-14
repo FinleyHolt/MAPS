@@ -41,6 +41,12 @@ def cw(v):
     return (v[1], -v[0])
 
 
+def cell_centre_xy(row, col, origin_xy, cell_m) -> tuple[float, float]:
+    """The world x, y of grid cell ``(row, col)``'s centre."""
+    return (float(origin_xy[0]) + (int(col) + 0.5) * float(cell_m),
+            float(origin_xy[1]) + (int(row) + 0.5) * float(cell_m))
+
+
 def _xy(p):
     """``(x, y)`` floats of ``[x, y]``."""
     return float(p[0]), float(p[1])

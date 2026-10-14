@@ -260,7 +260,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
     cs = float(cell_m)
 
     def _w(rc):
-        return [round(tx + (int(rc[1]) + 0.5) * cs, 2), round(ty + (int(rc[0]) + 0.5) * cs, 2)]
+        return [round(v, 2) for v in G.cell_centre_xy(rc[0], rc[1], (tx, ty), cs)]
 
     def _xy(n, mask=None):
         """The row's served point, the ``go_to``/``explore`` flight target: the
