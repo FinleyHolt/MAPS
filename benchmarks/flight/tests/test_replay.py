@@ -388,7 +388,7 @@ def test_a_week_bank_serves_every_run_s_observations_past_a_torn_line_in_another
         (run / "observations").mkdir()
         (run / "observations" / f"{sha}.jpg").write_bytes(b"jpeg")
         (run / "frames.jsonl").write_text(json.dumps({**frame, "observation": sha}) + "\n")
-        (run.parent / "episodes.jsonl").write_text(json.dumps({"run_no": 1, "workdir": "maps_run01"}) + "\n")
+        (run.parent / "episodes.jsonl").write_text(json.dumps({"run_no": 1, "workdir": "maps_run01", "start_xy": [0, 0]}) + "\n")
         runs.append(run)
     for name in ("frames.jsonl", "flight/llm/transcript.jsonl"):
         with (runs[1] / name).open("a") as f:
@@ -411,7 +411,7 @@ def test_a_week_bank_reads_past_a_torn_ledger_line_in_another_sortie(tmp_path, m
         (run / "observations").mkdir()
         (run / "observations" / f"{sha}.jpg").write_bytes(b"jpeg")
         (run / "frames.jsonl").write_text(json.dumps({**frame, "observation": sha}) + "\n")
-        (run.parent / "episodes.jsonl").write_text(json.dumps({"run_no": 1, "workdir": "maps_run01"}) + "\n")
+        (run.parent / "episodes.jsonl").write_text(json.dumps({"run_no": 1, "workdir": "maps_run01", "start_xy": [0, 0]}) + "\n")
         runs.append(run)
     with (runs[1].parent / "episodes.jsonl").open("a") as f:
         f.write('{"torn\n')
@@ -422,8 +422,14 @@ def test_a_week_bank_reads_past_a_torn_ledger_line_in_another_sortie(tmp_path, m
     assert [h.path.parent.parent for h in banks[0]] == runs
 
 
-def test_a_replay_of_a_run_that_never_reached_the_reasoner_is_refused_by_name(tmp_path):
+def test_a_replay_of_a_run_that_never_reached_the_reasoner_is_refused_by_name_before_its_frames_are_read(
+        tmp_path, monkeypatch, capsys):
+    import benchmarks.flight.recorded_ring as ring
+
     rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run", row={"episode_id": "calcity::t"},
                       params={}, requests=[], responses=[], conversation=[], frames=[])
-    with pytest.raises(ValueError, match="never reached the reasoner"):
-        R.fly(rec, tmp_path, bank=[])
+    monkeypatch.setattr(R, "open_recording", lambda run: rec)
+    monkeypatch.setattr(ring, "RecordedRing", lambda *a, **kw: pytest.fail("the frames were read"))
+    with pytest.raises(SystemExit) as refused:
+        R.main(["run", "--frames", str(tmp_path / "cam.mcap"), "--out", str(tmp_path / "out")])
+    assert refused.value.code == 2 and "records no start: the run never reached the reasoner" in capsys.readouterr().err
