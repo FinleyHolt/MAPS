@@ -60,11 +60,8 @@ _DEVICE = os.environ.get("SAM_DEVICE", "cuda" if torch.cuda.is_available() else 
 _DTYPE_STR = os.environ.get("SAM_DTYPE", "bfloat16")
 
 _state_lock = threading.Lock()
-# The admission wait is async, so a waiter holds no thread. Sync handlers
-# and sync dependencies share starlette's 40-thread pool; a sync gate held
-# one per waiter, and once about 40 waited, admitted forwards and /health
-# could not get a thread and the replica served two requests per wait
-# window until the waiters timed out.
+# The admission wait is async, so a waiter holds no thread from the pool
+# admitted forwards and /health share.
 _MAX_INFLIGHT = int(os.environ.get("SAM_MAX_INFLIGHT", "2"))
 _INFLIGHT_WAIT_S = float(os.environ.get("SAM_INFLIGHT_WAIT_S", "600"))
 _inflight_sem = asyncio.BoundedSemaphore(max(1, _MAX_INFLIGHT))
