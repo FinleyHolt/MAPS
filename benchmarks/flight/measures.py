@@ -217,10 +217,13 @@ def _window(track, t0: float, t1: float):
 
 
 def _at(track, t: float) -> tuple[float, float] | None:
-    """The track's position at ``t``, interpolated between fixes; None outside it."""
-    if not track or t < track[0]["t_unix"] or t > track[-1]["t_unix"]:
+    """The track's position at ``t``, interpolated between fixes; the last fix for
+    ``TRACK_GAP_S`` past it (a gap the coverage counts as held); None outside."""
+    if not track or t < track[0]["t_unix"] or t > track[-1]["t_unix"] + TRACK_GAP_S:
         return None
     i = bisect_left([r["t_unix"] for r in track], t)
+    if i == len(track):
+        return track[-1]["x"], track[-1]["y"]
     b = track[i]
     if i == 0 or b["t_unix"] == t:
         return b["x"], b["y"]

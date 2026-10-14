@@ -208,3 +208,17 @@ def test_a_mission_that_failed_off_the_serve_reads_failed():
     ``failed``, not ``no run``."""
     assert Q.ended({"status": "ok", "ended_by": None, "error": "KeyError: 'x'"}) == "failed"
     assert Q.ended({"status": "infra", "error": "SamServerOutage"}) == "no run"
+
+
+def test_a_track_ending_under_a_second_before_the_report_owes_no_way_back(tmp_path):
+    root, truth = tmp_path / "20260101T000000Z", tmp_path / "truth"
+    row = _run(root, "run1", commit=("prior_0", [100.0, 100.0]), t_s=20.5)
+    (root / "episodes.jsonl").write_text(json.dumps(row) + "\n")
+    # North along x = 100 at 100 m/s, the last fix at t = 20 50 m past the target, the report at 20.5.
+    (root / "flight_track.jsonl").write_text("".join(
+        json.dumps({"t_unix": T0 + k, "x": 100.0, "y": -1850.0 + 100.0 * k, "alt_agl_m": 600.0, "track_deg": 0.0,
+                    "ground_speed_mps": 100.0}) + "\n" for k in range(21)))
+    truth.mkdir()
+    (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
+    (got,), _radius, _turns = Q.collect([root], Q.Truth([truth]))
+    assert got["final_leg_ft"] == 0.0
