@@ -113,8 +113,8 @@ def plan_coverage(landmarks: list[Landmark], bounds, start_xy: tuple[float, floa
         for y in _axis_centres(miny, maxy, fov, step)
     ]
     # Rasterise the region: cell centres inside it are what a square must
-    # cover. ponytail: a fixed fraction of the FOV, so a small landmark still
-    # gets a few hundred cells and a whole block stays under ~10k.
+    # cover.
+    # ponytail: cells a fixed fraction of the FOV; finer costs memory on a window-sized region.
     cell = max(1.0, fov / 25.0)
     cx = np.arange(minx + cell / 2.0, maxx, cell)
     cy = np.arange(miny + cell / 2.0, maxy, cell)
