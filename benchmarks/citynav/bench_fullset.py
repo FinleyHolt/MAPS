@@ -572,6 +572,13 @@ class Driver:
 
     def _run(self) -> int:
         episodes = self._select_episodes()
+        # A session's clock cannot resume: its reports would arrive against a
+        # fresh zero. Refused before the manifest records a resume.
+        if (self.arrivals_path is not None and self.episodes_file.exists()
+                and self.episodes_file.stat().st_size):
+            self.log(f"FATAL: {self.out_root} already holds a ledger; a capacity session flies "
+                     f"into a fresh --out-root")
+            return 2
         self._selection = episodes
         missing = _missing_block_assets(episodes)
         if missing:
@@ -606,11 +613,6 @@ class Driver:
             return 2
         self._absorb_ledger()
         if self.arrivals_path is not None:
-            # A session's clock cannot resume: its reports would arrive against a fresh zero.
-            if self.episodes_file.exists() and self.episodes_file.stat().st_size:
-                self.log(f"FATAL: {self.out_root} already holds a ledger; a capacity session flies "
-                         f"into a fresh --out-root")
-                return 2
             shutil.copyfile(self.arrivals_path, self.out_root / "arrivals.json")
         pending = self._pending(episodes)
         self.log(

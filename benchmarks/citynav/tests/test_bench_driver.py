@@ -464,6 +464,7 @@ def test_a_session_refuses_a_root_that_already_holds_a_ledger(driver, tmp_path, 
     monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
     episodes.append_row(tmp_path, {"episode_id": "z", "status": "ok"})
     d = driver()
+    monkeypatch.setattr(rm, "emit_or_verify", lambda *a, **k: pytest.fail("a refused session touched the manifest"))
     d.arrivals_path = stream
     monkeypatch.setattr(d, "worker_loop", lambda w: pytest.fail("a resumed session flew"))
     assert d.run() == 2 and "fresh --out-root" in d.driver_log.read_text()
