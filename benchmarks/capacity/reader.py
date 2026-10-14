@@ -103,32 +103,35 @@ def curve(sessions: list[dict[str, Any]]) -> dict[str, Any]:
             "capacity_finds_per_h": max(pt["finds_per_h"] for pt in points), "saturation_load_per_h": saturation}
 
 
+def _stream(s: dict[str, Any]) -> tuple:
+    return (s["load_per_h"], s["seed"], s["hours"])
+
+
+def _by_stream(arm: list[dict[str, Any]]) -> dict[tuple, dict[str, Any]]:
+    """An arm's sessions by the stream they flew; two on one stream are refused."""
+    out: dict = {}
+    for s in arm:
+        if _stream(s) in out:
+            raise SystemExit(f"{out[_stream(s)]['root']} and {s['root']} both fly stream {_stream(s)} in one arm")
+        out[_stream(s)] = s
+    return out
+
+
 def paired(alone: list[dict[str, Any]], assisted: list[dict[str, Any]]) -> dict[str, Any]:
     """Alone against assisted over the sessions that flew the same stream,
     paired by ``(load_per_h, seed, hours)``, one session per arm per stream:
     the per-session difference in finds per hour (assisted - alone) with its
     bootstrap interval, and the per-report in-window correct finds through
     ``ab_stats`` (a = alone)."""
-    def key(s):
-        return (s["load_per_h"], s["seed"], s["hours"])
-
-    def by_key(arm):
-        out: dict = {}
-        for s in arm:
-            if key(s) in out:
-                raise SystemExit(f"{out[key(s)]['root']} and {s['root']} both fly stream {key(s)} in one arm")
-            out[key(s)] = s
-        return out
-
-    alone_by = by_key(alone)
-    by_key(assisted)
+    alone_by = _by_stream(alone)
+    _by_stream(assisted)
     pairs = []
-    for b in sorted(assisted, key=key):
-        a = alone_by.get(key(b))
+    for b in sorted(assisted, key=_stream):
+        a = alone_by.get(_stream(b))
         if a is None:
             continue
         if [r["episode_id"] for r in a["reports"]] != [r["episode_id"] for r in b["reports"]]:
-            raise SystemExit(f"{a['root']} and {b['root']} claim stream {key(b)} but flew different reports")
+            raise SystemExit(f"{a['root']} and {b['root']} claim stream {_stream(b)} but flew different reports")
         pairs.append((a, b))
     diffs = [b["finds_per_h"] - a["finds_per_h"] for a, b in pairs]
     lo, hi = bootstrap_ci(diffs)
@@ -162,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     arms = {name: [session(r) for r in roots]
             for name, roots in (("assisted", args.assisted), ("alone", args.alone)) if roots}
+    for sessions in arms.values():
+        _by_stream(sessions)
     out: dict[str, Any] = {name: {"curve": curve(s), "sessions": [{k: v for k, v in x.items() if k != "reports"}
                                                                    for x in s]}
                            for name, s in arms.items()}

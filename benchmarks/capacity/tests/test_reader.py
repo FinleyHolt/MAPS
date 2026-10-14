@@ -132,3 +132,9 @@ def test_a_correct_row_with_no_find_time_is_not_a_correct_find(tmp_path) -> None
     assert [r["correct"] for r in s["reports"]] == [True, False]
     assert reader.curve([s])["capacity_finds_per_h"] == 1
 
+
+def test_two_sessions_on_one_stream_are_refused_with_no_alone_arm(tmp_path) -> None:
+    one = _session(tmp_path / "b1", 4, 1, [(0, 100, 1)])
+    two = _session(tmp_path / "b2", 4, 1, [(0, 100, 1)])
+    with pytest.raises(SystemExit, match="b1.*b2"):
+        reader.main(["--assisted", str(one), str(two)])
