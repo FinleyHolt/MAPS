@@ -117,3 +117,12 @@ def test_a_never_flown_episode_scores_zero_under_either_mask():
                 assert row[key] == 0, f"{criterion}: {key}"
         # The honest part: NE is still start->target, not zeroed.
         assert row["NE"] == won["NE"]
+
+
+@pytest.mark.parametrize("trajectory", [None, [], [(0.0, 0.0)]])
+def test_a_flight_that_never_moved_scores_spl(trajectory):
+    """A replay of under two poses (the commit within snap tolerance of the
+    start) has flown no path: its SPL is its verdict, and it stays in the mean."""
+    row = cn_eval.score_arrival(criterion="ring", final_pos_xy=(0.0, 0.0), target_xy=(5.0, 0.0),
+                                pos_trajectory=trajectory, flew=True)
+    assert row["spl_pos"] == 1.0

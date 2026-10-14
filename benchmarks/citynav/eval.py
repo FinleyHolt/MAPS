@@ -41,13 +41,11 @@ def path_length_m(path: list[tuple[float, float]] | None) -> float:
 
 def spl_pos_from_path(
     target_xy: tuple[float, float],
-    pos_trajectory: list[tuple[float, float]] | None,
+    pos_trajectory: list[tuple[float, float]],
     sr_pos: int,
-) -> float | None:
+) -> float:
     """Anderson SPL over the flown path: ``sr_pos * L_opt / max(L_opt, L_agent)``,
-    ``L_opt`` from the first flown pose to the target; ``None`` under two poses."""
-    if not pos_trajectory or len(pos_trajectory) < 2:
-        return None
+    ``L_opt`` from the first flown pose to the target."""
     pts = [tuple(p) for p in pos_trajectory]
     l_opt = float(np.hypot(pts[0][0] - target_xy[0], pts[0][1] - target_xy[1]))
     l_agent = path_length_m(pts)
@@ -114,7 +112,8 @@ def score_arrival(
         return float(np.hypot(p[0] - target_xy[0], p[1] - target_xy[1]))
 
     ne = _d(final_pos_xy)
-    pos_traj = list(pos_trajectory) if pos_trajectory else [final_pos_xy]
+    # Under two poses nothing was flown: the path is the final pose, held.
+    pos_traj = list(pos_trajectory) if pos_trajectory and len(pos_trajectory) >= 2 else [final_pos_xy, final_pos_xy]
     sr = 1 if ne <= success_dist_m else 0
     scores = {
         "spl_pos": spl_pos_from_path(target_xy, pos_traj, sr),
