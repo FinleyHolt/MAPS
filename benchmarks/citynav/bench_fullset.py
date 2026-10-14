@@ -234,7 +234,7 @@ class Driver:
                 f"{k}x). This run is not producing results; stopping instead "
                 f"of spending the rest of the allocation on it."
             )
-        self.log("!! ABORTING RUN — " + self._abort)
+        self.log("!! ABORTING RUN: " + self._abort)
         self.log(f"!! by cause: {_causes(counts)}")
         self.log(f"!! representative worker log: {log_path}")
         self.log(self._log_excerpt(log_path))
@@ -505,7 +505,7 @@ class Driver:
                         self._abort = self._abort or (
                             f"[w{worker_id}] cannot write {self.episodes_file}: {werr}"
                         )
-                    self.log(f"!! ABORTING RUN — {self._abort}")
+                    self.log(f"!! ABORTING RUN: {self._abort}")
                     return
             finally:
                 with self._dispatch_lock:

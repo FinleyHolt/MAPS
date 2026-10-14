@@ -262,7 +262,7 @@ def emit_or_verify(out_root: Path, manifest: dict, log=print) -> Path:
     drift = identity_drift(prior, manifest)
     if drift:
         raise ManifestIdentityError(
-            "run_manifest identity drift — a resumed run under a different "
+            "run_manifest identity drift: a resumed run under a different "
             "bake/model/config/selection is two runs wearing one run id. "
             "Reconcile by hand (new out_root for a new identity):\n  "
             + "\n  ".join(drift)
