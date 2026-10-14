@@ -361,7 +361,6 @@ def continue_mission(mission: "_Mission", instruction: str, *,
     ``ctx`` holds now, and keeps every name, handle, flown stop, staged view
     and watched class of the turns before it."""
     mission.rid_tag = rid_tag
-    mission.preflight = False
     mission._world_moved()
     return mission.converse(instruction.strip())
 

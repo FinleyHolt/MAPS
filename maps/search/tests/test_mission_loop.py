@@ -117,3 +117,11 @@ def test_a_followup_turn_keeps_the_missions_names_stops_and_watchlist():
     assert "error" not in named and named["watching"] == ["car (0 detected)"], named
     assert stood["stance"]["staged"][0]["at_xy"] == [1.0, 2.0], stood
     assert declared == [["car"]]
+
+
+def test_a_followup_after_a_turn_that_flew_nowhere_is_still_preflight():
+    _, fr, _, _ = drive(["nothing."] * 3, preflight=True)
+    drive(["still nothing."] * 3, reasoner=fr)
+    assert fr.mission[0].preflight
+    drive([[run('go_to("prior_7")')], "report"], reasoner=fr)
+    assert not fr.mission[0].preflight
