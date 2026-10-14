@@ -198,7 +198,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
         map_name=assets.map_name,
         sam_setter=perception.concept_provider.set_concepts,
-        # The mission's observation span is ``2 * (alt - ground)`` off it.
+        # The block's ground datum: every height above ground is read off it.
         ortho_ground_z_m=ground,
         # The look tool's crop raster (a live run crops its own imagery).
         rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
@@ -300,9 +300,9 @@ def run_episode(
     state = h.state
     ground = h.search_loop._ortho_ground_z_m
     agl = cfg.start_altitude_agl_m
-    log.info("  ortho start altitude: %.2f m (%s, ground=%.2f, cap=%.0f, view_square=%.0fm, episode=%s)",
+    log.info("  ortho start altitude: %.2f m (%s, ground=%.2f, cap=%.0f, episode=%s)",
              state.altitude_m, f"AGL {agl:.0f} m" if agl is not None else f"row z={episode.start_z:.2f}",
-             ground, float(cfg.altitude_cap_m), 2.0 * (state.altitude_m - ground), episode.episode_id)
+             ground, float(cfg.altitude_cap_m), episode.episode_id)
     h.search_loop.set_retro_perceiver(functools.partial(retro_perceive, h))
 
     # The takeoff pose, before the mission moves the drone: the replay flies
