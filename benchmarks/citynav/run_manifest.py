@@ -10,6 +10,7 @@ mission writes one at the sortie root and one per mission workdir
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 import socket
@@ -152,12 +153,23 @@ def build_manifest(
 ) -> dict:
     """The resolved record. ``mission`` is the flight mission's per-mission
     stamp, recorded whole; a ``reasoning_effort`` it names replaces the arm's
-    in ``search_env_flags``, since the mission's requests carried it.
+    in ``search_env_flags``, since the mission's requests carried it, as does
+    the fixed dial of a config's baseline ``policy`` (``baselines.seam.REASONING_EFFORT``).
     ``arrivals`` is a capacity session's stream sha256: the stream, not a
     seed, selects its episodes."""
     arm = arm_env_stamp()
     if mission is not None and mission.get("reasoning_effort") is not None:
         arm["SEARCH_SAMPLING_REASONING_EFFORT"] = str(mission["reasoning_effort"])
+    import yaml  # noqa: PLC0415
+
+    from benchmarks.citynav.run_benchmark.config import resolve_config  # noqa: PLC0415
+
+    resolved = resolve_config(config_path)[0]
+    if resolved.get("policy"):
+        # By name: benchmarks carries no static import of baselines.
+        fixed = importlib.import_module("baselines.seam").REASONING_EFFORT.get(resolved["policy"])
+        if fixed is not None:
+            arm["SEARCH_SAMPLING_REASONING_EFFORT"] = fixed
     endpoints = _endpoint_section()
     prov = repo_provenance(
         config_path=str(config_path),
@@ -166,11 +178,6 @@ def build_manifest(
         served_model=endpoints["model_id"],
         served_build=endpoints["tokenizer"],
     )
-    import yaml  # noqa: PLC0415
-
-    from benchmarks.citynav.run_benchmark.config import resolve_config  # noqa: PLC0415
-
-    resolved = resolve_config(config_path)[0]
     config_yaml = yaml.safe_dump(resolved, sort_keys=False)
     return {
         "schema": SCHEMA,
