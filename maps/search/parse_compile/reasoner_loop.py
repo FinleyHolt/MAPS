@@ -459,9 +459,8 @@ class _Mission:
         # ``obs_span_m`` (the footprint's long side) sits under the short side
         # for any sensor below 2:1, so a ONE-DIMENSIONAL walk covers a shape that
         # is not one: consecutive stops overlap on the minor axis too.
-        self._cover_spacing = (float(self.obs_span_m) / 2.0
-                               if isinstance(self.obs_span_m, (int, float))
-                               and self.obs_span_m > 0 else None)
+        self._cover_spacing = (obs_span_m / 2.0
+                               if obs_span_m and obs_span_m > 0 else None)
 
         # The call in flight: what _ground_names noted and _analyze answered,
         # read by _finish.
