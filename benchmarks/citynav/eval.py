@@ -28,14 +28,6 @@ class WorldBounds:
     x_max: float
     y_max: float
 
-    @property
-    def width_m(self) -> float:
-        return self.x_max - self.x_min
-
-    @property
-    def height_m(self) -> float:
-        return self.y_max - self.y_min
-
 
 def path_length_m(path: list[tuple[float, float]] | None) -> float:
     """Sum of Euclidean distances along a pose sequence: the one definition
