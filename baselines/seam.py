@@ -294,9 +294,10 @@ class BaselineHarness:
         the dial says. The model reasons, then answers, and the answer is
         parsed as JSON and checked against the schema (``_fits``). An answer
         that is not that JSON goes through a second, grammar-constrained call
-        with the dial off that only reshapes it. A first call whose cap the
-        reasoning exhausted (no answer) falls back to the constrained call at
-        the policy's dial and is counted under ``reasoning_truncated``.
+        with the dial off that only reshapes it. A first call with no answer
+        falls back to the constrained call at the policy's dial; one whose cap
+        the reasoning exhausted (``finish_reason`` ``length``) is counted under
+        ``reasoning_truncated``.
         ``LLM_ATTEMPTS`` tries, then ``RuntimeError``.
         """
         from maps.llm import endpoint_spec
@@ -355,8 +356,8 @@ class BaselineHarness:
                         )
                         parsed, mode = shaped(again), "free+extract"
                     elif parsed is None:
-                        # No answer at all: the reasoning span ate the cap.
-                        self.reasoning_truncated += 1
+                        # No answer at all, the reasoning span having eaten the cap when it reads length.
+                        self.reasoning_truncated += finish == "length"
                         again, _, more_tokens, _ = call(messages, dial=effort, cap=EXTRACTION_MAX_TOKENS,
                                                         response_format=strict)
                         parsed, mode = shaped(again), "truncated+constrained"

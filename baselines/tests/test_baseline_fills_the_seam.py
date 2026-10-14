@@ -232,6 +232,32 @@ def test_an_answer_that_is_not_json_is_reshaped_with_the_dial_off(monkeypatch):
     assert h.extraction_calls == 1 and h.llm_calls == 2
 
 
+@pytest.mark.parametrize(("finish", "truncated"), [("length", 1), ("stop", 0)])
+def test_only_a_cap_the_reasoning_exhausted_counts_as_truncated(monkeypatch, finish, truncated):
+    """An empty first answer falls back to the constrained call either way; it
+    counts under ``reasoning_truncated`` only when the cap ended it."""
+    import maps.llm.http as http
+    from maps.llm import endpoint_spec
+
+    replies = iter([("", finish), ('{"pick": 3}', "stop")])
+
+    def fake(base_url, api_key, **kw):
+        text, why = next(replies)
+        return {"choices": [{"message": {"content": text}, "finish_reason": why}], "usage": {}}
+
+    monkeypatch.setattr(http, "_chat_completions_raw", fake)
+    monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
+        base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
+        tokenizer_name="qwen", max_output_tokens=40000))
+    h = BaselineHarness.__new__(BaselineHarness)
+    h.policy, h.cfg = "visa", SimpleNamespace()
+    h.llm_calls = h.reasoning_tokens = h.extraction_calls = h.reasoning_truncated = 0
+    h.calls, h.phase_s = [], {"examine": 0.0}
+    schema = {"type": "object", "properties": {"pick": {"type": "integer"}}, "required": ["pick"]}
+    assert h.llm_json([{"role": "user", "content": "which?"}], schema, "pick") == {"pick": 3}
+    assert (h.reasoning_truncated, h.calls[0]["mode"]) == (truncated, "truncated+constrained")
+
+
 def test_an_answer_whose_nested_item_breaks_the_schema_is_reshaped(monkeypatch):
     """The schema check reaches inside the answer: a sub-goal whose strategy is
     outside the enum, or one missing a required key, goes to the reshape
