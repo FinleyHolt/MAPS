@@ -645,6 +645,8 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
 
     rec = open_recording(args.run)
+    if args.frames is None and (args.raster or args.boresight or args.nav is not None):
+        ap.error("--raster, --boresight and --nav belong to the frame tier: give --frames")
     out = args.out / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     live = None
     bank: list[Held] | None = None
