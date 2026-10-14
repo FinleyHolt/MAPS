@@ -435,7 +435,7 @@ def _degrade_tool_result_content(
                 "rows.")
         head["hint"] = join_hints(head.get("hint"), note)
     if not changed:
-        return None, had_colors
+        return None, False
     return json.dumps(obj, default=str), had_colors
 
 
