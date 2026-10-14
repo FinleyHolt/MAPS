@@ -318,6 +318,12 @@ def test_a_list_in_near_cuts_against_its_nearest_member_as_filter_does():
     assert _cut(ops)["value"] == 500.0
 
 
+def test_dwithin_cuts_against_an_x_y_point_in_near_or_nearest():
+    for kw in ("near", "nearest"):
+        ops = _ops(f'r1 = find("car", {kw}=[7900, 5600], dwithin=300)\n')
+        assert _cut(ops)["value"] == 300.0, ops
+
+
 def test_a_list_in_nearest_with_dwithin_refuses_and_names_near():
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car", nearest=["prior_7", "prior_1"], dwithin=500)\n')
