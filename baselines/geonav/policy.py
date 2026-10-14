@@ -264,7 +264,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
         if strategy == "Search" and (
             t - last_vlm_t >= VLM_DETECTION_INTERVAL or _dist(pose, last_vlm_pos) >= VLM_DETECTION_DISTANCE_M
         ):
-            sub = _understand(h, frame, instruction, [target_name] + surroundings, t, frame_px=obs.rgb.shape[:2], max_tokens=understand_cap)
+            sub = _understand(h, frame, instruction, [target_name] + surroundings, frame_px=obs.rgb.shape[:2], max_tokens=understand_cap)
             landed = ingest_subgraph(
                 graph, sub, t,
                 lambda bbox, _o=obs: _bbox_corners_world(h, _o, bbox[1], bbox[0], bbox[3], bbox[2]),
@@ -309,7 +309,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
             # released: the complex path raises on a return-shape mismatch
             # and falls through to this chain path, so the chain path is
             # the only one that ever resolves.
-            chain = _operation_chain(h, task["goal"], t, max_tokens=call_cap)
+            chain = _operation_chain(h, task["goal"], max_tokens=call_cap)
             nodes = recursive_query(engine, chain, max_depth=5, current_depth=0)
             h.record(f"{t:02d}_locate_query", {"goal": task["goal"], "complex_query": complex_query,
                                                "operation_chain": chain,
@@ -398,7 +398,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
     )
 
 
-def _understand(h: BaselineHarness, frame: bytes, instruction: str, objects: list[str], t: int, frame_px=(1008, 1008), max_tokens: int = UNDERSTAND_MAX_TOKENS) -> dict:
+def _understand(h: BaselineHarness, frame: bytes, instruction: str, objects: list[str], *, frame_px, max_tokens) -> dict:
     """``LLMController.understand``: the scene-graph extractor over the raw frame."""
     text = P.LOCAL_GRAPH_PROMPT.format(instruction=instruction, objects=objects)
     # substitution: the frame's pixel size, stated ahead of the verbatim prompt,
@@ -415,7 +415,7 @@ def _understand(h: BaselineHarness, frame: bytes, instruction: str, objects: lis
         return {"nodes": [], "edges": []}  # released: two failed tries yield an empty graph
 
 
-def _operation_chain(h: BaselineHarness, goal: str, t: int, max_tokens: int = CALL_MAX_TOKENS) -> list[dict]:
+def _operation_chain(h: BaselineHarness, goal: str, *, max_tokens) -> list[dict]:
     """``GeonavAgent.generate_operation_chain``: text-only, through call_response."""
     try:
         out = h.llm_json(
