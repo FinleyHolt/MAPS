@@ -369,3 +369,40 @@ def test_a_city_sized_block_is_held_to_the_window_maximum():
     near = _lm("Near Road", [(700.0, 100.0), (710.0, 100.0), (710.0, 110.0)])
     w = h.search_window([near])
     assert w.x_max - 100.0 >= 610.0
+
+
+def test_visa_falls_back_to_an_attribute_matched_mark_before_a_pending_one(monkeypatch):
+    import numpy as np
+
+    from baselines import seam
+    from baselines.visa import policy
+
+    marks = [{"id": 1, "confidence": 0.9, "world_xy": [1.0, 1.0], "color": "", "label": "car"},
+             {"id": 2, "confidence": 0.5, "world_xy": [2.0, 2.0], "color": "", "label": "car"}]
+    verdict = {"verdict": "move", "target_mark": 0, "guidance": "", "guidance_concepts": [],
+               "attribute_match": {"candidate_marks": [1], "pending_marks": [2], "reasoning": ""},
+               "spatial_topology": {"consistent_marks": [2], "reasoning": ""},
+               "geographic_boundary": {"valid_marks": [2], "reasoning": ""}}
+    analysis = {"target": {"phrase": "red car", "class": "car", "attributes": []},
+                "surroundings": [], "landmarks": [], "concepts": []}
+    calls = iter([analysis, verdict])
+    h = SimpleNamespace(
+        cfg=SimpleNamespace(altitude_cap_m=200.0),
+        episode=SimpleNamespace(description="x", start_xy=(0.0, 0.0)),
+        start_alt_m=100.0, ground_z_m=0.0,
+        budget=seam.Budget(1000, seam.Pose(0.0, 0.0, 100.0, 0.0)),
+        llm_json=lambda *a, **k: next(calls),
+        landmarks=lambda: [], record=lambda *a: None,
+        search_window=lambda m: SimpleNamespace(x_min=-50, y_min=-50, x_max=50, y_max=50),
+        view_half_short_m=lambda a=None: 100.0, view_half_m=lambda a=None: 100.0,
+        observe=lambda xy, alt: SimpleNamespace(rgb=np.zeros((8, 8, 3), np.uint8), altitude_m=alt, pose_xy=xy),
+        detect=lambda obs, c: [], save_image=lambda *a: None, jpeg=lambda x: b"",
+        user_message=lambda t, i: {},
+    )
+    monkeypatch.setattr(policy, "mark_frame", lambda rgb, dets: (rgb, marks))
+    monkeypatch.setattr(policy, "legend", lambda m: "")
+    monkeypatch.setattr(policy, "mark_world_xy", lambda m: tuple(m["world_xy"]))
+
+    res = policy.run_episode(h)
+
+    assert (res.commit_label, res.commit_tier) == ("mark_1@step1", "visa:pending")

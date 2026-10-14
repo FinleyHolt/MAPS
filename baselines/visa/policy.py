@@ -132,7 +132,7 @@ def run_episode(h: BaselineHarness) -> BaselineResult:
     })
 
     stops: list[tuple[tuple[float, float], float]] = []
-    best: dict | None = None  # the strongest pending candidate: (score, conf, mark, step)
+    best: dict | None = None  # the strongest fallback candidate: key, mark, step
     step = 0
     guided_moves = 0
     altitude_changes = 0
@@ -153,10 +153,9 @@ def run_episode(h: BaselineHarness) -> BaselineResult:
         for m in marks:
             if m["id"] not in stages[0] and m["id"] not in pending:
                 continue
-            score = sum(m["id"] in s for s in stages)
-            key = (score, m["confidence"])
-            if best is None or key > (best["score"], best["confidence"]):
-                best = {"score": score, "confidence": m["confidence"], "mark": m, "step": step}
+            key = (m["id"] in stages[0], sum(m["id"] in s for s in stages), m["confidence"])
+            if best is None or key > best["key"]:
+                best = {"key": key, "mark": m, "step": step}
 
     def verify(obs, marks: list[dict], marked, guidance: str | None) -> dict:
         nonlocal step
