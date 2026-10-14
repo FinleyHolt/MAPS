@@ -20,6 +20,7 @@ from maps.search.withhold import withheld
 
 log = logging.getLogger(__name__)
 
+
 def _preflight_color_note() -> str:
     """Served on a preflight color-column request that attached to no row:
     before landing no row carries perceived color."""
@@ -105,6 +106,7 @@ def _program_dedup_key(ops: list) -> str | None:
     if any(t not in ren for t in re.findall(r"\br\d+\b", blob)):
         return None
     return re.sub(r"\br\d+\b", lambda m: ren[m.group(0)], blob)
+
 
 def _refs_read(op: dict) -> set:
     """The handles an op's args read (``rN`` or ``rN[a:b]``)."""

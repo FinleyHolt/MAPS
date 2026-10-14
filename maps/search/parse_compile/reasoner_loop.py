@@ -15,9 +15,9 @@ import difflib
 import hashlib
 import itertools
 import json
+import logging
 import os
 import re
-import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -31,35 +31,26 @@ from maps.search.analyze_scene.compactor import (
     CompactionInfeasible,
     CompactionInvariantError,
 )
-from maps.search.render.look_render import (
-    look_label,
-    look_outline,
-    look_xy,
-    up_bearing_deg,
+from maps.search.analyze_scene.geom_program import (
+    _BROAD_DUMP_SOFT_ROWS,
+    MODEL_UNSERVED_COLUMNS,
+    build_surface_from_graph,
 )
-from maps.util.xy_token import format_xy_token, parse_xy_token
-from maps.search.analyze_scene.tools import ToolContext
-from maps.search.withhold import withheld
 from maps.search.analyze_scene.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR,
     unmatched_query_tokens as _unmatched_query_tokens,
 )
-from maps.search.analyze_scene.geom_program import (
-    _BROAD_DUMP_SOFT_ROWS,
-    build_surface_from_graph,
-    MODEL_UNSERVED_COLUMNS,
-)
+from maps.search.analyze_scene.tools import ToolContext
+from maps.search.parse_compile import python_surface as _py_surface
 from maps.search.parse_compile.carry import (
     Carry,
     _program_dedup_key,
     program_reads,
     run_ops,
 )
+from maps.search.parse_compile.passes import cover_items
 from maps.search.parse_compile.prompts import served_tools
 from maps.search.parse_compile.reasoner_agent import Reasoner
-from maps.search.render.look_render import LOOK_MAX_BADGES as _MAP_MAX_MARKS
-from maps.search.parse_compile import python_surface as _py_surface
-from maps.search.parse_compile.passes import cover_items
 from maps.search.parse_compile.views import (
     LOOK_MAX_CROPS,
     _crop_token_of,
@@ -70,6 +61,15 @@ from maps.search.parse_compile.views import (
     map_spec,
     map_vision_text,
 )
+from maps.search.render.look_render import (
+    LOOK_MAX_BADGES as _MAP_MAX_MARKS,
+    look_label,
+    look_outline,
+    look_xy,
+    up_bearing_deg,
+)
+from maps.search.withhold import withheld
+from maps.util.xy_token import format_xy_token, parse_xy_token
 
 # Transient LLM-side errors: a retry, never the end of the reasoner (a
 # non-2xx, a link fault, or a ValueError: an undecodable body or a collapsed
@@ -179,7 +179,6 @@ def _deliver_frames(jpegs: list[bytes], sink: list[str]) -> None:
         except OSError:
             log.warning("frame %s not written under %s", sha[:12], workdir,
                         exc_info=True)
-
 
 
 # Tool-call residue: a prose turn carrying one is a malformed envelope,
@@ -455,10 +454,8 @@ class _Mission:
         # The fids explore passes have covered this mission.
         self._covered_fids: set = set()
 
-        # HALF THE OBSERVATION'S LONG SIDE: a pass's stop spacing. Half of
-        # ``obs_span_m`` (the footprint's long side) sits under the short side
-        # for any sensor below 2:1, so a ONE-DIMENSIONAL walk covers a shape that
-        # is not one: consecutive stops overlap on the minor axis too.
+        # A pass's stop spacing: half the footprint's long side, under the
+        # short side for any sensor below 2:1, so stops overlap on both axes.
         self._cover_spacing = (obs_span_m / 2.0
                                if obs_span_m and obs_span_m > 0 else None)
 
@@ -719,8 +716,8 @@ class _Mission:
         self.carry.mint(_h, [self._ns_rows[_f] for _f in _new_fids])
         self._those = _h
         return (f"{_h} — the {len(_new_fids)} rows this {_what} added; "
-                    f"the handle is bound, so {_h}, {_h}[0] and "
-                    f"{_h}.order(...) all reach them")
+                f"the handle is bound, so {_h}, {_h}[0] and "
+                f"{_h}.order(...) all reach them")
 
     def _stop_xy(self, _it) -> list[float] | None:
         _t = str(_it.get("target_fid") or "")

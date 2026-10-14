@@ -67,6 +67,7 @@ def served_calls() -> tuple[str, ...]:
     return tuple(c for c in _LIBRARY_CALLS
                  if c not in ("look_for", "look") or not withheld(c))
 
+
 # Free-call spellings the surface refuses, mapped to the method that performs
 # the operation. The refusal names the method; nothing here defines the free
 # name or runs anything.
@@ -120,6 +121,7 @@ def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
     if level or name.split(".")[0] not in _SAFE_MODULES:
         raise CodeError(_import_refusal(name.split(".")[0] or "that"))
     return __import__(name, globals, locals, fromlist, level)
+
 
 # The printed channel is capped the way a notebook caps cell output, so a
 # loop that prints a city-wide result cannot flood the context.
@@ -1235,12 +1237,11 @@ class MissionPython:
             self._labels[ref] = f"find({query!r})"
         return Rows(ref, self, label=f"find({query!r})" if q else "")
 
-    # find("pool", nearest=<street>) re-sorts a global name-match, so pools
-    # 2.5 km away can read like "the pools near the street"; this note says
-    # none of what was found is NEAR the anchor.
     _NEAR_MISS_M = 500.0
 
     def _near_miss_note(self, ref, query) -> None:
+        """Note that nothing a find ranked by distance lies near its anchor:
+        a re-sorted global match 2.5 km off reads as near otherwise."""
         rows = self.env.rows_of_ref(ref) if ref else []
         if not rows:
             return
