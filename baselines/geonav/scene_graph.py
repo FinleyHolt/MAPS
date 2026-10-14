@@ -437,16 +437,8 @@ _CHAIN_RELATIONS = [
 ]
 
 
-def recursive_query(engine: QueryEngine, operation_chain, max_depth=5, current_depth=0):
-    if current_depth >= max_depth or not operation_chain:
-        return []
-    if isinstance(operation_chain, list) and operation_chain and isinstance(operation_chain[0], list):
-        # ponytail: a list of chains runs in order, first non-empty wins;
-        # upstream's multi-step variant was not reachable through its prompt.
-        for chain in operation_chain:
-            found = recursive_query(engine, chain, max_depth, current_depth + 1)
-            if found:
-                return found
+def recursive_query(engine: QueryEngine, operation_chain):
+    if not operation_chain:
         return []
     try:
         for op in operation_chain:

@@ -309,7 +309,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
             # and falls through to this chain path, so the chain path is
             # the only one that ever resolves.
             chain = _operation_chain(h, task["goal"], max_tokens=call_cap)
-            nodes = recursive_query(engine, chain, max_depth=5, current_depth=0)
+            nodes = recursive_query(engine, chain)
             h.record(f"{t:02d}_locate_query", {"goal": task["goal"], "complex_query": complex_query,
                                                "operation_chain": chain,
                                                "result_ids": [n.id for n in nodes] if nodes else []})
