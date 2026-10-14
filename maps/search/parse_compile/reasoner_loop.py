@@ -1260,7 +1260,7 @@ class _Mission:
                             "" if withheld("look") else
                             f" -- look({_h}[a:b]) pages the rest"))
                 if withheld("images"):
-                    mv["catch"] = {"note": _PICTURE_WITHHELD}
+                    mv["catch"]["note"] = _PICTURE_WITHHELD
         return {"explored": mv}
 
     def _crops(self, of, fid, marks) -> dict:

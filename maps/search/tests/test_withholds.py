@@ -194,11 +194,23 @@ def test_an_images_withhold_serves_each_picture_as_its_caption(call, monkeypatch
     assert vision[0][0].startswith(_PICTURE_CALLS[call])
 
 
-@pytest.mark.parametrize("call", ["show_map(around=prior_7)", "look(prior_7)"])
+@pytest.mark.parametrize("call", ["show_map(around=prior_7)", "look(prior_7)",
+                                  "a = explore(prior_1)"])
 def test_an_images_withhold_counts_no_picture_delivered(call, monkeypatch):
     results, _ = _map_mission([call], monkeypatch, "images", renderer=_crops)
     served = json.dumps(results)
     assert '"delivered": 0' in served and '"delivered": 1' not in served, served
+
+
+def test_an_images_withhold_keeps_the_catchs_text_facts(monkeypatch):
+    """Only the picture is withheld: the catch keeps every other key."""
+    def _catch(names):
+        results, _ = _map_mission(["a = explore(prior_1)"], monkeypatch, names,
+                                  renderer=_crops)
+        return next(r["explored"]["catch"] for r in results if "explored" in r)
+
+    base, held = _catch(""), _catch("images")
+    assert set(held) == set(base) | {"note"}, (base, held)
 
 
 def test_a_look_for_withhold_serves_no_watchlist(monkeypatch):
