@@ -10,6 +10,6 @@ dist/
 /output/
 /tiles/*
 !/tiles/osm_cache/
-/benchmarks/calcity/tiles/
+/benchmarks/calcity/tiles
 /data/
 /.commit
