@@ -185,10 +185,12 @@ _SCRIPT_BLOCK_HEADER = "[script so far]"
 #: Separates a block's code from what its turns found.
 _FINDINGS_SEP = "\nwhat those turns found:\n"
 
+
 def _protected_head(messages: list[dict]) -> int:
     """How many head messages never fold: through the first user message."""
     first_user = next((i for i, m in enumerate(messages) if m.get("role") == "user"), 0)
     return first_user + 1
+
 
 #: Turn units the fold keeps verbatim at the tail.
 _KEEP_TAIL_UNITS = 2
