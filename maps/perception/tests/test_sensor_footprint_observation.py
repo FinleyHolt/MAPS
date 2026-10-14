@@ -52,23 +52,11 @@ ORYX = resolve_sensor("oryx_orx32_25mm_nadir")
 AGL = 80.0
 
 
-def _crop(sensor=None, yaw=0.0, pose=(30.0, 30.0), alt=AGL):
-    return crop_ortho_observation(
-        map_name=MAP,
-        pose_xy=pose,
-        altitude_m=alt,
-        yaw_deg=yaw,
-        ground_z=GROUND_Z,
-        rgbd_dir="unused",  # the fixture monkeypatch makes the loader dir-blind
-    )
-
-
 def test_sensor_frame_is_native_size_over_the_footprint(ortho_dir):
     oc = crop_ortho_observation(
         map_name=MAP,
         pose_xy=(30.0, 30.0),
         altitude_m=AGL,
-        yaw_deg=30.0,
         ground_z=GROUND_Z,
         rgbd_dir=ortho_dir,
         sensor=ORYX,
@@ -77,7 +65,7 @@ def test_sensor_frame_is_native_size_over_the_footprint(ortho_dir):
     assert oc["rgb"].shape == (intr.image_height, intr.image_width, 3)
     assert oc["depth"].shape == (intr.image_height, intr.image_width)
     w_m, h_m = footprint_m(ORYX, AGL)
-    expect = footprint_corners_xy((30.0, 30.0), w_m, h_m, 30.0)
+    expect = footprint_corners_xy((30.0, 30.0), w_m, h_m, 0.0)
     got = oc["view_corners_xy"]
     assert np.allclose(np.asarray(got), np.asarray(expect))
     # Flat world, full coverage: depth is AGL minus the constant height.
@@ -91,7 +79,6 @@ def test_sensorless_path_crops_the_altitude_square(ortho_dir):
         map_name=MAP,
         pose_xy=(30.0, 30.0),
         altitude_m=GROUND_Z + 10.0,
-        yaw_deg=0.0,
         ground_z=GROUND_Z,
         rgbd_dir=ortho_dir,
     )

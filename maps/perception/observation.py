@@ -48,14 +48,13 @@ def crop_ortho_observation(
     map_name: str,
     pose_xy: tuple[float, float],
     altitude_m: float,
-    yaw_deg: float,
     ground_z: float,
     rgbd_dir: Path | str | None = None,
     sensor: "SensorSpec | None" = None,
     ortho: dict | None = None,
 ) -> dict:
     """Crop the ortho over the view rectangle (:func:`ground_sides_m`,
-    yaw-rotated, corners ``[FL, FR, BR, BL]``): ``rgb``, ``height`` and
+    north-up, corners ``[FL, FR, BR, BL]``): ``rgb``, ``height`` and
     ``validity`` warped, ``depth = altitude_m - height``.
 
     ``ortho`` is the raster in hand (``{rgb, height, alpha, x_min, y_min,
@@ -86,7 +85,7 @@ def crop_ortho_observation(
     H_o = rgb_map.shape[0]
 
     width_m, height_m = ground_sides_m(altitude_m, ground_z, sensor)
-    corners_world = footprint_corners_xy(pose_xy, width_m, height_m, yaw_deg)
+    corners_world = footprint_corners_xy(pose_xy, width_m, height_m, 0.0)
     if sensor is not None:
         out_w = int(sensor.intrinsics.image_width)
         out_h = int(sensor.intrinsics.image_height)
@@ -171,8 +170,7 @@ def crop_observation(
     altitude_m: float,
     rgbd_dir: Path | str,
     map_name: str,
-    yaw_deg: float = 0.0,
-    sensor: SensorSpec | None = None,
+    sensor: SensorSpec | None,
 ) -> Observation:
     """The observation at a pose: :func:`crop_ortho_observation` over the
     block's ortho with ``ground_z = GROUND_LEVEL[map_name]``."""
@@ -187,7 +185,6 @@ def crop_observation(
         map_name=map_name,
         pose_xy=pose_xy,
         altitude_m=altitude_m,
-        yaw_deg=yaw_deg,
         ground_z=float(GROUND_LEVEL[map_name]),
         rgbd_dir=rgbd_dir,
         sensor=sensor,
@@ -195,7 +192,7 @@ def crop_observation(
     return Observation(
         pose_xy=pose_xy,
         altitude_m=altitude_m,
-        yaw_deg=yaw_deg,
+        yaw_deg=0.0,
         world_window=oc["world_window"],
         sensor=sensor,
         rgb=oc["rgb"],

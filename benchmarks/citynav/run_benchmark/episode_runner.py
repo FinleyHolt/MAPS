@@ -235,7 +235,6 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
         obs = crop_observation(
             (px, py),
             altitude_m=alt,
-            yaw_deg=0.0,
             sensor=h.sensor,
             rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
             map_name=h.episode.map_name,

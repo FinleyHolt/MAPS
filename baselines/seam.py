@@ -180,7 +180,6 @@ class BaselineHarness:
         obs = crop_observation(
             (float(pose_xy[0]), float(pose_xy[1])),
             altitude_m=float(altitude_m if altitude_m is not None else self.start_alt_m),
-            yaw_deg=0.0,
             sensor=self.sensor,
             # Read at call time: benchmarks.calcity.use() selects the Cal City rasters.
             rgbd_dir=bench_paths.CITYNAV_NATIVE_RGBD_DIR,

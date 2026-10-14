@@ -254,7 +254,6 @@ class MissionSession:
             obs = crop_observation(
                 new_xy,
                 altitude_m=new_alt,
-                yaw_deg=0.0,
                 sensor=h.sensor,
                 rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
                 map_name=episode.map_name,
