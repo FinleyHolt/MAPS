@@ -127,7 +127,7 @@ PRINT_LINE_CAP = 60
 PRINT_CHAR_CAP = 8_000
 
 _LOOP_MOVE_MSG = (
-    "{name}() cannot go inside a loop: it MOVES, and a loop moves to "
+    "{name}() cannot go inside a loop or a def/lambda: it MOVES, and a loop moves to "
     "every row of the set -- go_to commits to whichever came last, and "
     "explore flies a covering pass over each. Loop to LOOK, then move "
     "once to the place you chose.")
@@ -201,7 +201,7 @@ class MissionNamespace(dict):
 
 # --------------------------------------------------------------------------
 # The pre-scan: plain Python, minus non-whitelisted imports, underscores
-# and moving loops
+# and moves a loop or a function could repeat
 # --------------------------------------------------------------------------
 
 
@@ -231,6 +231,7 @@ def scan_block(code: str) -> ast.Module:
         raise CodeError(
             f"line {e.lineno}: syntax error: {e.msg}{where}") from None
     loop_depth = 0
+    called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
 
     def _walk(node):
         nonlocal loop_depth
@@ -251,6 +252,11 @@ def scan_block(code: str) -> ast.Module:
         if isinstance(node, ast.Attribute) and node.attr.startswith("_"):
             raise CodeError(f"no underscore attributes (.{node.attr})")
         if isinstance(node, ast.Name):
+            if node.id in _MOVE_CALLS and isinstance(node.ctx, ast.Load) \
+                    and id(node) not in called:
+                raise CodeError(
+                    f"{node.id} is a move; call it once, {node.id}(<place>), "
+                    "outside any loop or function")
             if node.id.startswith("_"):
                 raise CodeError(f"no underscore names ({node.id})")
             if node.id in _FORBIDDEN_NAMES:
@@ -270,7 +276,9 @@ def scan_block(code: str) -> ast.Module:
                     f"would shadow it for the rest of the mission. Pick "
                     "another name.")
         in_loop = isinstance(node, (ast.For, ast.While, ast.AsyncFor, ast.ListComp,
-                                    ast.SetComp, ast.DictComp, ast.GeneratorExp))
+                                    ast.SetComp, ast.DictComp, ast.GeneratorExp,
+                                    ast.FunctionDef, ast.AsyncFunctionDef,
+                                    ast.Lambda))
         if in_loop:
             loop_depth += 1
         if (loop_depth and isinstance(node, ast.Call)

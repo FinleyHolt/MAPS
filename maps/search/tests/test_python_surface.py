@@ -673,3 +673,17 @@ def test_a_list_plus_rows_is_a_rowlist_either_way_round():
 def test_a_slice_of_one_row_chains_like_every_other_slice():
     r = Row({"fid": "f1", "xy": [1.0, 2.0]})
     assert r[0:1].order(lambda x: x.x) == [r]
+
+
+@pytest.mark.parametrize("code", [
+    'r1 = find("car")\nlist(map(go_to, r1))\n',
+    'r1 = find("car")\ng = go_to\nfor c in r1:\n    g(c)\n',
+    'r1 = find("car")\ndef hop(c):\n    go_to(c)\nfor c in r1:\n    hop(c)\n',
+    'r1 = find("car")\nhop = lambda c: go_to(c)\nfor c in r1:\n    hop(c)\n',
+])
+def test_a_move_reaching_a_loop_by_another_spelling_is_refused(code):
+    """A move passed as a value, or wrapped in a def or lambda, would fly
+    every leg the loop refusal stops."""
+    _reply, fr, flights, _d = drive([[run(code)], "done"])
+    assert not flights, (flights, tool_results(fr)[0])
+
