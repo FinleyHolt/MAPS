@@ -341,7 +341,9 @@ class SearchLoop:
                     "confidence": float(det.confidence),
                     "source_tier": det.source_tier,
                     "attributes": dict(det.attributes or {}),
-                    "metadata": {k: _json_safe(v) for k, v in (det.metadata or {}).items()},
+                    # tile_cells feeds the upsert above; str() of an array truncates it.
+                    "metadata": {k: _json_safe(v) for k, v in (det.metadata or {}).items()
+                                 if k != "tile_cells"},
                 }
                 if det.mask is not None:
                     mask_record = encode_mask_record(det.mask.crop, bbox_rcrc=det.mask.bbox)
