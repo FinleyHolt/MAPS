@@ -119,7 +119,7 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
     """GET ``url`` (``bearer`` as an Authorization header) and parse the JSON
     body; raise EndpointUnreachable when nothing answers (no connection, a
     dropped one, a body cut short, a timeout, a 5xx or a 4xx the serve clears
-    on its own) and EndpointDiscoveryError on any other 4xx, a malformed URL
+    on its own) and EndpointDiscoveryError, unasked again, on any other 4xx, a malformed URL
     or a non-JSON body."""
     from maps.llm.http import TRANSIENT_CLIENT_STATUS  # noqa: PLC0415 -- http imports this module
     req = urllib.request.Request(url)
@@ -131,10 +131,11 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
                 body = resp.read()
             break
         except (urllib.error.URLError, OSError, ValueError, TimeoutError, http.client.HTTPException) as exc:
+            if isinstance(exc, ValueError) or (isinstance(exc, urllib.error.HTTPError) and exc.code < 500
+                                               and exc.code not in TRANSIENT_CLIENT_STATUS):
+                raise EndpointDiscoveryError(f"endpoint refused: GET {url} failed ({exc})") from exc
             if attempt == _PROBE_TRIES:
-                refused = isinstance(exc, ValueError) or (isinstance(exc, urllib.error.HTTPError) and exc.code < 500
-                                                          and exc.code not in TRANSIENT_CLIENT_STATUS)
-                raise (EndpointDiscoveryError if refused else EndpointUnreachable)(
+                raise EndpointUnreachable(
                     f"endpoint unreachable: GET {url} failed ({exc}) after {_PROBE_TRIES} tries"
                 ) from exc
             log.warning("discovery: GET %s failed (%s); asking again in %.0f s", url, exc, _PROBE_RETRY_S)

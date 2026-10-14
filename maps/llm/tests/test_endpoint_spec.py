@@ -356,11 +356,12 @@ def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
 @pytest.mark.parametrize("fault,unreachable", [
     (lambda: urllib.error.HTTPError("u", 429, "Too Many Requests", None, None), True),
     (lambda: urllib.error.HTTPError("u", 401, "Unauthorized", None, None), False),
+    (lambda: ValueError("unknown url type: 'arm'"), False),
     (lambda: http.client.IncompleteRead(b'{"data":'), True),
-], ids=["429", "401", "truncated body"])
+], ids=["429", "401", "malformed url", "truncated body"])
 def test_a_serve_that_is_busy_or_drops_its_body_is_unreachable_and_a_refusal_is_not(monkeypatch, fault, unreachable):
     """A 4xx the serve clears on its own and a body cut short are the serve's
-    fault, asked again; any other 4xx is the config's."""
+    fault, asked again; any other 4xx is the config's, refused at once."""
     monkeypatch.setattr(E, "_PROBE_RETRY_S", 0.0)
     calls: list[int] = []
 
@@ -372,7 +373,7 @@ def test_a_serve_that_is_busy_or_drops_its_body_is_unreachable_and_a_refusal_is_
     with pytest.raises(EndpointDiscoveryError) as err:
         E._get_json("http://arm:18001/v1/models")
     assert isinstance(err.value, E.EndpointUnreachable) is unreachable
-    assert len(calls) == E._PROBE_TRIES
+    assert len(calls) == (E._PROBE_TRIES if unreachable else 1)
 
 
 # --------------------------------------------------------------------------- #
