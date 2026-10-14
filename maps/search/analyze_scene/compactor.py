@@ -26,6 +26,7 @@ import json
 import logging
 import time
 
+from maps.llm.endpoint_spec import _MIN_INPUT_BUDGET
 from maps.llm.tokenizer import _tokenizer
 from maps.llm.vision_content import image_tokens_in, image_tokens_of
 from maps.search.analyze_scene.geom_program import join_hints
@@ -502,9 +503,9 @@ def compact_transcript(
 
     # Step 1 goes first: every other step rewrites an old message in place,
     # leaving it to re-prefill. The low-water mark is never above target and
-    # floored at 8000, the least input budget a reasoner runs on.
+    # floored at the least input budget a reasoner runs on.
     low_water = max(target_input_tokens - _CLEAR_HEADROOM_TOKENS,
-                    min(8000, target_input_tokens))
+                    min(_MIN_INPUT_BUDGET, target_input_tokens))
     output_tokens = input_tokens
     out, folded_turns, freed_fold = _drop_spent_turns(
         messages, before=input_tokens, shed_tokens=input_tokens - low_water,
