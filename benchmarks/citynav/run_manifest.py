@@ -94,9 +94,10 @@ _EFFORT = "SEARCH_SAMPLING_REASONING_EFFORT"
 
 
 def arm_stamp(policy: str | None) -> dict:
-    """The arm flags as the requests carry them: :func:`arm_env_stamp`, with a
-    baseline ``policy``'s fixed dial (``baselines.seam.REASONING_EFFORT``) in
-    place of the environment's effort. The manifest and every row stamp this."""
+    """The arm flags: :func:`arm_env_stamp`, with a baseline ``policy``'s fixed
+    dial (``baselines.seam.REASONING_EFFORT``; ``none`` is the dial off,
+    whichever switch the card takes) in place of the environment's effort. The
+    manifest and every row stamp this."""
     stamp = arm_env_stamp()
     if policy:
         # By name: benchmarks carries no static import of baselines.

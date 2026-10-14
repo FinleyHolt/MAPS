@@ -79,7 +79,7 @@ python -m benchmarks.citynav.analysis.arm_table output/e3/<model's E3 root> outp
 configs differ only in `policy`, which its config check sets aside as it sets
 aside `withhold`. It still refuses a pair across splits, tile bakes, code
 commits, served models or reasoning efforts. A `geonav_released` root's rows
-and manifest stamp `none`, the effort its requests carry, so its pair against
+and manifest stamp `none`, its dial off (`seam.dial_off`), so its pair against
 a MAPS root runs only with `--allow-provenance-mismatch`.
 
 ## Cal City
