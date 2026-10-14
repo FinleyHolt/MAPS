@@ -450,17 +450,11 @@ class Mission:
 
     def _held_now(self, h: Hydrated, stops: list) -> list[bool]:
         """Which of a pass's stops the recording holds already, off one index read (``MissionSpec.held_now``)."""
-        out = [False] * len(stops)
-        areas, idx = [], []
-        for i, (token, xy) in enumerate(stops):
-            if xy is None:
-                continue
-            areas.append(self._area_lonlat(leg_area(h, str(token), [float(xy[0]), float(xy[1])])))
-            idx.append(i)
-        covs = self._live.coverage_of_each(areas) if areas else None
-        for i, cov in zip(idx, covs or []):
-            out[i] = _holds(cov)
-        return out
+        asked = {i: self._area_lonlat(leg_area(h, str(token), [float(xy[0]), float(xy[1])]))
+                 for i, (token, xy) in enumerate(stops) if xy is not None}
+        covs = self._live.coverage_of_each(list(asked.values())) if asked else None
+        held = dict(zip(asked, covs or []))
+        return [_holds(held.get(i)) for i in range(len(stops))]
 
     def _short_pass(self, token: str, xy, area: list[tuple[float, float]], cov: dict[str, Any],
                     n: int) -> tuple[list[float], str]:
