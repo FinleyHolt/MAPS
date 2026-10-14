@@ -83,7 +83,7 @@ def curve(sessions: list[dict[str, Any]]) -> dict[str, Any]:
     light = [s for s in sessions if s["load_per_h"] == loads[0]]
     base = [s["accuracy"] for s in light if s["accuracy"] is not None]
     p = statistics.fmean(base) if base else None
-    lags = [r["found_s"] - r["arrival_s"] for s in light for r in s["reports"] if r["found_s"] is not None]
+    lags = [r["found_s"] - r["arrival_s"] for s in light for r in s["reports"] if r["correct"]]
     ttf = statistics.median(lags) if lags else None
     points = []
     for load in loads:

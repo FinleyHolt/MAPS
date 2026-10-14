@@ -96,3 +96,15 @@ def test_a_report_lost_to_the_infrastructure_is_offered_and_counted(tmp_path) ->
     (root / "run_manifest.json").write_text(json.dumps({"selection": {"episodes_n": 2}}))
     s = reader.session(root)
     assert (s["offered"], s["answered"], s["infra"], s["finds_per_h"]) == (2, 1, 1, 1)
+
+
+def test_the_due_cut_reads_the_light_load_s_time_to_a_correct_find(tmp_path) -> None:
+    # Light load: two correct finds at 300 s and two wrong answers at 3,000 s
+    # (cap timeouts); the median time to find is 300 s, so a report is due
+    # when it arrives by 3,300 s.
+    light = reader.session(_session(tmp_path / "l", 4, 1, [(0, 300, 1), (100, 400, 1), (200, 3200, 0),
+                                                         (300, 3300, 0)]))
+    heavy = reader.session(_session(tmp_path / "h", 18, 1, [(a, a + 1000, 1) for a in range(0, 3600, 200)]))
+    assert light["time_to_find_median_s"] == 300
+    # 17 reports arrive by 3,300 s; the 14 that arrive by 2,600 s land inside the hour.
+    assert reader.curve([light, heavy])["points"][1]["due_yield"] == round(14 / 17, 3)
