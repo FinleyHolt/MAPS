@@ -58,8 +58,8 @@ REASONER_WAIT_S = 120.0
 # cold-start at once.
 WORKER_STAGGER_S = 2.0
 # The run aborts when ABORT_FRACTION of the last ABORT_WINDOW completions are
-# infra casualties (a missing tile bake fails every episode in seconds). A
-# trailing window still fires after a healthy first hour; it must fill first.
+# infra casualties (a missing tile bake fails every episode in seconds); the
+# window must fill first.
 ABORT_WINDOW = 12
 ABORT_FRACTION = 0.9
 # The pre-limit shuffle's seed when --sample-seed is not given.
@@ -159,7 +159,6 @@ class Driver:
         self._deadline = (
             time.monotonic() + self.max_wall_s if self.max_wall_s > 0 else None
         )
-
 
     def log(self, msg: str) -> None:
         line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
@@ -308,7 +307,6 @@ class Driver:
             f"--max-infra-attempts above {self.max_infra_attempts} flies them again"
         )
 
-
     def _reasoner_answers(self) -> bool:
         """True when the reasoner endpoint answers its model list, at the URL
         discovery read it from (``endpoint_spec.models_url``), asked with the
@@ -339,7 +337,6 @@ class Driver:
             time.sleep(max(0.0, min(REASONER_WAIT_S, left)))
         self.log("reasoner back; resuming")
         return True
-
 
     def _wait(self, proc: subprocess.Popen) -> str:
         """Block until the attempt child exits (``exited``), hits the episode
@@ -453,7 +450,6 @@ class Driver:
         self._append_result(row)
         self._write_summary()
 
-
     def _write_summary(self) -> None:
         """``summary.txt``: the driver's infra and abort lines above
         ``analysis.run_report.report`` over the root, once a row has landed."""
@@ -483,7 +479,6 @@ class Driver:
                 print(exc)
         text = "\n".join(x for x in lines if x) + "\n" + buf.getvalue().lstrip("\n")
         self.summary_file.write_text(text)
-
 
     def worker_loop(self, worker_id: int) -> None:
         while (eid := self._next_claimed_episode()) is not None:

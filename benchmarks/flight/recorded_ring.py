@@ -1,26 +1,19 @@
 """A camera recording read back as the aircraft's ring: a :class:`~benchmarks.flight.vehicle.Vehicle` over ``sensors.mcap``.
 
-The recorder wrote every camera frame and every fix and attitude to one ROS 2
-MCAP on the receiver's UTC (``log_time``, nanoseconds). This module reads it
-back the way the aircraft's ring held it, over one time window, streamed and
-never loaded whole:
-
-* **Poses** are the recording's own, built as the aircraft built them: every
-  ``/gnss/pvt`` fix and ``/nav/attitude`` document in the window into a
-  :class:`NavTrack`, and each frame tagged with the track's pose at its stamp
-  (``nav_track.pose_tag``), the antenna's, so the live source applies the
-  lever arm and the boresight once, as in flight.
-* **The index** is the frames the ring kept: one each
-  ``1 / RING_HZ`` s of log time, the rate the recorder spilled its ring at.
-  ponytail: the newest quarter-gigabyte the ring held at the camera's full
-  rate is read at the spill rate too; seconds of extra frames per pass.
-* **The clock** starts at the window's start and moves only while the
-  harness waits, and the index holds the frames stamped up to it: a leg
-  posted to the recording arrives when the recording reaches its ground.
-
-A fix that cannot pose a frame (missing a field, further than
-``MAX_GAP_S`` from any fix, worse than ``MAX_H_ACC_M``) leaves the frame
-out of the index, as the aircraft's ring carried no tag for it.
+The recorder wrote every camera frame, fix and attitude to one ROS 2 MCAP on
+the receiver's UTC (``log_time``, ns); this reads one time window of it back,
+streamed. Each frame is tagged with the antenna's pose at its stamp off a
+:class:`NavTrack` of the window's ``/gnss/pvt`` fixes and ``/nav/attitude``
+documents (``nav_track.pose_tag``), so the live source applies the lever arm
+and the boresight once, as in flight; a frame no fix can pose (a missing
+field, further than ``MAX_GAP_S`` from any fix, worse than ``MAX_H_ACC_M``)
+is left out, as the ring carried no tag for it. The index keeps one frame
+each ``1 / RING_HZ`` s, the rate the recorder spilled its ring at (ponytail:
+the newest quarter-gigabyte the ring held at the camera's full rate is read
+at the spill rate too; seconds of extra frames per pass). The clock starts at
+the window's start and moves only while the harness waits, and the index
+holds the frames stamped up to it: a leg posted to the recording arrives when
+the recording reaches its ground.
 """
 
 from __future__ import annotations

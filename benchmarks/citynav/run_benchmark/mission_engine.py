@@ -146,8 +146,6 @@ class MissionSession:
         self.recorder = recorder
         self.observe = observe
         self.flights: list[dict] = []
-        # Prior-colour enrichment frames that raised; the warning prints on
-        # the first and every 50th.
         self.prior_enrich_fails = 0
         loop = h.search_loop
         with loop._lock:
@@ -216,11 +214,9 @@ class MissionSession:
         return report
 
     def _fly(self, item: dict) -> dict:
-        """Resolve -> teleport -> render -> segment -> fold -> enrich for ONE
-        move, the moment it lands. Returns the model-facing flight report, or
-        ``{"error": ...}`` when the target does not resolve. Appends the flight
-        to ``flights``: the commit reads the last, and the discrete replay
-        flies them all."""
+        """One move, the moment it lands: resolve, teleport, render, segment,
+        fold, enrich. The flight report, or ``{"error": ...}`` when the target
+        does not resolve; the flight joins ``flights``."""
         h = self.h
         state, episode, loop = h.state, h.episode, h.search_loop
         token = str(item.get("target_fid") or "")

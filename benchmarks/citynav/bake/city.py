@@ -562,8 +562,7 @@ def _features_from_records(
             round(len(named_off_raster) / named_priors_total, 3),
             ", ".join(n for n, _d in sorted(named_off_raster, key=lambda p: -p[1])[:8]),
         )
-    # The one features.json key; the graph builder mints ``prior_<i>`` fids
-    # from it, positionally stable per the deterministic record sort.
+    # The graph builder mints ``prior_<i>`` fids from this key in record order.
     return {"prior": entries} if entries else {}
 
 

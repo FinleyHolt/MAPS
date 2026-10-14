@@ -354,10 +354,9 @@ class LiveSource:
             self._halt.set()
 
     def _posed(self, jpeg: bytes, t_host: float, *, pose: Pose | None = None) -> SimpleNamespace | str:
-        """The frame decoded and its camera posed through the calibrated chain,
-        or why it cannot be, a string the caller decides whether to keep (the
-        corrector's thread must not overwrite the mission's ``last_refusal``).
-        Without ``pose``, the vehicle's pose at ``t_host`` (:meth:`pose_now`)."""
+        """The frame decoded and its camera posed through the calibrated chain
+        at ``pose`` (default :meth:`pose_now` at ``t_host``), or why it cannot
+        be: a string, so the corrector's thread leaves ``last_refusal`` alone."""
         pose = pose if pose is not None else self.pose_now(t_host)
         if pose is None:
             return f"no pose for the frame: {self.vehicle.last_error or 'no fix'}"
