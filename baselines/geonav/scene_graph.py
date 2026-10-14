@@ -120,7 +120,6 @@ class KnowledgeGraph:
         return None
 
     def _add_node_v2(self, node: KnowledgeNode, obj_class: str) -> str | None:
-        self.spatial_threshold = 20.0 / 5.0
         merge_candidate = None
         max_score = -1.0
         for n in self.query_radius(node.position, 20.0):
