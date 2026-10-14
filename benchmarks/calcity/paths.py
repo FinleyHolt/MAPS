@@ -1,8 +1,9 @@
 """Filesystem contract for the independent Cal City benchmark.
 
-Only ``SEARCH_CALCITY_*`` variables are public.  The build tree contains the
-CityRefer-compatible object catalog and orthographic rasters; released splits
-and tiles live with this package by default.
+The ``SEARCH_CALCITY_*`` variables, with ``CALCITY_ROOT`` as the data root's
+fallback, name every location. The build tree contains the
+CityRefer-compatible object catalog and orthographic rasters; released
+splits and tiles live with this package by default.
 
 ``SEARCH_CALCITY_RGBD_DIR`` names the imagery the bench crops: a directory
 holding ``<map>_rgb.tif`` (the block's own map) beside ``<map>.tif`` (the
@@ -29,7 +30,6 @@ def _env_path(name: str, default: Path) -> Path:
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
-REPO_ROOT = PACKAGE_ROOT.parents[1]
 
 CALCITY_ROOT = _env_path(
     "SEARCH_CALCITY_DATA",
@@ -71,10 +71,6 @@ def split_path(split: str) -> Path:
     if split not in SPLIT_FILES:
         raise ValueError(f"Unknown Cal City split {split!r}. Known: {sorted(SPLIT_FILES)}")
     return SPLITS_DIR / SPLIT_FILES[split]
-
-
-def tile_stem(map_name: str) -> str:
-    return str(TILES_DIR / map_name)
 
 
 def assert_available() -> None:
