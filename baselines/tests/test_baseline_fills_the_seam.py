@@ -17,6 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from baselines.geonav.policy import landmark_distance
 from baselines.seam import (
     BaselineHarness,
     BaselineResult,
@@ -24,7 +25,6 @@ from baselines.seam import (
     _extract_json,
     _landmarks_from_rows,
     fly,
-    landmark_distance,
     match_landmarks,
 )
 from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
@@ -122,7 +122,7 @@ def test_the_runner_start_altitude_is_the_altitude_the_policy_sees(tmp_path, mon
 
     def run(h):
         seen["alt"] = h.start_alt_m
-        seen["half"] = h.view_half_m()
+        seen["half"] = h.view_half_m(h.start_alt_m)
         return BaselineResult(stops=[], commit_xy=(0.0, 100.0), commit_label="x", commit_tier="stub:tier")
 
     _install_stub_policy(monkeypatch, "stub2", run)
@@ -135,11 +135,11 @@ def test_the_view_half_follows_the_sensor_not_a_fixed_square(tmp_path):
     """CityNav's 90-degree sensor gives upstream's square (half = height above
     ground); Cal City's 16-degree Oryx gives its own, much narrower footprint."""
     h = BaselineHarness.__new__(BaselineHarness)
-    h.start_alt_m, h.ground_z_m = 150.0, 50.0
+    h.ground_z_m = 50.0
     h.sensor = resolve_sensor("nadir_1008_90")
-    assert abs(h.view_half_m() - 100.0) < 1e-6
+    assert abs(h.view_half_m(150.0) - 100.0) < 1e-6
     h.sensor = resolve_sensor("oryx_orx32_25mm_nadir")
-    assert 10.0 < h.view_half_short_m() < h.view_half_m() < 20.0
+    assert 10.0 < h.view_half_short_m(150.0) < h.view_half_m(150.0) < 20.0
 
 
 def _lm(name, contour):

@@ -18,7 +18,7 @@ import numpy as np
 from baselines.geonav import prompts as P
 from baselines.geonav.cognitive_map import CognitiveMap, rgb_entropy
 from baselines.geonav.scene_graph import KnowledgeGraph, QueryEngine, ingest_subgraph, recursive_query
-from baselines.seam import BaselineHarness, BaselineResult, landmark_distance, match_landmarks, pixel_bbox
+from baselines.seam import BaselineHarness, BaselineResult, Landmark, match_landmarks
 
 # gsamllavanav/parser.py: --eval_max_timestep 20 (one perceive + one decision each).
 MAX_TIMESTEPS = 20
@@ -151,6 +151,31 @@ def clamp_to_bounds(xy, bounds) -> tuple[float, float]:
 
 def _dist(a, b) -> float:
     return math.hypot(a[0] - b[0], a[1] - b[1])
+
+
+def landmark_distance(lm: Landmark, xy: tuple[float, float]) -> float:
+    """Metres from ``xy`` to the landmark's area, 0 inside it. A street's
+    centroid can sit hundreds of metres from every point of the street, so
+    distance to the area is the only reading that means "at the landmark"."""
+    from shapely.geometry import Point, Polygon
+
+    try:
+        poly = Polygon(lm.contour).buffer(0)
+        if not poly.is_empty:
+            return float(poly.distance(Point(float(xy[0]), float(xy[1]))))
+    except (ValueError, TypeError):
+        pass
+    return math.hypot(lm.centroid[0] - xy[0], lm.centroid[1] - xy[1])
+
+
+def pixel_bbox(det) -> tuple[int, int, int, int] | None:
+    """A detection's inclusive ``(row_min, col_min, row_max, col_max)`` in
+    frame pixels: its mask's box, else the box the SAM client stamped."""
+    mask = getattr(det, "mask", None)
+    if mask is not None:
+        return tuple(int(v) for v in mask.bbox)
+    bb = (getattr(det, "metadata", None) or {}).get("pixel_bbox")
+    return tuple(int(v) for v in bb) if bb else None
 
 
 # --- the episode ---------------------------------------------------------------

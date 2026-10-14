@@ -87,7 +87,7 @@ class Budget:
 
     ``move`` commits a leg from the current pose: the actions
     :func:`snap_to_actions` needs to reach the target, the pose it actually
-    reaches. ``price`` asks without committing. The replay flies the same legs
+    reaches. ``affords`` asks without committing. The replay flies the same legs
     from the same start with the same snap, so the two agree up to the
     replay's commit-leg reserve.
     """
@@ -101,22 +101,14 @@ class Budget:
     def remaining(self) -> int:
         return self.max_steps - self.used
 
-    def _end(self, xy: tuple[float, float], altitude_m: float | None) -> Pose:
-        return Pose(
-            float(xy[0]),
-            float(xy[1]),
-            float(altitude_m) if altitude_m is not None else self.pose.altitude_m,
-            self.pose.heading_deg,
-        )
+    def _end(self, xy: tuple[float, float], altitude_m: float) -> Pose:
+        return Pose(float(xy[0]), float(xy[1]), float(altitude_m), self.pose.heading_deg)
 
-    def price(self, xy: tuple[float, float], altitude_m: float | None = None) -> int:
+    def affords(self, xy: tuple[float, float], altitude_m: float) -> bool:
         actions, _ = snap_to_actions(self.pose, self._end(xy, altitude_m))
-        return len(actions)
+        return len(actions) <= self.remaining
 
-    def affords(self, xy: tuple[float, float], altitude_m: float | None = None) -> bool:
-        return self.price(xy, altitude_m) <= self.remaining
-
-    def move(self, xy: tuple[float, float], altitude_m: float | None = None) -> int:
+    def move(self, xy: tuple[float, float], altitude_m: float) -> int:
         actions, reached = snap_to_actions(self.pose, self._end(xy, altitude_m))
         self.used += len(actions)
         self.pose = reached
@@ -133,11 +125,11 @@ class BaselineHarness:
         episode,
         assets,
         start_alt_m: float,
-        ground_z_m: float | None,
+        ground_z_m: float,
         workdir: Path,
         policy: str,
-        sensor=None,
-        perception=None,
+        sensor,
+        perception,
     ) -> None:
         self.cfg = cfg
         # The run's own sensor, block geometry and SAM client: the frames a
@@ -146,7 +138,7 @@ class BaselineHarness:
         self.episode = episode
         self.assets = assets
         self.start_alt_m = float(start_alt_m)
-        self.ground_z_m = float(ground_z_m if ground_z_m is not None else 0.0)
+        self.ground_z_m = float(ground_z_m)
         self.workdir = Path(workdir)
         self.policy = policy
         self.log_dir = self.workdir / policy
@@ -173,13 +165,13 @@ class BaselineHarness:
 
     # -- the sensor ---------------------------------------------------------
 
-    def observe(self, pose_xy: tuple[float, float], altitude_m: float | None = None) -> Observation:
+    def observe(self, pose_xy: tuple[float, float], altitude_m: float) -> Observation:
         """The mission's frame at this pose: the run's sensor, north-up,
         rendered by the same call the mission makes."""
         t0 = time.perf_counter()
         obs = crop_observation(
             (float(pose_xy[0]), float(pose_xy[1])),
-            altitude_m=float(altitude_m if altitude_m is not None else self.start_alt_m),
+            altitude_m=float(altitude_m),
             sensor=self.sensor,
             # Read at call time: benchmarks.calcity.use() selects the Cal City rasters.
             rgbd_dir=bench_paths.CITYNAV_NATIVE_RGBD_DIR,
@@ -189,13 +181,13 @@ class BaselineHarness:
         self.phase_s["render"] += time.perf_counter() - t0
         return obs
 
-    def view_half_m(self, altitude_m: float | None = None) -> float:
+    def view_half_m(self, altitude_m: float) -> float:
         """Half the ground footprint across the frame's columns: height
         above ground times ``tan(hfov / 2)``. Under CityNav's 90-degree
         sensor this is ``altitude - ground``, upstream's view square."""
         return self._half(altitude_m, self._fov_deg()[0])
 
-    def view_half_short_m(self, altitude_m: float | None = None) -> float:
+    def view_half_short_m(self, altitude_m: float) -> float:
         """Half the footprint's SHORT side, the square a frame surely covers."""
         return self._half(altitude_m, min(self._fov_deg()))
 
@@ -205,11 +197,10 @@ class BaselineHarness:
             return (90.0, 90.0)
         return (float(intr.hfov_deg), float(intr.vfov_deg))
 
-    def _half(self, altitude_m: float | None, fov_deg: float) -> float:
-        alt = float(altitude_m if altitude_m is not None else self.start_alt_m)
+    def _half(self, altitude_m: float, fov_deg: float) -> float:
         # Exactly 1 at 90 degrees, where math.tan(pi / 4) is one ulp short.
         t = 1.0 if fov_deg == 90.0 else math.tan(math.radians(fov_deg) / 2.0)
-        return max(1.0, (alt - self.ground_z_m) * t)
+        return max(1.0, (float(altitude_m) - self.ground_z_m) * t)
 
     def search_window(self, landmarks: list["Landmark"]) -> SimpleNamespace:
         """The square a policy plans and maps over: centred on the start, a
@@ -383,12 +374,10 @@ class BaselineHarness:
         p.write_text(json.dumps(payload, indent=1, default=_jsonable))
         return p
 
-    def save_image(self, name: str, rgb: np.ndarray | bytes) -> Path:
-        p = self.log_dir / (f"{name}.jpg" if isinstance(rgb, bytes) else f"{name}.png")
-        if isinstance(rgb, bytes):
-            p.write_bytes(rgb)
-        else:
-            Image.fromarray(np.asarray(rgb, dtype=np.uint8)).save(p)
+    def save_image(self, name: str, jpeg: bytes) -> Path:
+        """Land one JPEG under ``<workdir>/<policy>/``."""
+        p = self.log_dir / f"{name}.jpg"
+        p.write_bytes(jpeg)
         return p
 
 
@@ -659,31 +648,6 @@ def match_landmarks(names: list[str], landmarks: list[Landmark]) -> list[Landmar
             out.append(best)
             seen.add(best.name)
     return out
-
-
-def landmark_distance(lm: Landmark, xy: tuple[float, float]) -> float:
-    """Metres from ``xy`` to the landmark's area, 0 inside it. A street's
-    centroid can sit hundreds of metres from every point of the street, so
-    distance to the area is the only reading that means "at the landmark"."""
-    from shapely.geometry import Point, Polygon
-
-    try:
-        poly = Polygon(lm.contour).buffer(0)
-        if not poly.is_empty:
-            return float(poly.distance(Point(float(xy[0]), float(xy[1]))))
-    except (ValueError, TypeError):
-        pass
-    return math.hypot(lm.centroid[0] - xy[0], lm.centroid[1] - xy[1])
-
-
-def pixel_bbox(det) -> tuple[int, int, int, int] | None:
-    """A detection's inclusive ``(row_min, col_min, row_max, col_max)`` in
-    frame pixels: its mask's box, else the box the SAM client stamped."""
-    mask = getattr(det, "mask", None)
-    if mask is not None:
-        return tuple(int(v) for v in mask.bbox)
-    bb = (getattr(det, "metadata", None) or {}).get("pixel_bbox")
-    return tuple(int(v) for v in bb) if bb else None
 
 
 def _jsonable(o: Any) -> Any:
