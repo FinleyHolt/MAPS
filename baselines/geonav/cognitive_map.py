@@ -54,7 +54,6 @@ class ColorLayer:
     """One ``GSamMap`` colour layer: phrase -> RGBA, painted by maximum."""
 
     def __init__(self, shape: tuple[int, int], palette: list[tuple[int, int, int]]) -> None:
-        self.shape = shape
         self.palette = palette
         self.semantic_colors: dict[str, tuple[int, int, int, int]] = {}
         self.color_array = np.zeros((*shape, 4), dtype=np.uint8)
@@ -89,14 +88,11 @@ class CognitiveMap:
     def __init__(
         self,
         bounds: tuple[float, float, float, float],
-        ground_z: float,
         landmarks: list[Landmark],
         target_name: str,
-        px_per_m: float = PX_PER_M,
     ) -> None:
         self.x_min, self.y_min, self.x_max, self.y_max = (float(b) for b in bounds)
-        self.ground_z = float(ground_z)
-        self.ppm = float(px_per_m)
+        self.ppm = PX_PER_M
         self.shape = (
             max(2, int(round((self.y_max - self.y_min) * self.ppm))),
             max(2, int(round((self.x_max - self.x_min) * self.ppm))),
@@ -128,13 +124,13 @@ class CognitiveMap:
 
     # --- updates ---------------------------------------------------------------
 
-    def add_pose(self, xy, altitude_m: float, *, half_m: float | None = None) -> None:
+    def add_pose(self, xy, half_m: float) -> None:
         """One perceive: the trajectory point and the view square
-        (``TrackingMap.mark_current_view_area``, half side = z - ground).
-        ``half_m`` is the sensor's own half footprint where it is not the
-        90-degree square upstream assumes."""
+        (``TrackingMap.mark_current_view_area``, whose half side z - ground
+        is upstream's 90-degree square; ``half_m`` is the sensor's own half
+        footprint)."""
         self.trajectory.append((float(xy[0]), float(xy[1])))
-        half = float(half_m) if half_m is not None else max(1.0, float(altitude_m) - self.ground_z)
+        half = float(half_m)
         corners = [(xy[0] - half, xy[1] + half), (xy[0] + half, xy[1] + half),
                    (xy[0] + half, xy[1] - half), (xy[0] - half, xy[1] - half)]
         rows, cols = self.to_rows_cols(corners)

@@ -231,8 +231,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
     for lm in matched:
         graph.add_geo_node(lm)
     engine = QueryEngine(graph)
-    cmap = CognitiveMap((bounds.x_min, bounds.y_min, bounds.x_max, bounds.y_max), h.ground_z_m,
-                        matched, target_name)
+    cmap = CognitiveMap((bounds.x_min, bounds.y_min, bounds.x_max, bounds.y_max), matched, target_name)
 
     pose = (float(ep.start_xy[0]), float(ep.start_xy[1]))
     alt = h.start_alt_m  # released: altitude never changes
@@ -261,7 +260,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
         obs = h.observe(pose, alt)
         t += 1
         frame = h.jpeg(obs.rgb)
-        cmap.add_pose(pose, alt, half_m=h.view_half_short_m(alt))
+        cmap.add_pose(pose, h.view_half_short_m(alt))
 
         # The detector paints the maps (released: GroundingDINO + MobileSAM,
         # one pass per caption set; substitution: one SAM 3.1 pass over the

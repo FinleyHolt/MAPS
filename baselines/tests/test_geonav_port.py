@@ -85,7 +85,7 @@ def test_get_child_nodes_coerces_adjacent_to_into_contains():
 
 def test_cognitive_map_renders_the_released_canvas():
     lms = [_lm("A", 50.0, 50.0), _lm("B", 150.0, 60.0), _lm("C", 90.0, 160.0)]
-    cmap = CognitiveMap((0.0, 0.0, 200.0, 200.0), 0.0, lms, "red car")
+    cmap = CognitiveMap((0.0, 0.0, 200.0, 200.0), lms, "red car")
     assert len({tuple(c) for c in np.unique(cmap.landmark_color.reshape(-1, 4), axis=0) if c[3]}) >= 3
     cmap.add_pose((100.0, 100.0), 50.0)
     cmap.paint_detection("tree", _square(120.0, 120.0, 3.0))
