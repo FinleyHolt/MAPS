@@ -69,12 +69,13 @@ def test_alone_and_assisted_pair_on_the_same_stream(tmp_path) -> None:
 
 
 def test_two_sessions_on_one_stream_in_one_arm_are_refused(tmp_path) -> None:
-    one = reader.session(_session(tmp_path / "a1", 4, 1, [(0, 100, 0)]))
-    two = reader.session(_session(tmp_path / "a2", 4, 1, [(0, 100, 1)]))
-    assisted = reader.session(_session(tmp_path / "b", 4, 1, [(0, 100, 1)]))
-    for alone, assist in (([one, two], [assisted]), ([assisted], [one, two])):
+    one = _session(tmp_path / "a1", 4, 1, [(0, 100, 0)])
+    two = _session(tmp_path / "a2", 4, 1, [(0, 100, 1)])
+    assisted = _session(tmp_path / "b", 4, 1, [(0, 100, 1)])
+    for argv in (["--alone", str(one), str(two), "--assisted", str(assisted)],
+                 ["--alone", str(assisted), "--assisted", str(one), str(two)]):
         with pytest.raises(SystemExit, match="a1.*a2"):
-            reader.paired(alone, assist)
+            reader.main(argv)
 
 
 def test_a_pairing_that_pairs_nothing_prints_strict_json_and_text(tmp_path, capsys) -> None:

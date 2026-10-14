@@ -124,7 +124,6 @@ def paired(alone: list[dict[str, Any]], assisted: list[dict[str, Any]]) -> dict[
     bootstrap interval, and the per-report in-window correct finds through
     ``ab_stats`` (a = alone)."""
     alone_by = _by_stream(alone)
-    _by_stream(assisted)
     pairs = []
     for b in sorted(assisted, key=_stream):
         a = alone_by.get(_stream(b))
