@@ -145,7 +145,7 @@ def test_run_episode_over_a_stub_harness():
 
         view_half_short_m = view_half_m
 
-        def search_window(self, landmarks, clip_to_block=True):
+        def search_window(self, landmarks):
             return self.assets.bounds
 
         def pixel_to_world(self, obs, row, col):

@@ -125,7 +125,7 @@ def run_episode(h: BaselineHarness) -> BaselineResult:
 
     alt = float(h.start_alt_m)
     plan = plan_coverage(
-        matched, h.search_window(matched, clip_to_block=False), h.episode.start_xy,
+        matched, h.search_window(matched), h.episode.start_xy,
         fov_m=2.0 * h.view_half_short_m(alt),
     )
     h.record("plan", {

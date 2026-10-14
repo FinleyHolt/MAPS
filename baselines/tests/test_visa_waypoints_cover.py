@@ -107,7 +107,7 @@ class _StubHarness:
 
     view_half_short_m = view_half_m
 
-    def search_window(self, landmarks, clip_to_block=True):
+    def search_window(self, landmarks):
         return self.assets.bounds
 
     def observe(self, xy, alt=None):
@@ -249,3 +249,25 @@ def test_a_huge_landmark_is_planned_only_inside_the_window():
     plan = plan_coverage([road], window, (0.0, 0.0), fov_m=300.0)
     assert plan.waypoints
     assert all(-1000.0 <= x <= 1000.0 for x, _y in plan.waypoints)
+
+
+def test_an_unmatched_instruction_is_planned_inside_the_block(tmp_path):
+    """With no landmark matched the plan covers the search window, and on a
+    CityNav-sized block that window is the block: no waypoint leaves it."""
+    import json
+    from types import SimpleNamespace
+
+    from baselines.seam import BaselineHarness
+    from baselines.visa.policy import run_episode
+
+    class _Block(_StubHarness):
+        search_window = BaselineHarness.search_window
+
+        def landmarks(self):
+            return []
+
+    h = _Block(tmp_path, [])
+    h.assets = SimpleNamespace(bounds=WorldBounds(0.0, 0.0, 400.0, 400.0))
+    run_episode(h)
+    waypoints = json.loads((tmp_path / "plan.json").read_text())["waypoints"]
+    assert waypoints and all(0.0 <= x <= 400.0 and 0.0 <= y <= 400.0 for x, y in waypoints)

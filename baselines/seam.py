@@ -212,13 +212,13 @@ class BaselineHarness:
         t = 1.0 if fov_deg == 90.0 else math.tan(math.radians(fov_deg) / 2.0)
         return max(1.0, (alt - self.ground_z_m) * t)
 
-    def search_window(self, landmarks: list["Landmark"], *, clip_to_block: bool = True) -> SimpleNamespace:
+    def search_window(self, landmarks: list["Landmark"]) -> SimpleNamespace:
         """The square a policy plans and maps over: centred on the start, a
         half-side reaching the farthest matched landmark plus a margin, held
         to ``[WINDOW_MIN_HALF_M, WINDOW_MAX_HALF_M]``. Every CityNav block is
         narrower than the minimum, so there the window covers the block; the
         13 km Cal City block would otherwise size a policy's arrays past
-        16 GB. ``clip_to_block`` intersects it with the block's bounds."""
+        16 GB. The window is held inside the block's bounds."""
         sx, sy = (float(v) for v in self.episode.start_xy)
         reach = 0.0
         for lm in landmarks:
@@ -226,10 +226,9 @@ class BaselineHarness:
                 reach = max(reach, abs(float(x) - sx), abs(float(y) - sy))
         half = min(max(reach + WINDOW_MARGIN_M, WINDOW_MIN_HALF_M), WINDOW_MAX_HALF_M)
         x0, y0, x1, y1 = sx - half, sy - half, sx + half, sy + half
-        if clip_to_block:
-            b = self.assets.bounds
-            x0, y0 = max(x0, float(b.x_min)), max(y0, float(b.y_min))
-            x1, y1 = min(x1, float(b.x_max)), min(y1, float(b.y_max))
+        b = self.assets.bounds
+        x0, y0 = max(x0, float(b.x_min)), max(y0, float(b.y_min))
+        x1, y1 = min(x1, float(b.x_max)), min(y1, float(b.y_max))
         return SimpleNamespace(x_min=x0, y_min=y0, x_max=x1, y_max=y1)
 
     def pixel_to_world(self, obs: Observation, row: float, col: float) -> tuple[float, float]:
