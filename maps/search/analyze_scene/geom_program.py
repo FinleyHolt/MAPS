@@ -440,23 +440,20 @@ def _render_color_cell(row):
     if not isinstance(row, dict):
         return row
     c = row.get("color")
-    if not (isinstance(c, str) and c.strip()):
-        if "color_shade" in row or "color_flag" in row:
-            row = dict(row)
-            row.pop("color_shade", None)
-            row.pop("color_flag", None)
+    has_color = isinstance(c, str) and c.strip()
+    if not has_color and "color_shade" not in row and "color_flag" not in row:
         return row
-    conf = row.get("color_conf")
-    uncertain = ((isinstance(conf, (int, float)) and conf < _COLOR_CONF_FLOOR)
-                 or row.get("color_flag") == "look")
-    shade = row.get("color_shade")
-    # A palette mixture's second word is glass or shadow: only a color-name
-    # read (shade set) serves it.
-    rich = shade is not None
-    out = {**row, "color": G.compact_color_cell(
-        c, shade=shade if shade in ("dk", "lt") else None, uncertain=uncertain, rich=rich)}
-    out.pop("color_shade", None)
-    out.pop("color_flag", None)
+    out = {k: v for k, v in row.items() if k not in ("color_shade", "color_flag")}
+    if has_color:
+        conf = row.get("color_conf")
+        uncertain = ((isinstance(conf, (int, float)) and conf < _COLOR_CONF_FLOOR)
+                     or row.get("color_flag") == "look")
+        shade = row.get("color_shade")
+        # A palette mixture's second word is glass or shadow: only a
+        # color-name read (shade set) serves it.
+        out["color"] = G.compact_color_cell(
+            c, shade=shade if shade in ("dk", "lt") else None,
+            uncertain=uncertain, rich=shade is not None)
     return out
 
 
@@ -538,21 +535,10 @@ def _query_matched_census(counts: dict, query: str) -> dict:
     for key, n in counts.items():
         toks = set(T.fuzzy_normalize(key).split())
         toks |= {T.singularize(t) for t in toks}
-        if toks & q_tokens:
-            matched[key] = n
-            continue
-        hit = False
-        for qt in q_long:
-            for ct in toks:
-                if len(ct) < 4:
-                    continue
-                if 1.0 - T.edit_distance(qt, ct) / max(len(qt),
-                                                        len(ct)) >= 0.7:
-                    hit = True
-                    break
-            if hit:
-                break
-        if hit:
+        if toks & q_tokens or any(
+                len(ct) >= 4
+                and 1.0 - T.edit_distance(qt, ct) / max(len(qt), len(ct)) >= 0.7
+                for qt in q_long for ct in toks):
             matched[key] = n
     return _top(matched, 8)
 
