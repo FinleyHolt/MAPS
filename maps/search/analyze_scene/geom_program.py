@@ -297,8 +297,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         to the tile while a contour runs on. A node with no cells is not
         clipped."""
         wc = n.world_contour
-        parts = [wc] if wc else []
-        chains = [[[float(x), float(y)] for x, y in p] for p in parts if p]
+        chains = [[[float(x), float(y)] for x, y in wc]] if wc else []
         cl = cell_mesh.cells_of(n)
         if not len(cl) or not chains:
             return chains
