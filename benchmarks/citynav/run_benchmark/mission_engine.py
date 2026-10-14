@@ -9,6 +9,7 @@ honest zero the episode runner scores.
 
 from __future__ import annotations
 
+import itertools
 import logging
 import os
 import time
@@ -96,21 +97,12 @@ def detected_digest(dets: list[dict]) -> dict:
     if not dets:
         return {}
     by_class: dict = {}
-    for _i, d in enumerate(dets):
-        by_class.setdefault(str(d.get("class") or ""), []).append((_i, d))
-    for rows in by_class.values():
-        # conf descending; fold order breaks a tie.
-        rows.sort(key=lambda t: (-float(t[1].get("conf") or 0.0), t[0]))
-    lanes = sorted(by_class.values(),
-                   key=lambda rows: (-float(rows[0][1].get("conf") or 0.0),
-                                     rows[0][0]))
-    head: list = []
-    for _rank in range(max((len(r) for r in lanes), default=0)):
-        for rows in lanes:
-            if _rank < len(rows) and len(head) < _DETECTED_HEAD:
-                head.append(rows[_rank][1])
-        if len(head) >= _DETECTED_HEAD:
-            break
+    for i, d in enumerate(dets):
+        by_class.setdefault(str(d.get("class") or ""), []).append((-float(d.get("conf") or 0.0), i, d))
+    # Each lane by conf descending, fold order breaking a tie; lanes by their
+    # first row. ``i`` is unique, so no comparison reaches the dict.
+    lanes = sorted(sorted(rows, key=lambda t: t[:2]) for rows in by_class.values())
+    head = [t[2] for tier in itertools.zip_longest(*lanes) for t in tier if t is not None][:_DETECTED_HEAD]
     out: dict = {"detected": [
         {"fid": d["fid"], "class": d["class"], "xy": list(d["xy"])}
         for d in head]}
