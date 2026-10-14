@@ -437,6 +437,16 @@ def _check_order(key, nearest, color, direction, reverse) -> None:
             "is not callable: rows.order(lambda r: r.distance(x))")
 
 
+def _order_here(rows, key, direction, reverse) -> "RowList | None":
+    """A key or compass ordering needs no server, so it answers here: the
+    rows are in hand and the axis is the map's. None for a server order."""
+    if direction is not None:
+        return RowList(sorted(rows, key=_direction_key(direction)))
+    if key is not None:
+        return RowList(sorted(rows, key=key, reverse=bool(reverse)))
+    return None
+
+
 _MISSING = object()
 
 
@@ -635,12 +645,8 @@ class RowList(list):
     def order(self, key=None, *, nearest=None, color=None, direction=None,
               reverse=False) -> "RowList | Rows":
         _check_order(key, nearest, color, direction, reverse)
-        # A GLOBAL ORDERING NEEDS NO SERVER, so it answers here rather than
-        # compiling: the rows are in hand and the axis is the map's.
-        if direction is not None:
-            return RowList(sorted(self, key=_direction_key(direction)))
-        if key is not None:
-            return RowList(sorted(self, key=key, reverse=bool(reverse)))
+        if (here := _order_here(self, key, direction, reverse)) is not None:
+            return here
         return self._mp()._rows_order(list(self), nearest=nearest,
                                       color=color)
 
@@ -765,10 +771,8 @@ class Rows:
         the whole set server-side, and relating to a place stamps ``facing
         <place>`` and ``distance to <place>``."""
         _check_order(key, nearest, color, direction, reverse)
-        if direction is not None:
-            return RowList(sorted(self, key=_direction_key(direction)))
-        if key is not None:
-            return RowList(sorted(self, key=key, reverse=bool(reverse)))
+        if (here := _order_here(self, key, direction, reverse)) is not None:
+            return here
         src = self if not self.spec else self.mp._materialize(self)
         return self.mp._rows_order(src, nearest=nearest, color=color)
 
