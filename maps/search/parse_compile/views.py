@@ -94,8 +94,8 @@ def _look_vision_text(crops: list[dict]) -> str:
         if _px:
             _span += f" ({int(_px)}x{int(_px)} px)"
         base += f"\n  crop {k + 1}{_span}: {line}"
+        _sxy = c.get("world_xy") or ["?", "?"]
         if c.get("subject_in_window") is False:
-            _sxy = c.get("world_xy") or ["?", "?"]
             _sw = c.get("world_window") or ["?"] * 4
             base += (" ; WARNING: neither this fid's position "
                      f"[{_sxy[0]}, {_sxy[1]}] nor any part of its "
@@ -106,14 +106,12 @@ def _look_vision_text(crops: list[dict]) -> str:
                      "from it (the position and window bounds here say "
                      "where it sits relative to this crop).")
         elif c.get("subject_centroid_in_window") is False:
-            _sxy = c.get("world_xy") or ["?", "?"]
             base += (" ; note: this fid's recorded position "
                      f"[{_sxy[0]}, {_sxy[1]}] is outside this crop's "
                      "window (edge-clamped at the tile boundary), but "
                      "part of its footprint IS in frame -- the outline/"
                      "circle marks the in-frame part.")
         elif c.get("subject_on_data") is False and c.get("source") == "run":
-            _sxy = c.get("world_xy") or ["?", "?"]
             base += (" ; WARNING: this fid's position "
                      f"[{_sxy[0]}, {_sxy[1]}] is inside this crop's "
                      "window but this run has not imaged that ground yet "
@@ -121,7 +119,6 @@ def _look_vision_text(crops: list[dict]) -> str:
                      "object; its color/shape cannot be read until a leg "
                      "flies over it (go_to it, then look).")
         elif c.get("subject_on_data") is False:
-            _sxy = c.get("world_xy") or ["?", "?"]
             base += (" ; WARNING: this fid's position "
                      f"[{_sxy[0]}, {_sxy[1]}] is inside this crop's "
                      "window but past the map raster's DATA edge -- "
@@ -236,17 +233,13 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
         mark_list: list[dict] = []
         for mf in dict.fromkeys(marked + _fids_of([f])):
             row = rows.get(mf)
-            xy = look_xy(row)
-            if xy is None:
-                xy = _rounded_xy(mf)
+            xy = look_xy(row) or _rounded_xy(mf)
             if xy is None:
                 skipped.append(mf)
                 continue
             mark_list.append(_mark(mf, row, xy, mf == f))
         row = rows.get(f)
-        xy = look_xy(row)
-        if xy is None:
-            xy = _rounded_xy(f)
+        xy = look_xy(row) or _rounded_xy(f)
         if xy is None:
             skipped.append(f)
             continue
