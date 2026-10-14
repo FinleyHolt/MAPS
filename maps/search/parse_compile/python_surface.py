@@ -961,6 +961,9 @@ class MissionPython:
         # union would measure a world that no longer stands.
         self._geom = SurfaceGeometry(env.row_of_fid)
         self._measure_calls = 0
+        # Every block's code objects: a def from an earlier block is still
+        # the model's own lines.
+        self._codes: list = []
         # per-block state
         self._out: dict = {}
         self._code = ""
@@ -1572,10 +1575,11 @@ class MissionPython:
             compiled = compile(tree, BLOCK_FILENAME, "exec")
         except CodeError as e:
             return self.env.say_err(out, str(e))
+        self._codes.extend(_code_objects(compiled))
 
         self._deadline = time.monotonic() + TRACE_DEADLINE_S
         try:
-            with _block_ceilings(self, compiled):
+            with _block_ceilings(self):
                 exec(compiled, self.ns)        # noqa: S102 -- the surface
         except _Stop:
             pass                     # the refusal is already in the receipt
@@ -1702,7 +1706,7 @@ class MissionPython:
 # The liveness ceilings, charged to the block's OWN lines and nothing else
 # --------------------------------------------------------------------------
 #
-# ``sys.monitoring`` delivers LINE events for exactly the block's code
+# ``sys.monitoring`` delivers LINE events for exactly the blocks' code
 # objects, so the executor beneath the block runs untraced.
 
 _MON = sys.monitoring
@@ -1739,10 +1743,11 @@ def _monitor_tool() -> int:
 
 
 @contextlib.contextmanager
-def _block_ceilings(mp: "MissionPython", compiled):
-    """Charge ``mp._tick`` for every line of ``compiled`` while it runs."""
+def _block_ceilings(mp: "MissionPython"):
+    """Charge ``mp._tick`` for every line of the mission's blocks while one
+    runs."""
     tid = _monitor_tool()
-    codes = _code_objects(compiled)
+    codes = mp._codes
     with _MON_LOCK:
         for c in codes:
             _MON_ACTIVE[id(c)] = mp

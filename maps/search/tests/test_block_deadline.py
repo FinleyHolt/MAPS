@@ -61,3 +61,13 @@ def test_a_runaway_loop_inside_a_nested_def_still_hits_the_line_ceiling(
     out = mp.run_block("def spin():\n    n = 0\n    while True:\n"
                        "        n += 1\nspin()\n")
     assert "unbounded loop" in (out.get("error") or ""), out
+
+
+def test_a_def_from_an_earlier_block_runs_under_the_line_ceiling():
+    """A function defined in one block and called in a later one is still
+    the model's own code: its lines count."""
+    mp = _mission_python()
+    mp.run_block("def spin():\n    n = 0\n    for i in range(300000):\n"
+                 "        n += 1\n    return n\n")
+    out = mp.run_block("print(spin())\n")
+    assert "unbounded loop" in (out.get("error") or ""), out
