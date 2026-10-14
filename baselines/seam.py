@@ -41,17 +41,15 @@ from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.observation import Observation, crop_observation
 
 #: The request-side thinking dial each policy sends on every call. ``None``
-#: sends nothing, so the call rides the server default the headline arm flew:
-#: the controlled comparison holds the model AND its reasoning rung fixed.
-#: ``geonav_released`` is GeoNav as shipped, whose DashScope client disabled
-#: thinking; it is the arm that says how much of the gap a reasoning backbone
-#: closes for that method.
+#: sends the arm's ``SEARCH_SAMPLING_REASONING_EFFORT`` (none when unset), so
+#: the call rides the rung the headline arm flew. ``geonav_released`` is
+#: GeoNav as shipped, whose DashScope client disabled thinking; it is the arm
+#: that says how much of the gap a reasoning backbone closes for that method.
 REASONING_EFFORT: dict[str, str | None] = {"geonav": None, "geonav_released": "none", "visa": None}
 
 #: Each paper's sampling temperature. GeoNav's code sends none, so it rode its
 #: server's default, 1.0 here; ViSA states 0.6.
 TEMPERATURE: dict[str, float] = {"geonav": 1.0, "geonav_released": 1.0, "visa": 0.6}
-
 
 
 @dataclass
@@ -62,7 +60,7 @@ class BaselineResult:
     stops: list[tuple[tuple[float, float], float]]
     # The committed target's world xy; ``None`` commits the last stop.
     commit_xy: tuple[float, float] | None
-    # A label for the commit, carried as ``commit_fid`` (a mark id, a graph
+    # A label for the commit, carried as ``committed_fid`` (a mark id, a graph
     # node id, ...). Never a CityRefer id.
     commit_label: str
     # The ``commit_path`` tier: ``"<policy>:<mechanism>"``, one string per
@@ -493,11 +491,10 @@ def _landmarks_from_rows(rows: list[dict]) -> list[Landmark]:
 
 #: The search window's half-side bounds and its margin past the farthest
 #: matched landmark (``BaselineHarness.search_window``). The minimum exceeds
-#: every CityNav block's extent (at most ~414 m), so a CityNav window covers
-#: its block from any start. At the maximum, GeoNav's map render peaks at
-#: ~1.6 GB per episode and ViSA's coverage plan at ~0.7 GB; twice the half-side
-#: put GeoNav at ~4.2 GB.
-#: ponytail: a start-centred square, so a Cal City dashboard row that starts
+#: every CityNav block's extent, so a CityNav window covers its block from any
+#: start; the maximum bounds the memory GeoNav's map and ViSA's coverage plan
+#: take per episode.
+#: ponytail: a start-centred square, so a Cal City episode that starts
 #: more than ~1.3 km from its target plans over ground that may not hold it;
 #: the upgrade is a window spanning the start and the matched landmarks, with
 #: GeoNav's map resolution scaled to hold its pixel count.

@@ -24,12 +24,11 @@ DELTA_Z_M = 10.0
 # None: the seam's free-call cap, the headline arm's output reserve.
 ANALYSIS_MAX_TOKENS = None
 VERIFY_MAX_TOKENS = None
-# ponytail: a frame cap on candidates. SAM 3.1 over a 270 m view proposes
-# several hundred masks (564 measured at 155 m over a Birmingham block), and a
-# Set-of-Mark frame with that many numbered discs is unreadable by any model.
-# The paper's VLM-proposed candidates are bounded by what a VLM will list, so
-# the top-K by detector confidence stands in for that bound; raise it if the
-# target is measured to fall outside it.
+# ponytail: a frame cap on candidates. SAM 3.1 over a wide view proposes
+# hundreds of masks, and a Set-of-Mark frame with that many numbered discs is
+# unreadable. The paper's VLM-proposed candidates are bounded by what a VLM
+# will list, so the top-K stands in for that bound; raise it if the target is
+# measured to fall outside it.
 MAX_MARKS = 80
 
 
@@ -64,9 +63,7 @@ def detection_concepts(analysis: dict) -> list[str]:
     """The phrases the detector is prompted with: the paper's VPG proposed the
     instruction's own phrases ("red car"), so the attributed target phrase,
     the surrounding phrases and the landmark nouns are prompted and the bare
-    class never is. A bare class returned every car in view, eighty marks on
-    a car instruction, and the probe measured the verifier hitting twice as
-    often on fifteen."""
+    class, which returns every car in view, never is."""
     target = analysis.get("target") or {}
     phrase = str(target.get("phrase") or "").strip()
     cls = str(target.get("class") or "").strip().lower()

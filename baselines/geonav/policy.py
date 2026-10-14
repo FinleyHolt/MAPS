@@ -32,15 +32,12 @@ VLM_DETECTION_DISTANCE_M = 20.0
 CALL_MAX_TOKENS = 800
 # substitution: understand() sends no max_tokens, so on the released client
 # the DashScope default output cap (2,048 tokens for the qwen3-vl-plus API)
-# bounded it; served here uncapped, an extractor enumerating a hundred cars
-# ran past ten minutes on the smoke. The same bound, stated.
+# bounded it; the same bound, stated.
 UNDERSTAND_MAX_TOKENS = 2048
 # substitution: the released caps assumed a backbone with no reasoning span.
-# The headline arm rides the server's reasoning rung, and thinking tokens
-# count against max_tokens here, so an 800-token call returns an empty object
-# with finish_reason=stop (measured on a recorded run, which raised the budget
-# to 8192 for the thinking arm). geonav_released keeps
-# the released caps with the dial off.
+# Thinking tokens count against max_tokens here, so an 800-token call returns
+# an empty object (measured on a recorded run). The headline arm takes the
+# seam's free-call cap; geonav_released keeps the released caps with the dial off.
 THINK_MAX_TOKENS = None  # the seam's free-call cap, the headline arm's output reserve
 # check_subgoals: Navigate ends past t=12 or with every landmark within 40 m;
 # Search ends 5 steps after the last Navigate check or on a flat entropy.
@@ -166,9 +163,8 @@ def _dist(a, b) -> float:
 def _bbox_corners_world(h: BaselineHarness, obs, r0, c0, r1, c1):
     hh, ww = obs.rgb.shape[:2]
     # substitution: the released extractor read Qwen3-VL-PLUS boxes as pixels
-    # of its 1024 px crop; the model served here sometimes answers in unit
-    # fractions of the frame (measured on the smoke), and a fraction read as a
-    # pixel lands every node in the frame's top-left corner.
+    # of its 1024 px crop; a model that answers in unit fractions of the frame
+    # would land every node in its top-left corner, so fractions scale to pixels.
     if all(0.0 <= float(v) <= 1.0 for v in (r0, c0, r1, c1)):
         r0, r1, c0, c1 = r0 * (hh - 1), r1 * (hh - 1), c0 * (ww - 1), c1 * (ww - 1)
     cl = lambda v, hi: min(max(float(v), 0.0), float(hi - 1))  # noqa: E731
