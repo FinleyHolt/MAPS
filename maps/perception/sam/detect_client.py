@@ -191,8 +191,7 @@ def _dominant_color(rgb: np.ndarray, region: MaskRegion) -> tuple[str, list[int]
     # Confidence: the RGB margin between the nearest anchor and the
     # runner-up, in [0, 1] (~0 between two anchors, ~1 a clean snap), times
     # the colour's reliability prior.
-    d1 = float(np.sqrt(max(0.0, dists[0][0])))
-    d2 = float(np.sqrt(max(0.0, dists[1][0])))
+    d1, d2 = float(np.sqrt(dists[0][0])), float(np.sqrt(dists[1][0]))
     margin = (d2 - d1) / (d2 + d1) if (d1 + d2) > 0.0 else 0.0
     prior = _COLOR_RELIABILITY_PRIOR_ACHROMATIC if name in _COLOR_ACHROMATIC else _COLOR_RELIABILITY_PRIOR_DEFAULT
     conf = round(max(0.0, min(1.0, margin * prior)), 3)
