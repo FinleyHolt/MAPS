@@ -135,7 +135,6 @@ class Driver:
         self.max_infra_attempts = args.max_infra_attempts
         self._infra_errors: dict[str, Counter] = {}
         self.out_root = Path(args.out_root).resolve()
-        self.out_root.mkdir(parents=True, exist_ok=True)
         self.episodes_file = self.out_root / episodes.EPISODES_JSONL
         self.driver_log = self.out_root / "driver.log"
         self.summary_file = self.out_root / "summary.txt"
@@ -544,6 +543,7 @@ class Driver:
 
     def dry_run(self) -> int:
         """Selection preview. Launches nothing."""
+        self.out_root.mkdir(parents=True, exist_ok=True)
         episodes = self._select_episodes()
         self._absorb_ledger()
         done = self._done_cache
@@ -561,6 +561,7 @@ class Driver:
         return 0
 
     def run(self) -> int:
+        self.out_root.mkdir(parents=True, exist_ok=True)
         try:
             lock = episodes.hold_root(self.out_root)
         except episodes.RootHeld as exc:
@@ -759,6 +760,16 @@ def main(argv: list[str] | None = None) -> int:
                           or args.sample_seed is not None):
         parser.error("--arrivals selects the session's episodes; drop --episode-allowlist, --limit "
                      "and --sample-seed")
+    # The config is refused here, before an out-root exists or a serve is asked.
+    import yaml
+
+    from benchmarks.citynav.run_benchmark.config import resolve_config
+
+    try:
+        resolved = resolve_config(CONFIG)[0]
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
     driver = Driver(args)
     if args.dry_run:
         return driver.dry_run()
@@ -779,9 +790,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     install_spec(spec)
     settle_effort()
-    from benchmarks.citynav.run_benchmark.config import resolve_config
-
-    if resolve_config(CONFIG)[0].get("policy"):
+    if resolved.get("policy"):
         # Every baseline arm makes dial-off calls: an arm whose model has none
         # is refused here, once, rather than scored a miss per episode.
         seam = importlib.import_module("baselines.seam")  # by name: no static import of baselines

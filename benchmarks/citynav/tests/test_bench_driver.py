@@ -412,7 +412,7 @@ def test_the_dry_run_counts_a_persistent_infra_episode_as_left_out(driver, tmp_p
 def test_relative_paths_resolve_against_the_working_directory(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     d = bf.Driver(bf._build_parser().parse_args(["--out-root", "runs/a", "--episode-allowlist", "ids.txt"]))
-    assert d.out_root == tmp_path / "runs" / "a" and d.out_root.is_dir()
+    assert d.out_root == tmp_path / "runs" / "a"
     assert d.allowlist_path == tmp_path / "ids.txt"
 
 
@@ -550,3 +550,13 @@ def test_a_refused_selection_exits_2_and_says_so_in_the_driver_log(driver, tmp_p
     assert d.run() == 2
     assert "FATAL: --arrivals names 1 episodes" in d.driver_log.read_text()
 
+
+@pytest.mark.parametrize("dry", [[], ["--dry-run"]])
+def test_a_refused_config_exits_2_before_any_out_root(dry, tmp_path, monkeypatch, capsys) -> None:
+    bad = tmp_path / "arm.yaml"
+    bad.write_text(f"base: {REPO / 'configs/citynav.yaml'}\npolicy: nope\n")
+    monkeypatch.setattr(bf, "CONFIG", bad)
+    monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused config flew"))
+    assert bf.main(["--out-root", str(tmp_path / "r"), *dry]) == 2
+    assert not (tmp_path / "r").exists()
+    assert capsys.readouterr().err.startswith("FATAL: ")
