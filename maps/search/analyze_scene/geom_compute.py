@@ -872,7 +872,8 @@ def cells_boundary_loops(cells, origin_xy, cell_m):
     if not cs:
         return None
     # Each cell side with no 4-neighbour is one directed corner edge,
-    # clockwise in (row, col), so loops chain head to tail.
+    # clockwise in (row, col), so loops chain head to tail. Every corner
+    # has as many edges in as out, so a chain from ``start`` closes there.
     edges: dict[tuple, list] = {}
     for (r, c) in cs:
         if (r - 1, c) not in cs:
@@ -890,15 +891,12 @@ def cells_boundary_loops(cells, origin_xy, cell_m):
         cur = edges[start].pop()
         if not edges[start]:
             del edges[start]
-        while cur != start and cur in edges:
+        while cur != start:
             loop.append(cur)
             nxt = edges[cur].pop()
             if not edges[cur]:
                 del edges[cur]
             cur = nxt
-        if cur != start:
-            # open chain (pinched corner artifact) — skip, keep tracing others
-            continue
         lp = _collapse_collinear(loop)
         if len(lp) >= 3:
             loops.append(lp)
