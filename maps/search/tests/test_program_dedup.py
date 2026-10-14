@@ -3,7 +3,7 @@ LABELS normalized out of the key."""
 from __future__ import annotations
 
 from maps.search.parse_compile.carry import _program_dedup_key
-from maps.search.tests.fakes import drive, ops_of_block, run, tool_results
+from maps.search.tests.fakes import drive, grow_drive, ops_of_block, run, tool_results
 
 _BLOCK = 'r1 = find("car")\nr2 = r1.order(nearest="prior_1")\n'
 
@@ -59,3 +59,18 @@ def test_the_dedup_note_after_a_plain_look_for_names_only_the_placed_form():
     note = tool_results(fr)[2]["result"]["note"]
     assert "no flight, no look_for(..., at=) --" in note, note
     assert "(fly, look_for(..., at=))" in note, note
+
+
+def test_a_deduped_handle_re_derives_after_a_flight_like_its_original():
+    """The alias carries the producing ops, so after the world moves both
+    handles read the same live rows."""
+    res, _graph, _added = grow_drive([
+        [run('go_to("prior_7")')],
+        [run('a = find("car")')],
+        [run('b = find("car")')],
+        [run('go_to("prior_1")')],
+        [run('print(len(a), len(b))')],
+        "done",
+    ])
+    n_a, n_b = res[4]["printed"].split()
+    assert n_a == n_b, res[4]

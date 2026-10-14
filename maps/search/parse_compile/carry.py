@@ -201,8 +201,8 @@ class Carry:
         self._fresh.add(handle)
 
     def alias(self, prev_ops, cur_ops) -> None:
-        """Point a deduped emission's refs at the handles the first run
-        stored, op by op; a label already live is never overwritten."""
-        for prev, cur in zip(prev_ops, cur_ops):
-            if cur["ref"] not in self.rows and prev["ref"] in self.rows:
-                self.rows[cur["ref"]] = self.rows[prev["ref"]]
+        """A deduped emission: its refs take the rows the first run's refs
+        hold now, and its own ops re-derive them from here on."""
+        self.record(cur_ops, {c["ref"]: self.rows[p["ref"]]
+                              for p, c in zip(prev_ops, cur_ops)
+                              if p["ref"] in self.rows})
