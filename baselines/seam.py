@@ -288,79 +288,77 @@ class BaselineHarness:
         call itself raises propagates.
         """
         from maps.llm import endpoint_spec
-        from maps.llm.flight_summary import reasoning_tokens_of
-        from maps.llm.http import _chat_completions_raw
-        from maps.llm.model_cards import sampling_kwargs, speaks_openai
-        from maps.llm.openai_wire import OUTPUT_CAP_KEY
 
         effort = REASONING_EFFORT.get(self.policy)
-        spec = endpoint_spec.spec()
-        model = spec.model_id
-        cap_key = OUTPUT_CAP_KEY if speaks_openai(model) else "max_tokens"
-        api_key = os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY")
         site = f"{self.policy}:{schema_name}"
-
-        def call(msgs, *, dial, cap, response_format=None):
-            if dial == "none":
-                kw = {**sampling_kwargs(model, ""), **dial_off(model)}
-            else:
-                kw = sampling_kwargs(model, dial)
-            # The card's envelope at the paper's temperature; an OpenAI-wire
-            # card sends none (its reasoning models take only 1.0).
-            if "temperature" in kw:
-                kw["temperature"] = TEMPERATURE.get(self.policy, 1.0)
-            if response_format is not None:
-                kw["response_format"] = response_format
-            resp = _chat_completions_raw(
-                spec.base_url, api_key, timeout=LLM_TIMEOUT_S, model=model, messages=msgs, **{cap_key: cap}, **kw,
-            )
-            choice = resp["choices"][0]
-            self.llm_calls += 1
-            reasoning = reasoning_tokens_of(resp, model=model)
-            self.reasoning_tokens += reasoning
-            return (((choice.get("message") or {}).get("content") or ""), choice.get("finish_reason"),
-                    int((resp.get("usage") or {}).get("completion_tokens") or 0), reasoning)
+        strict = {"type": "json_schema", "json_schema": {"name": schema_name, "schema": schema, "strict": True}}
 
         def shaped(text):
             parsed = _extract_json(text)
             return parsed if _fits(parsed, schema) else None
 
-        strict = {"type": "json_schema", "json_schema": {"name": schema_name, "schema": schema, "strict": True}}
         t0 = time.perf_counter()
-        last: Exception | None = None
         try:
             for _ in range(LLM_ATTEMPTS):
-                try:
-                    text, finish, completion, reasoning = call(
-                        _with_answer_shape(messages, schema), dial=effort, cap=max_tokens or spec.max_output_tokens,
+                text, finish, completion, reasoning = self._call(
+                    _with_answer_shape(messages, schema), dial=effort,
+                    cap=max_tokens or endpoint_spec.spec().max_output_tokens,
+                )
+                parsed, mode, more_tokens = shaped(text), "free", 0
+                if parsed is None and text.strip():
+                    # The answer exists but is not the schema's JSON: reshape it.
+                    again, _, more_tokens, _ = self._call(
+                        [{"role": "user", "content": EXTRACTION_PROMPT.format(answer=text[:12000])}],
+                        dial="none", cap=EXTRACTION_MAX_TOKENS, response_format=strict,
                     )
-                    parsed, mode, more_tokens = shaped(text), "free", 0
-                    if parsed is None and text.strip():
-                        # The answer exists but is not the schema's JSON: reshape it.
-                        again, _, more_tokens, _ = call(
-                            [{"role": "user", "content": EXTRACTION_PROMPT.format(answer=text[:12000])}],
-                            dial="none", cap=EXTRACTION_MAX_TOKENS, response_format=strict,
-                        )
-                        parsed, mode = shaped(again), "free+extract"
-                    elif parsed is None:
-                        # No answer at all, the reasoning span having eaten the cap when it reads length.
-                        self.reasoning_truncated += finish == "length"
-                        again, _, more_tokens, _ = call(messages, dial=effort, cap=EXTRACTION_MAX_TOKENS,
-                                                        response_format=strict)
-                        parsed, mode = shaped(again), "truncated+constrained"
-                    if parsed is None:
-                        raise _NoJSON(f"{site}: no schema JSON after the {mode} call")
-                    if mode == "free+extract":
-                        self.extraction_calls += 1
+                    parsed, mode = shaped(again), "free+extract"
+                elif parsed is None:
+                    # No answer at all, the reasoning span having eaten the cap when it reads length.
+                    self.reasoning_truncated += finish == "length"
+                    again, _, more_tokens, _ = self._call(messages, dial=effort, cap=EXTRACTION_MAX_TOKENS,
+                                                          response_format=strict)
+                    parsed, mode = shaped(again), "truncated+constrained"
+                if parsed is not None:
+                    self.extraction_calls += mode == "free+extract"
                     self.calls.append({"site": site, "mode": mode, "finish": finish,
                                        "reasoning_tokens": reasoning,
                                        "completion_tokens": completion + more_tokens})
                     return parsed
-                except _NoJSON as exc:
-                    last = exc
-            raise NoSchemaAnswer(f"{site}: no JSON after {LLM_ATTEMPTS} attempts") from last
+            raise NoSchemaAnswer(f"{site}: no JSON after {LLM_ATTEMPTS} attempts")
         finally:
             self.phase_s["examine"] += time.perf_counter() - t0
+
+    def _call(self, msgs: list[dict], *, dial: str | None, cap: int,
+              response_format: dict | None = None) -> tuple[str, str | None, int, int]:
+        """One chat completion on the served card's envelope at the policy's
+        temperature: its content, ``finish_reason``, completion tokens and
+        reasoning tokens. ``dial`` ``"none"`` switches thinking off."""
+        from maps.llm import endpoint_spec
+        from maps.llm.flight_summary import reasoning_tokens_of
+        from maps.llm.http import _chat_completions_raw
+        from maps.llm.model_cards import sampling_kwargs, speaks_openai
+        from maps.llm.openai_wire import OUTPUT_CAP_KEY
+
+        spec = endpoint_spec.spec()
+        model = spec.model_id
+        kw = {**sampling_kwargs(model, ""), **dial_off(model)} if dial == "none" else sampling_kwargs(model, dial)
+        # The card's envelope at the paper's temperature; an OpenAI-wire
+        # card sends none (its reasoning models take only 1.0).
+        if "temperature" in kw:
+            kw["temperature"] = TEMPERATURE.get(self.policy, 1.0)
+        if response_format is not None:
+            kw["response_format"] = response_format
+        cap_key = OUTPUT_CAP_KEY if speaks_openai(model) else "max_tokens"
+        resp = _chat_completions_raw(
+            spec.base_url, os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY"), timeout=LLM_TIMEOUT_S,
+            model=model, messages=msgs, **{cap_key: cap}, **kw,
+        )
+        choice = resp["choices"][0]
+        self.llm_calls += 1
+        reasoning = reasoning_tokens_of(resp, model=model)
+        self.reasoning_tokens += reasoning
+        return (((choice.get("message") or {}).get("content") or ""), choice.get("finish_reason"),
+                int((resp.get("usage") or {}).get("completion_tokens") or 0), reasoning)
 
     # -- the record ---------------------------------------------------------
 
@@ -381,10 +379,6 @@ class NoSchemaAnswer(RuntimeError):
     """``llm_json`` got no answer of the schema's shape in ``LLM_ATTEMPTS``
     tries: the method's own failure, which a policy may answer with its
     released fallback."""
-
-
-class _NoJSON(ValueError):
-    """One attempt's answer was not the schema's JSON."""
 
 
 class NoDialOff(RuntimeError):
