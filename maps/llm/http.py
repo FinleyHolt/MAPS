@@ -5,11 +5,11 @@ The request body is exactly the caller's kwargs (no SDK). A 5xx or transport
 error burns ``_MAX_RETRIES``; a 429/402 waits on its own budget, up to
 ``_RATE_LIMIT_BUDGET_S`` of waiting, honouring ``Retry-After`` (a hosted
 endpoint bills no refused request, so a saturated limit costs wall clock, not
-the episode); any other 4xx raises
-at once, as does a read, write or pool timeout (the mission loop's backoff
-decides whether to send the turn again). A call with a ``cancel_event`` streams (SSE), and the event shuts its
-socket down and raises :class:`CallCanceled`; an answer that lands as the
-event fires is never handed back or recorded.
+the episode); any other 4xx raises at once, as does a read, write or pool
+timeout (the mission loop's backoff decides whether to send the turn again). A
+call with a ``cancel_event`` streams (SSE), and the event shuts its socket
+down and raises :class:`CallCanceled`; an answer that lands as the event fires
+is never handed back or recorded.
 
 ``flight/llm/transcript.jsonl`` stores the conversation once: per-call
 message deltas, params written once per distinct body, image parts as sha
