@@ -55,8 +55,6 @@ def spend(out_root: Path, prices: dict = PRICES) -> dict:
     scored_ids: set[str] = set()
     for attempt in sorted(out_root.glob("w*/maps_*")):
         llm = summarize(attempt / "flight")
-        if not llm["requests"]:
-            continue
         for k in ("prompt_tokens", "completion_tokens", "reasoning_tokens", "cached_tokens",
                   "cache_write_tokens"):
             totals[k] += llm[k] or 0

@@ -45,3 +45,16 @@ def test_a_root_with_nothing_flown_prices_nothing(tmp_path: Path) -> None:
     out = spend.spend(tmp_path)
     assert out["usd_total"] == 0 and out["usd_per_scored_episode"] is None
     assert out["cache_hit"] is None and out["usd_projected_remaining"] is None
+
+
+def test_a_scored_attempt_that_sent_no_request_is_a_scored_episode(tmp_path: Path) -> None:
+    """An episode scored without a request cost nothing, and still counts in the mean and the projection."""
+    _attempt(tmp_path, "w0/maps_1_a", prompt=1_000_000, cached=0, write=0, out=0)
+    (tmp_path / "w0/maps_2_b/flight/llm").mkdir(parents=True)
+    (tmp_path / "w0/maps_2_b/flight/llm/transcript.jsonl").write_text("")
+    (tmp_path / "episodes.jsonl").write_text("".join(
+        json.dumps({"episode_id": f"e::{i}", "workdir": f"w0/maps_{i}_{c}", "status": "ok",
+                    "metrics": {"SR": 0}}) + "\n" for i, c in ((1, "a"), (2, "b"))))
+    (tmp_path / "run_manifest.json").write_text(json.dumps({"selection": {"episodes_n": 2}}))
+    out = spend.spend(tmp_path)
+    assert (out["scored_episodes"], out["usd_per_scored_episode"], out["usd_projected_remaining"]) == (2, 2.5, 0)
