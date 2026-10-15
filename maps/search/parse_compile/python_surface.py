@@ -1438,17 +1438,13 @@ class MissionPython:
             raise CodeError("at= takes ONE place and a set has no one "
                             "point to stand at. Index it -- at=rows[0].")
         at = self._slot(at)
-        if not isinstance(facing, str):
-            facing = self._slot(facing)
         # A heading: a compass word rides as itself, anything else is a
         # place to look TOWARD.
+        word = facing.strip().lower() if isinstance(facing, str) else None
+        if word not in COMPASS_UNIT:
+            facing = self._slot(facing)
         at_site = self._site(at, "stage")
-        if isinstance(facing, str) and facing.strip().lower() in COMPASS_UNIT:
-            f_site = facing.strip().lower()
-        else:
-            f_site = self._site(self._held(facing) or facing
-                                if isinstance(facing, str) else facing,
-                                "facing")
+        f_site = word if word in COMPASS_UNIT else self._site(facing, "facing")
         self._act(self.env.stand, [(at_site, "stage"), (f_site, "facing")])
         h = self._out["stance"]["staged"][-1]["handle"]
         self.ns[h] = h
