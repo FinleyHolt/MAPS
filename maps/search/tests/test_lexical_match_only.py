@@ -233,7 +233,7 @@ def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
     # floor. A guard that suppressed nothing fails the first count; one
     # that suppressed on the mere PRESENCE of colour fails the third; one
     # that suppressed everything fails the second and the third.
-    assert len(COLORS) == 10, sorted(COLORS)
+    assert len(COLORS) == 15, sorted(COLORS)
     _other = {w: ("purple" if w != "purple" else "green") for w in COLORS}
     read = [w for w in COLORS
             if U(f"{w} car", _rows("car", colour=f"{w} 0.60")) == []]

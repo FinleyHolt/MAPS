@@ -18,7 +18,7 @@ from __future__ import annotations
 import math
 import re
 
-from maps.search.analyze_scene.geom_compute import COLOR_ENUM
+from maps.search.analyze_scene.geom_compute import COLOR_FAMILY
 
 # --- lexical abbreviation expansion -----------------------------------------
 
@@ -155,7 +155,7 @@ def _word_forms(text: str) -> tuple:
                  for t in dict.fromkeys(fuzzy_normalize(text).split()))
 
 
-COLORS = frozenset(COLOR_ENUM)
+COLORS = frozenset(COLOR_FAMILY)
 
 
 def _row_match_text(row) -> str:
