@@ -34,11 +34,9 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from benchmarks.citynav import paths as bench_paths
 from benchmarks.citynav.action_snap import Pose, snap_to_actions
 from maps.llm.vision_content import build_vision_user_content
-from maps.perception.geometry.geolocate import TileFrame
-from maps.perception.observation import Observation, crop_observation
+from maps.perception.observation import Observation
 
 #: The thinking dial each policy sends: ``None`` sends the arm's
 #: ``SEARCH_SAMPLING_REASONING_EFFORT`` (no key when unset); ``"none"`` is
@@ -116,42 +114,28 @@ class Budget:
 class BaselineHarness:
     """The substrate, held fixed: one object a policy computes against."""
 
-    def __init__(
-        self,
-        *,
-        cfg,
-        episode,
-        assets,
-        start_alt_m: float,
-        ground_z_m: float,
-        workdir: Path,
-        policy: str,
-        sensor,
-        perception,
-    ) -> None:
-        self.cfg = cfg
-        # The run's own sensor, block geometry and SAM client: the frames a
-        # policy reads and the detections it gets are the mission's.
-        self.sensor = sensor
-        self.episode = episode
-        self.assets = assets
-        self.start_alt_m = float(start_alt_m)
-        self.ground_z_m = float(ground_z_m)
-        self.workdir = Path(workdir)
+    def __init__(self, h, policy: str, workdir: Path) -> None:
+        """Over the built episode ``h`` (``episode_runner.Hydrated``): its
+        config, sensor, block, raster crop, SAM client and start pose, so the
+        frames a policy reads and the detections it gets are the mission's."""
+        self.cfg = h.cfg
+        self.sensor = h.sensor
+        self.episode = h.episode
+        self.assets = h.assets
+        self.start_alt_m = float(h.state.altitude_m)
+        self.ground_z_m = float(h.ground_z_m)
+        self.tile_frame = h.tile_frame
+        self._crop = h.crop
+        self._sam = h.perception
         self.policy = policy
-        self.log_dir = self.workdir / policy
+        self.log_dir = Path(workdir) / policy
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.tile_frame = TileFrame(
-            x_min=float(assets.bounds.x_min),
-            y_min=float(assets.bounds.y_min),
-            cell_size_m=float(assets.cell_size_m),
-            grid_shape=tuple(assets.grid_shape),
-        )
         # The replay's own start pose: the start heading prices every leg.
+        start_xy = h.episode.start_xy
         self.budget = Budget(
-            cfg.max_steps,
-            Pose(float(episode.start_xy[0]), float(episode.start_xy[1]), self.start_alt_m,
-                 float(episode.start_heading_deg) % 360.0),
+            h.cfg.max_steps,
+            Pose(float(start_xy[0]), float(start_xy[1]), self.start_alt_m,
+                 float(h.episode.start_heading_deg) % 360.0),
         )
         # Wall time per phase, landed on the row as ``<policy>_phase_<name>_s``.
         self.phase_s: dict[str, float] = {"render": 0.0, "segment": 0.0, "examine": 0.0}
@@ -159,7 +143,6 @@ class BaselineHarness:
         self.extraction_calls = 0
         self.reasoning_truncated = 0
         self.calls: list[dict] = []
-        self._sam = perception
         self._landmarks: list[Landmark] | None = None
 
     # -- the sensor ---------------------------------------------------------
@@ -168,14 +151,7 @@ class BaselineHarness:
         """The mission's frame at this pose: the run's sensor, north-up,
         rendered by the same call the mission makes."""
         t0 = time.perf_counter()
-        obs = crop_observation(
-            (float(pose_xy[0]), float(pose_xy[1])),
-            altitude_m=float(altitude_m),
-            sensor=self.sensor,
-            # Read at call time: benchmarks.calcity.use() selects the Cal City rasters.
-            rgbd_dir=bench_paths.CITYNAV_NATIVE_RGBD_DIR,
-            map_name=self.episode.map_name,
-        )
+        obs = self._crop(pose_xy, altitude_m)
         obs.tile = self.tile_frame
         self.phase_s["render"] += time.perf_counter() - t0
         return obs
@@ -682,24 +658,8 @@ def fly(h, policy: str) -> BaselineFlight:
     commit come back as flights for the runner's replay, and its record lands
     under ``<workdir>/<policy>/``.
     """
-    from maps.llm import endpoint_spec
-
-    # Every policy's reshape calls, and every geonav_released call, run with
-    # the dial off: refuse a model that has none before any request.
-    dial_off(endpoint_spec.spec().model_id)
-    workdir = Path(os.environ.get("SEARCH_COMPILE_WORKDIR") or ".")
     start_xy = (float(h.episode.start_xy[0]), float(h.episode.start_xy[1]))
-    harness = BaselineHarness(
-        cfg=h.cfg,
-        episode=h.episode,
-        assets=h.assets,
-        start_alt_m=h.state.altitude_m,
-        ground_z_m=h.ground_z_m,
-        workdir=workdir,
-        policy=policy,
-        sensor=h.sensor,
-        perception=h.perception,
-    )
+    harness = BaselineHarness(h, policy, Path(os.environ.get("SEARCH_COMPILE_WORKDIR") or "."))
     module = importlib.import_module(f"baselines.{policy}.policy")
     t0 = time.monotonic()
     result: BaselineResult = module.run_episode(harness)

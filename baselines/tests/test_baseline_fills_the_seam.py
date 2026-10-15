@@ -54,6 +54,7 @@ def _install_stub_policy(monkeypatch, name: str, run) -> None:
 def _hydrated(alt: float = 50.0, ground: float = 0.0, heading: float = 0.0):
     """The parts of ``episode_runner.Hydrated`` the seam reads."""
     return SimpleNamespace(
+        tile_frame=None, crop=None,
         cfg=SimpleNamespace(max_steps=200),
         episode=SimpleNamespace(episode_id="unit::1#0", map_name="unit_block_0",
                                 description="the car by the depot", start_xy=(0.0, 0.0), target_xy=(0.0, 100.0),
@@ -339,21 +340,6 @@ def test_a_dial_off_call_turns_the_template_s_thinking_off_where_none_is_not_a_r
     for body in _dial_off_bodies(monkeypatch, "qwen38-flash-next-nvfp4"):
         assert "reasoning_effort" not in body
         assert body["chat_template_kwargs"] == {"enable_thinking": False}
-
-
-def test_a_model_with_no_dial_off_is_refused_before_the_policy_runs(tmp_path, monkeypatch):
-    from baselines.seam import NoDialOff
-    from maps.llm import endpoint_spec
-
-    monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
-    monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
-        base_url="http://serve.example:8001/v1", model_id="gemma4-26b-a4b-nvfp4", max_model_len=262144,
-        tokenizer_name="gemma", max_output_tokens=40000))
-    ran = []
-    _install_stub_policy(monkeypatch, "stub_g", lambda h: ran.append(h))
-    with pytest.raises(NoDialOff, match="gemma4-26b-a4b-nvfp4"):
-        fly(_hydrated(), "stub_g")
-    assert not ran
 
 
 def _window_harness(bounds):

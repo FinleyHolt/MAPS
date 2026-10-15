@@ -18,7 +18,7 @@ their own evaluators instead: [`released/`](released/README.md).
 | served model | discovered from `/v1/models` at startup, the same serve as the MAPS arm | `maps/llm/endpoint_spec.py` |
 | sampling envelope | the served model's card (`maps.llm.model_cards.sampling_kwargs`) at each paper's temperature (`seam.TEMPERATURE`); an OpenAI-wire card sends no temperature | `seam.BaselineHarness.llm_json` |
 | thinking dial | the request-side `reasoning_effort` per method (`seam.REASONING_EFFORT`); `None` takes the arm's `SEARCH_SAMPLING_REASONING_EFFORT`, as the mission does | `seam.BaselineHarness.llm_json` |
-| sensor | the run's `sensor:`, north-up, rendered by the `crop_observation` call the mission makes; the view's ground footprint comes from the sensor's field of view | `seam.BaselineHarness.observe`, `seam.BaselineHarness.view_half_m` |
+| sensor | the run's `sensor:`, north-up, rendered by the episode's `Hydrated.crop`, the call the mission makes; the view's ground footprint comes from the sensor's field of view | `seam.BaselineHarness.observe`, `seam.BaselineHarness.view_half_m` |
 | start pose | the runner's: the dataset start (or the config's `spawn`), at the dataset's start z or the config's `start_altitude_agl_m` | `episode_runner.start_altitude_m` |
 | prior | the OSM rows of the block; a landmark is a row with a `name` tag | `seam.BaselineHarness.landmarks` |
 | detector | the run's own SAM 3.1 client | `episode_runner.make_perception`, `seam.BaselineHarness.detect` |
