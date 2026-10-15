@@ -109,10 +109,6 @@ class EndpointSpec:
                 - _WINDOW_MARGIN_TOKENS)
 
 
-def _output_reserve_for(max_model_len: int) -> int:
-    return min(_OUTPUT_RESERVE_CAP, max_model_len // 4)
-
-
 def _get_json(url: str, *, bearer: str | None = None) -> object:
     """GET ``url`` (``bearer`` as an Authorization header) and parse the JSON
     body; raise EndpointUnreachable when nothing answers (no connection, a
@@ -344,7 +340,7 @@ def discover(
         model_id=model_id,
         max_model_len=max_model_len,
         tokenizer_name=tokenizer_name,
-        max_output_tokens=_output_reserve_for(max_model_len),
+        max_output_tokens=min(_OUTPUT_RESERVE_CAP, max_model_len // 4),
         sam_url=sam_url,
     )
     if spec.input_budget < _MIN_INPUT_BUDGET:
@@ -357,15 +353,17 @@ def discover(
     return spec
 
 
-def discover_from_env() -> EndpointSpec:
-    """:func:`discover` over ``SEARCH_REASONER_URL``, the SAM replicas and
-    the ``SEARCH_ENDPOINT_OFFLINE`` / ``SEARCH_ENDPOINT_SPEC_OVERRIDE`` pins."""
+def discover_from_env(*, probe_sam: bool = True) -> EndpointSpec:
+    """:func:`discover` over ``SEARCH_REASONER_URL``, the SAM replicas (none
+    when ``probe_sam`` is False) and the ``SEARCH_ENDPOINT_OFFLINE`` /
+    ``SEARCH_ENDPOINT_SPEC_OVERRIDE`` pins."""
 
     from maps.perception.sam.detect_client import sam_endpoints  # noqa: PLC0415
 
     override_raw = os.environ.get("SEARCH_ENDPOINT_SPEC_OVERRIDE", "").strip()
     try:
-        sam_url = ",".join(sam_endpoints())  # the replicas the run posts to
+        # the replicas the run posts to
+        sam_url = ",".join(sam_endpoints()) if probe_sam else ""
     except ValueError as exc:
         raise EndpointDiscoveryError(str(exc)) from exc
     return discover(

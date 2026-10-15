@@ -110,11 +110,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
-    override = os.environ.get("SEARCH_ENDPOINT_SPEC_OVERRIDE", "").strip()
     try:
-        spec = endpoint_spec.discover(
-            os.environ.get("SEARCH_REASONER_URL", endpoint_spec.DEFAULT_REASONER_URL),
-            override=endpoint_spec.parse_override(override) if override else None)
+        spec = endpoint_spec.discover_from_env(probe_sam=False)
     except endpoint_spec.EndpointDiscoveryError as exc:
         print(f"discovery refused: {exc}", file=sys.stderr)
         return 2
