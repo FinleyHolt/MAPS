@@ -37,6 +37,7 @@ from PIL import Image
 
 from benchmarks.citynav.action_snap import Pose, snap_to_actions
 from maps.llm.vision_content import build_vision_user_content
+from maps.perception.geometry.geolocate import frame_world_xy
 from maps.perception.observation import Observation
 
 #: The thinking dial each policy sends: ``None`` sends the arm's
@@ -202,11 +203,8 @@ class BaselineHarness:
 
     def pixel_to_world(self, obs: Observation, row: float, col: float) -> tuple[float, float]:
         """A frame pixel's ground point, through the crop's own corners."""
-        h, w = obs.rgb.shape[:2]
-        u = float(col) / max(w - 1, 1)
-        v = float(row) / max(h - 1, 1)
-        (flx, fly), (frx, fry), _br, (blx, bly) = obs.ortho_view_corners_xy
-        return (flx + u * (frx - flx) + v * (blx - flx), fly + u * (fry - fly) + v * (bly - fly))
+        _u, _v, x, y = frame_world_xy(obs.ortho_view_corners_xy, np.array([row]), np.array([col]), obs.rgb.shape[:2])
+        return float(x[0]), float(y[0])
 
     # -- the detector -------------------------------------------------------
 
