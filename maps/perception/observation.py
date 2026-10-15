@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from maps.perception.geometry.sensor_spec import SensorSpec
-from maps.perception.ortho.sensor_frame import footprint_corners_xy, footprint_m, frame_corners_px
+from maps.perception.ortho.sensor_frame import footprint_corners_xy, footprint_m, frame_corners_px, ortho_px
 
 #: The sensorless view square's output side cap, in pixels.
 _MAX_PX = 2048
@@ -90,10 +90,7 @@ def crop_ortho_observation(
     else:
         out_w = out_h = None  # derived from the ortho span below
 
-    corners_px = np.array(
-        [[(x - ox_min) * ppm, (H_o - 1) - (y - oy_min) * ppm] for (x, y) in corners_world],
-        dtype=np.float32,
-    )
+    corners_px = ortho_px(corners_world, ox_min, oy_min, ppm, H_o)
     if out_w is None:
         span = int(
             round(

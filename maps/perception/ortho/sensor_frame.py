@@ -123,16 +123,18 @@ def render_frame(
                 f"{tuple(round(v, 1) for v in bounds)}: the frame would carry "
                 f"no-data border. Move the aim point inward or lower the altitude."
             )
-    rows = ortho_rgb.shape[0]
-    src = np.array(
-        [
-            [(x - bounds.x_min) * px_per_m, (rows - 1) - (y - bounds.y_min) * px_per_m]
-            for (x, y) in corners
-        ],
-        dtype=np.float32,
-    )
+    src = ortho_px(corners, bounds.x_min, bounds.y_min, px_per_m, ortho_rgb.shape[0])
     out_w, out_h = sensor.intrinsics.image_width, sensor.intrinsics.image_height
     return np.ascontiguousarray(warp_window(ortho_rgb, src, out_w, out_h), np.uint8)
+
+
+def ortho_px(points_xy, x_min: float, y_min: float, px_per_m: float, rows: int) -> np.ndarray:
+    """World ``(x, y)`` points as ``float32`` pixel ``(col, row)`` of a north-up
+    ortho ``rows`` tall whose south-west corner is ``(x_min, y_min)``."""
+    return np.array(
+        [[(x - x_min) * px_per_m, (rows - 1) - (y - y_min) * px_per_m] for (x, y) in points_xy],
+        dtype=np.float32,
+    )
 
 
 def source_map(src_px: np.ndarray, width: int, height: int) -> tuple[np.ndarray, np.ndarray]:
