@@ -312,12 +312,28 @@ class Mission:
             area_ll = self._area_lonlat(area)
             cov, unread = self._coverage_before_leg(area_ll)
             held = self._held_frame(area_ll, xy) if _holds(cov) else None
+            at = f"{token} at ({xy[0]:.0f}, {xy[1]:.0f})"
             if held is not None:
-                self._said(f"{token} at ({xy[0]:.0f}, {xy[1]:.0f}) is held by the pass already: "
-                           f"{self._held_words(held[1])}; no leg is flown")
-            else:
+                self._said(f"{at} is held by the pass already: {self._held_words(held[1])}; no leg is flown")
+            elif not self._cancel.is_set():
+                # Frames recorded after this vehicle time are the leg's own; None counts the whole ring.
+                after = None
+                if unread is not None:
+                    log.warning("the leg to %s is posted unread: the recording did not answer in %d reads: %s",
+                                at, COVERAGE_TRIES, unread)
+                    self._said(f"{at} may be held by the pass already, but the recording could not be asked "
+                               f"in {COVERAGE_TRIES} reads ({unread}); the leg is flown")
+                elif cov is not None and not _holds(cov):
+                    log.info("the pass holds %d/%d points of %s in %d frames, short of %.0f%%; the leg is flown",
+                             cov["held"], cov["points"], at, cov["frames"], 100.0 * COVERED_FRACTION)
+                elif cov is not None:
+                    self._said(f"{at} is held by the pass ({cov['held']}/{cov['points']} points), but no frame of "
+                               f"it could be served ({self._live.last_refusal or 'no reason recorded'}); "
+                               f"the leg is flown")
+                    # The ring already holds the area, so only a pass after the post can arrive.
+                    after = self._vehicle.now()
                 ahead = [(float(x), float(y)) for x, y in (item.get("pass_ahead") or [])]
-                held = self._post_and_wait(token, xy, area, area_ll, cov, unread, ahead)
+                held = self._post_and_wait(token, at, xy, area, area_ll, ahead, after)
             self._held = held
         if self._cancel.is_set():
             return dict(STOPPED)
@@ -327,33 +343,13 @@ class Mission:
             # The fused pass is spent with the flight.
             self._held = None
 
-    def _post_and_wait(self, token: str, xy: list[float], area: list[tuple[float, float]],
-                       area_ll: list[tuple[float, float]], cov: dict[str, Any] | None, unread: str | None,
-                       ahead: list[tuple[float, float]]) -> tuple[Any, dict[str, Any]] | None:
-        """The leg posted for ``area`` and waited on, a short pass asked again
-        up to ``SHORT_PASS_REQUESTS`` times; then what the pass held,
-        ``(observation, record)``, or None. ``cov`` and ``unread`` are the
-        recording's answer before the leg. A stopped mission posts and
-        fetches nothing more."""
-        if self._cancel.is_set():
-            return None
-        at = f"{token} at ({xy[0]:.0f}, {xy[1]:.0f})"
-        # Frames recorded after this vehicle time are the leg's own; None counts the whole ring.
-        after = None
-        if unread is not None:
-            log.warning("the leg to %s at (%.0f, %.0f) is posted unread: the recording did not answer "
-                        "in %d reads: %s", token, xy[0], xy[1], COVERAGE_TRIES, unread)
-            self._said(f"{at} may be held by the pass already, but the recording could not be asked "
-                       f"in {COVERAGE_TRIES} reads ({unread}); the leg is flown")
-        elif cov is not None and not _holds(cov):
-            log.info("the pass holds %d/%d points of %s at (%.0f, %.0f) in %d frames, short of %.0f%%; "
-                     "the leg is flown", cov["held"], cov["points"], token, xy[0], xy[1], cov["frames"],
-                     100.0 * COVERED_FRACTION)
-        elif cov is not None:
-            self._said(f"{at} is held by the pass ({cov['held']}/{cov['points']} points), but no frame of it could be "
-                       f"served ({self._live.last_refusal or 'no reason recorded'}); the leg is flown")
-            # The ring already holds the area, so only a pass after the post can arrive.
-            after = self._vehicle.now()
+    def _post_and_wait(self, token: str, at: str, xy: list[float], area: list[tuple[float, float]],
+                       area_ll: list[tuple[float, float]], ahead: list[tuple[float, float]],
+                       after: float | None) -> tuple[Any, dict[str, Any]] | None:
+        """The leg posted for ``area`` and waited on (arrival counting the
+        frames after ``after`` when given), a short pass asked again up to
+        ``SHORT_PASS_REQUESTS`` times; then what the pass held,
+        ``(observation, record)``, or None. A stopped mission fetches nothing more."""
         step = len(self.flights)
         self._post(Leg(target=token, point=(xy[0], xy[1]), step=step, area=area_ll, ahead=ahead))
         # The leg's reach: how far from the point the aircraft is still over
