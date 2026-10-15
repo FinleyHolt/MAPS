@@ -2,8 +2,10 @@
 transcript every call is mirrored into.
 
 The request body is exactly the caller's kwargs (no SDK). A 5xx or transport
-error burns ``_MAX_RETRIES``; a 429/402 draws on its own budget,
-``_MAX_RATE_LIMIT_RETRIES``, honouring ``Retry-After``; any other 4xx raises
+error burns ``_MAX_RETRIES``; a 429/402 waits on its own budget, up to
+``_RATE_LIMIT_BUDGET_S`` of waiting, honouring ``Retry-After`` (a hosted
+endpoint bills no refused request, so a saturated limit costs wall clock, not
+the episode); any other 4xx raises
 at once, as does a read, write or pool timeout (the mission loop's backoff
 decides whether to send the turn again). A call with a ``cancel_event`` streams (SSE), and the event shuts its
 socket down and raises :class:`CallCanceled`; an answer that lands as the
@@ -56,20 +58,24 @@ _NO_RETRY_TIMEOUTS = (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout)
 # Ceiling on one rate-limit wait, however long the advertised ``Retry-After``.
 _RATE_LIMIT_MAX_BACKOFF_S = 60.0
 
-# The two retry budgets and the exponential backoff base, in seconds.
+# The fault retry budget, the rate-limit wait budget (seconds waited over
+# one call) and the exponential backoff base, in seconds.
 _MAX_RETRIES = 2
-_MAX_RATE_LIMIT_RETRIES = 5
+_RATE_LIMIT_BUDGET_S = 1800.0
 _BACKOFF_S = 1.5
 
 
 def _retry_after_delay(headers: httpx.Headers, default_s: float) -> float:
-    """Seconds to wait before re-sending: ``Retry-After`` in its delta-seconds
-    form, else ``default_s``, capped. The HTTP-date form, rare on JSON APIs,
-    takes the default."""
+    """Seconds to wait before re-sending: Azure's ``retry-after-ms``, else
+    ``Retry-After`` in its delta-seconds form, else ``default_s``, capped. The
+    HTTP-date form, rare on JSON APIs, takes the default."""
     try:
-        delay = float(headers.get("retry-after", ""))
-    except ValueError:
-        delay = default_s
+        delay = float(headers["retry-after-ms"]) / 1000.0
+    except (KeyError, ValueError):
+        try:
+            delay = float(headers.get("retry-after", ""))
+        except ValueError:
+            delay = default_s
     return max(0.0, min(_RATE_LIMIT_MAX_BACKOFF_S, delay))
 
 
@@ -580,6 +586,7 @@ def _chat_completions_raw(
 
     attempt = 0
     rate_limit_attempt = 0
+    rate_limit_waited = 0.0
     wire = body
     while True:
         try:
@@ -619,24 +626,29 @@ def _chat_completions_raw(
                 else None
             )
             if status in _RATE_LIMIT_STATUS:
-                if rate_limit_attempt >= _MAX_RATE_LIMIT_RETRIES:
+                # floored, so an endpoint answering "retry now" forever still
+                # spends the budget
+                delay = max(1.0, _retry_after_delay(
+                    e.response.headers, _BACKOFF_S * (2**min(rate_limit_attempt, 6))
+                ))
+                if rate_limit_waited + delay > _RATE_LIMIT_BUDGET_S:
                     log.error(
-                        "LLM endpoint %d after %d rate-limit retries; "
-                        "giving up on this call",
+                        "LLM endpoint %d after %d rate-limit retries (%.0fs "
+                        "waited); giving up on this call",
                         status,
                         rate_limit_attempt,
+                        rate_limit_waited,
                     )
                     raise
-                delay = _retry_after_delay(
-                    e.response.headers, _BACKOFF_S * (2**rate_limit_attempt)
-                )
                 rate_limit_attempt += 1
+                rate_limit_waited += delay
                 log.warning(
                     "LLM endpoint %d (rate limit/quota) on rate-limit "
-                    "retry %d/%d; waiting %.1fs",
+                    "retry %d (%.0f/%.0fs waited); waiting %.1fs",
                     status,
                     rate_limit_attempt,
-                    _MAX_RATE_LIMIT_RETRIES,
+                    rate_limit_waited,
+                    _RATE_LIMIT_BUDGET_S,
                     delay,
                 )
                 _backoff(delay, cancel_event)

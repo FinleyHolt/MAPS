@@ -1,5 +1,5 @@
 """The chat transport's retries split by cause: 5xx and connection faults burn ``_MAX_RETRIES``, 429/402
-draw on ``_MAX_RATE_LIMIT_RETRIES``, any other 4xx raises at once."""
+wait on ``_RATE_LIMIT_BUDGET_S``, any other 4xx raises at once."""
 
 from __future__ import annotations
 
@@ -52,12 +52,26 @@ def test_rate_limit_wait_is_capped(transport) -> None:
 
 
 def test_rate_limit_budget_is_separate_from_transient_budget(transport) -> None:
-    """A permanent 429 is sent 1 + ``_MAX_RATE_LIMIT_RETRIES`` (5) times, past ``_MAX_RETRIES`` (2)."""
-    result, calls, sleeps = transport([_err(429)] * 10)
+    """A permanent 429 waits until ``_RATE_LIMIT_BUDGET_S`` is spent, far past
+    ``_MAX_RETRIES`` (2), then raises: a saturated limit costs wall clock, not the episode."""
+    result, calls, sleeps = transport([_err(429)] * 200)
     assert isinstance(result, httpx.HTTPStatusError)
     assert result.response.status_code == 429
-    assert len(calls) == 6
-    assert len(sleeps) == 5
+    assert len(calls) == len(sleeps) + 1 > 20
+    assert http_mod._RATE_LIMIT_BUDGET_S - http_mod._RATE_LIMIT_MAX_BACKOFF_S < sum(sleeps)
+    assert sum(sleeps) <= http_mod._RATE_LIMIT_BUDGET_S
+
+
+def test_azure_s_millisecond_retry_after_wins(transport) -> None:
+    _result, calls, sleeps = transport([_err(429, {"retry-after-ms": "2500", "retry-after": "3"})])
+    assert (len(calls), sleeps) == (2, [2.5])
+
+
+def test_a_retry_now_answer_still_spends_the_budget(transport) -> None:
+    """``retry-after: 0`` forever would loop on a time budget; each wait is floored."""
+    result, _calls, sleeps = transport([_err(429, {"retry-after": "0"})] * 2000)
+    assert isinstance(result, httpx.HTTPStatusError)
+    assert min(sleeps) == 1.0
 
 
 def test_quota_status_is_retried_too(transport) -> None:
