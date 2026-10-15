@@ -304,12 +304,10 @@ class SamDetectClient:
     """Adapter onto the SAM 3.1 image server: every ``/segment`` call ships
     the full concept list, decoded in one forward.
 
-    ``concepts`` is the list written last through :meth:`set_concepts`, by two
-    channels, each a wholesale replacement: the mission's declared class union
-    (``search_loop.declare_mission_concepts``) and the agent-owned watchlist
-    (the ``PerceptionDirector`` pushes the full current set, watchlist plus
-    the classes of the boosts riding a flight, on every change). Empty is
-    valid and the common state before the model declares anything:
+    ``concepts`` is the list written last through :meth:`set_concepts`, a
+    wholesale replacement the ``PerceptionDirector`` pushes: the watchlist
+    (the mission's declared classes, in declared order) plus the classes of
+    the boosts riding a flight. Empty is valid and the common state before the model declares anything:
     ``detect`` then returns ``[]``."""
 
     concepts: list[str] = field(default_factory=list)
