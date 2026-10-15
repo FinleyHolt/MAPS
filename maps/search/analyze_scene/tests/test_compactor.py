@@ -141,12 +141,30 @@ def test_a_message_between_folded_turns_keeps_its_place():
     msgs = _head() + _units(2) + [follow_up] + later
     out, n, _ = C._drop_spent_turns(msgs, before=_est(msgs), shed_tokens=_est(msgs),
                                     model="m", tools=None)
-    assert n == 3                               # every spent turn, as before
+    assert n == 3                               # every spent turn
     assert out[2]["content"].startswith("[script so far] (2 earlier turns folded")
     assert out[3] == follow_up
     assert out[4]["content"].startswith("[script so far] (1 earlier turn folded;")
     assert "# c2" in out[4]["content"] and "# c2" not in out[2]["content"]
     assert out[5:] == msgs[9:]                  # the two newest units, verbatim
+
+
+def test_step_5_strips_only_the_blocks_this_fire_made(caplog):
+    earlier = C._script_block(["old = 1"], 1, ["OLDFINDING"])
+    follow_up = {"role": "user", "content": "now the truck"}
+
+    def big(k):
+        return [_call([f"c{k}"]), _dump(f"c{k}", [f"k{k}_{i}" for i in range(300)])]
+
+    msgs = _head() + [earlier] + big(0) + [follow_up] + big(1) + _units(2, 10)
+    target = _est(_head() + [earlier, C._script_block(["x"], 1), follow_up,
+                             C._script_block(["x"], 1)] + _units(2, 10)) + 60
+    with caplog.at_level("INFO", logger=C.log.name):
+        out = _compact(msgs, target)
+    blocks = [m for m in out if C._is_script_block(m)]
+    assert len(blocks) == 3 and out[2] is earlier and out[4] == follow_up
+    assert not [b for b in blocks[1:] if C._FINDINGS_SEP in b["content"]]
+    assert "folded 2 spent turn(s) into 2 script block(s)" in caplog.text
 
 
 def test_a_call_whose_results_are_not_contiguous_is_no_unit():

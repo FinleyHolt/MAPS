@@ -316,6 +316,8 @@ def _drop_spent_turns(
     folded: list[tuple[int, int]] = []
     out = messages
     freed = 0
+    # ponytail: each candidate re-folds and re-measures the whole transcript,
+    # quadratic in the turns folded; measure per span if a fire grows slow.
     for span in candidates:
         folded.append(span)
         out = _folded(messages, folded)
@@ -522,9 +524,10 @@ def compact_transcript(
     if folded_turns:
         output_tokens = input_tokens - freed_fold
         log.info(
-            "compaction folded %d spent turn(s) into a script block, "
-            "freed ~%d tok -> %s/%d",
-            folded_turns, freed_fold, output_tokens, target_input_tokens,
+            "compaction folded %d spent turn(s) into %d script block(s), "
+            "freed ~%d tok -> %s/%d", folded_turns,
+            sum(map(_is_script_block, out)) - sum(map(_is_script_block, messages)),
+            freed_fold, output_tokens, target_input_tokens,
         )
 
     # Steps 2-4.
