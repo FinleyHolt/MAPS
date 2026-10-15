@@ -97,6 +97,51 @@ def test_the_reasoner_s_request_is_the_openai_shape(monkeypatch) -> None:
     assert "reasoning_content" in r.messages[-3] and r.messages[-2]["name"] == "run"
 
 
+def test_the_episode_s_routing_key_is_its_prompt_cache_key(monkeypatch) -> None:
+    """Azure matches a GPT-5.6 prefix cache within a ``prompt_cache_key``; the episode's
+    routing key carries its turns on one. A self-hosted card's body gains no such key."""
+    sent = _serve(monkeypatch)
+    monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "calcity::ep-7")
+    for spec in (GPT_SPEC, TEST_SPEC):
+        r = Reasoner(reasoner_url="http://unused", endpoint_spec=spec)
+        r.append_user("find the truck")
+        r.step_tool_call([])
+    assert sent[0]["prompt_cache_key"] == "calcity::ep-7"
+    assert "prompt_cache_key" not in sent[1]
+    monkeypatch.delenv("SEARCH_LLM_ROUTING_KEY")
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=GPT_SPEC)
+    r.append_user("find the truck")
+    r.step_tool_call([])
+    assert "prompt_cache_key" not in sent[2]
+
+
+def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
+    """A provider caches the longest prefix it has seen byte for byte: under the image
+    cap and the budget, each turn's tools serialize as the last turn's did and its
+    messages array opens with the last turn's bytes."""
+    from maps.search.parse_compile.prompts import served_tools
+
+    sent: list[dict] = []
+
+    def _fake(url, api_key, **kwargs):
+        sent.append(json.loads(json.dumps(kwargs)))  # the bytes as sent, not a live alias
+        return {"choices": [{"finish_reason": "tool_calls", "message": {"content": None, "tool_calls": [
+            {"id": f"c{len(sent)}", "type": "function",
+             "function": {"name": "run", "arguments": "{ \"code\":  \"look()\" }"}}]}}]}
+
+    monkeypatch.setattr(reasoner_agent, "_chat_completions_raw", _fake)
+    r = Reasoner(reasoner_url="http://unused", endpoint_spec=GPT_SPEC, reasoning_effort="xhigh")
+    r.append_vision_user("look 0", [jpeg(64)] * 4)
+    for k in range(1, 5):
+        r.step_tool_call(served_tools())
+        r.append_tool_result(f"c{k}", "run", {"printed": f"turn {k}"})
+        r.append_vision_user(f"look {k}", [jpeg(64)] * 4)
+    assert len(sent) == 4, "VACUITY FLOOR"
+    for prev, cur in zip(sent, sent[1:]):
+        assert json.dumps(cur["tools"]) == json.dumps(prev["tools"])
+        assert json.dumps(cur["messages"]).startswith(json.dumps(prev["messages"])[:-1])
+
+
 def test_the_run_tool_s_documentation_rides_the_system_turn(monkeypatch) -> None:
     """OpenAI refuses a function description over 1,024 characters; the run tool's is far
     longer, so it moves verbatim into the system turn and the tool points at it."""

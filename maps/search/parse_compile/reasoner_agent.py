@@ -235,6 +235,11 @@ class Reasoner:
         # hint that replays nothing a reasoning model does.
         if self.seed is not None and not wire:
             kwargs["seed"] = self.seed
+        # A hosted provider's prefix cache is matched within a key: the
+        # episode's routing key (one request a turn) keeps its turns on one.
+        routing_key = os.environ.get("SEARCH_LLM_ROUTING_KEY")
+        if wire and routing_key:
+            kwargs["prompt_cache_key"] = routing_key
         if self.cancel_event is not None:
             if self.cancel_event.is_set():
                 raise CallCanceled(
