@@ -7,6 +7,7 @@ import json
 import numpy as np
 
 from maps.search.analyze_scene import geom_program as gp
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.search.analyze_scene import row_geometry as RG
 from maps.sws.graph.model import MapObject
 
@@ -27,7 +28,7 @@ def _surface(n=40):
              for i in range(n)}
     nodes["detected_1"] = _node(200, 200, provenance="detected", cls="car")
     nodes["detected_2"] = _node(210, 215, provenance="detected", cls="car")
-    return gp.build_surface_from_graph(nodes.items(), (0.0, 0.0), 2.0)
+    return build_surface_from_graph(nodes.items(), (0.0, 0.0), 2.0)
 
 
 def _served(cands, anchors, program) -> str:

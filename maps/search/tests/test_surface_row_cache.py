@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.search.analyze_scene import geom_program as gp
+from maps.search.analyze_scene import surface
 from maps.sws.graph.model import MapObject
 
 
@@ -23,13 +23,13 @@ def _graph(n=9, name_suffix=""):
 
 
 def _build(nodes):
-    return gp.build_surface_from_graph(nodes.items(), (0.0, 0.0), 2.0)
+    return surface.build_surface_from_graph(nodes.items(), (0.0, 0.0), 2.0)
 
 
 def _uncached(nodes):
-    gp._ROW_CACHE.clear()
+    surface._ROW_CACHE.clear()
     out = _build(nodes)
-    gp._ROW_CACHE.clear()
+    surface._ROW_CACHE.clear()
     return out
 
 
@@ -58,12 +58,12 @@ def test_a_mutated_node_is_rebuilt():
 def test_replacing_every_node_object_still_hits_the_cache():
     """What the ingest fold does: same content, all-new objects."""
     ref = _uncached(_graph())
-    gp._ROW_CACHE.clear()
+    surface._ROW_CACHE.clear()
     _build(_graph())
-    n_after_first = len(gp._ROW_CACHE)
+    n_after_first = len(surface._ROW_CACHE)
     _build(_graph())  # a wholly separate set of node objects, same content
-    assert len(gp._ROW_CACHE) == n_after_first, (
-        n_after_first, len(gp._ROW_CACHE))
+    assert len(surface._ROW_CACHE) == n_after_first, (
+        n_after_first, len(surface._ROW_CACHE))
     assert _build(_graph()) == ref
 
 
@@ -93,22 +93,22 @@ def test_geometry_is_part_of_the_key():
     """The same node under a different origin or cell size is a different row, so the
     geometry cannot be left out of the key."""
     nodes = _graph()
-    a = gp.build_surface_from_graph(nodes.items(), (0.0, 0.0), 2.0)
-    b = gp.build_surface_from_graph(nodes.items(), (1000.0, 0.0), 2.0)
+    a = surface.build_surface_from_graph(nodes.items(), (0.0, 0.0), 2.0)
+    b = surface.build_surface_from_graph(nodes.items(), (1000.0, 0.0), 2.0)
     assert a != b
-    gp._ROW_CACHE.clear()
-    assert b == gp.build_surface_from_graph(nodes.items(), (1000.0, 0.0), 2.0)
+    surface._ROW_CACHE.clear()
+    assert b == surface.build_surface_from_graph(nodes.items(), (1000.0, 0.0), 2.0)
 
 
 def test_overflow_drops_the_cache_rather_than_growing_without_bound():
-    original = gp._ROW_CACHE_MAX
-    gp._ROW_CACHE.clear()
+    original = surface._ROW_CACHE_MAX
+    surface._ROW_CACHE.clear()
     try:
-        gp._ROW_CACHE_MAX = 4
+        surface._ROW_CACHE_MAX = 4
         nodes = _graph(n=6)
         out = _build(nodes)
-        assert len(gp._ROW_CACHE) <= 6, len(gp._ROW_CACHE)
+        assert len(surface._ROW_CACHE) <= 6, len(surface._ROW_CACHE)
         assert out == _uncached(nodes)
     finally:
-        gp._ROW_CACHE_MAX = original
-        gp._ROW_CACHE.clear()
+        surface._ROW_CACHE_MAX = original
+        surface._ROW_CACHE.clear()

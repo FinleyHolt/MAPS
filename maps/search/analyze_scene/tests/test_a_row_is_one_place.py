@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene.geom_program import build_surface
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.sws.graph.model import MapObject
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,9 +35,9 @@ def _row(cells_cols, row=10):
 
 
 def test_two_places_under_one_name_are_two_rows():
-    _c, anchors = build_surface(
-        [], [("prior_1", _way("85th Street", _row(range(0, 10)))),
-             ("prior_2", _way("85th Street", _row(range(400, 410))))],
+    _c, anchors = build_surface_from_graph(
+        [("prior_1", _way("85th Street", _row(range(0, 10)))),
+         ("prior_2", _way("85th Street", _row(range(400, 410))))],
         (0.0, 0.0), 2.0)
     assert len(anchors) == 2, [a["fid"] for a in anchors]
     assert {a["name"] for a in anchors} == {"85th Street"}
@@ -45,9 +45,9 @@ def test_two_places_under_one_name_are_two_rows():
 
 def test_unnamed_features_are_never_folded_together():
     """There is nothing to fold them ON."""
-    _c, anchors = build_surface(
-        [], [("prior_1", _way(None, [[0, 0]])),
-             ("prior_2", _way("", [[0, 1]]))], (0.0, 0.0), 2.0)
+    _c, anchors = build_surface_from_graph(
+        [("prior_1", _way(None, [[0, 0]])),
+         ("prior_2", _way("", [[0, 1]]))], (0.0, 0.0), 2.0)
     assert len(anchors) == 2, [a["fid"] for a in anchors]
 
 
@@ -59,7 +59,7 @@ def test_geometry_is_cut_at_the_edge_of_what_the_tile_covers():
     contour = [[1.0, 21.0], [1.0, 4000.0]]          # runs far north
     way = _way("Neuralia Road", _row(range(0, 1), row=10), contour=contour)
     way.cells = np.asarray([[r, 0] for r in range(0, 20)], dtype=int)
-    _c, anchors = build_surface([], [("prior_1", way)], (0.0, 0.0), 2.0)
+    _c, anchors = build_surface_from_graph([("prior_1", way)], (0.0, 0.0), 2.0)
     ys = [p[1] for ch in anchors[0]["mask"] for p in ch]
     assert max(ys) <= 44.0, ys        # 20 cells * 2 m + one cell of margin
     assert anchors[0]["xy"][1] <= 44.0, anchors[0]["xy"]
@@ -71,7 +71,7 @@ def test_a_feature_wholly_inside_is_not_touched():
     contour = [[1.0, 1.0], [1.0, 19.0]]
     way = _way("Rea Avenue", _row(range(0, 1)), contour=contour)
     way.cells = np.asarray([[r, 0] for r in range(0, 10)], dtype=int)
-    _c, anchors = build_surface([], [("prior_1", way)], (0.0, 0.0), 2.0)
+    _c, anchors = build_surface_from_graph([("prior_1", way)], (0.0, 0.0), 2.0)
     assert anchors[0]["mask"] == [[[1.0, 1.0], [1.0, 19.0]]], anchors[0]["mask"]
 
 
@@ -87,9 +87,9 @@ def test_clipping_preserves_exact_vertex_identity():
 
 
 def test_the_served_point_is_on_the_row_it_belongs_to():
-    _c, anchors = build_surface(
-        [], [("prior_1", _way("85th Street", _row(range(0, 10)))),
-             ("prior_2", _way("85th Street", _row(range(400, 410))))],
+    _c, anchors = build_surface_from_graph(
+        [("prior_1", _way("85th Street", _row(range(0, 10)))),
+         ("prior_2", _way("85th Street", _row(range(400, 410))))],
         (0.0, 0.0), 2.0)
     for r in anchors:
         gap, _a, _b = G.gap_witness(G.mask_geom(r["mask"]),
@@ -102,7 +102,6 @@ def test_the_served_point_is_on_the_row_it_belongs_to():
 
 @pytest.mark.skipif(not _HAS_BAKE, reason="calcity bake not present")
 def test_the_real_bake_lands_every_row_on_the_map():
-    from maps.search.analyze_scene.geom_program import build_surface_from_graph
     from maps.sws.graph.builder import build_object_graph
 
     meta = json.loads((_TILES / "calcity_meta.json").read_text())
@@ -174,7 +173,7 @@ def test_the_flown_pose_is_the_row_s_served_xy():
 
     loop = search_loop(dict(ways), cell_size_m=2.0)
 
-    _c, anchors = build_surface([], ways, (0.0, 0.0), 2.0)
+    _c, anchors = build_surface_from_graph(ways, (0.0, 0.0), 2.0)
     assert anchors, "fixture built no rows"
     for r in anchors:
         flown = loop.node_xy(r["fid"])[0]

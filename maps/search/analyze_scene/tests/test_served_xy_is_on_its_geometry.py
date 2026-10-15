@@ -4,10 +4,7 @@ from __future__ import annotations
 import math
 
 from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene.geom_program import (
-    build_surface,
-    representative_point,
-)
+from maps.search.analyze_scene.surface import build_surface_from_graph, representative_point
 from maps.sws.graph.model import MapObject
 
 
@@ -47,7 +44,7 @@ def _surface():
              ("p_bldg", _node(_BUILDING)),
              ("p_far_a", _node(_FAR_A, name="Raymond Avenue")),
              ("p_far_b", _node(_FAR_B, name="Raymond Avenue"))]
-    _cands, anchors = build_surface([], nodes, (0.0, 0.0), 2.0)
+    _cands, anchors = build_surface_from_graph(nodes, (0.0, 0.0), 2.0)
     return anchors
 
 
@@ -81,7 +78,8 @@ def test_a_measured_position_wins_over_a_derived_one():
     det = ("d_car", _node([(10.0, 10.0), (14.0, 10.0), (14.0, 12.0),
                            (10.0, 12.0), (10.0, 10.0)],
                           world_xy=(11.37, 10.94)))
-    cands, _anchors = build_surface([det], [], (0.0, 0.0), 2.0)
+    det[1].provenance = "detected"
+    cands, _anchors = build_surface_from_graph([det], (0.0, 0.0), 2.0)
     assert cands[0]["xy"] == [11.37, 10.94], cands[0]["xy"]
 
 

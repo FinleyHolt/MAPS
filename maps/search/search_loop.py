@@ -84,11 +84,11 @@ class SearchLoop:
         built once (priors do not move). Under the lock."""
         if self._prior_xy_cache is not None:
             return self._prior_xy_cache
-        from maps.search.analyze_scene.geom_program import build_surface  # noqa: PLC0415
+        from maps.search.analyze_scene.surface import build_surface_from_graph  # noqa: PLC0415
 
         priors = [(f, n) for f, n in self.state.runtime_graph.nodes.items()
                   if n.provenance != "detected"]
-        _c, anchors = build_surface([], priors, self._tile_origin_xy, self._cell_size_m)
+        _c, anchors = build_surface_from_graph(priors, self._tile_origin_xy, self._cell_size_m)
         self._prior_xy_cache = {str(r["fid"]): (float(r["xy"][0]), float(r["xy"][1]))
                                 for r in anchors if r.get("xy")}
         return self._prior_xy_cache
@@ -98,7 +98,7 @@ class SearchLoop:
         its row says it is, the point a flight to it flies: a detection's
         ``world_xy``, else a prior's served row point, else the node's cell
         centroid (a cluster member no row serves). The precedence is
-        ``geom_program.build_surface``'s. None off the graph."""
+        ``surface.build_surface_from_graph``'s. None off the graph."""
         with self._lock:
             node = self.state.runtime_graph.nodes.get(fid)
             if node is None:
@@ -408,7 +408,7 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m):
         semantic_attributes=semantic_attributes,
         cells=None,
         world_contour=world_contour,
-        # the sub-cell position build_surface prefers to the cell centroid
+        # the sub-cell position build_surface_from_graph prefers to the cell centroid
         world_xy=(float(det.world_xy[0]), float(det.world_xy[1])),
     )
 

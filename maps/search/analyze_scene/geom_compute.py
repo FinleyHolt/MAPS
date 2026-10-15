@@ -153,7 +153,7 @@ def points_from_geoms(geoms):
 # Colour matches by FAMILY: perception's usual slip stays inside one (gray
 # reads silver under glare, red reads maroon).
 # Palette word -> family; key order is the order a label's colour is read in
-# (geom_program._color_of).
+# (surface._color_of).
 COLOR_FAMILY = {
     "white": "achromatic", "black": "achromatic", "gray": "achromatic", "silver": "achromatic",
     "red": "red", "blue": "blue", "green": "green", "yellow": "yellow",

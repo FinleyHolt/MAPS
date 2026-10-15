@@ -12,10 +12,10 @@ from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
     _COMPARE_COL_PREFIXES,
-    build_surface_from_graph,
     compact_results,
     run_program,
 )
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.sws.graph.io import load_graph
 
 _HERE = os.path.dirname(os.path.abspath(__file__))

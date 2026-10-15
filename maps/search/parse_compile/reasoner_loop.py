@@ -35,8 +35,8 @@ from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
     MODEL_UNSERVED_COLUMNS,
-    build_surface_from_graph,
 )
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.search.analyze_scene.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR,
     unmatched_query_tokens as _unmatched_query_tokens,

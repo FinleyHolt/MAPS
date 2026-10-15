@@ -4,7 +4,8 @@ from __future__ import annotations
 import pytest
 
 from maps.search.analyze_scene.geom_program import (
-    ProgramError, _grid_cell, build_surface, run_program)
+    ProgramError, _grid_cell, run_program)
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.search.analyze_scene.text_match import (
     find_score, fuzzy_prepare_query, token_idf)
 
@@ -152,8 +153,8 @@ def test_build_surface_stamps_covers_window_geometrically():
                tags={"building": "yes"}, class_name="")
     far = _N(name="Far", centroid=[35, 35], cells=[[35, 35]],
              tags={"building": "yes"}, class_name="")
-    cands, anchors = build_surface(
-        [], [("prior_1", small), ("prior_2", far), ("prior_9", blanket)],
+    cands, anchors = build_surface_from_graph(
+        [("prior_1", small), ("prior_2", far), ("prior_9", blanket)],
         (0.0, 0.0), 2.0)
     rows = {a["fid"]: a for a in anchors}
     assert rows["prior_9"].get("covers_window") is True, rows["prior_9"]
@@ -168,8 +169,8 @@ def test_covering_ref_serves_containment_fact_not_zero_columns():
         {"ref": "r1", "op": "compare",
          "args": {"items": "r0", "refs": ["prior_9"]}},
     ]}
-    # covers_window is stamped at build_surface; stamp it here directly (the
-    # geometric stamp has its own test above).
+    # covers_window is stamped at build_surface_from_graph; stamp it here
+    # directly (the geometric stamp has its own test above).
     anchors[-1]["covers_window"] = True
     out = run_program(cands, anchors, prog)["results"]
     rows = {r["fid"]: r for r in out["r1"]}

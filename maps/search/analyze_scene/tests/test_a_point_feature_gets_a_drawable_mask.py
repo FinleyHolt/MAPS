@@ -1,7 +1,7 @@
 """A row's ``mask`` is what the picture DRAWS, so it has to be a shape."""
 from __future__ import annotations
 
-from maps.search.analyze_scene.geom_program import build_surface
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.sws.graph.model import MapObject
 
 _CELL_M = 2.0
@@ -35,7 +35,7 @@ def _way_node(ring, name=None):
 
 
 def _row(node, fid="prior_1"):
-    _c, anchors = build_surface([], [(fid, node)], _ORIGIN, _CELL_M)
+    _c, anchors = build_surface_from_graph([(fid, node)], _ORIGIN, _CELL_M)
     assert anchors, "the fixture produced no row at all"
     return anchors[0]
 

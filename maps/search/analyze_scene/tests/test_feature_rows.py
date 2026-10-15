@@ -3,9 +3,8 @@
 import numpy as np
 
 from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene.geom_program import (
-    build_surface, run_program,
-)
+from maps.search.analyze_scene.geom_program import run_program
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.sws.graph.model import MapObject
 
 
@@ -26,7 +25,7 @@ def test_each_osm_way_keeps_its_own_row():
             ("prior_3", _road("Lime Avenue", 0, 9)),
             ("prior_7", _road("Lime Avenue", 10, 19)),
             ("prior_1", _way("Oak Street", [[0, 0]]))]
-    _c, anchors = build_surface([], ways, (0.0, 0.0), 2.0)
+    _c, anchors = build_surface_from_graph(ways, (0.0, 0.0), 2.0)
     assert len(anchors) == 4, [a["fid"] for a in anchors]
     lime = [a for a in anchors if a["name"] == "Lime Avenue"]
     assert len(lime) == 3, [a["fid"] for a in lime]
@@ -38,7 +37,7 @@ def test_a_rows_cells_are_its_own_ways_cells():
     ways = [("prior_1", _road("Lime Avenue", 0, 9)),
             ("prior_2", _road("Lime Avenue", 10, 19)),
             ("prior_3", _road("Lime Avenue", 400, 409))]
-    _c, anchors = build_surface([], ways, (0.0, 0.0), 2.0)
+    _c, anchors = build_surface_from_graph(ways, (0.0, 0.0), 2.0)
     by_fid = dict(ways)
     assert len(anchors) == 3
     for row in anchors:
@@ -50,9 +49,9 @@ def test_a_rows_cells_are_its_own_ways_cells():
 
 def test_every_row_is_one_place_and_may_claim_a_centre():
     """One way is one place, so the centre columns read on every named row."""
-    _c, anchors = build_surface(
-        [], [("prior_1", _road("Lime Avenue", 0, 9)),
-             ("prior_2", _road("Lime Avenue", 400, 409))], (0.0, 0.0), 2.0)
+    _c, anchors = build_surface_from_graph(
+        [("prior_1", _road("Lime Avenue", 0, 9)),
+         ("prior_2", _road("Lime Avenue", 400, 409))], (0.0, 0.0), 2.0)
     lime = [a for a in anchors if a["name"] == "Lime Avenue"]
     assert len(lime) == 2, [a["fid"] for a in lime]
     for row in lime:
@@ -73,7 +72,7 @@ def test_a_row_that_is_STILL_several_places_orients_no_side():
     reference that is several places serves its gap and no centre column."""
     speckled = _way(None, [[10, c] for c in range(0, 10)]
                     + [[10, c] for c in range(400, 410)])
-    _c, anchors = build_surface([], [("prior_1", speckled)], (0.0, 0.0), 2.0)
+    _c, anchors = build_surface_from_graph([("prior_1", speckled)], (0.0, 0.0), 2.0)
     assert not G.one_place(anchors[0]["mask"]), anchors[0]["mask"]
     assert anchors[0].get("mask_centroid") is None, anchors[0]
 
@@ -92,7 +91,7 @@ def test_the_surface_carries_cells_and_a_name_repeats_across_its_ways():
     ways = [(f"prior_{i}", _road("Lime Avenue", i * 10, i * 10 + 9))
             for i in range(4)]
     ways.append(("prior_99", _way("Oak Street", [[40, 40], [40, 41]])))
-    _cands, anchors = build_surface([], ways, (0.0, 0.0), 2.0)
+    _cands, anchors = build_surface_from_graph(ways, (0.0, 0.0), 2.0)
     assert len(anchors) == 5
     lime = [a for a in anchors if a["name"] == "Lime Avenue"]
     assert len(lime) == 4, [a["fid"] for a in lime]

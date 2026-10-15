@@ -101,7 +101,7 @@ def test_crossing_boundaries_read_zero_gap():
 
 
 def test_centerline_row_renders_its_termini():
-    from maps.search.analyze_scene.geom_program import build_surface_from_graph
+    from maps.search.analyze_scene.surface import build_surface_from_graph
 
     class _N:
         def __init__(self, **kw):

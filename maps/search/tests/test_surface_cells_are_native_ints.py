@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from maps.search.analyze_scene.row_geometry import cells_of
-from maps.search.analyze_scene.geom_program import build_surface_from_graph
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.sws.graph.model import MapObject
 
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.search.analyze_scene.geom_program import build_surface_from_graph
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.search.tests.fakes import acts_of_block
 from maps.sws.graph.model import MapObject
 
@@ -29,7 +29,6 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
     """A street's initial reply is what it IS, not an arbitrary prefix."""
     from maps.search.analyze_scene.geom_program import (
         _NAME_SET_SHAPE_ROWS,
-        build_surface,
         compact_results,
         run_program,
     )
@@ -48,7 +47,7 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
     ways = [(f"prior_{i}", _way("Neuralia Road",
                                 [[10, c] for c in range(i * 20, i * 20 + 10)]))
             for i in range(n)]
-    _c, anchors = build_surface([], ways, (0.0, 0.0), 2.0)
+    _c, anchors = build_surface_from_graph(ways, (0.0, 0.0), 2.0)
     out = run_program([], [dict(a) for a in anchors],
                       {"ops": [{"ref": "r1", "op": "find",
                                 "args": {"query": "Neuralia Road"}}]})
@@ -68,7 +67,7 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
 
     # A SMALL set still renders: the table is cheap and a reader holds it.
     few = ways[:_NAME_SET_SHAPE_ROWS]
-    _c, anchors = build_surface([], few, (0.0, 0.0), 2.0)
+    _c, anchors = build_surface_from_graph(few, (0.0, 0.0), 2.0)
     out = run_program([], [dict(a) for a in anchors],
                       {"ops": [{"ref": "r1", "op": "find",
                                 "args": {"query": "Neuralia Road"}}]})

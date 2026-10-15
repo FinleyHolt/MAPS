@@ -79,7 +79,7 @@ def test_a_row_whose_tags_are_all_dropped_renders_the_absent_marker():
 
 def test_the_drop_is_a_render_cut_not_a_data_cut():
     """The node keeps every tag, so ``find`` still reaches a dropped key."""
-    from maps.search.analyze_scene.geom_program import _anchor_search_text
+    from maps.search.analyze_scene.surface import _anchor_search_text
 
     class _Node:
         name = "Willmore Road"
@@ -148,7 +148,7 @@ def test_an_absent_key_refusal_names_only_served_columns(op):
 
 
 def test_bake_bookkeeping_tags_never_reach_a_row():
-    from maps.search.analyze_scene.geom_program import _anchor_search_text, _row_tags
+    from maps.search.analyze_scene.surface import _anchor_search_text, _row_tags
 
     class _Node:
         name = ""

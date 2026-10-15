@@ -8,10 +8,8 @@ import os
 import pytest
 
 from maps.search.analyze_scene import text_match as T
-from maps.search.analyze_scene.geom_program import (
-    build_surface_from_graph,
-    run_program,
-)
+from maps.search.analyze_scene.geom_program import run_program
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.sws.graph.io import load_graph
 
 _HERE = os.path.dirname(os.path.abspath(__file__))

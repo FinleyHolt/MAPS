@@ -3,11 +3,8 @@ from __future__ import annotations
 
 
 from maps.search.analyze_scene import text_match as T
-from maps.search.analyze_scene.geom_program import (
-    build_surface,
-    compact_results,
-    run_program,
-)
+from maps.search.analyze_scene.geom_program import compact_results, run_program
+from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.sws.graph.model import MapObject
 
 
@@ -27,7 +24,7 @@ def _prior_surface():
     ]
     dets = [("detected_0", _node(class_name="car", centroid=(5, 5),
                                  provenance="detected"))]
-    return build_surface(dets, priors, (0.0, 0.0), 2.0)
+    return build_surface_from_graph(dets + priors, (0.0, 0.0), 2.0)
 
 
 def test_prior_rows_carry_tags_and_no_class():
@@ -61,7 +58,7 @@ def test_broad_dump_census_renders_tag_counts():
                _node(tags={"building": "yes"} if i % 2 else
                      {"highway": "residential"}, centroid=(i, 0)))
               for i in range(60)]
-    cands, anchors = build_surface([], priors, (0.0, 0.0), 2.0)
+    cands, anchors = build_surface_from_graph(priors, (0.0, 0.0), 2.0)
     out = run_program(cands, anchors, {"ops": [
         {"ref": "r0", "op": "find", "args": {}},
     ]})

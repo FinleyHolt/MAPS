@@ -7,7 +7,7 @@ block imagery covers, every raw tag verbatim except the ground-truth label keys
 (``_PRIVILEGED_KEYS``), the ``name`` when present, the ``osm_id``, and
 ``world_contour``: the source geometry's exact vertices in CityNav local meters
 at 2 dp (a polygon's exterior ring closed, a way open, a node's one vertex),
-which ``build_surface`` serves as the row ``mask``. Nothing is classified or
+which ``build_surface_from_graph`` serves as the row ``mask``. Nothing is classified or
 named, and no feature is dropped beyond "rasterizes to no covered cell".
 ``meta.json`` carries the grid (``bounds``, ``grid_shape``, ``cell_size_m``),
 a caller's ``coordinate_frame`` and ``georef``, and for a city-cache bake
@@ -156,7 +156,7 @@ def _normalise_props(raw: dict[str, Any] | None) -> dict[str, Any]:
         if clean == "source":
             # OSM's own `source` tag (imagery/survey provenance, e.g. "Bing")
             # rides as `source_tag`, a key the search text drops
-            # (geom_program._UNSERVED_TAGS).
+            # (surface._UNSERVED_TAGS).
             clean = "source_tag"
         props[clean] = value
     return props

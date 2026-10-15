@@ -3,9 +3,9 @@ the as-flown replays read such bakes, so the surface never serves that key."""
 
 from types import SimpleNamespace
 
-from maps.search.analyze_scene import geom_program as gp
+from maps.search.analyze_scene.surface import _row_tags
 
 
 def test_a_flown_bake_s_source_stamp_is_not_served():
     node = SimpleNamespace(tags={"source": "osm", "amenity": "school", "levels": 2})
-    assert gp._row_tags(node) == {"amenity": "school"}
+    assert _row_tags(node) == {"amenity": "school"}
