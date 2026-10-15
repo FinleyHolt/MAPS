@@ -223,14 +223,12 @@ class SearchLoop:
         """Make the declared classes the director's watchlist and push it to
         the segmenter. Returns the error the mission serves when the push
         failed, else None."""
-        # The classes SAM segments, canonical, first seen first; a placeholder
-        # class is no class.
-        union = list(dict.fromkeys(
-            c for c in (canon_concept(x) for x in classes)
-            if c and c not in _NULL_CONCEPTS))
+        # The classes SAM segments, canonical; a placeholder class is no
+        # class. The director's push dedups.
+        watch = [c for c in map(canon_concept, classes) if c and c not in _NULL_CONCEPTS]
         with self._lock:
             # never a clean receipt over a segmenter that kept its old classes
-            err = self.state.perception_director.set_watchlist(union)
+            err = self.state.perception_director.set_watchlist(watch)
         if err:
             return (f"the segmenter did not take this declaration "
                     f"({err}); say it again")
