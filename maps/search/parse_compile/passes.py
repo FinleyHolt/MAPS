@@ -91,7 +91,7 @@ def _cover_set_items(accepted: list, said, *, spec, spacing,
     chained greedily by nearest endpoint from the live pose (a member
     reversed when its far end is nearer), dropping a stop within half a
     spacing of one already kept; a chain longer than the flight budget
-    keeps that many evenly spaced stops, its first among them."""
+    keeps that many stops (``spread``)."""
     # ponytail: O(n*m) greedy chaining, not a TSP; order the members
     # optimally if a pass's flown length ever matters.
     members: list[dict] = []
