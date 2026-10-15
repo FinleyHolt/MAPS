@@ -281,11 +281,11 @@ def keyframe_poses(bases: list[Path], t0: float, t1: float, map_name: str) -> li
             t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
             if t0 <= t <= t1:
                 out.append({"t_unix": t, "x": float(xy[0]), "y": float(xy[1]),
-                            "alt_agl_m": _frame_agl(f, map_name), "src": "keyframes"})
+                            "alt_agl_m": frame_agl(f, map_name), "src": "keyframes"})
     return sorted(out, key=lambda f: f["t_unix"])
 
 
-def _frame_agl(frame: dict[str, Any], map_name: str) -> float | None:
+def frame_agl(frame: dict[str, Any], map_name: str) -> float | None:
     """An observation's camera height above the map's ground; None when it records none."""
     alt = frame.get("altitude_m")
     return None if alt is None else float(alt) - GROUND_LEVEL[map_name]
@@ -295,7 +295,7 @@ def _agl(fix, bases: list[Path], events, map_name: str) -> tuple[float | None, s
     """Height above ground at ``fix``: its own (a GNSS fix or an observation's), else the observations' median, else the waypoints' commanded."""
     if fix.get("alt_agl_m") is not None:
         return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
-    alts = [_frame_agl(f, map_name) for f in _frames(bases) if f.get("altitude_m") is not None]
+    alts = [frame_agl(f, map_name) for f in _frames(bases) if f.get("altitude_m") is not None]
     if alts:
         return statistics.median(alts), "keyframes (median)"
     asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]

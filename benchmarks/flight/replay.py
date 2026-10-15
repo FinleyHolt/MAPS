@@ -42,8 +42,8 @@ from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL, RUN_LOG, TOUR_CURSOR
 from benchmarks.citynav.episode_workdir import DETECTIONS_JSONL
 from benchmarks.flight import map_render
-from benchmarks.flight.live_source import check_map, held_record, open_live, ortho_observation
-from benchmarks.flight.measures import run_bases, sortie_of
+from benchmarks.flight.live_source import check_map, coverage_record, held_record, open_live, ortho_observation
+from benchmarks.flight.measures import frame_agl, run_bases, sortie_of
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, converse,
                                        flight_config, summary_line)
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
@@ -312,10 +312,8 @@ class BankSource:
 
     def coverage(self, points, after=None) -> dict[str, Any]:
         best, held = self._best(points)
-        n = sum(held)
         self.last_refusal = ""
-        return {"points": len(points), "held": n, "fraction": n / len(points) if points else 0.0,
-                "best": [(0.0, best) if h else None for h in held], "frames": len(self.bank)}
+        return coverage_record([(0.0, best) if h else None for h in held], len(self.bank))
 
     def coverage_of_each(self, areas) -> list[dict[str, Any]]:
         return [self.coverage(a) for a in areas]
@@ -524,10 +522,8 @@ def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
         from benchmarks.citynav.run_benchmark.config import load_config  # noqa: PLC0415
 
         return float(load_config(config).start_altitude_agl_m)
-    from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
-
     map_name = rec.map_name
-    alts = [float(f["altitude_m"]) - GROUND_LEVEL[map_name] for f in rec.frames if f.get("altitude_m") is not None]
+    alts = [frame_agl(f, map_name) for f in rec.frames if f.get("altitude_m") is not None]
     if not alts and rec.row.get("started_at_utc"):
         t0 = float(rec.row["started_at_utc"])
         t1 = t0 + float(rec.row.get("elapsed_s") or 0.0)

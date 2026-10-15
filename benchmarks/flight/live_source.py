@@ -85,6 +85,15 @@ def held_record(points: int, held: int, seqs: list[int], fetch_failed: int = 0) 
     return {"points": points, "held": held, "seqs": seqs, "fetch_failed": fetch_failed}
 
 
+def coverage_record(best: list[tuple[float, int] | None], frames: int) -> dict[str, Any]:
+    """How much of an area a source holds, as ``coverage`` returns it: per
+    point ``best`` (``(off-nadir degrees, seq)``, or None where nothing holds
+    it), the fraction held, and how many ``frames`` were asked."""
+    held = sum(1 for b in best if b is not None)
+    return {"points": len(best), "held": held, "fraction": (held / len(best)) if best else 0.0, "best": best,
+            "frames": frames}
+
+
 @functools.lru_cache(maxsize=4)
 def _radius(h: int, w: int) -> np.ndarray:
     """Each source pixel's distance from the frame's centre: the seam rule's cost."""
@@ -531,10 +540,8 @@ class LiveSource:
                 # At one angle the fresher frame wins.
                 if best[i] is None or (angle, -seq) < (best[i][0], -best[i][1]):
                     best[i] = (float(angle), seq)
-        held = sum(1 for b in best if b is not None)
         self.last_refusal = ""
-        return {"points": len(points), "held": held,
-                "fraction": (held / len(points)) if points else 0.0, "best": best, "frames": len(rows)}
+        return coverage_record(best, len(rows))
 
     def observe_area(self, points: list[tuple[float, float]], after: float | None = None) -> Observation | None:
         """The ground the pass held over an AREA as one north-up observation:
@@ -619,7 +626,8 @@ class LiveSource:
                          fit["shift_e_m"], fit["shift_n_m"], fit["shift_yaw_deg"], fit["response"], fit["ms"])
             else:
                 log.info("mosaic not registered on the map: %s", fit["why"])
-        camera_z = float(np.median([f.camera_z for f in placed]))
+        obs = ortho_observation(rgb, alpha, (x0, y0, x1, y1), float(np.median([f.camera_z for f in placed])),
+                                tile_ground_z=self.tile_ground_z)
         # The sequence restarts with the camera; the stamp does not.
         newest = max(placed, key=lambda f: f.log_time)
         self.last = {
@@ -628,7 +636,7 @@ class LiveSource:
             "utc": newest.pose.utc,
             "boresight": self.boresight.path.name if self.boresight.path else "datasheet",
             "registration": fused_registration(records) if self.register is not None else None,
-            "corners_xy": [(x0, y1), (x1, y1), (x1, y0), (x0, y0)],
+            "corners_xy": list(obs.ortho_view_corners_xy),
             "mosaic": {"placed": n, "asked": len(want), "ranked": ranked, "gsd_m": round(gsd_m, 3),
                        "fetch_failed": unfetched, "fit": fit, "seqs": [f.seq for f in placed],
                        "off_nadir_deg": [round(f.angle, 2) for f in placed],
@@ -638,7 +646,7 @@ class LiveSource:
             "off_nadir_deg": round(min(f.angle for f in placed), 2),
         }
         self.last_refusal = ""
-        return ortho_observation(rgb, alpha, (x0, y0, x1, y1), camera_z, tile_ground_z=self.tile_ground_z)
+        return obs
 
 
 def check_map(tiles_dir, map_name: str) -> None:
