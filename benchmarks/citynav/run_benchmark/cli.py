@@ -166,10 +166,11 @@ def main() -> int:
 
     if args.attempt_root:
         ((orig_idx, row),) = indexed_rows
+        episode = parse_episode(row, row_index=orig_idx)
         ep = open_episode_dir(args.attempt_root, episode_id=args.episode_id)
         print(ep.dir, flush=True)
         try:
-            _dispatch_one(row=row, orig_idx=orig_idx, idx=0, total=1,
+            _dispatch_one(episode=episode, idx=0, total=1,
                           objects_by_map=objects_by_map, cfg=cfg, split=args.split, recorder=ep.recorder,
                           episode_dir=ep.dir)
         finally:
@@ -196,16 +197,15 @@ def main() -> int:
 
     for i, (orig_idx, row) in enumerate(indexed_rows):
         try:
-            ep_meta = parse_episode(row, row_index=orig_idx)
+            episode = parse_episode(row, row_index=orig_idx)
         except (KeyError, ValueError, TypeError) as exc:
             log.error("row %d: unparseable episode: %s", orig_idx, exc)
             continue
-        ep = open_episode_dir(out_root, episode_id=ep_meta.episode_id)
+        ep = open_episode_dir(out_root, episode_id=episode.episode_id)
         try:
             # The same dispatch bench_fullset's --attempt-root children run.
             result = _dispatch_one(
-                row=row,
-                orig_idx=orig_idx,
+                episode=episode,
                 idx=i,
                 total=len(indexed_rows),
                 objects_by_map=objects_by_map,

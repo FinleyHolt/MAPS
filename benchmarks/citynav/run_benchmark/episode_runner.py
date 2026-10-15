@@ -17,10 +17,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from benchmarks.citynav.adapter import CityNavEpisode, parse_episode
+from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.citynav.eval import score_arrival
 from benchmarks.citynav.live_recorder import LiveRecorder
-from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, tile_stem
+from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, SUCCESS_CRITERION, tile_stem
 from benchmarks.citynav.run_benchmark.assets import BlockAssets, load_episode_assets
 from benchmarks.citynav.run_benchmark.config import RunConfig
 from benchmarks.citynav.run_benchmark.mission_engine import (
@@ -142,25 +142,6 @@ def _success_shape(episode, objects_by_map: dict):
     return next((o.contour for o in objects_by_map.get(episode.map_name) or [] if o.id in tids), None)
 
 
-def score_episode(cfg, episode, objects_by_map: dict, final_xy, trajectory, *,
-                  commit_xy, flew: bool) -> dict:
-    """The episode's metrics for an agent that ended at ``final_xy`` over
-    ``trajectory``, having committed at ``commit_xy``, under this bench's
-    success criterion (``paths.SUCCESS_CRITERION``)."""
-    from benchmarks.citynav import paths as bench_paths
-
-    return score_arrival(
-        criterion=bench_paths.SUCCESS_CRITERION,
-        final_pos_xy=final_xy,
-        target_xy=episode.target_xy,
-        pos_trajectory=trajectory,
-        success_dist_m=cfg.success_radius_m,
-        gt_polygon=_success_shape(episode, objects_by_map),
-        commit_xy=commit_xy,
-        flew=flew,
-    )
-
-
 @dataclass
 class Hydrated:
     """The search stack for one episode, built once by :func:`build_episode`
@@ -266,15 +247,13 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
 
 
 def run_episode(
-    row: dict,
+    episode: CityNavEpisode,
     objects_by_map: dict,
     cfg: RunConfig,
     recorder: LiveRecorder | None = None,
-    row_index: int | None = None,
 ) -> dict | None:
-    """Fly one split row and return its scored record (None: no CityRefer
+    """Fly one episode and return its scored record (None: no CityRefer
     objects on its map, nothing to score)."""
-    episode = parse_episode(row, row_index=row_index)
     if not objects_by_map.get(episode.map_name, []):
         log.warning("  skip %s: no CityRefer objects", episode.episode_id)
         return None
@@ -331,9 +310,16 @@ def run_episode(
     # token (provenance "point"), which no fid prefix classifies.
     last = flights[-1] if flights else {}
     commit_xy = (float(last["resolved_xy"][0]), float(last["resolved_xy"][1])) if flights else None
-    scores = score_episode(cfg, episode, objects_by_map, final_xy,
-                           [(float(p[0]), float(p[1])) for p in visited],
-                           commit_xy=commit_xy, flew=bool(flights))
+    scores = score_arrival(
+        criterion=SUCCESS_CRITERION,
+        final_pos_xy=final_xy,
+        target_xy=episode.target_xy,
+        pos_trajectory=[(float(p[0]), float(p[1])) for p in visited],
+        success_dist_m=cfg.success_radius_m,
+        gt_polygon=_success_shape(episode, objects_by_map),
+        commit_xy=commit_xy,
+        flew=bool(flights),
+    )
     # ``referent_bucket`` is a noisy text proxy (regex over the description).
     scores["referent_bucket"] = classify_referent(episode.description)
     scores["intel_quality"] = episode.intel_quality

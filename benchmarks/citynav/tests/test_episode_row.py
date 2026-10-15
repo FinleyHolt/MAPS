@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from benchmarks.citynav.adapter import parse_episode
 from benchmarks.citynav.run_benchmark import episode_runner as er
 from maps.search.parse_compile.reasoner_loop import MissionReply
 
@@ -41,7 +42,7 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
     cfg = SimpleNamespace(spawn="dataset", start_altitude_agl_m=None, altitude_cap_m=1000.0, success_radius_m=20.0,
                           policy=policy)
-    return er.run_episode(row, {"b_block_1": [object()]}, cfg)
+    return er.run_episode(parse_episode(row), {"b_block_1": [object()]}, cfg)
 
 
 def test_a_flying_episode_records_its_commit_and_final_pose(monkeypatch, tmp_path) -> None:

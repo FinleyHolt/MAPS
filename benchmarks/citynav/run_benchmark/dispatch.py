@@ -9,7 +9,7 @@ import traceback
 from pathlib import Path
 
 from benchmarks import repo_provenance
-from benchmarks.citynav.adapter import parse_episode
+from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.citynav.analysis import rows as _rows
 from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
 from benchmarks.citynav.live_recorder import LiveRecorder
@@ -98,8 +98,7 @@ def is_infra_fault(exc: BaseException) -> bool:
 
 def _dispatch_one(
     *,
-    row: dict,
-    orig_idx: int,
+    episode: CityNavEpisode,
     idx: int,
     total: int,
     objects_by_map: dict,
@@ -114,10 +113,6 @@ def _dispatch_one(
     ended ``transient_failures``, or the runner produced no record.
     """
     t0 = time.monotonic()
-    try:
-        _eid = parse_episode(row, row_index=orig_idx).episode_id
-    except Exception:
-        _eid = f"row{orig_idx}"
 
     # Every row's provenance carries the arm identity, as the manifest stamps it.
     _prov = _cached_run_provenance(arm_stamp(cfg.policy), config_path=cfg.source_path, split=split)
@@ -126,13 +121,7 @@ def _dispatch_one(
         return {**rec, "provenance": _prov, "elapsed_s": round(time.monotonic() - t0, 1)}
 
     try:
-        rec = run_episode(
-            row,
-            objects_by_map,
-            cfg,
-            recorder=recorder,
-            row_index=orig_idx,
-        )
+        rec = run_episode(episode, objects_by_map, cfg, recorder=recorder)
     except Exception as e:
         # exc_info lands the traceback in run.log through the root
         # handler; a bare print_exc reaches only stderr.
@@ -142,7 +131,7 @@ def _dispatch_one(
         # carrying its traceback.
         infra = is_infra_fault(e)
         out = _stamp({
-            "episode_id": _eid,
+            "episode_id": episode.episode_id,
             "status": STATUS_INFRA if infra else STATUS_OK,
             "error": f"{type(e).__name__}: {e}",
             **({} if infra else {"traceback": traceback.format_exc()}),
@@ -153,7 +142,7 @@ def _dispatch_one(
         # The runner skipped the episode (its map has no CityRefer objects):
         # not a scored attempt, so it is excluded and re-queued.
         out = _stamp({
-            "episode_id": _eid,
+            "episode_id": episode.episode_id,
             "status": STATUS_INFRA,
             "error": "no_prediction_unclassified",
         })
@@ -162,7 +151,7 @@ def _dispatch_one(
     m = rec["metrics"]
     # A mission the serve failed out from under is the cluster's weather,
     # not the model's skill: excluded from SR and re-queued.
-    serve_failed = _rows.ended_by({"metrics": m}) in _rows.INFRA_ENDINGS
+    serve_failed = _rows.is_infra_abort(rec)
     out = _stamp({
         **rec,
         "status": STATUS_INFRA if serve_failed else STATUS_OK,
