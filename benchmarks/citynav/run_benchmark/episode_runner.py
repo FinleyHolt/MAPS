@@ -33,7 +33,6 @@ from maps.llm import flight_summary
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import crop_observation
-from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.sam.detect_client import SamDetectClient
 from maps.search.search_loop import SearchLoop
 from maps.search.withhold import withheld
@@ -62,7 +61,7 @@ def make_perception() -> SamDetectClient:
     """The SAM client. Its class set is the concept union of every active
     reasoner thread, pushed via ``set_concepts``; before the first push it
     detects nothing."""
-    return SamDetectClient(concept_provider=ReasonerUnionConceptProvider())
+    return SamDetectClient()
 
 
 def uniform_spawn_xy(
@@ -197,7 +196,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
         GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
         map_name=assets.map_name,
-        sam_setter=perception.concept_provider.set_concepts,
+        sam_setter=perception.set_concepts,
         # The block's ground datum: every height above ground is read off it.
         ortho_ground_z_m=ground,
         # The look tool's crop raster (a live run crops its own imagery).

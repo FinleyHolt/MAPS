@@ -232,7 +232,7 @@ class BaselineHarness:
         if self._sam is None or not concepts:
             return []
         t0 = time.perf_counter()
-        self._sam.concept_provider.set_concepts(concepts)
+        self._sam.set_concepts(concepts)
         out = self._sam.detect(obs)
         self.phase_s["segment"] += time.perf_counter() - t0
         return out

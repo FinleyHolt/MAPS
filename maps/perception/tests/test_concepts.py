@@ -1,12 +1,12 @@
-"""Unit tests for ReasonerUnionConceptProvider."""
+"""``SamDetectClient.set_concepts``."""
 
 from __future__ import annotations
 
-from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+from maps.perception.sam.detect_client import SamDetectClient
 
 
 def test_set_concepts_dedups_and_replaces_wholesale() -> None:
-    provider = ReasonerUnionConceptProvider()
+    provider = SamDetectClient()
     assert provider.concepts == []
     provider.set_concepts(["red car", "tree", "Red Car", "  ", "tree"])
     # Case-insensitive dedup; first-occurrence casing kept, stripped; blanks dropped.

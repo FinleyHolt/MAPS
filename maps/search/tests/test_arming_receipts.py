@@ -97,9 +97,9 @@ def test_a_boost_at_an_unflown_stop_names_it_and_queues_nothing():
 
 
 def test_a_queued_boost_segments_its_flights_in_watchlist_order_until_its_target_flies():
-    from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+    from maps.perception.sam.detect_client import SamDetectClient
 
-    prov = ReasonerUnionConceptProvider()
+    prov = SamDetectClient()
     loop = search_loop(sam_setter=prov.set_concepts)
     car, pool = "car", "pool"
     loop.declare_mission_concepts([car, pool])

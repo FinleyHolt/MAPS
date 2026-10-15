@@ -85,7 +85,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
                                    grid_shape=(10, 10)),
             episode=SimpleNamespace(map_name="calcity", description="the largest building"),
             sensor=None, tile_frame=None, search_loop=loop,
-            perception=SimpleNamespace(detect=lambda obs: [], concept_provider=SimpleNamespace(concepts=[])))
+            perception=SimpleNamespace(detect=lambda obs: [], concepts=[]))
         return me.MissionSession(h, observe=lambda: frame)
 
     return make

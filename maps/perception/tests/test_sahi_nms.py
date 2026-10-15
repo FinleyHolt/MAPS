@@ -15,7 +15,6 @@ import numpy as np
 import pytest
 
 from maps.perception.tests.regions import full, region_of, square_view
-from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import SamDetectClient, _png_wire_bytes
 from maps.util.mask_codec import decode_mask_crop, encode_mask_record
@@ -129,9 +128,7 @@ def _build_tile_case():
     masks. The rgb is a deterministic gradient so each tile's PNG is
     distinct and the content-keyed mock is never degenerate."""
     H, W = 1008, 1512  # 1 row x 2 cols of native 1008 tiles: c0 in {0, 504}
-    provider = ReasonerUnionConceptProvider()
-    provider.set_concepts(["car"])
-    client = SamDetectClient(concept_provider=provider)
+    client = SamDetectClient(concepts=["car"])
     bounds = client._tile_bounds(H, W)
     assert bounds == [(0, 1008, 0, 1008), (0, 1008, 504, 1512)]
 

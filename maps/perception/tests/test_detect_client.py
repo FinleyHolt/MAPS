@@ -7,7 +7,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.observation import Observation
 from maps.perception.sam.detect_client import _SAM_INPUT_SIZE, SamDetectClient
 from maps.util.mask_codec import encode_mask_record
@@ -56,9 +55,7 @@ def adapter(monkeypatch):
     from maps.perception.sam import detect_client as dc
 
     monkeypatch.setattr(dc, "MIN_AREA_PX", 1)
-    provider = ReasonerUnionConceptProvider()
-    provider.set_concepts(["building"])
-    return SamDetectClient(concept_provider=provider)
+    return SamDetectClient(concepts=["building"])
 
 
 def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):

@@ -312,7 +312,7 @@ class MissionSession:
             "cue": episode.description,
         }
         if not withheld("look_for"):
-            report["watchlist"] = list(h.perception.concept_provider.concepts)
+            report["watchlist"] = list(h.perception.concepts)
         return report
 
 

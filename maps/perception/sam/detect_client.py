@@ -12,11 +12,11 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from typing import Iterable
 
 import numpy as np
 
 from maps.perception.base import DetectedObject
-from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.geometry.geolocate import (
     project_mask_to_world_ortho,
 )
@@ -302,9 +302,17 @@ _DECODE_WORKERS = 4
 @dataclass
 class SamDetectClient:
     """Adapter onto the SAM 3.1 image server: every ``/segment`` call ships
-    the full concept list, decoded in one forward."""
+    the full concept list, decoded in one forward.
 
-    concept_provider: ReasonerUnionConceptProvider
+    ``concepts`` is the list written last through :meth:`set_concepts`, by two
+    channels, each a wholesale replacement: the mission's declared class union
+    (``search_loop.declare_mission_concepts``) and the agent-owned watchlist
+    (the ``PerceptionDirector`` pushes the full current set, watchlist plus
+    the classes of the boosts riding a flight, on every change). Empty is
+    valid and the common state before the model declares anything:
+    ``detect`` then returns ``[]``."""
+
+    concepts: list[str] = field(default_factory=list)
     # SAHI tiles whose ``/segment`` gave no usable response after retries,
     # over this client's life (one episode; the row's ``sam_tiles_failed``).
     # A frame with some failed tiles is partial-blind, not empty.
@@ -313,8 +321,20 @@ class SamDetectClient:
         default_factory=threading.Lock, init=False, repr=False, compare=False
     )
 
+    def set_concepts(self, concepts: Iterable[str]) -> None:
+        """Replace the list: case-insensitive dedup in first-seen order,
+        entries stripped, blanks dropped."""
+        seen: set[str] = set()
+        out: list[str] = []
+        for s in concepts or []:
+            key = (s or "").strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(s.strip())
+        self.concepts = out
+
     def detect(self, obs: Observation) -> list[DetectedObject]:
-        """Detect the provider's concepts on one frame; ``[]`` with no
+        """Detect ``concepts`` on one frame; ``[]`` with no
         concepts or no picture."""
         if obs.rgb is None:
             return []
@@ -323,7 +343,7 @@ class SamDetectClient:
                 "SamDetectClient.detect requires obs.ortho_view_corners_xy "
                 "(the view square a mask projects through)"
             )
-        concepts = list(self.concept_provider.concepts)
+        concepts = list(self.concepts)
         return self._segment(obs, concepts) if concepts else []
 
     @staticmethod

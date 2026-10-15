@@ -110,7 +110,7 @@ def test_the_bench_resolves_its_sensor_as_the_flight_does(monkeypatch) -> None:
     loop = SimpleNamespace(start=lambda g: None)
     monkeypatch.setattr(er, "_episode_graph", lambda stem, assets: None)
     monkeypatch.setattr(er, "start_altitude_m", lambda cfg, m, z: (100.0, 0.0))
-    monkeypatch.setattr(er, "make_perception", lambda: SimpleNamespace(concept_provider=SimpleNamespace(set_concepts=None)))
+    monkeypatch.setattr(er, "make_perception", lambda: SimpleNamespace(set_concepts=None))
     monkeypatch.setattr(er, "SearchLoop", lambda *a, **kw: loop)
     assets = SimpleNamespace(grid_shape=(2, 2), cell_size_m=1.0, map_name="b_block_1",
                              bounds=SimpleNamespace(x_min=0.0, y_min=0.0))

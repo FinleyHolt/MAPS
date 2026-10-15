@@ -93,10 +93,10 @@ def serves(monkeypatch):
 
     from benchmarks.citynav.run_benchmark import episode_runner
 
-    from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+    from maps.perception.sam.detect_client import SamDetectClient
 
-    seen = SimpleNamespace(detect=lambda obs: [], reset=lambda: None,
-                           concept_provider=ReasonerUnionConceptProvider(), sahi_tiles_failed=0)
+    seen = SamDetectClient()
+    seen.detect = lambda obs: []
     monkeypatch.setattr(episode_runner, "make_perception", lambda: seen)
     return sent
 
@@ -156,15 +156,14 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity,
     from benchmarks.citynav.run_benchmark import episode_runner
     from benchmarks.flight import mission as M
     from maps.llm import endpoint_spec
-    from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
+    from maps.perception.sam.detect_client import SamDetectClient
 
-    monkeypatch.setattr(episode_runner, "make_perception", lambda: SimpleNamespace(
-        detect=lambda obs: [], concept_provider=ReasonerUnionConceptProvider()))
+    monkeypatch.setattr(episode_runner, "make_perception", SamDetectClient)
     endpoint_spec.install_spec(endpoint_spec.discover_from_env())
     h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=914.4)
     h.search_loop.declare_mission_concepts(["car"])
     h.search_loop.state.perception_director.watchlist_apply(["tree"], [])
-    assert h.perception.concept_provider.concepts == ["car", "tree"]
+    assert h.perception.concepts == ["car", "tree"]
 
 
 def test_a_mission_hydrated_at_a_commanded_height_flies_at_that_height(calcity, serves, monkeypatch):

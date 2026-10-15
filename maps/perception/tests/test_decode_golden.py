@@ -10,7 +10,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from maps.perception.sam.concept_provider import ReasonerUnionConceptProvider
 from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import SamDetectClient
 from maps.perception.tests.regions import square_view
@@ -62,9 +61,7 @@ def _build_case():
 
 
 def _run():
-    provider = ReasonerUnionConceptProvider()
-    provider.set_concepts(["car"])
-    client = SamDetectClient(concept_provider=provider)
+    client = SamDetectClient(concepts=["car"])
     dets, obs = _build_case()
     return client._detections(
         obs, [(dc.record_region(d, (H, W)), d["label"], d["object_id"], d["score"]) for d in dets]

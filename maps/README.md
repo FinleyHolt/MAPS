@@ -32,7 +32,7 @@ detections into the graph) and returns the flight report the model reads.
 | The world-state graph: map features and detected nodes, their upsert and serialization | `sws/graph/` |
 | The orthographic observation: a pose to a cropped window of the raster | `perception/observation.py`, `perception/ortho/` |
 | Sensor specs (the C-12 Oryx, the CityNav nadir camera) and pixel-to-world projection | `perception/geometry/` |
-| The SAM 3.1 client and the classes it is asked for | `perception/sam/detect_client.py`, `perception/sam/concept_provider.py` |
+| The SAM 3.1 client and the classes it is asked for | `perception/sam/detect_client.py` |
 | Detections stamped onto the tile grid | `perception/ortho/detection_stamping.py` |
 | World-space tracking of detections across flights | `perception/world_tracker.py` |
 | Seen colour of a detection | `perception/viz/color.py` |
