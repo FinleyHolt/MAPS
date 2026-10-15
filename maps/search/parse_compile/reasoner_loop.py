@@ -511,9 +511,9 @@ class _Mission:
     def _rebuild_ns_rows(self) -> None:
         # cands win on fid collision.
         self._ns_rows.clear()
-        for _key in ("cands", "anchors"):
-            for _r in self.ns.get(_key) or []:
-                self._ns_rows.setdefault(str(_r["fid"]), _r)
+        for key in ("cands", "anchors"):
+            for r in self.ns.get(key) or []:
+                self._ns_rows.setdefault(str(r["fid"]), r)
 
     def _point(self, tok) -> list[float] | None:
         """THE place a token names, as [x, y] at 2 dp: a live surface fid, a
@@ -585,10 +585,10 @@ class _Mission:
         (never a silent rotation); ``(None, "")`` with no stance."""
         if self.standing_handle is None:
             return None, ""
-        _sv = self.staged_viewpoints[self.standing_handle]
-        return (list(_sv["up_unit"]),
-                f"image-up = {_sv['handle']}'s facing "
-                f"(bearing {_sv['bearing_deg']})")
+        sv = self.staged_viewpoints[self.standing_handle]
+        return (list(sv["up_unit"]),
+                f"image-up = {sv['handle']}'s facing "
+                f"(bearing {sv['bearing_deg']})")
 
     def _map_features_cached(self) -> list[dict]:
         if self._map_feats_version != self.carry.version:
@@ -596,10 +596,10 @@ class _Mission:
             self._map_feats = map_features(self.ctx)
         return self._map_feats
 
-    def _loop_breaker_facts(self, _n: int) -> str:
+    def _loop_breaker_facts(self, n: int) -> str:
         c_n, a_n, cols, more = self._census(8)
         parts = [
-            f" This error class has now occurred {_n}x.",
+            f" This error class has now occurred {n}x.",
             f" Live surface: {_live_counts(c_n, a_n, ';')}.",
         ]
         if cols:
@@ -620,22 +620,22 @@ class _Mission:
         columns and the " (+N more)" past them."""
         c_n = len(self.ns.get("cands") or [])
         a_n = len(self.ns.get("anchors") or [])
-        cols = sorted({k for _row in self.row_latest.values()
-                       for k, _v in _row.items()
+        cols = sorted({k for row in self.row_latest.values()
+                       for k, v in row.items()
                        if k not in MODEL_UNSERVED_COLUMNS
-                       and _v not in (None, "")})
+                       and v not in (None, "")})
         more = f" (+{len(cols) - cap} more)" if len(cols) > cap else ""
         return c_n, a_n, cols[:cap], more
 
-    def _repeated_rejection_state(self, err: str, _n: int, _consec: int) -> str:
+    def _repeated_rejection_state(self, err: str, n: int, consec: int) -> str:
         """The 3rd-consecutive-rejection fact, served instead of the remedy
         and census again: the counts, the rejection's first clause and the
         live state."""
-        _first = str(err).split(". ", 1)[0].strip().rstrip(".")
+        first = str(err).split(". ", 1)[0].strip().rstrip(".")
         c_n, a_n, cols, more = self._census(12)
         return (
-            f"rejected again -- the same error class, {_consec}x "
-            f"consecutively ({_n}x): {_first}. The full "
+            f"rejected again -- the same error class, {consec}x "
+            f"consecutively ({n}x): {first}. The full "
             f"rejection text was served at its 1st occurrence and the "
             f"live-surface census at its 2nd (both above in this "
             f"conversation, unchanged). The executor is deterministic on "
@@ -649,209 +649,209 @@ class _Mission:
         the live census, then (3rd consecutive on) the repetition fact
         alone. A shape error gets only its count. A successful call resets
         the consecutive streak, never the class count."""
-        _sig = self._err_class_sig(err if sig_of is None else sig_of)
-        _n = self._err_class_counts[_sig] = self._err_class_counts.get(_sig, 0) + 1
-        if self._err_sig == _sig:
+        sig = self._err_class_sig(err if sig_of is None else sig_of)
+        n = self._err_class_counts[sig] = self._err_class_counts.get(sig, 0) + 1
+        if self._err_sig == sig:
             self._err_n += 1
         else:
-            self._err_sig, self._err_n = _sig, 1
-        _consec = self._err_n
-        if _n < 2:
+            self._err_sig, self._err_n = sig, 1
+        consec = self._err_n
+        if n < 2:
             return err
         # The escalation is a new sentence; a caret line is no sentence.
         if not err.endswith((".", "!", "?", "^")):
             err += "."
-        _SHAPE_MARKERS = ("unknown ref", "is a result handle",
+        SHAPE_MARKERS = ("unknown ref", "is a result handle",
                           "syntax error")
-        if any(m in err for m in _SHAPE_MARKERS):
-            return err + f" This error class has now occurred {_n}x."
-        if _consec >= 3:
-            return self._repeated_rejection_state(err, _n, _consec)
-        return err + self._loop_breaker_facts(_n)
+        if any(m in err for m in SHAPE_MARKERS):
+            return err + f" This error class has now occurred {n}x."
+        if consec >= 3:
+            return self._repeated_rejection_state(err, n, consec)
+        return err + self._loop_breaker_facts(n)
 
     def _dispatch_analyze_scene(self, ops, *, answer_ref=""):
-        _key = _program_dedup_key(ops)
-        _prev = self._programs_seen.get(_key) if _key is not None else None
-        if _prev is not None and _prev[0] == self.carry.version:
+        key = _program_dedup_key(ops)
+        prev = self._programs_seen.get(key) if key is not None else None
+        if prev is not None and prev[0] == self.carry.version:
             # A one-line reference, never a payload; the emission's own
             # labels alias the stored handles so nothing downstream can tell
             # it from a re-run.
-            self.carry.alias(_prev[2], ops)
-            if self._dedup_key == _key:
+            self.carry.alias(prev[2], ops)
+            if self._dedup_key == key:
                 self._dedup_n += 1
             else:
-                self._dedup_key, self._dedup_n = _key, 1
+                self._dedup_key, self._dedup_n = key, 1
             if self._dedup_n >= 2:
-                _c_n, _a_n, _dcols, _ = self._census(12)
-                _cols_s = ("; columns live: " + ", ".join(_dcols)
-                           if _dcols else "")
+                c_n, a_n, dcols, _ = self._census(12)
+                cols_s = ("; columns live: " + ", ".join(dcols)
+                           if dcols else "")
                 return {"note": _DEDUP_REPEAT_NOTE.format(
                     n=_ordinal(self._dedup_n),
-                    counts=_live_counts(_c_n, _a_n), cols=_cols_s)}
-            _lf = not withheld("look_for")
+                    counts=_live_counts(c_n, a_n), cols=cols_s)}
+            lf = not withheld("look_for")
             return {"note": _DEDUP_NOTE.format(
-                turn=_prev[1], no_look_for=", no look_for(..., at=)" if _lf else "",
-                look_for=", look_for(..., at=)" if _lf else "")}
-        _raw_sink: dict = {}
+                turn=prev[1], no_look_for=", no look_for(..., at=)" if lf else "",
+                look_for=", look_for(..., at=)" if lf else "")}
+        raw_sink: dict = {}
         self.carry.ensure_fresh(program_reads(ops))
         out = run_ops(ops, namespace=self.ns,
-                      raw_sink=_raw_sink,
+                      raw_sink=raw_sink,
                       seed_results=self.carry.rows,
                       preflight=self.preflight,
                       answer_ref=answer_ref)
         if "error" in out:
             # The failing op keeps one op's errors their own class.
-            _err = str(out["error"])
+            err = str(out["error"])
             out = {**out, "error": self._loop_broken_error(
-                _err, sig_of=f"{_err}|{_raw_sink.get('error_op', '')}")}
+                err, sig_of=f"{err}|{raw_sink.get('error_op', '')}")}
         else:
             self._err_sig, self._err_n = None, 0
             self._dedup_key, self._dedup_n = None, 0
-            if _key is not None:
-                self._programs_seen[_key] = (self.carry.version, self.turn_idx,
+            if key is not None:
+                self._programs_seen[key] = (self.carry.version, self.turn_idx,
                                              ops)
-            self.carry.record(ops, _raw_sink["results"])
-            for _rows in _raw_sink["results"].values():
-                for _row in _rows:
-                    if _row.get("fid"):
-                        self.row_latest[str(_row["fid"])] = _row
+            self.carry.record(ops, raw_sink["results"])
+            for rows in raw_sink["results"].values():
+                for row in rows:
+                    if row.get("fid"):
+                        self.row_latest[str(row["fid"])] = row
         return out
 
     def _watching_trailer(self) -> list:
         """The armed watchlist with each class's live detection count."""
         counts: dict[str, int] = {}
-        for _r in self.ns.get("cands") or []:
-            if str(_r["fid"]).startswith("detected_"):
-                _c = str(_r.get("class") or "?")
-                counts[_c] = counts.get(_c, 0) + 1
+        for r in self.ns.get("cands") or []:
+            if str(r["fid"]).startswith("detected_"):
+                cls = str(r.get("class") or "?")
+                counts[cls] = counts.get(cls, 0) + 1
         return [f"{c} ({counts.get(c, 0)} detected)" for c in self.mission_sam]
 
-    def _mint_rows(self, _new_fids: list, _what: str):
+    def _mint_rows(self, new_fids: list, what: str):
         """The rows a flight or a pass added -> the note naming their new rN
         handle; None (and no handle) when nothing was added."""
-        if not _new_fids:
+        if not new_fids:
             return None
         while f"r{self.plan_rn[0]}" in self._code_names:
             self.plan_rn[0] += 1
-        _h = f"r{self.plan_rn[0]}"
+        h = f"r{self.plan_rn[0]}"
         self.plan_rn[0] += 1
-        self._code_names.add(_h)
-        self._code_minted.append(_h)
-        self.carry.mint(_h, [self._ns_rows[_f] for _f in _new_fids])
-        self._those = _h
-        return (f"{_h} — the {len(_new_fids)} rows this {_what} added; "
-                f"the handle is bound, so {_h}, {_h}[0] and "
-                f"{_h}.order(...) all reach them")
+        self._code_names.add(h)
+        self._code_minted.append(h)
+        self.carry.mint(h, [self._ns_rows[f] for f in new_fids])
+        self._those = h
+        return (f"{h} — the {len(new_fids)} rows this {what} added; "
+                f"the handle is bound, so {h}, {h}[0] and "
+                f"{h}.order(...) all reach them")
 
-    def _pick_next(self, _queue: list, cover: str | None) -> int:
+    def _pick_next(self, queue: list, cover: str | None) -> int:
         """The queue index to fly next: in a pass, a stop the recording
         already holds flies first; otherwise the head."""
-        if cover is None or len(_queue) < 2 or self.mission_spec.held_now is None:
+        if cover is None or len(queue) < 2 or self.mission_spec.held_now is None:
             return 0
         try:
-            _held = self.mission_spec.held_now(
-                [(str(_it.get("target_fid") or ""), self._point(_it.get("target_fid")))
-                 for _it in _queue])
-        except Exception as _exc:  # noqa: BLE001 - the order is a convenience, never a fault
-            log.warning("%s pass: held_now failed: %s", self.rid_tag, _summarise_exc(_exc))
+            held = self.mission_spec.held_now(
+                [(str(it.get("target_fid") or ""), self._point(it.get("target_fid")))
+                 for it in queue])
+        except Exception as exc:  # noqa: BLE001 - the order is a convenience, never a fault
+            log.warning("%s pass: held_now failed: %s", self.rid_tag, _summarise_exc(exc))
             return 0
-        _pick = next((_i for _i, _h in enumerate(_held) if _h), 0)
-        if _pick:
+        pick = next((i for i, h in enumerate(held) if h), 0)
+        if pick:
             log.info("%s pass: %s taken first, the recording holds it",
-                     self.rid_tag, _queue[_pick].get("target_fid"))
-        return _pick
+                     self.rid_tag, queue[pick].get("target_fid"))
+        return pick
 
-    def _snap_to_row(self, _item: dict) -> str | None:
+    def _snap_to_row(self, item: dict) -> str | None:
         """A point target within 1 m of a row flies as that row's fid; the
         point it was asked as, or None when nothing snapped."""
-        _pt = parse_xy_token(_item["target_fid"])
-        if _pt is None:
+        pt = parse_xy_token(item["target_fid"])
+        if pt is None:
             return None
-        _best, _bd = None, 1.0
-        for _bf, _brow in self._ns_rows.items():
-            _bxy = look_xy(_brow)
-            if _bxy is None:
+        best, bd = None, 1.0
+        for bf, brow in self._ns_rows.items():
+            bxy = look_xy(brow)
+            if bxy is None:
                 continue
-            _d = ((_bxy[0] - _pt[0]) ** 2 + (_bxy[1] - _pt[1]) ** 2) ** 0.5
-            if _d < _bd:
-                _best, _bd = _bf, _d
-        if _best is None:
+            d = ((bxy[0] - pt[0]) ** 2 + (bxy[1] - pt[1]) ** 2) ** 0.5
+            if d < bd:
+                best, bd = bf, d
+        if best is None:
             return None
-        _snap_from = _item["target_fid"]
-        _item["target_fid"] = _best
-        return _snap_from
+        snap_from = item["target_fid"]
+        item["target_fid"] = best
+        return snap_from
 
-    def _flight_view(self, _item: dict, _report: dict) -> None:
+    def _flight_view(self, item: dict, report: dict) -> None:
         """THE FLIGHT SHOWS WHAT IT SAW: the target's own look, centred on
         the row it asked for (a stop flown again centres on the stop's
         point), queued for the next message and named in the report."""
-        _tfid = str(_item.get("target_fid") or "")
-        _trow = self._ns_rows.get(_tfid)
-        _txy = look_xy(_trow)
+        tfid = str(item.get("target_fid") or "")
+        trow = self._ns_rows.get(tfid)
+        txy = look_xy(trow)
         try:
-            _fv = self.look_renderer([{
-                "center_fid": _tfid if _txy else "",
-                "center_xy": (list(_txy) if _txy
-                              else list(_report["pose_xy"])),
+            fv = self.look_renderer([{
+                "center_fid": tfid if txy else "",
+                "center_xy": (list(txy) if txy
+                              else list(report["pose_xy"])),
                 "center_label": (
-                    look_label(_tfid, _trow, is_target=True)
-                    if _txy else (_tfid or "the stop")),
-                "center_boundary": look_outline(_trow) if _txy else None,
+                    look_label(tfid, trow, is_target=True)
+                    if txy else (tfid or "the stop")),
+                "center_boundary": look_outline(trow) if txy else None,
                 "marks": [],
             }])
-        except Exception as _exc:  # noqa: BLE001 - never crash a flight
+        except Exception as exc:  # noqa: BLE001 - never crash a flight
             log.warning("%s flight view render failed: %s",
-                        self.rid_tag, _summarise_exc(_exc))
-            _fv = []
-        _fj = [c["jpeg"] for c in _fv if c.get("jpeg")]
-        if not _fj:
+                        self.rid_tag, _summarise_exc(exc))
+            fv = []
+        fj = [c["jpeg"] for c in fv if c.get("jpeg")]
+        if not fj:
             return
-        _fv_text = _look_vision_text(_fv)
-        _shown = not withheld("images")
-        _fv_note = ("the view follows." if _shown else
+        fv_text = _look_vision_text(fv)
+        shown = not withheld("images")
+        fv_note = ("the view follows." if shown else
                     _PICTURE_WITHHELD_OF.format("view"))
-        if _shown:
-            _deliver_frames(_fj, self._block_frames)
-        self.pending_vision.append((_fv_text, _fj if _shown else []))
-        _add_note(_report, _fv_note)
+        if shown:
+            _deliver_frames(fj, self._block_frames)
+        self.pending_vision.append((fv_text, fj if shown else []))
+        _add_note(report, fv_note)
 
-    def _after_flight(self, _report: dict, _fids_before: set,
+    def _after_flight(self, report: dict, fids_before: set,
                       cover: str | None) -> None:
         """A flight that flew: count it, record its stop, re-derive the
         surface, and (outside a pass) mint the rows it added."""
         self.turn_flights += 1
         self.flights += 1
-        _pxy = _report["pose_xy"]
-        self._plan_stops[str(_report["stop_id"]).strip().lower()] = [
-            float(_pxy[0]), float(_pxy[1])]
+        pxy = report["pose_xy"]
+        self._plan_stops[str(report["stop_id"]).strip().lower()] = [
+            float(pxy[0]), float(pxy[1])]
         self._world_moved()
         # The flight's new rows (the surface diff) mint a handle; a pass
         # mints once, around the whole of itself.
         if cover is None:
-            _m = self._mint_rows([_f for _f in self._ns_rows
-                                  if _f not in _fids_before], "flight")
-            if _m is not None:
-                _report["new_rows"] = _m
+            m = self._mint_rows([f for f in self._ns_rows
+                                  if f not in fids_before], "flight")
+            if m is not None:
+                report["new_rows"] = m
         self.preflight = False
 
-    def _fly_moves(self, _accepted: list, _item_errors: list,
+    def _fly_moves(self, accepted: list, item_errors: list,
                    cover: str | None = None) -> dict:
         """Fly each entry in order; after each flight the surface re-derives
         and the rows it added mint an rN handle. ``cover`` (an explore) makes
         the loop ONE pass: no per-stop view, one handle, one ack."""
-        _reports: list[dict] = []
-        _cover_before = set(self._ns_rows) if cover is not None else None
-        _clock_cut = False
-        _queue = list(_accepted)
-        while _queue:
-            _item = _queue.pop(self._pick_next(_queue, cover))
+        reports: list[dict] = []
+        cover_before = set(self._ns_rows) if cover is not None else None
+        clock_cut = False
+        queue = list(accepted)
+        while queue:
+            item = queue.pop(self._pick_next(queue, cover))
             if cover is not None:
                 # The rest of the pass rides every stop, for the crew.
-                _item["pass_ahead"] = [
-                    [float(_xy[0]), float(_xy[1])] for _xy in
-                    (self._point(_it.get("target_fid")) for _it in _queue) if _xy]
-            _cut = self.turn_flights >= self.mission_spec.flight_budget
-            if _cut:
+                item["pass_ahead"] = [
+                    [float(xy[0]), float(xy[1])] for xy in
+                    (self._point(it.get("target_fid")) for it in queue) if xy]
+            cut = self.turn_flights >= self.mission_spec.flight_budget
+            if cut:
                 log.warning("%s flight backstop hit (%d flights)",
                             self.rid_tag, self.mission_spec.flight_budget)
             elif (self.mission_spec.deadline_epoch is not None
@@ -860,84 +860,84 @@ class _Mission:
                 # keeps its turns and its own commit.
                 # ponytail: checked between stops, so one slow stop still
                 # overruns by its own duration.
-                if not _clock_cut:
+                if not clock_cut:
                     log.warning(
                         "%s wall-clock backstop hit (%d flights, %.0f s past "
                         "the deadline)", self.rid_tag, self.turn_flights,
                         time.time() - self.mission_spec.deadline_epoch)
-                _cut = _clock_cut = True
-            if _cut:
-                _item_errors.append({"target_fid": _item["target_fid"],
+                cut = clock_cut = True
+            if cut:
+                item_errors.append({"target_fid": item["target_fid"],
                                      "error": "not flown."})
                 continue
-            _snap_from = self._snap_to_row(_item)
-            _fids_before = set(self._ns_rows)
-            _report = self.mission_spec.fly(dict(_item))
-            if _snap_from:
-                _report.setdefault(
+            snap_from = self._snap_to_row(item)
+            fids_before = set(self._ns_rows)
+            report = self.mission_spec.fly(dict(item))
+            if snap_from:
+                report.setdefault(
                     "note",
-                    f"{_snap_from} is {_item['target_fid']}"
+                    f"{snap_from} is {item['target_fid']}"
                     "'s own position -- flown as that fid.")
-            if "error" not in _report:
-                if (not _report.get("new_detections") and not self.mission_sam
+            if "error" not in report:
+                if (not report.get("new_detections") and not self.mission_sam
                         and not withheld("look_for")):
-                    _wl_note = ('the watchlist is empty -- nothing is '
+                    wl_note = ('the watchlist is empty -- nothing is '
                                 'segmented on any flight; call '
                                 'look_for("<class>") to see detections')
-                    _add_note(_report, _wl_note)
+                    _add_note(report, wl_note)
                 # A pass renders no per-stop view.
                 if cover is None:
-                    self._flight_view(_item, _report)
-                self._after_flight(_report, _fids_before, cover)
-            _reports.append(_report)
+                    self._flight_view(item, report)
+                self._after_flight(report, fids_before, cover)
+            reports.append(report)
         if cover is not None:
-            return self._cover_ack(cover, _reports, _cover_before, _item_errors)
-        _mv_ack: dict = {"flown": [_served_flight(r) for r in _reports]}
-        if _item_errors:
-            _mv_ack["rejected"] = _item_errors
-        return _mv_ack
+            return self._cover_ack(cover, reports, cover_before, item_errors)
+        mv_ack: dict = {"flown": [_served_flight(r) for r in reports]}
+        if item_errors:
+            mv_ack["rejected"] = item_errors
+        return mv_ack
 
-    def _cover_ack(self, cover: str, _reports: list, _before: set,
-                   _item_errors: list) -> dict:
+    def _cover_ack(self, cover: str, reports: list, before: set,
+                   item_errors: list) -> dict:
         """One explore's flight reports -> the one ack of the pass. The ack
         states that the standing answer is the pass's last stop."""
-        _ok = [r for r in _reports if "error" not in r]
-        _ack: dict = {"explored": cover, "stops": len(_ok)}
-        if _ok:
-            _ack["answer_if_you_reply_now"] = (
+        ok = [r for r in reports if "error" not in r]
+        ack: dict = {"explored": cover, "stops": len(ok)}
+        if ok:
+            ack["answer_if_you_reply_now"] = (
                 f"the last stop of the pass over {cover}; go_to() the row "
                 f"you mean before you reply")
-        _ack["new_detections"] = sum(int(r.get("new_detections") or 0)
-                                     for r in _ok)
-        _m = self._mint_rows([_f for _f in self._ns_rows if _f not in _before], "pass")
-        if _m is not None:
-            _ack["new_rows"] = _m
-        _errs = [str(r["error"]) for r in _reports if r.get("error")]
-        if _errs:
-            _ack["not_flown"] = _errs[:4]
-        if _item_errors:
-            _ack["rejected"] = _item_errors
-        if not _ok:
-            return {"error": (_errs[0] if _errs
+        ack["new_detections"] = sum(int(r.get("new_detections") or 0)
+                                     for r in ok)
+        m = self._mint_rows([f for f in self._ns_rows if f not in before], "pass")
+        if m is not None:
+            ack["new_rows"] = m
+        errs = [str(r["error"]) for r in reports if r.get("error")]
+        if errs:
+            ack["not_flown"] = errs[:4]
+        if item_errors:
+            ack["rejected"] = item_errors
+        if not ok:
+            return {"error": (errs[0] if errs
                               else f"nothing of {cover} could be flown")}
-        return _ack
+        return ack
 
     def _watch_apply(self, adds: list[str]) -> dict:
         """look_for(): add classes to the watchlist (a class declared again
         moves to the end; the list only grows) and arm it with the engine."""
-        for _c in adds:
-            self.mission_sam[:] = [c for c in self.mission_sam if c != _c]
-            self.mission_sam.append(_c)
-        _err = self.mission_spec.declare_concepts(list(self.mission_sam))
+        for add in adds:
+            self.mission_sam[:] = [c for c in self.mission_sam if c != add]
+            self.mission_sam.append(add)
+        err = self.mission_spec.declare_concepts(list(self.mission_sam))
         ack: dict = {"now": [f"{c} (target)" for c in self.mission_sam]}
-        if _err:
-            ack["error"] = _err
-        _names = {s for s in (
+        if err:
+            ack["error"] = err
+        names = {s for s in (
             str(n.name or "").strip().lower()
             for n in self.ctx.graph.nodes.copy().values()) if s}
-        _note = _named_feature_note(list(adds), _names)
-        if _note:
-            ack["note"] = _note
+        note = _named_feature_note(list(adds), names)
+        if note:
+            ack["note"] = note
         log.info("%s SAY watch: +%s -> %s", self.rid_tag, adds, self.mission_sam)
         return ack
 
@@ -946,10 +946,10 @@ class _Mission:
         res = self.boost_queue(list(concepts), [where]) or {}
         if "error" not in res:
             # The placed form also arms the class it names.
-            _adds = [str(c) for c in concepts if c]
-            if _adds:
-                _w = self._watch_apply(_adds)
-                res["watching"] = _w.get("error") or _w.get("now")
+            adds = [str(c) for c in concepts if c]
+            if adds:
+                w = self._watch_apply(adds)
+                res["watching"] = w.get("error") or w.get("now")
             if res.get("queued"):
                 res["note"] = ("boost queued -- extra segmentation at the "
                                "asked spot fires on your next flight; the "
@@ -983,10 +983,10 @@ class _Mission:
     def _crops_of(self, fid, marks: list | None = None,
                    preamble: str = "") -> dict:
         # A list asks for one crop per row.
-        _fids = [str(f) for f in fid] if isinstance(fid, (list, tuple)) \
+        fids = [str(f) for f in fid] if isinstance(fid, (list, tuple)) \
             else [str(fid)]
         reqs, skipped, ref_notes = crop_requests(
-            _fids, marks, rows=self._ns_rows, resolve=self._point,
+            fids, marks, rows=self._ns_rows, resolve=self._point,
             carry=self.carry, stops=self._plan_stops, obs_minor_m=self.obs_minor_m,
             obs_span_m=self.obs_span_m, frame=self._standing_frame())
         ack: dict = {"looked": len(reqs)}
@@ -996,7 +996,7 @@ class _Mission:
             ack["ref_notes"] = ref_notes[:20]
         if not reqs:
             ack["error"] = ("; ".join(ref_notes) if ref_notes
-                            else f"{', '.join(_fids)} is not on the live "
+                            else f"{', '.join(fids)} is not on the live "
                                  "surface")
             return ack
         try:
@@ -1023,9 +1023,9 @@ class _Mission:
         bites."""
         rows = [r for r in (self.carry.read(handle) or []) if r.get("fid")]
         if not rows:
-            _mp = self._mission_py
-            _name = _mp.ref_name(handle) or _mp.call_arg("look")
-            return {"error": (f"{_name or handle} holds no rows to look at; "
+            mp = self._mission_py
+            name = mp.ref_name(handle) or mp.call_arg("look")
+            return {"error": (f"{name or handle} holds no rows to look at; "
                               "name a handle that has some, or find() one first")}
         fids = [_crop_token_of(r, str(r["fid"]) in self._ns_rows) for r in rows]
         return self._crops_of(
@@ -1041,22 +1041,22 @@ class _Mission:
     def _flown_stop(self, tok: str) -> tuple[str, str | None]:
         """A flown stop id -> its recorded point; an unflown one is refused.
         ``(token, error)``."""
-        _sp = self._plan_stops.get(tok.strip().lower())
-        if _sp is not None:
-            return format_xy_token(_sp[0], _sp[1]), None
+        sp = self._plan_stops.get(tok.strip().lower())
+        if sp is not None:
+            return format_xy_token(sp[0], sp[1]), None
         if STOP_RE.fullmatch(tok.strip().lower()):
-            _known = ", ".join(sorted(self._plan_stops)) or "none yet"
+            known = ", ".join(sorted(self._plan_stops)) or "none yet"
             return tok, (f"{tok} has not been flown; the flown stops are: "
-                         f"{_known}")
+                         f"{known}")
         return tok, None
 
     def _closest_names(self, what: str) -> str:
         """The 3 nearest named rows to a name that matched nothing."""
         names: dict[str, tuple] = {}
-        for _f, _r in self._ns_rows.items():
-            _nm = str(_r.get("name") or "").strip()
-            if _nm:
-                names.setdefault(_nm.lower(), (_f, _nm))
+        for f, r in self._ns_rows.items():
+            nm = str(r.get("name") or "").strip()
+            if nm:
+                names.setdefault(nm.lower(), (f, nm))
         close = difflib.get_close_matches(
             (what or "").lower(), list(names), n=3, cutoff=0.55)
         if not close:
@@ -1078,16 +1078,16 @@ class _Mission:
         ties: dict = {}
         if not names:
             return {"ties": ties}
-        _sink: dict = {}
+        sink: dict = {}
         g_out = run_ops(
             [{"ref": f"r{i}", "op": "find", "args": {"query": q.lower()}}
              for i, q in enumerate(names)],
             namespace=self.ns,
-            raw_sink=_sink, preflight=self.preflight)
+            raw_sink=sink, preflight=self.preflight)
         if "error" in g_out:
             return self._plan_err({}, str(g_out["error"]))
-        g_res = _sink.get("results") or {}
-        _WHY_VERB = {"stage": "standing at", "move": "flying",
+        g_res = sink.get("results") or {}
+        WHY_VERB = {"stage": "standing at", "move": "flying",
                      "map": "mapping around", "crops": "looking at",
                      "boost": "looking around", "facing": "facing"}
         for i, (q, why) in enumerate(names.items()):
@@ -1096,38 +1096,38 @@ class _Mission:
             rows = [r for r in rows
                     if r.get("name_match") is None
                     or float(r["name_match"]) >= _FUZZY_FLOOR]
-            _what = q.lower() or "that"
+            what = q.lower() or "that"
             if not rows:
                 return self._plan_err({}, (
-                    f"nothing named \"{_what}\" is on "
-                    f"this surface{self._closest_names(_what)}; say it "
+                    f"nothing named \"{what}\" is on "
+                    f"this surface{self._closest_names(what)}; say it "
                     "differently, say a fid off a served row, or "
                     + ("fly" if withheld("look_for") else "look_for + fly")
                     + " more first"))
             # every name keeps only its top name_match tie group
-            _top = rows[0].get("name_match")
+            top = rows[0].get("name_match")
             ties[q] = [str(r["fid"]) for r in rows
-                       if r.get("name_match") == _top] \
+                       if r.get("name_match") == top] \
                 or [str(rows[0]["fid"])]
             if why == "stage" and len(ties[q]) > 1:
-                _f = ", ".join(ties[q][:4])
+                f = ", ".join(ties[q][:4])
                 return self._plan_err({}, (
                     f"a viewpoint is one point; "
-                    f"\"{_what}\" has {len(ties[q])} equally good "
-                    f"name matches ({_f}); say which one — a fid "
+                    f"\"{what}\" has {len(ties[q])} equally good "
+                    f"name matches ({f}); say which one — a fid "
                     "works"))
             # A token no matched row carries gets a note, never a refusal.
-            _dead = _unmatched_query_tokens(q.lower(), rows)
-            if _dead:
+            dead = _unmatched_query_tokens(q.lower(), rows)
+            if dead:
                 notes.append(
-                    f"no row matching \"{_what}\" carries "
-                    + ", ".join(repr(t) for t in _dead[:4])
+                    f"no row matching \"{what}\" carries "
+                    + ", ".join(repr(t) for t in dead[:4])
                     + " -- those words did not narrow anything")
             # a covered name skips this note: the pass flies every top tie
             if why not in ("anchor", "cover") and len(rows) > 1:
                 notes.append(
-                    f"{len(rows)} rows match \"{_what}\"; "
-                    f"{_WHY_VERB.get(why, 'using')} the best "
+                    f"{len(rows)} rows match \"{what}\"; "
+                    f"{WHY_VERB.get(why, 'using')} the best "
                     f"name match, {rows[0]['fid']} — say a fid to "
                     "choose precisely")
         return {"ties": ties}
@@ -1138,129 +1138,129 @@ class _Mission:
         more_of window pages."""
         if page:
             # Paging a handle with nothing left to page is refused here.
-            _ref, _lo, _h = page
-            _held = len(self.carry.read(_ref) or [])
-            if _held and (_held <= _BROAD_DUMP_SOFT_ROWS or _lo >= _held):
+            ref, lo, h = page
+            held = len(self.carry.read(ref) or [])
+            if held and (held <= _BROAD_DUMP_SOFT_ROWS or lo >= held):
                 return self._plan_err({}, (
-                    f"all {_held} row(s) of {_h} are already served -- there "
+                    f"all {held} row(s) of {h} are already served -- there "
                     f"is no further block to serve. Narrow it "
-                    f"({_h}.order(color=\"<colour>\"), "
-                    f"{_h}.order(nearest=\"<fid>\"), "
-                    f"{_h}.filter(within=\"<place>\"))"
-                    + ("." if withheld("look") else f" or look({_h}).")))
+                    f"({h}.order(color=\"<colour>\"), "
+                    f"{h}.order(nearest=\"<fid>\"), "
+                    f"{h}.filter(within=\"<place>\"))"
+                    + ("." if withheld("look") else f" or look({h}).")))
         out = self._dispatch_analyze_scene(ops, answer_ref=str(answer or ""))
         if "error" in out:
             return {"error": out["error"]}
         self.plan_rn[0] = max(self.plan_rn[0], int(rn_end or 0))
         # The column this call ordered by, so _finish can say when the
         # ordering separated nothing.
-        _sb = next((o for o in reversed(ops) if o["op"] == "score_by"), None)
+        sb = next((o for o in reversed(ops) if o["op"] == "score_by"), None)
         self._call.update(answer=answer, page=page,
                           rows=self.carry.rows.get(answer),
-                          order=str(_sb["args"]["emphasis"][0]["key"])
-                          if _sb else None)
+                          order=str(sb["args"]["emphasis"][0]["key"])
+                          if sb else None)
         return {"result": out}
 
     def _move_to(self, tok: str) -> dict:
-        tok, _stop_err = self._flown_stop(tok)
-        if _stop_err:
-            return self._plan_err({}, _stop_err)
+        tok, stop_err = self._flown_stop(tok)
+        if stop_err:
+            return self._plan_err({}, stop_err)
         mv = self._fly_moves([{"target_fid": tok.strip()}], [])
-        _ok = [r for r in mv.get("flown") or [] if "error" not in r]
-        if not _ok:
+        ok = [r for r in mv.get("flown") or [] if "error" not in r]
+        if not ok:
             # nothing flew: the failure is the result
-            _msg = next(
+            msg = next(
                 (str(r["error"]) for r in mv.get("flown") or []
                  if r.get("error")),
                 None) or next(
                 (str(e["error"]) for e in mv.get("rejected") or []
                  if e.get("error")),
                 None) or "nothing flew"
-            return self._plan_err({"flown": mv}, _msg)
+            return self._plan_err({"flown": mv}, msg)
         return {"flown": mv}
 
     def _cover(self, members: list, said_to: str) -> dict:
         """explore(): one pass of flights over a place or a set, whose
         members arrive as a name's top tie group (a list), a handle's rows
         or a token."""
-        _raw_members: list = []
-        for _t in members:
-            if isinstance(_t, list):
-                _raw_members.extend(_t)
+        raw_members: list = []
+        for t in members:
+            if isinstance(t, list):
+                raw_members.extend(t)
                 continue
-            _t, _stop_err = self._flown_stop(_t)
-            if _stop_err:
-                return self._plan_err({}, _stop_err)
-            if _is_handle_token(_t):
-                _hr = [str(r["fid"]) for r in (self.carry.read(_t) or [])
+            t, stop_err = self._flown_stop(t)
+            if stop_err:
+                return self._plan_err({}, stop_err)
+            if _is_handle_token(t):
+                hr = [str(r["fid"]) for r in (self.carry.read(t) or [])
                        if r.get("fid")]
-                if not _hr:
+                if not hr:
                     return self._plan_err({}, (
-                        f"{_t} holds 0 fid-bearing row(s) "
+                        f"{t} holds 0 fid-bearing row(s) "
                         "here; there is nothing to cover."))
-                _raw_members.extend(_hr)
+                raw_members.extend(hr)
                 continue
-            _raw_members.append(_t)
-        _accepted = [{"target_fid": _t.strip()}
-                     for _t in dict.fromkeys(_raw_members)]
-        if not _accepted:
+            raw_members.append(t)
+        accepted = [{"target_fid": t.strip()}
+                     for t in dict.fromkeys(raw_members)]
+        if not accepted:
             return self._plan_err({}, "nothing to cover")
-        _accepted, _cov_note, _subject, _segs = cover_items(
-            _accepted, said_to, spec=self.mission_spec,
+        accepted, cov_note, subject, segs = cover_items(
+            accepted, said_to, spec=self.mission_spec,
             spacing=self._cover_spacing, rows=self._ns_rows,
             covered=self._covered_fids, pose_xy=self.ctx.pose_xy)
-        if not _accepted:
-            return self._plan_err({}, _cov_note)
-        mv = self._fly_moves(_accepted, [], cover=_subject)
+        if not accepted:
+            return self._plan_err({}, cov_note)
+        mv = self._fly_moves(accepted, [], cover=subject)
         if "error" in mv:
             return self._plan_err({"explored": mv}, str(mv["error"]))
-        if _segs > 1:
-            mv["segments"] = _segs
+        if segs > 1:
+            mv["segments"] = segs
         # A truncated pass reads as truncated.
-        if mv["stops"] < len(_accepted):
-            _cov_note = (f"the pass ended after "
+        if mv["stops"] < len(accepted):
+            cov_note = (f"the pass ended after "
                          f"{mv['stops']} of its stops.")
-        if _cov_note:
-            _add_note(mv, _cov_note, before=True)
+        if cov_note:
+            _add_note(mv, cov_note, before=True)
         # THE PASS SHOWS ITS CATCH: one crop per row it added, pass order.
-        _h = self._call_minted()
-        _rows = [r for r in (self.carry.rows.get(_h) or [])
-                 if r.get("fid")] if _h else []
-        _catch = _rows[:_CATCH_CROPS]
-        if _catch:
-            _cack = self._crops_of(
+        h = self._call_minted()
+        rows = [r for r in (self.carry.rows.get(h) or [])
+                 if r.get("fid")] if h else []
+        catch = rows[:_CATCH_CROPS]
+        if catch:
+            cack = self._crops_of(
                 [_crop_token_of(r, str(r["fid"]) in self._ns_rows)
-                 for r in _catch],
+                 for r in catch],
                 preamble=("The pass's catch, one crop per "
                           "row it added, in pass order: "))
-            if not _cack.get("error"):
-                mv["catch"] = {k: _cack[k] for k in ("delivered", "not_drawn")
-                               if k in _cack}
-                if len(_catch) < len(self.carry.rows.get(_h) or []):
+            if not cack.get("error"):
+                mv["catch"] = {k: cack[k] for k in ("delivered", "not_drawn")
+                               if k in cack}
+                if len(catch) < len(self.carry.rows.get(h) or []):
                     mv["catch"]["shown"] = (
-                        f"first {len(_catch)} of "
-                        f"{len(self.carry.rows[_h])}" + (
+                        f"first {len(catch)} of "
+                        f"{len(self.carry.rows[h])}" + (
                             "" if withheld("look") else
-                            f" -- look({_h}[a:b]) pages the rest"))
+                            f" -- look({h}[a:b]) pages the rest"))
                 if withheld("images"):
                     mv["catch"]["note"] = _PICTURE_WITHHELD
         return {"explored": mv}
 
     def _crops(self, of, fid, marks) -> dict:
-        _mk = [m for m in marks or [] if isinstance(m, str) and m.strip()]
-        crop = (self._crops_set(str(of), marks=_mk or None) if of
-                else self._crops_of(fid, marks=_mk or None))
+        mk = [m for m in marks or [] if isinstance(m, str) and m.strip()]
+        crop = (self._crops_set(str(of), marks=mk or None) if of
+                else self._crops_of(fid, marks=mk or None))
         if crop.get("error") and not crop.get("delivered"):
             return self._plan_err({"crop": crop}, str(crop["error"]))
         return {"crop": crop}
 
     def _map(self, around: str) -> dict:
         """show_map(): one map around a place, badging the set in scope."""
-        _h = self._those
-        _mrows = [r for r in (self.carry.read(_h) or [])
-                  if r.get("fid")] if _h else []
-        _mfids = [str(r["fid"]) for r in _mrows[:_MAP_MAX_MARKS]]
-        spec, m_skipped = map_spec(around, _mfids, rows=self._ns_rows,
+        h = self._those
+        mrows = [r for r in (self.carry.read(h) or [])
+                  if r.get("fid")] if h else []
+        mfids = [str(r["fid"]) for r in mrows[:_MAP_MAX_MARKS]]
+        spec, m_skipped = map_spec(around, mfids, rows=self._ns_rows,
                                    resolve=self._point,
                                    frame=self._standing_frame())
         mp: dict = {"maps": int(spec is not None)}
@@ -1273,12 +1273,12 @@ class _Mission:
                 from maps.search.render.map_render import (  # noqa: PLC0415
                     render_map_from_spec,
                 )
-                _m = render_map_from_spec(
+                rendered = render_map_from_spec(
                     spec, self._map_features_cached(),
                     tile_origin_xy=self.ctx.tile_origin_xy,
                     cell_size_m=float(self.ctx.cell_size_m),
                     grid_shape=tuple(self.ctx.grid_shape))
-                maps = [_m] if _m is not None else []
+                maps = [rendered] if rendered is not None else []
             except Exception as exc:  # noqa: BLE001 - render never crashes the mission
                 log.warning("%s SAY map render failed: %s", self.rid_tag,
                             _summarise_exc(exc))
@@ -1286,14 +1286,14 @@ class _Mission:
             else:
                 self._ship(mp, "map", [m["jpeg"] for m in maps if m.get("jpeg")],
                            map_vision_text(maps))
-        if _mfids:
+        if mfids:
             # The set under the model's own name for it.
-            _name = self._mission_py.ref_name(_h)
-            mp["badged_from"] = _name or "the set in scope"
-            if len(_mrows) > len(_mfids):
+            name = self._mission_py.ref_name(h)
+            mp["badged_from"] = name or "the set in scope"
+            if len(mrows) > len(mfids):
                 mp.setdefault("ref_notes", []).append(
-                    f"{len(_mrows)} rows in {_name or 'the set in scope'}; "
-                    f"this map badges the first {len(_mfids)}")
+                    f"{len(mrows)} rows in {name or 'the set in scope'}; "
+                    f"this map badges the first {len(mfids)}")
         if mp.get("error") and not mp.get("delivered"):
             return self._plan_err({"map": mp}, str(mp["error"]))
         return {"map": mp}
@@ -1308,19 +1308,19 @@ class _Mission:
         """Close a call nothing refused: the tie note, the grounding notes,
         the streak reset, the scope and paging writes."""
         # An ordering that separated nothing says how many rows tie.
-        _ok_key = self._call.get("order")
-        if _ok_key:
-            _rows = self._call.get("rows") or []
-            if len(_rows) >= 2:
-                _v0 = _rows[0].get(_ok_key)
-                if _v0 is not None:
-                    _tied = [r for r in _rows if r.get(_ok_key) == _v0]
-                    if len(_tied) >= 2:
-                        _t = f"{_v0:g}" if isinstance(_v0, (int, float)) \
-                            else str(_v0)
+        ok_key = self._call.get("order")
+        if ok_key:
+            rows = self._call.get("rows") or []
+            if len(rows) >= 2:
+                v0 = rows[0].get(ok_key)
+                if v0 is not None:
+                    tied = [r for r in rows if r.get(ok_key) == v0]
+                    if len(tied) >= 2:
+                        t = f"{v0:g}" if isinstance(v0, (int, float)) \
+                            else str(v0)
                         _add_note(
-                            ack, f"{len(_tied)} of {len(_rows)} rows tie at "
-                            f"{_t} on '{_ok_key}' -- this ordering does "
+                            ack, f"{len(tied)} of {len(rows)} rows tie at "
+                            f"{t} on '{ok_key}' -- this ordering does "
                             f"not separate them, so its rank 0 is "
                             f"arbitrary among the tie", "\n")
         if self._call.get("notes"):
@@ -1518,6 +1518,6 @@ class _Mission:
                     self.reasoner.append_tool_result(cid, name or "unknown", {
                         "error": f"unknown tool {name!r}; available: run"})
             # Pictures ride a user turn after the turn's tool results.
-            for _vtext, _vjpegs in self.pending_vision:
-                self.reasoner.append_vision_user(_vtext, _vjpegs)
+            for vtext, vjpegs in self.pending_vision:
+                self.reasoner.append_vision_user(vtext, vjpegs)
             self.pending_vision.clear()
