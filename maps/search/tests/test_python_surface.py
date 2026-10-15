@@ -810,3 +810,16 @@ def test_a_tier_view_is_served_once_under_the_models_name():
     out = tool_results(fr)[0]
     assert list(out["result"]["results"]) == ["cars.exact"], out
 
+
+def test_an_unnamed_set_in_a_look_list_is_refused_without_an_executor_ref():
+    """A computed set no name reaches is refused by asking for a name, never
+    under an rN the model cannot type."""
+    import re
+
+    _, fr, _, _ = drive([[run(
+        'cars = find("car")\n'
+        'look([cars.filter(near=cars[0], dwithin=50), cars[0]])\n')], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert ("look() got an unnamed set inside a list; bind it first "
+            "(s = ...) and name its rows: look([s[0], ...])") in err, err
+    assert not re.search(r"\br\d", err), err

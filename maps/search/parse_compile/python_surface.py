@@ -1340,12 +1340,20 @@ class MissionPython:
             # A set inside a list is refused under the model's spelling,
             # before _slot would materialize a slice; a string naming a held
             # set is caught once _slot has made it a Ref.
-            held = [self.name_of(a) or f"{self.ref_name(a.ref) or a.ref}"
-                    f"{a.spec}" for a in (
-                        x if isinstance(x, (list, tuple, set, frozenset))
-                        else ())
-                    if isinstance(a, Rows)]
-            if not held:
+            sets = [a for a in (
+                x if isinstance(x, (list, tuple, set, frozenset)) else ())
+                if isinstance(a, Rows)]
+            held = []
+            if sets:
+                ref = self.ref_name(sets[0].ref)
+                held = [self.name_of(sets[0])
+                        or ref and f"{ref}{sets[0].spec}"]
+                if not held[0]:
+                    raise CodeError(
+                        "look() got an unnamed set inside a list; bind it "
+                        "first (s = ...) and name its rows: "
+                        "look([s[0], ...])")
+            else:
                 x = self._slot(x)
                 if isinstance(x, (list, tuple)) and not is_xy(x):
                     held = [a.label for a in x if isinstance(a, Ref)]
