@@ -1,7 +1,7 @@
 """The closed-loop measures of each run, from its records: SR, OSR, NE, time to identification, SPL.
 
     python -m benchmarks.flight.measures --root <sortie>... --truth <adjudications dir> [<split.json>]
-        [--json] [--check runs_all.csv]
+        [--json]
 
 The flight README says what each measure is; this is how each is read off
 the records. A root is a flown or twin sortie (``episodes.jsonl`` beside
@@ -38,7 +38,6 @@ reason is out of every rate.
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import json
 import math
@@ -586,35 +585,11 @@ def by(rows, *keys: str) -> dict[str, dict[str, Any]]:
     return {v: summarize([r for r in rows if name(r) == v]) for v in sorted({name(r) for r in rows})}
 
 
-#: The master table's columns ``--check`` compares.
-CHECKED = ("success", "oracle_success")
-
-
-def check(rows: list[dict[str, Any]], master: Path) -> list[str]:
-    """Where these rows disagree with a master table's real rows on SR and OSR, by (sortie, run_no)."""
-    table = csv.DictReader(master.open())
-    missing = [k for k in CHECKED if k not in (table.fieldnames or [])]
-    if missing:
-        raise SystemExit(f"{master} has no {', '.join(missing)} column: --check reads a master table that scores SR "
-                         "as the commit point inside the mask")
-    want = {(r["sortie"], int(r["run_no"])): r for r in table if r["environment"] == "real"}
-    have = {(r["sortie"], int(r["run_no"] or 0)): r for r in rows}
-    out = [f"{k}: in the master table, not read" for k in sorted(set(want) - set(have))]
-    out += [f"{k}: read, not in the master table" for k in sorted(set(have) - set(want))]
-    for k in sorted(set(want) & set(have)):
-        for key in CHECKED:
-            a, b = have[k][key], want[k][key]
-            if ("" if a is None else str(a)) != b:
-                out.append(f"{k} {key}: {a!r} here, {b!r} in the master table")
-    return out
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--root", type=Path, nargs="+", required=True, help="flown or replay sortie roots")
     ap.add_argument("--truth", type=Path, nargs="+", required=True,
                     help="a directory of <sortie>.json analyst entries, and/or the tasking set's split JSON")
-    ap.add_argument("--check", type=Path, default=None, help="a master table to compare SR and OSR against")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     roots = sorted(r for r in args.root if (r / EPISODES_JSONL).is_file())
@@ -622,8 +597,6 @@ def main(argv: list[str] | None = None) -> int:
     doc = {"turn_radius_m": radius, "turns_read": turns, "summary": summarize(rows),
            "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "model", "reasoning_effort"),
            "runs": rows}
-    if args.check is not None:
-        doc["check"] = check(rows, args.check)
     if args.json:
         json.dump(doc, sys.stdout, indent=1)
         print()
@@ -646,11 +619,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {r['sortie']} run {r['run_no']}: {r['end']}, SR {r['success']}, OSR {r['oracle_success']}, NE {r['ne_ft']} ft, "
                   f"time to ID {r['time_to_id_s']} s, {r['flights']} flights / {r['turns']} turns, SPL {r['spl']}"
                   + (f", excluded: {r['excluded']}" if r["excluded"] else ""))
-        if args.check is not None:
-            print(f"against {args.check}: {'agrees on every row' if not doc['check'] else 'DISAGREES'}")
-            for d in doc["check"]:
-                print(f"  {d}")
-    return 1 if args.check is not None and doc["check"] else 0
+    return 0
 
 
 if __name__ == "__main__":

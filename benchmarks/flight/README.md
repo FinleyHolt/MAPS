@@ -157,5 +157,3 @@ of every rate and named; a run that ends after a report without a new one
 (the crew's Stop, a harness ending, a failure) is scored at that report:
 its end, time and flights. It prints the totals, the totals by intel
 quality and by model and reasoning effort, then one line per run.
-`--check <master table>` compares SR (`success`) and OSR
-(`oracle_success`) row by row against a table that carries both columns.

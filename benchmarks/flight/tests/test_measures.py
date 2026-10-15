@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import csv
 import json
 
-import pytest
 
 from benchmarks.flight import measures as Q
 
@@ -58,20 +56,6 @@ def test_the_measures_score_the_commit_point_against_the_mask_and_the_track_agai
     assert list(Q.by(got, "model", "reasoning_effort")) == ["m 0.9"]
     s = Q.summarize(got)
     assert (s["sr"]["k"], s["sr"]["n"], s["osr"]["n"]) == (2, 4, 4)
-    master = tmp_path / "runs_all.csv"
-    with master.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, ["environment", "sortie", "run_no", "success", "oracle_success"])
-        w.writeheader()
-        for r in got:
-            w.writerow({"environment": "real", "sortie": r["sortie"], "run_no": r["run_no"],
-                        **{k: "" if r[k] is None else str(r[k]) for k in ("success", "oracle_success")}})
-    assert Q.check(got, master) == []
-    one["success"] = False
-    assert Q.check(got, master) == [f"('{root.name}', 1) success: False here, 'True' in the master table"]
-    stale = tmp_path / "stale.csv"
-    stale.write_text("environment,sortie,run_no,success_area,success_radius,oracle_success\n")
-    with pytest.raises(SystemExit, match="no success column"):
-        Q.check(got, stale)
     assert Q.main(["--root", str(root), "--truth", str(truth), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["summary"]["sr"] == {"k": 2, "n": 4, "pct": 50.0}
     # The track flies straight: no turn is read, and the radius is the fallback's.
