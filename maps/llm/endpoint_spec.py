@@ -109,6 +109,12 @@ class EndpointSpec:
                 - _WINDOW_MARGIN_TOKENS)
 
 
+def reasoner_api_key() -> str | None:
+    """``SEARCH_REASONER_API_KEY``, the reasoner's bearer, or None when unset
+    or blank (a self-hosted serve takes no Authorization header)."""
+    return os.environ.get("SEARCH_REASONER_API_KEY") or None
+
+
 def _get_json(url: str, *, bearer: str | None = None) -> object:
     """GET ``url`` (``bearer`` as an Authorization header) and parse the JSON
     body; raise EndpointUnreachable when nothing answers (no connection, a
@@ -154,10 +160,7 @@ def models_url(base_url: str) -> str:
 
 def _probe_models(base_url: str) -> list[dict]:
     """``GET models_url(base_url)`` -> the ``data`` model list (non-empty)."""
-    payload = _get_json(
-        models_url(base_url),
-        bearer=os.environ.get("SEARCH_REASONER_API_KEY") or None,
-    )
+    payload = _get_json(models_url(base_url), bearer=reasoner_api_key())
     data = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(data, list) or not data:
         raise EndpointDiscoveryError(

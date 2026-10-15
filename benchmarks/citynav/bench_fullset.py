@@ -308,10 +308,10 @@ class Driver:
         """True when the reasoner endpoint answers its model list, at the URL
         discovery read it from (``endpoint_spec.models_url``), asked with the
         chat path's bearer (hosted endpoints auth ``/v1/models``)."""
-        from maps.llm.endpoint_spec import DEFAULT_REASONER_URL, models_url  # noqa: PLC0415
+        from maps.llm.endpoint_spec import DEFAULT_REASONER_URL, models_url, reasoner_api_key  # noqa: PLC0415
 
         url = os.environ.get("SEARCH_REASONER_URL", DEFAULT_REASONER_URL).strip()
-        key = os.environ.get("SEARCH_REASONER_API_KEY")
+        key = reasoner_api_key()
         try:
             req = urllib.request.Request(models_url(url))
             if key:

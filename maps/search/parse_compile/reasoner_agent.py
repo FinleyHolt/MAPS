@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from maps.llm import openai_wire
-from maps.llm.endpoint_spec import EndpointSpec
+from maps.llm.endpoint_spec import EndpointSpec, reasoner_api_key
 from maps.llm.http import (
     CallCanceled,
     DegenerateCompletion,
@@ -149,9 +149,7 @@ class Reasoner:
     fits the served window."""
 
     endpoint_spec: EndpointSpec
-    # "EMPTY" is the no-auth sentinel a local vLLM accepts.
-    api_key: str = field(
-        default_factory=lambda: os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY"))
+    api_key: str | None = field(default_factory=reasoner_api_key)
     timeout: float = field(default_factory=_reasoner_timeout_s)
     seed: int | None = None
     messages: list[dict] = field(default_factory=list)

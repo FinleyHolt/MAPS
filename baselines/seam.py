@@ -331,7 +331,7 @@ class BaselineHarness:
             kw["response_format"] = response_format
         cap_key = OUTPUT_CAP_KEY if speaks_openai(model) else "max_tokens"
         resp = _chat_completions_raw(
-            spec.base_url, os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY"), timeout=LLM_TIMEOUT_S,
+            spec.base_url, endpoint_spec.reasoner_api_key(), timeout=LLM_TIMEOUT_S,
             model=model, messages=msgs, **{cap_key: cap}, **kw,
         )
         choice = resp["choices"][0]

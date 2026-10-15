@@ -9,7 +9,7 @@ from maps.search.parse_compile import reasoner_agent as ra
 from maps.search.tests.fakes import TEST_SPEC
 
 
-@pytest.mark.parametrize("env_key, sent_key", [("sk-1", "sk-1"), (None, "EMPTY")])
+@pytest.mark.parametrize("env_key, sent_key", [("sk-1", "sk-1"), (None, None), ("", None)])
 def test_the_reasoner_posts_to_its_spec_with_the_env_key(monkeypatch, env_key, sent_key):
     if env_key is None:
         monkeypatch.delenv("SEARCH_REASONER_API_KEY", raising=False)
