@@ -883,12 +883,6 @@ class _Mission:
                     f"{snap_from} is {item['target_fid']}"
                     "'s own position -- flown as that fid.")
             if "error" not in report:
-                if (not report.get("new_detections") and not self.mission_sam
-                        and not withheld("look_for")):
-                    wl_note = ('the watchlist is empty -- nothing is '
-                                'segmented on any flight; call '
-                                'look_for("<class>") to see detections')
-                    _add_note(report, wl_note)
                 # A pass renders no per-stop view.
                 if cover is None:
                     self._flight_view(item, report)
