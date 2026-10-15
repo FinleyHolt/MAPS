@@ -339,6 +339,11 @@ def point_in_polygon(pt, poly) -> bool:
 _PAIR_CHUNK = 4_000_000
 
 
+def _chunk(m: int) -> int:
+    """Rows per chunk when each row is paired with ``m`` edges or points."""
+    return max(1, int(_PAIR_CHUNK // max(1, m)))
+
+
 def _shoelace(loops):
     """Shoelace sums ``(sum cross, sum (x1+x2) cross, sum (y1+y2) cross)``
     over the CLOSED chains; hole loops wind opposite and subtract."""
@@ -563,7 +568,7 @@ def _inside_mask_arr(P, A, B):
     yhi = np.maximum(A[:, 1], B[:, 1])
     order = np.flatnonzero(inbox)
     order = order[np.argsort(P[order, 1], kind="stable")]
-    step = max(1, int(_PAIR_CHUNK // max(1, len(A))))
+    step = _chunk(len(A))
     for s in range(0, len(order), step):
         idx = order[s:s + step]
         p = P[idx]
@@ -631,7 +636,7 @@ def _min_pt_to_segs_all(P, A, B):
     if len(P) == 0 or len(A) == 0:
         return float("inf"), -1, None
     best_d2, best_i, best_foot = float("inf"), -1, None
-    step = max(1, int(_PAIR_CHUNK // max(1, len(A))))
+    step = _chunk(len(A))
     for s in range(0, len(P), step):
         d2, F = _pt_to_segs_grid(P[s:s + step], A, B)
         i, j = np.unravel_index(int(np.argmin(d2)), d2.shape)
@@ -707,7 +712,7 @@ def _segments_cross(A1, B1, A2, B2):
         if not k1.any() or not k2.any():
             return None
         A1, B1, A2, B2 = A1[k1], B1[k1], A2[k2], B2[k2]
-    step = max(1, int(_PAIR_CHUNK // max(1, len(A2))))
+    step = _chunk(len(A2))
     for k in range(0, len(A1), step):
         X, P = _proper_crossings(A1[k:k + step], B1[k:k + step], A2, B2)
         if P is not None:
@@ -820,7 +825,7 @@ def polyline_crossings(polys_a, polys_b):
         return [], float("inf")
     hits: list = []
     nearest = float("inf")
-    step = max(1, int(_PAIR_CHUNK // max(1, len(A2))))
+    step = _chunk(len(A2))
     for k in range(0, len(A1), step):
         a1, b1 = A1[k:k + step], B1[k:k + step]
         d1, F1 = _pt_to_segs_grid(a1, A2, B2)
