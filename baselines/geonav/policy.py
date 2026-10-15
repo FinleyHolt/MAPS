@@ -18,7 +18,7 @@ import numpy as np
 from baselines.geonav import prompts as P
 from baselines.geonav.cognitive_map import CognitiveMap, rgb_entropy
 from baselines.geonav.scene_graph import KnowledgeGraph, QueryEngine, ingest_subgraph, recursive_query
-from baselines.seam import BaselineHarness, BaselineResult, Landmark, NoSchemaAnswer, match_landmarks
+from baselines.seam import STR, STRS, BaselineHarness, BaselineResult, Landmark, NoSchemaAnswer, match_landmarks, obj
 
 # gsamllavanav/parser.py: --eval_max_timestep 20 (one perceive + one decision each).
 MAX_TIMESTEPS = 20
@@ -53,37 +53,29 @@ JSON_SUFFIX = (
     "1. Use standard JSON format\n2. Include all required fields\n3. Wrap the response with ```json"
 )
 
-_STR = {"type": "string"}
-_STRS = {"type": "array", "items": _STR}
-
-
-def _obj(props: dict) -> dict:
-    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
-
-
-EXTRACT_SCHEMA = _obj({"target": _STR, "landmarks": _STRS, "surroundings": _STRS})
-PLAN_SCHEMA = _obj({
-    "plan": _STR,
-    "sub_goals": {"type": "array", "items": _obj({
-        "goal": _STR, "desired_state": _STR, "strategy": {"type": "string", "enum": list(STRATEGIES)},
+EXTRACT_SCHEMA = obj({"target": STR, "landmarks": STRS, "surroundings": STRS})
+PLAN_SCHEMA = obj({
+    "plan": STR,
+    "sub_goals": {"type": "array", "items": obj({
+        "goal": STR, "desired_state": STR, "strategy": {"type": "string", "enum": list(STRATEGIES)},
     })},
 })
-ACTION_SCHEMA = _obj({"reason": _STR, "movement": _STR})
-LOCATE_SCHEMA = _obj({
-    "reason": _STR,
+ACTION_SCHEMA = obj({"reason": STR, "movement": STR})
+LOCATE_SCHEMA = obj({
+    "reason": STR,
     "selected_pos": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
 })
-GRAPH_SCHEMA = _obj({
-    "nodes": {"type": "array", "items": _obj({
-        "id": _STR, "object_type": _STR,
+GRAPH_SCHEMA = obj({
+    "nodes": {"type": "array", "items": obj({
+        "id": STR, "object_type": STR,
         "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
-        "color": _STR,
+        "color": STR,
     })},
-    "edges": {"type": "array", "items": _obj({"source": _STR, "target": _STR, "relationship": _STR})},
+    "edges": {"type": "array", "items": obj({"source": STR, "target": STR, "relationship": STR})},
 })
-CHAIN_SCHEMA = _obj({
-    "operations": {"type": "array", "items": _obj({
-        "method": _STR, "args": _STRS, "kwargs": _obj({"relation_type": _STR}),
+CHAIN_SCHEMA = obj({
+    "operations": {"type": "array", "items": obj({
+        "method": STR, "args": STRS, "kwargs": obj({"relation_type": STR}),
     })},
 })
 

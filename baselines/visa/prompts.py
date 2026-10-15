@@ -13,6 +13,8 @@ primitives (stop, move, ascend, descend) with the optional signal beside it.
 
 from __future__ import annotations
 
+from baselines.seam import STR, STRS, obj
+
 SYSTEM = (
     "You are the reasoning module of a UAV searching a city for one described "
     "target from a nadir (straight-down, north-up) aerial view. Think in short "
@@ -34,26 +36,10 @@ Analyse this navigation instruction for a nadir aerial search.
   phrased, and the landmark nouns (e.g. "red car", "white car", "parking lot",
   "tram depot"). Never a bare class on its own. Two to twelve phrases."""
 
-ANALYSIS_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "target": {
-            "type": "object",
-            "properties": {
-                "phrase": {"type": "string"},
-                "class": {"type": "string"},
-                "attributes": {"type": "array", "items": {"type": "string"}},
-            },
-            "required": ["phrase", "class", "attributes"],
-            "additionalProperties": False,
-        },
-        "landmarks": {"type": "array", "items": {"type": "string"}},
-        "surroundings": {"type": "array", "items": {"type": "string"}},
-        "concepts": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["target", "landmarks", "surroundings", "concepts"],
-    "additionalProperties": False,
-}
+ANALYSIS_SCHEMA = obj({
+    "target": obj({"phrase": STR, "class": STR, "attributes": STRS}),
+    "landmarks": STRS, "surroundings": STRS, "concepts": STRS,
+})
 
 VERIFY_PROMPT = """Instruction: "{instruction}"
 Target sought: {target_phrase} (class: {target_class}; attributes: {target_attributes}).
@@ -95,56 +81,16 @@ Then decide one task primitive:
   Guidance may accompany either.
 target_mark is 0 unless the verdict is "stop"."""
 
-VERIFY_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "attribute_match": {
-            "type": "object",
-            "properties": {
-                "candidate_marks": {"type": "array", "items": {"type": "integer"}},
-                "pending_marks": {"type": "array", "items": {"type": "integer"}},
-                "reasoning": {"type": "string"},
-            },
-            "required": ["candidate_marks", "pending_marks", "reasoning"],
-            "additionalProperties": False,
-        },
-        "spatial_topology": {
-            "type": "object",
-            "properties": {
-                "consistent_marks": {"type": "array", "items": {"type": "integer"}},
-                "reasoning": {"type": "string"},
-            },
-            "required": ["consistent_marks", "reasoning"],
-            "additionalProperties": False,
-        },
-        "geographic_boundary": {
-            "type": "object",
-            "properties": {
-                "valid_marks": {"type": "array", "items": {"type": "integer"}},
-                "reasoning": {"type": "string"},
-            },
-            "required": ["valid_marks", "reasoning"],
-            "additionalProperties": False,
-        },
-        "verdict": {
-            "type": "string",
-            "enum": ["stop", "move", "ascend", "descend"],
-        },
-        "target_mark": {"type": "integer"},
-        "guidance": {"type": "string"},
-        "guidance_concepts": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": [
-        "attribute_match",
-        "spatial_topology",
-        "geographic_boundary",
-        "verdict",
-        "target_mark",
-        "guidance",
-        "guidance_concepts",
-    ],
-    "additionalProperties": False,
-}
+_MARKS = {"type": "array", "items": {"type": "integer"}}
+VERIFY_SCHEMA = obj({
+    "attribute_match": obj({"candidate_marks": _MARKS, "pending_marks": _MARKS, "reasoning": STR}),
+    "spatial_topology": obj({"consistent_marks": _MARKS, "reasoning": STR}),
+    "geographic_boundary": obj({"valid_marks": _MARKS, "reasoning": STR}),
+    "verdict": {"type": "string", "enum": ["stop", "move", "ascend", "descend"]},
+    "target_mark": {"type": "integer"},
+    "guidance": STR,
+    "guidance_concepts": STRS,
+})
 
 
 def guidance_block(guidance: str | None) -> str:

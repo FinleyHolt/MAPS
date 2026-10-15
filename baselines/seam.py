@@ -523,6 +523,15 @@ def _with_answer_shape(messages: list[dict], schema: dict) -> list[dict]:
     return out
 
 
+STR = {"type": "string"}
+STRS = {"type": "array", "items": STR}
+
+
+def obj(props: dict) -> dict:
+    """A strict JSON-schema object: every property required, no others."""
+    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+
+
 _SCALAR = {"string": str, "integer": int, "number": (int, float), "boolean": bool}
 
 
