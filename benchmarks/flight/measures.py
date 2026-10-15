@@ -55,6 +55,7 @@ from benchmarks.flight.mission import FRAMES_JSONL, TRACK_JSONL
 from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.geometry.sensor_spec import resolve_sensor
+from maps.perception.ortho.sensor_frame import footprint_m
 from maps.search.analyze_scene.geom_compute import point_in_polygon
 
 FT_PER_M = 1.0 / 0.3048
@@ -504,8 +505,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     agl, out["agl_source"] = _agl(nearest, bases, events, row.get("map_name"))
     if agl is not None:
         out["agl_ft"] = round(agl * FT_PER_M, 1)
-        hfov_deg = resolve_sensor(C12_SENSOR).intrinsics.hfov_deg
-        width = 2.0 * agl * math.tan(math.radians(hfov_deg) / 2.0)
+        width = footprint_m(resolve_sensor(C12_SENSOR), agl)[0]
         out["hfov_width_ft"] = round(width * FT_PER_M, 1)
         out["oracle_success"] = d <= width
     if out["oracle_success"] is False and thin:

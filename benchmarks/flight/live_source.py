@@ -28,13 +28,13 @@ from PIL import Image
 
 from benchmarks.flight import frame_offset, frame_ties, locator, map_render
 from benchmarks.flight.airframe import C12_LEVER_M
-from benchmarks.flight.footprint import ground_gsd_m, in_frame_xy, off_nadir_lonlat
+from benchmarks.flight.footprint import in_frame_xy, off_nadir_lonlat
 from benchmarks.flight.nav_track import Pose, camera_pose_local, tag_pose
 from benchmarks.flight.pose_graph import INNOVATION_CAP_M, PoseGraph
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
 from maps.perception.geometry.sensor_spec import SensorSpec, resolve_sensor
 from maps.perception.observation import Observation
-from maps.perception.ortho.sensor_frame import ground_corners_xy
+from maps.perception.ortho.sensor_frame import footprint_m, ground_corners_xy
 
 log = logging.getLogger(__name__)
 
@@ -477,7 +477,7 @@ class LiveSource:
         agl = alt_msl - self.floor_msl_m
         if agl <= 0.0:
             return None
-        return 2.0 * agl * math.tan(math.radians(self.boresight.sensor.intrinsics.vfov_deg) / 2.0) / pose.speed_mps
+        return footprint_m(self.boresight.sensor, agl)[1] / pose.speed_mps
 
     def ownship(self) -> dict[str, Any] | None:
         """Where the aircraft IS: the camera in the tile frame, its height
@@ -611,9 +611,8 @@ class LiveSource:
             return None
         # The grid's cell is what the FRAMES carry: resampling onto a finer grid
         # invents resolution the sensor never had, onto a coarser one throws it away.
-        gsd = [ground_gsd_m(f.agl, hfov_deg=f.sensor.intrinsics.hfov_deg,
-                            image_width=f.sensor.intrinsics.image_width) for f in placed]
-        gsd_m = float(np.median([g for g in gsd if g])) if any(gsd) else GSD_FLOOR_M
+        gsd = [footprint_m(f.sensor, f.agl)[0] / f.sensor.intrinsics.image_width for f in placed if f.agl > 0.0]
+        gsd_m = float(np.median(gsd)) if gsd else GSD_FLOOR_M
         corners = np.asarray([[(float(c[0]), float(c[1])) for c in f.corners] for f in placed])
         rgb, alpha, (x0, y0, x1, y1), n = composite(corners, (f.rgb for f in placed), gsd_m=gsd_m)
         fit = None

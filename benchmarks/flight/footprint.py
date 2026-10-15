@@ -63,10 +63,3 @@ def off_nadir_lonlat(lat: float, lon: float, agl_m: float, heading_deg: float, r
     scale = M_PER_DEG_LAT * math.cos(math.radians(lat))
     return off_nadir_deg((float(point_lon) - float(lon)) * scale, (float(point_lat) - float(lat)) * M_PER_DEG_LAT,
                          agl_m, heading_deg, roll_deg, pitch_deg, hfov_deg=hfov_deg, vfov_deg=vfov_deg)
-
-
-def ground_gsd_m(agl_m: float, *, hfov_deg: float, image_width: int) -> float | None:
-    """Metres of ground one pixel covers looking straight down from ``agl_m``; None on the ground."""
-    if agl_m <= 0.0 or image_width <= 0:
-        return None
-    return 2.0 * agl_m * math.tan(math.radians(hfov_deg) / 2.0) / float(image_width)
