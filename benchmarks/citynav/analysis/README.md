@@ -4,7 +4,7 @@ The readers every reported number is derived with. Each reads run roots, the
 directories a bench run writes (`run_manifest.json` beside `episodes.jsonl`),
 and none defines a metric of its own: `rows.load_attempts` decides which
 attempt is an episode's result (the first fully complete attempt by start
-time) and `eval.aggregate` averages.
+time) and `arm_table.arm_row` averages.
 
 Every reader refuses a root that scores fewer episodes than its manifest
 selected (`selection.episodes_n`) and names the shortfall: episodes only ever

@@ -135,29 +135,3 @@ def score_arrival(
             if key in scores:
                 scores[key] = 0
     return scores
-
-
-def aggregate(per_episode: list[dict]) -> dict:
-    """Macro-average a non-empty list of episode metrics into one summary dict."""
-    out: dict = {}
-    for k in ("NE", "SR", "OSR"):
-        # A key a row lacks (OSR on a shape-scored row) stays out of the mean.
-        vals = [r[k] for r in per_episode if r.get(k) is not None]
-        if vals:
-            out[k] = round(float(np.mean(vals)), 4)
-    # A shape-scored SR pools footprint containment and the disc fallback;
-    # each is reported apart. A ring bench resolves no ``precise_target``.
-    for kind in ("shape", "radius"):
-        vals = [
-            r["SR"]
-            for r in per_episode
-            if r.get("precise_target") == kind and r.get("SR") is not None
-        ]
-        out[f"precise_{kind}_n"] = len(vals)
-        if vals:
-            out[f"SR_by_{kind}"] = round(float(np.mean(vals)), 4)
-    # CityNav reports its rates as percentages.
-    for k in ("SR", "OSR", "SR_by_shape", "SR_by_radius"):
-        if k in out:
-            out[k + "_pct"] = round(out[k] * 100.0, 2)
-    return out

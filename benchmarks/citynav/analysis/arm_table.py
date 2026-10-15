@@ -1,7 +1,7 @@
 """One metrics row per run root — the N-arm view a ladder is read with.
 
 It defines no metric: ``rows.load_attempts`` picks each episode's result
-and ``eval.aggregate`` averages. The criterion must be identical across
+and :func:`arm_row` averages it. The criterion must be identical across
 every root and is printed once. An arm's label is the withholds its run
 manifest records, else the root's basename; its effort is the manifest's
 ``SEARCH_SAMPLING_REASONING_EFFORT``, as written.
@@ -19,7 +19,8 @@ import statistics
 import sys
 from pathlib import Path
 
-from benchmarks.citynav import eval as _eval
+import numpy as np
+
 from benchmarks.citynav.analysis import rows as _rows
 from benchmarks.citynav.analysis.run_report import run_criterion
 
@@ -42,17 +43,24 @@ COLUMNS = (
 )
 
 
-#: Copied straight out of ``eval.aggregate``'s output, never recomputed.
-_AGG_KEYS = ("SR", "SR_pct", "OSR", "OSR_pct", "SR_by_shape", "SR_by_shape_pct", "SR_by_radius",
-             "SR_by_radius_pct", "precise_shape_n", "precise_radius_n")
-_METRIC_KEYS = (*_AGG_KEYS, "SR_n", "NE_mean", "NE_med")
+_METRIC_KEYS = ("SR", "SR_pct", "OSR", "OSR_pct", "SR_by_shape", "SR_by_shape_pct", "SR_by_radius",
+                "SR_by_radius_pct", "precise_shape_n", "precise_radius_n", "SR_n", "NE_mean", "NE_med")
+
+
+def _mean(vals: list) -> float | None:
+    return round(float(np.mean(vals)), 4) if vals else None
 
 
 def arm_row(root: Path, *, allow_partial: bool = False,
             attempts: tuple[dict, _rows.ReadStats] | None = None) -> dict:
     """One arm's summary; an arm with no scored episode still gets its row.
     ``attempts`` is the root's ``rows.load_attempts`` result when the caller
-    already read it."""
+    already read it.
+
+    Each mean is a macro mean over the rows carrying the key (OSR is absent
+    from a shape-scored row); a shape-scored SR, which pools footprint
+    containment and the disc fallback, is also split by ``precise_target``;
+    rates are also given as percentages, as CityNav reports them."""
     picked, stats = attempts or _rows.load_attempts(root, allow_partial=allow_partial)
     scored = list(_rows.scored_metrics(picked).values())
     manifest = _rows.read_manifest(root)
@@ -72,12 +80,19 @@ def arm_row(root: Path, *, allow_partial: bool = False,
     }
     if not scored:
         return row
-    agg = _eval.aggregate(scored)
     row["SR_n"] = sum(1 for m in scored if m.get("SR"))
     ne = [m["NE"] for m in scored if m.get("NE") is not None]
     row["NE_med"] = round(statistics.median(ne), 2) if ne else None
-    row["NE_mean"] = agg.get("NE")
-    row.update({k: agg.get(k) for k in _AGG_KEYS})
+    row["NE_mean"] = _mean(ne)
+    for k in ("SR", "OSR"):
+        row[k] = _mean([m[k] for m in scored if m.get(k) is not None])
+    for kind in ("shape", "radius"):
+        vals = [m["SR"] for m in scored if m.get("precise_target") == kind and m.get("SR") is not None]
+        row[f"precise_{kind}_n"] = len(vals)
+        row[f"SR_by_{kind}"] = _mean(vals)
+    for k in ("SR", "OSR", "SR_by_shape", "SR_by_radius"):
+        if row[k] is not None:
+            row[k + "_pct"] = round(row[k] * 100.0, 2)
     return row
 
 
