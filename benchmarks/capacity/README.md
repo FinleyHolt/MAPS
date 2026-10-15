@@ -7,7 +7,7 @@ repository and writes the same session shape.
 
 | Piece | What it is |
 |---|---|
-| `streams.py` | Seeded Poisson report streams over the 603 reviewed Cal City episodes (`benchmarks.calcity.data_prep.reviewed`), drawn without replacement |
+| `streams.py` | Seeded Poisson report streams over the 1,100 reviewed Cal City episodes (`benchmarks.calcity.data_prep.reviewed`), drawn without replacement |
 | `bench_fullset --arrivals` | The assisted arm: the shared batch driver releases each report at its arrival time to `--workers N` concurrent missions, one process each, frames from the bench's ortho crops |
 | `reader.py` | Correct finds per hour against offered load, the saturation load, and alone against assisted paired on the same stream |
 

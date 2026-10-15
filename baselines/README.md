@@ -54,7 +54,7 @@ for policy in geonav geonav_released visa; do
 done
 ```
 
-Against the E3 roots (the 603 reviewed Cal City episodes):
+Against the E3 roots (the 1,100 reviewed Cal City episodes):
 
 ```sh
 for policy in geonav geonav_released visa; do

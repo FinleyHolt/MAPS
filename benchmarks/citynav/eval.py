@@ -1,4 +1,4 @@
-"""CityNav scoring: NE / SR / OSR / SPL for one episode, and their macro average.
+"""CityNav scoring: NE / SR / OSR / SPL for one episode.
 
 NE is the straight-line distance in metres from where the agent ended to the
 goal, with no path term: a 3 km tour that commits 1 m from the goal scores

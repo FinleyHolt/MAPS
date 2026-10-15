@@ -163,7 +163,7 @@ A released checkpoint cannot read the Cal City protocol as flown by MAPS.
 | Cal City protocol (`configs/calcity.yaml`) | What a checkpoint gets | Why |
 |---|---|---|
 | One 13.4 x 10.2 km map | one 400 m block per episode, placed uniformly at random (seeded per episode) among the windows holding the start and the target shape 20 m from the edge | the checkpoints were trained on blocks of about 400 m; FlightGPT reads the whole block as one image under a 4004 px limit; HETT and MGP normalize over a 410 m canvas. A centred window would put the target at the reflection of the start |
-| All 1,023 episodes | episodes whose start and target shape fit one block; the rest listed in `manifest.json` with the reason | no block holds them |
+| All 4,573 episodes | episodes whose start and target shape fit one block; the rest listed in `manifest.json` with the reason | no block holds them |
 | 0.15 m/px flown ortho (EPSG:32611) | bilinear resample to 0.1 m/px, PNG + flat float32 GeoTIFF on the same grid, affine in the local frame | the checkpoints' rasters are 0.1 m/px |
 | Flat world, ground 0 | `GROUND_LEVEL` 0 per block; the depth channel reads a constant 50 m | the checkpoints were trained on SensatUrban relief, and get none |
 | Dataset start pose | trajectory[0], heading north | Cal City rows carry no heading |

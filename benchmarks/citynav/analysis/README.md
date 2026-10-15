@@ -15,10 +15,10 @@ and prints the shortfall to stderr.
 | Reader | Reads | Prints |
 |---|---|---|
 | `rows.py` | One root's ledger | Nothing: the library every reader picks attempts with. |
-| `run_report.py <root>...` | Each root in turn | SR, NE, SPL, OSR and the OSR x SR joint, SR by referent bucket, commit provenance, the bake check. |
-| `arm_table.py <root>...` | Many roots, one per arm | One row per arm: effort, n, SR, OSR, shape and radius SR, NE; refuses roots that mix success criteria. `--json` for the rows. |
+| `run_report.py <root>...` | Each root in turn | SR, NE, SPL, OSR and the OSR x SR joint, SR by target shape, SR by referent bucket and by intel quality (Cal City; each episode's class read off the run's split), commit provenance, the bake check. |
+| `arm_table.py <root>...` | Many roots, one per arm | One row per arm: effort, n, SR, OSR, shape and radius SR, NE; refuses roots that mix success criteria, discs of two radii included. `--json` for the rows. |
 | `ab_report.py <a> <b>` | Two roots | Paired SR with a bootstrap interval on the difference, McNemar, and the flip counts. |
-| `spend.py <root>` | Every attempt's transcript, flying or re-queued included | A hosted endpoint's tokens and USD (cache reads, cache writes and the rest priced apart, off `metrics.llm`'s `cached_tokens` and `cache_write_tokens`), USD per scored episode, the projection for the selection's remainder, and every `served_model` that answered. |
+| `spend.py <root>` | Every attempt's transcript, flying or re-queued included | A hosted endpoint's tokens and USD (cache reads, cache writes and the rest priced apart, off each transcript's `cached_tokens` and `cache_write_tokens` (`maps.llm.flight_summary`), null where the serve reports none), USD per scored episode, the projection for the selection's remainder, and every `served_model` that answered. |
 
 The figures in `figures/` read the same rows: `capability_effort_arms` adds
 the cost of the same picked attempts (`metrics.llm`) and the arm's identity

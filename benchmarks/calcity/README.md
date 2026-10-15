@@ -79,7 +79,7 @@ Read a root with [`benchmarks/citynav/analysis`](../citynav/analysis/README.md).
 |---|---|
 | `__init__.py` | `use()`: selects Cal City for the CityNav engine (`SEARCH_BENCHMARK_NAME` and the `SEARCH_CITYNAV_*` roots). |
 | `paths.py` | The file layout. |
-| `bench_fullset.py`, `run_benchmark/` | The CityNav driver and runner with Cal City selected. |
+| `bench_fullset.py`, `run_benchmark.py` | The CityNav driver and runner with Cal City selected. |
 | `data_prep/aoi.py` | The area, its local metric frame and the flat ground plane. |
 | `data_prep/bundle.py` | Reads the world bundle. |
 | `data_prep/build_objects_json.py`, `data_prep/build_rgbd_ortho.py`, `data_prep/bake_tiles.py` | The build steps. |
