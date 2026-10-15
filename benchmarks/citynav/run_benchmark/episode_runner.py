@@ -212,8 +212,6 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
     except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact
         log.exception("retro re-render failed")
         return {"error": f"re-render failed: {type(exc).__name__}: {exc}"}
-    if obs is None or obs.rgb is None or obs.ortho_view_corners_xy is None:
-        return {"error": "re-render produced no ortho frame"}
     try:
         dets = h.perception.segment(obs, list(concepts))
     except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact

@@ -244,7 +244,7 @@ class MissionSession:
             self.recorder.write_step(step=step_idx, detections=step_detections)
 
         # Prior colour enrichment: one frame, upserted onto the named priors.
-        if obs.rgb is not None and not withheld("prior"):
+        if not withheld("prior"):
             try:
                 for pfid, pattrs, ppx in prior_percepts(obs, h, step_idx):
                     loop.upsert_prior_percept(pfid, pattrs, px=ppx)
