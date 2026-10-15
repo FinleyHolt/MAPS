@@ -51,6 +51,7 @@ from typing import Any
 from benchmarks.citynav.analysis.rows import is_infra_abort, iter_json_rows
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
+from benchmarks.flight.airframe import C12_SENSOR
 from benchmarks.flight.mission import FRAMES_JSONL, TRACK_JSONL
 from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.ortho.ground_level import GROUND_LEVEL
@@ -59,8 +60,6 @@ from maps.perception.ortho.sensor_frame import footprint_m
 from maps.search.analyze_scene.geom_compute import point_in_polygon
 
 FT_PER_M = 1.0 / 0.3048
-#: The C-12's camera, whose horizontal field of view is the width OSR reads.
-C12_SENSOR = "oryx_orx32_25mm_nadir"
 #: A gap between fixes longer than this is a hole in the recording.
 TRACK_GAP_S = 3.0
 #: A success's SPL needs the recording to hold this share of its run.
