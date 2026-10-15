@@ -1,4 +1,4 @@
-"""``_dispatch_one`` writes a verdict, and the verdict is not always ``ok``.
+"""``dispatch_one`` writes a verdict, and the verdict is not always ``ok``.
 
 A ``status`` the producer only ever set to ``ok`` would pass every schema
 and contract test while the reader's ``infra`` branch never turned over.
@@ -27,7 +27,7 @@ def light(monkeypatch):
 
 
 def _dispatch(tmp_path):
-    return dispatch._dispatch_one(
+    return dispatch.dispatch_one(
         episode=SimpleNamespace(episode_id="b::1#0"), idx=0, total=1, objects_by_map={},
         cfg=SimpleNamespace(source_path="x.yaml", policy=None), split="test", recorder=None, episode_dir=tmp_path,
     )
@@ -200,7 +200,7 @@ def test_a_fixed_dial_baseline_row_stamps_the_effort_its_requests_carry(tmp_path
     monkeypatch.setattr(dispatch, "_cached_run_provenance", lambda flags, **kw: {"search_env_flags": flags})
     monkeypatch.setattr(dispatch, "run_episode", lambda *a, **k: _rec())
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
-    row = dispatch._dispatch_one(
+    row = dispatch.dispatch_one(
         episode=SimpleNamespace(episode_id="b::1#0"), idx=0, total=1, objects_by_map={}, split="test", recorder=None, episode_dir=tmp_path,
         cfg=SimpleNamespace(source_path="x.yaml", policy="geonav_released"),
     )

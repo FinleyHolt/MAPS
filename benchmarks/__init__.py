@@ -17,7 +17,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMMIT_STAMP = REPO_ROOT / ".commit"
 
 
-def _git_provenance() -> dict:
+def git_provenance() -> dict:
     """Commit and dirty flag for this checkout, None where git cannot say. A
     tree without git reads its commit from ``COMMIT_STAMP``; dirty stays None."""
     out: dict = {"git_commit": None, "git_dirty": None}
@@ -50,7 +50,7 @@ def repo_provenance(
     served_build: str | None = None,
 ) -> dict:
     """The provenance record: git, and each run fact given."""
-    prov: dict = _git_provenance()
+    prov: dict = git_provenance()
     if config_path is not None:
         prov["config"] = str(config_path)
         from benchmarks.citynav.run_benchmark.config import config_sha256  # noqa: PLC0415

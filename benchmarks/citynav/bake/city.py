@@ -146,7 +146,7 @@ def _cell_coverage(
     return coverage
 
 
-def _normalise_props(raw: dict[str, Any] | None) -> dict[str, Any]:
+def normalise_props(raw: dict[str, Any] | None) -> dict[str, Any]:
     props: dict[str, Any] = {}
     for key, value in (raw or {}).items():
         clean = str(key).replace(":", "_").strip()
@@ -549,7 +549,7 @@ def _read_geojson_cache(
         geometry = raw.get("geometry")
         if not isinstance(geometry, dict):
             continue
-        props = _normalise_props(raw.get("properties") if isinstance(raw.get("properties"), dict) else {})
+        props = normalise_props(raw.get("properties") if isinstance(raw.get("properties"), dict) else {})
         if raw.get("id") is not None:
             props.setdefault("osm_id", raw.get("id"))
         records.append((props, geometry))

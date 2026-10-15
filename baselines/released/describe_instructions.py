@@ -32,8 +32,8 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from baselines.released.calcity_export import TARGET_OBJECT_ID, _write_json, block_name
-from baselines.seam import _extract_json
+from baselines.released.calcity_export import TARGET_OBJECT_ID, write_json, block_name
+from baselines.seam import extract_json
 
 PROMPT = """\
 An aerial navigation instruction describes one target to find.
@@ -57,7 +57,7 @@ def parse_reply(text: str, block_landmarks: list[str]) -> dict:
     Landmarks outside the block's own names are dropped rather than snapped.
     Raises ``ValueError`` on a reply with no usable object.
     """
-    raw = _extract_json(text)
+    raw = extract_json(text)
     if raw is None:
         raise ValueError(f"no JSON object in reply: {text[:200]!r}")
     target = str(raw.get("target") or "").strip()
@@ -105,7 +105,7 @@ def describe(export_dir: Path, base_url: str, model: str | None, api_key: str | 
         }, api_key)
         parsed = parse_reply(reply["choices"][0]["message"]["content"] or "", meta["landmarks"])
         done[block] = {str(TARGET_OBJECT_ID): [parsed]}
-        _write_json(out, done)
+        write_json(out, done)
     missing = set(manifest["blocks"]) - set(done)
     if missing:
         raise SystemExit(f"{len(missing)} blocks unparsed")

@@ -275,7 +275,7 @@ class BaselineHarness:
         strict = {"type": "json_schema", "json_schema": {"name": schema_name, "schema": schema, "strict": True}}
 
         def shaped(text):
-            parsed = _extract_json(text)
+            parsed = extract_json(text)
             return parsed if _fits(parsed, schema) else None
 
         t0 = time.perf_counter()
@@ -551,7 +551,7 @@ def _fits(value: Any, schema: dict) -> bool:
     return True
 
 
-def _extract_json(text: str) -> dict | None:
+def extract_json(text: str) -> dict | None:
     """The first JSON object in ``text``: a fenced block, else the first
     ``{`` that decodes. Prose before or after it is ignored."""
     if not text:

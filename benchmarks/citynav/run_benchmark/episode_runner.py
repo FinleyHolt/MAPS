@@ -125,7 +125,7 @@ def _episode_graph(assets):
     return build_object_graph(features, cell_size_m=float(assets.cell_size_m))
 
 
-def _success_shape(episode, objects_by_map: dict):
+def success_shape(episode, objects_by_map: dict):
     """The shape ``eval.score_arrival`` tests: the linked object's contour
     when the episode names one, else its mask."""
     if not episode.target_object_ids:
@@ -310,7 +310,7 @@ def run_episode(
         target_xy=episode.target_xy,
         pos_trajectory=[(float(p[0]), float(p[1])) for p in visited],
         success_dist_m=cfg.success_radius_m,
-        gt_polygon=_success_shape(episode, objects_by_map),
+        gt_polygon=success_shape(episode, objects_by_map),
         commit_xy=commit_xy,
         flew=bool(flights),
     )

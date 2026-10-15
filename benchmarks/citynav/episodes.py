@@ -148,7 +148,7 @@ def upsert_row(root: Path, row: dict) -> None:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
-def _json_default(obj: Any) -> Any:
+def json_default(obj: Any) -> Any:
     """numpy arrays and scalars as their values; anything else as its str."""
     import numpy as np  # noqa: PLC0415 — the fleet driver imports this module without numpy
 
@@ -167,7 +167,7 @@ def atomic_write_json(path: Path, payload: Any) -> None:
     fd, tmp = tempfile.mkstemp(prefix=".tmp.", dir=str(path.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, default=_json_default, indent=2)
+            json.dump(payload, fh, default=json_default, indent=2)
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, path)

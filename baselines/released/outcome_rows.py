@@ -78,7 +78,7 @@ def read_natives(paths: list[Path]):
 
 def stamp(method: str, checkpoint_id: str, dataset_version: str, split: str) -> dict:
     """The identity every row of one run carries, top level and in provenance."""
-    from benchmarks import _git_provenance
+    from benchmarks import git_provenance
 
     release = RELEASES[method]
     ident = {
@@ -91,7 +91,7 @@ def stamp(method: str, checkpoint_id: str, dataset_version: str, split: str) -> 
     }
     provenance = {
         **ident,
-        "git_commit": _git_provenance().get("git_commit"),
+        "git_commit": git_provenance().get("git_commit"),
         "split": split,
         "served_model": f"{method}:{checkpoint_id}",
         # No tile bake: a released checkpoint reads its own rasters, so

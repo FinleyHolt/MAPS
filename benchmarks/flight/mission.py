@@ -253,9 +253,9 @@ class Mission:
         #: The nearest the pose came to the last leg's point since it was posted, re-flies included.
         self._closest_m = float("inf")
 
-        from benchmarks import _git_provenance  # noqa: PLC0415
+        from benchmarks import git_provenance  # noqa: PLC0415
 
-        prov = _git_provenance()
+        prov = git_provenance()
         self.git_commit: str | None = prov.get("git_commit")
         self.git_dirty: bool | None = prov.get("git_dirty")
 

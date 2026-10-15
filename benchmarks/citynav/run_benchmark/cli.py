@@ -22,7 +22,7 @@ from benchmarks.citynav.adapter import episode_ids, find_row, load_objects, load
 from benchmarks.citynav.episode_workdir import benchmark, open_episode_dir
 from benchmarks.citynav.paths import DEFAULT_SPLIT, OBJECTS_JSON, assert_available, split_path
 from benchmarks.citynav.run_benchmark.config import export_withhold, load_config
-from benchmarks.citynav.run_benchmark.dispatch import _dispatch_one
+from benchmarks.citynav.run_benchmark.dispatch import dispatch_one
 from maps.llm import endpoint_spec as endpoint_spec_module
 
 log = logging.getLogger("run_benchmark")
@@ -178,7 +178,7 @@ def main() -> int:
         ep = open_episode_dir(args.attempt_root, episode_id=args.episode_id)
         print(ep.dir, flush=True)
         try:
-            _dispatch_one(episode=episode, idx=0, total=1,
+            dispatch_one(episode=episode, idx=0, total=1,
                           objects_by_map=objects_by_map, cfg=cfg, split=args.split, recorder=ep.recorder,
                           episode_dir=ep.dir)
         finally:
@@ -212,7 +212,7 @@ def main() -> int:
         ep = open_episode_dir(out_root, episode_id=episode.episode_id)
         try:
             # The same dispatch bench_fullset's --attempt-root children run.
-            result = _dispatch_one(
+            result = dispatch_one(
                 episode=episode,
                 idx=i,
                 total=len(indexed_rows),

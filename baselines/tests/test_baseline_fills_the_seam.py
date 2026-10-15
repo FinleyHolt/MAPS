@@ -22,7 +22,7 @@ from baselines.seam import (
     BaselineHarness,
     BaselineResult,
     Landmark,
-    _extract_json,
+    extract_json,
     _landmarks_from_rows,
     fly,
     match_landmarks,
@@ -194,9 +194,9 @@ def test_landmark_distance_reads_the_area_not_the_centroid():
 
 
 def test_the_first_json_object_is_read_out_of_prose_or_a_fence():
-    assert _extract_json('thinking... ```json\n{"verdict": "move", "n": 2}\n``` trailing') == {"verdict": "move", "n": 2}
-    assert _extract_json('Here is my answer: {"a": [1, 2], "b": {"c": "x"}} and a tail {') == {"a": [1, 2], "b": {"c": "x"}}
-    assert _extract_json("no json here") is None
+    assert extract_json('thinking... ```json\n{"verdict": "move", "n": 2}\n``` trailing') == {"verdict": "move", "n": 2}
+    assert extract_json('Here is my answer: {"a": [1, 2], "b": {"c": "x"}} and a tail {') == {"a": [1, 2], "b": {"c": "x"}}
+    assert extract_json("no json here") is None
 
 
 def test_a_street_is_widened_to_its_carriageway_from_its_tags():

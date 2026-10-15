@@ -21,7 +21,7 @@ from benchmarks.calcity import paths
 from benchmarks.calcity.data_prep.aoi import AOI_BBOX, build_local_frame, bundle_root
 from benchmarks.calcity.data_prep.bundle import load_features_local
 from benchmarks.citynav.bake import city
-from benchmarks.citynav.bake.city import _normalise_props
+from benchmarks.citynav.bake.city import normalise_props
 from benchmarks.citynav.eval import WorldBounds
 
 
@@ -45,7 +45,7 @@ def local_osm_records(bundle: Path) -> list[tuple[dict[str, Any], dict[str, Any]
         if geom is None or geom.is_empty:
             continue
         tags = {str(k): v for k, v in (rec.get("tags") or {}).items()}
-        props = _normalise_props({**tags, "worldkit_layer": rec.get("layer")})
+        props = normalise_props({**tags, "worldkit_layer": rec.get("layer")})
         if rec.get("osm_id") is not None:
             props.setdefault("osm_id", rec["osm_id"])
         records.append((props, mapping(geom)))

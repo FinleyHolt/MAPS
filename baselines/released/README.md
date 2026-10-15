@@ -105,7 +105,7 @@ set, count every listed id as a miss.
   upstream's `target_positions[-1]`). Upstream's own number for the same run
   stays in its native output.
 - Cal City: the shape criterion `benchmarks.calcity.use` selects, against
-  the shape the bench scores the row on (`episode_runner._success_shape`,
+  the shape the bench scores the row on (`episode_runner.success_shape`,
   through `calcity_export.calcity_shapes`), exactly as drawn, on the final
   pose (the released methods record no commit). This is the Cal City
   contract, not upstream's 20 m disc.

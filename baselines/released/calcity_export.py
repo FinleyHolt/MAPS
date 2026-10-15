@@ -317,8 +317,8 @@ def export(
             objects[name] = {str(o["id"]): o for o in landmarks + [target]}
             episodes.append(mturk_row(b["row_index"], b["description"],
                                       tuple(b["start_xy"]), tuple(b["target_xy"])))
-        _write_json(root / "citynav" / f"citynav_{SPLIT_NAME}.json", episodes)
-        _write_json(root / "cityrefer" / "objects.json", objects)
+        write_json(root / "citynav" / f"citynav_{SPLIT_NAME}.json", episodes)
+        write_json(root / "cityrefer" / "objects.json", objects)
         link = root / "cityrefer" / "processed_descriptions.json"
         if not link.is_symlink():
             link.symlink_to("../../../../processed_descriptions.json")
@@ -334,7 +334,7 @@ def export(
                     continue
                 write_block_rasters(src, utm_origin, tuple(b["bounds"]), png, tif)
 
-    _write_json(out / "blocks.json", {
+    write_json(out / "blocks.json", {
         "GROUND_LEVEL": {name: 0.0 for name in blocks},
         "MAP_BOUNDS": {name: b["bounds"] for name, b in blocks.items()},
     })
@@ -353,11 +353,11 @@ def export(
         },
         "excluded": excluded,
     }
-    _write_json(out / "manifest.json", manifest)
+    write_json(out / "manifest.json", manifest)
     return manifest
 
 
-def _write_json(path: Path, payload) -> None:
+def write_json(path: Path, payload) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload))
@@ -367,20 +367,20 @@ def _write_json(path: Path, payload) -> None:
 def calcity_shapes() -> dict[str, dict]:
     """``{episode_id: {gt_polygon, target_xy, start_xy, description}}`` over
     the Cal City split, in split order: the shape the bench scores each row
-    against (``episode_runner._success_shape``), its target point, its start
+    against (``episode_runner.success_shape``), its target point, its start
     and the episode's instruction. Selects Cal City for this process first."""
     import benchmarks.calcity
 
     benchmarks.calcity.use()
     from benchmarks.calcity import paths
     from benchmarks.citynav.adapter import load_objects, load_split, parse_episode
-    from benchmarks.citynav.run_benchmark.episode_runner import _success_shape
+    from benchmarks.citynav.run_benchmark.episode_runner import success_shape
 
     objects = load_objects(paths.OBJECTS_JSON)
     out: dict[str, dict] = {}
     for index, row in enumerate(load_split(paths.split_path("calcity"))):
         episode = parse_episode(row, index)
-        shape = _success_shape(episode, objects)
+        shape = success_shape(episode, objects)
         out[episode.episode_id] = {
             "gt_polygon": [list(map(float, p)) for p in shape] if shape is not None else None,
             "target_xy": episode.target_xy,

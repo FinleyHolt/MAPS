@@ -33,7 +33,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from benchmarks.citynav.episodes import RUN_LOG, _json_default
+from benchmarks.citynav.episodes import RUN_LOG, json_default
 
 CONVERSATION_JSONL = "conversation.jsonl"
 DETECTIONS_JSONL = "detections.jsonl"
@@ -111,7 +111,7 @@ class LiveRecorder:
 
     def write_step(self, *, step: int, detections: list[dict[str, Any]]) -> None:
         for det in detections:
-            line = json.dumps({**det, "step": int(step)}, default=_json_default) + "\n"
+            line = json.dumps({**det, "step": int(step)}, default=json_default) + "\n"
             try:
                 with (self.episode_dir / DETECTIONS_JSONL).open("a", encoding="utf-8") as fh:
                     fh.write(line)

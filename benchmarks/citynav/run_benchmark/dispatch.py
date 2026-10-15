@@ -96,7 +96,7 @@ def is_infra_fault(exc: BaseException) -> bool:
                    for cur in _chain(exc)))
 
 
-def _dispatch_one(
+def dispatch_one(
     *,
     episode: CityNavEpisode,
     idx: int,
