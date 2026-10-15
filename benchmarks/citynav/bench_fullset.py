@@ -794,15 +794,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--arrivals selects the session's episodes; drop --episode-allowlist, --limit "
                      "and --sample-seed")
     # The config is refused here, before an out-root exists or a serve is asked.
-    import yaml
-
     from benchmarks.citynav.run_benchmark.config import resolve_config
 
     try:
         resolved = resolve_config(CONFIG)[0]
-    except yaml.YAMLError as exc:
-        print(f"FATAL: {CONFIG}: {exc}", file=sys.stderr)
-        return 2
     except (OSError, ValueError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2

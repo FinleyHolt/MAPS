@@ -696,3 +696,13 @@ def test_a_dry_run_prints_the_allowlist_count_and_writes_nothing(tmp_path, monke
                     "--episode-allowlist", str(tmp_path / "ids.txt")]) == 0
     assert not (tmp_path / "r").exists()
     assert "1 ids requested -> 1 match" in capsys.readouterr().out
+
+
+def test_a_base_config_that_is_not_yaml_is_refused_naming_that_file(tmp_path, monkeypatch, capsys) -> None:
+    base = tmp_path / "base.yaml"
+    base.write_text("max_steps: [1\n")
+    top = tmp_path / "arm.yaml"
+    top.write_text("base: base.yaml\n")
+    monkeypatch.setattr(bf, "CONFIG", top)
+    assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run"]) == 2
+    assert capsys.readouterr().err.startswith(f"FATAL: {base.resolve()}: ")

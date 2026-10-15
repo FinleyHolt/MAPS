@@ -137,7 +137,10 @@ def _read_chain(p: Path, seen: tuple[Path, ...] = ()) -> dict:
     p = p.resolve()
     if p in seen:
         raise ValueError(f"{p}: base chain loops ({' -> '.join(map(str, (*seen, p)))})")
-    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    try:
+        data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"{p}: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError(f"{p}: a config is a mapping of keys")
     base = data.pop("base", None)
