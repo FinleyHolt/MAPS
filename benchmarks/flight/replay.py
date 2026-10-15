@@ -369,7 +369,9 @@ class Script:
     def _user_turns(self, k: int) -> int:
         if k <= 0 or k >= len(self.rec.requests):
             return 0
-        before = len(self.rec.requests[k - 1]) + 1     # the request before, and its answer
+        # ponytail: the turns past the request before and its answer; a run the
+        # compactor folded between them would miscount (none of the flown runs).
+        before = len(self.rec.requests[k - 1]) + 1
         # An operator's turn is words alone; a picture rides a user turn as a
         # list, and a protocol nudge is the harness's own ``[Repair]`` turn.
         return sum(1 for m in self.rec.requests[k][before:]
