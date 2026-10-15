@@ -29,14 +29,18 @@ def raster_pair(map_name: str) -> str:
             f"benchmarks.calcity.data_prep.build_rgbd_ortho builds them")
 
 
+def holds_raster(rgbd_dir: str | Path, map_name: str) -> bool:
+    """Whether a raster directory holds ``map_name``'s pair (:func:`raster_pair`)."""
+    d = Path(rgbd_dir)
+    return (d / f"{map_name}.tif").is_file() and any((d / f"{map_name}{s}").is_file() for s in ("_rgb.tif", ".png"))
+
+
 def load_raster(rgbd_dir: str | Path, map_name: str):
     """``(rgb, bounds, px_per_m)`` for a raster directory, the rgb memory-mapped;
     None when it does not hold the pair (:func:`raster_pair`)."""
     from maps.perception.ortho.camera_model import load_ortho_or_rasters  # noqa: PLC0415
 
-    d = Path(rgbd_dir)
-    if not (d / f"{map_name}.tif").is_file() or not any(
-            (d / f"{map_name}{s}").is_file() for s in ("_rgb.tif", ".png")):
+    if not holds_raster(rgbd_dir, map_name):
         return None
     bake = load_ortho_or_rasters(map_name, rgbd_dir=str(rgbd_dir))
     if bake is None:

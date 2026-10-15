@@ -433,3 +433,28 @@ def test_a_replay_of_a_run_that_never_reached_the_reasoner_is_refused_by_name_be
     with pytest.raises(SystemExit) as refused:
         R.main(["run", "--frames", str(tmp_path / "cam.mcap"), "--out", str(tmp_path / "out")])
     assert refused.value.code == 2 and "records no start: the run never reached the reasoner" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("missing", ["frames", "boresight", "raster"])
+def test_a_frame_tier_input_that_is_not_there_is_refused_before_the_ring_is_read(
+        tmp_path, monkeypatch, capsys, missing):
+    import benchmarks.flight.recorded_ring as ring
+
+    rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run",
+                      row={"episode_id": "calcity::t", "start_xy": [0.0, 0.0]},
+                      params={}, requests=[], responses=[], conversation=[], frames=[])
+    monkeypatch.setattr(R, "open_recording", lambda run: rec)
+    monkeypatch.setattr(ring, "RecordedRing", lambda *a, **kw: pytest.fail("the frames were read"))
+    given = {"frames": tmp_path / "cam.mcap", "boresight": tmp_path / "chain.json", "raster": tmp_path / "raster"}
+    given["raster"].mkdir()
+    for name in ("calcity.tif", "calcity_rgb.tif"):
+        (given["raster"] / name).write_bytes(b"")
+    given["frames"].write_bytes(b"")
+    given["boresight"].write_text("{}")
+    if missing == "raster":
+        (given["raster"] / "calcity_rgb.tif").unlink()
+    else:
+        given[missing].unlink()
+    with pytest.raises(SystemExit) as refused:
+        R.main(["run", *(a for k, p in given.items() for a in (f"--{k}", str(p))), "--out", str(tmp_path / "out")])
+    assert refused.value.code == 2 and str(given[missing]) in capsys.readouterr().err

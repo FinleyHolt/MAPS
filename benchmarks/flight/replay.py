@@ -41,6 +41,7 @@ from benchmarks.citynav.analysis.rows import iter_json_rows
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
+from benchmarks.flight import map_render
 from benchmarks.flight.live_source import open_live, ortho_observation
 from benchmarks.flight.measures import run_bases
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, converse,
@@ -653,6 +654,14 @@ def main(argv: list[str] | None = None) -> int:
     rec = open_recording(args.run)
     if not rec.row.get("start_xy"):
         ap.error(f"{rec.run_id} records no start: the run never reached the reasoner")
+    # The frame tier's inputs, checked before the recording is read.
+    if args.frames is not None and not args.frames.is_file():
+        ap.error(f"--frames {args.frames}: no such recording")
+    if args.boresight is not None and not args.boresight.is_file():
+        ap.error(f"--boresight {args.boresight}: no such file")
+    if args.raster is not None and not map_render.holds_raster(args.raster, rec.map_name):
+        ap.error(f"--raster {args.raster}: no {rec.map_name} raster there; a raster directory holds "
+                 f"{map_render.raster_pair(rec.map_name)}")
     out = args.out / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     live = None
     bank: list[Held] | None = None
