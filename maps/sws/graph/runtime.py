@@ -13,17 +13,6 @@ from maps.sws.graph.model import MapObject, ObjectGraph
 _BEST_VIEW_COLOR_KEYS = ("color", "color_conf", "color_shade", "color_flag", "color_rgb")
 
 
-def _flat_color(node) -> dict:
-    """Top-count color value per key off a freshly-built node's {value:count} buckets."""
-    sa = node.semantic_attributes
-    out: dict = {}
-    for key in _BEST_VIEW_COLOR_KEYS:
-        bucket = sa.get(key)
-        if isinstance(bucket, dict) and bucket:
-            out[key] = max(bucket.items(), key=lambda kv: kv[1])[0]
-    return out
-
-
 def apply_best_view_color(node, color_attrs: dict, px: int) -> bool:
     """Best-view color, the same for detected and prior nodes.
 
@@ -152,7 +141,6 @@ def upsert_tracked_detected(
     if existing_fid is None:
         fid = _next_detected_id(graph)
         base_node.track_id = track_id
-        base_node.provenance = "detected"
         base_node.centroid = centroid_rc
         _stamp_cells(base_node, hm_rows, hm_cols, graph.cell_size_m)
         graph.nodes[fid] = base_node
@@ -160,7 +148,6 @@ def upsert_tracked_detected(
 
     # Repeat sighting: the latest observation's footprint, contour and xy win.
     node = graph.nodes[existing_fid]
-    node.track_id = track_id
     node.centroid = centroid_rc
     _stamp_cells(node, hm_rows, hm_cols, graph.cell_size_m)
     # A contour-less repeat keeps the stored contour.
@@ -170,9 +157,10 @@ def upsert_tracked_detected(
     incoming_wxy = base_node.world_xy
     if incoming_wxy is not None:
         node.world_xy = (float(incoming_wxy[0]), float(incoming_wxy[1]))
-    # base_node carries this frame's mask pixel count and color read.
+    # base_node carries this frame's mask pixel count and color read, one
+    # value per bucket.
     apply_best_view_color(
-        node, _flat_color(base_node), base_node.best_view_px
+        node, {k: next(iter(v)) for k, v in base_node.semantic_attributes.items() if v}, base_node.best_view_px
     )
     return existing_fid
 
