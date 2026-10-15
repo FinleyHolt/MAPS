@@ -26,7 +26,7 @@ detections into the graph) and returns the flight report the model reads.
 | The surface the op program runs over: one row per graph node, its served point, mask and colour fields | `search/analyze_scene/surface.py` |
 | The geometry op program behind `find`, `intersection`, `ends_of`, `distance` | `search/analyze_scene/geom_program.py`, `search/analyze_scene/geom_compute.py`, `search/analyze_scene/row_geometry.py` |
 | Matching a query to rows by name | `search/analyze_scene/text_match.py` |
-| Transcript compaction when the conversation outgrows the window | `search/analyze_scene/compactor.py` |
+| Transcript compaction when the conversation outgrows the window | `search/parse_compile/compactor.py` |
 | The per-episode search state machine and its observation step | `search/search_loop.py` |
 | The `look` crop and the `show_map` schematic | `search/render/look_render.py`, `search/render/map_render.py` |
 | The bench ablation withholds | `search/withhold.py` |

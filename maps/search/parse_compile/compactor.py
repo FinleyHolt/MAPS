@@ -30,7 +30,6 @@ import time
 from maps.llm.endpoint_spec import _MIN_INPUT_BUDGET
 from maps.llm.tokenizer import _tokenizer
 from maps.llm.vision_content import image_tokens_in, image_tokens_of
-from maps.search.analyze_scene.geom_program import join_hints
 
 log = logging.getLogger(__name__)
 
@@ -444,7 +443,7 @@ def _degrade_tool_result_content(
         note = ("rows trimmed to fids for token budget; the world-state "
                 "graph is live: show the handle again to re-derive the full "
                 "rows.")
-        head["hint"] = join_hints(head.get("hint"), note)
+        head["hint"] = f"{head['hint']}\n{note}" if head.get("hint") else note
     if not changed:
         return None, False
     return json.dumps(obj, default=str), had_colors
@@ -472,22 +471,12 @@ def _stub_until(out, idxs, *, keep_color, source, bound, tokens, model, tools):
     return stubbed, colored, tokens
 
 
-def _carries_dump(content: object) -> bool:
-    """Whether a tool-result body holds a head with a render to trim."""
-    if not isinstance(content, str):
-        return False
-    try:
-        obj = json.loads(content)
-    except (TypeError, ValueError):
-        return False
-    return isinstance(obj, dict) and any(_iter_op_heads(obj))
-
-
 def _dump_result_indices(messages: list[dict]) -> list[int]:
     """Indices of the tool-result messages carrying re-derivable dumps."""
     return [
         i for i, m in enumerate(messages)
-        if m.get("role") == "tool" and _carries_dump(m.get("content"))
+        if m.get("role") == "tool"
+        and _degrade_tool_result_content(m.get("content"))[0] is not None
     ]
 
 

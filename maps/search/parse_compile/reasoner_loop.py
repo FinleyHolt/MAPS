@@ -27,10 +27,6 @@ from typing import Callable
 import httpx
 
 from maps.llm.http import TRANSIENT_CLIENT_STATUS, CallCanceled
-from maps.search.analyze_scene.compactor import (
-    CompactionInfeasible,
-    CompactionInvariantError,
-)
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
@@ -50,6 +46,10 @@ from maps.search.parse_compile.carry import (
     run_ops,
 )
 from maps.search.parse_compile.code_surface import STOP_RE
+from maps.search.parse_compile.compactor import (
+    CompactionInfeasible,
+    CompactionInvariantError,
+)
 from maps.search.parse_compile.passes import cover_items
 from maps.search.parse_compile.prompts import served_tools
 from maps.search.parse_compile.reasoner_agent import Reasoner

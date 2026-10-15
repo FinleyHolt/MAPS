@@ -9,8 +9,8 @@ import json
 import pytest
 from PIL import Image
 
-from maps.search.analyze_scene import compactor as C
-from maps.search.analyze_scene.compactor import (
+from maps.search.parse_compile import compactor as C
+from maps.search.parse_compile.compactor import (
     CompactionInfeasible,
     CompactionInvariantError,
     compact_transcript,

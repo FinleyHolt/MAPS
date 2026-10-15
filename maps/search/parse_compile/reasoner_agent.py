@@ -11,7 +11,6 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from maps.search.analyze_scene.compactor import bound_image_count, compact_transcript
 from maps.llm import openai_wire
 from maps.llm.endpoint_spec import EndpointSpec
 from maps.llm.http import (
@@ -21,6 +20,7 @@ from maps.llm.http import (
 )
 from maps.llm.model_cards import card_for, sampling_kwargs, speaks_openai
 from maps.llm.vision_content import build_vision_user_content
+from maps.search.parse_compile.compactor import bound_image_count, compact_transcript
 from maps.search.parse_compile.prompts import served_system_prompt
 
 log = logging.getLogger(__name__)
