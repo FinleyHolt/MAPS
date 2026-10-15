@@ -137,6 +137,10 @@ these places, the served-text changes among them:
 | A failing block names the line of the block just sent that led to the error, also when a function from an earlier block raised; an empty window of a window (`r1[0:2][5:8]`) is refused when written, naming that window and its parent's row count. | The earlier block's line was named; a nested empty window was refused only at first use, naming the composed span and the whole set's count. |
 | The closed-loop OSR reads the fused observation centres beside the GNSS track on every run; track coverage under 95% governs only an unknown miss and SPL; SPL holds a track's last fix for its gap, so a report a second after the last whole-second fix owes no way back. | The observation centres were read only beside a track holding under 95% of the run (E6 OSR 59/69); the position read nothing past the last fix and charged a return leg. |
 | A compaction fire writes one script block per run of adjacent folded turns, each in that run's place, so a message between folded turns (an operator follow-up, a look's crops, a `[Repair]` note) keeps its position; it folds the same turns. | The flown compactor wrote one block for all the turns a fire folded and moved the messages between them after it; no flown run reached compaction. |
+| A 429 or 402 from the reasoner is re-sent until 30 minutes of waiting are spent on that call, each wait the endpoint's `retry-after-ms`, else its `Retry-After`, held between 1 s and 60 s. | A rate-limit refusal was re-sent five times, then counted as one transient failure of the turn. |
+| A 400 naming a hosted endpoint's content filter ends the mission `content_filter`, never re-sent. | Such a refusal was re-sent as a transient failure, up to six times, before the mission ended `request_refused`. |
+| A request to a hosted (OpenAI-wire) card carries the episode's routing key as `prompt_cache_key`; the row's `metrics.llm` also sums the endpoint's `cached_tokens` and `cache_write_tokens` (None where it reports none) and names its `served_model`. | Flown requests went to self-hosted serves, with no such key and no cache or model fields on the row. |
+| The bench driver holds a launch while no SAM replica answers `/health`, and kills an attempt after two failed probes a minute apart as `sam_down_midrun` (an infra casualty, re-queued). | A launch waited on the reasoner alone, and an episode flown with SAM down served each failed segmentation as its run block's error. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -302,7 +306,7 @@ export SEARCH_REASONER_URL=https://<resource>.openai.azure.com/openai/v1
 export SEARCH_REASONER_API_KEY=<deployment key>
 export SEARCH_ENDPOINT_SPEC_OVERRIDE=gpt-5.6-sol:262144
 export SEARCH_REASONER_TIMEOUT_S=1200
-python -m maps.llm.endpoint_preflight --effort none --effort medium --effort high
+python -m maps.llm.endpoint_preflight --effort none --effort medium --effort xhigh
 ```
 
 The override pins the window Inkling Small is served with, so the compactor
@@ -312,7 +316,13 @@ that spends the whole output reserve. The card takes the efforts `none`, `low`,
 `medium`, `high`, `xhigh` and `max`. The preflight flies two turns per effort
 through the reasoner's request path, the second streaming and carrying the
 tool call and its result, and prints either the endpoint's refusal or each
-reply and the token meter; it starts no run. Fly an arm as any other,
+reply and the token meter; it starts no run. Each request carries the
+episode's routing key as `prompt_cache_key`, and every turn's bytes open with
+the last turn's until an image eviction or a compaction fire rewrites an
+earlier message, so Azure's prompt cache serves the prefix; the preflight
+fails an effort whose second turn reads no cache hit. A run's spend, flying
+attempts and re-queued ones included, reads off its transcripts with
+`python -m benchmarks.citynav.analysis.spend <out-root>`. Fly an arm as any other,
 for example the reviewed Cal City episodes at one effort:
 
 ```sh
