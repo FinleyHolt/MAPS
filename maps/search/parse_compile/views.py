@@ -175,10 +175,12 @@ def crop_token_of(row: dict, live: bool) -> str:
     return fid
 
 
-def rounded_xy(token) -> list[float] | None:
-    """An ``[x, y]`` token -> the point at centimetre precision, else None."""
-    p = parse_xy_token(token)
-    return [round(p[0], 2), round(p[1], 2)] if p else None
+def rounded_xy(p) -> list[float] | None:
+    """An ``[x, y]`` token or point -> the point at centimetre precision,
+    else None."""
+    if isinstance(p, str):
+        p = parse_xy_token(p)
+    return [round(float(p[0]), 2), round(float(p[1]), 2)] if p else None
 
 
 def _mark(fid: str, row, xy, is_target: bool) -> dict:

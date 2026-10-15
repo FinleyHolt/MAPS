@@ -532,11 +532,10 @@ class _Mission:
                 return look_xy(row)
             sp = self._stop_xy(tok)
             if sp is not None:
-                return [round(sp[0], 2), round(sp[1], 2)]
+                return rounded_xy(sp)
             sv = self.staged_viewpoints.get(tok.strip().lower())
             if sv is not None:
-                return [round(float(sv["from_xy"][0]), 2),
-                        round(float(sv["from_xy"][1]), 2)]
+                return rounded_xy(sv["from_xy"])
             return rounded_xy(tok)
         return None
 
