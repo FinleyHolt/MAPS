@@ -15,13 +15,13 @@ import os
 import time
 from pathlib import Path
 
+from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL, ConversationLog
 from benchmarks.citynav.episodes import DEADLINE_ENV, TOUR_CURSOR, atomic_write_json
 from benchmarks.citynav.run_benchmark.osm_prior import prior_percepts
 from maps.llm.endpoint_spec import spec as endpoint_spec
 from maps.perception.geometry.sensor_spec import served_description
 from maps.perception.observation import ground_sides_m
 from maps.perception.ortho.detection_stamping import project_and_stamp_ortho_detections
-from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL, ConversationLog
 from maps.search.parse_compile.reasoner_loop import MissionSpec, run_mission
 from maps.search.withhold import withheld
 from maps.util.xy_token import parse_xy_token
@@ -119,9 +119,9 @@ def perceive(h, obs, detections) -> list[dict]:
     """Project and stamp one observation's detections through its view square
     and fold them into the live world-state; returns the folded rows. The
     one ingest path a flight and the bench's retrospective boost share."""
-    projected = dict(project_and_stamp_ortho_detections(
+    projected = project_and_stamp_ortho_detections(
         detections, view_corners_xy=obs.ortho_view_corners_xy, rgb=obs.rgb, tile=h.tile_frame,
-    )) if obs is not None else {}
+    ) if obs is not None else {}
     return h.search_loop.update_perception(detections=detections, projected_masks=projected)
 
 
@@ -242,11 +242,8 @@ class MissionSession:
 
         step_detections = perceive(h, obs, h.perception.detect(obs))
 
-        if self.recorder is not None and obs is not None:
-            try:
-                self.recorder.write_step(step=step_idx, detections=step_detections)
-            except Exception as exc:  # noqa: BLE001
-                log.warning("mission step write failed step=%d: %s", step_idx, exc)
+        if self.recorder is not None:
+            self.recorder.write_step(step=step_idx, detections=step_detections)
 
         # Prior colour enrichment: one frame, upserted onto the named priors.
         if obs is not None and obs.rgb is not None and not withheld("prior"):
