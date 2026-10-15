@@ -49,8 +49,9 @@ class SamServerOutage(RuntimeError):
 
 
 class SamRequestRefused(RuntimeError):
-    """The segmenter refused the request this client built (a 4xx other than
-    408 or 429): every replica would, so it is raised at once, never an outage."""
+    """The segmenter refused the request this client built (a 4xx outside
+    ``_SAM_TRANSIENT_CLIENT_STATUSES``): every replica would, so it is raised
+    at once, never an outage."""
 
 
 #: 4xx statuses that are the serve's weather, not a request built wrong: a
@@ -88,8 +89,9 @@ def _pick_url(eps: list[str]) -> str:
 def _post_segment(json_body: dict) -> dict | None:
     """POST ``/segment``, the one retry layer: the parsed JSON, or ``None``.
 
-    A 4xx other than 408 or 429 raises :class:`SamRequestRefused`. A connect
-    error, 408, 429 or 5xx goes to the next replica after
+    A 4xx outside ``_SAM_TRANSIENT_CLIENT_STATUSES`` raises
+    :class:`SamRequestRefused`. A connect error, one of those statuses or a
+    5xx goes to the next replica after
     ``SEGMENT_BACKOFF_S``. A read timeout is never resent to the replica that
     timed out (the server still holds the request): it moves to another, or
     fails when none is left. ``SEGMENT_DEADLINE_S`` bounds the whole. Each
