@@ -386,66 +386,79 @@ _FILTER_SAY = ("near=/within=/dwithin=/facing= with direction=, "
                + "/".join(f"{k}=" for k in sorted(_CARDINAL_KWARGS)))
 
 
-def _check_filter(pred, kw: dict) -> None:
-    """The filter refusals, one text for every filter (a set, a list, a
-    row): a kwarg outside the set is refused, never ignored, and a colour
-    cut gets its own reason."""
-    if "color" in kw:
-        raise CodeError(
-            "colour never CUTS -- it orders. The same car reads red "
-            "0.63 through a tight mask and 0.38 through its full one, "
-            "so a colour threshold drops the right row on the width of "
-            "its mask. Say rows.order(color=\"red\") and let the "
-            "spatial cuts do the dropping.")
-    bad = sorted(k for k in kw if k not in _FILTER_KWARGS)
-    if bad:
-        raise CodeError(
-            f"filter takes {_FILTER_SAY} or a predicate; "
-            f"{'=, '.join(bad)}= is none of them."
-            + _diagonal_remedy(bad))
-    _refuse_metres_in_within(kw.get("within"))
-    if pred is not None and any(v is not None for v in kw.values()):
-        raise CodeError(f"filter takes a predicate OR {_FILTER_SAY}, not both")
-    if pred is not None and not callable(pred):
-        raise CodeError(
-            f"filter's first argument is a predicate and {pred!r} "
-            "is not callable: rows.filter(lambda r: r.distance(x) <= 25)")
-
-
-def _check_order(key, nearest, color, direction, reverse) -> None:
-    """The order refusals, one text for every order (a set, a list, a
-    row)."""
-    if key is None and direction is None:
-        return
-    if key is not None and direction is not None:
-        raise CodeError(
-            'order takes a key OR direction=, not both: '
-            'direction="north" IS the key.')
-    if nearest is not None or color is not None:
-        raise CodeError("order takes a key OR nearest=/color=, not both")
-    if direction is not None:
-        _refuse_reversed_direction(direction, reverse)
-        _direction_key(direction)
-    elif not callable(key):
-        raise CodeError(
-            f"order's first argument is a key function and {key!r} "
-            "is not callable: rows.order(lambda r: r.distance(x))")
-
-
-def _order_here(rows, key, direction, reverse) -> "RowList | None":
-    """A key or compass ordering needs no server, so it answers here: the
-    rows are in hand and the axis is the map's. None for a server order."""
-    if direction is not None:
-        return RowList(sorted(rows, key=_direction_key(direction)))
-    if key is not None:
-        return RowList(sorted(rows, key=key, reverse=bool(reverse)))
-    return None
-
-
 _MISSING = object()
 
 
-class Row:
+class _Cuts:
+    """``filter`` and ``order``, one body and one refusal text for a row, a
+    list of rows and a result set. A predicate, a key or a compass word needs
+    no server and answers on the rows in hand; a served cut or order runs on
+    the mission over ``_target()``."""
+
+    __slots__ = ()
+
+    def _in_hand(self):
+        return self
+
+    def _sorted(self, key, reverse: bool) -> "RowList":
+        return RowList(sorted(self._in_hand(), key=key, reverse=reverse))
+
+    def filter(self, pred=None, **kw):
+        # A kwarg outside the set is refused, never ignored, and a colour cut
+        # gets its own reason.
+        if "color" in kw:
+            raise CodeError(
+                "colour never CUTS -- it orders. The same car reads red "
+                "0.63 through a tight mask and 0.38 through its full one, "
+                "so a colour threshold drops the right row on the width of "
+                "its mask. Say rows.order(color=\"red\") and let the "
+                "spatial cuts do the dropping.")
+        bad = sorted(k for k in kw if k not in _FILTER_KWARGS)
+        if bad:
+            raise CodeError(
+                f"filter takes {_FILTER_SAY} or a predicate; "
+                f"{'=, '.join(bad)}= is none of them."
+                + _diagonal_remedy(bad))
+        _refuse_metres_in_within(kw.get("within"))
+        if pred is None:
+            mp, src = self._target()
+            return mp._rows_filter(src, **kw)
+        if any(v is not None for v in kw.values()):
+            raise CodeError(
+                f"filter takes a predicate OR {_FILTER_SAY}, not both")
+        if not callable(pred):
+            raise CodeError(
+                f"filter's first argument is a predicate and {pred!r} "
+                "is not callable: rows.filter(lambda r: r.distance(x) <= 25)")
+        return RowList(r for r in self._in_hand() if pred(r))
+
+    def order(self, key=None, *, nearest=None, color=None, direction=None,
+              reverse=False):
+        """Put the rows in one order; a table sorts by one column.
+        ``direction=`` and ``key=`` sort the rows in hand (``reverse=`` flips a
+        key sort, as ``sorted()`` does); ``nearest=`` and ``color=`` re-rank
+        the whole set server-side, and relating to a place stamps ``facing
+        <place>`` and ``distance to <place>``."""
+        if key is None and direction is None:
+            mp, src = self._target()
+            return mp._rows_order(src, nearest=nearest, color=color)
+        if key is not None and direction is not None:
+            raise CodeError(
+                'order takes a key OR direction=, not both: '
+                'direction="north" IS the key.')
+        if nearest is not None or color is not None:
+            raise CodeError("order takes a key OR nearest=/color=, not both")
+        if direction is not None:
+            _refuse_reversed_direction(direction, reverse)
+            return self._sorted(_direction_key(direction), False)
+        if not callable(key):
+            raise CodeError(
+                f"order's first argument is a key function and {key!r} "
+                "is not callable: rows.order(lambda r: r.distance(x))")
+        return self._sorted(key, bool(reverse))
+
+
+class Row(_Cuts):
     """One selected row: a read-only view of its served columns (attributes,
     ``r["spaced name"]``, ``.get``/``.keys``, ``print``), geometry blobs
     hidden. ``bind`` is what a slot takes (the fid, or [x, y] for a computed
@@ -462,27 +475,22 @@ class Row:
         self.name = row.get("name")
         self.src = src                       # (ref, index) or None
 
-    # ONE row cuts and orders as the one-element set it is:
-    # r.order(nearest=poppy) puts a "distance to poppy" column on the row
-    # you are about to commit.
     def distance(self, other) -> float:
         """Metres from this row's footprint to ``other``."""
         mp = object.__getattribute__(self, "_mp")
         return mp._call_distance(self, other)
 
-    def filter(self, pred=None, **kw):
-        _check_filter(pred, kw)
-        if pred is not None:
-            return RowList([self] if pred(self) else [])
-        return object.__getattribute__(self, "_mp")._rows_filter(self, **kw)
+    # ONE row cuts and orders as the one-element set it is:
+    # r.order(nearest=poppy) puts a "distance to poppy" column on the row
+    # you are about to commit.
+    def _in_hand(self):
+        return (self,)
 
-    def order(self, key=None, *, nearest=None, color=None, direction=None,
-              reverse=False):
-        _check_order(key, nearest, color, direction, reverse)
-        if key is not None or direction is not None:
-            return RowList([self])      # one row is already in order
-        return object.__getattribute__(self, "_mp")._rows_order(
-            self, nearest=nearest, color=color)
+    def _sorted(self, key, reverse: bool) -> "RowList":
+        return RowList([self])          # one row is already in order
+
+    def _target(self):
+        return object.__getattribute__(self, "_mp"), self
 
     def _resolve_key(self, k):
         """The served column a Python spelling names, or None: the exact key,
@@ -615,41 +623,27 @@ class Row:
         return f"<row {body}>"
 
 
-class RowList(list):
+class RowList(_Cuts, list):
     """Rows the model narrowed in PYTHON (an arbitrary subset no executor
     ref spans): a plain list of :class:`Row` that every slot takes
     element-wise, kept a subclass only so ``.filter``/``.order`` chain."""
 
     __slots__ = ()
 
-    def _mp(self):
-        """The mission the rows came from. A list carries no ref of its own,
-        but every Row in it carries the surface it was minted on."""
+    def _target(self):
+        """The mission the rows came from, and the rows. A list carries no
+        ref of its own, but every Row in it carries the surface it was minted
+        on, so a predicate filter is no dead end: the served cut works on the
+        materialised subset as it does on a handle."""
         for r in self:
             mp = object.__getattribute__(r, "_mp")
             if mp is not None:
-                return mp
+                return mp, list(self)
         raise CodeError(
             "these rows are empty, so there is nothing to cut or order")
 
-    def filter(self, pred=None, **kw) -> "RowList | Rows":
-        # A PREDICATE FILTER IS NOT A DEAD END: the served cut works on a
-        # materialised subset exactly as it does on a handle.
-        _check_filter(pred, kw)
-        if pred is None:
-            return self._mp()._rows_filter(list(self), **kw)
-        return RowList(r for r in self if pred(r))
 
-    def order(self, key=None, *, nearest=None, color=None, direction=None,
-              reverse=False) -> "RowList | Rows":
-        _check_order(key, nearest, color, direction, reverse)
-        if (here := _order_here(self, key, direction, reverse)) is not None:
-            return here
-        return self._mp()._rows_order(list(self), nearest=nearest,
-                                      color=color)
-
-
-class Rows:
+class Rows(_Cuts):
     """A result set behind an executor ref: an index gives a :class:`Row`,
     a slice a window over the same ref, ``len()`` the rows it holds now."""
 
@@ -749,37 +743,18 @@ class Rows:
             shown=f"{src.ref}.{tier}"), self.mp)
 
     # -- cut and order: many filters, ONE ordering ------------------------
+    def _target(self):
+        return self.mp, self if not self.spec else self.mp._materialize(self)
+
     def filter(self, pred=None, *, near=None, within=None, dwithin=None,
                north_of=None, south_of=None, east_of=None, west_of=None,
-               facing=None, direction=None,
-               **kw) -> "Rows | RowList":
+               facing=None, direction=None, **kw):
         """Keep the rows that hold; filters compose, and every cut is a
         relation to its anchor (one place or a set)."""
-        _check_filter(pred, dict(
-            kw, near=near, within=within, dwithin=dwithin, facing=facing,
-            direction=direction, north_of=north_of, south_of=south_of,
-            east_of=east_of, west_of=west_of))
-        if pred is not None:
-            return RowList(r for r in self if pred(r))
-        src = self if not self.spec else self.mp._materialize(self)
-        return self.mp._rows_filter(
-            src, within=within, near=near,
-            dwithin=dwithin, north_of=north_of, south_of=south_of,
-            east_of=east_of, west_of=west_of,
-            facing=facing, direction=direction)
-
-    def order(self, key=None, *, nearest=None, color=None,
-              direction=None, reverse=False) -> "Rows | RowList":
-        """Put the rows in one order; a table sorts by one column.
-        ``direction=`` and ``key=`` sort the rows in hand (``reverse=`` flips a
-        key sort, as ``sorted()`` does); ``nearest=`` and ``color=`` re-rank
-        the whole set server-side, and relating to a place stamps ``facing
-        <place>`` and ``distance to <place>``."""
-        _check_order(key, nearest, color, direction, reverse)
-        if (here := _order_here(self, key, direction, reverse)) is not None:
-            return here
-        src = self if not self.spec else self.mp._materialize(self)
-        return self.mp._rows_order(src, nearest=nearest, color=color)
+        return super().filter(
+            pred, near=near, within=within, dwithin=dwithin,
+            north_of=north_of, south_of=south_of, east_of=east_of,
+            west_of=west_of, facing=facing, direction=direction, **kw)
 
     def distance(self, other) -> float:
         """Metres to ``other``, this set counting as ONE place: the free
