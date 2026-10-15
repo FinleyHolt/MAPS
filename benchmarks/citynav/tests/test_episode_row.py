@@ -16,7 +16,7 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
          policy: str | None = None) -> dict:
     h = SimpleNamespace(
         episode=None,
-        state=SimpleNamespace(altitude_m=100.0, pose_xy=(0.0, 0.0), visited_xy=[]),
+        state=SimpleNamespace(altitude_m=100.0, pose_xy=(0.0, 0.0)),
         search_loop=SimpleNamespace(_ortho_ground_z_m=0.0, set_retro_perceiver=lambda f: None),
         perception=SimpleNamespace(sahi_tiles_failed=0))
 
@@ -28,12 +28,10 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
         return SimpleNamespace(h=h, flights=flights,
                                run=lambda text, transcript: (MissionReply(ended_by="reply", turns_used=3), None))
 
-    def fly(*, state, flights, **kw):
-        # The six-action replay ends ``snap`` m east of the commit.
+    def fly(*, flights, **kw):
+        # Seven actions, the last ending ``snap`` m east of the commit.
         x, y = flights[-1]["resolved_xy"]
-        state.pose_xy = (x + snap, y)
-        state.visited_xy = [(0.0, 0.0), state.pose_xy]
-        return 7
+        return [(0.0, 0.0)] * 6 + [(x + snap, y)]
 
     monkeypatch.setattr(er, "load_episode_assets", lambda m: SimpleNamespace())
     monkeypatch.setattr(er, "build_episode", build)

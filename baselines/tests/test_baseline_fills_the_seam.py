@@ -97,14 +97,11 @@ def test_a_stub_policy_lands_its_commit_and_the_replay_ends_there(tmp_path, monk
 
     # The runner's replay flies the stops, then the commit leg: the scored
     # pose is the commit, reached through the six-action space.
-    state = h.state
-    state.record_visit()
-    steps = synthesize_compliant_trajectory(
-        cfg=h.cfg, state=state, flights=flight.flights, start_pose_xyh=(0.0, 0.0, 0.0), start_alt=50.0,
+    visited = synthesize_compliant_trajectory(
+        cfg=h.cfg, flights=flight.flights, start_pose_xyh=(0.0, 0.0, 0.0), start_alt=50.0,
     )
-    assert 0 < steps <= h.cfg.max_steps
-    assert len(state.visited_xy) == steps
-    assert abs(state.pose_xy[1] - 100.0) <= 5.0
+    assert 0 < len(visited) <= h.cfg.max_steps
+    assert abs(visited[-1][1] - 100.0) <= 5.0
 
 
 def test_the_budget_prices_a_leg_from_the_start_heading_the_replay_flies_from(tmp_path, monkeypatch):
@@ -121,10 +118,10 @@ def test_the_budget_prices_a_leg_from_the_start_heading_the_replay_flies_from(tm
     _install_stub_policy(monkeypatch, "stub_heading", run)
     h = _hydrated(heading=180.0)
     flights = fly(h, "stub_heading").flights
-    steps = synthesize_compliant_trajectory(
-        cfg=h.cfg, state=h.state, flights=flights, start_pose_xyh=(0.0, 0.0, 180.0), start_alt=50.0,
+    visited = synthesize_compliant_trajectory(
+        cfg=h.cfg, flights=flights, start_pose_xyh=(0.0, 0.0, 180.0), start_alt=50.0,
     )
-    assert priced["used"] == steps
+    assert priced["used"] == len(visited)
 
 
 def test_a_policy_that_commits_nothing_commits_its_last_stop(tmp_path, monkeypatch):

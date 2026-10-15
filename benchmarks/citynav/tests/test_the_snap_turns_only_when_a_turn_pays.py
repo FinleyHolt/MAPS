@@ -82,28 +82,15 @@ def test_a_leg_never_orbits_its_target(monkeypatch, tmp_path):
     from benchmarks.citynav.run_benchmark.config import load_config
     from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 
-    class _State:
-        pose_xy = (0.0, 0.0)
-        altitude_m = 100.0
-        heading_deg = 180.0
-
-        def __init__(self):
-            self.visited_xy = []
-
-        def record_visit(self):
-            self.visited_xy.append(self.pose_xy)
-
     target = (154.77264176418146, -47.65705150149299)
     cfg = load_config("configs/citynav.yaml")
     cfg.max_steps = 100_000
-    state = _State()
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
-    steps = synthesize_compliant_trajectory(
+    visited = synthesize_compliant_trajectory(
         cfg=cfg,
-        state=state,
         flights=[{"target": "s0", "resolved_xy": list(target), "altitude_m": 100.0}],
         start_pose_xyh=(0.0, 0.0, 180.0),
         start_alt=100.0,
     )
-    assert steps < 100
-    assert math.dist(state.pose_xy, target) <= ARRIVAL_BOUND_M
+    assert len(visited) < 100
+    assert math.dist(visited[-1], target) <= ARRIVAL_BOUND_M

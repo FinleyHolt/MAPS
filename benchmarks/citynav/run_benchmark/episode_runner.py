@@ -13,7 +13,7 @@ import importlib
 import logging
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -45,16 +45,12 @@ log = logging.getLogger("run_benchmark")
 
 @dataclass
 class EpisodeState:
-    """The harness's pose and visit history; the graph lives on the
-    ``SearchLoop``."""
+    """The aircraft's pose during the mission and the stop it is flying; the
+    graph lives on the ``SearchLoop``."""
 
     pose_xy: tuple[float, float]
     altitude_m: float
-    visited_xy: list[tuple[float, float]] = field(default_factory=list)
     step_idx: int = 0
-
-    def record_visit(self) -> None:
-        self.visited_xy.append(self.pose_xy)
 
 
 def make_perception() -> SamDetectClient:
@@ -188,7 +184,6 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
     graph = _episode_graph(tile_stem(episode.map_name), assets)
     start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.start_z)
     state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m)
-    state.record_visit()
     # A module global looked up at call time: the flight's forced replay swaps it.
     perception = make_perception()
     grid_h, grid_w = assets.grid_shape
@@ -321,12 +316,11 @@ def run_episode(
         flown = importlib.import_module("baselines.seam").fly(h, cfg.policy)
         flights, own = flown.flights, flown.metrics
     if flights:
-        steps_taken = synthesize_compliant_trajectory(
-            cfg=cfg, state=state, flights=flights,
-            start_pose_xyh=start_pose_xyh, start_alt=start_alt,
+        visited = synthesize_compliant_trajectory(
+            cfg=cfg, flights=flights, start_pose_xyh=start_pose_xyh, start_alt=start_alt,
         )
-        final_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
-        visited = state.visited_xy
+        steps_taken = len(visited)
+        final_xy = visited[-1] if visited else start_pose_xyh[:2]
     else:
         # ZERO flights: the drone never took off and nothing was committed.
         steps_taken = 0

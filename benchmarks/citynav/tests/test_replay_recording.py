@@ -17,16 +17,6 @@ import pytest
 FIXTURE = Path(__file__).parent / "fixtures" / "replay_trajectory.json"
 
 
-class _State:
-    def __init__(self):
-        self.pose_xy = (0.0, 0.0)
-        self.altitude_m = 50.0
-        self.visited_xy = []
-
-    def record_visit(self):
-        self.visited_xy.append(self.pose_xy)
-
-
 def _vp(xy, alt, fid):
     return {"target": fid, "resolved_xy": list(xy), "altitude_m": alt}
 
@@ -55,28 +45,24 @@ def _replay(case, tmp_path, monkeypatch):
 
     cfg = load_config("configs/citynav.yaml")
     cfg.max_steps = case["max_steps"]
-    state = _State()
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
-    steps = synthesize_compliant_trajectory(
+    return synthesize_compliant_trajectory(
         cfg=cfg,
-        state=state,
         flights=case["stops"],
         start_pose_xyh=(0.0, 0.0, 0.0),
         start_alt=50.0,
     )
-    return steps, state
 
 
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_the_replay_flies_the_recorded_trajectory_exactly(name, tmp_path, monkeypatch):
     recorded = json.loads(FIXTURE.read_text())[name]
-    steps, state = _replay(CASES[name], tmp_path, monkeypatch)
+    visited = _replay(CASES[name], tmp_path, monkeypatch)
 
-    assert steps == recorded["steps"]
-    assert list(state.pose_xy) == recorded["final_pos_xy"]
-    flown = [[round(p[0], 9), round(p[1], 9)] for p in state.visited_xy]
+    assert len(visited) == recorded["steps"]
+    assert list(visited[-1]) == recorded["final_pos_xy"]
+    flown = [[round(p[0], 9), round(p[1], 9)] for p in visited]
     assert flown == recorded["visited_xy"]
-    assert round(state.altitude_m, 9) == recorded["altitude_m"]
 
 
 def test_the_recording_is_not_vacuous():
