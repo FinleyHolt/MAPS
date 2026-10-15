@@ -49,10 +49,12 @@ RUNNER_MODULE = "benchmarks.citynav.run_benchmark"
 # Share of the episode cap held back from flying, so the model still has
 # turns to reply and commit after the mission's wall-clock backstop fires.
 _DEADLINE_RESERVE_FRAC = 0.1
-# How often the driver asks the reasoner's ``/models`` while an attempt
-# flies; two failures in a row kill the attempt as ``reasoner_down_midrun``.
+# How often the driver asks the reasoner's ``/models`` and the SAM replicas'
+# ``/health`` while an attempt flies; two failures in a row kill the attempt
+# as ``reasoner_down_midrun`` or ``sam_down_midrun``: an episode flying blind
+# spends reasoner calls on a result it cannot keep.
 REASONER_PROBE_S = 60.0
-# How often a launch held for a reasoner that is down asks again.
+# How often a launch held for a reasoner or a segmenter that is down asks again.
 REASONER_WAIT_S = 120.0
 # Pause between worker thread starts, so the first attempts do not all
 # cold-start at once.
@@ -323,26 +325,52 @@ class Driver:
         except (OSError, ValueError):
             return False
 
-    def _wait_for_reasoner(self) -> bool:
-        """Hold a launch until the reasoner answers; False once the wall
-        budget is spent or the run aborted while it waited."""
-        if self._reasoner_answers():
+    @staticmethod
+    def _sam_answers() -> bool:
+        """True when a SAM replica discovery health-checked answers
+        ``/health`` (the client steps off a dead replica); True with none
+        checked, as discovery skips an empty list."""
+        from maps.llm.endpoint_spec import spec, spec_installed  # noqa: PLC0415
+
+        urls = [u.strip().rstrip("/") for u in (spec().sam_url if spec_installed() else "").split(",")]
+        if not any(urls):
             return True
-        self.log("reasoner down; pausing launches until it answers")
-        while not self._reasoner_answers():
+        for url in filter(None, urls):
+            try:
+                with urllib.request.urlopen(f"{url}/health", timeout=10.0) as resp:
+                    if 200 <= resp.status < 400:
+                        return True
+            except (OSError, ValueError):
+                continue
+        return False
+
+    def _wait_for_reasoner(self) -> bool:
+        return self._wait_for("reasoner", self._reasoner_answers)
+
+    def _wait_for_sam(self) -> bool:
+        return self._wait_for("sam", self._sam_answers)
+
+    def _wait_for(self, name: str, answers) -> bool:
+        """Hold a launch until ``answers()``; False once the wall budget is
+        spent or the run aborted while it waited."""
+        if answers():
+            return True
+        self.log(f"{name} down; pausing launches until it answers")
+        while not answers():
             if self._wall_spent() or self._abort is not None:
                 return False
             left = self._deadline - time.monotonic() if self._deadline is not None else REASONER_WAIT_S
             time.sleep(max(0.0, min(REASONER_WAIT_S, left)))
-        self.log("reasoner back; resuming")
+        self.log(f"{name} back; resuming")
         return True
 
     def _wait(self, proc: subprocess.Popen) -> str:
         """Block until the attempt child exits (``exited``), hits the episode
-        cap (``timeout``), or the reasoner fails two ``/models`` probes
-        ``REASONER_PROBE_S`` apart while it flies (``reasoner_dead``)."""
+        cap (``timeout``), or the reasoner or SAM fails two probes
+        ``REASONER_PROBE_S`` apart while it flies (``reasoner_dead``,
+        ``sam_dead``)."""
         deadline = time.monotonic() + self.episode_timeout_s
-        down = 0
+        down = {"reasoner_dead": 0, "sam_dead": 0}
         while (left := deadline - time.monotonic()) > 0:
             try:
                 proc.wait(timeout=min(REASONER_PROBE_S, left))
@@ -351,9 +379,10 @@ class Driver:
                 pass
             if time.monotonic() >= deadline:
                 break
-            down = 0 if self._reasoner_answers() else down + 1
-            if down >= 2:
-                return "reasoner_dead"
+            for verdict, answers in (("reasoner_dead", self._reasoner_answers), ("sam_dead", self._sam_answers)):
+                down[verdict] = 0 if answers() else down[verdict] + 1
+                if down[verdict] >= 2:
+                    return verdict
         return "timeout"
 
     def _run_attempt(self, worker_id: int, episode_id: str) -> dict:
@@ -404,8 +433,9 @@ class Driver:
         landed = episodes.read_episode_json(workdir) if workdir else None
         where = {"workdir": str(workdir.relative_to(self.out_root))} if workdir else {}
         crashed = verdict == "exited" and landed is None and proc.returncode != 0
-        if verdict == "reasoner_dead":
-            self.log(f"[w{worker_id}] REASONER-DEAD mid-episode {episode_id} after "
+        lost = {"reasoner_dead": "reasoner_down_midrun", "sam_dead": "sam_down_midrun"}.get(verdict)
+        if lost:
+            self.log(f"[w{worker_id}] {verdict.upper().replace('_', '-')} mid-episode {episode_id} after "
                      f"{elapsed:.0f}s; killed + re-queued (not scored)")
         elif verdict == "timeout":
             self.log(f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killed")
@@ -413,12 +443,12 @@ class Driver:
             # Killed by a signal (a cgroup OOM is SIGKILL) or exited with an error before landing a record.
             self.log(f"[w{worker_id}] CRASHED mid-episode {episode_id} after "
                      f"{elapsed:.0f}s (exit {proc.returncode}); re-queued (not scored)")
-        if verdict == "reasoner_dead" or crashed:
-            # Re-queued; a lost reasoner's attempt is pending until it is back.
+        if lost or crashed:
+            # Re-queued; a lost service's attempt is pending until it is back.
             return {"episode_id": episode_id, "worker_id": worker_id,
                     "status": episodes.STATUS_INFRA, "elapsed_s": round(elapsed, 1), **where,
-                    "error": ("reasoner_down_midrun" if verdict == "reasoner_dead" else "killed_midrun"
-                              if proc.returncode < 0 else f"exited {proc.returncode} with no record")}
+                    "error": lost or ("killed_midrun" if proc.returncode < 0
+                                      else f"exited {proc.returncode} with no record")}
         # The child's own verdict decides (dispatch classifies the episode's
         # exception chain); the driver adds only what it alone saw.
         row = {**(landed or {"episode_id": episode_id}), "worker_id": worker_id,
@@ -482,7 +512,7 @@ class Driver:
     def worker_loop(self, worker_id: int) -> None:
         while (eid := self._next_claimed_episode()) is not None:
             try:
-                if self._wait_for_reasoner():
+                if self._wait_for_reasoner() and self._wait_for_sam():
                     self.run_one(worker_id, eid)
             except Exception as exc:  # noqa: BLE001
                 self.log(f"[w{worker_id}] FAIL {eid}: {type(exc).__name__}: {exc}")

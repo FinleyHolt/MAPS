@@ -36,6 +36,7 @@ OUTCOMES = {
     "kill": ("infra", "killed_midrun", True),
     "norow": ("infra", "no_prediction_unclassified", True),
     "reasoner": ("infra", "reasoner_down_midrun", True),
+    "sam": ("infra", "sam_down_midrun", True),
     "exit": ("infra", "exited 3 with no record", True),
     "nodir": ("infra", "exited 2 with no record", False),
 }
@@ -54,6 +55,9 @@ def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
     monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
     monkeypatch.setattr(d, "_reasoner_answers",
                         lambda: not any(e.startswith("reasoner") for e in d._in_flight))
+    # SAM is down exactly while the "sam" episode flies.
+    monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
+    monkeypatch.setattr(d, "_sam_answers", lambda: not any(e.startswith("sam") for e in d._in_flight))
     t0 = time.time()
     d.worker_loop(0)
     rows = {r["episode_id"].split("::")[0]: r for r in iter_json_rows(d.episodes_file)}
@@ -433,6 +437,61 @@ def test_a_reasoner_that_never_answers_stops_at_the_wall_budget(driver, monkeypa
     t.join(timeout=10)
     assert not t.is_alive()
     assert not d.episodes_file.exists()
+
+
+def test_a_segmenter_that_never_answers_holds_every_launch(driver, monkeypatch) -> None:
+    """An episode launched with SAM down would spend reasoner calls on a blind search: the
+    gate holds it, the reasoner up, until the wall budget is spent."""
+    import threading
+
+    d = driver(selection=["ep0"])
+    d._deadline = time.monotonic() + 1
+    monkeypatch.setattr(d, "_reasoner_answers", lambda: True)
+    monkeypatch.setattr(d, "_sam_answers", lambda: False)
+    monkeypatch.setattr(d, "run_one", lambda *a: pytest.fail("launched with no segmenter"))
+    t = threading.Thread(target=d.worker_loop, args=(0,), daemon=True)
+    t.start()
+    t.join(timeout=10)
+    assert not t.is_alive()
+    assert not d.episodes_file.exists()
+
+
+def test_the_sam_gate_asks_the_replicas_discovery_checked(monkeypatch) -> None:
+    """Any replica answering ``/health`` passes (the client steps off a dead one); none checked
+    at discovery passes as discovery did; every replica down fails."""
+    from dataclasses import replace
+
+    from maps.llm import endpoint_spec as E
+    from maps.search.tests.fakes import TEST_SPEC
+
+    asked: list[str] = []
+    up: set[str] = set()
+
+    class _Answer:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def _open(url, timeout):
+        asked.append(url)
+        if url not in up:
+            raise OSError("connection refused")
+        return _Answer()
+
+    monkeypatch.setattr(bf.urllib.request, "urlopen", _open)
+    monkeypatch.setattr(E, "_SPEC", replace(TEST_SPEC, sam_url="http://a:8100, http://b:8100/"))
+    assert not bf.Driver._sam_answers()
+    up.add("http://b:8100/health")
+    assert bf.Driver._sam_answers()
+    assert asked == ["http://a:8100/health", "http://b:8100/health", "http://a:8100/health", "http://b:8100/health"]
+    monkeypatch.setattr(E, "_SPEC", replace(TEST_SPEC, sam_url=""))
+    assert bf.Driver._sam_answers() and len(asked) == 4
+    monkeypatch.setattr(E, "_SPEC", None)
+    assert bf.Driver._sam_answers()
 
 
 @pytest.mark.parametrize("flag", ["--workers", "--max-infra-attempts", "--episode-timeout-s"])
