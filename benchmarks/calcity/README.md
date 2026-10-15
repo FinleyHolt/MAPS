@@ -11,7 +11,7 @@ footprint, the same test as the flight measures (the shape criterion).
 
 | Item | Path | Source |
 |---|---|---|
-| The corpus, 1,023 episodes | `data/calcity.json` | Ships. |
+| The corpus, 4,573 episodes | `data/calcity.json` | Ships. |
 | The positions of the reviewed targets | `data_prep/authoring/ground_truth.json` | Ships. |
 | The C-12 v6 map raster of the block | `<map>_rgb.tif` | You supply it. |
 | A world bundle of OpenStreetMap layers | `osm/<layer>.geojson` in WGS84 for each of the eight `bundle.OSM_LAYERS` | You supply it, covering `aoi.BUNDLE_BBOX_WGS84`. |
@@ -48,7 +48,10 @@ defaults to `SEARCH_CALCITY_TILES`.
 
 The reviewed set is derived, not listed: a corpus row is reviewed when its
 first target position lies within 0.2 m of a position `ground_truth.json`
-lists on its own map. It holds 603 episodes.
+lists on its own map. It holds 1,100 episodes. A row's `intel_quality`
+is its graded candidate count's class: G for one candidate, M for two to
+five, P for six or more; a hand-written row whose count was never graded
+carries none. `analysis.run_report` breaks SR out by it.
 
 ```sh
 mkdir -p output && python -m benchmarks.calcity.data_prep.reviewed > output/reviewed_episodes.txt

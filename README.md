@@ -146,6 +146,7 @@ these places, the served-text changes among them:
 | A baseline model call that raises (an image-store refusal, a served-model change) ends the episode under the bench's infra rule; only a call with no schema answer after two tries takes the method's released fallback (stay put, an empty graph, an empty chain). | GeoNav took any failed call, image-store refusals and server changes included, as its released fallback and the episode was scored. |
 | The bench refuses an `--episode-allowlist` naming any id outside the split, a bad selection under `--dry-run` and an unreadable `--arrivals` stream, each with exit 2 before anything is written. | Unknown allowlist ids were dropped (a list matching nothing ran nothing and exited 0); the dry run made the out-root and exited 1; a malformed stream raised a traceback. |
 | A quoted handle (`go_to("r1")`, `explore("r2")`) moves as the set it names; a row indexed from a window (`w = r1[2:5]; w[0]`, `for r in w`) shows the row it is; `look([names])` grounds each name as `look(name)` does; a fold of one turn reads "1 earlier turn folded". | A quoted handle served "'r0' is a result handle ..." naming an internal handle; a window's row showed the result's row at the window-relative index; a look list of names was refused as not on the live surface; the header read "1 earlier turns folded". |
+| The Cal City corpus is 4,573 rows, 1,100 of them reviewed, each naming its `intel_quality` (G, M or P) where its candidate count was graded; a Cal City row records it and `run_report` reports SR by it. | The corpus was 1,023 rows, 603 reviewed, with no intel-quality field. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -194,7 +195,7 @@ lists the exact commands.
 |---|---|---|---|---|
 | E1 | CityNav `train_seen`, 1,000 per arm (`--limit 1000`, seed 1234) | Inkling Small at effort 0.99; Qwen 3.8 Flash Next at `xhigh`; Gemma 4 26B-A4B | `configs/citynav.yaml`, `SEARCH_SAMPLING_REASONING_EFFORT` | `arm_table`, `run_report` |
 | E2 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `low`, `medium`, `xhigh`; Inkling Small at 0.99; Gemma 4 E2B; Gemma 4 E4B | `configs/citynav.yaml`, `--split test_unseen` | `arm_table`, `run_report` |
-| E3 | Cal City, the 603 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table`, `figures.plot_effort_ladder` |
+| E3 | Cal City, the 1,100 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table`, `figures.plot_effort_ladder` |
 | E4 | CityNav `train_seen`, 1,000 per arm | Per model: the control and one arm per withhold | `configs/withhold/<part>.yaml` | `arm_table`, `ab_report` |
 | E5 | E2 and E3 roots | Every arm | none beyond E2 and E3 | `figures.capability_effort_arms`, `figures.plot_capability_effort` |
 
@@ -360,7 +361,7 @@ relocate each part.
 
 ### Cal City
 
-The Cal City corpus (`benchmarks/calcity/data/calcity.json`, 1,023 episodes)
+The Cal City corpus (`benchmarks/calcity/data/calcity.json`, 4,573 episodes)
 and the positions of its reviewed targets
 (`benchmarks/calcity/data_prep/authoring/ground_truth.json`) ship with the
 repository. You supply two inputs:
