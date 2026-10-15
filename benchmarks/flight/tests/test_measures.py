@@ -230,3 +230,10 @@ def test_a_track_ending_under_a_second_before_the_report_owes_no_way_back(tmp_pa
     (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
     (got,), _radius, _turns = Q.collect([root], Q.Truth([truth]))
     assert got["final_leg_ft"] == 0.0
+
+
+def test_either_copy_of_a_run_folder_belongs_to_its_sortie(tmp_path):
+    root = tmp_path / "20260101T000000Z"
+    bases = Q.run_bases(root, {"workdir": "run01"})
+    assert bases[1] == tmp_path / "20260101T000000Z_grnd" / "20260101T000000Z" / "run01"
+    assert [Q.sortie_of(b) for b in bases] == [root, root]

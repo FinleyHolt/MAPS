@@ -400,6 +400,12 @@ def run_bases(root: Path, row: dict[str, Any]) -> list[Path]:
     return [root / wd, root.parent / f"{root.name}_grnd" / root.name / wd] if wd else []
 
 
+def sortie_of(run_dir: Path) -> Path:
+    """The sortie a run folder belongs to, either copy :func:`run_bases` names."""
+    sortie = run_dir.parent
+    return sortie.parent.parent / sortie.name if sortie.parent.name.endswith("_grnd") else sortie
+
+
 def _conversation(bases: list[Path]) -> list[dict[str, Any]]:
     return next((list(iter_json_rows(b / CONVERSATION_JSONL)) for b in bases if (b / CONVERSATION_JSONL).is_file()), [])
 

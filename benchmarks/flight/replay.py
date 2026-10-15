@@ -43,7 +43,7 @@ from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import open_live, ortho_observation
-from benchmarks.flight.measures import run_bases
+from benchmarks.flight.measures import run_bases, sortie_of
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, converse,
                                        flight_config, summary_line)
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
@@ -163,9 +163,7 @@ def open_recording(run_dir: Path) -> Recording:
     """The recording of the run in ``run_dir``, a folder under a sortie (or
     under its ``_grnd`` copy) that the sortie's ``episodes.jsonl`` names."""
     run_dir = Path(run_dir).resolve()
-    sortie = run_dir.parent
-    if sortie.parent.name.endswith("_grnd"):
-        sortie = sortie.parent.parent / sortie.name
+    sortie = sortie_of(run_dir)
     row = next((r for r in read_records(sortie / EPISODES_JSONL) if r.get("workdir") == run_dir.name), None)
     if row is None:
         raise ValueError(f"{sortie / EPISODES_JSONL} names no run {run_dir.name}")
