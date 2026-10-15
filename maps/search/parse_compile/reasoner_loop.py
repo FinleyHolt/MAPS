@@ -49,6 +49,7 @@ from maps.search.parse_compile.carry import (
     program_reads,
     run_ops,
 )
+from maps.search.parse_compile.code_surface import STOP_RE
 from maps.search.parse_compile.passes import cover_items
 from maps.search.parse_compile.prompts import served_tools
 from maps.search.parse_compile.reasoner_agent import Reasoner
@@ -1045,7 +1046,7 @@ class _Mission:
         _sp = self._plan_stops.get(tok.strip().lower())
         if _sp is not None:
             return format_xy_token(_sp[0], _sp[1]), None
-        if re.fullmatch(r"stop_[0-9]{1,4}", tok.strip().lower()):
+        if STOP_RE.fullmatch(tok.strip().lower()):
             _known = ", ".join(sorted(self._plan_stops)) or "none yet"
             return tok, (f"{tok} has not been flown; the flown stops are: "
                          f"{_known}")

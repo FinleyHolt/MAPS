@@ -4,9 +4,9 @@ resolve off the surface rows and the captions that ride their pictures."""
 from __future__ import annotations
 
 import math
-import re
 
 from maps.search.analyze_scene.geom_compute import cell_centre_xy
+from maps.search.parse_compile.code_surface import END_RE, HANDLE_RE
 from maps.search.render.look_render import (
     LOOK_MAX_BADGES,
     look_label,
@@ -170,7 +170,7 @@ def _crop_token_of(row: dict, live: bool) -> str:
     stays on the skip path)."""
     fid = str(row.get("fid"))
     xy = row.get("xy")
-    if not live and re.fullmatch(r"end_\d+", fid) and is_xy(xy):
+    if not live and END_RE.fullmatch(fid) and is_xy(xy):
         return format_xy_token(float(xy[0]), float(xy[1]))
     return fid
 
@@ -215,7 +215,7 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, resolve,
     def _fids_of(tokens) -> list[str]:
         out: list[str] = []
         for t in tokens:
-            if re.fullmatch(r"r\d+", t):
+            if HANDLE_RE.fullmatch(t):
                 out.extend(str(_r["fid"]) for _r in (carry.read(t) or [])
                            if _r.get("fid"))
             else:
