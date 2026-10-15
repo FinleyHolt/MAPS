@@ -106,7 +106,9 @@ def exported(tmp_path):
     ]
     shapes = {
         f"calcity::0#{i}": {"gt_polygon": r["target_mask"],
-                            "target_xy": tuple(r["target_positions"][0][:2])}
+                            "target_xy": tuple(r["target_positions"][0][:2]),
+                            "start_xy": tuple(r["trajectory"][0][:2]),
+                            "description": r["descriptions"][0]}
         for i, r in enumerate(rows)
     }
     catalog = {
@@ -120,7 +122,7 @@ def exported(tmp_path):
               "descriptions": []},
     }
     out = tmp_path / "export"
-    manifest = ce.export(rows, shapes, catalog, out, ortho_path=tmp_path / "ortho.tif",
+    manifest = ce.export(shapes, catalog, out, ortho_path=tmp_path / "ortho.tif",
                          utm_origin=(OE, ON), imagery=imagery, side_m=200.0)
     return out, manifest
 

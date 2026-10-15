@@ -73,7 +73,7 @@ CITYREFER_FIELDS = (
 )
 
 
-def block_name(row_index: int) -> str:
+def block_name(row_index: int | str) -> str:
     """``calcity_block_<i>``: what ``MTurkTrajectory.map_name`` builds from
     ``area="calcity"``, ``block=<i>``."""
     return f"calcity_block_{row_index}"
@@ -261,7 +261,6 @@ def write_block_rasters(
 
 
 def export(
-    rows: list[dict],
     shapes: dict[str, dict],
     catalog: dict,
     out: Path,
@@ -276,32 +275,28 @@ def export(
     """Write the export under ``out``; return the manifest.
 
     ``shapes`` is :func:`calcity_shapes`'s
-    ``{episode_id: {gt_polygon, target_xy, description}}``, so the window holds the
-    same shape the outcome is later scored against. ``ortho_path=None``
-    writes everything but the rasters (a dry run).
+    ``{episode_id: {gt_polygon, target_xy, start_xy, description}}`` in split
+    order, so the window holds the same shape the outcome is later scored
+    against. ``ortho_path=None`` writes everything but the rasters (a dry run).
     """
-    from benchmarks.citynav.adapter import parse_episode
-
     blocks: dict[str, dict] = {}
     excluded: dict[str, str] = {}
-    for index, row in enumerate(rows):
-        episode = parse_episode(row, index)
-        shape = shapes[episode.episode_id]
+    for index, (episode_id, shape) in enumerate(shapes.items()):
         polygon = shape.get("gt_polygon")
         target_xy = tuple(shape["target_xy"])
-        points = [episode.start_xy, target_xy] + [tuple(p) for p in polygon or []]
-        rng = random.Random(f"{seed}:{episode.episode_id}")
+        points = [shape["start_xy"], target_xy] + [tuple(p) for p in polygon or []]
+        rng = random.Random(f"{seed}:{episode_id}")
         placed = place_block(points, imagery, rng, side_m)
         if isinstance(placed, str):
-            excluded[episode.episode_id] = placed
+            excluded[episode_id] = placed
             continue
         x0, y0 = placed
         blocks[block_name(index)] = {
-            "episode_id": episode.episode_id,
+            "episode_id": episode_id,
             "row_index": index,
             "bounds": [x0, y0, x0 + side_m, y0 + side_m],
-            "description": episode.description,
-            "start_xy": list(episode.start_xy),
+            "description": shape["description"],
+            "start_xy": list(shape["start_xy"]),
             "target_xy": list(target_xy),
             "polygon": polygon,
         }
@@ -351,7 +346,7 @@ def export(
             "ortho": str(ortho_path) if ortho_path else None,
             "utm_origin": list(utm_origin), "imagery": list(imagery),
         },
-        "n_rows": len(rows),
+        "n_rows": len(shapes),
         "blocks": {
             name: {k: b[k] for k in ("episode_id", "row_index", "bounds", "shard", "landmarks")}
             for name, b in blocks.items()
@@ -370,10 +365,10 @@ def _write_json(path: Path, payload) -> None:
 
 
 def calcity_shapes() -> dict[str, dict]:
-    """``{episode_id: {gt_polygon, target_xy, description}}`` over the Cal City
-    split: the shape the bench scores each row against
-    (``episode_runner._success_shape``), its target point and the episode's
-    instruction. Selects Cal City for this process first."""
+    """``{episode_id: {gt_polygon, target_xy, start_xy, description}}`` over
+    the Cal City split, in split order: the shape the bench scores each row
+    against (``episode_runner._success_shape``), its target point, its start
+    and the episode's instruction. Selects Cal City for this process first."""
     import benchmarks.calcity
 
     benchmarks.calcity.use()
@@ -389,6 +384,7 @@ def calcity_shapes() -> dict[str, dict]:
         out[episode.episode_id] = {
             "gt_polygon": [list(map(float, p)) for p in shape] if shape is not None else None,
             "target_xy": episode.target_xy,
+            "start_xy": episode.start_xy,
             "description": episode.description,
         }
     return out
@@ -417,10 +413,9 @@ def main(argv: list[str] | None = None) -> int:
         b = src.bounds
         imagery = (b.left - utm_origin[0], b.bottom - utm_origin[1],
                    b.right - utm_origin[0], b.top - utm_origin[1])
-    rows = json.loads(paths.split_path("calcity").read_text())
     catalog = json.loads(paths.OBJECTS_JSON.read_text())["calcity"]
     manifest = export(
-        rows, shapes, catalog, args.out,
+        shapes, catalog, args.out,
         ortho_path=None if args.dry_run else args.ortho,
         utm_origin=utm_origin, imagery=imagery, seed=args.seed,
         shard_size=args.shard_size,

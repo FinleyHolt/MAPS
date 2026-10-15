@@ -32,7 +32,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from baselines.released.calcity_export import TARGET_OBJECT_ID
+from baselines.released.calcity_export import TARGET_OBJECT_ID, _write_json, block_name
 from baselines.seam import _extract_json
 
 PROMPT = """\
@@ -86,7 +86,7 @@ def describe(export_dir: Path, base_url: str, model: str | None, api_key: str | 
     descriptions = {}
     for shard in sorted((export_dir / "shards").iterdir()):
         for row in json.loads((shard / "data/citynav/citynav_test_unseen.json").read_text()):
-            descriptions[f"calcity_block_{row['block']}"] = row["descriptions"][0]
+            descriptions[block_name(row["block"])] = row["descriptions"][0]
     out = export_dir / "processed_descriptions.json"
     done = json.loads(out.read_text()) if out.exists() else {}
     base = base_url.rstrip("/")
@@ -105,9 +105,7 @@ def describe(export_dir: Path, base_url: str, model: str | None, api_key: str | 
         }, api_key)
         parsed = parse_reply(reply["choices"][0]["message"]["content"] or "", meta["landmarks"])
         done[block] = {str(TARGET_OBJECT_ID): [parsed]}
-        tmp = out.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(done))
-        tmp.replace(out)
+        _write_json(out, done)
     missing = set(manifest["blocks"]) - set(done)
     if missing:
         raise SystemExit(f"{len(missing)} blocks unparsed")
