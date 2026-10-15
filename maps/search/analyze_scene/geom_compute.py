@@ -87,15 +87,10 @@ BAND_M = 150.0
 
 def cardinal_offset(cells_xy, at_xy, direction: str) -> float | None:
     """Signed metres the point lies in ``direction`` (one of
-    :data:`CARDINALS`) from an extended reference, or ``None`` when there is
-    no side to name.
-
-    The reference's points (``cells_xy``, every member way of a merged
-    feature) are cut to the band of :data:`BAND_M` around the point on the axis
-    orthogonal to ``direction`` ("east of the road where the road is, at my
-    latitude"), then compared along it. Positive: the clearance past the
-    band's farthest reference point in that direction. ``None`` when the band holds no
-    reference point, or the reference straddles the point inside it."""
+    :data:`CARDINALS`) past the reference points ``cells_xy`` within
+    :data:`BAND_M` of it across that axis ("east of the road where the road
+    is, at my latitude"), negative when short of them; ``None`` when the band
+    holds none or they straddle the point."""
     d = str(direction or "").strip().lower()
     if d not in CARDINALS:
         raise ValueError(
@@ -278,14 +273,12 @@ _SCORE_MAX_DP = 10
 
 
 def score_by(items, keys, weights) -> list[dict]:
-    """Rows best-first by ``sum(w * term)``, each stamped with ``score``.
-
-    A ``color_<word>`` term is the value centred on its 0.5 neutral (missing:
-    0, the row has not been seen yet); any other key is min-max scaled over
-    the rows carrying it (missing or constant: 0.5). A weight's sign is its
-    direction (negative: lower is better). ``score`` is rounded to the fewest
-    decimals (4 to ``_SCORE_MAX_DP``) that keep distinct composites distinct;
-    ties keep input order."""
+    """Rows best-first by ``sum(w * term)``, stamped ``score``: a
+    ``color_<word>`` term is the value minus 0.5 (missing: 0), any other key
+    min-max scaled over the rows carrying it (missing or constant: 0.5), a
+    negative weight meaning lower is better; ``score`` keeps the fewest
+    decimals (4 to ``_SCORE_MAX_DP``) that keep distinct composites distinct,
+    and ties keep input order."""
     spans = {}
     for k in keys:
         vals = [r[k] for r in items if isinstance(r.get(k), (int, float))]
@@ -767,13 +760,9 @@ def gap_witness(ga, gb):
 
 def set_gap(geoms, bbs, item_geom):
     """``(gap, ref_witness, item_witness)`` from ``item_geom`` to the
-    nearest of ``geoms`` (``bbs`` = :func:`stack_bboxes` of them): a set of
-    places is its nearest member.
-
-    The nearest box seeds an upper bound and members whose box is farther
-    are skipped; members are still taken in order with a strict test, so a
-    tie keeps the earliest member's witness. Contact ends the scan.
-    """
+    nearest of ``geoms`` (``bbs`` = :func:`stack_bboxes` of them), members
+    whose box is past the best gap so far skipped; a tie keeps the earliest
+    member's witness and contact ends the scan."""
     bounds = bbox_bounds(bbs, item_geom)
     ub = None
     seed_i, seed = -1, None
