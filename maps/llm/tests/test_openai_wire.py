@@ -264,7 +264,7 @@ def test_a_deployment_name_the_listing_does_not_carry_passes_discovery(monkeypat
     """Azure's /openai/v1/models lists the resource's base models, not its deployments: the
     deployment-named alias passes on the listing answering the key, and a self-hosted pin the
     listing does not carry is still refused."""
-    base = "https://maps-sol.openai.azure.com/openai/v1"
+    base = "https://example.openai.azure.com/openai/v1"
     seen: list[tuple[str, str | None]] = []
 
     def _get(url, *, bearer=None):

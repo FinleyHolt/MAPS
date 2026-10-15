@@ -11,7 +11,7 @@ from maps.search.tests import fakes
 
 
 def _status_error(status: int, body: str) -> httpx.HTTPStatusError:
-    request = httpx.Request("POST", "https://maps-sol.openai.azure.com/openai/v1/chat/completions")
+    request = httpx.Request("POST", "https://example.openai.azure.com/openai/v1/chat/completions")
     response = httpx.Response(status, text=body, request=request)
     return httpx.HTTPStatusError(f"{status}", request=request, response=response)
 
