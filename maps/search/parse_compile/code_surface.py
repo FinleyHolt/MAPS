@@ -297,9 +297,15 @@ class Program:
                 "op": "on_side"})
         if not rank:
             return ref
+        return self.rank_color(ref, color, emphasis)
+
+    def rank_color(self, items, color, emphasis=()) -> str:
+        """One ``score_by`` over ``emphasis`` with the colour, when given,
+        ranked last."""
+        emphasis = list(emphasis)
         if color:
             emphasis.append({"key": f"color_{color}", "w": 1})
-        return self.add("score_by", {"items": ref, "emphasis": emphasis})
+        return self.add("score_by", {"items": items, "emphasis": emphasis})
 
     def anchor_names(self) -> list:
         """The bare NAMES in the ops' refs, in order: places to ground."""
@@ -381,8 +387,7 @@ def compile_find(p: Program, query, *, name=None, near=None, nearest=None,
         return p.relate(ref, [] if nearest is None else _anchors(nearest),
                         cards, color)
     if color:
-        return p.add("score_by", {"items": ref, "emphasis": [
-            {"key": f"color_{color}", "w": 1}]})
+        return p.rank_color(ref, color)
     return ref
 
 
@@ -392,8 +397,7 @@ def compile_order(p: Program, items, *, nearest=None, color=None) -> str:
         return p.relate(items, _anchors(nearest), (), color)
     if not color:
         raise CodeError("order ranks by nearest= or color=")
-    return p.add("score_by", {"items": items, "emphasis": [
-        {"key": f"color_{color}", "w": 1}]})
+    return p.rank_color(items, color)
 
 
 def compile_filter(p: Program, items, *, within=None, near=None,
