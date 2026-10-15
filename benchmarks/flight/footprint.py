@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import math
 
-from benchmarks.flight.airframe import M_PER_DEG_LAT
+#: Metres per degree of latitude: the flat-earth step off a fix.
+M_PER_DEG_LAT = 111_320.0
 
 
 def off_nadir_deg(east_m: float, north_m: float, agl_m: float, heading_deg: float, roll_deg: float,

@@ -10,6 +10,3 @@ C12_SENSOR = "oryx_orx32_25mm_nadir"
 
 #: 160 knots, the speed the twin flies.
 C12_SPEED_MPS = 160.0 * 0.514444
-
-#: Metres per degree of latitude: the flat-earth step off a fix.
-M_PER_DEG_LAT = 111_320.0

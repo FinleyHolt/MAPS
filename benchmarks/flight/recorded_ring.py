@@ -25,7 +25,7 @@ import struct
 from pathlib import Path
 from typing import Any, Iterator
 
-from benchmarks.flight.airframe import M_PER_DEG_LAT
+from benchmarks.flight.footprint import M_PER_DEG_LAT
 from benchmarks.flight.nav_track import Pose, pose_tag
 
 TOPIC_CAMERA = "/camera/image_raw/compressed"
