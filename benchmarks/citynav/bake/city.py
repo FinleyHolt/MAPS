@@ -10,8 +10,8 @@ at 2 dp (a polygon's exterior ring closed, a way open, a node's one vertex),
 which ``build_surface`` serves as the row ``mask``. Nothing is classified or
 named, and no feature is dropped beyond "rasterizes to no covered cell".
 ``meta.json`` carries the grid (``bounds``, ``grid_shape``, ``cell_size_m``),
-a caller's ``coordinate_frame`` and ``georef``, and for a city-cache bake ``provenance``: cache name +
-sha256, record count and the cache's georef.
+a caller's ``coordinate_frame`` and ``georef``, and for a city-cache bake
+``provenance``: cache name + sha256, record count and the cache's georef.
 
 The source is the shipped OSM cache per city (``tiles/osm_cache``), already
 registered into CityNav local XY. Every ``<city>_block_<n>.tif`` raster
@@ -291,9 +291,9 @@ def _world_contour_from_geometry(geometry: dict[str, Any]) -> list[list[float]] 
     best = max(chains, key=_chain_extent)
     closed = len(best) >= 4 and best[0] == best[-1]
     out = [[round(float(x), 2), round(float(y), 2)] for x, y in (best[:-1] if closed else best)]
-    # Rounding to 2 dp can collapse neighbours onto each other; drop the
-    # repeats so the closing vertex stays the chain's ONLY one. A chain that
-    # rounds down to a single vertex IS that place.
+    # Rounding to 2 dp can collapse neighbours onto each other; drop
+    # consecutive repeats. A chain that rounds down to a single vertex IS
+    # that place.
     dedup = [p for i, p in enumerate(out) if i == 0 or p != out[i - 1]]
     if not closed:
         return dedup
@@ -448,9 +448,10 @@ def _feature_entry(
     coverage: np.ndarray | None,
 ) -> dict[str, Any]:
     """One baked prior: mask, every raw tag verbatim except
-    ``_PRIVILEGED_KEYS``, the name when present and the osm_id. The centroid is the cell mean, snapped to the nearest
-    kept cell when it lands over no-data (it becomes the surface xy and the
-    viewpoint target, both over imagery)."""
+    ``_PRIVILEGED_KEYS``, the name when present and the osm_id. The centroid
+    is the cell mean, snapped to the nearest kept cell when it lands over
+    no-data (it becomes the surface xy and the viewpoint target, both over
+    imagery)."""
     ordered_cells = [[int(r), int(c)] for r, c in sorted(cells)]
     arr = np.asarray(ordered_cells, dtype=np.float64)
     cr = float(arr[:, 0].mean())
