@@ -29,11 +29,8 @@ class WorldBounds:
     y_max: float
 
 
-def path_length_m(path: list[tuple[float, float]] | None) -> float:
-    """Sum of Euclidean distances along a pose sequence: the one definition
-    of "how far did it fly" that path lengths and the SPL denominator share."""
-    if not path or len(path) < 2:
-        return 0.0
+def path_length_m(path: list[tuple[float, float]]) -> float:
+    """Sum of Euclidean distances along a pose sequence: the SPL denominator."""
     pts = np.asarray(path, dtype=np.float64)
     deltas = np.diff(pts, axis=0)
     return float(np.linalg.norm(deltas, axis=1).sum())
