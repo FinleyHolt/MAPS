@@ -149,6 +149,7 @@ these places, the served-text changes among them:
 | The Cal City corpus is 4,573 rows, 1,100 of them reviewed, each naming its `intel_quality` (G, M or P) where its candidate count was graded; a Cal City row records it and `run_report` reports SR by it. | The corpus was 1,023 rows, 603 reviewed, with no intel-quality field. |
 | A filter with two cardinal cuts on one place relates to it once, and `distance()` after a flight in the same block measures the surface the flight left. | The anchor went to its compare twice and served a second suffixed set of relation columns (seen in a flown run's replay); a distance after a flight reused the footprint measured before it. |
 | A fused observation's frames.jsonl row is keyed to its newest frame by log time. | The flown harness keyed it to the highest camera sequence number, which restarts with the camera, so a mosaic spanning a restart was keyed to an older frame (no flown mosaic spanned the week's one restart). |
+| The SAM client's split log says `cap_hit=True` only when detections past the cap were dropped; `run_report` and `ab_report` name the success disc by the run's configured `success_radius_m`. | A frame whose detections filled the cap exactly logged `cap_hit=True`; the readers said "the 20 m disc" whatever radius was configured. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
