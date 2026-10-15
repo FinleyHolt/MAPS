@@ -446,3 +446,48 @@ def test_a_mistyped_or_misshapen_answer_does_not_fit_and_is_reshaped(monkeypatch
     h.calls, h.phase_s = [], {"examine": 0.0}
     assert h.llm_json([{"role": "user", "content": "where?"}], LOCATE_SCHEMA, "geonav_locate")["selected_pos"] == [12.0, 4.0]
     assert h.calls[0]["mode"] == "free+extract"
+
+
+def test_an_image_store_refusal_inside_a_call_reaches_the_infra_rule(monkeypatch):
+    """Only an answer that is not the schema's JSON is retried; an image-store
+    refusal raised by the call itself propagates, so the driver excludes the
+    episode as infra rather than scoring the policy's fallback."""
+    import maps.llm.http as http
+    from benchmarks.citynav.run_benchmark.dispatch import is_infra_fault
+    from maps.llm import endpoint_spec
+
+    def refuse(base_url, api_key, **kw):
+        raise http.ImageStoreError("image store PUT http://store.example/looks/abc failed: 503")
+
+    monkeypatch.setattr(http, "_chat_completions_raw", refuse)
+    monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
+        base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
+        tokenizer_name="qwen", max_output_tokens=40000))
+    h = BaselineHarness.__new__(BaselineHarness)
+    h.policy, h.cfg = "geonav", SimpleNamespace()
+    h.llm_calls = h.reasoning_tokens = h.extraction_calls = h.reasoning_truncated = 0
+    h.calls, h.phase_s = [], {"examine": 0.0}
+    schema = {"type": "object", "properties": {"pick": {"type": "integer"}}, "required": ["pick"]}
+    with pytest.raises(http.ImageStoreError) as caught:
+        h.llm_json([{"role": "user", "content": "which?"}], schema, "pick")
+    assert is_infra_fault(caught.value)
+
+
+def test_no_schema_answer_after_every_attempt_raises_no_schema_answer(monkeypatch):
+    import maps.llm.http as http
+    from baselines.seam import LLM_ATTEMPTS, NoSchemaAnswer
+    from maps.llm import endpoint_spec
+
+    monkeypatch.setattr(http, "_chat_completions_raw", lambda base_url, api_key, **kw: {
+        "choices": [{"message": {"content": "prose"}, "finish_reason": "stop"}], "usage": {}})
+    monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
+        base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
+        tokenizer_name="qwen", max_output_tokens=40000))
+    h = BaselineHarness.__new__(BaselineHarness)
+    h.policy, h.cfg = "geonav", SimpleNamespace()
+    h.llm_calls = h.reasoning_tokens = h.extraction_calls = h.reasoning_truncated = 0
+    h.calls, h.phase_s = [], {"examine": 0.0}
+    schema = {"type": "object", "properties": {"pick": {"type": "integer"}}, "required": ["pick"]}
+    with pytest.raises(NoSchemaAnswer, match=f"geonav:pick: no JSON after {LLM_ATTEMPTS} attempts"):
+        h.llm_json([{"role": "user", "content": "which?"}], schema, "pick")
+    assert h.llm_calls == 2 * LLM_ATTEMPTS and h.calls == []

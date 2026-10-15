@@ -288,7 +288,8 @@ class BaselineHarness:
         falls back to the constrained call at the policy's dial; one whose cap
         the reasoning exhausted (``finish_reason`` ``length``) is counted under
         ``reasoning_truncated``.
-        ``LLM_ATTEMPTS`` tries, then ``RuntimeError``.
+        ``LLM_ATTEMPTS`` tries, then :class:`NoSchemaAnswer`; anything the
+        call itself raises propagates.
         """
         from maps.llm import endpoint_spec
         from maps.llm.flight_summary import reasoning_tokens_of
@@ -352,16 +353,16 @@ class BaselineHarness:
                                                         response_format=strict)
                         parsed, mode = shaped(again), "truncated+constrained"
                     if parsed is None:
-                        raise ValueError(f"{site}: no schema JSON after the {mode} call")
+                        raise _NoJSON(f"{site}: no schema JSON after the {mode} call")
                     if mode == "free+extract":
                         self.extraction_calls += 1
                     self.calls.append({"site": site, "mode": mode, "finish": finish,
                                        "reasoning_tokens": reasoning,
                                        "completion_tokens": completion + more_tokens})
                     return parsed
-                except ValueError as exc:
+                except _NoJSON as exc:
                     last = exc
-            raise RuntimeError(f"{site}: no JSON after {LLM_ATTEMPTS} attempts") from last
+            raise NoSchemaAnswer(f"{site}: no JSON after {LLM_ATTEMPTS} attempts") from last
         finally:
             self.phase_s["examine"] += time.perf_counter() - t0
 
@@ -378,6 +379,16 @@ class BaselineHarness:
         p = self.log_dir / f"{name}.jpg"
         p.write_bytes(jpeg)
         return p
+
+
+class NoSchemaAnswer(RuntimeError):
+    """``llm_json`` got no answer of the schema's shape in ``LLM_ATTEMPTS``
+    tries: the method's own failure, which a policy may answer with its
+    released fallback."""
+
+
+class _NoJSON(ValueError):
+    """One attempt's answer was not the schema's JSON."""
 
 
 class NoDialOff(RuntimeError):

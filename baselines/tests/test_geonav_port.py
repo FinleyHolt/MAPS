@@ -14,7 +14,9 @@ import numpy as np
 from baselines.geonav.cognitive_map import CognitiveMap
 from baselines.geonav.policy import direction_map, next_position
 from baselines.geonav.scene_graph import GeoNode, KnowledgeGraph, QueryEngine
-from baselines.seam import Landmark
+import pytest
+
+from baselines.seam import Landmark, NoSchemaAnswer
 
 
 def _square(cx, cy, s):
@@ -199,8 +201,18 @@ def test_a_locate_with_no_answer_commits_the_pose_under_its_own_tier():
     """A Locate whose graph query finds nothing and whose prompt yields no
     position commits the pose, and the row says so rather than reading as a
     walk that never reached Locate."""
-    res, calls = _run_stub(geonav_chain={"operations": []}, geonav_locate=RuntimeError("no JSON"))
+    res, calls = _run_stub(geonav_chain={"operations": []}, geonav_locate=NoSchemaAnswer("no JSON"))
     assert "geonav_locate" in calls
     assert (res.commit_tier, res.commit_label, res.extra_metrics["locate_path"]) == (
         "geonav:locate_pose", "geonav:pose", "pose")
     assert res.lock_step is not None
+
+
+@pytest.mark.parametrize("site", ["geonav_action", "geonav_chain"])
+def test_a_call_that_raised_for_any_other_reason_ends_the_episode(site):
+    """Only a call that got no schema answer stays put or yields an empty
+    chain; a serve fault raised inside the call (a served-model mismatch is a
+    RuntimeError) reaches the driver's infra rule instead of being scored as
+    the method's decision."""
+    with pytest.raises(RuntimeError, match="served-model mismatch"):
+        _run_stub(**{site: RuntimeError("served-model mismatch: the server behind the URL changed")})

@@ -18,7 +18,7 @@ import numpy as np
 from baselines.geonav import prompts as P
 from baselines.geonav.cognitive_map import CognitiveMap, rgb_entropy
 from baselines.geonav.scene_graph import KnowledgeGraph, QueryEngine, ingest_subgraph, recursive_query
-from baselines.seam import BaselineHarness, BaselineResult, Landmark, match_landmarks
+from baselines.seam import BaselineHarness, BaselineResult, Landmark, NoSchemaAnswer, match_landmarks
 
 # gsamllavanav/parser.py: --eval_max_timestep 20 (one perceive + one decision each).
 MAX_TIMESTEPS = 20
@@ -351,7 +351,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
             messages = [{"role": "system", "content": sys_prompt}, h.user_message(text + JSON_SUFFIX, [img])]
             try:
                 action_json = h.llm_json(messages, schema, name, max_tokens=call_cap)
-            except RuntimeError:
+            except NoSchemaAnswer:
                 action_json = None  # released: three failed tries stay put
             if mode != "Locate":
                 h.save_image(f"{t:02d}_{mode.lower()}_map", img)
@@ -433,7 +433,7 @@ def _understand(h: BaselineHarness, frame: bytes, instruction: str, objects: lis
     ]
     try:
         return h.llm_json(messages, GRAPH_SCHEMA, "geonav_understand", max_tokens=max_tokens)
-    except RuntimeError:
+    except NoSchemaAnswer:
         return {"nodes": [], "edges": []}  # released: two failed tries yield an empty graph
 
 
@@ -444,7 +444,7 @@ def _operation_chain(h: BaselineHarness, goal: str, *, max_tokens) -> list[dict]
             [{"role": "user", "content": P.QUERY_OPERATION_CHAIN_PROMPT.format(instruction=goal)}],
             CHAIN_SCHEMA, "geonav_chain", max_tokens=max_tokens,
         )
-    except RuntimeError:
+    except NoSchemaAnswer:
         return []
     chain = []
     for op in out.get("operations") or []:
