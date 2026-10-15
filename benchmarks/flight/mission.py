@@ -126,7 +126,7 @@ def flight_config(config: str):
     """The config a flight flies, refused (before any sortie is written) when
     it withholds a part of the flown engine; the loader refuses a missing or
     unresolved sensor."""
-    from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
+    from benchmarks.citynav.run_benchmark.config import load_config  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
 
     cfg = load_config(str(config))
@@ -139,7 +139,7 @@ def hydrate(*, episode_id: str, split: str, config: str, agl_m: float,
     """The engine for one mission, built by the bench's :func:`build_episode`,
     at the operator's start and at ``agl_m``, the crew's commanded height
     above ground: the one height the served sensor block and every leg read."""
-    from benchmarks.citynav.run_benchmark import load_episode_assets  # noqa: PLC0415
+    from benchmarks.citynav.run_benchmark.assets import load_episode_assets  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import build_episode  # noqa: PLC0415
 
     cfg = flight_config(config)

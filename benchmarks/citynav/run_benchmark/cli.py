@@ -24,11 +24,6 @@ from benchmarks.citynav.run_benchmark.config import export_withhold, load_config
 from benchmarks.citynav.run_benchmark.dispatch import _dispatch_one
 from maps.llm import endpoint_spec as endpoint_spec_module
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-5s %(message)s",
-    datefmt="%H:%M:%S",
-)
 log = logging.getLogger("run_benchmark")
 
 # The driver's pid, which bench_fullset sets when it spawns an attempt.
@@ -77,6 +72,11 @@ def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
 
 def main() -> int:
     """The runner's CLI, for the benchmark ``paths.BENCHMARK`` names."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-5s %(message)s",
+        datefmt="%H:%M:%S",
+    )
     # benchmarks.calcity.use() declares Cal City before calling in;
     # episode_workdir.benchmark() refuses an undeclared process.
     os.environ.setdefault("SEARCH_BENCHMARK_NAME", "citynav")

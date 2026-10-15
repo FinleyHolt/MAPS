@@ -522,7 +522,7 @@ def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
     flown engine was hydrated; else the recorded run's: the median camera
     height of its observations, else of its GNSS track over the run."""
     if forced:
-        from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
+        from benchmarks.citynav.run_benchmark.config import load_config  # noqa: PLC0415
 
         return float(load_config(config).start_altitude_agl_m)
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
@@ -667,7 +667,7 @@ def main(argv: list[str] | None = None) -> int:
         benchmarks.calcity.use()
         from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
         from benchmarks.flight.recorded_ring import RecordedRing, run_window  # noqa: PLC0415
-        from benchmarks.citynav.run_benchmark import load_config  # noqa: PLC0415
+        from benchmarks.citynav.run_benchmark.config import load_config  # noqa: PLC0415
         from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
 
         t0 = time.perf_counter()

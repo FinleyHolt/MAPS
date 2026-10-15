@@ -50,10 +50,8 @@ CASES = {
 
 
 def _replay(case, tmp_path, monkeypatch):
-    from benchmarks.citynav.run_benchmark import (
-        load_config,
-        synthesize_compliant_trajectory,
-    )
+    from benchmarks.citynav.run_benchmark.config import load_config
+    from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 
     cfg = load_config("configs/citynav.yaml")
     cfg.max_steps = case["max_steps"]

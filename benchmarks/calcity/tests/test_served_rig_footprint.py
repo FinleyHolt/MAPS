@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from benchmarks.citynav.run_benchmark import load_config
+from benchmarks.citynav.run_benchmark.config import load_config
 from maps.perception.geometry.sensor_spec import resolve_sensor, served_description
 from maps.perception.ortho.sensor_frame import footprint_m
 from maps.search.parse_compile.prompts import served_system_prompt

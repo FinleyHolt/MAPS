@@ -79,10 +79,8 @@ def test_every_leg_ends_within_the_arrival_bound_without_pacing():
 def test_a_leg_never_orbits_its_target(monkeypatch, tmp_path):
     """A 162 m leg whose target no lattice heading aligns with: the replay
     flies it in under 100 actions and counts it reached."""
-    from benchmarks.citynav.run_benchmark import (
-        load_config,
-        synthesize_compliant_trajectory,
-    )
+    from benchmarks.citynav.run_benchmark.config import load_config
+    from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 
     class _State:
         pose_xy = (0.0, 0.0)
