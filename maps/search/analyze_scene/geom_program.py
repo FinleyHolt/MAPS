@@ -14,10 +14,9 @@ import re
 
 import numpy as np
 
-from maps.search.analyze_scene import cell_mesh
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene import text_match as T
-from maps.search.analyze_scene.row_geometry import chains_of, geom_of, mask_center
+from maps.search.analyze_scene.row_geometry import cells_of, chains_of, geom_of, mask_center
 from maps.search.render.look_render import LOOK_SET_ROWS
 from maps.util.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld
@@ -281,7 +280,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
     def _cells(n):
         """The node's 2 m mesh as a plain (row, col) int list, so a surface
         round-trips through JSON."""
-        c = cell_mesh.cells_of(n)
+        c = cells_of(n)
         return c.tolist() if len(c) else []
 
     def _axis_q(n):
@@ -298,7 +297,7 @@ def build_surface(det_nodes, prior_nodes, origin_xy, cell_m):
         clipped."""
         wc = n.world_contour
         chains = [[[float(x), float(y)] for x, y in wc]] if wc else []
-        cl = cell_mesh.cells_of(n)
+        cl = cells_of(n)
         if not len(cl) or not chains:
             return chains
         r0, c0 = cl[:, 0].min(), cl[:, 1].min()

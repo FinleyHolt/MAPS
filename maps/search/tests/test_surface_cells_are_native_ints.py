@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from maps.search.analyze_scene import cell_mesh
+from maps.search.analyze_scene.row_geometry import cells_of
 from maps.search.analyze_scene.geom_program import build_surface_from_graph
 from maps.sws.graph.model import MapObject
 
@@ -41,8 +41,8 @@ def test_cells_match_the_nodes_they_came_from():
     checked = 0
     for fid, node in nodes.items():
         got = by_fid[fid].get("cells")
-        assert got == cell_mesh.cells_of(node).tolist(), fid
-        assert got == [[int(r), int(k)] for r, k in cell_mesh.cells_of(node)], fid
+        assert got == cells_of(node).tolist(), fid
+        assert got == [[int(r), int(k)] for r, k in cells_of(node)], fid
         assert len(got) == 20, (fid, len(got))
         checked += 1
     assert checked == 11, checked
