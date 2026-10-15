@@ -111,7 +111,7 @@ VIEWPOINT_RE = re.compile(rf"v{_FID_N}")
 STOP_RE = re.compile(rf"stop_{_FID_N}")
 END_RE = re.compile(rf"end_{_FID_N}")
 HANDLE_RE = re.compile(r"r[0-9]+")
-HANDLE_SLICE_RE = re.compile(rf"{HANDLE_RE.pattern}(?:\[[^\]]*\])?")
+HANDLE_WORD_RE = re.compile(rf"\b{HANDLE_RE.pattern}\b")
 
 
 def fid_like(tok) -> bool:

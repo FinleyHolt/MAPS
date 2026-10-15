@@ -46,7 +46,7 @@ from maps.search.parse_compile.carry import (
     run_ops,
 )
 from maps.search.parse_compile.code_surface import (
-    HANDLE_RE, HANDLE_SLICE_RE, STOP_RE)
+    HANDLE_RE, HANDLE_WORD_RE, STOP_RE)
 from maps.search.parse_compile.compactor import (
     CompactionInfeasible,
     CompactionInvariantError,
@@ -1187,7 +1187,7 @@ class _Mission:
             t, stop_err = self._flown_stop(t)
             if stop_err:
                 return self._plan_err({}, stop_err)
-            if HANDLE_SLICE_RE.fullmatch(t):
+            if HANDLE_RE.fullmatch(t):
                 hr = [str(r["fid"]) for r in (self.carry.read(t) or [])
                        if r.get("fid")]
                 if not hr:
@@ -1342,7 +1342,7 @@ class _Mission:
         if not isinstance(code, str) or not code.strip():
             return {"error": "run takes one block of code in code"}
         self._code_names.clear()
-        self._code_names.update(re.findall(rf"\b{HANDLE_RE.pattern}\b", code))
+        self._code_names.update(HANDLE_WORD_RE.findall(code))
         self._code_names.update(
             v.ref for v in self._mission_py.ns.values()
             if isinstance(v, _py_surface.Rows))

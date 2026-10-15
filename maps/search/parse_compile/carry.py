@@ -15,7 +15,7 @@ from maps.search.analyze_scene.geom_program import (
     join_hints,
     run_program,
 )
-from maps.search.parse_compile.code_surface import HANDLE_RE
+from maps.search.parse_compile.code_surface import HANDLE_RE, HANDLE_WORD_RE
 from maps.search.withhold import withheld
 
 log = logging.getLogger(__name__)
@@ -84,14 +84,15 @@ def program_dedup_key(ops: list) -> str | None:
         return None
     ren = {op["ref"]: f"r{i}" for i, op in enumerate(ops)}
     blob = json.dumps(ops, sort_keys=True, default=str)
-    handle = rf"\b{HANDLE_RE.pattern}\b"
-    if any(t not in ren for t in re.findall(handle, blob)):
+    if any(t not in ren for t in HANDLE_WORD_RE.findall(blob)):
         return None
-    return re.sub(handle, lambda m: ren[m.group(0)], blob)
+    return HANDLE_WORD_RE.sub(lambda m: ren[m.group(0)], blob)
 
 
 def _refs_read(op: dict) -> set:
     """The handles an op's args read (``rN`` or ``rN[a:b]``)."""
+    # A handle read is a whole JSON string, so an rN inside a longer string
+    # (a name) does not count.
     return set(re.findall(rf'"({HANDLE_RE.pattern})(?:\[[^"\]]*\])?"',
                           json.dumps(op["args"], default=str))) - {op["ref"]}
 
