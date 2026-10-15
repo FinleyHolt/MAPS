@@ -23,11 +23,13 @@ class BlockAssets:
 
 def missing_bake(stem: str) -> str | None:
     """What the bake at ``stem`` lacks for an episode to load, or None."""
+    recipe = ("python -m benchmarks.calcity.data_prep.bake_tiles" if Path(stem).name == "calcity"
+              else "benchmarks/citynav/data_prep/bake_tiles.sh")
     meta_path, feat_path = Path(f"{stem}_meta.json"), Path(f"{stem}_features.json")
     if not meta_path.exists():
-        return f"Missing {meta_path}. Run benchmarks/citynav/data_prep/bake_tiles.sh for this block first."
+        return f"Missing {meta_path}. Run {recipe} for this block first."
     if not feat_path.exists():
-        return f"Missing {feat_path}: re-bake this block (benchmarks/citynav/data_prep/bake_tiles.sh)."
+        return f"Missing {feat_path}: re-bake this block ({recipe})."
     return None
 
 

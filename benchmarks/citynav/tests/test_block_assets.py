@@ -60,3 +60,16 @@ def test_per_block_meta_bounds_match_block_canvas():
     height = bounds["y_max"] - bounds["y_min"]
     assert width < 600
     assert height < 600
+
+
+def test_a_missing_bake_names_its_maps_recipe(tmp_path, monkeypatch):
+    """A Cal City bake lacking a file names the Cal City recipe; a CityNav
+    block names bake_tiles.sh."""
+    from benchmarks.citynav.run_benchmark import assets
+
+    (tmp_path / "calcity_meta.json").write_text("{}")
+    monkeypatch.setattr(assets, "tile_stem", lambda name: str(tmp_path / name))
+    with pytest.raises(FileNotFoundError, match=r"calcity_features\.json.*benchmarks\.calcity\.data_prep\.bake_tiles"):
+        assets.load_episode_assets("calcity")
+    with pytest.raises(FileNotFoundError, match=r"blk_meta\.json.*benchmarks/citynav/data_prep/bake_tiles\.sh"):
+        assets.load_episode_assets("blk")

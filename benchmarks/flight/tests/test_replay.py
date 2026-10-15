@@ -126,7 +126,7 @@ def test_a_replay_over_a_bake_with_no_features_is_refused_before_its_sortie_fold
                       row={"episode_id": "calcity::t", "start_xy": [0, 0]}, params={}, requests=[], responses=[],
                       conversation=[], frames=[{"altitude_m": 1990.0}])
     out = tmp_path / "out"
-    with pytest.raises(ValueError, match="calcity_features.json"):
+    with pytest.raises(ValueError, match=r"calcity_features\.json.*python -m benchmarks\.calcity\.data_prep\.bake_tiles"):
         R.fly(rec, out, bank=[])
     assert not (out / "s").exists()
 
