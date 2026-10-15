@@ -972,9 +972,8 @@ class MissionPython:
         self._unbound: dict = {}        # name -> why this mission removed it
         self._get_noted: set = set()    # .get near-miss keys noted, per block
         self._call_minted: list = []    # handles the last call's flights minted
-        # Footprint geometry BY FID off the live surface. The cache is
-        # per-block: a flight folds detections in under it, so last block's
-        # union would measure a world that no longer stands.
+        # Footprint geometry BY FID off the live surface, cached until a
+        # call ends: a flight folds detections in under it.
         self._geom = SurfaceGeometry(env.row_of_fid)
         self._measure_calls = 0
         # Every block's code objects: a def from an earlier block is still
@@ -1100,9 +1099,11 @@ class MissionPython:
 
     def _end(self, ack: dict) -> None:
         """Close one call: finish an ack nothing refused, fold it into the
-        receipt, bind what its flights minted; a refusal ends the block."""
+        receipt, bind what its flights minted; a refusal ends the block. A
+        call may have changed the surface, so measured geometry is dropped."""
         if "error" not in ack:
             ack = self.env.finish(ack)
+        self._geom.clear()
         self._fold(ack)
         self._call_minted = list(self.env.minted)
         for h in self._call_minted:

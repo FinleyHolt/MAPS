@@ -744,3 +744,25 @@ def test_an_empty_window_of_a_window_names_its_own_span_and_parent():
         "window [5:8] selected 0 of 3 rows: the set holds 3 row(s) and the "
         "window begins at or past the end of them (or begins at or after "
         "where it stops).")
+
+
+def test_a_distance_after_a_flight_in_the_same_block_measures_the_new_surface():
+    from maps.search.parse_compile.python_surface import MissionPython
+
+    rows = {"prior_1": {"fid": "prior_1", "xy": [0.0, 0.0],
+                        "mask": [[[0.0, 0.0]]]},
+            "detected_2": {"fid": "detected_2", "xy": [10.0, 0.0],
+                           "mask": [[[10.0, 0.0]]]}}
+
+    def move(_tok):
+        # the flight folds a detection into detected_2: its mask moves
+        rows["detected_2"] = {"fid": "detected_2", "xy": [30.0, 0.0],
+                              "mask": [[[30.0, 0.0]]]}
+        return {}
+
+    mp = MissionPython(quiet_env(move=move, row_of_fid=rows.get))
+    out = mp.run_block('a = distance("prior_1", "detected_2")\n'
+                       'go_to("prior_1")\n'
+                       'print(a, distance("prior_1", "detected_2"))\n')
+    assert "error" not in out, out
+    assert out["printed"] == "10.0 30.0", out
