@@ -157,7 +157,7 @@ def points_from_geoms(geoms):
 COLOR_FAMILY = {
     "white": "achromatic", "black": "achromatic", "gray": "achromatic", "silver": "achromatic",
     "red": "red", "blue": "blue", "green": "green", "yellow": "yellow",
-    "orange": "warm", "brown": "warm", "tan": "warm", "beige": "warm", "gold": "warm",
+    "orange": "warm", "brown": "warm", "tan": "warm", "beige": "warm", "gold": "yellow",
     "maroon": "red", "purple": "purple",
 }
 

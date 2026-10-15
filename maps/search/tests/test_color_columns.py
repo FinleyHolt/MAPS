@@ -172,3 +172,12 @@ def test_palette_equals_the_m6_emitted_vocabulary():
     assert set(G.COLOR_ENUM) == set(_VDW_TO_VOCAB.values()), (
         G.COLOR_ENUM, sorted(set(_VDW_TO_VOCAB.values())))
     assert G.COLOR_COLUMNS == frozenset("color_" + w for w in G.COLOR_ENUM)
+
+
+# --- ONE-FAMILY guard: a word scores in the family its column is named for ---
+
+
+def test_a_word_shares_a_family_with_its_canonical_column():
+    for w in G.COLOR_FAMILY:
+        assert G.COLOR_FAMILY[w] == G.COLOR_FAMILY[G.normalize_color(w)], w
+    assert G.color_match("gold", G.normalize_color("gold")) >= 0.8
