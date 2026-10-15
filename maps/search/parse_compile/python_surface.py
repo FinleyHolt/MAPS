@@ -32,7 +32,7 @@ from typing import Callable
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
     _AUTOATTACH_PREFIXES, _BROAD_HEAD_ROWS, _STANDING_SIDE_PREFIXES,
-    MODEL_UNSERVED_COLUMNS, empty_window_refusal)
+    MODEL_UNSERVED_COLUMNS, _sanitize_token, empty_window_refusal)
 from maps.search.analyze_scene.row_geometry import SurfaceGeometry
 from maps.search.withhold import withheld
 from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
@@ -331,13 +331,6 @@ def looks_like_code(text: str) -> bool:
 # --------------------------------------------------------------------------
 
 
-def _norm_key(k: str) -> str:
-    """A column spelling collapsed the way ``geom_program._sanitize_token``
-    collapses ref labels, so "Poppy Boulevard" names the column "facing
-    poppy_boulevard"."""
-    return re.sub(r"[^a-z0-9]+", "_", k.lower()).strip("_")
-
-
 # The cardinal cut kwargs, derived from the compiler's (the geometry's) four.
 _CARDINAL_KWARGS = frozenset(f"{w}_of" for w in _CARDINALS)
 
@@ -493,15 +486,18 @@ class Row:
 
     def _resolve_key(self, k):
         """The served column a Python spelling names, or None: the exact key,
-        else the one column equal under :func:`_norm_key` (an ambiguous match
-        is None). Attribute, item and ``.get`` access all resolve here."""
+        else the one column equal under ``_sanitize_token``, the collapse ref
+        labels take ("Poppy Boulevard" names "facing poppy_boulevard"; an
+        ambiguous match is None). Attribute, item and ``.get`` access all
+        resolve here."""
         row = object.__getattribute__(self, "_row")
         if not isinstance(k, str) or k in MODEL_UNSERVED_COLUMNS:
             return None
         if k in row:
             return k
         hit = [rk for rk in row
-               if rk not in MODEL_UNSERVED_COLUMNS and _norm_key(rk) == _norm_key(k)]
+               if rk not in MODEL_UNSERVED_COLUMNS
+               and _sanitize_token(rk) == _sanitize_token(k)]
         return hit[0] if len(hit) == 1 else None
 
     def _derived(self, k):
