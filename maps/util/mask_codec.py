@@ -26,7 +26,7 @@ import zlib
 import numpy as np
 
 
-def _extent(mask: np.ndarray) -> tuple[int, int, int, int] | None:
+def extent(mask: np.ndarray) -> tuple[int, int, int, int] | None:
     """Inclusive ``(r0, c0, r1, c1)`` of a 2-D bool mask's set pixels; ``None`` when empty."""
     rows = mask.any(axis=1)
     if not rows.any():
@@ -54,7 +54,7 @@ def encode_mask_record(
     arr = np.asarray(mask).astype(bool, copy=False)
 
     if bbox_rcrc is None:
-        ext = _extent(arr)
+        ext = extent(arr)
         if ext is None:
             return None
         r0, c0, r1, c1 = ext

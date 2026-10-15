@@ -159,6 +159,6 @@ def test_cap_hit_says_whether_detections_were_dropped(adapter, monkeypatch, caps
     obs = _build_observation(_square_frame())
     blocks = [MaskRegion(np.ones((10, 10), dtype=bool), (100 * i, 0, 100 * i + 9, 9), obs.rgb.shape[:2])
               for i in range(n_masks)]
-    dets = adapter._detections(obs, [(b, "building", i, 0.9) for i, b in enumerate(blocks)])
+    dets = adapter.detections(obs, [(b, "building", i, 0.9) for i, b in enumerate(blocks)])
     assert len(dets) == 2
     assert ("cap_hit=True" in capsys.readouterr().out) is cap_hit

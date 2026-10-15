@@ -16,7 +16,7 @@ from maps.llm.endpoint_spec import EndpointSpec, reasoner_api_key
 from maps.llm.http import (
     CallCanceled,
     DegenerateCompletion,
-    _chat_completions_raw,
+    chat_completions_raw,
 )
 from maps.llm.model_cards import card_for, sampling_kwargs, speaks_openai
 from maps.llm.vision_content import build_vision_user_content
@@ -245,7 +245,7 @@ class Reasoner:
                 )
             kwargs["cancel_event"] = self.cancel_event
 
-        resp = _chat_completions_raw(self.endpoint_spec.base_url, self.api_key, **kwargs)
+        resp = chat_completions_raw(self.endpoint_spec.base_url, self.api_key, **kwargs)
         choice = resp["choices"][0]
         msg = choice.get("message", {})
         # The reasoning rides the assistant turn back to the next request (the

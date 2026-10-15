@@ -33,7 +33,7 @@ def _extract_tags(feat: dict) -> dict[str, str]:
     return tags
 
 
-def _mask_centerline(
+def mask_centerline(
     arr: np.ndarray, *, cell_size_m: float
 ) -> tuple[list[list[float]], float] | None:
     """A mask's principal-axis centerline: ``(centerline_rc, length_m)``, or
@@ -88,7 +88,7 @@ def _build_node(
     centroid = (int(round(feat["centroid_row"])), int(round(feat["centroid_col"])))
 
     # The mask centerline, the same for every class.
-    centerline, axis_length_m = _mask_centerline(arr, cell_size_m=cell_size_m) or (None, 0.0)
+    centerline, axis_length_m = mask_centerline(arr, cell_size_m=cell_size_m) or (None, 0.0)
 
     # The bake's exact world-meter vertex chain (a ring, a way, or a node's
     # single vertex), stamped verbatim; the bake omits it when the geometry

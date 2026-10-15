@@ -23,12 +23,12 @@ def test_a_partially_failed_frame_counts_its_failed_tiles(monkeypatch):
     )
     captured = []
     monkeypatch.setattr(
-        SamDetectClient, "_detections",
+        SamDetectClient, "detections",
         lambda self, obs, masks: captured.append(masks) or [],
     )
     assert client.sahi_tiles_failed == 0
-    client._segment(obs, ["car"])
+    client.segment(obs, ["car"])
     assert client.sahi_tiles_failed == 1
     assert captured and captured[0], "the answering tile's detections are kept"
-    client._segment(obs, ["car"])
+    client.segment(obs, ["car"])
     assert client.sahi_tiles_failed == 2

@@ -21,7 +21,7 @@ def test_a_cancel_aborts_a_call_the_serve_is_silent_on(monkeypatch, hold):
     t0 = time.monotonic()
     with ChatServe(hold=hold) as serve:
         with pytest.raises(http.CallCanceled):
-            http._chat_completions_raw(f"{serve.url}/v1", None, timeout=60.0, cancel_event=cancel,
+            http.chat_completions_raw(f"{serve.url}/v1", None, timeout=60.0, cancel_event=cancel,
                                        model="m", messages=[{"role": "user", "content": "x"}])
         assert time.monotonic() - t0 < 2.0
 
@@ -35,9 +35,9 @@ def test_an_answer_that_lands_as_the_cancel_is_set_is_never_used(monkeypatch, tm
         return {"choices": [{"message": {"content": "late"}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 5, "completion_tokens": 1}}
 
-    monkeypatch.setattr(http, "_stream_chat_completions", answer_as_the_stop_is_pressed)
+    monkeypatch.setattr(http, "stream_chat_completions", answer_as_the_stop_is_pressed)
     with pytest.raises(http.CallCanceled):
-        http._chat_completions_raw("http://127.0.0.1:9/v1", None, timeout=60.0, cancel_event=cancel,
+        http.chat_completions_raw("http://127.0.0.1:9/v1", None, timeout=60.0, cancel_event=cancel,
                                    model="m", messages=[{"role": "user", "content": "x"}])
     kinds = [json.loads(line)["kind"]
              for line in (tmp_path / "flight" / "llm" / "transcript.jsonl").read_text().splitlines()]
@@ -52,7 +52,7 @@ def test_a_cancel_during_a_retry_backoff_ends_the_wait(monkeypatch):
     t0 = time.monotonic()
     with ChatServe([(503, {"error": "boom"}, {})]) as serve:
         with pytest.raises(http.CallCanceled):
-            http._chat_completions_raw(f"{serve.url}/v1", None, timeout=60.0, cancel_event=cancel,
+            http.chat_completions_raw(f"{serve.url}/v1", None, timeout=60.0, cancel_event=cancel,
                                        model="m", messages=[{"role": "user", "content": "x"}])
         assert len(serve.bodies) == 1
     assert time.monotonic() - t0 < 2.0

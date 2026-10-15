@@ -4,7 +4,7 @@
 Offline + hermetic: ``_get_json`` (the one HTTP seam) is monkeypatched with a
 url->payload table, and ``_require_tokenizer`` is stubbed except in the
 tokenizer-failure test (which drives the REAL ``_require_tokenizer`` against a
-stubbed ``maps.llm.tokenizer._tokenizer``). Every abort case a-i is a
+stubbed ``maps.llm.tokenizer.load_tokenizer``). Every abort case a-i is a
 distinct ``EndpointDiscoveryError`` naming the fact; the install-once authority
 is exercised on an isolated module global.
 
@@ -160,7 +160,7 @@ def test_case_g_tokenizer_load_failure(monkeypatch):
     def _unloadable(m):
         raise RuntimeError(f"tokenizer for served model {m!r} failed to load")
 
-    monkeypatch.setattr(tok, "_tokenizer", _unloadable)
+    monkeypatch.setattr(tok, "load_tokenizer", _unloadable)
     with pytest.raises(EndpointDiscoveryError, match="tokenizer"):
         discover(_URL_A)
 
@@ -179,7 +179,7 @@ def test_case_g_discovery_refuses_a_template_that_cannot_render_a_tool_turn(monk
     monkeypatch.setattr(E, "_require_tokenizer", _REAL_REQUIRE_TOKENIZER)
     import maps.llm.tokenizer as tok
 
-    monkeypatch.setattr(tok, "_tokenizer", lambda m: _NoToolTurnTemplate())
+    monkeypatch.setattr(tok, "load_tokenizer", lambda m: _NoToolTurnTemplate())
     with pytest.raises(EndpointDiscoveryError, match="chat template"):
         discover(_URL_A)
 

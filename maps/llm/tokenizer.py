@@ -16,7 +16,7 @@ from maps.llm.model_cards import CARDS
 _TOKENIZER_CACHE: dict[str, Any] = {}
 
 
-def _hf_tokenizer_name(model: str) -> str:
+def hf_tokenizer_name(model: str) -> str:
     """The tokenizer repo for a served alias: ``SEARCH_COMPACT_TOKENIZER_NAME``,
     else the model card's, else ``model`` itself."""
     env = os.environ.get("SEARCH_COMPACT_TOKENIZER_NAME", "").strip()
@@ -28,10 +28,10 @@ def _hf_tokenizer_name(model: str) -> str:
     return model
 
 
-def _tokenizer(model: str):
+def load_tokenizer(model: str):
     """The cached tokenizer for ``model``, loaded on first call; a repo that
     cannot load raises ``RuntimeError`` naming it."""
-    hf_name = _hf_tokenizer_name(model)
+    hf_name = hf_tokenizer_name(model)
     cached = _TOKENIZER_CACHE.get(hf_name)
     if cached is not None:
         return cached

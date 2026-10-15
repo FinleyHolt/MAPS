@@ -108,7 +108,7 @@ def test_encode_from_crop_matches_full_frame_encode():
         assert via_crop == encode_mask_record(m)
 
 
-# ── End-to-end: the masks _segment decodes equal the full-frame reference ──
+# ── End-to-end: the masks segment decodes equal the full-frame reference ──
 
 
 def _tile_det(mask_1008, label, score):
@@ -175,8 +175,8 @@ def _build_tile_case():
 
 def _decoded(monkeypatch, client, obs):
     captured = []
-    monkeypatch.setattr(SamDetectClient, "_detections", lambda self, obs, masks: captured.append(masks) or [])
-    client._segment(obs, ["car"])
+    monkeypatch.setattr(SamDetectClient, "detections", lambda self, obs, masks: captured.append(masks) or [])
+    client.segment(obs, ["car"])
     assert captured, "the tiles never reached the decode"
     return captured[0]
 

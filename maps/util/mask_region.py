@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from maps.util.mask_codec import _extent
+from maps.util.mask_codec import extent
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,7 @@ class MaskRegion:
 
     def tightened(self) -> "MaskRegion | None":
         """The same pixels, re-boxed to their own extent."""
-        ext = _extent(self.crop)
+        ext = extent(self.crop)
         if ext is None:
             return None
         dr0, dc0, dr1, dc1 = ext

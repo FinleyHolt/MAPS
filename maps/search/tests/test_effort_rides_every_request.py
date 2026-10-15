@@ -24,7 +24,7 @@ def _serve(monkeypatch) -> list[dict]:
                         "tool_calls": []},
         }]}
 
-    monkeypatch.setattr(reasoner_agent, "_chat_completions_raw", _fake)
+    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
     return sent
 
 

@@ -1,4 +1,4 @@
-"""``SamDetectClient._detections`` output, pinned value by value, serial and on a thread pool.
+"""``SamDetectClient.detections`` output, pinned value by value, serial and on a thread pool.
 
 The case splits multi-component masks, drops a detection over NaN depth (its components and merged
 fallback all fail projection), and hits ``max_per_step`` mid-detection. A change meant to move a value
@@ -63,7 +63,7 @@ def _build_case():
 def _run():
     client = SamDetectClient(concepts=["car"])
     dets, obs = _build_case()
-    return client._detections(
+    return client.detections(
         obs, [(dc.record_region(d, (H, W)), d["label"], d["object_id"], d["score"]) for d in dets]
     )
 

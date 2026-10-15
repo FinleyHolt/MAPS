@@ -21,7 +21,7 @@ def test_the_reasoner_posts_to_its_spec_with_the_env_key(monkeypatch, env_key, s
         seen.update(url=url, key=api_key)
         return {"choices": [{"message": {"content": "done"}, "finish_reason": "stop"}]}
 
-    monkeypatch.setattr(ra, "_chat_completions_raw", _fake)
+    monkeypatch.setattr(ra, "chat_completions_raw", _fake)
     r = ra.Reasoner(endpoint_spec=replace(TEST_SPEC, base_url="http://spec.example/v1"))
     r.append_user("find it")
     r.step_tool_call([])

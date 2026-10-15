@@ -316,7 +316,7 @@ class BaselineHarness:
         reasoning tokens. ``dial`` ``"none"`` switches thinking off."""
         from maps.llm import endpoint_spec
         from maps.llm.flight_summary import reasoning_tokens_of
-        from maps.llm.http import _chat_completions_raw
+        from maps.llm.http import chat_completions_raw
         from maps.llm.model_cards import sampling_kwargs, speaks_openai
         from maps.llm.openai_wire import OUTPUT_CAP_KEY
 
@@ -330,7 +330,7 @@ class BaselineHarness:
         if response_format is not None:
             kw["response_format"] = response_format
         cap_key = OUTPUT_CAP_KEY if speaks_openai(model) else "max_tokens"
-        resp = _chat_completions_raw(
+        resp = chat_completions_raw(
             spec.base_url, endpoint_spec.reasoner_api_key(), timeout=LLM_TIMEOUT_S,
             model=model, messages=msgs, **{cap_key: cap}, **kw,
         )

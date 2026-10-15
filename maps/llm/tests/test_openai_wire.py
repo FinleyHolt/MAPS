@@ -39,7 +39,7 @@ class _Tok:
 @pytest.fixture(autouse=True)
 def _offline_tokenizer(monkeypatch) -> None:
     """The compactor sizes the transcript with a stub, never a hub download."""
-    monkeypatch.setattr(compactor, "_tokenizer", lambda _model: _Tok())
+    monkeypatch.setattr(compactor, "load_tokenizer", lambda _model: _Tok())
 
 
 def test_the_card_is_the_one_an_openai_wire_reader_keys_on() -> None:
@@ -90,7 +90,7 @@ def _serve(monkeypatch) -> list[dict]:
             "content": None, "tool_calls": [
                 {"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{\"code\": \"x\"}"}}]}}]}
 
-    monkeypatch.setattr(reasoner_agent, "_chat_completions_raw", _fake)
+    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
     return sent
 
 
@@ -145,7 +145,7 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
             {"id": f"c{len(sent)}", "type": "function",
              "function": {"name": "run", "arguments": "{ \"code\":  \"look()\" }"}}]}}]}
 
-    monkeypatch.setattr(reasoner_agent, "_chat_completions_raw", _fake)
+    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
     r = Reasoner(endpoint_spec=GPT_SPEC, reasoning_effort="xhigh")
     r.append_vision_user("look 0", [jpeg(64)] * 4)
     for k in range(1, 5):

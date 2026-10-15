@@ -387,7 +387,7 @@ class Script:
 
 
 def recorded_segmenter(rec: Recording, state_of):
-    """The segmenter's ``_segment`` answered with the flight's recorded masks,
+    """The segmenter's ``segment`` answered with the flight's recorded masks,
     through the client's own decode, split, projection and colour read."""
 
     def segment(client, obs, concepts):
@@ -395,7 +395,7 @@ def recorded_segmenter(rec: Recording, state_of):
 
         rows = rec.detections.get(int(state_of().step_idx), [])
         hw = obs.rgb.shape[:2]
-        return client._detections(obs, [
+        return client.detections(obs, [
             (record_region(d, hw), d["label"], int((d.get("metadata") or {}).get("sam3_1_object_id", i)),
              float((d.get("metadata") or {}).get("sam3_1_score", d.get("confidence"))))
             for i, d in enumerate(rows) if d.get("mask_zpacked_b64")])
@@ -563,12 +563,12 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         if rec.params.get("seed") is not None:
             os.environ["SEARCH_SEED_BASE"] = str(rec.params["seed"])
         script = Script(rec)
-        http._stream_chat_completions = script
+        http.stream_chat_completions = script
         make = episode_runner.make_perception
 
         def recorded():
             adapter = make()
-            adapter._segment = functools.partial(recorded_segmenter(rec, lambda: mission._hydrated.state), adapter)
+            adapter.segment = functools.partial(recorded_segmenter(rec, lambda: mission._hydrated.state), adapter)
             return adapter
 
         episode_runner.make_perception = recorded

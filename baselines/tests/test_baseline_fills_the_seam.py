@@ -232,7 +232,7 @@ def test_an_answer_that_is_not_json_is_reshaped_with_the_dial_off(monkeypatch):
         return {"choices": [{"message": {"content": next(replies)}, "finish_reason": "stop"}],
                 "usage": {"completion_tokens": 1}}
 
-    monkeypatch.setattr(http, "_chat_completions_raw", fake)
+    monkeypatch.setattr(http, "chat_completions_raw", fake)
     monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
         base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
         tokenizer_name="qwen", max_output_tokens=40000))
@@ -264,7 +264,7 @@ def test_only_a_cap_the_reasoning_exhausted_counts_as_truncated(monkeypatch, fin
         text, why = next(replies)
         return {"choices": [{"message": {"content": text}, "finish_reason": why}], "usage": {}}
 
-    monkeypatch.setattr(http, "_chat_completions_raw", fake)
+    monkeypatch.setattr(http, "chat_completions_raw", fake)
     monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
         base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
         tokenizer_name="qwen", max_output_tokens=40000))
@@ -291,7 +291,7 @@ def test_an_answer_whose_nested_item_breaks_the_schema_is_reshaped(monkeypatch):
                  {"plan": "p", "sub_goals": [{"goal": "g", "strategy": "Navigate"}]},
                  {"plan": "p", "sub_goals": "Navigate"}):
         replies = iter([json.dumps(slip), json.dumps(good)])
-        monkeypatch.setattr(http, "_chat_completions_raw", lambda base_url, api_key, **kw: {
+        monkeypatch.setattr(http, "chat_completions_raw", lambda base_url, api_key, **kw: {
             "choices": [{"message": {"content": next(replies)}, "finish_reason": "stop"}], "usage": {}})
         monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
             base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
@@ -317,7 +317,7 @@ def _dial_off_bodies(monkeypatch, model: str) -> list[dict]:
         sent.append(kw)
         return {"choices": [{"message": {"content": next(replies)}, "finish_reason": "stop"}], "usage": {}}
 
-    monkeypatch.setattr(http, "_chat_completions_raw", fake)
+    monkeypatch.setattr(http, "chat_completions_raw", fake)
     monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
         base_url="http://serve.example:8001/v1", model_id=model, max_model_len=262144,
         tokenizer_name="qwen", max_output_tokens=40000))
@@ -439,7 +439,7 @@ def test_a_mistyped_or_misshapen_answer_does_not_fit_and_is_reshaped(monkeypatch
     assert not _fits({"reason": "r", "selected_pos": [1.0, False]}, LOCATE_SCHEMA)
 
     replies = iter(['{"reason": "r", "selected_pos": [12.0]}', '{"reason": "r", "selected_pos": [12.0, 4.0]}'])
-    monkeypatch.setattr(http, "_chat_completions_raw", lambda base_url, api_key, **kw: {
+    monkeypatch.setattr(http, "chat_completions_raw", lambda base_url, api_key, **kw: {
         "choices": [{"message": {"content": next(replies)}, "finish_reason": "stop"}], "usage": {}})
     monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
         base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
@@ -463,7 +463,7 @@ def test_an_image_store_refusal_inside_a_call_reaches_the_infra_rule(monkeypatch
     def refuse(base_url, api_key, **kw):
         raise http.ImageStoreError("image store PUT http://store.example/looks/abc failed: 503")
 
-    monkeypatch.setattr(http, "_chat_completions_raw", refuse)
+    monkeypatch.setattr(http, "chat_completions_raw", refuse)
     monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
         base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
         tokenizer_name="qwen", max_output_tokens=40000))
@@ -482,7 +482,7 @@ def test_no_schema_answer_after_every_attempt_raises_no_schema_answer(monkeypatc
     from baselines.seam import LLM_ATTEMPTS, NoSchemaAnswer
     from maps.llm import endpoint_spec
 
-    monkeypatch.setattr(http, "_chat_completions_raw", lambda base_url, api_key, **kw: {
+    monkeypatch.setattr(http, "chat_completions_raw", lambda base_url, api_key, **kw: {
         "choices": [{"message": {"content": "prose"}, "finish_reason": "stop"}], "usage": {}})
     monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
         base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,

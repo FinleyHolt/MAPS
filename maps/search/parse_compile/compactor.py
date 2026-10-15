@@ -27,8 +27,8 @@ import json
 import logging
 import time
 
-from maps.llm.endpoint_spec import _MIN_INPUT_BUDGET
-from maps.llm.tokenizer import _tokenizer
+from maps.llm.endpoint_spec import MIN_INPUT_BUDGET
+from maps.llm.tokenizer import load_tokenizer
 from maps.llm.vision_content import image_tokens_in, image_tokens_of
 
 log = logging.getLogger(__name__)
@@ -337,7 +337,7 @@ def _estimate_input_tokens(
 ) -> int:
     """The chat-templated input tokens the server will see, crops priced by
     their pixels; a tokenizer or template failure raises."""
-    tok = _tokenizer(model)
+    tok = load_tokenizer(model)
     text = tok.apply_chat_template(
         _messages_for_tokenization(messages),
         tools=tools,
@@ -504,7 +504,7 @@ def compact_transcript(
     # leaving it to re-prefill. The low-water mark is never above target and
     # floored at the least input budget a reasoner runs on.
     low_water = max(target_input_tokens - _CLEAR_HEADROOM_TOKENS,
-                    min(_MIN_INPUT_BUDGET, target_input_tokens))
+                    min(MIN_INPUT_BUDGET, target_input_tokens))
     output_tokens = input_tokens
     out, folded_turns, freed_fold = _drop_spent_turns(
         messages, before=input_tokens, shed_tokens=input_tokens - low_water,

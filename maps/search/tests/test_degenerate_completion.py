@@ -23,7 +23,7 @@ def _serve(monkeypatch, *, content="", reasoning="", finish_reason="stop",
                         "tool_calls": list(tool_calls)},
         }]}
 
-    monkeypatch.setattr(reasoner_agent, "_chat_completions_raw", _fake)
+    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
     return sent
 
 

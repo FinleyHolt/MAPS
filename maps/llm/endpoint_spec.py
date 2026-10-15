@@ -55,7 +55,7 @@ _OUTPUT_RESERVE_CAP = 40000
 _WINDOW_MARGIN_TOKENS = 1024
 
 # The reasoner cannot operate below this input budget.
-_MIN_INPUT_BUDGET = 8000
+MIN_INPUT_BUDGET = 8000
 
 
 class EndpointDiscoveryError(RuntimeError):
@@ -263,11 +263,11 @@ def _require_tokenizer(model_id: str) -> str:
     """Load the tokenizer for ``model_id`` and render its chat template over
     :data:`_TEMPLATE_PROBE`; either failing raises naming the repo. The
     import is local so spec readers never load transformers."""
-    from maps.llm.tokenizer import _hf_tokenizer_name, _tokenizer
+    from maps.llm.tokenizer import hf_tokenizer_name, load_tokenizer
 
-    tokenizer_name = _hf_tokenizer_name(model_id)
+    tokenizer_name = hf_tokenizer_name(model_id)
     try:
-        tok = _tokenizer(model_id)
+        tok = load_tokenizer(model_id)
     except RuntimeError as exc:
         raise EndpointDiscoveryError(str(exc)) from exc
     try:
@@ -345,12 +345,12 @@ def discover(
         max_output_tokens=min(_OUTPUT_RESERVE_CAP, max_model_len // 4),
         sam_urls=sam_urls,
     )
-    if spec.input_budget < _MIN_INPUT_BUDGET:
+    if spec.input_budget < MIN_INPUT_BUDGET:
         raise EndpointDiscoveryError(
             f"served window max_model_len={max_model_len} leaves "
             f"input_budget={spec.input_budget} after max_output_tokens="
             f"{spec.max_output_tokens} + margin={_WINDOW_MARGIN_TOKENS}, "
-            f"below the {_MIN_INPUT_BUDGET}-token reasoner minimum"
+            f"below the {MIN_INPUT_BUDGET}-token reasoner minimum"
         )
     return spec
 

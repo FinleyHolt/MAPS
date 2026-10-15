@@ -307,7 +307,7 @@ def test_the_recorded_segmenter_keeps_a_recorded_object_id_of_zero():
     rows = [{"label": "car", "confidence": 0.9, "metadata": {"sam3_1_object_id": oid}, **record} for oid in (3, 0)]
     rec = SimpleNamespace(detections={0: rows})
     seen = []
-    client = SimpleNamespace(_detections=lambda obs, masks: seen.extend(masks) or [])
+    client = SimpleNamespace(detections=lambda obs, masks: seen.extend(masks) or [])
     R.recorded_segmenter(rec, lambda: SimpleNamespace(step_idx=0))(client, SimpleNamespace(rgb=np.zeros((8, 8, 3))), [])
     assert [m[2] for m in seen] == [3, 0]
 

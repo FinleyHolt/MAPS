@@ -21,7 +21,7 @@ def _err(status: int, headers: dict | None = None, payload: dict | None = None):
 
 @pytest.fixture
 def transport(monkeypatch):
-    """Run ``_chat_completions_raw`` against a ChatServe scripted with ``answers``; returns
+    """Run ``chat_completions_raw`` against a ChatServe scripted with ``answers``; returns
     ``(result_or_exc, bodies, sleeps)`` with the backoff sleeps captured, not taken."""
     monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
     sleeps: list[float] = []
@@ -30,7 +30,7 @@ def transport(monkeypatch):
     def _run(answers, **kwargs):
         with ChatServe(answers) as serve:
             try:
-                result = http_mod._chat_completions_raw(
+                result = http_mod.chat_completions_raw(
                     f"{serve.url}/v1", "key", model="m", messages=_MESSAGES, timeout=60.0, **kwargs)
             except Exception as exc:  # noqa: BLE001 - the test inspects it
                 result = exc
@@ -89,7 +89,7 @@ def test_malformed_request_raises_without_retry(transport) -> None:
 
 
 def _posted_body(transport, **kwargs) -> dict:
-    """The body ``_chat_completions_raw`` actually puts on the wire."""
+    """The body ``chat_completions_raw`` actually puts on the wire."""
     return transport([], **kwargs)[1][0]
 
 
@@ -168,7 +168,7 @@ def _run_raising(monkeypatch, exc: Exception) -> list[int]:
         http_mod.httpx, "Client", lambda *a, **kw: _RaisingClient(exc, calls)
     )
     with pytest.raises(httpx.TimeoutException):
-        http_mod._chat_completions_raw(
+        http_mod.chat_completions_raw(
             "http://endpoint/v1",
             "key",
             model="m",
@@ -198,7 +198,7 @@ def test_connect_timeout_still_burns_the_fault_budget(monkeypatch) -> None:
 
 def test_every_call_names_its_timeout() -> None:
     with pytest.raises(TypeError, match="timeout"):
-        http_mod._chat_completions_raw(
+        http_mod.chat_completions_raw(
             "http://endpoint/v1", "key", model="m", messages=[{"role": "user", "content": "hi"}])
 
 
@@ -230,8 +230,8 @@ def test_a_stream_cut_before_its_end_is_a_transport_fault(monkeypatch, tail, fin
     monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=mock, **kw))
     if finish is None:
         with pytest.raises(httpx.RemoteProtocolError, match="without a finish_reason"):
-            http_mod._stream_chat_completions("http://e/v1/chat/completions", {}, {}, timeout=5.0)
+            http_mod.stream_chat_completions("http://e/v1/chat/completions", {}, {}, timeout=5.0)
         return
-    out = http_mod._stream_chat_completions("http://e/v1/chat/completions", {}, {}, timeout=5.0)
+    out = http_mod.stream_chat_completions("http://e/v1/chat/completions", {}, {}, timeout=5.0)
     assert out["choices"][0]["finish_reason"] == finish
     assert out["choices"][0]["message"]["content"] == "half"

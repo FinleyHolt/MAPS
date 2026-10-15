@@ -120,10 +120,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     # Lazy: maps.llm.tokenizer eagerly imports transformers.
-    from maps.llm.tokenizer import _tokenizer
+    from maps.llm.tokenizer import load_tokenizer
 
     c = assemble(sensor=args.sensor, agl_m=args.agl_m)
-    tok = _tokenizer(args.model)
+    tok = load_tokenizer(args.model)
     rendered = tok.apply_chat_template(
         [{"role": "system", "content": c["system"]},
          {"role": "user", "content": _SAMPLE_INSTRUCTION}],

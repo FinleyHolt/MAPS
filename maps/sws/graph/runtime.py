@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.sws.graph.builder import _mask_centerline
+from maps.sws.graph.builder import mask_centerline
 from maps.sws.graph.model import MapObject, ObjectGraph
 
 
@@ -89,7 +89,7 @@ def upsert_detected_centroid_only(graph: ObjectGraph, node: MapObject) -> str:
 
 def _stamp_cells(node: MapObject, cells: np.ndarray, cell_size_m: float) -> None:
     """Set a detected node's ``cells`` and, if it has none yet, the bake's own
-    centerline family (``builder._mask_centerline``) derived from them.
+    centerline family (``builder.mask_centerline``) derived from them.
 
     ponytail: derive-if-absent, so the centerline stays the first frame's
     while ``cells`` are re-stamped every frame; re-deriving changes the geom
@@ -98,7 +98,7 @@ def _stamp_cells(node: MapObject, cells: np.ndarray, cell_size_m: float) -> None
     node.cells = cells
     if node.centerline is not None or len(node.cells) < 2:
         return
-    geom = _mask_centerline(node.cells, cell_size_m=float(cell_size_m))
+    geom = mask_centerline(node.cells, cell_size_m=float(cell_size_m))
     if geom is not None:
         node.centerline, node.axis_length_m = geom
 

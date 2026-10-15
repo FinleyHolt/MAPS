@@ -342,7 +342,7 @@ class SamDetectClient:
                 "(the view square a mask projects through)"
             )
         concepts = list(self.concepts)
-        return self._segment(obs, concepts) if concepts else []
+        return self.segment(obs, concepts) if concepts else []
 
     @staticmethod
     def _tile_bounds(H: int, W: int) -> "list[tuple[int, int, int, int]]":
@@ -390,7 +390,7 @@ class SamDetectClient:
                 kept.append((region, a, lab, sc))
         return [(region, lab, sc) for region, _a, lab, sc in kept]
 
-    def _segment(
+    def segment(
         self, obs: Observation, concepts: list[str]
     ) -> list[DetectedObject]:
         """Slicing-aided detection: ``/segment`` each ``_SAM_INPUT_SIZE`` tile
@@ -453,9 +453,9 @@ class SamDetectClient:
             + (" -- WARNING: this frame is PARTIAL-BLIND" if n_failed else ""),
             flush=True,
         )
-        return self._detections(obs, [(region, lab, i, sc) for i, (region, lab, sc) in enumerate(kept)])
+        return self.detections(obs, [(region, lab, i, sc) for i, (region, lab, sc) in enumerate(kept)])
 
-    def _detections(
+    def detections(
         self,
         obs: Observation,
         masks: "list[tuple[MaskRegion | None, str, int, float]]",

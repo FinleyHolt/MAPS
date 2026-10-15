@@ -16,7 +16,7 @@ from typing import Any
 
 from .http import TRANSCRIPT_JSONL
 from .model_cards import speaks_openai
-from .tokenizer import _tokenizer
+from .tokenizer import load_tokenizer
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int
     if not isinstance(model_alias, str):
         return 0
     try:
-        tok = _tokenizer(model_alias)
+        tok = load_tokenizer(model_alias)
     except Exception:  # noqa: BLE001 — no tokenizer reads 0
         return 0
     total = 0

@@ -395,7 +395,7 @@ _EMPTY_STREAM_S = 90.0
 _EMPTY_STREAM_CHUNKS = 1200
 
 
-def _stream_chat_completions(
+def stream_chat_completions(
     url: str,
     headers: dict[str, str],
     body: dict,
@@ -555,7 +555,7 @@ def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusa
 _SAMPLING_KEYS = ("temperature", "top_p", "top_k", "max_tokens", "max_completion_tokens", "reasoning_effort")
 
 
-def _chat_completions_raw(
+def chat_completions_raw(
     base_url: str,
     api_key: str | None,
     *,
@@ -590,7 +590,7 @@ def _chat_completions_raw(
                 raise CallCanceled("canceled before dispatch")
             wire = _wire_body(body, cancel_event)
             if use_stream:
-                response_json = _stream_chat_completions(
+                response_json = stream_chat_completions(
                     url, headers, wire, timeout=timeout, cancel_event=cancel_event)
             else:
                 with httpx.Client(timeout=timeout) as client:

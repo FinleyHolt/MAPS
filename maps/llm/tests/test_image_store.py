@@ -43,7 +43,7 @@ def _store(monkeypatch, url: str = "http://store") -> list[tuple[str, dict]]:
 
 
 def _send(serve, messages=None, **kw) -> dict:
-    return http_mod._chat_completions_raw(
+    return http_mod.chat_completions_raw(
         f"{serve.url}/v1", "sk-reasoner", model="m", messages=messages or _messages(), timeout=30.0, **kw)
 
 

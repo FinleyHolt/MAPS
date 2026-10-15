@@ -93,7 +93,7 @@ def serves(monkeypatch):
             message = {"content": "The church is under the last flight.", "reasoning_content": "", "tool_calls": []}
         return {"choices": [{"finish_reason": "stop", "message": message}]}
 
-    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    monkeypatch.setattr(http, "stream_chat_completions", reply)
 
     from benchmarks.citynav.run_benchmark import episode_runner
 
@@ -184,7 +184,7 @@ def _fly_failing(tmp_path, monkeypatch, fault):
     from benchmarks.flight import twin
     from maps.llm import http
 
-    scripted = http._stream_chat_completions
+    scripted = http.stream_chat_completions
     calls = []
 
     def reply(url, headers, body, **kw):
@@ -193,7 +193,7 @@ def _fly_failing(tmp_path, monkeypatch, fault):
             raise fault
         return scripted(url, headers, body, **kw)
 
-    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    monkeypatch.setattr(http, "stream_chat_completions", reply)
     out = tmp_path / "out"
     assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho",
                       str(tmp_path / "calcity" / "data" / "rgbd_upstream"), "--out", str(out)]) == 1
@@ -245,7 +245,7 @@ def test_a_retasked_mission_is_measured_to_its_last_report(calcity, serves, tmp_
             message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
         return {"choices": [{"finish_reason": "stop", "message": message}]}
 
-    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    monkeypatch.setattr(http, "stream_chat_completions", reply)
     out = tmp_path / "out"
     assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                       "--then", "Check the west side too.", "--out", str(out)]) == 0
@@ -297,7 +297,7 @@ def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, ser
             message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
         return {"choices": [{"finish_reason": "stop", "message": message}]}
 
-    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    monkeypatch.setattr(http, "stream_chat_completions", reply)
     out = tmp_path / "out"
     assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                       "--then", "Check the west side too.", "--out", str(out)]) == 1
@@ -345,7 +345,7 @@ def test_a_follow_up_that_ends_without_a_new_report_scores_the_run_at_that_repor
             message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
         return {"choices": [{"finish_reason": "stop", "message": message}]}
 
-    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    monkeypatch.setattr(http, "stream_chat_completions", reply)
     out = tmp_path / "out"
     assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                       "--then", "Check the west side too.", "--out", str(out)]) == 0
@@ -440,7 +440,7 @@ def test_a_pass_flies_first_the_stop_the_recording_holds_and_its_replays_fly_it_
             message = {"content": "The church is under the pass.", "reasoning_content": "", "tool_calls": []}
         return {"choices": [{"finish_reason": "stop", "message": message}]}
 
-    monkeypatch.setattr(http, "_stream_chat_completions", reply)
+    monkeypatch.setattr(http, "stream_chat_completions", reply)
     shed, church = [565.0, 995.0], [999.0, 1019.0]
 
     def visited(out):
