@@ -641,6 +641,14 @@ def test_a_refused_config_exits_2_before_any_out_root(dry, tmp_path, monkeypatch
     assert capsys.readouterr().err.startswith("FATAL: ")
 
 
+def test_a_config_that_is_not_yaml_is_refused_naming_its_file(tmp_path, monkeypatch, capsys) -> None:
+    bad = tmp_path / "arm.yaml"
+    bad.write_text("max_steps: [1\n")
+    monkeypatch.setattr(bf, "CONFIG", bad)
+    assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run"]) == 2
+    assert capsys.readouterr().err.startswith(f"FATAL: {bad}: ")
+
+
 @pytest.mark.parametrize("stream", ["{}", "not json", '{"reports": [{"episode_id": "a"}]}', None])
 def test_an_unreadable_session_stream_is_refused_fatal(stream, driver, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])

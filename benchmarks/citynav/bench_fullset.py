@@ -800,7 +800,10 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         resolved = resolve_config(CONFIG)[0]
-    except (OSError, ValueError, yaml.YAMLError) as exc:
+    except yaml.YAMLError as exc:
+        print(f"FATAL: {CONFIG}: {exc}", file=sys.stderr)
+        return 2
+    except (OSError, ValueError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
     driver = Driver(args)
