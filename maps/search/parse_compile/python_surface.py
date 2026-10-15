@@ -1227,10 +1227,7 @@ class MissionPython:
         if name is not None and query == "":
             raise CodeError(f"the name IS the query: find({name!r})")
         _refuse_metres_in_within(within)
-        if isinstance(nearest, (list, tuple)) and not is_xy(nearest):
-            nearest = [self._slot(a) for a in nearest]
-        else:
-            nearest = self._slot(nearest)
+        nearest = self._slot(nearest)
         near = self._slot(near)
         within = self._slot(within)
         cards = self._cards(north=north_of, south=south_of, east=east_of,
@@ -1289,12 +1286,9 @@ class MissionPython:
                 "distance, rows.order(color=\"red\") by colour, "
                 "rows.order(direction=\"north\") northernmost first, or "
                 "rows.order(<function>) for one you compute yourself.")
-        if isinstance(nearest, (list, tuple)) and not is_xy(nearest):
-            # nearest=[A, B] ranks by both distances in one score_by, as
-            # find's does.
-            nearest = [self._slot(a) for a in nearest]
-        else:
-            nearest = self._slot(nearest)
+        # nearest=[A, B] ranks by both distances in one score_by, as find's
+        # does.
+        nearest = self._slot(nearest)
         items = self._slot(items)
         p = self._program(items, nearest, color)
         return Rows(self._analyze(p, compile_order(
