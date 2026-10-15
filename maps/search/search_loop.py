@@ -325,16 +325,17 @@ class SearchLoop:
             log.debug("upsert_prior_percept failed for %s", fid, exc_info=True)
             return False
 
-    def _tool_ctx_for_examiner(self):
+    def tool_ctx(self):
         """The :class:`ToolContext` over the live graph and the tile frame."""
         from maps.search.analyze_scene.tools import ToolContext
 
-        return ToolContext(
-            grid_shape=(int(self._grid.height), int(self._grid.width)),
-            graph=self.state.runtime_graph,
-            tile_origin_xy=self._tile_origin_xy,
-            cell_size_m=self._cell_size_m,
-        )
+        with self._lock:
+            return ToolContext(
+                grid_shape=(int(self._grid.height), int(self._grid.width)),
+                graph=self.state.runtime_graph,
+                tile_origin_xy=self._tile_origin_xy,
+                cell_size_m=self._cell_size_m,
+            )
 
     @staticmethod
     def _detection_id(det) -> str:

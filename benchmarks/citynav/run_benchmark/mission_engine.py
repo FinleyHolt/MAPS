@@ -144,8 +144,7 @@ class MissionSession:
         self.flights: list[dict] = []
         self.prior_enrich_fails = 0
         loop = h.search_loop
-        with loop._lock:
-            self.ctx = loop._tool_ctx_for_examiner()
+        self.ctx = loop.tool_ctx()
         state = h.state
         self.ctx.pose_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
         sides = ground_sides_m(float(state.altitude_m), h.ground_z_m, h.sensor)
