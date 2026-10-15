@@ -630,9 +630,6 @@ class Mission:
                 self.instruction = instruction
                 self.map_name = h.episode.map_name
             self._tiles_dir = TILES_DIR
-            if local_to_lonlat(TILES_DIR, self.map_name, 0.0, 0.0) is None:
-                raise ValueError(f"{self.map_name} carries no georef under {TILES_DIR}: a leg's area cannot be "
-                                 f"asked of the recording")
 
             # look crops what this run captured, never the bake's raster.
             h.search_loop.look_imagery = self._imagery
