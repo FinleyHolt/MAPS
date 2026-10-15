@@ -40,11 +40,9 @@ from maps.llm.vision_content import build_vision_user_content
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.observation import Observation, crop_observation
 
-#: The request-side thinking dial each policy sends on every call. ``None``
-#: sends the arm's ``SEARCH_SAMPLING_REASONING_EFFORT`` (no key when unset:
-#: the template's own default), so the call rides the rung the headline arm flew. ``geonav_released`` is
-#: GeoNav as shipped, whose DashScope client disabled thinking; it is the arm
-#: that says how much of the gap a reasoning backbone closes for that method.
+#: The thinking dial each policy sends: ``None`` sends the arm's
+#: ``SEARCH_SAMPLING_REASONING_EFFORT`` (no key when unset); ``"none"`` is
+#: GeoNav as shipped, whose client disabled thinking.
 REASONING_EFFORT: dict[str, str | None] = {"geonav": None, "geonav_released": "none", "visa": None}
 
 #: Each paper's sampling temperature. GeoNav's code sends none, so it rode its
