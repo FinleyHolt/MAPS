@@ -40,6 +40,18 @@ MAX_PER_STEP = 1024
 SAHI_OVERLAP = 0.2
 SAHI_NMS_IOU = 0.5
 
+#: How long one /segment attempt waits to connect: past a radio dropout.
+SEGMENT_CONNECT_TIMEOUT_S = 45
+#: How long one /segment attempt waits for the answer: past the server's
+#: ``_INFLIGHT_WAIT_S`` (600 s) admission wait, so a queued request is not abandoned.
+SEGMENT_READ_TIMEOUT_S = 660
+#: The pause before each retry: 21 s across the three, so the ladder spans a
+#: radio dropout instead of spending every retry inside one.
+SEGMENT_BACKOFF_S = (3.0, 6.0, 12.0)
+#: The most one tile's /segment takes, every attempt and pause included: one
+#: full server wait plus a connect ladder.
+SEGMENT_DEADLINE_S = 900.0
+
 
 class SamServerOutage(RuntimeError):
     """No tile of a frame got a usable ``/segment`` response
@@ -281,19 +293,6 @@ def _png_wire_bytes(canvas: np.ndarray) -> bytes:
     if not ok:
         raise RuntimeError("cv2 refused to PNG-encode the SAM wire frame")
     return buf.tobytes()
-
-
-#: How long one /segment attempt waits to connect: past a radio dropout.
-SEGMENT_CONNECT_TIMEOUT_S = 45
-#: How long one /segment attempt waits for the answer: past the server's
-#: ``_INFLIGHT_WAIT_S`` (600 s) admission wait, so a queued request is not abandoned.
-SEGMENT_READ_TIMEOUT_S = 660
-#: The pause before each retry: 21 s across the three, so the ladder spans a
-#: radio dropout instead of spending every retry inside one.
-SEGMENT_BACKOFF_S = (3.0, 6.0, 12.0)
-#: The most one tile's /segment takes, every attempt and pause included: one
-#: full server wait plus a connect ladder.
-SEGMENT_DEADLINE_S = 900.0
 
 
 #: Threads for the per-detection mask decode, projection and colour read;
