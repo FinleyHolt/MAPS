@@ -145,7 +145,7 @@ def hydrate(*, episode_id: str, split: str, config: str, agl_m: float,
     cfg = flight_config(config)
     episode = resolve_episode(episode_id, split, start_xy)
     h = build_episode(cfg, episode, load_episode_assets(episode.map_name))
-    h.state.altitude_m = float(h.search_loop._ortho_ground_z_m) + float(agl_m)
+    h.state.altitude_m = h.ground_z_m + float(agl_m)
     return h
 
 
@@ -154,7 +154,7 @@ def leg_span_m(h: Hydrated) -> float:
     long side at the mission's height."""
     from maps.perception.observation import ground_sides_m  # noqa: PLC0415
 
-    return float(max(ground_sides_m(float(h.state.altitude_m), float(h.search_loop._ortho_ground_z_m), h.sensor)))
+    return float(max(ground_sides_m(float(h.state.altitude_m), h.ground_z_m, h.sensor)))
 
 
 def leg_area(h: Hydrated, token: str, xy) -> list[tuple[float, float]]:

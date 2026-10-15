@@ -178,7 +178,6 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
         map_name=assets.map_name,
         sam_setter=perception.set_concepts,
-        ortho_ground_z_m=ground,
         # The look tool's crop raster (a live run crops its own imagery).
         rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
     )

@@ -175,7 +175,7 @@ def test_a_mission_hydrated_at_a_commanded_height_flies_at_that_height(calcity, 
 
     endpoint_spec.install_spec(endpoint_spec.discover_from_env())
     h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=1828.8)
-    assert h.state.altitude_m - h.search_loop._ortho_ground_z_m == pytest.approx(1828.8)
+    assert h.state.altitude_m - h.ground_z_m == pytest.approx(1828.8)
 
 
 def _fly_failing(tmp_path, monkeypatch, fault):

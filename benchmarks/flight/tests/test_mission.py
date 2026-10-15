@@ -29,8 +29,8 @@ def make_mission(built, make_twin, make_live, tmp_path):
 def _hydrated(sensor, cells=None):
     """The parts of a hydrated mission the leg reads."""
     return SimpleNamespace(
-        sensor=sensor, state=SimpleNamespace(pose_xy=(600.0, 100.0), altitude_m=world.AGL_M),
-        search_loop=SimpleNamespace(_ortho_ground_z_m=0.0, node_cells_xy=lambda token: cells))
+        sensor=sensor, state=SimpleNamespace(pose_xy=(600.0, 100.0), altitude_m=world.AGL_M), ground_z_m=0.0,
+        search_loop=SimpleNamespace(node_cells_xy=lambda token: cells))
 
 
 def _session(h, fly):

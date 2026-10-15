@@ -87,7 +87,7 @@ def search_loop(nodes=None, *, cell_size_m=2.0, sam_setter=None):
 
     loop = SearchLoop(GridDomain(height=10, width=10, cell_size_m=cell_size_m),
                       tile_origin_xy=(0.0, 0.0), map_name="test", sam_setter=sam_setter,
-                      ortho_ground_z_m=0.0, rgbd_dir="")
+                      rgbd_dir="")
     loop.start(SimpleNamespace(nodes=dict(nodes or {})))
     return loop
 

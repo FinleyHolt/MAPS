@@ -44,7 +44,6 @@ class SearchLoop:
         tile_origin_xy: tuple[float, float],
         map_name: str,
         sam_setter: Callable[[list[str]], None] | None,
-        ortho_ground_z_m: float,
         rgbd_dir: str,
     ):
         self._grid = grid
@@ -56,8 +55,6 @@ class SearchLoop:
         self._map_name = map_name
         # The segmenter's concept list, written whole by the director.
         self._sam_setter = sam_setter
-        # The block's ground datum.
-        self._ortho_ground_z_m = ortho_ground_z_m
         # The raster ``look`` crops on the bench.
         self._rgbd_dir = rgbd_dir
         #: What a live run has captured (``benchmarks/flight/run_imagery``),
