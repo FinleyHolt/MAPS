@@ -165,9 +165,8 @@ class Hydrated:
 
 def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) -> Hydrated:
     """The engine for one episode: its graph, the start pose, the segmenter
-    with both of the agent's concept channels wired (the declared union and
-    the director's watchlist, which a view{watchlist} change or a placed
-    boost pushes), and the started SearchLoop."""
+    wired to the director's watchlist (the declared classes plus the boosts
+    riding a flight), and the started SearchLoop."""
     graph = _episode_graph(assets)
     start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.start_z)
     state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m)
