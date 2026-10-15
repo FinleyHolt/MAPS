@@ -1436,12 +1436,6 @@ def _union_members(cx, ref_el, as_label) -> list:
     return members
 
 
-def _row_geom_center(cx, node):
-    """``(geom, centre)`` of a row: its mask, else its point. Geometry is
-    re-read by fid, since op output rows carry no mask."""
-    return place_geom(cx.by_fid.get(node.get("fid")), node)
-
-
 def _union_center(cx, members):
     """``(member geoms, centre)`` of a union: the centre is the members'
     area-weighted centroid, else the mean of their centres, else None."""
@@ -1449,7 +1443,7 @@ def _union_center(cx, members):
     wx = wy = wa = 0.0
     ucs: list = []
     for node in members:
-        g, c = _row_geom_center(cx, node)
+        g, c = place_geom(cx.by_fid.get(node.get("fid")), node)
         geoms.append(g)
         if c is not None:
             ucs.append(c)
@@ -1531,7 +1525,7 @@ def _compare(cx, a):
             kind = "row"
             lab = _unique_label(as_label or sanitize_token(payload["fid"]),
                                 used_labels, payload["fid"])
-            geom, center = _row_geom_center(cx, payload)
+            geom, center = place_geom(cx.by_fid.get(payload.get("fid")), payload)
         fid = payload.get("fid") if kind == "row" else None
         want = next((card_req[k] for k in (fid, lab)
                      if k and k in card_req), None)
@@ -1558,7 +1552,7 @@ def _compare(cx, a):
     for i, it in enumerate(items):
         row = {k: v for k, v in it.items() if k not in _MODEL_HIDDEN_ROW_FIELDS}
         # Items resolve like refs, so a ref compared to itself is exactly 0.
-        item_geom, it_c = _row_geom_center(cx, it)
+        item_geom, it_c = place_geom(cx.by_fid.get(it.get("fid")), it)
         for ref in refs:
             kind, payload, lab = ref["kind"], ref["payload"], ref["lab"]
             if ref["cards"] is not None and it_c is not None:
