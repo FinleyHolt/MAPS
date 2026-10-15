@@ -38,9 +38,8 @@ import numpy as np
 
 import benchmarks.calcity
 from benchmarks.citynav.analysis.rows import iter_json_rows
-from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL
+from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL, DETECTIONS_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL, RUN_LOG, TOUR_CURSOR
-from benchmarks.citynav.episode_workdir import DETECTIONS_JSONL
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import check_map, coverage_record, held_record, open_live, ortho_observation
 from benchmarks.flight.measures import frame_agl, run_bases, sortie_of
@@ -648,7 +647,7 @@ def main(argv: list[str] | None = None) -> int:
     rec = open_recording(args.run)
     if not rec.row.get("start_xy"):
         ap.error(f"{rec.run_id} records no start: the run never reached the reasoner")
-    # The frame tier's inputs, checked before the recording is read.
+    # The frame tier's inputs, checked before the camera recording is read.
     if args.frames is not None and not args.frames.is_file():
         ap.error(f"--frames {args.frames}: no such recording")
     if args.boresight is not None and not args.boresight.is_file():
