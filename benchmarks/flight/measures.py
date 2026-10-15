@@ -469,7 +469,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         "success": None, "ne_ft": None, "oracle_success": None,
         "closest_approach_ft": None, "hfov_width_ft": None, "agl_ft": None, "agl_source": None,
         "track_source": None,
-        "track_coverage": None, "time_to_id_s": round(t_stop - t_start, 1) if determined and t_stop else None,
+        "track_coverage": None, "time_to_id_s": round(t_end, 1) if determined and t_stop is not None else None,
         "spl": None, "spl_note": None, "path_ft": None, "final_leg_ft": None, "shortest_ft": None,
         "start_utc": _utc(t_start), "stop_utc": _utc(t_stop), **tokens(bases),
     }
