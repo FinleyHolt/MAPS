@@ -552,6 +552,8 @@ class Driver:
             except OSError as exc:
                 raise SystemExit(f"FATAL: --episode-allowlist read failed: {self.allowlist_path}: {exc}") from exc
             allowed = {ln.strip() for ln in lines if ln.strip()}
+            if not allowed:
+                raise SystemExit(f"FATAL: --episode-allowlist names no episode: {self.allowlist_path}")
             before = len(episodes)
             episodes = [e for e in episodes if e in allowed]
             unknown = sorted(allowed - set(episodes))

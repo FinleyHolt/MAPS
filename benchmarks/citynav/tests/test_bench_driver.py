@@ -608,7 +608,7 @@ def test_a_selection_naming_episodes_off_the_split_is_refused_fatal(driver, tmp_
         d._select_episodes()
 
 
-@pytest.mark.parametrize("refusal", ["split", "stream", "allowlist", "partial"])
+@pytest.mark.parametrize("refusal", ["split", "stream", "allowlist", "partial", "empty"])
 def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, tmp_path, monkeypatch,
                                                                       capsys) -> None:
     """A bad selection is refused as the dry run refuses it: no serve asked, no root made, no lock taken."""
@@ -620,9 +620,11 @@ def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, 
         monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
     (tmp_path / "stream.json").write_text("{}")
     (tmp_path / "ids.txt").write_text("a\nz\n")
+    (tmp_path / "empty.txt").write_text("\n")
     flags = {"split": ["--split", "nope"], "stream": ["--arrivals", str(tmp_path / "stream.json")],
              "allowlist": ["--episode-allowlist", str(tmp_path / "absent.txt")],
-             "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")]}[refusal]
+             "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")],
+             "empty": ["--episode-allowlist", str(tmp_path / "empty.txt")]}[refusal]
     assert bf.main(["--out-root", str(tmp_path / "r"), *flags]) == 2
     assert not (tmp_path / "r").exists()
     assert capsys.readouterr().err.startswith("FATAL: ")
@@ -662,16 +664,18 @@ def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(ids, driver, tmp
         d._select_episodes()
 
 
-@pytest.mark.parametrize("refusal", ["split", "stream", "allowlist", "partial"])
+@pytest.mark.parametrize("refusal", ["split", "stream", "allowlist", "partial", "empty"])
 def test_a_refused_dry_run_exits_2_with_no_out_root(refusal, tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a dry run flew"))
     if refusal != "split":
         monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
     (tmp_path / "stream.json").write_text("{}")
     (tmp_path / "ids.txt").write_text("a\nz\n")
+    (tmp_path / "empty.txt").write_text("\n")
     flags = {"split": ["--split", "nope"], "stream": ["--arrivals", str(tmp_path / "stream.json")],
              "allowlist": ["--episode-allowlist", str(tmp_path / "absent.txt")],
-             "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")]}[refusal]
+             "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")],
+             "empty": ["--episode-allowlist", str(tmp_path / "empty.txt")]}[refusal]
     assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run", *flags]) == 2
     assert not (tmp_path / "r").exists()
     assert capsys.readouterr().err.startswith("FATAL: ")
