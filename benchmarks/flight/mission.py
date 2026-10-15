@@ -49,7 +49,7 @@ ARRIVAL_TIMEOUT_S = 1800.0
 #: A leg has arrived when the recording holds this share of the area it was
 #: flown for. ponytail: a share rather than all of it, because a footprint's
 #: rim cells sit under a frame's edge at the pass's longest lever and nine
-#: tenths of a house is the house; the leg row states the share.
+#: tenths of a house is the house; the leg row states the points held.
 COVERED_FRACTION = 0.9
 #: How many of a footprint's cells sample its area for the arrival rule.
 AREA_POINTS = 48
@@ -346,11 +346,11 @@ class Mission:
             self._said(f"{at} may be held by the pass already, but the recording could not be asked "
                        f"in {COVERAGE_TRIES} reads ({unread}); the leg is flown")
         elif cov is not None and not _holds(cov):
-            log.info("the pass holds %.0f%% of %s at (%.0f, %.0f) (%d of %d points, %d frames), short "
-                     "of %.0f%%; the leg is flown", 100.0 * cov["fraction"], token, xy[0], xy[1],
-                     cov["held"], cov["points"], cov["frames"], 100.0 * COVERED_FRACTION)
+            log.info("the pass holds %d/%d points of %s at (%.0f, %.0f) in %d frames, short of %.0f%%; "
+                     "the leg is flown", cov["held"], cov["points"], token, xy[0], xy[1], cov["frames"],
+                     100.0 * COVERED_FRACTION)
         elif cov is not None:
-            self._said(f"{at} is held by the pass ({cov['fraction']:.0%}), but no frame of it could be "
+            self._said(f"{at} is held by the pass ({cov['held']}/{cov['points']} points), but no frame of it could be "
                        f"served ({self._live.last_refusal or 'no reason recorded'}); the leg is flown")
             # The ring already holds the area, so only a pass after the post can arrive.
             after = self._vehicle.now()

@@ -188,6 +188,7 @@ def test_ground_held_by_frames_that_cannot_be_fetched_is_flown_again_and_served_
     assert len(twin.legs) == 2
     assert served[0] is not None, _legs(m)
     assert min(served[0][1]["mosaic"]["seqs"]) >= n_old
+    assert "is held by the pass (19/19 points), but no frame of it could be served" in _legs(m)[0], _legs(m)
     assert "arrived" in _legs(m)[-1]
 
 
