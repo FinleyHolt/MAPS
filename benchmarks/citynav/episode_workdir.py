@@ -1,4 +1,5 @@
-"""One function opens an episode's directory; everything the episode writes lands under it.
+"""One function opens an episode's directory; everything the episode writes lands under it,
+and the two writers that fill it as the episode runs.
 
     <root>/maps_<YYYYmmdd_HHMMSS>[_run<NN>]_<benchmark>_<slug>/  one ATTEMPT of one episode
         episode.json       the runner's row once the attempt lands: ok | infra
@@ -12,10 +13,19 @@
 The runner and the flight mission open their attempt directories through
 ``open_episode_dir``. The stamp is the attempt's start, which the readers
 order attempts by, so a retry is a new directory.
+
+``ConversationLog`` is the transcript list the loop appends to (a row per
+turn and the reasons a turn was not a block); every ``append`` also lands the
+row in ``conversation.jsonl``, opened per append, so a mission killed between
+turns keeps every turn it flew. ``LiveRecorder`` appends one line per
+detection the step's perception fold produced (``maps.search.search_loop``'s
+record, masks packed) plus ``step`` to ``detections.jsonl``, flushed per line
+so a reader sees at most one torn final line; the file exists from the start.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -23,8 +33,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from benchmarks.citynav.episodes import _json_default
 
 RUN_LOG = "run.log"
+CONVERSATION_JSONL = "conversation.jsonl"
+DETECTIONS_JSONL = "detections.jsonl"
 
 
 #: The benchmarks a directory name may claim: the corpus the episode came from.
@@ -67,10 +80,51 @@ def mint_workdir(root: Path, episode_id: str, run_no: int | None = None) -> Path
     )
 
 
+class ConversationLog(list):
+    """A transcript list whose every append also lands on disk; ``path=None``
+    is a plain list."""
+
+    def __init__(self, path: Path | None = None) -> None:
+        super().__init__()
+        self.path = Path(path) if path is not None else None
+
+    def append(self, row: dict) -> None:  # type: ignore[override]
+        super().append(row)
+        if self.path is None:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+            fh.flush()
+
+
+@dataclass
+class LiveRecorder:
+    """What the drone detected each step, one recorder per episode directory."""
+
+    episode_dir: Path
+
+    def __post_init__(self) -> None:
+        self.episode_dir = Path(self.episode_dir)
+        self.episode_dir.mkdir(parents=True, exist_ok=True)
+        # A mission that detects nothing has zero rows: an empty file says so.
+        (self.episode_dir / DETECTIONS_JSONL).touch()
+
+    def write_step(self, *, step: int, detections: list[dict[str, Any]]) -> None:
+        for det in detections:
+            line = json.dumps({**det, "step": int(step)}, default=_json_default) + "\n"
+            try:
+                with (self.episode_dir / DETECTIONS_JSONL).open("a", encoding="utf-8") as fh:
+                    fh.write(line)
+                    fh.flush()
+            except OSError:
+                pass
+
+
 @dataclass
 class OpenEpisode:
     dir: Path
-    recorder: Any
+    recorder: LiveRecorder
     close: Callable[[], None]
 
 
@@ -84,9 +138,6 @@ def open_episode_dir(
     point this process at it, its log into ``<dir>/run.log``. ``close()``
     detaches the log handler, so a batch's next episode logs elsewhere.
     """
-    # numpy at import; the driver imports this module and must stay light.
-    from benchmarks.citynav.live_recorder import LiveRecorder
-
     d = mint_workdir(Path(root), episode_id, run_no)
     flight = d / "flight"
     flight.mkdir(parents=True, exist_ok=True)

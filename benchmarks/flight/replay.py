@@ -38,9 +38,9 @@ import numpy as np
 
 import benchmarks.calcity
 from benchmarks.citynav.analysis.rows import iter_json_rows
-from benchmarks.citynav.conversation import CONVERSATION_JSONL
+from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
-from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
+from benchmarks.citynav.episode_workdir import DETECTIONS_JSONL
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import held_record, open_live, ortho_observation
 from benchmarks.flight.measures import run_bases, sortie_of
