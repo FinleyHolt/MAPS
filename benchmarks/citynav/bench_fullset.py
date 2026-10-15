@@ -535,10 +535,16 @@ class Driver:
                 with self._dispatch_lock:
                     self._in_flight.discard(eid)
 
-    def _select_episodes(self) -> list[str]:
+    def _select_episodes(self, say=None) -> list[str]:
+        """The selection, in flying order; a refusal raises ``SystemExit``
+        with its FATAL line. ``say`` takes the allowlist's count line
+        (default ``log``)."""
         if self.arrivals_path is not None:
-            reports = json.loads(self.arrivals_path.read_text())["reports"]
-            self._arrival = {r["episode_id"]: float(r["arrival_s"]) for r in reports}
+            try:
+                reports = json.loads(self.arrivals_path.read_text())["reports"]
+                self._arrival = {r["episode_id"]: float(r["arrival_s"]) for r in reports}
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise SystemExit(f"FATAL: --arrivals read failed: {self.arrivals_path}: {exc!r}") from exc
             unknown = set(self._arrival) - set(_enumerate_split(self.split))
             if unknown:
                 raise SystemExit(f"FATAL: --arrivals names {len(unknown)} episodes not in the {self.split} "
@@ -554,7 +560,7 @@ class Driver:
             before = len(episodes)
             episodes = [e for e in episodes if e in allowed]
             unknown = sorted(allowed - set(episodes))
-            self.log(
+            (say or self.log)(
                 f"--episode-allowlist {self.allowlist_path}: "
                 f"{len(allowed)} ids requested -> {len(episodes)} match "
                 f"the {self.split} split (from {before} total); "
@@ -572,9 +578,12 @@ class Driver:
         return "sample_seed", self.sample_seed
 
     def dry_run(self) -> int:
-        """Selection preview. Launches nothing."""
-        self.out_root.mkdir(parents=True, exist_ok=True)
-        episodes = self._select_episodes()
+        """Selection preview. Launches nothing and writes nothing."""
+        try:
+            episodes = self._select_episodes(say=print)
+        except SystemExit as exc:
+            print(exc, file=sys.stderr)
+            return 2
         self._absorb_ledger()
         done = self._done_cache
         pending = self._pending(episodes)

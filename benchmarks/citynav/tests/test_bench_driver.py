@@ -410,7 +410,7 @@ def test_the_dry_run_counts_a_persistent_infra_episode_as_left_out(driver, tmp_p
     for _ in range(3):
         episodes.append_row(tmp_path, _infra(0))
     d = driver()
-    monkeypatch.setattr(d, "_select_episodes", lambda: ["ep0", "ep1"])
+    monkeypatch.setattr(d, "_select_episodes", lambda say: ["ep0", "ep1"])
     assert d.dry_run() == 0
     out = capsys.readouterr().out
     assert "pending: 1" in out and "[PEND] ep1" in out and "[PEND] ep0" not in out, out
@@ -622,3 +622,38 @@ def test_a_refused_config_exits_2_before_any_out_root(dry, tmp_path, monkeypatch
     assert bf.main(["--out-root", str(tmp_path / "r"), *dry]) == 2
     assert not (tmp_path / "r").exists()
     assert capsys.readouterr().err.startswith("FATAL: ")
+
+
+@pytest.mark.parametrize("stream", ["{}", "not json", '{"reports": [{"episode_id": "a"}]}', None])
+def test_an_unreadable_session_stream_is_refused_fatal(stream, driver, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    d = driver()
+    d.arrivals_path = tmp_path / "stream.json"
+    if stream is not None:
+        d.arrivals_path.write_text(stream)
+    with pytest.raises(SystemExit, match="^FATAL: --arrivals read failed"):
+        d._select_episodes()
+
+
+@pytest.mark.parametrize("refusal", ["split", "stream", "allowlist"])
+def test_a_refused_dry_run_exits_2_with_no_out_root(refusal, tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a dry run flew"))
+    if refusal != "split":
+        monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
+    (tmp_path / "stream.json").write_text("{}")
+    (tmp_path / "ids.txt").write_text("a\nz\n")
+    flags = {"split": ["--split", "nope"], "stream": ["--arrivals", str(tmp_path / "stream.json")],
+             "allowlist": ["--episode-allowlist", str(tmp_path / "absent.txt")],
+             "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")]}[refusal]
+    assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run", *flags]) == 2
+    assert not (tmp_path / "r").exists()
+    assert capsys.readouterr().err.startswith("FATAL: ")
+
+
+def test_a_dry_run_prints_the_allowlist_count_and_writes_nothing(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
+    (tmp_path / "ids.txt").write_text("a\n")
+    assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run",
+                    "--episode-allowlist", str(tmp_path / "ids.txt")]) == 0
+    assert not (tmp_path / "r").exists()
+    assert "1 ids requested -> 1 match" in capsys.readouterr().out
