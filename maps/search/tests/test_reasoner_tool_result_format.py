@@ -11,7 +11,7 @@ from maps.search.tests.fakes import TEST_SPEC
 # Offline stand-in for the server-discovered endpoint authority.
 def _mk() -> Reasoner:
     # Cheap: __post_init__ only seeds the system prompt — no network.
-    return Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
+    return Reasoner(endpoint_spec=TEST_SPEC)
 
 
 # --------------------------------------------------------------------------- #

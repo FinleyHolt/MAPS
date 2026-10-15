@@ -63,9 +63,7 @@ def _conversation(spec: endpoint_spec.EndpointSpec, effort: str | None, workdir:
     from maps.search.parse_compile.prompts import served_tools  # noqa: PLC0415
     from maps.search.parse_compile.reasoner_agent import Reasoner  # noqa: PLC0415
 
-    reasoner = Reasoner(reasoner_url=spec.base_url, endpoint_spec=spec,
-                        api_key=os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY"),
-                        seed=1234, reasoning_effort=effort)
+    reasoner = Reasoner(endpoint_spec=spec, seed=1234, reasoning_effort=effort)
     reasoner.append_vision_user(
         "Endpoint check. Name the colour of the square in this picture, then call run with the code "
         "print('ok').", [_picture()])

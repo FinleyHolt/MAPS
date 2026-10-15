@@ -28,7 +28,7 @@ def _serve(monkeypatch, *, content="", reasoning="", finish_reason="stop",
 
 
 def _reasoner() -> Reasoner:
-    return Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
+    return Reasoner(endpoint_spec=TEST_SPEC)
 
 
 @pytest.mark.parametrize("channel", ["reasoning", "content"])

@@ -47,7 +47,7 @@ def _round(monkeypatch, faults: int, *, cancel_event=None, transcript=None,
             raise nxt
         return nxt
 
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
+    r = Reasoner(endpoint_spec=TEST_SPEC,
                  cancel_event=cancel_event)
     r.step_tool_call = _step
 

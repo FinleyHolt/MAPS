@@ -355,9 +355,7 @@ def _not_a_reply(content: str) -> tuple[str, str, str] | None:
 def run_mission(
     *,
     instruction: str,
-    reasoner_url: str,
     endpoint_spec,
-    api_key: str = "EMPTY",
     seed: int | None = None,
     sensor_description: str = "",
     cancel_event: "threading.Event | None" = None,
@@ -369,9 +367,7 @@ def run_mission(
     the first operator turn (``turn`` is :class:`_Mission`'s). Returns the
     reply and the mission, for :func:`continue_mission`."""
     reasoner = Reasoner(
-        reasoner_url=reasoner_url,
         endpoint_spec=endpoint_spec,
-        api_key=api_key,
         seed=seed,
         sensor_description=sensor_description,
         cancel_event=cancel_event,

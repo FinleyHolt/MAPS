@@ -18,7 +18,7 @@ def test_the_env_sets_the_timeout_and_a_value_that_cannot_apply_is_loud(monkeypa
     monkeypatch.setenv(ENV, "   ")
     assert _reasoner_timeout_s() == _REASONER_TIMEOUT_DEFAULT_S
     monkeypatch.setenv(ENV, " 900 ")
-    assert Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC).timeout == 900.0
+    assert Reasoner(endpoint_spec=TEST_SPEC).timeout == 900.0
     for bad in ("900s", "0", "nan", "1e12"):
         monkeypatch.setenv(ENV, bad)
         with pytest.raises(ValueError):

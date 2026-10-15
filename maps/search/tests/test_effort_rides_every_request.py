@@ -34,7 +34,7 @@ def test_the_missions_word_rides_every_request_and_the_arms_does_not(monkeypatch
     value (thinking off), not an absence."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
+    r = Reasoner(endpoint_spec=TEST_SPEC,
                  reasoning_effort=word)
     r.append_user("find the truck")
     r.step_tool_call([])
@@ -48,7 +48,7 @@ def test_a_reasoner_with_no_word_sends_the_arms(monkeypatch):
     select mid-day reaches a mission that named none."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.9")
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
+    r = Reasoner(endpoint_spec=TEST_SPEC)
     r.append_user("find the truck")
     r.step_tool_call([])
     assert sent[0]["reasoning_effort"] == "0.9"
@@ -58,7 +58,7 @@ def test_the_effort_reaches_no_served_byte(monkeypatch):
     """The model is never told a budget fact."""
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC,
+    r = Reasoner(endpoint_spec=TEST_SPEC,
                  reasoning_effort="0.3")
     r.append_user("find the truck")
     r.step_tool_call([{"type": "function", "function": {"name": "run"}}])
@@ -79,7 +79,6 @@ def test_run_mission_hands_the_word_to_the_reasoner_it_builds(monkeypatch):
         "maps.search.parse_compile.reasoner_loop._Mission.converse", _converse)
     _reply, mission = run_mission(
         instruction="find the truck",
-        reasoner_url="http://unused",
         endpoint_spec=TEST_SPEC,
         ctx=bare_ctx(),
         mission_spec=None,

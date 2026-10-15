@@ -96,7 +96,7 @@ def _serve(monkeypatch) -> list[dict]:
 
 def test_the_reasoner_s_request_is_the_openai_shape(monkeypatch) -> None:
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=GPT_SPEC, seed=7, reasoning_effort="medium")
+    r = Reasoner(endpoint_spec=GPT_SPEC, seed=7, reasoning_effort="medium")
     r.append_user("find the truck")
     r.step_tool_call([{"type": "function", "function": {"name": "run"}}])
     r.append_tool_result("c1", "run", "ok")
@@ -119,13 +119,13 @@ def test_the_episode_s_routing_key_is_its_prompt_cache_key(monkeypatch) -> None:
     sent = _serve(monkeypatch)
     monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "calcity::ep-7")
     for spec in (GPT_SPEC, TEST_SPEC):
-        r = Reasoner(reasoner_url="http://unused", endpoint_spec=spec)
+        r = Reasoner(endpoint_spec=spec)
         r.append_user("find the truck")
         r.step_tool_call([])
     assert sent[0]["prompt_cache_key"] == "calcity::ep-7"
     assert "prompt_cache_key" not in sent[1]
     monkeypatch.delenv("SEARCH_LLM_ROUTING_KEY")
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=GPT_SPEC)
+    r = Reasoner(endpoint_spec=GPT_SPEC)
     r.append_user("find the truck")
     r.step_tool_call([])
     assert "prompt_cache_key" not in sent[2]
@@ -146,7 +146,7 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
              "function": {"name": "run", "arguments": "{ \"code\":  \"look()\" }"}}]}}]}
 
     monkeypatch.setattr(reasoner_agent, "_chat_completions_raw", _fake)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=GPT_SPEC, reasoning_effort="xhigh")
+    r = Reasoner(endpoint_spec=GPT_SPEC, reasoning_effort="xhigh")
     r.append_vision_user("look 0", [jpeg(64)] * 4)
     for k in range(1, 5):
         r.step_tool_call(served_tools())
@@ -167,7 +167,7 @@ def test_the_run_tool_s_documentation_rides_the_system_turn(monkeypatch) -> None
     doc = tools[0]["function"]["description"]
     assert len(doc) > openai_wire.DESCRIPTION_MAX_CHARS, "VACUITY FLOOR: nothing to move"
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=GPT_SPEC)
+    r = Reasoner(endpoint_spec=GPT_SPEC)
     r.append_user("find the truck")
     r.step_tool_call(tools)
     body = sent[0]
@@ -190,7 +190,7 @@ def test_descriptions_that_fit_pass_untouched() -> None:
 def test_a_self_hosted_card_keeps_its_shape(monkeypatch) -> None:
     """The narrowing is the OpenAI card's alone: Inkling's body is what it always was."""
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC, seed=7)
+    r = Reasoner(endpoint_spec=TEST_SPEC, seed=7)
     r.append_user("find the truck")
     r.step_tool_call([])
     body = sent[0]
@@ -204,7 +204,7 @@ def test_the_request_never_carries_more_images_than_azure_takes(monkeypatch) -> 
     from maps.search.parse_compile.views import LOOK_MAX_CROPS
 
     sent = _serve(monkeypatch)
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=GPT_SPEC)
+    r = Reasoner(endpoint_spec=GPT_SPEC)
     picture = jpeg(64)
     for k in range(4):
         r.append_vision_user(f"look {k}", [picture] * LOOK_MAX_CROPS)

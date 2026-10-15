@@ -29,7 +29,7 @@ def _jpeg(n: int) -> bytes:
 
 
 def test_appending_a_crop_leaves_every_earlier_message_byte_identical():
-    r = Reasoner(reasoner_url="http://unused", endpoint_spec=TEST_SPEC)
+    r = Reasoner(endpoint_spec=TEST_SPEC)
     for i in range(_DELIVERIES):
         before = _digests(r.messages)
         r.append_vision_user(f"look {i}", [_jpeg(i)])

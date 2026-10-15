@@ -144,13 +144,14 @@ def _complete_json_brackets(raw: str) -> str | None:
 @dataclass
 class Reasoner:
     """The mission's message history and its request settings.
-    ``endpoint_spec`` (server-discovered) supplies the model name,
-    ``max_tokens`` and the compaction budget, so prompt + completion fits
-    the served window."""
+    ``endpoint_spec`` (server-discovered) supplies the base URL, the model
+    name, ``max_tokens`` and the compaction budget, so prompt + completion
+    fits the served window."""
 
-    reasoner_url: str
     endpoint_spec: EndpointSpec
-    api_key: str = "EMPTY"
+    # "EMPTY" is the no-auth sentinel a local vLLM accepts.
+    api_key: str = field(
+        default_factory=lambda: os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY"))
     timeout: float = field(default_factory=_reasoner_timeout_s)
     seed: int | None = None
     messages: list[dict] = field(default_factory=list)
@@ -246,7 +247,7 @@ class Reasoner:
                 )
             kwargs["cancel_event"] = self.cancel_event
 
-        resp = _chat_completions_raw(self.reasoner_url, self.api_key, **kwargs)
+        resp = _chat_completions_raw(self.endpoint_spec.base_url, self.api_key, **kwargs)
         choice = resp["choices"][0]
         msg = choice.get("message", {})
         # The reasoning rides the assistant turn back to the next request (the
