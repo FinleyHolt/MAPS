@@ -3,14 +3,7 @@
 from __future__ import annotations
 
 
-from maps.search.tests.fakes import (
-    FakeReasoner,
-    bare_ctx,
-    drive,
-    run,
-    tool_results,
-    unarmed_boost,
-)
+from maps.search.tests.fakes import drive, run, tool_results
 
 
 def test_unknown_tool_names_the_one_verb():
@@ -36,21 +29,21 @@ def test_unparseable_arguments_serve_the_parse_error():
     assert "Expecting ',' delimiter at pos 9" in err and "nothing ran" in err, err
 
 
-def test_move_refuses_a_result_handle_and_names_what_it_takes():
-    from maps.search.parse_compile.reasoner_loop import MissionSpec, _Mission
-    flown = []
-    m = _Mission(reasoner=FakeReasoner([]), ctx=bare_ctx(),
-                 compute_namespace={"cands": [], "anchors": [], "cell_m": 1.0},
-                 mission_spec=MissionSpec(fly=flown.append,
-                                          declare_concepts=lambda _i: None),
-                 boost_queue=unarmed_boost)
-    out = m._move_to("r3[0:2]")
+def test_a_quoted_handle_moves_as_the_set_it_names():
+    cands = [{"fid": "detected_0", "xy": [0.0, 0.0], "class": "car",
+              "search_text": "car"},
+             {"fid": "detected_1", "xy": [10.0, 0.0], "class": "car",
+              "search_text": "car"}]
+    _, fr, flown, _ = drive(
+        [[run('r1 = find("car")\ngo_to("r1")\n')],
+         [run('r2 = find("zebra crossing")\nexplore("r2")\n')]]
+        + ["done."] * 3, cands=cands)
+    went, empty = (r["error"] for r in tool_results(fr)[:2])
     assert flown == []
-    rej = out["flown"]["rejected"]
-    assert out["flown"]["flown"] == [] and rej[0]["index"] == 0, out
-    assert "is a result handle" in rej[0]["error"], out
-    # what move accepts, and only that
-    assert "staged" not in out["error"] and "flown stop id" in out["error"], out
+    # The handle's own name and the remedy, never an internal ref.
+    assert "r1 is a set of 2 row(s)" in went and "go_to(r1[0])" in went, went
+    assert "r2 holds 0 row(s) here" in empty, empty
+    assert "fid-bearing" not in empty, empty
 
 
 def test_second_consecutive_empty_turn_still_ends_the_mission():

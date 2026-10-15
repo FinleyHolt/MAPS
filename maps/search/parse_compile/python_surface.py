@@ -1451,6 +1451,9 @@ class MissionPython:
         return h
 
     def _move(self, call: str, x):
+        # A string naming a held set IS that set: go_to("r1") is go_to(r1).
+        if isinstance(x, str) and isinstance(dict.get(self.ns, x), Rows):
+            x = self.ns[x]
         if isinstance(x, Rows):
             # A SET is one place for explore; go_to lands on one thing.
             if call == "go_to":

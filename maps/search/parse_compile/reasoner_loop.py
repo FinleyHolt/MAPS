@@ -894,8 +894,6 @@ class _Mission:
         _mv_ack: dict = {"flown": [_served_flight(r) for r in _reports]}
         if _item_errors:
             _mv_ack["rejected"] = _item_errors
-        if not _accepted and not _item_errors:
-            _mv_ack = {"error": "nothing to fly"}
         return _mv_ack
 
     def _cover_ack(self, cover: str, _reports: list, _before: set,
@@ -1200,13 +1198,7 @@ class _Mission:
         tok, _stop_err = self._flown_stop(tok)
         if _stop_err:
             return self._plan_err({}, _stop_err)
-        tok = tok.strip()
-        if _is_handle_token(tok):
-            mv = self._fly_moves([], [{"index": 0, "error": (
-                f"{tok!r} is a result handle; move takes a literal fid "
-                "off the rows, a flown stop id, or an [x, y] world point")}])
-        else:
-            mv = self._fly_moves([{"target_fid": tok}], [])
+        mv = self._fly_moves([{"target_fid": tok.strip()}], [])
         _ok = [r for r in mv.get("flown") or [] if "error" not in r]
         if not _ok:
             # nothing flew: the failure is the result
@@ -1216,7 +1208,7 @@ class _Mission:
                 None) or next(
                 (str(e["error"]) for e in mv.get("rejected") or []
                  if e.get("error")),
-                None) or str(mv.get("error") or "nothing flew")
+                None) or "nothing flew"
             return self._plan_err({"flown": mv}, _msg)
         return {"flown": mv}
 
