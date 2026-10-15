@@ -562,8 +562,7 @@ class LiveSource:
         want = sorted((angle, -seq) for seq, angle in chosen.items())
         obs = self._fused(want, ranked=cov["frames"], about=f"the area's {cov['points']} points")
         if obs is not None:
-            self.last["coverage"] = {"fraction": round(cov["fraction"], 3), "points": cov["points"],
-                                     "held": cov["held"], "seqs": [-neg for _a, neg in want],
+            self.last["coverage"] = {"points": cov["points"], "held": cov["held"], "seqs": [-neg for _a, neg in want],
                                      "fetch_failed": self.last["mosaic"]["fetch_failed"]}
         return obs
 

@@ -65,7 +65,7 @@ def test_the_fused_observation_is_the_ground_north_up_where_the_map_has_it(built
     assert obs is not None and obs.ortho_view_corners_xy is not None
     x0, y0, x1, y1 = obs.world_window
     assert x0 < 540 and x1 > 660 and y0 < 540 and y1 > 660
-    assert live.last["coverage"]["fraction"] == 1.0 and live.last["mosaic"]["placed"] >= 1
+    assert live.last["coverage"]["held"] == live.last["coverage"]["points"] and live.last["mosaic"]["placed"] >= 1
     # Where the frames landed, their pixels are the map's own at that ground.
     truth = map_render.window_render(obs.world_window, obs.rgb.shape[:2], ortho).astype(np.float32)
     held = obs.alpha > 0
