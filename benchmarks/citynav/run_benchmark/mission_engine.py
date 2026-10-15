@@ -120,8 +120,7 @@ def perceive(h, obs, detections) -> list[dict]:
     and fold them into the live world-state; returns the folded rows. The
     one ingest path a flight and the bench's retrospective boost share."""
     projected = project_and_stamp_ortho_detections(
-        detections, view_corners_xy=obs.ortho_view_corners_xy, rgb=obs.rgb, tile=h.tile_frame,
-    ) if obs is not None else {}
+        detections, view_corners_xy=obs.ortho_view_corners_xy, rgb=obs.rgb, tile=h.tile_frame)
     return h.search_loop.update_perception(detections=detections, projected_masks=projected)
 
 
@@ -245,7 +244,7 @@ class MissionSession:
             self.recorder.write_step(step=step_idx, detections=step_detections)
 
         # Prior colour enrichment: one frame, upserted onto the named priors.
-        if obs is not None and obs.rgb is not None and not withheld("prior"):
+        if obs.rgb is not None and not withheld("prior"):
             try:
                 for pfid, pattrs, ppx in prior_percepts(obs, h, step_idx):
                     loop.upsert_prior_percept(pfid, pattrs, px=ppx)
