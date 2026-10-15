@@ -67,8 +67,10 @@ _BACKOFF_S = 1.5
 
 def _retry_after_delay(headers: httpx.Headers, default_s: float) -> float:
     """Seconds to wait before re-sending: Azure's ``retry-after-ms``, else
-    ``Retry-After`` in its delta-seconds form, else ``default_s``, capped. The
-    HTTP-date form, rare on JSON APIs, takes the default."""
+    ``Retry-After`` in its delta-seconds form, else ``default_s``, held to
+    1 s .. ``_RATE_LIMIT_MAX_BACKOFF_S`` (the floor: an endpoint answering
+    "retry now" forever still spends the budget). The HTTP-date form, rare
+    on JSON APIs, takes the default."""
     try:
         delay = float(headers["retry-after-ms"]) / 1000.0
     except (KeyError, ValueError):
@@ -76,7 +78,7 @@ def _retry_after_delay(headers: httpx.Headers, default_s: float) -> float:
             delay = float(headers.get("retry-after", ""))
         except ValueError:
             delay = default_s
-    return max(0.0, min(_RATE_LIMIT_MAX_BACKOFF_S, delay))
+    return max(1.0, min(_RATE_LIMIT_MAX_BACKOFF_S, delay))
 
 
 def _backoff(delay: float, cancel_event: threading.Event | None) -> None:
@@ -620,11 +622,8 @@ def _chat_completions_raw(
                 else None
             )
             if status in _RATE_LIMIT_STATUS:
-                # floored, so an endpoint answering "retry now" forever still
-                # spends the budget
-                delay = max(1.0, _retry_after_delay(
-                    e.response.headers, _BACKOFF_S * (2**min(rate_limit_attempt, 6))
-                ))
+                delay = _retry_after_delay(
+                    e.response.headers, _BACKOFF_S * (2**min(rate_limit_attempt, 6)))
                 if rate_limit_waited + delay > _RATE_LIMIT_BUDGET_S:
                     log.error(
                         "LLM endpoint %d after %d rate-limit retries (%.0fs "
