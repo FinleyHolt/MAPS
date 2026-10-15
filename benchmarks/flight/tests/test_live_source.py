@@ -272,11 +272,14 @@ def test_a_raster_directory_without_the_pair_loads_none_and_the_live_source_name
 def test_the_simulated_clock_asks_a_frame_that_cannot_be_fetched_once():
     """Under the simulated clock each recorded frame is asked once: a frame
     that cannot be fetched is passed over, not asked again at every sleep."""
+    import threading
     import types
 
     from benchmarks.flight.live_source import LiveSource
 
     class Ring:
+        last_error = ""
+
         def __init__(self):
             self.rows, self.asked = [], 0
 
@@ -288,7 +291,8 @@ def test_the_simulated_clock_asks_a_frame_that_cannot_be_fetched_once():
             return None if self.rows[seq]["off"] else (b"", 0.0, self.rows[seq]["log_time"], seq, {})
 
     ring = Ring()
-    src = types.SimpleNamespace(vehicle=ring, correct=lambda got: None, _clocked_since=None)
+    src = types.SimpleNamespace(vehicle=ring, correct=lambda got: None, _clocked_since=None, _asking=threading.Lock())
+    src._ask = types.MethodType(LiveSource._ask, src)
     src._correct_since = types.MethodType(LiveSource._correct_since, src)
     step = types.MethodType(LiveSource._correct_through_now, src)
     for i in range(105):
@@ -346,3 +350,33 @@ def test_a_wall_clock_vehicle_registers_the_newest_frame_each_period_until_close
     asked = len(ring.asked)
     time.sleep(0.05)
     assert len(ring.asked) == asked and seen == [2, 4]
+
+
+def test_a_frame_not_fetched_is_quoted_with_its_own_reason_while_the_corrector_fetches(make_live):
+    """The wall-clock corrector's fetch lands between the fused observation's
+    failed fetch and the reason it quotes: the reason is still the fetch's own."""
+    import threading
+
+    threads = []
+
+    class Ring:
+        last_error = ""
+
+        def index(self, since=None):
+            return [{"seq": 1, "log_time": 1}]
+
+        def frame(self, seq):
+            if threading.current_thread().name == "corrector":
+                self.last_error = ""          # a fetch that went through
+                return None
+            self.last_error = "link down"
+            threads.append(threading.Thread(target=live._correct_since, args=(None,),
+                                            kwargs={"newest_only": True}, name="corrector"))
+            threads[0].start()
+            threads[0].join(0.3)
+            return None
+
+    live = make_live(Ring())
+    assert live._fused([(0.0, -5)], ranked=1, about="the area") is None
+    threads[0].join()
+    assert "ring frame 5 not fetched: link down" in live.last_refusal

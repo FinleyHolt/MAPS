@@ -303,6 +303,9 @@ class LiveSource:
         #: The frames placed together, built on the first frame at its size.
         self.graph: PoseGraph | None = None
         self._correcting = threading.Lock()
+        #: One ask of the vehicle at a time: the corrector's thread asks too,
+        #: and ``vehicle.last_error`` is the reason for the last ask either made.
+        self._asking = threading.Lock()
         #: Set to stop the wall-clock corrector; None until it starts.
         self._halt: threading.Event | None = None
         #: The log time past the newest frame a simulated vehicle's clock has corrected.
@@ -331,6 +334,11 @@ class LiveSource:
 
             threading.Thread(target=run, name="corrector", daemon=True).start()
 
+    def _ask(self, call: Callable, *args) -> tuple[Any, str]:
+        """``(answer, why)``: one ask of the vehicle and its ``last_error`` read together."""
+        with self._asking:
+            return call(*args), self.vehicle.last_error
+
     def _correct_through_now(self) -> None:
         self._clocked_since = self._correct_since(self._clocked_since)
 
@@ -338,9 +346,9 @@ class LiveSource:
         """:meth:`correct` each frame the index holds past log time ``since``,
         in log-time order (only the newest with ``newest_only``); the log time
         past the last frame asked (fetched, with ``newest_only``), else ``since``."""
-        rows = sorted(self.vehicle.index(since=since) or [], key=lambda r: int(r["log_time"]))
+        rows = sorted(self._ask(self.vehicle.index, since)[0] or [], key=lambda r: int(r["log_time"]))
         for row in rows[-1:] if newest_only else rows:
-            got = self.vehicle.frame(int(row["seq"]))
+            got, _why = self._ask(self.vehicle.frame, int(row["seq"]))
             # The wall clock asks the newest frame again until it is served;
             # the simulated clock asks each frame once.
             if got is not None or not newest_only:
@@ -357,9 +365,11 @@ class LiveSource:
         """The frame decoded and its camera posed through the calibrated chain
         at ``pose`` (default :meth:`pose_now` at ``t_host``), or why it cannot
         be: a string, so the corrector's thread leaves ``last_refusal`` alone."""
-        pose = pose if pose is not None else self.pose_now(t_host)
+        why = ""
         if pose is None:
-            return f"no pose for the frame: {self.vehicle.last_error or 'no fix'}"
+            pose, why = self._pose(t_host)
+        if pose is None:
+            return f"no pose for the frame: {why or 'no fix'}"
         # A pose's roll and pitch are aerospace (right wing down, nose up); the projector's pitch is nose down.
         roll = float(pose.roll_deg)
         pitch_proj = -float(pose.pitch_deg)
@@ -433,8 +443,11 @@ class LiveSource:
 
     def pose_now(self, t: float | None = None) -> Pose | None:
         """The antenna's pose at ``t`` (now by default), the timing offset applied."""
-        at = (self.vehicle.now() if t is None else t) + self.boresight.time_offset_s
-        return self.vehicle.pose(at)
+        return self._pose(t)[0]
+
+    def _pose(self, t: float | None = None) -> tuple[Pose | None, str]:
+        """:meth:`pose_now` and why it is None."""
+        return self._ask(self.vehicle.pose, (self.vehicle.now() if t is None else t) + self.boresight.time_offset_s)
 
     def camera_pose(self, pose: Pose) -> tuple[tuple[float, float], float, float]:
         """``(pose_xy, alt_msl, yaw)`` of the camera in the tile frame, the solved GNSS bias applied."""
@@ -494,9 +507,9 @@ class LiveSource:
         return None if rows is None else [self._held_by(rows, area) for area in areas]
 
     def _ring_rows(self) -> list[dict[str, Any]] | None:
-        rows = self.vehicle.index()
+        rows, why = self._ask(self.vehicle.index)
         if rows is None:
-            self.last_refusal = f"the recorder's ring cannot be asked: {self.vehicle.last_error or 'no index'}"
+            self.last_refusal = f"the recorder's ring cannot be asked: {why or 'no index'}"
         return rows
 
     def _held_by(self, rows: list[dict[str, Any]], points: list[tuple[float, float]]) -> dict[str, Any]:
@@ -561,12 +574,11 @@ class LiveSource:
         records: list[dict[str, Any]] = []
         unfetched = 0
         for angle, negative_seq in want:
-            got = self.vehicle.frame(-negative_seq)
+            got, why = self._ask(self.vehicle.frame, -negative_seq)
             if got is None:
                 # The link, not the ring: the index said the frame is there.
                 unfetched += 1
-                self.last_refusal = (f"ring frame {-negative_seq} not fetched: "
-                                     f"{self.vehicle.last_error or 'no reason recorded'}")
+                self.last_refusal = f"ring frame {-negative_seq} not fetched: {why or 'no reason recorded'}"
                 continue
             jpeg, t_host, log_time, seq, tag = got
             # Posed as the corrector poses it, so its registration and the
