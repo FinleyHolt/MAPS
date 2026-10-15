@@ -96,9 +96,9 @@ def test_the_recording_is_not_vacuous():
         assert len(case["visited_xy"]) == case["steps"], name
 
 
-def test_the_six_action_alphabet_is_the_contract():
-    """Pinned by name: the leaderboard trajectory log is submittable only in
-    these six primitives."""
+def test_the_move_alphabet_is_the_contract():
+    """Pinned by name: the leaderboard trajectory log holds only upstream's
+    five moves; its sixth action, stop, is where the log ends."""
     from benchmarks.citynav.action_snap import (
         ALTITUDE_STEP_M,
         FORWARD_STEP_M,
@@ -112,6 +112,5 @@ def test_the_six_action_alphabet_is_the_contract():
         "turn_right",
         "ascend",
         "descend",
-        "stop",
     }
     assert (FORWARD_STEP_M, TURN_STEP_DEG, ALTITUDE_STEP_M) == (5.0, 30.0, 2.0)

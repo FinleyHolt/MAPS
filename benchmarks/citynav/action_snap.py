@@ -27,14 +27,13 @@ from enum import Enum
 
 
 class CityNavAction(str, Enum):
-    """The six-element CityNav action set."""
+    """CityNav's movement actions, the primitives the trajectory log holds."""
 
     FORWARD = "move_forward"
     TURN_LEFT = "turn_left"
     TURN_RIGHT = "turn_right"
     ASCEND = "ascend"
     DESCEND = "descend"
-    STOP = "stop"
 
 
 @dataclass(frozen=True)
@@ -78,10 +77,8 @@ def bearing_deg(from_xy: tuple[float, float], to_xy: tuple[float, float]) -> flo
     return math.degrees(math.atan2(dx, dy))
 
 
-def _apply(pose: Pose, action: CityNavAction) -> Pose:
+def apply_action(pose: Pose, action: CityNavAction) -> Pose:
     """Advance a pose by one CityNav action."""
-    if action is CityNavAction.STOP:
-        return pose
     if action is CityNavAction.TURN_LEFT:
         return Pose(
             pose.x,
@@ -108,11 +105,6 @@ def _apply(pose: Pose, action: CityNavAction) -> Pose:
         pose.altitude_m,
         pose.heading_deg,
     )
-
-
-def apply_action(pose: Pose, action: CityNavAction) -> Pose:
-    """Public re-export of ``_apply`` so the benchmark loop can advance."""
-    return _apply(pose, action)
 
 
 #: Bearing error a leg aligns within before its first forward step, and on
@@ -157,7 +149,7 @@ def snap_to_actions(start: Pose, end: Pose) -> tuple[list[CityNavAction], Pose]:
         if len(actions) >= MAX_ACTIONS:
             return False
         actions.append(action)
-        pose = _apply(pose, action)
+        pose = apply_action(pose, action)
         return True
 
     target_xy = (end.x, end.y)
