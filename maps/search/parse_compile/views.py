@@ -294,23 +294,33 @@ def map_spec(around: str, mark_fids: list, *, rows: dict, resolve,
             skipped.append(mf)
             continue
         marks.append(_mark(mf, row, xy, False))
-    # The frame follows the request: the marks' and centre's extent
-    # derives the zoom; a bare point gets the floor.
+    # The frame follows the request: the marks' and centre's extent derives
+    # the zoom, and a bare point gets the floor. A window that would miss
+    # the centre frames the centre alone, so the map is centred there.
     _cb = look_outline(rows.get(center_fid)) if center_fid else None
-    _fpts: list = [m["xy"] for m in marks if m.get("xy")]
-    for _src in [m.get("boundary") for m in marks] + [_cb]:
-        for _b in (_src or []):
-            if isinstance(_b, (list, tuple)) and len(_b) >= 2:
-                _fpts.append([float(_b[0]), float(_b[1])])
-    span = _MAP_FRAME_MIN_M
-    if _fpts:
-        _fx = [float(p[0]) for p in _fpts]
-        _fy = [float(p[1]) for p in _fpts]
-        cxy = [round((min(_fx) + max(_fx)) / 2.0, 2),
-               round((min(_fy) + max(_fy)) / 2.0, 2)]
-        span = max((max(_fx) - min(_fx)) * _MAP_FRAME_MARGIN,
-                   (max(_fy) - min(_fy)) * _MAP_FRAME_MARGIN,
-                   _MAP_FRAME_MIN_M)
+
+    def _pts(srcs) -> list:
+        return [[float(_b[0]), float(_b[1])] for _src in srcs
+                for _b in (_src or [])
+                if isinstance(_b, (list, tuple)) and len(_b) >= 2]
+
+    def _frame(pts) -> tuple:
+        if not pts:
+            return cxy, _MAP_FRAME_MIN_M
+        _fx = [p[0] for p in pts]
+        _fy = [p[1] for p in pts]
+        return ([round((min(_fx) + max(_fx)) / 2.0, 2),
+                 round((min(_fy) + max(_fy)) / 2.0, 2)],
+                max((max(_fx) - min(_fx)) * _MAP_FRAME_MARGIN,
+                    (max(_fy) - min(_fy)) * _MAP_FRAME_MARGIN,
+                    _MAP_FRAME_MIN_M))
+
+    _own = _pts([_cb])
+    fxy, span = _frame(_pts([[m["xy"] for m in marks if m.get("xy")]]
+                            + [m.get("boundary") for m in marks]) + _own)
+    if max(abs(cxy[0] - fxy[0]), abs(cxy[1] - fxy[1])) > span / 2.0:
+        fxy, span = _frame(_own)
+    cxy = fxy
     spec: dict = {
         "center_xy": cxy,
         "context_m": round(float(span), 2),

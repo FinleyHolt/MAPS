@@ -254,6 +254,34 @@ def test_the_map_frame_follows_what_was_asked_about():
     assert 15.0 / (span / 1024.0) >= 20.0, span
 
 
+def _far_set_map(around):
+    from maps.search.parse_compile.views import map_spec, rounded_xy
+
+    rows = {"detected_1": {"fid": "detected_1", "xy": [1000.0, 1000.0]},
+            "detected_2": {"fid": "detected_2", "xy": [1010.0, 1000.0]}}
+    spec, _ = map_spec(around, list(rows), rows=rows,
+                       resolve=lambda t: rows[t]["xy"] if t in rows
+                       else rounded_xy(t), frame=(None, ""))
+    return spec
+
+
+def test_a_map_window_always_holds_its_around():
+    spec = _far_set_map("[0, 0]")
+    (cx, cy), half = spec["center_xy"], spec["context_m"] / 2.0
+    assert abs(cx) <= half and abs(cy) <= half, spec
+
+
+def test_a_map_around_a_point_far_from_the_set_is_the_point_alone():
+    from maps.search.parse_compile.views import _MAP_FRAME_MIN_M
+
+    spec = _far_set_map("[0, 0]")
+    assert spec["center_xy"] == [0.0, 0.0], spec
+    assert spec["context_m"] == _MAP_FRAME_MIN_M, spec
+    # a centre the set's own frame holds keeps that frame
+    near = _far_set_map("[1004, 1000]")
+    assert near["center_xy"] == [1005.0, 1000.0], near
+
+
 def test_the_image_axis_convention_is_stated_once_and_correctly():
     from maps.search.parse_compile.prompts import served_system_prompt
 
