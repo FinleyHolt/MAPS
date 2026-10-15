@@ -256,18 +256,13 @@ class Driver:
             # The earliest report still to arrive, which a worker with nothing released waits for.
             due = float("inf")
             with self._dispatch_lock:
-                done = self._done_cache
                 n = len(self._selection)
                 scanned = 0
                 while scanned < n:
                     eid = self._selection[self._cursor % n]
                     self._cursor += 1
                     scanned += 1
-                    if (
-                        eid in done
-                        or eid in self._in_flight
-                        or self._infra_attempts(eid) >= self.max_infra_attempts
-                    ):
+                    if eid in self._in_flight or not self._left(eid):
                         continue
                     if self._session_s() < self._arrival.get(eid, 0.0):
                         due = min(due, self._arrival[eid])
@@ -286,17 +281,15 @@ class Driver:
     def _infra_attempts(self, eid: str) -> int:
         return self._infra_errors.get(eid, Counter()).total()
 
-    def _pending(self, selection: list[str]) -> list[str]:
-        """The selected episodes still to fly: not done and not past their infra attempts."""
-        return [e for e in selection if e not in self._done_cache
-                and self._infra_attempts(e) < self.max_infra_attempts]
+    def _left(self, eid: str) -> bool:
+        """Still to fly: not done and not past its infra attempts."""
+        return eid not in self._done_cache and self._infra_attempts(eid) < self.max_infra_attempts
 
     def _persistent_infra(self) -> str:
         """The line naming the selected episodes left out after
         ``max_infra_attempts`` infra attempts, errors counted, or ""."""
         with self._dispatch_lock:
-            stuck = [e for e in self._selection if e not in self._done_cache
-                     and self._infra_attempts(e) >= self.max_infra_attempts]
+            stuck = [e for e in self._selection if e not in self._done_cache and not self._left(e)]
             errors: Counter = Counter()
             for e in stuck:
                 errors.update(self._infra_errors[e])
@@ -588,7 +581,7 @@ class Driver:
             return 2
         self._absorb_ledger()
         done = self._done_cache
-        pending = self._pending(episodes)
+        pending = [e for e in episodes if self._left(e)]
         key, value = self._selected_by()
         print(f"{key}: {value}   split: {self.split}   limit: {self.limit}")
         print(
@@ -665,7 +658,7 @@ class Driver:
         self._absorb_ledger()
         if self.arrivals_path is not None:
             shutil.copyfile(self.arrivals_path, self.out_root / "arrivals.json")
-        pending = self._pending(episodes)
+        pending = [e for e in episodes if self._left(e)]
         key, value = self._selected_by()
         self.log(
             f"split={self.split} {key}={value} selection={len(episodes)} "
