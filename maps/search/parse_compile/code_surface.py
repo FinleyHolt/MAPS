@@ -86,7 +86,7 @@ def bind_row(row: dict):
     its point -- a crossing's fid IS its ``[x, y]`` token, and a terminus
     (``end_N``) is nowhere on the surface, so it binds its own ``xy``."""
     fid = row.get("fid")
-    if isinstance(fid, str) and fid.startswith("end_"):
+    if isinstance(fid, str) and END_RE.fullmatch(fid):
         xy = row.get("xy")
         if isinstance(xy, (list, tuple)) and len(xy) == 2:
             return [float(xy[0]), float(xy[1])]
@@ -101,14 +101,17 @@ def _is_place_list(v) -> bool:
 
 
 # The token grammar, each matched whole: the fid families the world mints
-# (everything else in a place position is a NAME to ground), a result handle,
-# a staged viewpoint, a coverage stop and a terminus.
-FID_RE = re.compile(r"(?:prior_|detected_|stop_|end_|v)[0-9]{1,4}",
+# (everything else in a place position is a NAME to ground), a staged
+# viewpoint, a coverage stop, a terminus, and a result handle with or without
+# its window.
+_FID_N = "[0-9]{1,4}"
+FID_RE = re.compile(rf"(?:prior_|detected_|stop_|end_|v){_FID_N}",
                     re.IGNORECASE)
-HANDLE_RE = re.compile(r"r\d+")
-VIEWPOINT_RE = re.compile(r"v\d{1,3}")
-STOP_RE = re.compile(r"stop_[0-9]{1,4}")
-END_RE = re.compile(r"end_\d+")
+VIEWPOINT_RE = re.compile(rf"v{_FID_N}")
+STOP_RE = re.compile(rf"stop_{_FID_N}")
+END_RE = re.compile(rf"end_{_FID_N}")
+HANDLE_RE = re.compile(r"r[0-9]+")
+HANDLE_SLICE_RE = re.compile(rf"{HANDLE_RE.pattern}(?:\[[^\]]*\])?")
 
 
 def _fid_like(tok) -> bool:
