@@ -192,9 +192,7 @@ class BaselineHarness:
         return self._half(altitude_m, min(self._fov_deg()))
 
     def _fov_deg(self) -> tuple[float, float]:
-        intr = getattr(self.sensor, "intrinsics", None)
-        if intr is None:
-            return (90.0, 90.0)
+        intr = self.sensor.intrinsics
         return (float(intr.hfov_deg), float(intr.vfov_deg))
 
     def _half(self, altitude_m: float, fov_deg: float) -> float:

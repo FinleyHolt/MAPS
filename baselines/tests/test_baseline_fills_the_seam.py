@@ -63,7 +63,7 @@ def _hydrated(alt: float = 50.0, ground: float = 0.0):
         ),
         state=EpisodeState(pose_xy=(0.0, 0.0), altitude_m=alt),
         search_loop=SimpleNamespace(_ortho_ground_z_m=ground),
-        sensor=None,
+        sensor=resolve_sensor("nadir_1008_90"),
         perception=None,
     )
 

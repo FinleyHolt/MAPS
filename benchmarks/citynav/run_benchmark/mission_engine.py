@@ -191,9 +191,8 @@ class MissionSession:
             # "EMPTY" is the no-auth sentinel a local vLLM accepts.
             api_key=os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY"),
             seed=_seed_base() & 0x7FFFFFFF,
-            sensor_description=(served_description(
-                h.sensor, agl_m=float(h.state.altitude_m) - float(h.search_loop._ortho_ground_z_m))
-                if h.sensor is not None else ""),
+            sensor_description=served_description(
+                h.sensor, agl_m=float(h.state.altitude_m) - float(h.search_loop._ortho_ground_z_m)),
             **self.run_kwargs,
             **extra,
         )
