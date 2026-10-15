@@ -872,23 +872,6 @@ def _plain(v):
     return v
 
 
-def _look_tok(a) -> str:
-    """One element of ``look([a, b, c])`` -> the token its crop centres on,
-    or a :class:`_Name` to ground."""
-    if isinstance(a, Bind):
-        b = a.bind
-        if isinstance(b, (list, tuple)) and len(b) == 2:
-            return format_xy_token(float(b[0]), float(b[1]))
-        return b if isinstance(b, str) else a.label
-    if isinstance(a, Ref):
-        return a.label
-    if is_xy(a):
-        return format_xy_token(float(a[0]), float(a[1]))
-    if isinstance(a, str) and not _fid_like(a) and not parse_xy_token(a):
-        return _Name(a)
-    return str(_plain(a))
-
-
 @dataclass
 class MissionEnv:
     """The loop's verbs, one set per mission. A library call opens with
@@ -1350,7 +1333,12 @@ class MissionPython:
             x = self._slot(x)
             if isinstance(x, (list, tuple)) and not is_xy(x):
                 # look([a, b, c]) crops EACH element.
-                fids = [_look_tok(a) for a in x]
+                for a in x:
+                    if isinstance(a, Ref):
+                        raise CodeError(
+                            f"look({a.label}) shows a set; inside a list "
+                            f"name its rows: look([{a.label}[0], ...])")
+                fids = [self._site(a, "crops") for a in x]
                 lead = [(f, "crops") for f in fids if isinstance(f, _Name)]
             elif not isinstance(x, Ref):
                 site = self._site(x, "crops")

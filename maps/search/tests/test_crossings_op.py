@@ -373,3 +373,12 @@ def test_a_look_list_crops_each_element():
     assert calls_of_block('look(["Long Road", "prior_2"])\n') == [
         ("ground", {"Long Road": "crops"}),
         ("crops", None, ["<Long Road>", "prior_2"], None)]
+
+
+def test_a_look_list_refuses_a_set_and_names_its_rows():
+    """look([cars, "car_2"]) holds a whole set in a list: refused, naming the
+    spelling that crops its rows."""
+    from maps.search.tests.fakes import record_block
+    calls, out = record_block('cars = find("car")\nlook([cars, "car_2"])\n')
+    assert not [c for c in calls if c[0] == "crops"], calls
+    assert "look([cars[0], ...])" in str(out["error"]), out
