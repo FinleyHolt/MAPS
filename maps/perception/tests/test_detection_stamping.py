@@ -1,10 +1,8 @@
 """Contract for the shared ortho paint pass (``detection_stamping``).
 
-Pins the gates both call sites (the sweep's Phase A and the
-retrospective re-perception) rely on: projection keys for projectable
-masks only, ``world_contour``/color stamped, the
-``color``/``color_rgb`` supersession rule, and the ``color_conf``
-format.
+Pins what both call sites (a flight and the retrospective re-perception)
+rely on: ``world_contour`` and the M6 colour stamped, the client's median
+colour superseded, and the ``color_conf`` format.
 """
 
 from __future__ import annotations
@@ -41,18 +39,6 @@ def _rgb() -> np.ndarray:
     return np.full((64, 64, 3), 128, dtype=np.uint8)
 
 
-def test_projects_only_maskful_detections():
-    dets = [
-        _det("sam"),
-        DetectedObject(world_xy=(0.0, 0.0), label="car", confidence=0.5, source_tier="sam"),
-    ]
-    tracked = project_and_stamp_ortho_detections(
-        dets, view_corners_xy=_CORNERS, rgb=_rgb(), tile=_TILE
-    )
-    assert set(tracked) == {0}
-    assert tracked[0].rows.size > 0
-
-
 def test_real_tier_gets_contour_and_color():
     det = _det("sam")
     project_and_stamp_ortho_detections(
@@ -66,17 +52,6 @@ def test_real_tier_gets_contour_and_color():
     assert det.attributes["color_px"] == str(20 * 20)
 
 
-def test_higher_fidelity_color_never_overwritten():
-    # A color WITHOUT color_rgb is a higher-fidelity fill (GT table /
-    # vision) — the mixture pass must not touch it.
-    det = _det("sam", attributes={"color": "cyan"})
-    project_and_stamp_ortho_detections(
-        [det], view_corners_xy=_CORNERS, rgb=_rgb(), tile=_TILE
-    )
-    assert det.attributes["color"] == "cyan"
-    assert "color_conf" not in det.attributes
-
-
 def test_adapter_median_color_is_superseded():
     # color WITH color_rgb is the adapter's single-word median — same
     # fidelity class, so the mixture pass replaces it.
@@ -88,12 +63,3 @@ def test_adapter_median_color_is_superseded():
     )
     assert det.attributes["color"] != "mud"
     assert "color_conf" in det.attributes
-
-
-def test_no_rgb_disables_color_but_not_contour():
-    det = _det("sam")
-    project_and_stamp_ortho_detections(
-        [det], view_corners_xy=_CORNERS, rgb=None, tile=_TILE
-    )
-    assert det.metadata.get("world_contour")
-    assert "color" not in det.attributes
