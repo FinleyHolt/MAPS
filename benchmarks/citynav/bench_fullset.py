@@ -146,8 +146,10 @@ class Driver:
         # episode -> arrival_s, and the session clock's zero; a capacity session only.
         self._arrival: dict[str, float] = {}
         self._t0: float | None = None
-        # Guarded by _dispatch_lock.
+        # Fixed by main() before anything runs; guarded by _dispatch_lock.
         self._selection: list[str] = []
+        # The allowlist's count line, for the preview or the driver log.
+        self._selection_note: str | None = None
         self._cursor = 0
         self._dispatch_lock = threading.Lock()
         self._done_cache: set[str] = set()
@@ -527,10 +529,10 @@ class Driver:
                 with self._dispatch_lock:
                     self._in_flight.discard(eid)
 
-    def _select_episodes(self, say=None) -> list[str]:
+    def _select_episodes(self) -> list[str]:
         """The selection, in flying order; a refusal raises ``SystemExit``
-        with its FATAL line. ``say`` takes the allowlist's count line
-        (default ``log``)."""
+        with its FATAL line. An allowlist's count line is kept in
+        ``_selection_note``."""
         if self.arrivals_path is not None:
             try:
                 reports = json.loads(self.arrivals_path.read_text())["reports"]
@@ -555,7 +557,7 @@ class Driver:
             if unknown:
                 raise SystemExit(f"FATAL: --episode-allowlist names {len(unknown)} ids not in the "
                                  f"{self.split} split, e.g. {unknown[0]}")
-            (say or self.log)(
+            self._selection_note = (
                 f"--episode-allowlist {self.allowlist_path}: "
                 f"{len(allowed)} ids requested -> {len(episodes)} match "
                 f"the {self.split} split (from {before} total)"
@@ -573,11 +575,9 @@ class Driver:
 
     def dry_run(self) -> int:
         """Selection preview. Launches nothing and writes nothing."""
-        try:
-            episodes = self._select_episodes(say=print)
-        except SystemExit as exc:
-            print(exc, file=sys.stderr)
-            return 2
+        episodes = self._selection
+        if self._selection_note:
+            print(self._selection_note)
         self._absorb_ledger()
         done = self._done_cache
         pending = [e for e in episodes if self._left(e)]
@@ -613,12 +613,9 @@ class Driver:
             self.log(f"FATAL: {self.out_root} already holds a ledger; a capacity session flies "
                      f"into a fresh --out-root")
             return 2
-        try:
-            episodes = self._select_episodes()
-        except SystemExit as exc:
-            self.log(str(exc))
-            return 2
-        self._selection = episodes
+        episodes = self._selection
+        if self._selection_note:
+            self.log(self._selection_note)
         missing = _missing_block_assets(episodes)
         if missing:
             self.log(
@@ -804,6 +801,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
     driver = Driver(args)
+    # The selection too, so a refusal makes no out-root and asks no serve.
+    try:
+        driver._selection = driver._select_episodes()
+    except SystemExit as exc:
+        print(exc, file=sys.stderr)
+        return 2
     if args.dry_run:
         return driver.dry_run()
     # Endpoint discovery once, so an unreachable or wrong serve fails here,

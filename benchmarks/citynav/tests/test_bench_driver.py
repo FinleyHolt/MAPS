@@ -189,8 +189,7 @@ def no_flight(monkeypatch):
 
 
 def test_an_aborted_run_exits_3_and_the_summary_says_why(driver, monkeypatch, no_flight) -> None:
-    d = driver()
-    monkeypatch.setattr(d, "_select_episodes", lambda: [f"ep{i}" for i in range(60)])
+    d = driver(selection=[f"ep{i}" for i in range(60)])
     d._deadline = time.monotonic() + 15  # bounds a driver that never aborts
     seq = iter(range(60))
 
@@ -209,8 +208,7 @@ def test_an_aborted_run_exits_3_and_the_summary_says_why(driver, monkeypatch, no
 def test_persistent_infra_is_left_out_and_reported(driver, tmp_path, monkeypatch, no_flight) -> None:
     for cause in ("A", "A", "B"):
         episodes.append_row(tmp_path, _infra(0, cause=cause))
-    d = driver()
-    monkeypatch.setattr(d, "_select_episodes", lambda: ["ep0"])
+    d = driver(selection=["ep0"])
     monkeypatch.setattr(d, "worker_loop", lambda w: pytest.fail("a capped episode flew"))
     d._deadline = time.monotonic() + 5
     assert d.run() == 0
@@ -219,8 +217,7 @@ def test_persistent_infra_is_left_out_and_reported(driver, tmp_path, monkeypatch
 
 
 def test_a_spent_wall_budget_stops_the_run(driver, monkeypatch, no_flight) -> None:
-    d = driver()
-    monkeypatch.setattr(d, "_select_episodes", lambda: ["ep0"])
+    d = driver(selection=["ep0"])
     monkeypatch.setattr(d, "worker_loop", lambda w: pytest.fail("flew past the budget"))
     d.max_wall_s, d._deadline = 1, time.monotonic() - 1
     assert d.run() == 0
@@ -237,8 +234,7 @@ def test_a_second_run_into_a_held_root_is_refused(driver, tmp_path, monkeypatch)
     try:
         assert holder.stdout.readline().strip() == "held"
         monkeypatch.setattr(rm, "build_manifest", lambda **kw: pytest.fail("flew"))
-        d = driver()
-        monkeypatch.setattr(d, "_select_episodes", lambda: ["ep0"])
+        d = driver(selection=["ep0"])
         assert d.run() == 2 and f"pid {holder.pid}" in d.driver_log.read_text()
     finally:
         holder.kill()
@@ -258,8 +254,7 @@ def test_missing_block_assets_fail_before_flying(driver, tmp_path, monkeypatch) 
     monkeypatch.setattr(paths, "CITYNAV_NATIVE_RGBD_DIR", rgbd)
     monkeypatch.setattr(rm, "build_manifest", lambda **kw: pytest.fail("flew"))
     (tmp_path / "run").mkdir()
-    d = driver(tmp_path / "run")
-    monkeypatch.setattr(d, "_select_episodes", lambda: ["blk::1#0"])
+    d = driver(tmp_path / "run", selection=["blk::1#0"])
     assert d.run() == 2 and str(rgbd / "blk_rgb.tif") in d.driver_log.read_text()
     (rgbd / "blk.png").write_bytes(b"")  # the CityNav raster pair
     assert bf._missing_block_assets(["blk::1#0"]) == []
@@ -341,7 +336,7 @@ _INTERRUPTED = (
     "d.summary_file, d.split, d.workers, d.max_wall_s, d._deadline = root / 'summary.txt', 's', 2, 0, None\n"
     "d._done_cache, d._infra_errors, d.max_infra_attempts, d._abort = set(), {}, 3, None\n"
     "d.sample_seed, d.limit, d.allowlist_path, d.arrivals_path = 1, 0, None, None\n"
-    "d._select_episodes = lambda: ['ep0']\n"
+    "d._selection, d._selection_note = ['ep0'], None\n"
     "bf._missing_block_assets, bf.WORKER_STAGGER_S = (lambda eps: []), 0\n"
     "rm.build_manifest = lambda **kw: None\n"
     "rm.emit_or_verify = lambda *a, **kw: None\n"
@@ -409,8 +404,7 @@ def test_the_end_line_prints_no_score_for_an_infra_attempt(driver, monkeypatch) 
 def test_the_dry_run_counts_a_persistent_infra_episode_as_left_out(driver, tmp_path, monkeypatch, capsys) -> None:
     for _ in range(3):
         episodes.append_row(tmp_path, _infra(0))
-    d = driver()
-    monkeypatch.setattr(d, "_select_episodes", lambda say: ["ep0", "ep1"])
+    d = driver(selection=["ep0", "ep1"])
     assert d.dry_run() == 0
     out = capsys.readouterr().out
     assert "pending: 1" in out and "[PEND] ep1" in out and "[PEND] ep0" not in out, out
@@ -541,6 +535,7 @@ def test_a_session_s_manifest_names_the_stream_it_flies(driver, tmp_path, monkey
     monkeypatch.setattr(rm, "build_manifest", lambda **kw: built.update(kw) or {})
     d = driver()
     d.arrivals_path = stream
+    d._selection = d._select_episodes()
     monkeypatch.setattr(d, "worker_loop", lambda w: None)
     d.run()
     assert built["arrivals"] == hashlib.sha256(stream.read_bytes()).hexdigest()
@@ -577,6 +572,7 @@ def test_a_session_with_no_reports_reads_as_offered_nothing(driver, tmp_path, mo
     d.out_root.mkdir()
     d.arrivals_path = stream
     monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    d._selection = d._select_episodes()
     assert d.run() == 0
     s = reader.session(d.out_root)
     assert (s["offered"], s["finds_per_h"]) == (0, 0.0)
@@ -588,6 +584,7 @@ def test_a_session_s_preview_names_its_stream_not_a_seed(driver, tmp_path, monke
     monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
     d = driver()
     d.arrivals_path = stream
+    d._selection = d._select_episodes()
     assert d.dry_run() == 0
     assert capsys.readouterr().out.startswith(f"arrivals: {stream}   split:")
 
@@ -604,13 +601,24 @@ def test_a_selection_naming_episodes_off_the_split_is_refused_fatal(driver, tmp_
         d._select_episodes()
 
 
-def test_a_refused_selection_exits_2_and_says_so_in_the_driver_log(driver, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
-    d = driver()
-    d.arrivals_path = tmp_path / "stream.json"
-    d.arrivals_path.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "z"}]}))
-    assert d.run() == 2
-    assert "FATAL: --arrivals names 1 episodes" in d.driver_log.read_text()
+@pytest.mark.parametrize("refusal", ["split", "stream", "allowlist", "partial"])
+def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, tmp_path, monkeypatch,
+                                                                      capsys) -> None:
+    """A bad selection is refused as the dry run refuses it: no serve asked, no root made, no lock taken."""
+    from maps.llm import endpoint_spec
+
+    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: pytest.fail("a refused selection asked a serve"))
+    monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused selection flew"))
+    if refusal != "split":
+        monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
+    (tmp_path / "stream.json").write_text("{}")
+    (tmp_path / "ids.txt").write_text("a\nz\n")
+    flags = {"split": ["--split", "nope"], "stream": ["--arrivals", str(tmp_path / "stream.json")],
+             "allowlist": ["--episode-allowlist", str(tmp_path / "absent.txt")],
+             "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")]}[refusal]
+    assert bf.main(["--out-root", str(tmp_path / "r"), *flags]) == 2
+    assert not (tmp_path / "r").exists()
+    assert capsys.readouterr().err.startswith("FATAL: ")
 
 
 @pytest.mark.parametrize("dry", [[], ["--dry-run"]])
@@ -643,8 +651,8 @@ def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(ids, driver, tmp
     d = driver()
     d.allowlist_path = tmp_path / "ids.txt"
     d.allowlist_path.write_text("\n".join(ids) + "\n")
-    assert d.run() == 2
-    assert "FATAL: --episode-allowlist names 1 ids not in the train_seen split, e.g. z" in d.driver_log.read_text()
+    with pytest.raises(SystemExit, match="^FATAL: --episode-allowlist names 1 ids not in the train_seen split, e.g. z"):
+        d._select_episodes()
 
 
 @pytest.mark.parametrize("refusal", ["split", "stream", "allowlist", "partial"])

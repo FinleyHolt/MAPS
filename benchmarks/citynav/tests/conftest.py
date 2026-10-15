@@ -33,6 +33,7 @@ def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         d._abort = None
         d._deadline = None
         d._selection = [f"ep{i}" for i in range(500)] if selection is None else list(selection)
+        d._selection_note = None
         d._cursor = 0
         d.split = "train_seen"
         d.workers = 2

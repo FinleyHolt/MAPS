@@ -44,7 +44,8 @@ episodes (after `--episode-allowlist`) are shuffled by `--sample-seed`
 (default 1234) before `--limit` applies, so a seed and a limit select the
 same episodes on every run.
 `--episode-allowlist` keeps only the listed ids and refuses a list naming
-an id outside the split. Rerunning a command resumes its root. `--dry-run` prints the selection and launches nothing.
+an id outside the split. A refused selection exits 2 before the out-root
+exists or a serve is asked. Rerunning a command resumes its root. `--dry-run` prints the selection and launches nothing.
 `--arrivals <stream.json>` flies a capacity session in place of the shuffle
 (`benchmarks/capacity/README.md`).
 `CITYNAV_BENCH_CONFIG` names the config (default `configs/citynav.yaml`).
