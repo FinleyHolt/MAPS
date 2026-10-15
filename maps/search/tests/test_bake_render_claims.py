@@ -10,7 +10,7 @@ import pytest
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import (
-    _BROAD_DUMP_SOFT_ROWS,
+    BROAD_DUMP_SOFT_ROWS,
     _COMPARE_COL_PREFIXES,
     compact_results,
     run_program,
@@ -67,7 +67,7 @@ def test_a_cue_sorted_head_is_not_told_its_own_order_is_arbitrary():
         # BRANCH FLOOR: the clause only exists past the soft-dump knee AND
         # on a single-valued name_match — without both, neither assertion
         # below is testing anything.
-        if len(pool) <= _BROAD_DUMP_SOFT_ROWS or len(nm) != 1 or None in nm:
+        if len(pool) <= BROAD_DUMP_SOFT_ROWS or len(nm) != 1 or None in nm:
             continue
         assert getattr(out["r2"], "ordered", False), stem
         env = compact_results({"r0": pool, "r2": out["r2"]})

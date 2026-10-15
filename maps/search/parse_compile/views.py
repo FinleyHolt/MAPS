@@ -58,7 +58,7 @@ def _window_caption(c: dict) -> str:
     return _span
 
 
-def _look_vision_text(crops: list[dict]) -> str:
+def look_vision_text(crops: list[dict]) -> str:
     # The digit -> fid binding lives in this text legend; color is left to
     # the pixels, and each crop line states its delivered span.
     def _subject(c):
@@ -164,7 +164,7 @@ def _look_vision_text(crops: list[dict]) -> str:
     return base
 
 
-def _crop_token_of(row: dict, live: bool) -> str:
+def crop_token_of(row: dict, live: bool) -> str:
     """A crops token for one carried row: its fid, except a derived
     ``end_N`` row off the surface crops its own ``[x, y]`` (an evicted fid
     stays on the skip path)."""
@@ -175,7 +175,7 @@ def _crop_token_of(row: dict, live: bool) -> str:
     return fid
 
 
-def _rounded_xy(token) -> list[float] | None:
+def rounded_xy(token) -> list[float] | None:
     """An ``[x, y]`` token -> the point at centimetre precision, else None."""
     p = parse_xy_token(token)
     return [round(p[0], 2), round(p[1], 2)] if p else None

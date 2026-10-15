@@ -9,17 +9,17 @@ from dataclasses import dataclass
 
 from maps.search.analyze_scene.geom_compute import CARDINALS as _GEOM_CARDINALS
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
-from maps.search.analyze_scene.geom_program import _sanitize_token
+from maps.search.analyze_scene.geom_program import sanitize_token
 from maps.util.xy_token import is_xy, parse_xy_token
 from maps.search.withhold import withheld
 
 # The four map-fixed directions, in the order their kwargs are read. Taken
 # from the executor's own table so the surface can never offer a direction
 # the geometry does not compute.
-_CARDINALS = tuple(sorted(_GEOM_CARDINALS))
+CARDINAL_ORDER = tuple(sorted(_GEOM_CARDINALS))
 
 
-def _split_diagonal(word: str):
+def split_diagonal(word: str):
     """A diagonal wind -> its two cardinals, or None. Derived, not listed."""
     for a in ("north", "south"):
         if word.startswith(a) and word[len(a):] in ("east", "west"):
@@ -30,7 +30,7 @@ def _split_diagonal(word: str):
 def _wind_parts(word: str) -> frozenset:
     """The CARDINALS a compass wind is made of: southwest is south and
     west, so a thing facing southwest faces south and faces west."""
-    pair = _split_diagonal(word)
+    pair = split_diagonal(word)
     return frozenset(pair) if pair else frozenset((word,))
 
 
@@ -68,7 +68,7 @@ class CodeError(ValueError):
     """A refusal the model can act on: what was said, and what is allowed."""
 
 
-def _refuse_metres_in_within(v):
+def refuse_metres_in_within(v):
     """``within=`` takes a PLACE; a bare number is ``dwithin=`` (Shapely's
     names: ``a.within(b)`` is containment, ``dwithin(a, b, d)`` a
     distance)."""
@@ -114,7 +114,7 @@ HANDLE_RE = re.compile(r"r[0-9]+")
 HANDLE_SLICE_RE = re.compile(rf"{HANDLE_RE.pattern}(?:\[[^\]]*\])?")
 
 
-def _fid_like(tok) -> bool:
+def fid_like(tok) -> bool:
     """Is this string a FID rather than a name?"""
     return isinstance(tok, str) and bool(FID_RE.fullmatch(tok.strip()))
 
@@ -250,7 +250,7 @@ class Program:
         executor's OWN sanitizer ("the depot" -> "the_depot"), so a key
         built here never names a column that does not exist."""
         r = self.ref_of(anchor)
-        return _sanitize_token(r["as"] if isinstance(r, dict) and "as" in r
+        return sanitize_token(r["as"] if isinstance(r, dict) and "as" in r
                                else r)
 
     def cut_le(self, items, anchor, value) -> str:
@@ -305,7 +305,7 @@ class Program:
         """The bare NAMES in the ops' refs, in order: places to ground."""
         live = self.live | {op["ref"] for op in self.ops}
         return [v for op in self.ops for v in op["args"].get("refs") or []
-                if isinstance(v, str) and v not in live and not _fid_like(v)]
+                if isinstance(v, str) and v not in live and not fid_like(v)]
 
     def ground(self, ties: dict) -> None:
         """Each named anchor -> its grounded fid, or its top-tie fids as the
@@ -315,7 +315,7 @@ class Program:
         for op in self.ops:
             refs = op["args"].get("refs") or []
             for i, v in enumerate(refs):
-                if isinstance(v, str) and v not in live and not _fid_like(v):
+                if isinstance(v, str) and v not in live and not fid_like(v):
                     fids = ties[v]
                     refs[i] = {"ref": fids[0] if len(fids) == 1 else fids,
                                "as": v}
@@ -420,10 +420,10 @@ def compile_filter(p: Program, items, *, within=None, near=None,
                 "facing= needs the way it faces: "
                 'rows.filter(facing=<place>, direction="south") '
                 "keeps the rows whose 'facing <place>' column "
-                f"reads south. One of {'|'.join(_CARDINALS)}.")
+                f"reads south. One of {'|'.join(CARDINAL_ORDER)}.")
         w = str(direction).strip().lower()
-        if w not in _CARDINALS:
-            pair = _split_diagonal(w)
+        if w not in CARDINAL_ORDER:
+            pair = split_diagonal(w)
             if pair:
                 raise CodeError(
                     f"a thing facing {w} faces {pair[0]} AND "
@@ -433,7 +433,7 @@ def compile_filter(p: Program, items, *, within=None, near=None,
                     f'facing=<place>, direction="{pair[1]}").')
             raise CodeError(
                 f"{direction!r} is not a compass direction; "
-                f"direction= takes one of {'|'.join(_CARDINALS)} "
+                f"direction= takes one of {'|'.join(CARDINAL_ORDER)} "
                 f"(a diagonal is those two, chained).")
         if cards or within is not None or near is not None:
             raise CodeError(

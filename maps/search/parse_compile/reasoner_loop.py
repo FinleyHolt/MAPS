@@ -29,7 +29,7 @@ import httpx
 from maps.llm.http import TRANSIENT_CLIENT_STATUS, CallCanceled
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
-    _BROAD_DUMP_SOFT_ROWS,
+    BROAD_DUMP_SOFT_ROWS,
     MODEL_UNSERVED_COLUMNS,
 )
 from maps.search.analyze_scene.surface import build_surface_from_graph
@@ -41,7 +41,7 @@ from maps.search.analyze_scene.tools import ToolContext
 from maps.search.parse_compile import python_surface as _py_surface
 from maps.search.parse_compile.carry import (
     Carry,
-    _program_dedup_key,
+    program_dedup_key,
     program_reads,
     run_ops,
 )
@@ -56,13 +56,13 @@ from maps.search.parse_compile.prompts import served_tools
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.views import (
     LOOK_MAX_CROPS,
-    _crop_token_of,
-    _look_vision_text,
-    _rounded_xy,
     crop_requests,
+    crop_token_of,
+    look_vision_text,
     map_features,
     map_spec,
     map_vision_text,
+    rounded_xy,
 )
 from maps.search.render.look_render import (
     LOOK_MAX_BADGES as _MAP_MAX_MARKS,
@@ -422,7 +422,7 @@ class _Mission:
 
         # Each fid's latest result-enriched row, for the rejection census.
         self.row_latest: dict[str, dict] = {}
-        # Successful self-contained programs by ``_program_dedup_key`` ->
+        # Successful self-contained programs by ``program_dedup_key`` ->
         # ``(surface_version, turn, ops)``: a repeat under the same version gets
         # the dedup note. A flight, a boost or a stance bumps the version.
         self._programs_seen: dict[str, tuple] = {}
@@ -527,7 +527,7 @@ class _Mission:
             if sv is not None:
                 return [round(float(sv["from_xy"][0]), 2),
                         round(float(sv["from_xy"][1]), 2)]
-            return _rounded_xy(tok)
+            return rounded_xy(tok)
         return None
 
     def _stand(self, at_tok: str, facing_tok: str) -> dict:
@@ -666,7 +666,7 @@ class _Mission:
         return err + self._loop_breaker_facts(n)
 
     def _dispatch_analyze_scene(self, ops, *, answer_ref=""):
-        key = _program_dedup_key(ops)
+        key = program_dedup_key(ops)
         prev = self._programs_seen.get(key) if key is not None else None
         if prev is not None and prev[0] == self.carry.version:
             # A one-line reference, never a payload; the emission's own
@@ -802,7 +802,7 @@ class _Mission:
         fj = [c["jpeg"] for c in fv if c.get("jpeg")]
         if not fj:
             return
-        fv_text = _look_vision_text(fv)
+        fv_text = look_vision_text(fv)
         shown = not withheld("images")
         fv_note = ("the view follows." if shown else
                     _PICTURE_WITHHELD_OF.format("view"))
@@ -1002,7 +1002,7 @@ class _Mission:
                         _summarise_exc(exc))
             return {"error": f"crop render failed: {_summarise_exc(exc)}"}
         jpegs = [c["jpeg"] for c in crops if c.get("jpeg")]
-        vis_text = preamble + _look_vision_text(crops)
+        vis_text = preamble + look_vision_text(crops)
         if self._ship(ack, "crop", jpegs, vis_text) and marks:
             # Badges drawn (the legend IS the drawn set) and the renderer's
             # own out-of-frame list, on a crop that shipped.
@@ -1023,7 +1023,7 @@ class _Mission:
             name = mp.ref_name(handle) or mp.call_arg("look")
             return {"error": (f"{name or handle} holds no rows to look at; "
                               "name a handle that has some, or find() one first")}
-        fids = [_crop_token_of(r, str(r["fid"]) in self._ns_rows) for r in rows]
+        fids = [crop_token_of(r, str(r["fid"]) in self._ns_rows) for r in rows]
         return self._crops_of(
             fids, marks=marks,
             # No handle named: the executor's ref may be unbound.
@@ -1136,7 +1136,7 @@ class _Mission:
             # Paging a handle with nothing left to page is refused here.
             ref, lo, h = page
             held = len(self.carry.read(ref) or [])
-            if held and (held <= _BROAD_DUMP_SOFT_ROWS or lo >= held):
+            if held and (held <= BROAD_DUMP_SOFT_ROWS or lo >= held):
                 return self._plan_err({}, (
                     f"all {held} row(s) of {h} are already served -- there "
                     f"is no further block to serve. Narrow it "
@@ -1225,7 +1225,7 @@ class _Mission:
         catch = rows[:_CATCH_CROPS]
         if catch:
             cack = self._crops_of(
-                [_crop_token_of(r, str(r["fid"]) in self._ns_rows)
+                [crop_token_of(r, str(r["fid"]) in self._ns_rows)
                  for r in catch],
                 preamble=("The pass's catch, one crop per "
                           "row it added, in pass order: "))

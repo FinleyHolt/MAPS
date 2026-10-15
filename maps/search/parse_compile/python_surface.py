@@ -31,16 +31,15 @@ from typing import Callable
 
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
-    _AUTOATTACH_PREFIXES, _BROAD_HEAD_ROWS, _STANDING_SIDE_PREFIXES,
-    MODEL_UNSERVED_COLUMNS, _sanitize_token, empty_window_refusal,
-    window_span)
+    AUTOATTACH_PREFIXES, BROAD_HEAD_ROWS, MODEL_UNSERVED_COLUMNS,
+    STANDING_SIDE_PREFIXES, empty_window_refusal, sanitize_token, window_span)
 from maps.search.analyze_scene.row_geometry import SurfaceGeometry
 from maps.search.withhold import withheld
 from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
 from maps.search.parse_compile.code_surface import (
-    _CARDINALS, HANDLE_RE, VIEWPOINT_RE, Bind, CodeError, Program, Ref,
+    CARDINAL_ORDER, HANDLE_RE, VIEWPOINT_RE, Bind, CodeError, Program, Ref,
     act_needs_a_thing, bind_row, compile_filter, compile_find, compile_order,
-    _fid_like, _refuse_metres_in_within, rn_spelled, _split_diagonal)
+    fid_like, refuse_metres_in_within, rn_spelled, split_diagonal)
 
 BLOCK_FILENAME = "<mission-block>"
 
@@ -158,7 +157,7 @@ class MissionNamespace(dict):
 
     def __missing__(self, k):
         mp = self.mp
-        if _fid_like(k):
+        if fid_like(k):
             row = mp.env.row_of_fid(k)
             return Row(row, mp=mp) if isinstance(row, dict) else k
         # A plain KeyError is what lets LOAD_GLOBAL fall through to
@@ -333,7 +332,7 @@ def looks_like_code(text: str) -> bool:
 
 
 # The cardinal cut kwargs, derived from the compiler's (the geometry's) four.
-_CARDINAL_KWARGS = frozenset(f"{w}_of" for w in _CARDINALS)
+_CARDINAL_KWARGS = frozenset(f"{w}_of" for w in CARDINAL_ORDER)
 
 
 def _direction_key(word):
@@ -363,7 +362,7 @@ def _refuse_reversed_direction(direction, reverse) -> None:
         return
     w = str(direction).strip().lower()
     opp = {"north": "south", "south": "north", "east": "west", "west": "east"}
-    flip = "".join(opp.get(p, p) for p in (_split_diagonal(w) or (w,)))
+    flip = "".join(opp.get(p, p) for p in (split_diagonal(w) or (w,)))
     raise CodeError(
         f'order(direction="{w}", reverse=True) is '
         f'order(direction="{flip}") -- say the direction you mean.')
@@ -374,7 +373,7 @@ def _diagonal_remedy(names) -> str:
     of its two cardinal cuts against the same place."""
     for n in names:
         n = str(n)
-        pair = _split_diagonal(n[:-3]) if n.endswith("_of") else None
+        pair = split_diagonal(n[:-3]) if n.endswith("_of") else None
         if pair:
             return (f" A diagonal is TWO cuts against the same place: "
                     f"{pair[0]}_of=<place>, {pair[1]}_of=<place> -- which is "
@@ -420,7 +419,7 @@ class _Cuts:
                 f"filter takes {_FILTER_SAY} or a predicate; "
                 f"{'=, '.join(bad)}= is none of them."
                 + _diagonal_remedy(bad))
-        _refuse_metres_in_within(kw.get("within"))
+        refuse_metres_in_within(kw.get("within"))
         if pred is None:
             mp, src = self._target()
             return mp._rows_filter(src, **kw)
@@ -495,7 +494,7 @@ class Row(_Cuts):
 
     def _resolve_key(self, k):
         """The served column a Python spelling names, or None: the exact key,
-        else the one column equal under ``_sanitize_token``, the collapse ref
+        else the one column equal under ``sanitize_token``, the collapse ref
         labels take ("Poppy Boulevard" names "facing poppy_boulevard"; an
         ambiguous match is None). Attribute, item and ``.get`` access all
         resolve here."""
@@ -506,7 +505,7 @@ class Row(_Cuts):
             return k
         hit = [rk for rk in row
                if rk not in MODEL_UNSERVED_COLUMNS
-               and _sanitize_token(rk) == _sanitize_token(k)]
+               and sanitize_token(rk) == sanitize_token(k)]
         return hit[0] if len(hit) == 1 else None
 
     def _derived(self, k):
@@ -530,10 +529,10 @@ class Row(_Cuts):
     def _miss(self, k) -> str:
         """Why this key is not here and what writes it: a relation column
         exists only where a compare named its ref
-        (``geom_program._AUTOATTACH_PREFIXES``), so the remedy is the relate.
+        (``geom_program.AUTOATTACH_PREFIXES``), so the remedy is the relate.
         """
         row = object.__getattribute__(self, "_row")
-        pre = next((p for p in _AUTOATTACH_PREFIXES
+        pre = next((p for p in AUTOATTACH_PREFIXES
                     if isinstance(k, str) and k.startswith(p)), None)
         generic = (f"row {row.get('fid')} carries no {k!r}; its columns "
                    f"are {sorted(self.keys())[:12]}")
@@ -542,7 +541,7 @@ class Row(_Cuts):
             # off-palette word has its own loud error at the op layer
             return generic
         place = k[len(pre):]
-        if pre in _STANDING_SIDE_PREFIXES:
+        if pre in STANDING_SIDE_PREFIXES:
             # a side of the VIEWER, so the remedy is a viewpoint
             return (f"row {row.get('fid')} carries no {k!r}: "
                     f"'{pre.strip()}' is a side of a VIEWPOINT, and none "
@@ -838,7 +837,7 @@ def _places(v, who: str) -> tuple:
                             "nothing there to measure.")
         return tuple(p for x in v for p in _places(x, who))
     if isinstance(v, str):
-        if _fid_like(v):
+        if fid_like(v):
             return ((v, None),)
         # A NAME HAS NO GEOMETRY until find retrieves it.
         raise CodeError(
@@ -1108,7 +1107,7 @@ class MissionPython:
                       "-- r2 = intersection(\"A Road\", \"B St\") then "
                       "go_to(r2[0]).")
             return format_xy_token(float(pt[0]), float(pt[1]))
-        if isinstance(v, str) and not _fid_like(v):
+        if isinstance(v, str) and not fid_like(v):
             return _Name(v)
         return str(_plain(v))
 
@@ -1116,7 +1115,7 @@ class MissionPython:
         """The cardinal cuts given, slotted in the order named, read in
         the compiler's order."""
         got = {d: self._slot(a) for d, a in anchors.items() if a is not None}
-        return [(d, got[d]) for d in _CARDINALS if d in got]
+        return [(d, got[d]) for d in CARDINAL_ORDER if d in got]
 
     def _act(self, verb, sites: list, *args, **kw) -> None:
         """Ground the NAMES among ``sites`` (``(site, why)`` pairs), then run
@@ -1182,7 +1181,7 @@ class MissionPython:
                 '"Fuchsia Avenue") for where they cross.')
         if name is not None and query == "":
             raise CodeError(f"the name IS the query: find({name!r})")
-        _refuse_metres_in_within(within)
+        refuse_metres_in_within(within)
         nearest = self._slot(nearest)
         near = self._slot(near)
         within = self._slot(within)
@@ -1285,13 +1284,13 @@ class MissionPython:
             raise CodeError("more_of pages a RESULT a find or an ordering "
                             "left")
         name = self.name_of(x) or self.call_arg("more_of") or x.ref
-        lo = _BROAD_HEAD_ROWS + int(self.env.widened.get(x.ref) or 0)
+        lo = BROAD_HEAD_ROWS + int(self.env.widened.get(x.ref) or 0)
         p = self._program(name)
         # The rows served are NOT the handle -- they are a window of it --
         # so the envelope is labelled with what was asked for rather than
         # with a name that would claim to be the whole set.
         return Rows(self._analyze(
-            p, p.window(x.ref, f"[{lo}:{lo + _BROAD_HEAD_ROWS}]"),
+            p, p.window(x.ref, f"[{lo}:{lo + BROAD_HEAD_ROWS}]"),
             shown=f"more_of({name})", page=(x.ref, lo, name)), self)
 
     # -- measuring ---------------------------------------------------------

@@ -27,7 +27,7 @@ def _quote(v) -> str:
     return s if len(s) <= 120 else s[:120] + "..."
 
 
-def _is_color_column_key(k) -> bool:
+def is_color_column_key(k) -> bool:
     """A ``color_<word>`` column key (``color_conf`` is a surface field)."""
     return isinstance(k, str) and k.startswith("color_") and k != "color_conf"
 
@@ -203,10 +203,10 @@ def join_hints(*parts) -> str:
 # Above this many tied ways under one name, a find renders the set's shape.
 _NAME_SET_SHAPE_ROWS = 8
 
-# A row list longer than _BROAD_DUMP_SOFT_ROWS renders its first
-# _BROAD_HEAD_ROWS rows (a set crop badges the same rows); the rN keeps all.
-_BROAD_DUMP_SOFT_ROWS = 48
-_BROAD_HEAD_ROWS = LOOK_SET_ROWS
+# A row list longer than BROAD_DUMP_SOFT_ROWS renders its first
+# BROAD_HEAD_ROWS rows (a set crop badges the same rows); the rN keeps all.
+BROAD_DUMP_SOFT_ROWS = 48
+BROAD_HEAD_ROWS = LOOK_SET_ROWS
 
 
 def _census_counts(rows) -> tuple[dict, int]:
@@ -446,20 +446,20 @@ def _render_grid_rows(rows, cols) -> str:
 
 # The relation column-key prefixes, each followed by its ref's label. The
 # side prefixes may name a staged viewpoint handle; the python surface reads
-# them, and _AUTOATTACH_PREFIXES, to name what writes a missing key.
-_STANDING_SIDE_PREFIXES = ("left of ", "right of ", "ahead of ", "behind ")
+# them, and AUTOATTACH_PREFIXES, to name what writes a missing key.
+STANDING_SIDE_PREFIXES = ("left of ", "right of ", "ahead of ", "behind ")
 _COMPARE_COL_PREFIXES = ("distance to ", "center distance to ",
                          "bearing from ", "facing ", "contains ",
-                         *_STANDING_SIDE_PREFIXES,
+                         *STANDING_SIDE_PREFIXES,
                          "east of ", "west of ", "north of ", "south of ")
-_AUTOATTACH_PREFIXES = tuple(
+AUTOATTACH_PREFIXES = tuple(
     p for p in _COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
 
 # A wall-clock net: a union measures members x items gaps.
 _UNION_MAX_MEMBERS = 400
 
 
-def _sanitize_token(lbl) -> str:
+def sanitize_token(lbl) -> str:
     """A token as a column label: lowercase, ``[^a-z0-9]+`` collapsed to
     ``_``. The compiler builds its keys with it too."""
     base = re.sub(r"[^a-z0-9]+", "_", str(lbl).lower()).strip("_")
@@ -590,7 +590,7 @@ def _envelope(v, legend) -> dict:
                     f"this rendered head; they stay live in this rN "
                     f"(full set intact), covers_window marks them "
                     f"wherever they render.")
-        capped = (body[:_BROAD_HEAD_ROWS] if len(v) > _BROAD_DUMP_SOFT_ROWS
+        capped = (body[:BROAD_HEAD_ROWS] if len(v) > BROAD_DUMP_SOFT_ROWS
                   else body)
         more = None
         if len(capped) < len(body):
@@ -598,7 +598,7 @@ def _envelope(v, legend) -> dict:
                 f"showing the first {len(capped)} of {len(v)} row(s); "
                 f"the rest stay live in this rN -- later ops on it "
                 f"read the FULL set, and more_of(<rN>) serves the next "
-                f"{_BROAD_HEAD_ROWS}",
+                f"{BROAD_HEAD_ROWS}",
                 _cut_stands_at(v, body, capped))
         head = {"len": len(v),
                 "fids": [str(r["fid"]) for r in capped if r.get("fid")]}
@@ -621,8 +621,8 @@ def _step_hint(v) -> "str | None":
 
 def compact_results(results: dict, *, answer_ref: str = "") -> dict:
     """Each op result as its model-facing envelope: an ordered list ``{len,
-    fids, rows}`` (a markdown grid, past ``_BROAD_DUMP_SOFT_ROWS`` only the
-    first ``_BROAD_HEAD_ROWS``), an unordered one ``{len, census, named}``, an
+    fids, rows}`` (a markdown grid, past ``BROAD_DUMP_SOFT_ROWS`` only the
+    first ``BROAD_HEAD_ROWS``), an unordered one ``{len, census, named}``, an
     empty one ``{len: 0, items: [], hint}``; a compare, always a step a later
     op reads, only ``{len, hint}``. The legend rides the first grid. With ``answer_ref`` the
     response is that one envelope, carrying the other ops' hints. Every rN
@@ -1236,7 +1236,7 @@ def _score_by(cx, a):
     emphasis: dict = {}
     for el in a["emphasis"]:
         key = el["key"]
-        if _is_color_column_key(key):
+        if is_color_column_key(key):
             # color_navy weights color_blue, noted.
             canon, cnote = _resolve_color_word(key[len("color_"):])
             if cnote is not None:
@@ -1245,7 +1245,7 @@ def _score_by(cx, a):
         emphasis[key] = float(el["w"])
     for key in emphasis:
         # Naming a color column attaches it.
-        if _is_color_column_key(key) and not any(
+        if is_color_column_key(key) and not any(
                 it.get(key) is not None for it in items):
             items = _attach_color_column(items, key[len("color_"):])
     # A key no row carries would be a silent constant term.
@@ -1253,7 +1253,7 @@ def _score_by(cx, a):
     for key in list(emphasis):
         if items and not any(isinstance(it.get(key), (int, float))
                              for it in items):
-            if _is_color_column_key(key):
+            if is_color_column_key(key):
                 # Nothing has a perceived colour before a flight sees it: the
                 # term drops, unless it is the only one.
                 if len(emphasis) > 1:
@@ -1408,7 +1408,7 @@ def _union_members(cx, ref_el, as_label) -> list:
             got = [cx.by_fid.get(r.get("fid"), r) for r in cx.resolve(x)
                    if isinstance(r, dict)
                    and (r.get("fid") in cx.by_fid or is_xy(r.get("xy")))]
-            lbl = as_label or _sanitize_token(x)
+            lbl = as_label or sanitize_token(x)
             if not got:
                 raise ProgramError(
                     f"{lbl} is empty, so 'distance to {lbl}' is undefined on "
@@ -1502,7 +1502,7 @@ def _compare(cx, a):
         ref_el = el
         if isinstance(el, dict):
             if el.get("as"):
-                as_label = _sanitize_token(el["as"])
+                as_label = sanitize_token(el["as"])
             ref_el = el["ref"]
         if (isinstance(el, dict) and isinstance(ref_el, (list, tuple))
                 and ref_el and not is_xy(ref_el)
@@ -1530,7 +1530,7 @@ def _compare(cx, a):
                     f"compare ref {_quote(ref_el)} is not a fid on this "
                     f"surface. {cx.avail('point')}")
             kind = "row"
-            lab = _unique_label(as_label or _sanitize_token(payload["fid"]),
+            lab = _unique_label(as_label or sanitize_token(payload["fid"]),
                                 used_labels, payload["fid"])
             geom, center = _row_geom_center(cx, payload)
         fid = payload.get("fid") if kind == "row" else None

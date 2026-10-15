@@ -2,14 +2,14 @@
 LABELS normalized out of the key."""
 from __future__ import annotations
 
-from maps.search.parse_compile.carry import _program_dedup_key
+from maps.search.parse_compile.carry import program_dedup_key
 from maps.search.tests.fakes import drive, grow_drive, ops_of_block, run, tool_results
 
 _BLOCK = 'r1 = find("car")\nr2 = r1.order(nearest="prior_1")\n'
 
 
 def _key(code, **kw):
-    return _program_dedup_key(ops_of_block(code, **kw))
+    return program_dedup_key(ops_of_block(code, **kw))
 
 
 def test_a_reissued_block_shares_its_key_whatever_its_ref_labels():
@@ -28,13 +28,13 @@ def test_wiring_and_emission_order_stay_distinct():
     near = {"op": "find", "args": {"query": "gate"}}
     a = [{"ref": "r0", **find}, {"ref": "r1", **near}]
     b = [{"ref": "r0", **near}, {"ref": "r1", **find}]
-    assert _program_dedup_key(a) != _program_dedup_key(b)
+    assert program_dedup_key(a) != program_dedup_key(b)
 
     def _cut(items):
         return {"ref": "r2", "op": "filter_items",
                 "args": {"items": items, "key": "xy", "op": "truthy"}}
-    assert _program_dedup_key(a + [_cut("r0")]) \
-        != _program_dedup_key(a + [_cut("r1")])
+    assert program_dedup_key(a + [_cut("r0")]) \
+        != program_dedup_key(a + [_cut("r1")])
 
 
 def test_a_deduped_reissue_answers_under_its_own_labels():

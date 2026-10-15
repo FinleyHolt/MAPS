@@ -9,11 +9,11 @@ import logging
 import re
 
 from maps.search.analyze_scene.geom_program import (
-    ProgramError as _ProgramError,
-    _is_color_column_key,
-    compact_results as _compact_results,
+    ProgramError,
+    compact_results,
+    is_color_column_key,
     join_hints,
-    run_program as _run_program,
+    run_program,
 )
 from maps.search.parse_compile.code_surface import HANDLE_RE
 from maps.search.withhold import withheld
@@ -34,7 +34,7 @@ def _requests_color(op: dict) -> bool:
     """Whether this op names a color column (a filter key, a score_by
     emphasis key)."""
     args = op["args"]
-    return any(_is_color_column_key(k) and k[len("color_"):].strip()
+    return any(is_color_column_key(k) and k[len("color_"):].strip()
                for k in [args.get("key")]
                + [e["key"] for e in args.get("emphasis") or []])
 
@@ -51,11 +51,11 @@ def run_ops(ops: list, *, namespace: dict,
     cands = ns.get("cands") or []
     anchors = ns.get("anchors") or []
     try:
-        out = _run_program(cands, anchors, {"ops": ops},
+        out = run_program(cands, anchors, {"ops": ops},
                            seed_results=seed_results,
                            staged=ns.get("staged"),
                            standing=ns.get("standing"))
-    except _ProgramError as exc:
+    except ProgramError as exc:
         _err = str(exc)
         if raw_sink is not None:
             raw_sink["error_op"] = getattr(exc, "op", "")
@@ -72,11 +72,11 @@ def run_ops(ops: list, *, namespace: dict,
         raw_sink["results"] = _raw_results
     # ``answer_ref`` names the one table a plan returns; the other ops' hints
     # ride it.
-    out["results"] = _compact_results(_raw_results, answer_ref=answer_ref)
+    out["results"] = compact_results(_raw_results, answer_ref=answer_ref)
     return out
 
 
-def _program_dedup_key(ops: list) -> str | None:
+def program_dedup_key(ops: list) -> str | None:
     """Canonical identity of a SELF-CONTAINED op list (each ref renamed to
     its emission index), or ``None`` when it reads a handle it does not
     define and is therefore never deduped."""

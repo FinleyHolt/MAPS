@@ -11,13 +11,13 @@ from maps.search.tests.fakes import grow_drive, run
 def _programs_run(monkeypatch) -> list[list[dict]]:
     """Every op-program the executor runs, in order."""
     seen: list[list[dict]] = []
-    orig = rl._run_program
+    orig = rl.run_program
 
     def _spy(cands, anchors, program, **kw):
         seen.append(list(program.get("ops") or []))
         return orig(cands, anchors, program, **kw)
 
-    monkeypatch.setattr(rl, "_run_program", _spy)
+    monkeypatch.setattr(rl, "run_program", _spy)
     return seen
 
 

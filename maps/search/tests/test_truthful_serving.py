@@ -4,8 +4,8 @@ import re
 
 from maps.search.analyze_scene import text_match as T
 from maps.search.analyze_scene.geom_program import (
-    _BROAD_DUMP_SOFT_ROWS,
-    _BROAD_HEAD_ROWS,
+    BROAD_DUMP_SOFT_ROWS,
+    BROAD_HEAD_ROWS,
     compact_results,
     run_program,
 )
@@ -229,7 +229,7 @@ def test_broad_score_by_serves_census_plus_head_not_full_dump():
     # array + full grid (113-148KB). The envelope is census + head; the
     # full set stays live in the rN.
     n = 120
-    assert n > _BROAD_DUMP_SOFT_ROWS  # past the knee, so the law applies
+    assert n > BROAD_DUMP_SOFT_ROWS  # past the knee, so the law applies
     out = run_program([], _wide_world(n), {"ops": [
         {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "compare", "args": {"items": "r0",
@@ -240,7 +240,7 @@ def test_broad_score_by_serves_census_plus_head_not_full_dump():
     ]})
     env = compact_results(out["results"])["r2"]
     assert env["len"] == n
-    assert len(env["fids"]) == _BROAD_HEAD_ROWS
+    assert len(env["fids"]) == BROAD_HEAD_ROWS
     # ranked head IS the ranking's top: rank-0 nearest prior_000
     assert env["fids"][0] == "prior_000"
     assert len(out["results"]["r2"]) == n
@@ -263,8 +263,8 @@ def test_broad_filter_items_capped_same_law():
     ]})
     env = compact_results(out["results"])["r2"]
     assert env["len"] == n
-    assert len(env["fids"]) == _BROAD_HEAD_ROWS
-    assert env["rows"].count("\n") <= _BROAD_HEAD_ROWS + 4
+    assert len(env["fids"]) == BROAD_HEAD_ROWS
+    assert env["rows"].count("\n") <= BROAD_HEAD_ROWS + 4
     assert len(out["results"]["r2"]) == n  # raw rows all live
 
 

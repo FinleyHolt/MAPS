@@ -751,7 +751,7 @@ def test_stand_adopts_the_viewpoint_and_its_columns_ride_the_rows():
 
 def test_more_of_pages_a_long_result_and_stops_at_the_end():
     """`more_of(r1)` -- the sentence `more of rN.`"""
-    from maps.search.analyze_scene.geom_program import _BROAD_HEAD_ROWS as H
+    from maps.search.analyze_scene.geom_program import BROAD_HEAD_ROWS as H
     wide = [{"fid": f"car_{i:03d}", "xy": [float(i), 0.0], "class": "car",
              "search_text": "car"} for i in range(3 * H)]
     reply, fr, _f, _d = drive([
@@ -791,7 +791,7 @@ def test_more_of_pages_a_long_result_and_stops_at_the_end():
     with pytest.raises(CodeError, match="more_of pages a RESULT"):
         calls_of_block("more_of(r2)\n", {"r2": "car_1"})
     # A RESULT pages: the window opens past the rows already asked for.
-    from maps.search.analyze_scene.geom_program import _BROAD_HEAD_ROWS as B
+    from maps.search.analyze_scene.geom_program import BROAD_HEAD_ROWS as B
     (_v, (op,), answer, page), _shown = calls_of_block(
         "more_of(r1)\n", {"r1": "r7"}, widened={"r7": B})
     assert op["args"]["items"] == f"r7[{2 * B}:{3 * B}]", op
@@ -890,7 +890,7 @@ def test_a_slice_frames_the_head_of_an_ordering():
         calls_of_block("r3 = r9[0:5]\n")
 
     # ...and end to end the head of the ordering is what comes back.
-    from maps.search.analyze_scene.geom_program import _BROAD_HEAD_ROWS as H
+    from maps.search.analyze_scene.geom_program import BROAD_HEAD_ROWS as H
     wide = [{"fid": f"car_{i:03d}", "xy": [float(i), 0.0], "class": "car",
              "search_text": "car"} for i in range(3 * H)]
     reply, fr, _f, _d = drive([

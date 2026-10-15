@@ -61,14 +61,14 @@ def test_a_look_in_a_flight_mission_is_cut_from_the_runs_imagery_and_says_what_i
     left, right = img[h // 2, w // 8], img[h // 2, w - w // 8]
     assert int(left[1]) > 120 and int(right.max()) < 40, (left, right)
     # The partly imaged window says how much is unobserved, by that word.
-    from maps.search.parse_compile.views import _look_vision_text
+    from maps.search.parse_compile.views import look_vision_text
 
-    assert "not imaged" in _look_vision_text(crops) and "raster" not in _look_vision_text(crops)
+    assert "not imaged" in look_vision_text(crops) and "raster" not in look_vision_text(crops)
     # And a subject on ground the run never flew reads unobserved, by name.
     far = look_render.render_candidate_crops(
         [{"center_fid": "b2", "center_xy": [1000.0, 2000.0], "center_label": "b2", "marks": []}],
         map_name=map_name, rgbd_dir="/nowhere", imagery=_Imagery(0.0))
-    words = _look_vision_text(far)
+    words = look_vision_text(far)
     assert far[0]["source"] == "run" and far[0]["subject_on_data"] is False and "unobserved" in words, words
 
 
