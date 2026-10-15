@@ -151,14 +151,14 @@ def _read_chain(p: Path, seen: tuple[Path, ...] = ()) -> dict:
     return _merge(_read_chain(p.parent / base, (*seen, p)), data)
 
 
-def _check(data: dict, schema: dict, src: Path) -> None:
-    unknown = sorted(set(data) - set(schema))
-    missing = sorted(set(schema) - set(data) - _OPTIONAL)
+def _check(data: dict, src: Path) -> None:
+    unknown = sorted(set(data) - set(_SCHEMA))
+    missing = sorted(set(_SCHEMA) - set(data) - _OPTIONAL)
     if unknown:
         raise ValueError(f"{src}: unknown config key(s) {unknown}")
     if missing:
         raise ValueError(f"{src}: missing config key(s) {missing}")
-    for key, rule in schema.items():
+    for key, rule in _SCHEMA.items():
         if key not in data:
             continue
         v = data[key]
@@ -179,7 +179,7 @@ def resolve_config(path: str | Path | None) -> tuple[dict, Path]:
     """The checked, fully merged key dict of a config file, and its path."""
     p = _locate(path)
     data = _read_chain(p)
-    _check(data, _SCHEMA, p)
+    _check(data, p)
     return data, p
 
 
