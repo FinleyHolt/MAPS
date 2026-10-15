@@ -18,7 +18,7 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
     h = SimpleNamespace(
         episode=None,
         state=SimpleNamespace(altitude_m=100.0, pose_xy=(0.0, 0.0)),
-        search_loop=SimpleNamespace(_ortho_ground_z_m=0.0, set_retro_perceiver=lambda f: None),
+        ground_z_m=0.0, search_loop=SimpleNamespace(set_retro_perceiver=lambda f: None),
         perception=SimpleNamespace(sahi_tiles_failed=0))
 
     def build(cfg, ep, assets):

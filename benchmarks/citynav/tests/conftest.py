@@ -84,7 +84,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
             assets=SimpleNamespace(bounds=SimpleNamespace(x_min=0.0, y_min=0.0), cell_size_m=2.0,
                                    grid_shape=(10, 10)),
             episode=SimpleNamespace(map_name="calcity", description="the largest building"),
-            sensor=None, tile_frame=None, search_loop=loop,
+            sensor=None, tile_frame=None, ground_z_m=0.0, search_loop=loop,
             perception=SimpleNamespace(detect=lambda obs: [], concepts=[]))
         return me.MissionSession(h, observe=lambda: frame)
 

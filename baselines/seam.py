@@ -694,7 +694,7 @@ def fly(h, policy: str) -> BaselineFlight:
         episode=h.episode,
         assets=h.assets,
         start_alt_m=h.state.altitude_m,
-        ground_z_m=h.search_loop._ortho_ground_z_m,
+        ground_z_m=h.ground_z_m,
         workdir=workdir,
         policy=policy,
         sensor=h.sensor,

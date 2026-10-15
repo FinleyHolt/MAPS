@@ -16,11 +16,10 @@ import time
 from pathlib import Path
 
 from benchmarks.citynav.episodes import atomic_write_json
-from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
 from benchmarks.citynav.run_benchmark.osm_prior import prior_percepts
 from maps.llm.endpoint_spec import spec as endpoint_spec
 from maps.perception.geometry.sensor_spec import served_description
-from maps.perception.observation import crop_observation, ground_sides_m
+from maps.perception.observation import ground_sides_m
 from maps.perception.ortho.detection_stamping import project_and_stamp_ortho_detections
 from benchmarks.citynav.conversation import CONVERSATION_JSONL, ConversationLog
 from maps.search.parse_compile.reasoner_loop import MissionSpec, run_mission
@@ -152,9 +151,7 @@ class MissionSession:
             self.ctx = loop._tool_ctx_for_examiner()
         state = h.state
         self.ctx.pose_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
-        ground = float(loop._ortho_ground_z_m)
-        alt = float(state.altitude_m)
-        sides = ground_sides_m(alt, ground, h.sensor)
+        sides = ground_sides_m(float(state.altitude_m), h.ground_z_m, h.sensor)
         # The footprint's LONG side is the crop window's ceiling; its SHORT
         # side is the row pitch an explore's serpentine can rely on whichever
         # way the footprint is turned, and the look coverage gate (a crop on
@@ -192,7 +189,7 @@ class MissionSession:
             api_key=os.environ.get("SEARCH_REASONER_API_KEY", "EMPTY"),
             seed=_seed_base() & 0x7FFFFFFF,
             sensor_description=served_description(
-                h.sensor, agl_m=float(h.state.altitude_m) - float(h.search_loop._ortho_ground_z_m)),
+                h.sensor, agl_m=float(h.state.altitude_m) - h.ground_z_m),
             **self.run_kwargs,
             **extra,
         )
@@ -246,13 +243,7 @@ class MissionSession:
         else:
             # Rendered north-up (yaw 0), as the captions and the retrospective
             # re-render are.
-            obs = crop_observation(
-                new_xy,
-                altitude_m=new_alt,
-                sensor=h.sensor,
-                rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
-                map_name=episode.map_name,
-            )
+            obs = h.crop(new_xy, new_alt)
         state.pose_xy = new_xy
         state.altitude_m = new_alt
         if obs is not None:
@@ -269,7 +260,7 @@ class MissionSession:
         # Prior colour enrichment: one frame, upserted onto the named priors.
         if obs is not None and obs.rgb is not None and not withheld("prior"):
             try:
-                for pfid, pattrs, ppx in prior_percepts(obs, h.assets, step_idx):
+                for pfid, pattrs, ppx in prior_percepts(obs, h, step_idx):
                     loop.upsert_prior_percept(pfid, pattrs, px=ppx)
             except Exception as exc:  # noqa: BLE001 - colour enrichment never kills a flight
                 self.prior_enrich_fails += 1

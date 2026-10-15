@@ -153,8 +153,20 @@ class Hydrated:
     episode: CityNavEpisode
     sensor: Any
     tile_frame: TileFrame
+    # The block's ground datum: every height above ground is read off it.
+    ground_z_m: float
     perception: Any
     search_loop: SearchLoop
+
+    def crop(self, xy: tuple[float, float], altitude_m: float):
+        """The raster's north-up frame through the run's sensor at this pose."""
+        return crop_observation(
+            (float(xy[0]), float(xy[1])),
+            altitude_m=float(altitude_m),
+            sensor=self.sensor,
+            rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
+            map_name=self.episode.map_name,
+        )
 
 
 def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) -> Hydrated:
@@ -173,7 +185,6 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
         map_name=assets.map_name,
         sam_setter=perception.set_concepts,
-        # The block's ground datum: every height above ground is read off it.
         ortho_ground_z_m=ground,
         # The look tool's crop raster (a live run crops its own imagery).
         rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
@@ -186,7 +197,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
         sensor=resolve_sensor(cfg.sensor),
         tile_frame=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
                              cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape)),
-        perception=perception, search_loop=search_loop,
+        ground_z_m=ground, perception=perception, search_loop=search_loop,
     )
 
 
@@ -207,13 +218,7 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
     px, py = float(pose_xy[0]), float(pose_xy[1])
     alt = float(flown_entry["alt_m"])
     try:
-        obs = crop_observation(
-            (px, py),
-            altitude_m=alt,
-            sensor=h.sensor,
-            rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
-            map_name=h.episode.map_name,
-        )
+        obs = h.crop((px, py), alt)
     except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact
         log.exception("retro re-render failed")
         return {"error": f"re-render failed: {type(exc).__name__}: {exc}"}
@@ -271,7 +276,7 @@ def run_episode(
                  *episode.start_xy, int(cfg.spawn_seed), episode.episode_id)
     h = build_episode(cfg, episode, assets)
     state = h.state
-    ground = h.search_loop._ortho_ground_z_m
+    ground = h.ground_z_m
     agl = cfg.start_altitude_agl_m
     log.info("  ortho start altitude: %.2f m (%s, ground=%.2f, cap=%.0f, episode=%s)",
              state.altitude_m, f"AGL {agl:.0f} m" if agl is not None else f"row z={episode.start_z:.2f}",

@@ -10,7 +10,6 @@ import logging
 
 import numpy as np
 
-from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.ortho.prior_overlay import build_prior_polys_ortho
 from maps.perception.viz.color import m6_attributes
 
@@ -41,22 +40,21 @@ def _prior_fids_in_view(assets, view_corners_xy) -> list[str]:
     return out
 
 
-def prior_percepts(obs, assets, step_idx: int):
-    """Yield ``(fid, colour attrs, mask px)`` for each prior footprint in the
-    frame's view that M6 colours; an M6 failure raises after the items
+def prior_percepts(obs, h, step_idx: int):
+    """Yield ``(fid, colour attrs, mask px)`` for each prior footprint of the
+    episode ``h`` (``episode_runner.Hydrated``) in the frame's view that M6 colours; an M6 failure raises after the items
     before it were yielded. A footprint projection that fails is logged and
     yields nothing."""
     rgb_arr = np.asarray(obs.rgb)
     view_corners = obs.ortho_view_corners_xy
-    enrich_fids = _prior_fids_in_view(assets, view_corners)
+    enrich_fids = _prior_fids_in_view(h.assets, view_corners)
     if rgb_arr.ndim != 3 or not enrich_fids:
         return
     try:
         prior_polys = build_prior_polys_ortho(
             rgb_shape=(int(rgb_arr.shape[0]), int(rgb_arr.shape[1])),
-            features=assets.base_features,
-            bounds=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
-                             cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape)),
+            features=h.assets.base_features,
+            bounds=h.tile_frame,
             view_corners_xy=view_corners,
             fids_to_render=enrich_fids,
         )

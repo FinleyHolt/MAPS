@@ -10,7 +10,7 @@ from benchmarks.citynav.run_benchmark import episode_runner as er
 def _h(segment):
     nodes = {"prior_1": SimpleNamespace(provenance="prebaked")}
     loop = SimpleNamespace(state=SimpleNamespace(runtime_graph=SimpleNamespace(nodes=nodes)))
-    return SimpleNamespace(sensor=None, tile_frame="tile",
+    return SimpleNamespace(sensor=None, tile_frame="tile", crop=lambda xy, alt: er.crop_observation(xy, altitude_m=alt),
                            episode=SimpleNamespace(map_name="blk"),
                            perception=SimpleNamespace(_segment=segment), search_loop=loop), nodes
 

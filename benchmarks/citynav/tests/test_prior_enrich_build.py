@@ -33,7 +33,7 @@ _ASSETS = SimpleNamespace(bounds=SimpleNamespace(x_min=0.0, y_min=0.0), cell_siz
 def _build(monkeypatch, polys):
     monkeypatch.setattr(osm_prior, "_prior_fids_in_view", lambda *a, **k: ["f1"])
     monkeypatch.setattr(osm_prior, "build_prior_polys_ortho", lambda **k: polys)
-    return osm_prior.prior_percepts(_obs(), _ASSETS, 0)
+    return osm_prior.prior_percepts(_obs(), SimpleNamespace(assets=_ASSETS, tile_frame=None), 0)
 
 
 def test_build_items_filters(monkeypatch):

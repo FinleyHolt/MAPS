@@ -161,6 +161,6 @@ def test_the_sensor_block_states_the_footprint_at_the_height_the_mission_flies(m
     session.h = SimpleNamespace(sensor=resolve_sensor("oryx_orx32_25mm_nadir"),
                                 cfg=SimpleNamespace(start_altitude_agl_m=914.4),
                                 state=SimpleNamespace(altitude_m=600.0),
-                                search_loop=SimpleNamespace(_ortho_ground_z_m=100.0))
+                                ground_z_m=100.0)
     session.run("find it")
     assert "at the 1,640 ft AGL this run flies" in served["sensor_description"], served["sensor_description"]
