@@ -8,73 +8,73 @@ import math
 from maps.util.xy_token import format_xy_token, parse_xy_token
 
 
-def _coverage_stops(_tok: str, spec, spacing):
+def _coverage_stops(tok: str, spec, spacing):
     """The engine's stops over one fid's footprint; None for a point,
     a fid with no cells, or a run without an observation extent."""
-    if (parse_xy_token(_tok) is None and spacing is not None
+    if (parse_xy_token(tok) is None and spacing is not None
             and spec.coverage_stops is not None):
-        return spec.coverage_stops(_tok, spacing)
+        return spec.coverage_stops(tok, spacing)
     return None
 
 
-def _uncovered_segments(_nm: str, rows: dict, covered: set) -> str:
+def _uncovered_segments(name: str, rows: dict, covered: set) -> str:
     """`` '<name>' has N more segment(s) no pass has covered (...).``,
     or "" when every segment bearing the name is covered."""
-    _sibs = sorted(f for f, r in rows.items()
-                   if r.get("name") == _nm and f not in covered)
-    if not _sibs:
+    sibs = sorted(f for f, r in rows.items()
+                  if r.get("name") == name and f not in covered)
+    if not sibs:
         return ""
-    _head = ", ".join(_sibs[:6])
-    _more = f", +{len(_sibs) - 6} more" if len(_sibs) > 6 else ""
-    return (f" {_nm!r} has {len(_sibs)} more segment(s) no pass has "
-            f"covered ({_head}{_more}).")
+    head = ", ".join(sibs[:6])
+    more = f", +{len(sibs) - 6} more" if len(sibs) > 6 else ""
+    return (f" {name!r} has {len(sibs)} more segment(s) no pass has "
+            f"covered ({head}{more}).")
 
 
-def cover_items(_accepted_items: list, _said, *, spec, spacing, rows: dict,
+def cover_items(accepted: list, said, *, spec, spacing, rows: dict,
                 covered: set, pose_xy):
     """One explore -> ``(move items, note, subject, segments)``: the stops
     over the subject's footprint in shape order and nothing after them,
     and a note saying how much of the shape they reach. A set is one
     pass over the union (``_cover_set_items``)."""
-    if len(_accepted_items) > 1:
-        return _cover_set_items(_accepted_items, _said, spec=spec,
+    if len(accepted) > 1:
+        return _cover_set_items(accepted, said, spec=spec,
                                 spacing=spacing, rows=rows,
                                 covered=covered, pose_xy=pose_xy)
-    _item = _accepted_items[0]
-    _tok = str(_item.get("target_fid") or "")
-    _stops = _coverage_stops(_tok, spec, spacing)
-    _note = ""
-    if _stops:
-        _walk = sum(math.dist(a, b) for a, b in zip(_stops, _stops[1:]))
-        _reached = min(1.0, len(_stops) * spacing / _walk) if _walk else 1.0
-        if len(_stops) == 1:
-            _note = (f"{_tok} fits inside one observation; covered it "
-                     "from the middle in one stop.")
-        elif _reached >= 1.0:
-            _note = (f"covered {_walk:.0f} m of {_tok} in "
-                     f"{len(_stops)} stops.")
+    item = accepted[0]
+    tok = str(item.get("target_fid") or "")
+    stops = _coverage_stops(tok, spec, spacing)
+    note = ""
+    if stops:
+        walk = sum(math.dist(a, b) for a, b in zip(stops, stops[1:]))
+        reached = min(1.0, len(stops) * spacing / walk) if walk else 1.0
+        if len(stops) == 1:
+            note = (f"{tok} fits inside one observation; covered it "
+                    "from the middle in one stop.")
+        elif reached >= 1.0:
+            note = (f"covered {walk:.0f} m of {tok} in "
+                    f"{len(stops)} stops.")
         else:
-            _note = (f"covered {_reached:.0%} of {_tok}'s "
-                     f"{_walk:.0f} m in {len(_stops)} stops.")
-        _items = [{"target_fid": format_xy_token(float(p[0]),
-                                                 float(p[1]))}
-                  for p in _stops]
+            note = (f"covered {reached:.0%} of {tok}'s "
+                    f"{walk:.0f} m in {len(stops)} stops.")
+        items = [{"target_fid": format_xy_token(float(p[0]),
+                                                float(p[1]))}
+                 for p in stops]
     else:
         # A point, a fid with no cells, or no observation extent: the
         # pass is the one stop it is.
-        _note = (f"{_tok} has no footprint to cover, so this pass is "
-                 "the one stop it is.")
-        _items = [dict(_item)]
+        note = (f"{tok} has no footprint to cover, so this pass is "
+                "the one stop it is.")
+        items = [dict(item)]
     # A named feature is often many segments: the note names those no
     # pass has covered.
-    covered.add(str(_tok))
-    _nm = (rows.get(str(_tok)) or {}).get("name")
-    if _nm:
-        _note += _uncovered_segments(_nm, rows, covered)
-    return _items, _note, _tok, 1
+    covered.add(str(tok))
+    name = (rows.get(str(tok)) or {}).get("name")
+    if name:
+        note += _uncovered_segments(name, rows, covered)
+    return items, note, tok, 1
 
 
-def _cover_set_items(_accepted_items: list, _said, *, spec, spacing,
+def _cover_set_items(accepted: list, said, *, spec, spacing,
                      rows: dict, covered: set, pose_xy):
     """The multi-member half of ``cover_items``: each member's own walk,
     chained greedily by nearest endpoint from the live pose (a member
@@ -83,102 +83,102 @@ def _cover_set_items(_accepted_items: list, _said, *, spec, spacing,
     keeps that many evenly spaced stops, its first among them."""
     # ponytail: O(n*m) greedy chaining, not a TSP; order the members
     # optimally if a pass's flown length ever matters.
-    _members: list[dict] = []
-    for _it in _accepted_items:
-        _tok = str(_it.get("target_fid") or "")
-        _pt = parse_xy_token(_tok)
-        _stops = _coverage_stops(_tok, spec, spacing)
-        if _stops:
-            _pts = [[float(p[0]), float(p[1])] for p in _stops]
-            _members.append({
-                "tok": _tok, "pts": _pts,
+    members: list[dict] = []
+    for it in accepted:
+        tok = str(it.get("target_fid") or "")
+        pt = parse_xy_token(tok)
+        stops = _coverage_stops(tok, spec, spacing)
+        if stops:
+            pts = [[float(p[0]), float(p[1])] for p in stops]
+            members.append({
+                "tok": tok, "pts": pts,
                 "items": [{"target_fid": format_xy_token(p[0], p[1])}
-                          for p in _pts],
+                          for p in pts],
                 "walk": sum(math.dist(a, b)
-                            for a, b in zip(_pts, _pts[1:]))})
+                            for a, b in zip(pts, pts[1:]))})
         else:
             # one stop; its recorded position anchors the chain.
-            _xy = ((rows.get(_tok) or {}).get("xy")
-                   if _pt is None else list(_pt))
-            _p = ([float(_xy[0]), float(_xy[1])]
-                  if isinstance(_xy, (list, tuple)) and len(_xy) == 2
-                  else None)
-            _members.append({"tok": _tok, "pts": [_p] if _p else [],
-                             "items": [dict(_it)], "walk": 0.0})
+            xy = ((rows.get(tok) or {}).get("xy")
+                  if pt is None else list(pt))
+            p = ([float(xy[0]), float(xy[1])]
+                 if isinstance(xy, (list, tuple)) and len(xy) == 2
+                 else None)
+            members.append({"tok": tok, "pts": [p] if p else [],
+                            "items": [dict(it)], "walk": 0.0})
     # greedy nearest-endpoint chain, seeded from where the drone is
-    _cur = pose_xy
-    _cur = [float(_cur[0]), float(_cur[1])] if _cur else None
-    _chained: list[dict] = []
-    _rest = list(_members)
-    while _rest:
-        if _cur is None:
-            _next = _rest.pop(0)
+    cur = pose_xy
+    cur = [float(cur[0]), float(cur[1])] if cur else None
+    chained: list[dict] = []
+    rest = list(members)
+    while rest:
+        if cur is None:
+            nxt = rest.pop(0)
         else:
-            def _gap(_m):
-                if not _m["pts"]:
+            def gap(m):
+                if not m["pts"]:
                     return float("inf")
-                return min(math.dist(_cur, _m["pts"][0]),
-                           math.dist(_cur, _m["pts"][-1]))
-            _next = min(_rest, key=_gap)
-            _rest.remove(_next)
-            if (len(_next["pts"]) > 1
-                    and math.dist(_cur, _next["pts"][-1])
-                    < math.dist(_cur, _next["pts"][0])):
-                _next["pts"].reverse()
-                _next["items"].reverse()
-        _chained.append(_next)
-        if _next["pts"]:
-            _cur = _next["pts"][-1]
+                return min(math.dist(cur, m["pts"][0]),
+                           math.dist(cur, m["pts"][-1]))
+            nxt = min(rest, key=gap)
+            rest.remove(nxt)
+            if (len(nxt["pts"]) > 1
+                    and math.dist(cur, nxt["pts"][-1])
+                    < math.dist(cur, nxt["pts"][0])):
+                nxt["pts"].reverse()
+                nxt["items"].reverse()
+        chained.append(nxt)
+        if nxt["pts"]:
+            cur = nxt["pts"][-1]
     # flatten in chain order, dropping stops a kept stop already covers
-    _kept_pts: list = []
-    _flat: list[tuple[dict, dict]] = []
-    for _m in _chained:
-        for _i, _mv in enumerate(_m["items"]):
-            _p = _m["pts"][_i] if _i < len(_m["pts"]) else None
-            if (_p is not None and spacing is not None
-                    and any(math.dist(_p, _q) < spacing / 2.0
-                            for _q in _kept_pts)):
+    kept_pts: list = []
+    flat: list[tuple[dict, dict]] = []
+    for m in chained:
+        for i, mv in enumerate(m["items"]):
+            p = m["pts"][i] if i < len(m["pts"]) else None
+            if (p is not None and spacing is not None
+                    and any(math.dist(p, q) < spacing / 2.0
+                            for q in kept_pts)):
                 continue
-            _flat.append((_m, _mv))
-            if _p is not None:
-                _kept_pts.append(_p)
-    _n = spec.flight_budget
-    if len(_flat) > _n:
-        _stride = (len(_flat) - 1) / max(_n - 1, 1)
-        _keep = sorted({int(round(_i * _stride)) for _i in range(_n)})
-        _flat = [_flat[_i] for _i in _keep]
-    for _m in _chained:
-        _m["kept"] = sum(1 for _f, _ in _flat if _f is _m)
-    _total = sum(_m["walk"] for _m in _chained)
-    _n_stops = len(_flat)
-    _reached = (min(1.0, _n_stops * spacing / _total)
-                if _total and spacing else 1.0)
-    _subject = str(_said) if _said else f"{len(_chained)} places"
-    if _reached >= 1.0:
-        _note = (
-            (f"covered {len(_chained)} places in {_n_stops} stops; each "
+            flat.append((m, mv))
+            if p is not None:
+                kept_pts.append(p)
+    n = spec.flight_budget
+    if len(flat) > n:
+        stride = (len(flat) - 1) / max(n - 1, 1)
+        keep = sorted({int(round(i * stride)) for i in range(n)})
+        flat = [flat[i] for i in keep]
+    for m in chained:
+        m["kept"] = sum(1 for f, _ in flat if f is m)
+    total = sum(m["walk"] for m in chained)
+    n_stops = len(flat)
+    reached = (min(1.0, n_stops * spacing / total)
+               if total and spacing else 1.0)
+    subject = str(said) if said else f"{len(chained)} places"
+    if reached >= 1.0:
+        note = (
+            (f"covered {len(chained)} places in {n_stops} stops; each "
              f"fits inside one observation.")
-            if not _total else
-            (f"covered {_total:.0f} m of {_subject} across "
-             f"{len(_chained)} segments in {_n_stops} stops."))
+            if not total else
+            (f"covered {total:.0f} m of {subject} across "
+             f"{len(chained)} segments in {n_stops} stops."))
     else:
-        _note = (f"covered {_reached:.0%} of {_subject}'s "
-                 f"{_total:.0f} m.")
+        note = (f"covered {reached:.0%} of {subject}'s "
+                f"{total:.0f} m.")
 
-    def _pct(_m):
-        if not _m["walk"] or spacing is None:
+    def pct(m):
+        if not m["walk"] or spacing is None:
             return 1.0
-        return min(1.0, _m["kept"] * spacing / _m["walk"])
-    _mm = ", ".join(f"{_m['tok']} {_pct(_m):.0%}" for _m in _chained[:8])
-    _mm_more = (f", +{len(_chained) - 8} more"
-                if len(_chained) > 8 else "")
-    _note = f"{_note} ({_mm}{_mm_more})"
-    for _m in _chained:
-        covered.add(_m["tok"])
-    _names = {(rows.get(_m["tok"]) or {}).get("name")
-              for _m in _chained}
-    _names.discard(None)
-    _names.discard("")
-    for _nm in sorted(_names):
-        _note += _uncovered_segments(_nm, rows, covered)
-    return ([_mv for _, _mv in _flat], _note, _subject, len(_chained))
+        return min(1.0, m["kept"] * spacing / m["walk"])
+    mm = ", ".join(f"{m['tok']} {pct(m):.0%}" for m in chained[:8])
+    mm_more = (f", +{len(chained) - 8} more"
+               if len(chained) > 8 else "")
+    note = f"{note} ({mm}{mm_more})"
+    for m in chained:
+        covered.add(m["tok"])
+    names = {(rows.get(m["tok"]) or {}).get("name")
+             for m in chained}
+    names.discard(None)
+    names.discard("")
+    for name in sorted(names):
+        note += _uncovered_segments(name, rows, covered)
+    return ([mv for _, mv in flat], note, subject, len(chained))
