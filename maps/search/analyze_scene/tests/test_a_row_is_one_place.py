@@ -183,7 +183,6 @@ def test_the_flown_pose_is_the_row_s_served_xy():
 
     bent = next(r for r in anchors if r["name"] == "Bent Road")
     node = dict(ways)[bent["fid"]]
-    old = loop._grid_centroid_to_world_xy(node.centroid)
-    assert old is not None
+    old = G.cell_centre_xy(*node.centroid, (0.0, 0.0), 2.0)
     off = ((old[0] - bent["xy"][0]) ** 2 + (old[1] - bent["xy"][1]) ** 2) ** 0.5
     assert off > 5.0, (old, bent["xy"], off)

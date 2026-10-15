@@ -57,7 +57,7 @@ class SearchLoop:
         # The segmenter's concept list: the declared union and the director's
         # watchlist both write it whole.
         self._sam_setter = sam_setter
-        # The block's ground datum: the observation span is measured off it.
+        # The block's ground datum.
         self._ortho_ground_z_m = ortho_ground_z_m
         # The raster ``look`` crops on the bench.
         self._rgbd_dir = rgbd_dir
@@ -80,31 +80,16 @@ class SearchLoop:
         self._state = _State(runtime_graph=graph,
                              perception_director=PerceptionDirector(push=self._sam_setter))
 
-    def _grid_centroid_to_world_xy(
-        self, centroid: object
-    ) -> tuple[float, float] | None:
-        """A ``(row, col)`` grid centroid as the world x, y of its cell
-        centre; None when it is not a pair of numbers."""
-        if not isinstance(centroid, (list, tuple)) or len(centroid) != 2:
-            return None
-        try:
-            row, col = int(centroid[0]), int(centroid[1])
-        except (TypeError, ValueError):
-            return None
-        return cell_centre_xy(row, col, self._tile_origin_xy, self._cell_size_m)
-
     def _prior_surface_xy_locked(self) -> dict:
         """``{fid: (x, y)}`` for every prior row as the surface serves it,
         built once (priors do not move). Under the lock."""
         if self._prior_xy_cache is not None:
             return self._prior_xy_cache
-        from maps.search.analyze_scene.geom_program import (  # noqa: PLC0415
-            build_surface_from_graph,
-        )
+        from maps.search.analyze_scene.geom_program import build_surface  # noqa: PLC0415
 
-        _c, anchors = build_surface_from_graph(
-            self.state.runtime_graph.nodes.items(), self._tile_origin_xy,
-            self._cell_size_m)
+        priors = [(f, n) for f, n in self.state.runtime_graph.nodes.items()
+                  if n.provenance != "detected"]
+        _c, anchors = build_surface([], priors, self._tile_origin_xy, self._cell_size_m)
         self._prior_xy_cache = {str(r["fid"]): (float(r["xy"][0]), float(r["xy"][1]))
                                 for r in anchors if r.get("xy")}
         return self._prior_xy_cache
@@ -114,8 +99,7 @@ class SearchLoop:
         its row says it is, the point a flight to it flies: a detection's
         ``world_xy``, else a prior's served row point, else the node's cell
         centroid (a cluster member no row serves). The precedence is
-        ``geom_program.build_surface``'s. None off the graph or without a
-        position."""
+        ``geom_program.build_surface``'s. None off the graph."""
         with self._lock:
             node = self.state.runtime_graph.nodes.get(fid)
             if node is None:
@@ -125,9 +109,8 @@ class SearchLoop:
                 xy = (float(w[0]), float(w[1]))
             else:
                 xy = (self._prior_surface_xy_locked().get(str(fid))
-                      or self._grid_centroid_to_world_xy(node.centroid))
-            if xy is None:
-                return None
+                      or cell_centre_xy(*node.centroid, self._tile_origin_xy,
+                                        self._cell_size_m))
             return xy, ("detected" if node.provenance == "detected" else "prior")
 
     def _cells_xy_locked(self, target_fid: str) -> list[tuple[float, float]] | None:
