@@ -1311,9 +1311,9 @@ class MissionPython:
         for fid, xy in a + b:
             if xy is None and self.env.row_of_fid(fid) is None:
                 raise CodeError(
-                    f"distance() got {fid!r}, which is not a fid on this "
-                    "surface -- find it first, then measure against the "
-                    "rows it serves.")
+                    f"distance() got {fid!r}, which names no row on this "
+                    "surface -- it measures between rows, result sets and "
+                    "[x, y] points.")
         return self._geom.distance(a, b)
 
     def _call_look(self, x, *, marks=None):

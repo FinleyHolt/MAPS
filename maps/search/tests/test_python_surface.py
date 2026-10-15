@@ -769,9 +769,9 @@ def test_a_distance_after_a_flight_in_the_same_block_measures_the_new_surface():
 
 
 @pytest.mark.parametrize("arg, says", [
-    ("prior_99", "distance() got 'prior_99', which is not a fid on this "
+    ("prior_99", "distance() got 'prior_99', which names no row on this "
                  "surface"),
-    ('"detected_7"', "distance() got 'detected_7', which is not a fid on "
+    ('"detected_7"', "distance() got 'detected_7', which names no row on "
                      "this surface"),
     ("r1", "distance() got an empty list -- there is nothing there to "
            "measure."),
@@ -787,3 +787,17 @@ def test_distance_refuses_a_place_with_nothing_to_measure(arg, says):
     mp.ns["r1"] = Rows("r1", mp)
     out = mp.run_block(f"print(distance(prior_1, {arg}))\n")
     assert says in out.get("error", ""), out
+
+
+def test_distance_refuses_a_stop_name_without_asking_to_find_it():
+    """A fid-shaped token that no find() can produce (a stop name) is
+    refused without telling the model to find it."""
+    from maps.search.parse_compile.python_surface import MissionPython
+
+    rows = {"prior_1": {"fid": "prior_1", "xy": [0.0, 0.0],
+                        "mask": [[[0.0, 0.0]]]}}
+    mp = MissionPython(quiet_env(row_of_fid=rows.get))
+    out = mp.run_block("print(distance(v1, prior_1))\n")
+    err = out.get("error", "")
+    assert "distance() got 'v1', which names no row" in err, out
+    assert "find" not in err, out
