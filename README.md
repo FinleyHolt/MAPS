@@ -156,6 +156,7 @@ these places, the served-text changes among them:
 | The bake writes each block's `_meta.json` and `_features.json`; the episode graph is built from the features, and `bake_sha256` hashes those two files. | The bake also wrote `_graph.npz` and `_nodes.json`, which nothing at run time read, and the stamp hashed them. |
 | `run_report` takes each episode's referent bucket and intel quality from the run's split, so a miss without a record counts in its own class; `spend` counts a scored episode that sent no request and leaves unreported cache meters null; `arm_table` refuses ring arms scored on discs of different radii. | A miss without a record counted under `?`; a zero-request episode dropped out of the per-episode spend; unreported cache meters read 0; ring arms of any radius tabled together. |
 | A whole set inside a `look` list is refused with the spelling that crops its rows (`look([cars[0], ...])`). | The set's label was sent as a crop token and the crop was skipped with no refusal. |
+| A twin, bank or forced replay refuses a map whose bake has no georef or no `<map>_features.json` before its run folder opens. | The bank and forced replays opened the run and recorded the missing bake as the method's failed miss. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
