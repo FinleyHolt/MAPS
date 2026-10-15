@@ -877,10 +877,8 @@ class _Mission:
             fids_before = set(self._ns_rows)
             report = self.mission_spec.fly(dict(item))
             if snap_from:
-                report.setdefault(
-                    "note",
-                    f"{snap_from} is {item['target_fid']}"
-                    "'s own position -- flown as that fid.")
+                _add_note(report, f"{snap_from} is {item['target_fid']}"
+                                  "'s own position -- flown as that fid.")
             if "error" not in report:
                 # A pass renders no per-stop view.
                 if cover is None:
