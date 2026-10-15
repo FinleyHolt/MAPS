@@ -1105,24 +1105,24 @@ def _crossings(cx, a):
     """The places two features meet: one row per distinct crossing, its fid
     the [x, y] token of its whole-metre point. None raises."""
     sides = []
-    for _el in a["refs"]:
-        _nodes = _named_rows(cx, _el, "xy")
-        _polys = [p for n in _nodes for p in chains_of(n)]
-        if not _polys:
+    for el in a["refs"]:
+        nodes = _named_rows(cx, el, "xy")
+        polys = [p for n in nodes for p in chains_of(n)]
+        if not polys:
             raise ProgramError(
-                f"crossings ref {_quote(_el)} names no geometry on this "
+                f"crossings ref {_quote(el)} names no geometry on this "
                 f"surface -- a crossing needs two features that HAVE "
                 f"a shape. {cx.avail('point')}")
-        sides.append((_x_label(_nodes, _el), _polys,
-                      {str(n.get("fid")) for n in _nodes}))
+        sides.append((_x_label(nodes, el), polys,
+                      {str(n.get("fid")) for n in nodes}))
     # A row on both sides would hand back its own corners.
-    _shared = sides[0][2] & sides[1][2]
-    if _shared:
-        _same = "the same feature" if sides[0][2] == sides[1][2] \
+    shared = sides[0][2] & sides[1][2]
+    if shared:
+        same = "the same feature" if sides[0][2] == sides[1][2] \
             else "the same feature in part"
         raise ProgramError(
-            f"{sides[0][0]} and {sides[1][0]} are {_same} "
-            f"({', '.join(sorted(_shared)[:4])}), and nothing crosses "
+            f"{sides[0][0]} and {sides[1][0]} are {same} "
+            f"({', '.join(sorted(shared)[:4])}), and nothing crosses "
             f"itself -- a feature's own corners are not crossings. "
             f"Name two DIFFERENT features (find each one and read its "
             f"row).")
@@ -1132,61 +1132,61 @@ def _crossings(cx, a):
     if not xpts:
         # Sweep a bounded set of same-named sibling pairs for a crossing.
         by_fid = cx.by_fid
-        _sa = [c for c in by_fid.values()
+        sa = [c for c in by_fid.values()
                if str(c.get("name")) == str(la)
                and str(c.get("fid")) not in fa][:8]
-        _sb = [c for c in by_fid.values()
+        sb = [c for c in by_fid.values()
                if str(c.get("name")) == str(lb)
                and str(c.get("fid")) not in fb][:8]
-        _hit = None
-        _budget = 24
-        for _ra in ([by_fid[f] for f in sorted(fa) if f in by_fid][:8] + _sa):
-            for _rb in ([by_fid[f] for f in sorted(fb)
-                         if f in by_fid][:8] + _sb):
-                if str(_ra.get("fid")) in fa and str(_rb.get("fid")) in fb:
+        hit = None
+        budget = 24
+        for ra in ([by_fid[f] for f in sorted(fa) if f in by_fid][:8] + sa):
+            for rb in ([by_fid[f] for f in sorted(fb)
+                         if f in by_fid][:8] + sb):
+                if str(ra.get("fid")) in fa and str(rb.get("fid")) in fb:
                     continue          # the pair already tested
-                if _budget <= 0:
+                if budget <= 0:
                     break
-                _budget -= 1
-                _px, _ = G.polyline_crossings(chains_of(_ra), chains_of(_rb))
-                if _px:
-                    _hx, _hy = (float(round(_px[0][0])),
-                                float(round(_px[0][1])))
-                    _hit = (str(_ra.get("fid")), str(_rb.get("fid")),
-                            format_xy_token(_hx, _hy))
+                budget -= 1
+                px, _ = G.polyline_crossings(chains_of(ra), chains_of(rb))
+                if px:
+                    hx, hy = (float(round(px[0][0])),
+                                float(round(px[0][1])))
+                    hit = (str(ra.get("fid")), str(rb.get("fid")),
+                            format_xy_token(hx, hy))
                     break
-            if _hit or _budget <= 0:
+            if hit or budget <= 0:
                 break
-        _sib = ""
-        if _hit:
-            _sib = (f" But the NAMES do cross elsewhere: "
-                    f"{_hit[0]} and {_hit[1]} (same-named "
-                    f"segments) touch at {_hit[2]} -- "
+        sib = ""
+        if hit:
+            sib = (f" But the NAMES do cross elsewhere: "
+                    f"{hit[0]} and {hit[1]} (same-named "
+                    f"segments) touch at {hit[2]} -- "
                     f"intersection on those rows returns it.")
-        elif _sa or _sb:
-            _sib = (f" {len(_sa)} other {la} segment(s) and "
-                    f"{len(_sb)} other {lb} segment(s) exist; "
+        elif sa or sb:
+            sib = (f" {len(sa)} other {la} segment(s) and "
+                    f"{len(sb)} other {lb} segment(s) exist; "
                     f"no swept pair touches either.")
         raise ProgramError(
             f"{la} and {lb} do not meet HERE: the tested rows "
             f"({', '.join(sorted(fa)[:4])} against "
             f"{', '.join(sorted(fb)[:4])}) come no closer than "
             f"{nearest:.1f} m, and a crossing is where they "
-            f"TOUCH.{_sib} A point near one of them is not their "
+            f"TOUCH.{sib} A point near one of them is not their "
             f"intersection; relate to ONE of them instead "
             f"('... near <feature>').")
     rows = []
     # Whole metres: the fid is the coordinate, and the model spells whole
     # numbers only.
-    _seen: set = set()
-    for _x, _y in xpts:
-        _x, _y = float(round(_x)), float(round(_y))
-        tok = format_xy_token(_x, _y)
+    seen: set = set()
+    for x, y in xpts:
+        x, y = float(round(x)), float(round(y))
+        tok = format_xy_token(x, y)
         # Rounding can collapse two crossings onto one fid.
-        if tok in _seen:
+        if tok in seen:
             continue
-        _seen.add(tok)
-        rows.append({"fid": tok, "xy": [_x, _y], "name": f"{la} x {lb}"})
+        seen.add(tok)
+        rows.append({"fid": tok, "xy": [x, y], "name": f"{la} x {lb}"})
     notes = [
         f"{len(rows)} distinct crossing{'' if len(rows) == 1 else 's'} "
         f"of {la} and {lb}"
@@ -1200,33 +1200,33 @@ def _crossings(cx, a):
 def _ends(cx, a):
     """A road's termini (end0_xy / end1_xy) as rows."""
     rows = []
-    _n_end = 0
-    _no_line: list = []
-    for _el in a["refs"]:
-        _nodes = _named_rows(cx, _el, "centerline")
-        if not _nodes:
+    n_end = 0
+    no_line: list = []
+    for el in a["refs"]:
+        nodes = _named_rows(cx, el, "centerline")
+        if not nodes:
             raise ProgramError(
-                f"ends ref {_quote(_el)} names no row on this surface. "
+                f"ends ref {_quote(el)} names no row on this surface. "
                 f"{cx.avail('point')}")
-        for _nd in _nodes:
-            _cl = _nd.get("centerline")
-            if not (isinstance(_cl, list) and len(_cl) >= 2):
-                _no_line.append(
-                    f"{_nd.get('fid')}"
-                    + (f" ({_nd.get('name')})" if _nd.get("name") else ""))
+        for nd in nodes:
+            cl = nd.get("centerline")
+            if not (isinstance(cl, list) and len(cl) >= 2):
+                no_line.append(
+                    f"{nd.get('fid')}"
+                    + (f" ({nd.get('name')})" if nd.get("name") else ""))
                 continue
-            _lab = str(_nd.get("name") or _nd.get("fid"))
-            for _which, _pt in (("end0", _cl[0]), ("end1", _cl[-1])):
-                _xy = [float(round(_pt[0])), float(round(_pt[1]))]
-                rows.append({"fid": f"end_{_n_end}", "xy": _xy,
-                             "name": f"{_lab} {_which}"})
-                _n_end += 1
+            lab = str(nd.get("name") or nd.get("fid"))
+            for which, pt in (("end0", cl[0]), ("end1", cl[-1])):
+                xy = [float(round(pt[0])), float(round(pt[1]))]
+                rows.append({"fid": f"end_{n_end}", "xy": xy,
+                             "name": f"{lab} {which}"})
+                n_end += 1
     if not rows:
-        _named = ", ".join(_no_line[:4]) + (
-            f" (+{len(_no_line) - 4} more)" if len(_no_line) > 4 else "")
+        named = ", ".join(no_line[:4]) + (
+            f" (+{len(no_line) - 4} more)" if len(no_line) > 4 else "")
         raise ProgramError(
             f"none of those rows carries a recorded centerline -- "
-            f"{_named} have no line geometry on this surface, so "
+            f"{named} have no line geometry on this surface, so "
             f"no termini exist for them. ends reads a centerline; "
             f"end0_xy/end1_xy on a row is the same fact served as "
             f"columns.")
@@ -1240,53 +1240,53 @@ def _score_by(cx, a):
     """The sort: a signed, key-normalized composite over exactly the
     columns the emphasis names."""
     items = _as_rows(cx, a["items"])
-    _sb_notes: list = []
+    notes: list = []
     emphasis: dict = {}
-    for _el in a["emphasis"]:
-        _k = _el["key"]
-        if _is_color_column_key(_k):
+    for el in a["emphasis"]:
+        key = el["key"]
+        if _is_color_column_key(key):
             # color_navy weights color_blue, noted.
-            _canon, _cnote = _resolve_color_word(_k[len("color_"):])
-            if _cnote is not None:
-                _sb_notes.append(_cnote)
-            _k = "color_" + _canon
-        emphasis[_k] = float(_el["w"])
-    for _k in emphasis:
+            canon, cnote = _resolve_color_word(key[len("color_"):])
+            if cnote is not None:
+                notes.append(cnote)
+            key = "color_" + canon
+        emphasis[key] = float(el["w"])
+    for key in emphasis:
         # Naming a color column attaches it.
-        if _is_color_column_key(_k) and not any(
-                it.get(_k) is not None for it in items):
-            items = _attach_color_column(items, _k[len("color_"):])
+        if _is_color_column_key(key) and not any(
+                it.get(key) is not None for it in items):
+            items = _attach_color_column(items, key[len("color_"):])
     # A key no row carries would be a silent constant term.
-    _dropped_color: list = []
-    for _k in list(emphasis):
-        if items and not any(isinstance(it.get(_k), (int, float))
+    dropped_color: list = []
+    for key in list(emphasis):
+        if items and not any(isinstance(it.get(key), (int, float))
                              for it in items):
-            if _is_color_column_key(_k):
+            if _is_color_column_key(key):
                 # Nothing has a perceived colour before a flight sees it: the
                 # term drops, unless it is the only one.
                 if len(emphasis) > 1:
-                    _dropped_color.append(_k)
-                    del emphasis[_k]
+                    dropped_color.append(key)
+                    del emphasis[key]
                     continue
                 raise ProgramError(
-                    f"nothing orders by {_quote(_k)} here: no row carries a "
+                    f"nothing orders by {_quote(key)} here: no row carries a "
                     f"perceived color, so no color column attaches (rows "
                     f"without a color read omit color_<word> columns). "
                     f"{_present_keys_hint(items, True)}")
             raise ProgramError(
-                f"nothing orders by {_quote(_k)} here: no row carries a "
-                f"numeric {_quote(_k)}. "
-                f"{_contact_fact(cx, _k)}"
+                f"nothing orders by {_quote(key)} here: no row carries a "
+                f"numeric {_quote(key)}. "
+                f"{_contact_fact(cx, key)}"
                 f"{_present_keys_hint(items, True)}")
-    for _k in _dropped_color:
-        _sb_notes.append(
-            f"{_quote(_k)} ranked nothing here: no row on this surface has "
+    for key in dropped_color:
+        notes.append(
+            f"{_quote(key)} ranked nothing here: no row on this surface has "
             f"been SEEN yet, so none carries a perceived colour. The "
             f"other keys still rank. A row gets a colour once a "
             f"flight has passed over it.")
     keys = sorted(emphasis)  # deterministic; the sum is order-independent
     return Result(G.score_by(items, keys, [emphasis[k] for k in keys]),
-                  "sorted", ordered=True, op_cols=keys, notes=_sb_notes)
+                  "sorted", ordered=True, op_cols=keys, notes=notes)
 
 
 def _filter_items(cx, a):
@@ -1312,10 +1312,10 @@ def _filter_items(cx, a):
             (kept if v is not None and v <= val else excluded).append(it)
 
         stats = {"cut": f"{len(items)}->{len(kept)}"}
-        _excl_vals = [(e, it) for it in excluded
+        excl_vals = [(e, it) for it in excluded
                       if (e := _num(it.get(key))) is not None]
-        if _excl_vals:
-            ne_v, ne_it = min(_excl_vals, key=lambda t: t[0])
+        if excl_vals:
+            ne_v, ne_it = min(excl_vals, key=lambda t: t[0])
             stats["nearest_excluded"] = {
                 "fid": str(ne_it.get("fid") or "?"),
                 key: round(float(ne_it.get(key)), 3),
@@ -1336,35 +1336,35 @@ def _filter_items(cx, a):
     if opr == "in_or_blank":
         # The caller passes every word that counts (south: southeast,
         # southwest too).
-        _on = [it for it in items if it.get(key) is None or it.get(key) in val]
-        _blank = sum(1 for it in _on if it.get(key) is None)
-        _want = list(val) if isinstance(val, (list, tuple)) else [val]
+        on = [it for it in items if it.get(key) is None or it.get(key) in val]
+        blank = sum(1 for it in on if it.get(key) is None)
+        want = list(val) if isinstance(val, (list, tuple)) else [val]
         stats = {
-            "cut": f"{len(items)}->{len(_on)}",
-            "counts_as": _want,
-            "reads_one_of_them": len(_on) - _blank,
-            "reads_another_word_dropped": len(items) - len(_on),
-            "unmeasured_kept": _blank,
+            "cut": f"{len(items)}->{len(on)}",
+            "counts_as": want,
+            "reads_one_of_them": len(on) - blank,
+            "reads_another_word_dropped": len(items) - len(on),
+            "unmeasured_kept": blank,
         }
-        if not (len(_on) - _blank):
+        if not (len(on) - blank):
             stats["nothing_reads_those_words"] = (
                 f"no {'' if withheld('prior') else 'surveyed '}row reads "
-                f"any of {_want} in {_quote(key)}; "
+                f"any of {want} in {_quote(key)}; "
                 f"the rows kept are the ones the geometry never "
                 f"measured (a row TOUCHING the reference has no "
                 f"facing word). Widen, or read the column and "
                 f"see which words are actually there.")
     elif opr == "on_side":
-        _on = [it for it in items if it.get(key) is None
+        on = [it for it in items if it.get(key) is None
                or (_num(it.get(key)) or 0) > 0]
-        _blank = sum(1 for it in _on if it.get(key) is None)
+        blank = sum(1 for it in on if it.get(key) is None)
         stats = {
-            "cut": f"{len(items)}->{len(_on)}",
-            "on_side": len(_on) - _blank,
-            "other_side_dropped": len(items) - len(_on),
-            "no_side_kept": _blank,
+            "cut": f"{len(items)}->{len(on)}",
+            "on_side": len(on) - blank,
+            "other_side_dropped": len(items) - len(on),
+            "no_side_kept": blank,
         }
-        if not (len(_on) - _blank):
+        if not (len(on) - blank):
             stats["nothing_on_that_side"] = (
                 ("no row lies on that side" if withheld("prior") else
                  "the prior map holds nothing on that side")
@@ -1373,8 +1373,8 @@ def _filter_items(cx, a):
                    ": look_for the class, then explore the place to "
                    "segment it"))
     else:  # truthy
-        _on, stats = [it for it in items if it.get(key)], None
-    return Result(_on, "cut", ordered=_ordered(items), op_cols=[key],
+        on, stats = [it for it in items if it.get(key)], None
+    return Result(on, "cut", ordered=_ordered(items), op_cols=[key],
                   cut_stats=stats)
 
 
@@ -1390,16 +1390,16 @@ def _stratum(cx, a):
             + ("" if withheld("look_for") else
                " A pass's minted rows are all THE thing the "
                "watchlist named; there is nothing to stratify."))
-    _lo, _hi = {"exact": (T.NAME_TIER_FLOOR, None),
+    lo, hi = {"exact": (T.NAME_TIER_FLOOR, None),
                 "tagged": (T.KV_TIER_BASE, T.NAME_TIER_FLOOR),
                 "fuzzy": (None, T.KV_TIER_BASE)}[tier]
 
-    def _in_tier(it):
+    def in_tier(it):
         v = it.get("name_match")
         if not isinstance(v, (int, float)):
             return False
-        return (_lo is None or v >= _lo) and (_hi is None or v < _hi)
-    return Result((it for it in items if _in_tier(it)), "cut",
+        return (lo is None or v >= lo) and (hi is None or v < hi)
+    return Result((it for it in items if in_tier(it)), "cut",
                   ordered=_ordered(items))
 
 
@@ -1499,9 +1499,9 @@ def _compare(cx, a):
     standing: list = []         # staged viewpoint handles, in ref order
 
     # The cardinals asked for per ref (named by fid or label).
-    _card_req: dict = {}
-    for _el in (a.get("cardinals") or []):
-        _card_req.setdefault(str(_el.get("ref")), []).append(_el["dir"])
+    card_req: dict = {}
+    for card in (a.get("cardinals") or []):
+        card_req.setdefault(str(card.get("ref")), []).append(card["dir"])
 
     # One entry per ref: its label, geometry and cardinals.
     refs: list[dict] = []
@@ -1541,10 +1541,10 @@ def _compare(cx, a):
             lab = _unique_label(as_label or _sanitize_token(payload["fid"]),
                                 used_labels, payload["fid"])
             geom, center = _row_geom_center(cx, payload)
-        _fid = payload.get("fid") if kind == "row" else None
-        want = next((_card_req[_k] for _k in (_fid, lab)
-                     if _k and _k in _card_req), None)
-        _pts = G.points_from_geoms(geom if isinstance(geom, list)
+        fid = payload.get("fid") if kind == "row" else None
+        want = next((card_req[k] for k in (fid, lab)
+                     if k and k in card_req), None)
+        pts = G.points_from_geoms(geom if isinstance(geom, list)
                                    else [geom]) if want else None
         # A window-covering ref's gap columns would be 0 on every row: one
         # note says so instead.
@@ -1559,7 +1559,7 @@ def _compare(cx, a):
                 f"{lab}' (centroid vector) ride per-row.")
         refs.append({"kind": kind, "payload": payload, "lab": lab,
                      "geom": geom, "center": center, "covers": covers,
-                     "cards": (want, _pts) if _pts is not None else None,
+                     "cards": (want, pts) if pts is not None else None,
                      "bb": G.stack_bboxes(geom) if kind == "union" else None,
                      "contains": []})
 
@@ -1571,12 +1571,12 @@ def _compare(cx, a):
         for ref in refs:
             kind, payload, lab = ref["kind"], ref["payload"], ref["lab"]
             if ref["cards"] is not None and it_c is not None:
-                _dirs, _rpts = ref["cards"]
-                for _d in _dirs:
-                    _v = G.cardinal_offset(_rpts, it_c, _d)
+                sides, rpts = ref["cards"]
+                for side in sides:
+                    off = G.cardinal_offset(rpts, it_c, side)
                     # Absent, never 0.0, when there is no side to name.
-                    if _v is not None:
-                        row[f"{_d} of {lab}"] = round(_v, 1)
+                    if off is not None:
+                        row[f"{side} of {lab}"] = round(off, 1)
             ref_geom, center = ref["geom"], ref["center"]
             if ref["covers"]:
                 d = None
@@ -1611,23 +1611,23 @@ def _compare(cx, a):
     # Rows whose own mask contains a ref, per ref, named in one note; it
     # states a fact of each row it names, so it outlives a later cut or sort.
     for ref in refs:
-        _cf, lab = ref["contains"], ref["lab"]
-        if _cf:
-            _cfs = f"{_cf[:8]}" + (
-                f" (+{len(_cf) - 8} more)" if len(_cf) > 8 else "")
+        contains, lab = ref["contains"], ref["lab"]
+        if contains:
+            named = f"{contains[:8]}" + (
+                f" (+{len(contains) - 8} more)" if len(contains) > 8 else "")
             notes.append(
-                f"ref {lab}: row(s) {_cfs} read 'distance to {lab}'=0 because "
+                f"ref {lab}: row(s) {named} read 'distance to {lab}'=0 because "
                 f"their OWN mask CONTAINS {lab} (every vertex of the ref sits "
                 f"inside the row's footprint -- containment, not adjacency); "
                 f"each such row carries 'contains {lab}'=true. distance reads "
                 f"0 on ANY mask contact, so a 0 in a nearest-first read spans "
                 f"touching neighbors AND containers.")
-    for _h in standing:
+    for h in standing:
         out_rows = _attach_standing_columns(
-            out_rows, cx.staged[_h], with_distance=True)
+            out_rows, cx.staged[h], with_distance=True)
         notes.append(
-            f"ref {_h} is your staged viewpoint: its side columns ('left "
-            f"of/right of/ahead of/behind {_h}') + 'distance to {_h}' "
+            f"ref {h} is your staged viewpoint: its side columns ('left "
+            f"of/right of/ahead of/behind {h}') + 'distance to {h}' "
             f"(meters from where you stand) ride every row.")
     return Result(out_rows, "compare", ordered=_ordered(items), notes=notes)
 
