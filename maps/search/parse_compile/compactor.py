@@ -13,8 +13,9 @@ stopping once the transcript fits; re-derivable text goes before pixels:
   3. drop those colour tables;
   4. stub the remaining dumps largest first, the newest last;
   5. strip the findings from the blocks this fire made;
-  6. evict stale crops oldest first, never the current turn's;
-  7. thin the current turn's crops, keeping its newest;
+  6. evict stale crops oldest first, never the newest crop-bearing
+     message's;
+  7. thin that message's crops, keeping its newest;
 
 and raises ``CompactionInfeasible`` when all of them fall short. A block is
 never rewritten by a later fire, so the served prefix only grows. A
@@ -135,8 +136,9 @@ def _evict_crops(
 ) -> tuple[list[dict], int, int]:
     """``(messages, n_evicted, tokens_freed)``: crops replaced by
     :data:`_EVICTED_CROP_TEXT`, oldest first, until ``shed_tokens`` are freed;
-    every priced crop before the current turn's message, or with ``current``
-    that message's crops but its newest. Nothing evicted returns the input."""
+    every priced crop before the newest crop-bearing message, or with
+    ``current`` that message's crops but its newest. Nothing evicted returns
+    the input."""
     slots = _crop_slots(messages)
     if not slots:
         return messages, 0, 0
