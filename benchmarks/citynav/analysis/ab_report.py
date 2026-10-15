@@ -4,7 +4,7 @@
 A change can trade successes for failures at a flat net SR, so the
 success->fail count is reported beside the delta. ``ab_stats`` takes
 (sr_a, sr_b) pairs over the shared episodes; the CLI pairs two run roots by
-episode_id and refuses two roots scored under different success criteria.
+episode_id and refuses two roots scored on different masks (criterion or disc radius).
 
 Usage:
   python -m benchmarks.citynav.analysis.ab_report <run_a> <run_b> [--label "..."]
@@ -215,11 +215,11 @@ def main() -> None:
     shared = sorted(set(a) & set(b))
     if not shared:
         raise SystemExit("no shared scored episodes between the two runs")
-    crit_a, crit_b = (run_criterion([run[e] for e in shared]) for run in (a, b))
-    if crit_a != crit_b:
+    lab_a, lab_b = (criterion_label(run_criterion([run[e] for e in shared]), Path(p))
+                    for run, p in ((a, args.run_a), (b, args.run_b)))
+    if lab_a != lab_b:
         raise SystemExit(
-            f"INVALID A/B -- A is scored on {criterion_label(crit_a, Path(args.run_a))} and B on "
-            f"{criterion_label(crit_b, Path(args.run_b))}: the two numbers answer different questions."
+            f"INVALID A/B -- A is scored on {lab_a} and B on {lab_b}: the two numbers answer different questions."
         )
 
     prov_a, prov_b = _run_provenance(Path(args.run_a)), _run_provenance(Path(args.run_b))

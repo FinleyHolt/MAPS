@@ -57,6 +57,21 @@ def test_cli_refuses_runs_scored_under_different_criteria(tmp_path, monkeypatch)
         main()
 
 
+def test_cli_refuses_ring_runs_of_two_radii_even_with_the_waiver(tmp_path, monkeypatch):
+    import json
+
+    import yaml
+
+    for name, radius in (("a", 20), ("b", 40)):
+        _write_run(tmp_path / name, "aaaaaaa", {"e1": 1, "e2": 0})
+        (tmp_path / name / "run_manifest.json").write_text(json.dumps({
+            "withhold": [], "config_yaml": yaml.safe_dump({"success_radius_m": radius})}))
+    monkeypatch.setattr(sys, "argv", ["ab_report", str(tmp_path / "a"), str(tmp_path / "b"),
+                                      "--allow-provenance-mismatch"])
+    with pytest.raises(SystemExit, match="A is scored on the 20 m disc and B on the 40 m disc"):
+        main()
+
+
 def test_a_withhold_arm_compares_without_a_waiver_and_names_its_treatment(tmp_path, monkeypatch, capsys):
     import json
 
