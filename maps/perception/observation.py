@@ -28,7 +28,6 @@ class Observation:
     pose_xy: tuple[float, float]
     altitude_m: float
     world_window: tuple[float, float, float, float]  # (x_min, y_min, x_max, y_max)
-    sensor: SensorSpec | None = None
     # The model-input crop the reasoner and SAM consume; marks/labels are
     # drawn on this single frame.
     rgb: np.ndarray | None = None  # (h, w, 3) uint8
@@ -192,7 +191,6 @@ def crop_observation(
         pose_xy=pose_xy,
         altitude_m=altitude_m,
         world_window=oc["world_window"],
-        sensor=sensor,
         rgb=oc["rgb"],
         depth=oc["depth"],
         ortho_view_corners_xy=tuple(oc["view_corners_xy"]),

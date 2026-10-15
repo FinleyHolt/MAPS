@@ -69,7 +69,6 @@ def ortho_observation(rgb: np.ndarray, alpha: np.ndarray, extent: tuple[float, f
         pose_xy=((x0 + x1) / 2.0, (y0 + y1) / 2.0),
         altitude_m=float(camera_z),
         world_window=(x0, y0, x1, y1),
-        sensor=None,          # ortho corners outrank a sensor, and there is no one camera here
         rgb=rgb,
         alpha=alpha,
         depth=depth,
