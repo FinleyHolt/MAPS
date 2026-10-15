@@ -19,9 +19,8 @@ from benchmarks.flight.tile_georef import lonlat_to_local
 
 @dataclass(frozen=True)
 class Pose:
-    """Where the ANTENNA was at ``t``, and how the aircraft was pointed."""
+    """Where the ANTENNA was, and how the aircraft was pointed."""
 
-    t: float
     lat: float
     lon: float
     alt_msl_m: float
@@ -43,14 +42,13 @@ def pose_tag(pose: Pose) -> dict[str, Any]:
             "attitude": pose.attitude, "track_deg": pose.track_deg, "speed_mps": pose.speed_mps, "utc": pose.utc}
 
 
-def tag_pose(tag: dict[str, Any] | None, t: float) -> Pose | None:
-    """The pose a frame's tag states, at the frame's own stamp ``t``; None
-    when the tag names no position or no heading. A tag that names no
-    attitude is read as the recorder's fused word."""
+def tag_pose(tag: dict[str, Any] | None) -> Pose | None:
+    """The pose a frame's tag states; None when the tag names no position or
+    no heading. A tag that names no attitude is read as the recorder's fused word."""
     if not tag or tag.get("lat") is None or tag.get("lon") is None or tag.get("heading_deg") is None:
         return None
     heading = float(tag["heading_deg"])
-    return Pose(t=t, lat=float(tag["lat"]), lon=float(tag["lon"]), alt_msl_m=float(tag["alt_msl_m"]),
+    return Pose(lat=float(tag["lat"]), lon=float(tag["lon"]), alt_msl_m=float(tag["alt_msl_m"]),
                 track_deg=float(tag["track_deg"]) if tag.get("track_deg") is not None else heading,
                 speed_mps=float(tag.get("speed_mps") or 0.0),
                 utc=str(tag.get("utc") or ""), heading_deg=heading,

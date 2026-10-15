@@ -583,7 +583,7 @@ class LiveSource:
             jpeg, t_host, log_time, seq, tag = got
             # Posed as the corrector poses it, so its registration and the
             # graph's nodes share a time base; the tag where the vehicle has no pose then.
-            pose = self.pose_now(t_host) or tag_pose(tag, t_host)
+            pose = self.pose_now(t_host) or tag_pose(tag)
             if pose is None:
                 self.last_refusal = f"ring frame {seq} carries no pose"
                 continue

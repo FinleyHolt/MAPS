@@ -118,7 +118,7 @@ class Twin:
             return None
         alt = self.ground((x, y)) + self.agl_m + C12_LEVER_M[2]
         utc = (EPOCH + dt.timedelta(seconds=t)).isoformat()
-        return Pose(t=t, lat=lonlat[1], lon=lonlat[0], alt_msl_m=alt, track_deg=heading_deg,
+        return Pose(lat=lonlat[1], lon=lonlat[0], alt_msl_m=alt, track_deg=heading_deg,
                     speed_mps=C12_SPEED_MPS, utc=utc, heading_deg=heading_deg,
                     attitude="fusion")
 
@@ -150,7 +150,7 @@ class Twin:
         if row is None:
             self.last_error = f"no frame {seq} in the ring"
             return None
-        pose = tag_pose(row["pose"], row["t_host"])
+        pose = tag_pose(row["pose"])
         cam_xy, cam_alt, yaw = camera_pose_local(pose, self.tiles_dir, self.map_name, lever=C12_LEVER_M)
         try:
             rgb = self._render(self.sensor, cam_xy, cam_alt - self.ground(cam_xy), yaw,

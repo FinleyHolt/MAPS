@@ -247,7 +247,7 @@ class NavTrack:
             if rate is not None:
                 roll = math.degrees(math.atan(float(fix["speedMps"]) * math.radians(rate) / G_MPS2))
                 attitude = "estimated"
-        return Pose(t=t, lat=float(fix["lat"]), lon=float(fix["lon"]), alt_msl_m=float(fix["altitudeMslMeters"]),
+        return Pose(lat=float(fix["lat"]), lon=float(fix["lon"]), alt_msl_m=float(fix["altitudeMslMeters"]),
                     track_deg=float(fix["trackDeg"]) % 360.0, speed_mps=float(fix["speedMps"]),
                     utc=str(fix.get("timestamp", "")), heading_deg=heading % 360.0, roll_deg=roll, pitch_deg=pitch,
                     attitude=attitude)

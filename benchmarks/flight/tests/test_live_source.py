@@ -82,7 +82,7 @@ def test_registration_reads_a_pose_error_as_the_shift_that_undoes_it(built, make
     jpeg, t_host, _log, seq, tag = twin.frame(len(twin.rows) - 1)
     from benchmarks.flight.nav_track import tag_pose
 
-    posed = live._posed(jpeg, t_host, pose=tag_pose(tag, t_host))
+    posed = live._posed(jpeg, t_host, pose=tag_pose(tag))
     posed.pose_xy = (posed.pose_xy[0] + 12.0, posed.pose_xy[1] - 7.0)
     record, _measured = register_frame(live.register, posed.rgb, frame_pose(posed), posed.sensor,
                                        live.ground_msl(posed.pose_xy))
@@ -96,7 +96,7 @@ def test_a_frame_off_the_map_is_refused_by_name(built, make_twin, make_live):
     jpeg, t_host, _log, _seq, tag = twin.frame(0)
     from benchmarks.flight.nav_track import tag_pose
 
-    posed = live._posed(jpeg, t_host, pose=tag_pose(tag, t_host))
+    posed = live._posed(jpeg, t_host, pose=tag_pose(tag))
     posed.pose_xy = (-5000.0, -5000.0)
     record, _measured = register_frame(live.register, posed.rgb, frame_pose(posed), posed.sensor,
                                        live.ground_msl(posed.pose_xy))
@@ -113,7 +113,7 @@ def test_a_featureless_map_is_no_match_and_the_frame_is_refused_by_its_response(
     live = make_live(twin, register=True)
     _fly_over(twin, (600.0, 600.0), 6.0)
     jpeg, t_host, _log, _seq, tag = twin.frame(len(twin.rows) - 1)
-    posed = live._posed(jpeg, t_host, pose=tag_pose(tag, t_host))
+    posed = live._posed(jpeg, t_host, pose=tag_pose(tag))
     blank = np.full_like(posed.rgb, 128)
     assert frame_offset.offset(posed.rgb, blank) == (0.0, 0.0, 0.0)
     flat = replace(live.register, render=lambda s, *a, **k: np.full(
@@ -140,7 +140,7 @@ def test_the_corrector_graph_places_a_leg_and_gates_a_ring_frame_by_its_nearest_
     assert live.graph.nodes and live.graph.estimate(twin.rows[-1]["t_host"]) is not None
     seq = len(twin.rows) - 1
     jpeg, t_host, _log, _seq, tag = twin.frame(seq)
-    posed = live._posed(jpeg, t_host, pose=tag_pose(tag, t_host))
+    posed = live._posed(jpeg, t_host, pose=tag_pose(tag))
     posed.pose_xy = (posed.pose_xy[0] + INNOVATION_CAP_M + 20.0, posed.pose_xy[1])
     record = live._register_ring(seq, posed, t_host)
     assert record["source"] == "nearest" and abs(record["shift_e_m"]) < 2.0, record
@@ -193,7 +193,7 @@ def test_a_ring_frame_reads_the_graph_under_the_corrector_s_lock(built, make_twi
         live.correct(twin.frame(seq))
     seq = len(twin.rows) - 1
     jpeg, t_host, _log, _seq, tag = twin.frame(seq)
-    posed = live._posed(jpeg, t_host, pose=tag_pose(tag, t_host))
+    posed = live._posed(jpeg, t_host, pose=tag_pose(tag))
     estimates = []
     real = live.graph.estimate
     live.graph.estimate = lambda t: estimates.append(live._correcting.locked()) or real(t)
