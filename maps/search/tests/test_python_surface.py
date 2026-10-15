@@ -801,3 +801,12 @@ def test_distance_refuses_a_stop_name_without_asking_to_find_it():
     err = out.get("error", "")
     assert "distance() got 'v1', which names no row" in err, out
     assert "find" not in err, out
+
+
+def test_a_tier_view_is_served_once_under_the_models_name():
+    """cars.exact is one table, served as cars.exact, not also under the
+    executor's ref."""
+    _, fr, _, _ = drive([[run('cars = find("car")\ncars.exact\n')], "done"])
+    out = tool_results(fr)[0]
+    assert list(out["result"]["results"]) == ["cars.exact"], out
+

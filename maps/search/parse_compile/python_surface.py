@@ -738,9 +738,10 @@ class Rows(_Cuts):
     def _stratum(self, tier: str) -> "Rows":
         src = self if not self.spec else self.mp._materialize(self)
         p = self.mp._program(src.ref)
+        name = self.mp.name_of(self) or self.mp.ref_name(src.ref) or src.ref
         return Rows(self.mp._analyze(
             p, p.add("stratum", {"items": src.ref, "tier": tier}),
-            shown=f"{src.ref}.{tier}"), self.mp)
+            shown=f"{name}.{tier}"), self.mp)
 
     # -- cut and order: many filters, ONE ordering ------------------------
     def _target(self):
