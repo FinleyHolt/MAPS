@@ -1330,14 +1330,24 @@ class MissionPython:
             ref = p.window(x.ref, x.spec)
             self._show_as(ref, f"{name}{x.spec}")
         else:
-            x = self._slot(x)
+            # A set inside a list is refused under the model's spelling,
+            # before _slot would materialize a slice; a string naming a held
+            # set is caught once _slot has made it a Ref.
+            held = [self.name_of(a) or f"{self.ref_name(a.ref) or a.ref}"
+                    f"{a.spec}" for a in (
+                        x if isinstance(x, (list, tuple, set, frozenset))
+                        else ())
+                    if isinstance(a, Rows)]
+            if not held:
+                x = self._slot(x)
+                if isinstance(x, (list, tuple)) and not is_xy(x):
+                    held = [a.label for a in x if isinstance(a, Ref)]
+            if held:
+                raise CodeError(
+                    f"look({held[0]}) shows a set; inside a list "
+                    f"name its rows: look([{held[0]}[0], ...])")
             if isinstance(x, (list, tuple)) and not is_xy(x):
                 # look([a, b, c]) crops EACH element.
-                for a in x:
-                    if isinstance(a, Ref):
-                        raise CodeError(
-                            f"look({a.label}) shows a set; inside a list "
-                            f"name its rows: look([{a.label}[0], ...])")
                 fids = [self._site(a, "crops") for a in x]
                 lead = [(f, "crops") for f in fids if isinstance(f, _Name)]
             elif not isinstance(x, Ref):

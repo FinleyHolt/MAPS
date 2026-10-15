@@ -382,3 +382,17 @@ def test_a_look_list_refuses_a_set_and_names_its_rows():
     calls, out = record_block('cars = find("car")\nlook([cars, "car_2"])\n')
     assert not [c for c in calls if c[0] == "crops"], calls
     assert "look([cars[0], ...])" in str(out["error"]), out
+
+
+@pytest.mark.parametrize("block, name", [
+    ('cars = find("car")\nlook([cars[0:2], "car_2"])\n', "cars[0:2]"),
+    ('cars = find("car")\ntop = cars[0:2]\nlook([top, "car_2"])\n', "top"),
+])
+def test_a_look_list_refuses_a_slice_naming_it_as_spelled(block, name):
+    """A slice in a look list is refused under the model's own spelling --
+    its bound name, else the slice -- before any window is analyzed."""
+    from maps.search.tests.fakes import record_block
+    calls, out = record_block(block)
+    assert [c[0] for c in calls].count("analyze") == 1, calls  # the find
+    assert not [c for c in calls if c[0] == "crops"], calls
+    assert f"look([{name}[0], ...])" in str(out["error"]), out
