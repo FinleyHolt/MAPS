@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
+
 from maps.search.analyze_scene.geom_compute import cell_centre_xy
 from maps.search.parse_compile.perception_director import (
     PerceptionDirector, canon_concept)
@@ -234,7 +236,7 @@ class SearchLoop:
                     f"({err}); say it again")
         return None
 
-    def update_perception(self, detections: list, projected_masks: dict[int, object]) -> list[dict]:
+    def update_perception(self, detections: list, projected_masks: dict[int, np.ndarray]) -> list[dict]:
         """Fold one flight's detections into the runtime graph: tracked ones
         with a projected footprint through the tracked upsert, the rest
         centroid-only. Returns the per-step detection records the recorder
@@ -274,7 +276,7 @@ class SearchLoop:
                     "confidence": float(det.confidence),
                     "source_tier": det.source_tier,
                     "attributes": dict(det.attributes or {}),
-                    "metadata": {k: _json_safe(v) for k, v in (det.metadata or {}).items()},
+                    "metadata": dict(det.metadata or {}),
                 }
                 if det.mask is not None:
                     mask_record = encode_mask_record(det.mask.crop, bbox_rcrc=det.mask.bbox)
@@ -395,13 +397,3 @@ def _detection_to_mapobject(det, bounds_min, cell_size_m):
         # the sub-cell position build_surface_from_graph prefers to the cell centroid
         world_xy=(float(det.world_xy[0]), float(det.world_xy[1])),
     )
-
-
-def _json_safe(v):
-    if isinstance(v, (str, int, float, bool, type(None))):
-        return v
-    if isinstance(v, (list, tuple)):
-        return [_json_safe(x) for x in v]
-    if isinstance(v, dict):
-        return {str(k): _json_safe(x) for k, x in v.items()}
-    return str(v)
