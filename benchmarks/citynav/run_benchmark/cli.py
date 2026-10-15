@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import ctypes
-import importlib
 import logging
 import os
 import signal
@@ -23,7 +22,6 @@ from benchmarks.citynav.episode_workdir import benchmark, open_episode_dir
 from benchmarks.citynav.paths import DEFAULT_SPLIT, OBJECTS_JSON, assert_available, split_path
 from benchmarks.citynav.run_benchmark.config import export_withhold, load_config
 from benchmarks.citynav.run_benchmark.dispatch import dispatch_one
-from maps.llm import endpoint_spec as endpoint_spec_module
 
 log = logging.getLogger("run_benchmark")
 
@@ -129,24 +127,11 @@ def main() -> int:
     assert_available()
     cfg = load_config(args.config)
     export_withhold(cfg)
-    # Endpoint discovery, once per process before any inference or
-    # perception call: a fact it cannot discover stops the run here.
     try:
-        spec = endpoint_spec_module.discover_from_env()
-    except endpoint_spec_module.EndpointDiscoveryError as exc:
-        log.error("endpoint discovery failed: %s", exc)
+        _rm.install_endpoint(cfg.policy)
+    except _rm.EndpointRefused as exc:
+        log.error("%s", exc)
         return 2
-    endpoint_spec_module.install_spec(spec)
-    _rm.settle_effort()
-    if cfg.policy:
-        # Every baseline arm makes dial-off calls: an arm whose model has none
-        # is refused here, before any request (bench_fullset refuses it too).
-        seam = importlib.import_module("baselines.seam")  # by name: no static import of baselines
-        try:
-            seam.dial_off(spec.model_id)
-        except seam.NoDialOff as exc:
-            log.error("%s", exc)
-            return 2
     log.info(
         "MISSION: one reasoner conversation per episode -- requested "
         "viewpoints fly the moment they land, the plain reply ends the "

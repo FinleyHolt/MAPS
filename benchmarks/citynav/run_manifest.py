@@ -121,6 +121,33 @@ def settle_effort() -> None:
         del os.environ[_EFFORT]
 
 
+class EndpointRefused(RuntimeError):
+    """The serve cannot fly this process: discovery failed, or a baseline
+    arm's model has no dial-off."""
+
+
+def install_endpoint(policy: str | None = None) -> None:
+    """Discover the serve, install its spec and settle the effort, once per
+    process before any inference or perception call; a baseline ``policy``
+    (every arm makes dial-off calls) is refused here when its model has no
+    dial-off. Raises :class:`EndpointRefused`."""
+    from maps.llm import endpoint_spec
+
+    try:
+        spec = endpoint_spec.discover_from_env()
+    except endpoint_spec.EndpointDiscoveryError as exc:
+        raise EndpointRefused(f"endpoint discovery failed: {exc}") from exc
+    endpoint_spec.install_spec(spec)
+    settle_effort()
+    if policy:
+        # By name: benchmarks carries no static import of baselines.
+        seam = importlib.import_module("baselines.seam")
+        try:
+            seam.dial_off(spec.model_id)
+        except seam.NoDialOff as exc:
+            raise EndpointRefused(str(exc)) from exc
+
+
 def _audited_env() -> dict:
     keys = set(AUDITED_ENV) | {k for k in os.environ if k.startswith(AUDITED_ENV_PREFIXES)}
     return {k: os.environ[k] for k in sorted(keys - set(SECRET_ENV)) if k in os.environ}

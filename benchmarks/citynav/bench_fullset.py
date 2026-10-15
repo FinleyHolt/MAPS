@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
-import importlib
 import io
 import json
 import logging
@@ -809,32 +808,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.dry_run:
         return driver.dry_run()
-    # Endpoint discovery once, so an unreachable or wrong serve fails here,
-    # before any worker spawns.
-    from maps.llm.endpoint_spec import (
-        EndpointDiscoveryError,
-        discover_from_env,
-        install_spec,
-    )
-
-    from benchmarks.citynav.run_manifest import settle_effort
+    # Once, so an unreachable or wrong serve fails here, before any worker spawns.
+    from benchmarks.citynav.run_manifest import EndpointRefused, install_endpoint
 
     try:
-        spec = discover_from_env()
-    except EndpointDiscoveryError as exc:
-        print(f"FATAL: endpoint discovery failed: {exc}", file=sys.stderr)
+        install_endpoint(resolved.get("policy"))
+    except EndpointRefused as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
         return 2
-    install_spec(spec)
-    settle_effort()
-    if resolved.get("policy"):
-        # Every baseline arm makes dial-off calls: an arm whose model has none
-        # is refused here, once, rather than scored a miss per episode.
-        seam = importlib.import_module("baselines.seam")  # by name: no static import of baselines
-        try:
-            seam.dial_off(spec.model_id)
-        except seam.NoDialOff as exc:
-            print(f"FATAL: {exc}", file=sys.stderr)
-            return 2
     return driver.run()
 
 
