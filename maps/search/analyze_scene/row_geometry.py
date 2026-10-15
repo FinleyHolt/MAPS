@@ -100,8 +100,6 @@ class SurfaceGeometry:
         """Metres between the nearest members of two sets of places. 0.0 on
         touch or containment."""
         (ga, bba), (gb, _) = self.geom(a), self.geom(b)
-        if not ga or not gb:
-            return float("inf")
         if len(gb) > len(ga):
             (ga, bba), gb = self.geom(b), ga
         return min(G.set_gap(ga, bba, g)[0] for g in gb)

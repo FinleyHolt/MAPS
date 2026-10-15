@@ -766,3 +766,24 @@ def test_a_distance_after_a_flight_in_the_same_block_measures_the_new_surface():
                        'print(a, distance("prior_1", "detected_2"))\n')
     assert "error" not in out, out
     assert out["printed"] == "10.0 30.0", out
+
+
+@pytest.mark.parametrize("arg, says", [
+    ("prior_99", "distance() got 'prior_99', which is not a fid on this "
+                 "surface"),
+    ('"detected_7"', "distance() got 'detected_7', which is not a fid on "
+                     "this surface"),
+    ("r1", "distance() got an empty list -- there is nothing there to "
+           "measure."),
+])
+def test_distance_refuses_a_place_with_nothing_to_measure(arg, says):
+    """A fid the surface does not hold and an empty set are refused, not
+    measured as an infinite gap."""
+    from maps.search.parse_compile.python_surface import MissionPython, Rows
+
+    rows = {"prior_1": {"fid": "prior_1", "xy": [0.0, 0.0],
+                        "mask": [[[0.0, 0.0]]]}}
+    mp = MissionPython(quiet_env(row_of_fid=rows.get))
+    mp.ns["r1"] = Rows("r1", mp)
+    out = mp.run_block(f"print(distance(prior_1, {arg}))\n")
+    assert says in out.get("error", ""), out

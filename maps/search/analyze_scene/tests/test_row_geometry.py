@@ -68,13 +68,6 @@ def test_a_point_inside_overlapping_members_is_inside_the_set():
     assert mp._call_distance([7.0, 5.0], "prior_2") == 0.0
 
 
-def test_an_empty_set_is_infinitely_far():
-    """An empty result set has no footprint: inf, as the executor's empty geom."""
-    mp = _mp({"prior_1": ROAD})
-    assert mp._geom.distance((), (("prior_1", None),)) == math.inf
-    assert mp._geom.distance((("prior_1", None),), ()) == math.inf
-
-
 def test_distance_matches_the_executor_column():
     out = run_program(
         [dict(CAR)], [dict(ROAD)],

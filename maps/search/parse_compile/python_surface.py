@@ -826,15 +826,15 @@ def _places(v, who: str) -> tuple:
     crossing, a terminus), whose point is its whole footprint."""
     if isinstance(v, Row):
         return ((v.fid, _tuple_xy(v.get("xy"))),)
+    if isinstance(v, (Rows, list, tuple, set, frozenset)) and not v:
+        raise CodeError(f"{who}() got an empty list -- there is "
+                        "nothing there to measure.")
     if isinstance(v, Rows):
         return tuple((r.get("fid"), _tuple_xy(r.get("xy")))
                      for r in v._rows())
     if is_xy(v):
         return ((None, (float(v[0]), float(v[1]))),)
     if isinstance(v, (list, tuple, set, frozenset)):
-        if not v:
-            raise CodeError(f"{who}() got an empty list -- there is "
-                            "nothing there to measure.")
         return tuple(p for x in v for p in _places(x, who))
     if isinstance(v, str):
         if fid_like(v):
@@ -1307,8 +1307,14 @@ class MissionPython:
                 "down, or measure each thing against the WHOLE other set "
                 "in one call -- a set is one place and means its nearest "
                 "member.")
-        return self._geom.distance(_places(a, "distance"),
-                                   _places(b, "distance"))
+        a, b = _places(a, "distance"), _places(b, "distance")
+        for fid, xy in a + b:
+            if xy is None and self.env.row_of_fid(fid) is None:
+                raise CodeError(
+                    f"distance() got {fid!r}, which is not a fid on this "
+                    "surface -- find it first, then measure against the "
+                    "rows it serves.")
+        return self._geom.distance(a, b)
 
     def _call_look(self, x, *, marks=None):
         # marks= names the rows whose identity bears on the decision; a
