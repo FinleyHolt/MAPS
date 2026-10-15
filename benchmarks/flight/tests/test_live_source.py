@@ -380,3 +380,15 @@ def test_a_frame_not_fetched_is_quoted_with_its_own_reason_while_the_corrector_f
     assert live._fused([(0.0, -5)], ranked=1, about="the area") is None
     threads[0].join()
     assert "ring frame 5 not fetched: link down" in live.last_refusal
+
+
+def test_the_observation_is_keyed_to_its_newest_frame_by_log_time_not_seq(built, make_twin, make_live):
+    """A camera restart starts its sequence again: the frame the observation
+    is keyed to is the newest by its stamp, whatever its sequence number."""
+    twin = make_twin()
+    live = make_live(twin)
+    _fly_over(twin, (600.0, 600.0), 2.0)
+    last = len(twin.rows) - 1
+    twin.rows[0]["log_time"] = twin.rows[last]["log_time"] + 1     # frame 0 recorded after a restart
+    assert live._fused([(0.0, 0), (0.0, -last)], ranked=2, about="two frames") is not None
+    assert live.last["seq"] == 0 and live.last["log_time"] == twin.rows[0]["log_time"]

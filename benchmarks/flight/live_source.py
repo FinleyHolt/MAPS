@@ -631,7 +631,8 @@ class LiveSource:
             else:
                 log.info("mosaic not registered on the map: %s", fit["why"])
         camera_z = float(np.median([f.camera_z for f in placed]))
-        newest = max(placed, key=lambda f: f.seq)
+        # The sequence restarts with the camera; the stamp does not.
+        newest = max(placed, key=lambda f: f.log_time)
         self.last = {
             "log_time": newest.log_time, "seq": newest.seq, "t_host": newest.t_host,
             "age_s": self.vehicle.now() - newest.t_host, "attitude": newest.pose.attitude,
