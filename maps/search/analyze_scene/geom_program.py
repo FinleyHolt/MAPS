@@ -14,7 +14,7 @@ import re
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene import text_match as T
-from maps.search.analyze_scene.row_geometry import chains_of, geom_of
+from maps.search.analyze_scene.row_geometry import chains_of, place_geom
 from maps.search.render.look_render import LOOK_SET_ROWS
 from maps.util.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld
@@ -1448,7 +1448,7 @@ def _union_members(cx, ref_el, as_label) -> list:
 def _row_geom_center(cx, node):
     """``(geom, centre)`` of a row: its mask, else its point. Geometry is
     re-read by fid, since op output rows carry no mask."""
-    return geom_of(cx.by_fid.get(node.get("fid")) or node)
+    return place_geom(cx.by_fid.get(node.get("fid")), node)
 
 
 def _union_center(cx, members):

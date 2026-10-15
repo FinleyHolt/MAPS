@@ -60,6 +60,12 @@ def geom_of(row) -> tuple:
     return hit[1], row.get("mask_centroid") or hit[2]
 
 
+def place_geom(row, fallback) -> tuple:
+    """:func:`geom_of` a row read off the surface, else of ``fallback`` when
+    that row carries no chains (absent, or neither mask nor point)."""
+    return geom_of(row if chains_of(row) else fallback)
+
+
 class SurfaceGeometry:
     """Mask geometry by fid off the LIVE surface.
 
@@ -79,8 +85,8 @@ class SurfaceGeometry:
 
     def _geom(self, place):
         fid, xy = place
-        row = self.row_of_fid(fid) if fid else None
-        return geom_of(row if chains_of(row) else {"xy": xy})[0]
+        return place_geom(self.row_of_fid(fid) if fid else None,
+                          {"xy": xy})[0]
 
     def geom(self, places: tuple):
         """``(member geoms, their stacked boxes)`` of a tuple of places."""
