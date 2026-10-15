@@ -14,6 +14,12 @@ endpoint's own words (``maps.llm.http`` logs the body it refused); a pass
 prints each reply's shape and token meter. With no ``--effort`` it sends
 ``SEARCH_SAMPLING_REASONING_EFFORT``, or none when that is unset.
 
+On a hosted (OpenAI-wire) card each conversation rides one
+``prompt_cache_key``, and the second turn, which opens with the first turn's
+bytes, must read a cache hit (``usage.prompt_tokens_details.cached_tokens``
+above zero); a miss fails the effort, since a run would then pay full price
+for every turn's prefix.
+
 It writes the transcript to a temporary directory and nothing else: no run
 root, no SAM call.
 """
@@ -32,7 +38,7 @@ from pathlib import Path
 
 from maps.llm import endpoint_spec
 from maps.llm.flight_summary import summarize
-from maps.llm.model_cards import check_effort
+from maps.llm.model_cards import check_effort, speaks_openai
 
 
 def _picture() -> bytes:
@@ -64,6 +70,7 @@ def _conversation(spec: endpoint_spec.EndpointSpec, effort: str | None, workdir:
         "Endpoint check. Name the colour of the square in this picture, then call run with the code "
         "print('ok').", [_picture()])
     first = reasoner.step_tool_call(served_tools())
+    after_first = summarize(workdir / "flight")
     for call in first.get("tool_calls") or []:
         reasoner.append_tool_result(call["id"], call["function"]["name"], "ok")
     if not first.get("tool_calls"):
@@ -71,9 +78,29 @@ def _conversation(spec: endpoint_spec.EndpointSpec, effort: str | None, workdir:
     reasoner.cancel_event = threading.Event()  # never set: the call streams, as a flight's does
     second = reasoner.step_tool_call(served_tools())
     meter = summarize(workdir / "flight")
-    return {"first": _shape(first), "second": _shape(second),
-            "tokens": {k: meter[k] for k in ("prompt_tokens", "completion_tokens", "reasoning_tokens")},
-            "latency_s": meter["latency_s_sum"]}
+    out = {"first": _shape(first), "second": _shape(second),
+           "tokens": {k: meter[k] for k in ("prompt_tokens", "completion_tokens", "reasoning_tokens",
+                                            "cached_tokens", "cache_write_tokens")},
+           "served_model": meter["served_model"], "latency_s": meter["latency_s_sum"]}
+    if speaks_openai(spec.model_id):
+        out["second_turn_cached_tokens"] = _second_turn_cached(after_first, meter)
+    return out
+
+
+class NoCacheHit(RuntimeError):
+    """A hosted endpoint's second turn read nothing from its prompt cache."""
+
+
+def _second_turn_cached(after_first: dict, after_second: dict) -> int:
+    """The second turn's cache hit; raises :class:`NoCacheHit` when the
+    endpoint reported none, or reported a zero."""
+    total = after_second["cached_tokens"]
+    if total is None:
+        raise NoCacheHit("the endpoint reported no usage.prompt_tokens_details.cached_tokens")
+    hit = total - (after_first["cached_tokens"] or 0)
+    if hit <= 0:
+        raise NoCacheHit("turn 2 opens with turn 1's bytes but read 0 cached tokens")
+    return hit
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,12 +123,14 @@ def main(argv: list[str] | None = None) -> int:
           f"tokenizer {spec.tokenizer_name}")
 
     efforts = args.effort or [os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "").strip() or None]
-    workdir_before = os.environ.get("SEARCH_COMPILE_WORKDIR")
+    env_before = {k: os.environ.get(k) for k in ("SEARCH_COMPILE_WORKDIR", "SEARCH_LLM_ROUTING_KEY")}
     failed = 0
     try:
         for effort in efforts:
             with tempfile.TemporaryDirectory(prefix="maps-preflight-") as tmp:
                 os.environ["SEARCH_COMPILE_WORKDIR"] = tmp
+                # one prompt-cache key per conversation, as one per episode
+                os.environ["SEARCH_LLM_ROUTING_KEY"] = f"preflight-{Path(tmp).name}"
                 try:
                     if effort is not None:
                         check_effort(spec.model_id, effort)
@@ -112,10 +141,11 @@ def main(argv: list[str] | None = None) -> int:
                     continue
             print(f"effort {effort!r}: " + json.dumps(result, default=str))
     finally:
-        if workdir_before is None:
-            os.environ.pop("SEARCH_COMPILE_WORKDIR", None)
-        else:
-            os.environ["SEARCH_COMPILE_WORKDIR"] = workdir_before
+        for k, v in env_before.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
     return 1 if failed else 0
 
 
