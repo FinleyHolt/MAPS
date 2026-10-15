@@ -13,10 +13,13 @@ Explicit pins:
       Offline / replay: probe nothing; requires the override below.
   ``SEARCH_ENDPOINT_SPEC_OVERRIDE=<model_id>:<max_model_len>``
       An endpoint serving several models or stating no window. A reachable
-      endpoint must still serve the pinned id.
+      self-hosted endpoint must still serve the pinned id. A hosted
+      deployment (a card with ``wire: "openai"``) is named by its deployment,
+      which the provider's model listing does not carry: there the listing
+      answering the key is the live check, and the first request is refused
+      for an alias the endpoint does not deploy.
   ``SEARCH_REASONER_MODELS_URL=<url>``
-      Where the served ids are listed when not at ``{SEARCH_REASONER_URL}/models``
-      (Bedrock's bedrock-mantle lists them under ``/v1/models``).
+      Where the served ids are listed when not at ``{SEARCH_REASONER_URL}/models``.
 """
 
 from __future__ import annotations
@@ -175,6 +178,16 @@ def _facts_from_endpoint(
     models = _probe_models(base_url)
     ids = [str(m.get("id") or "") for m in models]
     if override is not None:
+        from maps.llm.model_cards import speaks_openai  # noqa: PLC0415
+
+        if speaks_openai(override.model_id):
+            # A hosted endpoint lists its provider's models, not the
+            # deployment the alias names: the listing answering the key is
+            # the live check, and an alias it does not deploy is refused on
+            # the first request.
+            log.info("discovery: %s answers with %d listed models; %r is a deployment name, "
+                     "confirmed by the first request", models_url(base_url), len(ids), override.model_id)
+            return override.model_id, override.max_model_len
         # The override never bypasses the live check: the pinned id must be
         # among the served ids.
         if override.model_id not in ids:
