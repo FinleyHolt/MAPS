@@ -251,7 +251,7 @@ both). The served model name selects a sampling envelope from
 keys exactly: `inkling-small`, `qwen38-flash-next-nvfp4`,
 `gemma4-26b-a4b-nvfp4` (E1 to E3), `gemma4-e4b`, `gemma4-e2b` (E2),
 `gemma4-26b-a4b-gguf` (the llama.cpp serve flown aboard), and
-`openai.gpt-5.6-sol` ([GPT-5.6 Sol on Amazon Bedrock](#gpt-56-sol-on-amazon-bedrock));
+`gpt-5.6-sol` ([GPT-5.6 Sol on Azure](#gpt-56-sol-on-azure));
 any other name is refused at startup with the list. Every request runs in
 thinking mode at temperature 1.0, and `max_tokens` is the output reserve of
 the discovered window (the OpenAI-wire card below takes both in OpenAI's own
@@ -272,34 +272,43 @@ terms).
 | `SAM_MAX_INFLIGHT`, `SAM_INFLIGHT_WAIT_S`, `SAM_PREWARM`, `SAM_HEALTH_MIN_FREE_GB` | serve | Admission, prewarm and health limits (`serving/sam_server.py`). |
 | `MAPS_IMAGE_STORE_URL` | client | An image store one fast hop from the reasoner: each inline image is PUT once to `<store>/looks/<sha>` and rides as `sha256:<sha>`; a 409 naming missing shas re-sends them. |
 
-### GPT-5.6 Sol on Amazon Bedrock
+### GPT-5.6 Sol on Azure
 
-Amazon Bedrock's `bedrock-mantle` endpoint serves GPT-5.6 Sol as
-`openai.gpt-5.6-sol` under OpenAI's own chat-completions contract, not a chat
-template. Its card (`wire: "openai"` in `maps/llm/model_cards.py`) shapes the
-request to that contract (`maps/llm/openai_wire.py`): no sampling envelope or
-template kwargs, the output cap as `max_completion_tokens`, and each message
-with only the fields its role takes. OpenAI refuses a function description
-over 1,024 characters, so the `run` tool's documentation rides the system
-turn verbatim under its own heading and the tool points at it. Bedrock
-refuses a request carrying more than 100 images, so past that the reasoner
-evicts the oldest crops, down to 80. The
-thinking span never comes back, so the reasoning count is the provider's
-`usage.completion_tokens_details` meter. A Bedrock API key is the bearer
+An Azure (Microsoft Foundry) deployment serves GPT-5.6 Sol on Azure's v1 API
+under OpenAI's own chat-completions contract, not a chat template. The
+request names the deployment, so the deployment carries the card's alias,
+`gpt-5.6-sol`. The card (`wire: "openai"` in `maps/llm/model_cards.py`)
+shapes the request to that contract (`maps/llm/openai_wire.py`): no sampling
+envelope or template kwargs, the output cap as `max_completion_tokens`, and
+each message with only the fields its role takes. OpenAI refuses a function
+description over 1,024 characters, so the `run` tool's documentation rides
+the system turn verbatim under its own heading and the tool points at it.
+Azure refuses a GPT-5.x request carrying more than 50 images, so past that
+the reasoner evicts the oldest crops, down to 30. The thinking span never
+comes back, so the reasoning count is the provider's
+`usage.completion_tokens_details` meter. The deployment's key is the bearer
 token.
 
+Azure's `/openai/v1/models` lists the resource's base models, not its
+deployments, so for this card discovery takes the listing answering the key
+as the live check, and the first request is refused for a deployment name
+the resource does not carry. A Global Standard deployment's tokens-per-minute
+limit admits each request at its prompt plus `max_completion_tokens` (the
+output reserve, 40,000 tokens at the pinned window), not at the tokens it
+bills; size the limit to the bench's concurrency on that count.
+
 ```sh
-export SEARCH_REASONER_URL=https://bedrock-mantle.us-east-1.api.aws/openai/v1
-export SEARCH_REASONER_MODELS_URL=https://bedrock-mantle.us-east-1.api.aws/v1/models
-export SEARCH_REASONER_API_KEY=<Bedrock API key>
-export SEARCH_ENDPOINT_SPEC_OVERRIDE=openai.gpt-5.6-sol:262144
-export SEARCH_REASONER_TIMEOUT_S=600
+export SEARCH_REASONER_URL=https://<resource>.openai.azure.com/openai/v1
+export SEARCH_REASONER_API_KEY=<deployment key>
+export SEARCH_ENDPOINT_SPEC_OVERRIDE=gpt-5.6-sol:262144
+export SEARCH_REASONER_TIMEOUT_S=1200
 python -m maps.llm.endpoint_preflight --effort none --effort medium --effort high
 ```
 
 The override pins the window Inkling Small is served with, so the compactor
 holds GPT-5.6 Sol to the same context budget as the other arms; the model's
-own window is 1,050,000 tokens. The card takes the efforts `none`, `low`,
+own window is 1,050,000 tokens. The timeout outlasts a turn at a high effort
+that spends the whole output reserve. The card takes the efforts `none`, `low`,
 `medium`, `high`, `xhigh` and `max`. The preflight flies two turns per effort
 through the reasoner's request path, the second streaming and carrying the
 tool call and its result, and prints either the endpoint's refusal or each

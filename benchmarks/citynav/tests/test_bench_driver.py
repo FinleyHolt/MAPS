@@ -67,8 +67,9 @@ def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
 
 
 def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypatch) -> None:
-    """bedrock-mantle serves GPT-5.6 under /openai/v1 and lists it under /v1/models: a gate
-    asking SEARCH_REASONER_URL/models would hold every launch on a reasoner discovery accepted."""
+    """An endpoint listing its models away from SEARCH_REASONER_URL/models names the listing in
+    SEARCH_REASONER_MODELS_URL: a gate asking the default would hold every launch on a reasoner
+    discovery accepted."""
     asked: list[str] = []
 
     class _Answer:
@@ -85,16 +86,18 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
         return _Answer()
 
     monkeypatch.setattr(bf.urllib.request, "urlopen", _open)
-    monkeypatch.setenv("SEARCH_REASONER_URL", "https://bedrock-mantle.us-east-1.api.aws/openai/v1")
-    monkeypatch.setenv("SEARCH_REASONER_MODELS_URL", "https://bedrock-mantle.us-east-1.api.aws/v1/models")
+    monkeypatch.setenv("SEARCH_REASONER_URL", "https://reasoner.example/serve/v1")
+    monkeypatch.setenv("SEARCH_REASONER_MODELS_URL", "https://reasoner.example/catalog/models")
     assert driver()._reasoner_answers()
     monkeypatch.delenv("SEARCH_REASONER_MODELS_URL")
+    monkeypatch.setenv("SEARCH_REASONER_URL", "https://maps-sol.openai.azure.com/openai/v1")
+    assert driver()._reasoner_answers()
     monkeypatch.setenv("SEARCH_REASONER_URL", "http://127.0.0.1:8001/v1")
     assert driver()._reasoner_answers()
     monkeypatch.delenv("SEARCH_REASONER_URL")  # unset: the gate asks where discovery did
     assert driver()._reasoner_answers()
-    assert asked == ["https://bedrock-mantle.us-east-1.api.aws/v1/models", "http://127.0.0.1:8001/v1/models",
-                     "http://127.0.0.1:8001/v1/models"]
+    assert asked == ["https://reasoner.example/catalog/models", "https://maps-sol.openai.azure.com/openai/v1/models",
+                     "http://127.0.0.1:8001/v1/models", "http://127.0.0.1:8001/v1/models"]
     monkeypatch.setenv("SEARCH_REASONER_URL", "")  # no URL to ask is a reasoner that does not answer
     assert not driver()._reasoner_answers()
 

@@ -42,15 +42,18 @@ CARDS: dict[str, dict[str, Any]] = {
     "gemma4-26b-a4b-gguf": {"tokenizer": "google/gemma-4-26B-A4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e4b": {"tokenizer": "google/gemma-4-E4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e2b": {"tokenizer": "google/gemma-4-E2B-it", "top_p": 0.95, "top_k": 64},
-    # GPT-5.6 Sol on Amazon Bedrock's bedrock-mantle endpoint, which serves it
-    # under this id. OpenAI publishes no tokenizer for it; gpt-oss-120b's
-    # o200k_harmony vocabulary is the nearest published one, so prompt sizing
-    # is an estimate, and the window a run pins (SEARCH_ENDPOINT_SPEC_OVERRIDE)
-    # sits far enough under the served 1,050,000 that an undercount never
-    # reaches the server. Bedrock refuses a request carrying more than 100
-    # images.
-    "openai.gpt-5.6-sol": {"tokenizer": "openai/gpt-oss-120b", "wire": "openai",
-                           "efforts": ("none", "low", "medium", "high", "xhigh", "max"), "max_images": 100},
+    # GPT-5.6 Sol on an Azure (Microsoft Foundry) deployment, keyed by the
+    # deployment's name, which is the alias the request carries. OpenAI
+    # publishes no tokenizer for it; gpt-oss-120b's o200k_harmony vocabulary
+    # is the nearest published one, so prompt sizing is an estimate, and the
+    # window a run pins (SEARCH_ENDPOINT_SPEC_OVERRIDE) sits far enough under
+    # the served 1,050,000 that an undercount never reaches the server.
+    # ponytail: Azure refuses a GPT-5.x chat-completions request carrying more
+    # than 50 images ("Exceeded maximum number of images (50)"), a limit its
+    # quota page does not list and no quota request raises; raise this when
+    # Azure does.
+    "gpt-5.6-sol": {"tokenizer": "openai/gpt-oss-120b", "wire": "openai",
+                    "efforts": ("none", "low", "medium", "high", "xhigh", "max"), "max_images": 50},
 }
 
 

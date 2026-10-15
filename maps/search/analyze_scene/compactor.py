@@ -161,7 +161,9 @@ def _evict_crops(
     return out, len(taken), freed
 
 
-#: How far under ``max_images`` an eviction goes: more than one look delivers.
+#: How far under ``max_images`` an eviction goes: more than one ``look``
+#: delivers (``parse_compile.views.LOOK_MAX_CROPS``, 16), so the next look
+#: lands under the limit without evicting again.
 _IMAGE_COUNT_HEADROOM = 20
 
 

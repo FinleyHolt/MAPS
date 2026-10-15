@@ -1,5 +1,5 @@
-"""A model behind OpenAI's own chat-completions contract (GPT-5.6 Sol on Bedrock)
-is sent only what that contract takes, and is metered by what it reports."""
+"""A model behind OpenAI's own chat-completions contract (GPT-5.6 Sol on an Azure
+deployment) is sent only what that contract takes, and is metered by what it reports."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from maps.search.parse_compile import reasoner_agent
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.tests.fakes import TEST_SPEC, jpeg
 
-GPT = "openai.gpt-5.6-sol"
+GPT = "gpt-5.6-sol"
 GPT_SPEC = replace(TEST_SPEC, model_id=GPT, tokenizer_name="openai/gpt-oss-120b")
 
 
@@ -139,19 +139,21 @@ def test_a_self_hosted_card_keeps_its_shape(monkeypatch) -> None:
     assert body["top_k"] == 64 and body["messages"] is r.messages
 
 
-def test_the_request_never_carries_more_images_than_bedrock_takes(monkeypatch) -> None:
+def test_the_request_never_carries_more_images_than_azure_takes(monkeypatch) -> None:
+    from maps.search.parse_compile.views import LOOK_MAX_CROPS
+
     sent = _serve(monkeypatch)
     r = Reasoner(reasoner_url="http://unused", endpoint_spec=GPT_SPEC)
     picture = jpeg(64)
-    for k in range(3):
-        r.append_vision_user(f"look {k}", [picture] * 40)
+    for k in range(4):
+        r.append_vision_user(f"look {k}", [picture] * LOOK_MAX_CROPS)
     r.step_tool_call([])
     images = [p for m in sent[0]["messages"] if isinstance(m["content"], list)
               for p in m["content"] if p.get("type") == "image_url"]
-    # 120 is over Bedrock's 100, so the oldest go down to the low-water mark.
-    assert CARDS[GPT]["max_images"] == 100 and len(images) == 80
-    assert sum(p.get("type") == "image_url" for p in r.messages[-2]["content"]) == 40, "the newest look lost a crop"
-    assert sum(p.get("type") == "image_url" for p in r.messages[1]["content"]) == 0
+    # Four full looks (64) are over Azure's 50, so the oldest go down to the low-water mark.
+    assert CARDS[GPT]["max_images"] == 50 and len(images) == 30
+    crops = [sum(p.get("type") == "image_url" for p in m["content"]) for m in r.messages[1:5]]
+    assert crops == [0, 0, 14, LOOK_MAX_CROPS], "the newest look lost a crop"
 
 
 def test_reasoning_is_metered_from_usage_when_the_span_never_comes_back() -> None:
@@ -179,19 +181,41 @@ def test_the_episode_summary_meters_an_openai_turn(tmp_path: Path) -> None:
 
 
 def test_the_model_list_is_read_where_the_endpoint_keeps_it(monkeypatch) -> None:
-    """bedrock-mantle serves GPT-5.6 under /openai/v1 and lists its models under /v1."""
-    base = "https://bedrock-mantle.us-east-1.api.aws/openai/v1"
-    listing = "https://bedrock-mantle.us-east-1.api.aws/v1/models"
+    """SEARCH_REASONER_MODELS_URL names a listing kept away from SEARCH_REASONER_URL/models."""
+    base = "https://reasoner.example/serve/v1"
+    listing = "https://reasoner.example/catalog/models"
     seen: list[str] = []
 
     def _get(url, *, bearer=None):
         seen.append(url)
         if url != listing:
             raise E.EndpointDiscoveryError(f"endpoint unreachable: GET {url}")
-        return {"data": [{"id": "openai.gpt-oss-120b"}, {"id": GPT}]}
+        return {"data": [{"id": "gemma4-e4b"}, {"id": "inkling-small"}]}
 
     monkeypatch.setattr(E, "_get_json", _get)
     monkeypatch.setattr(E, "_require_tokenizer", lambda m: f"tok:{m}")
     monkeypatch.setenv("SEARCH_REASONER_MODELS_URL", listing)
+    spec = E.discover(base, override=E.EndpointOverride("inkling-small", 262144))
+    assert (spec.base_url, spec.model_id, spec.max_model_len, seen) == (base, "inkling-small", 262144, [listing])
+
+
+def test_a_deployment_name_the_listing_does_not_carry_passes_discovery(monkeypatch) -> None:
+    """Azure's /openai/v1/models lists the resource's base models, not its deployments: the
+    deployment-named alias passes on the listing answering the key, and a self-hosted pin the
+    listing does not carry is still refused."""
+    base = "https://maps-sol.openai.azure.com/openai/v1"
+    seen: list[tuple[str, str | None]] = []
+
+    def _get(url, *, bearer=None):
+        seen.append((url, bearer))
+        return {"data": [{"id": "gpt-5.6-sol-2026-07-09"}, {"id": "gpt-5.4-2026-03-05"}]}
+
+    monkeypatch.setattr(E, "_get_json", _get)
+    monkeypatch.setattr(E, "_require_tokenizer", lambda m: f"tok:{m}")
+    monkeypatch.setenv("SEARCH_REASONER_API_KEY", "k")
+    monkeypatch.delenv("SEARCH_REASONER_MODELS_URL", raising=False)
     spec = E.discover(base, override=E.EndpointOverride(GPT, 262144))
-    assert (spec.base_url, spec.model_id, spec.max_model_len, seen) == (base, GPT, 262144, [listing])
+    assert (spec.model_id, spec.max_model_len) == (GPT, 262144)
+    assert seen == [(f"{base}/models", "k")], "the listing is asked, with the key"
+    with pytest.raises(E.EndpointDiscoveryError, match="does not match the live endpoint"):
+        E.discover(base, override=E.EndpointOverride("inkling-small", 262144))
