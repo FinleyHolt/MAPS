@@ -13,7 +13,7 @@ from maps.llm import endpoint_spec as E
 from maps.llm import openai_wire
 from maps.llm.flight_summary import reasoning_tokens_of, summarize
 from maps.llm.model_cards import CARDS, check_effort, sampling_kwargs
-from maps.search.parse_compile import reasoner_agent
+from maps.search.parse_compile import compactor, reasoner_agent
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.tests.fakes import TEST_SPEC, jpeg
 
@@ -24,6 +24,22 @@ GPT_SPEC = replace(TEST_SPEC, model_id=GPT, tokenizer_name="openai/gpt-oss-120b"
 @pytest.fixture(autouse=True)
 def _no_ambient_effort(monkeypatch) -> None:
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
+
+
+class _Tok:
+    """Four characters a token over the rendered transcript."""
+
+    def apply_chat_template(self, messages, tools=None, **_kw):
+        return json.dumps([messages, tools], default=str)
+
+    def encode(self, text, add_special_tokens=False):
+        return range(len(text) // 4)
+
+
+@pytest.fixture(autouse=True)
+def _offline_tokenizer(monkeypatch) -> None:
+    """The compactor sizes the transcript with a stub, never a hub download."""
+    monkeypatch.setattr(compactor, "_tokenizer", lambda _model: _Tok())
 
 
 def test_the_card_is_the_one_an_openai_wire_reader_keys_on() -> None:

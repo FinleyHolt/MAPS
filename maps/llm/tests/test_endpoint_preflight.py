@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from maps.llm import endpoint_preflight
+from maps.llm import endpoint_preflight, endpoint_spec
 
 
 def _fake_endpoint(cached_on_second: int | None):
@@ -66,6 +66,8 @@ def hosted(monkeypatch):
         monkeypatch.delenv("SEARCH_REASONER_MODELS_URL", raising=False)
         monkeypatch.delenv("SEARCH_LLM_ROUTING_KEY", raising=False)
         monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
+        # Discovery's tokenizer load is the hub's; these tests own the endpoint only.
+        monkeypatch.setattr(endpoint_spec, "_require_tokenizer", lambda m: f"tok:{m}")
         return server, bodies
     servers = []
     yield lambda c: servers.append(start(c)) or servers[-1]
