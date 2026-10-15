@@ -560,11 +560,13 @@ class Driver:
             before = len(episodes)
             episodes = [e for e in episodes if e in allowed]
             unknown = sorted(allowed - set(episodes))
+            if unknown:
+                raise SystemExit(f"FATAL: --episode-allowlist names {len(unknown)} ids not in the "
+                                 f"{self.split} split, e.g. {unknown[0]}")
             (say or self.log)(
                 f"--episode-allowlist {self.allowlist_path}: "
                 f"{len(allowed)} ids requested -> {len(episodes)} match "
-                f"the {self.split} split (from {before} total); "
-                f"{len(unknown)} ids unknown to the split"
+                f"the {self.split} split (from {before} total)"
             )
         random.Random(self.sample_seed).shuffle(episodes)
         if self.limit > 0:
@@ -768,8 +770,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--episode-allowlist",
         default=None,
         help="path to a newline-delimited file of episode_ids. When set, "
-        "only those ids run (intersected with the enumerated split). The "
-        "seeded shuffle + --limit still apply on top of the allowlist.",
+        "only those ids run; every id must be in the split, else the run is "
+        "refused. The seeded shuffle + --limit still apply on top of the allowlist.",
     )
     p.add_argument(
         "--arrivals",

@@ -635,7 +635,19 @@ def test_an_unreadable_session_stream_is_refused_fatal(stream, driver, tmp_path,
         d._select_episodes()
 
 
-@pytest.mark.parametrize("refusal", ["split", "stream", "allowlist"])
+@pytest.mark.parametrize("ids", [["z"], ["a", "z"]])
+def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(ids, driver, tmp_path, monkeypatch) -> None:
+    """Every allowlisted id must be in the split: one that is not is a wrong
+    split or a stale list, and a run over the rest would read as complete."""
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
+    d = driver()
+    d.allowlist_path = tmp_path / "ids.txt"
+    d.allowlist_path.write_text("\n".join(ids) + "\n")
+    assert d.run() == 2
+    assert "FATAL: --episode-allowlist names 1 ids not in the train_seen split, e.g. z" in d.driver_log.read_text()
+
+
+@pytest.mark.parametrize("refusal", ["split", "stream", "allowlist", "partial"])
 def test_a_refused_dry_run_exits_2_with_no_out_root(refusal, tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a dry run flew"))
     if refusal != "split":
