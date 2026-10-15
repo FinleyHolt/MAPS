@@ -567,7 +567,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
 
         def recorded():
             adapter = make()
-            adapter.segment = functools.partial(recorded_segmenter(rec, lambda: mission._hydrated.state), adapter)
+            adapter.segment = functools.partial(recorded_segmenter(rec, lambda: mission.hydrated.state), adapter)
             return adapter
 
         episode_runner.make_perception = recorded

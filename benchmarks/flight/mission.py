@@ -245,7 +245,7 @@ class Mission:
         self.flights: list[dict] = []
         self.map_name: str | None = None
         self._tiles_dir: Path | None = None
-        self._hydrated: Hydrated | None = None
+        self.hydrated: Hydrated | None = None
         #: What this run has captured, the imagery ``look`` crops.
         self._imagery = RunImagery()
         #: The fused pass the flight in progress fetched when it held its area.
@@ -617,7 +617,7 @@ class Mission:
 
             h = hydrate(episode_id=self.episode_id, split=self.split, config=self.config, start_xy=self._start_xy,
                         agl_m=self.agl_m)
-            self._hydrated = h
+            self.hydrated = h
             instruction = self.instruction or h.episode.description
             # The override IS the operator's instruction, so the episode
             # carries no second copy: a flight echoes the description back as
@@ -766,7 +766,7 @@ class Mission:
         from benchmarks.citynav.run_manifest import arm_env_stamp  # noqa: PLC0415
         from maps.llm.endpoint_spec import spec, spec_installed  # noqa: PLC0415
 
-        episode = self._hydrated.episode if self._hydrated else None
+        episode = self.hydrated.episode if self.hydrated else None
         with self._lock:
             visited = [[float(episode.start_xy[0]), float(episode.start_xy[1])]] if episode else []
             scored = self.flights[:self._scored_flights]
