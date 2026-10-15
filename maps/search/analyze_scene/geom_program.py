@@ -144,9 +144,9 @@ def _render_color_cell(row):
         return row
     c = row.get("color")
     has_color = isinstance(c, str) and c.strip()
-    if not has_color and "color_shade" not in row and "color_flag" not in row:
+    if not has_color and not any(k in row for k in _RENDER_INPUT_ROW_FIELDS):
         return row
-    out = {k: v for k, v in row.items() if k not in ("color_shade", "color_flag")}
+    out = {k: v for k, v in row.items() if k not in _RENDER_INPUT_ROW_FIELDS}
     if has_color:
         conf = row.get("color_conf")
         uncertain = ((isinstance(conf, (int, float)) and conf < _COLOR_CONF_FLOOR)
@@ -402,24 +402,23 @@ def _grid_columns(rows) -> list[str]:
     prio = [c for c in _GRID_COL_PRIORITY if c in seen_set]
     extras = [c for c in seen if c not in _GRID_COL_PRIORITY]
     # A ref's four side columns (one of each pair per row) group where the
-    # first appears, in left/right/ahead/behind order.
-    _side = re.compile(r"^(left of|right of|ahead of|behind) (.+)$")
-    _order = {"left of": 0, "right of": 1, "ahead of": 2, "behind": 3}
+    # first appears, in STANDING_SIDE_PREFIXES order.
+    def _side(c):
+        """``(prefix index, ref)`` of a side column, else None."""
+        for i, p in enumerate(STANDING_SIDE_PREFIXES):
+            if c.startswith(p) and len(c) > len(p):
+                return i, c[len(p):]
+        return None
+
     grouped: list[str] = []
     done: set = set()
     for c in extras:
         if c in done:
             continue
-        m = _side.match(c)
-        if m is None:
-            grouped.append(c)
-            done.add(c)
-            continue
-        ref = m.group(2)
-        family = sorted(
-            (x for x in extras if (_m2 := _side.match(x)) and
-             _m2.group(2) == ref),
-            key=lambda x: _order[_side.match(x).group(1)])
+        side = _side(c)
+        family = [c] if side is None else sorted(
+            (x for x in extras if (s := _side(x)) and s[1] == side[1]),
+            key=lambda x: _side(x)[0])
         grouped.extend(family)
         done.update(family)
     return prio + grouped
