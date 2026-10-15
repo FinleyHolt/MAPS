@@ -23,6 +23,7 @@ detections into the graph) and returns the flight report the model reads.
 | The Python surface: executing a block, the library calls, rows, `.filter` and `.order` | `search/parse_compile/python_surface.py` |
 | Compiling library calls onto geometry ops | `search/parse_compile/code_surface.py` |
 | Which classes the segmenter watches | `search/parse_compile/perception_director.py`, `search/search_loop.py` (`declare_mission_concepts`) |
+| The surface the op program runs over: one row per graph node, its served point, mask and colour fields | `search/analyze_scene/surface.py` |
 | The geometry op program behind `find`, `intersection`, `ends_of`, `distance` | `search/analyze_scene/geom_program.py`, `search/analyze_scene/geom_compute.py`, `search/analyze_scene/row_geometry.py` |
 | Matching a query to rows by name | `search/analyze_scene/text_match.py` |
 | Transcript compaction when the conversation outgrows the window | `search/analyze_scene/compactor.py` |
