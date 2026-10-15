@@ -25,6 +25,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import Rectangle  # noqa: E402
 from PIL import Image  # noqa: E402
 
+from baselines.visa.som import legend  # noqa: E402
+
 
 def _load(p: Path):
     return json.loads(p.read_text()) if p.exists() else None
@@ -51,10 +53,8 @@ def step_panels(workdir: Path, out: Path) -> list[Path]:
         cited = set(r["attribute_match"]["candidate_marks"]) | set(r["spatial_topology"]["consistent_marks"]) \
             | set(r["geographic_boundary"]["valid_marks"]) | {r.get("target_mark")}
         shown = [m for m in marks if m["id"] in cited][:24]
-        legend = "\n".join(f"[{m['id']}] {m['label']}{', ' + m['color'] if m.get('color') else ''}" for m in shown)
-        legend += f"\n({len(marks)} marks in frame; {len(shown)} cited shown)"
         trace = [
-            "Set-of-Mark legend:", legend, "",
+            "Set-of-Mark legend:", legend(shown) + f"\n({len(marks)} marks in frame; {len(shown)} cited shown)", "",
             "1. Literal attribute matching -> " + str(r["attribute_match"]["candidate_marks"]),
             textwrap.fill(r["attribute_match"]["reasoning"], 70), "",
             "2. Spatial topology -> " + str(r["spatial_topology"]["consistent_marks"]),

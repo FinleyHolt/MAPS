@@ -141,10 +141,6 @@ def clamp_to_bounds(xy, bounds) -> tuple[float, float]:
     return (min(max(float(xy[0]), bounds.x_min), bounds.x_max), min(max(float(xy[1]), bounds.y_min), bounds.y_max))
 
 
-def _dist(a, b) -> float:
-    return math.hypot(a[0] - b[0], a[1] - b[1])
-
-
 def landmark_distance(lm: Landmark, xy: tuple[float, float]) -> float:
     """Metres from ``xy`` to the landmark's area, 0 inside it. A street's
     centroid can sit hundreds of metres from every point of the street, so
@@ -270,7 +266,7 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
         geo_text = engine.is_within_geo_node(pose) + engine.get_enhanced_geo_relation(pose)
 
         if strategy == "Search" and (
-            t - last_vlm_t >= VLM_DETECTION_INTERVAL or _dist(pose, last_vlm_pos) >= VLM_DETECTION_DISTANCE_M
+            t - last_vlm_t >= VLM_DETECTION_INTERVAL or math.dist(pose, last_vlm_pos) >= VLM_DETECTION_DISTANCE_M
         ):
             sub = _understand(h, frame, instruction, [target_name] + surroundings, frame_px=obs.rgb.shape[:2], max_tokens=understand_cap)
             landed = ingest_subgraph(

@@ -104,7 +104,6 @@ class CognitiveMap:
             rows, cols = self.to_rows_cols(lm.contour)
             pts = np.stack([cols, rows]).T.astype(np.int32)
             cv2.polylines(self.landmark_color, [pts], isClosed=True, color=(*color, 255), thickness=2)
-        self.current_view_area = np.zeros(self.shape, dtype=np.uint8)
         self.explored_area = np.zeros(self.shape, dtype=np.uint8)
         self.target = ColorLayer(self.shape, _TARGET_COLORS)
         self.surroundings = ColorLayer(self.shape, _SURROUNDINGS_COLORS)
@@ -134,10 +133,8 @@ class CognitiveMap:
         corners = [(xy[0] - half, xy[1] + half), (xy[0] + half, xy[1] + half),
                    (xy[0] + half, xy[1] - half), (xy[0] - half, xy[1] - half)]
         rows, cols = self.to_rows_cols(corners)
-        self.current_view_area = cv2.fillConvexPoly(
-            np.zeros(self.shape, dtype=np.uint8), np.stack([cols, rows]).T.astype(np.int32), color=1
-        )
-        self.explored_area = np.maximum(self.explored_area, self.current_view_area)
+        view = cv2.fillConvexPoly(np.zeros(self.shape, dtype=np.uint8), np.stack([cols, rows]).T.astype(np.int32), color=1)
+        self.explored_area = np.maximum(self.explored_area, view)
 
     def paint_detection(self, phrase: str, world_polygon) -> None:
         """A detection onto its layer by phrase. substitution: the released

@@ -30,10 +30,6 @@ def get_direction(src: tuple[float, float], target: tuple[float, float]) -> str:
     return DIRECTION_NAMES[round(angle / 45) % 8]
 
 
-def _dist(p1, p2) -> float:
-    return math.hypot(p1[0] - p2[0], p1[1] - p2[1])
-
-
 class KnowledgeNode:
     def __init__(self, node_id: str, node_type: str, position: tuple[float, float]) -> None:
         self.id = node_id
@@ -113,7 +109,7 @@ class KnowledgeGraph:
 
     def _add_node(self, node: KnowledgeNode, obj_class: str) -> str | None:
         for n in self.query_radius(node.position, 20.0):
-            if n.type == node.type and _dist(n.position, node.position) < 5.0:
+            if n.type == node.type and math.dist(n.position, node.position) < 5.0:
                 return n.id
         self.class_counters[obj_class] += 1
         self.nodes[node.id] = node
@@ -138,7 +134,7 @@ class KnowledgeGraph:
         return None
 
     def _spatial_similarity(self, p1, p2) -> float:
-        return math.exp(-_dist(p1, p2) / self.spatial_threshold)
+        return math.exp(-math.dist(p1, p2) / self.spatial_threshold)
 
     @staticmethod
     def _semantic_similarity(type1: str, type2: str) -> float:
@@ -234,7 +230,7 @@ class QueryEngine:
     def get_context(self, position, radius=10.0) -> list[dict]:
         out = []
         for n in self.graph.query_radius(position, radius):
-            d = {"type": n.type, "distance": f"{_dist(n.position, position):.1f} meters",
+            d = {"type": n.type, "distance": f"{math.dist(n.position, position):.1f} meters",
                  "direction": get_direction(position, n.position)}
             if isinstance(n, GeoNode):
                 d.update(name=n.name, category=n.object_type)
