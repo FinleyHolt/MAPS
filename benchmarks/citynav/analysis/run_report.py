@@ -191,24 +191,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
             f"conversion(SR|OSR)={_pct(joint[(True, True)], osr)}"
         )
 
-    # SR by referent bucket.
-    bt: Counter = Counter()
-    bs: Counter = Counter()
-    for m in scored.values():
-        b = m.get("referent_bucket") or "?"
-        bt[b] += 1
-        bs[b] += bool(m.get("SR"))
-    print("by bucket: " + "   ".join(_label(k, bs[k], bt[k]) for k in _BUCKETS if bt[k]))
-
-    # SR by the row's intel quality (Cal City), as the flight measures' by_intel_quality.
-    qt: Counter = Counter()
-    qs: Counter = Counter()
-    for m in scored.values():
-        q = m.get("intel_quality") or "?"
-        qt[q] += 1
-        qs[q] += bool(m.get("SR"))
-    if set(qt) != {"?"}:
-        print("by intel quality: " + "   ".join(_label(k, qs[k], qt[k]) for k in ("G", "M", "P", "?") if qt[k]))
+    print_classes(root, scored)
 
     # Commit provenance (prior landmark, runtime detection, world point, or none).
     prov = Counter(m.get("committed_provenance") or "none" for m in scored.values())
@@ -216,7 +199,52 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     return scored
 
 
-_BUCKETS = ("car", "building", "other", "?")
+_BUCKETS = ("car", "building", "other")
+
+
+def _split_rows(split: str | None) -> list[dict] | None:
+    """The rows of the split a run names, else ``None`` when its file is not on this machine."""
+    from benchmarks.calcity import paths as calcity_paths
+    from benchmarks.citynav import paths
+    from benchmarks.citynav.adapter import load_split
+
+    try:
+        return load_split(calcity_paths.split_path(split) if split in calcity_paths.SPLIT_FILES
+                          else paths.split_path(split))
+    except (OSError, ValueError):
+        return None
+
+
+def print_classes(root: Path, scored: dict[str, dict]) -> None:
+    """SR by referent bucket and, where the corpus grades it, by intel quality
+    (Cal City, as the flight measures' by_intel_quality). Each episode's class
+    is its corpus row's, read from the run's split by episode id, so a pick
+    without metrics counts in its own class. A split on this machine that
+    lacks any of the run's episodes is not the run's corpus: no class line."""
+    from benchmarks.citynav.adapter import find_row, parse_episode
+    from benchmarks.citynav.run_benchmark.episode_runner import classify_referent
+
+    split = read_manifest(root).get("split")
+    corpus = _split_rows(split) or []
+    found = {eid: find_row(corpus, eid) for eid in scored}
+    missing = sum(f is None for f in found.values())
+    if missing:
+        print(f"by class: -- ({missing} of the run's {len(scored)} episodes are not in "
+              f"its split {split} on this machine)")
+        return
+    episodes = {eid: parse_episode(f[1]) for eid, f in found.items()}
+    for kind, class_of, order in (
+        ("bucket", lambda e: classify_referent(e.description), _BUCKETS),
+        ("intel quality", lambda e: e.intel_quality or "?", ("G", "M", "P", "?")),
+    ):
+        tot: Counter = Counter()
+        suc: Counter = Counter()
+        for eid, m in scored.items():
+            cls = class_of(episodes[eid])
+            tot[cls] += 1
+            suc[cls] += bool(m.get("SR"))
+        if kind == "bucket" or set(tot) != {"?"}:
+            print(f"by {kind}: " + "   ".join(_label(k, suc[k], tot[k]) for k in order if tot[k]))
 
 
 def _label(name: str, suc: int, tot: int) -> str:

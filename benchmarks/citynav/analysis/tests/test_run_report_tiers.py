@@ -8,6 +8,8 @@ every pre-flight floor once.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from benchmarks.citynav.analysis import rows
@@ -234,15 +236,49 @@ def test_the_provenance_line_orders_ties_by_name(tmp_path, capsys):
     assert "provenance: detection=2  point=2  landmark=1" in capsys.readouterr().out
 
 
-def test_the_report_splits_sr_by_intel_quality_where_rows_carry_it(tmp_path, capsys):
-    """A Cal City row records its corpus row's intel quality; the report breaks SR out by it,
-    and a run whose rows carry none prints no such line."""
-    rows_ = [ledger_row(f"e::{i}#{i}", f"20260725_1100{i:02d}", sr) for i, sr in enumerate([1, 0, 1, 0, 0])]
-    for r, q in zip(rows_, ["G", "G", "M", "M", None]):
-        r["metrics"]["intel_quality"] = q
-    write_ledger(tmp_path / "q", *rows_)
-    report(tmp_path / "q")
-    assert "by intel quality: G:1/2(50%)   M:1/2(50%)   ?:0/1(0%)" in capsys.readouterr().out
-    write_ledger(tmp_path / "n", ledger_row("e::1#1", "20260725_110000", 1))
-    report(tmp_path / "n")
-    assert "intel quality" not in capsys.readouterr().out
+def _calcity_corpus(tmp_path, monkeypatch, *rows: tuple[str, str | None]) -> None:
+    """A Cal City split of ``(description, intel_quality)`` rows, ids ``calcity::<i>#<i>``."""
+    from benchmarks.calcity import paths as calcity_paths
+
+    corpus = [{"area": "calcity", "descriptions": [d], "ann_ids": [i], "target_positions": [[0.0, 0.0]],
+               "trajectory": [[0.0, 0.0, 100.0]], "intel_quality": q} for i, (d, q) in enumerate(rows)]
+    (tmp_path / "calcity.json").write_text(json.dumps(corpus))
+    monkeypatch.setattr(calcity_paths, "SPLITS_DIR", tmp_path)
+
+
+def test_the_by_class_lines_read_each_episode_class_off_the_corpus(tmp_path, monkeypatch, capsys):
+    """An episode's referent bucket and intel quality are its corpus row's, so a G episode that
+    timed out with no record is a G miss, not a '?' one, and a recorded row's own keys are not read."""
+    _calcity_corpus(tmp_path, monkeypatch, ("the red car", "G"), ("a building", "G"),
+                    ("the lot", "G"), ("a shed", None))
+    root = tmp_path / "run"
+    write_ledger(root, ledger_row("calcity::0#0", "20260725_110000", 1),
+                 ledger_row("calcity::1#1", "20260725_110001", 1,
+                            metrics={"SR": 1, "intel_quality": "P", "referent_bucket": "car"}),
+                 ledger_row("calcity::2#2", "20260725_110002", status="timed_out"),
+                 ledger_row("calcity::3#3", "20260725_110003", 0))
+    (root / "run_manifest.json").write_text(json.dumps({"split": "calcity"}))
+    report(root)
+    out = capsys.readouterr().out
+    assert "by bucket: car:1/1(100%)   building:1/1(100%)   other:0/2(0%)" in out
+    assert "by intel quality: G:2/3(67%)   ?:0/1(0%)" in out
+
+
+def test_a_split_that_is_not_the_run_s_corpus_prints_no_class_split(tmp_path, monkeypatch, capsys):
+    """Without the run's corpus its classes are unknown: no split on this machine, or a split
+    lacking one of the run's episodes (another corpus of the same name), says so instead of '?'."""
+    _calcity_corpus(tmp_path, monkeypatch, ("the red car", None))
+    root = tmp_path / "q"
+    write_ledger(root, ledger_row("calcity::0#0", "20260725_110000", 1),
+                 ledger_row("calcity::7#1", "20260725_110001", 1))
+    report(root)
+    out = capsys.readouterr().out
+    assert "by bucket" not in out and "intel quality" not in out
+    assert "by class: -- (2 of the run's 2 episodes are not in its split None on this machine)" in out
+    (root / "run_manifest.json").write_text(json.dumps({"split": "calcity"}))
+    report(root)
+    assert "by class: -- (1 of the run's 2 episodes are not in its split calcity" in capsys.readouterr().out
+    write_ledger(root, ledger_row("calcity::0#0", "20260725_110000", 1))
+    report(root)
+    out = capsys.readouterr().out
+    assert "by bucket: car:1/1(100%)" in out and "intel quality" not in out
