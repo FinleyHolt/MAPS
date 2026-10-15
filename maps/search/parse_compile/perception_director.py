@@ -1,8 +1,9 @@
 """The segmenter watchlist (the classes every later flight segments, pushed
-whole to the concept provider) and the boost: ``look_for(..., at=)`` on a
-flown stop, a fid one targeted or a point near a flown pose re-segments that
-stop now; on anything else it queues beside the watchlist until a flight
-reaches its target (a where-less boost rides one flight)."""
+whole to the segmenter's concept setter, ``SamDetectClient.set_concepts``)
+and the boost: ``look_for(..., at=)`` on a flown stop, a fid one targeted or
+a point near a flown pose re-segments that stop now; on anything else it
+queues beside the watchlist until a flight reaches its target (a where-less
+boost rides one flight)."""
 
 from __future__ import annotations
 
@@ -75,7 +76,8 @@ class PerceptionDirector:
     """The watchlist, the queued boosts, the flown stops and the
     retrospective executor."""
 
-    # The live concept provider's setter; None keeps changes state-only.
+    # The segmenter's concept setter (SamDetectClient.set_concepts); None
+    # keeps changes state-only.
     push: Callable[[list[str]], None] | None = None
     # Called with (flown entry, concepts); returns {"n_dets", "new_fids", ...}
     # or {"error": str}. None: a boost at a flown stop says re-segmentation
