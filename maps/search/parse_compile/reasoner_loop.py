@@ -741,10 +741,6 @@ class _Mission:
                 f"the handle is bound, so {_h}, {_h}[0] and "
                 f"{_h}.order(...) all reach them")
 
-    def _stop_xy(self, _it) -> list[float] | None:
-        _t = str(_it.get("target_fid") or "")
-        return parse_xy_token(_t) or look_xy(self._ns_rows.get(_t))
-
     def _pick_next(self, _queue: list, cover: str | None) -> int:
         """The queue index to fly next: in a pass, a stop the recording
         already holds flies first; otherwise the head."""
@@ -752,7 +748,8 @@ class _Mission:
             return 0
         try:
             _held = self.mission_spec.held_now(
-                [(str(_it.get("target_fid") or ""), self._stop_xy(_it)) for _it in _queue])
+                [(str(_it.get("target_fid") or ""), self._point(_it.get("target_fid")))
+                 for _it in _queue])
         except Exception as _exc:  # noqa: BLE001 - the order is a convenience, never a fault
             log.warning("%s pass: held_now failed: %s", self.rid_tag, _summarise_exc(_exc))
             return 0
@@ -848,8 +845,9 @@ class _Mission:
             _item = _queue.pop(self._pick_next(_queue, cover))
             if cover is not None:
                 # The rest of the pass rides every stop, for the crew.
-                _item["pass_ahead"] = [[float(_xy[0]), float(_xy[1])]
-                                       for _xy in map(self._stop_xy, _queue) if _xy]
+                _item["pass_ahead"] = [
+                    [float(_xy[0]), float(_xy[1])] for _xy in
+                    (self._point(_it.get("target_fid")) for _it in _queue) if _xy]
             _cut = self.turn_flights >= self.mission_spec.flight_budget
             if _cut:
                 log.warning("%s flight backstop hit (%d flights)",
