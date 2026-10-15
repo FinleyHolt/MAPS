@@ -495,3 +495,19 @@ def test_no_schema_answer_after_every_attempt_raises_no_schema_answer(monkeypatc
     with pytest.raises(NoSchemaAnswer, match=f"geonav:pick: no JSON after {LLM_ATTEMPTS} attempts"):
         h.llm_json([{"role": "user", "content": "which?"}], schema, "pick")
     assert h.llm_calls == 2 * LLM_ATTEMPTS and h.calls == []
+
+
+def test_a_bare_runner_refuses_a_baseline_arm_whose_model_has_no_dial_off(tmp_path, monkeypatch):
+    """The runner CLI, like the bench driver, refuses the arm before any
+    request or episode directory."""
+    from benchmarks.citynav.run_benchmark import cli
+    from maps.llm import endpoint_spec
+
+    monkeypatch.setattr(cli, "assert_available", lambda: None)
+    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: SimpleNamespace(model_id="gemma4-26b-a4b-nvfp4"))
+    monkeypatch.setattr(endpoint_spec, "install_spec", lambda spec: None)
+    monkeypatch.setattr(cli, "load_split", lambda path: pytest.fail("a refused arm loaded its split"))
+    monkeypatch.setattr("sys.argv", ["run_benchmark", "--config", "configs/baselines/geonav.yaml",
+                                     "--out", str(tmp_path / "r")])
+    assert cli.main() == 2
+    assert not (tmp_path / "r").exists()

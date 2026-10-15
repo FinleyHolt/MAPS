@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import importlib
 import logging
 import os
 import signal
@@ -139,6 +140,15 @@ def main() -> int:
         return 2
     endpoint_spec_module.install_spec(spec)
     _rm.settle_effort()
+    if cfg.policy:
+        # Every baseline arm makes dial-off calls: an arm whose model has none
+        # is refused here, before any request (bench_fullset refuses it too).
+        seam = importlib.import_module("baselines.seam")  # by name: no static import of baselines
+        try:
+            seam.dial_off(spec.model_id)
+        except seam.NoDialOff as exc:
+            log.error("%s", exc)
+            return 2
     log.info(
         "MISSION: one reasoner conversation per episode -- requested "
         "viewpoints fly the moment they land, the plain reply ends the "
