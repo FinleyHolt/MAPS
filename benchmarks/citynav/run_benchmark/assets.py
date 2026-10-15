@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from benchmarks.citynav.eval import WorldBounds
-from benchmarks.citynav.paths import assert_current_tile_schema, tile_stem
+from benchmarks.citynav.paths import BAKE_OUTPUT_SUFFIXES, assert_current_tile_schema, tile_stem
 
 
 @dataclass
@@ -25,11 +25,9 @@ def missing_bake(stem: str) -> str | None:
     """What the bake at ``stem`` lacks for an episode to load, or None."""
     recipe = ("python -m benchmarks.calcity.data_prep.bake_tiles" if Path(stem).name == "calcity"
               else "benchmarks/citynav/data_prep/bake_tiles.sh")
-    meta_path, feat_path = Path(f"{stem}_meta.json"), Path(f"{stem}_features.json")
-    if not meta_path.exists():
-        return f"Missing {meta_path}. Run {recipe} for this block first."
-    if not feat_path.exists():
-        return f"Missing {feat_path}: re-bake this block ({recipe})."
+    for path in (Path(f"{stem}{s}") for s in BAKE_OUTPUT_SUFFIXES):
+        if not path.exists():
+            return f"Missing {path}: bake this block first ({recipe})."
     return None
 
 
@@ -38,7 +36,8 @@ def load_episode_assets(map_name: str) -> BlockAssets:
     stem = tile_stem(map_name)
     if why := missing_bake(stem):
         raise FileNotFoundError(why)
-    meta = json.loads(Path(f"{stem}_meta.json").read_text())
+    meta_path, feat_path = (Path(f"{stem}{s}") for s in BAKE_OUTPUT_SUFFIXES)
+    meta = json.loads(meta_path.read_text())
     bounds = WorldBounds(
         x_min=meta["bounds"]["x_min"],
         y_min=meta["bounds"]["y_min"],
@@ -51,7 +50,6 @@ def load_episode_assets(map_name: str) -> BlockAssets:
     # The features dict is the OSM bake's sidecar, never rebuilt from
     # objects.json (that would hand the reasoner ground-truth geometry); the
     # bake drops the CityRefer descriptions (bake/city.py _PRIVILEGED_KEYS).
-    feat_path = Path(f"{stem}_features.json")
     base_features = json.loads(feat_path.read_text())
     assert_current_tile_schema(base_features, str(feat_path))
 

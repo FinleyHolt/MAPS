@@ -37,7 +37,7 @@ from typing import Any
 import numpy as np
 
 from benchmarks.citynav.eval import WorldBounds
-from benchmarks.citynav.paths import TILES_DIR
+from benchmarks.citynav.paths import BAKE_OUTPUT_SUFFIXES, TILES_DIR
 
 log = logging.getLogger("bake_city")
 
@@ -594,8 +594,8 @@ def bake_block(
         log.warning("%s: no OSM records rasterized onto the block imagery", name)
 
     tiles_path.mkdir(parents=True, exist_ok=True)
-    stem = tiles_path / name
-    Path(f"{stem}_features.json").write_text(
+    meta_path, feat_path = (Path(f"{tiles_path / name}{s}") for s in BAKE_OUTPUT_SUFFIXES)
+    feat_path.write_text(
         json.dumps(features, separators=(",", ":")), encoding="utf-8"
     )
     out_meta: dict[str, Any] = {
@@ -605,7 +605,7 @@ def bake_block(
                    "x_max": bounds.x_max, "y_max": bounds.y_max},
         **(meta or {}),
     }
-    Path(f"{stem}_meta.json").write_text(json.dumps(out_meta, indent=2), encoding="utf-8")
+    meta_path.write_text(json.dumps(out_meta, indent=2), encoding="utf-8")
     count = sum(len(v) for v in features.values())
     log.info("wrote %s bake: %d features", name, count)
     return count

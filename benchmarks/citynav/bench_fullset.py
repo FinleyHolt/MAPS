@@ -113,20 +113,21 @@ def _causes(counts: Counter) -> str:
     return ", ".join(f"{c} ({k})" for c, k in counts.most_common())
 
 
-def _missing_block_assets(episode_ids: list[str]) -> list[Path]:
-    """The files the selected episodes' blocks need and do not have: the
-    bake's per-block files, and ``<map>.tif`` beside ``<map>_rgb.tif`` or
+def _missing_block_assets(episode_ids: list[str]) -> list[str]:
+    """What the selected episodes' blocks need and do not have: the bake
+    (``assets.missing_bake``), and ``<map>.tif`` beside ``<map>_rgb.tif`` or
     ``<map>.png``."""
-    missing: list[Path] = []
+    from benchmarks.citynav.run_benchmark.assets import missing_bake
+
+    missing: list[str] = []
     for map_name in sorted({e.split("::", 1)[0] for e in episode_ids}):
-        stem = paths.tile_stem(map_name)
-        missing += [p for p in (Path(f"{stem}{s}") for s in paths.BAKE_OUTPUT_SUFFIXES)
-                    if not p.exists()]
+        if why := missing_bake(paths.tile_stem(map_name)):
+            missing.append(why)
         rgbd = Path(paths.CITYNAV_NATIVE_RGBD_DIR)
         if not (rgbd / f"{map_name}.tif").exists():
-            missing.append(rgbd / f"{map_name}.tif")
+            missing.append(f"Missing {rgbd / f'{map_name}.tif'}")
         if not any((rgbd / f"{map_name}{s}").exists() for s in ("_rgb.tif", ".png")):
-            missing.append(rgbd / f"{map_name}_rgb.tif")
+            missing.append(f"Missing {rgbd / f'{map_name}_rgb.tif'}")
     return missing
 
 
@@ -625,9 +626,7 @@ class Driver:
                 "FATAL: block assets missing for the selection (every episode on "
                 "these blocks would land infra):\n"
                 + "".join(f"  {p}\n" for p in missing)
-                + "  tiles: benchmarks/citynav/data_prep/bake_tiles.sh, or python -m "
-                "benchmarks.calcity.data_prep.bake_tiles\n"
-                "  rasters: benchmarks/citynav/data_prep/rasterize_citynav_native.sh, "
+                + "  rasters: benchmarks/citynav/data_prep/rasterize_citynav_native.sh, "
                 "or python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster "
                 "<calcity_rgb.tif>"
             )
