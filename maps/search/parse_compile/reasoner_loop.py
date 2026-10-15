@@ -31,6 +31,7 @@ from maps.search.analyze_scene.compactor import (
     CompactionInfeasible,
     CompactionInvariantError,
 )
+from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
     _BROAD_DUMP_SOFT_ROWS,
     MODEL_UNSERVED_COLUMNS,
@@ -523,10 +524,11 @@ class _Mission:
             row = self._ns_rows.get(tok.strip())
             if row is not None:
                 return look_xy(row)
-            sp = self._plan_stops.get(tok.strip().lower())
+            key = tok.strip().lower()
+            sp = self._plan_stops.get(key)
             if sp is not None:
                 return [round(sp[0], 2), round(sp[1], 2)]
-            sv = self.staged_viewpoints.get(tok.strip().lower())
+            sv = self.staged_viewpoints.get(key)
             if sv is not None:
                 return [round(float(sv["from_xy"][0]), 2),
                         round(float(sv["from_xy"][1]), 2)]
@@ -536,14 +538,13 @@ class _Mission:
     def _stage_apply(self, at_tok: str, facing_tok: str) -> dict:
         """stand(): mint a vN handle that becomes STANDING and bump the
         surface version (a program can answer differently under it)."""
-        from maps.search.analyze_scene.geom_compute import COMPASS_UNIT  # noqa: PLC0415
-
         at_xy = self._resolve_stage_point(at_tok)
         if at_xy is None:
             return {"error": f"at {at_tok!r} is not a live surface fid or an "
                              f"[x, y] world point"}
-        if facing_tok.strip().lower() in COMPASS_UNIT:
-            up = list(COMPASS_UNIT[facing_tok.strip().lower()])
+        compass = facing_tok.strip().lower()
+        if compass in COMPASS_UNIT:
+            up = list(COMPASS_UNIT[compass])
         else:
             f_xy = self._resolve_stage_point(facing_tok)
             if f_xy is None:
