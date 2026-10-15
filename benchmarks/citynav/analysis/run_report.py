@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
+from benchmarks import REPO_ROOT
 from benchmarks.citynav.analysis import rows as _rows
 from benchmarks.citynav.analysis.rows import read_manifest
 
@@ -79,9 +80,6 @@ def print_precise(metrics: list[dict], n: int) -> bool:
     return True
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-
-
 def _local_bake_dir(resolved: str | None) -> Path | None:
     """This machine's copy of the recorded ``tiles_dir_resolved``: the path
     itself, else its longest tail that is a directory under this repo
@@ -92,7 +90,7 @@ def _local_bake_dir(resolved: str | None) -> Path | None:
         return Path(resolved)
     parts = PurePosixPath(resolved).parts
     for i in range(1, len(parts) - 1):          # a tail of two parts at least: "tiles" alone names nothing
-        cand = _REPO_ROOT.joinpath(*parts[i:])
+        cand = REPO_ROOT.joinpath(*parts[i:])
         if cand.is_dir():
             return cand
     return None

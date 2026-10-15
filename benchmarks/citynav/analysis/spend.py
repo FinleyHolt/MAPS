@@ -27,7 +27,7 @@ from collections import Counter
 from pathlib import Path
 
 from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.episodes import MANIFEST_NAME
+from benchmarks.citynav.episodes import EPISODES_JSONL, MANIFEST_NAME
 from maps.llm.flight_summary import summarize
 
 #: USD per million tokens: input, cache read, cache write, output.
@@ -48,7 +48,7 @@ def spend(out_root: Path, prices: dict = PRICES) -> dict:
     """The root's spend: tokens and USD over every attempt, the scored
     episodes' mean, and the projection for the selection's remainder."""
     out_root = Path(out_root)
-    ledger = {r.get("workdir"): r for r in _rows.iter_json_rows(out_root / "episodes.jsonl")}
+    ledger = {r.get("workdir"): r for r in _rows.iter_json_rows(out_root / EPISODES_JSONL)}
     # A cache meter stays None until an attempt reports it.
     totals: dict = {"prompt_tokens": 0, "completion_tokens": 0, "reasoning_tokens": 0,
                     "cached_tokens": None, "cache_write_tokens": None}

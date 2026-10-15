@@ -19,12 +19,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from benchmarks import REPO_ROOT
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.search.withhold import ENV as WITHHOLD_ENV
 from maps.search.withhold import WITHHOLDS
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
 _NUM = (int, float)
 _NONE = type(None)
 
@@ -117,7 +117,7 @@ def _locate(path: str | Path | None) -> Path:
         raise RuntimeError("a --config YAML is required: pass --config configs/citynav.yaml.")
     candidates = [Path(path)]
     if not candidates[0].is_absolute():
-        candidates.append(_REPO_ROOT / path)
+        candidates.append(REPO_ROOT / path)
     for p in candidates:
         if p.exists():
             return p

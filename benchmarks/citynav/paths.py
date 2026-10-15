@@ -21,6 +21,8 @@ import json
 import os
 from pathlib import Path
 
+from benchmarks import REPO_ROOT
+
 
 def _env_value(*names: str, default: str) -> str:
     for name in names:
@@ -66,7 +68,6 @@ CITYNAV_NATIVE_RGBD_DIR = (
     .resolve()
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 # The tile bake (data_prep/bake_tiles.sh): one tags-only OSM ``prior`` list per
 # block, masks clipped to the block's imagery. An SR measured against another
 # bake is not comparable.

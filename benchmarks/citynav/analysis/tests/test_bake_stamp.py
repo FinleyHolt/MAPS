@@ -76,7 +76,7 @@ def _run(root, tiles, *, stamped):
 
 def test_reader_reports_all_three_states(tmp_path, monkeypatch):
     tiles = _bake(tmp_path / "tiles" / "citynav_2m_osmv3")
-    monkeypatch.setattr(run_report, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(run_report, "REPO_ROOT", tmp_path)
     rel = tiles.relative_to(tmp_path)
     real = paths.bake_sha256(tiles)
 
@@ -103,7 +103,7 @@ def test_reader_does_not_confuse_benchmarks(tmp_path, monkeypatch):
     ``tiles_dir_resolved`` is what keeps a calcity run from reporting a
     mismatch against citynav tiles on every read.
     """
-    monkeypatch.setattr(run_report, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(run_report, "REPO_ROOT", tmp_path)
     citynav = _bake(tmp_path / "tiles" / "citynav_2m_osmv3", features='{"a": 1}')
     calcity = _bake(tmp_path / "benchmarks" / "calcity" / "tiles", features='{"b": 2}')
     assert paths.bake_sha256(citynav) != paths.bake_sha256(calcity)
@@ -121,7 +121,7 @@ def test_the_resolved_tiles_dir_names_the_bake_to_check(tmp_path, monkeypatch):
     back to this checkout's default bake instead reports a mismatch on every
     Cal City read -- a correct number, disowned by its own reader.
     """
-    monkeypatch.setattr(run_report, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(run_report, "REPO_ROOT", tmp_path)
     _bake(tmp_path / "tiles" / "citynav_2m_osmv3", features='{"a": 1}')
     calcity = _bake(tmp_path / "benchmarks" / "calcity" / "tiles", features='{"b": 2}')
 
@@ -160,7 +160,7 @@ def test_a_bake_outside_the_repo_is_checked_where_the_run_recorded_it(tmp_path, 
     """Tiles under an absolute path outside the checkout are read there; a
     recorded bake that is nowhere here is UNKNOWN, never compared against
     the CityNav default."""
-    monkeypatch.setattr(run_report, "_REPO_ROOT", tmp_path / "repo")
+    monkeypatch.setattr(run_report, "REPO_ROOT", tmp_path / "repo")
     _bake(tmp_path / "repo" / "tiles" / "citynav_2m_osmv3", features='{"a": 1}')
     monkeypatch.setattr(paths, "TILES_DIR", tmp_path / "repo" / "tiles" / "citynav_2m_osmv3")
     outside = _bake(tmp_path / "elsewhere" / "calcity_tiles", features='{"b": 2}')

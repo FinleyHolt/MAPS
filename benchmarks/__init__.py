@@ -9,11 +9,12 @@ from __future__ import annotations
 import pathlib
 import subprocess
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+#: The checkout every bench path defaults under.
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 #: A copy deployed without git (an rsync of the tree) names its commit here.
-COMMIT_STAMP = _REPO_ROOT / ".commit"
+COMMIT_STAMP = REPO_ROOT / ".commit"
 
 
 def _git_provenance() -> dict:
@@ -22,13 +23,13 @@ def _git_provenance() -> dict:
     out: dict = {"git_commit": None, "git_dirty": None}
     try:
         commit = subprocess.run(
-            ["git", "-C", str(_REPO_ROOT), "rev-parse", "HEAD"],
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
             capture_output=True, text=True, timeout=5,
         )
         if commit.returncode == 0:
             out["git_commit"] = commit.stdout.strip()
         status = subprocess.run(
-            ["git", "-C", str(_REPO_ROOT), "status", "--porcelain"],
+            ["git", "-C", str(REPO_ROOT), "status", "--porcelain"],
             capture_output=True, text=True, timeout=5,
         )
         if status.returncode == 0:

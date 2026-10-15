@@ -40,6 +40,7 @@ import sys
 from pathlib import Path
 
 from baselines.released.upstream import PROTOCOL, RELEASES
+from benchmarks.citynav.episodes import EPISODES_JSONL
 
 Key = tuple[str, int, int]
 
@@ -205,7 +206,7 @@ def calcity_rows(
 
 def write_run(out: Path, rows: list[dict], sets: dict) -> None:
     out.mkdir(parents=True, exist_ok=True)
-    with (out / "episodes.jsonl").open("w") as fh:
+    with (out / EPISODES_JSONL).open("w") as fh:
         for row in rows:
             fh.write(json.dumps(row, sort_keys=True) + "\n")
     (out / "episode_sets.json").write_text(json.dumps(sets, indent=1, sort_keys=True))
