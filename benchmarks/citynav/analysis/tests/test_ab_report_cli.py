@@ -53,7 +53,7 @@ def test_cli_refuses_runs_scored_under_different_criteria(tmp_path, monkeypatch)
     _write_run(tmp_path / "a", "aaaaaaa", {"e1": 1, "e2": 0}, criterion="ring")
     _write_run(tmp_path / "b", "aaaaaaa", {"e1": 0, "e2": 1}, criterion="shape")
     monkeypatch.setattr(sys, "argv", ["ab_report", str(tmp_path / "a"), str(tmp_path / "b")])
-    with pytest.raises(SystemExit, match="the 20 m disc.*the target's own shape"):
+    with pytest.raises(SystemExit, match="the disc of unrecorded radius.*the target's own shape"):
         main()
 
 

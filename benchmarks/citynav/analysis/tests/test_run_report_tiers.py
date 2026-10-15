@@ -153,8 +153,20 @@ def test_a_ring_bench_names_the_disc(tmp_path, capsys):
     write_ledger(tmp_path, *_scored([1, 1, 1, 0, 0], OSR=1, success_criterion="ring"))
     report(tmp_path)
     out = capsys.readouterr().out
-    assert "criterion: the 20 m disc" in out, out
+    assert "criterion: the disc of unrecorded radius" in out, out
     assert "shape" not in out, out
+
+
+def test_the_disc_label_reads_the_run_s_configured_radius(tmp_path, capsys):
+    """The disc is the run's ``success_radius_m`` (manifest ``config_yaml``), not a fixed 20 m;
+    unstamped rows name the same disc."""
+    write_ledger(tmp_path, *_scored([1, 0], OSR=1, success_criterion="ring"))
+    (tmp_path / "run_manifest.json").write_text('{"config_yaml": "success_radius_m: 30.0\\n"}')
+    report(tmp_path)
+    assert "criterion: the 30 m disc" in capsys.readouterr().out
+    write_ledger(tmp_path, *_scored([1, 0], OSR=1))
+    report(tmp_path)
+    assert "the SR above is the 30 m disc" in capsys.readouterr().out
 
 
 def test_an_unstamped_run_refuses_to_elect_a_headline(tmp_path, capsys):

@@ -15,6 +15,8 @@ import sys
 from collections import Counter
 from pathlib import Path, PurePosixPath
 
+import yaml
+
 from benchmarks.citynav.analysis import rows as _rows
 from benchmarks.citynav.analysis.rows import read_manifest
 
@@ -29,12 +31,13 @@ def _pct(num: int, den: int) -> str:
     return f"{num}/{den} ({100 * num / den:.1f}%)" if den else f"{num}/0 (--)"
 
 
-#: How each criterion prints; ``None`` is a row without the stamp.
-_CRITERION_LABEL = {
-    "ring": "the 20 m disc",
-    "shape": "the target's own shape",
-    None: "UNRECORDED",
-}
+def criterion_label(criterion: str | None, root: Path) -> str:
+    """How a criterion prints; ``None`` is a row without the stamp. The disc's
+    radius is the run's configured ``success_radius_m`` (manifest ``config_yaml``)."""
+    if criterion == "ring":
+        radius = (yaml.safe_load(read_manifest(root).get("config_yaml") or "{}") or {}).get("success_radius_m")
+        return "the disc of unrecorded radius" if radius is None else f"the {radius:g} m disc"
+    return {"shape": "the target's own shape", None: "UNRECORDED"}.get(criterion, criterion)
 
 
 def run_criterion(metrics: list[dict]) -> str | None:
@@ -145,7 +148,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
         f"timeouts(wall-clock)={stats.timed_out}  "
         f"infra(excluded)={stats.infra}"
     )
-    print(f"criterion: {_CRITERION_LABEL.get(_criterion, _criterion)}")
+    print(f"criterion: {criterion_label(_criterion, root)}")
     print(f"SR = {_pct(sr, n)}")
     # Metres from the final pose to the target centroid, on every row with metrics.
     ne = [float(m["NE"]) for m in scored.values() if isinstance(m.get("NE"), (int, float))]
@@ -165,8 +168,8 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     if _criterion is None and any(a.metrics for a in picked.values()):
         # Unstamped recorded rows: neither reading is the headline, and the
         # note names the shape line only when one printed.
-        print("  ^ these rows carry no criterion stamp: the SR above is the "
-              "20 m disc"
+        print("  ^ these rows carry no criterion stamp: the SR above is "
+              + criterion_label("ring", root)
               + (", and the shape line beside it is the other reading. Which "
                  "one this bench is scored on is NOT recorded"
                  if shaped else

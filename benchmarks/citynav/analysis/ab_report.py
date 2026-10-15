@@ -208,7 +208,7 @@ def main() -> None:
     _rows.add_allow_partial(ap)
     args = ap.parse_args()
 
-    from benchmarks.citynav.analysis.run_report import _CRITERION_LABEL, load_run, run_criterion
+    from benchmarks.citynav.analysis.run_report import criterion_label, load_run, run_criterion
 
     a = load_run(Path(args.run_a), allow_partial=args.allow_partial)
     b = load_run(Path(args.run_b), allow_partial=args.allow_partial)
@@ -218,8 +218,8 @@ def main() -> None:
     crit_a, crit_b = (run_criterion([run[e] for e in shared]) for run in (a, b))
     if crit_a != crit_b:
         raise SystemExit(
-            f"INVALID A/B -- A is scored on {_CRITERION_LABEL.get(crit_a, crit_a)} and B on "
-            f"{_CRITERION_LABEL.get(crit_b, crit_b)}: the two numbers answer different questions."
+            f"INVALID A/B -- A is scored on {criterion_label(crit_a, Path(args.run_a))} and B on "
+            f"{criterion_label(crit_b, Path(args.run_b))}: the two numbers answer different questions."
         )
 
     prov_a, prov_b = _run_provenance(Path(args.run_a)), _run_provenance(Path(args.run_b))
