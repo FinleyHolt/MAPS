@@ -535,27 +535,30 @@ class _Mission:
             return _rounded_xy(tok)
         return None
 
-    def _stage_apply(self, at_tok: str, facing_tok: str) -> dict:
+    def _stand(self, at_tok: str, facing_tok: str) -> dict:
         """stand(): mint a vN handle that becomes STANDING and bump the
         surface version (a program can answer differently under it)."""
+        def refuse(why: str) -> dict:
+            return self._plan_err({}, f"the stance did not bind: {why}")
+
         at_xy = self._point(at_tok)
         if at_xy is None:
-            return {"error": f"at {at_tok!r} is not a live surface fid or an "
-                             f"[x, y] world point"}
+            return refuse(f"at {at_tok!r} is not a live surface fid or an "
+                          f"[x, y] world point")
         compass = facing_tok.strip().lower()
         if compass in COMPASS_UNIT:
             up = list(COMPASS_UNIT[compass])
         else:
             f_xy = self._point(facing_tok)
             if f_xy is None:
-                return {"error": (f"facing {facing_tok!r} is not a live surface "
-                                  f"fid, an [x, y] point, or one of "
-                                  f"{'|'.join(COMPASS_UNIT)}")}
+                return refuse(f"facing {facing_tok!r} is not a live surface "
+                              f"fid, an [x, y] point, or one of "
+                              f"{'|'.join(COMPASS_UNIT)}")
             dx = f_xy[0] - at_xy[0]
             dy = f_xy[1] - at_xy[1]
             n = (dx * dx + dy * dy) ** 0.5
             if n < 1e-6:
-                return {"error": "at and facing coincide -- no look direction"}
+                return refuse("at and facing coincide -- no look direction")
             up = [dx / n, dy / n]
         h = f"v{len(self.staged_viewpoints) + 1}"
         brg = round(up_bearing_deg(up)) % 360
@@ -569,14 +572,14 @@ class _Mission:
         self.ns["staged"] = self.staged_viewpoints
         self.ns["standing"] = h
         self.carry.version += 1
-        return {
+        return {"stance": {
             "staged": [{"handle": h, "at_xy": at_xy,
                         "facing_bearing_deg": brg}],
             "note": (f"standing viewpoint = {h}: 'left of {h}'/'right of "
                      f"{h}'/'ahead of {h}'/'behind {h}' ride every find "
                      f"row; {h} is a point ref ('distance to {h}'); crops "
                      f"and maps render its facing up."),
-        }
+        }}
 
     def _standing_frame(self) -> tuple[list | None, str]:
         """The STANDING viewpoint's image-up and the caption note stating it
@@ -1032,34 +1035,6 @@ class _Mission:
             preamble=("One crop per row, in order, each badged with the "
                       "row it shows. "))
 
-    def _map_of(self, fid: str, mark_fids: list | None = None) -> dict:
-        spec, m_skipped = map_spec(fid, mark_fids or [], rows=self._ns_rows,
-                                   resolve=self._point,
-                                   frame=self._standing_frame())
-        ack: dict = {"maps": int(spec is not None)}
-        if m_skipped:
-            ack["skipped"] = m_skipped[:20]
-        if spec is None:
-            ack["error"] = "no resolvable map center"
-            return ack
-        try:
-            from maps.search.render.map_render import (  # noqa: PLC0415
-                render_map_from_spec,
-            )
-            _m = render_map_from_spec(
-                spec, self._map_features_cached(),
-                tile_origin_xy=self.ctx.tile_origin_xy,
-                cell_size_m=float(self.ctx.cell_size_m),
-                grid_shape=tuple(self.ctx.grid_shape))
-            maps = [_m] if _m is not None else []
-        except Exception as exc:  # noqa: BLE001 - render never crashes the mission
-            log.warning("%s SAY map render failed: %s", self.rid_tag,
-                        _summarise_exc(exc))
-            return {"error": f"map render failed: {_summarise_exc(exc)}"}
-        jpegs = [m["jpeg"] for m in maps if m.get("jpeg")]
-        self._ship(ack, "map", jpegs, map_vision_text(maps))
-        return ack
-
     def _plan_err(self, ack: dict, msg: str) -> dict:
         """A plan error, through the escalating loop breaker."""
         return {**ack, "error": self._loop_broken_error(str(msg))}
@@ -1187,12 +1162,6 @@ class _Mission:
                           if _sb else None)
         return {"result": out}
 
-    def _stand(self, at: str, facing: str) -> dict:
-        st = self._stage_apply(at, facing)
-        if "error" in st:
-            return self._plan_err({}, f"the stance did not bind: {st['error']}")
-        return {"stance": st}
-
     def _move_to(self, tok: str) -> dict:
         tok, _stop_err = self._flown_stop(tok)
         if _stop_err:
@@ -1287,12 +1256,37 @@ class _Mission:
         return {"crop": crop}
 
     def _map(self, around: str) -> dict:
-        # The map badges the set in scope.
+        """show_map(): one map around a place, badging the set in scope."""
         _h = self._those
         _mrows = [r for r in (self.carry.read(_h) or [])
                   if r.get("fid")] if _h else []
         _mfids = [str(r["fid"]) for r in _mrows[:_MAP_MAX_MARKS]]
-        mp = self._map_of(around, mark_fids=_mfids)
+        spec, m_skipped = map_spec(around, _mfids, rows=self._ns_rows,
+                                   resolve=self._point,
+                                   frame=self._standing_frame())
+        mp: dict = {"maps": int(spec is not None)}
+        if m_skipped:
+            mp["skipped"] = m_skipped[:20]
+        if spec is None:
+            mp["error"] = "no resolvable map center"
+        else:
+            try:
+                from maps.search.render.map_render import (  # noqa: PLC0415
+                    render_map_from_spec,
+                )
+                _m = render_map_from_spec(
+                    spec, self._map_features_cached(),
+                    tile_origin_xy=self.ctx.tile_origin_xy,
+                    cell_size_m=float(self.ctx.cell_size_m),
+                    grid_shape=tuple(self.ctx.grid_shape))
+                maps = [_m] if _m is not None else []
+            except Exception as exc:  # noqa: BLE001 - render never crashes the mission
+                log.warning("%s SAY map render failed: %s", self.rid_tag,
+                            _summarise_exc(exc))
+                mp = {"error": f"map render failed: {_summarise_exc(exc)}"}
+            else:
+                self._ship(mp, "map", [m["jpeg"] for m in maps if m.get("jpeg")],
+                           map_vision_text(maps))
         if _mfids:
             # The set under the model's own name for it.
             _name = self._mission_py.ref_name(_h)
