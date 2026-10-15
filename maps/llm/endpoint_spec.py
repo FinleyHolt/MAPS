@@ -1,7 +1,7 @@
 """Server-discovered endpoint facts, probed once at process start.
 
 :func:`discover` reads the served model and its window off
-``GET {url}/v1/models`` and checks each SAM replica's ``/health``; any
+``GET models_url(url)`` and checks each SAM replica's ``/health``; any
 divergence raises :class:`EndpointDiscoveryError` naming the URL and what was
 seen. An entry point runs ``install_spec(discover_from_env())``; the reasoner
 gets the spec injected, and other readers call :func:`spec`, which raises when

@@ -487,8 +487,8 @@ class SamDetectClient:
         # Pass 2: one DetectedObject per kept component; a mask whose every
         # component fails projection falls back to the merged mask.
         def _pack(region, det_idx, obj_id, score, label, comp_idx, n_comp):
-            """One region projected, coloured and packed, or None when fewer
-            than ``_MIN_VALID_DEPTH_PIXELS`` of its pixels have real depth."""
+            """One region projected, coloured and packed, or None when too few
+            of its pixels carry real depth (``geolocate.project_mask_to_world_ortho``)."""
             projected = project_mask_to_world_ortho(
                 region,
                 depth=obs.depth,
