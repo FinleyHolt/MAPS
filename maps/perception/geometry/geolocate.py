@@ -49,25 +49,10 @@ def frame_world_xy(
     return u, v, xs, ys
 
 
-def _tile_mask_from_world(xs: np.ndarray, ys: np.ndarray, tile: TileFrame) -> np.ndarray | None:
-    """World points rasterized onto ``tile`` as the ``(N, 2) int32`` (row, col)
-    cells they occupy, clipped to it and deduplicated (``np.unique`` on
-    ``row * W + col`` gives row-major order); ``None`` when no point lands
-    inside."""
-    col_idx = np.rint((xs - tile.x_min) / tile.cell_size_m - 0.5).astype(np.int64)
-    row_idx = np.rint((ys - tile.y_min) / tile.cell_size_m - 0.5).astype(np.int64)
-    H, W = tile.grid_shape
-    in_bounds = (row_idx >= 0) & (row_idx < H) & (col_idx >= 0) & (col_idx < W)
-    if not np.any(in_bounds):
-        return None
-
-    flat = np.unique(row_idx[in_bounds] * W + col_idx[in_bounds])
-    return np.stack(np.divmod(flat, W), axis=1).astype(np.int32)
-
-
-# Below this many valid depth pixels a mask's world position is noise, not a
-# measurement, so the detection is dropped rather than placed badly.
-_MIN_VALID_DEPTH_PIXELS = 16
+# Below this many pixels (set, or with valid depth) a mask's world position
+# is noise, not a measurement, so the detection is dropped rather than placed
+# badly.
+_MIN_MASK_PIXELS = 16
 
 
 def _r_bc(sensor: SensorSpec, airframe_roll_deg: float, airframe_pitch_deg: float) -> np.ndarray:
@@ -206,14 +191,23 @@ def project_mask_to_tile_cells_ortho(
     view_corners_xy: tuple,
     tile: TileFrame,
 ) -> np.ndarray | None:
-    """A mask's ``(N, 2) int32`` tile cells through the view-square affine (no depth);
-    ``None`` with fewer than ``_MIN_VALID_DEPTH_PIXELS`` set pixels or no cell
-    inside ``tile``."""
+    """A mask's tile cells through the view-square affine (no depth): the
+    ``(N, 2) int32`` (row, col) cells its pixels land in, clipped to ``tile``
+    and deduplicated (``np.unique`` on ``row * W + col`` gives row-major
+    order); ``None`` with fewer than ``_MIN_MASK_PIXELS`` set pixels or no
+    cell inside ``tile``."""
     rr, cc = region.rows_cols()
-    if rr.size < _MIN_VALID_DEPTH_PIXELS:
+    if rr.size < _MIN_MASK_PIXELS:
         return None
     _u, _v, xs, ys = frame_world_xy(view_corners_xy, rr, cc, region.frame_shape)
-    return _tile_mask_from_world(xs, ys, tile)
+    col_idx = np.rint((xs - tile.x_min) / tile.cell_size_m - 0.5).astype(np.int64)
+    row_idx = np.rint((ys - tile.y_min) / tile.cell_size_m - 0.5).astype(np.int64)
+    H, W = tile.grid_shape
+    in_bounds = (row_idx >= 0) & (row_idx < H) & (col_idx >= 0) & (col_idx < W)
+    if not np.any(in_bounds):
+        return None
+    flat = np.unique(row_idx[in_bounds] * W + col_idx[in_bounds])
+    return np.stack(np.divmod(flat, W), axis=1).astype(np.int32)
 
 
 # A traced contour is simplified to ~1.5% of its perimeter, then decimated to
@@ -271,7 +265,7 @@ def project_mask_to_world_ortho(
     """A mask's world centroid, the mean (east, north) through the
     view-square affine over the pixels with finite, positive depth (depth
     sampled nearest-neighbour at each pixel's normalised ``(u, v)``, so its
-    grid may differ from the mask's). ``None`` with no depth or fewer than ``_MIN_VALID_DEPTH_PIXELS``
+    grid may differ from the mask's). ``None`` with no depth or fewer than ``_MIN_MASK_PIXELS``
     valid pixels.
     """
     if depth is None:
@@ -289,6 +283,6 @@ def project_mask_to_world_ortho(
     dc = np.clip(np.rint(u * (wd - 1)).astype(np.int64), 0, wd - 1)
     d = depth2d[dr, dc]
     finite = np.isfinite(d) & (d > 0.0)
-    if int(finite.sum()) < _MIN_VALID_DEPTH_PIXELS:
+    if int(finite.sum()) < _MIN_MASK_PIXELS:
         return None
     return (float(xs[finite].mean()), float(ys[finite].mean()))
