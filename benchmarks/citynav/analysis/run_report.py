@@ -10,6 +10,7 @@ unless ``--allow-partial`` (``rows.load_attempts``).
 from __future__ import annotations
 
 import argparse
+import functools
 import statistics
 import sys
 from collections import Counter
@@ -200,15 +201,23 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
 _BUCKETS = ("car", "building", "other")
 
 
+# ponytail: a split file is read once per process (the bench reports after every landed
+# episode); one edited on disk is read again by a new process only.
+@functools.lru_cache(maxsize=4)
+def _read_split(path: Path) -> list[dict]:
+    from benchmarks.citynav.adapter import load_split
+
+    return load_split(path)
+
+
 def _split_rows(split: str | None) -> list[dict] | None:
     """The rows of the split a run names, else ``None`` when its file is not on this machine."""
     from benchmarks.calcity import paths as calcity_paths
     from benchmarks.citynav import paths
-    from benchmarks.citynav.adapter import load_split
 
     try:
-        return load_split(calcity_paths.split_path(split) if split in calcity_paths.SPLIT_FILES
-                          else paths.split_path(split))
+        return _read_split(calcity_paths.split_path(split) if split in calcity_paths.SPLIT_FILES
+                           else paths.split_path(split))
     except (OSError, ValueError):
         return None
 
