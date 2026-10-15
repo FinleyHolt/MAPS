@@ -22,6 +22,7 @@ import os
 from pathlib import Path
 
 from benchmarks import REPO_ROOT
+from benchmarks.calcity import paths as calcity_paths
 
 
 def _env_value(*names: str, default: str) -> str:
@@ -104,7 +105,7 @@ SUCCESS_CRITERION, DEFAULT_SPLIT, SPLIT_FILES = {
         "test_unseen_medium": "citynav_test_unseen_medium.json",
         "test_unseen_hard": "citynav_test_unseen_hard.json",
     }),
-    "calcity": ("shape", "calcity", {"calcity": "calcity.json"}),
+    "calcity": ("shape", "calcity", calcity_paths.SPLIT_FILES),
 }[BENCHMARK]
 
 
@@ -122,8 +123,6 @@ def tile_stem(map_name: str) -> str:
 def assert_available() -> None:
     """Raise with the fetch recipe when the splits or ``objects.json`` are missing."""
     if BENCHMARK == "calcity":
-        from benchmarks.calcity import paths as calcity_paths  # noqa: PLC0415
-
         calcity_paths.assert_available()
         return
     missing = [p for p in (SPLITS_DIR, OBJECTS_JSON) if not p.exists()]
