@@ -48,6 +48,7 @@ from bisect import bisect_left
 from pathlib import Path
 from typing import Any
 
+from benchmarks.citynav.action_snap import bearing_deg
 from benchmarks.citynav.analysis.rows import is_infra_abort, iter_json_rows
 from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
@@ -153,10 +154,6 @@ ARC_EPS_DEG = 1.0
 #: Each Dubins word's three senses, in flying order.
 SENSES = {"LSL": (-1, 0, -1), "RSR": (1, 0, 1), "LSR": (-1, 0, 1), "RSL": (1, 0, -1),
           "LRL": (-1, 1, -1), "RLR": (1, -1, 1)}
-
-
-def bearing_deg(a, b) -> float:
-    return math.degrees(math.atan2(b[0] - a[0], b[1] - a[1]))
 
 
 def turn_centre(p, heading_deg: float, sense: int, r: float) -> tuple[float, float]:
