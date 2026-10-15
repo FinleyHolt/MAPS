@@ -282,3 +282,11 @@ def test_a_lost_leg_after_a_short_pass_says_the_closest_the_leg_came(make_missio
     assert m._wait_arrival((600.0, 600.0), area=[], timeout_s=60.0, reach_m=200.0)[0] == "short"
     assert m._wait_arrival((600.0, 600.0), area=[], timeout_s=3.0)[0] == "lost"
     assert "(closest 100 m)" in m._outcome_words("lost", "t at (600, 600)", None, 0.0)
+
+
+def test_the_mission_stamps_the_arm_s_reasoning_effort_as_its_requests_carry_it(make_mission, monkeypatch):
+    m, _twin = make_mission()
+    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", " high ")
+    assert m._mission_stamp()["reasoning_effort"] == "high"
+    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "  ")
+    assert m._mission_stamp()["reasoning_effort"] is None

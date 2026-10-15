@@ -721,7 +721,8 @@ class Mission:
         """The mission's grain of the run manifest: which mission, and the
         reasoning effort its requests carry (``model_cards.sampling_kwargs``'s rule)."""
         return {"episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no,
-                "reasoning_effort": self.reasoning_effort or os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT")}
+                "reasoning_effort": self.reasoning_effort
+                or (os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT") or "").strip() or None}
 
     def _turns(self) -> int:
         """Model turns taken: the conversations that have ended plus the turn the one in flight is on."""
