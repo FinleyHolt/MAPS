@@ -37,9 +37,9 @@ from maps.search.analyze_scene.row_geometry import SurfaceGeometry
 from maps.search.withhold import withheld
 from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
 from maps.search.parse_compile.code_surface import (
-    _CARDINALS, Bind, CodeError, Program, Ref, act_needs_a_thing, bind_row,
-    compile_filter, compile_find, compile_order, _fid_like,
-    _refuse_metres_in_within, rn_spelled, _split_diagonal)
+    _CARDINALS, HANDLE_RE, VIEWPOINT_RE, Bind, CodeError, Program, Ref,
+    act_needs_a_thing, bind_row, compile_filter, compile_find, compile_order,
+    _fid_like, _refuse_metres_in_within, rn_spelled, _split_diagonal)
 
 BLOCK_FILENAME = "<mission-block>"
 
@@ -1054,7 +1054,7 @@ class MissionPython:
             return Ref(v.ref, name)
         if isinstance(v, Row):
             return Bind(v.bind, name)
-        if isinstance(v, str) and v == name and re.fullmatch(r"v\d{1,3}", v):
+        if isinstance(v, str) and v == name and VIEWPOINT_RE.fullmatch(v):
             return Bind(v, name)
         return None
 
@@ -1085,7 +1085,7 @@ class MissionPython:
         """A program for one call: it mints past the rN names the call spells
         and the mission's handles hold."""
         taken = rn_spelled(args) | {
-            k for k, v in self.ns.items() if re.fullmatch(r"r\d+", k)
+            k for k, v in self.ns.items() if HANDLE_RE.fullmatch(k)
             and (isinstance(v, Row) or isinstance(v, Rows) and not v.spec)}
         live = {v.ref for v in self.ns.values()
                 if isinstance(v, Rows) and not v.spec}
@@ -1489,7 +1489,7 @@ class MissionPython:
                     name="go_to/explore",
                     got=", ".join(f"{v:g}" if isinstance(v, (int, float))
                                   else str(v) for v in x)))
-        if isinstance(x, str) and re.fullmatch(r"v\d{1,3}", x):
+        if isinstance(x, str) and VIEWPOINT_RE.fullmatch(x):
             # A staged viewpoint is a pose, not a thing on the map: the
             # move wire would resolve it to its stand point, a coordinate.
             raise CodeError(

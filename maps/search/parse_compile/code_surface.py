@@ -100,15 +100,20 @@ def _is_place_list(v) -> bool:
             and not is_xy(v))
 
 
-#: The fid families the world mints. Everything else in a place position is
-#: a NAME to ground.
-_FID_RE = re.compile(r"(?:prior_|detected_|stop_|end_|v)[0-9]{1,4}",
-                     re.IGNORECASE)
+# The token grammar, each matched whole: the fid families the world mints
+# (everything else in a place position is a NAME to ground), a result handle,
+# a staged viewpoint, a coverage stop and a terminus.
+FID_RE = re.compile(r"(?:prior_|detected_|stop_|end_|v)[0-9]{1,4}",
+                    re.IGNORECASE)
+HANDLE_RE = re.compile(r"r\d+")
+VIEWPOINT_RE = re.compile(r"v\d{1,3}")
+STOP_RE = re.compile(r"stop_[0-9]{1,4}")
+END_RE = re.compile(r"end_\d+")
 
 
 def _fid_like(tok) -> bool:
     """Is this string a FID rather than a name?"""
-    return isinstance(tok, str) and bool(_FID_RE.fullmatch(tok.strip()))
+    return isinstance(tok, str) and bool(FID_RE.fullmatch(tok.strip()))
 
 
 @dataclass(frozen=True)
@@ -136,7 +141,7 @@ def rn_spelled(vals) -> set:
         if isinstance(v, (Ref, Bind)):
             v = v.label
         if isinstance(v, str):
-            if re.fullmatch(r"r\d+", v):
+            if HANDLE_RE.fullmatch(v):
                 out.add(v)
         elif isinstance(v, dict):
             todo.extend(v.values())
@@ -233,7 +238,7 @@ class Program:
             got = got["ref"]
         if (isinstance(got, list) and len(got) == 1
                 and isinstance(got[0], str)
-                and re.fullmatch(r"r\d+", got[0])):
+                and HANDLE_RE.fullmatch(got[0])):
             return got[0]
         return got
 
