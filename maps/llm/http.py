@@ -538,7 +538,7 @@ def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusa
     if not requested:
         return
     try:
-        served = [str(m.get("id")) for m in endpoint_spec._probe_models(base_url)]
+        served = [str(m.get("id")) for m in endpoint_spec.probe_models(base_url)]
     except endpoint_spec.EndpointDiscoveryError:
         return
     if requested not in served:

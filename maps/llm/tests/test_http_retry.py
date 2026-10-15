@@ -209,7 +209,7 @@ def test_a_404_for_a_model_no_longer_served_is_named_on_both_paths(transport, mo
 
     from maps.llm import endpoint_spec
 
-    monkeypatch.setattr(endpoint_spec, "_probe_models", lambda _url: [{"id": "another-model"}])
+    monkeypatch.setattr(endpoint_spec, "probe_models", lambda _url: [{"id": "another-model"}])
     result, calls, _sleeps = transport([_err(404)], **({"cancel_event": threading.Event()} if stream else {}))
     assert isinstance(result, RuntimeError), result
     assert "served-model mismatch" in str(result) and "another-model" in str(result)

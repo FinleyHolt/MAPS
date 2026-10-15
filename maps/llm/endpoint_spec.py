@@ -157,7 +157,7 @@ def models_url(base_url: str) -> str:
     return f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
 
 
-def _probe_models(base_url: str) -> list[dict]:
+def probe_models(base_url: str) -> list[dict]:
     """``GET models_url(base_url)`` -> the ``data`` model list (non-empty)."""
     payload = _get_json(models_url(base_url), bearer=reasoner_api_key())
     data = payload.get("data") if isinstance(payload, dict) else None
@@ -173,7 +173,7 @@ def _facts_from_endpoint(
     base_url: str, override: EndpointOverride | None
 ) -> tuple[str, int]:
     """One endpoint's ``(model_id, max_model_len)``."""
-    models = _probe_models(base_url)
+    models = probe_models(base_url)
     ids = [str(m.get("id") or "") for m in models]
     if override is not None:
         from maps.llm.model_cards import speaks_openai  # noqa: PLC0415
