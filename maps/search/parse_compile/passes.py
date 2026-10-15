@@ -8,6 +8,17 @@ import math
 from maps.util.xy_token import format_xy_token, parse_xy_token
 
 
+def spread(seq: list, k: int) -> list:
+    """``k`` (clamped to 1 .. ``len(seq)``) items of ``seq`` at an even stride,
+    both ends kept; one item is the middle one, since an end would see half
+    the shape."""
+    k = max(1, min(k, len(seq)))
+    if k == 1:
+        return [seq[(len(seq) - 1) // 2]]
+    stride = (len(seq) - 1) / (k - 1)
+    return [seq[int(round(i * stride))] for i in range(k)]
+
+
 def _coverage_stops(tok: str, spec, spacing):
     """The engine's stops over one fid's footprint; None for a point,
     a fid with no cells, or a run without an observation extent."""
@@ -142,11 +153,8 @@ def _cover_set_items(accepted: list, said, *, spec, spacing,
             flat.append((m, mv))
             if p is not None:
                 kept_pts.append(p)
-    n = spec.flight_budget
-    if len(flat) > n:
-        stride = (len(flat) - 1) / max(n - 1, 1)
-        keep = sorted({int(round(i * stride)) for i in range(n)})
-        flat = [flat[i] for i in keep]
+    if len(flat) > spec.flight_budget:
+        flat = spread(flat, spec.flight_budget)
     for m in chained:
         m["kept"] = sum(1 for f, _ in flat if f is m)
     total = sum(m["walk"] for m in chained)

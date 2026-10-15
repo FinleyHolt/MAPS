@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from maps.search.analyze_scene.geom_compute import cell_centre_xy
+from maps.search.parse_compile.passes import spread
 from maps.search.parse_compile.perception_director import (
     PerceptionDirector, canon_concept)
 from maps.sws.graph.model import GridDomain, MapObject
@@ -164,16 +165,16 @@ class SearchLoop:
                     row = sorted(rows[ridx], key=_maj,
                                  reverse=bool(ri % 2))
                     r_reach = abs(_maj(row[-1]) - _maj(row[0]))
-                    picks.extend(_spread(row, min(int(max_stops), int(r_reach // span) + 1)))
+                    picks.extend(spread(row, min(int(max_stops), int(r_reach // span) + 1)))
                 if len(picks) > int(max_stops):
-                    picks = _spread(picks, int(max_stops))
+                    picks = spread(picks, int(max_stops))
             else:
                 along = sorted(zip(xs, ys),
                                key=(lambda p: p[0])
                                if (x1 - x0) >= (y1 - y0)
                                else (lambda p: p[1]))
                 reach = max(x1 - x0, y1 - y0)
-                picks = _spread(along, min(int(max_stops), int(reach // span) + 1))
+                picks = spread(along, min(int(max_stops), int(reach // span) + 1))
             on_it: list = []
             for px, py in picks:
                 q = [round(px), round(py)]
@@ -347,17 +348,6 @@ class SearchLoop:
         if isinstance(track, str) and track.startswith("wt_"):
             return track
         return f"{det.label or '?'}@{float(det.world_xy[0]):.0f},{float(det.world_xy[1]):.0f}"
-
-
-def _spread(seq: list, k: int) -> list:
-    """``k`` (clamped to 1 .. ``len(seq)``) items of ``seq`` at an even stride,
-    both ends kept; one item is the middle one, since an end would see half
-    the shape."""
-    k = max(1, min(k, len(seq)))
-    if k == 1:
-        return [seq[(len(seq) - 1) // 2]]
-    stride = (len(seq) - 1) / (k - 1)
-    return [seq[int(round(i * stride))] for i in range(k)]
 
 
 def _detection_to_mapobject(det, bounds_min, cell_size_m):
