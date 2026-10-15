@@ -51,12 +51,13 @@ def _install_stub_policy(monkeypatch, name: str, run) -> None:
     monkeypatch.setitem(sys.modules, f"baselines.{name}.policy", mod)
 
 
-def _hydrated(alt: float = 50.0, ground: float = 0.0):
+def _hydrated(alt: float = 50.0, ground: float = 0.0, heading: float = 0.0):
     """The parts of ``episode_runner.Hydrated`` the seam reads."""
     return SimpleNamespace(
         cfg=SimpleNamespace(max_steps=200),
         episode=SimpleNamespace(episode_id="unit::1#0", map_name="unit_block_0",
-                                description="the car by the depot", start_xy=(0.0, 0.0), target_xy=(0.0, 100.0)),
+                                description="the car by the depot", start_xy=(0.0, 0.0), target_xy=(0.0, 100.0),
+                                start_heading_deg=heading),
         assets=SimpleNamespace(
             bounds=SimpleNamespace(x_min=-500.0, y_min=-500.0, x_max=500.0, y_max=500.0),
             cell_size_m=2.0, grid_shape=(500, 500), base_features={"prior": []},
@@ -104,6 +105,26 @@ def test_a_stub_policy_lands_its_commit_and_the_replay_ends_there(tmp_path, monk
     assert 0 < steps <= h.cfg.max_steps
     assert len(state.visited_xy) == steps
     assert abs(state.pose_xy[1] - 100.0) <= 5.0
+
+
+def test_the_budget_prices_a_leg_from_the_start_heading_the_replay_flies_from(tmp_path, monkeypatch):
+    """The replay starts facing the episode's start heading; a budget that
+    started facing north priced a 100 m leg north from a south-facing start
+    at fewer actions than the replay spends on it."""
+    monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
+    priced = {}
+
+    def run(h):
+        priced["used"] = h.budget.move((0.0, 100.0), 50.0)
+        return BaselineResult(stops=[((0.0, 100.0), 50.0)], commit_xy=None, commit_label="x", commit_tier="stub:tier")
+
+    _install_stub_policy(monkeypatch, "stub_heading", run)
+    h = _hydrated(heading=180.0)
+    flights = fly(h, "stub_heading").flights
+    steps = synthesize_compliant_trajectory(
+        cfg=h.cfg, state=h.state, flights=flights, start_pose_xyh=(0.0, 0.0, 180.0), start_alt=50.0,
+    )
+    assert priced["used"] == steps
 
 
 def test_a_policy_that_commits_nothing_commits_its_last_stop(tmp_path, monkeypatch):

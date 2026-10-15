@@ -147,9 +147,11 @@ class BaselineHarness:
             cell_size_m=float(assets.cell_size_m),
             grid_shape=tuple(assets.grid_shape),
         )
+        # The replay's own start pose: the start heading prices every leg.
         self.budget = Budget(
             cfg.max_steps,
-            Pose(float(episode.start_xy[0]), float(episode.start_xy[1]), self.start_alt_m, 0.0),
+            Pose(float(episode.start_xy[0]), float(episode.start_xy[1]), self.start_alt_m,
+                 float(episode.start_heading_deg) % 360.0),
         )
         # Wall time per phase, landed on the row as ``<policy>_phase_<name>_s``.
         self.phase_s: dict[str, float] = {"render": 0.0, "segment": 0.0, "examine": 0.0}

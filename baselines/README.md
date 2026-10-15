@@ -22,7 +22,7 @@ their own evaluators instead: [`released/`](released/README.md).
 | start pose | the runner's: the dataset start (or the config's `spawn`), at the dataset's start z or the config's `start_altitude_agl_m` | `episode_runner.start_altitude_m` |
 | prior | the OSM rows of the block; a landmark is a row with a `name` tag | `seam.BaselineHarness.landmarks` |
 | detector | the run's own SAM 3.1 client | `episode_runner.make_perception`, `seam.BaselineHarness.detect` |
-| budget | the config's `max_steps`, priced per teleport in the six-action space | `seam.Budget` |
+| budget | the config's `max_steps`, priced per teleport in the six-action space from the replay's start pose and heading | `seam.Budget` |
 | replay and score | the stops and the commit, as flights, through `synthesize_compliant_trajectory`, scored by `episode_runner.score_episode` under the bench's criterion | `episode_runner.run_episode` |
 | row | the MAPS row; `policy`, `commit_path` and `committed_fid` name the method, its commit tier and its commit, and the policy's own numbers ride as `metrics.<policy>_*`; `metrics.llm` counts every call, read off the same `flight/llm/transcript.jsonl` | `seam.fly` |
 
