@@ -96,17 +96,22 @@ _OVERSIZE_REJECTION = (
 )
 
 
+def _rejection_body(exc: BaseException, statuses) -> str:
+    """The lowercased body of an HTTP rejection whose status is in
+    ``statuses``; empty otherwise."""
+    if not (isinstance(exc, httpx.HTTPStatusError)
+            and exc.response.status_code in statuses):
+        return ""
+    try:
+        return exc.response.text.lower()
+    except Exception:
+        return ""
+
+
 def _is_oversize_rejection(exc: BaseException) -> bool:
     """Did the serve reject this request because it does not FIT? A retry
     would re-send the same bytes for the same answer."""
-    if not isinstance(exc, httpx.HTTPStatusError):
-        return False
-    if not 400 <= exc.response.status_code < 500:
-        return False
-    try:
-        body = exc.response.text.lower()
-    except Exception:
-        return False
+    body = _rejection_body(exc, range(400, 500))
     return any(s in body for s in _OVERSIZE_REJECTION)
 
 
@@ -119,12 +124,7 @@ _CONTENT_FILTER_REJECTION = ("content_filter", "responsibleaipolicyviolation")
 def _is_content_filter_rejection(exc: BaseException) -> bool:
     """Did a content filter refuse this prompt? The same prompt is refused the
     same way, so the mission ends rather than re-send it."""
-    if not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code != 400:
-        return False
-    try:
-        body = exc.response.text.lower()
-    except Exception:
-        return False
+    body = _rejection_body(exc, (400,))
     return any(s in body for s in _CONTENT_FILTER_REJECTION)
 
 
