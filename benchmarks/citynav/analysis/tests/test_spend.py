@@ -58,3 +58,11 @@ def test_a_scored_attempt_that_sent_no_request_is_a_scored_episode(tmp_path: Pat
     (tmp_path / "run_manifest.json").write_text(json.dumps({"selection": {"episodes_n": 2}}))
     out = spend.spend(tmp_path)
     assert (out["scored_episodes"], out["usd_per_scored_episode"], out["usd_projected_remaining"]) == (2, 2.5, 0)
+
+
+def test_cache_meters_no_attempt_reported_read_none(tmp_path: Path) -> None:
+    """A serve that reports no cache meter has an unknown hit rate, not a zero one."""
+    _attempt(tmp_path, "w0/maps_1_a", prompt=1_000_000, cached=None, write=0, out=0)
+    out = spend.spend(tmp_path)
+    assert (out["tokens"]["cached_tokens"], out["tokens"]["cache_write_tokens"], out["cache_hit"]) == (None, None, None)
+    assert out["usd"]["flying"] == 5.0

@@ -9,7 +9,7 @@ attempt still flying and one the run re-queued as infra are both counted:
 the endpoint billed them. Prompt tokens are priced in three parts: the
 cache reads (``cached_tokens``), the cache writes (``cache_write_tokens``)
 and the rest; a serve that reports no cache meter prices every prompt token
-as uncached. The projection is the mean cost of a scored episode times the
+as uncached, and its cache totals and hit rate read null. The projection is the mean cost of a scored episode times the
 selected episodes not yet scored (``run_manifest.json`` ``selection``).
 Every ``served_model`` the attempts were answered by is listed: more than
 one is a deployment that changed model version mid-run.
@@ -49,15 +49,17 @@ def spend(out_root: Path, prices: dict = PRICES) -> dict:
     episodes' mean, and the projection for the selection's remainder."""
     out_root = Path(out_root)
     ledger = {r.get("workdir"): r for r in _rows.iter_json_rows(out_root / "episodes.jsonl")}
-    totals = Counter()
+    # A cache meter stays None until an attempt reports it.
+    totals: dict = {"prompt_tokens": 0, "completion_tokens": 0, "reasoning_tokens": 0,
+                    "cached_tokens": None, "cache_write_tokens": None}
     usd = {"scored": 0.0, "infra": 0.0, "flying": 0.0}
     served: Counter = Counter()
     scored_ids: set[str] = set()
     for attempt in sorted(out_root.glob("w*/maps_*")):
         llm = summarize(attempt / "flight")
-        for k in ("prompt_tokens", "completion_tokens", "reasoning_tokens", "cached_tokens",
-                  "cache_write_tokens"):
-            totals[k] += llm[k] or 0
+        for k in totals:
+            if llm[k] is not None:
+                totals[k] = (totals[k] or 0) + llm[k]
         if llm["served_model"]:
             served[llm["served_model"]] += 1
         row = ledger.get(str(attempt.relative_to(out_root)))
@@ -72,8 +74,9 @@ def spend(out_root: Path, prices: dict = PRICES) -> dict:
     per_episode = usd["scored"] / len(scored_ids) if scored_ids else None
     remaining = None if selected is None else max(0, selected - len(scored_ids))
     return {
-        "tokens": dict(totals),
-        "cache_hit": totals["cached_tokens"] / totals["prompt_tokens"] if totals["prompt_tokens"] else None,
+        "tokens": totals,
+        "cache_hit": (totals["cached_tokens"] / totals["prompt_tokens"]
+                      if totals["cached_tokens"] is not None and totals["prompt_tokens"] else None),
         "usd": {k: round(v, 2) for k, v in usd.items()},
         "usd_total": round(sum(usd.values()), 2),
         "scored_episodes": len(scored_ids),
