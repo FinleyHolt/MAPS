@@ -10,6 +10,10 @@ import cv2
 import numpy as np
 
 
+#: The JPEG quality of every image the model is sent: the mission's crops and
+#: a baseline policy's frames (``baselines.seam``).
+JPEG_QUALITY = 85
+
 _LABEL_FONT = cv2.FONT_HERSHEY_SIMPLEX
 
 _LOOK_BAND_BGR: tuple[int, int, int] = (28, 28, 28)  # dark margin strip
@@ -196,7 +200,7 @@ def render_look_overlay(
     out = np.vstack([band, canvas])
 
     ok, buf = cv2.imencode(
-        ".jpg", out, [int(cv2.IMWRITE_JPEG_QUALITY), 85]
+        ".jpg", out, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
     )
     if not ok:
         raise RuntimeError("cv2.imencode failed on look overlay")

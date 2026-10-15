@@ -39,6 +39,7 @@ from benchmarks.citynav.action_snap import Pose, snap_to_actions
 from maps.llm.vision_content import build_vision_user_content
 from maps.perception.geometry.geolocate import frame_world_xy
 from maps.perception.observation import Observation
+from maps.perception.viz.mllm_overlay import JPEG_QUALITY
 
 #: The thinking dial each policy sends: ``None`` sends the arm's
 #: ``SEARCH_SAMPLING_REASONING_EFFORT`` (no key when unset); ``"none"`` is
@@ -479,10 +480,6 @@ def _landmarks_from_rows(rows: list[dict]) -> list[Landmark]:
 WINDOW_MIN_HALF_M = 512.0
 WINDOW_MAX_HALF_M = 1280.0
 WINDOW_MARGIN_M = 200.0
-
-#: The JPEG quality every image a policy sends is encoded at: the quality the
-#: mission's crops are encoded at (``maps.perception.viz.mllm_overlay``).
-JPEG_QUALITY = 85
 
 #: The reshaping call only restates an answer; it never reasons.
 EXTRACTION_MAX_TOKENS = 4096
