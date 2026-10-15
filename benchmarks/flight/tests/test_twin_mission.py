@@ -69,9 +69,13 @@ def calcity(tmp_path, monkeypatch):
 def serves(monkeypatch):
     """The reasoner scripted (fly to the church, then reply), the segmenter
     seeing nothing; every request body the reasoner was sent."""
+    from huggingface_hub import constants as hub
+
     from maps.llm import endpoint_spec, http
     from maps.llm.endpoint_spec import EndpointSpec
 
+    # The compactor's tokenizer comes off the local cache: the hub read its flag at import.
+    monkeypatch.setattr(hub, "HF_HUB_OFFLINE", True)
     spec = EndpointSpec(base_url="http://unused", model_id="inkling-small", max_model_len=262144, tokenizer_name="qwen",
                         max_output_tokens=40000)
     monkeypatch.setattr(endpoint_spec, "_SPEC", None)
