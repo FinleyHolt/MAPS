@@ -280,6 +280,13 @@ _CATCH_CROPS = LOOK_MAX_CROPS // 2
 _PICTURE_WITHHELD_OF = ("the {}'s caption follows in the next message; "
                         "its picture is not served on this run")
 _PICTURE_WITHHELD = _PICTURE_WITHHELD_OF.format("crop")
+# The shape errors: a repeat serves only its count (_loop_broken_error).
+_SHAPE_MARKERS = ("unknown ref", "is a result handle", "syntax error")
+# How a grounding note says what the call does at a name's best match, by
+# the name's why.
+_WHY_VERB = {"stage": "standing at", "move": "flying",
+             "map": "mapping around", "crops": "looking at",
+             "boost": "looking around", "facing": "facing"}
 
 
 def _surface_from_ctx(ctx) -> dict:
@@ -660,9 +667,7 @@ class _Mission:
         # The escalation is a new sentence; a caret line is no sentence.
         if not err.endswith((".", "!", "?", "^")):
             err += "."
-        SHAPE_MARKERS = ("unknown ref", "is a result handle",
-                          "syntax error")
-        if any(m in err for m in SHAPE_MARKERS):
+        if any(m in err for m in _SHAPE_MARKERS):
             return err + f" This error class has now occurred {n}x."
         if consec >= 3:
             return self._repeated_rejection_state(err, n, consec)
@@ -1086,9 +1091,6 @@ class _Mission:
         if "error" in g_out:
             return self._plan_err({}, str(g_out["error"]))
         g_res = sink.get("results") or {}
-        WHY_VERB = {"stage": "standing at", "move": "flying",
-                     "map": "mapping around", "crops": "looking at",
-                     "boost": "looking around", "facing": "facing"}
         for i, (q, why) in enumerate(names.items()):
             rows = [r for r in (g_res.get(f"r{i}") or [])
                     if r.get("fid")]
@@ -1126,7 +1128,7 @@ class _Mission:
             if why not in ("anchor", "cover") and len(rows) > 1:
                 notes.append(
                     f"{len(rows)} rows match \"{what}\"; "
-                    f"{WHY_VERB.get(why, 'using')} the best "
+                    f"{_WHY_VERB.get(why, 'using')} the best "
                     f"name match, {rows[0]['fid']} — say a fid to "
                     "choose precisely")
         return {"ties": ties}
