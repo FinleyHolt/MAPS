@@ -32,7 +32,7 @@ def _centered(half: int = 6) -> np.ndarray:
 def test_constant_depth_yields_real_world_xy():
     projected = _project(_centered(), np.full((H, W), 50.0, np.float32))
     assert projected is not None
-    assert abs(projected.world_xy[0]) < 1.0 and abs(projected.world_xy[1]) < 1.0
+    assert abs(projected[0]) < 1.0 and abs(projected[1]) < 1.0
 
 
 def test_missing_or_invalid_depth_drops_detection():
@@ -46,7 +46,7 @@ def test_partial_valid_depth_uses_valid_pixels_only():
     depth[:, : W // 2] = 50.0
     projected = _project(np.ones((H, W), dtype=bool), depth)
     assert projected is not None
-    assert projected.world_xy[0] < 0.0  # the valid left half lies west
+    assert projected[0] < 0.0  # the valid left half lies west
 
 
 def test_below_threshold_drops_detection():

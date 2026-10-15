@@ -507,13 +507,10 @@ class SamDetectClient:
         def _pack(region, det_idx, obj_id, score, label, comp_idx, n_comp):
             """One region projected, coloured and packed, or None when too few
             of its pixels carry real depth (``geolocate.project_mask_to_world_ortho``)."""
-            projected = project_mask_to_world_ortho(
-                region,
-                depth=obs.depth,
-                view_corners_xy=obs.ortho_view_corners_xy,
-                tile=obs.tile,
+            world_xy = project_mask_to_world_ortho(
+                region, depth=obs.depth, view_corners_xy=obs.ortho_view_corners_xy
             )
-            if projected is None:
+            if world_xy is None:
                 return None
             color, med, conf = _dominant_color(obs.rgb, region)
             attrs = {"color": color, "color_rgb": f"{med[0]},{med[1]},{med[2]}", "color_conf": f"{conf:.3f}"}
@@ -525,12 +522,8 @@ class SamDetectClient:
                 "sam3_1_score": score,
                 "track_id": track_id,
             }
-            if projected.tile_cells is not None and projected.tile_cells.size:
-                metadata["tile_cells"] = projected.tile_cells.astype(
-                    np.int32, copy=False
-                )
             return DetectedObject(
-                world_xy=projected.world_xy,
+                world_xy=world_xy,
                 label=label,
                 confidence=score,
                 source_tier="sam3_1_image",

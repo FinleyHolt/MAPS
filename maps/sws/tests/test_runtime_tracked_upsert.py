@@ -35,8 +35,7 @@ def _cells_of(mask):
 
 def _sparse(mask):
     """The projector's sparse output shape for a dense fixture mask."""
-    rs, cs = np.where(mask)
-    return {"rows": rs.astype(np.int32), "cols": cs.astype(np.int32)}
+    return {"cells": np.argwhere(mask).astype(np.int32)}
 
 
 def _upsert(g, track_id, mask, *, class_name="car"):
@@ -78,8 +77,7 @@ def test_a_repeat_with_no_cells_returns_its_own_id():
     g = _seed_graph()
 
     def upsert(tid, rows, cols):
-        return upsert_tracked_detected(g, track_id=tid, base_node=_node(), rows=np.array(rows, dtype=np.int32),
-                                       cols=np.array(cols, dtype=np.int32))
+        return upsert_tracked_detected(g, track_id=tid, base_node=_node(), cells=list(zip(rows, cols)))
 
     a = upsert("wt_a", [5, 5], [5, 6])
     b = upsert("wt_b", [9, 9], [9, 10])

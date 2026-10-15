@@ -269,7 +269,6 @@ class BankSource:
         self.tiles_dir, self.map_name = Path(tiles_dir), map_name
         self.tile_ground_z = float(tile_ground_z)
         self.vehicle = Clock()
-        self.tile = None
         self.last: dict[str, Any] = {}
         self.last_refusal = ""
         self._forced = forced
@@ -339,7 +338,7 @@ class BankSource:
         self.last = {**frame, "boresight": Path(str(boresight)).name if boresight else None,
                      "coverage": held_record(len(held), sum(held), [frame.get("seq")])}
         self.last_refusal = ""
-        return ortho_observation(rgb, alpha, h.extent, h.camera_z, tile_ground_z=self.tile_ground_z, tile=self.tile)
+        return ortho_observation(rgb, alpha, h.extent, h.camera_z, tile_ground_z=self.tile_ground_z)
 
 
 def bank_of(run_dir: Path, frames) -> list[Held]:

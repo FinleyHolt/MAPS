@@ -87,15 +87,7 @@ def upsert_detected_centroid_only(graph: ObjectGraph, node: MapObject) -> str:
     return fid
 
 
-def _cells_from_mask(hm_rows: np.ndarray, hm_cols: np.ndarray) -> np.ndarray:
-    """The ``(N, 2) int32`` (row, col) footprint of a projected detection, the
-    format prebake nodes carry."""
-    return np.stack((hm_rows, hm_cols), axis=1).astype(np.int32)
-
-
-def _stamp_cells(
-    node: MapObject, hm_rows: np.ndarray, hm_cols: np.ndarray, cell_size_m: float
-) -> None:
+def _stamp_cells(node: MapObject, cells: np.ndarray, cell_size_m: float) -> None:
     """Set a detected node's ``cells`` and, if it has none yet, the bake's own
     centerline family (``builder._mask_centerline``) derived from them.
 
@@ -103,7 +95,7 @@ def _stamp_cells(
     while ``cells`` are re-stamped every frame; re-deriving changes the geom
     surface for detected fids and needs a paired SR read.
     """
-    node.cells = _cells_from_mask(hm_rows, hm_cols)
+    node.cells = cells
     if node.centerline is not None or len(node.cells) < 2:
         return
     geom = _mask_centerline(node.cells, cell_size_m=float(cell_size_m))
@@ -116,11 +108,11 @@ def upsert_tracked_detected(
     *,
     track_id: str,
     base_node: MapObject,
-    rows: np.ndarray,
-    cols: np.ndarray,
+    cells: np.ndarray,
 ) -> str:
-    """Upsert a tracked detection from its footprint cells on the tile grid
-    (``rows``/``cols``, row-major). A first sighting of ``track_id`` inserts
+    """Upsert a tracked detection from its footprint on the tile grid,
+    ``cells`` ``(N, 2)`` (row, col), row-major, the format prebake nodes
+    carry. A first sighting of ``track_id`` inserts
     ``base_node`` with its geometry set from the cells; a repeat updates the
     node carrying that ``track_id`` in place. Returns the fid."""
     if base_node.provenance != "detected":
@@ -128,28 +120,27 @@ def upsert_tracked_detected(
             "upsert_tracked_detected only accepts provenance='detected' nodes"
         )
 
-    hm_rows = np.asarray(rows)
-    hm_cols = np.asarray(cols)
+    cells = np.asarray(cells, dtype=np.int32)
 
     existing_fid = _find_track(graph, track_id)
 
-    if hm_rows.size == 0:
+    if len(cells) == 0:
         return existing_fid or ""
 
-    centroid_rc = (int(round(float(hm_rows.mean()))), int(round(float(hm_cols.mean()))))
+    centroid_rc = (int(round(float(cells[:, 0].mean()))), int(round(float(cells[:, 1].mean()))))
 
     if existing_fid is None:
         fid = _next_detected_id(graph)
         base_node.track_id = track_id
         base_node.centroid = centroid_rc
-        _stamp_cells(base_node, hm_rows, hm_cols, graph.cell_size_m)
+        _stamp_cells(base_node, cells, graph.cell_size_m)
         graph.nodes[fid] = base_node
         return fid
 
     # Repeat sighting: the latest observation's footprint, contour and xy win.
     node = graph.nodes[existing_fid]
     node.centroid = centroid_rc
-    _stamp_cells(node, hm_rows, hm_cols, graph.cell_size_m)
+    _stamp_cells(node, cells, graph.cell_size_m)
     # A contour-less repeat keeps the stored contour.
     incoming_contour = base_node.world_contour
     if incoming_contour:

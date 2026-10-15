@@ -132,7 +132,6 @@ class BaselineHarness:
         self.assets = h.assets
         self.start_alt_m = float(h.state.altitude_m)
         self.ground_z_m = float(h.ground_z_m)
-        self.tile_frame = h.tile_frame
         self._crop = h.crop
         self._sam = h.perception
         self.policy = policy
@@ -160,7 +159,6 @@ class BaselineHarness:
         rendered by the same call the mission makes."""
         t0 = time.perf_counter()
         obs = self._crop(pose_xy, altitude_m)
-        obs.tile = self.tile_frame
         self.phase_s["render"] += time.perf_counter() - t0
         return obs
 

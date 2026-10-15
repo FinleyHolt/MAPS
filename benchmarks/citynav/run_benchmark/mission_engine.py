@@ -242,8 +242,6 @@ class MissionSession:
             obs = h.crop(new_xy, new_alt)
         state.pose_xy = new_xy
         state.altitude_m = new_alt
-        if obs is not None:
-            obs.tile = h.tile_frame
 
         step_detections = perceive(h, obs, h.perception.detect(obs))
 

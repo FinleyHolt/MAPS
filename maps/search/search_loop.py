@@ -253,7 +253,7 @@ class SearchLoop:
             # ``track_id`` ('wt_<n>'), the upsert's sole re-id key.
             self._world_tracker.update(detections)
             upsert_ids: dict[int, str] = {}
-            for i, tp in projected_masks.items():
+            for i, cells in projected_masks.items():
                 det = detections[i]
                 if not (det.metadata or {}).get("track_id"):
                     continue
@@ -262,8 +262,7 @@ class SearchLoop:
                     track_id=self._detection_id(det),
                     base_node=_detection_to_mapobject(det, bounds_min, cell),
                     # Sparse occupied cells, never a dense tile raster.
-                    rows=tp.rows,
-                    cols=tp.cols,
+                    cells=cells,
                 )
 
             step_detections: list[dict] = []
@@ -277,9 +276,7 @@ class SearchLoop:
                     "confidence": float(det.confidence),
                     "source_tier": det.source_tier,
                     "attributes": dict(det.attributes or {}),
-                    # tile_cells feeds the upsert above; str() of an array truncates it.
-                    "metadata": {k: _json_safe(v) for k, v in (det.metadata or {}).items()
-                                 if k != "tile_cells"},
+                    "metadata": {k: _json_safe(v) for k, v in (det.metadata or {}).items()},
                 }
                 if det.mask is not None:
                     mask_record = encode_mask_record(det.mask.crop, bbox_rcrc=det.mask.bbox)
@@ -364,25 +361,17 @@ def _spread(seq: list, k: int) -> list:
 
 def _detection_to_mapobject(det, bounds_min, cell_size_m):
     """One detection as a graph node without cells (the tracked upsert stamps
-    them): its centroid (the mean of its stamped tile cells, else the cell
-    under its world point), contour, attributes and world point."""
+    them and their centroid): the cell under its world point, its contour,
+    attributes and world point."""
     meta = det.metadata or {}
-    # The detect client's (N, 2) int32 cells, stamped only when N > 0.
-    cells = meta.get("tile_cells")
     # The footprint ring in world metres the ortho stamping traced (>= 3
     # vertices); the upsert re-stamps it on repeat sightings.
     wc = meta.get("world_contour")
     world_contour = [[float(x), float(y)] for x, y in wc] if wc else None
-    if cells is not None:
-        centroid = (
-            int(round(float(cells[:, 0].mean()))),
-            int(round(float(cells[:, 1].mean()))),
-        )
-    else:
-        centroid = (
-            math.floor((det.world_xy[1] - bounds_min[1]) / cell_size_m),
-            math.floor((det.world_xy[0] - bounds_min[0]) / cell_size_m),
-        )
+    centroid = (
+        math.floor((det.world_xy[1] - bounds_min[1]) / cell_size_m),
+        math.floor((det.world_xy[0] - bounds_min[0]) / cell_size_m),
+    )
     semantic_attributes: dict[str, dict[str, int]] = {
         key: {value: 1} for key, value in (det.attributes or {}).items()
     }

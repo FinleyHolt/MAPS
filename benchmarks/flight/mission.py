@@ -634,9 +634,7 @@ class Mission:
                 raise ValueError(f"{self.map_name} carries no georef under {TILES_DIR}: a leg's area cannot be "
                                  f"asked of the recording")
 
-            # The live frames project onto this mission's tile grid; look crops
-            # what this run captured, never the bake's raster.
-            self._live.tile = h.tile_frame
+            # look crops what this run captured, never the bake's raster.
             h.search_loop.look_imagery = self._imagery
 
             def observe():

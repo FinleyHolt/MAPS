@@ -59,7 +59,7 @@ HOLD_NEAR_DEG = 0.04
 
 
 def ortho_observation(rgb: np.ndarray, alpha: np.ndarray, extent: tuple[float, float, float, float],
-                      camera_z: float, *, tile_ground_z: float, tile: object | None) -> Observation:
+                      camera_z: float, *, tile_ground_z: float) -> Observation:
     """A north-up image on the map grid as the observation the bench reads
     orthographically: ``extent`` is ``(x0, y0, x1, y1)`` in bake-local metres,
     ``camera_z`` the camera's height in the tile frame."""
@@ -72,7 +72,6 @@ def ortho_observation(rgb: np.ndarray, alpha: np.ndarray, extent: tuple[float, f
         rgb=rgb,
         alpha=alpha,
         depth=depth,
-        tile=tile,
         # [FL, FR, BR, BL] == image [TL, TR, BR, BL]; north-up, so FL is the
         # north-west corner, the pixel the grid starts at.
         ortho_view_corners_xy=((x0, y1), (x1, y1), (x1, y0), (x0, y0)),
@@ -291,8 +290,6 @@ class LiveSource:
         self.boresight = boresight
         self.register = register
         self.vehicle = vehicle
-        #: The mission's tile grid the observations project onto, set when the mission is hydrated.
-        self.tile: object | None = None
         self.tile_ground_z = float(tile_ground_z)
         self.floor_msl_m = float(floor_msl_m)
         #: The map's bare-earth surface, None where it carries none (:func:`map_render.terrain`).
@@ -641,8 +638,7 @@ class LiveSource:
             "off_nadir_deg": round(min(f.angle for f in placed), 2),
         }
         self.last_refusal = ""
-        return ortho_observation(rgb, alpha, (x0, y0, x1, y1), camera_z, tile_ground_z=self.tile_ground_z,
-                                 tile=self.tile)
+        return ortho_observation(rgb, alpha, (x0, y0, x1, y1), camera_z, tile_ground_z=self.tile_ground_z)
 
 
 def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresight_path: str | Path | None = None,

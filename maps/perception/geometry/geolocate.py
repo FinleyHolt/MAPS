@@ -20,26 +20,6 @@ from maps.util.mask_region import MaskRegion
 
 
 @dataclass
-class TileProjectedMask:
-    """A mask rasterized onto the tile grid as its occupied cells, deduplicated
-    and row-major (the cells ``np.where`` would yield over a dense raster)."""
-
-    rows: np.ndarray  # (N,) int32 tile rows of the occupied cells
-    cols: np.ndarray  # (N,) int32 tile cols, paired with ``rows``
-
-
-@dataclass
-class ProjectedMask:
-    """One mask's projection: ``world_xy``, the mean (east, north) of its
-    valid pixels, and ``tile_cells``, its ``(N, 2) int32`` (row, col) cells on
-    the tile grid when the projector received a ``tile`` (the graph's mask-IoU
-    re-identification reads them)."""
-
-    world_xy: tuple[float, float]
-    tile_cells: np.ndarray | None = None
-
-
-@dataclass
 class TileFrame:
     """Minimal tile georef needed to rasterize a projected mask."""
 
@@ -69,12 +49,11 @@ def frame_world_xy(
     return u, v, xs, ys
 
 
-def _tile_mask_from_world(
-    xs: np.ndarray, ys: np.ndarray, tile: TileFrame
-) -> TileProjectedMask | None:
-    """World points rasterized onto ``tile``, clipped to it and deduplicated
-    (``np.unique`` on ``row * W + col`` gives row-major order); ``None`` when
-    no point lands inside."""
+def _tile_mask_from_world(xs: np.ndarray, ys: np.ndarray, tile: TileFrame) -> np.ndarray | None:
+    """World points rasterized onto ``tile`` as the ``(N, 2) int32`` (row, col)
+    cells they occupy, clipped to it and deduplicated (``np.unique`` on
+    ``row * W + col`` gives row-major order); ``None`` when no point lands
+    inside."""
     col_idx = np.rint((xs - tile.x_min) / tile.cell_size_m - 0.5).astype(np.int64)
     row_idx = np.rint((ys - tile.y_min) / tile.cell_size_m - 0.5).astype(np.int64)
     H, W = tile.grid_shape
@@ -83,8 +62,7 @@ def _tile_mask_from_world(
         return None
 
     flat = np.unique(row_idx[in_bounds] * W + col_idx[in_bounds])
-    gr_rows, gr_cols = np.divmod(flat, W)
-    return TileProjectedMask(rows=gr_rows.astype(np.int32, copy=False), cols=gr_cols.astype(np.int32, copy=False))
+    return np.stack(np.divmod(flat, W), axis=1).astype(np.int32)
 
 
 # Below this many valid depth pixels a mask's world position is noise, not a
@@ -227,8 +205,8 @@ def project_mask_to_tile_cells_ortho(
     *,
     view_corners_xy: tuple,
     tile: TileFrame,
-) -> TileProjectedMask | None:
-    """A mask's tile cells through the view-square affine (no depth);
+) -> np.ndarray | None:
+    """A mask's ``(N, 2) int32`` tile cells through the view-square affine (no depth);
     ``None`` with fewer than ``_MIN_VALID_DEPTH_PIXELS`` set pixels or no cell
     inside ``tile``."""
     rr, cc = region.rows_cols()
@@ -289,12 +267,11 @@ def project_mask_to_world_ortho(
     *,
     depth: np.ndarray | None,
     view_corners_xy: tuple,
-    tile: TileFrame | None = None,
-) -> ProjectedMask | None:
-    """A mask's world centroid through the view-square affine, over the
-    pixels with finite, positive depth (depth sampled nearest-neighbour at
-    each pixel's normalised ``(u, v)``, so its grid may differ from the
-    mask's). ``None`` with no depth or fewer than ``_MIN_VALID_DEPTH_PIXELS``
+) -> tuple[float, float] | None:
+    """A mask's world centroid, the mean (east, north) through the
+    view-square affine over the pixels with finite, positive depth (depth
+    sampled nearest-neighbour at each pixel's normalised ``(u, v)``, so its
+    grid may differ from the mask's). ``None`` with no depth or fewer than ``_MIN_VALID_DEPTH_PIXELS``
     valid pixels.
     """
     if depth is None:
@@ -314,12 +291,4 @@ def project_mask_to_world_ortho(
     finite = np.isfinite(d) & (d > 0.0)
     if int(finite.sum()) < _MIN_VALID_DEPTH_PIXELS:
         return None
-    xs = xs[finite]
-    ys = ys[finite]
-    world_xy = (float(xs.mean()), float(ys.mean()))
-    tile_cells: np.ndarray | None = None
-    if tile is not None:
-        tm = _tile_mask_from_world(xs, ys, tile)
-        if tm is not None:
-            tile_cells = np.stack([tm.rows, tm.cols], axis=1)
-    return ProjectedMask(world_xy=world_xy, tile_cells=tile_cells)
+    return (float(xs[finite].mean()), float(ys[finite].mean()))

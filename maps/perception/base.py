@@ -20,7 +20,7 @@ class DetectedObject:
     label: str  # Free-form class-less label ("car", "building", ...)
     confidence: float  # [0, 1]
     source_tier: str  # the producer: "sam3_1_image"
-    metadata: dict = field(default_factory=dict)  # track_id, sam3_1_object_id, tile_cells, ...
+    metadata: dict = field(default_factory=dict)  # track_id, sam3_1_object_id, world_contour, ...
     attributes: dict[str, str] = field(default_factory=dict)
     # Semantic attributes per detection (the colour read). The graph upsert
     # folds them into a node's semantic_attributes as {key: {value: 1}} counters.

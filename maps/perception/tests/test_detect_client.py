@@ -77,7 +77,7 @@ def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):
     assert meta["sam3_1_object_id"] == 0
     assert meta["sam3_1_score"] == pytest.approx(0.9)
     assert meta["track_id"] == "sam3_1_img_0"
-    assert set(meta) == {"sam3_1_object_id", "sam3_1_score", "track_id"}  # no tile: no tile_cells
+    assert set(meta) == {"sam3_1_object_id", "sam3_1_score", "track_id"}
     assert dets_second[0].metadata["track_id"] == "sam3_1_img_0"
     assert len(serve.bodies) == 2
     for body in serve.bodies:

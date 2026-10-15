@@ -27,11 +27,11 @@ def test_cells_are_unique_and_row_major():
         region_of(pixel_mask), view_corners_xy=_corners(10.0, 12.0, 30.0), tile=_TILE
     )
     assert tp is not None
-    flat = tp.rows.astype(np.int64) * _TILE.grid_shape[1] + tp.cols
+    assert tp.dtype == np.int32 and tp.shape[1] == 2
+    flat = tp[:, 0].astype(np.int64) * _TILE.grid_shape[1] + tp[:, 1]
     assert np.all(np.diff(flat) > 0)  # strictly ascending: unique and row-major
     # Many pixels collapse into each cell.
-    assert 0 < tp.rows.size < int(pixel_mask.sum())
-    assert tp.rows.dtype == np.int32 and tp.cols.dtype == np.int32
+    assert 0 < len(tp) < int(pixel_mask.sum())
 
 
 def test_cells_partly_outside_the_tile_are_clipped():
@@ -44,9 +44,9 @@ def test_cells_partly_outside_the_tile_are_clipped():
     )
     assert tp is not None
     H, W = _TILE.grid_shape
-    assert int(tp.rows.min()) >= 0 and int(tp.rows.max()) < H
-    assert int(tp.cols.min()) >= 0 and int(tp.cols.max()) < W
-    assert tp.rows.size > 0
+    assert int(tp[:, 0].min()) >= 0 and int(tp[:, 0].max()) < H
+    assert int(tp[:, 1].min()) >= 0 and int(tp[:, 1].max()) < W
+    assert len(tp) > 0
 
 
 def test_fully_outside_the_tile_drops():

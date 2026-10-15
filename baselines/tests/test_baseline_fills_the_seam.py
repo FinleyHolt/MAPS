@@ -54,7 +54,7 @@ def _install_stub_policy(monkeypatch, name: str, run) -> None:
 def _hydrated(alt: float = 50.0, ground: float = 0.0, heading: float = 0.0):
     """The parts of ``episode_runner.Hydrated`` the seam reads."""
     return SimpleNamespace(
-        tile_frame=None, crop=None,
+        crop=None,
         cfg=SimpleNamespace(max_steps=200),
         episode=SimpleNamespace(episode_id="unit::1#0", map_name="unit_block_0",
                                 description="the car by the depot", start_xy=(0.0, 0.0), target_xy=(0.0, 100.0),

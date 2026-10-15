@@ -33,9 +33,6 @@ class Observation:
     rgb: np.ndarray | None = None  # (h, w, 3) uint8
     alpha: np.ndarray | None = None  # (h, w) uint8 — 0 for nodata pixels (flight imagery)
     depth: np.ndarray | None = None  # (h, w) float32 meters (altitude − height)
-    # Tile georef the detections are rasterized onto
-    # (``perception.geometry.geolocate.TileFrame``).
-    tile: "object | None" = None
     # View-rectangle ground corners in world (x, y), order [FL, FR, BR, BL]
     # == image [TL, TR, BR, BL]; the orthographic projection inverts them.
     ortho_view_corners_xy: tuple | None = None

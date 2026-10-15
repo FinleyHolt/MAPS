@@ -221,7 +221,6 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
     except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact
         log.exception("retro segment failed")
         return {"error": f"segment failed: {type(exc).__name__}: {exc}"}
-    obs.tile = h.tile_frame
     before = _detected_fids(h.search_loop)
     try:
         perceive(h, obs, dets)
