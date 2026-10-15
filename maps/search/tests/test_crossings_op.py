@@ -365,3 +365,8 @@ def test_a_look_list_crops_each_element():
     # ...and a genuine [x, y] point still rides as ONE point token.
     assert acts_of_block("look([100, 200])\n") == [
         ("crops", None, "[100, 200]", None)]
+    # A NAME in the list grounds as it does alone, to its best match.
+    from maps.search.tests.fakes import calls_of_block
+    assert calls_of_block('look(["Long Road", "prior_2"])\n') == [
+        ("ground", {"Long Road": "crops"}),
+        ("crops", None, ["<Long Road>", "prior_2"], None)]

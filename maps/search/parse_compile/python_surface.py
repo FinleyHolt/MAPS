@@ -902,7 +902,8 @@ def _plain(v):
 
 
 def _look_tok(a) -> str:
-    """One element of ``look([a, b, c])`` -> the token its crop centres on."""
+    """One element of ``look([a, b, c])`` -> the token its crop centres on,
+    or a :class:`_Name` to ground."""
     if isinstance(a, Bind):
         b = a.bind
         if isinstance(b, (list, tuple)) and len(b) == 2:
@@ -912,6 +913,8 @@ def _look_tok(a) -> str:
         return a.label
     if is_xy(a):
         return format_xy_token(float(a[0]), float(a[1]))
+    if isinstance(a, str) and not _fid_like(a) and not parse_xy_token(a):
+        return _Name(a)
     return str(_plain(a))
 
 
@@ -1369,6 +1372,7 @@ class MissionPython:
         # The marks ride the SAME crop request as its subject, so the
         # renderer's frame decision and its mark projection see one window.
         lead: list = []
+        fids = None
         if isinstance(x, Rows) and x.spec:
             # A SLICE is looked at through its window: two verbs, one
             # receipt, and the window is no answer of its own.
@@ -1381,6 +1385,7 @@ class MissionPython:
             if isinstance(x, (list, tuple)) and not is_xy(x):
                 # look([a, b, c]) crops EACH element.
                 fids = [_look_tok(a) for a in x]
+                lead = [(f, "crops") for f in fids if isinstance(f, _Name)]
             elif not isinstance(x, Ref):
                 site = self._site(x, "crops")
                 lead = [(site, "crops")]
@@ -1395,7 +1400,8 @@ class MissionPython:
             # A SET look is the badged frame over its rows.
             ack = self.env.crops(x.ref, None, toks)
         else:
-            ack = self.env.crops(None, _tok(site, ties) if lead else fids,
+            ack = self.env.crops(None, [_tok(f, ties) for f in fids]
+                                 if fids is not None else _tok(site, ties),
                                  toks)
         self._end(ack)
         return None
