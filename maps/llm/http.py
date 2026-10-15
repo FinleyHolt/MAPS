@@ -226,12 +226,6 @@ def _image_ref(part: dict, media_type: str, raw: bytes | None) -> dict:
             "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
 
 
-def _scrub_image_parts(messages: list) -> list:
-    """``messages`` with every data-URL image part replaced by
-    ``{"type": "image_ref", "media_type", "sha256", "bytes"}``."""
-    return _map_image_parts(messages, _image_ref)
-
-
 #: The image store a slow link sends each image to once (module docstring).
 IMAGE_STORE_ENV = "MAPS_IMAGE_STORE_URL"
 # shas the store holds; a 409 from it drops the ones it names.
@@ -339,7 +333,7 @@ def _flight_request_record(
                 )
                 seen.add(params_sha)
 
-            scrubbed = _scrub_image_parts(body.get("messages") or [])
+            scrubbed = _map_image_parts(body.get("messages") or [], _image_ref)
             digests = [
                 hashlib.sha256(
                     json.dumps(m, sort_keys=True, default=str).encode("utf-8")

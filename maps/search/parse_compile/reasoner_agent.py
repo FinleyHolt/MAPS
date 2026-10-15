@@ -195,8 +195,9 @@ class Reasoner:
                               "content": json.dumps(result, default=str)})
 
     def step_tool_call(self, tools: list[dict]) -> dict:
-        """One non-streaming turn under ``tool_choice="auto"`` (a plain reply
-        must stay possible: it ends the mission). Compacts the history,
+        """One turn under ``tool_choice="auto"`` (a plain reply must stay
+        possible: it ends the mission); it streams when ``cancel_event`` is
+        set, so the event can abort it. Compacts the history,
         appends the assistant turn and returns ``{"kind": "tool_call" |
         "text", "tool_calls"?, "content", "reasoning", "finish_reason"}``.
         A degenerate completion raises ``DegenerateCompletion`` unappended.

@@ -133,12 +133,8 @@ def _scan_transcript(path: Path, out: dict) -> None:
             body = _as_dict(rec.get("response"))
             out["reasoning_tokens"] += reasoning_tokens_of(body, model=model)
             usage = _as_dict(body.get("usage"))
-            for key, field in (
-                ("prompt_tokens", "prompt_tokens"),
-                ("completion_tokens", "completion_tokens"),
-                ("total_tokens", "total_tokens"),
-            ):
-                v = usage.get(field)
+            for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                v = usage.get(key)
                 if isinstance(v, (int, float)):
                     out[key] += int(v)
             details = _as_dict(usage.get("prompt_tokens_details"))

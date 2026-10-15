@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 
-from maps.llm.http import _scrub_image_parts
+from maps.llm.http import _image_ref, _map_image_parts
 from maps.llm.vision_content import build_image_part
 from maps.search.parse_compile.reasoner_loop import _deliver_frames
 
@@ -21,7 +21,7 @@ JPEG = b"\xff\xd8\xff\xe0 not really a jpeg but exactly these bytes"
 def test_the_wire_log_and_the_delivery_helper_agree_on_the_sha(tmp_path, monkeypatch):
     sha = hashlib.sha256(JPEG).hexdigest()
     part = build_image_part(JPEG)
-    scrubbed = _scrub_image_parts([{"role": "user", "content": [part]}])
+    scrubbed = _map_image_parts([{"role": "user", "content": [part]}], _image_ref)
     assert scrubbed[0]["content"][0]["sha256"] == sha
 
     monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
