@@ -215,30 +215,34 @@ def _split_rows(split: str | None) -> list[dict] | None:
 
 def print_classes(root: Path, scored: dict[str, dict]) -> None:
     """SR by referent bucket and, where the corpus grades it, by intel quality
-    (Cal City, as the flight measures' by_intel_quality). Each episode's class
-    is its corpus row's, read from the run's split by episode id, so a pick
-    without metrics counts in its own class. A split on this machine that
-    lacks any of the run's episodes is not the run's corpus: no class line."""
+    (Cal City, as the flight measures' by_intel_quality). A recorded row's
+    class is its own ``referent_bucket`` and ``intel_quality``; a pick without
+    them takes its corpus row's, read from the run's split by episode id, so it
+    counts in its own class. A split on this machine that lacks such a pick is
+    not the run's corpus: no class line."""
     from benchmarks.citynav.adapter import find_row, parse_episode
     from benchmarks.citynav.run_benchmark.episode_runner import classify_referent
 
-    split = read_manifest(root).get("split")
-    corpus = _split_rows(split) or []
-    found = {eid: find_row(corpus, eid) for eid in scored}
-    missing = sum(f is None for f in found.values())
-    if missing:
-        print(f"by class: -- ({missing} of the run's {len(scored)} episodes are not in "
-              f"its split {split} on this machine)")
-        return
-    episodes = {eid: parse_episode(f[1]) for eid, f in found.items()}
-    for kind, class_of, order in (
-        ("bucket", lambda e: classify_referent(e.description), _BUCKETS),
-        ("intel quality", lambda e: e.intel_quality or "?", ("G", "M", "P", "?")),
-    ):
+    classes = {eid: (m["referent_bucket"], m.get("intel_quality"))
+               for eid, m in scored.items() if "referent_bucket" in m}
+    unrecorded = [eid for eid in scored if eid not in classes]
+    if unrecorded:
+        split = read_manifest(root).get("split")
+        corpus = _split_rows(split) or []
+        found = {eid: find_row(corpus, eid) for eid in unrecorded}
+        missing = sum(f is None for f in found.values())
+        if missing:
+            print(f"by class: -- ({missing} of the run's {len(scored)} episodes are not in "
+                  f"its split {split} on this machine)")
+            return
+        for eid, f in found.items():
+            episode = parse_episode(f[1])
+            classes[eid] = (classify_referent(episode.description), episode.intel_quality)
+    for kind, index, order in (("bucket", 0, _BUCKETS), ("intel quality", 1, ("G", "M", "P", "?"))):
         tot: Counter = Counter()
         suc: Counter = Counter()
         for eid, m in scored.items():
-            cls = class_of(episodes[eid])
+            cls = classes[eid][index] or "?"
             tot[cls] += 1
             suc[cls] += bool(m.get("SR"))
         if kind == "bucket" or set(tot) != {"?"}:

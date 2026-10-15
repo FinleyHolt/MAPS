@@ -246,9 +246,11 @@ def _calcity_corpus(tmp_path, monkeypatch, *rows: tuple[str, str | None]) -> Non
     monkeypatch.setattr(calcity_paths, "SPLITS_DIR", tmp_path)
 
 
-def test_the_by_class_lines_read_each_episode_class_off_the_corpus(tmp_path, monkeypatch, capsys):
-    """An episode's referent bucket and intel quality are its corpus row's, so a G episode that
-    timed out with no record is a G miss, not a '?' one, and a recorded row's own keys are not read."""
+def test_the_by_class_lines_read_a_row_s_own_class_and_the_corpus_for_a_pick_without_one(
+        tmp_path, monkeypatch, capsys):
+    """A recorded row's referent bucket and intel quality are its own keys; a pick without them
+    takes its corpus row's, so a G episode that timed out with no record is a G miss, not a '?'
+    one. A run whose every row carries its class needs no split on this machine."""
     _calcity_corpus(tmp_path, monkeypatch, ("the red car", "G"), ("a building", "G"),
                     ("the lot", "G"), ("a shed", None))
     root = tmp_path / "run"
@@ -260,8 +262,14 @@ def test_the_by_class_lines_read_each_episode_class_off_the_corpus(tmp_path, mon
     (root / "run_manifest.json").write_text(json.dumps({"split": "calcity"}))
     report(root)
     out = capsys.readouterr().out
-    assert "by bucket: car:1/1(100%)   building:1/1(100%)   other:0/2(0%)" in out
-    assert "by intel quality: G:2/3(67%)   ?:0/1(0%)" in out
+    assert "by bucket: car:2/2(100%)   other:0/2(0%)" in out
+    assert "by intel quality: G:1/2(50%)   P:1/1(100%)   ?:0/1(0%)" in out
+    alone = tmp_path / "alone"
+    write_ledger(alone, ledger_row("calcity::9#9", "20260725_110000", 1,
+                                   metrics={"SR": 1, "intel_quality": "M", "referent_bucket": "building"}))
+    report(alone)
+    out = capsys.readouterr().out
+    assert "by bucket: building:1/1(100%)" in out and "by intel quality: M:1/1(100%)" in out
 
 
 def test_a_split_that_is_not_the_run_s_corpus_prints_no_class_split(tmp_path, monkeypatch, capsys):
