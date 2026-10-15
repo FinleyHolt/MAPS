@@ -156,7 +156,6 @@ class BaselineHarness:
         # Wall time per phase, landed on the row as ``<policy>_phase_<name>_s``.
         self.phase_s: dict[str, float] = {"render": 0.0, "segment": 0.0, "examine": 0.0}
         self.llm_calls = 0
-        self.reasoning_tokens = 0
         self.extraction_calls = 0
         self.reasoning_truncated = 0
         self.calls: list[dict] = []
@@ -358,7 +357,6 @@ class BaselineHarness:
         choice = resp["choices"][0]
         self.llm_calls += 1
         reasoning = reasoning_tokens_of(resp, model=model)
-        self.reasoning_tokens += reasoning
         return (((choice.get("message") or {}).get("content") or ""), choice.get("finish_reason"),
                 int((resp.get("usage") or {}).get("completion_tokens") or 0), reasoning)
 
@@ -733,8 +731,6 @@ def fly(h, policy: str) -> BaselineFlight:
 
     own: dict[str, Any] = {
         "actions_priced": harness.budget.used,
-        "llm_calls": harness.llm_calls,
-        "reasoning_tokens": harness.reasoning_tokens,
         "extraction_calls": harness.extraction_calls,
         "reasoning_truncated": harness.reasoning_truncated,
         "stops": len(stops),

@@ -118,14 +118,12 @@ need more than 16 GB per episode. A Cal City row that starts more than about
   {enable_thinking: false}` where the template reads that switch (Qwen 3.8
   Flash Next). A baseline arm on a model with neither (the Gemma 4 cards) is
   refused when the driver starts, before any episode (`seam.NoDialOff`).
-* `<policy>_reasoning_tokens` is `maps.llm.flight_summary.reasoning_tokens_of`
-  over each response; a reply with no reasoning span reads 0.
 
 ## The serve fact every baseline call answers to
 
 | fact | measured | what the seam does |
 | --- | --- | --- |
-| an output grammar applies from the first token, so a `json_schema` call never opens the reasoning span | a recorded GeoNav action call: 49 completion tokens and no reasoning under `json_schema` strict; 8,192 tokens of reasoning and no answer without it | every call is free of grammar first (the model reasons, then answers in the JSON shape the prompt asks for); an answer that is not that JSON is reshaped by a second, constrained call with the dial off; a first call whose cap the reasoning exhausted falls back to the constrained call and is counted under `metrics.<policy>_reasoning_truncated`. `metrics.<policy>_reasoning_tokens` is the proof the dial applied. |
+| an output grammar applies from the first token, so a `json_schema` call never opens the reasoning span | a recorded GeoNav action call: 49 completion tokens and no reasoning under `json_schema` strict; 8,192 tokens of reasoning and no answer without it | every call is free of grammar first (the model reasons, then answers in the JSON shape the prompt asks for); an answer that is not that JSON is reshaped by a second, constrained call with the dial off; a first call whose cap the reasoning exhausted falls back to the constrained call and is counted under `metrics.<policy>_reasoning_truncated`. `metrics.llm.reasoning_tokens` is the proof the dial applied. |
 
 ## Substitutions, per method
 
