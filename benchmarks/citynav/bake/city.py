@@ -39,7 +39,6 @@ import numpy as np
 from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import TILES_DIR
 from maps.sws.graph.builder import build_object_graph
-from maps.sws.graph.io import save_graph
 
 log = logging.getLogger("bake_city")
 
@@ -598,7 +597,6 @@ def bake_block(
     tiles_path.mkdir(parents=True, exist_ok=True)
     stem = tiles_path / name
     graph = build_object_graph(features, cell_size_m=CELL_SIZE_M)
-    save_graph(graph, str(stem))
     Path(f"{stem}_features.json").write_text(
         json.dumps(features, separators=(",", ":")), encoding="utf-8"
     )

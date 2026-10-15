@@ -16,7 +16,7 @@ from maps.search.analyze_scene.geom_program import (
     run_program,
 )
 from maps.search.analyze_scene.surface import build_surface_from_graph
-from maps.sws.graph.io import load_graph
+from maps.sws.graph.builder import build_object_graph
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
@@ -38,7 +38,9 @@ def _blocks():
 def _surface(stem):
     meta = json.loads(open(stem + "_meta.json").read())
     b = meta["bounds"]
-    return build_surface_from_graph(load_graph(stem).nodes.items(),
+    graph = build_object_graph(json.loads(open(stem + "_features.json").read()),
+                               cell_size_m=float(meta["cell_size_m"]))
+    return build_surface_from_graph(graph.nodes.items(),
                                     (b["x_min"], b["y_min"]),
                                     float(meta["cell_size_m"]))
 

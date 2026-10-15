@@ -10,6 +10,7 @@ import pytest
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import ProgramError, run_program
+from maps.sws.graph.builder import build_object_graph
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
@@ -223,14 +224,16 @@ def _blocks():
 
 def _named_ways(stem):
     """Every named feature of one block as its EXACT chains, by name."""
-    nodes = json.loads(open(stem + "_nodes.json").read())
+    meta = json.loads(open(stem + "_meta.json").read())
+    nodes = build_object_graph(json.loads(open(stem + "_features.json").read()),
+                               cell_size_m=float(meta["cell_size_m"])).nodes
     out: dict = {}
     for _fid, n in sorted(nodes.items()):
-        wc = n.get("world_contour")
-        if not (n.get("name") and (n.get("tags") or {}).get("highway") and wc):
+        wc = n.world_contour
+        if not (n.name and (n.tags or {}).get("highway") and wc):
             continue
-        out.setdefault(n["name"], []).append([[float(x), float(y)]
-                                              for x, y in wc])
+        out.setdefault(n.name, []).append([[float(x), float(y)]
+                                           for x, y in wc])
     return out
 
 

@@ -114,7 +114,7 @@ def split_path(split: str) -> Path:
 
 
 def tile_stem(map_name: str) -> str:
-    """Stem path for the prebaked feature-graph sidecar (no suffix)."""
+    """Stem path of a block's bake files (no suffix)."""
     return str(TILES_DIR / map_name)
 
 
@@ -156,7 +156,7 @@ def assert_current_tile_schema(features: dict, source: str) -> None:
 
 
 #: The per-block files the bake writes, the content :func:`bake_sha256` hashes.
-BAKE_OUTPUT_SUFFIXES = ("_meta.json", "_features.json", "_graph.npz", "_nodes.json")
+BAKE_OUTPUT_SUFFIXES = ("_meta.json", "_features.json")
 
 
 def _bake_content(f: Path) -> bytes:

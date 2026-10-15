@@ -12,7 +12,7 @@ import pytest
 
 from benchmarks.calcity.data_prep import bake_tiles
 from benchmarks.calcity.data_prep.bake_tiles import bake_block
-from maps.sws.graph.io import load_graph
+from maps.sws.graph.builder import build_object_graph
 
 
 def _bundle(monkeypatch, features):
@@ -125,10 +125,11 @@ def test_the_bake_shape_and_provenance_are_unchanged(tmp_path, monkeypatch):
     stats = bake_block(tmp_path / "bundle", tiles, "calcity")
     features = json.loads((tiles / "calcity_features.json").read_text())
     assert list(features) == ["prior"]
+    assert sorted(p.name for p in tiles.iterdir()) == ["calcity_features.json", "calcity_meta.json"]
     assert stats["features"] == stats["nodes"] == 1
-    graph = load_graph(str(tiles / "calcity"))
-    assert list(graph.nodes) == ["prior_0"]
     meta = json.loads((tiles / "calcity_meta.json").read_text())
+    graph = build_object_graph(features, cell_size_m=float(meta["cell_size_m"]))
+    assert list(graph.nodes) == ["prior_0"]
     assert list(meta) == ["grid_shape", "cell_size_m", "bounds", "coordinate_frame", "georef"]
     assert meta["coordinate_frame"] == {"y_axis": "north"}
 

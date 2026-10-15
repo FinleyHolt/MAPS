@@ -41,7 +41,7 @@ def test_hash_sees_renames_and_added_blocks(tmp_path):
 
     b = _bake(tmp_path / "b")
     added = paths.bake_sha256(b)
-    (b / "block_2_nodes.json").write_text("{}")
+    (b / "block_2_features.json").write_text("{}")
     assert paths.bake_sha256(b) != added, "an added block file must move the hash"
 
 
@@ -52,6 +52,7 @@ def test_two_bakes_of_one_prior_hash_equal(tmp_path):
     (a / "block_0_meta.json").write_text(json.dumps({"crs": "utm", "provenance": {"prior": "osm"}}, indent=2))
     (b / "block_0_meta.json").write_text(json.dumps({"provenance": {"prior": "osm"}, "crs": "utm"}))
     (b / "notes.txt").write_text("scratch")
+    (b / "block_0_graph.npz").write_bytes(b"a graph file an older bake wrote")
     assert paths.bake_sha256(a) == paths.bake_sha256(b)
 
     (b / "block_0_meta.json").write_text(json.dumps({

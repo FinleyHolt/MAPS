@@ -120,9 +120,8 @@ def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, 
 
 
 def _episode_graph(assets):
-    """The episode's object graph, built from the bake's features (the same
-    graph the bake writes to ``_graph.npz``). The ``prior`` withhold starts it
-    empty."""
+    """The episode's object graph, built from the bake's features. The
+    ``prior`` withhold starts it empty."""
     features = {} if withheld("prior") else assets.base_features
     return build_object_graph(features, cell_size_m=float(assets.cell_size_m))
 

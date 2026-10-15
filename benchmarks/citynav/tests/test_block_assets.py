@@ -15,7 +15,7 @@ import pytest
 
 from benchmarks.citynav.paths import TILES_DIR, tile_stem
 
-BLOCK_TILE = TILES_DIR / "birmingham_block_0_graph.npz"
+BLOCK_TILE = TILES_DIR / "birmingham_block_0_features.json"
 
 needs_block_bake = pytest.mark.skipif(
     not BLOCK_TILE.exists(),
@@ -25,9 +25,14 @@ needs_block_bake = pytest.mark.skipif(
 
 @needs_block_bake
 def test_per_block_graph_has_no_cross_block_leakage():
-    from maps.sws.graph.io import load_graph
+    import json
 
-    graph = load_graph(tile_stem("birmingham_block_0"))
+    from maps.sws.graph.builder import build_object_graph
+
+    stem = tile_stem("birmingham_block_0")
+    meta = json.loads(Path(f"{stem}_meta.json").read_text())
+    graph = build_object_graph(json.loads(Path(f"{stem}_features.json").read_text()),
+                               cell_size_m=float(meta["cell_size_m"]))
     ids = list(graph.nodes.keys())
     # The tags-only bake emits generic prior ids (road_0, building_3) with
     # CityRefer provenance in tags — never city/block-namespaced ids.

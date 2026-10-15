@@ -12,7 +12,7 @@ import json
 
 from benchmarks.citynav.bake.city import bake_block
 from benchmarks.citynav.eval import WorldBounds
-from maps.sws.graph.io import load_graph
+from maps.sws.graph.builder import build_object_graph
 
 
 TOY = WorldBounds(x_min=0.0, y_min=0.0, x_max=40.0, y_max=40.0)
@@ -41,7 +41,7 @@ def _bake(tmp_path):
     bake_block("toy", list(_RECORDS), tmp_path, bounds=TOY)
     rows = json.loads((tmp_path / "toy_features.json").read_text())["prior"]
     meta = json.loads((tmp_path / "toy_meta.json").read_text())
-    return rows, meta, load_graph(str(tmp_path / "toy"))
+    return rows, meta, build_object_graph({"prior": rows}, cell_size_m=float(meta["cell_size_m"]))
 
 
 def test_every_in_window_geometry_is_kept_with_its_tags_and_nothing_minted(tmp_path):

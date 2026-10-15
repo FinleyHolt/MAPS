@@ -10,7 +10,7 @@ import pytest
 from maps.search.analyze_scene import text_match as T
 from maps.search.analyze_scene.geom_program import run_program
 from maps.search.analyze_scene.surface import build_surface_from_graph
-from maps.sws.graph.io import load_graph
+from maps.sws.graph.builder import build_object_graph
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", "..", ".."))
@@ -94,7 +94,8 @@ needs_bake = pytest.mark.skipif(not os.path.isfile(_META),
 def calcity_rows():
     meta = json.loads(open(_META).read())
     b = meta["bounds"]
-    graph = load_graph(os.path.join(_TILES, "calcity"))
+    graph = build_object_graph(json.loads(open(os.path.join(_TILES, "calcity_features.json")).read()),
+                               cell_size_m=float(meta["cell_size_m"]))
     _cands, anchors = build_surface_from_graph(
         graph.nodes.items(), (float(b["x_min"]), float(b["y_min"])),
         float(meta["cell_size_m"]))
