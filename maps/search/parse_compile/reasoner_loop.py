@@ -511,6 +511,10 @@ class _Mission:
             for r in self.ns.get(key) or []:
                 self._ns_rows.setdefault(str(r["fid"]), r)
 
+    def _stop_xy(self, tok: str):
+        """A flown stop id's recorded point, or None."""
+        return self._plan_stops.get(tok.strip().lower())
+
     def _point(self, tok) -> list[float] | None:
         """THE place a token names, as [x, y] at 2 dp: a live surface fid, a
         flown stop id, a staged handle, or the canonical '[x, y]' token; None
@@ -519,11 +523,10 @@ class _Mission:
             row = self._ns_rows.get(tok.strip())
             if row is not None:
                 return look_xy(row)
-            key = tok.strip().lower()
-            sp = self._plan_stops.get(key)
+            sp = self._stop_xy(tok)
             if sp is not None:
                 return [round(sp[0], 2), round(sp[1], 2)]
-            sv = self.staged_viewpoints.get(key)
+            sv = self.staged_viewpoints.get(tok.strip().lower())
             if sv is not None:
                 return [round(float(sv["from_xy"][0]), 2),
                         round(float(sv["from_xy"][1]), 2)]
@@ -1037,7 +1040,7 @@ class _Mission:
     def _flown_stop(self, tok: str) -> tuple[str, str | None]:
         """A flown stop id -> its recorded point; an unflown one is refused.
         ``(token, error)``."""
-        sp = self._plan_stops.get(tok.strip().lower())
+        sp = self._stop_xy(tok)
         if sp is not None:
             return format_xy_token(sp[0], sp[1]), None
         if STOP_RE.fullmatch(tok.strip().lower()):
