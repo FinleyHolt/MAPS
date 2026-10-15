@@ -15,7 +15,7 @@ all (an ``ok`` miss with no metrics keeps its slot in the denominator).
 or window, or a refused request, stays ``ok``), ``timed_out`` (scored,
 counted apart), ``infra`` (never a fair run; dropped at read time).
 
-Stdlib only but for the ledger name ``episodes`` owns, so the benchmark
+Stdlib only but for the names ``episodes`` owns, so the benchmark
 driver and the report CLIs both depend on it without a cycle.
 """
 
@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Iterator
 
-from benchmarks.citynav.episodes import EPISODES_JSONL
+from benchmarks.citynav.episodes import EPISODES_JSONL, MANIFEST_NAME, STATUS_INFRA, STATUS_OK, STATUS_TIMED_OUT
 
 
 def metrics(row: dict) -> dict:
@@ -62,7 +62,7 @@ def is_infra_abort(row: dict) -> bool:
     row, an ``ended_by`` in ``INFRA_ENDINGS`` on a flight row. Such a row is
     dropped at read time.
     """
-    return row.get("status") == "infra" or ended_by(row) in INFRA_ENDINGS
+    return row.get("status") == STATUS_INFRA or ended_by(row) in INFRA_ENDINGS
 
 
 def is_complete(row: dict, m: dict | None = None) -> bool:
@@ -70,7 +70,7 @@ def is_complete(row: dict, m: dict | None = None) -> bool:
     that committed carries metrics but loses to any clean attempt."""
     if m is None:
         m = metrics(row)
-    return bool(m) and row.get("status") == "ok"
+    return bool(m) and row.get("status") == STATUS_OK
 
 
 # The start stamp on an attempt's directory; a run root's name never matches.
@@ -150,7 +150,7 @@ def read_attempts(ledger: Path) -> tuple[list[Attempt], ReadStats]:
     infra_episodes: set[str] = set()
     for row in iter_json_rows(ledger):
         rows += 1
-        if row.get("status") == "timed_out":
+        if row.get("status") == STATUS_TIMED_OUT:
             timed_out += 1
         m = metrics(row)
         eid = episode_id(row, m)
@@ -204,7 +204,7 @@ def pick_attempts(attempts: Iterable[Attempt]) -> dict[str, Attempt]:
 def read_manifest(root: Path) -> dict:
     """The run's ``run_manifest.json`` at its root, else ``{}``."""
     try:
-        return json.loads((root / "run_manifest.json").read_text())
+        return json.loads((root / MANIFEST_NAME).read_text())
     except (OSError, ValueError):
         return {}
 

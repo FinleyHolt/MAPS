@@ -27,6 +27,7 @@ from collections import Counter
 from pathlib import Path
 
 from benchmarks.citynav.analysis import rows as _rows
+from benchmarks.citynav.episodes import MANIFEST_NAME
 from maps.llm.flight_summary import summarize
 
 #: USD per million tokens: input, cache read, cache write, output.
@@ -67,7 +68,7 @@ def spend(out_root: Path, prices: dict = PRICES) -> dict:
         if state == "scored" and isinstance(row.get("episode_id"), str):
             scored_ids.add(row["episode_id"])
     try:
-        selected = json.loads((out_root / "run_manifest.json").read_text())["selection"]["episodes_n"]
+        selected = json.loads((out_root / MANIFEST_NAME).read_text())["selection"]["episodes_n"]
     except (OSError, ValueError, KeyError):
         selected = None
     per_episode = usd["scored"] / len(scored_ids) if scored_ids else None

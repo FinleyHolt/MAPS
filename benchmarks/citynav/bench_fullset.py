@@ -97,8 +97,7 @@ def _runner_env() -> dict[str, str]:
     env = {**RUNNER_THREAD_ENV, **os.environ}
     # Unbuffered, so a child that dies fast still leaves its lines in server.log.
     env["PYTHONUNBUFFERED"] = "1"
-    # cli.PARENT_PID_ENV, named here so the driver stays off the engine's imports.
-    env["CITYNAV_BENCH_PARENT_PID"] = str(os.getpid())
+    env[episodes.PARENT_PID_ENV] = str(os.getpid())
     return env
 
 
@@ -213,7 +212,7 @@ class Driver:
         # worker's server.log for an attempt that never got a workdir.
         wd = row.get("workdir")
         log_path = (
-            self.out_root / wd / "run.log"
+            self.out_root / wd / episodes.RUN_LOG
             if wd
             else self.out_root / f"w{row.get('worker_id', 0)}" / "server.log"
         )
@@ -391,9 +390,9 @@ class Driver:
         worker_root = self.out_root / f"w{worker_id}"
         worker_root.mkdir(parents=True, exist_ok=True)
         env = _runner_env()
-        # The mission's wall-clock backstop (mission_engine.MISSION_DEADLINE_ENV):
-        # an absolute epoch from the cap's start, less the reserve for ending.
-        env["CITYNAV_EPISODE_DEADLINE_EPOCH"] = repr(
+        # The mission's wall-clock backstop: an absolute epoch from the cap's
+        # start, less the reserve for ending.
+        env[episodes.DEADLINE_ENV] = repr(
             time.time() + self.episode_timeout_s * (1.0 - _DEADLINE_RESERVE_FRAC))
         cmd = [sys.executable, "-m", RUNNER_MODULE, "--config", str(CONFIG),
                "--split", self.split, "--episode-id", episode_id,

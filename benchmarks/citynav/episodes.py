@@ -25,6 +25,18 @@ STATUS_OK = "ok"
 STATUS_TIMED_OUT = "timed_out"
 STATUS_INFRA = "infra"
 
+#: The run root's manifest; an attempt's log in its workdir; the flown tour's
+#: cursor in its workdir.
+MANIFEST_NAME = "run_manifest.json"
+RUN_LOG = "run.log"
+TOUR_CURSOR = "flight/tour_cursor.json"
+
+#: What the driver hands each attempt's environment: its own pid (the runner
+#: exits when it is gone) and the attempt's wall-clock deadline, an epoch (the
+#: mission's backstop).
+PARENT_PID_ENV = "CITYNAV_BENCH_PARENT_PID"
+DEADLINE_ENV = "CITYNAV_EPISODE_DEADLINE_EPOCH"
+
 # Threads serialize here; the flock serializes against other processes.
 _append_lock = threading.Lock()
 
