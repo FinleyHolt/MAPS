@@ -190,7 +190,7 @@ class Reasoner:
     def append_tool_result(self, tool_call_id: str, name: str, result: dict) -> None:
         """Append one tool-role result, ``json.dumps(result, default=str)``.
         Every tool_call id the assistant emitted gets exactly one (the
-        compactor's id-closure sweep requires a result per id)."""
+        compactor refuses a call without a result)."""
         self.messages.append({"role": "tool", "tool_call_id": tool_call_id,
                               "name": name,
                               "content": json.dumps(result, default=str)})
