@@ -74,9 +74,11 @@ _log_lock = threading.Lock()
 def _enumerate_split(split: str) -> list[str]:
     from benchmarks.citynav.adapter import episode_ids, load_split
 
-    if split not in paths.SPLIT_FILES:
-        raise SystemExit(f"FATAL: unknown split {split!r}; known: {sorted(paths.SPLIT_FILES)}")
-    return episode_ids(enumerate(load_split(paths.split_path(split))))
+    try:
+        split_file = paths.split_path(split)
+    except ValueError as exc:
+        raise SystemExit(f"FATAL: {exc}") from None
+    return episode_ids(enumerate(load_split(split_file)))
 
 
 # One thread per native pool (BLAS, OpenCV, Rayon) and two malloc arenas per

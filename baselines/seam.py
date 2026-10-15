@@ -143,7 +143,7 @@ class BaselineHarness:
         self.budget = Budget(
             h.cfg.max_steps,
             Pose(float(start_xy[0]), float(start_xy[1]), self.start_alt_m,
-                 float(h.episode.start_heading_deg) % 360.0),
+                 float(h.episode.start_heading_deg)),
         )
         # Wall time per phase, landed on the row as ``<policy>_phase_<name>_s``.
         self.phase_s: dict[str, float] = {"render": 0.0, "segment": 0.0, "examine": 0.0}
