@@ -27,6 +27,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -76,6 +77,13 @@ class Landmark:
     contour: list[tuple[float, float]]
     centroid: tuple[float, float]
     tags: dict
+
+    @cached_property
+    def area(self):
+        """The contour as a shapely polygon."""
+        from shapely.geometry import Polygon
+
+        return Polygon(self.contour).buffer(0)
 
 
 class Budget:

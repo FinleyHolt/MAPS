@@ -157,15 +157,9 @@ def landmark_distance(lm: Landmark, xy: tuple[float, float]) -> float:
     """Metres from ``xy`` to the landmark's area, 0 inside it. A street's
     centroid can sit hundreds of metres from every point of the street, so
     distance to the area is the only reading that means "at the landmark"."""
-    from shapely.geometry import Point, Polygon
+    from shapely.geometry import Point
 
-    try:
-        poly = Polygon(lm.contour).buffer(0)
-        if not poly.is_empty:
-            return float(poly.distance(Point(float(xy[0]), float(xy[1]))))
-    except (ValueError, TypeError):
-        pass
-    return math.hypot(lm.centroid[0] - xy[0], lm.centroid[1] - xy[1])
+    return float(lm.area.distance(Point(float(xy[0]), float(xy[1]))))
 
 
 def pixel_bbox(det) -> tuple[int, int, int, int] | None:

@@ -38,17 +38,14 @@ def _compass(dx: float, dy: float) -> str:
 def landmark_text(landmarks: list[Landmark], centre: tuple[float, float], half: float) -> str:
     if not landmarks:
         return "(no named landmark of the instruction matched the map)"
-    from shapely.geometry import Polygon, box
+    from shapely.geometry import box
 
     view = box(centre[0] - half, centre[1] - half, centre[0] + half, centre[1] + half)
     lines = []
     for lm in landmarks:
         dx, dy = lm.centroid[0] - centre[0], lm.centroid[1] - centre[1]
         dist = math.hypot(dx, dy)
-        try:
-            overlaps = Polygon(lm.contour).buffer(0).intersects(view)
-        except (ValueError, TypeError):
-            overlaps = False
+        overlaps = lm.area.intersects(view)
         lines.append(
             f"- {lm.name}: centroid {dist:.0f} m to the {_compass(dx, dy)}"
             + ("; its outline is inside this view" if overlaps else "; outside this view")

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import shapely
-from shapely.geometry import Polygon, box
+from shapely.geometry import box
 from shapely.ops import unary_union
 
 from baselines.seam import Landmark
@@ -40,14 +40,7 @@ class CoveragePlan:
 def merged_region(landmarks: list[Landmark], bounds):
     """The union of the matched landmarks' contours inside ``bounds`` (the
     search window); the window itself when none matched."""
-    polys = []
-    for lm in landmarks:
-        try:
-            p = Polygon(lm.contour).buffer(0)
-        except (ValueError, TypeError):
-            continue
-        if not p.is_empty and p.area > 0:
-            polys.append(p)
+    polys = [lm.area for lm in landmarks if not lm.area.is_empty and lm.area.area > 0]
     window = box(bounds.x_min, bounds.y_min, bounds.x_max, bounds.y_max)
     if not polys:
         return window
