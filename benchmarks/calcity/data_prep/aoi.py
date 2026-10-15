@@ -131,7 +131,7 @@ def build_local_frame(bbox: tuple[float, float, float, float]) -> LocalFrame:
 # (the airport corner).
 
 _LEISURE_WATER = {"swimming_pool"}
-_LEISURE_GROUND = {"pitch", "track", "garden", "stadium", "bleachers", "park", "golf_course"}
+_LEISURE_GROUND = {"pitch", "track", "garden", "stadium", "bleachers", "park", "golf_course", "sports_center"}
 _AEROWAY_BUILDING = {"hangar", "terminal"}
 _AEROWAY_GROUND = {"runway", "taxiway", "apron", "helipad", "runway_link"}
 _HIGHWAY_DRIVE = {
@@ -187,9 +187,7 @@ def classify_object_type(tags: dict) -> str | None:
         return "Building"
     if aeroway in _AEROWAY_GROUND:
         return "Ground"
-    if leisure in _LEISURE_GROUND or leisure == "sports_center":
-        return "Ground"
-    if landuse == "golf_course" or leisure == "golf_course":
+    if leisure in _LEISURE_GROUND or landuse == "golf_course":
         return "Ground"
     if amenity == "parking":
         return "Parking"
