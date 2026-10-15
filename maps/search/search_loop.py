@@ -54,8 +54,7 @@ class SearchLoop:
             float(tile_origin_xy[1]),
         )
         self._map_name = map_name
-        # The segmenter's concept list: the declared union and the director's
-        # watchlist both write it whole.
+        # The segmenter's concept list, written whole by the director.
         self._sam_setter = sam_setter
         # The block's ground datum.
         self._ortho_ground_z_m = ortho_ground_z_m
@@ -224,32 +223,20 @@ class SearchLoop:
             self.state.perception_director.record_flown(flown)
 
     def declare_mission_concepts(self, classes: list[str]) -> str | None:
-        """Set the segmenter's classes to the declared list of classes and
-        diff the director's watchlist to it. Returns the error the mission
-        serves when the setter failed, else None."""
+        """Make the declared classes the director's watchlist and push it to
+        the segmenter. Returns the error the mission serves when the push
+        failed, else None."""
         # The classes SAM segments, canonical, first seen first; a placeholder
         # class is no class.
         union = list(dict.fromkeys(
             c for c in (canon_concept(x) for x in classes)
             if c and c not in _NULL_CONCEPTS))
-        setter_err: str | None = None
         with self._lock:
-            if self._sam_setter is not None:
-                try:
-                    self._sam_setter(union)
-                except Exception as e:  # noqa: BLE001
-                    # never a clean receipt over a segmenter that kept its
-                    # old classes
-                    log.warning("sam concept setter failed: %s", e)
-                    setter_err = str(e)
-            d = self.state.perception_director
-            adds = [c for c in union if c not in d.watchlist]
-            rems = [c for c in d.watchlist if c not in union]
-            if adds or rems:
-                d.watchlist_apply(adds, rems)
-        if setter_err:
+            # never a clean receipt over a segmenter that kept its old classes
+            err = self.state.perception_director.set_watchlist(union)
+        if err:
             return (f"the segmenter did not take this declaration "
-                    f"({setter_err}); say it again")
+                    f"({err}); say it again")
         return None
 
     def update_perception(self, detections: list, projected_masks: dict[int, object]) -> list[dict]:

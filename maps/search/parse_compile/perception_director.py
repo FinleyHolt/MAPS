@@ -87,23 +87,24 @@ class PerceptionDirector:
     # Every flown stop: {"pose_xy", "alt_m", "stop_id", "target_fids"}.
     flown_log: list[dict] = field(default_factory=list)
 
-    def watchlist_apply(self, add, remove) -> None:
-        """Remove then add classes (canonical-deduped) and push the result."""
-        remove_keys = {canon_concept(s) for s in (remove or []) if canon_concept(s)}
-        kept = [w for w in self.watchlist if canon_concept(w) not in remove_keys]
-        existing = {canon_concept(w) for w in kept}
-        self.watchlist = kept + [a for a in _dedup_concepts(add)
-                                 if canon_concept(a) not in existing]
-        self._push_live()
+    def set_watchlist(self, classes: list[str]) -> str | None:
+        """Make ``classes`` the watchlist, in their order, and push it; the
+        push's error, or None."""
+        self.watchlist = list(classes)
+        return self._push_live()
 
-    def _push_live(self) -> None:
+    def _push_live(self) -> str | None:
+        """Push the watchlist and the riding boosts' classes; a push failure
+        never crashes the turn and is returned."""
         if self.push is None:
-            return
+            return None
         try:
             self.push(_dedup_concepts(
                 self.watchlist + [c for b in self.boosts if b.riding for c in b.concepts]))
-        except Exception:  # noqa: BLE001 -- a push failure never crashes the turn
-            log.exception("PerceptionDirector: live concept push failed")
+        except Exception as e:  # noqa: BLE001
+            log.warning("live concept push failed: %s", e)
+            return str(e)
+        return None
 
     def _retro(self, flown: dict, concepts: list[str], token) -> dict:
         if self.retro_perceiver is None:

@@ -151,8 +151,8 @@ def test_a_twin_sortie_scores_fully_on_the_closed_loop_measures(calcity, serves,
 
 def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity, serves, tmp_path, monkeypatch):
     """The flight wires the agent's watchlist channel exactly as the bench
-    does: a watchlist change the director makes reaches the segmenter's
-    concept provider, not engine state alone."""
+    does: a declaration reaches the segmenter's concept list, not
+    engine state alone."""
     from benchmarks.citynav.run_benchmark import episode_runner
     from benchmarks.flight import mission as M
     from maps.llm import endpoint_spec
@@ -161,8 +161,7 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity,
     monkeypatch.setattr(episode_runner, "make_perception", SamDetectClient)
     endpoint_spec.install_spec(endpoint_spec.discover_from_env())
     h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=914.4)
-    h.search_loop.declare_mission_concepts(["car"])
-    h.search_loop.state.perception_director.watchlist_apply(["tree"], [])
+    h.search_loop.declare_mission_concepts(["car", "tree"])
     assert h.perception.concepts == ["car", "tree"]
 
 

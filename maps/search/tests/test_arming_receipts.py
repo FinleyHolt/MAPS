@@ -96,21 +96,30 @@ def test_a_boost_at_an_unflown_stop_names_it_and_queues_nothing():
         "unknown_where": ["stop_009"]}
 
 
-def test_a_queued_boost_segments_its_flights_in_watchlist_order_until_its_target_flies():
+def test_a_queued_boost_rides_every_flight_until_its_target_flies():
     from maps.perception.sam.detect_client import SamDetectClient
 
     prov = SamDetectClient()
     loop = search_loop(sam_setter=prov.set_concepts)
-    car, pool = "car", "pool"
-    loop.declare_mission_concepts([car, pool])
+    loop.declare_mission_concepts(["car"])
     assert loop.boost_queue(["pool"], ["prior_1"])["queued"] == ["pool"]
-    loop.declare_mission_concepts([pool, car])  # a re-declaration reorders the union
-    assert prov.concepts == ["pool", "car"]
     for target in ("prior_2", "prior_1"):  # the boost rides until prior_1 flies
         loop.start_flight()
         assert prov.concepts == ["car", "pool"]
         loop.record_flown_stop({"pose_xy": (0.0, 0.0), "stop_id": "s", "target_fids": [target]})
-        loop.declare_mission_concepts([car, pool])
-        loop.declare_mission_concepts([pool, car])
+        assert prov.concepts == ["car"]
     loop.start_flight()
-    assert prov.concepts == ["pool", "car"]
+    assert prov.concepts == ["car"]
+
+
+def test_the_segmenter_keeps_the_declared_order_across_a_flight():
+    """A re-declared class moves to the end of the declared union, and every
+    later push (a flight's start, its recorded stop) sends that same order."""
+    pushed = []
+    loop = search_loop(sam_setter=pushed.append)
+    loop.declare_mission_concepts(["car", "house"])
+    loop.declare_mission_concepts(["house", "car"])
+    loop.boost_queue(["pool"], ["prior_1"])
+    loop.start_flight()
+    loop.record_flown_stop({"pose_xy": (0.0, 0.0), "stop_id": "s", "target_fids": ["prior_9"]})
+    assert pushed == [["car", "house"], ["house", "car"], ["house", "car", "pool"], ["house", "car"]]

@@ -49,9 +49,8 @@ def test_bare_xy_token_matches_the_one_grammar():
 
 
 # ---------------------------------------------------------------------------
-# declare_mission_concepts: the mission's act.sam_concepts channel arms the
-# director on the first declaration and DIFFS it afterwards (latest-wins),
-# re-arming the segmenter setter and the roles map each time.
+# declare_mission_concepts: each declaration replaces the director's
+# watchlist with the declared union (latest wins) and pushes it.
 # ---------------------------------------------------------------------------
 
 
@@ -71,13 +70,13 @@ def test_declare_arms_the_director_on_first_call():
     assert pushes[-1] == ["car"]
 
 
-def test_redeclare_is_latest_wins_via_diff_not_rebuild():
+def test_redeclare_is_latest_wins_on_the_same_director():
     loop, pushes = _bare_loop()
     loop.declare_mission_concepts(["car"])
     director_first = loop.state.perception_director
     loop.declare_mission_concepts(["building"])
     d = loop.state.perception_director
-    assert d is director_first, "a redeclare diffs the live director, never rebuilds"
+    assert d is director_first, "a redeclare updates the live director, never rebuilds"
     assert d.watchlist == ["building"]
     assert pushes[-1] == ["building"]
 
