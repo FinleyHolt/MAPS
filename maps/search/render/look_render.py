@@ -394,19 +394,12 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
                          interpolation=cv2.INTER_LANCZOS4)
     H, W = rgb.shape[:2]
     # A declared view (``frame_up``) rotates pixels and ink together; the
-    # unrotated validity0 serves the subject sample, the rotated validity the
-    # valid fraction.
+    # unrotated validity is the window's own data for the caption facts.
     # ponytail: whole-image warp (corners go black); a sqrt(2) over-crop
     # upgrade keeps full coverage if framed crops prove load-bearing.
     _rotM, band_text = view_rotation(req.get("frame_up"), W, H)
-    validity0 = validity
     if _rotM is not None:
         rgb = cv2.warpAffine(rgb, _rotM, (W, H))
-        _Hv0, _Wv0 = validity.shape[:2]
-        validity = cv2.warpAffine(
-            validity.astype(np.uint8),
-            view_rotation(req.get("frame_up"), _Wv0, _Hv0)[0], (_Wv0, _Hv0),
-            flags=cv2.INTER_NEAREST)
     x0, y0, x1, y1 = oc["world_window"]
     meta = {
         "center_fid": center_fid,
@@ -486,13 +479,13 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
     else:
         meta["subject_extent_m"] = None
         meta["subject_outline_cut"] = False
-    _Hv, _Wv = validity0.shape[:2]
+    _Hv, _Wv = validity.shape[:2]
     meta["window_valid_frac"] = round(
         float((validity > 0).mean()), 3) if validity.size else 0.0
     _spx = int(min(max((true_x - x0) / sx * _Wv, 0.0), _Wv - 1))
     _spy = int(min(max((y1 - true_y) / sy * _Hv, 0.0), _Hv - 1))
     meta["subject_on_data"] = (
-        bool(validity0[_spy, _spx] > 0) if (_cin and validity0.size)
+        bool(validity[_spy, _spx] > 0) if (_cin and validity.size)
         else None)
     meta["legend"] = legend
     meta["marks_dropped"] = _dropped_marks

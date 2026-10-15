@@ -40,8 +40,11 @@ def _window_caption(c: dict) -> str:
     _fu = c.get("frame_up")
     if isinstance(_fu, (list, tuple)) and len(_fu) == 2:
         _fn = str(c.get("frame_note") or "").strip()
-        _up = (f"up {round(up_bearing_deg(_fu)) % 360} deg"
-               + (f" -- {_fn}" if _fn else ""))
+        _deg = round(up_bearing_deg(_fu)) % 360
+        _up = (f"up {_deg} deg" + (f" -- {_fn}" if _fn else "")
+               # a turn off the square leaves the frame's corners empty
+               + ("; its corners lie outside the turned window and render dark"
+                  if _deg % 90 else ""))
     else:
         _up = "north-up"
     _cm = c.get("context_m")

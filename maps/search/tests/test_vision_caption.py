@@ -35,3 +35,14 @@ def test_a_point_subject_is_named_by_its_legend_label():
     t = _look_vision_text([{"center_fid": "", "legend": [
         {"digit": 1, "label": "[3411, 1468]", "role": "center"}]}])
     assert "in order: [[3411, 1468]]" in t
+
+
+def test_a_turned_view_says_its_corners_are_outside_the_window():
+    turned = _look_vision_text([{"center_fid": "c1", "legend": _LEGEND,
+                                 "context_m": 20.0, "frame_up": [0.7071, 0.7071]}])
+    assert "its corners lie outside the turned window and render dark" in turned
+    for square in (None, [1.0, 0.0], [0.0, -1.0]):
+        c = {"center_fid": "c1", "legend": _LEGEND, "context_m": 20.0}
+        if square:
+            c["frame_up"] = square
+        assert "corners" not in _look_vision_text([c]), square
