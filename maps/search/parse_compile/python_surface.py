@@ -673,6 +673,11 @@ class Rows:
             rows = rows[int(lo):int(hi)]
         return rows
 
+    def _lo(self) -> int:
+        """Where this window starts in the whole ref: a row's ``src`` index
+        is into the ref, not the window."""
+        return int(self.spec[1:-1].split(":")[0]) if self.spec else 0
+
     def __len__(self):
         return len(self._rows())
 
@@ -714,10 +719,12 @@ class Rows:
             raise CodeError(
                 f"{name}[{i}] did not bind: {name} served {len(rows)} "
                 "row(s) here. Show it first, then index it.")
-        return Row(rows[i], src=(self.ref, i % len(rows)), mp=self.mp)
+        return Row(rows[i], src=(self.ref, self._lo() + i % len(rows)),
+                   mp=self.mp)
 
     def __iter__(self):
-        return (Row(r, src=(self.ref, i), mp=self.mp)
+        lo = self._lo()
+        return (Row(r, src=(self.ref, lo + i), mp=self.mp)
                 for i, r in enumerate(self._rows()))
 
     # THE MATCH TIERS AS ATTRIBUTES: the agent chooses a find's stratum by

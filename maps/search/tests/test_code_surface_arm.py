@@ -901,6 +901,21 @@ def test_a_slice_frames_the_head_of_an_ordering():
     assert env["fids"] == [f"car_{i:03d}" for i in range(5)], env
 
 
+def test_a_row_of_a_window_shows_the_row_it_is():
+    """w[0] and a loop over w show the window's rows, not the ref's head."""
+    cands = [{"fid": f"detected_{i}", "xy": [10.0 * i, 0.0], "class": "car",
+              "search_text": "car"} for i in range(6)]
+    _, fr, _f, _d = drive([
+        [run('r1 = find("car")\nw = r1[2:5]\nw[0]\n')],
+        [run('for r in w:\n    show(r)\n')],
+        "done",
+    ], cands=cands)
+    head, loop = tool_results(fr)[:2]
+    assert head["result"]["results"]["w[0]"]["fids"] == ["detected_2"], head
+    # the loop's name holds its last row
+    assert loop["shown"] == {"r": "detected_4"}, loop
+
+
 def test_the_legend_documents_every_call_the_surface_serves():
     """A call the parser accepts and the legend omits is a capability the model has no
     way to learn it has."""
