@@ -40,15 +40,8 @@ def _die_with_parent() -> None:
 
 
 def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
-    """Write this run's receipt at the run root.
-
-    ``perception.bake_sha256`` tells two bakes at one path apart;
-    ``run_report`` prints ``bake: UNVERIFIED`` without it.
-
-    A direct run's root is one run, so the write-once identity check
-    refuses a root reused under another config. The fleet driver emits at
-    the fleet root; its attempt children return before reaching here.
-    """
+    """Write this run's receipt at the run root: a direct run's root is one
+    run (write-once identity)."""
     _rm.emit_or_verify(
         out_root,
         _rm.build_manifest(

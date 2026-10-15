@@ -100,14 +100,8 @@ def render(st: dict) -> str:
 
 
 def _run_provenance(run_root: Path) -> dict:
-    """The first row's provenance block, else {}, with what the manifest adds:
-    the tile-bake content hash (every Cal City bake sits at
-    ``benchmarks/calcity/tiles``, so the path the rows carry cannot tell two
-    apart), the arm's withholds and baseline ``policy``, the sha256 of the resolved config
-    without them or a baseline ``policy`` (``config_body``: an E4 arm differs
-    from E1 only in its withholds, a baseline arm only in its policy),
-    and ``resume_commits`` when the run's start and resumes name more than
-    one code commit."""
+    """The first row's provenance (else {}) with the manifest's bake hash,
+    withholds, policy, config body hash and resume commits."""
     prov = next((r["provenance"] for r in _rows.iter_json_rows(run_root / _rows.EPISODES_JSONL)
                  if r.get("provenance")), None)
     if not prov:
@@ -145,13 +139,12 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
     """``(fatal, arm)`` mismatches between two runs' provenance.
 
     ``fatal`` is the ground truth SR is scored against (split, tile bake):
-    differing or unrecorded,
-    no A/B exists, and nothing waives it. ``arm`` is code, config (apart from
-    its withholds and baseline policy where both manifests record it), served
-    model and reasoning effort (unset reads as blank), which an A/B is meant
-    to vary; compared only
-    where both sides recorded them, and waived by ``--allow-provenance-mismatch``.
-    A side whose resumes ran other code is an ``arm`` mismatch on its own."""
+    differing or unrecorded, no A/B exists, and nothing waives it. ``arm`` is
+    code, config (apart from its withholds and baseline policy where both
+    manifests record it), served model and reasoning effort (unset reads as
+    blank), which an A/B is meant to vary; compared only where both sides
+    recorded them, and waived by ``--allow-provenance-mismatch``. A side whose
+    resumes ran other code is an ``arm`` mismatch on its own."""
     fatal: list[str] = []
     ga, gb = _ground_truth_keys(prov_a), _ground_truth_keys(prov_b)
     for key, label in (
