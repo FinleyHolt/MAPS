@@ -15,7 +15,7 @@ from itertools import islice
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene import text_match as T
-from maps.search.analyze_scene.row_geometry import chains_of, place_geom
+from maps.search.analyze_scene.row_geometry import chains_of, geom_of, place_geom
 from maps.search.render.look_render import LOOK_SET_ROWS
 from maps.util.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld
@@ -1441,7 +1441,7 @@ def _union_center(cx, members):
     wx = wy = wa = 0.0
     ucs: list = []
     for node in members:
-        g, c = place_geom(cx.by_fid.get(node.get("fid")), node)
+        g, c = geom_of(node)
         geoms.append(g)
         if c is not None:
             ucs.append(c)
@@ -1523,7 +1523,7 @@ def _compare(cx, a):
             kind = "row"
             lab = _unique_label(as_label or sanitize_token(payload["fid"]),
                                 used_labels, payload["fid"])
-            geom, center = place_geom(cx.by_fid.get(payload.get("fid")), payload)
+            geom, center = geom_of(payload)
         fid = payload.get("fid") if kind == "row" else None
         want = next((card_req[k] for k in (fid, lab)
                      if k and k in card_req), None)
