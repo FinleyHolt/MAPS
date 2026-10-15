@@ -1,9 +1,11 @@
-"""A synthetic Cal City for the flight tests: a georeferenced bake frame and a raster of buildings on it."""
+"""A synthetic Cal City for the flight tests (a georeferenced bake frame and a raster of buildings on it),
+and the stand-ins they share for a vehicle, a hydrated mission and its session."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -71,3 +73,26 @@ def write_raster_pair(raster_dir: Path, rgb: np.ndarray, px_m: float) -> None:
     with rasterio.open(raster_dir / "calcity.tif", "w", driver="GTiff", width=n, height=n, count=1,
                        dtype="float32", transform=transform) as dst:
         dst.write(np.zeros((1, n, n), np.float32))
+
+
+def recording_legs(vehicle):
+    """``vehicle`` with every leg posted to it kept in ``legs``, for a test to read."""
+    vehicle.legs, post = [], vehicle.post
+    vehicle.post = lambda leg: (vehicle.legs.append(leg), post(leg))[-1]
+    return vehicle
+
+
+def hydrated(sensor, cells=None):
+    """The parts of a hydrated mission the leg reads."""
+    return SimpleNamespace(
+        sensor=sensor, state=SimpleNamespace(pose_xy=(600.0, 100.0), altitude_m=AGL_M), ground_z_m=0.0,
+        search_loop=SimpleNamespace(node_cells_xy=lambda token: cells))
+
+
+def session(h, fly):
+    """The parts of a mission session a leg reads: the hydrated stack, the
+    target resolution, and the flight the leg hands its observation to."""
+    from benchmarks.citynav.run_benchmark.mission_engine import resolve_flight_target
+
+    return SimpleNamespace(h=h, fly=fly, resolve=lambda token: resolve_flight_target(
+        token, node_xy=lambda fid: None))

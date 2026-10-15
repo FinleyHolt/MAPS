@@ -13,8 +13,6 @@ from PIL import Image
 from benchmarks.flight import mission as M
 from benchmarks.flight import replay as R
 from benchmarks.flight.tests import world
-from benchmarks.flight.tests.conftest import _recording_legs
-from benchmarks.flight.tests.test_mission import _hydrated, _session
 
 
 def _held(tmp_path, name, extent, black_east=False):
@@ -31,7 +29,7 @@ def _held(tmp_path, name, extent, black_east=False):
 def bank_mission(built, tmp_path):
     def make(bank):
         live = R.BankSource(bank, tiles_dir=built[0], map_name="calcity", tile_ground_z=0.0)
-        _recording_legs(live.vehicle)
+        world.recording_legs(live.vehicle)
         workdir = tmp_path / "sortie" / "run"
         workdir.mkdir(parents=True)
         m = M.Mission(episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,
@@ -47,12 +45,12 @@ def test_the_bank_serves_the_observation_holding_most_of_the_area_and_black_grou
     half = _held(tmp_path, "half", (300.0, 300.0, 900.0, 900.0), black_east=True)
     whole = _held(tmp_path, "whole", (300.0, 300.0, 900.0, 900.0))
     m, live = bank_mission([half, whole])
-    area = m._area_lonlat(M.leg_area(_hydrated(built[3]), "", (600.0, 600.0)))
+    area = m._area_lonlat(M.leg_area(world.hydrated(built[3]), "", (600.0, 600.0)))
     assert live.coverage(area)["best"][0] == (0.0, 1)
     alone = R.BankSource([half], tiles_dir=built[0], map_name="calcity", tile_ground_z=0.0).coverage(area)
     assert 0.0 < alone["fraction"] < M.COVERED_FRACTION     # the black east half holds nothing
     served = []
-    m._fly_live(_session(_hydrated(built[3]), lambda item: served.append(m._held) or {}), {"target_fid": "[600, 600]"})
+    m._fly_live(world.session(world.hydrated(built[3]), lambda item: served.append(m._held) or {}), {"target_fid": "[600, 600]"})
     assert "no leg is flown" in [r["said"] for r in m.transcript if r.get("kind") == "leg"][-1]
     obs, last = served[0]
     assert obs.world_window == (300.0, 300.0, 900.0, 900.0) and last["boresight"] == "boresight.json"
@@ -61,7 +59,7 @@ def test_the_bank_serves_the_observation_holding_most_of_the_area_and_black_grou
 def test_ground_no_recorded_observation_holds_leaves_the_flight_without_one(built, bank_mission, tmp_path):
     m, live = bank_mission([_held(tmp_path, "far", (300.0, 300.0, 500.0, 500.0))])
     served = []
-    m._fly_live(_session(_hydrated(built[3]), lambda item: served.append(m._held) or {}), {"target_fid": "[1000, 1000]"})
+    m._fly_live(world.session(world.hydrated(built[3]), lambda item: served.append(m._held) or {}), {"target_fid": "[1000, 1000]"})
     assert served == [None] and len(live.vehicle.legs) == 1
     assert "no frame held any of it" in [r["said"] for r in m.transcript if r.get("kind") == "leg"][-1]
 
