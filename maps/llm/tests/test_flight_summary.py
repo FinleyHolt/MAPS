@@ -155,13 +155,34 @@ def test_turns_tokens_and_latency(tmp_path: Path) -> None:
     # Every key has a reader (measures, the figures, the endpoint check).
     assert set(s) == set(flight_summary.blank()) == {
         "turns", "requests", "unanswered", "prompt_tokens", "completion_tokens",
-        "total_tokens", "reasoning_tokens", "latency_s_sum"}
+        "total_tokens", "reasoning_tokens", "latency_s_sum",
+        "cached_tokens", "cache_write_tokens", "served_model"}
 
 
-def test_the_row_carries_no_cached_count(tmp_path: Path) -> None:
-    """Cache hits are a serve fact only some serves report; the row holds none."""
-    assert "cached_tokens" not in flight_summary.summarize(_flight(tmp_path))
-    assert "cached_tokens" not in flight_summary.blank()
+def test_the_cache_meters_sum_what_the_responses_report(tmp_path: Path) -> None:
+    """A hosted provider's cache reads and writes ride the row summed; the
+    model it names on its responses rides as it last named it."""
+    flight = _flight(tmp_path)
+    with (flight / "llm" / "transcript.jsonl").open("a") as fh:
+        fh.write(json.dumps({"kind": "response", "response": {
+            "model": "gpt-5.6-sol-2026-07-09", "choices": [{"message": {}}],
+            "usage": {"prompt_tokens": 2000, "prompt_tokens_details": {
+                "cached_tokens": 1408, "cache_write_tokens": 512}}}}) + "\n")
+    s = flight_summary.summarize(flight)
+    assert s["cached_tokens"] == 640 + 800 + 1408
+    assert s["cache_write_tokens"] == 512
+    assert s["served_model"] == "gpt-5.6-sol-2026-07-09"
+
+
+def test_a_serve_that_reports_no_cache_reads_none(tmp_path: Path) -> None:
+    """Cache hits are a serve fact only some serves report: none reported is
+    None, never a zero hit rate."""
+    flight = tmp_path / "flight"
+    _write(flight, [_response("r1", 1.0, usage={"prompt_tokens": 5}, tool_calls=[])])
+    s = flight_summary.summarize(flight)
+    assert s["cached_tokens"] is None and s["cache_write_tokens"] is None
+    assert s["served_model"] is None
+    assert flight_summary.blank()["cached_tokens"] is None
 
 
 def test_reasoning_tokens_are_summed_over_the_responses_that_carry_a_span(tmp_path: Path) -> None:

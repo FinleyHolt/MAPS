@@ -1,7 +1,10 @@
 """One episode's LLM activity, reduced to a block that rides its row.
 
-:func:`summarize` folds the flight dir's ``llm/transcript.jsonl`` into turns,
-requests, token sums and latency.
+Folds the flight dir's ``llm/transcript.jsonl`` into turns, requests, token
+sums and latency. The cache meters (``cached_tokens``, ``cache_write_tokens``,
+off ``usage.prompt_tokens_details``) and ``served_model`` (the responses'
+``model``, a hosted provider's versioned name) are None when no response
+reported them: a serve without cache reporting reads n/a, not a zero hit.
 """
 
 from __future__ import annotations
@@ -34,6 +37,9 @@ def blank() -> dict:
         "total_tokens": 0,
         "reasoning_tokens": 0,
         "latency_s_sum": 0.0,
+        "cached_tokens": None,
+        "cache_write_tokens": None,
+        "served_model": None,
     }
 
 
@@ -135,6 +141,13 @@ def _scan_transcript(path: Path, out: dict) -> None:
                 v = usage.get(field)
                 if isinstance(v, (int, float)):
                     out[key] += int(v)
+            details = _as_dict(usage.get("prompt_tokens_details"))
+            for key in ("cached_tokens", "cache_write_tokens"):
+                v = details.get(key)
+                if isinstance(v, (int, float)):
+                    out[key] = (out[key] or 0) + int(v)
+            if isinstance(body.get("model"), str):
+                out["served_model"] = body["model"]
 
     # requests never answered: a crash, a timeout or a kill mid-call
     out["unanswered"] = len(started)
