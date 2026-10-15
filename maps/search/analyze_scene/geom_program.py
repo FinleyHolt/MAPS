@@ -11,6 +11,7 @@ union).
 from __future__ import annotations
 
 import re
+from itertools import islice
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene import text_match as T
@@ -1101,6 +1102,33 @@ def _x_label(nodes, el):
     return ", ".join(str(n.get("fid")) for n in nodes[:3])
 
 
+def _sibling_crossing(by_fid, la, fa, lb, fb) -> str:
+    """What a crossing that did not meet adds: where two same-named
+    segments touch, from a sweep of at most 24 untested pairs (each side's
+    first 8 tested rows and first 8 siblings), else how many siblings it
+    swept, else nothing."""
+    def side(lab, fids):
+        tested = [by_fid[f] for f in sorted(fids) if f in by_fid][:8]
+        sibs = [c for c in by_fid.values() if str(c.get("name")) == str(lab)
+                and str(c.get("fid")) not in fids][:8]
+        return tested, sibs
+    (ta, sa), (tb, sb) = side(la, fa), side(lb, fb)
+    pairs = ((ra, rb) for ra in ta + sa for rb in tb + sb
+             if not (str(ra.get("fid")) in fa and str(rb.get("fid")) in fb))
+    for ra, rb in islice(pairs, 24):
+        px, _ = G.polyline_crossings(chains_of(ra), chains_of(rb))
+        if px:
+            tok = format_xy_token(float(round(px[0][0])),
+                                  float(round(px[0][1])))
+            return (f" But the NAMES do cross elsewhere: {ra.get('fid')} and "
+                    f"{rb.get('fid')} (same-named segments) touch at {tok} "
+                    f"-- intersection on those rows returns it.")
+    if sa or sb:
+        return (f" {len(sa)} other {la} segment(s) and {len(sb)} other {lb} "
+                f"segment(s) exist; no swept pair touches either.")
+    return ""
+
+
 def _crossings(cx, a):
     """The places two features meet: one row per distinct crossing, its fid
     the [x, y] token of its whole-metre point. None raises."""
@@ -1130,43 +1158,7 @@ def _crossings(cx, a):
                           (sides[1][0], sides[1][2]))
     xpts, nearest = G.polyline_crossings(sides[0][1], sides[1][1])
     if not xpts:
-        # Sweep a bounded set of same-named sibling pairs for a crossing.
-        by_fid = cx.by_fid
-        sa = [c for c in by_fid.values()
-               if str(c.get("name")) == str(la)
-               and str(c.get("fid")) not in fa][:8]
-        sb = [c for c in by_fid.values()
-               if str(c.get("name")) == str(lb)
-               and str(c.get("fid")) not in fb][:8]
-        hit = None
-        budget = 24
-        for ra in ([by_fid[f] for f in sorted(fa) if f in by_fid][:8] + sa):
-            for rb in ([by_fid[f] for f in sorted(fb)
-                         if f in by_fid][:8] + sb):
-                if str(ra.get("fid")) in fa and str(rb.get("fid")) in fb:
-                    continue          # the pair already tested
-                if budget <= 0:
-                    break
-                budget -= 1
-                px, _ = G.polyline_crossings(chains_of(ra), chains_of(rb))
-                if px:
-                    hx, hy = (float(round(px[0][0])),
-                                float(round(px[0][1])))
-                    hit = (str(ra.get("fid")), str(rb.get("fid")),
-                            format_xy_token(hx, hy))
-                    break
-            if hit or budget <= 0:
-                break
-        sib = ""
-        if hit:
-            sib = (f" But the NAMES do cross elsewhere: "
-                    f"{hit[0]} and {hit[1]} (same-named "
-                    f"segments) touch at {hit[2]} -- "
-                    f"intersection on those rows returns it.")
-        elif sa or sb:
-            sib = (f" {len(sa)} other {la} segment(s) and "
-                    f"{len(sb)} other {lb} segment(s) exist; "
-                    f"no swept pair touches either.")
+        sib = _sibling_crossing(cx.by_fid, la, fa, lb, fb)
         raise ProgramError(
             f"{la} and {lb} do not meet HERE: the tested rows "
             f"({', '.join(sorted(fa)[:4])} against "
