@@ -798,10 +798,16 @@ def empty_window_refusal(part: str, n: int) -> str:
             "or after where it stops).")
 
 
+def window_span(spec: str) -> tuple[int, int]:
+    """A window ``"[lo:hi]"`` -> ``(lo, hi)``."""
+    lo, hi = spec[1:-1].split(":")
+    return int(lo), int(hi)
+
+
 def _window(cur, win):
     """``rN[a:b]``: those rows, keeping the source's ``kind``, ``ordered``
     and ``op_cols``. Selecting none of a non-empty set raises."""
-    lo, hi = (int(b) for b in win[:-1].split(":"))
+    lo, hi = window_span("[" + win)
     rows = cur[lo:hi]
     if isinstance(cur, Result):
         rows = Result(rows, cur.kind, ordered=cur.ordered, op_cols=cur.op_cols)

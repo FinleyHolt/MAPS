@@ -32,7 +32,8 @@ from typing import Callable
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import (
     _AUTOATTACH_PREFIXES, _BROAD_HEAD_ROWS, _STANDING_SIDE_PREFIXES,
-    MODEL_UNSERVED_COLUMNS, _sanitize_token, empty_window_refusal)
+    MODEL_UNSERVED_COLUMNS, _sanitize_token, empty_window_refusal,
+    window_span)
 from maps.search.analyze_scene.row_geometry import SurfaceGeometry
 from maps.search.withhold import withheld
 from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
@@ -659,14 +660,14 @@ class Rows(_Cuts):
     def _rows(self) -> list[dict]:
         rows = self.mp.env.rows_of_ref(self.ref)
         if self.spec:
-            lo, hi = self.spec[1:-1].split(":")
-            rows = rows[int(lo):int(hi)]
+            lo, hi = window_span(self.spec)
+            rows = rows[lo:hi]
         return rows
 
     def _lo(self) -> int:
         """Where this window starts in the whole ref: a row's ``src`` index
         is into the ref, not the window."""
-        return int(self.spec[1:-1].split(":")[0]) if self.spec else 0
+        return window_span(self.spec)[0] if self.spec else 0
 
     def __len__(self):
         return len(self._rows())
@@ -694,7 +695,7 @@ class Rows(_Cuts):
             hi = int(i.stop)
             if self.spec:
                 # a slice of a slice composes into absolute indices
-                p_lo, p_hi = (int(x) for x in self.spec[1:-1].split(":"))
+                p_lo, p_hi = window_span(self.spec)
                 held = range(len(self.mp.env.rows_of_ref(self.ref)))[p_lo:p_hi]
                 s = held[lo:hi]
                 if held and not s:
