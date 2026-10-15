@@ -37,7 +37,6 @@ from maps.perception.sam.detect_client import SamDetectClient
 from maps.search.search_loop import SearchLoop
 from maps.search.withhold import withheld
 from maps.sws.graph.builder import build_object_graph
-from maps.sws.graph.io import load_graph
 from maps.sws.graph.model import GridDomain
 
 log = logging.getLogger("run_benchmark")
@@ -120,17 +119,12 @@ def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, 
     )
 
 
-def _episode_graph(stem: str, assets):
-    """The episode's object graph. The ``prior`` withhold starts it empty."""
-    if withheld("prior"):
-        return build_object_graph({}, cell_size_m=float(assets.cell_size_m))
-    try:
-        return load_graph(stem)
-    except FileNotFoundError:
-        log.warning("  %s: no baked graph, building on the fly", stem)
-        return build_object_graph(
-            assets.base_features, cell_size_m=float(assets.cell_size_m),
-        )
+def _episode_graph(assets):
+    """The episode's object graph, built from the bake's features (the same
+    graph the bake writes to ``_graph.npz``). The ``prior`` withhold starts it
+    empty."""
+    features = {} if withheld("prior") else assets.base_features
+    return build_object_graph(features, cell_size_m=float(assets.cell_size_m))
 
 
 def _success_shape(episode, objects_by_map: dict):
@@ -174,7 +168,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
     with both of the agent's concept channels wired (the declared union and
     the director's watchlist, which a view{watchlist} change or a placed
     boost pushes), and the started SearchLoop."""
-    graph = _episode_graph(tile_stem(episode.map_name), assets)
+    graph = _episode_graph(assets)
     start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.start_z)
     state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m)
     # A module global looked up at call time: the flight's forced replay swaps it.
