@@ -553,8 +553,6 @@ class SamDetectClient:
         out: list[DetectedObject] = []
         n_union_fallback = n_lost = 0
         for packs, fallback in pass2:
-            if len(out) >= MAX_PER_STEP:
-                break
             if not packs:
                 if fallback is None:
                     n_lost += 1  # no valid depth anywhere
@@ -562,7 +560,7 @@ class SamDetectClient:
                 packs = [fallback]
                 n_union_fallback += 1
             out.extend(packs)
-        hit_cap = len(out) >= MAX_PER_STEP
+        hit_cap = len(out) > MAX_PER_STEP
         out = out[:MAX_PER_STEP]
         # A binding cap prints on its own: a run truncating every stop must say so.
         if n_union_fallback or n_lost or hit_cap:

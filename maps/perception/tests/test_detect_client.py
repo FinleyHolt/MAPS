@@ -150,3 +150,18 @@ def test_pick_url_is_round_robin():
     assert all(a != b for a, b in zip(picks, picks[1:]))
 
 
+
+
+@pytest.mark.parametrize("n_masks,cap_hit", [(2, False), (3, True)])
+def test_cap_hit_says_whether_detections_were_dropped(adapter, monkeypatch, capsys, n_masks, cap_hit):
+    """A frame filling the cap exactly drops nothing, so ``cap_hit`` is False; one past it is True."""
+    from maps.perception.sam import detect_client as dc
+    from maps.util.mask_region import MaskRegion
+
+    monkeypatch.setattr(dc, "MAX_PER_STEP", 2)
+    obs = _build_observation(_square_frame())
+    blocks = [MaskRegion(np.ones((10, 10), dtype=bool), (100 * i, 0, 100 * i + 9, 9), obs.rgb.shape[:2])
+              for i in range(n_masks)]
+    dets = adapter._detections(obs, [(b, "building", i, 0.9) for i, b in enumerate(blocks)])
+    assert len(dets) == 2
+    assert ("cap_hit=True" in capsys.readouterr().out) is cap_hit
