@@ -48,14 +48,14 @@ class Twin:
 
     ``start_xy`` is where it starts in the tile frame, heading north at
     ``agl_m`` over the ground; ``sensor`` is the camera its frames are
-    rendered through, ``terrain`` the map's surface (flat at its floor without one).
+    rendered through. It flies over the map's surface, flat at its floor where
+    the map carries none (:func:`map_render.terrain`).
     """
 
-    def __init__(self, *, tiles_dir, map_name: str, ortho, sensor, start_xy: tuple[float, float], agl_m: float,
-                 terrain=None) -> None:
+    def __init__(self, *, tiles_dir, map_name: str, ortho, sensor, start_xy: tuple[float, float], agl_m: float) -> None:
         self.tiles_dir, self.map_name, self.sensor = Path(tiles_dir), map_name, sensor
         self.floor_msl_m = FLOOR_MSL_M[map_name]
-        self.terrain = terrain
+        self.terrain = map_render.terrain(map_name, str(self.tiles_dir))
         self.agl_m = float(agl_m)
         self._render = map_render.renderer(ortho)
         self.t = 0.0
@@ -210,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     start_alt, ground_z = start_altitude_m(cfg, map_name, episode.start_z)
     twin = Twin(tiles_dir=TILES_DIR, map_name=map_name, ortho=ortho, sensor=sensor, start_xy=episode.start_xy,
-                agl_m=start_alt - ground_z, terrain=map_render.terrain(map_name, str(TILES_DIR)))
+                agl_m=start_alt - ground_z)
     live = open_live(vehicle=twin, tiles_dir=TILES_DIR, map_name=map_name, sensor=sensor,
                      register_raster=args.register)
 
