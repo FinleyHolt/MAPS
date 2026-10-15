@@ -250,7 +250,7 @@ class Mission:
         self._imagery = RunImagery()
         #: The fused pass the flight in progress fetched when it held its area.
         self._held: tuple[Any, dict[str, Any]] | None = None
-        #: The nearest the pose came to the last leg's point.
+        #: The nearest the pose came to the last leg's point since it was posted, re-flies included.
         self._closest_m = float("inf")
 
         from benchmarks import _git_provenance  # noqa: PLC0415
@@ -396,11 +396,14 @@ class Mission:
             posed = (f"the map registered it{f' ({by})' if by else ''}" if reg.get("applied") else
                      f"the map did not register it: {reg.get('why') or 'the corrector is not running'}")
             return f"the leg to {at} arrived; {waited:.1f} s later {self._held_words(held[1])}; {posed}"
-        closest = f"closest {self._closest_m:.0f} m" if math.isfinite(self._closest_m) else "no pose read"
-        lost = f"the leg to {at} never arrived in {ARRIVAL_TIMEOUT_S:.0f} s ({closest}); "
+        lost = f"the leg to {at} never arrived in {ARRIVAL_TIMEOUT_S:.0f} s ({self._closest_words()}); "
         if held is None:
             return lost + "no frame held any of it, and the flight has no observation"
         return lost + f"{self._held_words(held[1])}, and those frames are the observation"
+
+    def _closest_words(self) -> str:
+        """The nearest the pose came to the leg's point since the leg was posted, or that no pose was read."""
+        return f"closest {self._closest_m:.0f} m" if math.isfinite(self._closest_m) else "no pose read"
 
     def _said(self, text: str) -> None:
         """A ``leg`` row of the transcript: what the crew's side of a flight did."""
@@ -539,7 +542,7 @@ class Mission:
             if pose is not None:
                 d = math.hypot(pose["x"] - float(xy[0]), pose["y"] - float(xy[1]))
                 best = min(best, d)
-                self._closest_m = best
+                self._closest_m = min(self._closest_m, d)
                 # Over the area and gone, with part of it held: a short pass.
                 if reach_m is not None and fraction > 0.0 and best <= reach_m and d > best + SHORT_PASS_LEAVE_M:
                     receding_since = receding_since or self._vehicle.now()
@@ -552,8 +555,8 @@ class Mission:
                 if pose["agl_m"] < AIRBORNE_AGL_M:
                     t0 = self._vehicle.now()
             if self._vehicle.now() - t0 > timeout_s:
-                log.warning("no arrival at (%.0f, %.0f) in %.0f s, closest %.0f m: the leg is lost",
-                            float(xy[0]), float(xy[1]), timeout_s, best)
+                log.warning("no arrival at (%.0f, %.0f) in %.0f s, %s: the leg is lost",
+                            float(xy[0]), float(xy[1]), timeout_s, self._closest_words())
                 return "lost", cov
             self._vehicle.sleep(1.0)
         return "cancel", cov

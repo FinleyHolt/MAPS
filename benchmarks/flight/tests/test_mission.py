@@ -225,11 +225,12 @@ def test_the_summary_line_counts_the_turns_the_row_counts(make_mission):
     assert f"{m.row()['turns_used']} turns" in M.summary_line(m) and m.row()["turns_used"] == 5
 
 
-def test_a_lost_leg_with_no_pose_read_says_so_rather_than_an_infinite_distance(make_mission):
+def test_a_lost_leg_with_no_pose_read_says_so_rather_than_an_infinite_distance(make_mission, caplog):
     m, _twin = make_mission()
     m._live.ownship = lambda: None
     area_ll = m._area_lonlat([(600.0, 1100.0), (610.0, 1100.0), (600.0, 1110.0)])
     assert m._wait_arrival((600.0, 1100.0), area=area_ll, timeout_s=2.0)[0] == "lost"
+    assert "no pose read: the leg is lost" in caplog.text and "inf" not in caplog.text
     said = m._outcome_words("lost", "t at (600, 1100)", None, 0.0)
     assert "(no pose read)" in said and "inf" not in said
 
@@ -267,3 +268,16 @@ def test_a_stop_while_the_ring_is_asked_says_no_leg_is_flown(built, make_mission
     out = m._fly_live(_session(_hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
     assert out == {"error": "the mission is stopped"}
     assert twin.legs == [] and not any("the leg is flown" in s for s in _legs(m)), _legs(m)
+
+
+def test_a_lost_leg_after_a_short_pass_says_the_closest_the_leg_came(make_mission):
+    """The pass came within 100 m and was short; the re-fly never came nearer
+    than 740 m and was lost: the leg row says the leg's closest, 100 m."""
+    m, _twin = make_mission()
+    offs = iter([100.0] + [400.0] * 6)
+    m._live.coverage = lambda area, after=None: {"fraction": 0.5, "held": 1, "points": 2, "best": [None, None]}
+    m._live.ownship = lambda: {"x": 600.0 + next(offs, 740.0), "y": 600.0, "agl_m": 900.0}
+    m._closest_m = float("inf")
+    assert m._wait_arrival((600.0, 600.0), area=[], timeout_s=60.0, reach_m=200.0)[0] == "short"
+    assert m._wait_arrival((600.0, 600.0), area=[], timeout_s=3.0)[0] == "lost"
+    assert "(closest 100 m)" in m._outcome_words("lost", "t at (600, 600)", None, 0.0)
