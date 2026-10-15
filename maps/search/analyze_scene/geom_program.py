@@ -961,6 +961,13 @@ def _is_name_set(matched) -> bool:
             and len(names) == 1 and bool(next(iter(names))))
 
 
+def _tier(v) -> str:
+    """The match tier a ``name_match`` score falls in."""
+    if v >= T.NAME_TIER_FLOOR:
+        return "exact"
+    return "tagged" if v >= T.KV_TIER_BASE else "fuzzy"
+
+
 def _match_notes(scored, n, band_cut) -> list:
     """What a matched find says: how many matched and whether their order is
     real, the tier split, the band cut and the head."""
@@ -979,8 +986,8 @@ def _match_notes(scored, n, band_cut) -> list:
     notes = [f"{n} of {len(scored)} rows matched ({order}"
              + (f"; {rest} sub-threshold row(s) NOT in this rN" if rest else "")
              + ")."]
-    n_ex = sum(1 for x in vals if x >= T.NAME_TIER_FLOOR)
-    n_tg = sum(1 for x in vals if T.KV_TIER_BASE <= x < T.NAME_TIER_FLOOR)
+    tiers = [_tier(x) for x in vals]
+    n_ex, n_tg = tiers.count("exact"), tiers.count("tagged")
     if n_ex and n - n_ex:
         notes.append(f"tiers: {n_ex} exact, {n_tg} tagged, {n - n_ex - n_tg} "
                      "fuzzy -- .exact / .tagged / .fuzzy on this result hold "
@@ -1380,17 +1387,9 @@ def _stratum(cx, a):
             + ("" if withheld("look_for") else
                " A pass's minted rows are all THE thing the "
                "watchlist named; there is nothing to stratify."))
-    lo, hi = {"exact": (T.NAME_TIER_FLOOR, None),
-                "tagged": (T.KV_TIER_BASE, T.NAME_TIER_FLOOR),
-                "fuzzy": (None, T.KV_TIER_BASE)}[tier]
-
-    def in_tier(it):
-        v = it.get("name_match")
-        if not isinstance(v, (int, float)):
-            return False
-        return (lo is None or v >= lo) and (hi is None or v < hi)
-    return Result((it for it in items if in_tier(it)), "cut",
-                  ordered=_ordered(items))
+    return Result((it for it in items
+                   if isinstance(v := it.get("name_match"), (int, float))
+                   and _tier(v) == tier), "cut", ordered=_ordered(items))
 
 
 def _union_members(cx, ref_el, as_label) -> list:
