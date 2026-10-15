@@ -265,13 +265,13 @@ class Program:
                rank: bool = True) -> str:
         """One compare carrying every anchor, a cut per cardinal and, when
         ranking, one score_by for every ordering (a second sort would undo the
-        first). A cardinal cuts and proximity to the same anchor orders; a
-        ranking compare dedups its refs by label, and a colour orders in the
-        same emphasis as the distances."""
+        first). A cardinal cuts and proximity to the same anchor orders; the
+        compare dedups its refs by label, and a colour orders in the same
+        emphasis as the distances."""
         refs, emphasis, seen = [], [], set()
         for a in [*near, *(a for _d, a in cards)]:
             lab = self.label(a)
-            if rank and lab in seen:
+            if lab in seen:
                 continue
             seen.add(lab)
             refs.append(self.ref_of(a))

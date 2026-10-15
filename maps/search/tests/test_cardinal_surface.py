@@ -170,6 +170,18 @@ def test_a_corner_is_two_cuts_against_one_crossing():
     assert all(o["args"]["op"] == "on_side" for o in cuts), cuts
 
 
+def test_a_filter_naming_one_anchor_twice_sends_ONE_ref():
+    # two cardinal cuts against one place are one compare against it: a
+    # second copy is suffixed by the executor and serves a duplicate set of
+    # columns under the suffixed label
+    ops = ops_of_block('r1 = find("house")\n'
+                       'r2 = r1.filter(east_of="Jacaranda Avenue", '
+                       'north_of="Jacaranda Avenue")\n')
+    cmp_op = next(o for o in ops if o["op"] == "compare")
+    assert len(cmp_op["args"]["refs"]) == 1, cmp_op["args"]["refs"]
+    assert [c["dir"] for c in cmp_op["args"]["cardinals"]] == ["east", "north"]
+
+
 @pytest.mark.parametrize("kw, pair", [("southwest_of", ("south_of", "west_of")),
                                       ("northeast_of", ("north_of", "east_of"))])
 def test_a_diagonal_filter_kwarg_refuses_and_names_the_conjunction(kw, pair):
