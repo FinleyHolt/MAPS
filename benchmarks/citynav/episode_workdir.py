@@ -1,5 +1,5 @@
-"""One function opens an episode's directory; everything the episode writes lands under it,
-and the two writers that fill it as the episode runs.
+"""An episode's directory: the function that opens it, its layout, and the two writers that
+fill it as the episode runs.
 
     <root>/maps_<YYYYmmdd_HHMMSS>[_run<NN>]_<benchmark>_<slug>/  one ATTEMPT of one episode
         episode.json       the runner's row once the attempt lands: ok | infra

@@ -53,9 +53,8 @@ class EpisodeState:
 
 
 def make_perception() -> SamDetectClient:
-    """The SAM client. Its class set is the concept union of every active
-    reasoner thread, pushed via ``set_concepts``; before the first push it
-    detects nothing."""
+    """The SAM client; it detects the classes last pushed through
+    ``set_concepts`` (none before the first push)."""
     return SamDetectClient()
 
 
