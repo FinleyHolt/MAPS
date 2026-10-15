@@ -123,7 +123,7 @@ def test_the_fold_keeps_the_agents_code_the_head_and_the_live_tail():
     assert "cars = find('car')  # c0" in block
     assert "d0a" in block.split(C._FINDINGS_SEP)[1]   # what the turn found rides
     assert out[-4:] == msgs[-4:]               # the two newest units, verbatim
-    assert "(1 earlier turns folded" in block   # a marginal overflow folds one
+    assert "(1 earlier turn folded;" in block   # a marginal overflow folds one
 
 
 def test_a_later_fire_appends_a_block_and_never_rewrites_the_first():
@@ -144,7 +144,7 @@ def test_a_message_between_folded_turns_keeps_its_place():
     assert n == 3                               # every spent turn, as before
     assert out[2]["content"].startswith("[script so far] (2 earlier turns folded")
     assert out[3] == follow_up
-    assert out[4]["content"].startswith("[script so far] (1 earlier turns folded")
+    assert out[4]["content"].startswith("[script so far] (1 earlier turn folded;")
     assert "# c2" in out[4]["content"] and "# c2" not in out[2]["content"]
     assert out[5:] == msgs[9:]                  # the two newest units, verbatim
 

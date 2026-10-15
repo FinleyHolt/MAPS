@@ -264,7 +264,8 @@ def _script_block(sources: list[str], n_turns: int,
     return {
         "role": "assistant",
         "content": (
-            f"{_SCRIPT_BLOCK_HEADER} ({n_turns} earlier turns folded; the names "
+            f"{_SCRIPT_BLOCK_HEADER} ({n_turns} earlier "
+            f"turn{'s' if n_turns != 1 else ''} folded; the names "
             f"they bound are still live)\n```python\n{body}\n```"
             + (f"{_FINDINGS_SEP}{found}" if found else "")
         ),
