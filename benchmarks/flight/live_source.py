@@ -30,7 +30,7 @@ from benchmarks.flight import frame_offset, frame_ties, locator, map_render
 from benchmarks.flight.airframe import C12_LEVER_M
 from benchmarks.flight.footprint import in_frame_xy, off_nadir_lonlat
 from benchmarks.flight.nav_track import Pose, camera_pose_local, tag_pose
-from benchmarks.flight.pose_graph import INNOVATION_CAP_M, PoseGraph
+from benchmarks.flight.pose_graph import INNOVATION_CAP_M, PoseGraph, innovation_past_cap
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
 from maps.perception.geometry.sensor_spec import SensorSpec, resolve_sensor
 from maps.perception.observation import Observation
@@ -423,20 +423,19 @@ class LiveSource:
             self.graph.offer(seq, t_host, pose, locator.gray(posed.rgb), measured)
 
     def _register_ring(self, seq: int, posed, t: float) -> dict[str, Any]:
-        """A ring frame registered on its own pixels: a measurement past
-        :data:`pose_graph.INNOVATION_CAP_M` from the graph's node nearest in
-        time is refused, and a refused or unmeasured frame takes that node."""
+        """A ring frame registered on its own pixels: a measurement past the
+        cap (:func:`pose_graph.innovation_past_cap`) from the graph's node
+        nearest in time is refused, and a refused or unmeasured frame takes that node."""
         pose = frame_pose(posed)
         record, _measured = register_frame(self.register, posed.rgb, pose, posed.sensor,
                                            self.ground_msl(pose.pose_xy))
         record["seq"] = seq
         with self._correcting:
             est = self.graph.estimate(t) if self.graph is not None else None
-        if record["applied"] and est is not None:
-            far = math.hypot(record["shift_e_m"] - est["e_m"], record["shift_n_m"] - est["n_m"])
-            if far > INNOVATION_CAP_M:
-                record.update(applied=False, source=None,
-                              why=f"disagrees with the graph's nearest node by {far:.1f} m, past {INNOVATION_CAP_M:.0f}")
+        far = innovation_past_cap(est, record["shift_e_m"], record["shift_n_m"]) if record["applied"] else None
+        if far is not None:
+            record.update(applied=False, source=None,
+                          why=f"disagrees with the graph's nearest node by {far:.1f} m, past {INNOVATION_CAP_M:.0f}")
         if not record["applied"] and est is not None:
             record.update(applied=True, source="nearest", shift_e_m=est["e_m"], shift_n_m=est["n_m"])
         return record

@@ -33,6 +33,16 @@ MIN_ANCHORS = 2
 INNOVATION_CAP_M = 40.0
 
 
+def innovation_past_cap(est: dict[str, Any] | None, e: float, n: float) -> float | None:
+    """How far a measurement ``(e, n)`` sits from the graph's estimate
+    ``est`` when that is past :data:`INNOVATION_CAP_M` and it is refused;
+    None when it stands (or there is no estimate)."""
+    if est is None:
+        return None
+    far = math.hypot(e - est["e_m"], n - est["n_m"])
+    return far if far > INNOVATION_CAP_M else None
+
+
 @dataclass
 class _Frame:
     seq: int
@@ -85,8 +95,8 @@ class PoseGraph:
               measurement: tuple[float, float, float] | None) -> None:
         """Add a frame (its chain pose, its luma, its own registration
         ``(east, north, response)`` or None) and re-solve the window once it
-        holds :data:`MIN_ANCHORS` anchors. A measurement further than
-        :data:`INNOVATION_CAP_M` from the graph's estimate is refused."""
+        holds :data:`MIN_ANCHORS` anchors. A measurement past the cap
+        (:func:`innovation_past_cap`) is refused."""
         self._forget(t)
         frame = _Frame(seq, t, pose, gray, frame_ties.FrameGeometry(pose, self.sensor, self.ground(tuple(pose.pose_xy))))
         before = sorted((f for f in self.frames.values() if f.t <= t), key=lambda f: f.t)[-TIE_NEIGHBOURS:]
@@ -96,8 +106,7 @@ class PoseGraph:
         self.frames[seq] = frame
         if measurement is not None:
             e, n, response = measurement
-            est = self.estimate(t)
-            if est is None or math.hypot(e - est["e_m"], n - est["n_m"]) <= INNOVATION_CAP_M:
+            if innovation_past_cap(self.estimate(t), e, n) is None:
                 self.measurements[seq] = (float(e), float(n), float(response))
         if len(self.measurements) >= MIN_ANCHORS:
             geometry = {s: f.geometry for s, f in self.frames.items()}
