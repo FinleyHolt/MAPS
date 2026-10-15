@@ -18,10 +18,9 @@ import time
 from pathlib import Path
 
 from benchmarks import repo_provenance
-from benchmarks.citynav.episodes import EPISODES_JSONL, atomic_write_json
+from benchmarks.citynav.episodes import EPISODES_JSONL, MANIFEST_NAME, atomic_write_json
 
 SCHEMA = "maps.run_manifest/v1"
-MANIFEST_NAME = "run_manifest.json"
 
 # The experiment-arm flags every row carries (``arm_stamp``). Set-only,
 # except the tile bake, which is resolved.

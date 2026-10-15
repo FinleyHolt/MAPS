@@ -10,6 +10,7 @@ import json
 import pytest
 
 from benchmarks.citynav import paths, run_manifest
+from benchmarks.citynav.episodes import MANIFEST_NAME
 from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm.endpoint_spec import EndpointSpec
 
@@ -184,11 +185,11 @@ def test_a_root_with_episodes_and_no_manifest_is_refused(stub_run, tmp_path):
     (tmp_path / "episodes.jsonl").write_text('{"episode_id": "e", "status": "ok"}\n')
     with pytest.raises(run_manifest.ManifestIdentityError, match="no run_manifest.json"):
         run_manifest.emit_or_verify(tmp_path, stub_run, log=lambda *_: None)
-    assert not (tmp_path / run_manifest.MANIFEST_NAME).exists()
+    assert not (tmp_path / MANIFEST_NAME).exists()
 
 
 def test_an_unreadable_manifest_is_refused_in_one_line(stub_run, tmp_path):
-    path = tmp_path / run_manifest.MANIFEST_NAME
+    path = tmp_path / MANIFEST_NAME
     path.write_text('{"schema": "maps.run_manifest/v1", ')
     with pytest.raises(run_manifest.ManifestIdentityError, match="unreadable") as e:
         run_manifest.emit_or_verify(tmp_path, stub_run, log=lambda *_: None)

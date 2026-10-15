@@ -15,7 +15,7 @@ import os
 import time
 from pathlib import Path
 
-from benchmarks.citynav.episodes import atomic_write_json
+from benchmarks.citynav.episodes import DEADLINE_ENV, TOUR_CURSOR, atomic_write_json
 from benchmarks.citynav.run_benchmark.osm_prior import prior_percepts
 from maps.llm.endpoint_spec import spec as endpoint_spec
 from maps.perception.geometry.sensor_spec import served_description
@@ -37,15 +37,10 @@ def _write_tour_cursor(flights: list[dict]) -> None:
     if not workdir_env:
         return
     try:
-        atomic_write_json(Path(workdir_env) / "flight" / "tour_cursor.json", {
+        atomic_write_json(Path(workdir_env) / TOUR_CURSOR, {
             "stops_visited": [{"stop_id": f["target"], "xy": f["resolved_xy"]} for f in flights]})
     except Exception:
         log.debug("tour_cursor write failed; non-fatal", exc_info=True)
-
-
-# The wall-clock backstop: an absolute epoch the bench driver exports. Unset
-# (the flight mission, a bare smoke) means no clock.
-MISSION_DEADLINE_ENV = "CITYNAV_EPISODE_DEADLINE_EPOCH"
 
 
 def _seed_base() -> int:
@@ -58,8 +53,10 @@ def _seed_base() -> int:
 
 
 def _mission_deadline_epoch() -> float | None:
-    """The absolute epoch a pass must stop flying at, or ``None``."""
-    raw = os.environ.get(MISSION_DEADLINE_ENV, "").strip()
+    """The absolute epoch a pass must stop flying at, the wall-clock backstop
+    the bench driver exports, or ``None`` (the flight mission, a bare smoke:
+    no clock)."""
+    raw = os.environ.get(DEADLINE_ENV, "").strip()
     # The bench driver writes repr(float).
     return float(raw) if raw else None
 

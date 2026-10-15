@@ -27,8 +27,6 @@ from maps.llm import endpoint_spec as endpoint_spec_module
 
 log = logging.getLogger("run_benchmark")
 
-# The driver's pid, which bench_fullset sets when it spawns an attempt.
-PARENT_PID_ENV = "CITYNAV_BENCH_PARENT_PID"
 _PR_SET_PDEATHSIG = 1
 
 
@@ -38,7 +36,7 @@ def _die_with_parent() -> None:
     driver already gone before the request is armed is caught by the
     parent-pid check."""
     ctypes.CDLL(None, use_errno=True).prctl(_PR_SET_PDEATHSIG, signal.SIGKILL)
-    parent = os.environ.get(PARENT_PID_ENV)
+    parent = os.environ.get(episodes.PARENT_PID_ENV)
     if parent and os.getppid() != int(parent):
         os._exit(1)
 

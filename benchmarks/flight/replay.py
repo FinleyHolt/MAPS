@@ -39,7 +39,7 @@ import numpy as np
 import benchmarks.calcity
 from benchmarks.citynav.analysis.rows import iter_json_rows
 from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL
-from benchmarks.citynav.episodes import EPISODES_JSONL
+from benchmarks.citynav.episodes import EPISODES_JSONL, RUN_LOG, TOUR_CURSOR
 from benchmarks.citynav.episode_workdir import DETECTIONS_JSONL
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import held_record, open_live, ortho_observation
@@ -68,7 +68,7 @@ _PATH_FLAG = re.compile(r"_(TILES|RGBD_DIR)$")
 def tour_stops(run_dir: Path) -> list[tuple[str, tuple[float, float]]]:
     """The flights a run flew, in order: ``(target, xy)`` off its ``flight/tour_cursor.json``."""
     try:
-        cursor = json.loads((run_dir / "flight" / "tour_cursor.json").read_text())
+        cursor = json.loads((run_dir / TOUR_CURSOR).read_text())
     except (OSError, ValueError):
         return []
     return [(str(s.get("stop_id") or ""), (float(s["xy"][0]), float(s["xy"][1])))
@@ -171,7 +171,7 @@ def open_recording(run_dir: Path) -> Recording:
     detections: dict[int, list[dict]] = {}
     for d in read_records(run_dir / DETECTIONS_JSONL):
         detections.setdefault(int(d.get("step", -1)), []).append(d)
-    run_log = run_dir / "run.log"
+    run_log = run_dir / RUN_LOG
     logged = re.search(r"endpoint spec installed: model_id=\S+ max_model_len=(\d+)",
                        run_log.read_text(errors="replace") if run_log.is_file() else "")
     window = int(logged.group(1)) if logged else DEFAULT_WINDOW

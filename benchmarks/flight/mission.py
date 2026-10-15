@@ -702,7 +702,8 @@ class Mission:
     def _write_manifests(self) -> None:
         """The sortie's ``run_manifest.json`` (by its first mission) and this
         mission's own in its workdir; a failure is logged."""
-        from benchmarks.citynav.run_manifest import MANIFEST_NAME, build_manifest, emit_or_verify  # noqa: PLC0415
+        from benchmarks.citynav.episodes import MANIFEST_NAME  # noqa: PLC0415
+        from benchmarks.citynav.run_manifest import build_manifest, emit_or_verify  # noqa: PLC0415
 
         sortie = self.workdir.parent
         common = dict(config_path=Path(self.config), split=self.split, sample_seed=None,
