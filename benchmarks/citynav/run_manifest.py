@@ -138,7 +138,7 @@ def _endpoint_section() -> dict:
         "tokenizer": s.tokenizer_name,
         "input_budget": s.input_budget,
         "max_output_tokens": s.max_output_tokens,
-        "sam_url": s.sam_url,
+        "sam_url": ",".join(s.sam_urls),
     }
 
 

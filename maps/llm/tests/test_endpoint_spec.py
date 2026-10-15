@@ -94,8 +94,8 @@ def test_service_urls_frozen_and_probed(monkeypatch):
             "http://sam:8772/health": {"service": "sam"},
         },
     )
-    s = discover(_URL_A, "http://sam:8772")
-    assert s.sam_url == "http://sam:8772"
+    s = discover(_URL_A, ("http://sam:8772",))
+    assert s.sam_urls == ("http://sam:8772",)
 
 
 # --------------------------------------------------------------------------- #
@@ -192,7 +192,7 @@ def test_case_g_discovery_refuses_a_template_that_cannot_render_a_tool_turn(monk
 def test_case_h_service_unreachable(monkeypatch):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload()})
     with pytest.raises(EndpointDiscoveryError, match="'sam'"):
-        discover(_URL_A, "http://sam:8772")
+        discover(_URL_A, ("http://sam:8772",))
 
 
 def test_case_i_service_identity_mismatch(monkeypatch):
@@ -206,7 +206,7 @@ def test_case_i_service_identity_mismatch(monkeypatch):
         },
     )
     with pytest.raises(EndpointDiscoveryError, match="WRONG"):
-        discover(_URL_A, "http://sam:8772")
+        discover(_URL_A, ("http://sam:8772",))
 
 
 def test_service_health_without_identity_field_is_reachability_only(monkeypatch):
@@ -217,8 +217,8 @@ def test_service_health_without_identity_field_is_reachability_only(monkeypatch)
             "http://sam:8772/health": {"status": "ok"},
         },
     )
-    s = discover(_URL_A, "http://sam:8772")
-    assert s.sam_url == "http://sam:8772"
+    s = discover(_URL_A, ("http://sam:8772",))
+    assert s.sam_urls == ("http://sam:8772",)
 
 
 # --------------------------------------------------------------------------- #
@@ -235,13 +235,13 @@ def test_offline_with_pin_skips_probes(monkeypatch):
     _fake_http(monkeypatch, {})  # every URL unreachable — must not matter
     s = discover(
         _URL_A,
-        "http://sam:8772",
+        ("http://sam:8772",),
         offline=True,
         override=EndpointOverride("gemma4-e4b", 131072),
     )
     assert s.model_id == "gemma4-e4b"
     assert s.max_model_len == 131072
-    assert s.sam_url == "http://sam:8772"  # frozen unprobed offline
+    assert s.sam_urls == ("http://sam:8772",)  # frozen unprobed offline
 
 
 def test_override_cross_checked_against_live_ids(monkeypatch):

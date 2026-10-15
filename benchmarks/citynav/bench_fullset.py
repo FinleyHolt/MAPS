@@ -327,10 +327,10 @@ class Driver:
         checked, as discovery skips an empty list."""
         from maps.llm.endpoint_spec import spec, spec_installed  # noqa: PLC0415
 
-        urls = [u.strip().rstrip("/") for u in (spec().sam_url if spec_installed() else "").split(",")]
-        if not any(urls):
+        urls = spec().sam_urls if spec_installed() else ()
+        if not urls:
             return True
-        for url in filter(None, urls):
+        for url in urls:
             try:
                 with urllib.request.urlopen(f"{url}/health", timeout=10.0) as resp:
                     if 200 <= resp.status < 400:

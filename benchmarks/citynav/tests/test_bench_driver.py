@@ -484,12 +484,12 @@ def test_the_sam_gate_asks_the_replicas_discovery_checked(monkeypatch) -> None:
         return _Answer()
 
     monkeypatch.setattr(bf.urllib.request, "urlopen", _open)
-    monkeypatch.setattr(E, "_SPEC", replace(TEST_SPEC, sam_url="http://a:8100, http://b:8100/"))
+    monkeypatch.setattr(E, "_SPEC", replace(TEST_SPEC, sam_urls=("http://a:8100", "http://b:8100")))
     assert not bf.Driver._sam_answers()
     up.add("http://b:8100/health")
     assert bf.Driver._sam_answers()
     assert asked == ["http://a:8100/health", "http://b:8100/health", "http://a:8100/health", "http://b:8100/health"]
-    monkeypatch.setattr(E, "_SPEC", replace(TEST_SPEC, sam_url=""))
+    monkeypatch.setattr(E, "_SPEC", replace(TEST_SPEC, sam_urls=()))
     assert bf.Driver._sam_answers() and len(asked) == 4
     monkeypatch.setattr(E, "_SPEC", None)
     assert bf.Driver._sam_answers()

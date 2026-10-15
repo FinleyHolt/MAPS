@@ -91,15 +91,14 @@ def parse_override(raw: str) -> EndpointOverride:
 @dataclass(frozen=True)
 class EndpointSpec:
     """The discovered endpoint facts, frozen for the process. ``base_url`` is
-    the one OpenAI-style base probed; ``sam_url`` the SAM replicas'
-    comma-list, verbatim."""
+    the one OpenAI-style base probed; ``sam_urls`` the SAM replicas."""
 
     base_url: str
     model_id: str
     max_model_len: int
     tokenizer_name: str
     max_output_tokens: int  # the request's output cap
-    sam_url: str = ""
+    sam_urls: tuple[str, ...] = ()
 
     @property
     def input_budget(self) -> int:
@@ -226,10 +225,10 @@ def _facts_from_endpoint(
     return model_id, int(max_model_len)
 
 
-def _probe_sam_health(urls: str) -> None:
+def _probe_sam_health(urls: tuple[str, ...]) -> None:
     """Probe every SAM replica's ``/health``; a payload whose ``service``
     field does not name sam (a foreign server on the port) raises."""
-    for url in (u.strip().rstrip("/") for u in urls.split(",") if u.strip()):
+    for url in urls:
         try:
             payload = _get_json(f"{url}/health")
         except EndpointDiscoveryError as exc:
@@ -285,7 +284,7 @@ def _require_tokenizer(model_id: str) -> str:
 
 def discover(
     base_url: str,
-    sam_url: str = "",
+    sam_urls: tuple[str, ...] = (),
     *,
     offline: bool = False,
     override: EndpointOverride | None = None,
@@ -293,7 +292,7 @@ def discover(
     """Discover the endpoint facts, or raise :class:`EndpointDiscoveryError`.
 
     ``base_url`` is one URL (a comma-list is refused: the engine balances its
-    own replicas); ``sam_url`` the replicas to health-check (empty skips);
+    own replicas); ``sam_urls`` the replicas to health-check (none skips);
     ``offline=True`` probes nothing and requires ``override``.
     """
     url = str(base_url or "").strip().rstrip("/")
@@ -304,7 +303,7 @@ def discover(
             f"its own data-parallel replicas behind it, and no "
             f"client-side endpoint picking exists"
         )
-    sam_url = str(sam_url or "").strip()
+    sam_urls = tuple(sam_urls)
 
     if offline:
         if override is None:
@@ -321,8 +320,8 @@ def discover(
                 "no reasoner endpoint to probe: SEARCH_REASONER_URL is empty"
             )
         model_id, max_model_len = _facts_from_endpoint(url, override)
-        if sam_url:
-            _probe_sam_health(sam_url)
+        if sam_urls:
+            _probe_sam_health(sam_urls)
 
     from maps.llm.model_cards import card_for, check_effort  # noqa: PLC0415
 
@@ -344,7 +343,7 @@ def discover(
         max_model_len=max_model_len,
         tokenizer_name=tokenizer_name,
         max_output_tokens=min(_OUTPUT_RESERVE_CAP, max_model_len // 4),
-        sam_url=sam_url,
+        sam_urls=sam_urls,
     )
     if spec.input_budget < _MIN_INPUT_BUDGET:
         raise EndpointDiscoveryError(
@@ -366,12 +365,12 @@ def discover_from_env(*, probe_sam: bool = True) -> EndpointSpec:
     override_raw = os.environ.get("SEARCH_ENDPOINT_SPEC_OVERRIDE", "").strip()
     try:
         # the replicas the run posts to
-        sam_url = ",".join(sam_endpoints()) if probe_sam else ""
+        sam_urls = tuple(sam_endpoints()) if probe_sam else ()
     except ValueError as exc:
         raise EndpointDiscoveryError(str(exc)) from exc
     return discover(
         os.environ.get("SEARCH_REASONER_URL", DEFAULT_REASONER_URL),
-        sam_url,
+        sam_urls,
         offline=os.environ.get("SEARCH_ENDPOINT_OFFLINE", "").strip() == "1",
         override=parse_override(override_raw) if override_raw else None,
     )
