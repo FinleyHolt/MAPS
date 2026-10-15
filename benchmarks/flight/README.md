@@ -131,9 +131,9 @@ transcript row, stamped `t_s`), `frames.jsonl` (one row per observation),
 `observations/<sha>.jpg` and `flight/llm/transcript.jsonl`; the sortie's
 `flight_track.jsonl` holds the ownship track. Some fields are the recording's
 provenance, kept for a person auditing a flight against its camera recording
-and read by no measure or decision: in `frames.jsonl`, `t_host`, `age_s`,
-`attitude`, `boresight`, `registration` (with its `frames` count) and
-`mosaic`; in the ledger row, `ts` (the host's wall clock at the start).
+and read by no measure or decision: in `frames.jsonl`, `log_time`, `t_host`,
+`age_s`, `attitude`, `boresight`, `registration` (with its `frames` count)
+and `mosaic`; in the ledger row, `ts` (the host's wall clock at the start).
 `conversation.jsonl`'s diagnostic rows (`malformed_envelope`, `empty_turn`,
 `code_shaped_reply`, `no_flight_reply`, `transient_error`,
 `oversize_rejection`, and a `run` row's `reasoning`, `said`, `printed`,

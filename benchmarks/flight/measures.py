@@ -411,7 +411,7 @@ def _frames(bases: list[Path]) -> list[dict[str, Any]]:
 
 def ended(row: dict[str, Any]) -> str:
     """``no run`` (status not ``ok``), ``stopped`` (a crew end), ``failed`` (a
-    mission that failed off the serve, a miss), else the row's ``ended_by``:
+    failure not the serve's: a scored miss), else the row's ``ended_by``:
     ``reply`` (the model's report) is the one end that scores."""
     if row.get("status") != "ok":
         return "no run"
