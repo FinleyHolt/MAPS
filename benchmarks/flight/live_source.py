@@ -80,6 +80,13 @@ def ortho_observation(rgb: np.ndarray, alpha: np.ndarray, extent: tuple[float, f
     )
 
 
+def held_record(points: int, held: int, seqs: list[int], fetch_failed: int = 0) -> dict[str, Any]:
+    """What held an area, as an observation's ``last["coverage"]`` says it:
+    the points held of those asked, the frames that held them, and how many
+    of those frames were not fetched."""
+    return {"points": points, "held": held, "seqs": seqs, "fetch_failed": fetch_failed}
+
+
 @functools.lru_cache(maxsize=4)
 def _radius(h: int, w: int) -> np.ndarray:
     """Each source pixel's distance from the frame's centre: the seam rule's cost."""
@@ -552,8 +559,8 @@ class LiveSource:
         want = sorted((angle, -seq) for seq, angle in chosen.items())
         obs = self._fused(want, ranked=cov["frames"], about=f"the area's {cov['points']} points")
         if obs is not None:
-            self.last["coverage"] = {"points": cov["points"], "held": cov["held"], "seqs": [-neg for _a, neg in want],
-                                     "fetch_failed": self.last["mosaic"]["fetch_failed"]}
+            self.last["coverage"] = held_record(cov["points"], cov["held"], [-neg for _a, neg in want],
+                                                self.last["mosaic"]["fetch_failed"])
         return obs
 
     def _fused(self, want: list[tuple[float, int]], *, ranked: int, about: str) -> Observation | None:

@@ -42,7 +42,7 @@ from benchmarks.citynav.conversation import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.citynav.live_recorder import DETECTIONS_JSONL
 from benchmarks.flight import map_render
-from benchmarks.flight.live_source import open_live, ortho_observation
+from benchmarks.flight.live_source import held_record, open_live, ortho_observation
 from benchmarks.flight.measures import run_bases, sortie_of
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, converse,
                                        flight_config, summary_line)
@@ -336,10 +336,8 @@ class BankSource:
         rgb, alpha = h.pixels()
         frame = h.frame
         boresight = frame.get("boresight")
-        self.last = {**{k: frame.get(k) for k in ("log_time", "seq", "t_host", "utc", "age_s", "attitude",
-                                                   "corners_xy", "off_nadir_deg", "registration", "mosaic")},
-                     "boresight": Path(str(boresight)).name if boresight else None,
-                     "coverage": {"points": len(held), "held": sum(held), "seqs": [frame.get("seq")]}}
+        self.last = {**frame, "boresight": Path(str(boresight)).name if boresight else None,
+                     "coverage": held_record(len(held), sum(held), [frame.get("seq")])}
         self.last_refusal = ""
         return ortho_observation(rgb, alpha, h.extent, h.camera_z, tile_ground_z=self.tile_ground_z, tile=self.tile)
 
