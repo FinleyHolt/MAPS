@@ -38,7 +38,6 @@ import numpy as np
 
 from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import TILES_DIR
-from maps.sws.graph.builder import build_object_graph
 
 log = logging.getLogger("bake_city")
 
@@ -569,9 +568,9 @@ def bake_block(
     *,
     bounds: WorldBounds | None = None,
     meta: dict[str, Any] | None = None,
-) -> dict[str, int]:
+) -> int:
     """Bake ``records`` into block ``name``'s window, write its sidecars and
-    return their counts, ``{"features", "nodes"}``.
+    return the number of features written.
 
     The grid is ``CELL_SIZE_M`` cells over the block's raster extent, covered
     where its imagery has pixels; a block with no CityNav raster (Cal City)
@@ -596,7 +595,6 @@ def bake_block(
 
     tiles_path.mkdir(parents=True, exist_ok=True)
     stem = tiles_path / name
-    graph = build_object_graph(features, cell_size_m=CELL_SIZE_M)
     Path(f"{stem}_features.json").write_text(
         json.dumps(features, separators=(",", ":")), encoding="utf-8"
     )
@@ -608,9 +606,9 @@ def bake_block(
         **(meta or {}),
     }
     Path(f"{stem}_meta.json").write_text(json.dumps(out_meta, indent=2), encoding="utf-8")
-    stats = {"features": sum(len(v) for v in features.values()), "nodes": len(graph.nodes)}
-    log.info("wrote %s bake: %d features, %d nodes", name, stats["features"], stats["nodes"])
-    return stats
+    count = sum(len(v) for v in features.values())
+    log.info("wrote %s bake: %d features", name, count)
+    return count
 
 
 def bake_city(city: str, osm_cache: str | Path, tiles_dir: str | Path = TILES_DIR) -> None:

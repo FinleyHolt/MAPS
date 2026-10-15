@@ -42,7 +42,7 @@ def test_the_build_commands_default_to_the_bench_s_own_roots(monkeypatch, tmp_pa
     monkeypatch.setattr(build_rgbd_ortho, "build_block",
                         lambda root, name, bbox, raster: seen.setdefault("ortho", root) and (None, None))
     monkeypatch.setattr(bake_tiles, "bake_block",
-                        lambda bundle, tiles, name: seen.setdefault("tiles", tiles) and {"features": 0, "nodes": 0})
+                        lambda bundle, tiles, name: seen.setdefault("tiles", tiles) and 0)
     build_objects_json.main(["--bundle", str(tmp_path)])
     build_rgbd_ortho.main(["--raster", str(tmp_path / "r.tif")])
     bake_tiles.main(["--bundle", str(tmp_path)])

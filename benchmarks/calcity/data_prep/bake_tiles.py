@@ -52,9 +52,10 @@ def local_osm_records(bundle: Path) -> list[tuple[dict[str, Any], dict[str, Any]
     return records
 
 
-def bake_block(bundle: Path, tiles_dir: Path, map_name: str) -> dict[str, Any]:
+def bake_block(bundle: Path, tiles_dir: Path, map_name: str) -> int:
     """Bake the bundle over the AOI's local frame, its meta carrying the y-north
-    ``coordinate_frame`` (``benchmarks.calcity.paths``) and the UTM ``georef``."""
+    ``coordinate_frame`` (``benchmarks.calcity.paths``) and the UTM ``georef``;
+    returns the number of priors written."""
     records = local_osm_records(bundle)
     if not records:
         raise ValueError(f"{bundle} carries no OSM features over {map_name!r}")
@@ -78,8 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--bundle", type=Path, default=None)
     parser.add_argument("--tiles-dir", type=Path, default=paths.TILES_DIR)
     args = parser.parse_args(argv)
-    stats = bake_block(args.bundle or bundle_root(), args.tiles_dir, "calcity")
-    print(f"[calcity-bake] calcity: {stats['features']} priors, {stats['nodes']} graph nodes")
+    count = bake_block(args.bundle or bundle_root(), args.tiles_dir, "calcity")
+    print(f"[calcity-bake] calcity: {count} priors")
     return 0
 
 

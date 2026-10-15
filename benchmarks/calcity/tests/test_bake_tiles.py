@@ -74,8 +74,7 @@ def test_a_feature_with_no_cityrefer_class_is_baked(tmp_path, monkeypatch):
         _road(5, {"waterway": "stream"}, [(100, 500), (400, 500)]),
     ]
     _bundle(monkeypatch, dropped)
-    stats = bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity")
-    assert stats["features"] == len(dropped)
+    assert bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity") == len(dropped)
 
 
 def test_every_tag_rides_through(tmp_path, monkeypatch):
@@ -105,8 +104,7 @@ def test_every_way_of_one_street_is_its_own_row(tmp_path, monkeypatch):
             _road(2, street, [(1100, 100), (1900, 100)]),
         ],
     )
-    stats = bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity")
-    assert stats["features"] == 2
+    assert bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity") == 2
 
 
 def test_an_empty_bundle_is_an_error_not_an_empty_bake(tmp_path, monkeypatch):
@@ -122,11 +120,10 @@ def test_the_bake_shape_and_provenance_are_unchanged(tmp_path, monkeypatch):
         [_area(7, {"leisure": "pitch", "name": "Central Park"}, 100, 100, 200, 200)],
     )
     tiles = tmp_path / "tiles"
-    stats = bake_block(tmp_path / "bundle", tiles, "calcity")
+    assert bake_block(tmp_path / "bundle", tiles, "calcity") == 1
     features = json.loads((tiles / "calcity_features.json").read_text())
     assert list(features) == ["prior"]
     assert sorted(p.name for p in tiles.iterdir()) == ["calcity_features.json", "calcity_meta.json"]
-    assert stats["features"] == stats["nodes"] == 1
     meta = json.loads((tiles / "calcity_meta.json").read_text())
     graph = build_object_graph(features, cell_size_m=float(meta["cell_size_m"]))
     assert list(graph.nodes) == ["prior_0"]
@@ -167,7 +164,7 @@ def test_the_bake_reads_no_citynav_raster_and_keeps_the_bounds_rectangle(tmp_pat
         __str__ = __truediv__ = __fspath__
 
     monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", Untouchable())
-    assert bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity")["features"] == 2
+    assert bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity") == 2
     prior = json.loads((tmp_path / "tiles" / "calcity_features.json").read_text())["prior"]
     building = next(r for r in prior if r.get("building") == "yes")
     assert len(building["cells"]) == 30 * 25
