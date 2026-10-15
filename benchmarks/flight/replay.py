@@ -42,7 +42,7 @@ from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL, RUN_LOG, TOUR_CURSOR
 from benchmarks.citynav.episode_workdir import DETECTIONS_JSONL
 from benchmarks.flight import map_render
-from benchmarks.flight.live_source import held_record, open_live, ortho_observation
+from benchmarks.flight.live_source import check_map, held_record, open_live, ortho_observation
 from benchmarks.flight.measures import run_bases, sortie_of
 from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, converse,
                                        flight_config, summary_line)
@@ -578,6 +578,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         episode_runner.make_perception = recorded
     frames = live is not None
     if not frames:
+        check_map(TILES_DIR, map_name)
         by_flight: dict[int, list[Held]] = {}
         if forced:
             for h in bank_of(rec.run_dir, rec.frames):

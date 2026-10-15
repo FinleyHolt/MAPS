@@ -71,9 +71,10 @@ def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers_an
     from types import SimpleNamespace
 
     import benchmarks.calcity
-    from benchmarks.citynav import episode_workdir
+    from benchmarks.citynav import episode_workdir, paths
 
     monkeypatch.setattr(benchmarks.calcity, "use", lambda: None)
+    monkeypatch.setattr(paths, "TILES_DIR", built[0])
     monkeypatch.setattr(episode_workdir, "open_episode_dir",
                         lambda *a, **k: SimpleNamespace(dir=tmp_path, recorder=None, close=lambda: None))
     modes = []
@@ -90,6 +91,23 @@ def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers_an
         with pytest.raises(StopIteration):
             R.fly(rec, tmp_path, bank=[], live=live)
     assert modes == [("bank", 1990.0, None), ("frames", 1990.0, None)]
+
+
+def test_a_replay_over_a_bake_with_no_georef_is_refused_before_its_sortie_folder_is_opened(tmp_path, monkeypatch):
+    import benchmarks.calcity
+    from benchmarks.citynav import paths
+
+    monkeypatch.setattr(benchmarks.calcity, "use", lambda: None)
+    monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
+    monkeypatch.setattr(paths, "TILES_DIR", tmp_path / "tiles")
+    monkeypatch.setattr(R, "ReplayMission", lambda **kw: pytest.fail("the mission was built"))
+    rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run",
+                      row={"episode_id": "calcity::t", "start_xy": [0, 0]}, params={}, requests=[], responses=[],
+                      conversation=[], frames=[{"altitude_m": 1990.0}])
+    out = tmp_path / "out"
+    with pytest.raises(ValueError, match="carries no georef"):
+        R.fly(rec, out, bank=[])
+    assert not (out / "s").exists()
 
 
 def test_a_replay_flies_at_the_recorded_height_and_a_forced_one_at_the_config_s(tmp_path):

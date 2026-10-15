@@ -641,11 +641,9 @@ class LiveSource:
         return ortho_observation(rgb, alpha, (x0, y0, x1, y1), camera_z, tile_ground_z=self.tile_ground_z)
 
 
-def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresight_path: str | Path | None = None,
-              register_raster: str | Path | None = None) -> LiveSource:
-    """A live source over ``vehicle``, failing on the ramp rather than on the
-    first flight. With ``register_raster`` (the raster each frame is
-    registered against) the corrector starts."""
+def check_map(tiles_dir, map_name: str) -> None:
+    """Refuse a map a fix cannot be placed on (no georef under ``tiles_dir``)
+    or a floor cannot be read for, before any run folder is opened."""
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
 
     if lonlat_to_local(Path(tiles_dir), map_name, 0.0, 0.0) is None:
@@ -654,6 +652,16 @@ def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresigh
         raise ValueError(f"{map_name} has no floor in GROUND_LEVEL: no bench declares it")
     if map_name not in FLOOR_MSL_M:
         raise ValueError(f"{map_name} has no orthometric floor in tile_georef.FLOOR_MSL_M")
+
+
+def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresight_path: str | Path | None = None,
+              register_raster: str | Path | None = None) -> LiveSource:
+    """A live source over ``vehicle``, failing on the ramp rather than on the
+    first flight. With ``register_raster`` (the raster each frame is
+    registered against) the corrector starts."""
+    from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
+
+    check_map(tiles_dir, map_name)
     boresight = Boresight.load(boresight_path) if boresight_path else Boresight(sensor=sensor)
     if boresight_path is None:
         log.warning("live source: no boresight.json; flying the datasheet camera")
