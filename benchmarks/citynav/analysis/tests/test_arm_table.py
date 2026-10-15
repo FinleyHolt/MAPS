@@ -94,6 +94,19 @@ def test_mixing_criteria_refuses_rather_than_pooling(tmp_path):
         arm_table.table([shape, ring])
 
 
+def test_ring_arms_of_two_radii_refuse_rather_than_pooling(tmp_path):
+    """Two ring arms scored on a 20 m and a 40 m disc answer different questions."""
+    roots = []
+    for radius in (20, 40):
+        root = _arm(tmp_path, f"r{radius}", _ledger("n::1#0", "20260827_100000", 1, criterion="ring"))
+        (root / "run_manifest.json").write_text(json.dumps({"config_yaml": f"success_radius_m: {radius}\n"}))
+        roots.append(root)
+    with pytest.raises(SystemExit, match=r"mix success criteria \['the 20 m disc', 'the 40 m disc'\]"):
+        arm_table.table(roots)
+    (row,) = arm_table.table(roots[:1])
+    assert row["criterion"] == "the 20 m disc"
+
+
 def test_osr_rides_a_ring_row_and_is_absent_from_a_shape_row(tmp_path):
     ring_row = _ledger("n::1#0", "20260827_100000", 1, criterion="ring")
     ring_row["metrics"]["OSR"] = 1
@@ -123,8 +136,8 @@ def test_an_ablation_arm_is_labelled_by_its_withholds(tmp_path):
 
 def test_a_long_withhold_label_keeps_the_columns_aligned(capsys):
     label = "withhold=look_for,mission_map"
-    arm_table.render([{"label": label, "criterion": "shape", "n": 1},
-                      {"label": "e1", "criterion": "shape", "n": 1}])
+    arm_table.render([{"label": label, "criterion": "the target's own shape", "n": 1},
+                      {"label": "e1", "criterion": "the target's own shape", "n": 1}])
     lines = capsys.readouterr().out.splitlines()[-3:]
     assert all(ln[len(label):len(label) + 2] == "  " for ln in lines), lines
     assert lines[1].startswith(label + "  ")

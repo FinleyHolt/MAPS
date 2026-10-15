@@ -2,7 +2,7 @@
 
 It defines no metric: ``rows.load_attempts`` picks each episode's result
 and :func:`arm_row` averages it. The criterion must be identical across
-every root and is printed once. An arm's label is the withholds its run
+every root (a disc's radius included) and is printed once. An arm's label is the withholds its run
 manifest records, else the root's basename; its effort is the manifest's
 ``SEARCH_SAMPLING_REASONING_EFFORT``, as written.
 
@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.analysis.run_report import run_criterion
+from benchmarks.citynav.analysis.run_report import criterion_label, run_criterion
 
 #: (json key, header, format). An absent metric prints ``--``, never 0.
 COLUMNS = (
@@ -63,6 +63,7 @@ def arm_row(root: Path, *, allow_partial: bool = False,
     rates are also given as percentages, as CityNav reports them."""
     picked, stats = attempts or _rows.load_attempts(root, allow_partial=allow_partial)
     scored = list(_rows.scored_metrics(picked).values())
+    criterion = run_criterion(scored) if scored else None
     manifest = _rows.read_manifest(root)
     withhold = list(manifest.get("withhold") or [])
     row: dict = {
@@ -70,7 +71,7 @@ def arm_row(root: Path, *, allow_partial: bool = False,
         "label": f"withhold={','.join(withhold)}" if withhold else root.name,
         "effort": (manifest.get("search_env_flags") or {}).get(
             "SEARCH_SAMPLING_REASONING_EFFORT"),
-        "criterion": run_criterion(scored) if scored else None,
+        "criterion": criterion_label(criterion, root) if criterion else None,
         "n": len(scored),
         "no_metrics": stats.no_metrics,
         "timed_out": stats.timed_out,
@@ -112,8 +113,8 @@ def table(roots: list[Path], *, allow_partial: bool = False) -> list[dict]:
     if len(seen) > 1:
         raise SystemExit(
             f"arm_table: these roots mix success criteria {sorted(seen)}. "
-            "A ring arm and a shape arm answer different questions and share "
-            "no success key -- table them separately."
+            "Arms scored on different masks (a shape and a disc, or discs of "
+            "two radii) answer different questions -- table them separately."
         )
     return sorted(rows, key=_sort_key)
 
@@ -132,7 +133,7 @@ def render(rows: list[dict]) -> None:
     seen = {r["criterion"] for r in rows if r["criterion"] is not None}
     criterion = seen.pop() if seen else None
     print(f"criterion: {criterion or 'UNRECORDED'}   arms: {len(rows)}")
-    if criterion == "shape":
+    if criterion == criterion_label("shape", Path()):
         print("OSR is ring-basis and absent from every shape-scored row.")
     columns = [(k, h, f"{{:<{label_w}}}" if k == "label" else fmt) for k, h, fmt in COLUMNS]
     print("  ".join(fmt.format(head) for _, head, fmt in columns))

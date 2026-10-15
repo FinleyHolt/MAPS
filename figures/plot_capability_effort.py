@@ -112,7 +112,7 @@ def render(data: dict, theme: str, split: str, cost: str = "completion") -> str:
     crit = sorted({str(r["criterion"]) for r in arms if r["criterion"]})
     sizes = sorted({r["n"] for r in arms})
     priced = sorted({r["priced_n"] for r in arms})
-    sub = (f"{'/'.join(crit) or 'unrecorded'} criterion · "
+    sub = (f"scored on {'/'.join(crit) or 'an unrecorded criterion'} · "
            f"{', '.join(f'{n:,}' for n in sizes) or 0} episodes per arm · "
            f"{', '.join(f'{n:,}' for n in priced) or 0} priced per arm · "
            f"{len(arms)} arms")
