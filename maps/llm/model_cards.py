@@ -107,6 +107,14 @@ def speaks_openai(model_id: str | None) -> bool:
     return CARDS.get((model_id or "").strip().lower(), {}).get("wire") == "openai"
 
 
+def effort(reasoning_effort: str | None = None) -> str | None:
+    """The reasoning effort a request carries: the mission's own word, else
+    ``SEARCH_SAMPLING_REASONING_EFFORT``, stripped; empty is none."""
+    raw = reasoning_effort if reasoning_effort is not None else os.environ.get(
+        "SEARCH_SAMPLING_REASONING_EFFORT", "")
+    return raw.strip() or None
+
+
 def sampling_kwargs(model_id: str, reasoning_effort: str | None = None) -> dict[str, Any]:
     """The request's sampling keys, flat at the top level (a hosted endpoint
     drops an ``extra_body`` object whole). A chat-template card sends
@@ -114,9 +122,8 @@ def sampling_kwargs(model_id: str, reasoning_effort: str | None = None) -> dict[
     OpenAI-wire card sends none of them (1.0 is that API's default and the
     only value its reasoning models take, and it thinks unasked).
 
-    ``reasoning_effort`` is the mission's own word, else
-    ``SEARCH_SAMPLING_REASONING_EFFORT``; it rides verbatim as a string (a
-    serve refuses a JSON float for it), and empty sends no key, leaving the
+    The effort is :func:`effort`'s; it rides verbatim as a string (a serve
+    refuses a JSON float for it), and none sends no key, leaving the
     template's own default."""
     card = card_for(model_id)
     if card.get("wire") == "openai":
@@ -124,14 +131,13 @@ def sampling_kwargs(model_id: str, reasoning_effort: str | None = None) -> dict[
     else:
         kwargs = {"temperature": 1.0, "top_p": card["top_p"], "top_k": card["top_k"],
                   "chat_template_kwargs": {"enable_thinking": True}}
-    effort = (reasoning_effort if reasoning_effort is not None
-              else os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "")).strip()
-    if effort:
+    chosen = effort(reasoning_effort)
+    if chosen:
         # ponytail: the request key is spelled `reasoning_effort` for every
         # card; a card that names no effort values (the gemma rows) takes any
         # well-formed value at discovery, and a template without the field
         # ignores it while the row stamps an effort the template never saw.
         # The upgrade path is declaring those cards' values once their serves
         # are checked.
-        kwargs["reasoning_effort"] = effort
+        kwargs["reasoning_effort"] = chosen
     return kwargs

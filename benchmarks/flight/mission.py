@@ -18,7 +18,6 @@ import hashlib
 import json
 import logging
 import math
-import os
 import queue
 import threading
 import time
@@ -33,6 +32,7 @@ from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.flight.vehicle import Leg
 from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL, ConversationLog
+from maps.llm.model_cards import effort
 
 if TYPE_CHECKING:
     # Imported where used: the engine binds the bench's paths at import,
@@ -715,10 +715,9 @@ class Mission:
 
     def _mission_stamp(self) -> dict[str, Any]:
         """The mission's grain of the run manifest: which mission, and the
-        reasoning effort its requests carry (``model_cards.sampling_kwargs``'s rule)."""
+        reasoning effort its requests carry."""
         return {"episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no,
-                "reasoning_effort": self.reasoning_effort
-                or (os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT") or "").strip() or None}
+                "reasoning_effort": effort(self.reasoning_effort)}
 
     def _turns(self) -> int:
         """Model turns taken: the conversations that have ended plus the turn the one in flight is on."""
