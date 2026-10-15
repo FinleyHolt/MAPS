@@ -188,13 +188,14 @@ def _mark(fid: str, row, xy, is_target: bool) -> dict:
             "is_target": is_target}
 
 
-def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
-                  stops: dict, obs_minor_m: float | None,
+def crop_requests(fids: list[str], marks: list | None, *, rows: dict, resolve,
+                  carry, stops: dict, obs_minor_m: float | None,
                   obs_span_m: float | None,
                   frame: tuple) -> tuple[list[dict], list[str], list[str]]:
     """One look's fids -> per-crop render requests off ``rows``: each crop
-    centred on its fid, badged as the target, with ``marks`` (fids, points
-    or handles) drawn beside it, capped at the server's 16 images.
+    centred on the place ``resolve`` names, badged as the target, with
+    ``marks`` (places or handles) drawn beside it, capped at the server's 16
+    images.
     ``(requests, skipped_fids, ref_notes)``."""
     skipped: list[str] = []
     requests: list[dict] = []
@@ -235,14 +236,13 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, carry,
             continue
         mark_list: list[dict] = []
         for mf in dict.fromkeys(marked + _fids_of([f])):
-            row = rows.get(mf)
-            xy = look_xy(row) or _rounded_xy(mf)
+            xy = resolve(mf)
             if xy is None:
                 skipped.append(mf)
                 continue
-            mark_list.append(_mark(mf, row, xy, mf == f))
+            mark_list.append(_mark(mf, rows.get(mf), xy, mf == f))
         row = rows.get(f)
-        xy = look_xy(row) or _rounded_xy(f)
+        xy = resolve(f)
         if xy is None:
             skipped.append(f)
             continue

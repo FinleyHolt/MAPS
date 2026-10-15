@@ -118,3 +118,24 @@ def test_a_followup_after_a_turn_that_flew_nowhere_is_still_preflight():
     assert fr.mission[0].preflight
     drive([[run('go_to("prior_7")')], "report"], reasoner=fr)
     assert not fr.mission[0].preflight
+
+
+def test_look_and_its_marks_take_every_point_a_stance_takes():
+    """A flown stop id and a staged vN handle are places stand(at=) and
+    show_map(around=) take; look takes them too, as a subject and as a mark."""
+    from maps.search.tests.fakes import jpeg
+
+    asked = []
+
+    def renderer(reqs):
+        asked.extend(reqs)
+        return [{"jpeg": jpeg(), "center_fid": r["center_fid"], "legend": []} for r in reqs]
+
+    drive([[run('go_to("prior_7")')],
+           [run('stand(at="stop_000", facing="north")')],
+           [run('look("stop_000")\nlook("v1", marks=["stop_000"])')],
+           "done"], look_renderer=renderer, obs_minor_m=None)
+    looks = [r for r in asked if r["center_fid"] in ("stop_000", "v1")]
+    assert [(r["center_fid"], r["center_xy"]) for r in looks] == [
+        ("stop_000", [1.0, 2.0]), ("v1", [1.0, 2.0])], asked
+    assert [m["fid"] for m in looks[1]["marks"]] == ["stop_000", "v1"], looks[1]

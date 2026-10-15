@@ -516,9 +516,9 @@ class _Mission:
             for _r in self.ns.get(_key) or []:
                 self._ns_rows.setdefault(str(_r["fid"]), _r)
 
-    def _resolve_stage_point(self, tok) -> list[float] | None:
-        """A stage at/facing slot -> [x, y]: a live surface fid, a flown
-        stop id, a staged handle, or the canonical '[x, y]' token; None
+    def _point(self, tok) -> list[float] | None:
+        """THE place a token names, as [x, y] at 2 dp: a live surface fid, a
+        flown stop id, a staged handle, or the canonical '[x, y]' token; None
         otherwise."""
         if isinstance(tok, str):
             row = self._ns_rows.get(tok.strip())
@@ -538,7 +538,7 @@ class _Mission:
     def _stage_apply(self, at_tok: str, facing_tok: str) -> dict:
         """stand(): mint a vN handle that becomes STANDING and bump the
         surface version (a program can answer differently under it)."""
-        at_xy = self._resolve_stage_point(at_tok)
+        at_xy = self._point(at_tok)
         if at_xy is None:
             return {"error": f"at {at_tok!r} is not a live surface fid or an "
                              f"[x, y] world point"}
@@ -546,7 +546,7 @@ class _Mission:
         if compass in COMPASS_UNIT:
             up = list(COMPASS_UNIT[compass])
         else:
-            f_xy = self._resolve_stage_point(facing_tok)
+            f_xy = self._point(facing_tok)
             if f_xy is None:
                 return {"error": (f"facing {facing_tok!r} is not a live surface "
                                   f"fid, an [x, y] point, or one of "
@@ -986,8 +986,8 @@ class _Mission:
         _fids = [str(f) for f in fid] if isinstance(fid, (list, tuple)) \
             else [str(fid)]
         reqs, skipped, ref_notes = crop_requests(
-            _fids, marks, rows=self._ns_rows, carry=self.carry,
-            stops=self._plan_stops, obs_minor_m=self.obs_minor_m,
+            _fids, marks, rows=self._ns_rows, resolve=self._point,
+            carry=self.carry, stops=self._plan_stops, obs_minor_m=self.obs_minor_m,
             obs_span_m=self.obs_span_m, frame=self._standing_frame())
         ack: dict = {"looked": len(reqs)}
         if skipped:
@@ -1036,7 +1036,7 @@ class _Mission:
 
     def _map_of(self, fid: str, mark_fids: list | None = None) -> dict:
         spec, m_skipped = map_spec(fid, mark_fids or [], rows=self._ns_rows,
-                                   resolve=self._resolve_stage_point,
+                                   resolve=self._point,
                                    frame=self._standing_frame())
         ack: dict = {"maps": int(spec is not None)}
         if m_skipped:
