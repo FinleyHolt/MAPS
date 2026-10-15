@@ -107,6 +107,24 @@ def _is_oversize_rejection(exc: BaseException) -> bool:
     return any(s in body for s in _OVERSIZE_REJECTION)
 
 
+#: What a hosted endpoint says when its content filter refuses the prompt
+#: (Azure: 400 with ``"code": "content_filter"``, inner code
+#: ``ResponsibleAIPolicyViolation``), lowercased.
+_CONTENT_FILTER_REJECTION = ("content_filter", "responsibleaipolicyviolation")
+
+
+def _is_content_filter_rejection(exc: BaseException) -> bool:
+    """Did a content filter refuse this prompt? The same prompt is refused the
+    same way, so the mission ends rather than re-send it."""
+    if not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code != 400:
+        return False
+    try:
+        body = exc.response.text.lower()
+    except Exception:
+        return False
+    return any(s in body for s in _CONTENT_FILTER_REJECTION)
+
+
 def _is_refused_request(exc: BaseException) -> bool:
     """Did the serve refuse what was sent (a 4xx outside
     ``TRANSIENT_CLIENT_STATUS``, which re-sending fails the same way)?"""
@@ -219,7 +237,8 @@ class MissionSpec:
 class MissionReply:
     """How the conversation ended: ``ended_by`` is "reply" (the one
     model-owned ending) | "turn_cap" | "transient_failures" |
-    "request_refused" | "oversize_rejection" | "compaction_infeasible"."""
+    "request_refused" | "oversize_rejection" | "content_filter" |
+    "compaction_infeasible"."""
 
     ended_by: str
     turns_used: int = 0
@@ -1412,6 +1431,13 @@ class _Mission:
                         self.rid_tag, _summarise_exc(exc))
                     self._log("oversize_rejection", error=_summarise_exc(exc))
                     return self._mission_end("oversize_rejection", turns=turn_idx + 1)
+                if _is_content_filter_rejection(exc):
+                    log.warning(
+                        "%s the endpoint's content filter refused the prompt "
+                        "-> mission ends (a retry re-sends the same prompt): %s",
+                        self.rid_tag, _summarise_exc(exc))
+                    self._log("content_filter", error=_summarise_exc(exc))
+                    return self._mission_end("content_filter", turns=turn_idx + 1)
                 transient_failures += 1
                 cancel = self.reasoner.cancel_event
                 log.warning(
