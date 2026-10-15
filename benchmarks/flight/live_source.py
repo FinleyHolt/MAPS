@@ -17,7 +17,7 @@ import math
 import threading
 import time
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -236,12 +236,6 @@ def fused_registration(records: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def frame_pose(posed) -> frame_ties.Pose:
-    """A posed frame's camera pose as the registration reads it, pitch back in aerospace signs."""
-    return frame_ties.Pose(tuple(posed.pose_xy), float(posed.alt_msl), float(posed.yaw), float(posed.roll),
-                           -float(posed.pitch_proj))
-
-
 def register_frame(register: Registration, rgb, pose: frame_ties.Pose, sensor, ground: float
                    ) -> tuple[dict[str, Any], tuple[float, float, float] | None]:
     """``(record, measurement)``: the frame's ground residual on its own
@@ -364,16 +358,16 @@ class LiveSource:
     def _posed(self, jpeg: bytes, t_host: float, *, pose: Pose | None = None) -> SimpleNamespace | str:
         """The frame decoded and its camera posed through the calibrated chain
         at ``pose`` (default :meth:`pose_now` at ``t_host``), or why it cannot
-        be: a string, so the corrector's thread leaves ``last_refusal`` alone."""
+        be: a string, so the corrector's thread leaves ``last_refusal`` alone.
+        ``cam`` is the camera pose the registration reads, ``ground_tile`` the
+        ground under it in the tile frame."""
         why = ""
         if pose is None:
             pose, why = self._pose(t_host)
         if pose is None:
             return f"no pose for the frame: {why or 'no fix'}"
-        # A pose's roll and pitch are aerospace (right wing down, nose up); the projector's pitch is nose down.
-        roll = float(pose.roll_deg)
-        pitch_proj = -float(pose.pitch_deg)
         pose_xy, alt_msl, yaw = self.camera_pose(pose)
+        cam = frame_ties.Pose(tuple(pose_xy), float(alt_msl), float(yaw), float(pose.roll_deg), float(pose.pitch_deg))
         try:
             rgb = np.asarray(Image.open(BytesIO(jpeg)).convert("RGB"), dtype=np.uint8)
         except (OSError, ValueError) as exc:
@@ -381,23 +375,22 @@ class LiveSource:
         h, w = rgb.shape[:2]
         sensor = locator.sized(self.boresight.sensor, w, h)
         camera_z = self.tile_ground_z + (alt_msl - self.floor_msl_m)
-        ground_tile = self.ground_tile_z(pose_xy)
+        ground_tile = self.tile_ground_z + (self.ground_msl(pose_xy) - self.floor_msl_m)
         agl = camera_z - ground_tile
-        # ponytail: flat ground at the nadir's height (the bake's DEM, else its floor); relief
-        # within a frame needs a height raster under ground_corners_xy.
         try:
-            corners = ground_corners_xy(sensor, pose_xy, agl, yaw, airframe_roll_deg=roll,
-                                        airframe_pitch_deg=pitch_proj, ground_z=ground_tile)
+            corners = self._corners(sensor, cam, agl, ground_tile)
         except ValueError as exc:
             return f"no ground under the frame: {exc}"
-        return SimpleNamespace(pose=pose, pose_xy=pose_xy, alt_msl=alt_msl, yaw=yaw, roll=roll,
-                               pitch_proj=pitch_proj, rgb=rgb, sensor=sensor, agl=agl, camera_z=camera_z,
+        return SimpleNamespace(pose=pose, cam=cam, rgb=rgb, sensor=sensor, agl=agl, camera_z=camera_z,
                                corners=corners, ground_tile=ground_tile)
 
-    def ground_tile_z(self, pose_xy) -> float:
-        """The ground under ``pose_xy`` in the tile frame: the map's surface
-        over its floor where the map carries one, else the tile's floor."""
-        return self.tile_ground_z + (self.ground_msl(pose_xy) - self.floor_msl_m)
+    @staticmethod
+    def _corners(sensor, cam: frame_ties.Pose, agl: float, ground_tile: float) -> list[tuple[float, float]]:
+        """Where the frame of a camera at ``cam``, ``agl`` over ``ground_tile``, meets the ground."""
+        # ponytail: flat ground at the nadir's height (the bake's DEM, else its floor); relief
+        # within a frame needs a height raster under ground_corners_xy. The projector's pitch is nose down.
+        return ground_corners_xy(sensor, cam.pose_xy, agl, cam.yaw_deg, airframe_roll_deg=cam.roll_deg,
+                                 airframe_pitch_deg=-cam.pitch_deg, ground_z=ground_tile)
 
     def ground_msl(self, xy) -> float:
         """The ground under ``xy`` in the receiver's orthometric datum: the
@@ -417,18 +410,16 @@ class LiveSource:
         with self._correcting:
             if self.graph is None:
                 self.graph = PoseGraph(posed.sensor, self.ground_msl)
-            pose = frame_pose(posed)
-            _record, measured = register_frame(self.register, posed.rgb, pose, posed.sensor,
-                                               self.ground_msl(pose.pose_xy))
-            self.graph.offer(seq, t_host, pose, locator.gray(posed.rgb), measured)
+            _record, measured = register_frame(self.register, posed.rgb, posed.cam, posed.sensor,
+                                               self.ground_msl(posed.cam.pose_xy))
+            self.graph.offer(seq, t_host, posed.cam, locator.gray(posed.rgb), measured)
 
     def _register_ring(self, seq: int, posed, t: float) -> dict[str, Any]:
         """A ring frame registered on its own pixels: a measurement past the
         cap (:func:`pose_graph.innovation_past_cap`) from the graph's node
         nearest in time is refused, and a refused or unmeasured frame takes that node."""
-        pose = frame_pose(posed)
-        record, _measured = register_frame(self.register, posed.rgb, pose, posed.sensor,
-                                           self.ground_msl(pose.pose_xy))
+        record, _measured = register_frame(self.register, posed.rgb, posed.cam, posed.sensor,
+                                           self.ground_msl(posed.cam.pose_xy))
         record["seq"] = seq
         with self._correcting:
             est = self.graph.estimate(t) if self.graph is not None else None
@@ -589,7 +580,6 @@ class LiveSource:
             if isinstance(posed, str):
                 self.last_refusal = posed
                 continue
-            corners = posed.corners
             if self.register is not None:
                 record = self._register_ring(seq, posed, t_host)
                 # The heading the frame was placed at and the track beside it: a crab is their difference.
@@ -597,13 +587,11 @@ class LiveSource:
                               attitude=posed.pose.attitude)
                 records.append(record)
                 if record["applied"]:
-                    pose_xy = (posed.pose_xy[0] + record["shift_e_m"], posed.pose_xy[1] + record["shift_n_m"])
-                    corners = ground_corners_xy(posed.sensor, pose_xy, posed.agl, posed.yaw,
-                                                airframe_roll_deg=posed.roll, airframe_pitch_deg=posed.pitch_proj,
-                                                ground_z=posed.ground_tile)
-            placed.append(SimpleNamespace(angle=angle, seq=seq, t_host=t_host, log_time=log_time,
-                                          pose=posed.pose, corners=corners, rgb=posed.rgb,
-                                          camera_z=posed.camera_z, agl=posed.agl, sensor=posed.sensor))
+                    moved = replace(posed.cam, pose_xy=(posed.cam.pose_xy[0] + record["shift_e_m"],
+                                                        posed.cam.pose_xy[1] + record["shift_n_m"]))
+                    posed.corners = self._corners(posed.sensor, moved, posed.agl, posed.ground_tile)
+            posed.angle, posed.seq, posed.t_host, posed.log_time = angle, seq, t_host, log_time
+            placed.append(posed)
         if not placed:
             self.last_refusal = (f"none of the {len(want)} frames over {about} could be placed: "
                                  f"{self.last_refusal or 'no reason recorded'}")
