@@ -173,19 +173,25 @@ class Result(list):
     ``consumed`` marks rows a later op read; the other attributes are render
     inputs its op sets."""
 
-    ordered: bool = False
-    name_set: bool = False
     consumed: bool = False
-    op_cols: list = []
-    notes: list = []
-    set_notes: list = []
-    cut_stats: dict = {}
-    empty_condition: "str | None" = None
 
-    def __init__(self, rows=(), kind: str = "broad", **attrs):
+    def __init__(self, rows=(), kind: str = "broad", *, ordered=False,
+                 name_set=False, op_cols=(), notes=(), set_notes=(),
+                 cut_stats=None, empty_condition=None):
         super().__init__(rows)
-        self.kind = kind
-        vars(self).update(attrs)
+        self.kind, self.ordered, self.name_set = kind, ordered, name_set
+        self.op_cols, self.notes, self.set_notes = op_cols, notes, set_notes
+        self.cut_stats, self.empty_condition = cut_stats, empty_condition
+
+
+def _ordered(rows) -> bool:
+    """Whether an op's input rows carry a real order its output keeps."""
+    return bool(getattr(rows, "ordered", False))
+
+
+def _num(v):
+    """``v`` when it is a number (a bool is not), else None."""
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
 
 def join_hints(*parts) -> str:
@@ -276,14 +282,14 @@ def _cut_stands_at(v, body: list, capped: list) -> str | None:
     if v.kind != "sorted" or len(capped) >= len(body):
         return None
 
-    def _num(row):
-        val = row.get("score") if isinstance(row, dict) else None
-        return float(val) if isinstance(val, (int, float)) else None
+    def score(row):
+        x = _num(row.get("score")) if isinstance(row, dict) else None
+        return None if x is None else float(x)
 
-    head = [x for x in (_num(r) for r in capped) if x is not None]
+    head = [x for x in map(score, capped) if x is not None]
     if len(head) < 2:
         return None
-    nxt = next((x for x in (_num(r) for r in body[len(capped):])
+    nxt = next((x for x in map(score, body[len(capped):])
                 if x is not None), None)
     keys = [k for k in v.op_cols if isinstance(k, str)]
     what = " + ".join(f"'{k}'" for k in keys) or "this ordering"
@@ -1158,7 +1164,7 @@ def _crossings(cx, a):
             f"TOUCH.{_sib} A point near one of them is not their "
             f"intersection; relate to ONE of them instead "
             f"('... near <feature>').")
-    rows = Result()
+    rows = []
     # Whole metres: the fid is the coordinate, and the model spells whole
     # numbers only.
     _seen: set = set()
@@ -1170,21 +1176,19 @@ def _crossings(cx, a):
             continue
         _seen.add(tok)
         rows.append({"fid": tok, "xy": [_x, _y], "name": f"{la} x {lb}"})
-    rows.ordered = True
-    rows.notes = [
+    notes = [
         f"{len(rows)} distinct crossing{'' if len(rows) == 1 else 's'} "
         f"of {la} and {lb}"
         + ("." if len(rows) == 1 else
            " -- each is its OWN row with its OWN fid, so narrow to the "
            "one you mean (order or cut this set) rather than averaging "
            "them; a point between crossings is at none of them.")]
-    rows.set_notes = rows.notes
-    return rows
+    return Result(rows, ordered=True, notes=notes, set_notes=notes)
 
 
 def _ends(cx, a):
     """A road's termini (end0_xy / end1_xy) as rows."""
-    rows = Result()
+    rows = []
     _n_end = 0
     _no_line: list = []
     for _el in a["refs"]:
@@ -1215,12 +1219,10 @@ def _ends(cx, a):
             f"no termini exist for them. ends reads a centerline; "
             f"end0_xy/end1_xy on a row is the same fact served as "
             f"columns.")
-    rows.ordered = True
-    rows.notes = [
+    notes = [
         f"{len(rows)} terminus rows; each is its OWN row with its "
         f"own fid, so index the one you mean."]
-    rows.set_notes = rows.notes
-    return rows
+    return Result(rows, ordered=True, notes=notes, set_notes=notes)
 
 
 def _score_by(cx, a):
@@ -1272,12 +1274,8 @@ def _score_by(cx, a):
             f"other keys still rank. A row gets a colour once a "
             f"flight has passed over it.")
     keys = sorted(emphasis)  # deterministic; the sum is order-independent
-    r = Result(G.score_by(items, keys, [emphasis[k] for k in keys]), "sorted")
-    r.ordered = True
-    r.op_cols = list(keys)
-    if _sb_notes:
-        r.notes = _sb_notes
-    return r
+    return Result(G.score_by(items, keys, [emphasis[k] for k in keys]),
+                  "sorted", ordered=True, op_cols=keys, notes=_sb_notes)
 
 
 def _filter_items(cx, a):
@@ -1287,7 +1285,6 @@ def _filter_items(cx, a):
     keeps a word column reading one of ``value`` or blank."""
     items = _as_rows(cx, a["items"])
     key, opr, val = a["key"], a["op"], a.get("value")
-    _in_ordered = bool(getattr(items, "ordered", False))
     if opr == "le":
         if items and not any(isinstance(it.get(key), (int, float)) for it in items):
             raise ProgramError(
@@ -1303,14 +1300,9 @@ def _filter_items(cx, a):
             v = it.get(key)
             (kept if v is not None and v <= val else excluded).append(it)
 
-        def _eff(it):
-            v = it.get(key)
-            if isinstance(v, bool) or not isinstance(v, (int, float)):
-                return None
-            return v
-
         stats = {"cut": f"{len(items)}->{len(kept)}"}
-        _excl_vals = [(e, it) for it in excluded if (e := _eff(it)) is not None]
+        _excl_vals = [(e, it) for it in excluded
+                      if (e := _num(it.get(key))) is not None]
         if _excl_vals:
             ne_v, ne_it = min(_excl_vals, key=lambda t: t[0])
             stats["nearest_excluded"] = {
@@ -1320,12 +1312,9 @@ def _filter_items(cx, a):
             stats["admit_at"] = round(float(ne_v), 3)
             stats["n_at_admit"] = sum(
                 1 for it in items
-                if (v := _eff(it)) is not None and v <= ne_v)
-        r = Result(kept, "cut")
-        r.cut_stats = stats
-        r.ordered = _in_ordered
-        r.op_cols = [key]
-        return r
+                if (v := _num(it.get(key))) is not None and v <= ne_v)
+        return Result(kept, "cut", ordered=_ordered(items), op_cols=[key],
+                      cut_stats=stats)
     if (items and not any(key in it for it in items)
             and not _relate_ran(key, items)):
         raise ProgramError(
@@ -1354,14 +1343,9 @@ def _filter_items(cx, a):
                 f"measured (a row TOUCHING the reference has no "
                 f"facing word). Widen, or read the column and "
                 f"see which words are actually there.")
-        r = Result(_on, "cut")
-        r.cut_stats = stats
     elif opr == "on_side":
-        def _ok(it):
-            v = it.get(key)
-            return v is None or (isinstance(v, (int, float))
-                                 and not isinstance(v, bool) and v > 0)
-        _on = [it for it in items if _ok(it)]
+        _on = [it for it in items if it.get(key) is None
+               or (_num(it.get(key)) or 0) > 0]
         _blank = sum(1 for it in _on if it.get(key) is None)
         stats = {
             "cut": f"{len(items)}->{len(_on)}",
@@ -1377,13 +1361,10 @@ def _filter_items(cx, a):
                 + ("" if withheld("look_for") else
                    ": look_for the class, then explore the place to "
                    "segment it"))
-        r = Result(_on, "cut")
-        r.cut_stats = stats
     else:  # truthy
-        r = Result((it for it in items if it.get(key)), "cut")
-    r.ordered = _in_ordered
-    r.op_cols = [key]
-    return r
+        _on, stats = [it for it in items if it.get(key)], None
+    return Result(_on, "cut", ordered=_ordered(items), op_cols=[key],
+                  cut_stats=stats)
 
 
 def _stratum(cx, a):
@@ -1407,9 +1388,8 @@ def _stratum(cx, a):
         if not isinstance(v, (int, float)):
             return False
         return (_lo is None or v >= _lo) and (_hi is None or v < _hi)
-    r = Result((it for it in items if _in_tier(it)), "cut")
-    r.ordered = bool(getattr(items, "ordered", False))
-    return r
+    return Result((it for it in items if _in_tier(it)), "cut",
+                  ordered=_ordered(items))
 
 
 def _union_members(cx, ref_el, as_label) -> list:
@@ -1503,8 +1483,6 @@ def _compare(cx, a):
     viewpoint, or ``{ref: [fid | rN | [x, y], ...]}``, a union measured as
     one place."""
     items = _as_rows(cx, a["items"])
-    _in_ordered = bool(getattr(items, "ordered", False))
-
     notes: list = []
     used_labels: set = set()
     standing: list = []         # staged viewpoint handles, in ref order
@@ -1640,10 +1618,7 @@ def _compare(cx, a):
             f"ref {_h} is your staged viewpoint: its side columns ('left "
             f"of/right of/ahead of/behind {_h}') + 'distance to {_h}' "
             f"(meters from where you stand) ride every row.")
-    r = Result(out_rows, "compare")
-    r.notes = notes
-    r.ordered = _in_ordered
-    return r
+    return Result(out_rows, "compare", ordered=_ordered(items), notes=notes)
 
 
 OPS = {
