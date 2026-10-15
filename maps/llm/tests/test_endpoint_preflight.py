@@ -29,6 +29,7 @@ def _fake_endpoint(cached_on_second: int | None):
             self.wfile.write(payload)
 
         def do_GET(self):
+            self.server.gets.append(self.path)
             self._send(json.dumps({"data": [{"id": "gpt-5.6-sol-2026-07-09"}]}).encode())
 
         def do_POST(self):
@@ -52,6 +53,7 @@ def _fake_endpoint(cached_on_second: int | None):
                        + b"data: [DONE]\n\n", "text/event-stream")
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.gets = []
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server, bodies
 
@@ -66,6 +68,7 @@ def hosted(monkeypatch):
         monkeypatch.delenv("SEARCH_REASONER_MODELS_URL", raising=False)
         monkeypatch.delenv("SEARCH_LLM_ROUTING_KEY", raising=False)
         monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
+        monkeypatch.delenv("SEARCH_ENDPOINT_OFFLINE", raising=False)
         # Discovery's tokenizer load is the hub's; these tests own the endpoint only.
         monkeypatch.setattr(endpoint_spec, "_require_tokenizer", lambda m: f"tok:{m}")
         return server, bodies
@@ -91,3 +94,13 @@ def test_a_second_turn_that_misses_the_cache_fails_the_effort(hosted, capsys, ca
     hosted(cached)
     assert endpoint_preflight.main(["--effort", "medium"]) == 1
     assert "NoCacheHit" in capsys.readouterr().err
+
+
+def test_an_offline_preflight_asks_no_model_listing_and_still_flies_both_turns(hosted, monkeypatch) -> None:
+    server, bodies = hosted(2944)
+    monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")
+    assert endpoint_preflight.main(["--effort", "xhigh"]) == 0
+    assert server.gets == [] and len(bodies) == 2
+    monkeypatch.delenv("SEARCH_ENDPOINT_OFFLINE")
+    assert endpoint_preflight.main(["--effort", "xhigh"]) == 0
+    assert server.gets == ["/openai/v1/models"]

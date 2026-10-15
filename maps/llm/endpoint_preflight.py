@@ -4,7 +4,9 @@
 
 Discovers the endpoint as a run does (``SEARCH_REASONER_URL``,
 ``SEARCH_REASONER_API_KEY``, ``SEARCH_ENDPOINT_SPEC_OVERRIDE``,
-``SEARCH_REASONER_MODELS_URL``), without the SAM probe, then flies a short
+``SEARCH_REASONER_MODELS_URL``; ``SEARCH_ENDPOINT_OFFLINE=1`` skips the
+model listing and takes the override as the endpoint's facts), without the
+SAM probe, then flies a short
 conversation through the reasoner's own request path: the served system turn
 and ``run`` tool, a picture, the effort, the model's tool call, and its
 result. The first turn is a blocking request, as the bench sends; the second
