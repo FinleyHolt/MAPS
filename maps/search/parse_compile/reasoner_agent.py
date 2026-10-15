@@ -160,8 +160,6 @@ class Reasoner:
     reasoning_effort: str | None = None
     # Set when compaction cannot fit the thread: no later turn grows it.
     compaction_infeasible: bool = False
-    # The mission's flights so far, over every operator turn.
-    flights: int = 0
 
     @property
     def model(self) -> str:

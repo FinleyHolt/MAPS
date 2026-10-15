@@ -455,6 +455,8 @@ class _Mission:
         self._map_feats: list[dict] = []
 
         self.carry = Carry(compute_namespace)
+        # The mission's flights so far, over every operator turn.
+        self.flights = 0
         # The watched classes, in declaration order.
         self.mission_sam: list[str] = []
         self._new_turn()
@@ -496,7 +498,7 @@ class _Mission:
 
     def _new_turn(self) -> None:
         """An operator turn's own state: its flight budget (the backstop's
-        count; the mission's flights are the reasoner's), its escalating loop
+        count; ``flights`` counts the mission's), its escalating loop
         breaker (see _loop_broken_error) and its dedup streak."""
         self.turn_flights = 0
         self._err_class_counts: dict[str, int] = {}
@@ -822,7 +824,7 @@ class _Mission:
         """A flight that flew: count it, record its stop, re-derive the
         surface, and (outside a pass) mint the rows it added."""
         self.turn_flights += 1
-        self.reasoner.flights += 1
+        self.flights += 1
         _pxy = _report["pose_xy"]
         self._plan_stops[str(_report["stop_id"]).strip().lower()] = [
             float(_pxy[0]), float(_pxy[1])]
@@ -1472,7 +1474,7 @@ class _Mission:
                              turn_idx)
                 # A clean prose reply before any flight answers nothing: hand
                 # the turn back, up to NO_FLIGHT_ABSTAIN_STREAK.
-                if no_call_streak == 0 and self.reasoner.flights == 0:
+                if no_call_streak == 0 and self.flights == 0:
                     no_flight_streak += 1
                     self._log("no_flight_reply", turn_idx=turn_idx,
                               streak=no_flight_streak)

@@ -31,7 +31,6 @@ class FakeReasoner:
         self.messages = [{"role": "system", "content": "sys"}]
         self.vision: list[tuple[str, list]] = []
         self.compaction_infeasible = False
-        self.flights = 0
         self.cancel_event = None
         self.model = "test"
 
