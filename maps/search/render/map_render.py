@@ -32,6 +32,125 @@ def _n_cells(f) -> int:
     return 0 if cells is None else len(cells)
 
 
+def _pill(txt, thick=_CHIP_TH):
+    """``(pw, ph, th)``: a chip's pill size and its text height."""
+    import cv2  # noqa: PLC0415
+    (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX,
+                                  _CHIP_FS, thick)
+    return tw + 8, th + 8, th
+
+
+def _fit(v, size, lim):
+    """A pill's corner coordinate kept a pixel inside the frame."""
+    return int(min(max(v, 1), lim - size - 1))
+
+
+def _leader(rgb, a, b, color, halo):
+    import cv2  # noqa: PLC0415
+    cv2.line(rgb, a, b, (0, 0, 0), halo, cv2.LINE_AA)
+    cv2.line(rgb, a, b, color, 1, cv2.LINE_AA)
+
+
+def _label(rgb, txt, bx, by, pw, ph, th, fill, thick):
+    """Text on its pill; ``fill`` None draws no pill."""
+    import cv2  # noqa: PLC0415
+    if fill is not None:
+        cv2.rectangle(rgb, (bx, by), (bx + pw, by + ph), fill, -1)
+        cv2.rectangle(rgb, (bx, by), (bx + pw, by + ph), (0, 0, 0), 1,
+                      cv2.LINE_AA)
+    cv2.putText(rgb, txt, (bx + 4, by + th + 4),
+                cv2.FONT_HERSHEY_SIMPLEX, _CHIP_FS, (0, 0, 0), thick,
+                cv2.LINE_AA)
+
+
+def _prior_chips(rgb, cands, det_entries, marked, tan):
+    """Prior chips, nearest the centre first: with marks only the marked
+    objects (a pill that does not fit sits above with a leader); without,
+    every building whose footprint holds the pill. One prior stacks under
+    each covering detection (its ``stacked``). ``(glyphs, chipped,
+    unchipped)``; a candidate is ``(x, y, digits, bbox w, h, fid)`` in
+    pixels."""
+    H, W = rgb.shape[:2]
+    if marked:
+        cands = [t for t in cands if t[5] in marked]
+    glyphs: list = []
+    n_chips = n_unchipped = 0
+    cands = sorted(cands,
+                   key=lambda t: (t[0] - W / 2.0) ** 2 + (t[1] - H / 2.0) ** 2)
+    for cx_, cy_, digits, bw, bh, pfid in cands:
+        pw, ph, th = _pill(digits)
+        if n_chips >= _MAX_PRIOR_CHIPS:
+            n_unchipped += 1
+            continue
+        de = next((d for d in det_entries
+                   if cx_ - pw / 2.0 < d["bbox"][2]
+                   and d["bbox"][0] < cx_ + pw / 2.0
+                   and cy_ - ph / 2.0 < d["bbox"][3]
+                   and d["bbox"][1] < cy_ + ph / 2.0), None)
+        if de is not None:
+            if de["stacked"]:
+                n_unchipped += 1  # one stack slot per detection
+            else:
+                de["stacked"] = (digits, pfid)
+                n_chips += 1
+            continue
+        fits = not (pw > bw + 4 or ph > bh + 4)
+        if not fits and pfid not in marked:
+            n_unchipped += 1
+            continue
+        bx0 = _fit(cx_ - pw / 2.0, pw, W)
+        if fits:
+            by0 = _fit(cy_ - ph / 2.0, ph, H)
+        else:
+            by0 = _fit(cy_ - bh / 2.0 - ph - 4, ph, H)
+            _leader(rgb, (bx0 + pw // 2, by0 + ph), (int(cx_), int(cy_)), tan, 2)
+        glyphs.append((bx0, by0, pw, ph, digits, th, tan, pfid))
+        n_chips += 1
+    return glyphs, n_chips, n_unchipped
+
+
+def _place_glyphs(rgb, glyphs) -> tuple[list, set]:
+    """Draw ``glyphs`` (``(x, y, pw, ph, text, th, fill, prior fid or
+    None)``) in queue order, never overlapping: a colliding glyph takes the
+    least crowded diagonal offset (a moved one gets a leader); one with no
+    free offset is dropped and its prior fid recorded. A pill backdrop draws
+    only off the chip's own colour. ``(placed boxes, undrawn prior fids)``."""
+    H, W = rgb.shape[:2]
+    placed: list = []
+    undrawn: set = set()
+    for gx, gy, pw, ph, txt, th, fill, pfid in glyphs:
+        ax_, ay_ = float(gx + pw / 2.0), float(gy + ph / 2.0)
+        cands = [(gx, gy)] + [
+            (ax_ + sx_ * 6 + (0 if sx_ > 0 else -pw),
+             ay_ + sy_ * 6 + (0 if sy_ > 0 else -ph))
+            for sx_, sy_ in ((1, -1), (1, 1), (-1, -1), (-1, 1))]
+        scored = []
+        for qx, qy in cands:
+            qx = int(min(max(qx, 1), W - pw - 1))
+            qy = int(min(max(qy, 1), H - ph - 1))
+            bb = (qx, qy, qx + pw, qy + ph)
+            scored.append((sum(
+                max(0, min(bb[2], ob[2]) - max(bb[0], ob[0]))
+                * max(0, min(bb[3], ob[3]) - max(bb[1], ob[1]))
+                for ob in placed), bb))
+        crowd, box = min(scored, key=lambda c: c[0])
+        if crowd > 0:
+            if pfid is not None:
+                undrawn.add(pfid)
+            continue
+        gx, gy = box[0], box[1]
+        placed.append(box)
+        if ((gx + pw / 2.0 - ax_) ** 2 + (gy + ph / 2.0 - ay_) ** 2) ** 0.5 > 12.0:
+            _leader(rgb, (int(gx + pw / 2.0), int(gy + ph / 2.0)),
+                    (int(ax_), int(ay_)), fill, 3)
+        under = rgb[int(min(max(gy + ph // 2, 0), H - 1)),
+                    int(min(max(gx + pw // 2, 0), W - 1))]
+        on_own_ink = sum(abs(int(under[i]) - fill[i]) for i in range(3)) <= 24
+        _label(rgb, txt, gx, gy, pw, ph, th, None if on_own_ink else fill,
+               _CHIP_TH)
+    return placed, undrawn
+
+
 def features_window_paint(features, *, tile_origin_xy, cell_size_m,
                           grid_shape, window):
     """``(rgb, counts)`` for the world square ``window``: the north-up cell
@@ -103,6 +222,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         paint_color,
         paint_word,
     )
+    from maps.search.analyze_scene.geom_compute import cell_centre_xy  # noqa: PLC0415
     from maps.search.analyze_scene.row_geometry import cells_of  # noqa: PLC0415
     from maps.search.render.look_render import (  # noqa: PLC0415
         frame_arcs,
@@ -147,37 +267,10 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     cs_ = float(cell_size_m)
     tox, toy = (float(tile_origin_xy[0]), float(tile_origin_xy[1]))
 
-    def _cell_centre(r, c):
-        return tox + (int(c) + 0.5) * cs_, toy + (int(r) + 0.5) * cs_
-
     def _cell_quad(r, c):
         wx0, wy0 = tox + int(c) * cs_, toy + int(r) * cs_
         return _px_ring([(wx0, wy0), (wx0 + cs_, wy0),
                          (wx0 + cs_, wy0 + cs_), (wx0, wy0 + cs_)])
-
-    def _pill(txt, thick=_CHIP_TH):
-        """``(pw, ph, th)``: a chip's pill size and its text height."""
-        (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX,
-                                      _CHIP_FS, thick)
-        return tw + 8, th + 8, th
-
-    def _fit(v, size, lim):
-        """A pill's corner coordinate kept a pixel inside the frame."""
-        return int(min(max(v, 1), lim - size - 1))
-
-    def _leader(a, b, color, halo):
-        cv2.line(rgb, a, b, (0, 0, 0), halo, cv2.LINE_AA)
-        cv2.line(rgb, a, b, color, 1, cv2.LINE_AA)
-
-    def _label(txt, bx, by, pw, ph, th, fill, thick):
-        """Text on its pill; ``fill`` None draws no pill."""
-        if fill is not None:
-            cv2.rectangle(rgb, (bx, by), (bx + pw, by + ph), fill, -1)
-            cv2.rectangle(rgb, (bx, by), (bx + pw, by + ph), (0, 0, 0), 1,
-                          cv2.LINE_AA)
-        cv2.putText(rgb, txt, (bx + 4, by + th + 4),
-                    cv2.FONT_HERSHEY_SIMPLEX, _CHIP_FS, (0, 0, 0), thick,
-                    cv2.LINE_AA)
 
     # Feature ink under the overlay: road strokes and building contour
     # fills; each prior with fid digits and a point in the window is a chip
@@ -215,7 +308,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                 for r, c in cells_of(f):
                     cv2.fillPoly(bmask, [_cell_quad(r, c)], 1)
             if not pts:  # cells-only building: chip geometry off its cells
-                pts = [_cell_centre(r, c) for r, c in cells_of(f)]
+                pts = [cell_centre_xy(r, c, tile_origin_xy, cell_size_m) for r, c in cells_of(f)]
             ppx = [_w2p(*p) for p in pts if _in_window(p)]
             m = re.search(r"(\d+)$", str(f.get("fid") or ""))
             if ppx and m:
@@ -230,12 +323,12 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         if str(f.get("provenance") or "") != "detected":
             continue
         cells_inw = [(r, c) for r, c in cells_of(f)
-                     if _in_window(_cell_centre(r, c))]
+                     if _in_window(cell_centre_xy(r, c, tile_origin_xy, cell_size_m))]
         if not cells_inw:
             continue
         quads = [_cell_quad(r, c) for r, c in cells_inw]
         allpts = np.concatenate(quads)
-        centres = [_cell_centre(r, c) for r, c in cells_inw]
+        centres = [cell_centre_xy(r, c, tile_origin_xy, cell_size_m) for r, c in cells_inw]
         det_entries.append({
             "label": str(f.get("label") or "detection"),
             "quads": quads,
@@ -252,50 +345,12 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
 
     # Chips queue as (x, y, pw, ph, text, th, fill, prior fid or None) and
     # draw after all ink.
-    glyphs: list = []
-
-    # Prior chips: with marks only the marked objects (a pill that does not
-    # fit sits above with a leader); without, every building whose footprint
-    # holds the pill. One prior stacks under each covering detection.
     _marked_fids = {str(mk.get("fid")) for mk in (spec.get("marks") or [])
                     if mk.get("fid")}
     if spec.get("center_fid"):
         _marked_fids.add(str(spec.get("center_fid")))
-    if _marked_fids:
-        prior_chip_cands = [t for t in prior_chip_cands
-                            if t[5] in _marked_fids]
-    n_prior_chips = n_prior_unchipped = 0
-    prior_chip_cands.sort(
-        key=lambda t: (t[0] - W / 2.0) ** 2 + (t[1] - H / 2.0) ** 2)
-    for cx_, cy_, digits, bw, bh, pfid in prior_chip_cands:
-        pw, ph, th = _pill(digits)
-        if n_prior_chips >= _MAX_PRIOR_CHIPS:
-            n_prior_unchipped += 1
-            continue
-        de = next((d for d in det_entries
-                   if cx_ - pw / 2.0 < d["bbox"][2]
-                   and d["bbox"][0] < cx_ + pw / 2.0
-                   and cy_ - ph / 2.0 < d["bbox"][3]
-                   and d["bbox"][1] < cy_ + ph / 2.0), None)
-        if de is not None:
-            if de["stacked"]:
-                n_prior_unchipped += 1  # one stack slot per detection
-            else:
-                de["stacked"] = (digits, pfid)
-                n_prior_chips += 1
-            continue
-        fits = not (pw > bw + 4 or ph > bh + 4)
-        if not fits and pfid not in _marked_fids:
-            n_prior_unchipped += 1
-            continue
-        bx0 = _fit(cx_ - pw / 2.0, pw, W)
-        if fits:
-            by0 = _fit(cy_ - ph / 2.0, ph, H)
-        else:
-            by0 = _fit(cy_ - bh / 2.0 - ph - 4, ph, H)
-            _leader((bx0 + pw // 2, by0 + ph), (int(cx_), int(cy_)), _tan, 2)
-        glyphs.append((bx0, by0, pw, ph, digits, th, _tan, pfid))
-        n_prior_chips += 1
+    glyphs, n_prior_chips, n_prior_unchipped = _prior_chips(
+        rgb, prior_chip_cands, det_entries, _marked_fids, _tan)
 
     # Detections last, over the building fills: cell fill, tan hatch on a
     # surveyed footprint, the dN chip and any stacked prior chip.
@@ -351,41 +406,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                       sum(p_[1] for p_ in _inw) / len(_inw)),
                 str(_f["name"])))
 
-    # Glyphs in queue order, never overlapping: a colliding glyph takes the
-    # least crowded diagonal offset (a moved one gets a leader); one with no
-    # free offset is dropped and its prior fid recorded. A pill backdrop
-    # draws only off the chip's own colour.
-    placed: list = []
-    undrawn: set = set()
-    for gx, gy, pw, ph, txt, th, fill, pfid in glyphs:
-        ax_, ay_ = float(gx + pw / 2.0), float(gy + ph / 2.0)
-        cands = [(gx, gy)] + [
-            (ax_ + sx_ * 6 + (0 if sx_ > 0 else -pw),
-             ay_ + sy_ * 6 + (0 if sy_ > 0 else -ph))
-            for sx_, sy_ in ((1, -1), (1, 1), (-1, -1), (-1, 1))]
-        scored = []
-        for qx, qy in cands:
-            qx = int(min(max(qx, 1), W - pw - 1))
-            qy = int(min(max(qy, 1), H - ph - 1))
-            bb = (qx, qy, qx + pw, qy + ph)
-            scored.append((sum(
-                max(0, min(bb[2], ob[2]) - max(bb[0], ob[0]))
-                * max(0, min(bb[3], ob[3]) - max(bb[1], ob[1]))
-                for ob in placed), bb))
-        crowd, box = min(scored, key=lambda c: c[0])
-        if crowd > 0:
-            if pfid is not None:
-                undrawn.add(pfid)
-            continue
-        gx, gy = box[0], box[1]
-        placed.append(box)
-        if ((gx + pw / 2.0 - ax_) ** 2 + (gy + ph / 2.0 - ay_) ** 2) ** 0.5 > 12.0:
-            _leader((int(gx + pw / 2.0), int(gy + ph / 2.0)),
-                    (int(ax_), int(ay_)), fill, 3)
-        under = rgb[int(min(max(gy + ph // 2, 0), H - 1)),
-                    int(min(max(gx + pw // 2, 0), W - 1))]
-        on_own_ink = sum(abs(int(under[i]) - fill[i]) for i in range(3)) <= 24
-        _label(txt, gx, gy, pw, ph, th, None if on_own_ink else fill, _CHIP_TH)
+    placed, undrawn = _place_glyphs(rgb, glyphs)
 
     _seen_names: set = set()
     for _px, _py, _lab in _name_cands:
@@ -401,7 +422,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
                for q in placed):
             continue          # overlapping label: drop rather than stack
         placed.append(_box)
-        _label(_txt, _x0, _y0, _pw, _ph, _th, (250, 250, 250), 1)
+        _label(rgb, _txt, _x0, _y0, _pw, _ph, _th, (250, 250, 250), 1)
 
     try:
         jp = render_look_overlay(
