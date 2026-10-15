@@ -21,15 +21,22 @@ class BlockAssets:
     base_features: dict  # Prebaked features dict, loaded once per block.
 
 
+def missing_bake(stem: str) -> str | None:
+    """What the bake at ``stem`` lacks for an episode to load, or None."""
+    meta_path, feat_path = Path(f"{stem}_meta.json"), Path(f"{stem}_features.json")
+    if not meta_path.exists():
+        return f"Missing {meta_path}. Run benchmarks/citynav/data_prep/bake_tiles.sh for this block first."
+    if not feat_path.exists():
+        return f"Missing {feat_path}: re-bake this block (benchmarks/citynav/data_prep/bake_tiles.sh)."
+    return None
+
+
 def load_episode_assets(map_name: str) -> BlockAssets:
     """Load the episode's per-block bakes."""
     stem = tile_stem(map_name)
-    meta_path = Path(f"{stem}_meta.json")
-    if not meta_path.exists():
-        raise FileNotFoundError(
-            f"Missing {meta_path}. Run benchmarks/citynav/data_prep/bake_tiles.sh for this block first."
-        )
-    meta = json.loads(meta_path.read_text())
+    if why := missing_bake(stem):
+        raise FileNotFoundError(why)
+    meta = json.loads(Path(f"{stem}_meta.json").read_text())
     bounds = WorldBounds(
         x_min=meta["bounds"]["x_min"],
         y_min=meta["bounds"]["y_min"],
@@ -43,11 +50,6 @@ def load_episode_assets(map_name: str) -> BlockAssets:
     # objects.json (that would hand the reasoner ground-truth geometry); the
     # bake drops the CityRefer descriptions (bake/city.py _PRIVILEGED_KEYS).
     feat_path = Path(f"{stem}_features.json")
-    if not feat_path.exists():
-        raise FileNotFoundError(
-            f"Missing {feat_path}: re-bake this block "
-            f"(benchmarks/citynav/data_prep/bake_tiles.sh)."
-        )
     base_features = json.loads(feat_path.read_text())
     assert_current_tile_schema(base_features, str(feat_path))
 

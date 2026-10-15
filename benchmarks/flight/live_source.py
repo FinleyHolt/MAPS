@@ -650,12 +650,16 @@ class LiveSource:
 
 
 def check_map(tiles_dir, map_name: str) -> None:
-    """Refuse a map a fix cannot be placed on (no georef under ``tiles_dir``)
-    or a floor cannot be read for, before any run folder is opened."""
+    """Refuse a map a fix cannot be placed on (no georef under ``tiles_dir``),
+    an episode cannot load on (a bake file missing) or a floor cannot be read
+    for, before any run folder is opened."""
+    from benchmarks.citynav.run_benchmark.assets import missing_bake  # noqa: PLC0415
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
 
     if lonlat_to_local(Path(tiles_dir), map_name, 0.0, 0.0) is None:
         raise ValueError(f"{map_name} carries no georef under {tiles_dir}: a fix cannot be placed in the tile frame")
+    if why := missing_bake(str(Path(tiles_dir) / map_name)):
+        raise ValueError(why)
     if map_name not in GROUND_LEVEL:
         raise ValueError(f"{map_name} has no floor in GROUND_LEVEL: no bench declares it")
     if map_name not in FLOOR_MSL_M:

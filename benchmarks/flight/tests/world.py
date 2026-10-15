@@ -21,7 +21,8 @@ AGL_M = 914.4
 
 def build(root: Path) -> tuple[Path, Path]:
     """``(tiles_dir, raster_dir)`` under ``root``: ``calcity_meta.json`` with
-    bounds and georef, and the ``calcity_rgb.tif`` / ``calcity.tif`` pair."""
+    bounds and georef, an empty ``calcity_features.json``, and the
+    ``calcity_rgb.tif`` / ``calcity.tif`` pair."""
     import cv2
 
     tiles, raster = root / "tiles", root / "raster"
@@ -30,6 +31,7 @@ def build(root: Path) -> tuple[Path, Path]:
     (tiles / "calcity_meta.json").write_text(json.dumps({
         "map_name": "calcity", "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": SIZE_M, "y_max": SIZE_M},
         "georef": {"crs_utm_epsg": 32611, "origin_e": ORIGIN_E, "origin_n": ORIGIN_N}}))
+    (tiles / "calcity_features.json").write_text(json.dumps({"prior": []}))
     n = int(SIZE_M / PX_M)
     rng = np.random.default_rng(7)
     rgb = np.full((n, n, 3), 140, np.uint8)

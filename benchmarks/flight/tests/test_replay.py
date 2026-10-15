@@ -108,6 +108,29 @@ def test_a_replay_over_a_bake_with_no_georef_is_refused_before_its_sortie_folder
     assert not (out / "s").exists()
 
 
+def test_a_replay_over_a_bake_with_no_features_is_refused_before_its_sortie_folder_is_opened(built, tmp_path,
+                                                                                             monkeypatch):
+    import shutil
+
+    import benchmarks.calcity
+    from benchmarks.citynav import paths
+
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    shutil.copy(built[0] / "calcity_meta.json", tiles)
+    monkeypatch.setattr(benchmarks.calcity, "use", lambda: None)
+    monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
+    monkeypatch.setattr(paths, "TILES_DIR", tiles)
+    monkeypatch.setattr(R, "ReplayMission", lambda **kw: pytest.fail("the mission was built"))
+    rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run",
+                      row={"episode_id": "calcity::t", "start_xy": [0, 0]}, params={}, requests=[], responses=[],
+                      conversation=[], frames=[{"altitude_m": 1990.0}])
+    out = tmp_path / "out"
+    with pytest.raises(ValueError, match="calcity_features.json"):
+        R.fly(rec, out, bank=[])
+    assert not (out / "s").exists()
+
+
 def test_a_replay_flies_at_the_recorded_height_and_a_forced_one_at_the_config_s(tmp_path):
     """The recorded run's height above ground: its observations' camera
     heights, else its GNSS track over the run; forced, the config's start
