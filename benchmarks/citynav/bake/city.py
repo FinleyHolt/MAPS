@@ -96,55 +96,18 @@ def _raster_bounds(block: str) -> tuple[float, float, float, float]:
     return (float(b.left), float(b.bottom), float(b.right), float(b.top))
 
 
-def _block_frame(name: str, tiles_dir: Path, *, imagery: bool
-                 ) -> tuple[dict[str, Any], WorldBounds, tuple[int, int], float]:
-    """``(caller_keys, bounds, grid_shape, cell_size_m)``: the grid a block bakes over.
-
-    A CityNav block is its raster's extent on ``CELL_SIZE_M`` cells. A block
-    with no CityNav imagery (``imagery=False``, Cal City) reads the
-    ``<name>_meta.json`` its caller wrote: bounds, grid_shape, cell_size_m and
-    the keys the bake keeps, ``coordinate_frame`` (the y-north guard
-    ``benchmarks.calcity.paths`` reads) and ``georef``.
-    """
-    if imagery:
-        x_min, y_min, x_max, y_max = _raster_bounds(name)
-        # Rows run north-to-south, so grid_shape is (rows, cols) = (y, x).
-        grid_shape = (int(round((y_max - y_min) / CELL_SIZE_M)),
-                      int(round((x_max - x_min) / CELL_SIZE_M)))
-        return {}, WorldBounds(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max), grid_shape, CELL_SIZE_M
-    meta_path = tiles_dir / f"{name}_meta.json"
-    if not meta_path.is_file():
-        raise BakeError(f"missing {meta_path}: a block without CityNav imagery bakes over its caller's meta")
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    try:
-        b = meta["bounds"]
-        bounds = WorldBounds(x_min=float(b["x_min"]), y_min=float(b["y_min"]),
-                             x_max=float(b["x_max"]), y_max=float(b["y_max"]))
-        grid_shape = (int(meta["grid_shape"][0]), int(meta["grid_shape"][1]))
-        cell_size_m = float(meta["cell_size_m"])
-    except (KeyError, TypeError, ValueError, IndexError) as exc:
-        raise BakeError(f"{meta_path} is missing valid bounds/grid metadata") from exc
-    return ({k: meta[k] for k in ("coordinate_frame", "georef") if k in meta},
-            bounds, grid_shape, cell_size_m)
-
-
 def _cell_coverage(
     block: str,
     bounds: WorldBounds,
     grid_shape: tuple[int, int],
     cell_size_m: float,
-    *,
-    imagery: bool = True,
 ) -> np.ndarray | None:
     """Boolean ``grid_shape`` mask of where the block's IMAGERY has pixels: a
     cell is covered iff any pixel of the filled ortho under it has
     ``alpha > 0``, the runtime observation's no-data rule. ``None`` (the
     bounds rectangle is the coverage) when the ortho's geometry disagrees
-    with the block grid, or ``imagery=False`` (Cal City); an unreadable
-    ortho is a ``BakeError``.
+    with the block grid; an unreadable ortho is a ``BakeError``.
     """
-    if not imagery:
-        return None
     from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
     from maps.perception.ortho.camera_model import load_ortho_or_rasters
 
@@ -605,41 +568,47 @@ def bake_block(
     records: list[tuple[dict[str, Any], dict[str, Any]]],
     tiles_dir: str | Path = TILES_DIR,
     *,
-    imagery: bool = True,
-    provenance: dict[str, Any] | None = None,
+    bounds: WorldBounds | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> dict[str, int]:
     """Bake ``records`` into block ``name``'s window, write its sidecars and
     return their counts, ``{"features", "nodes"}``.
 
-    ``imagery=False`` is a block with no CityNav raster: its caller's meta
-    sidecar's grid and the bounds rectangle's coverage. A ``provenance`` dict
-    (a city-frame cache baked per block) is written to the meta as given.
+    The grid is ``CELL_SIZE_M`` cells over the block's raster extent, covered
+    where its imagery has pixels; a block with no CityNav raster (Cal City)
+    passes its ``bounds``, all covered. ``meta`` keys (a caller's
+    ``coordinate_frame`` and ``georef``, a city-cache bake's ``provenance``)
+    are written to the meta sidecar after the grid, as given.
     """
     tiles_path = Path(tiles_dir).expanduser().resolve()
-    caller_keys, bounds, grid_shape, cell_size_m = _block_frame(name, tiles_path, imagery=imagery)
-    coverage = _cell_coverage(name, bounds, grid_shape, cell_size_m, imagery=imagery)
+    imagery = bounds is None
+    if bounds is None:
+        x_min, y_min, x_max, y_max = _raster_bounds(name)
+        bounds = WorldBounds(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max)
+    # Rows run north-to-south, so grid_shape is (rows, cols) = (y, x).
+    grid_shape = (int(round((bounds.y_max - bounds.y_min) / CELL_SIZE_M)),
+                  int(round((bounds.x_max - bounds.x_min) / CELL_SIZE_M)))
+    coverage = _cell_coverage(name, bounds, grid_shape, CELL_SIZE_M) if imagery else None
     features = _features_from_records(
-        records, bounds=bounds, grid_shape=grid_shape, cell_size_m=cell_size_m, coverage=coverage,
+        records, bounds=bounds, grid_shape=grid_shape, cell_size_m=CELL_SIZE_M, coverage=coverage,
     )
     if not features:
         log.warning("%s: no OSM records rasterized onto the block imagery", name)
 
     tiles_path.mkdir(parents=True, exist_ok=True)
     stem = tiles_path / name
-    graph = build_object_graph(features, cell_size_m=cell_size_m)
+    graph = build_object_graph(features, cell_size_m=CELL_SIZE_M)
     save_graph(graph, str(stem))
     Path(f"{stem}_features.json").write_text(
         json.dumps(features, separators=(",", ":")), encoding="utf-8"
     )
     out_meta: dict[str, Any] = {
         "grid_shape": [int(grid_shape[0]), int(grid_shape[1])],
-        "cell_size_m": float(cell_size_m),
+        "cell_size_m": CELL_SIZE_M,
         "bounds": {"x_min": bounds.x_min, "y_min": bounds.y_min,
                    "x_max": bounds.x_max, "y_max": bounds.y_max},
-        **caller_keys,
+        **(meta or {}),
     }
-    if provenance is not None:
-        out_meta["provenance"] = provenance
     Path(f"{stem}_meta.json").write_text(json.dumps(out_meta, indent=2), encoding="utf-8")
     stats = {"features": sum(len(v) for v in features.values()), "nodes": len(graph.nodes)}
     log.info("wrote %s bake: %d features, %d nodes", name, stats["features"], stats["nodes"])
@@ -668,7 +637,7 @@ def bake_city(city: str, osm_cache: str | Path, tiles_dir: str | Path = TILES_DI
         "georef": (cache_meta or {}).get("georef_provenance"),
     }
     for block in blocks:
-        bake_block(block, records, tiles_path, provenance=provenance)
+        bake_block(block, records, tiles_path, meta={"provenance": provenance})
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -57,12 +57,6 @@ BUNDLE_BBOX_WGS84: tuple[float, float, float, float] = (
 # ``GROUND_LEVEL["calcity"]`` carries the same value.
 GROUND_LEVEL_M = 0.0
 
-# Tile grid resolution for the feature-cell grid (the CityNav 2 m
-# default). The RGB raster is baked far finer (imagery-native ~0.5 m) in
-# build_rgbd_ortho; this scalar sizes the _features.json cell grid.
-CELL_SIZE_M = 2.0
-
-
 def bundle_root() -> Path:
     """The world bundle directory (``CALCITY_BUNDLE`` env override), else
     ``bundle/`` under the Cal City root."""

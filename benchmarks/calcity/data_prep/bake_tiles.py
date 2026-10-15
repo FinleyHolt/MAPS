@@ -14,46 +14,15 @@ substrate (episode ``object_ids``); the prior is baked from the bundle alone.
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 from typing import Any
 
 from benchmarks.calcity import paths
-from benchmarks.calcity.data_prep.aoi import (
-    AOI_BBOX,
-    CELL_SIZE_M,
-    build_local_frame,
-    bundle_root,
-)
+from benchmarks.calcity.data_prep.aoi import AOI_BBOX, build_local_frame, bundle_root
 from benchmarks.calcity.data_prep.bundle import load_features_local
 from benchmarks.citynav.bake import city
 from benchmarks.citynav.bake.city import _normalise_props
-
-
-def _write_meta(map_name: str, tiles_dir: Path) -> Path:
-    frame = build_local_frame(AOI_BBOX)
-    width = round(frame.width_m / CELL_SIZE_M)
-    height = round(frame.height_m / CELL_SIZE_M)
-    payload = {
-        "grid_shape": [height, width],
-        "cell_size_m": CELL_SIZE_M,
-        "coordinate_frame": {"y_axis": "north"},
-        "bounds": {
-            "x_min": 0.0,
-            "y_min": 0.0,
-            "x_max": round(frame.width_m, 4),
-            "y_max": round(frame.height_m, 4),
-        },
-        "georef": {
-            "crs_utm_epsg": int(frame.crs_utm.to_epsg()),
-            "origin_e": round(frame.origin_e, 4),
-            "origin_n": round(frame.origin_n, 4),
-        },
-    }
-    tiles_dir.mkdir(parents=True, exist_ok=True)
-    path = tiles_dir / f"{map_name}_meta.json"
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    return path
+from benchmarks.citynav.eval import WorldBounds
 
 
 def local_osm_records(bundle: Path) -> list[tuple[dict[str, Any], dict[str, Any]]]:
@@ -84,11 +53,24 @@ def local_osm_records(bundle: Path) -> list[tuple[dict[str, Any], dict[str, Any]
 
 
 def bake_block(bundle: Path, tiles_dir: Path, map_name: str) -> dict[str, Any]:
+    """Bake the bundle over the AOI's local frame, its meta carrying the y-north
+    ``coordinate_frame`` (``benchmarks.calcity.paths``) and the UTM ``georef``."""
     records = local_osm_records(bundle)
     if not records:
         raise ValueError(f"{bundle} carries no OSM features over {map_name!r}")
-    _write_meta(map_name, tiles_dir)
-    return city.bake_block(map_name, records, tiles_dir, imagery=False)
+    frame = build_local_frame(AOI_BBOX)
+    return city.bake_block(
+        map_name, records, tiles_dir,
+        bounds=WorldBounds(x_min=0.0, y_min=0.0, x_max=round(frame.width_m, 4), y_max=round(frame.height_m, 4)),
+        meta={
+            "coordinate_frame": {"y_axis": "north"},
+            "georef": {
+                "crs_utm_epsg": int(frame.crs_utm.to_epsg()),
+                "origin_e": round(frame.origin_e, 4),
+                "origin_n": round(frame.origin_n, 4),
+            },
+        },
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

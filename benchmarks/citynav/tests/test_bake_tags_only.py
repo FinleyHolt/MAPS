@@ -11,7 +11,11 @@ from __future__ import annotations
 import json
 
 from benchmarks.citynav.bake.city import bake_block
+from benchmarks.citynav.eval import WorldBounds
 from maps.sws.graph.io import load_graph
+
+
+TOY = WorldBounds(x_min=0.0, y_min=0.0, x_max=40.0, y_max=40.0)
 
 
 def _poly(x0, y0, x1, y1):
@@ -34,11 +38,7 @@ _RECORDS = [
 
 def _bake(tmp_path):
     """A 40 m x 40 m map of 2 m cells; returns its prior rows, meta and graph."""
-    (tmp_path / "toy_meta.json").write_text(json.dumps({
-        "cell_size_m": 2.0, "grid_shape": [20, 20],
-        "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 40.0, "y_max": 40.0},
-    }))
-    bake_block("toy", list(_RECORDS), tmp_path, imagery=False)
+    bake_block("toy", list(_RECORDS), tmp_path, bounds=TOY)
     rows = json.loads((tmp_path / "toy_features.json").read_text())["prior"]
     meta = json.loads((tmp_path / "toy_meta.json").read_text())
     return rows, meta, load_graph(str(tmp_path / "toy"))
@@ -132,14 +132,10 @@ def test_the_bake_keeps_whatever_geometry_it_is_given():
 def test_a_point_just_outside_the_window_is_dropped(tmp_path):
     """A point 1 m west or south of the map lies in no cell; it is not
     pulled onto the edge column or row."""
-    (tmp_path / "toy_meta.json").write_text(json.dumps({
-        "cell_size_m": 2.0, "grid_shape": [20, 20],
-        "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 40.0, "y_max": 40.0},
-    }))
     bake_block("toy", [
         ({"tourism": "artwork", "osm_id": "n1"}, {"type": "Point", "coordinates": [30, 30]}),
         ({"tourism": "artwork", "osm_id": "w"}, {"type": "Point", "coordinates": [-1, 30]}),
         ({"tourism": "artwork", "osm_id": "s"}, {"type": "Point", "coordinates": [30, -1]}),
-    ], tmp_path, imagery=False)
+    ], tmp_path, bounds=TOY)
     rows = json.loads((tmp_path / "toy_features.json").read_text())["prior"]
     assert {e["osm_id"] for e in rows} == {"n1"}, rows

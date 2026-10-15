@@ -43,21 +43,17 @@ RECORDS = [
 
 def _bake(tmp_path, monkeypatch, *, imagery: bool) -> dict:
     """An 8 m x 8 m block of 2 m cells. ``imagery``: a raster whose north half
-    alone has imagery; else a block with no CityNav imagery over its caller's
-    meta (the bounds rectangle is the coverage)."""
+    alone has imagery; else a block with no CityNav imagery baked over its
+    bounds (the bounds rectangle is the coverage)."""
     tiles = tmp_path / "tiles"
     tiles.mkdir()
     if imagery:
         rgb = np.zeros((80, 80, 3), dtype=np.uint8)
         rgb[:40, :] = 90  # raster row 0 is y_max: the NORTH half has imagery
         write_rasters(tmp_path / "rasters", BLOCK, rgb, np.zeros((80, 80), dtype=np.float32))
-    else:
-        (tiles / f"{BLOCK}_meta.json").write_text(json.dumps({
-            "cell_size_m": 2.0, "grid_shape": [4, 4],
-            "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 8.0, "y_max": 8.0},
-        }))
     monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", tmp_path / "rasters")
-    bake_block(BLOCK, RECORDS, tiles, imagery=imagery)
+    bake_block(BLOCK, RECORDS, tiles,
+               bounds=None if imagery else WorldBounds(x_min=0.0, y_min=0.0, x_max=8.0, y_max=8.0))
     rows = json.loads((tiles / f"{BLOCK}_features.json").read_text())["prior"]
     return {r["osm_id"]: r for r in rows}
 
