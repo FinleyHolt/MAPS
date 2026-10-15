@@ -248,6 +248,12 @@ def closest_approach(path, p) -> tuple[float, dict[str, Any]]:
     return _seg_dist(p, pts[i], pts[i + 1]), path[i] if math.dist(pts[i], p) <= math.dist(pts[i + 1], p) else path[i + 1]
 
 
+def nearest_fix(fixes, p) -> tuple[float, dict[str, Any]]:
+    """Distance from ``p`` to the nearest of ``fixes`` read as points, and that fix."""
+    f = min(fixes, key=lambda f: math.dist((f["x"], f["y"]), p))
+    return math.dist((f["x"], f["y"]), p), f
+
+
 def track_coverage(track, t0: float, t1: float) -> float:
     """The share of ``[t0, t1]`` the recording holds."""
     fixes = _window(track, t0, t1) if t1 > t0 else []
@@ -486,13 +492,14 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     poses = keyframe_poses(bases, t_start, t_end_run, row.get("map_name"))
     if success and len(flown) < 2:
         out["spl_note"] = "undefined: the recording does not cover the run"
-    paths = [(name, p) for name, p in (("GNSS track", flown), ("keyframe poses", poses)) if p]
-    if not paths:
+    # The GNSS track is joined between its fixes; each observation stands alone.
+    cands = ([(closest_approach(flown, target), "GNSS track")] if flown else []) + \
+        ([(nearest_fix(poses, target), "keyframe poses")] if poses else [])
+    if not cands:
         out["track_source"] = "none"
         return out
     # The path the closest approach came off names the track.
-    (d, nearest), out["track_source"] = min(((closest_approach(p, target), name) for name, p in paths),
-                                            key=lambda c: c[0][0])
+    (d, nearest), out["track_source"] = min(cands, key=lambda c: c[0][0])
     out["closest_approach_ft"] = round(d * FT_PER_M, 1)
     agl, out["agl_source"] = _agl(nearest, bases, events, row.get("map_name"))
     if agl is not None:

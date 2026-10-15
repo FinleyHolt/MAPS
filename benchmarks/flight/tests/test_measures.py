@@ -79,9 +79,9 @@ def test_the_measures_score_the_commit_point_against_the_mask_and_the_track_agai
     assert f"turn radius {Q.TURN_RADIUS_FALLBACK_M} m (fallback: no turn read)" in capsys.readouterr().out
 
 
-def _keyframe_run(tmp_path, keyframe_xy, gnss_agl_m=600.0, fixes=5):
+def _keyframe_run(tmp_path, *keyframe_xy, gnss_agl_m=600.0, fixes=5):
     """A run whose recording holds ``fixes`` s far from the target (its fixes' height
-    ``gnss_agl_m``, None for none), plus one keyframe pose at ``keyframe_xy``."""
+    ``gnss_agl_m``, None for none), plus a keyframe pose a second at each ``keyframe_xy``."""
     import datetime as dt
 
     root, truth = tmp_path / "20260101T000000Z", tmp_path / "truth"
@@ -90,9 +90,9 @@ def _keyframe_run(tmp_path, keyframe_xy, gnss_agl_m=600.0, fixes=5):
     (root / "flight_track.jsonl").write_text("".join(
         json.dumps({"t_unix": T0 + k, "x": 5000.0, "y": 0.0, "alt_agl_m": gnss_agl_m, "track_deg": 0.0,
                     "ground_speed_mps": 100.0}) + "\n" for k in range(fixes)))
-    utc = dt.datetime.fromtimestamp(T0 + 300.0, dt.timezone.utc).isoformat()
-    (root / "run1" / "frames.jsonl").write_text(json.dumps({"pose_xy": keyframe_xy, "utc": utc,
-                                                            "altitude_m": 600.0}) + "\n")
+    (root / "run1" / "frames.jsonl").write_text("".join(
+        json.dumps({"pose_xy": xy, "utc": dt.datetime.fromtimestamp(T0 + 300.0 + k, dt.timezone.utc).isoformat(),
+                    "altitude_m": 600.0}) + "\n" for k, xy in enumerate(keyframe_xy)))
     truth.mkdir()
     (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
     (got,), _radius, _turns = Q.collect([root], Q.Truth([truth]))
@@ -123,6 +123,14 @@ def test_an_observation_s_height_above_ground_is_its_altitude_over_the_map_s_gro
     for keyframe_xy, gnss_agl_m in (([120.0, 100.0], 600.0), ([9000.0, 9000.0], None)):
         got = _keyframe_run(tmp_path / str(gnss_agl_m), keyframe_xy, gnss_agl_m=gnss_agl_m)
         assert got["agl_ft"] == round(500.0 * Q.FT_PER_M, 1), got["agl_source"]
+
+
+def test_keyframe_poses_are_read_as_points_not_the_line_between_them(tmp_path):
+    # Two observations 1,500 m either side of the target: the line joining them crosses it.
+    got = _keyframe_run(tmp_path, [-1400.0, 100.0], [1600.0, 100.0], fixes=601)
+    assert got["track_source"] == "keyframe poses"
+    assert got["closest_approach_ft"] == round(1500.0 * Q.FT_PER_M, 1)
+    assert got["oracle_success"] is False
 
 
 def test_a_thin_recording_with_no_pose_near_the_target_cannot_show_a_miss(tmp_path):
