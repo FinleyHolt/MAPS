@@ -197,6 +197,16 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
         bs[b] += bool(m.get("SR"))
     print("by bucket: " + "   ".join(_label(k, bs[k], bt[k]) for k in _BUCKETS if bt[k]))
 
+    # SR by the row's intel quality (Cal City), as the flight measures' by_intel_quality.
+    qt: Counter = Counter()
+    qs: Counter = Counter()
+    for m in scored.values():
+        q = m.get("intel_quality") or "?"
+        qt[q] += 1
+        qs[q] += bool(m.get("SR"))
+    if set(qt) != {"?"}:
+        print("by intel quality: " + "   ".join(_label(k, qs[k], qt[k]) for k in ("G", "M", "P", "?") if qt[k]))
+
     # Commit provenance (prior landmark, runtime detection, world point, or none).
     prov = Counter(m.get("committed_provenance") or "none" for m in scored.values())
     print("provenance: " + "  ".join(f"{k}={v}" for k, v in sorted(prov.items(), key=lambda kv: (-kv[1], kv[0]))))

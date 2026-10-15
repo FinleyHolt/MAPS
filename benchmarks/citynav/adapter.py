@@ -43,6 +43,9 @@ class CityNavEpisode:
     target_mask: list[tuple[float, float]] | None  # hand-labeled GT polygon
     #: Upstream's start yaw as a heading (:func:`start_heading_deg`).
     start_heading_deg: float = 0.0
+    #: The row's intel quality, G, M or P (a Cal City row's graded candidate
+    #: count: one, two to five, six or more); None on a row that carries none.
+    intel_quality: str | None = None
 
 
 def load_split(split_file: Path) -> list[dict]:
@@ -169,6 +172,7 @@ def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
         target_xy=(tx, ty),
         target_object_ids=list(row.get("object_ids") or []),
         target_mask=target_mask,
+        intel_quality=row.get("intel_quality"),
     )
 
 

@@ -343,6 +343,7 @@ def run_episode(
                            commit_xy=commit_xy, flew=bool(flights))
     # ``referent_bucket`` is a noisy text proxy (regex over the description).
     scores["referent_bucket"] = classify_referent(episode.description)
+    scores["intel_quality"] = episode.intel_quality
     scores["steps_taken"] = steps_taken
     # What the episode spent on the LLM, at row size, read after the mission
     # from its transcript; a mission that never flew spent turns too.

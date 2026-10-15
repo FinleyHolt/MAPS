@@ -220,3 +220,17 @@ def test_the_provenance_line_orders_ties_by_name(tmp_path, capsys):
         for i, prov in enumerate(("point", "detection", "point", "detection", "landmark"))))
     report(root)
     assert "provenance: detection=2  point=2  landmark=1" in capsys.readouterr().out
+
+
+def test_the_report_splits_sr_by_intel_quality_where_rows_carry_it(tmp_path, capsys):
+    """A Cal City row records its corpus row's intel quality; the report breaks SR out by it,
+    and a run whose rows carry none prints no such line."""
+    rows_ = [ledger_row(f"e::{i}#{i}", f"20260725_1100{i:02d}", sr) for i, sr in enumerate([1, 0, 1, 0, 0])]
+    for r, q in zip(rows_, ["G", "G", "M", "M", None]):
+        r["metrics"]["intel_quality"] = q
+    write_ledger(tmp_path / "q", *rows_)
+    report(tmp_path / "q")
+    assert "by intel quality: G:1/2(50%)   M:1/2(50%)   ?:0/1(0%)" in capsys.readouterr().out
+    write_ledger(tmp_path / "n", ledger_row("e::1#1", "20260725_110000", 1))
+    report(tmp_path / "n")
+    assert "intel quality" not in capsys.readouterr().out
