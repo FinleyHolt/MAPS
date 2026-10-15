@@ -132,18 +132,18 @@ def _crop_slots(messages: list[dict]) -> list[tuple[int, int]]:
 
 
 def _evict_crops(
-    messages: list[dict], *, shed_tokens: int, current: bool
+    messages: list[dict], *, shed_tokens: int, newest: bool
 ) -> tuple[list[dict], int, int]:
     """``(messages, n_evicted, tokens_freed)``: crops replaced by
     :data:`_EVICTED_CROP_TEXT`, oldest first, until ``shed_tokens`` are freed;
     every priced crop before the newest crop-bearing message, or with
-    ``current`` that message's crops but its newest. Nothing evicted returns
+    ``newest`` that message's crops but its newest. Nothing evicted returns
     the input."""
     slots = _crop_slots(messages)
     if not slots:
         return messages, 0, 0
     last = slots[-1][0]
-    if current:
+    if newest:
         slots = [s for s in slots if s[0] == last][:-1]
     else:
         slots = [(i, j) for i, j in slots
@@ -564,7 +564,7 @@ def compact_transcript(
     n_evicted = 0
     if output_tokens > target_input_tokens:
         out, n_evicted, freed = _evict_crops(
-            out, shed_tokens=output_tokens - target_input_tokens, current=False
+            out, shed_tokens=output_tokens - target_input_tokens, newest=False
         )
         if n_evicted:
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
@@ -574,17 +574,17 @@ def compact_transcript(
             )
 
     # Step 7.
-    evicted_current = 0
+    evicted_newest = 0
     if output_tokens > target_input_tokens:
-        out, evicted_current, freed_current = _evict_crops(
-            out, shed_tokens=output_tokens - target_input_tokens, current=True
+        out, evicted_newest, freed_newest = _evict_crops(
+            out, shed_tokens=output_tokens - target_input_tokens, newest=True
         )
-        if evicted_current:
+        if evicted_newest:
             output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
             log.info(
-                "compaction thinned the current turn: %d crop(s), "
-                "freed ~%d tok -> %s/%d",
-                evicted_current, freed_current, output_tokens,
+                "compaction evicted %d of the newest crop-bearing message's "
+                "crops, freed ~%d tok -> %s/%d",
+                evicted_newest, freed_newest, output_tokens,
                 target_input_tokens,
             )
 
@@ -608,9 +608,9 @@ def compact_transcript(
         raise CompactionInfeasible(
             f"cleared {len(cleared)} stale dump(s), degraded "
             f"{degraded_dumps} dump(s), folded {folded_turns} spent turn(s), "
-            f"evicted {n_evicted} stale crop(s) AND thinned {evicted_current} "
-            f"current-turn crop(s); tokens={output_tokens} still exceeds "
-            f"target={target_input_tokens} "
+            f"evicted {n_evicted} stale crop(s) AND {evicted_newest} of the "
+            f"newest crop-bearing message's crops; tokens={output_tokens} "
+            f"still exceeds target={target_input_tokens} "
             f"(input_tokens={input_tokens}); largest: {anatomy}")
 
     _validate_invariants(out)

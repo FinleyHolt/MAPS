@@ -221,7 +221,7 @@ def test_stale_crops_go_oldest_first_and_the_current_turn_keeps_its_own():
     assert out[3] == msgs[3] and out[4] == msgs[4]
 
 
-def test_the_current_turn_is_thinned_last_and_keeps_its_newest_crop():
+def test_the_newest_crop_bearing_message_is_thinned_last_and_keeps_its_newest_crop():
     msgs = _head() + [_look(_crop(1)), _look(_crop(3), _crop(3), _crop(1)),
                       {"role": "user", "content": "x"}]
     out = _compact(msgs, _est(msgs) - 2 * C.image_tokens_of(_crop(3)))
