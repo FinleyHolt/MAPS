@@ -8,7 +8,6 @@ import json
 import logging
 import re
 
-from maps.search.analyze_scene.geom_compute import normalize_color as _normalize_color
 from maps.search.analyze_scene.geom_program import (
     ProgramError as _ProgramError,
     _is_color_column_key,
@@ -22,7 +21,7 @@ log = logging.getLogger(__name__)
 
 
 def _preflight_color_note() -> str:
-    """Served on a preflight color-column request that attached to no row:
+    """Served on a refused preflight program that names a color column:
     before landing no row carries perceived color."""
     return (("nothing is detected before landing" if withheld("prior")
              else "priors carry no perceived color before landing")
@@ -30,17 +29,13 @@ def _preflight_color_note() -> str:
               "after arrival.")
 
 
-def _color_words_of_op(op: dict) -> list[str]:
-    """The palette words this op requests a color column for (a filter key,
-    a score_by emphasis key)."""
+def _requests_color(op: dict) -> bool:
+    """Whether this op names a color column (a filter key, a score_by
+    emphasis key)."""
     args = op["args"]
-    words: list[str] = []
-    for k in [args.get("key")] + [e["key"] for e in args.get("emphasis") or []]:
-        if _is_color_column_key(k):
-            c = _normalize_color(k[len("color_"):].strip().lower())
-            if c and c not in words:
-                words.append(c)
-    return words
+    return any(_is_color_column_key(k) and k[len("color_"):].strip()
+               for k in [args.get("key")]
+               + [e["key"] for e in args.get("emphasis") or []])
 
 
 def run_ops(ops: list, *, namespace: dict,
@@ -63,7 +58,7 @@ def run_ops(ops: list, *, namespace: dict,
         _err = str(exc)
         if raw_sink is not None:
             raw_sink["error_op"] = getattr(exc, "op", "")
-        if preflight and any(_color_words_of_op(op) for op in ops):
+        if preflight and any(_requests_color(op) for op in ops):
             # The color request errored before any envelope existed (e.g.
             # the emphasis absent-color guard) -- the phase fact rides the
             # error so "no color" reads as WHEN, not broken.
@@ -77,21 +72,6 @@ def run_ops(ops: list, *, namespace: dict,
     # ``answer_ref`` names the one table a plan returns; the other ops' hints
     # ride it.
     out["results"] = _compact_results(_raw_results, answer_ref=answer_ref)
-    if preflight:
-        # A color-column request whose raw rows carry none of its columns
-        # gets the phase note.
-        for _op in ops:
-            _words = _color_words_of_op(_op)
-            if not _words:
-                continue
-            _rows = _raw_results.get(_op.get("ref"))
-            _attached = any(
-                any(_it.get("color_" + _w) is not None for _w in _words)
-                for _it in _rows)
-            _env = out["results"].get(_op.get("ref"))
-            if not _attached and isinstance(_env, dict):
-                _env["hint"] = join_hints(_env.get("hint"),
-                                          _preflight_color_note())
     return out
 
 
