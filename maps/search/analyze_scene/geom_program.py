@@ -704,8 +704,8 @@ def _attach_standing_columns(items, frame, with_distance=False):
     fx, fy = (float(frame["from_xy"][0]), float(frame["from_xy"][1]))
     ux, uy = (float(frame["up_unit"][0]), float(frame["up_unit"][1]))
     rx, ry = G.cw((ux, uy))
-    left_k, right_k = f"left of {h}", f"right of {h}"
-    ahead_k, behind_k = f"ahead of {h}", f"behind {h}"
+    left_k, right_k, ahead_k, behind_k = (
+        f"{p}{h}" for p in STANDING_SIDE_PREFIXES)
     dist_k = f"distance to {h}"
     out = []
     for it in items:
@@ -1080,8 +1080,7 @@ def _find(cx, a):
     if cx.standing is not None and rows:
         rows = _attach_standing_columns(rows, cx.standing)
         h = str(cx.standing["handle"])
-        op_cols = [f"left of {h}", f"right of {h}", f"ahead of {h}",
-                   f"behind {h}"]
+        op_cols = [f"{p}{h}" for p in STANDING_SIDE_PREFIXES]
     if not rows and query:
         return Result(kind="miss", notes=notes, empty_condition=empty_cond)
     return Result(rows, ordered=matched, name_set=name_set, op_cols=op_cols,
