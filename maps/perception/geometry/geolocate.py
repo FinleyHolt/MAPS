@@ -49,7 +49,7 @@ class TileFrame:
     grid_shape: tuple[int, int]  # (H, W)
 
 
-def _frame_world_xy(
+def frame_world_xy(
     view_corners_xy: tuple, rows: np.ndarray, cols: np.ndarray, frame_shape: tuple[int, int]
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """``(u, v, x, y)`` of frame pixels ``(rows, cols)``: normalised frame
@@ -234,7 +234,7 @@ def project_mask_to_tile_cells_ortho(
     rr, cc = region.rows_cols()
     if rr.size < _MIN_VALID_DEPTH_PIXELS:
         return None
-    _u, _v, xs, ys = _frame_world_xy(view_corners_xy, rr, cc, region.frame_shape)
+    _u, _v, xs, ys = frame_world_xy(view_corners_xy, rr, cc, region.frame_shape)
     return _tile_mask_from_world(xs, ys, tile)
 
 
@@ -279,7 +279,7 @@ def world_contour_from_region(
 
     # cv2 contour points are (x=col, y=row), crop-relative until shifted.
     r0, c0 = region.bbox[0], region.bbox[1]
-    _u, _v, xs, ys = _frame_world_xy(view_corners_xy, approx[:, 1] + r0, approx[:, 0] + c0, region.frame_shape)
+    _u, _v, xs, ys = frame_world_xy(view_corners_xy, approx[:, 1] + r0, approx[:, 0] + c0, region.frame_shape)
     ring = [[round(float(x), 2), round(float(y), 2)] for x, y in zip(xs, ys)]
     return ring + [list(ring[0])]
 
@@ -304,7 +304,7 @@ def project_mask_to_world_ortho(
     rr, cc = region.rows_cols()
     if rr.size == 0:
         return None
-    u, v, xs, ys = _frame_world_xy(view_corners_xy, rr, cc, region.frame_shape)
+    u, v, xs, ys = frame_world_xy(view_corners_xy, rr, cc, region.frame_shape)
 
     # Nearest-neighbour: depth must not blend across building/ground edges.
     hd, wd = depth2d.shape
