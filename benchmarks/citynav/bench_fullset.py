@@ -388,8 +388,8 @@ class Driver:
     def _run_attempt(self, worker_id: int, episode_id: str) -> dict:
         """One attempt in a fresh child: its ledger row, the child's
         ``episode.json`` plus ``worker_id``, ``workdir`` and the wall measured
-        here. ``status`` is ``infra`` for a lost reasoner (``reasoner_down_midrun``),
-        a child that a signal killed with no record (``killed_midrun``), that
+        here. ``status`` is ``infra`` for a lost reasoner or SAM
+        (``reasoner_down_midrun``, ``sam_down_midrun``), a child that a signal killed with no record (``killed_midrun``), that
         exited nonzero with none (``exited N with no record``) or exited clean
         with none (``no_prediction_unclassified``); a record's own ``infra``
         stands; otherwise ``timed_out`` at the cap, else ``ok``.
