@@ -273,11 +273,11 @@ def last_pass(track, xy, t0: float, t1: float, within_m: float) -> tuple[float, 
     return best
 
 
-def keyframe_poses(bases: list[Path], t0: float, t1: float, map_name: str) -> list[dict[str, Any]]:
+def keyframe_poses(frames: list[dict[str, Any]], t0: float, t1: float, map_name: str) -> list[dict[str, Any]]:
     """The centre of each observation the run fused (``frames.jsonl`` ``pose_xy``) and its camera height
     above ``map_name``'s ground (``altitude_m`` is on the tile frame), as track fixes."""
     out = []
-    for f in _frames(bases):
+    for f in frames:
         xy, utc = f.get("pose_xy"), f.get("utc")
         if xy and utc:
             t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
@@ -293,11 +293,11 @@ def frame_agl(frame: dict[str, Any], map_name: str) -> float | None:
     return None if alt is None else float(alt) - GROUND_LEVEL[map_name]
 
 
-def _agl(fix, bases: list[Path], events, map_name: str) -> tuple[float | None, str | None]:
+def _agl(fix, frames: list[dict[str, Any]], events, map_name: str) -> tuple[float | None, str | None]:
     """Height above ground at ``fix``: its own (a GNSS fix or an observation's), else the observations' median, else the waypoints' commanded."""
     if fix.get("alt_agl_m") is not None:
         return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
-    alts = [frame_agl(f, map_name) for f in _frames(bases) if f.get("altitude_m") is not None]
+    alts = [frame_agl(f, map_name) for f in frames if f.get("altitude_m") is not None]
     if alts:
         return statistics.median(alts), "keyframes (median)"
     asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]
@@ -494,7 +494,8 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     # The observations are centred on ground the camera held: they can show the
     # target came within the width where the track does not.
     thin = out["track_coverage"] < SPL_MIN_COVERAGE
-    poses = keyframe_poses(bases, t_start, t_end_run, row.get("map_name"))
+    frames = _frames(bases)
+    poses = keyframe_poses(frames, t_start, t_end_run, row.get("map_name"))
     if success and len(flown) < 2:
         out["spl_note"] = "undefined: the recording does not cover the run"
     # The GNSS track is joined between its fixes; each observation stands alone.
@@ -506,7 +507,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     # The path the closest approach came off names the track.
     (d, nearest), out["track_source"] = min(cands, key=lambda c: c[0][0])
     out["closest_approach_ft"] = round(d * FT_PER_M, 1)
-    agl, out["agl_source"] = _agl(nearest, bases, events, row.get("map_name"))
+    agl, out["agl_source"] = _agl(nearest, frames, events, row.get("map_name"))
     width = 0.0
     if agl is not None:
         out["agl_ft"] = round(agl * FT_PER_M, 1)
