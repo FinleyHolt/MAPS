@@ -1355,7 +1355,7 @@ class _Mission:
         self._code_names.clear()
         self._code_names.update(HANDLE_WORD_RE.findall(code))
         self._code_names.update(
-            v.ref for v in self._mission_py.ns.values()
+            v._ref for v in self._mission_py.ns.values()
             if isinstance(v, _py_surface.Rows))
         self._code_minted.clear()
         self._script_lines += len(code.strip().splitlines())

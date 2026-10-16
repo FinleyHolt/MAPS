@@ -477,19 +477,19 @@ class _Cuts:
 class Row(_Cuts):
     """One selected row: a read-only view of its served columns (attributes,
     ``r["spaced name"]``, ``.get``/``.keys``, ``print``), geometry blobs
-    hidden. ``bind`` is what a slot takes (the fid, or [x, y] for a computed
-    row); ``src`` is the (ref, index) it was indexed from, so showing it
+    hidden. ``_bind`` is what a slot takes (the fid, or [x, y] for a computed
+    row); ``_src`` is the (ref, index) it was indexed from, so showing it
     renders the row."""
 
-    __slots__ = ("bind", "fid", "name", "src", "_row", "_mp")
+    __slots__ = ("_bind", "fid", "name", "_src", "_row", "_mp")
 
     def __init__(self, row: dict, src: tuple | None = None, mp=None):
         object.__setattr__(self, "_row", dict(row))
         object.__setattr__(self, "_mp", mp)  # receipt-note sink, optional
-        self.bind = bind_row(row)
+        self._bind = bind_row(row)
         self.fid = row.get("fid")
         self.name = row.get("name")
-        self.src = src                       # (ref, index) or None
+        self._src = src                       # (ref, index) or None
 
     def distance(self, other) -> float:
         """Metres from this row's footprint to ``other``."""
@@ -614,14 +614,14 @@ class Row(_Cuts):
     # and two views of the same bind are the same place. A Row also equals
     # its own fid string.
     def _eq_key(self):
-        b = self.bind
+        b = self._bind
         return tuple(b) if isinstance(b, list) else b
 
     def __eq__(self, other):
         if isinstance(other, Row):
             return self._eq_key() == other._eq_key()
         if isinstance(other, str):
-            return other == self.fid or other == self.bind
+            return other == self.fid or other == self._bind
         return NotImplemented
 
     def __hash__(self):
@@ -663,32 +663,32 @@ class Rows(_Cuts):
     """A result set behind an executor ref: an index gives a :class:`Row`,
     a slice a window over the same ref, ``len()`` the rows it holds now."""
 
-    __slots__ = ("ref", "spec", "mp", "label")
+    __slots__ = ("_ref", "_spec", "_mp", "_label")
 
     def __init__(self, ref: str, mp: "MissionPython", spec: str = "",
                  label: str = ""):
-        self.ref = ref
-        self.spec = spec
-        self.mp = mp
-        self.label = label          # the call that made it, for refusals
+        self._ref = ref
+        self._spec = spec
+        self._mp = mp
+        self._label = label          # the call that made it, for refusals
 
     def _rows(self) -> list[dict]:
-        rows = self.mp.env.rows_of_ref(self.ref)
-        if self.spec:
-            lo, hi = window_span(self.spec)
+        rows = self._mp.env.rows_of_ref(self._ref)
+        if self._spec:
+            lo, hi = window_span(self._spec)
             rows = rows[lo:hi]
         return rows
 
     def _lo(self) -> int:
         """Where this window starts in the whole ref: a row's ``src`` index
         is into the ref, not the window."""
-        return window_span(self.spec)[0] if self.spec else 0
+        return window_span(self._spec)[0] if self._spec else 0
 
     def __len__(self):
         return len(self._rows())
 
     def _tied(self) -> bool:
-        return bool(not self.spec and self.mp.env.tied_of_ref(self.ref))
+        return bool(not self._spec and self._mp.env.tied_of_ref(self._ref))
 
     def _refuse_tied(self, name: str, what: str):
         """The refusal of an index or a page on a tied view; it names the
@@ -703,25 +703,25 @@ class Rows(_Cuts):
         # every row ties, so an index would read as a choice and be a coin
         # flip.
         if self._tied():
-            self._refuse_tied(self.mp.said_name(self, None),
+            self._refuse_tied(self._mp.said_name(self, None),
                               "is not subscriptable")
         if isinstance(i, slice):
             lo = int(i.start or 0)
             if i.stop is None or i.step not in (None, 1) or lo < 0:
                 raise CodeError("a window is [lo:hi] with both ends")
             hi = int(i.stop)
-            if self.spec:
+            if self._spec:
                 # a slice of a slice composes into absolute indices
-                p_lo, p_hi = window_span(self.spec)
-                held = range(len(self.mp.env.rows_of_ref(self.ref)))[p_lo:p_hi]
+                p_lo, p_hi = window_span(self._spec)
+                held = range(len(self._mp.env.rows_of_ref(self._ref)))[p_lo:p_hi]
                 s = held[lo:hi]
                 if held and not s:
                     raise CodeError(
                         empty_window_refusal(f"[{lo}:{hi}]", len(held)))
                 lo, hi = s.start, s.stop
-            return Rows(self.ref, self.mp, f"[{lo}:{hi}]")
+            return Rows(self._ref, self._mp, f"[{lo}:{hi}]")
         if not isinstance(i, int):
-            name = self.mp.said_name(self, None)
+            name = self._mp.said_name(self, None)
             raise CodeError(
                 f"{name}[{i!r}] did not bind: {name} is a set of rows, "
                 "indexed by an int position"
@@ -729,17 +729,17 @@ class Rows(_Cuts):
                    if isinstance(i, str) else "."))
         rows = self._rows()
         if not (-len(rows) <= i < len(rows)):
-            name = self.mp.said_name(self, None)
+            name = self._mp.said_name(self, None)
             raise CodeError(
                 f"{name}[{i}] did not bind: {name} served {len(rows)} "
                 "row(s) here. " + ("Show it first, then index it." if rows
                                    else "There is no row to index."))
-        return Row(rows[i], src=(self.ref, self._lo() + i % len(rows)),
-                   mp=self.mp)
+        return Row(rows[i], src=(self._ref, self._lo() + i % len(rows)),
+                   mp=self._mp)
 
     def __iter__(self):
         lo = self._lo()
-        return (Row(r, src=(self.ref, lo + i), mp=self.mp)
+        return (Row(r, src=(self._ref, lo + i), mp=self._mp)
                 for i, r in enumerate(self._rows()))
 
     # THE MATCH TIERS AS ATTRIBUTES: the agent chooses a find's stratum by
@@ -761,16 +761,16 @@ class Rows(_Cuts):
         return self._stratum("fuzzy")
 
     def _stratum(self, tier: str) -> "Rows":
-        src = self if not self.spec else self.mp._materialize(self)
-        p = self.mp._program(src.ref)
-        name = self.mp.spelling(self)
-        return Rows(self.mp._analyze(
-            p, p.add("stratum", {"items": src.ref, "tier": tier}),
-            shown=name and f"{name}.{tier}"), self.mp)
+        src = self if not self._spec else self._mp._materialize(self)
+        p = self._mp._program(src._ref)
+        name = self._mp.spelling(self)
+        return Rows(self._mp._analyze(
+            p, p.add("stratum", {"items": src._ref, "tier": tier}),
+            shown=name and f"{name}.{tier}"), self._mp)
 
     # -- cut and order: many filters, ONE ordering ------------------------
     def _target(self):
-        return self.mp, self if not self.spec else self.mp._materialize(self)
+        return self._mp, self if not self._spec else self._mp._materialize(self)
 
     def filter(self, pred=None, *, near=None, within=None, dwithin=None,
                north_of=None, south_of=None, east_of=None, west_of=None,
@@ -792,7 +792,7 @@ class Rows(_Cuts):
     def distance(self, other) -> float:
         """Metres to ``other``, this set counting as ONE place: the free
         ``distance(a, b)`` as a method."""
-        return self.mp._call_distance(self, other)
+        return self._mp._call_distance(self, other)
 
     def __add__(self, other):
         # Set union, the Python way: a list of rows to loop and read.
@@ -809,7 +809,7 @@ class Rows(_Cuts):
 
     def __repr__(self):
         """Named rows, not an opaque count."""
-        name = self.mp.spelling(self) or UNNAMED
+        name = self._mp.spelling(self) or UNNAMED
         rows = self._rows()
         if not rows:
             return f"<{name}: 0 rows>"
@@ -855,7 +855,7 @@ def _index_it(name: str | None) -> str:
 
 def _set_as_list(v) -> list:
     """A Python SET of things is the list of them, in a fixed order."""
-    return sorted(v, key=lambda x: str(x.bind) if isinstance(x, Row)
+    return sorted(v, key=lambda x: str(x._bind) if isinstance(x, Row)
                   else repr(x))
 
 
@@ -1008,7 +1008,7 @@ class MissionPython:
         for k, v in self.ns.items():
             if v is obj and not k.startswith("__"):
                 return k
-        return getattr(obj, "label", "") or None
+        return getattr(obj, "_label", "") or None
 
     def spelling(self, x: "Rows") -> str | None:
         """The model's spelling of a set, the one name every served label
@@ -1017,14 +1017,14 @@ class MissionPython:
         name = self.name_of(x)
         if name:
             return name
-        base = self.ref_name(x.ref)
-        return base and f"{base}{x.spec}"
+        base = self.ref_name(x._ref)
+        return base and f"{base}{x._spec}"
 
     def ref_name(self, ref: str) -> str | None:
         """The model's name for a whole result: a bound name, else what it
         was shown under or the call that made it; None when it has none."""
         for k, v in self.ns.items():
-            if isinstance(v, Rows) and not v.spec and v.ref == ref \
+            if isinstance(v, Rows) and not v._spec and v._ref == ref \
                     and not k.startswith("__"):
                 return k
         return self._shown.get(ref) or self._labels.get(ref)
@@ -1062,10 +1062,10 @@ class MissionPython:
         """What a bound name holds, as an argument: a whole result, a row,
         or a staged viewpoint; None for anything else."""
         v = dict.get(self.ns, name)
-        if isinstance(v, Rows) and not v.spec:
-            return Ref(v.ref, name)
+        if isinstance(v, Rows) and not v._spec:
+            return Ref(v._ref, name)
         if isinstance(v, Row):
-            return Bind(v.bind, name)
+            return Bind(v._bind, name)
         if isinstance(v, str) and v == name and VIEWPOINT_RE.fullmatch(v):
             return Bind(v, name)
         return None
@@ -1079,11 +1079,11 @@ class MissionPython:
             # A nameless set is numbered, once per mission, so two of them
             # in one call stay two places (two columns, two cuts).
             name = self.spelling(v)
-            if v.spec:
+            if v._spec:
                 v = self._materialize(v)
-            return Ref(v.ref, name or self._unnamed_label(v.ref))
+            return Ref(v._ref, name or self._unnamed_label(v._ref))
         if isinstance(v, Row):
-            return Bind(v.bind, self.name_of(v) or (v.fid or "row"))
+            return Bind(v._bind, self.name_of(v) or (v.fid or "row"))
         if isinstance(v, str):
             return self._held(v) or v
         if isinstance(v, dict):
@@ -1104,9 +1104,9 @@ class MissionPython:
         and the mission's handles hold."""
         taken = rn_spelled(args) | {
             k for k, v in self.ns.items() if HANDLE_RE.fullmatch(k)
-            and (isinstance(v, Row) or isinstance(v, Rows) and not v.spec)}
-        live = {v.ref for v in self.ns.values()
-                if isinstance(v, Rows) and not v.spec}
+            and (isinstance(v, Row) or isinstance(v, Rows) and not v._spec)}
+        live = {v._ref for v in self.ns.values()
+                if isinstance(v, Rows) and not v._spec}
         return Program(self.env.plan_rn[0], taken, live)
 
     # -- the per-call plumbing --------------------------------------------
@@ -1236,8 +1236,8 @@ class MissionPython:
         """A sliced set becomes a real ref via the identity window, so a
         slice rides every slot a set can (find(near=r1[0:5]) is the union
         of the head, which is what the spelling plainly means)."""
-        return Rows(self._window(sliced.ref, sliced.spec,
-                                 self.spelling(sliced), sliced.ref), self)
+        return Rows(self._window(sliced._ref, sliced._spec,
+                                 self.spelling(sliced), sliced._ref), self)
 
     # -- the library -------------------------------------------------------
 
@@ -1351,20 +1351,20 @@ class MissionPython:
             "refs": [p.ref_of(x)]})), self)
 
     def _call_more_of(self, x):
-        if not isinstance(x, Rows) or x.spec:
+        if not isinstance(x, Rows) or x._spec:
             raise CodeError("more_of pages a RESULT a find or an ordering "
                             "left")
         name = self.said_name(x, "more_of")
         if x._tied():
             x._refuse_tied(name, "has no next block")
-        lo = BROAD_HEAD_ROWS + int(self.env.widened.get(x.ref) or 0)
+        lo = BROAD_HEAD_ROWS + int(self.env.widened.get(x._ref) or 0)
         p = self._program(name)
         # The rows served are NOT the handle -- they are a window of it --
         # so the envelope is labelled with what was asked for rather than
         # with a name that would claim to be the whole set.
         return Rows(self._analyze(
-            p, p.window(x.ref, f"[{lo}:{lo + BROAD_HEAD_ROWS}]"),
-            shown=f"more_of({name})", page=(x.ref, lo, name)), self)
+            p, p.window(x._ref, f"[{lo}:{lo + BROAD_HEAD_ROWS}]"),
+            shown=f"more_of({name})", page=(x._ref, lo, name)), self)
 
     # -- measuring ---------------------------------------------------------
 
@@ -1404,12 +1404,12 @@ class MissionPython:
         # renderer's frame decision and its mark projection see one window.
         lead: list = []
         fids = None
-        if isinstance(x, Rows) and x.spec:
+        if isinstance(x, Rows) and x._spec:
             # A SLICE is looked at through its window: two verbs, one
             # receipt, and the window is no answer of its own.
             name = self.spelling(x)
-            p = self._program(x.ref, mk)
-            ref = p.window(x.ref, x.spec)
+            p = self._program(x._ref, mk)
+            ref = p.window(x._ref, x._spec)
             self._show_as(ref, name)
         else:
             # A set inside a list is refused under the model's spelling,
@@ -1618,25 +1618,25 @@ class MissionPython:
     def _show(self, value, label: str | None):
         if value is None:
             return
-        if isinstance(value, Rows) and not value.spec \
-                and value.ref in self._unrendered:
+        if isinstance(value, Rows) and not value._spec \
+                and value._ref in self._unrendered:
             return
         if isinstance(value, Rows):
             # Key the envelope by the MODEL's spelling ("r1[0:5]"), not the
             # executor's ref the window compiled onto (the window shows it
             # under a label; a nameless set is served whole all the same).
             self._block_shown.add(
-                self._window(value.ref, value.spec, label, value.ref))
-        elif isinstance(value, Row) and value.src \
+                self._window(value._ref, value._spec, label, value._ref))
+        elif isinstance(value, Row) and value._src \
                 and not re.fullmatch(r"\w+", label):
             # Render the ROW: a one-row window keeps the ordering
             # attribute a bare dict loses, so the model sees the row it
             # asked for rather than a census of one.
-            ref, i = value.src
+            ref, i = value._src
             spec = f"[{i}:{i + 1}]"
             self._window(ref, spec, label, ref)
         elif isinstance(value, Row):
-            self._out.setdefault("shown", {})[label] = value.bind
+            self._out.setdefault("shown", {})[label] = value._bind
         else:
             self._printed += (f"{label} = {value!r}" if label != repr(value)
                               else repr(value)) + "\n"
@@ -1740,8 +1740,8 @@ class MissionPython:
         # Serve the model's own names over the executor's refs.
         mine = dict(self._shown)
         for k, v in self.ns.items():
-            if isinstance(v, Rows) and not v.spec and not k.startswith("__"):
-                mine[v.ref] = k
+            if isinstance(v, Rows) and not v._spec and not k.startswith("__"):
+                mine[v._ref] = k
         res = out.get("result")
         if isinstance(res, dict) and isinstance(res.get("results"), dict):
             results = dict(res["results"])

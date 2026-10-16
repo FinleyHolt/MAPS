@@ -584,7 +584,8 @@ def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
 
     rows = [{"fid": f"prior_{i}", "name": "Neuralia Road"} for i in range(12)]
     env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: True)
-    view = Rows("r1", MissionPython(env))
+    mp = MissionPython(env)
+    view = Rows("r1", mp)
 
     assert len(view) == 12
     assert len(list(view)) == 12, "a tied view still iterates"
@@ -595,7 +596,6 @@ def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
     with pytest.raises(CodeError, match="not subscriptable"):
         view[20:40]
 
-    mp = view.mp
     mp.ns["roads"] = view
     out = mp.run_block("more_of(roads)\n")
     assert out["error"].endswith(
@@ -906,6 +906,16 @@ def test_none_inside_a_move_list_is_no_place():
     assert err.endswith("each explore() place got None, which is no place: "
                         "the name it came from holds no row. Bind a row "
                         "first."), err
+
+
+@pytest.mark.parametrize("attr, says", [
+    ("cars.ref", "'Rows' object has no attribute 'ref'"),
+    ("cars.mp", "'Rows' object has no attribute 'mp'"),
+    ("cars[0].bind", "row car_1 carries no 'bind'"),
+    ("cars[0].src", "row car_1 carries no 'src'")])
+def test_model_code_cannot_read_a_sets_executor_slots(attr, says):
+    err, _ = _refusal(f'cars = find("car")\n{attr}\n')
+    assert says in err, err
 
 
 def test_indexing_a_set_by_a_non_int_names_the_int_position():
