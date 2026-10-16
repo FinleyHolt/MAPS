@@ -176,6 +176,7 @@ these places, the served-text changes among them:
 | `more_of` on a result that fits one block says "h holds N row(s), one block: show it with a bare `h` line." | It said "all N row(s) of h are already served", also for a bound result never shown. |
 | A re-task arriving on the turn-cap turn stays queued. | It was appended to the thread as the mission ended at the cap, unread by the model. |
 | An explore marks its segments covered only once the pass flies. | A pass that flew nothing marked its segments covered, so later passes stopped naming them as uncovered. |
+| Endpoint discovery passes when one SAM replica answers `/health` (a replica answering as another service is refused), and a segment retry goes to a replica that call has not seen fail. | Discovery refused unless every listed replica answered, and a retry took the next replica in a shared rotation, which could be the one that just failed. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
