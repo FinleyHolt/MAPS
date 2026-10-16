@@ -711,8 +711,15 @@ class Rows(_Cuts):
                         empty_window_refusal(f"[{lo}:{hi}]", len(held)))
                 lo, hi = s.start, s.stop
             return Rows(self.ref, self.mp, f"[{lo}:{hi}]")
+        if not isinstance(i, int):
+            name = self.mp.said_name(self, None)
+            raise CodeError(
+                f"{name}[{i!r}] did not bind: {name} is a set of rows, "
+                "indexed by an int position"
+                + (f"; a column is read off one row: {name}[0][{i!r}]."
+                   if isinstance(i, str) else "."))
         rows = self._rows()
-        if not isinstance(i, int) or not (-len(rows) <= i < len(rows)):
+        if not (-len(rows) <= i < len(rows)):
             name = self.mp.said_name(self, None)
             raise CodeError(
                 f"{name}[{i}] did not bind: {name} served {len(rows)} "

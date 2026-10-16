@@ -879,6 +879,16 @@ def test_indexing_an_empty_set_says_it_holds_no_rows():
                         "Show it first, then index it."), err
 
 
+def test_indexing_a_set_by_a_non_int_names_the_int_position():
+    err, _ = _refusal('cars = find("car")\ncars["name"]\n')
+    assert err.endswith("cars['name'] did not bind: cars is a set of rows, "
+                        "indexed by an int position; a column is read off "
+                        "one row: cars[0]['name']."), err
+    err, _ = _refusal('cars = find("car")\ncars[1.0]\n')
+    assert err.endswith("cars[1.0] did not bind: cars is a set of rows, "
+                        "indexed by an int position."), err
+
+
 @pytest.mark.parametrize("code", [
     'look({"ref": "prior_7"})\n',
     'go_to({"a": 1})\n',
