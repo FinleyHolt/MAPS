@@ -119,13 +119,13 @@ def test_a_track_fix_is_where_the_aircraft_was_at_its_stamp_under_a_timing_offse
     import datetime as dt
 
     m, twin = make_mission()
-    m._live.boresight = dataclasses.replace(m._live.boresight, time_offset_s=10.0)
+    m.live.boresight = dataclasses.replace(m.live.boresight, time_offset_s=10.0)
     twin.sleep(30.0)
     m._t0, m.started_at_utc = twin.now(), m._utc_now()
     twin.sleep(20.0)
     m._record_track()
     first = json.loads((m.workdir.parent / TRACK_JSONL).read_text().splitlines()[0])
-    pose = m._live.pose_now(m._t0)
+    pose = m.live.pose_now(m._t0)
     assert first["t_unix"] == pytest.approx(dt.datetime.fromisoformat(pose.utc).timestamp(), abs=1e-3)
     x, y = M.lonlat_to_local(m._tiles_dir, m.map_name, pose.lon, pose.lat)
     assert (first["x"], first["y"]) == pytest.approx((x, y), abs=0.01)
@@ -139,7 +139,7 @@ def test_a_start_without_a_fix_takes_its_utc_at_the_first_bank_with_one(make_mis
 
     m, twin = make_mission()
     m.started_at, m._t0, m.started_at_utc = 0.0, twin.now(), None
-    pose = m._live.pose_now(m._t0)
+    pose = m.live.pose_now(m._t0)
     twin.sleep(20.0)
     m.status, m.ended_by = M.STATE_AWAITING, "reply"
     m.bank()
@@ -196,7 +196,7 @@ def test_ground_held_by_frames_that_cannot_be_fetched_is_flown_again_and_served_
 def test_a_leg_arrives_on_the_recording_while_the_aircraft_s_own_pose_cannot_be_read(built, make_mission):
     m, twin = make_mission()
     twin.post(M.Leg(target="t", point=(600.0, 700.0), step=0))
-    m._live.ownship = lambda: None
+    m.live.ownship = lambda: None
     area_ll = m._area_lonlat([(600.0, 600.0), (610.0, 600.0), (600.0, 610.0)])
     assert m._wait_arrival((600.0, 600.0), area=area_ll, timeout_s=60.0)[0] == "arrived"
 
@@ -229,7 +229,7 @@ def test_the_summary_line_counts_the_turns_the_row_counts(make_mission):
 
 def test_a_lost_leg_with_no_pose_read_says_so_rather_than_an_infinite_distance(make_mission, caplog):
     m, _twin = make_mission()
-    m._live.ownship = lambda: None
+    m.live.ownship = lambda: None
     area_ll = m._area_lonlat([(600.0, 1100.0), (610.0, 1100.0), (600.0, 1110.0)])
     assert m._wait_arrival((600.0, 1100.0), area=area_ll, timeout_s=2.0)[0] == "lost"
     assert "no pose read: the leg is lost" in caplog.text and "inf" not in caplog.text
@@ -277,8 +277,8 @@ def test_a_lost_leg_after_a_short_pass_says_the_closest_the_leg_came(make_missio
     than 740 m and was lost: the leg row says the leg's closest, 100 m."""
     m, _twin = make_mission()
     offs = iter([100.0] + [400.0] * 6)
-    m._live.coverage = lambda area, after=None: {"fraction": 0.5, "held": 1, "points": 2, "best": [None, None]}
-    m._live.ownship = lambda: {"x": 600.0 + next(offs, 740.0), "y": 600.0, "agl_m": 900.0}
+    m.live.coverage = lambda area, after=None: {"fraction": 0.5, "held": 1, "points": 2, "best": [None, None]}
+    m.live.ownship = lambda: {"x": 600.0 + next(offs, 740.0), "y": 600.0, "agl_m": 900.0}
     m._closest_m = float("inf")
     assert m._wait_arrival((600.0, 600.0), area=[], timeout_s=60.0, reach_m=200.0)[0] == "short"
     assert m._wait_arrival((600.0, 600.0), area=[], timeout_s=3.0)[0] == "lost"

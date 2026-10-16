@@ -196,7 +196,7 @@ class Mission:
         self.run_id = run_id
         self.run_no = run_no
         self._start_xy = start_xy
-        self._live = live
+        self.live = live
         self._vehicle = live.vehicle
         self._recorder = recorder
         self.close_log = close_log
@@ -215,7 +215,7 @@ class Mission:
         self.error: str | None = None
         #: The mission failed on a serve fault (the bench's infra rule), not its own.
         self.infra = False
-        #: Model turns of the conversations that have ENDED; :meth:`_turns` adds the one in flight.
+        #: Model turns of the conversations that have ENDED; :meth:`turns` adds the one in flight.
         self.turns_used = 0
         #: How many conversations have ended and parked the mission.
         self.replies = 0
@@ -320,7 +320,7 @@ class Mission:
                              100.0 * COVERED_FRACTION)
                 elif cov is not None:
                     self._said(f"{at} is held by the pass ({cov['held']}/{cov['points']} points), but no frame of "
-                               f"it could be served ({self._live.last_refusal or 'no reason recorded'}); "
+                               f"it could be served ({self.live.last_refusal or 'no reason recorded'}); "
                                f"the leg is flown")
                     # The ring already holds the area, so only a pass after the post can arrive.
                     after = self._vehicle.now()
@@ -378,7 +378,7 @@ class Mission:
         if outcome == "arrived":
             if held is None:
                 return (f"the leg to {at} arrived, but no frame of the pass could be served "
-                        f"({self._live.last_refusal or 'no reason recorded'}); the flight has no observation")
+                        f"({self.live.last_refusal or 'no reason recorded'}); the flight has no observation")
             reg = held[1].get("registration") or {}
             by = ", ".join(f"{n} {k}" for k, n in (reg.get("sources") or {}).items())
             posed = (f"the map registered it{f' ({by})' if by else ''}" if reg.get("applied") else
@@ -401,13 +401,13 @@ class Mission:
         """Hold until the point leaves the frame, so the whole pass is in the
         ring, at most the frame's transit and :data:`FRAME_WAIT_S`; the
         seconds it took."""
-        bound = self._live.frame_transit_s()
+        bound = self.live.frame_transit_s()
         if bound is None:
             return 0.0
         bound = min(float(bound), FRAME_WAIT_S)
         t0 = self._vehicle.now()
         while not self._cancel.is_set() and self._vehicle.now() - t0 < bound:
-            if not self._live.in_frame(float(xy[0]), float(xy[1])):
+            if not self.live.in_frame(float(xy[0]), float(xy[1])):
                 break
             self._vehicle.sleep(0.25)
         return self._vehicle.now() - t0
@@ -418,10 +418,10 @@ class Mission:
         whether a leg is flown: ``(coverage, refusal)``."""
         refusal = None
         for k in range(1, COVERAGE_TRIES + 1):
-            cov = self._live.coverage(area_lonlat)
+            cov = self.live.coverage(area_lonlat)
             if cov is not None:
                 return cov, None
-            refusal = self._live.last_refusal or "no reason recorded"
+            refusal = self.live.last_refusal or "no reason recorded"
             log.warning("read %d of %d: the recording could not be asked whether it holds the area: %s",
                         k, COVERAGE_TRIES, refusal)
             if k < COVERAGE_TRIES:
@@ -434,7 +434,7 @@ class Mission:
         """Which of a pass's stops the recording holds already, off one index read (``MissionSpec.held_now``)."""
         asked = {i: self._area_lonlat(leg_area(h, str(token), [float(xy[0]), float(xy[1])]))
                  for i, (token, xy) in enumerate(stops) if xy is not None}
-        covs = self._live.coverage_of_each(list(asked.values())) if asked else None
+        covs = self.live.coverage_of_each(list(asked.values())) if asked else None
         held = dict(zip(asked, covs or []))
         return [_holds(held.get(i)) for i in range(len(stops))]
 
@@ -485,8 +485,8 @@ class Mission:
                     ) -> tuple[Any, dict[str, Any]] | None:
         """``(observation, record)`` of the ground the pass held over ``area_ll``
         (lon/lat; the frames after ``after`` when given); None when no frame held any."""
-        obs = self._live.observe_area(area_ll, after)
-        last, refusal = dict(self._live.last or {}), self._live.last_refusal
+        obs = self.live.observe_area(area_ll, after)
+        last, refusal = dict(self.live.last or {}), self.live.last_refusal
         if obs is None:
             log.info("no frame in the recording held the area about (%.0f, %.0f): %s",
                      float(xy[0]), float(xy[1]), refusal)
@@ -528,11 +528,11 @@ class Mission:
         while not self._cancel.is_set():
             # The recording decides arrival; the aircraft's own pose only the
             # short pass and the timeout's start.
-            cov = self._live.coverage(area, after)
+            cov = self.live.coverage(area, after)
             if _holds(cov):
                 return "arrived", cov
             fraction = float((cov or {}).get("fraction") or 0.0)
-            pose = self._live.ownship()
+            pose = self.live.ownship()
             if pose is not None:
                 d = math.hypot(pose["x"] - float(xy[0]), pose["y"] - float(xy[1]))
                 best = min(best, d)
@@ -579,7 +579,7 @@ class Mission:
 
     def _utc_now(self) -> float | None:
         """The receiver's UTC now, unix seconds, or None without a fix."""
-        stamp = (self._live.ownship() or {}).get("utc")
+        stamp = (self.live.ownship() or {}).get("utc")
         if not stamp:
             return None
         try:
@@ -638,7 +638,7 @@ class Mission:
                 # when it held it; a waypoint's observation is that or nothing.
                 held, self._held = self._held, None
                 if held is None:
-                    log.warning("live observation refused: %s", self._live.last_refusal)
+                    log.warning("live observation refused: %s", self.live.last_refusal)
                     return None
                 obs, last = held
                 log.info("live frame seq %s log_time %s age %.2fs attitude %s", last.get("seq"),
@@ -718,7 +718,7 @@ class Mission:
         return {"episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no,
                 "reasoning_effort": effort(self.reasoning_effort)}
 
-    def _turns(self) -> int:
+    def turns(self) -> int:
         """Model turns taken: the conversations that have ended plus the turn the one in flight is on."""
         return self.turns_used + int(self._turn_diag.get("turns_used") or 0)
 
@@ -769,7 +769,7 @@ class Mission:
             visited = [[float(episode.start_xy[0]), float(episode.start_xy[1])]] if episode else []
             scored = self.flights[:self._scored_flights]
             visited += [[float(f["resolved_xy"][0]), float(f["resolved_xy"][1])] for f in scored]
-            infra, ended_by, error, turns = self.infra, self.ended_by, self.error, self._turns()
+            infra, ended_by, error, turns = self.infra, self.ended_by, self.error, self.turns()
         return {
             "episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no, "split": self.split,
             "map_name": self.map_name, "description": self.instruction, "reasoning_effort": self.reasoning_effort,
@@ -819,13 +819,13 @@ class Mission:
         lines = []
         while (t := self._t0 + self._tracked * TRACK_PERIOD_S) <= self._vehicle.now() + 1e-9:
             self._tracked += 1
-            pose = self._live.pose_now(t)
+            pose = self.live.pose_now(t)
             xy = None if pose is None else lonlat_to_local(self._tiles_dir, self.map_name, pose.lon, pose.lat)
             if xy is not None:
                 lines.append(json.dumps({
                     "t_unix": round(self.started_at_utc + (t - self._t0), 3), "x": round(xy[0], 2),
                     "y": round(xy[1], 2), "alt_msl_m": round(pose.alt_msl_m, 2),
-                    "alt_agl_m": round(pose.alt_msl_m - self._live.ground_msl(xy), 2),
+                    "alt_agl_m": round(pose.alt_msl_m - self.live.ground_msl(xy), 2),
                     "track_deg": round(pose.track_deg, 2), "ground_speed_mps": round(pose.speed_mps, 3)}))
         if lines:
             with (self.workdir.parent / TRACK_JSONL).open("a", encoding="utf-8") as f:
@@ -852,10 +852,10 @@ def converse(mission: Mission, taskings: list[str], *, ended=None) -> None:
                 break
         time.sleep(0.2)
     mission.wait()
-    mission._live.close()
+    mission.live.close()
 
 
 def summary_line(mission: Mission) -> str:
     """How a mission ended, in one line."""
     return (f"{mission.workdir}: {mission.status}, ended by {mission.ended_by}, {len(mission.flights)} flights, "
-            f"{mission._turns()} turns" + (f", error {mission.error}" if mission.error else ""))
+            f"{mission.turns()} turns" + (f", error {mission.error}" if mission.error else ""))

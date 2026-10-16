@@ -382,7 +382,7 @@ def test_a_replay_records_no_start_time_and_no_track(built, make_twin, make_live
                         close_log=lambda: None, agl_m=world.AGL_M)
     m.map_name, m._tiles_dir = "calcity", built[0]
     m.started_at, m._t0, m.started_at_utc = 0.0, 0.0, m._utc_now()
-    m._live.vehicle.sleep(5.0)
+    m.live.vehicle.sleep(5.0)
     m.bank()
     row = json.loads((workdir.parent / "episodes.jsonl").read_text())
     assert row["started_at_utc"] is None and row["replay_of"] == {"mode": "frames"}
