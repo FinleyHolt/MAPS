@@ -409,7 +409,7 @@ def test_a_refused_ref_is_quoted_by_the_models_label(op, query):
     with pytest.raises(ProgramError) as e:
         run_program([{"fid": "c1", "class": "car", "search_text": "car"}],
                     [], prog)
-    assert "ref 'roads' names no" in str(e.value), e.value
+    assert str(e.value).startswith("'roads' names no"), e.value
 
 
 @pytest.mark.parametrize("op", ["crossings", "ends"])
@@ -422,4 +422,4 @@ def test_a_fid_off_the_surface_is_refused_as_naming_no_row(op):
                      "args": {"refs": ["prior_999", "prior_1"]}}]}
     with pytest.raises(ProgramError) as e:
         run_program([], anchors, prog)
-    assert "ref 'prior_999' names no" in str(e.value), e.value
+    assert str(e.value).startswith("'prior_999' names no"), e.value

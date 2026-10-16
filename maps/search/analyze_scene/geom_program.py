@@ -1155,9 +1155,9 @@ def _crossings(cx, a):
         polys = [p for n in nodes for p in chains_of(n)]
         if not polys:
             raise ProgramError(
-                f"crossings ref {_quote(_as_said(el))} names no geometry on this "
-                f"surface -- a crossing needs two features that HAVE "
-                f"a shape. {cx.avail('point')}")
+                f"{_quote(_as_said(el))} names no geometry on this surface "
+                f"-- a crossing needs two features that HAVE a shape. "
+                f"{cx.avail('point')}")
         sides.append((_x_label(nodes, el), polys,
                       {str(n.get("fid")) for n in nodes}))
     # A row on both sides would hand back its own corners.
@@ -1215,7 +1215,7 @@ def _ends(cx, a):
         nodes = _named_rows(cx, el, "centerline")
         if not nodes:
             raise ProgramError(
-                f"ends ref {_quote(_as_said(el))} names no row on this surface. "
+                f"{_quote(_as_said(el))} names no row on this surface. "
                 f"{cx.avail('point')}")
         for nd in nodes:
             cl = nd.get("centerline")
@@ -1307,8 +1307,7 @@ def _filter_items(cx, a):
     if opr == "le":
         if items and not any(isinstance(it.get(key), (int, float)) for it in items):
             raise ProgramError(
-                f"filter_items op {_quote(opr)} on key {_quote(key)}: no item "
-                f"carries a numeric {_quote(key)}. "
+                f"no item carries a numeric {_quote(key)}. "
                 f"{_contact_fact(cx, key)}"
                 f"{_present_keys_hint(items, True)}")
         # The nearest excluded row, the bound that would admit it and how
@@ -1337,8 +1336,7 @@ def _filter_items(cx, a):
     if (items and not any(key in it for it in items)
             and not _relate_ran(key, items)):
         raise ProgramError(
-            f"filter_items op {_quote(opr)} on key {_quote(key)}: no item carries "
-            f"{_quote(key)}. "
+            f"no item carries {_quote(key)}. "
             f"{_contact_fact(cx, key)}"
             f"{_present_keys_hint(items, False)}")
     if opr == "in_or_blank":
@@ -1393,8 +1391,8 @@ def _stratum(cx, a):
     tier = a["tier"]
     if not any(isinstance(it.get("name_match"), (int, float)) for it in items):
         raise ProgramError(
-            "these rows carry no match tiers -- strata come off a "
-            "find's own result."
+            "these rows carry no match tiers: .exact/.tagged/.fuzzy come "
+            "off a find's own result."
             + ("" if withheld("look_for") else
                " A pass's minted rows are all THE thing the "
                "watchlist named; there is nothing to stratify."))
@@ -1439,7 +1437,7 @@ def _union_members(cx, ref_el, as_label) -> list:
         node = cx.by_fid.get(x)
         if node is None:
             raise ProgramError(
-                f"union ref member {_quote(x)} is not a fid on this surface. "
+                f"{_quote(x)} is not a fid on this surface. "
                 f"{cx.avail('point')}")
         members.append(node)
     return members
@@ -1529,8 +1527,8 @@ def _compare(cx, a):
                 continue
             if payload is None:
                 raise ProgramError(
-                    f"compare ref {_quote(ref_el)} is not a fid on this "
-                    f"surface. {cx.avail('point')}")
+                    f"{_quote(ref_el)} is not a fid on this surface. "
+                    f"{cx.avail('point')}")
             kind = "row"
             lab = _unique_label(as_label or sanitize_token(payload["fid"]),
                                 used_labels, payload["fid"])
