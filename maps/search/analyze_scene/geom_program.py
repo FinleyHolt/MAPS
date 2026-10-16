@@ -749,15 +749,11 @@ class _Run:
         self.results: dict = {}
         self.op = None
 
-    def avail(self, kind: str) -> str:
-        """The live handles and fids (bounded) a refusal names."""
-        def _cap(fids):
-            return f"{fids[:12]}" + (f" (+{len(fids) - 12} more)" if len(fids) > 12 else "")
-        if kind == "list":
-            srcs = ", ".join(str(k) for k in self.results) or (
-                "(no result handles yet -- run a find first)")
-            return f"list sources: {srcs}; fids present: {_cap(sorted(self.by_fid))}"
-        return f"available fids: {_cap(sorted(self.by_fid))}"
+    def avail(self) -> str:
+        """The surface fids (the first 12) a refusal names."""
+        fids = sorted(self.by_fid)
+        return f"available fids: {fids[:12]}" + (
+            f" (+{len(fids) - 12} more)" if len(fids) > 12 else "")
 
     def is_ref(self, tok) -> bool:
         """A handle: ``rN`` or ``rN[a:b]`` naming a result of this program
@@ -823,11 +819,6 @@ def _as_rows(cx, arg):
     v = cx.resolve(arg) if cx.is_ref(arg) else arg
     if is_xy(v) or (isinstance(v, str) and v in cx.by_fid):
         v = [v]
-    if not isinstance(v, list):
-        raise ProgramError(
-            f"cannot resolve rows from {_quote(arg)}: items is a set, a "
-            f"fid on this surface, an [x,y], or a list of them. "
-            f"{cx.avail('list')}")
     if all(isinstance(it, dict) and is_xy(it.get("xy")) for it in v):
         return v
     out = []
@@ -844,7 +835,7 @@ def _as_rows(cx, arg):
             raise ProgramError(
                 f"cannot resolve a point in the list from item {_quote(it)}: each item must "
                 f"be a fid in this surface, a {{'fid':...}} dict, an [x,y], or a set. "
-                f"{cx.avail('point')}")
+                f"{cx.avail()}")
     return out
 
 
@@ -1152,7 +1143,7 @@ def _crossings(cx, a):
             raise ProgramError(
                 f"{_quote(_as_said(el))} names no geometry on this surface "
                 f"-- a crossing needs two features that HAVE a shape. "
-                f"{cx.avail('point')}")
+                f"{cx.avail()}")
         sides.append((_x_label(nodes, el), polys,
                       {str(n.get("fid")) for n in nodes}))
     # A row on both sides would hand back its own corners.
@@ -1211,7 +1202,7 @@ def _ends(cx, a):
         if not nodes:
             raise ProgramError(
                 f"{_quote(_as_said(el))} names no row on this surface. "
-                f"{cx.avail('point')}")
+                f"{cx.avail()}")
         for nd in nodes:
             cl = nd.get("centerline")
             if not (isinstance(cl, list) and len(cl) >= 2):
@@ -1433,7 +1424,7 @@ def _union_members(cx, ref_el, as_label) -> list:
         if node is None:
             raise ProgramError(
                 f"{_quote(x)} is not a fid on this surface. "
-                f"{cx.avail('point')}")
+                f"{cx.avail()}")
         members.append(node)
     return members
 
@@ -1523,7 +1514,7 @@ def _compare(cx, a):
             if payload is None:
                 raise ProgramError(
                     f"{_quote(ref_el)} is not a fid on this surface. "
-                    f"{cx.avail('point')}")
+                    f"{cx.avail()}")
             kind = "row"
             lab = _unique_label(as_label or sanitize_token(payload["fid"]),
                                 used_labels, payload["fid"])
