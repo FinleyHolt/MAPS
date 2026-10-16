@@ -15,10 +15,7 @@ from maps.search.parse_compile import contract, prompts
 from maps.search.parse_compile import python_surface as ps
 from maps.search.parse_compile import reasoner_agent as ra
 from maps.search.parse_compile.code_surface import act_needs_a_thing
-from maps.search.parse_compile.reasoner_loop import (
-    _PICTURE_WITHHELD,
-    _PICTURE_WITHHELD_OF,
-)
+from maps.search.parse_compile.reasoner_loop import _PICTURE_WITHHELD_OF
 from maps.search.tests.fakes import (
     quiet_env,
     cars,
@@ -154,7 +151,7 @@ def test_an_images_withhold_delivers_the_looks_caption(ortho_dir, monkeypatch):
         [[run('a = find("car")')], [run("look(a)")], "over"], cars(3), ortho_dir)
     assert reqs, "the look rendered"
     assert len(vision) == 1
-    assert _PICTURE_WITHHELD in json.dumps(results)
+    assert _PICTURE_WITHHELD_OF.format("crop") in json.dumps(results)
 
 
 def test_an_unknown_withhold_is_refused(monkeypatch):
@@ -220,6 +217,7 @@ def test_an_images_withhold_keeps_the_catchs_text_facts(monkeypatch):
 
     base, held = _catch(""), _catch("images")
     assert set(held) == set(base) | {"note"}, (base, held)
+    assert held["note"] == _PICTURE_WITHHELD_OF.format("crop"), held
 
 
 def test_a_look_for_withhold_serves_no_watchlist(monkeypatch):

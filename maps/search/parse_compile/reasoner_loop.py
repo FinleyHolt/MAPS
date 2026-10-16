@@ -278,7 +278,6 @@ _CATCH_CROPS = LOOK_MAX_CROPS // 2
 # What a look and a pass's catch say under the ``images`` withhold.
 _PICTURE_WITHHELD_OF = ("the {}'s caption follows in the next message; "
                         "its picture is not served on this run")
-_PICTURE_WITHHELD = _PICTURE_WITHHELD_OF.format("crop")
 # The shape errors: a repeat serves only its count (_loop_broken_error).
 _SHAPE_MARKERS = ("unknown ref", "is a result handle", "syntax error")
 # How a grounding note says what the call does at a name's best match, by
@@ -1233,7 +1232,7 @@ class _Mission:
                             "" if withheld("look") else
                             f" -- look({h}[a:b]) pages the rest"))
                 if withheld("images"):
-                    mv["catch"]["note"] = _PICTURE_WITHHELD
+                    mv["catch"]["note"] = cack["note"]
         return {"explored": mv}
 
     def _crops(self, of, fid, marks) -> dict:
