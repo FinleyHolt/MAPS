@@ -881,12 +881,15 @@ def _as_said(el):
 
 
 def _relate_ran(key, items) -> bool:
-    """Whether the compare that writes a ``facing <lab>`` key ran: its
-    sibling ``distance to <lab>`` is on a row, so a facing absent everywhere
-    means every row touches the place."""
-    if not (isinstance(key, str) and key.startswith("facing ")):
+    """Whether the compare that writes a ``facing <lab>`` or ``<dir> of
+    <lab>`` key ran: its sibling ``distance to <lab>`` is on a row, so the
+    key absent everywhere means no row has a word or a side to name."""
+    pre = next((p for p in ("facing ", "north of ", "south of ", "east of ",
+                            "west of ")
+                if isinstance(key, str) and key.startswith(p)), None)
+    if pre is None:
         return False
-    sib = "distance to " + key[len("facing "):]
+    sib = "distance to " + key[len(pre):]
     return any(isinstance(it, dict) and sib in it for it in items)
 
 
