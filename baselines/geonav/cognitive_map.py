@@ -2,11 +2,13 @@
 
 ``gsamllavanav/maps/landmark_nav_map.py`` (+ ``landmark_map.py``,
 ``tracking_map.py``, the colour half of ``gsam_map.py``) of
-github.com/Xhtshr/geonav-official: a north-up raster over the block at
-480/410 px per metre carrying the landmark contours (gray ramp), the explored
-view squares, the target and surroundings colour layers, and a matplotlib
-10x10 in figure that stacks them with name labels, the dashed trajectory,
-the heading arrow and a legend. The 1000x1000 canvas is what the MLLM sees.
+github.com/Xhtshr/geonav-official: north-up rasters over the block at
+480/410 px per metre (the landmark contours in a gray ramp, the explored view
+squares, the target and surroundings colour layers) stacked in a matplotlib
+10x10 in figure. The landmark map (Navigate) draws the contours with name
+labels, the dashed trajectory and the heading arrow; the semantic map
+(Search) adds the explored area, the colour layers, the object nodes and a
+legend. The 1000x1000 canvas is what the MLLM sees.
 """
 
 from __future__ import annotations
