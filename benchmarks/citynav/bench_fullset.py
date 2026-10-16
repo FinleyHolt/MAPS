@@ -358,10 +358,9 @@ class Driver:
         return True
 
     def _wait(self, proc: subprocess.Popen) -> str:
-        """Block until the attempt child exits (``exited``), hits the episode
-        cap (``timeout``), or the reasoner or SAM fails two probes
-        ``REASONER_PROBE_S`` apart while it flies (the infra cause
-        ``reasoner_down_midrun``, ``sam_down_midrun``)."""
+        """Block until the child exits (``exited``), the episode cap passes
+        (``timeout``) or the reasoner or SAM fails two probes in a row
+        (``<name>_down_midrun``)."""
         deadline = time.monotonic() + self.episode_timeout_s
         down = {"reasoner": 0, "sam": 0}
         while (left := deadline - time.monotonic()) > 0:
@@ -381,12 +380,7 @@ class Driver:
     def _run_attempt(self, worker_id: int, episode_id: str) -> dict:
         """One attempt in a fresh child: its ledger row, the child's
         ``episode.json`` plus ``worker_id``, ``workdir`` and the wall measured
-        here. ``status`` is ``infra`` for a lost reasoner or SAM
-        (``reasoner_down_midrun``, ``sam_down_midrun``), a child that a signal killed with no record (``killed_midrun``), that
-        exited nonzero with none (``exited N with no record``) or exited clean
-        with none (``no_prediction_unclassified``); a record's own ``infra``
-        stands; otherwise ``timed_out`` at the cap, else ``ok``.
-        """
+        here."""
         t0 = time.monotonic()
         worker_root = self.out_root / f"w{worker_id}"
         worker_root.mkdir(parents=True, exist_ok=True)

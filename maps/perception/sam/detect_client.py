@@ -102,13 +102,11 @@ def _post_segment(json_body: dict) -> dict | None:
     """POST ``/segment``, the one retry layer: the parsed JSON, or ``None``.
 
     A 4xx outside ``_SAM_TRANSIENT_CLIENT_STATUSES`` raises
-    :class:`SamRequestRefused`. A connect error, one of those statuses or a
-    5xx goes to the next replica after
-    ``SEGMENT_BACKOFF_S``. A read timeout is never resent to the replica that
-    timed out (the server still holds the request): it moves to another, or
-    fails when none is left. ``SEGMENT_DEADLINE_S`` bounds the whole. Each
-    attempt opens a fresh connection: a pooled socket the tunnel reaped
-    during a long compile reads as half-open (urllib3#944, #2751).
+    :class:`SamRequestRefused`; any other failure goes to the next replica
+    after ``SEGMENT_BACKOFF_S``, except that a read timeout drops the replica
+    that still holds the request. Each attempt opens a fresh connection: a
+    pooled socket the tunnel reaped during a long compile reads as half-open
+    (urllib3#944, #2751).
     """
     import requests
 
@@ -254,12 +252,12 @@ def split_into_instances(
     ref_area_px: float | None = None,
     coverage_count: "np.ndarray | None" = None,
 ) -> "list[MaskRegion]":
-    """A SAM concept mask's connected components (:func:`_connected_components`)
-    as per-instance components, never empty: the largest is kept, each other one dropped as speckle (under ``MIN_AREA_PX``
-    or ``_INSTANCE_SPLIT_AREA_FRAC`` of ``ref_area_px``, the median clean
-    same-class area) or as redundant (over ``_INSTANCE_SPLIT_REDUNDANT_FRAC``
-    under ``coverage_count``, the per-pixel count of same-class primaries).
-    """
+    """A SAM concept mask's connected components as per-instance components,
+    never empty: the largest is kept, each other one dropped as speckle (under
+    ``MIN_AREA_PX`` or ``_INSTANCE_SPLIT_AREA_FRAC`` of ``ref_area_px``, the
+    median clean same-class area) or as redundant (over
+    ``_INSTANCE_SPLIT_REDUNDANT_FRAC`` under ``coverage_count``, the per-pixel
+    count of same-class primaries)."""
     if len(comps) <= 1:
         return comps
     floor = MIN_AREA_PX
@@ -303,13 +301,9 @@ _DECODE_WORKERS = 4
 @dataclass
 class SamDetectClient:
     """Adapter onto the SAM 3.1 image server: every ``/segment`` call ships
-    the full concept list, decoded in one forward.
-
-    ``concepts`` is the list written last through :meth:`set_concepts`, a
-    wholesale replacement the ``PerceptionDirector`` pushes: the watchlist
-    (the mission's declared classes, in declared order) plus the classes of
-    the boosts riding a flight. Empty is valid and the common state before the model declares anything:
-    ``detect`` then returns ``[]``."""
+    the full concept list, decoded in one forward. ``concepts`` is what the
+    ``PerceptionDirector`` last pushed through :meth:`set_concepts`: the
+    watchlist plus the classes of the boosts riding a flight."""
 
     concepts: list[str] = field(default_factory=list)
     # SAHI tiles whose ``/segment`` gave no usable response after retries,
@@ -333,8 +327,7 @@ class SamDetectClient:
         self.concepts = out
 
     def detect(self, obs: Observation) -> list[DetectedObject]:
-        """Detect ``concepts`` on one frame; ``[]`` with no
-        concepts or no picture."""
+        """Detect ``concepts`` on one frame; ``[]`` with no concepts or no picture."""
         if obs.rgb is None:
             return []
         if obs.ortho_view_corners_xy is None:

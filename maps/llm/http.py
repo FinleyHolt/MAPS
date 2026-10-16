@@ -58,8 +58,7 @@ _NO_RETRY_TIMEOUTS = (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout)
 # Ceiling on one rate-limit wait, however long the advertised ``Retry-After``.
 _RATE_LIMIT_MAX_BACKOFF_S = 60.0
 
-# The fault retry budget, the rate-limit wait budget (seconds waited over
-# one call) and the exponential backoff base, in seconds.
+# The fault retries, the rate-limit wait per call (s), the backoff base (s).
 _MAX_RETRIES = 2
 _RATE_LIMIT_BUDGET_S = 1800.0
 _BACKOFF_S = 1.5
