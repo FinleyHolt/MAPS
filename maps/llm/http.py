@@ -94,13 +94,6 @@ class CallCanceled(Exception):
     """A request aborted via its ``cancel_event``; never retried."""
 
 
-class DegenerateCompletion(ValueError):
-    """A completion whose generation collapsed (a repeated-token run): a
-    serve fault, retried rather than repaired, since the model was never
-    asked anything. A ``ValueError`` so it is one of
-    ``reasoner_loop._RETRIABLE_LLM_ERRORS``."""
-
-
 #: How often an in-flight call's watch looks at its cancel event.
 _CANCEL_POLL_S = 0.25
 

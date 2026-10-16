@@ -13,11 +13,7 @@ from typing import Any
 
 from maps.llm import openai_wire
 from maps.llm.endpoint_spec import EndpointSpec, reasoner_api_key
-from maps.llm.http import (
-    CallCanceled,
-    DegenerateCompletion,
-    chat_completions_raw,
-)
+from maps.llm.http import CallCanceled, chat_completions_raw
 from maps.llm.model_cards import card_for, sampling_kwargs, speaks_openai
 from maps.llm.vision_content import build_vision_user_content
 from maps.search.parse_compile.compactor import bound_image_count, compact_transcript
@@ -27,6 +23,14 @@ log = logging.getLogger(__name__)
 
 
 _REASONER_TIMEOUT_DEFAULT_S = 240.0
+
+
+class DegenerateCompletion(ValueError):
+    """A completion whose generation collapsed (a repeated-token run): a
+    serve fault, retried rather than repaired, since the model was never
+    asked anything. A ``ValueError`` so it is one of
+    ``reasoner_loop._RETRIABLE_LLM_ERRORS``."""
+
 
 # One character repeated to the end of a channel: degenerate decode output.
 # A collapse runs to thousands of characters; 64 stays clear of markdown

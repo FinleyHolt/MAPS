@@ -6,7 +6,8 @@ import threading
 import httpx
 import pytest
 
-from maps.llm.http import CallCanceled, DegenerateCompletion
+from maps.llm.http import CallCanceled
+from maps.search.parse_compile.reasoner_agent import DegenerateCompletion
 from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.reasoner_loop import (
     _RETRIABLE_LLM_ERRORS,

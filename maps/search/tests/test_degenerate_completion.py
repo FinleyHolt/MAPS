@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from maps.llm.http import DegenerateCompletion
 from maps.search.parse_compile import reasoner_agent
-from maps.search.parse_compile.reasoner_agent import Reasoner
+from maps.search.parse_compile.reasoner_agent import DegenerateCompletion, Reasoner
 from maps.search.tests.fakes import TEST_SPEC
 
 
