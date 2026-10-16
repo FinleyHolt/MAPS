@@ -768,19 +768,14 @@ class _Run:
         return base in self.results or base in self.seed
 
     def resolve(self, tok):
-        """``rN`` -> its rows (this program's shadowing an earlier call's);
-        ``rN[a:b]`` -> that window of them."""
+        """A handle (:meth:`is_ref`): ``rN`` -> its rows (this program's
+        shadowing an earlier call's); ``rN[a:b]`` -> that window of them."""
         base, _, win = tok.partition("[")
         if base in self.results:
             v = self.results[base]
             v.consumed = True
-        elif base in self.seed:
-            v = self.seed[base]
         else:
-            _known = sorted(set(self.results) | set(self.seed))
-            raise ProgramError(
-                f"unknown ref {_quote(tok)}; valid refs so far: "
-                f"{_known or '(none)'}")
+            v = self.seed[base]
         return _window(v, win) if win else v
 
 
