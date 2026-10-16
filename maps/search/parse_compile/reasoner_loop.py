@@ -853,12 +853,13 @@ class _Mission:
         self.preflight = False
 
     def _fly_moves(self, accepted: list, item_errors: list,
-                   cover: str | None = None) -> dict:
-        """Fly each entry in order; after each flight the surface re-derives
-        and the rows it added mint an rN handle. ``cover`` (an explore) makes
-        the loop ONE pass: no per-stop view, one handle, one ack."""
+                   cover: str | None = None) -> list[dict]:
+        """Fly each entry in order and return the flight reports (a stop the
+        backstop cut lands in ``item_errors``); after each flight the surface
+        re-derives and the rows it added mint an rN handle. ``cover`` (an
+        explore) makes the loop ONE pass: no per-stop view, no per-stop
+        handle."""
         reports: list[dict] = []
-        cover_before = set(self._ns_rows) if cover is not None else None
         clock_cut = False
         queue = list(accepted)
         while queue:
@@ -900,37 +901,7 @@ class _Mission:
                     self._flight_view(item, report)
                 self._after_flight(report, fids_before, cover)
             reports.append(report)
-        if cover is not None:
-            return self._cover_ack(cover, reports, cover_before, item_errors)
-        mv_ack: dict = {"flown": [_served_flight(r) for r in reports]}
-        if item_errors:
-            mv_ack["rejected"] = item_errors
-        return mv_ack
-
-    def _cover_ack(self, cover: str, reports: list, before: set,
-                   item_errors: list) -> dict:
-        """One explore's flight reports -> the one ack of the pass. The ack
-        states that the standing answer is the pass's last stop."""
-        ok = [r for r in reports if "error" not in r]
-        ack: dict = {"explored": cover, "stops": len(ok)}
-        if ok:
-            ack["answer_if_you_reply_now"] = (
-                f"the last stop of the pass over {cover}; go_to() the row "
-                f"you mean before you reply")
-        ack["new_detections"] = sum(int(r.get("new_detections") or 0)
-                                     for r in ok)
-        m = self._mint_rows([f for f in self._ns_rows if f not in before], "pass")
-        if m is not None:
-            ack["new_rows"] = m
-        errs = [str(r["error"]) for r in reports if r.get("error")]
-        if errs:
-            ack["not_flown"] = errs[:4]
-        if item_errors:
-            ack["rejected"] = item_errors
-        if not ok:
-            return {"error": (errs[0] if errs
-                              else f"nothing of {cover} could be flown")}
-        return ack
+        return reports
 
     def _watch_apply(self, adds: list[str]) -> dict:
         """look_for(): add classes to the watchlist (a class declared again
@@ -1186,17 +1157,16 @@ class _Mission:
         tok, stop_err = self._fly_token(tok)
         if stop_err:
             return self._plan_err({}, stop_err)
-        mv = self._fly_moves([{"target_fid": tok.strip()}], [])
-        ok = [r for r in mv.get("flown") or [] if "error" not in r]
-        if not ok:
+        rejected: list = []
+        flown = [_served_flight(r) for r in
+                 self._fly_moves([{"target_fid": tok.strip()}], rejected)]
+        mv: dict = {"flown": flown}
+        if rejected:
+            mv["rejected"] = rejected
+        if all("error" in r for r in flown):
             # nothing flew: the failure is the result
-            msg = next(
-                (str(r["error"]) for r in mv.get("flown") or []
-                 if r.get("error")),
-                None) or next(
-                (str(e["error"]) for e in mv.get("rejected") or []
-                 if e.get("error")),
-                None) or "nothing flew"
+            msg = next((str(r["error"]) for r in flown + rejected
+                        if r.get("error")), "nothing flew")
             return self._plan_err({"flown": mv}, msg)
         return {"flown": mv}
 
@@ -1229,10 +1199,29 @@ class _Mission:
             covered=covered, pose_xy=self.ctx.pose_xy)
         if not accepted:
             return self._plan_err({}, cov_note)
-        mv = self._fly_moves(accepted, [], cover=subject)
-        if "error" in mv:
-            return self._plan_err({"explored": mv}, str(mv["error"]))
+        # One ack for the whole pass; the standing answer is its last stop.
+        before, rejected = set(self._ns_rows), []
+        reports = self._fly_moves(accepted, rejected, cover=subject)
+        ok = [r for r in reports if "error" not in r]
+        errs = [str(r["error"]) for r in reports if r.get("error")]
+        if not ok:
+            err = errs[0] if errs else f"nothing of {subject} could be flown"
+            return self._plan_err({"explored": {"error": err}}, err)
         self._covered_fids = covered
+        mv: dict = {
+            "explored": subject, "stops": len(ok),
+            "answer_if_you_reply_now": (
+                f"the last stop of the pass over {subject}; go_to() the row "
+                f"you mean before you reply"),
+            "new_detections": sum(int(r.get("new_detections") or 0)
+                                  for r in ok)}
+        m = self._mint_rows([f for f in self._ns_rows if f not in before], "pass")
+        if m is not None:
+            mv["new_rows"] = m
+        if errs:
+            mv["not_flown"] = errs[:4]
+        if rejected:
+            mv["rejected"] = rejected
         if segs > 1:
             mv["segments"] = segs
         # A truncated pass reads as truncated.
