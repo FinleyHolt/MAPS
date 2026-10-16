@@ -40,7 +40,7 @@ import sys
 from pathlib import Path
 
 from baselines.released.upstream import PROTOCOL, RELEASES
-from benchmarks.citynav.episodes import EPISODES_JSONL
+from benchmarks.citynav.episodes import EPISODES_JSONL, STATUS_OK
 
 Key = tuple[str, int, int]
 
@@ -106,7 +106,7 @@ def _row(eid: str, key: Key, path: list, description: str, scores: dict, ident: 
     return {
         **ident,
         "episode_id": eid,
-        "status": "ok",
+        "status": STATUS_OK,
         "upstream_key": list(key),
         "description": description,
         "visited_xy": [list(p) for p in path],
