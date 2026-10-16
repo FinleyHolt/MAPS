@@ -391,8 +391,12 @@ def _request_headers(api_key: str | None) -> dict[str, str]:
     return headers
 
 
+# A stream of nothing but empty deltas is a hung generation: it ends after
+# _EMPTY_STREAM_S or _EMPTY_STREAM_CHUNKS, whichever first, in a ReadTimeout
+# whose text starts with _EMPTY_STREAM_ERROR.
 _EMPTY_STREAM_S = 90.0
 _EMPTY_STREAM_CHUNKS = 1200
+_EMPTY_STREAM_ERROR = "LLM stream emitted only empty deltas"
 
 
 def stream_chat_completions(
@@ -415,8 +419,6 @@ def stream_chat_completions(
     model: str | None = None
     role: str | None = None
     saw_done = False
-    # A server that streams nothing but empty deltas is a hung generation;
-    # give up after _EMPTY_STREAM_S or _EMPTY_STREAM_CHUNKS, whichever first.
     empty_chunk_count = 0
     first_empty_at: float | None = None
 
@@ -500,8 +502,7 @@ def stream_chat_completions(
                 first_empty_at = first_empty_at or time.monotonic()
                 if (time.monotonic() - first_empty_at >= _EMPTY_STREAM_S
                         or empty_chunk_count >= _EMPTY_STREAM_CHUNKS):
-                    raise httpx.ReadTimeout(
-                        f"LLM stream emitted only empty deltas for {empty_chunk_count} chunks")
+                    raise httpx.ReadTimeout(f"{_EMPTY_STREAM_ERROR} for {empty_chunk_count} chunks")
             if finish_reason is None and not saw_done:
                 raise httpx.RemoteProtocolError("LLM stream ended without a finish_reason")
     except httpx.HTTPError:
@@ -607,6 +608,9 @@ def chat_completions_raw(
             raise
         except _NO_RETRY_TIMEOUTS as e:
             # Raised to the caller, whose backoff decides on a re-send.
+            if str(e).startswith(_EMPTY_STREAM_ERROR):
+                log.error("%s; not re-sent here.", e)
+                raise
             log.error(
                 "LLM %s after %.0fs; not re-sent here (the server may still "
                 "hold this request). Raise SEARCH_REASONER_TIMEOUT_S if this "

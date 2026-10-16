@@ -235,3 +235,21 @@ def test_a_stream_cut_before_its_end_is_a_transport_fault(monkeypatch, tail, fin
     out = http_mod.stream_chat_completions("http://e/v1/chat/completions", {}, {}, timeout=5.0)
     assert out["choices"][0]["finish_reason"] == finish
     assert out["choices"][0]["message"]["content"] == "half"
+
+
+def test_an_empty_delta_stream_is_logged_as_one_not_as_a_timeout(monkeypatch, caplog) -> None:
+    """A hung generation (only empty deltas) raises ReadTimeout like a read timeout, but its log line
+    names the empty stream instead of telling the operator to raise the reasoner timeout."""
+    import threading
+
+    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
+    monkeypatch.setattr(http_mod, "_EMPTY_STREAM_CHUNKS", 3)
+    sse = b'data: {"choices":[{"delta":{}}]}\n\n' * 3
+    real = httpx.Client
+    mock = httpx.MockTransport(lambda _r: httpx.Response(200, content=sse))
+    monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=mock, **kw))
+    with caplog.at_level(logging.ERROR, logger=http_mod.__name__), pytest.raises(httpx.ReadTimeout):
+        http_mod.chat_completions_raw("http://e/v1", "key", model="m", messages=_MESSAGES, timeout=60.0,
+                                      cancel_event=threading.Event())
+    assert "only empty deltas for 3 chunks" in caplog.text
+    assert "SEARCH_REASONER_TIMEOUT_S" not in caplog.text
