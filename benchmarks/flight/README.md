@@ -108,7 +108,7 @@ python -m benchmarks.flight.replay <sortie>/<run dir> --frames <sensors.mcap> --
 | Tier | What answers a flight | What it proves |
 |---|---|---|
 | Observation bank (default) | The recorded observations holding the leg's area (`--bank run`: the run's own; `--bank week`: every run under the sorties root). Your reasoner and segmenter answer; the recorded taskings are spoken after each report. | How the method decides over the ground the aircraft actually saw. |
-| Forced (`--forced`) | The recorded reasoner responses, observations and detections. Every request's text is diffed against the recording into `replay_diff.json`; differing pictures are counted (`pictures_differ`); a text divergence exits non-zero. No endpoint is contacted. | That this harness sends the flown request text turn for turn. |
+| Forced (`--forced`) | The recorded reasoner responses, observations and detections. Every request's text is diffed against the recording into `replay_diff.json`; differing pictures are counted (`pictures_differ`); any divergence (request text, params, flights, request count, stopped_there) exits non-zero. No endpoint is contacted. | That this harness sends the flown request text turn for turn. |
 | Frames (`--frames`) | The camera recording as the aircraft's ring, re-fused through the live chain at every waypoint. Needs the `recording` extra. | The observation chain on the real frames. |
 
 The bank and frame tiers fly your arm's reasoning effort
@@ -132,8 +132,9 @@ transcript row, stamped `t_s`), `frames.jsonl` (one row per observation),
 `flight_track.jsonl` holds the ownship track. Some fields are the recording's
 provenance, kept for a person auditing a flight against its camera recording
 and read by no measure or decision: in `frames.jsonl`, `log_time`, `t_host`,
-`age_s`, `attitude`, `boresight`, `registration` (with its `frames` count)
-and `mosaic`; in the ledger row, `ts` (the host's wall clock at the start).
+`age_s`, `attitude`, `boresight` and `registration` (with its `frames`
+count); in the ledger row, `ts` (the host's wall clock at the start). The
+replay tiers' `leg` rows read `mosaic`'s `asked` and `fetch_failed`.
 `conversation.jsonl`'s diagnostic rows (`malformed_envelope`, `empty_turn`,
 `code_shaped_reply`, `no_flight_reply`, `transient_error`,
 `oversize_rejection`, `content_filter`, `request_refused`, and a `run` row's `reasoning`, `said`, `printed`,
