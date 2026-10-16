@@ -2,7 +2,7 @@
 
 It defines no metric: ``rows.load_attempts`` picks each episode's result
 and :func:`arm_row` averages it. The criterion must be identical across
-every root (a disc's radius included) and is printed once. An arm's label is the withholds its run
+every root that records one (a disc's radius included) and is printed once. An arm's label is the withholds its run
 manifest records, else the root's basename; its effort is the manifest's
 ``SEARCH_SAMPLING_REASONING_EFFORT``, as written.
 
@@ -63,7 +63,7 @@ def arm_row(root: Path, *, allow_partial: bool = False,
     rates are also given as percentages, as CityNav reports them."""
     picked, stats = attempts or _rows.load_attempts(root, allow_partial=allow_partial)
     scored = list(_rows.scored_metrics(picked).values())
-    criterion = run_criterion(scored) if scored else None
+    recorded = [a.metrics for a in picked.values() if a.metrics]
     manifest = _rows.read_manifest(root)
     withhold = list(manifest.get("withhold") or [])
     row: dict = {
@@ -71,7 +71,7 @@ def arm_row(root: Path, *, allow_partial: bool = False,
         "label": f"withhold={','.join(withhold)}" if withhold else root.name,
         "effort": (manifest.get("search_env_flags") or {}).get(
             "SEARCH_SAMPLING_REASONING_EFFORT"),
-        "criterion": criterion_label(criterion, root) if criterion else None,
+        "criterion": criterion_label(run_criterion(recorded), root) if recorded else None,
         "n": len(scored),
         "no_metrics": stats.no_metrics,
         "timed_out": stats.timed_out,
@@ -109,7 +109,7 @@ def _sort_key(row: dict) -> tuple[int, float, str]:
 def table(roots: list[Path], *, allow_partial: bool = False) -> list[dict]:
     """Every arm's row, criterion-checked across the whole set."""
     rows = [arm_row(r, allow_partial=allow_partial) for r in roots]
-    seen = {r["criterion"] or criterion_label(None, Path()) for r in rows if r["n"]}
+    seen = {r["criterion"] for r in rows if r["criterion"] is not None}
     if len(seen) > 1:
         raise SystemExit(
             f"arm_table: these roots mix success criteria {sorted(seen)}. "

@@ -103,6 +103,17 @@ def test_an_unstamped_root_beside_a_stamped_one_refuses(tmp_path):
         arm_table.table([shape, _arm(tmp_path, "bare", bare)])
 
 
+def test_a_crash_only_root_beside_a_stamped_one_tables(tmp_path):
+    """A root whose every pick is a crash miss records no criterion, so it mixes with none."""
+    shape = _arm(tmp_path, "shape", _ledger("c::1#0", "20260827_100000", 1))
+    crash = _ledger("c::1#0", "20260827_100000", 1)
+    del crash["metrics"]
+    crash["error"] = "Boom"
+    rows = arm_table.table([shape, _arm(tmp_path, "crash", crash)])
+    assert [(r["label"], r["n"], r["criterion"], r["SR_pct"]) for r in rows] == [
+        ("crash", 1, None, 0.0), ("shape", 1, "the target's own shape", 100.0)]
+
+
 def test_ring_arms_of_two_radii_refuse_rather_than_pooling(tmp_path):
     """Two ring arms scored on a 20 m and a 40 m disc answer different questions."""
     roots = []
