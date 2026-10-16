@@ -38,6 +38,7 @@ import numpy as np
 
 from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import BAKE_OUTPUT_SUFFIXES, TILES_DIR
+from maps.search.analyze_scene.geom_compute import is_closed_chain
 
 log = logging.getLogger("bake_city")
 
@@ -209,7 +210,7 @@ def _chain_extent(chain: Sequence[tuple[float, float]]) -> float:
     """How much of the world a chain covers: enclosed area if it closes, else
     path length, else 0 for a lone vertex; it ranks a multi-part geometry's
     parts."""
-    if len(chain) >= 4 and chain[0] == chain[-1]:
+    if is_closed_chain(chain):
         area = 0.0
         for i in range(len(chain) - 1):
             (x0, y0), (x1, y1) = chain[i], chain[i + 1]
@@ -222,8 +223,8 @@ def _chain_extent(chain: Sequence[tuple[float, float]]) -> float:
 def _world_contour_from_geometry(geometry: dict[str, Any]) -> list[list[float]] | None:
     """The feature's EXACT vertex chain in world meters at 2 dp, or ``None``.
 
-    A Polygon's exterior ring CLOSED (how a reader tells a ring from a way,
-    ``geom_compute.is_closed_chain``), a LineString's vertices open, a Point's
+    A Polygon's exterior ring CLOSED (how ``is_closed_chain`` tells a ring
+    from a way), a LineString's vertices open, a Point's
     single vertex; a multi-part geometry contributes its largest part by
     ``_chain_extent``. The chain is kept whole: it is the footprint
     (``footprint_area_m2``) of every areal prior.
@@ -250,7 +251,7 @@ def _world_contour_from_geometry(geometry: dict[str, Any]) -> list[list[float]] 
     if not chains:
         return None
     best = max(chains, key=_chain_extent)
-    closed = len(best) >= 4 and best[0] == best[-1]
+    closed = is_closed_chain(best)
     out = [[round(float(x), 2), round(float(y), 2)] for x, y in (best[:-1] if closed else best)]
     # Rounding to 2 dp can collapse neighbours onto each other; drop
     # consecutive repeats. A chain that rounds down to a single vertex IS
