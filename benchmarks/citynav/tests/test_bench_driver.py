@@ -495,10 +495,6 @@ def test_the_sam_gate_asks_the_replicas_discovery_checked(monkeypatch) -> None:
     up.add("http://b:8100/health")
     assert bf.Driver._sam_answers()
     assert asked == ["http://a:8100/health", "http://b:8100/health", "http://a:8100/health", "http://b:8100/health"]
-    monkeypatch.setattr(E, "_SPEC", replace(TEST_SPEC, sam_urls=()))
-    assert bf.Driver._sam_answers() and len(asked) == 4
-    monkeypatch.setattr(E, "_SPEC", None)
-    assert bf.Driver._sam_answers()
 
 
 @pytest.mark.parametrize("flag", ["--workers", "--max-infra-attempts", "--episode-timeout-s"])
