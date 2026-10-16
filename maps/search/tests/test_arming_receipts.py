@@ -131,7 +131,7 @@ def test_an_empty_watchlist_is_told_once_per_run_not_per_flight():
                 "pose_xy": [1.0, 2.0], "new_detections": 0, "cue": "the cue"}
 
     _, fr, flights, _ = drive(
-        [[run("go_to(prior_7)\ngo_to(prior_1)\n")], "done"], fly=_fly)
+        [[run('go_to("prior_7")\ngo_to("prior_1")\n')], "done"], fly=_fly)
     assert len(flights) == 2, flights
     served = json.dumps(tool_results(fr)[0])
     assert served.count('look_for(\\"<class>\\")') == 1, served

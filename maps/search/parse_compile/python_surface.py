@@ -152,8 +152,9 @@ class _Stop(Exception):
 class MissionNamespace(dict):
     """The exec globals (CPython honours ``__missing__`` on a dict-subclass
     globals): an undefined name that spells a served fid is a :class:`Row` of
-    the live row, else the fid string; a name this mission unbound says why,
-    and a near-miss gets a did-you-mean."""
+    the live row, a prior_/detected_ fid with no row is refused, any other
+    fid spelling is the string; a name this mission unbound says why, and a
+    near-miss gets a did-you-mean."""
 
     def __init__(self, mp: "MissionPython", base: dict):
         super().__init__(base)
@@ -163,7 +164,12 @@ class MissionNamespace(dict):
         mp = self.mp
         if fid_like(k):
             row = mp.env.row_of_fid(k)
-            return Row(row, mp=mp) if isinstance(row, dict) else k
+            if isinstance(row, dict):
+                return Row(row, mp=mp)
+            if k.startswith(("prior_", "detected_")):
+                raise CodeError(f"there is no {k} on this surface; say a "
+                                "fid off a served row.")
+            return k
         # A plain KeyError is what lets LOAD_GLOBAL fall through to
         # __builtins__.
         if k in (dict.get(self, "__builtins__") or {}):

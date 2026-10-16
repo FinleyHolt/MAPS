@@ -767,8 +767,8 @@ def test_a_distance_after_a_flight_in_the_same_block_measures_the_new_surface():
 
 
 @pytest.mark.parametrize("arg, says", [
-    ("prior_99", "distance() got 'prior_99', which names no row on this "
-                 "surface"),
+    ("prior_99", "there is no prior_99 on this surface; say a fid off a "
+                 "served row."),
     ('"detected_7"', "distance() got 'detected_7', which names no row on "
                      "this surface"),
     ("r1", "distance() got an empty list -- there is nothing there to "
@@ -877,6 +877,12 @@ def test_indexing_an_empty_set_says_it_holds_no_rows():
     err, _ = _refusal('cars = find("car")\ncars[99]\n')
     assert err.endswith("cars[99] did not bind: cars served 2 row(s) here. "
                         "Show it first, then index it."), err
+
+
+def test_a_fid_name_with_no_row_on_the_surface_is_refused():
+    err, _ = _refusal('look(prior_9999[0])\n')
+    assert err.endswith("there is no prior_9999 on this surface; say a fid "
+                        "off a served row."), err
 
 
 def test_indexing_a_set_by_a_non_int_names_the_int_position():
