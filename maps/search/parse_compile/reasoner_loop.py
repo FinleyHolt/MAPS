@@ -289,8 +289,6 @@ _CATCH_CROPS = LOOK_MAX_CROPS // 2
 # What a look and a pass's catch say under the ``images`` withhold.
 _PICTURE_WITHHELD_OF = ("the {}'s caption follows in the next message; "
                         "its picture is not served on this run")
-# The shape errors: a repeat serves only its count (_loop_broken_error).
-_SHAPE_MARKERS = ("syntax error",)
 # How a grounding note says what the call does at a name's best match, by
 # the name's why.
 _WHY_VERB = {"stage": "standing at", "move": "flying",
@@ -677,7 +675,8 @@ class _Mission:
         # The escalation is a new sentence; a caret line is no sentence.
         if not err.endswith((".", "!", "?", "^")):
             err += "."
-        if any(m in err for m in _SHAPE_MARKERS):
+        # A syntax error's repeat serves only its count.
+        if "syntax error" in err:
             return err + f" This error class has now occurred {n}x."
         if consec >= 3:
             return self._repeated_rejection_state(err, n, consec)
