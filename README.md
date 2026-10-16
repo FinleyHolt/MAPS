@@ -159,6 +159,7 @@ these places, the served-text changes among them:
 | A twin, bank or forced replay refuses a map whose bake has no georef or no `<map>_features.json` before its run folder opens. | The bank and forced replays opened the run and recorded the missing bake as the method's failed miss. |
 | `ab_report` refuses two runs whose criterion labels differ, discs of different radius included, and no waiver overrides it; `run_report`'s by-class lines read a recorded row's own `referent_bucket` and `intel_quality`, and the run's split only for picks without metrics. | Two ring runs paired whatever their radius (only the config hash caught it, and `--allow-provenance-mismatch` waived that); a miss without a record counted under `?`. |
 | A `show_map(around=X)` whose frame on the badged set would not contain X is centred on X at X's own window size (200 m for a point); otherwise the frame is as flown. | The window framed the badged set and the centre's outline only, so a point centre away from the set fell off the map (4 forced-replay renders in 2 recorded runs). |
+| An empty watchlist is told once per run, in the run's `watching` line. | Each zero-detection flight's note also said "the watchlist is empty -- nothing is segmented on any flight; call look_for(...)" (8 recorded Cal City runs carry it). |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
