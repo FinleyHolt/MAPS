@@ -1538,6 +1538,10 @@ class MissionPython:
                 raise CodeError(
                     f"{call}() got an empty list; there is nothing to "
                     f"{_MOVE_SAYS[call]}.")
+            if any(e is None for e in x):
+                raise CodeError(
+                    f"each {call}() place got None, which is no place: the "
+                    "name it came from holds no row. Bind a row first.")
             # explore's list is a SET of things -- rows, sets, fids -- as
             # one place to cover; any numeric element is the coordinate
             # hatch.

@@ -893,6 +893,13 @@ def test_an_empty_name_is_no_place(code, slot):
     assert err.endswith(f"{slot} got an empty name, which is no place."), err
 
 
+def test_none_inside_a_move_list_is_no_place():
+    err, _ = _refusal('explore(["prior_1", None])\n')
+    assert err.endswith("each explore() place got None, which is no place: "
+                        "the name it came from holds no row. Bind a row "
+                        "first."), err
+
+
 def test_indexing_a_set_by_a_non_int_names_the_int_position():
     err, _ = _refusal('cars = find("car")\ncars["name"]\n')
     assert err.endswith("cars['name'] did not bind: cars is a set of rows, "
