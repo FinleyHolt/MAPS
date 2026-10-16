@@ -1404,7 +1404,7 @@ def _union_members(cx, ref_el, as_label) -> list:
             if not got:
                 raise ProgramError(
                     f"{lbl} is empty, so 'distance to {lbl}' is undefined on "
-                    f"every row and the ordering would be meaningless."
+                    f"every row and nothing can be cut or ordered by it."
                     + ("" if withheld("look_for") else
                        " If these are things the map does not carry (a "
                        "pool, solar panels, a shed, a car), nothing is "
