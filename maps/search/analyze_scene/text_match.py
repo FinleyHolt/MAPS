@@ -20,9 +20,8 @@ import re
 
 from maps.search.analyze_scene.geom_compute import COLOR_FAMILY
 
-# --- lexical abbreviation expansion -----------------------------------------
-
-_STREET_ABBREVS: dict[str, str] = {
+# The abbreviations query and row words expand to, before matching.
+_FUZZY_ABBREVS: dict[str, str] = {
     "st": "street",
     "ave": "avenue",
     "blvd": "boulevard",
@@ -34,9 +33,6 @@ _STREET_ABBREVS: dict[str, str] = {
     "cir": "circle",
     "hwy": "highway",
     "pkwy": "parkway",
-}
-
-_GENERAL_ABBREVS: dict[str, str] = {
     "hlth": "health",
     "ctr": "center",
     "cntr": "center",
@@ -66,8 +62,6 @@ _GENERAL_ABBREVS: dict[str, str] = {
     "acad": "academy",
     "sch": "school",
 }
-
-_FUZZY_ABBREVS: dict[str, str] = {**_GENERAL_ABBREVS, **_STREET_ABBREVS}
 
 FUZZY_THRESHOLD = 0.45
 
