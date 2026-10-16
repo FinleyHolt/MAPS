@@ -43,6 +43,10 @@ from maps.search.parse_compile.code_surface import (
 
 BLOCK_FILENAME = "<mission-block>"
 
+# What a set the model has no name for is called where a label must be said
+# (MissionPython.spelling): never the executor's rN, which it never bound.
+UNNAMED = "(unnamed)"
+
 # Liveness ceiling on one block's own lines (harness frames are untraced).
 # A block that runs 100k model-written lines is a runaway loop, not a plan.
 TRACE_LINE_CEILING = 100_000
@@ -680,7 +684,7 @@ class Rows(_Cuts):
         # flip.
         if self._tied():
             name = (self.mp.name_of(self) or self.mp.call_arg(None)
-                    or self.ref)
+                    or self.mp.spelling(self) or UNNAMED)
             # The refusal names the call that does the work.
             raise CodeError(
                 f"{name} is a tied view of {len(self._rows())} rows and is "
@@ -705,7 +709,7 @@ class Rows(_Cuts):
         rows = self._rows()
         if not isinstance(i, int) or not (-len(rows) <= i < len(rows)):
             name = (self.mp.name_of(self) or self.mp.call_arg(None)
-                    or self.ref)
+                    or self.mp.spelling(self) or UNNAMED)
             raise CodeError(
                 f"{name}[{i}] did not bind: {name} served {len(rows)} "
                 "row(s) here. Show it first, then index it.")
@@ -738,10 +742,10 @@ class Rows(_Cuts):
     def _stratum(self, tier: str) -> "Rows":
         src = self if not self.spec else self.mp._materialize(self)
         p = self.mp._program(src.ref)
-        name = self.mp.name_of(self) or self.mp.ref_name(src.ref) or src.ref
+        name = self.mp.spelling(self)
         return Rows(self.mp._analyze(
             p, p.add("stratum", {"items": src.ref, "tier": tier}),
-            shown=f"{name}.{tier}"), self.mp)
+            shown=name and f"{name}.{tier}"), self.mp)
 
     # -- cut and order: many filters, ONE ordering ------------------------
     def _target(self):
@@ -777,7 +781,7 @@ class Rows(_Cuts):
 
     def __repr__(self):
         """Named rows, not an opaque count."""
-        name = self.mp.name_of(self) or self.ref
+        name = self.mp.spelling(self) or UNNAMED
         rows = self._rows()
         if not rows:
             return f"<{name}: 0 rows>"
@@ -813,6 +817,12 @@ def _tuple_xy(xy):
     """A served ``xy`` as a hashable pair, or None. The place tuple is the
     geometry cache's key, so a list would make it unhashable."""
     return (float(xy[0]), float(xy[1])) if is_xy(xy) else None
+
+
+def _index_it(name: str | None) -> str:
+    """The remedy's opening for a set refused where one place goes: a set
+    the model has no name for is bound first, as ``s``."""
+    return "Index it" if name else "Bind it first (s = ...), then index it"
 
 
 def _set_as_list(v) -> list:
@@ -923,6 +933,7 @@ class MissionPython:
         # served envelope is keyed by the model's own name.
         self._shown: dict = {}
         self._labels: dict = {}         # ref -> the call that made it (find)
+        self._unnamed: dict = {}        # nameless set -> its slot number
         self._picked: dict = {}         # fids the model's Row names hold
         self._unbound: dict = {}        # name -> why this mission removed it
         self._get_noted: set = set()    # .get near-miss keys noted, per block
@@ -974,6 +985,16 @@ class MissionPython:
                 return k
         return getattr(obj, "label", "") or None
 
+    def spelling(self, x: "Rows") -> str | None:
+        """The model's spelling of a set, the one name every served label
+        uses: its bound name, else its whole result's name with the window;
+        None when the model has no name for it (never the executor's rN)."""
+        name = self.name_of(x)
+        if name:
+            return name
+        base = self.ref_name(x.ref)
+        return base and f"{base}{x.spec}"
+
     def ref_name(self, ref: str) -> str | None:
         """The model's name for a whole result: a bound name, else what it
         was shown under or the call that made it; None when it has none."""
@@ -1023,9 +1044,14 @@ class MissionPython:
         own name (as is a string naming one); anything else rides verbatim,
         a bare name to ground."""
         if isinstance(v, Rows):
+            # A nameless set is numbered, once per mission, so two of them
+            # in one call stay two places (two columns, two cuts).
+            name = self.spelling(v) or "(unnamed {})".format(
+                self._unnamed.setdefault(f"{v.ref}{v.spec}",
+                                         len(self._unnamed) + 1))
             if v.spec:
                 v = self._materialize(v)
-            return Ref(v.ref, self.name_of(v) or v.ref)
+            return Ref(v.ref, name)
         if isinstance(v, Row):
             return Bind(v.bind, self.name_of(v) or (v.fid or "row"))
         if isinstance(v, str):
@@ -1124,9 +1150,11 @@ class MissionPython:
         ties = self._ground(sites)
         self._end(verb(*[_tok(s, ties) for s, _w in sites], *args, **kw))
 
-    def _show_as(self, ref: str, label: str) -> None:
-        """Serve ``ref``'s envelope under ``label``, kept whole."""
-        self._shown[ref] = label
+    def _show_as(self, ref: str, label: str | None) -> None:
+        """Serve ``ref``'s envelope under ``label``, kept whole (unnamed when
+        ``label`` is None)."""
+        if label is not None:
+            self._shown[ref] = label
         self._block_shown.add(ref)
 
     def _analyze(self, p: Program, ref: str, *, shown=None, page=None) -> str:
@@ -1166,8 +1194,7 @@ class MissionPython:
         slice rides every slot a set can (find(near=r1[0:5]) is the union
         of the head, which is what the spelling plainly means)."""
         return Rows(self._window(sliced.ref, sliced.spec,
-                                 f"{sliced.ref}{sliced.spec}", sliced.ref),
-                    self)
+                                 self.spelling(sliced), sliced.ref), self)
 
     # -- the library -------------------------------------------------------
 
@@ -1284,7 +1311,8 @@ class MissionPython:
         if not isinstance(x, Rows) or x.spec:
             raise CodeError("more_of pages a RESULT a find or an ordering "
                             "left")
-        name = self.name_of(x) or self.call_arg("more_of") or x.ref
+        name = (self.name_of(x) or self.call_arg("more_of")
+                or self.spelling(x) or UNNAMED)
         lo = BROAD_HEAD_ROWS + int(self.env.widened.get(x.ref) or 0)
         p = self._program(name)
         # The rows served are NOT the handle -- they are a window of it --
@@ -1332,10 +1360,10 @@ class MissionPython:
         if isinstance(x, Rows) and x.spec:
             # A SLICE is looked at through its window: two verbs, one
             # receipt, and the window is no answer of its own.
-            name = self.name_of(x) or self.ref_name(x.ref) or x.ref
-            p = self._program(name, mk)
+            name = self.spelling(x)
+            p = self._program(x.ref, mk)
             ref = p.window(x.ref, x.spec)
-            self._show_as(ref, f"{name}{x.spec}")
+            self._show_as(ref, name)
         else:
             # A set inside a list is refused under the model's spelling,
             # before _slot would materialize a slice; a string naming a held
@@ -1345,9 +1373,7 @@ class MissionPython:
                 if isinstance(a, Rows)]
             held = []
             if sets:
-                ref = self.ref_name(sets[0].ref)
-                held = [self.name_of(sets[0])
-                        or ref and f"{ref}{sets[0].spec}"]
+                held = [self.spelling(sets[0])]
                 if not held[0]:
                     raise CodeError(
                         "look() got an unnamed set inside a list; bind it "
@@ -1387,10 +1413,11 @@ class MissionPython:
 
     def _call_show_map(self, around=None):
         if isinstance(around, Rows):
-            name = self.name_of(around) or around.ref
+            name = self.spelling(around)
             raise CodeError(
-                f"around= takes ONE place and {name} is a set. Index it "
-                f"-- around={name}[0] -- or use a name. (A set IS one "
+                f"around= takes ONE place and {name or 'that'} is a set. "
+                f"{_index_it(name)} -- around={name or 's'}[0] -- or use a "
+                "name. (A set IS one "
                 "place in near=, within= and nearest=, where it means "
                 "the gap to its NEAREST member, but there is no one "
                 "point to centre on.)")
@@ -1445,16 +1472,16 @@ class MissionPython:
         if isinstance(x, Rows):
             # A SET is one place for explore; go_to lands on one thing.
             if call == "go_to":
-                name = self.name_of(x) or x.ref
+                name = self.spelling(x)
+                s = name or "s"
                 raise CodeError(
-                    f"go_to() takes ONE thing and {name} is a set of "
-                    f"{len(x)} row(s). Index it -- go_to({name}[0]) -- "
-                    f"or explore({name}) to cover the whole set.")
+                    f"go_to() takes ONE thing and {name or 'that'} is a set "
+                    f"of {len(x)} row(s). {_index_it(name)} -- go_to({s}[0])"
+                    f" -- or explore({s}) to cover the whole set.")
             if not len(x):
-                name = self.name_of(x) or x.ref
                 raise CodeError(
-                    f"{name} holds 0 row(s) here; there is nothing to "
-                    "cover.")
+                    f"{self.spelling(x) or 'that set'} holds 0 row(s) here; "
+                    "there is nothing to cover.")
         elif is_xy(x) and withheld("prior"):
             pass  # no map to name a thing on: a point is the place to fly
         elif isinstance(x, (list, tuple, set, frozenset)):
@@ -1523,18 +1550,17 @@ class MissionPython:
     def _call_show(self, *xs):
         """``show(r1)`` renders exactly what ``r1`` on its own line does."""
         for x in xs:
-            self._show(x, self.name_of(x)
-                       or (x.ref if isinstance(x, Rows) else repr(x)))
+            self._show(x, self.spelling(x) if isinstance(x, Rows)
+                       else self.name_of(x) or repr(x))
 
-    def _show(self, value, label: str):
+    def _show(self, value, label: str | None):
         if value is None:
             return
         if isinstance(value, Rows):
-            name = self.name_of(value) or value.ref
             # Key the envelope by the MODEL's spelling ("r1[0:5]"), not the
             # executor's ref the window compiled onto.
-            self._shown[self._window(value.ref, value.spec,
-                                     f"{name}{value.spec}", name)] = label
+            self._show_as(self._window(value.ref, value.spec, label,
+                                       value.ref), label)
         elif isinstance(value, Row) and value.src \
                 and not re.fullmatch(r"\w+", label):
             # Render the ROW: a one-row window keeps the ordering
@@ -1542,7 +1568,7 @@ class MissionPython:
             # asked for rather than a census of one.
             ref, i = value.src
             spec = f"[{i}:{i + 1}]"
-            self._shown[self._window(ref, spec, f"{ref}{spec}", ref)] = label
+            self._window(ref, spec, label, ref)
         elif isinstance(value, Row):
             self._out.setdefault("shown", {})[label] = value.bind
         else:
