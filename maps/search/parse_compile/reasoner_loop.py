@@ -216,10 +216,6 @@ def _deliver_frames(jpegs: list[bytes], sink: list[str]) -> None:
                         exc_info=True)
 
 
-# Tool-call residue: a prose turn carrying one is a malformed envelope,
-# repaired, never an ending.
-ENVELOPE_RESIDUE = ("<tool_call", "</tool_call", "<function")
-
 # Consecutive zero-flight replies that end the mission: the first two draw
 # NO_FLIGHT_REPLY_NUDGE, the third is an abstain. Anything the model
 # executes between two replies resets the streak.
@@ -313,9 +309,10 @@ def _surface_from_ctx(ctx) -> dict:
 
 
 def _envelope_residue(text: str) -> bool:
-    """True when a prose turn carries tool-call envelope residue."""
+    """True when a prose turn carries tool-call markup: a malformed
+    envelope, repaired, never an ending."""
     t = str(text or "")
-    return any(m in t for m in ENVELOPE_RESIDUE)
+    return any(m in t for m in ("<tool_call", "</tool_call", "<function"))
 
 
 EMPTY_TURN_NUDGE = (
@@ -1009,7 +1006,6 @@ class _Mission:
         fids = [row_token(r) for r in rows]
         return self._crops_of(
             fids, marks=marks,
-            # No handle named: the executor's ref may be unbound.
             preamble=("One crop per row, in order, each badged with the "
                       "row it shows. "))
 
