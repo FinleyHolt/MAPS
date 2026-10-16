@@ -111,6 +111,12 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
                      "http://127.0.0.1:8001/v1/models"]
     installed("")  # an offline spec names no URL: a reasoner that does not answer
     assert not driver()._reasoner_answers()
+    bearers: list = []
+    monkeypatch.setattr(bf.urllib.request, "urlopen", lambda req, timeout: bearers.append(
+        req.get_header("Authorization")) or _Answer())
+    monkeypatch.setenv("SEARCH_REASONER_API_KEY", "k")
+    installed("http://127.0.0.1:8001/v1")
+    assert driver()._reasoner_answers() and bearers == ["Bearer k"]  # hosted endpoints auth the listing
 
 
 def test_a_window_of_infra_casualties_stops_the_run(driver, tmp_path: Path) -> None:
@@ -483,7 +489,8 @@ def test_the_sam_gate_asks_the_replicas_discovery_checked(monkeypatch) -> None:
         def __exit__(self, *exc):
             return False
 
-    def _open(url, timeout):
+    def _open(req, timeout):
+        url = req.full_url
         asked.append(url)
         if url not in up:
             raise OSError("connection refused")

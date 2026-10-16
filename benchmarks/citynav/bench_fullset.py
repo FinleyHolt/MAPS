@@ -112,6 +112,17 @@ def _causes(counts: Counter) -> str:
     return ", ".join(f"{c} ({k})" for c, k in counts.most_common())
 
 
+def _answers(url: str, bearer: str | None = None) -> bool:
+    """True when a GET of ``url`` (``bearer`` as an Authorization header)
+    gets a 2xx or 3xx within 10 s."""
+    try:
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {bearer}"} if bearer else {})
+        with urllib.request.urlopen(req, timeout=10.0) as resp:
+            return 200 <= resp.status < 400
+    except (OSError, ValueError):
+        return False
+
+
 def _missing_block_assets(episode_ids: list[str]) -> list[str]:
     """What the selected episodes' blocks need and do not have: the bake
     (``assets.missing_bake``), and ``<map>.tif`` beside ``<map>_rgb.tif`` or
@@ -313,30 +324,14 @@ class Driver:
         with the chat path's bearer (hosted endpoints auth ``/v1/models``)."""
         from maps.llm.endpoint_spec import models_url, reasoner_api_key, spec  # noqa: PLC0415
 
-        key = reasoner_api_key()
-        try:
-            req = urllib.request.Request(models_url(spec().base_url))
-            if key:
-                req.add_header("Authorization", f"Bearer {key}")
-            with urllib.request.urlopen(req, timeout=10.0) as resp:
-                return 200 <= resp.status < 400
-        except (OSError, ValueError):
-            return False
+        return _answers(models_url(spec().base_url), reasoner_api_key())
 
     @staticmethod
     def _sam_answers() -> bool:
-        """True when a SAM replica discovery health-checked answers
-        ``/health`` (the client steps off a dead replica)."""
+        """True when a SAM replica discovery health-checked answers ``/health``."""
         from maps.llm.endpoint_spec import spec  # noqa: PLC0415
 
-        for url in spec().sam_urls:
-            try:
-                with urllib.request.urlopen(f"{url}/health", timeout=10.0) as resp:
-                    if 200 <= resp.status < 400:
-                        return True
-            except (OSError, ValueError):
-                continue
-        return False
+        return any(_answers(f"{url}/health") for url in spec().sam_urls)
 
     def _wait_for_reasoner(self) -> bool:
         return self._wait_for("reasoner", self._reasoner_answers)
