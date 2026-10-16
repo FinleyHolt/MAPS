@@ -34,9 +34,7 @@ def _legend_line(entries: list[dict]) -> str:
 
 def _window_caption(c: dict) -> str:
     """One rendered image's window: span, orientation and world extent."""
-    # ORIENTATION, per image and derived, never assumed: a rotated image
-    # states its true up (bearing + the frame note); only a genuinely
-    # unrotated one says north-up. The header claims nothing.
+    # A rotated image states its true up; only an unrotated one says north-up.
     _fu = c.get("frame_up")
     if isinstance(_fu, (list, tuple)) and len(_fu) == 2:
         _fn = str(c.get("frame_note") or "").strip()

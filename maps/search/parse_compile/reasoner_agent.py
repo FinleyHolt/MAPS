@@ -27,9 +27,7 @@ _REASONER_TIMEOUT_DEFAULT_S = 240.0
 
 class DegenerateCompletion(ValueError):
     """A completion whose generation collapsed (a repeated-token run): a
-    serve fault, retried rather than repaired, since the model was never
-    asked anything. A ``ValueError`` so it is one of
-    ``reasoner_loop._RETRIABLE_LLM_ERRORS``."""
+    serve fault, retried as one of ``reasoner_loop._RETRIABLE_LLM_ERRORS``."""
 
 
 # One character repeated to the end of a channel: degenerate decode output.
