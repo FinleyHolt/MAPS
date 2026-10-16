@@ -64,7 +64,7 @@ def _flatten_multimodal_content(content: list) -> str:
             t = p.get("type")
             if t == "text":
                 parts.append(str(p.get("text") or ""))
-            elif "image" in str(t):
+            elif t == "image_url":
                 parts.append(_IMAGE_PART_PLACEHOLDER)
             else:
                 parts.append(str(p))
