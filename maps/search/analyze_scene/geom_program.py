@@ -400,27 +400,16 @@ def _grid_columns(rows) -> list[str]:
                 seen_set.add(k)
                 seen.append(k)
     prio = [c for c in _GRID_COL_PRIORITY if c in seen_set]
-    extras = [c for c in seen if c not in _GRID_COL_PRIORITY]
     # A ref's four side columns (one of each pair per row) group where the
     # first appears, in STANDING_SIDE_PREFIXES order.
-    def _side(c):
-        """``(prefix index, ref)`` of a side column, else None."""
-        for i, p in enumerate(STANDING_SIDE_PREFIXES):
-            if c.startswith(p) and len(c) > len(p):
-                return i, c[len(p):]
-        return None
-
     grouped: list[str] = []
-    done: set = set()
-    for c in extras:
-        if c in done:
+    for c in seen:
+        if c in _GRID_COL_PRIORITY or c in grouped:
             continue
-        side = _side(c)
-        family = [c] if side is None else sorted(
-            (x for x in extras if (s := _side(x)) and s[1] == side[1]),
-            key=lambda x: _side(x)[0])
-        grouped.extend(family)
-        done.update(family)
+        side = _column_ref(c, STANDING_SIDE_PREFIXES)
+        grouped += [c] if side is None else [
+            p + side[1] for p in STANDING_SIDE_PREFIXES
+            if p + side[1] in seen_set]
     return prio + grouped
 
 
@@ -453,6 +442,16 @@ _COMPARE_COL_PREFIXES = ("distance to ", "center distance to ",
                          "east of ", "west of ", "north of ", "south of ")
 AUTOATTACH_PREFIXES = tuple(
     p for p in _COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
+
+def _column_ref(key, prefixes) -> "tuple[str, str] | None":
+    """``(prefix, ref)`` of a ``<prefix><ref>`` column key, the prefix one
+    of ``prefixes``; else None."""
+    if isinstance(key, str):
+        for p in prefixes:
+            if key.startswith(p) and len(key) > len(p):
+                return p, key[len(p):]
+    return None
+
 
 # A wall-clock net: a union measures members x items gaps.
 _UNION_MAX_MEMBERS = 400
@@ -664,15 +663,14 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
 def _grouped_keys(present) -> str:
     """The keys with each family of more than three per-instance keys
     collapsed ('distance to building_* (100 instances, e.g. ...)'); a key's
-    family is its longest column prefix plus its stem's leading word."""
-    prefixes = sorted(_COMPARE_COL_PREFIXES + ("color_",), key=len, reverse=True)
+    family is its column prefix plus its stem's leading word."""
     fams: dict[str, list] = {}
     for k in present:
-        pre = next((p for p in prefixes if k.startswith(p)), None)
-        if pre is None:
+        col = _column_ref(k, _COMPARE_COL_PREFIXES + ("color_",))
+        if col is None:
             fams.setdefault(k, []).append(k)
             continue
-        stem = k[len(pre):]
+        pre, stem = col
         base = re.match(r"^([A-Za-z]+)_", stem)
         fams.setdefault(pre + (base.group(1) + "_" if base else stem),
                         []).append(k)
@@ -871,12 +869,11 @@ def _relate_ran(key, items) -> bool:
     """Whether the compare that writes a ``facing <lab>`` or ``<dir> of
     <lab>`` key ran: its sibling ``distance to <lab>`` is on a row, so the
     key absent everywhere means no row has a word or a side to name."""
-    pre = next((p for p in ("facing ", "north of ", "south of ", "east of ",
-                            "west of ")
-                if isinstance(key, str) and key.startswith(p)), None)
-    if pre is None:
+    col = _column_ref(key, ("facing ", "north of ", "south of ", "east of ",
+                            "west of "))
+    if col is None:
         return False
-    sib = "distance to " + key[len(pre):]
+    sib = "distance to " + col[1]
     return any(isinstance(it, dict) and sib in it for it in items)
 
 
@@ -884,9 +881,9 @@ def _contact_fact(cx, key) -> str:
     """For an absent 'distance to' / 'facing' a <fid> whose mask contains
     the whole surface window: why neither is stamped. Returns the fact, or
     ''."""
-    if isinstance(key, str) and key.startswith(("distance to ", "facing ")):
-        _p = (key[len("facing "):] if key.startswith("facing ")
-              else key[len("distance to "):])
+    col = _column_ref(key, ("distance to ", "facing "))
+    if col is not None:
+        _p = col[1]
         _n = cx.by_fid.get(_p)
         if isinstance(_n, dict) and _n.get("covers_window"):
             return (f"{_p}'s mask contains the whole surface window, so "
