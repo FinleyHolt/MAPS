@@ -452,19 +452,19 @@ class Mission:
         """Where a short pass is asked again, and the note for why: the area's
         centroid moved toward the unheld points' centroid (off ``cov``, the
         recording's answer that read the pass short) by the missing ground's
-        extent, no further than the leg's reach."""
+        extent."""
         best = cov.get("best") or []
         unheld = [p for p, b in zip(area, best) if b is None] or list(area)
         cx, cy = (sum(p[0] for p in area) / len(area), sum(p[1] for p in area) / len(area))
         ux, uy = (sum(p[0] for p in unheld) / len(unheld), sum(p[1] for p in unheld) / len(unheld))
         dx, dy = ux - cx, uy - cy
         span = math.hypot(dx, dy)
-        reach = max(math.dist((cx, cy), p) for p in area)
         if span < 1.0:
             shift, moved = 0.0, [cx, cy]
         else:
+            # Both lie inside the area, so the shift never passes its reach from the centroid.
             extent = max(((p[0] - cx) * dx + (p[1] - cy) * dy) / span for p in unheld)
-            shift = min(max(extent, span), reach)
+            shift = max(extent, span)
             moved = [cx + dx / span * shift, cy + dy / span * shift]
         side = "N NE E SE S SW W NW".split()[round(math.degrees(math.atan2(dx, dy)) / 45.0) % 8] if span >= 1.0 else "-"
         frames = len({b[1] for b in best if b is not None})
