@@ -511,16 +511,17 @@ def test_a_facing_cut_keeps_the_row_it_could_not_measure():
 
 
 def test_a_direction_COMPOSES_so_southwest_faces_south_and_west():
-    from maps.search.parse_compile.code_surface import _wind_parts, _winds_holding
+    from maps.search.parse_compile.code_surface import (
+        _winds_holding, split_diagonal)
 
     # derived from the wind's spelling, never tabulated
-    assert _wind_parts("southwest") == {"south", "west"}
-    assert _wind_parts("south") == {"south"}
+    assert split_diagonal("southwest") == ("south", "west")
+    assert split_diagonal("south") is None
     for c in ("north", "south", "east", "west"):
         holds = _winds_holding(c)
         assert len(holds) == 3, (c, holds)
         assert c in holds
-        assert all(c in _wind_parts(w) for w in holds), (c, holds)
+        assert all(c in (split_diagonal(w) or (w,)) for w in holds), (c, holds)
     assert set(_winds_holding("south")) == {"south", "southeast", "southwest"}
     # ...and no wind is claimed by an axis it does not hold
     assert "north" not in _winds_holding("south")

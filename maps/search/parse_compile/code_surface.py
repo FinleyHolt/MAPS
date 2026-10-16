@@ -27,19 +27,13 @@ def split_diagonal(word: str):
     return None
 
 
-def _wind_parts(word: str) -> frozenset:
-    """The CARDINALS a compass wind is made of: southwest is south and
-    west, so a thing facing southwest faces south and faces west."""
-    pair = split_diagonal(word)
-    return frozenset(pair) if pair else frozenset((word,))
-
-
 def _winds_holding(cardinal_word: str) -> list:
     """Every served wind that COUNTS AS facing this cardinal: ``south`` is
     satisfied by south, southeast and southwest, since a house sits
     DIAGONALLY from the crossing it is on the corner of. Chaining the two
     cardinals of a diagonal takes the precision back."""
-    return sorted(w for w in COMPASS_UNIT if cardinal_word in _wind_parts(w))
+    return sorted(w for w in COMPASS_UNIT
+                  if cardinal_word in (split_diagonal(w) or (w,)))
 
 
 # THE MOVING CALLS TAKE A THING, NEVER A COORDINATE (outside the prior
