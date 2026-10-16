@@ -939,9 +939,7 @@ class _Mission:
             # Any accepted boost refreshes the surface and bumps its version,
             # as a flight does (a retro boost has ingested detections).
             self._world_moved()
-        if res.get("error"):
-            return self._plan_err({"boost": res}, str(res["error"]))
-        return {"boost": res}
+        return self._acked("boost", res)
 
     def _ship(self, ack: dict, kind: str, jpegs: list, vis_text: str) -> bool:
         """Queue one look's or map's pictures (or, under the images
@@ -1018,6 +1016,13 @@ class _Mission:
     def _plan_err(self, ack: dict, msg: str) -> dict:
         """A plan error, through the escalating loop breaker."""
         return {**ack, "error": self._loop_broken_error(str(msg))}
+
+    def _acked(self, key: str, ack: dict) -> dict:
+        """A verb's ``{key: ack}``; an ack carrying an error is a plan error.
+        (A look or a map that errors delivered nothing.)"""
+        if ack.get("error"):
+            return self._plan_err({key: ack}, str(ack["error"]))
+        return {key: ack}
 
     def _fly_token(self, tok: str) -> tuple[str, str | None]:
         """A typed move token -> the token a flight takes: a flown stop id
@@ -1257,9 +1262,7 @@ class _Mission:
         mk = [m for m in marks or [] if isinstance(m, str) and m.strip()]
         crop = (self._crops_set(str(of), marks=mk or None) if of
                 else self._crops_of(fid, marks=mk or None))
-        if crop.get("error") and not crop.get("delivered"):
-            return self._plan_err({"crop": crop}, str(crop["error"]))
-        return {"crop": crop}
+        return self._acked("crop", crop)
 
     def _map(self, around: str) -> dict:
         """show_map(): one map around a place, badging the set in scope."""
@@ -1301,15 +1304,10 @@ class _Mission:
                 mp.setdefault("ref_notes", []).append(
                     f"{len(mrows)} rows in {name or 'the set in scope'}; "
                     f"this map badges the first {len(mfids)}")
-        if mp.get("error") and not mp.get("delivered"):
-            return self._plan_err({"map": mp}, str(mp["error"]))
-        return {"map": mp}
+        return self._acked("map", mp)
 
     def _watch(self, concepts: list) -> dict:
-        w = self._watch_apply(list(concepts))
-        if w.get("error"):
-            return self._plan_err({"watching": w}, str(w["error"]))
-        return {"watching": w}
+        return self._acked("watching", self._watch_apply(list(concepts)))
 
     def _finish(self, ack: dict) -> dict:
         """Close a call nothing refused: the tie note, the grounding notes,
