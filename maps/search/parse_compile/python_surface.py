@@ -1571,9 +1571,10 @@ class MissionPython:
             return
         if isinstance(value, Rows):
             # Key the envelope by the MODEL's spelling ("r1[0:5]"), not the
-            # executor's ref the window compiled onto.
-            self._show_as(self._window(value.ref, value.spec, label,
-                                       value.ref), label)
+            # executor's ref the window compiled onto (the window shows it
+            # under a label; a nameless set is served whole all the same).
+            self._block_shown.add(
+                self._window(value.ref, value.spec, label, value.ref))
         elif isinstance(value, Row) and value.src \
                 and not re.fullmatch(r"\w+", label):
             # Render the ROW: a one-row window keeps the ordering
