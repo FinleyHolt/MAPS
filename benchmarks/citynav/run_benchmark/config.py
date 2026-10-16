@@ -59,7 +59,7 @@ _SCHEMA: dict[str, Any] = {
     "altitude_cap_m": (_NUM, _POS),
     "sensor": ((str, dict), (_sensor_ok, "a registered sensor or an inline override")),
     "withhold": (list, (
-        lambda v: len(set(v)) == len(v) and all(n in WITHHOLDS for n in v),
+        lambda v: all(isinstance(n, str) and n in WITHHOLDS for n in v) and len(set(v)) == len(v),
         f"a list of distinct names from {sorted(WITHHOLDS)}")),
     "policy": (str, (_policy_ok, "the name of a baselines/<policy>/policy.py")),
 }
