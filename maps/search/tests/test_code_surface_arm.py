@@ -1149,19 +1149,25 @@ def test_an_explore_of_a_LIST_of_rows_covers_their_union():
     assert len(flights) == 4, flights
 
 
-def test_an_explore_of_ends_of_flies_each_terminus_as_its_point():
+@pytest.mark.parametrize("move,want", [
+    ("explore(e)", ["[80, 100]", "[120, 100]"]),
+    ('explore(["end_0", "end_1"])', ["[80, 100]", "[120, 100]"]),
+    ('go_to("end_0")', ["[80, 100]"]),
+    ("go_to(end_1)", ["[120, 100]"]),
+])
+def test_an_explore_of_ends_of_flies_each_terminus_as_its_point(move, want):
     """A terminus is nowhere on the surface; the pass flies its point, as
-    go_to(e[0]) does."""
+    go_to(e[0]) does, and so does its fid typed."""
     from maps.search.analyze_scene.surface import build_surface_from_graph
     from maps.search.tests.fakes import ROADS, priors
     cands, anchors = build_surface_from_graph(
         {**priors(), **ROADS}.items(), (0.0, 0.0), 1.0)
     reply, out, flights, _a, _rend = explore_drive([
-        [run('e = ends_of("Long Road")\nexplore(e)\n')],
+        [run(f'e = ends_of("Long Road")\n{move}\n')],
         "done",
     ], stops=None, cands=cands + anchors, obs_span_m=40.0)
     assert "error" not in out[0], out[0]
-    assert [f["target_fid"] for f in flights] == ["[80, 100]", "[120, 100]"]
+    assert [f["target_fid"] for f in flights] == want
 
 
 def test_a_set_pass_over_footprintless_members_says_it_has_none():

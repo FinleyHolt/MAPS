@@ -46,7 +46,7 @@ from maps.search.parse_compile.carry import (
     run_ops,
 )
 from maps.search.parse_compile.code_surface import (
-    HANDLE_RE, HANDLE_WORD_RE, STOP_RE, row_token)
+    END_RE, HANDLE_RE, HANDLE_WORD_RE, STOP_RE, row_token)
 from maps.search.parse_compile.compactor import (
     CompactionInfeasible,
     CompactionInvariantError,
@@ -1031,12 +1031,22 @@ class _Mission:
         """A plan error, through the escalating loop breaker."""
         return {**ack, "error": self._loop_broken_error(str(msg))}
 
-    def _flown_stop(self, tok: str) -> tuple[str, str | None]:
-        """A flown stop id -> its recorded point; an unflown one is refused.
-        ``(token, error)``."""
+    def _fly_token(self, tok: str) -> tuple[str, str | None]:
+        """A typed move token -> the token a flight takes: a flown stop id
+        its recorded point, a terminus fid its row's point; an unflown stop
+        is refused. ``(token, error)``."""
         sp = self._stop_xy(tok)
         if sp is not None:
             return format_xy_token(sp[0], sp[1]), None
+        if END_RE.fullmatch(tok.strip()):
+            # ponytail: end_N restarts per ends_of call, so the newest
+            # carried row holding it wins; unique terminus fids if two
+            # ends_of sets must be flown by fid.
+            row = next((r for rows in reversed(self.carry.rows.values())
+                        for r in rows or () if r.get("fid") == tok.strip()),
+                       None)
+            if row is not None:
+                return row_token(row), None
         if STOP_RE.fullmatch(tok.strip().lower()):
             known = ", ".join(sorted(self._plan_stops)) or "none yet"
             return tok, (f"{tok} has not been flown; the flown stops are: "
@@ -1152,7 +1162,7 @@ class _Mission:
         return {"result": out}
 
     def _move_to(self, tok: str) -> dict:
-        tok, stop_err = self._flown_stop(tok)
+        tok, stop_err = self._fly_token(tok)
         if stop_err:
             return self._plan_err({}, stop_err)
         mv = self._fly_moves([{"target_fid": tok.strip()}], [])
@@ -1178,7 +1188,7 @@ class _Mission:
             if isinstance(t, list):
                 raw_members.extend(t)
                 continue
-            t, stop_err = self._flown_stop(t)
+            t, stop_err = self._fly_token(t)
             if stop_err:
                 return self._plan_err({}, stop_err)
             if HANDLE_RE.fullmatch(t):
