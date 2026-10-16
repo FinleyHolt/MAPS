@@ -710,7 +710,8 @@ class Rows(_Cuts):
             name = self.mp.said_name(self, None)
             raise CodeError(
                 f"{name}[{i}] did not bind: {name} served {len(rows)} "
-                "row(s) here. Show it first, then index it.")
+                "row(s) here. " + ("Show it first, then index it." if rows
+                                   else "There is no row to index."))
         return Row(rows[i], src=(self.ref, self._lo() + i % len(rows)),
                    mp=self.mp)
 

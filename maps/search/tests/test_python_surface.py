@@ -868,3 +868,12 @@ def test_look_at_an_empty_list_says_so(code):
     err, _ = _refusal(code)
     assert err.endswith(
         "look() got an empty list; there is nothing to look at."), err
+
+
+def test_indexing_an_empty_set_says_it_holds_no_rows():
+    err, _ = _refusal('x = find("qqqzzz")\nx[0]\n')
+    assert err.endswith("x[0] did not bind: x served 0 row(s) here. There "
+                        "is no row to index."), err
+    err, _ = _refusal('cars = find("car")\ncars[99]\n')
+    assert err.endswith("cars[99] did not bind: cars served 2 row(s) here. "
+                        "Show it first, then index it."), err
