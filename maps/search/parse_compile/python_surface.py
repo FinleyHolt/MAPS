@@ -767,6 +767,13 @@ class Rows(_Cuts):
             north_of=north_of, south_of=south_of, east_of=east_of,
             west_of=west_of, facing=facing, direction=direction, **kw)
 
+    def order(self, key=None, *, nearest=None, color=None, direction=None,
+              reverse=False):
+        """Put the rows in one order (``_Cuts.order``), under this class's
+        name in a signature error."""
+        return super().order(key, nearest=nearest, color=color,
+                             direction=direction, reverse=reverse)
+
     def distance(self, other) -> float:
         """Metres to ``other``, this set counting as ONE place: the free
         ``distance(a, b)`` as a method."""

@@ -914,3 +914,8 @@ def test_a_move_to_an_empty_set_says_there_is_nothing_there(code, said):
     err, flights = _refusal(code)
     assert err.endswith(said), err
     assert not flights
+
+
+def test_an_unknown_order_keyword_names_rows_order():
+    err, _ = _refusal('cars = find("car")\ncars.order(foo=1)\n')
+    assert "Rows.order() got an unexpected keyword argument 'foo'" in err, err
