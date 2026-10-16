@@ -901,3 +901,16 @@ def test_stand_facing_a_set_is_refused_under_its_spelling():
 def test_reverse_on_a_served_order_is_refused(kw):
     err, _ = _refusal(f'cars = find("car")\ncars.order({kw}, reverse=True)\n')
     assert "reverse= flips a key sort" in err, err
+
+
+@pytest.mark.parametrize("code,said", [
+    ('x = find("qqqzzz")\ngo_to(x)\n', "x holds 0 row(s) here; there is "
+                                        "nothing to go to."),
+    ('x = find("qqqzzz")\nexplore(x)\n', "x holds 0 row(s) here; there is "
+                                          "nothing to cover."),
+    ("go_to([])\n", "go_to() got an empty list; there is nothing to go to."),
+])
+def test_a_move_to_an_empty_set_says_there_is_nothing_there(code, said):
+    err, flights = _refusal(code)
+    assert err.endswith(said), err
+    assert not flights

@@ -58,6 +58,7 @@ TRACE_LINE_CEILING = 100_000
 TRACE_DEADLINE_S = 90.0
 
 _MOVE_CALLS = ("go_to", "explore")
+_MOVE_SAYS = {"go_to": "go to", "explore": "cover"}
 # order/filter are METHODS on a result (rows.order(...), rows.filter(...)),
 # served through Rows.
 _LIBRARY_CALLS = ("find", "look_for", "go_to", "explore", "look",
@@ -1497,8 +1498,9 @@ class MissionPython:
         if isinstance(x, str) and isinstance(dict.get(self.ns, x), Rows):
             x = self.ns[x]
         if isinstance(x, Rows):
-            # A SET is one place for explore; go_to lands on one thing.
-            if call == "go_to":
+            # A SET is one place for explore; go_to lands on one thing (an
+            # empty set takes the empty refusal below).
+            if call == "go_to" and len(x):
                 name = self.spelling(x)
                 s = name or "s"
                 raise CodeError(
@@ -1512,7 +1514,8 @@ class MissionPython:
                 x = _set_as_list(x)
             if not x:
                 raise CodeError(
-                    f"{call}() got an empty list; there is nothing to cover.")
+                    f"{call}() got an empty list; there is nothing to "
+                    f"{_MOVE_SAYS[call]}.")
             # explore's list is a SET of things -- rows, sets, fids -- as
             # one place to cover; any numeric element is the coordinate
             # hatch.
@@ -1534,7 +1537,7 @@ class MissionPython:
             if isinstance(e, Rows) and not len(e):
                 raise CodeError(
                     f"{self.spelling(e) or 'that set'} holds 0 row(s) here; "
-                    "there is nothing to cover.")
+                    f"there is nothing to {_MOVE_SAYS[call]}.")
         if isinstance(x, str) and VIEWPOINT_RE.fullmatch(x):
             # A staged viewpoint is a pose, not a thing on the map: the
             # move wire would resolve it to its stand point, a coordinate.
