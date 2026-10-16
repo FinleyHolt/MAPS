@@ -1060,6 +1060,9 @@ class MissionPython:
             return Bind(v.bind, self.name_of(v) or (v.fid or "row"))
         if isinstance(v, str):
             return self._held(v) or v
+        if isinstance(v, dict):
+            raise CodeError("a place is a row, a set, a fid or an [x, y]; "
+                            f"got a dict ({v!r:.60}).")
         if isinstance(v, (set, frozenset)):
             v = _set_as_list(v)
         if isinstance(v, (list, tuple)) and not is_xy(v):

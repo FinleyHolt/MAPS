@@ -877,3 +877,14 @@ def test_indexing_an_empty_set_says_it_holds_no_rows():
     err, _ = _refusal('cars = find("car")\ncars[99]\n')
     assert err.endswith("cars[99] did not bind: cars served 2 row(s) here. "
                         "Show it first, then index it."), err
+
+
+@pytest.mark.parametrize("code", [
+    'look({"ref": "prior_7"})\n',
+    'go_to({"a": 1})\n',
+    'find("car", nearest={"a": 1})\n',
+])
+def test_a_dict_is_no_place(code):
+    err, flights = _refusal(code)
+    assert "a place is a row, a set, a fid or an [x, y]; got a dict" in err, err
+    assert not flights
