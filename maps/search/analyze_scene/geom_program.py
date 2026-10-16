@@ -11,6 +11,7 @@ union).
 from __future__ import annotations
 
 import re
+from collections import Counter
 from itertools import islice
 
 from maps.search.analyze_scene import geom_compute as G
@@ -209,24 +210,19 @@ BROAD_DUMP_SOFT_ROWS = 48
 BROAD_HEAD_ROWS = LOOK_SET_ROWS
 
 
-def _census_counts(rows) -> tuple[dict, int]:
+def _census_counts(rows) -> tuple[Counter, int]:
     """``key=value`` counts over a row set's tags and ``class=<c>``, and how
     many rows carry a name."""
-    counts: dict[str, int] = {}
+    counts: Counter = Counter()
     named = 0
     for it in rows:
         if not isinstance(it, dict):
             continue
-        if (it.get("name") or "").strip():
-            named += 1
-        c = it.get("class")
-        if c:
-            counts[f"class={c}"] = counts.get(f"class={c}", 0) + 1
-        tags = it.get("tags")
-        if isinstance(tags, dict):
-            for k, v in tags.items():
-                key = f"{k}={v}"
-                counts[key] = counts.get(key, 0) + 1
+        named += bool((it.get("name") or "").strip())
+        if it.get("class"):
+            counts[f"class={it['class']}"] += 1
+        if isinstance(it.get("tags"), dict):
+            counts.update(f"{k}={v}" for k, v in it["tags"].items())
     return counts, named
 
 
