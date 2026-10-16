@@ -56,6 +56,21 @@ def test_the_bank_serves_the_observation_holding_most_of_the_area_and_black_grou
     assert obs.world_window == (300.0, 300.0, 900.0, 900.0) and last["boresight"] == "boresight.json"
 
 
+@pytest.mark.parametrize("mosaic, words", [
+    ({"asked": 7, "fetch_failed": 6}, "points of it in 7 frame(s), 6 of them not fetched, the nearest 7"),
+    (None, "points of it, the nearest 7"),
+])
+def test_the_bank_says_the_frame_count_the_recorded_observation_carries(built, bank_mission, tmp_path, mosaic, words):
+    """A recorded observation fused 7 frames, 6 of them not fetched: the leg
+    row says so, as the flight did; one that records no mosaic names no count."""
+    held = _held(tmp_path, "whole", (300.0, 300.0, 900.0, 900.0))
+    held.frame["mosaic"] = mosaic
+    m, _live = bank_mission([held])
+    m._fly_live(world.session(world.hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
+    said = [r["said"] for r in m.transcript if r.get("kind") == "leg"][-1]
+    assert words in said, said
+
+
 def test_ground_no_recorded_observation_holds_leaves_the_flight_without_one(built, bank_mission, tmp_path):
     m, live = bank_mission([_held(tmp_path, "far", (300.0, 300.0, 500.0, 500.0))])
     served = []

@@ -478,10 +478,16 @@ class Mission:
 
     @staticmethod
     def _held_words(last: dict[str, Any]) -> str:
-        """The leg row's account of what held the area: the points held, the frames, the nearest to nadir."""
-        cov = last["coverage"]
-        short = f", {cov['fetch_failed']} of them not fetched" if cov.get("fetch_failed") else ""
-        return (f"the pass held {cov['held']}/{cov['points']} points of it in {len(cov['seqs'])} frame(s){short}, "
+        """The leg row's account of what held the area: the points held, the
+        frames the mosaic asked for and how many were not fetched (no count
+        where the observation records no mosaic), the nearest to nadir."""
+        cov, mosaic = last["coverage"], last.get("mosaic")
+        frames = ""
+        if mosaic:
+            frames = f" in {mosaic['asked']} frame(s)"
+            if mosaic.get("fetch_failed"):
+                frames += f", {mosaic['fetch_failed']} of them not fetched"
+        return (f"the pass held {cov['held']}/{cov['points']} points of it{frames}, "
                 f"the nearest {last.get('seq')} at {last.get('off_nadir_deg')} deg off nadir")
 
     def _held_frame(self, area_ll: list[tuple[float, float]], xy, after: float | None = None
