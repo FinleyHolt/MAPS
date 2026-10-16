@@ -8,6 +8,7 @@ import re
 
 import pytest
 
+from maps.search.parse_compile.perception_director import PerceptionDirector
 from maps.search.tests.fakes import CANDS, drive, run, tool_results
 
 _CANDS = CANDS + [
@@ -135,3 +136,16 @@ def test_a_nameless_set_has_one_number_in_keys_and_acks(code):
     keys = {tuple(v["fids"]): k for k, v in out["result"]["results"].items()}
     car = next(k for f, k in keys.items() if f and f[0].startswith("car_"))
     assert out["explored"]["explored"] == car, out
+
+
+@pytest.mark.parametrize("code,said", [
+    ('cars = find("car")\nlook_for("car", at=cars)\n', "Index it -- at=cars[0]"),
+    (f'look_for("car", at={_FILTERED})\n', "Bind it first (s = ...)"),
+])
+def test_look_for_at_a_set_is_refused_and_queues_nothing(code, said):
+    pd = PerceptionDirector()
+    _, fr, _, _ = drive([[run(code)], "done"], cands=_CANDS,
+                        boost_queue=pd.boost_queue)
+    out = tool_results(fr)[0]
+    assert said in out.get("error", ""), out
+    assert "boost" not in out and not pd.boosts, out

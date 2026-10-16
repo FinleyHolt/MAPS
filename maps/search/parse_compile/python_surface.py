@@ -1410,12 +1410,16 @@ class MissionPython:
         self._end(ack)
         return None
 
+    def _not_one_place(self, kw: str, x: "Rows") -> str:
+        """The refusal of a set where ``kw=`` takes one place."""
+        name = self.spelling(x)
+        return (f"{kw}= takes ONE place and {name or 'that'} is a set. "
+                f"{_index_it(name)} -- {kw}={name or 's'}[0]")
+
     def _call_show_map(self, around=None):
         if isinstance(around, Rows):
-            name = self.spelling(around)
             raise CodeError(
-                f"around= takes ONE place and {name or 'that'} is a set. "
-                f"{_index_it(name)} -- around={name or 's'}[0] -- or use a "
+                self._not_one_place("around", around) + " -- or use a "
                 "name. (A set IS one "
                 "place in near=, within= and nearest=, where it means "
                 "the gap to its NEAREST member, but there is no one "
@@ -1437,6 +1441,8 @@ class MissionPython:
         # look_for("parking lot") arm the same class.
         words = [w.strip().lower().replace("_", " ")
                  for w in classes if w.strip()]
+        if isinstance(at, Rows):
+            raise CodeError(self._not_one_place("at", at) + ".")
         at = self._slot(at)
         if at is None:
             self._act(self.env.watch, [], words)
