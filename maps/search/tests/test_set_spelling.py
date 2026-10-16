@@ -149,3 +149,13 @@ def test_look_for_at_a_set_is_refused_and_queues_nothing(code, said):
     out = tool_results(fr)[0]
     assert said in out.get("error", ""), out
     assert "boost" not in out and not pd.boosts, out
+
+
+@pytest.mark.parametrize("code", [
+    'none = find("qqqzzz")\nexplore(none)\n',
+    'none = find("qqqzzz")\ncars = find("car")\nexplore([cars[0], none])\n',
+])
+def test_an_empty_set_to_explore_is_refused_under_its_spelling(code):
+    _, out = _served(code)
+    assert "none holds 0 row(s) here; there is nothing to cover." \
+        in out.get("error", ""), out

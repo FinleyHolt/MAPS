@@ -1192,13 +1192,8 @@ class _Mission:
             if stop_err:
                 return self._plan_err({}, stop_err)
             if HANDLE_RE.fullmatch(t):
-                hr = [row_token(r) for r in (self.carry.read(t) or [])
-                       if r.get("fid")]
-                if not hr:
-                    return self._plan_err({}, (
-                        f"{t} holds 0 fid-bearing row(s) "
-                        "here; there is nothing to cover."))
-                raw_members.extend(hr)
+                raw_members.extend(row_token(r) for r in (
+                    self.carry.read(t) or []) if r.get("fid"))
                 continue
             raw_members.append(t)
         accepted = [{"target_fid": t.strip()}

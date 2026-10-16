@@ -1483,10 +1483,6 @@ class MissionPython:
                     f"go_to() takes ONE thing and {name or 'that'} is a set "
                     f"of {len(x)} row(s). {_index_it(name)} -- go_to({s}[0])"
                     f" -- or explore({s}) to cover the whole set.")
-            if not len(x):
-                raise CodeError(
-                    f"{self.spelling(x) or 'that set'} holds 0 row(s) here; "
-                    "there is nothing to cover.")
         elif is_xy(x) and withheld("prior"):
             pass  # no map to name a thing on: a point is the place to fly
         elif isinstance(x, (list, tuple, set, frozenset)):
@@ -1512,6 +1508,11 @@ class MissionPython:
                     name="go_to/explore",
                     got=", ".join(f"{v:g}" if isinstance(v, (int, float))
                                   else str(v) for v in x)))
+        for e in (x if isinstance(x, (list, tuple)) else [x]):
+            if isinstance(e, Rows) and not len(e):
+                raise CodeError(
+                    f"{self.spelling(e) or 'that set'} holds 0 row(s) here; "
+                    "there is nothing to cover.")
         if isinstance(x, str) and VIEWPOINT_RE.fullmatch(x):
             # A staged viewpoint is a pose, not a thing on the map: the
             # move wire would resolve it to its stand point, a coordinate.
