@@ -234,7 +234,7 @@ def _probe_sam_health(urls: tuple[str, ...]) -> None:
         try:
             payload = _get_json(f"{url}/health")
         except EndpointDiscoveryError as exc:
-            failures.append(str(exc))
+            failures.append(exc)
             continue
         identity = str(payload.get("service") or "").lower() if isinstance(payload, dict) else ""
         if identity and "sam" not in identity:
@@ -243,7 +243,10 @@ def _probe_sam_health(urls: tuple[str, ...]) -> None:
                 f"reachable-but-WRONG server; expected an identity containing 'sam'"
             )
     if len(failures) == len(urls):
-        raise EndpointDiscoveryError(f"service 'sam' failed its /health probe: {'; '.join(failures)}")
+        # Unreachable only when no replica refused: a down serve, not a config error.
+        cls = EndpointUnreachable if all(isinstance(e, EndpointUnreachable) for e in failures) \
+            else EndpointDiscoveryError
+        raise cls(f"service 'sam' failed its /health probe: {'; '.join(map(str, failures))}")
 
 
 #: The turns and tool a Reasoner's transcript carries, in the shape the

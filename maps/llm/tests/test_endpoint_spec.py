@@ -45,7 +45,7 @@ def _fake_http(monkeypatch, table: dict):
 
     def _get(url, *, bearer=None):
         if url not in table:
-            raise EndpointDiscoveryError(f"endpoint unreachable: GET {url}")
+            raise E.EndpointUnreachable(f"endpoint unreachable: GET {url}")
         return table[url]
 
     monkeypatch.setattr(E, "_get_json", _get)
@@ -217,6 +217,13 @@ def test_one_answering_sam_replica_passes_discovery(monkeypatch):
     )
     s = discover(_URL_A, ("http://sam:8772", "http://sam:8773"))
     assert s.sam_urls == ("http://sam:8772", "http://sam:8773")
+
+
+def test_no_sam_replica_answering_is_unreachable(monkeypatch):
+    # A sam serve that is down is the serve's fault, not the config's.
+    _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload()})
+    with pytest.raises(E.EndpointUnreachable):
+        discover(_URL_A, ("http://sam:8772", "http://sam:8773"))
 
 
 def test_a_foreign_replica_is_refused_beside_a_live_one(monkeypatch):
