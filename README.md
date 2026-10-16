@@ -162,6 +162,7 @@ these places, the served-text changes among them:
 | An empty watchlist is told once per run, in the run's `watching` line. | Each zero-detection flight's note also said "the watchlist is empty -- nothing is segmented on any flight; call look_for(...)" (8 recorded Cal City runs carry it). |
 | A match-tier view (`.exact`, `.tagged`, `.fuzzy`) is served under the model's name for its set (`cars.exact`). | It was served under the executor's ref (`r9.tagged` in a flown run), which the model cannot type, and a bare `cars.exact` served the table twice. |
 | ViSA's SAM prompts drop the bare target class (and its plural) from every concept source. | The port dropped it from the concept list only, so a surrounding or landmark naming the class still prompted it. |
+| A bank or forced replay's leg row gives the recorded observation's mosaic frame count ("in 7 frame(s)"); a frame row that records no mosaic names no count. | The replay tiers said "in 1 frame(s)" for every held area, whatever the flight had said. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
