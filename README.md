@@ -172,6 +172,10 @@ these places, the served-text changes among them:
 | `look_for(..., at=<set>)` is refused under the set's spelling with the index form (`at=cars[0]`) and nothing is queued; an empty set inside an `explore` list is refused under its spelling. | The boost was queued at the set's executor ref (`where: ["r0"]`), which never fires, while the ack said it would; an empty set in an explore list reached the pass as "r1 holds 0 fid-bearing row(s)". |
 | A match note says its sub-threshold and other-feature rows are "NOT in this set", an elided-columns note says "the set keeps them all", and a refusal lists a set among what `items` and `refs` take. | These texts said "this rN", "the rN keeps them all" and "an rN", an executor ref the model never bound. |
 | `stand(at=<set>)` is refused under the set's spelling with the index form (`at=cars[0]`), the rule `look_for(at=)` uses. | The refusal said "Index it -- at=rows[0]" whatever the set was called. |
+| The tie note counts rows equal on every column the ordering ranked by, and names them all when there are several. | It read only the first ordering column, so rows a later column separated were served as an arbitrary tie. |
+| `more_of` on a result that fits one block says "h holds N row(s), one block: show it with a bare `h` line." | It said "all N row(s) of h are already served", also for a bound result never shown. |
+| A re-task arriving on the turn-cap turn stays queued. | It was appended to the thread as the mission ended at the cap, unread by the model. |
+| An explore marks its segments covered only once the pass flies. | A pass that flew nothing marked its segments covered, so later passes stopped naming them as uncovered. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
