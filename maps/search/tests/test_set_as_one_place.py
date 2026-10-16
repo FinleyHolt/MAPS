@@ -152,7 +152,25 @@ def test_an_unseen_colour_drops_its_term_instead_of_killing_the_block():
               if str(r["fid"]).startswith("h_")]
     assert ranked == ["h_near", "h_far"], ranked   # distance still ranks
     hint = compact_results(out["results"])["r2"].get("hint") or ""
-    assert "has been SEEN yet" in hint, hint       # and it is NEVER silent
+    assert "carries a perceived colour yet" in hint, hint  # NEVER silent
+
+
+def test_a_dropped_colour_says_the_set_has_none_not_the_surface():
+    # A car on the surface was seen in red; the buildings ranked were not.
+    seen = {"fid": "c1", "class": "car", "color": "red", "color_conf": 0.9,
+            "xy": [0.0, 0.0], "search_text": "car"}
+    ops = [{"ref": "r0", "op": "find", "args": {"query": "building"}},
+           {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
+               {"key": "color_red", "w": 1.0},
+               {"key": "footprint_area_m2", "w": 1.0}]}}]
+    buildings = [{"fid": f"b{i}", "class": "building", "xy": [10.0 * i, 0.0],
+                  "search_text": "building", "footprint_area_m2": 50.0 * i}
+                 for i in (1, 2)]
+    notes = gp.run_program([seen], buildings, {"ops": ops})["results"]["r1"].notes
+    assert notes == [
+        "'color_red' ranked nothing here: no row in this set carries a "
+        "perceived colour yet (a row gets one once a flight has passed over "
+        "it); the other keys still rank."], notes
 
 
 def test_a_colour_alone_with_nothing_seen_is_still_a_loud_refusal():

@@ -1282,10 +1282,9 @@ def _score_by(cx, a):
                 f"{_present_keys_hint(items, True)}")
     for key in dropped_color:
         notes.append(
-            f"{_quote(key)} ranked nothing here: no row on this surface has "
-            f"been SEEN yet, so none carries a perceived colour. The "
-            f"other keys still rank. A row gets a colour once a "
-            f"flight has passed over it.")
+            f"{_quote(key)} ranked nothing here: no row in this set carries "
+            "a perceived colour yet (a row gets one once a flight has "
+            "passed over it); the other keys still rank.")
     keys = sorted(emphasis)  # deterministic; the sum is order-independent
     return Result(G.score_by(items, keys, [emphasis[k] for k in keys]),
                   "sorted", ordered=True, op_cols=keys, notes=notes)
