@@ -1162,6 +1162,17 @@ def test_an_explore_of_ends_of_flies_each_terminus_as_its_point():
     assert [f["target_fid"] for f in flights] == ["[80, 100]", "[120, 100]"]
 
 
+def test_a_set_pass_over_footprintless_members_says_it_has_none():
+    reply, out, flights, _a, _rend = explore_drive([
+        [run('r1 = find("car")\n')],
+        [run('explore(r1)\n')],
+        "done",
+    ], stops=None, obs_span_m=20.0)
+    note = out[1]["explored"]["note"]
+    assert note.startswith(
+        "r1 has no footprint to cover, so this pass is its 2 stops."), note
+
+
 # --- pixels are earned by flying: the look coverage gate ------------------
 
 _GATE_CANDS = [

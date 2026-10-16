@@ -102,7 +102,7 @@ def _cover_set_items(accepted: list, said, *, spec, spacing,
         if stops:
             pts = [[float(p[0]), float(p[1])] for p in stops]
             members.append({
-                "tok": tok, "pts": pts,
+                "tok": tok, "pts": pts, "footprint": True,
                 "items": [{"target_fid": format_xy_token(p[0], p[1])}
                           for p in pts],
                 "walk": sum(math.dist(a, b)
@@ -115,6 +115,7 @@ def _cover_set_items(accepted: list, said, *, spec, spacing,
                  if isinstance(xy, (list, tuple)) and len(xy) == 2
                  else None)
             members.append({"tok": tok, "pts": [p] if p else [],
+                            "footprint": False,
                             "items": [dict(it)], "walk": 0.0})
     # greedy nearest-endpoint chain, seeded from where the drone is
     cur = pose_xy
@@ -162,7 +163,11 @@ def _cover_set_items(accepted: list, said, *, spec, spacing,
     reached = (min(1.0, n_stops * spacing / total)
                if total and spacing else 1.0)
     subject = str(said) if said else f"{len(chained)} places"
-    if reached >= 1.0:
+    if not any(m["footprint"] for m in chained):
+        note = (f"{subject} has no footprint to cover, so this pass is "
+                + ("its one stop." if n_stops == 1
+                   else f"its {n_stops} stops."))
+    elif reached >= 1.0:
         note = (
             (f"covered {len(chained)} places in {n_stops} stops; each "
              f"fits inside one observation.")
