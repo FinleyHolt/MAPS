@@ -273,3 +273,17 @@ def test_the_mission_stamps_the_arm_s_reasoning_effort_as_its_requests_carry_it(
     assert m._mission_stamp()["reasoning_effort"] == "high"
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "  ")
     assert m._mission_stamp()["reasoning_effort"] is None
+
+
+def test_a_short_pass_before_the_leg_is_logged_as_the_frames_that_held_it(built, make_mission, caplog):
+    """The pass before the leg held 3 of the area's points in 2 frames out of
+    the 40 the ring scored: the log line counts the 2 that held them."""
+    from benchmarks.flight.live_source import coverage_record
+
+    m, _twin = make_mission()
+    best = [(1.0, 7), (2.0, 7), (1.5, 9)] + [None] * 16
+    m._coverage_before_leg = lambda area: (coverage_record(best, 40), None)
+    m._post_and_wait = lambda *a: None
+    caplog.set_level("INFO", logger=M.log.name)
+    m._fly_live(world.session(world.hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
+    assert "the pass holds 3/19 points of [600, 600] at (600, 600) in 2 frames" in caplog.text, caplog.text

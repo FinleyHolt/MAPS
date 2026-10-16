@@ -325,7 +325,8 @@ class Mission:
                                f"in {COVERAGE_TRIES} reads ({unread}); the leg is flown")
                 elif cov is not None and not _holds(cov):
                     log.info("the pass holds %d/%d points of %s in %d frames, short of %.0f%%; the leg is flown",
-                             cov["held"], cov["points"], at, cov["frames"], 100.0 * COVERED_FRACTION)
+                             cov["held"], cov["points"], at, len({b[1] for b in cov["best"] if b}),
+                             100.0 * COVERED_FRACTION)
                 elif cov is not None:
                     self._said(f"{at} is held by the pass ({cov['held']}/{cov['points']} points), but no frame of "
                                f"it could be served ({self._live.last_refusal or 'no reason recorded'}); "
