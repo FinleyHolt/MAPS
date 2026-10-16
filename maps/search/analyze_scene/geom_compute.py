@@ -530,8 +530,6 @@ def stack_bboxes(geoms) -> np.ndarray:
 def bbox_bounds(stacked: np.ndarray, g) -> np.ndarray:
     """:func:`bbox_gap` from every row of ``stacked`` to ``g``; an unknown
     box reads 0.0."""
-    if len(stacked) == 0:
-        return np.zeros(0, dtype=float)
     bb = g["BB"]
     if bb is None:
         return np.zeros(len(stacked), dtype=float)

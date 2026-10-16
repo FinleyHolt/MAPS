@@ -1001,11 +1001,9 @@ def _match_notes(scored, n, band_cut) -> list:
         notes.append(f"matched as a NAME: {band_cut} row(s) under the name "
                      f"tier are a different feature and are NOT in this rN.")
     head = "; ".join(f"{r.get('fid')} {_match_label(r)} (match {r['name_match']})"
-                     for r in scored[:n][:4]
-                     if r["name_match"] >= T.FUZZY_THRESHOLD)
-    if head:
-        lead = "Best" if vals[0] >= T.NAME_TIER_FLOOR else "Head"
-        notes.append(f"{lead}: {head}")
+                     for r in scored[:n][:4])
+    lead = "Best" if vals[0] >= T.NAME_TIER_FLOOR else "Head"
+    notes.append(f"{lead}: {head}")
     return notes
 
 
@@ -1339,7 +1337,7 @@ def _filter_items(cx, a):
         # southwest too).
         on = [it for it in items if it.get(key) is None or it.get(key) in val]
         blank = sum(1 for it in on if it.get(key) is None)
-        want = list(val) if isinstance(val, (list, tuple)) else [val]
+        want = list(val)
         stats = {
             "cut": f"{len(items)}->{len(on)}",
             "counts_as": want,
@@ -1383,7 +1381,7 @@ def _stratum(cx, a):
     """A find's match tier (exact / tagged / fuzzy) as a set, in input
     order."""
     items = _as_rows(cx, a["items"])
-    tier = str(a["tier"]).strip().lower()
+    tier = a["tier"]
     if not any(isinstance(it.get("name_match"), (int, float)) for it in items):
         raise ProgramError(
             "these rows carry no match tiers -- strata come off a "
