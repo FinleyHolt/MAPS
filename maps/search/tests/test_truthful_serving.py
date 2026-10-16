@@ -375,8 +375,8 @@ def test_render_budget_elides_column_tail_never_rows():
     assert "distance to prior_001" in env["rows"].splitlines()[0]
     raw = out["results"]["r1"]
     assert all("distance to prior_040" in r for r in raw if isinstance(r, dict))
-    # the elided tail is COUNTED in the hint — the render says what it dropped
-    assert "elided from this render" in env.get("hint", ""), env.get("hint")
+    # the elided tail is COUNTED — the render says what it dropped
+    assert "elided from this render" in env.get("shown", ""), env
 
 
 def test_budget_walk_skips_an_oversized_column_not_the_columns_behind_it():

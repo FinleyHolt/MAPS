@@ -530,37 +530,41 @@ def _table(head, rows, op_cols, legend) -> "str | None":
             "the rN keeps them all") if n_cut else None
 
 
-def _envelope(v, legend) -> dict:
-    """One op result's model-facing envelope (see :func:`compact_results`)."""
-    notes, kind = v.notes, v.kind
-    cut = v.cut_stats if kind == "cut" else None
-    if kind == "compare":
-        head = {"len": len(v)}
-        hint = join_hints(
+def _hint(v) -> str:
+    """What an op result's rows are, never how they render: its notes, and
+    the line saying why there are none or no order."""
+    if v.kind == "compare":
+        return join_hints(
             "" if v else
             "compare received NO items -- the items ref resolved to an "
             "empty list.",
-            *notes)
-    elif not v:
-        head = {"len": 0, "items": []}
-        if cut:
-            head["cut_stats"] = cut
-        head["hint"] = join_hints(
+            *v.notes)
+    if not v:
+        return join_hints(
             v.empty_condition
             or "this op returned NO items: nothing met its condition.",
-            *notes,
+            *v.notes,
             "this retrieval searched every surface row"
             + ("" if withheld("prior") else " (prior + runtime)")
             + " and matched nothing."
-            if kind == "miss" else "")
-        return head
+            if v.kind == "miss" else "")
+    if not v.ordered:
+        return join_hints(*v.notes, _NO_ORDER_HINT)
+    return join_hints(*v.notes)
+
+
+def _envelope(v, legend) -> dict:
+    """One op result's model-facing envelope (see :func:`compact_results`):
+    ``hint`` says what the rows are, ``shown`` how the grid renders them."""
+    cut = v.cut_stats if v.kind == "cut" else None
+    if v.kind == "compare":
+        head = {"len": len(v)}
+    elif not v:
+        head = {"len": 0, "items": [], **({"cut_stats": cut} if cut else {})}
     elif not v.ordered:
         counts, named = _census_counts(v)
-        head = {"len": len(v), "census": _top(counts, 12), "named": named}
-        if cut:
-            head["cut_stats"] = cut
-        head["hint"] = join_hints(*notes, _NO_ORDER_HINT)
-        return head
+        head = {"len": len(v), "census": _top(counts, 12), "named": named,
+                **({"cut_stats": cut} if cut else {})}
     elif v.name_set:
         # A name's ways tie, so a head would be an arbitrary prefix
         # served as a ranking: the shape renders instead.
@@ -568,10 +572,9 @@ def _envelope(v, legend) -> dict:
         set_m = sum(float(r.get("axis_length_m") or 0.0) for r in v)
         if set_m:
             head["length_m"] = round(set_m)
-        hint = join_hints(*notes)
     else:
         body, cover = list(v), None
-        if kind == "sorted":
+        if v.kind == "sorted":
             # A window-covering row is 0 m from every on-surface ref and
             # would tie rank 0 of every nearest-first sort.
             covering = [r for r in v if r.get("covers_window")]
@@ -586,7 +589,7 @@ def _envelope(v, legend) -> dict:
                     f"every ON-SURFACE ref by containment (their mask "
                     f"contains this whole window; an off-window [x,y] "
                     f"literal ref keeps a real distance) -- omitted from "
-                    f"this rendered head; they stay live in this rN "
+                    f"this rendered head; they stay live in this set "
                     f"(full set intact), covers_window marks them "
                     f"wherever they render.")
         capped = (body[:BROAD_HEAD_ROWS] if len(v) > BROAD_DUMP_SOFT_ROWS
@@ -595,27 +598,30 @@ def _envelope(v, legend) -> dict:
         if len(capped) < len(body):
             more = join_hints(
                 f"showing the first {len(capped)} of {len(v)} row(s); "
-                f"the rest stay live in this rN -- later ops on it "
-                f"read the FULL set, and more_of(<rN>) serves the next "
+                f"the rest stay live in this set -- later ops on it "
+                f"read the FULL set, and more_of on it serves the next "
                 f"{BROAD_HEAD_ROWS}",
                 _cut_stands_at(v, body, capped))
         head = {"len": len(v),
                 "fids": [str(r["fid"]) for r in capped if r.get("fid")]}
-        hint = join_hints(more, _table(head, capped, v.op_cols, legend),
-                          cover, *notes)
+        shown = join_hints(more, _table(head, capped, v.op_cols, legend),
+                           cover)
+        if shown:
+            head["shown"] = shown
+    hint = _hint(v)
     if hint:
         head["hint"] = hint
     if cut:
-        head["cut_stats"] = cut
+        head["cut_stats"] = cut   # keeps its place where a branch set it
     return head
 
 
-def _step_hint(v) -> "str | None":
+def _step_hint(v) -> str:
     """A step's hint as it rides the answer: a step whose rows a later op
     cut, sorted or measured serves only the notes not about those rows."""
     if v.consumed and v:
         return join_hints(*(n for n in v.notes if n not in v.set_notes))
-    return _envelope(v, []).get("hint")
+    return _hint(v)
 
 
 def compact_results(results: dict, *, answer_ref: str = "") -> dict:

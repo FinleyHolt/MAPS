@@ -762,8 +762,10 @@ def test_more_of_pages_a_long_result_and_stops_at_the_end():
         "done",
     ], cands=wide)
     out = tool_results(fr)
-    # The truncated head names the call that pages it.
-    assert "more_of(<rN>) serves the next" in json.dumps(out[0]), out[0]
+    # The truncated head names the call that pages it, never the rN.
+    head = out[0]["result"]["results"]["cars"]
+    assert "more_of on it serves the next" in head["shown"], head
+    assert "<rN>" not in json.dumps(out[0]), out[0]
     served = [out[0]["result"]["results"]["cars"]["fids"]]
     for r in (out[1], out[2]):
         assert r.get("error") is None, r

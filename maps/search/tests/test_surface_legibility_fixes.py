@@ -46,7 +46,8 @@ def test_truncated_tied_head_states_both_facts():
                cands)
     env = compact_results(out["results"])["r0"]
     hint = env.get("hint") or ""
-    assert "showing the first" in hint, hint
+    assert "showing the first" in env["shown"], env
+    assert "showing the first" not in hint, hint
     assert "equally good matches" in hint, hint
     assert "arbitrary" in hint, hint
     assert env["len"] == 60
@@ -92,7 +93,8 @@ def test_distance_to_ranks_by_magnitude_either_side():
 
 
 def _cut_hint(xs) -> str:
-    """A truncated, ORDERED head over rows at the given x offsets."""
+    """A truncated, ORDERED head's render note, over rows at the given x
+    offsets."""
     cands = [{"fid": f"d{i:03d}", "xy": [float(x), 0.0],
               "class": "house", "search_text": "house"}
              for i, x in enumerate(xs)]
@@ -107,7 +109,7 @@ def _cut_hint(xs) -> str:
                           "emphasis": [{"key": "distance to road_9",
                                         "w": -1}]}}],
                cands, anchors)
-    return compact_results(out["results"])["r2"].get("hint") or ""
+    return compact_results(out["results"])["r2"].get("shown") or ""
 
 
 def _scores(hint):
@@ -147,7 +149,7 @@ def test_it_reports_the_COMPOSITE_not_a_column():
                cands, anchors)
     res = out["results"]["r2"]
     assert res.op_cols[0] == "color_white", res.op_cols   # the trap
-    hint = compact_results(out["results"])["r2"].get("hint") or ""
+    hint = compact_results(out["results"])["r2"].get("shown") or ""
     # both keys NAMED, the numbers from the composite
     assert "'color_white'" in hint and "'distance to road_9'" in hint, hint
     lo, _hi, nxt = _scores(hint)
@@ -175,9 +177,9 @@ def test_an_unordered_dump_has_no_cut_to_stand_at():
               "search_text": "car"} for i in range(60)]
     out = _run([{"ref": "r0", "op": "find",
                  "args": {"query": "car"}}], cands)
-    hint = compact_results(out["results"])["r0"].get("hint") or ""
-    assert "showing the first" in hint, hint
-    assert "ranked on" not in hint, hint
+    env = compact_results(out["results"])["r0"]
+    assert "showing the first" in env["shown"], env
+    assert "ranked on" not in env["shown"] + env.get("hint", ""), env
 
 
 # --------------------------------------------------------------------------- #
@@ -198,3 +200,21 @@ def test_a_uniform_class_tie_keeps_the_generic_hint():
     hint = env.get("hint") or ""
     assert "arbitrary" in hint, hint
     assert "pieces of ONE named thing" not in hint, hint
+
+
+def test_a_folded_result_never_says_how_a_grid_it_does_not_serve_renders():
+    """Only an envelope that serves rows says how they render; a folded
+    result keeps its hint, and nothing names the executor's rN."""
+    import json
+
+    from maps.search.tests.fakes import CANDS, drive, run, tool_results
+    cands = CANDS + [{"fid": f"car_{i}", "xy": [5.0 * i, 7.0], "class": "car",
+                      "search_text": "car"} for i in range(3, 70)]
+    _, fr, _, _ = drive([[run('cars = find("car")\n'
+                              'x = cars.order(nearest="prior_1")\nx')],
+                         "done"], cands=cands)
+    env = tool_results(fr)[0]["result"]["results"]["x"]
+    assert "showing the first" not in env["hint"], env["hint"]
+    assert env["hint"].startswith("cars: 69 of 72 rows matched"), env["hint"]
+    assert env["shown"].startswith("showing the first 24 of 69"), env
+    assert "<rN>" not in json.dumps(env), env

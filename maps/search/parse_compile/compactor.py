@@ -381,7 +381,7 @@ def _validate_invariants(messages: list[dict]) -> None:
 
 
 # The render keys a stub drops; ``fids`` and the census stay.
-_TRIM_RENDER_KEYS = ("rows", "legend")
+_TRIM_RENDER_KEYS = ("rows", "legend", "shown")
 
 
 def _iter_op_heads(obj: dict):

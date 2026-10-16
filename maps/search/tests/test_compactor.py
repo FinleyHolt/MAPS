@@ -55,7 +55,7 @@ def _call(tcids, code="cars = find('car')") -> dict:
 
 def _dump(tcid, fids, filler=0) -> dict:
     head = {"len": len(fids), "fids": list(fids), "rows": _grid(fids, filler),
-            "legend": "distance to X: metres"}
+            "legend": "distance to X: metres", "shown": "showing the first 2"}
     return {"role": "tool", "tool_call_id": tcid, "name": "run", "content": json.dumps(
         {"said": f"cars  # {tcid}", "result": {"results": {"cars": head}}})}
 
@@ -185,7 +185,8 @@ def test_stale_dumps_clear_to_fids_with_their_colors_and_the_live_dump_stays():
     out = _compact(msgs, _est(msgs) - 1500)
     stale = _body(out[3])
     assert stale["fids"] == ["a1", "a2"] and "rows" not in stale
-    assert "legend" not in stale and stale["colors"] == "a1=red?; a2=red?"
+    assert "legend" not in stale and "shown" not in stale
+    assert stale["colors"] == "a1=red?; a2=red?"
     assert "show the handle again" in stale["hint"] and "census" not in stale["hint"]
     assert json.loads(out[3]["content"])["said"] == "cars  # a"
     assert out[5] == msgs[5]                   # the live view

@@ -225,7 +225,7 @@ def test_covering_row_as_item_omitted_from_sort_head_with_note():
     assert "prior_9" not in sort_env["fids"], sort_env["fids"]
     assert "prior_9" not in sort_env["rows"], sort_env["rows"]
     # ...named in one truthful note...
-    hint = sort_env.get("hint") or ""
+    hint = sort_env.get("shown") or ""
     assert "window-covering" in hint and "prior_9" in hint, hint
     # Named the way the executor spells the column: the rename to phrases
     # left 'd_=0' matching no column the model could act on.
