@@ -166,3 +166,8 @@ def test_an_empty_set_to_explore_is_refused_under_its_spelling(code):
     _, out = _served(code)
     assert "none holds 0 row(s) here; there is nothing to cover." \
         in out.get("error", ""), out
+
+
+def test_stand_at_a_set_is_refused_under_its_spelling():
+    _, out = _served('cars = find("car")\nstand(at=cars)\n')
+    assert "at=cars[0]" in out["error"], out

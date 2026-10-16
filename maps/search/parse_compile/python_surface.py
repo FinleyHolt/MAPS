@@ -1459,8 +1459,7 @@ class MissionPython:
 
     def _call_stand(self, *, at, facing="north"):
         if isinstance(at, Rows):
-            raise CodeError("at= takes ONE place and a set has no one "
-                            "point to stand at. Index it -- at=rows[0].")
+            raise CodeError(self._not_one_place("at", at) + ".")
         at = self._slot(at)
         # A heading: a compass word rides as itself, anything else is a
         # place to look TOWARD.
