@@ -17,8 +17,9 @@ _CANDS = CANDS + [
 
 _FILTERED = 'find("car").filter(near="prior_7", dwithin=5000)'
 
-# Slices, tier views, filters, show, show_map, the go_to/explore refusals,
-# print and the slots, each over a bound, an unbound and a nameless set.
+# Slices, tier views, filters, show, show_map, look_for(at=), the
+# go_to/explore refusals, print and the slots, each over a bound, an unbound
+# and a nameless set.
 SWEEP = [
     'cars = find("car")\nprint(cars[0:2])\n',
     'print(find("car")[0:3])\n',
@@ -50,6 +51,12 @@ SWEEP = [
     'ends_of(find("qqqzzz"))\n',
     f'ends_of({_FILTERED}.filter(within="prior_7"))\n',
     f'intersection({_FILTERED}, "prior_7")\n',
+    'post = find("car")[0]\npost\n',
+    f'show({_FILTERED}.filter(within="prior_7"))\nexplore({_FILTERED})\n',
+    'cars = find("car")\nlook_for("car", at=cars)\n',
+    f'look_for("car", at={_FILTERED})\n',
+    'explore([find("car")[0], find("qqqzzz")])\n',
+    f'explore([{_FILTERED}.filter(within="qqqzzz")])\n',
 ]
 
 
