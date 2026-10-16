@@ -103,11 +103,6 @@ class Recording:
     def taskings(self) -> list[str]:
         return [str(r["said"]) for r in self.conversation if r.get("kind") == "retask"]
 
-    @property
-    def stops(self) -> list[tuple[str, tuple[float, float]]]:
-        """The flights flown, in order: ``(target, xy)`` off ``flight/tour_cursor.json``."""
-        return tour_stops(self.run_dir)
-
 
 def read_records(path: Path) -> list[dict[str, Any]]:
     """Every row of a recorded ``.jsonl``, none when the file is absent; a line
@@ -486,7 +481,7 @@ def diff(rec: Recording, replay_dir: Path) -> dict[str, Any]:
         out["turns"].append(turn)
         if out["first"] is None:
             out["first"] = turn
-    flown, replayed = rec.stops, tour_stops(replay_dir)
+    flown, replayed = tour_stops(rec.run_dir), tour_stops(replay_dir)
     same = len(flown) == len(replayed) and all(
         fa == fb and abs(xa[0] - xb[0]) < 0.5 and abs(xa[1] - xb[1]) < 0.5
         for (fa, xa), (fb, xb) in zip(flown, replayed))
@@ -591,7 +586,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         replay_of={"sortie": rec.sortie.name, "run_no": run_no, "run_id": row.get("run_id"),
                    "workdir": rec.run_dir.name,
                    "mode": " ".join(m for m, on in (("forced", forced), ("frames", frames)) if on) or "bank"},
-        stops=rec.stops if forced else None, episode_id=episode_id, split=str(row.get("split") or DEFAULT_SPLIT),
+        stops=tour_stops(rec.run_dir) if forced else None, episode_id=episode_id, split=str(row.get("split") or DEFAULT_SPLIT),
         config=config, workdir=ep.dir, live=live, instruction=str(row.get("description") or ""),
         recorder=ep.recorder, close_log=ep.close, run_id=f"replay-{rec.sortie.name}", run_no=run_no,
         start_xy=tuple(row["start_xy"]), reasoning_effort=None if effort is None else str(effort),

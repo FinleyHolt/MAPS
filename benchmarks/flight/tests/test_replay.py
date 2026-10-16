@@ -212,7 +212,7 @@ def test_the_forced_diff_passes_a_replay_that_sent_what_flew_and_names_the_first
     flown = _run(sortie, "maps_run01", "flew to prior_1", retried=True)
     (sortie / "episodes.jsonl").write_text(json.dumps({"run_no": 1, "workdir": "maps_run01"}) + "\n")
     rec = R.open_recording(flown)
-    assert len(rec.requests) == 2 and rec.stops == [("prior_1", (10.0, 20.0))]
+    assert len(rec.requests) == 2 and R.tour_stops(rec.run_dir) == [("prior_1", (10.0, 20.0))]
     same = R.diff(rec, _run(tmp_path / "replay", "same", "flew to prior_1", unanswered=True))
     assert same["reproduced"] and same["first"] is None
     other = R.diff(rec, _run(tmp_path / "replay", "other", "flew to prior_2"))
