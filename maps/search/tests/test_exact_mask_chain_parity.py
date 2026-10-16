@@ -352,3 +352,16 @@ def test_containment_note_names_the_row_and_the_fact():
     joined = " ".join(str(n) for n in notes)
     assert "prior_9" in joined and "contains prior_1" in joined, joined
     assert "containment, not adjacency" in joined
+
+
+def test_compare_rows_carry_no_mask_fields():
+    # Op output rows hold no geometry: a later op reads it by fid off the
+    # live surface (row_geometry), so a carried row never goes stale.
+    prog = {"ops": [
+        {"ref": "r0", "op": "find", "args": {"query": "building"}},
+        {"ref": "r1", "op": "compare",
+         "args": {"items": "r0", "refs": ["prior_1"]}},
+    ]}
+    out = run_program([dict(_CAR)], _anchors(), prog)["results"]
+    assert out["r1"], out
+    assert not any(k in r for r in out["r1"] for k in ("mask", "mask_centroid")), out["r1"]
