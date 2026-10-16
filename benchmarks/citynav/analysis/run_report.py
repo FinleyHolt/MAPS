@@ -190,7 +190,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
             f"conversion(SR|OSR)={_pct(joint[(True, True)], osr)}"
         )
 
-    print_classes(root, scored)
+    print_classes(root, scored, picked)
 
     # Commit provenance (prior landmark, runtime detection, world point, or none).
     prov = Counter(m.get("committed_provenance") or "none" for m in scored.values())
@@ -222,13 +222,14 @@ def _split_rows(split: str | None) -> list[dict] | None:
         return None
 
 
-def print_classes(root: Path, scored: dict[str, dict]) -> None:
+def print_classes(root: Path, scored: dict[str, dict], picked: dict) -> None:
     """SR by referent bucket and, where the corpus grades it, by intel quality
     (Cal City, as the flight measures' by_intel_quality). A recorded row's
     class is its own ``referent_bucket`` and ``intel_quality``; a pick without
-    them takes its corpus row's, read from the run's split by episode id, so it
-    counts in its own class. A split on this machine that lacks such a pick is
-    not the run's corpus: no class line."""
+    them takes its corpus row's, read by episode id from the run's split (its
+    manifest's, else the one its rows record), so it counts in its own class.
+    A split on this machine that lacks such a pick is not the run's corpus: no
+    class line."""
     from benchmarks.citynav.adapter import find_row, parse_episode
     from benchmarks.citynav.run_benchmark.episode_runner import classify_referent
 
@@ -236,7 +237,8 @@ def print_classes(root: Path, scored: dict[str, dict]) -> None:
                for eid, m in scored.items() if "referent_bucket" in m}
     unrecorded = [eid for eid in scored if eid not in classes]
     if unrecorded:
-        split = read_manifest(root).get("split")
+        split = read_manifest(root).get("split") or next(
+            (a.row["split"] for a in picked.values() if a.row.get("split")), None)
         corpus = _split_rows(split) or []
         found = {eid: find_row(corpus, eid) for eid in unrecorded}
         missing = sum(f is None for f in found.values())
