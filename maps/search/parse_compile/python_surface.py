@@ -1112,6 +1112,10 @@ class MissionPython:
         """An act's PLACE -> its token, or a :class:`_Name` to ground. A
         point rides as its ``[x, y]`` token; what a binding holds and a fid
         the model typed are never looked up."""
+        if v is None and why not in ("map", "marks"):
+            raise CodeError(
+                f"{_SITE_SLOT[why]} got None, which is no place: the name it "
+                "came from holds no row. Bind a row first.")
         if isinstance(v, Ref):
             return v.ref
         if isinstance(v, Bind):

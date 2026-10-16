@@ -829,3 +829,35 @@ def test_an_empty_list_to_cover_is_said_empty_not_a_coordinate(arg):
     err = tool_results(fr)[0]["error"]
     assert "explore() got an empty list; there is nothing to cover." in err, err
     assert "coordinate" not in err, err
+
+
+# --------------------------------------------------------------------------
+# A slot handed nothing, or the wrong kind of thing, is refused by name
+# --------------------------------------------------------------------------
+
+
+def _refusal(code: str) -> tuple[str, list]:
+    _reply, fr, flights, _ = drive([[run(code)], "done"])
+    return tool_results(fr)[0].get("error") or "", flights
+
+
+@pytest.mark.parametrize("code,slot", [
+    ("look(None)\n", "each look() place"),
+    ("go_to(None)\n", "go_to()"),
+    ("explore(None)\n", "each explore() place"),
+    ("v = stand(at=None)\n", "at="),
+    ('v = stand(at="prior_7", facing=None)\n', "facing="),
+])
+def test_none_in_a_place_slot_is_no_place(code, slot):
+    err, flights = _refusal(code)
+    assert err.endswith(f"{slot} got None, which is no place: the name it "
+                        "came from holds no row. Bind a row first."), err
+    assert not flights
+
+
+def test_a_none_mark_is_skipped_and_the_look_still_runs():
+    # A mark only decorates the crop: a conditional mark that came out None
+    # is skipped by the renderer, as flown, and the subject is still cropped.
+    from maps.search.tests.fakes import calls_of_block
+    assert calls_of_block('look("prior_7", marks=[None])\n') == [
+        ("crops", None, "prior_7", ["None"])]
