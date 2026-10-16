@@ -106,6 +106,18 @@ def test_a_refused_request_is_the_methods_failure(monkeypatch, code, ended_by):
     assert reply.ended_by == ended_by
 
 
+def test_a_refused_request_is_sent_once_on_the_bench_and_live(monkeypatch):
+    """A 400 ends the mission at its first send: re-sending fails the same way."""
+    for stop in (None, _Stop()):
+        rows: list[dict] = []
+        reply = _round(monkeypatch, faults=6, fault=_status(400),
+                       cancel_event=stop, transcript=rows)
+        assert reply.ended_by == "request_refused"
+        assert reply.turns_used == 1
+        assert [r for r in rows if r["kind"] == "transient_error"] == []
+        assert stop is None or stop.waits == []
+
+
 def test_a_dead_relay_port_is_a_link_fault():
     assert issubclass(httpx.ConnectTimeout, _RETRIABLE_LLM_ERRORS)
     assert issubclass(httpx.PoolTimeout, _RETRIABLE_LLM_ERRORS)

@@ -1414,6 +1414,13 @@ class _Mission:
                         self.rid_tag, _summarise_exc(exc))
                     self._log("content_filter", error=_summarise_exc(exc))
                     return self._mission_end("content_filter", turns=turn_idx + 1)
+                if _is_refused_request(exc):
+                    log.warning(
+                        "%s the serve refused the request -> mission ends "
+                        "(a retry re-sends the same request): %s",
+                        self.rid_tag, _summarise_exc(exc))
+                    self._log("request_refused", error=_summarise_exc(exc))
+                    return self._mission_end("request_refused", turns=turn_idx + 1)
                 transient_failures += 1
                 cancel = self.reasoner.cancel_event
                 log.warning(
@@ -1427,9 +1434,8 @@ class _Mission:
                           error=_summarise_exc(exc))
                 if cancel is None:
                     if transient_failures >= _MAX_TRANSIENT:
-                        return self._mission_end(
-                            "request_refused" if _is_refused_request(exc)
-                            else "transient_failures", turns=turn_idx + 1)
+                        return self._mission_end("transient_failures",
+                                                 turns=turn_idx + 1)
                     time.sleep(min(15.0, 0.5 + 2.0 * transient_failures))
                 elif cancel.wait(min(30.0, 0.5 + 2.0 * transient_failures)):
                     raise CallCanceled("stopped while waiting for the reasoner")
