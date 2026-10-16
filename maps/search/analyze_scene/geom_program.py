@@ -1436,7 +1436,7 @@ def _union_members(cx, ref_el, as_label) -> list:
     return members
 
 
-def _union_center(cx, members):
+def _union_center(members):
     """``(member geoms, centre)`` of a union: the centre is the members'
     area-weighted centroid, else the mean of their centres, else None."""
     geoms: list = []
@@ -1502,7 +1502,7 @@ def _compare(cx, a):
                 and all(isinstance(x, str) or is_xy(x) for x in ref_el)):
             kind, payload = "union", _union_members(cx, ref_el, as_label)
             lab = _unique_label(as_label or "ref", used_labels)
-            geom, center = _union_center(cx, payload)
+            geom, center = _union_center(payload)
         elif is_xy(ref_el):
             kind, payload = "point", [float(ref_el[0]), float(ref_el[1])]
             lab = _unique_label(as_label or "xy", used_labels)
