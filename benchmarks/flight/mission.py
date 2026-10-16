@@ -539,7 +539,8 @@ class Mission:
                 self._closest_m = min(self._closest_m, d)
                 # Over the area and gone, with part of it held: a short pass.
                 if reach_m is not None and fraction > 0.0 and best <= reach_m and d > best + SHORT_PASS_LEAVE_M:
-                    receding_since = receding_since or self._vehicle.now()
+                    if receding_since is None:
+                        receding_since = self._vehicle.now()
                     if self._vehicle.now() - receding_since >= SHORT_PASS_LEAVE_S:
                         log.info("short pass at (%.0f, %.0f): closest %.0f m, now %.0f m off, %.0f%% held",
                                  float(xy[0]), float(xy[1]), best, d, 100.0 * fraction)
