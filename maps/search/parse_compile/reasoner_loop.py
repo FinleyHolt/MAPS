@@ -279,7 +279,7 @@ _CATCH_CROPS = LOOK_MAX_CROPS // 2
 _PICTURE_WITHHELD_OF = ("the {}'s caption follows in the next message; "
                         "its picture is not served on this run")
 # The shape errors: a repeat serves only its count (_loop_broken_error).
-_SHAPE_MARKERS = ("unknown ref", "syntax error")
+_SHAPE_MARKERS = ("syntax error",)
 # How a grounding note says what the call does at a name's best match, by
 # the name's why.
 _WHY_VERB = {"stage": "standing at", "move": "flying",
