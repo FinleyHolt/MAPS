@@ -79,7 +79,7 @@ TURN_RADIUS_FALLBACK_M = 1500.0
 
 
 def _utc(t: float | None) -> str:
-    return "" if t is None else dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")[:-5] + "Z"
+    return "" if t is None else dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-4] + "Z"
 
 
 def centroid(ring: list[list[float]]) -> tuple[float, float]:
@@ -506,6 +506,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     (d, nearest), out["track_source"] = min(cands, key=lambda c: c[0][0])
     out["closest_approach_ft"] = round(d * FT_PER_M, 1)
     agl, out["agl_source"] = _agl(nearest, bases, events, row.get("map_name"))
+    width = 0.0
     if agl is not None:
         out["agl_ft"] = round(agl * FT_PER_M, 1)
         width = footprint_m(resolve_sensor(C12_SENSOR), agl)[0]
@@ -522,7 +523,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     origin = tuple(map(float, loiter)) if loiter else _at(track, p0)
     leg = 0.0
     at = _at(track, t_end_run)
-    if xy is not None and (at is None or math.dist(at, xy) > (out["hfov_width_ft"] or 0.0) / FT_PER_M / 2.0):
+    if xy is not None and (at is None or math.dist(at, xy) > width / 2.0):
         leg = return_leg_m(track, t_end_run, xy, turn_radius_m)
     w = _window(track, p0, t_end_run)
     p = sum(math.dist((a["x"], a["y"]), (b["x"], b["y"])) for a, b in zip(w, w[1:]))
