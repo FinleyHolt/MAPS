@@ -75,6 +75,16 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
     assert "rows" in small, small
     assert len(small["fids"]) == len(few), small
 
+    # The identity window a bare line serves keeps every way, so it serves
+    # the same shape, not a 24-row head.
+    _c, anchors = build_surface_from_graph(ways, (0.0, 0.0), 2.0)
+    out = run_program([], [dict(a) for a in anchors], {"ops": [
+        {"ref": "r1", "op": "find", "args": {"query": "Neuralia Road"}},
+        {"ref": "r2", "op": "filter_items",
+         "args": {"items": "r1", "key": "xy", "op": "truthy"}}]})
+    window = compact_results(out["results"], answer_ref="r2")["r2"]
+    assert set(window) == {"len", "name", "length_m"}, sorted(window)
+
 
 def _crops_of(src: str) -> list:
     """The crop requests one code block makes: ``(of, fid, marks)``."""

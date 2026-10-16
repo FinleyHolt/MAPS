@@ -1355,8 +1355,11 @@ def _filter_items(cx, a):
                    "segment it"))
     else:  # truthy
         on, stats = [it for it in items if it.get(key)], None
+    # A cut that keeps every way of a name's tied set is still that set.
     return Result(on, "cut", ordered=_ordered(items), op_cols=[key],
-                  cut_stats=stats)
+                  cut_stats=stats,
+                  name_set=getattr(items, "name_set", False)
+                  and len(on) == len(items))
 
 
 def _stratum(cx, a):
