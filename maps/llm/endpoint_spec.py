@@ -1,7 +1,7 @@
 """Server-discovered endpoint facts, probed once at process start.
 
 :func:`discover` reads the served model and its window off
-``GET models_url(url)`` and checks each SAM replica's ``/health``; any
+``GET models_url(url)`` and checks the SAM replicas' ``/health``; any
 divergence raises :class:`EndpointDiscoveryError` naming the URL and what was
 seen. An entry point runs ``install_spec(discover_from_env())``; the reasoner
 gets the spec injected, and other readers call :func:`spec`, which raises when
@@ -226,21 +226,24 @@ def _facts_from_endpoint(
 
 
 def _probe_sam_health(urls: tuple[str, ...]) -> None:
-    """Probe every SAM replica's ``/health``; a payload whose ``service``
-    field does not name sam (a foreign server on the port) raises."""
+    """Probe every SAM replica's ``/health``: none answering raises (the
+    client steps off a dead replica, so one is enough), and so does a payload
+    whose ``service`` field does not name sam (a foreign server on the port)."""
+    failures = []
     for url in urls:
         try:
             payload = _get_json(f"{url}/health")
         except EndpointDiscoveryError as exc:
-            raise EndpointDiscoveryError(
-                f"service 'sam' failed its /health probe: {exc}"
-            ) from exc
+            failures.append(str(exc))
+            continue
         identity = str(payload.get("service") or "").lower() if isinstance(payload, dict) else ""
         if identity and "sam" not in identity:
             raise EndpointDiscoveryError(
                 f"service 'sam' at {url} answered /health as {identity!r}, a "
                 f"reachable-but-WRONG server; expected an identity containing 'sam'"
             )
+    if len(failures) == len(urls):
+        raise EndpointDiscoveryError(f"service 'sam' failed its /health probe: {'; '.join(failures)}")
 
 
 #: The turns and tool a Reasoner's transcript carries, in the shape the

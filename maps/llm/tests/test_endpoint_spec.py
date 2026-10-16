@@ -209,6 +209,29 @@ def test_case_i_service_identity_mismatch(monkeypatch):
         discover(_URL_A, ("http://sam:8772",))
 
 
+def test_one_answering_sam_replica_passes_discovery(monkeypatch):
+    # The client steps off a dead replica, so discovery asks only that one answers.
+    _fake_http(
+        monkeypatch,
+        {f"{_URL_A}/models": _models_payload(), "http://sam:8773/health": {"service": "sam"}},
+    )
+    s = discover(_URL_A, ("http://sam:8772", "http://sam:8773"))
+    assert s.sam_urls == ("http://sam:8772", "http://sam:8773")
+
+
+def test_a_foreign_replica_is_refused_beside_a_live_one(monkeypatch):
+    _fake_http(
+        monkeypatch,
+        {
+            f"{_URL_A}/models": _models_payload(),
+            "http://sam:8772/health": {"service": "sam"},
+            "http://sam:8773/health": {"service": "flight_sim"},
+        },
+    )
+    with pytest.raises(EndpointDiscoveryError, match="WRONG"):
+        discover(_URL_A, ("http://sam:8772", "http://sam:8773"))
+
+
 def test_service_health_without_identity_field_is_reachability_only(monkeypatch):
     _fake_http(
         monkeypatch,
