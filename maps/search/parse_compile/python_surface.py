@@ -1473,8 +1473,9 @@ class MissionPython:
         return None
 
     def _call_stand(self, *, at, facing="north"):
-        if isinstance(at, Rows):
-            raise CodeError(self._not_one_place("at", at) + ".")
+        for kw, v in (("at", at), ("facing", facing)):
+            if isinstance(v, Rows):
+                raise CodeError(self._not_one_place(kw, v) + ".")
         at = self._slot(at)
         # A heading: a compass word rides as itself, anything else is a
         # place to look TOWARD.

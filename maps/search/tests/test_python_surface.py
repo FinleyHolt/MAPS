@@ -888,3 +888,10 @@ def test_a_dict_is_no_place(code):
     err, flights = _refusal(code)
     assert "a place is a row, a set, a fid or an [x, y]; got a dict" in err, err
     assert not flights
+
+
+def test_stand_facing_a_set_is_refused_under_its_spelling():
+    err, _ = _refusal('cars = find("car")\n'
+                      'v = stand(at="prior_7", facing=cars)\n')
+    assert err.endswith("facing= takes ONE place and cars is a set. "
+                        "Index it -- facing=cars[0]."), err
