@@ -1557,7 +1557,7 @@ def _compare(cx, a):
 
     out_rows: list = []
     for i, it in enumerate(items):
-        row = {k: v for k, v in it.items() if k not in _MODEL_HIDDEN_ROW_FIELDS}
+        row = dict(it)
         # Items resolve like refs, so a ref compared to itself is exactly 0.
         item_geom, it_c = place_geom(cx.by_fid.get(it.get("fid")), it)
         for ref in refs:
