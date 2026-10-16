@@ -109,8 +109,8 @@ def dispatch_one(
 ) -> dict:
     """Run one episode, write its row to ``<episode_dir>/episode.json`` and
     return it. ``status`` is ``ok`` for a scored attempt (a method exception
-    included) and ``infra`` when an infrastructure fault raised, the mission
-    ended ``transient_failures``, or the runner produced no record.
+    included) and ``infra`` when an infrastructure fault raised or the
+    mission ended ``transient_failures``.
     """
     t0 = time.monotonic()
 
@@ -135,16 +135,6 @@ def dispatch_one(
             "status": STATUS_INFRA if infra else STATUS_OK,
             "error": f"{type(e).__name__}: {e}",
             **({} if infra else {"traceback": traceback.format_exc()}),
-        })
-        write_episode_json(episode_dir, out)
-        return out
-    if rec is None:
-        # The runner skipped the episode (its map has no CityRefer objects):
-        # not a scored attempt, so it is excluded and re-queued.
-        out = _stamp({
-            "episode_id": episode.episode_id,
-            "status": STATUS_INFRA,
-            "error": "no_prediction_unclassified",
         })
         write_episode_json(episode_dir, out)
         return out

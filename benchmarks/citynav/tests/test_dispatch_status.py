@@ -3,8 +3,7 @@
 A ``status`` the producer only ever set to ``ok`` would pass every schema
 and contract test while the reader's ``infra`` branch never turned over.
 Each non-``ok`` producer path is driven here for real: the episode
-raising, the runner landing no record, and the mission ending
-``transient_failures``. ``run_episode`` is the only thing stubbed.
+raising and the mission ending ``transient_failures``. ``run_episode`` is the only thing stubbed.
 """
 
 from __future__ import annotations
@@ -106,14 +105,6 @@ def test_an_image_store_refusal_is_infra(code):
             raise RuntimeError("no JSON after 2 attempts") from exc
     except RuntimeError as exc:
         assert dispatch.is_infra_fault(exc) is True
-
-
-def test_no_record_is_infra_not_a_scored_zero(tmp_path, light, monkeypatch):
-    monkeypatch.setattr(dispatch, "run_episode", lambda *a, **k: None)
-    row = _dispatch(tmp_path)
-    assert row["status"] == episodes.STATUS_INFRA
-    assert row["error"] == "no_prediction_unclassified"
-    assert episodes.read_episode_json(tmp_path) == row
 
 
 def test_a_serve_death_under_the_mission_is_infra(tmp_path, light, monkeypatch):

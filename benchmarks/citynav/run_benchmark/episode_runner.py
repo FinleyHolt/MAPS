@@ -243,13 +243,8 @@ def run_episode(
     objects_by_map: dict,
     cfg: RunConfig,
     recorder: LiveRecorder | None = None,
-) -> dict | None:
-    """Fly one episode and return its scored record (None: no CityRefer
-    objects on its map, nothing to score)."""
-    if not objects_by_map.get(episode.map_name, []):
-        log.warning("  skip %s: no CityRefer objects", episode.episode_id)
-        return None
-
+) -> dict:
+    """Fly one episode and return its scored record."""
     assets = load_episode_assets(episode.map_name)
     log.info("tile_stem=%s map_name=%s", tile_stem(episode.map_name), episode.map_name)
     if cfg.spawn == "uniform":
