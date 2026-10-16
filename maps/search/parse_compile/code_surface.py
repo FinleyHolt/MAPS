@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from maps.search.analyze_scene.geom_compute import CARDINALS as _GEOM_CARDINALS
 from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
 from maps.search.analyze_scene.geom_program import sanitize_token
-from maps.util.xy_token import is_xy, parse_xy_token
+from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
 from maps.search.withhold import withheld
 
 # The four map-fixed directions, in the order their kwargs are read. Taken
@@ -92,6 +92,13 @@ def bind_row(row: dict):
             return [float(xy[0]), float(xy[1])]
     pt = parse_xy_token(fid) if isinstance(fid, str) else None
     return list(pt) if pt else fid
+
+
+def row_token(row: dict) -> str:
+    """A selected row as the token a move or a crop takes: what it binds
+    (:func:`bind_row`), a point as its ``[x, y]`` token."""
+    b = bind_row(row)
+    return format_xy_token(*b) if isinstance(b, list) else str(b)
 
 
 def _is_place_list(v) -> bool:

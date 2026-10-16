@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 
 from maps.search.analyze_scene.geom_compute import cell_centre_xy
-from maps.search.parse_compile.code_surface import END_RE, HANDLE_RE
+from maps.search.parse_compile.code_surface import HANDLE_RE
 from maps.search.render.look_render import (
     LOOK_MAX_BADGES,
     look_label,
@@ -15,7 +15,7 @@ from maps.search.render.look_render import (
     up_bearing_deg,
 )
 from maps.search.withhold import withheld
-from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
+from maps.util.xy_token import parse_xy_token
 
 # The server's per-request image cap.
 LOOK_MAX_CROPS = 16
@@ -162,17 +162,6 @@ def look_vision_text(crops: list[dict]) -> str:
                      f"position falls outside it, so no badge is drawn "
                      f"(in the image, unlabeled)")
     return base
-
-
-def crop_token_of(row: dict, live: bool) -> str:
-    """A crops token for one carried row: its fid, except a derived
-    ``end_N`` row off the surface crops its own ``[x, y]`` (an evicted fid
-    stays on the skip path)."""
-    fid = str(row.get("fid"))
-    xy = row.get("xy")
-    if not live and END_RE.fullmatch(fid) and is_xy(xy):
-        return format_xy_token(float(xy[0]), float(xy[1]))
-    return fid
 
 
 def rounded_xy(p) -> list[float] | None:

@@ -444,18 +444,16 @@ def test_a_rebind_that_fails_inside_a_def_or_a_later_line_unbinds():
         assert "pick is unbound" in (out[2].get("error") or ""), out[2]
 
 
-def test_a_crop_token_falls_back_to_the_rows_own_xy():
-    from maps.search.parse_compile.views import crop_token_of
+def test_a_row_token_is_what_the_row_binds():
+    from maps.search.parse_compile.code_surface import row_token
 
-    live_row = {"fid": "detected_9", "xy": [10.0, 20.0]}
-    end_row = {"fid": "end_0", "xy": [3.0, 4.5]}
-    assert crop_token_of(live_row, True) == "detected_9"
-    assert crop_token_of(end_row, False) == "[3, 4.5]"
-    assert crop_token_of({"fid": "end_1"}, False) == "end_1"
-    # An EVICTED detection is not a derived row: it keeps its fid and the
-    # skip path reports it gone, never a crop of its stale xy.
-    assert crop_token_of({"fid": "detected_3", "xy": [9.0, 9.0]},
-                          False) == "detected_3"
+    assert row_token({"fid": "detected_9", "xy": [10.0, 20.0]}) == "detected_9"
+    assert row_token({"fid": "end_0", "xy": [3.0, 4.5]}) == "[3, 4.5]"
+    assert row_token({"fid": "end_1"}) == "end_1"
+    assert row_token({"fid": "[7, 8]", "xy": [7.0, 8.0]}) == "[7, 8]"
+    # An EVICTED detection keeps its fid and the skip path reports it gone,
+    # never a crop of its stale xy.
+    assert row_token({"fid": "detected_3", "xy": [9.0, 9.0]}) == "detected_3"
 
 
 def test_a_far_anchored_find_says_nothing_is_near():

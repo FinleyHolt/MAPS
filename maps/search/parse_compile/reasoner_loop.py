@@ -46,7 +46,7 @@ from maps.search.parse_compile.carry import (
     run_ops,
 )
 from maps.search.parse_compile.code_surface import (
-    HANDLE_RE, HANDLE_WORD_RE, STOP_RE)
+    HANDLE_RE, HANDLE_WORD_RE, STOP_RE, row_token)
 from maps.search.parse_compile.compactor import (
     CompactionInfeasible,
     CompactionInvariantError,
@@ -57,7 +57,6 @@ from maps.search.parse_compile.reasoner_agent import Reasoner
 from maps.search.parse_compile.views import (
     LOOK_MAX_CROPS,
     crop_requests,
-    crop_token_of,
     look_vision_text,
     map_features,
     map_spec,
@@ -1022,7 +1021,7 @@ class _Mission:
             name = mp.ref_name(handle) or mp.call_arg("look")
             return {"error": (f"{name or handle} holds no rows to look at; "
                               "name a handle that has some, or find() one first")}
-        fids = [crop_token_of(r, str(r["fid"]) in self._ns_rows) for r in rows]
+        fids = [row_token(r) for r in rows]
         return self._crops_of(
             fids, marks=marks,
             # No handle named: the executor's ref may be unbound.
@@ -1184,7 +1183,7 @@ class _Mission:
             if stop_err:
                 return self._plan_err({}, stop_err)
             if HANDLE_RE.fullmatch(t):
-                hr = [str(r["fid"]) for r in (self.carry.read(t) or [])
+                hr = [row_token(r) for r in (self.carry.read(t) or [])
                        if r.get("fid")]
                 if not hr:
                     return self._plan_err({}, (
@@ -1221,8 +1220,7 @@ class _Mission:
         catch = rows[:_CATCH_CROPS]
         if catch:
             cack = self._crops_of(
-                [crop_token_of(r, str(r["fid"]) in self._ns_rows)
-                 for r in catch],
+                [str(r["fid"]) for r in catch],
                 preamble=("The pass's catch, one crop per "
                           "row it added, in pass order: "))
             if not cack.get("error"):
