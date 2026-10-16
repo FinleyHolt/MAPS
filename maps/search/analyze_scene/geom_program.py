@@ -617,13 +617,9 @@ def _step_hint(v) -> str:
 
 
 def compact_results(results: dict, *, answer_ref: str = "") -> dict:
-    """Each op result as its model-facing envelope: an ordered list ``{len,
-    fids, rows}`` (a markdown grid, past ``BROAD_DUMP_SOFT_ROWS`` only the
-    first ``BROAD_HEAD_ROWS``), an unordered one ``{len, census, named}``, an
-    empty one ``{len: 0, items: [], hint}``; a compare, always a step a later
-    op reads, only ``{len, hint}``. The legend rides the first grid. With ``answer_ref`` the
-    response is that one envelope, carrying the other ops' hints. Every rN
-    keeps its full rows."""
+    """Each op result as its model-facing envelope (:func:`_envelope`), the
+    legend on the first grid; with ``answer_ref``, that one envelope,
+    carrying the other ops' hints."""
     legend = [_TABLE_LEGEND]
     if answer_ref not in results:
         out, seen = {}, {}
@@ -1457,13 +1453,10 @@ def _unique_label(label, used: set, fid=None) -> str:
 
 
 def _compare(cx, a):
-    """Attach each ref's columns to every item row, in input order:
-    'distance to' (footprint gap, 0.0 on contact), 'facing' (the compass
-    word of the gap vector, absent on contact), 'center distance to' and
-    'bearing from' (centroid to centroid), and a signed '<dir> of' column
-    per requested cardinal. A ref is a surface row, an [x, y], a staged
-    viewpoint, or ``{ref: [fid | rN | [x, y], ...]}``, a union measured as
-    one place."""
+    """Attach each ref's relation columns (:data:`_TABLE_LEGEND`) to every
+    item row, in input order. A ref is a surface row, an [x, y], a staged
+    viewpoint or a union ``{ref: [fid | rN | [x, y], ...]}`` measured as one
+    place."""
     items = _as_rows(cx, a["items"])
     notes: list = []
     used_labels: set = set()
@@ -1545,7 +1538,6 @@ def _compare(cx, a):
                 sides, rpts = ref["cards"]
                 for side in sides:
                     off = G.cardinal_offset(rpts, it_c, side)
-                    # Absent, never 0.0, when there is no side to name.
                     if off is not None:
                         row[f"{side} of {lab}"] = round(off, 1)
             ref_geom, center = ref["geom"], ref["center"]
