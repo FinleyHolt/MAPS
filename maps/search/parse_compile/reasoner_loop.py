@@ -1206,15 +1206,18 @@ class _Mission:
                      for t in dict.fromkeys(raw_members)]
         if not accepted:
             return self._plan_err({}, "nothing to cover")
+        # The pass's members count as covered once it flies.
+        covered = set(self._covered_fids)
         accepted, cov_note, subject, segs = cover_items(
             accepted, said_to, spec=self.mission_spec,
             spacing=self._cover_spacing, rows=self._ns_rows,
-            covered=self._covered_fids, pose_xy=self.ctx.pose_xy)
+            covered=covered, pose_xy=self.ctx.pose_xy)
         if not accepted:
             return self._plan_err({}, cov_note)
         mv = self._fly_moves(accepted, [], cover=subject)
         if "error" in mv:
             return self._plan_err({"explored": mv}, str(mv["error"]))
+        self._covered_fids = covered
         if segs > 1:
             mv["segments"] = segs
         # A truncated pass reads as truncated.

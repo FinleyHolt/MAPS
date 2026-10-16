@@ -183,3 +183,25 @@ def test_a_retask_on_the_turn_cap_turn_stays_queued():
     assert reply.ended_by == "turn_cap"
     assert queue == ["operator: also check the gate"]
     assert not [m for m in fr.messages if "also check the gate" in str(m.get("content"))]
+
+
+def test_a_pass_that_flew_nothing_leaves_its_segment_uncovered():
+    """A segment counts as covered once a pass over it flies: after a
+    pass that flew nothing, the next pass's note still names it."""
+    cands = [{"fid": f"road_{i}", "xy": [10.0 * i, 0.0], "class": "road",
+              "name": "Main St", "search_text": "main st road"} for i in (1, 2)]
+    tries: list = []
+
+    def fly(item):
+        tries.append(item)
+        if len(tries) == 1:
+            return {"error": "the aircraft refused that stop"}
+        return {"stop_id": f"stop_{len(tries):03d}", "target": item["target_fid"],
+                "pose_xy": [1.0, 2.0], "new_detections": 0}
+
+    _, fr, _, _ = drive([[run('explore("road_1")')], [run('explore("road_2")')],
+                         "done"], cands=cands, fly=fly)
+    failed, flown = tool_results(fr)[:2]
+    assert "error" in failed, failed
+    assert "'Main St' has 1 more segment(s) no pass has covered (road_1)" in \
+        flown["explored"]["note"], flown
