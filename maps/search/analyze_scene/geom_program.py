@@ -824,7 +824,7 @@ def _as_rows(cx, arg):
         else:
             raise ProgramError(
                 f"cannot resolve a point in the list from item {_quote(it)}: each item must "
-                f"be a fid in this surface, a {{'fid':...}} dict, an [x,y], or a set. "
+                f"be a fid on this surface, an [x, y], or a set. "
                 f"{cx.avail()}")
     return out
 

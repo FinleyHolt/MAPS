@@ -106,3 +106,17 @@ def test_look_without_marks_asks_for_none():
     crops = _crops_of('cars = find("car")\nlook(cars[0:10])\n')
     assert crops, "no crops step compiled"
     assert crops[-1][2] is None, crops[-1]
+
+
+def test_an_unresolvable_list_item_names_only_what_a_list_takes():
+    import pytest
+
+    from maps.search.analyze_scene.geom_program import ProgramError, run_program
+
+    with pytest.raises(ProgramError) as e:
+        run_program([{"fid": "prior_1", "xy": [0.0, 0.0]}], [], {"ops": [
+            {"ref": "r1", "op": "filter_items",
+             "args": {"items": ["prior_1", "nowhere"], "key": "xy",
+                      "op": "truthy"}}]})
+    assert "each item must be a fid on this surface, an [x, y], or a set." \
+        in str(e.value), str(e.value)
