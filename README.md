@@ -177,6 +177,10 @@ these places, the served-text changes among them:
 | A re-task arriving on the turn-cap turn stays queued. | It was appended to the thread as the mission ended at the cap, unread by the model. |
 | An explore marks its segments covered only once the pass flies. | A pass that flew nothing marked its segments covered, so later passes stopped naming them as uncovered. |
 | Endpoint discovery passes when one SAM replica answers `/health` (a replica answering as another service is refused), and a segment retry goes to a replica that call has not seen fail. | Discovery refused unless every listed replica answered, and a retry took the next replica in a shared rotation, which could be the one that just failed. |
+| A compass cut (`north_of=` etc.) on a column the place sets on no row keeps every row as unplaced. | The cut refused: `filter_items op 'on_side' ... no item carries '<dir> of <x>'`. |
+| A name match's sub-threshold count leaves out the rows the name band cut. | The count included them, and the name-band line counted them again. |
+| An answer its distance cut emptied serves that cut's stats, and no line names a compare step. | The stats were dropped and the answer served `compare received NO items -- the items ref resolved to an empty list.` |
+| Executor refusals quote the model's value and name no compiled op (`'x' is not a fid on this surface.`, `5 is not a place: a place is a fid, a set, a row or an [x, y].`); an empty result reads `this call returned no rows`; a cut against an empty set says nothing can be cut or ordered by it. | They led with the op (`compare ref`, `ends ref`, `crossings ref`, `union ref member`, `filter_items op 'le' on key ...`, `strata come off`, `compare refs element ... {ref:..., as:...}`); an empty result read `this op returned NO items`; a cut against an empty set said the ordering would be meaningless. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
