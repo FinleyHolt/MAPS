@@ -27,8 +27,9 @@ fix nearest the target's, else the observations' median camera height
 (``agl_source`` names which); a miss on a recording holding under 95% of
 the run reads unknown. Time to identification runs from the tasking to the
 end the row stands at. SPL is ``S * l / max(p, l)``: ``p`` the GNSS path
-from the crew's last pass of the loiter waypoint before the first leg to
-that end, plus the way back to the commit a crew flies (one turn and a
+from the crew's last pass of the loiter waypoint before the first ``leg``
+row (the first leg's outcome, or the row saying no leg is flown) to that
+end, plus the way back to the commit a crew flies (one turn and a
 straight, or a teardrop, at the median radius the crews turned on routed
 legs), ``l`` the straight from the loiter waypoint to the target; undefined
 for a success the recording holds under 95% of. A run with an ``excluded``
@@ -412,9 +413,10 @@ def _frames(bases: list[Path]) -> list[dict[str, Any]]:
 
 
 def ended(row: dict[str, Any]) -> str:
-    """``no run`` (status not ``ok``), ``stopped`` (a crew end), ``failed`` (a
-    failure not the serve's: a scored miss), else the row's ``ended_by``:
-    ``reply`` (the model's report) is the one end that scores."""
+    """``no run`` (status not ``ok``, or no recorded end), ``stopped`` (a
+    crew end), ``failed`` (a failure not the serve's: a scored miss), else
+    the row's ``ended_by``: ``reply`` (the model's report) is the one end
+    that scores."""
     if row.get("status") != "ok":
         return "no run"
     if row.get("ended_by") == "stopped":
