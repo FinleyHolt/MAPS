@@ -176,7 +176,7 @@ def test_a_ring_frame_is_posed_on_the_corrector_s_time_base(built, make_twin, ma
     _fly_over(twin, (600.0, 600.0), 4.0)
     for seq in range(len(twin.rows)):
         live.correct(twin.frame(seq))
-    assert live._fused([(0.0, -(len(twin.rows) // 2))], ranked=1, about="a frame mid-pass") is not None
+    assert live._fused([(0.0, len(twin.rows) // 2)], ranked=1, about="a frame mid-pass") is not None
     (record,) = live.last["mosaic"]["registrations"]
     assert record["applied"] and record["source"] == "measured", record
 
@@ -375,7 +375,7 @@ def test_a_frame_not_fetched_is_quoted_with_its_own_reason_while_the_corrector_f
             return None
 
     live = make_live(Ring())
-    assert live._fused([(0.0, -5)], ranked=1, about="the area") is None
+    assert live._fused([(0.0, 5)], ranked=1, about="the area") is None
     threads[0].join()
     assert "ring frame 5 not fetched: link down" in live.last_refusal
 
@@ -388,7 +388,7 @@ def test_the_observation_is_keyed_to_its_newest_frame_by_log_time_not_seq(built,
     _fly_over(twin, (600.0, 600.0), 2.0)
     last = len(twin.rows) - 1
     twin.rows[0]["log_time"] = twin.rows[last]["log_time"] + 1     # frame 0 recorded after a restart
-    assert live._fused([(0.0, 0), (0.0, -last)], ranked=2, about="two frames") is not None
+    assert live._fused([(0.0, 0), (0.0, last)], ranked=2, about="two frames") is not None
     assert live.last["seq"] == 0 and live.last["log_time"] == twin.rows[0]["log_time"]
 
 
@@ -407,3 +407,18 @@ def test_at_one_angle_the_frame_stamped_later_holds_the_point_though_its_sequenc
     rows = [{"seq": 900, "log_time": 100, "pose": pose}, {"seq": 3, "log_time": 200, "pose": pose}]
     cov = src._held_by(rows, [(-117.98, 35.13)])
     assert cov["best"][0][1] == 3
+
+
+def test_at_one_angle_the_area_s_frame_stamped_later_is_fused_first():
+    """Two frames hold two points at one angle; the camera restarted between
+    them: the later stamp goes first, as it would hold a point."""
+    from benchmarks.flight.live_source import LiveSource, coverage_record
+
+    src = LiveSource.__new__(LiveSource)
+    rows = [{"seq": 900, "log_time": 100, "t_host": 1.0}, {"seq": 3, "log_time": 200, "t_host": 2.0}]
+    src._ring_rows = lambda after=None: rows
+    src._held_by = lambda rows, points: coverage_record([(1.0, 900), (1.0, 3)], len(rows))
+    asked = []
+    src._fused = lambda want, **_kw: asked.extend(want)
+    src.observe_area([(0.0, 0.0), (1.0, 1.0)])
+    assert asked == [(1.0, 3), (1.0, 900)]

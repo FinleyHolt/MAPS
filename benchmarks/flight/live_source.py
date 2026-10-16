@@ -494,12 +494,8 @@ class LiveSource:
         over the frames stamped after ``after`` (vehicle seconds) when given:
         ``fraction``, and ``best`` per point ``(off-nadir degrees, seq)`` or
         None. None with ``last_refusal`` when the ring cannot be asked."""
-        rows = self._ring_rows()
-        if rows is None:
-            return None
-        if after is not None:
-            rows = [r for r in rows if float(r["t_host"]) > after]
-        return self._held_by(rows, points)
+        rows = self._ring_rows(after)
+        return None if rows is None else self._held_by(rows, points)
 
     def coverage_of_each(self, areas: list[list[tuple[float, float]]]) -> list[dict[str, Any] | None] | None:
         """:meth:`coverage` of several areas off ONE read of the ring's index,
@@ -507,10 +503,13 @@ class LiveSource:
         rows = self._ring_rows()
         return None if rows is None else [self._held_by(rows, area) for area in areas]
 
-    def _ring_rows(self) -> list[dict[str, Any]] | None:
+    def _ring_rows(self, after: float | None = None) -> list[dict[str, Any]] | None:
+        """The ring's index, the frames stamped after ``after`` (vehicle seconds) when given."""
         rows, why = self._ask(self.vehicle.index)
         if rows is None:
             self.last_refusal = f"the recorder's ring cannot be asked: {why or 'no index'}"
+        elif after is not None:
+            rows = [r for r in rows if float(r["t_host"]) > after]
         return rows
 
     def _held_by(self, rows: list[dict[str, Any]], points: list[tuple[float, float]]) -> dict[str, Any]:
@@ -548,9 +547,10 @@ class LiveSource:
         the frames (after ``after`` when given) nearest nadir over each point,
         fused; a partial pass is served as the part it held. None with
         ``last_refusal`` when no frame held any of it."""
-        cov = self.coverage(points, after)
-        if cov is None:
+        rows = self._ring_rows(after)
+        if rows is None:
             return None
+        cov = self._held_by(rows, points)
         if not cov["held"]:
             self.last_refusal = (f"no frame over any of the area's {cov['points']} points in the "
                                  f"recorder's ring ({cov['frames']} frames asked)")
@@ -559,24 +559,28 @@ class LiveSource:
         for b in cov["best"]:
             if b is not None:
                 chosen[b[1]] = min(chosen.get(b[1], b[0]), b[0])
-        want = sorted((angle, -seq) for seq, angle in chosen.items())
+        # At one angle the frame stamped later goes first, as it holds a point in _held_by.
+        stamped: dict[int, int] = {}
+        for r in rows:
+            stamped[int(r["seq"])] = max(stamped.get(int(r["seq"]), 0), int(r["log_time"]))
+        want = [(chosen[seq], seq) for seq in sorted(chosen, key=lambda s: (chosen[s], -stamped[s]))]
         obs = self._fused(want, ranked=cov["frames"], about=f"the area's {cov['points']} points")
         if obs is not None:
             self.last["coverage"] = held_record(cov["points"], cov["held"])
         return obs
 
     def _fused(self, want: list[tuple[float, int]], *, ranked: int, about: str) -> Observation | None:
-        """``want``'s frames, ``(off-nadir degrees, -seq)``, fetched, each placed
+        """``want``'s frames, ``(off-nadir degrees, seq)``, fetched, each placed
         by its pose and registration, composited at their median GSD."""
         placed: list[Any] = []
         records: list[dict[str, Any]] = []
         unfetched = 0
-        for angle, negative_seq in want:
-            got, why = self._ask(self.vehicle.frame, -negative_seq)
+        for angle, asked in want:
+            got, why = self._ask(self.vehicle.frame, asked)
             if got is None:
                 # The link, not the ring: the index said the frame is there.
                 unfetched += 1
-                self.last_refusal = f"ring frame {-negative_seq} not fetched: {why or 'no reason recorded'}"
+                self.last_refusal = f"ring frame {asked} not fetched: {why or 'no reason recorded'}"
                 continue
             jpeg, t_host, log_time, seq, tag = got
             # Posed as the corrector poses it, so its registration and the
