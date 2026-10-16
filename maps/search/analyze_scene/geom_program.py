@@ -870,6 +870,11 @@ def _named_rows(cx, el, need):
     return out
 
 
+def _as_said(el):
+    """A crossings/ends ref as the model said it: its label, else itself."""
+    return el["as"] if isinstance(el, dict) and el.get("as") else el
+
+
 def _relate_ran(key, items) -> bool:
     """Whether the compare that writes a ``facing <lab>`` key ran: its
     sibling ``distance to <lab>`` is on a row, so a facing absent everywhere
@@ -1143,7 +1148,7 @@ def _crossings(cx, a):
         polys = [p for n in nodes for p in chains_of(n)]
         if not polys:
             raise ProgramError(
-                f"crossings ref {_quote(el)} names no geometry on this "
+                f"crossings ref {_quote(_as_said(el))} names no geometry on this "
                 f"surface -- a crossing needs two features that HAVE "
                 f"a shape. {cx.avail('point')}")
         sides.append((_x_label(nodes, el), polys,
@@ -1203,7 +1208,7 @@ def _ends(cx, a):
         nodes = _named_rows(cx, el, "centerline")
         if not nodes:
             raise ProgramError(
-                f"ends ref {_quote(el)} names no row on this surface. "
+                f"ends ref {_quote(_as_said(el))} names no row on this surface. "
                 f"{cx.avail('point')}")
         for nd in nodes:
             cl = nd.get("centerline")

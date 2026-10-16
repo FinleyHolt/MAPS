@@ -396,3 +396,17 @@ def test_a_look_list_refuses_a_slice_naming_it_as_spelled(block, name):
     assert [c[0] for c in calls].count("analyze") == 1, calls  # the find
     assert not [c for c in calls if c[0] == "crops"], calls
     assert f"look([{name}[0], ...])" in str(out["error"]), out
+
+
+
+@pytest.mark.parametrize("op, query", [("crossings", "car"), ("ends", "qqq")])
+def test_a_refused_ref_is_quoted_by_the_models_label(op, query):
+    # A set with no geometry (or no rows) is refused under the label the
+    # model knows it by, never as the executor's {ref, as} element.
+    roads = {"ref": ["r0"], "as": "roads"}
+    prog = {"ops": [{"ref": "r0", "op": "find", "args": {"query": query}},
+                    {"ref": "r1", "op": op, "args": {"refs": [roads, roads]}}]}
+    with pytest.raises(ProgramError) as e:
+        run_program([{"fid": "c1", "class": "car", "search_text": "car"}],
+                    [], prog)
+    assert "ref 'roads' names no" in str(e.value), e.value
