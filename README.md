@@ -163,6 +163,8 @@ these places, the served-text changes among them:
 | A match-tier view (`.exact`, `.tagged`, `.fuzzy`) is served under the model's name for its set (`cars.exact`). | It was served under the executor's ref (`r9.tagged` in a flown run), which the model cannot type, and a bare `cars.exact` served the table twice. |
 | ViSA's SAM prompts drop the bare target class (and its plural) from every concept source. | The port dropped it from the concept list only, so a surrounding or landmark naming the class still prompted it. |
 | A bank or forced replay's leg row gives the recorded observation's mosaic frame count ("in 7 frame(s)"); a frame row that records no mosaic names no count. | The replay tiers said "in 1 frame(s)" for every held area, whatever the flight had said. |
+| A 4xx from the reasoner other than 402, 408 and 429 ends the mission `request_refused` at its first send, never re-sent. | Such a refusal was re-sent as a transient failure: the bench ended `request_refused` after six sends (about 32 s of backoff), and a live mission re-sent it until the operator stopped. |
+| `explore()` over a set holding termini (`ends_of`) flies each terminus's point, as `go_to(e[0])` does; a set pass whose members have no footprint says "<set> has no footprint to cover, so this pass is its N stops". | The pass sent the bare `end_N` fids and served the resolver's refusal; the footprint-less set pass said "covered N places in N stops; each fits inside one observation". |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results

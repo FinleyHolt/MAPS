@@ -136,7 +136,7 @@ and read by no measure or decision: in `frames.jsonl`, `log_time`, `t_host`,
 and `mosaic`; in the ledger row, `ts` (the host's wall clock at the start).
 `conversation.jsonl`'s diagnostic rows (`malformed_envelope`, `empty_turn`,
 `code_shaped_reply`, `no_flight_reply`, `transient_error`,
-`oversize_rejection`, and a `run` row's `reasoning`, `said`, `printed`,
+`oversize_rejection`, `content_filter`, `request_refused`, and a `run` row's `reasoning`, `said`, `printed`,
 `errored` and `frames`) are the turn-by-turn audit record, read by no
 measure; the measures read its `mission_end`, `leg` and `waypoint` rows.
 
