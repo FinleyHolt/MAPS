@@ -538,7 +538,7 @@ def _hint(v) -> str:
     if not v:
         return join_hints(
             v.empty_condition
-            or "this op returned NO items: nothing met its condition.",
+            or "this call returned no rows: nothing met its condition.",
             *v.notes,
             "this retrieval searched every surface row"
             + ("" if withheld("prior") else " (prior + runtime)")

@@ -433,7 +433,7 @@ def test_a_calls_own_steps_ride_its_answer_unprefixed_and_once():
     hint = compact_results({"r3": Result(kind="miss"), "r4": Result(kind="miss")},
                            answer_ref="r4")["r4"]["hint"]
     assert "r3" not in hint, hint
-    assert hint.count("this op returned NO items") == 1, hint
+    assert hint.count("this call returned no rows") == 1, hint
 
 
 def test_a_map_names_the_set_it_badges_as_the_model_does():
@@ -472,7 +472,7 @@ def test_a_folded_hint_keeps_the_lines_the_answer_does_not_say():
         'a = find("zeppelin").filter(near="prior_1", dwithin=10)\n'
         'b = find("car").filter(near="prior_1", dwithin=1)\n')], "done"])
     hint = tool_results(fr)[0]["result"]["results"]["b"]["hint"]
-    assert "\na: this op returned NO items: nothing met its condition.\n" in hint, hint
+    assert "\na: this call returned no rows: nothing met its condition.\n" in hint, hint
 
 
 def test_a_looked_slice_rides_under_the_models_name_for_it():
@@ -502,7 +502,7 @@ def test_an_emptied_sibling_keeps_its_own_status_line():
         'a = find("car").filter(near="prior_1", dwithin=1)\n'
         'b = find("depot").filter(near="prior_1", dwithin=1)\n')], "done"])
     hint = tool_results(fr)[0]["result"]["results"]["b"]["hint"]
-    assert "a: this op returned NO items" in hint, hint
+    assert "a: this call returned no rows" in hint, hint
     lines = hint.splitlines()
     assert len(lines) == len(set(lines)), lines
 
