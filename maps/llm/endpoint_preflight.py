@@ -40,7 +40,7 @@ from pathlib import Path
 
 from maps.llm import endpoint_spec
 from maps.llm.flight_summary import summarize
-from maps.llm.model_cards import check_effort, speaks_openai
+from maps.llm.model_cards import check_effort, effort, speaks_openai
 
 
 def _picture() -> bytes:
@@ -119,24 +119,24 @@ def main(argv: list[str] | None = None) -> int:
           f"input budget {spec.input_budget}, output cap {spec.max_output_tokens}, "
           f"tokenizer {spec.tokenizer_name}")
 
-    efforts = args.effort or [os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "").strip() or None]
+    efforts = args.effort or [effort()]
     env_before = {k: os.environ.get(k) for k in ("SEARCH_COMPILE_WORKDIR", "SEARCH_LLM_ROUTING_KEY")}
     failed = 0
     try:
-        for effort in efforts:
+        for asked in efforts:
             with tempfile.TemporaryDirectory(prefix="maps-preflight-") as tmp:
                 os.environ["SEARCH_COMPILE_WORKDIR"] = tmp
                 # one prompt-cache key per conversation, as one per episode
                 os.environ["SEARCH_LLM_ROUTING_KEY"] = f"preflight-{Path(tmp).name}"
                 try:
-                    if effort is not None:
-                        check_effort(spec.model_id, effort)
-                    result = _conversation(spec, effort, Path(tmp))
+                    if asked is not None:
+                        check_effort(spec.model_id, asked)
+                    result = _conversation(spec, asked, Path(tmp))
                 except Exception as exc:  # noqa: BLE001 — a refusal is the finding
                     failed += 1
-                    print(f"effort {effort!r}: REFUSED {type(exc).__name__}: {exc}", file=sys.stderr)
+                    print(f"effort {asked!r}: REFUSED {type(exc).__name__}: {exc}", file=sys.stderr)
                     continue
-            print(f"effort {effort!r}: " + json.dumps(result, default=str))
+            print(f"effort {asked!r}: " + json.dumps(result, default=str))
     finally:
         for k, v in env_before.items():
             if v is None:

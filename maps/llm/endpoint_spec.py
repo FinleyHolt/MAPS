@@ -323,16 +323,15 @@ def discover(
         if sam_urls:
             _probe_sam_health(sam_urls)
 
-    from maps.llm.model_cards import card_for, check_effort  # noqa: PLC0415
+    from maps.llm.model_cards import card_for, check_effort, effort  # noqa: PLC0415
 
     try:
         card_for(model_id)  # the sampling envelope: refused at startup, not mid-mission
     except ValueError as exc:
         raise EndpointDiscoveryError(str(exc)) from exc
-    effort = os.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "").strip()
-    if effort:
+    if chosen := effort():
         try:
-            check_effort(model_id, effort)
+            check_effort(model_id, chosen)
         except ValueError as exc:
             raise EndpointDiscoveryError(f"SEARCH_SAMPLING_REASONING_EFFORT: {exc}") from exc
     tokenizer_name = _require_tokenizer(model_id)

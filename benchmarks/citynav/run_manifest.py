@@ -19,6 +19,7 @@ from pathlib import Path
 
 from benchmarks import repo_provenance
 from benchmarks.citynav.episodes import EPISODES_JSONL, MANIFEST_NAME, atomic_write_json
+from maps.llm.model_cards import effort
 
 SCHEMA = "maps.run_manifest/v1"
 
@@ -111,14 +112,10 @@ def settle_effort() -> None:
     requests carry it (stripped; blank is unset). Endpoint discovery has
     checked it against the served card; called once after it, before any
     stamp or spawn."""
-    raw = os.environ.get(_EFFORT)
-    if raw is None:
-        return
-    effort = raw.strip()
-    if effort:
-        os.environ[_EFFORT] = effort
+    if chosen := effort():
+        os.environ[_EFFORT] = chosen
     else:
-        del os.environ[_EFFORT]
+        os.environ.pop(_EFFORT, None)
 
 
 class EndpointRefused(RuntimeError):
