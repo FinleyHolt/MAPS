@@ -47,11 +47,11 @@ def test_key_value_query_retrieves_the_tagged_rows():
     assert env["fids"][:2] == ["prior_1", "prior_2"]  # exact k=v tier first
     rows_by_fid = {r["fid"]: r for r in out["results"]["r0"]}
     assert rows_by_fid["prior_1"]["name_match"] >= 0.8
-    # the sub-threshold row stays OUT of the rN; the note states the tail
+    # the sub-threshold row stays OUT of the set; the note states the tail
     assert "prior_4" not in rows_by_fid
     assert "3 of 4 rows matched" in env["hint"]
     assert "1 sub-threshold row" in env["hint"]
-    assert "NOT in this rN" in env["hint"]
+    assert "NOT in this set" in env["hint"]
     assert f"match {max(rows_by_fid[f]['name_match'] for f in rows_by_fid)}" in env["hint"]
 
 

@@ -204,7 +204,7 @@ def join_hints(*parts) -> str:
 _NAME_SET_SHAPE_ROWS = 8
 
 # A row list longer than BROAD_DUMP_SOFT_ROWS renders its first
-# BROAD_HEAD_ROWS rows (a set crop badges the same rows); the rN keeps all.
+# BROAD_HEAD_ROWS rows (a set crop badges the same rows); the set keeps all.
 BROAD_DUMP_SOFT_ROWS = 48
 BROAD_HEAD_ROWS = LOOK_SET_ROWS
 
@@ -527,7 +527,7 @@ def _table(head, rows, op_cols, legend) -> "str | None":
     if legend:
         head["legend"] = legend.pop()
     return (f"{n_cut} column(s) elided from this render to fit; "
-            "the rN keeps them all") if n_cut else None
+            "the set keeps them all") if n_cut else None
 
 
 def _hint(v) -> str:
@@ -831,7 +831,7 @@ def _as_rows(cx, arg):
         v = [v]
     if not isinstance(v, list):
         raise ProgramError(
-            f"cannot resolve rows from {_quote(arg)}: items is an rN ref, a "
+            f"cannot resolve rows from {_quote(arg)}: items is a set, a "
             f"fid on this surface, an [x,y], or a list of them. "
             f"{cx.avail('list')}")
     if all(isinstance(it, dict) and is_xy(it.get("xy")) for it in v):
@@ -849,7 +849,7 @@ def _as_rows(cx, arg):
         else:
             raise ProgramError(
                 f"cannot resolve a point in the list from item {_quote(it)}: each item must "
-                f"be a fid in this surface, a {{'fid':...}} dict, an [x,y], or an rN. "
+                f"be a fid in this surface, a {{'fid':...}} dict, an [x,y], or a set. "
                 f"{cx.avail('point')}")
     return out
 
@@ -996,7 +996,7 @@ def _match_notes(scored, n, band_cut) -> list:
                       "order among themselves is arbitrary and ordering them "
                       "by a cue column chooses it")
     notes = [f"{n} of {len(scored)} rows matched ({order}"
-             + (f"; {rest} sub-threshold row(s) NOT in this rN" if rest else "")
+             + (f"; {rest} sub-threshold row(s) NOT in this set" if rest else "")
              + ")."]
     tiers = [_tier(x) for x in vals]
     n_ex, n_tg = tiers.count("exact"), tiers.count("tagged")
@@ -1006,7 +1006,7 @@ def _match_notes(scored, n, band_cut) -> list:
                      "each as a set.")
     if band_cut:
         notes.append(f"matched as a NAME: {band_cut} row(s) under the name "
-                     f"tier are a different feature and are NOT in this rN.")
+                     f"tier are a different feature and are NOT in this set.")
     head = "; ".join(f"{r.get('fid')} {_match_label(r)} (match {r['name_match']})"
                      for r in scored[:n][:4])
     lead = "Best" if vals[0] >= T.NAME_TIER_FLOOR else "Head"
@@ -1518,7 +1518,7 @@ def _compare(cx, a):
             if not isinstance(ref_el, str):
                 raise ProgramError(
                     f"compare refs element {_quote(ref_el)} must be a bare fid string, "
-                    f"an rN result, an [x,y] literal, or {{ref:..., as:...}}.")
+                    f"a set, an [x,y] literal, or {{ref:..., as:...}}.")
             payload = cx.by_fid.get(ref_el)
             if payload is None and ref_el in cx.staged:
                 # A staged viewpoint attaches its side columns.

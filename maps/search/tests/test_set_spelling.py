@@ -71,7 +71,7 @@ def _served(code: str) -> tuple[str, dict]:
 def test_no_served_text_names_an_rn_the_model_did_not_bind(code):
     text, out = _served(code)
     own = set(re.findall(r"\br\d+\b", code)) | set(out.get("handles") or ())
-    assert not set(re.findall(r"\br\d+\b", text)) - own, text
+    assert not set(re.findall(r"\br(?:\d+|N)\b", text)) - own, text
 
 
 def _keys(out: dict) -> list:
