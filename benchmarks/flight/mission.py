@@ -797,10 +797,14 @@ class Mission:
     def bank(self) -> None:
         """The run's row in ``episode.json`` and as ONE line of the sortie's
         ``episodes.jsonl``, replaced at every report, then the track flown
-        since; a row that will not land is logged, never raised."""
+        since; a row that will not land is logged, never raised. A start
+        without a fix takes its UTC at the first bank with one."""
         from benchmarks.citynav.episodes import upsert_row, write_episode_json  # noqa: PLC0415
 
         try:
+            if self.started_at_utc is None and self._t0 is not None and (utc := self._utc_now()) is not None:
+                # No fix at the start: the start's UTC is the first fix's, back through the seconds since.
+                self.started_at_utc = utc - self.elapsed_s()
             row = self.row()
             sortie = self.workdir.parent
             write_episode_json(self.workdir, row)

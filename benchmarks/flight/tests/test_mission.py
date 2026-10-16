@@ -130,6 +130,23 @@ def test_a_track_fix_is_where_the_aircraft_was_at_its_stamp_under_a_timing_offse
     assert (first["x"], first["y"]) == pytest.approx((x, y), abs=0.01)
 
 
+def test_a_start_without_a_fix_takes_its_utc_at_the_first_bank_with_one(make_mission):
+    """No fix at the start leaves no UTC start; the first bank with a fix
+    reads it back through the vehicle seconds since, so the row and the
+    track carry it."""
+    import datetime as dt
+
+    m, twin = make_mission()
+    m.started_at, m._t0, m.started_at_utc = 0.0, twin.now(), None
+    pose = m._live.pose_now(m._t0)
+    twin.sleep(20.0)
+    m.status, m.ended_by = M.STATE_AWAITING, "reply"
+    m.bank()
+    row = json.loads((m.workdir.parent / "episodes.jsonl").read_text().splitlines()[0])
+    assert row["started_at_utc"] == pytest.approx(dt.datetime.fromisoformat(pose.utc).timestamp(), abs=1e-3)
+    assert (m.workdir.parent / M.TRACK_JSONL).read_text().strip()
+
+
 def test_an_unknown_episode_is_refused_by_name(monkeypatch):
     import pytest
 
