@@ -46,7 +46,7 @@ from maps.search.parse_compile.carry import (
     run_ops,
 )
 from maps.search.parse_compile.code_surface import (
-    END_RE, HANDLE_RE, HANDLE_WORD_RE, STOP_RE, row_token)
+    END_RE, HANDLE_RE, HANDLE_WORD_RE, STOP_RE, CodeError, row_token)
 from maps.search.parse_compile.compactor import (
     CompactionInfeasible,
     CompactionInvariantError,
@@ -463,7 +463,8 @@ class _Mission:
         self._map_feats_version = None
         self._map_feats: list[dict] = []
 
-        self.carry = Carry(compute_namespace)
+        self.carry = Carry(compute_namespace, name=lambda ref: (
+            self._mission_py.ref_name(ref) or _py_surface.UNNAMED))
         # The mission's flights so far, over every operator turn.
         self.flights = 0
         # The watched classes, in declaration order.
@@ -706,12 +707,16 @@ class _Mission:
                 turn=prev[1], no_look_for=", no look_for(..., at=)" if lf else "",
                 look_for=", look_for(..., at=)" if lf else "")}
         raw_sink: dict = {}
-        self.carry.ensure_fresh(program_reads(ops))
-        out = run_ops(ops, namespace=self.ns,
-                      raw_sink=raw_sink,
-                      seed_results=self.carry.rows,
-                      preflight=self.preflight,
-                      answer_ref=answer_ref)
+        try:
+            self.carry.ensure_fresh(program_reads(ops))
+        except CodeError as exc:
+            out = {"error": str(exc)}
+        else:
+            out = run_ops(ops, namespace=self.ns,
+                          raw_sink=raw_sink,
+                          seed_results=self.carry.rows,
+                          preflight=self.preflight,
+                          answer_ref=answer_ref)
         if "error" in out:
             # The failing op keeps one op's errors their own class.
             err = str(out["error"])

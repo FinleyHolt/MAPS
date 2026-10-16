@@ -1,11 +1,10 @@
 """The op-program runner and the carry: a result handle is a query, so a
 read after the surface moves re-runs the ops behind it (and the handles
-they read); a replay that fails keeps the last rows."""
+they read); a refused replay fails the read, naming the handle."""
 
 from __future__ import annotations
 
 import json
-import logging
 import re
 
 from maps.search.analyze_scene.geom_program import (
@@ -15,10 +14,9 @@ from maps.search.analyze_scene.geom_program import (
     join_hints,
     run_program,
 )
-from maps.search.parse_compile.code_surface import HANDLE_RE, HANDLE_WORD_RE
+from maps.search.parse_compile.code_surface import (
+    HANDLE_RE, HANDLE_WORD_RE, CodeError)
 from maps.search.withhold import withheld
-
-log = logging.getLogger(__name__)
 
 
 def _preflight_color_note() -> str:
@@ -104,10 +102,12 @@ def program_reads(ops: list) -> set:
 
 class Carry:
     """Every successful program's raw results by ref (``rows``), and the op
-    history that re-derives them per surface ``version``."""
+    history that re-derives them per surface ``version``; ``name(ref)`` is
+    the model's name for a handle, said when its replay is refused."""
 
-    def __init__(self, namespace: dict):
+    def __init__(self, namespace: dict, name):
         self.ns = namespace
+        self.name = name
         # The surface version: bumped by whatever moves the surface (a
         # flight, a boost, a stance).
         self.version = 0
@@ -123,7 +123,9 @@ class Carry:
 
     def ensure_fresh(self, refs) -> None:
         """Re-derive ``refs`` and every op they read against the current
-        surface, once per surface version."""
+        surface, once per surface version; a refused replay raises
+        :class:`CodeError` naming the handles asked for, and none of them is
+        marked fresh."""
         if self._armed != self.version:
             self._armed = self.version
             self._fresh.clear()
@@ -151,10 +153,11 @@ class Carry:
                 seed_results={h: v for h, v in self.rows.items()
                               if h not in need},
                 staged=ns.get("staged"), standing=ns.get("standing"))
-        except Exception as exc:  # noqa: BLE001 - a refused replay keeps the last rows, unclaimed
-            log.debug("carry refresh refused; handles keep their last "
-                      "rows: %s", str(exc)[:200])
-            return
+        except Exception as exc:  # noqa: BLE001 - served on the read that asked
+            said = ", ".join(self.name(r) for r in dict.fromkeys(refs)
+                             if r in need)
+            raise CodeError(f"{said} cannot be re-derived on the surface as "
+                            f"it stands: {exc}") from None
         self.rows.update(
             {k: v for k, v in got["results"].items() if k in need})
         self._fresh.update(need)

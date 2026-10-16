@@ -81,10 +81,10 @@ def test_a_handle_never_read_between_two_flights_is_replayed_once(
     assert len(finds) == 2, len(finds)
 
 
-def test_a_replay_the_executor_refuses_leaves_the_handle_stale_and_unclaimed(
+def test_a_replay_the_executor_refuses_fails_the_read_and_the_next_read_retries(
         monkeypatch):
-    """An executor refusal on the replay is a failed replay: the handle keeps the rows
-    it held and is NOT marked fresh, so the next read tries again."""
+    """An executor refusal on the replay fails the read that asked, naming the
+    handle; it is NOT marked fresh, so the next read tries again."""
     from maps.search.analyze_scene.geom_program import ProgramError
 
     orig = rl.run_program
@@ -106,13 +106,16 @@ def test_a_replay_the_executor_refuses_leaves_the_handle_stale_and_unclaimed(
     results, _graph, added = grow_drive([
         [run('cars = find("car")')],
         [run('go_to(prior_7)')],
-        [run('print(sorted(r.fid for r in cars))')],   # refused: stale
+        [run('print(sorted(r.fid for r in cars))')],   # refused
         [run('print(sorted(r.fid for r in cars))')],   # refused again
         [run('print(sorted(r.fid for r in cars))')],   # replays: fresh
         "done",
     ])
     assert refused[0] == 2
-    assert _printed_fids(results[2]) == [] and _printed_fids(results[3]) == []
+    for res in results[2:4]:
+        assert not res.get("printed"), res
+        assert "cars cannot be re-derived on the surface as it stands: " \
+            "cannot resolve a POINT-LIST" in str(res.get("error")), res
     assert set(added[0]) <= set(_printed_fids(results[4]))
 
 
@@ -126,3 +129,17 @@ def test_the_first_read_after_a_flight_sees_the_flown_rows_whoever_reads_it():
         "done",
     ])
     assert results[2].get("crop", {}).get("looked") == len(added[0]), results[2]
+
+
+def test_a_refused_re_derive_fails_the_read_naming_the_handle():
+    """near's union over cars passes at 201 cars and is refused at 402: the
+    read after the second flight is refused by name, never served the 201
+    rows near held before it."""
+    res, _g, _a = grow_drive([[run('go_to("prior_7")\n')],
+                              [run('cars = find("car")\nnear = cars.order(nearest=cars)\nlen(near)\n')],
+                              [run('go_to("prior_1")\n')],
+                              [run('len(cars)\nlen(near)\n')], "done"], per_flight=201)
+    last = res[-1]
+    assert "len(cars) = 402" in last.get("printed", "")
+    assert "len(near) = 201" not in last.get("printed", ""), last
+    assert "near cannot be re-derived" in str(last.get("error")), last
