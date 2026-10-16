@@ -54,8 +54,8 @@ class Vehicle(Protocol):
         when the recording cannot be asked."""
 
     # ponytail: a frame is asked by its seq, which restarts with the camera: a
-    # restart inside the ring's span shadows the older frame of a repeated seq,
-    # and coverage breaks an angle tie by seq; asking by log time is the upgrade.
+    # restart inside the ring's span shadows the older frame of a repeated seq;
+    # asking by log time is the upgrade.
     def frame(self, seq: int) -> tuple[bytes, float, int, int, dict[str, Any]] | None:
         """``(jpeg, t_host, log_time, seq, tag)`` of one recorded frame, or None."""
 
