@@ -190,7 +190,6 @@ def test_the_summary_is_the_run_report_under_the_infra_lines(driver) -> None:
 
 @pytest.fixture
 def no_flight(monkeypatch):
-    monkeypatch.setattr(bf, "_missing_block_assets", lambda eps: [])
     monkeypatch.setattr(rm, "build_manifest", lambda **kw: {})
     monkeypatch.setattr(rm, "emit_or_verify", lambda *a, **k: None)
 
@@ -248,8 +247,11 @@ def test_a_second_run_into_a_held_root_is_refused(driver, tmp_path, monkeypatch)
         holder.wait()
 
 
-def test_missing_block_assets_fail_before_flying(driver, tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("dry", [[], ["--dry-run"]])
+def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(dry, tmp_path, monkeypatch,
+                                                                            capsys) -> None:
     from benchmarks.citynav import paths
+    from maps.llm import endpoint_spec
 
     tiles, rgbd = tmp_path / "tiles", tmp_path / "rgbd"
     tiles.mkdir()
@@ -259,10 +261,14 @@ def test_missing_block_assets_fail_before_flying(driver, tmp_path, monkeypatch) 
     (rgbd / "blk.tif").write_bytes(b"")
     monkeypatch.setattr(paths, "TILES_DIR", tiles)
     monkeypatch.setattr(paths, "CITYNAV_NATIVE_RGBD_DIR", rgbd)
-    monkeypatch.setattr(rm, "build_manifest", lambda **kw: pytest.fail("flew"))
-    (tmp_path / "run").mkdir()
-    d = driver(tmp_path / "run", selection=["blk::1#0"])
-    assert d.run() == 2 and str(rgbd / "blk_rgb.tif") in d.driver_log.read_text()
+    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["blk::1#0"])
+    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: pytest.fail("asked a serve"))
+    monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("flew"))
+    monkeypatch.setattr(bf.Driver, "dry_run", lambda self: pytest.fail("previewed"))
+    assert bf.main(["--out-root", str(tmp_path / "r"), *dry]) == 2
+    assert not (tmp_path / "r").exists()
+    assert (f"  Missing {rgbd / 'blk_rgb.tif'} (built by benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
+            in capsys.readouterr().err.splitlines())
     (rgbd / "blk.png").write_bytes(b"")  # the CityNav raster pair
     assert bf._missing_block_assets(["blk::1#0"]) == []
 
@@ -344,7 +350,7 @@ _INTERRUPTED = (
     "d._done_cache, d._infra_errors, d.max_infra_attempts, d._abort = set(), {}, 3, None\n"
     "d.sample_seed, d.limit, d.allowlist_path, d.arrivals_path = 1, 0, None, None\n"
     "d._selection, d._selection_note = ['ep0'], None\n"
-    "bf._missing_block_assets, bf.WORKER_STAGGER_S = (lambda eps: []), 0\n"
+    "bf.WORKER_STAGGER_S = 0\n"
     "rm.build_manifest = lambda **kw: None\n"
     "rm.emit_or_verify = lambda *a, **kw: None\n"
     "def fly(wid):\n"
@@ -562,6 +568,7 @@ def test_a_baseline_arm_whose_model_has_no_dial_off_is_refused_at_start(tmp_path
     from maps.llm import endpoint_spec
 
     monkeypatch.setattr(bf, "CONFIG", REPO / "configs/baselines/geonav.yaml")
+    monkeypatch.setattr(bf, "_missing_block_assets", lambda eps: [])
     monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: SimpleNamespace(model_id="gemma4-26b-a4b-nvfp4"))
     monkeypatch.setattr(endpoint_spec, "install_spec", lambda spec: None)
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused arm flew"))
@@ -691,6 +698,7 @@ def test_a_refused_dry_run_exits_2_with_no_out_root(refusal, tmp_path, monkeypat
 
 def test_a_dry_run_prints_the_allowlist_count_and_writes_nothing(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
+    monkeypatch.setattr(bf, "_missing_block_assets", lambda eps: [])
     (tmp_path / "ids.txt").write_text("a\n")
     assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run",
                     "--episode-allowlist", str(tmp_path / "ids.txt")]) == 0

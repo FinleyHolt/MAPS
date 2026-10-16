@@ -115,18 +115,20 @@ def _causes(counts: Counter) -> str:
 def _missing_block_assets(episode_ids: list[str]) -> list[str]:
     """What the selected episodes' blocks need and do not have: the bake
     (``assets.missing_bake``), and ``<map>.tif`` beside ``<map>_rgb.tif`` or
-    ``<map>.png``."""
+    ``<map>.png``, each raster line with the command that builds it."""
     from benchmarks.citynav.run_benchmark.assets import missing_bake
 
+    build = ("python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>"
+             if paths.BENCHMARK == "calcity" else "benchmarks/citynav/data_prep/rasterize_citynav_native.sh")
     missing: list[str] = []
     for map_name in sorted({e.split("::", 1)[0] for e in episode_ids}):
         if why := missing_bake(paths.tile_stem(map_name)):
             missing.append(why)
         rgbd = Path(paths.CITYNAV_NATIVE_RGBD_DIR)
         if not (rgbd / f"{map_name}.tif").exists():
-            missing.append(f"Missing {rgbd / f'{map_name}.tif'}")
+            missing.append(f"Missing {rgbd / f'{map_name}.tif'} (built by {build})")
         if not any((rgbd / f"{map_name}{s}").exists() for s in ("_rgb.tif", ".png")):
-            missing.append(f"Missing {rgbd / f'{map_name}_rgb.tif'}")
+            missing.append(f"Missing {rgbd / f'{map_name}_rgb.tif'} (built by {build})")
     return missing
 
 
@@ -619,17 +621,6 @@ class Driver:
         episodes = self._selection
         if self._selection_note:
             self.log(self._selection_note)
-        missing = _missing_block_assets(episodes)
-        if missing:
-            self.log(
-                "FATAL: block assets missing for the selection (every episode on "
-                "these blocks would land infra):\n"
-                + "".join(f"  {p}\n" for p in missing)
-                + "  rasters: benchmarks/citynav/data_prep/rasterize_citynav_native.sh, "
-                "or python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster "
-                "<calcity_rgb.tif>"
-            )
-            return 2
         # Written before anything flies; a resume under another identity is
         # refused (run_manifest.emit_or_verify).
         from benchmarks.citynav import run_manifest as _rm
@@ -800,11 +791,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
     driver = Driver(args)
-    # The selection too, so a refusal makes no out-root and asks no serve.
+    # The selection and its block assets too, so a refusal makes no out-root and asks no serve.
     try:
         driver._selection = driver._select_episodes()
     except SystemExit as exc:
         print(exc, file=sys.stderr)
+        return 2
+    if missing := _missing_block_assets(driver._selection):
+        print("FATAL: block assets missing for the selection (every episode on these blocks would land "
+              "infra):\n" + "\n".join(f"  {p}" for p in missing), file=sys.stderr)
         return 2
     if args.dry_run:
         return driver.dry_run()
