@@ -28,12 +28,13 @@ fix nearest the target's, else the observations' median camera height
 the run reads unknown. Time to identification runs from the tasking to the
 end the row stands at. SPL is ``S * l / max(p, l)``: ``p`` the GNSS path
 from the crew's last pass of the loiter waypoint before the first ``leg``
-row (the first leg's outcome, or the row saying no leg is flown) to that
-end, plus the way back to the commit a crew flies (one turn and a
-straight, or a teardrop, at the median radius the crews turned on routed
-legs), ``l`` the straight from the loiter waypoint to the target; undefined
-for a success the recording holds under 95% of. A run with an ``excluded``
-reason is out of every rate.
+row (the crew side's first word on a flight: a note said as its leg is
+posted or re-asked, its outcome, or that no leg is flown) to that end,
+plus the way back to the commit a crew flies (one turn and a straight, or
+a teardrop, at the median radius the crews turned on routed legs), ``l``
+the straight from the loiter waypoint to the target; undefined for a
+success the recording holds under 95% of. A run with an ``excluded`` reason
+is out of every rate.
 """
 
 from __future__ import annotations
