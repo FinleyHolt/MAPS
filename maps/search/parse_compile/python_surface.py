@@ -1487,10 +1487,13 @@ class MissionPython:
         elif isinstance(x, (list, tuple, set, frozenset)):
             if isinstance(x, (set, frozenset)):
                 x = _set_as_list(x)
+            if not x:
+                raise CodeError(
+                    f"{call}() got an empty list; there is nothing to cover.")
             # explore's list is a SET of things -- rows, sets, fids -- as
             # one place to cover; any numeric element is the coordinate
             # hatch.
-            things = (bool(x) and not is_xy(x)
+            things = (not is_xy(x)
                       and all(isinstance(e, (Row, Rows, str)) for e in x))
             ok_set = call == "explore" and things
             # A SET OF THINGS IS NOT A COORDINATE: go_to refuses it as a set.

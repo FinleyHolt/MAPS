@@ -821,3 +821,11 @@ def test_an_unnamed_set_in_a_look_list_is_refused_without_an_executor_ref():
     assert ("look() got an unnamed set inside a list; bind it first "
             "(s = ...) and name its rows: look([s[0], ...])") in err, err
     assert not re.search(r"\br\d", err), err
+
+
+@pytest.mark.parametrize("arg", ["[]", "set()", "find('car')[0:0] + []"])
+def test_an_empty_list_to_cover_is_said_empty_not_a_coordinate(arg):
+    _, fr, _, _ = drive([[run(f"explore({arg})\n")], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert "explore() got an empty list; there is nothing to cover." in err, err
+    assert "coordinate" not in err, err
