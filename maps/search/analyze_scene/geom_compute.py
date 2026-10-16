@@ -920,8 +920,7 @@ def contour_shape_features(chains):
     """``{"footprint_area_m2": ...}`` summed over a feature's CLOSED world
     chains (:func:`loops_area`), or ``None`` when no closed chain encloses
     area: a way's "area" would be the accident of closing it."""
-    rings = [ch for ch in (chains or []) if is_closed_chain(ch)]
-    area = loops_area(rings)
+    area = loops_area(chains)
     if area <= 1e-9:
         return None
     return {"footprint_area_m2": round(area, 2)}
