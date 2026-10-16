@@ -583,7 +583,7 @@ def bake_block(
     if bounds is None:
         x_min, y_min, x_max, y_max = _raster_bounds(name)
         bounds = WorldBounds(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max)
-    # Rows run north-to-south, so grid_shape is (rows, cols) = (y, x).
+    # Row 0 is y_min (south) and rows run north, so grid_shape is (rows, cols) = (y, x).
     grid_shape = (int(round((bounds.y_max - bounds.y_min) / CELL_SIZE_M)),
                   int(round((bounds.x_max - bounds.x_min) / CELL_SIZE_M)))
     coverage = _cell_coverage(name, bounds, grid_shape, CELL_SIZE_M) if imagery else None
