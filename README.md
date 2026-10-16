@@ -257,6 +257,10 @@ python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 
 The commands below run in the activated environment (`source .venv/bin/activate`).
 
+Every run records the commit it ran from. A tree without git, such as a
+`git archive` export, reads that commit from a `.commit` file at the repository
+root (`git rev-parse HEAD > .commit` before exporting).
+
 Extras:
 
 | Extra | For |
@@ -316,7 +320,7 @@ terms).
 | `SEARCH_ENDPOINT_SPEC_OVERRIDE` | client | `<model_id>:<max_model_len>` for an endpoint whose `/v1/models` reports no window. |
 | `SEARCH_REASONER_MODELS_URL` | client | Where the served models are listed, for an endpoint that lists them somewhere other than `SEARCH_REASONER_URL/models`. |
 | `SEARCH_SAMPLING_REASONING_EFFORT` | client | The arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`); discovery refuses a value the served model's card does not take. Unset sends none. |
-| `SEARCH_COMPACT_TOKENIZER_NAME` | client | The HF tokenizer repo, replacing the model card's. |
+| `SEARCH_COMPACT_TOKENIZER_NAME` | client | The HF tokenizer repo, or a local checkpoint directory on an offline machine, replacing the model card's. |
 | `SAM_SERVER_URL` | client | The SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset; a set but blank value, or `SAM_VIDEO_SERVER_URL` set without it, is refused. |
 | `SAM_PORT`, `SAM_DEVICE` | serve | Port (8772), device. |
 | `SAM3_CHECKPOINT` | serve | A local checkpoint file. |
