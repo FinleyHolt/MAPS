@@ -683,8 +683,7 @@ class Rows(_Cuts):
         # every row ties, so an index would read as a choice and be a coin
         # flip.
         if self._tied():
-            name = (self.mp.name_of(self) or self.mp.call_arg(None)
-                    or self.mp.spelling(self) or UNNAMED)
+            name = self.mp.said_name(self, None)
             # The refusal names the call that does the work.
             raise CodeError(
                 f"{name} is a tied view of {len(self._rows())} rows and is "
@@ -708,8 +707,7 @@ class Rows(_Cuts):
             return Rows(self.ref, self.mp, f"[{lo}:{hi}]")
         rows = self._rows()
         if not isinstance(i, int) or not (-len(rows) <= i < len(rows)):
-            name = (self.mp.name_of(self) or self.mp.call_arg(None)
-                    or self.mp.spelling(self) or UNNAMED)
+            name = self.mp.said_name(self, None)
             raise CodeError(
                 f"{name}[{i}] did not bind: {name} served {len(rows)} "
                 "row(s) here. Show it first, then index it.")
@@ -1003,6 +1001,13 @@ class MissionPython:
                     and not k.startswith("__"):
                 return k
         return self._shown.get(ref) or self._labels.get(ref)
+
+    def said_name(self, x: "Rows", fn: str | None) -> str:
+        """What a refusal or a page calls ``x``: its bound name, else the
+        model's text for it in the running ``fn(...)`` call (:meth:`call_arg`),
+        else its spelling, else unnamed."""
+        return (self.name_of(x) or self.call_arg(fn) or self.spelling(x)
+                or UNNAMED)
 
     def call_arg(self, fn: str | None) -> str | None:
         """The model's text for the first argument of the ``fn(...)`` call
@@ -1310,8 +1315,7 @@ class MissionPython:
         if not isinstance(x, Rows) or x.spec:
             raise CodeError("more_of pages a RESULT a find or an ordering "
                             "left")
-        name = (self.name_of(x) or self.call_arg("more_of")
-                or self.spelling(x) or UNNAMED)
+        name = self.said_name(x, "more_of")
         lo = BROAD_HEAD_ROWS + int(self.env.widened.get(x.ref) or 0)
         p = self._program(name)
         # The rows served are NOT the handle -- they are a window of it --
