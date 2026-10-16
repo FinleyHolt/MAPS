@@ -635,7 +635,7 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
         for k, v in results.items():
             e = out[k] = _envelope(v, legend)
             if "census" in e:
-                sig = repr(sorted(e["census"].items()))
+                sig = repr((sorted(e["census"].items()), e["named"]))
                 if sig in seen:
                     del e["census"], e["named"]
                     e["census_ref"] = (
