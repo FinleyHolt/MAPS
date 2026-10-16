@@ -595,6 +595,14 @@ def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
     with pytest.raises(CodeError, match="not subscriptable"):
         view[20:40]
 
+    mp = view.mp
+    mp.ns["roads"] = view
+    out = mp.run_block("more_of(roads)\n")
+    assert out["error"].endswith(
+        "roads is a tied view of 12 rows and has no next block: they all "
+        "match equally, so no row is its first and no span is its middle. "
+        "explore(roads) covers the whole set."), out
+
 
 def test_an_ordered_result_stays_subscriptable():
     """The refusal is about TIES, not about find results."""

@@ -690,18 +690,21 @@ class Rows(_Cuts):
     def _tied(self) -> bool:
         return bool(not self.spec and self.mp.env.tied_of_ref(self.ref))
 
+    def _refuse_tied(self, name: str, what: str):
+        """The refusal of an index or a page on a tied view; it names the
+        call that does the work."""
+        raise CodeError(
+            f"{name} is a tied view of {len(self._rows())} rows and {what}: "
+            "they all match equally, so no row is its first and no span is "
+            f"its middle. explore({name}) covers the whole set.")
+
     def __getitem__(self, i):
         # A TIED VIEW IS NOT SUBSCRIPTABLE, the way ``dict.keys()`` is not:
         # every row ties, so an index would read as a choice and be a coin
         # flip.
         if self._tied():
-            name = self.mp.said_name(self, None)
-            # The refusal names the call that does the work.
-            raise CodeError(
-                f"{name} is a tied view of {len(self._rows())} rows and is "
-                "not subscriptable: they all match equally, so no row is "
-                f"its first and no span is its middle. explore({name}) "
-                "covers the whole set.")
+            self._refuse_tied(self.mp.said_name(self, None),
+                              "is not subscriptable")
         if isinstance(i, slice):
             lo = int(i.start or 0)
             if i.stop is None or i.step not in (None, 1) or lo < 0:
@@ -1349,6 +1352,8 @@ class MissionPython:
             raise CodeError("more_of pages a RESULT a find or an ordering "
                             "left")
         name = self.said_name(x, "more_of")
+        if x._tied():
+            x._refuse_tied(name, "has no next block")
         lo = BROAD_HEAD_ROWS + int(self.env.widened.get(x.ref) or 0)
         p = self._program(name)
         # The rows served are NOT the handle -- they are a window of it --
