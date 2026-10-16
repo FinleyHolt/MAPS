@@ -94,6 +94,15 @@ def test_mixing_criteria_refuses_rather_than_pooling(tmp_path):
         arm_table.table([shape, ring])
 
 
+def test_an_unstamped_root_beside_a_stamped_one_refuses(tmp_path):
+    """Scored rows without a criterion stamp are UNRECORDED, a criterion of their own."""
+    shape = _arm(tmp_path, "shape", _ledger("c::1#0", "20260827_100000", 1))
+    bare = _ledger("c::1#0", "20260827_100000", 1)
+    del bare["metrics"]["success_criterion"]
+    with pytest.raises(SystemExit, match="mix success criteria"):
+        arm_table.table([shape, _arm(tmp_path, "bare", bare)])
+
+
 def test_ring_arms_of_two_radii_refuse_rather_than_pooling(tmp_path):
     """Two ring arms scored on a 20 m and a 40 m disc answer different questions."""
     roots = []

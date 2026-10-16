@@ -109,7 +109,7 @@ def _sort_key(row: dict) -> tuple[int, float, str]:
 def table(roots: list[Path], *, allow_partial: bool = False) -> list[dict]:
     """Every arm's row, criterion-checked across the whole set."""
     rows = [arm_row(r, allow_partial=allow_partial) for r in roots]
-    seen = {r["criterion"] for r in rows if r["criterion"] is not None}
+    seen = {r["criterion"] or criterion_label(None, Path()) for r in rows if r["n"]}
     if len(seen) > 1:
         raise SystemExit(
             f"arm_table: these roots mix success criteria {sorted(seen)}. "
