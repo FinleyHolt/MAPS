@@ -491,7 +491,7 @@ def test_refusals_over_an_unnamed_result_quote_the_models_own_text():
                                 "done"])
     look_err, page_err = (t["error"] for t in tool_results(fr)[:2])
     assert look_err.startswith("find('zeppelin') holds no rows"), look_err
-    assert "row(s) of find('car').order(nearest='prior_1') are" in page_err, page_err
+    assert page_err.startswith("find('car').order(nearest='prior_1') holds 2 row(s)"), page_err
     assert not re.search(r"\br\d+\b", look_err + page_err), (look_err, page_err)
 
 

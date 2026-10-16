@@ -1381,3 +1381,16 @@ def test_two_unnamed_results_with_one_label_stay_two_results():
     assert cmp_op["args"]["items"] == first["ref"], ops
     assert cmp_op["args"]["refs"] == [
         {"ref": [second["ref"]], "as": "find('car')"}], ops
+
+
+def test_more_of_on_a_one_block_handle_says_to_show_it():
+    """A handle that fits one block has no page past it: more_of says how
+    to see it, never that its rows are already served (a bound find that
+    was never shown has served none)."""
+    reply, fr, _f, _d = drive([
+        [run('cars = find("car")\nd = find("depot")\nd')],
+        [run("more_of(cars)\n")],
+        "done",
+    ])
+    err = tool_results(fr)[1]["error"]
+    assert err == "cars holds 2 row(s), one block: show it with a bare `cars` line.", err

@@ -1142,7 +1142,11 @@ class _Mission:
             # Paging a handle with nothing left to page is refused here.
             ref, lo, h = page
             held = len(self.carry.read(ref) or [])
-            if held and (held <= BROAD_DUMP_SOFT_ROWS or lo >= held):
+            if held and held <= BROAD_DUMP_SOFT_ROWS:
+                return self._plan_err({}, (
+                    f"{h} holds {held} row(s), one block: show it with a "
+                    f"bare `{h}` line."))
+            if held and lo >= held:
                 return self._plan_err({}, (
                     f"all {held} row(s) of {h} are already served -- there "
                     f"is no further block to serve. Narrow it "
