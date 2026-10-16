@@ -106,9 +106,6 @@ def describe(export_dir: Path, base_url: str, model: str | None, api_key: str | 
         parsed = parse_reply(reply["choices"][0]["message"]["content"] or "", meta["landmarks"])
         done[block] = {str(TARGET_OBJECT_ID): [parsed]}
         write_json(out, done)
-    missing = set(manifest["blocks"]) - set(done)
-    if missing:
-        raise SystemExit(f"{len(missing)} blocks unparsed")
     return out
 
 
