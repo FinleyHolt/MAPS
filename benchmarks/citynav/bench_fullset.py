@@ -364,10 +364,10 @@ class Driver:
     def _wait(self, proc: subprocess.Popen) -> str:
         """Block until the attempt child exits (``exited``), hits the episode
         cap (``timeout``), or the reasoner or SAM fails two probes
-        ``REASONER_PROBE_S`` apart while it flies (``reasoner_dead``,
-        ``sam_dead``)."""
+        ``REASONER_PROBE_S`` apart while it flies (the infra cause
+        ``reasoner_down_midrun``, ``sam_down_midrun``)."""
         deadline = time.monotonic() + self.episode_timeout_s
-        down = {"reasoner_dead": 0, "sam_dead": 0}
+        down = {"reasoner": 0, "sam": 0}
         while (left := deadline - time.monotonic()) > 0:
             try:
                 proc.wait(timeout=min(REASONER_PROBE_S, left))
@@ -376,10 +376,10 @@ class Driver:
                 pass
             if time.monotonic() >= deadline:
                 break
-            for verdict, answers in (("reasoner_dead", self._reasoner_answers), ("sam_dead", self._sam_answers)):
-                down[verdict] = 0 if answers() else down[verdict] + 1
-                if down[verdict] >= 2:
-                    return verdict
+            for name, answers in (("reasoner", self._reasoner_answers), ("sam", self._sam_answers)):
+                down[name] = 0 if answers() else down[name] + 1
+                if down[name] >= 2:
+                    return f"{name}_down_midrun"
         return "timeout"
 
     def _run_attempt(self, worker_id: int, episode_id: str) -> dict:
@@ -430,9 +430,9 @@ class Driver:
         landed = episodes.read_episode_json(workdir) if workdir else None
         where = {"workdir": str(workdir.relative_to(self.out_root))} if workdir else {}
         crashed = verdict == "exited" and landed is None and proc.returncode != 0
-        lost = {"reasoner_dead": "reasoner_down_midrun", "sam_dead": "sam_down_midrun"}.get(verdict)
+        lost = verdict if verdict.endswith("_down_midrun") else None
         if lost:
-            self.log(f"[w{worker_id}] {verdict.upper().replace('_', '-')} mid-episode {episode_id} after "
+            self.log(f"[w{worker_id}] {lost.split('_')[0].upper()}-DEAD mid-episode {episode_id} after "
                      f"{elapsed:.0f}s; killed + re-queued (not scored)")
         elif verdict == "timeout":
             self.log(f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killed")
