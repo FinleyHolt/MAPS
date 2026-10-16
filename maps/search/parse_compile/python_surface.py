@@ -1395,26 +1395,26 @@ class MissionPython:
             sets = [a for a in (
                 x if isinstance(x, (list, tuple, set, frozenset)) else ())
                 if isinstance(a, Rows)]
-            held = []
             if sets:
-                held = [self.spelling(sets[0])]
-                if not held[0]:
+                held = self.spelling(sets[0])
+                if not held:
                     raise CodeError(
                         "look() got an unnamed set inside a list; bind it "
                         "first (s = ...) and name its rows: "
                         "look([s[0], ...])")
             else:
                 x = self._slot(x)
-                if isinstance(x, (list, tuple)) and not is_xy(x):
-                    held = [a.label for a in x if isinstance(a, Ref)]
+                many = isinstance(x, (list, tuple)) and not is_xy(x)
+                held = many and next(
+                    (a.label for a in x if isinstance(a, Ref)), None)
             if held:
                 raise CodeError(
-                    f"look({held[0]}) shows a set; inside a list "
-                    f"name its rows: look([{held[0]}[0], ...])")
-            if isinstance(x, (list, tuple)) and not is_xy(x):
+                    f"look({held}) shows a set; inside a list "
+                    f"name its rows: look([{held}[0], ...])")
+            if many:
                 # look([a, b, c]) crops EACH element.
                 fids = [self._site(a, "crops") for a in x]
-                lead = [(f, "crops") for f in fids if isinstance(f, _Name)]
+                lead = [(f, "crops") for f in fids]
             elif not isinstance(x, Ref):
                 site = self._site(x, "crops")
                 lead = [(site, "crops")]
