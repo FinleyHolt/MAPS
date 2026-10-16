@@ -150,16 +150,6 @@ def landmark_distance(lm: Landmark, xy: tuple[float, float]) -> float:
     return float(lm.area.distance(Point(float(xy[0]), float(xy[1]))))
 
 
-def pixel_bbox(det) -> tuple[int, int, int, int] | None:
-    """A detection's inclusive ``(row_min, col_min, row_max, col_max)`` in
-    frame pixels: its mask's box, else the box the SAM client stamped."""
-    mask = getattr(det, "mask", None)
-    if mask is not None:
-        return tuple(int(v) for v in mask.bbox)
-    bb = (getattr(det, "metadata", None) or {}).get("pixel_bbox")
-    return tuple(int(v) for v in bb) if bb else None
-
-
 # --- the episode ---------------------------------------------------------------
 
 def _bbox_corners_world(h: BaselineHarness, obs, r0, c0, r1, c1):
@@ -250,10 +240,8 @@ def run_episode(h: BaselineHarness, released: bool = False) -> BaselineResult:
         ppm_frame = obs.rgb.shape[1] / (2.0 * half)
         painted = 0
         for det in h.detect(obs, [target_name] + surroundings):
-            bb = pixel_bbox(det)
-            if bb is None:
-                continue
-            r0, c0, r1, c1 = bb
+            # the mask's inclusive (row_min, col_min, row_max, col_max) in frame pixels
+            r0, c0, r1, c1 = (int(v) for v in det.mask.bbox)
             w_m, h_m = (c1 - c0) / ppm_frame, (r1 - r0) / ppm_frame
             if not (w_m < MAX_BOX_SIZE_M and h_m < MAX_BOX_SIZE_M and w_m * h_m < MAX_BOX_AREA_M2):
                 continue
