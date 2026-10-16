@@ -108,7 +108,6 @@ _SAFE_BUILTINS = {n: getattr(builtins, n)
 # Pure, deterministic stdlib only: no I/O, no clock, no randomness --
 # anything ambient would break identical bytes -> identical trajectory, and
 # numpy-class C loops would bypass the trace-line liveness ceiling.
-# `statistics` is out: NormalDist.samples() draws from ambient random.gauss.
 _SAFE_MODULES = {m.__name__: m for m in (
     bisect, collections, functools, heapq, itertools, json, math,
     operator, re)}
@@ -1252,8 +1251,8 @@ class MissionPython:
     _NEAR_MISS_M = 500.0
 
     def _near_miss_note(self, ref, query) -> None:
-        """Note that nothing a find ranked by distance lies near its anchor:
-        a re-sorted global match 2.5 km off reads as near otherwise."""
+        """Note that nothing a find ranked by distance lies near its
+        anchor."""
         rows = self.env.rows_of_ref(ref) if ref else []
         if not rows:
             return

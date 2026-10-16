@@ -175,9 +175,8 @@ class Program:
         return ref
 
     def ref_of(self, v):
-        """An argument -> an executor ref, LABELLED with the code's own name:
-        `{ref, as}` makes `r2.order(nearest=r1)` read 'distance to r1', so
-        the compare's column and the key that names it agree."""
+        """An argument -> an executor ref, LABELLED (``as``) with the code's
+        own name, so the compare's column and the key that names it agree."""
         if isinstance(v, Ref):
             # A WHOLE RESULT IN A PLACE SLOT IS ITS UNION: one column, the
             # gap to its NEAREST member ("the house with a pool" is about
