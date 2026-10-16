@@ -145,7 +145,7 @@ def dispatch_one(
     out = _stamp({
         **rec,
         "status": STATUS_INFRA if serve_failed else STATUS_OK,
-        "error": "mission ended_by=transient_failures" if serve_failed else None,
+        "error": f"mission ended_by={_rows.ended_by(rec)}" if serve_failed else None,
     })
     write_episode_json(episode_dir, out)
     log.info(
