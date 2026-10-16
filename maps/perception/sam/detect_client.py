@@ -365,10 +365,10 @@ class SamDetectClient:
         """The cross-tile seam dedup: greedy IoU-NMS over ``(region, label,
         score)``, highest score first (ties in input order), pixels compared on
         the box intersection only."""
-        kept: list[tuple[MaskRegion, int, str, float]] = []
+        kept: list[tuple[MaskRegion, str, float]] = []
         for region, lab, sc in sorted(items, key=lambda it: -it[2]):
             bb, a = region.bbox, region.area
-            for k, ka, _, _ in kept:
+            for k, _, _ in kept:
                 kbb = k.bbox
                 if bb[2] < kbb[0] or bb[0] > kbb[2] or bb[3] < kbb[1] or bb[1] > kbb[3]:
                     continue  # bboxes disjoint -> no overlap
@@ -380,11 +380,11 @@ class SamDetectClient:
                         & k.crop[wr0 - kbb[0] : wr1 - kbb[0] + 1, wc0 - kbb[1] : wc1 - kbb[1] + 1]
                     ).sum()
                 )
-                if inter and inter / (a + ka - inter) > SAHI_NMS_IOU:
+                if inter and inter / (a + k.area - inter) > SAHI_NMS_IOU:
                     break
             else:
-                kept.append((region, a, lab, sc))
-        return [(region, lab, sc) for region, _a, lab, sc in kept]
+                kept.append((region, lab, sc))
+        return kept
 
     def segment(
         self, obs: Observation, concepts: list[str]
