@@ -30,6 +30,8 @@ def _op(name, **args):
     (_op("compare", refs=["nope"]), "'nope' is not a fid on this surface. "),
     (_op("compare", refs=[{"ref": ["nope"], "as": "spot"}]),
      "'nope' is not a fid on this surface. "),
+    (_op("compare", refs=[5]),
+     "5 is not a place: a place is a fid, a set, a row or an [x, y]."),
     ({"ref": "r1", "op": "ends", "args": {"refs": ["nope"]}},
      "'nope' names no row on this surface. "),
     ({"ref": "r1", "op": "crossings", "args": {"refs": ["nope", "prior_1"]}},

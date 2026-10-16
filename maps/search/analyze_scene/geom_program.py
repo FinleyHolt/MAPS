@@ -1517,8 +1517,8 @@ def _compare(cx, a):
         else:
             if not isinstance(ref_el, str):
                 raise ProgramError(
-                    f"compare refs element {_quote(ref_el)} must be a bare fid string, "
-                    f"a set, an [x,y] literal, or {{ref:..., as:...}}.")
+                    f"{_quote(ref_el)} is not a place: a place is a fid, a "
+                    f"set, a row or an [x, y].")
             payload = cx.by_fid.get(ref_el)
             if payload is None and ref_el in cx.staged:
                 # A staged viewpoint attaches its side columns.
