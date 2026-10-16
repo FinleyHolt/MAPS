@@ -114,3 +114,12 @@ def test_a_column_list_of_another_length_is_the_same_class():
             None, f"line 5: AttributeError: row prior_1 carries no 'a'; "
                   f"its columns are {cols}")
     assert sig(["c", "d", "e", "f", "g", "h", "i"]) == sig(list("cdefghijklm"))
+
+
+def test_a_look_whose_program_succeeded_restarts_the_consecutive_streak():
+    # look(slice) runs its window program before the crop: that success
+    # ends the streak even when the crop is then refused.
+    served = drive_blocks(['a = find("car")\na\n']
+                          + [f"look(a[{w}])\n" for w in ("0:1", "1:2", "0:2")])
+    assert all("crop" in p["error"] for p in served[1:]), served
+    assert "rejected again" not in served[3]["error"], served[3]

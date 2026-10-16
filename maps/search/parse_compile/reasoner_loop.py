@@ -706,6 +706,9 @@ class _Mission:
             out = {**out, "error": self._loop_broken_error(
                 err, sig_of=f"{err}|{raw_sink.get('error_op', '')}")}
         else:
+            # A successful program ends both streaks: the next same-class
+            # error serves its full text again.
+            self._err_sig, self._err_n = None, 0
             self._dedup_key, self._dedup_n = None, 0
             if key is not None:
                 self._programs_seen[key] = (self.carry.version, self.turn_idx,
