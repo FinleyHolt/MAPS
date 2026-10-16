@@ -165,3 +165,21 @@ def test_the_tie_note_reads_every_ordering_key():
         "2 of 2 rows tie on every ordering column ('distance to depot', "
         "'distance to tower') -- this ordering does not separate them, so "
         "its rank 0 is arbitrary among the tie")
+
+
+def test_a_retask_on_the_turn_cap_turn_stays_queued():
+    """The turn cap ends the mission before the re-task queue drains, so a
+    re-task arriving then is still queued, never appended to a thread that
+    is over."""
+    queue: list = []
+
+    def fly(item):
+        queue.append("operator: also check the gate")
+        return {"stop_id": "stop_000", "target": item["target_fid"],
+                "pose_xy": [1.0, 2.0], "new_detections": 0}
+
+    reply, fr, _, _ = drive([[run('go_to("prior_7")')]], turn_cap=1, fly=fly,
+                            retask=lambda: queue.pop(0) if queue else None)
+    assert reply.ended_by == "turn_cap"
+    assert queue == ["operator: also check the gate"]
+    assert not [m for m in fr.messages if "also check the gate" in str(m.get("content"))]

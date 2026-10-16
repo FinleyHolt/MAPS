@@ -1382,6 +1382,10 @@ class _Mission:
             self.turn_idx = turn_idx
             if self.diag is not None:
                 self.diag["turns_used"] = turn_idx + 1
+            if turn_idx >= self.mission_spec.turn_cap:
+                log.info("%s mission turn cap (%d) reached", self.rid_tag,
+                         self.mission_spec.turn_cap)
+                return self._mission_end("turn_cap", turns=turn_idx)
             # The operator's re-tasks land at the top of a turn, never between
             # a turn's tool calls and their results.
             if self.retask is not None:
@@ -1389,10 +1393,6 @@ class _Mission:
                     log.info("%s operator re-task at turn %d (%d chars)",
                              self.rid_tag, turn_idx, len(operator_turn))
                     self.reasoner.append_user(operator_turn)
-            if turn_idx >= self.mission_spec.turn_cap:
-                log.info("%s mission turn cap (%d) reached", self.rid_tag,
-                         self.mission_spec.turn_cap)
-                return self._mission_end("turn_cap", turns=turn_idx)
             try:
                 r = self.reasoner.step_tool_call(self.stop_tools)
             except (CompactionInfeasible, CompactionInvariantError) as exc:
