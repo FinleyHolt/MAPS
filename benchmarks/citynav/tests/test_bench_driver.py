@@ -142,7 +142,7 @@ def test_a_window_of_infra_casualties_stops_the_run(driver, tmp_path: Path) -> N
     for i in range(1, bf.ABORT_WINDOW):
         fresh._append_result(_infra(i, cause="mission ended_by=transient_failures"))
     assert "transient_failures" in fresh._abort
-    assert "1 attempt(s) were scored" in fresh.driver_log.read_text()
+    assert "1 episode(s) were scored; every infra attempt is excluded" in fresh.driver_log.read_text()
 
 
 def test_scattered_infra_and_timeouts_never_stop_the_run(driver) -> None:

@@ -245,8 +245,8 @@ class Driver:
         self.log(self._log_excerpt(log_path))
         scored = len(self._done_cache)
         self.log(
-            ("!! nothing was scored" if not scored else f"!! {scored} attempt(s) were scored")
-            + f"; the {len(bad)} infra attempts are excluded and re-queued, so a "
+            ("!! nothing was scored" if not scored else f"!! {scored} episode(s) were scored")
+            + "; every infra attempt is excluded and re-queued, so a "
             "resume into this out-root re-flies them once the cause is fixed."
         )
 
