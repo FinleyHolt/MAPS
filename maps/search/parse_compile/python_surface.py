@@ -444,6 +444,12 @@ class _Cuts:
         the whole set server-side, and relating to a place stamps ``facing
         <place>`` and ``distance to <place>``."""
         if key is None and direction is None:
+            if reverse and (nearest is not None or color is not None):
+                raise CodeError(
+                    "reverse= flips a key sort; nearest= and color= are "
+                    "served orders with one direction. Farthest first is a "
+                    "key sort: rows.order(lambda r: r.distance(<place>), "
+                    "reverse=True).")
             mp, src = self._target()
             return mp._rows_order(src, nearest=nearest, color=color)
         if key is not None and direction is not None:

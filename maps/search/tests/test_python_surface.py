@@ -895,3 +895,9 @@ def test_stand_facing_a_set_is_refused_under_its_spelling():
                       'v = stand(at="prior_7", facing=cars)\n')
     assert err.endswith("facing= takes ONE place and cars is a set. "
                         "Index it -- facing=cars[0]."), err
+
+
+@pytest.mark.parametrize("kw", ['nearest="prior_7"', 'color="red"'])
+def test_reverse_on_a_served_order_is_refused(kw):
+    err, _ = _refusal(f'cars = find("car")\ncars.order({kw}, reverse=True)\n')
+    assert "reverse= flips a key sort" in err, err
