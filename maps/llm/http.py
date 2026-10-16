@@ -479,14 +479,7 @@ def stream_chat_completions(
                 fin = choice.get("finish_reason")
                 if fin is not None:
                     finish_reason = fin
-                has_signal = bool(
-                    content_delta
-                    or reasoning_delta
-                    or delta.get("tool_calls")
-                    or fin is not None
-                    or delta.get("role")
-                )
-                if has_signal:
+                if content_delta or reasoning_delta or delta.get("tool_calls") or fin is not None or delta.get("role"):
                     empty_chunk_count = 0
                     first_empty_at = None
                     continue
