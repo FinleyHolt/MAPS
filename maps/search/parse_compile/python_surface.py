@@ -1054,8 +1054,7 @@ class MissionPython:
             name = self.spelling(v)
             if v.spec:
                 v = self._materialize(v)
-            return Ref(v.ref, name or "(unnamed {})".format(
-                self._unnamed.setdefault(v.ref, len(self._unnamed) + 1)))
+            return Ref(v.ref, name or self._unnamed_label(v.ref))
         if isinstance(v, Row):
             return Bind(v.bind, self.name_of(v) or (v.fid or "row"))
         if isinstance(v, str):
@@ -1414,6 +1413,11 @@ class MissionPython:
         self._end(ack)
         return None
 
+    def _unnamed_label(self, ref: str) -> str:
+        """A nameless set's label, numbered once per mission."""
+        return "(unnamed {})".format(
+            self._unnamed.setdefault(ref, len(self._unnamed) + 1))
+
     def _not_one_place(self, kw: str, x: "Rows") -> str:
         """The refusal of a set where ``kw=`` takes one place."""
         name = self.spelling(x)
@@ -1726,8 +1730,7 @@ class MissionPython:
             for k in results:
                 name = mine.get(k) or self._labels.get(k)
                 if name is None or (k not in mine and name in said):
-                    name = "(unnamed {})".format(self._unnamed.setdefault(
-                        k, len(self._unnamed) + 1))
+                    name = self._unnamed_label(k)
                 said.add(name)
                 keys.append(name)
             out["result"] = {**res,
