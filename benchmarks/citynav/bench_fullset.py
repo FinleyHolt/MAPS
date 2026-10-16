@@ -246,8 +246,9 @@ class Driver:
         scored = len(self._done_cache)
         self.log(
             ("!! nothing was scored" if not scored else f"!! {scored} episode(s) were scored")
-            + "; every infra attempt is excluded and re-queued, so a "
-            "resume into this out-root re-flies them once the cause is fixed."
+            + "; every infra attempt is excluded, so a resume into this "
+            "out-root re-flies those still under --max-infra-attempts once "
+            "the cause is fixed."
         )
 
     def _wall_spent(self) -> bool:
