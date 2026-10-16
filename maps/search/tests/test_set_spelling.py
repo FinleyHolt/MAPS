@@ -116,3 +116,22 @@ def test_two_nameless_anchors_stay_two_places(call):
     assert got["fids"] == want["fids"], (got, want)
     header = lambda e: re.sub(r"\b(unnamed_\d|a|b)\b", "X", e["rows"].split("\n")[0])
     assert header(got) == header(want), (got["rows"], want["rows"])
+
+
+def test_an_unbound_find_is_keyed_by_its_call_unless_a_key_says_it():
+    _, out = _served('post = find("car")[0]\npost\n')
+    assert _keys(out)[0] == "find('car')", out
+    _, out = _served('show(find("car"))\n'
+                     'post = find("car", nearest="prior_7")[0]\n')
+    assert _keys(out) == ["find('car')", "(unnamed 1)"], out
+
+
+@pytest.mark.parametrize("code", [
+    f"show({_GATE})\nexplore({_FILTERED})\n",
+    f"explore({_FILTERED}[0:2])\n",
+])
+def test_a_nameless_set_has_one_number_in_keys_and_acks(code):
+    _, out = _served(code)
+    keys = {tuple(v["fids"]): k for k, v in out["result"]["results"].items()}
+    car = next(k for f, k in keys.items() if f and f[0].startswith("car_"))
+    assert out["explored"]["explored"] == car, out

@@ -1046,12 +1046,11 @@ class MissionPython:
         if isinstance(v, Rows):
             # A nameless set is numbered, once per mission, so two of them
             # in one call stay two places (two columns, two cuts).
-            name = self.spelling(v) or "(unnamed {})".format(
-                self._unnamed.setdefault(f"{v.ref}{v.spec}",
-                                         len(self._unnamed) + 1))
+            name = self.spelling(v)
             if v.spec:
                 v = self._materialize(v)
-            return Ref(v.ref, name)
+            return Ref(v.ref, name or "(unnamed {})".format(
+                self._unnamed.setdefault(v.ref, len(self._unnamed) + 1)))
         if isinstance(v, Row):
             return Bind(v.bind, self.name_of(v) or (v.fid or "row"))
         if isinstance(v, str):
@@ -1709,13 +1708,17 @@ class MissionPython:
                 a["hint"] = "\n".join(
                     ([a["hint"]] if a.get("hint") else []) + folded)
                 results[answer] = a
-            keys, n = [], 0
+            # A key is the set's spelling: an unbound find its call unless
+            # another key already says it, a nameless set its mission number.
+            said = {mine[k] for k in results if k in mine}
+            keys = []
             for k in results:
-                if k in mine:
-                    keys.append(mine[k])
-                else:
-                    n += 1
-                    keys.append(f"(unnamed {n})")
+                name = mine.get(k) or self._labels.get(k)
+                if name is None or (k not in mine and name in said):
+                    name = "(unnamed {})".format(self._unnamed.setdefault(
+                        k, len(self._unnamed) + 1))
+                said.add(name)
+                keys.append(name)
             out["result"] = {**res,
                              "results": dict(zip(keys, results.values()))}
         names = sorted(k for k, v in self.ns.items()
