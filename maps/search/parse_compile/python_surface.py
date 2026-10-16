@@ -1168,6 +1168,9 @@ class MissionPython:
                       "-- r2 = intersection(\"A Road\", \"B St\") then "
                       "go_to(r2[0]).")
             return format_xy_token(float(pt[0]), float(pt[1]))
+        if isinstance(v, str) and not v.strip() and why != "marks":
+            raise CodeError(
+                f"{_SITE_SLOT[why]} got an empty name, which is no place.")
         if isinstance(v, str) and not fid_like(v):
             return _Name(v)
         return str(_plain(v))

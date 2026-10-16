@@ -1090,7 +1090,7 @@ class _Mission:
             rows = [r for r in rows
                     if r.get("name_match") is None
                     or float(r["name_match"]) >= _FUZZY_FLOOR]
-            what = q.lower() or "that"
+            what = q.lower()
             if not rows:
                 return self._plan_err({}, (
                     f"nothing named \"{what}\" is on "

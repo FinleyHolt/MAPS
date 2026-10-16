@@ -885,6 +885,14 @@ def test_a_fid_name_with_no_row_on_the_surface_is_refused():
                         "off a served row."), err
 
 
+@pytest.mark.parametrize("code, slot", [
+    ('go_to("")\n', "go_to()"), ('explore(" ")\n', "each explore() place"),
+    ('look("")\n', "each look() place")])
+def test_an_empty_name_is_no_place(code, slot):
+    err, _ = _refusal(code)
+    assert err.endswith(f"{slot} got an empty name, which is no place."), err
+
+
 def test_indexing_a_set_by_a_non_int_names_the_int_position():
     err, _ = _refusal('cars = find("car")\ncars["name"]\n')
     assert err.endswith("cars['name'] did not bind: cars is a set of rows, "
