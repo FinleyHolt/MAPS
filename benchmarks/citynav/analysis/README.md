@@ -6,11 +6,12 @@ and none defines a metric of its own: `rows.load_attempts` decides which
 attempt is an episode's result (the first fully complete attempt by start
 time) and `arm_table.arm_row` averages.
 
-Every reader refuses a root that scores fewer episodes than its manifest
-selected (`selection.episodes_n`) and names the shortfall: episodes only ever
-an infrastructure casualty, and episodes that never landed a row. Resuming the
-run into the same root finishes it; `--allow-partial` reads it as it stands
-and prints the shortfall to stderr.
+`run_report`, `arm_table`, `ab_report` and the figures refuse a root that
+scores fewer episodes than its manifest selected (`selection.episodes_n`) and
+names the shortfall: episodes only ever an infrastructure casualty, and
+episodes that never landed a row. Resuming the run into the same root finishes
+it; `--allow-partial` reads it as it stands and prints the shortfall to
+stderr.
 
 | Reader | Reads | Prints |
 |---|---|---|
