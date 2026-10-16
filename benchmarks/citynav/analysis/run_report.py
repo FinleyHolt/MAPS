@@ -227,7 +227,8 @@ def print_classes(root: Path, scored: dict[str, dict], picked: dict) -> None:
     (Cal City, as the flight measures' by_intel_quality). A recorded row's
     class is its own ``referent_bucket`` and ``intel_quality``; a pick without
     them takes its corpus row's, read by episode id from the run's split (its
-    manifest's, else the one its rows record), so it counts in its own class.
+    manifest's, else the one its rows record), so it counts in its own class;
+    a row that records its own description is bucketed by that wording.
     A split on this machine that lacks such a pick is not the run's corpus: no
     class line."""
     from benchmarks.citynav.adapter import find_row, parse_episode
@@ -248,7 +249,8 @@ def print_classes(root: Path, scored: dict[str, dict], picked: dict) -> None:
             return
         for eid, f in found.items():
             episode = parse_episode(f[1])
-            classes[eid] = (classify_referent(episode.description), episode.intel_quality)
+            said = picked[eid].row.get("description") or episode.description
+            classes[eid] = (classify_referent(said), episode.intel_quality)
     for kind, index, order in (("bucket", 0, _BUCKETS), ("intel quality", 1, ("G", "M", "P", "?"))):
         tot: Counter = Counter()
         suc: Counter = Counter()

@@ -300,3 +300,14 @@ def test_a_root_without_a_manifest_reads_its_split_off_the_rows(tmp_path, monkey
     report(root)
     out = capsys.readouterr().out
     assert "by bucket: car:1/1(100%)" in out and "by intel quality: G:1/1(100%)" in out
+
+
+def test_a_row_that_records_its_description_is_bucketed_by_it(tmp_path, monkeypatch, capsys):
+    """A revised released root carries its own wording; the split row keeps the original."""
+    _calcity_corpus(tmp_path, monkeypatch, ("a building", "G"))
+    root = tmp_path / "revised"
+    write_ledger(root, ledger_row("calcity::0#0", "20260725_110000", 1, split="calcity",
+                                  description="the red car"))
+    report(root)
+    out = capsys.readouterr().out
+    assert "by bucket: car:1/1(100%)" in out and "by intel quality: G:1/1(100%)" in out
