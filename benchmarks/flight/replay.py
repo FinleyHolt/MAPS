@@ -42,7 +42,7 @@ from benchmarks.citynav.episode_workdir import (CONVERSATION_JSONL, DETECTIONS_J
                                                 TRACK_JSONL)
 from benchmarks.citynav.episodes import EPISODES_JSONL, RUN_LOG, TOUR_CURSOR
 from benchmarks.flight import map_render
-from benchmarks.flight.live_source import check_map, coverage_record, held_record, open_live, ortho_observation
+from benchmarks.flight.live_source import check_map, coverage_record, open_live, ortho_observation
 from benchmarks.flight.measures import frame_agl, run_bases, sortie_of
 from benchmarks.flight.mission import Mission, converse, flight_config, summary_line
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
@@ -328,7 +328,7 @@ class BankSource:
         frame = h.frame
         boresight = frame.get("boresight")
         self.last = {**frame, "boresight": Path(str(boresight)).name if boresight else None,
-                     "coverage": held_record(len(held), sum(held))}
+                     "coverage": {"points": len(held), "held": sum(held)}}
         self.last_refusal = ""
         return ortho_observation(rgb, alpha, h.extent, h.camera_z, tile_ground_z=self.tile_ground_z)
 

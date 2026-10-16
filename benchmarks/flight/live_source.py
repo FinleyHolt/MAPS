@@ -78,12 +78,6 @@ def ortho_observation(rgb: np.ndarray, alpha: np.ndarray, extent: tuple[float, f
     )
 
 
-def held_record(points: int, held: int) -> dict[str, Any]:
-    """What held an area, as an observation's ``last["coverage"]`` says it:
-    the points held of those asked."""
-    return {"points": points, "held": held}
-
-
 def coverage_record(best: list[tuple[float, int] | None], frames: int) -> dict[str, Any]:
     """How much of an area a source holds, as ``coverage`` returns it: per
     point ``best`` (``(off-nadir degrees, seq)``, or None where nothing holds
@@ -566,7 +560,7 @@ class LiveSource:
         want = [(chosen[seq], seq) for seq in sorted(chosen, key=lambda s: (chosen[s], -stamped[s]))]
         obs = self._fused(want, ranked=cov["frames"], about=f"the area's {cov['points']} points")
         if obs is not None:
-            self.last["coverage"] = held_record(cov["points"], cov["held"])
+            self.last["coverage"] = {"points": cov["points"], "held": cov["held"]}
         return obs
 
     def _fused(self, want: list[tuple[float, int]], *, ranked: int, about: str) -> Observation | None:
