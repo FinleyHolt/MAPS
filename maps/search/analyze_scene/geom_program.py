@@ -851,14 +851,15 @@ def _as_rows(cx, arg):
 def _named_rows(cx, el, need):
     """Every row a crossings/ends ref names (a road is several ways): a fid,
     an rN, a list of them, or {ref, as}. A row off the surface counts when
-    it carries ``need``."""
+    it carries ``need``; a string that is neither a fid nor a handle names
+    none."""
     if isinstance(el, dict):
         el = el.get("ref")
     out: list = []
     for t in (el if isinstance(el, list) else [el]):
         vals = [t]
         if isinstance(t, str) and t not in cx.by_fid:
-            vals = cx.resolve(t)
+            vals = cx.resolve(t) if cx.is_ref(t) else []
         for x in vals:
             n = None
             if isinstance(x, str):

@@ -410,3 +410,16 @@ def test_a_refused_ref_is_quoted_by_the_models_label(op, query):
         run_program([{"fid": "c1", "class": "car", "search_text": "car"}],
                     [], prog)
     assert "ref 'roads' names no" in str(e.value), e.value
+
+
+@pytest.mark.parametrize("op", ["crossings", "ends"])
+def test_a_fid_off_the_surface_is_refused_as_naming_no_row(op):
+    # A string that is neither a surface fid nor a handle names nothing:
+    # the op's own refusal answers, never the unknown-ref error.
+    anchors = [dict(_road("prior_1", [[0, -100], [0, 100]]),
+                    centerline=[[0, -100], [0, 100]])]
+    prog = {"ops": [{"ref": "r0", "op": op,
+                     "args": {"refs": ["prior_999", "prior_1"]}}]}
+    with pytest.raises(ProgramError) as e:
+        run_program([], anchors, prog)
+    assert "ref 'prior_999' names no" in str(e.value), e.value
