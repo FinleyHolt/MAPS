@@ -985,7 +985,7 @@ def _match_notes(scored, n, band_cut) -> list:
     """What a matched find says: how many matched and whether their order is
     real, the tier split, the band cut and the head."""
     vals = [r["name_match"] for r in scored[:n]]
-    rest = len(scored) - n
+    rest = len(scored) - n - band_cut
     if vals[0] == vals[-1]:
         order = (f"all equally good matches at match {vals[0]}, so this order "
                  f"is arbitrary and ordering them by a cue column chooses it")
