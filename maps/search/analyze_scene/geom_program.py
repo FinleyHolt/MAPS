@@ -778,10 +778,8 @@ class _Run:
         else:
             _known = sorted(set(self.results) | set(self.seed))
             raise ProgramError(
-                f"unknown ref {_quote(tok)}: an op defined with ref 'r0' is read back "
-                f"as r0. Refs persist across your analyze calls (redefining one "
-                f"replaces it). "
-                f"valid refs so far: {_known or '(none)'}")
+                f"unknown ref {_quote(tok)}; valid refs so far: "
+                f"{_known or '(none)'}")
         return _window(v, win) if win else v
 
 
