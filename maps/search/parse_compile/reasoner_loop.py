@@ -135,6 +135,21 @@ def _is_refused_request(exc: BaseException) -> bool:
             and exc.response.status_code not in TRANSIENT_CLIENT_STATUS)
 
 
+# The rejections a retry would only repeat, in the order they are tested:
+# ``(test, ended_by, the log's why)``.
+_REFUSAL_ENDINGS = (
+    (_is_oversize_rejection, "oversize_rejection",
+     "request does not fit the served window -> mission ends (retry would "
+     "re-send the same bytes)"),
+    (_is_content_filter_rejection, "content_filter",
+     "the endpoint's content filter refused the prompt -> mission ends (a "
+     "retry re-sends the same prompt)"),
+    (_is_refused_request, "request_refused",
+     "the serve refused the request -> mission ends (a retry re-sends the "
+     "same request)"),
+)
+
+
 def _summarise_exc(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"
 
@@ -1412,27 +1427,12 @@ class _Mission:
                     self.rid_tag, _summarise_exc(exc))
                 return self._mission_end("compaction_infeasible", turns=turn_idx + 1)
             except _RETRIABLE_LLM_ERRORS as exc:
-                if _is_oversize_rejection(exc):
-                    log.warning(
-                        "%s request does not fit the served window "
-                        "-> mission ends (retry would re-send the same bytes): %s",
-                        self.rid_tag, _summarise_exc(exc))
-                    self._log("oversize_rejection", error=_summarise_exc(exc))
-                    return self._mission_end("oversize_rejection", turns=turn_idx + 1)
-                if _is_content_filter_rejection(exc):
-                    log.warning(
-                        "%s the endpoint's content filter refused the prompt "
-                        "-> mission ends (a retry re-sends the same prompt): %s",
-                        self.rid_tag, _summarise_exc(exc))
-                    self._log("content_filter", error=_summarise_exc(exc))
-                    return self._mission_end("content_filter", turns=turn_idx + 1)
-                if _is_refused_request(exc):
-                    log.warning(
-                        "%s the serve refused the request -> mission ends "
-                        "(a retry re-sends the same request): %s",
-                        self.rid_tag, _summarise_exc(exc))
-                    self._log("request_refused", error=_summarise_exc(exc))
-                    return self._mission_end("request_refused", turns=turn_idx + 1)
+                for refused, ended_by, why in _REFUSAL_ENDINGS:
+                    if refused(exc):
+                        log.warning("%s %s: %s", self.rid_tag, why,
+                                    _summarise_exc(exc))
+                        self._log(ended_by, error=_summarise_exc(exc))
+                        return self._mission_end(ended_by, turns=turn_idx + 1)
                 transient_failures += 1
                 cancel = self.reasoner.cancel_event
                 log.warning(
