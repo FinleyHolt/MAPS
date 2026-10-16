@@ -9,6 +9,9 @@ fill it as the episode runs.
         frames/            every jpeg the model was shown, by sha256
         flight/            the engine's working files: llm/transcript.jsonl (the wire
                            log), look/ (the look audit), tour_cursor.json
+        frames.jsonl       a flight mission's: one row per observation it perceived
+        observations/      a flight mission's: each observation's fused pass, <sha>.jpg
+    <sortie>/flight_track.jsonl  a flight sortie's ownship track, one fix a second
 
 The runner and the flight mission open their attempt directories through
 ``open_episode_dir``. The stamp is the attempt's start, which the readers
@@ -37,6 +40,15 @@ from benchmarks.citynav.episodes import RUN_LOG, json_default
 
 CONVERSATION_JSONL = "conversation.jsonl"
 DETECTIONS_JSONL = "detections.jsonl"
+#: One row per observation a flight mission perceived: the key from the
+#: mission's reasoning back into the recording.
+FRAMES_JSONL = "frames.jsonl"
+#: Where each observation goes: the pass fused aboard as one north-up image,
+#: ``<sha>.jpg``. Never ``frames/``, which is what the model saw.
+OBSERVATIONS_DIR = "observations"
+#: The ownship track, in the sortie's folder: the path
+#: :mod:`benchmarks.flight.measures` reads OSR and SPL off.
+TRACK_JSONL = "flight_track.jsonl"
 
 
 #: The benchmarks a directory name may claim: the corpus the episode came from.

@@ -31,7 +31,8 @@ from benchmarks.flight.live_source import LiveSource
 from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.flight.vehicle import Leg
-from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL, ConversationLog
+from benchmarks.citynav.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL,
+                                                ConversationLog)
 from maps.llm.model_cards import effort
 
 if TYPE_CHECKING:
@@ -75,16 +76,8 @@ FRAME_WAIT_S = 30.0
 
 #: The quality a waypoint's observation is written at (``observations/<sha>.jpg``).
 OBSERVATION_JPEG_QUALITY = 90
-#: One row per observation a mission perceived, in the episode's directory:
-#: the key from the mission's reasoning back into the recording.
-FRAMES_JSONL = "frames.jsonl"
-#: The ownship track, one fix a second on the vehicle's clock, in the sortie's
-#: folder: the path :mod:`benchmarks.flight.measures` reads OSR and SPL off.
-TRACK_JSONL = "flight_track.jsonl"
+#: The ownship track's period (``TRACK_JSONL``), seconds on the vehicle's clock.
 TRACK_PERIOD_S = 1.0
-#: Where each waypoint's observation goes: the pass fused aboard as one
-#: north-up image, ``<sha>.jpg``. Never ``frames/``, which is what the model saw.
-OBSERVATIONS_DIR = "observations"
 
 STATE_IDLE = "idle"
 STATE_FLYING = "flying"

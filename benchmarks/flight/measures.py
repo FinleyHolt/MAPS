@@ -51,10 +51,9 @@ from typing import Any
 
 from benchmarks.citynav.action_snap import bearing_deg
 from benchmarks.citynav.analysis.rows import is_infra_abort, iter_json_rows
-from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL
+from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL, FRAMES_JSONL, TRACK_JSONL
 from benchmarks.citynav.episodes import EPISODES_JSONL
 from benchmarks.flight.airframe import C12_SENSOR
-from benchmarks.flight.mission import FRAMES_JSONL, TRACK_JSONL
 from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.geometry.sensor_spec import resolve_sensor

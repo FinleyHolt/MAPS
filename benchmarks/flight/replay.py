@@ -38,13 +38,13 @@ import numpy as np
 
 import benchmarks.calcity
 from benchmarks.citynav.analysis.rows import iter_json_rows
-from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL, DETECTIONS_JSONL
+from benchmarks.citynav.episode_workdir import (CONVERSATION_JSONL, DETECTIONS_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR,
+                                                TRACK_JSONL)
 from benchmarks.citynav.episodes import EPISODES_JSONL, RUN_LOG, TOUR_CURSOR
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import check_map, coverage_record, held_record, open_live, ortho_observation
 from benchmarks.flight.measures import frame_agl, run_bases, sortie_of
-from benchmarks.flight.mission import (FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL, Mission, converse,
-                                       flight_config, summary_line)
+from benchmarks.flight.mission import Mission, converse, flight_config, summary_line
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
 from maps.llm.http import TRANSCRIPT_JSONL, CallCanceled
 

@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from benchmarks.citynav.episode_workdir import OBSERVATIONS_DIR, TRACK_JSONL
 from benchmarks.flight import mission as M
 from benchmarks.flight.tests import world
 
@@ -51,7 +52,7 @@ def test_a_flight_over_unflown_ground_posts_the_leg_and_serves_the_pass_that_hel
     assert len(twin.legs[0].area) == 19
     assert served[0] is not None and served[0].ortho_view_corners_xy is not None
     assert "arrived" in _legs(m)[-1]
-    assert list((m.workdir / M.OBSERVATIONS_DIR).glob("*.jpg"))
+    assert list((m.workdir / OBSERVATIONS_DIR).glob("*.jpg"))
 
 
 def test_ground_the_pass_holds_already_is_answered_without_a_leg(built, make_mission):
@@ -123,7 +124,7 @@ def test_a_track_fix_is_where_the_aircraft_was_at_its_stamp_under_a_timing_offse
     m._t0, m.started_at_utc = twin.now(), m._utc_now()
     twin.sleep(20.0)
     m._record_track()
-    first = json.loads((m.workdir.parent / M.TRACK_JSONL).read_text().splitlines()[0])
+    first = json.loads((m.workdir.parent / TRACK_JSONL).read_text().splitlines()[0])
     pose = m._live.pose_now(m._t0)
     assert first["t_unix"] == pytest.approx(dt.datetime.fromisoformat(pose.utc).timestamp(), abs=1e-3)
     x, y = M.lonlat_to_local(m._tiles_dir, m.map_name, pose.lon, pose.lat)
@@ -144,7 +145,7 @@ def test_a_start_without_a_fix_takes_its_utc_at_the_first_bank_with_one(make_mis
     m.bank()
     row = json.loads((m.workdir.parent / "episodes.jsonl").read_text().splitlines()[0])
     assert row["started_at_utc"] == pytest.approx(dt.datetime.fromisoformat(pose.utc).timestamp(), abs=1e-3)
-    assert (m.workdir.parent / M.TRACK_JSONL).read_text().strip()
+    assert (m.workdir.parent / TRACK_JSONL).read_text().strip()
 
 
 def test_an_unknown_episode_is_refused_by_name(monkeypatch):
