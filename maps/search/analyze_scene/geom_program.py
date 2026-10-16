@@ -534,11 +534,7 @@ def _hint(v) -> str:
     """What an op result's rows are, never how they render: its notes, and
     the line saying why there are none or no order."""
     if v.kind == "compare":
-        return join_hints(
-            "" if v else
-            "compare received NO items -- the items ref resolved to an "
-            "empty list.",
-            *v.notes)
+        return join_hints(*v.notes)
     if not v:
         return join_hints(
             v.empty_condition
@@ -553,10 +549,11 @@ def _hint(v) -> str:
     return join_hints(*v.notes)
 
 
-def _envelope(v, legend) -> dict:
+def _envelope(v, legend, cut=None) -> dict:
     """One op result's model-facing envelope (see :func:`compact_results`):
-    ``hint`` says what the rows are, ``shown`` how the grid renders them."""
-    cut = v.cut_stats if v.kind == "cut" else None
+    ``hint`` says what the rows are, ``shown`` how the grid renders them;
+    ``cut`` is the stats of the cut that emptied an empty answer."""
+    cut = (v.cut_stats if v.kind == "cut" else None) or cut
     if v.kind == "compare":
         head = {"len": len(v)}
     elif not v:
@@ -646,7 +643,11 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
                 else:
                     seen[sig] = str(k)
         return out
-    answer = _envelope(results[answer_ref], legend)
+    v = results[answer_ref]
+    cut = None if v else next((s.cut_stats for s in results.values()
+                               if s.kind == "cut" and not s and s.cut_stats),
+                              None)
+    answer = _envelope(v, legend, cut)
     # The other ops are the call's own steps, refs the model never holds:
     # their hints ride unprefixed, each line once.
     own = str(answer.get("hint") or "").split("\n")
