@@ -460,6 +460,8 @@ class Driver:
             f"elapsed={row['elapsed_s']:.0f}s{summary}"
         )
         self._append_result(row)
+        # ponytail: re-reads the whole ledger per row (O(n^2) over a run, cheap
+        # beside an episode); refresh every N rows if the ledger grows past that.
         self._write_summary()
 
     def _write_summary(self) -> None:

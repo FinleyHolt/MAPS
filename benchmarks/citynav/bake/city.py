@@ -408,8 +408,7 @@ def _feature_entry(
     """One baked prior: mask, every raw tag verbatim except
     ``_PRIVILEGED_KEYS``, the name when present and the osm_id. The centroid
     is the cell mean, snapped to the nearest kept cell when it lands over
-    no-data (it becomes the surface xy and the viewpoint target, both over
-    imagery)."""
+    no-data."""
     ordered_cells = [[int(r), int(c)] for r, c in sorted(cells)]
     arr = np.asarray(ordered_cells, dtype=np.float64)
     cr = float(arr[:, 0].mean())
