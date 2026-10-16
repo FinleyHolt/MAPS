@@ -236,6 +236,16 @@ def test_the_detector_is_prompted_with_the_instruction_phrases_never_the_bare_cl
     assert {"white car", "road", "Willmore Road"} <= set(got)
 
 
+def test_the_bare_class_is_dropped_from_every_concept_source():
+    from baselines.visa.policy import detection_concepts
+
+    analysis = {"target": {"phrase": "red car", "class": "car"}, "landmarks": ["Mill Road", "Car"],
+                "surroundings": ["cars", "car", "tree"], "concepts": ["red car", "car", "white car"]}
+    assert detection_concepts(analysis) == ["red car", "tree", "Mill Road", "white car"]
+    bare = {"target": {"class": "car"}, "surroundings": ["cars"], "concepts": []}
+    assert detection_concepts(bare) == ["car"]
+
+
 def test_a_huge_landmark_is_planned_only_inside_the_window():
     """A city-long road would make the coverage grid city-sized; the region
     is the landmark inside the search window."""

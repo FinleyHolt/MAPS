@@ -57,15 +57,13 @@ def detection_concepts(analysis: dict) -> list[str]:
     """The phrases the detector is prompted with: the paper's VPG proposed the
     instruction's own phrases ("red car"), so the attributed target phrase,
     the surrounding phrases and the landmark nouns are prompted and the bare
-    class, which returns every car in view, never is."""
+    class (or its plural), which returns every car in view, is prompted only
+    when the target has no phrase."""
     target = analysis.get("target") or {}
     phrase = str(target.get("phrase") or "").strip()
     cls = str(target.get("class") or "").strip().lower()
-    out = [phrase or cls]
-    out += [str(x) for x in (analysis.get("surroundings") or [])]
-    out += [str(x) for x in (analysis.get("landmarks") or [])]
-    out += [str(x) for x in (analysis.get("concepts") or []) if str(x).strip().lower() != cls]
-    return _dedup(out)
+    rest = [str(x) for key in ("surroundings", "landmarks", "concepts") for x in (analysis.get(key) or [])]
+    return _dedup([phrase or cls] + [x for x in rest if x.strip().lower().rstrip("s") != cls.rstrip("s")])
 
 
 def _terms(phrases: list[str]) -> set[str]:
