@@ -390,3 +390,20 @@ def test_the_observation_is_keyed_to_its_newest_frame_by_log_time_not_seq(built,
     twin.rows[0]["log_time"] = twin.rows[last]["log_time"] + 1     # frame 0 recorded after a restart
     assert live._fused([(0.0, 0), (0.0, -last)], ranked=2, about="two frames") is not None
     assert live.last["seq"] == 0 and live.last["log_time"] == twin.rows[0]["log_time"]
+
+
+def test_at_one_angle_the_frame_stamped_later_holds_the_point_though_its_sequence_restarted():
+    """Two frames from one pose see the point at one angle; the camera
+    restarted between them, so the later one carries the lower sequence: the
+    later stamp wins."""
+    from types import SimpleNamespace as NS
+
+    from benchmarks.flight.live_source import LiveSource
+
+    src = LiveSource.__new__(LiveSource)
+    src.floor_msl_m = 0.0
+    src.boresight = NS(sensor=NS(intrinsics=NS(hfov_deg=15.0, vfov_deg=11.0)))
+    pose = {"lat": 35.13, "lon": -117.98, "alt_msl_m": 1000.0, "heading_deg": 0.0}
+    rows = [{"seq": 900, "log_time": 100, "pose": pose}, {"seq": 3, "log_time": 200, "pose": pose}]
+    cov = src._held_by(rows, [(-117.98, 35.13)])
+    assert cov["best"][0][1] == 3

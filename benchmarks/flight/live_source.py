@@ -525,7 +525,9 @@ class LiveSource:
                     if abs(float((r.get("pose") or {}).get("lat") or 0.0) - clat) <= HOLD_NEAR_DEG
                     and abs(float((r.get("pose") or {}).get("lon") or 0.0) - clon) <= HOLD_NEAR_DEG]
         best: list[tuple[float, int] | None] = [None] * len(points)
-        for row in rows:
+        # Newest first, so at one angle the fresher frame wins; the sequence
+        # restarts with the camera, the stamp does not.
+        for row in sorted(rows, key=lambda r: -int(r["log_time"])):
             tag = row.get("pose") or {}
             if tag.get("alt_msl_m") is None or tag.get("heading_deg") is None:
                 continue
@@ -537,8 +539,7 @@ class LiveSource:
                                          lat, lon, hfov_deg=intr.hfov_deg, vfov_deg=intr.vfov_deg)
                 if angle is None:
                     continue
-                # At one angle the fresher frame wins.
-                if best[i] is None or (angle, -seq) < (best[i][0], -best[i][1]):
+                if best[i] is None or angle < best[i][0]:
                     best[i] = (float(angle), seq)
         self.last_refusal = ""
         return coverage_record(best, len(rows))
