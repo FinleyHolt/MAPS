@@ -928,9 +928,6 @@ class MissionPython:
         self.ns["__builtins__"]["print"] = self._print
         self.ns["__builtins__"]["__import__"] = _safe_import
         self.ns["__show__"] = self._show
-        # show(x) is the bare-expression renderer under the model's own
-        # display verb.
-        self.ns["show"] = self._call_show
         self.ns.update(_SAFE_MODULES)
         for name in served_calls():
             self.ns[name] = self._wrap_call(name)
@@ -1580,12 +1577,6 @@ class MissionPython:
         # lines when the block ends.
         self._printed += ((" " if sep is None else sep).join(
             str(p)[:2_000] for p in parts) + ("\n" if end is None else end))
-
-    def _call_show(self, *xs):
-        """``show(r1)`` renders exactly what ``r1`` on its own line does."""
-        for x in xs:
-            self._show(x, self.spelling(x) if isinstance(x, Rows)
-                       else self.name_of(x) or repr(x))
 
     def _show(self, value, label: str | None):
         if value is None:

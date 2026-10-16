@@ -132,18 +132,14 @@ def test_a_call_indexed_inside_an_argument_is_its_own_dispatch():
     assert out[0]["handles"] == ["r1", "r2"], out[0]
 
 
-def test_show_of_a_handle_is_the_bare_line_spelled_out():
-    spelled = calls_of_block("show(r1)\n", bound={"r1": "r7"})
-    bare = calls_of_block("r1\n", bound={"r1": "r7"})
-    # IDENTICAL, not merely similar: two spellings of one call, or the
-    # served envelope keys them differently and the model sees two things.
-    assert spelled == bare == [("analyze", [
+def test_a_bare_handle_line_is_its_one_display():
+    assert calls_of_block("r1\n", bound={"r1": "r7"}) == [("analyze", [
         {"ref": "r0", "op": "filter_items",
          "args": {"items": "r7", "key": "xy", "op": "truthy"}}],
-        "r0", None)], (spelled, bare)
-    # ...and it stays out of the served vocabulary: one way to display.
-    from maps.search.parse_compile.python_surface import _LIBRARY_CALLS
-    assert "show" not in _LIBRARY_CALLS
+        "r0", None)]
+    # one way to display: no show() verb beside the bare line
+    _, fr, _, _ = drive([[run('r1 = find("car")\nshow(r1)\n')], "done"])
+    assert "there is no show here" in tool_results(fr)[0]["error"]
 
 
 def test_a_fid_in_an_anchor_slot_is_the_row_it_names():
@@ -909,7 +905,7 @@ def test_a_row_of_a_window_shows_the_row_it_is():
               "search_text": "car"} for i in range(6)]
     _, fr, _f, _d = drive([
         [run('r1 = find("car")\nw = r1[2:5]\nw[0]\n')],
-        [run('for r in w:\n    show(r)\n')],
+        [run('for r in w:\n    pass\nr\n')],
         "done",
     ], cands=cands)
     head, loop = tool_results(fr)[:2]
