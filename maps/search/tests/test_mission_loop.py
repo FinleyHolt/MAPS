@@ -139,3 +139,29 @@ def test_look_and_its_marks_take_every_point_a_stance_takes():
     assert [(r["center_fid"], r["center_xy"]) for r in looks] == [
         ("stop_000", [1.0, 2.0]), ("v1", [1.0, 2.0])], asked
     assert [m["fid"] for m in looks[1]["marks"]] == ["stop_000", "v1"], looks[1]
+
+
+_TIE_CANDS = [
+    {"fid": "prior_1", "xy": [0.0, 0.0], "class": "depot", "search_text": "depot"},
+    {"fid": "prior_2", "xy": [0.0, 5.0], "class": "tower", "search_text": "tower"},
+    {"fid": "car_1", "xy": [10.0, 0.0], "class": "car", "search_text": "car"},
+    {"fid": "car_2", "xy": [-10.0, 0.0], "class": "car", "search_text": "car"},
+]
+
+
+def _tie_note(cands):
+    _, fr, _, _ = drive([[run('r = find("car", nearest=["depot", "tower"])\nr')],
+                         "done"], cands=cands)
+    return tool_results(fr)[0].get("note")
+
+
+def test_the_tie_note_reads_every_ordering_key():
+    """Rows tied on the first key but separated by the second are no tie;
+    rows tied on every key are, and the note names every key."""
+    moved = [dict(c, xy=[10.0, 5.0]) if c["fid"] == "prior_2" else c
+             for c in _TIE_CANDS]
+    assert _tie_note(moved) is None
+    assert _tie_note(_TIE_CANDS) == (
+        "2 of 2 rows tie on every ordering column ('distance to depot', "
+        "'distance to tower') -- this ordering does not separate them, so "
+        "its rank 0 is arbitrary among the tie")

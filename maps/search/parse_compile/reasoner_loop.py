@@ -1154,12 +1154,12 @@ class _Mission:
         if "error" in out:
             return {"error": out["error"]}
         self.plan_rn[0] = max(self.plan_rn[0], int(rn_end or 0))
-        # The column this call ordered by, so _finish can say when the
+        # The columns this call ordered by, so _finish can say when the
         # ordering separated nothing.
         sb = next((o for o in reversed(ops) if o["op"] == "score_by"), None)
         self._call.update(answer=answer, page=page,
                           rows=self.carry.rows.get(answer),
-                          order=str(sb["args"]["emphasis"][0]["key"])
+                          order=[str(e["key"]) for e in sb["args"]["emphasis"]]
                           if sb else None)
         return {"result": out}
 
@@ -1303,22 +1303,23 @@ class _Mission:
     def _finish(self, ack: dict) -> dict:
         """Close a call nothing refused: the tie note, the grounding notes,
         the streak reset, the scope and paging writes."""
-        # An ordering that separated nothing says how many rows tie.
-        ok_key = self._call.get("order")
-        if ok_key:
-            rows = self._call.get("rows") or []
-            if len(rows) >= 2:
-                v0 = rows[0].get(ok_key)
-                if v0 is not None:
-                    tied = [r for r in rows if r.get(ok_key) == v0]
-                    if len(tied) >= 2:
-                        t = f"{v0:g}" if isinstance(v0, (int, float)) \
-                            else str(v0)
-                        _add_note(
-                            ack, f"{len(tied)} of {len(rows)} rows tie at "
-                            f"{t} on '{ok_key}' -- this ordering does "
-                            f"not separate them, so its rank 0 is "
-                            f"arbitrary among the tie", "\n")
+        # An ordering that separated nothing says how many rows tie on
+        # every column it ordered by.
+        rows = self._call.get("rows") or []
+        keys = [k for k in dict.fromkeys(self._call.get("order") or [])
+                if len(rows) >= 2 and rows[0].get(k) is not None]
+        tied = [r for r in rows if all(r.get(k) == rows[0][k] for k in keys)]
+        if keys and len(tied) >= 2:
+            if len(keys) == 1:
+                v0 = rows[0][keys[0]]
+                t = f"{v0:g}" if isinstance(v0, (int, float)) else str(v0)
+                on = f"at {t} on '{keys[0]}'"
+            else:
+                on = ("on every ordering column ("
+                      + ", ".join(f"'{k}'" for k in keys) + ")")
+            _add_note(ack, f"{len(tied)} of {len(rows)} rows tie {on} -- "
+                      "this ordering does not separate them, so its rank 0 "
+                      "is arbitrary among the tie", "\n")
         if self._call.get("notes"):
             _add_note(ack, "; ".join(self._call["notes"]), "\n")
         self._err_sig, self._err_n = None, 0
