@@ -316,7 +316,7 @@ class RecordedRing:
                 self.track.add_attitude(t_ns / 1e9, doc)
         #: ``{"seq", "log_time", "t_host", "pose"}`` per frame the ring kept, oldest first.
         self.rows: list[dict[str, Any]] = []
-        #: A torn recording's chunk offset per kept frame: frame() re-reads that chunk alone.
+        #: A torn recording's chunk offset per kept frame's log time: frame() re-reads that chunk alone.
         self._chunk_at: dict[int, int] = {}
         if _indexed(self.path):
             camera = ((m, None) for _c, m in messages(self.path, [TOPIC_CAMERA], start_ns, end_ns))
@@ -334,8 +334,11 @@ class RecordedRing:
             self.rows.append({"seq": int(message.sequence), "log_time": lt, "t_host": lt / 1e9,
                               "pose": pose_tag(pose)})
             if chunk_at is not None:
-                self._chunk_at[int(message.sequence)] = chunk_at
-        self._by_seq = {r["seq"]: r for r in self.rows}
+                self._chunk_at[lt] = chunk_at
+        #: The kept frames per seq, oldest first: the camera's seq starts again when it restarts.
+        self._by_seq: dict[int, list[dict[str, Any]]] = {}
+        for r in self.rows:
+            self._by_seq.setdefault(r["seq"], []).append(r)
         self._stamps = [r["log_time"] for r in self.rows]
         #: The clock, nanoseconds of log time: a float second this far from 1970 cannot hold a nanosecond.
         self.t_ns = int(start_ns if clock_ns is None else clock_ns)
@@ -360,13 +363,14 @@ class RecordedRing:
         return [dict(r) for r in self.rows[lo:upto]]
 
     def frame(self, seq: int):
-        """``(jpeg, t_host, log_time, seq, tag)`` read off the recording at the frame's stamp."""
-        row = self._by_seq.get(int(seq))
+        """``(jpeg, t_host, log_time, seq, tag)`` read off the recording at the
+        stamp of the newest frame numbered ``seq`` the clock has reached."""
+        row = next((r for r in reversed(self._by_seq.get(int(seq), [])) if r["log_time"] <= self.t_ns), None)
         if row is None:
             self.last_error = f"no frame {seq} in the ring"
             return None
-        if row["seq"] in self._chunk_at:
-            message = _message_in_chunk(self.path, self._chunk_at[row["seq"]], row["log_time"])
+        if row["log_time"] in self._chunk_at:
+            message = _message_in_chunk(self.path, self._chunk_at[row["log_time"]], row["log_time"])
             if message is not None:
                 self.last_error = ""
                 return compressed_jpeg(message.data), row["t_host"], row["log_time"], row["seq"], row["pose"]

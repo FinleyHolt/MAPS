@@ -251,8 +251,9 @@ def _cdr_image(jpeg: bytes) -> bytes:
     return out
 
 
-def _recording(path, t0, chunk_size=1 << 20):
-    """Five seconds at 10 Hz of fixes and camera frames, flying north at 80 m/s; the frames' JPEGs by sequence."""
+def _recording(path, t0, chunk_size=1 << 20, restart=None):
+    """Five seconds at 10 Hz of fixes and camera frames, flying north at 80 m/s; the frames' JPEGs by frame
+    number. ``restart`` is the frame the camera's sequence starts again from 5 at."""
     from mcap.writer import Writer
 
     from benchmarks.flight import recorded_ring as RR
@@ -274,7 +275,8 @@ def _recording(path, t0, chunk_size=1 << 20):
             buf = BytesIO()
             Image.fromarray(np.full((4, 4, 3), k, np.uint8)).save(buf, format="JPEG")
             jpegs[k] = buf.getvalue()
-            w.add_message(cam, log_time=t + 1, publish_time=t + 1, data=_cdr_image(jpegs[k]), sequence=k)
+            seq = k if restart is None or k < restart else k - restart + 5
+            w.add_message(cam, log_time=t + 1, publish_time=t + 1, data=_cdr_image(jpegs[k]), sequence=seq)
         w.finish()
     return jpegs
 
@@ -295,6 +297,25 @@ def test_the_ring_reads_a_recording_at_the_spill_rate_posed_by_its_own_fixes_and
     assert jpeg == jpegs[10] and seq == 10 and log_time == t0 + 10**9 + 1
     assert tag["lat"] == pytest.approx(35.0 + 80.0 / 111_320.0, abs=1e-9) and tag["heading_deg"] == 0.0
     assert ring.frame(11) is None and ring.last_error
+
+
+@pytest.mark.parametrize("torn", [False, True])
+def test_a_seq_the_camera_repeats_after_a_restart_serves_the_frame_the_clock_has_reached(tmp_path, torn):
+    from benchmarks.flight import recorded_ring as RR
+
+    t0 = 1_800_000_000 * 10**9
+    path = tmp_path / "sensors.mcap"
+    jpegs = _recording(path, t0, chunk_size=2048 if torn else 1 << 20, restart=25)
+    if torn:
+        data = path.read_bytes()
+        path.write_bytes(data[: int(len(data) * 0.8)])
+    ring = RR.RecordedRing(path, start_ns=t0, end_ns=t0 + 5 * 10**9)
+    assert [r["seq"] for r in ring.rows][:7] == [0, 5, 10, 15, 20, 5, 10]
+    ring.sleep(1.0)
+    jpeg, _t_host, log_time, seq, _tag = ring.frame(5)
+    assert jpeg == jpegs[5] and seq == 5 and log_time == t0 + 5 * 10**8 + 1
+    ring.sleep(2.0)
+    assert ring.frame(5)[0] == jpegs[25]
 
 
 def test_the_recorded_reasoner_settings_stand_only_in_a_forced_replay(monkeypatch):
@@ -331,6 +352,7 @@ def test_a_torn_recording_serves_a_frame_from_its_own_chunk_without_reading_from
         raise AssertionError("frame() streamed the recording from the top")
 
     monkeypatch.setattr(RR, "messages", streamed)
+    ring.sleep(2.0)
     assert ring.frame(10)[0] == jpegs[10]
 
 
