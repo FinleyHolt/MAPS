@@ -142,20 +142,21 @@ class Carry:
                 todo.extend(self._reads[i])
         if not need:
             return
-        _sink: dict = {}
-        # Seed everything else (a flight-minted handle has no op).
-        _out = run_ops(
-            [op for op in self._history if op["ref"] in need],
-            namespace=self.ns, raw_sink=_sink,
-            seed_results={h: v for h, v in self.rows.items()
-                          if h not in need})
-        if _out.get("error"):
-            # A refused replay keeps the last rows, unclaimed.
+        ns = self.ns
+        try:
+            got = run_program(
+                ns.get("cands") or [], ns.get("anchors") or [],
+                {"ops": [op for op in self._history if op["ref"] in need]},
+                # Seed everything else (a flight-minted handle has no op).
+                seed_results={h: v for h, v in self.rows.items()
+                              if h not in need},
+                staged=ns.get("staged"), standing=ns.get("standing"))
+        except Exception as exc:  # noqa: BLE001 - a refused replay keeps the last rows, unclaimed
             log.debug("carry refresh refused; handles keep their last "
-                      "rows: %s", str(_out["error"])[:200])
+                      "rows: %s", str(exc)[:200])
             return
         self.rows.update(
-            {k: v for k, v in _sink["results"].items() if k in need})
+            {k: v for k, v in got["results"].items() if k in need})
         self._fresh.update(need)
 
     def read(self, ref):
