@@ -1204,7 +1204,10 @@ class MissionPython:
             self._show_as(ref, shown)
         ties = self._ground((_Name(n), "anchor") for n in p.anchor_names())
         p.ground(ties)
-        self._end(self.env.analyze(p.ops, p.rn, ref, page))
+        ack = self.env.analyze(p.ops, p.rn, ref, page)
+        if "results" not in ack.get("result", {"results": None}):
+            self._unrendered.add(ref)    # deduped: its note says so
+        self._end(ack)
         return ref
 
     def _fold(self, part: dict) -> None:
@@ -1615,6 +1618,9 @@ class MissionPython:
     def _show(self, value, label: str | None):
         if value is None:
             return
+        if isinstance(value, Rows) and not value.spec \
+                and value.ref in self._unrendered:
+            return
         if isinstance(value, Rows):
             # Key the envelope by the MODEL's spelling ("r1[0:5]"), not the
             # executor's ref the window compiled onto (the window shows it
@@ -1643,6 +1649,7 @@ class MissionPython:
         self._printed = ""
         self._lines = 0
         self._block_shown = set()
+        self._unrendered: set = set()     # deduped this block: never shown
         self._get_noted.clear()
         self._geom.clear()
         self._measure_calls = 0

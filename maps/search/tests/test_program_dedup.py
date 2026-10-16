@@ -74,3 +74,13 @@ def test_a_deduped_handle_re_derives_after_a_flight_like_its_original():
     ])
     n_a, n_b = res[4]["printed"].split()
     assert n_a == n_b, res[4]
+
+
+def test_a_deduped_bare_line_serves_the_note_and_no_table():
+    """The note says the reissue is not re-rendered, so its bare line shows
+    no table."""
+    _, fr, _, _ = drive([[run('find("car")\n')], [run('find("car")\n')],
+                         "done"])
+    again = tool_results(fr)[1]["result"]
+    assert "not re-rendered" in again["note"], again
+    assert "results" not in again, again
