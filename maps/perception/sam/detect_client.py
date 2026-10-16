@@ -93,8 +93,8 @@ _rr = itertools.count()
 
 
 def _pick_url(eps: list[str]) -> str:
-    """The next of ``eps``, round-robin, so a frame's tiles spread evenly and
-    a retry steps off the replica that failed (``next`` on a count is atomic)."""
+    """The next of ``eps``, round-robin, so a frame's tiles spread evenly
+    (``next`` on a count is atomic)."""
     return eps[next(_rr) % len(eps)]
 
 
@@ -102,22 +102,23 @@ def _post_segment(json_body: dict) -> dict | None:
     """POST ``/segment``, the one retry layer: the parsed JSON, or ``None``.
 
     A 4xx outside ``_SAM_TRANSIENT_CLIENT_STATUSES`` raises
-    :class:`SamRequestRefused`; any other failure goes to the next replica
-    after ``SEGMENT_BACKOFF_S``, except that a read timeout drops the replica
-    that still holds the request. Each attempt opens a fresh connection: a
-    pooled socket the tunnel reaped during a long compile reads as half-open
-    (urllib3#944, #2751).
+    :class:`SamRequestRefused`; any other failure goes to a replica this call
+    has not seen fail (any replica once all have) after ``SEGMENT_BACKOFF_S``,
+    and a read timeout drops the replica that still holds the request. Each
+    attempt opens a fresh connection: a pooled socket the tunnel reaped during
+    a long compile reads as half-open (urllib3#944, #2751).
     """
     import requests
 
     deadline = time.monotonic() + SEGMENT_DEADLINE_S
     eps = sam_endpoints()
+    failed: set[str] = set()
     last: Exception | str | None = None
     for attempt in range(len(SEGMENT_BACKOFF_S) + 1):
         left = deadline - time.monotonic()
         if not eps or left <= 0.0:
             break
-        url = _pick_url(eps)
+        url = _pick_url([u for u in eps if u not in failed] or eps)
         try:
             with requests.Session() as s:
                 resp = s.post(url + "/segment", json=json_body, headers={"Connection": "close"},
@@ -137,6 +138,7 @@ def _post_segment(json_body: dict) -> dict | None:
                     f"/segment refused the request: HTTP {resp.status_code} at {url}: {resp.text[:200]}"
                 )
             last = f"HTTP {resp.status_code} at {url}"
+        failed.add(url)
         if attempt < len(SEGMENT_BACKOFF_S):
             backoff = SEGMENT_BACKOFF_S[attempt]
             if time.monotonic() + backoff >= deadline:

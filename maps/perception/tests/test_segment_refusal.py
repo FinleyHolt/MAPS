@@ -72,3 +72,12 @@ def test_the_per_tile_deadline_ends_the_backoff_ladder(monkeypatch, clock):
     monkeypatch.setattr(dc, "SEGMENT_DEADLINE_S", 10.0)
     assert _post("http://127.0.0.1:9") is None      # nothing listens: every connect is refused
     assert clock == [3.0, 6.0]
+
+
+def test_a_retry_steps_off_the_failed_replica_while_other_tiles_pick(monkeypatch, clock):
+    """Concurrent tiles share the round-robin: one picking during this call's backoff must not land
+    the retry back on the replica that just failed."""
+    monkeypatch.setattr(dc.time, "sleep", lambda s: (clock.append(s), next(dc._rr)))
+    with SegmentServe([(503, {}, {})] * 4) as failing, SegmentServe() as healthy:
+        assert _post(failing, healthy) == SegmentServe.default[1]
+    assert (len(failing.bodies), len(healthy.bodies)) == (1, 1)
