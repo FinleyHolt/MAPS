@@ -32,7 +32,7 @@ reads:
    area's points some frame holds. The leg has arrived at 90 %
    (`mission.COVERED_FRACTION`), or after `ARRIVAL_TIMEOUT_S` with what the
    pass held. When the index holds the area but none of its frames could be
-   fetched, the leg is flown and only the frames recorded after it count.
+   served, the leg is flown and only the frames recorded after it count.
 5. **The observation is fused.** `LiveSource.observe_area` fetches, for each
    area point, the frame that saw it nearest nadir, places each by its pose
    (as the corrector poses it; the frame's own tag where the vehicle has no
@@ -156,4 +156,5 @@ serve failed under before its first report (the bench's infra rule) is out
 of every rate and named; a run that ends after a report without a new one
 (the crew's Stop, a harness ending, a failure) is scored at that report:
 its end, time and flights. It prints the totals, the totals by intel
-quality and by model and reasoning effort, then one line per run.
+quality and by model and reasoning effort, the median turn radius the way
+back is flown at, then one line per run.
