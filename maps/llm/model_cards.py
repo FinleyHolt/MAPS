@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-#: alias -> {tokenizer, top_p, top_k[, efforts][, effort_numbers]}, or for a
+#: alias -> {tokenizer, top_p, top_k[, presence_penalty][, efforts][, effort_numbers]}, or for a
 #: hosted OpenAI model {tokenizer, wire: "openai", efforts[, max_images]}.
 #: ``efforts`` are the rungs the chat template takes and ``effort_numbers``
 #: whether it also takes a number in [0, 0.99]; a card naming no rungs takes
@@ -33,12 +33,16 @@ CARDS: dict[str, dict[str, Any]] = {
     # --tool-call-parser qwen3_coder owns enforcement.
     "qwen38-flash-next-nvfp4": {"tokenizer": "RadixArk/Qwen3.8-Flash-Next-NVFP4", "top_p": 0.95, "top_k": 20,
                                 "efforts": ("xhigh", "medium", "low")},
-    # Gemma 4, the family envelope (top_p 0.95, top_k 64, no penalty term) on
-    # every size, `-it` throughout: the base checkpoints carry no chat
-    # template and no tool-call surface. The GGUF alias is the same weights
-    # served by llama.cpp (flown aboard); a serve is not a model, and a run
-    # has to be able to name which one it got.
-    "gemma4-26b-a4b-nvfp4": {"tokenizer": "nvidia/Gemma-4-26B-A4B-NVFP4", "top_p": 0.95, "top_k": 64},
+    # Gemma 4, the family envelope (top_p 0.95, top_k 64) on every size,
+    # `-it` throughout: the base checkpoints carry no chat template and no
+    # tool-call surface. The GGUF alias is the same weights served by
+    # llama.cpp (flown aboard); a serve is not a model, and a run has to be
+    # able to name which one it got. The bench NVFP4 serve adds presence
+    # penalty 0.5, the setting its CityNav numbers were measured at: without
+    # it the 26B loops in its thinking, and over 1,000 episodes 0.25-1.5 left
+    # SR flat (.37-.39) while 0.5 cut p95 completion tokens 4,554 -> 3,337.
+    "gemma4-26b-a4b-nvfp4": {"tokenizer": "nvidia/Gemma-4-26B-A4B-NVFP4", "top_p": 0.95, "top_k": 64,
+                             "presence_penalty": 0.5},
     "gemma4-26b-a4b-gguf": {"tokenizer": "google/gemma-4-26B-A4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e4b": {"tokenizer": "google/gemma-4-E4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e2b": {"tokenizer": "google/gemma-4-E2B-it", "top_p": 0.95, "top_k": 64},
@@ -118,7 +122,8 @@ def effort(reasoning_effort: str | None = None) -> str | None:
 def sampling_kwargs(model_id: str, reasoning_effort: str | None = None) -> dict[str, Any]:
     """The request's sampling keys, flat at the top level (a hosted endpoint
     drops an ``extra_body`` object whole). A chat-template card sends
-    temperature 1.0, its ``top_p``/``top_k`` and ``enable_thinking``; an
+    temperature 1.0, its ``top_p``/``top_k`` (and ``presence_penalty`` where it
+    names one) and ``enable_thinking``; an
     OpenAI-wire card sends none of them (1.0 is that API's default and the
     only value its reasoning models take, and it thinks unasked).
 
@@ -131,6 +136,8 @@ def sampling_kwargs(model_id: str, reasoning_effort: str | None = None) -> dict[
     else:
         kwargs = {"temperature": 1.0, "top_p": card["top_p"], "top_k": card["top_k"],
                   "chat_template_kwargs": {"enable_thinking": True}}
+        if "presence_penalty" in card:
+            kwargs["presence_penalty"] = card["presence_penalty"]
     chosen = effort(reasoning_effort)
     if chosen:
         # ponytail: the request key is spelled `reasoning_effort` for every

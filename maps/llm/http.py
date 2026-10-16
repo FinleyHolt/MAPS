@@ -538,7 +538,8 @@ def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusa
 
 #: The sampling keys a refused request's summary names (a serve whose template
 #: carries no effort field answers 400 on one).
-_SAMPLING_KEYS = ("temperature", "top_p", "top_k", "max_tokens", "max_completion_tokens", "reasoning_effort")
+_SAMPLING_KEYS = ("temperature", "top_p", "top_k", "presence_penalty", "max_tokens", "max_completion_tokens",
+                  "reasoning_effort")
 
 
 def chat_completions_raw(

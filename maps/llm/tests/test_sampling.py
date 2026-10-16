@@ -12,11 +12,16 @@ def _no_ambient_sampling_env(monkeypatch) -> None:
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
 
 
-@pytest.mark.parametrize("model, top_k", [("qwen38-flash-next-nvfp4", 20), ("gemma4-26b-a4b-nvfp4", 64)])
-def test_the_envelope_is_the_cards_flat_top_level_keys(model, top_k) -> None:
-    # A key added or removed here changes every reasoner call; no penalty term.
+@pytest.mark.parametrize("model, top_k, extra", [
+    ("qwen38-flash-next-nvfp4", 20, {}),
+    ("gemma4-26b-a4b-nvfp4", 64, {"presence_penalty": 0.5}),
+    ("gemma4-26b-a4b-gguf", 64, {}),
+])
+def test_the_envelope_is_the_cards_flat_top_level_keys(model, top_k, extra) -> None:
+    # A key added or removed here changes every reasoner call.
     assert sampling_kwargs(model) == {
-        "temperature": 1.0, "top_p": 0.95, "top_k": top_k, "chat_template_kwargs": {"enable_thinking": True}}
+        "temperature": 1.0, "top_p": 0.95, "top_k": top_k, "chat_template_kwargs": {"enable_thinking": True},
+        **extra}
 
 
 def test_reasoning_effort_rides_as_the_string_given(monkeypatch) -> None:
