@@ -1352,6 +1352,9 @@ class MissionPython:
         return self._geom.distance(a, b)
 
     def _call_look(self, x, *, marks=None):
+        if isinstance(x, (list, tuple, set, frozenset)) and not x:
+            raise CodeError(
+                "look() got an empty list; there is nothing to look at.")
         # marks= names the rows whose identity bears on the decision; a
         # named road is drawn as its NAME, everything else outlines and
         # badges.

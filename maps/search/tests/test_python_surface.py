@@ -861,3 +861,10 @@ def test_a_none_mark_is_skipped_and_the_look_still_runs():
     from maps.search.tests.fakes import calls_of_block
     assert calls_of_block('look("prior_7", marks=[None])\n') == [
         ("crops", None, "prior_7", ["None"])]
+
+
+@pytest.mark.parametrize("code", ["look([])\n", "look(set())\n"])
+def test_look_at_an_empty_list_says_so(code):
+    err, _ = _refusal(code)
+    assert err.endswith(
+        "look() got an empty list; there is nothing to look at."), err
