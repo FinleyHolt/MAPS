@@ -146,8 +146,8 @@ def _read_chain(p: Path, seen: tuple[Path, ...] = ()) -> dict:
     base = data.pop("base", None)
     if base is None:
         return data
-    if not isinstance(base, str):
-        raise ValueError(f"{p}: base must name a config file")
+    if not isinstance(base, str) or not (p.parent / base).is_file():
+        raise ValueError(f"{p}: base {base!r} names no config file")
     return _merge(_read_chain(p.parent / base, (*seen, p)), data)
 
 

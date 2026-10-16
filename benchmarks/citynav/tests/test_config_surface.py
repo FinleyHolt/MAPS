@@ -99,6 +99,12 @@ def test_a_base_loop_is_refused(tmp_path):
         resolve_config(tmp_path / "a.yaml")
 
 
+@pytest.mark.parametrize("base", ["nowhere.yaml", "3"])
+def test_a_base_naming_no_file_is_refused_with_the_config(tmp_path, base):
+    with pytest.raises(ValueError, match=r"a\.yaml: base .* names no config file"):
+        resolve_config(_write(tmp_path, "a.yaml", f"base: {base}\n"))
+
+
 def test_each_withhold_config_is_the_control_less_its_own_part():
     control = resolve_config(REPO_ROOT / "configs/citynav.yaml")[0]
     shipped = sorted((REPO_ROOT / "configs/withhold").glob("*.yaml"))
