@@ -185,8 +185,8 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, resolve,
                   frame: tuple) -> tuple[list[dict], list[str], list[str]]:
     """One look's fids -> per-crop render requests off ``rows``: each crop
     centred on the place ``resolve`` names, badged as the target, with
-    ``marks`` (places or handles) drawn beside it, capped at the server's 16
-    images.
+    ``marks`` (places or handles) drawn beside it, capped at
+    :data:`LOOK_MAX_CROPS`.
     ``(requests, skipped_fids, ref_notes)``."""
     skipped: list[str] = []
     requests: list[dict] = []
