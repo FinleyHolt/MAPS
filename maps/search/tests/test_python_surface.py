@@ -283,6 +283,11 @@ def test_del_of_a_mission_call_nothing_is_bound_over_says_the_call_stays():
                    "mission call itself and stays."), err
 
 
+def test_a_move_name_an_earlier_block_bound_reads_as_its_variable():
+    _r, fr, _f, _d = drive([[run('go_to = find("car")\n')], [run('go_to[0]\n')], "done"])
+    assert "error" not in tool_results(fr)[1], tool_results(fr)[1]
+
+
 def test_math_is_loaded_and_import_math_works():
     reply, fr, _f, _d = drive([
         [run('import math\n'

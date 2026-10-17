@@ -236,10 +236,10 @@ class MissionNamespace(dict):
 # --------------------------------------------------------------------------
 
 
-def scan_block(code: str) -> ast.Module:
+def scan_block(code: str, bound=()) -> ast.Module:
     """Parse and vet one block, or raise :class:`CodeError` with the line
     and the reason (a syntax error echoes the offending source line with a
-    caret)."""
+    caret); ``bound`` holds the names earlier blocks bound."""
     try:
         tree = ast.parse(code)
         # Some syntax errors (a repeated keyword argument) are raised by the
@@ -265,8 +265,9 @@ def scan_block(code: str) -> ast.Module:
     loop_depth = 0
     at = 1                    # the line of the node being vetted
     called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
-    # A move's name the block binds itself is the model's variable (D58).
-    stored = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
+    # A move's name the model binds, here or earlier, is its variable (D58).
+    stored = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)
+              and isinstance(n.ctx, ast.Store)} | {m for m in _MOVE_CALLS if m in bound}
 
     def _walk(node):
         nonlocal loop_depth, at
@@ -1772,7 +1773,7 @@ class MissionPython:
         self._geom.clear()
         self._measure_calls = 0
         try:
-            tree = _instrument(scan_block(code))
+            tree = _instrument(scan_block(code, bound=self.ns))
             compiled = compile(tree, BLOCK_FILENAME, "exec")
         except CodeError as e:
             return self.env.say_err(out, f"nothing in this block ran -- {e}")
