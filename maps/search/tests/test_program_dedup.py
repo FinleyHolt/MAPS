@@ -100,3 +100,14 @@ def test_two_deduped_calls_in_a_block_serve_no_empty_results():
                          [run('a = find("car")\nb = find("car")\n')], "done"])
     again = tool_results(fr)[1]["result"]
     assert "results" not in again, again
+
+
+def test_the_dedup_note_holds_for_a_block_that_flies_after_it():
+    """The note speaks for the moment its call ran, so a flight later in the
+    same block does not make it false."""
+    _, fr, _, _ = drive([[run('cars = find("car")\n')],
+                         [run('cars = find("car")\ngo_to(cars[0])\n')], "done"])
+    again = tool_results(fr)[1]
+    assert "flown" in again, again
+    note = again["result"]["note"]
+    assert "nothing had entered the world between then and this call" in note, note

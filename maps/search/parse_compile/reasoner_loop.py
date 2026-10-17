@@ -156,19 +156,20 @@ def _summarise_exc(exc: BaseException) -> str:
 
 # The dedup hit serves a one-line REFERENCE, never a fresh payload (a full
 # re-render of an identical result is loop fuel). Every path that can mint a
-# row bumps the surface version, so "nothing has entered the world" is true
-# whenever it fires.
+# row bumps the surface version, so "nothing had entered the world" is true
+# of the moment it fires; the block may fly after it.
 _DEDUP_NOTE = (
-    "no new information since turn {turn}: nothing has entered the world "
-    "since then -- no flight{no_look_for} -- so every program returns what "
-    "it returned then, and this one is not re-rendered. Its handles stay "
-    "live for later ops. Change the world (fly{look_for}) or "
+    "no new information since turn {turn}: nothing had entered the world "
+    "between then and this call -- no flight{no_look_for} -- so this program "
+    "returned what it returned then, and it is not re-rendered. Its handles "
+    "stay live for later ops. Change the world (fly{look_for}) or "
     "ask something different."
 )
 _DEDUP_REPEAT_NOTE = (
-    "still nothing new, a {n} time: the world has not moved since that turn, "
-    "so no program can answer differently until something enters it -- a "
-    "flight folds new detections. Live now: {counts}{cols}."
+    "still nothing new, a {n} time: the world had not moved between that turn "
+    "and this call, so no program could answer differently -- only something "
+    "entering it can, and a flight folds new detections. Live at this call: "
+    "{counts}{cols}."
 )
 
 
