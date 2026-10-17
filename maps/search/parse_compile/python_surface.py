@@ -465,7 +465,10 @@ class _Cuts:
         if isinstance(self, Rows):
             name = self._mp.spelling(self)
         else:
-            mp = RowList._target(self)[0]
+            # An empty list carries no mission; the block that reads it runs
+            # in the mission's namespace.
+            mp = (RowList._target(self)[0]
+                  or getattr(sys._getframe(1).f_globals, "mp", None))
             name = mp and mp.name_of(self)
         # A remedy names the set as the model does, else binds it first.
         said, then = (name, "") if name else ("s", "bind it first (s = ...); ")

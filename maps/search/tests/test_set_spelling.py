@@ -245,3 +245,7 @@ def test_calling_a_set_names_the_call_it_was_bound_over():
     assert err.startswith("line 3: TypeError: intersection is a set"), err
     assert "del intersection gives the call back" in err, err
 
+
+def test_an_empty_list_the_model_bound_is_named_by_its_name():
+    err = _first_error('x = find("car").filter(lambda r: False)\nx.nearest')
+    assert "bind it first" not in err and "x.order(nearest=...)" in err, err
