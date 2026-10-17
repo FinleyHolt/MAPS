@@ -253,3 +253,10 @@ def test_a_policy_with_a_fixed_dial_stamps_the_effort_its_requests_carry(monkeyp
     assert fixed["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "none"
     rides = run_manifest.build_manifest(config_path=paths.REPO_ROOT / "configs/baselines/geonav.yaml", **common)
     assert rides["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "high"
+
+
+def test_a_set_reasoner_timeout_is_recorded(monkeypatch):
+    # The wait bounds a turn, so a run that sets it says so.
+    from benchmarks.citynav import run_manifest as RM
+    monkeypatch.setenv("SEARCH_REASONER_TIMEOUT_S", "240")
+    assert RM._audited_env()["SEARCH_REASONER_TIMEOUT_S"] == "240"
