@@ -536,13 +536,14 @@ def _bullet(flat: str) -> str:
         break_on_hyphens=False, break_long_words=False) + "\n"
 
 
-def _edit(text: str, edit: tuple[str, ...], turn: bool) -> str | None:
-    """``text`` with ``edit`` applied, or None when it names no text there."""
+def _edit(text: str, edit: tuple[str, ...], turn: bool) -> str:
+    """``text`` with ``edit`` applied; unchanged when it names no text there
+    (an earlier withhold may already have taken it)."""
     kind, *args = edit
     if kind == "cut":
         i = text.find(args[0])
         j = text.find(args[1], i + 1) if i >= 0 else -1
-        return text[:i] + text[j:] if 0 <= i < j else None
+        return text[:i] + text[j:] if 0 <= i < j else text
     units = _units(text, turn)
     for k, u in enumerate(units):
         if kind == "drop" and u.startswith(args[0]):
@@ -559,7 +560,7 @@ def _edit(text: str, edit: tuple[str, ...], turn: bool) -> str | None:
             return "".join(units)
     if kind == "sub" and not turn and text.count(args[0]) == 1:
         return text.replace(args[0], args[1])
-    return None
+    return text
 
 
 def _served(text: str, edits: dict, turn: bool) -> str:
@@ -567,8 +568,7 @@ def _served(text: str, edits: dict, turn: bool) -> str:
     for key in keys:
         if all(withheld(n) for n in key.split("+")):
             for e in edits[key]:
-                # An earlier withhold may already have taken this text.
-                text = _edit(text, e, turn) or text
+                text = _edit(text, e, turn)
     return text
 
 

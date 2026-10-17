@@ -310,7 +310,7 @@ def test_the_served_literals_hold_their_worked_block_and_every_edit_target(monke
             monkeypatch.setenv(W.ENV, name.replace("+", ","))
             text = prompts._served(literal, singles, turn) if "+" in name else literal
             for e in items:
-                assert prompts._edit(text, e, turn) not in (None, text), (name, e)
+                assert prompts._edit(text, e, turn) != text, (name, e)
                 units = prompts._units(text, turn)
                 if e[0] == "drop":
                     n = sum(u.startswith(e[1]) for u in units)
