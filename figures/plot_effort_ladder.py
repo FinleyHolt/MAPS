@@ -6,8 +6,9 @@ axis, median navigation error on the right, as two static SVGs.
 
 It defines no metric. ``arm_table.table`` is the canonical reader and hands
 back exactly the row a printed table shows, so the figure and the table
-agree. The title names the split and the subtitle the served model, arm
-count, episodes per arm and commit, all read off the run manifests.
+agree. The title names the split and the subtitle the served model, a
+baseline's policy, arm count, episodes per arm and commit, all read off the
+run manifests.
 
 Usage:
     python -m figures.plot_effort_ladder <root> [<root> ...] [--out-dir output/figures]
@@ -228,14 +229,15 @@ def main(argv: list[str]) -> int:
         missing = [r["label"] for r in rows if r.get(key) is None]
         if missing:
             raise SystemExit(f"plot_effort_ladder: {key} absent for {missing}")
-    # One ladder is one arm swept over effort: two policies or withhold sets
-    # would draw as one line.
-    cfgs = [yaml.safe_load(_rows.read_manifest(Path(r["root"])).get("config_yaml") or "{}") or {}
-            for r in rows]
-    arms = {(str(c.get("policy") or ""), tuple(sorted(c.get("withhold") or ()))) for c in cfgs}
+    # One ladder is one arm swept over effort: two models, policies or
+    # withhold sets would draw as one line.
+    mans = [_rows.read_manifest(Path(r["root"])) for r in rows]
+    cfgs = [yaml.safe_load(m.get("config_yaml") or "{}") or {} for m in mans]
+    arms = {(str(m.get("served_model") or ""), str(c.get("policy") or ""),
+             tuple(sorted(c.get("withhold") or ()))) for m, c in zip(mans, cfgs)}
     if len(arms) > 1:
-        raise SystemExit(f"plot_effort_ladder: the roots differ in policy or withhold {sorted(arms)}; "
-                         "plot one arm per ladder")
+        raise SystemExit(f"plot_effort_ladder: the roots differ in model, policy or withhold "
+                         f"{sorted(arms)}; plot one arm per ladder")
 
     title, sub = heading(rows)
     splits = sorted({str(_rows.read_manifest(Path(r["root"])).get("split") or "") for r in rows} - {""})

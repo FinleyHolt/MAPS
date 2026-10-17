@@ -174,3 +174,10 @@ def test_a_ladder_refuses_roots_of_two_policies_or_withholds(tmp_path):
         with pytest.raises(SystemExit, match="policy or withhold"):
             plot_effort_ladder.main([*map(str, roots), "--out-dir", str(tmp_path / f"f{i}")])
         assert not (tmp_path / f"f{i}").exists()
+
+
+def test_a_ladder_refuses_roots_of_two_served_models(tmp_path):
+    roots = [_arm(tmp_path, f"e{e}", "inkling-small", e, [1, 0, 0]) for e in ("0.0", "0.5")]
+    roots.append(_arm(tmp_path, "e0.9", "qwen38-flash-next-nvfp4", "0.9", [1, 0, 0]))
+    with pytest.raises(SystemExit, match="differ in model"):
+        plot_effort_ladder.main([*map(str, roots), "--out-dir", str(tmp_path / "fig")])
