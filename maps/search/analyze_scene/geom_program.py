@@ -11,6 +11,7 @@ union).
 from __future__ import annotations
 
 import re
+import threading
 from collections import Counter
 from itertools import islice
 
@@ -74,9 +75,10 @@ class ProgramError(Exception):
 _SAY_A_FID = "Say a fid off a served row."
 
 
-class _FindMemo:
+class _FindMemo(threading.local):
     """A find's per-query work and word rarity for the surface lists it was
-    built on; ``lists`` pins them so their ids cannot be reused."""
+    built on; ``lists`` pins them so their ids cannot be reused. Each thread
+    holds its own, so two missions in one process never share one."""
 
     def __init__(self):
         self.reset(None, None)

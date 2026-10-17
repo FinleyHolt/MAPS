@@ -110,7 +110,7 @@ def _is_place_list(v) -> bool:
 # (everything else in a place position is a NAME to ground), a staged
 # viewpoint, a coverage stop, a terminus, and a result handle with or without
 # its window.
-_FID_N = "[0-9]{1,4}"
+_FID_N = "[0-9]+"
 FID_RE = re.compile(rf"(?:prior_|detected_|stop_|end_|v){_FID_N}",
                     re.IGNORECASE)
 VIEWPOINT_RE = re.compile(rf"v{_FID_N}")

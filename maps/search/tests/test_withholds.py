@@ -28,10 +28,12 @@ from maps.search.tests.fakes import (
     tool_results,
 )
 
-FLOWN_SHA256 = {
-    "oryx_orx32_25mm_nadir": "b977e7290c6652029f9d57c63c358ee670ec541549511af289357310627a0dd7",
-    "nadir_1008_90": "9dfc2661077dcef616f0f78451bd08a0242098aa1d7cf8aca322b70e314471ed",
-    None: "400bc4dbc4ed3459c7673e9a91ec5d3a2a39bee715a18ed6771e2245467bc024",
+#: The default arm's dump: the flown system turn and tools, plus the surface's
+#: signature lines.
+DEFAULT_SHA256 = {
+    "oryx_orx32_25mm_nadir": "c7f106d54a07e16291830bc8f95e7031aa48f733efa53d670634887d7f31ca71",
+    "nadir_1008_90": "8c624247e7d22cbd157871c62eea976a50cb7677cb5a0c642051aab2b5833b0d",
+    None: "ea5da6466ec824d3cbac51fb5efd90d7c1b37941f051784e2c20bead3c7f8605",
 }
 
 
@@ -56,10 +58,10 @@ def _diff(a: str, b: str) -> tuple[int, int]:
             sum(ln.startswith("+ ") for ln in lines))
 
 
-@pytest.mark.parametrize("sensor", list(FLOWN_SHA256))
+@pytest.mark.parametrize("sensor", list(DEFAULT_SHA256))
 def test_no_withhold_serves_the_flown_contract(monkeypatch, sensor):
     text = _dump(monkeypatch, "", sensor)
-    assert hashlib.sha256(text.encode()).hexdigest() == FLOWN_SHA256[sensor]
+    assert hashlib.sha256(text.encode()).hexdigest() == DEFAULT_SHA256[sensor]
     assert prompts.served_doc() == prompts.CODE_DOC
 
 

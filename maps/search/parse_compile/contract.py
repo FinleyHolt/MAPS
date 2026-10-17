@@ -56,8 +56,10 @@ def surface_lines() -> list[str]:
         MissionPython, Rows, served_calls)
 
     def _params(fn) -> str:
-        return ", ".join(str(p) for n, p in
-                         inspect.signature(fn).parameters.items() if n != "self")
+        sig = inspect.signature(fn)
+        return str(sig.replace(parameters=[p for n, p in sig.parameters.items()
+                                           if n != "self"],
+                               return_annotation=sig.empty))[1:-1]
 
     out = [f"  {call}({_params(getattr(MissionPython, f'_call_{call}'))})"
            for call in served_calls()]

@@ -1052,10 +1052,15 @@ class MissionPython:
         ``_call_*``, with signature TypeErrors re-said without the internal
         name and with the keywords that DO exist."""
         fn = getattr(self, f"_call_{name}")
+        params = inspect.signature(fn).parameters.values()
         kws = ", ".join(
-            f"{p.name}=" for p in inspect.signature(fn).parameters.values()
+            f"{p.name}=" for p in params
             if p.kind is p.KEYWORD_ONLY
             or p.default is not p.empty) or "none"
+        # CPython counts the bound self in a positional-count error.
+        n_pos = sum(p.kind is p.POSITIONAL_OR_KEYWORD for p in params)
+        takes = (f"{name}() takes {n_pos or 'no'} positional "
+                 f"argument{'' if n_pos == 1 else 's'}")
 
         def call(*args, **kwargs):
             try:
@@ -1064,6 +1069,8 @@ class MissionPython:
                 if "_call_" not in str(e):
                     raise               # a real TypeError from inside
                 msg = re.sub(r"\S*_call_(\w+)\(\)", r"\1()", str(e))
+                if re.search(r"positional arguments? but \d+ (?:was|were) given", msg):
+                    msg = takes
                 raise CodeError(
                     f"{msg}. {name} keywords: {kws}") from None
 
