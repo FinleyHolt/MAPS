@@ -4,6 +4,7 @@ both."""
 
 from __future__ import annotations
 
+import re
 import textwrap
 
 from maps.search.withhold import WITHHOLDS, withheld
@@ -287,11 +288,13 @@ before it ran and stands. Names persist for the whole mission.
 # Each bench withhold's edits to the served text (maps.search.withhold). An edit is
 # ("sub", old, new): replace text written once; ("drop", opening): remove the
 # one entry that opens so; ("cut", start, end): remove from start up to the
-# next end.
+# next end; ("sentence", words): remove the sentence holding words from its
+# entry, and the entry when nothing is left.
 # In the description an entry is a line; in the system turn it is a bullet,
 # matched on its words joined by single spaces and re-wrapped at 72 columns
-# when an edit changes it. With nothing withheld the literals are served as
-# written.
+# when an edit changes it. A key naming several withholds ("library+map")
+# holds the edits their combination needs, applied after every single one.
+# With nothing withheld the literals are served as written.
 _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
     "prior": [
         ("sub", " the PRIOR map, plus whatever flights have detected. Nothing is"
@@ -450,6 +453,18 @@ def _flat(unit: str) -> str:
     return " ".join(unit.split())
 
 
+# A sentence ends on . ! or ? and the next opens on a capital, a quote, a
+# paren, or a name spelled as code.
+_SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"(]|[a-z]\w*[_(.])")
+
+
+def _bullet(flat: str) -> str:
+    """A turn bullet's words re-wrapped at 72 columns."""
+    return textwrap.fill(
+        flat[2:], 72, initial_indent="- ", subsequent_indent="  ",
+        break_on_hyphens=False, break_long_words=False) + "\n"
+
+
 def _edit(text: str, edit: tuple[str, ...], turn: bool) -> str | None:
     """``text`` with ``edit`` applied, or None when it names no text there."""
     kind, *args = edit
@@ -461,11 +476,15 @@ def _edit(text: str, edit: tuple[str, ...], turn: bool) -> str | None:
     for k, u in enumerate(units):
         if kind == "drop" and u.startswith(args[0]):
             return "".join(units[:k] + units[k + 1:])
-        if kind == "sub" and turn and u.startswith("- ") and args[0] in _flat(u):
-            flat = _flat(u).replace(args[0], args[1])
-            units[k] = textwrap.fill(
-                flat[2:], 72, initial_indent="- ", subsequent_indent="  ",
-                break_on_hyphens=False, break_long_words=False) + "\n"
+        held = (u.startswith("- ") and args[0] in _flat(u)) if turn else args[0] in u
+        if kind == "sub" and turn and held:
+            units[k] = _bullet(_flat(u).replace(args[0], args[1]))
+            return "".join(units)
+        if kind == "sentence" and held:
+            body = _flat(u)[2:] if turn else u.strip()
+            kept = " ".join(s for s in _SENTENCE.split(body) if args[0] not in s)
+            units[k] = ("" if not kept else _bullet("- " + kept) if turn
+                        else u[:len(u) - len(u.lstrip())] + kept + "\n")
             return "".join(units)
     if kind == "sub" and not turn and text.count(args[0]) == 1:
         return text.replace(args[0], args[1])
@@ -473,9 +492,10 @@ def _edit(text: str, edit: tuple[str, ...], turn: bool) -> str | None:
 
 
 def _served(text: str, edits: dict, turn: bool) -> str:
-    for name in WITHHOLDS:
-        if name in edits and withheld(name):
-            for e in edits[name]:
+    keys = [*(n for n in WITHHOLDS if n in edits), *(k for k in edits if "+" in k)]
+    for key in keys:
+        if all(withheld(n) for n in key.split("+")):
+            for e in edits[key]:
                 # An earlier withhold may already have taken this text.
                 text = _edit(text, e, turn) or text
     return text

@@ -263,9 +263,10 @@ def test_a_prior_withhold_flies_to_a_point_and_serves_no_prior_row(monkeypatch):
     assert [f["target_fid"] for f in flights] == ["[30, 30]", "[40, 40]", "[50, 50]"], flights
 
 
-def test_the_served_literals_hold_their_worked_block_and_every_edit_target():
+def test_the_served_literals_hold_their_worked_block_and_every_edit_target(monkeypatch):
     """The worked block in CODE_DOC scans on the real surface and runs the
-    chain it teaches; every withhold edit names text its literal carries once."""
+    chain it teaches; every withhold edit names text its literal carries once,
+    and a combination's edit names text its singles serve once."""
     import ast
 
     worked = "\n".join(
@@ -287,17 +288,22 @@ def test_the_served_literals_hold_their_worked_block_and_every_edit_target():
 
     from maps.perception.geometry.sensor_spec import resolve_sensor
 
-    for edits, text, turn in ((prompts._DOC_EDITS, prompts.CODE_DOC, False),
-                              (prompts._TURN_EDITS, prompts.CODE_SYSTEM_PROMPT, True),
-                              (prompts._SENSOR_EDITS, resolve_sensor("nadir_1008_90").description, False)):
+    for edits, literal, turn in ((prompts._DOC_EDITS, prompts.CODE_DOC, False),
+                                 (prompts._TURN_EDITS, prompts.CODE_SYSTEM_PROMPT, True),
+                                 (prompts._SENSOR_EDITS, resolve_sensor("nadir_1008_90").description,
+                                  False)):
+        singles = {k: v for k, v in edits.items() if "+" not in k}
         for name, items in edits.items():
-            assert name in W.WITHHOLDS, name
+            assert set(name.split("+")) <= W.WITHHOLDS.keys(), name
+            monkeypatch.setenv(W.ENV, name.replace("+", ","))
+            text = prompts._served(literal, singles, turn) if "+" in name else literal
             for e in items:
                 assert prompts._edit(text, e, turn) not in (None, text), (name, e)
+                units = prompts._units(text, turn)
                 if e[0] == "drop":
-                    n = sum(u.startswith(e[1]) for u in prompts._units(text, turn))
-                elif e[0] == "sub" and turn:
-                    n = sum(e[1] in prompts._flat(u) for u in prompts._units(text, turn))
+                    n = sum(u.startswith(e[1]) for u in units)
+                elif e[0] == "sentence" or (e[0] == "sub" and turn):
+                    n = sum(e[1] in (prompts._flat(u) if turn else u) for u in units)
                 else:
                     n = 1 if e[0] == "cut" else text.count(e[1])
                 assert n == 1, (name, e)
