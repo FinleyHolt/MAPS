@@ -1126,6 +1126,7 @@ class MissionPython:
         # per-block state
         self._out: dict = {}
         self._code = ""
+        self._nodes: dict | None = None  # the block's calls by position
         self._block_codes: set = set()
         self._printed = ""
         self._lines = 0
@@ -1217,11 +1218,15 @@ class MissionPython:
             fr = fr.f_back
         if fr is None:
             return None
-        at = inspect.getframeinfo(fr, context=0).positions
-        return next((node for node in ast.walk(ast.parse(self._code))
-                     if isinstance(node, (ast.Call, ast.Subscript))
-                     and (node.lineno, node.end_lineno, node.col_offset,
-                          node.end_col_offset) == tuple(at)), None)
+        if self._nodes is None:
+            # the model's source, parsed once a block; the compiled tree
+            # is instrumented
+            self._nodes = {}
+            for n in ast.walk(ast.parse(self._code)):
+                if isinstance(n, (ast.Call, ast.Subscript)):
+                    self._nodes.setdefault((n.lineno, n.end_lineno, n.col_offset,
+                                            n.end_col_offset), n)
+        return self._nodes.get(tuple(inspect.getframeinfo(fr, context=0).positions))
 
     def held_refs(self) -> set:
         """The executor refs the namespace's sets hold (a window holds its
@@ -1846,6 +1851,7 @@ class MissionPython:
     def run_block(self, code: str) -> dict:
         self._out = out = {}
         self._code = code
+        self._nodes = None
         self._printed = ""
         self._lines = 0
         self._block_shown = set()
