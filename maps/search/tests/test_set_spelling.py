@@ -167,3 +167,17 @@ def test_an_empty_set_to_explore_is_refused_under_its_spelling(code):
 def test_stand_at_a_set_is_refused_under_its_spelling():
     _, out = _served('cars = find("car")\nstand(at=cars)\n')
     assert "at=cars[0]" in out["error"], out
+
+
+def test_a_set_passed_as_a_predicate_or_key_gets_the_lambda_remedy():
+    # A set is callable since D58 (calling one says so); as filter's or
+    # order's first argument it still gets the remedy that names a lambda.
+    _, out = _served('cars = find("car")\nroads = find("depot")\ncars.filter(roads)\n')
+    assert "rows.filter(lambda r:" in out["error"], out
+    _, out = _served('cars = find("car")\nroads = find("depot")\ncars.order(roads)\n')
+    assert "rows.order(lambda r:" in out["error"], out
+
+
+def test_a_move_name_the_block_binds_reads_as_its_variable():
+    _, out = _served('explore = find("car")\nprint(len(explore))\n')
+    assert "error" not in out, out

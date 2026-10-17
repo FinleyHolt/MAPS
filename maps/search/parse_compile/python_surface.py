@@ -260,6 +260,8 @@ def scan_block(code: str) -> ast.Module:
     loop_depth = 0
     at = 1                    # the line of the node being vetted
     called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
+    # A move's name the block binds itself is the model's variable (D58).
+    stored = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
 
     def _walk(node):
         nonlocal loop_depth, at
@@ -282,7 +284,8 @@ def scan_block(code: str) -> ast.Module:
             raise CodeError(f"no underscore attributes (.{node.attr})")
         if isinstance(node, ast.Name):
             if node.id in _MOVE_CALLS and isinstance(node.ctx, ast.Load) \
-                    and id(node) not in called and not withheld("loop"):
+                    and id(node) not in called and node.id not in stored \
+                    and not withheld("loop"):
                 raise CodeError(
                     f"{node.id} is a move; call it once, {node.id}(<place>), "
                     "outside any loop or function.")
@@ -484,7 +487,7 @@ class _Cuts:
         if any(v is not None for v in kw.values()):
             raise CodeError(
                 f"filter takes a predicate OR {_FILTER_SAY}, not both")
-        if not callable(pred):
+        if isinstance(pred, _Cuts) or not callable(pred):
             raise CodeError(
                 f"filter's first argument is a predicate and {pred!r} "
                 "is not callable: rows.filter(lambda r: r.distance(x) <= 25)")
@@ -516,7 +519,7 @@ class _Cuts:
         if direction is not None:
             _refuse_reversed_direction(direction, reverse)
             return self._sorted(_direction_key(direction), False)
-        if not callable(key):
+        if isinstance(key, _Cuts) or not callable(key):
             raise CodeError(
                 f"order's first argument is a key function and {key!r} "
                 "is not callable: rows.order(lambda r: r.distance(x))")
