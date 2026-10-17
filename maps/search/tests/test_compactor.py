@@ -57,7 +57,7 @@ def _dump(tcid, fids, filler=0) -> dict:
     head = {"len": len(fids), "fids": list(fids), "rows": _grid(fids, filler),
             "legend": "distance to X: metres", "shown": "showing the first 2"}
     return {"role": "tool", "tool_call_id": tcid, "name": "run", "content": json.dumps(
-        {"said": f"cars  # {tcid}", "result": {"results": {"cars": head}}})}
+        {"result": {"results": {"cars": head}}})}
 
 
 def _head() -> list[dict]:
@@ -188,7 +188,6 @@ def test_stale_dumps_clear_to_fids_with_their_colors_and_the_live_dump_stays():
     assert "legend" not in stale and "shown" not in stale
     assert stale["colors"] == "a1=red?; a2=red?"
     assert "show the handle again" in stale["hint"] and "census" not in stale["hint"]
-    assert json.loads(out[3]["content"])["said"] == "cars  # a"
     assert out[5] == msgs[5]                   # the live view
 
 
@@ -249,7 +248,7 @@ def test_the_invariant_sweep_catches_orphans_reorders_and_unanswered_calls():
 
 def test_only_a_served_dump_is_selected_and_degraded():
     error = {"role": "tool", "tool_call_id": "e", "content": json.dumps(
-        {"said": "bad()", "error": "line 1: no such call"})}
+        {"error": "line 1: no such call"})}
     msgs = _head() + _units(2) + [_call(["e"]), error]
     assert C._dump_result_indices(msgs) == [3, 5]   # the trailing error is no dump
     assert C._degrade_tool_result_content(error["content"]) == (None, False)

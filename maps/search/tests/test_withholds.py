@@ -506,9 +506,8 @@ def test_a_library_withhold_serves_no_library_name_on_the_paths_a_block_reaches(
               [run('go_to(["prior_7", "prior_1"])\n')],
               [run('for f in ["prior_7"]:\n    go_to(f)\n')],
               [run('go_to("prior_7")\n')], "done"]
-    def answers(fr):    # every byte served back but the block's own echo
-        return json.dumps([{k: v for k, v in r.items() if k != "said"}
-                           for r in tool_results(fr)])
+    def answers(fr):    # every byte served back
+        return json.dumps(tool_results(fr))
 
     assert _LIBRARY_SPELLED.search(answers(drive(script)[1])), "the flown arm names them"
     monkeypatch.setenv(W.ENV, "library")
