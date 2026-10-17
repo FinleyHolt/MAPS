@@ -150,7 +150,8 @@ _LOOP_MOVE_MSG = (
 # Each act's place slot as the model spells it, by the act's ``why``.
 _SITE_SLOT = {"map": "around=", "boost": "at=", "stage": "at=", "facing": "facing=",
               "crops": "each look() place", "marks": "each mark",
-              "move": "go_to()", "cover": "each explore() place"}
+              "move": "go_to()", "cover": "each explore() place",
+              "anchor": "each place a relation names"}
 
 
 class _Stop(Exception):
@@ -1177,6 +1178,9 @@ class MissionPython:
         why: dict = {}
         for n, w in sites:
             if isinstance(n, _Name):
+                if not n.strip():
+                    raise CodeError(
+                        f"{_SITE_SLOT[w]} got an empty name, which is no place.")
                 why.setdefault(n, w)
         got = self.env.ground(why)
         if "error" in got:
@@ -1217,11 +1221,8 @@ class MissionPython:
                        "-- r2 = intersection(\"A Road\", \"B St\") then "
                        "go_to(r2[0])."))
             return format_xy_token(float(pt[0]), float(pt[1]))
-        if isinstance(v, str) and not v.strip():
-            if why == "marks":
-                return v            # a blank mark marks nothing, as None does
-            raise CodeError(
-                f"{_SITE_SLOT[why]} got an empty name, which is no place.")
+        if isinstance(v, str) and not v.strip() and why == "marks":
+            return v                # a blank mark marks nothing, as None does
         if isinstance(v, str) and not fid_like(v):
             return _Name(v)
         return str(_plain(v))

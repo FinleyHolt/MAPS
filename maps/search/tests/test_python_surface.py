@@ -916,7 +916,10 @@ def test_a_fid_name_with_no_row_on_the_surface_is_refused():
 
 @pytest.mark.parametrize("code, slot", [
     ('go_to("")\n', "go_to()"), ('explore(" ")\n', "each explore() place"),
-    ('look("")\n', "each look() place")])
+    ('look("")\n', "each look() place"),
+    ('find("car").order(nearest="")\n', "each place a relation names"),
+    ('find("car", within=" ")\n', "each place a relation names"),
+    ('find("car", north_of="")\n', "each place a relation names")])
 def test_an_empty_name_is_no_place(code, slot):
     err, _ = _refusal(code)
     assert err.endswith(f"{slot} got an empty name, which is no place."), err
