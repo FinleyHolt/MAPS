@@ -338,3 +338,9 @@ def test_a_list_holding_a_non_row_finds_its_mission_on_its_rows():
 ])
 def test_a_set_methods_signature_error_counts_no_self_and_names_no_class(code, want):
     assert _first_error(f'cars = find("car")\n{code}') == f"line 2: {want}"
+
+
+def test_a_type_error_inside_a_predicate_is_served_as_its_own():
+    # The model's own TypeError is not a signature error: no keyword tail.
+    err = _first_error('s = find("car")\ns.filter(lambda r: r + 1)\n')
+    assert "unsupported operand type(s) for +" in err and "keywords" not in err, err
