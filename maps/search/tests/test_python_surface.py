@@ -922,6 +922,13 @@ def test_an_empty_name_is_no_place(code, slot):
     assert err.endswith(f"{slot} got an empty name, which is no place."), err
 
 
+@pytest.mark.parametrize("mark", ['""', '" "'])
+def test_a_blank_mark_is_skipped_as_a_none_mark_is(mark):
+    from maps.search.tests.fakes import calls_of_block
+    assert calls_of_block(f'look("prior_7", marks=[{mark}, "prior_1"])\n') == [
+        ("crops", None, "prior_7", [eval(mark), "prior_1"])]
+
+
 def test_none_inside_a_move_list_is_no_place():
     err, _ = _refusal('explore(["prior_1", None])\n')
     assert err.endswith("each explore() place got None, which is no place: "
