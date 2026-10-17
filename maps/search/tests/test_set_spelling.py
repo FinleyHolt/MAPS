@@ -279,3 +279,9 @@ def test_a_list_of_rows_indexes_and_slices_as_a_list():
 def test_an_empty_list_of_rows_in_a_one_place_slot_holds_0_rows(slot):
     err = _first_error(f'x = find("car").filter(lambda r: False)\n{slot}')
     assert err.endswith("takes ONE place and that list holds 0 row(s)."), err
+
+
+@pytest.mark.parametrize("code", ['cars = find("car")\nsorted([1, 2], key=cars)',
+                                  'cars = find("car")\nmax([1, 2], key=cars)'])
+def test_a_set_called_by_a_builtin_is_named_by_its_own_name(code):
+    assert _first_error(code).startswith("line 2: TypeError: cars is a set of 2 row(s)")

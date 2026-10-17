@@ -792,10 +792,12 @@ class Rows(_Cuts):
         return len(self._rows())
 
     def __call__(self, *args, **kwargs):
-        # A set is no call; a name bound over a mission call says so.
+        # A set is no call; a name bound over a mission call says so. A
+        # builtin that calls it (sorted(key=s)) is not its name.
         node = self._mp.running_node()
         name = (node.func.id if isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name) else
+                and isinstance(node.func, ast.Name)
+                and dict.get(self._mp.ns, node.func.id) is self else
                 self._mp.spelling(self) or UNNAMED)
         raise TypeError(
             f"{name} is a set of {len(self)} row(s), not a call"
