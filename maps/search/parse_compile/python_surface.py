@@ -449,7 +449,7 @@ class _Cuts:
 
     def __getattribute__(self, k):
         if k in _LIBRARY_ATTRS and withheld("library"):
-            raise AttributeError    # __getattr__ says why
+            raise AttributeError    # __getattr__ answers as for a name no row has
         return object.__getattribute__(self, k)
 
     def __getattr__(self, k: str):
