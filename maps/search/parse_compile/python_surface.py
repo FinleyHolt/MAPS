@@ -496,6 +496,27 @@ class _Cuts:
             f"{name or 'that'} is a set of {len(self)} row(s) and carries no "
             f"{k!r}; {whose}")
 
+    def __call__(self, *args, **kwargs):
+        # A set or a row is no call; a name bound over a mission call says
+        # so. A builtin that calls it (sorted(key=s)) is not its name.
+        mp = self._mission()
+        node = mp and mp.running_node()
+        name = (node.func.id if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and dict.get(mp.ns, node.func.id) is self else
+                (mp.spelling(self) if isinstance(self, Rows)
+                 else mp and mp.name_of(self)) or UNNAMED)
+        what = "a row" if isinstance(self, Row) else f"a set of {len(self)} row(s)"
+        raise TypeError(f"{name} is {what}, not a call"
+                        + (f": {_shadows(name)}" if name in served_calls() else "."))
+
+    def _mission(self):
+        """The mission the rows came from; rows that carry none (an empty
+        list) are read by a block (two frames up) running in the mission's
+        namespace."""
+        return (self._target()[0]
+                or getattr(sys._getframe(2).f_globals, "mp", None))
+
     def _in_hand(self):
         return self
 
@@ -753,13 +774,6 @@ class RowList(_Cuts, list):
                 return mp, list(self)
         return None, None
 
-    def _mission(self):
-        """The mission the rows came from; an empty list carries none, and
-        the block reading it (two frames up) runs in the mission's
-        namespace."""
-        return (self._target()[0]
-                or getattr(sys._getframe(2).f_globals, "mp", None))
-
     def __getitem__(self, i):
         try:
             return list.__getitem__(self, i)
@@ -802,17 +816,8 @@ class Rows(_Cuts):
     def __len__(self):
         return len(self._rows())
 
-    def __call__(self, *args, **kwargs):
-        # A set is no call; a name bound over a mission call says so. A
-        # builtin that calls it (sorted(key=s)) is not its name.
-        node = self._mp.running_node()
-        name = (node.func.id if isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and dict.get(self._mp.ns, node.func.id) is self else
-                self._mp.spelling(self) or UNNAMED)
-        raise TypeError(
-            f"{name} is a set of {len(self)} row(s), not a call"
-            + (f": {_shadows(name)}" if name in served_calls() else "."))
+    def _mission(self):
+        return self._mp
 
     def _tied(self) -> bool:
         return bool(not self._spec and self._mp.env.tied_of_ref(self._ref))

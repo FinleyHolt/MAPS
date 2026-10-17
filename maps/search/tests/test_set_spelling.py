@@ -306,3 +306,16 @@ def test_an_unknown_order_keyword_is_refused_naming_orders_keywords(held):
     assert _first_error(f'cars = {held}\ncars.order(distance="prior_7")') == (
         "line 2: order takes key=/nearest=/color=/direction=/reverse=; "
         "distance= is none of them.")
+
+
+@pytest.mark.parametrize("held, what", [
+    ('find("car").filter(lambda r: True)', "a set of 2 row(s)"),
+    ('find("car").filter(lambda r: False)', "a set of 0 row(s)"),
+    ('find("car")[0]', "a row")])
+def test_a_list_or_a_row_called_says_what_it_is(held, what):
+    assert _first_error(f'intersection = {held}\nintersection("a", "b")') == (
+        f"line 2: TypeError: intersection is {what}, not a call: binding "
+        "intersection shadows the intersection() call; del intersection "
+        "gives the call back.")
+    assert _first_error(f'x = {held}\nsorted([1, 2], key=x)') == (
+        f"line 2: TypeError: x is {what}, not a call.")

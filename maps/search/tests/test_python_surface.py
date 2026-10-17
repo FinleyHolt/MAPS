@@ -267,7 +267,6 @@ def test_calling_a_name_bound_over_a_mission_call_says_how_to_get_it_back():
 
 @pytest.mark.parametrize("code, kind", [
     ('intersection = "A x B"\nintersection("A Road", "B St")\n', "str"),
-    ('look = find("car")[0]\nlook(look)\n', "Row"),
     ('go_to = 3\ngo_to("prior_7")\n', "int")])
 def test_calling_any_value_bound_over_a_mission_call_says_how_to_get_it_back(code, kind):
     err, flights = _refusal(code)
