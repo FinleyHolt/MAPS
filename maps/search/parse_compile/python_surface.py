@@ -341,15 +341,16 @@ def _instrument(tree: ast.Module) -> ast.Module:
 
 
 def looks_like_code(text: str) -> bool:
-    """A plain reply that is really a block: it parses AND calls the
-    library, which separates code written outside the tool from prose that
+    """A plain reply that is really a block: it parses AND calls a call
+    this run binds, which separates code written outside the tool from prose that
     happens to parse."""
     try:
         tree = ast.parse(text)
     except SyntaxError:
         return False
+    calls = served_calls()
     return any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-               and n.func.id in _LIBRARY_CALLS for n in ast.walk(tree))
+               and n.func.id in calls for n in ast.walk(tree))
 
 
 # --------------------------------------------------------------------------

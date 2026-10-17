@@ -538,3 +538,9 @@ def test_no_withheld_name_survives_a_combination(monkeypatch, names):
     for n in names.split(","):
         if n in _COMBO_SPELLED:
             assert not _COMBO_SPELLED[n].search(served), (n, _COMBO_SPELLED[n].search(served))
+
+
+def test_a_withheld_call_in_a_plain_reply_is_not_code(monkeypatch):
+    monkeypatch.setenv(W.ENV, "look_for")
+    assert ps.looks_like_code('go_to("prior_7")')
+    assert not ps.looks_like_code('look_for("car")')
