@@ -465,10 +465,7 @@ class _Cuts:
         if isinstance(self, Rows):
             name = self._mp.spelling(self)
         else:
-            # An empty list carries no mission; the block that reads it runs
-            # in the mission's namespace.
-            mp = (RowList._target(self)[0]
-                  or getattr(sys._getframe(1).f_globals, "mp", None))
+            mp = self._mission()
             name = mp and mp.name_of(self)
         # A remedy names the set as the model does, else binds it first.
         said, then = (name, "") if name else ("s", "bind it first (s = ...); ")
@@ -745,6 +742,26 @@ class RowList(_Cuts, list):
                 return mp, list(self)
         return None, None
 
+    def _mission(self):
+        """The mission the rows came from; an empty list carries none, and
+        the block reading it (two frames up) runs in the mission's
+        namespace."""
+        return (self._target()[0]
+                or getattr(sys._getframe(2).f_globals, "mp", None))
+
+    def __getitem__(self, i):
+        try:
+            return list.__getitem__(self, i)
+        except (IndexError, TypeError) as e:
+            past_end = isinstance(e, IndexError)
+        mp = self._mission()
+        name = (mp and (mp.name_of(self) or mp.call_arg(None))) or UNNAMED
+        if past_end:
+            raise CodeError(f"{name}[{i}] did not bind: {name} holds "
+                            f"{len(self)} row(s)."
+                            + ("" if self else " There is no row to index."))
+        raise _not_an_int(name, i, len(self))
+
 
 class Rows(_Cuts):
     """A result set behind an executor ref: an index gives a :class:`Row`,
@@ -820,12 +837,7 @@ class Rows(_Cuts):
                 lo, hi = s.start, s.stop
             return Rows(self._ref, self._mp, f"[{lo}:{hi}]")
         if not isinstance(i, int):
-            name = self._mp.said_name(self, None)
-            raise CodeError(
-                f"{name}[{i!r}] did not bind: {name} is a set of rows, "
-                "indexed by an int position"
-                + (f"; a column is read off one row: {name}[0][{i!r}]."
-                   if isinstance(i, str) and len(self) else "."))
+            raise _not_an_int(self._mp.said_name(self, None), i, len(self))
         rows = self._rows()
         if not (-len(rows) <= i < len(rows)):
             name = self._mp.said_name(self, None)
@@ -950,6 +962,15 @@ def _index_it(name: str | None) -> str:
     """The remedy's opening for a set refused where one place goes: a set
     the model has no name for is bound first, as ``s``."""
     return "Index it" if name else "Bind it first (s = ...), then index it"
+
+
+def _not_an_int(name: str, i, held: int) -> CodeError:
+    """The refusal of a set indexed by a non-int; a str is a column, read
+    off one row."""
+    return CodeError(
+        f"{name}[{i!r}] did not bind: {name} is a set of rows, indexed by an "
+        "int position" + (f"; a column is read off one row: {name}[0][{i!r}]."
+                          if isinstance(i, str) and held else "."))
 
 
 def _one_row(x, said: str) -> str | None:

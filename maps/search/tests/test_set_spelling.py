@@ -249,3 +249,27 @@ def test_calling_a_set_names_the_call_it_was_bound_over():
 def test_an_empty_list_the_model_bound_is_named_by_its_name():
     err = _first_error('x = find("car").filter(lambda r: False)\nx.nearest')
     assert "bind it first" not in err and "x.order(nearest=...)" in err, err
+
+
+@pytest.mark.parametrize("code, want", [
+    ('x = find("car").filter(lambda r: False)\nx[0]',
+     "line 2: x[0] did not bind: x holds 0 row(s). There is no row to index."),
+    ('x = find("car").filter(lambda r: True)\nx[5]',
+     "line 2: x[5] did not bind: x holds 2 row(s)."),
+    ('go_to(find("car").filter(lambda r: False)[0])',
+     "line 1: find('car').filter(lambda r: False)[0] did not bind: "
+     "find('car').filter(lambda r: False) holds 0 row(s). There is no row to index."),
+    ('x = find("car").filter(lambda r: True)\nx["fid"]',
+     "line 2: x['fid'] did not bind: x is a set of rows, indexed by an int "
+     "position; a column is read off one row: x[0]['fid']."),
+    ('x = find("car").filter(lambda r: False)\nx["fid"]',
+     "line 2: x['fid'] did not bind: x is a set of rows, indexed by an int position."),
+])
+def test_a_list_of_rows_indexed_past_its_rows_or_by_a_non_int_is_refused(code, want):
+    assert _first_error(code) == want
+
+
+def test_a_list_of_rows_indexes_and_slices_as_a_list():
+    _, fr, _, _ = drive([[run('x = find("car").filter(lambda r: True)\n'
+                              'print(x[-1].fid, len(x[0:1]))')], "done"], cands=_TIED)
+    assert [o.get("error") for o in tool_results(fr)] == [None]
