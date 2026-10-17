@@ -1312,6 +1312,9 @@ class MissionPython:
             v = _plain(v)
             if is_xy(v):
                 return format_xy_token(float(v[0]), float(v[1]))
+            if not v:
+                raise CodeError(f"{_SITE_SLOT[why]} takes ONE place and that "
+                                "list holds 0 row(s).")
             raise CodeError(
                 f"{_SITE_SLOT[why]} takes ONE place and that is a list of "
                 f"{len(v)} -- index the one you mean, or give one [x, y] point.")

@@ -273,3 +273,9 @@ def test_a_list_of_rows_indexes_and_slices_as_a_list():
     _, fr, _, _ = drive([[run('x = find("car").filter(lambda r: True)\n'
                               'print(x[-1].fid, len(x[0:1]))')], "done"], cands=_TIED)
     assert [o.get("error") for o in tool_results(fr)] == [None]
+
+
+@pytest.mark.parametrize("slot", ["show_map(around=x)", 'look_for("car", at=x)', "stand(at=x)"])
+def test_an_empty_list_of_rows_in_a_one_place_slot_holds_0_rows(slot):
+    err = _first_error(f'x = find("car").filter(lambda r: False)\n{slot}')
+    assert err.endswith("takes ONE place and that list holds 0 row(s)."), err
