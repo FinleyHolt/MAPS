@@ -1196,7 +1196,7 @@ def test_a_look_before_any_flight_refuses_toward_explore():
     assert flights == [], flights
     assert all(not r for r in rendered), rendered
     blob = _json.dumps(out[0])
-    assert "has never been under the sensor" in blob, out[0]
+    assert "that ground lies more than 50 m from every flown stop" in blob, out[0]
     assert "explore the place" in blob, out[0]
 
 
@@ -1213,7 +1213,11 @@ def test_a_pass_earns_exactly_the_pixels_it_covered():
     served = [r for reqs in rendered for r in reqs]
     assert len(served) == 1, served
     blob = _json.dumps(out[2])
-    assert "has never been under the sensor" in blob, out[2]
+    # car_2 sits outside every stop's inscribed circle; the note claims no
+    # more than that (a frame corner can hold ground the circle misses)
+    assert "that ground lies more than 50 m from every flown stop, outside " \
+        "the middle of every frame so far" in blob, out[2]
+    assert "never been under the sensor" not in blob, out[2]
 
 
 def test_without_a_stated_footprint_the_gate_stays_off():

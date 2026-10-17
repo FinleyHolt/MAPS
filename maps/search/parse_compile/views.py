@@ -254,9 +254,10 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, resolve,
         _um = (f", +{len(uncovered) - 6} more"
                if len(uncovered) > 6 else "")
         ref_notes.append(
-            f"{len(uncovered)} crop(s) not rendered ({_u}{_um}): that "
-            "ground has never been under the sensor. A look shows what "
-            "some flight has covered"
+            f"{len(uncovered)} crop(s) not rendered ({_u}{_um}): that ground "
+            f"lies more than {float(obs_minor_m) / 2.0:.0f} m from every "
+            "flown stop, outside the middle of every frame so far. A look "
+            "shows ground within that reach of a stop"
             + ("." if withheld("library") else
                " -- explore the place so a pass covers it, then look."))
     return requests, skipped, ref_notes
