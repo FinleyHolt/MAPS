@@ -86,6 +86,8 @@ CASES = {
     "end_commit": (("SYSTEM",), ("Your mission ends", "commits nothing",
                                  "A reply before any flight", "Your answer is the ROW"),
                    (11, 3), (0, 0), (0, 0)),
+    "loop": (("TOOLS",), ("cannot go inside a loop", "explore(the set)"),
+             (0, 0), (1, 1), (0, 0)),
 }
 
 
@@ -374,3 +376,59 @@ def test_a_look_withhold_loop_move_refusal_names_no_looking(monkeypatch):
     monkeypatch.setenv(W.ENV, "look")
     text = refusal()
     assert "Loop to read the rows, then move once" in text and "LOOK" not in text, text
+
+
+def test_a_loop_withhold_lets_a_move_ride_a_loop(monkeypatch):
+    block = "for r in find('car'):\n    go_to(r)\nf = go_to\n"
+    with pytest.raises(ps.CodeError, match="cannot go inside a loop"):
+        ps.scan_block(block)
+    monkeypatch.setenv(W.ENV, "loop")
+    ps.scan_block(block)
+
+
+def test_a_loop_withhold_ends_the_mission_on_its_first_text_turn(monkeypatch):
+    script = ["", [run('go_to("prior_7")')], "done"]
+    _reply, fr, flights, _d = drive(script)
+    assert flights and any("[Repair]" in str(m["content"]) for m in fr.messages)
+    monkeypatch.setenv(W.ENV, "loop")
+    reply, fr, flights, _d = drive(script)
+    assert reply.ended_by == "reply" and reply.turns_used == 1 and not flights
+    assert not any("[Repair]" in str(m["content"]) for m in fr.messages)
+
+
+def test_a_loop_withhold_reruns_an_identical_program(monkeypatch):
+    script = [[run('a = find("car")\n')], [run('b = find("car")\n')], "done"]
+    _reply, fr, _f, _d = drive(script)
+    assert "no new information" in json.dumps(tool_results(fr)[1])
+    monkeypatch.setenv(W.ENV, "loop")
+    _reply, fr, _f, _d = drive(script)
+    second = tool_results(fr)[1]
+    assert "no new information" not in json.dumps(second) and "car_1" in json.dumps(second)
+
+
+def test_a_loop_withhold_flies_a_point_as_asked(monkeypatch):
+    script = [[run("go_to([3, 4])\n")], "done"]
+    monkeypatch.setenv(W.ENV, "prior")
+    _reply, fr, flights, _d = drive(script)
+    assert flights == [{"target_fid": "prior_7"}], flights
+    assert "own position" in json.dumps(tool_results(fr))
+    monkeypatch.setenv(W.ENV, "prior,loop")
+    _reply, fr, flights, _d = drive(script)
+    assert flights == [{"target_fid": "[3, 4]"}], flights
+    assert "own position" not in json.dumps(tool_results(fr))
+
+
+def test_a_loop_withhold_replays_no_reasoning(monkeypatch):
+    from maps.search.tests.fakes import TEST_SPEC
+
+    def _fake(url, api_key, **kwargs):
+        return {"choices": [{"finish_reason": "stop", "message": {
+            "content": "done", "reasoning_content": "I weighed two rooftops."}}]}
+
+    monkeypatch.setattr(ra, "chat_completions_raw", _fake)
+    for names, replayed in (("", "I weighed two rooftops."), ("loop", "")):
+        monkeypatch.setenv(W.ENV, names)
+        r = ra.Reasoner(endpoint_spec=TEST_SPEC)
+        out = r.step_tool_call([])
+        assert out["reasoning"] == "I weighed two rooftops."
+        assert r.messages[-1]["reasoning_content"] == replayed

@@ -18,6 +18,7 @@ from maps.llm.model_cards import card_for, sampling_kwargs, speaks_openai
 from maps.llm.vision_content import build_vision_user_content
 from maps.search.parse_compile.compactor import bound_image_count, compact_transcript
 from maps.search.parse_compile.prompts import served_system_prompt
+from maps.search.withhold import withheld
 
 log = logging.getLogger(__name__)
 
@@ -279,9 +280,11 @@ class Reasoner:
                 f"(finish_reason={finish_reason!r}, "
                 f"reasoning_chars={len(reasoning_text)})"
             )
+        # Under the ``loop`` withhold the next request carries none of the
+        # model's own thinking; the return value still hands it to the log.
         self.messages.append({
             "role": "assistant", "content": text,
-            "reasoning_content": reasoning_text,
+            "reasoning_content": "" if withheld("loop") else reasoning_text,
             **({"tool_calls": calls} if calls else {})})
         return {"kind": "tool_call" if calls else "text",
                 **({"tool_calls": calls} if calls else {}),

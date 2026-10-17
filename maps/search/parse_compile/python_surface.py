@@ -265,7 +265,7 @@ def scan_block(code: str) -> ast.Module:
             raise CodeError(f"no underscore attributes (.{node.attr})")
         if isinstance(node, ast.Name):
             if node.id in _MOVE_CALLS and isinstance(node.ctx, ast.Load) \
-                    and id(node) not in called:
+                    and id(node) not in called and not withheld("loop"):
                 raise CodeError(
                     f"{node.id} is a move; call it once, {node.id}(<place>), "
                     "outside any loop or function.")
@@ -293,7 +293,7 @@ def scan_block(code: str) -> ast.Module:
                                     ast.Lambda))
         if in_loop:
             loop_depth += 1
-        if (loop_depth and isinstance(node, ast.Call)
+        if (loop_depth and not withheld("loop") and isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
                 and node.func.id in _MOVE_CALLS):
             raise CodeError(_LOOP_MOVE_MSG.format(

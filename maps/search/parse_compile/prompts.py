@@ -286,7 +286,8 @@ before it ran and stands. Names persist for the whole mission.
 
 # Each bench withhold's edits to the served text (maps.search.withhold). An edit is
 # ("sub", old, new): replace text written once; ("drop", opening): remove the
-# one entry that opens so; ("cut", start, end): remove from start up to end.
+# one entry that opens so; ("cut", start, end): remove from start up to the
+# next end.
 # In the description an entry is a line; in the system turn it is a bullet,
 # matched on its words joined by single spaces and re-wrapped at 72 columns
 # when an edit changes it. With nothing withheld the literals are served as
@@ -356,6 +357,9 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
          "points RELATE, they do not move you."),
         ("sub", "is a place to look and relate near", "is a place to relate near"),
         ("sub", "loop to LOOK, then move once", "loop to READ, then move once"),
+    ],
+    "loop": [
+        ("cut", " go_to and explore cannot go inside a loop", "\n"),
     ],
 }
 _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
@@ -436,7 +440,8 @@ def _edit(text: str, edit: tuple[str, ...], turn: bool) -> str | None:
     """``text`` with ``edit`` applied, or None when it names no text there."""
     kind, *args = edit
     if kind == "cut":
-        i, j = text.find(args[0]), text.find(args[1])
+        i = text.find(args[0])
+        j = text.find(args[1], i + 1) if i >= 0 else -1
         return text[:i] + text[j:] if 0 <= i < j else None
     units = _units(text, turn)
     for k, u in enumerate(units):

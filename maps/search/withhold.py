@@ -25,6 +25,10 @@ WITHHOLDS: dict[str, str] = {
     "end_commit": "the system turn's two bullets on how the mission ends and"
                   " what the answer is; the cue-word standard stays as one"
                   " bullet",
+    "loop": "the turn loop's own behaviours but compaction: the repair"
+            " nudges (a text turn always ends the mission), the move-in-a-loop"
+            " refusal and its sentence, the identical-program note, the"
+            " point-to-row snap, and the reasoning replayed in the prefix",
 }
 
 

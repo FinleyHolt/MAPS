@@ -694,7 +694,9 @@ class _Mission:
         return err + self._loop_breaker_facts(n)
 
     def _dispatch_analyze_scene(self, ops, *, answer_ref=""):
-        key = program_dedup_key(ops)
+        # The ``loop`` withhold takes the identical-program note: every
+        # program runs and renders.
+        key = None if withheld("loop") else program_dedup_key(ops)
         prev = self._programs_seen.get(key) if key is not None else None
         if prev is not None and prev[0] == self.carry.version:
             # A one-line reference, never a payload; the emission's own
@@ -901,7 +903,7 @@ class _Mission:
                 item_errors.append({"target_fid": item["target_fid"],
                                      "error": "not flown."})
                 continue
-            snap_from = self._snap_to_row(item)
+            snap_from = None if withheld("loop") else self._snap_to_row(item)
             fids_before = set(self._ns_rows)
             report = self.mission_spec.fly(dict(item))
             if snap_from:
@@ -1452,6 +1454,11 @@ class _Mission:
                 continue
             transient_failures = 0
 
+            if r["kind"] == "text" and withheld("loop"):
+                # No repair under the ``loop`` withhold: any text turn ends.
+                log.info("%s mission ended by reply at turn %d (%d flights)",
+                         self.rid_tag, turn_idx, self.turn_flights)
+                return self._mission_end("reply", turns=turn_idx + 1)
             if r["kind"] == "text":
                 content = str(r.get("content") or "")
                 if _envelope_residue(content) or _envelope_residue(
