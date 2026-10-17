@@ -930,8 +930,8 @@ def test_none_inside_a_move_list_is_no_place():
 
 
 @pytest.mark.parametrize("attr, says", [
-    ("cars.ref", "'Rows' object has no attribute 'ref'"),
-    ("cars.mp", "'Rows' object has no attribute 'mp'"),
+    ("cars.ref", "cars is a set of 2 row(s) and carries no 'ref'"),
+    ("cars.mp", "cars is a set of 2 row(s) and carries no 'mp'"),
     ("cars[0].bind", "row car_1 carries no 'bind'"),
     ("cars[0].src", "row car_1 carries no 'src'")])
 def test_model_code_cannot_read_a_sets_executor_slots(attr, says):

@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 from maps.search.parse_compile.python_surface import CodeError
-from maps.search.tests.fakes import quiet_env, raising_ops_of_block
+from maps.search.tests.fakes import (
+    drive, quiet_env, raising_ops_of_block, run, tool_results)
 
 
 def _ops(src: str) -> list[dict]:
@@ -404,3 +405,18 @@ def test_the_two_spellings_still_do_their_own_jobs():
     gap = _cut(_ops('r1 = find("house")\n'
                     'r2 = r1.filter(near="G Ave", dwithin=25)\n'))
     assert gap["op"] == "le" and gap["value"] == 25, gap
+
+
+def _served_error(code: str) -> str:
+    _r, fr, _f, _d = drive([[run(code)], "done"])
+    return tool_results(fr)[0]["error"]
+
+
+def test_a_set_read_as_a_row_names_the_row_to_read_it_off():
+    err = _served_error('cars = find("car")\nprint(cars.xy)\n')
+    assert "cars is a set of 2 row(s)" in err and "cars[0].xy" in err, err
+
+
+def test_a_keyword_spelled_as_a_method_names_the_call():
+    err = _served_error('cars = find("car")\ncars.nearest("prior_7")\n')
+    assert "cars.order(nearest=...)" in err, err

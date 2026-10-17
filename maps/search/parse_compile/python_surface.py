@@ -423,6 +423,26 @@ class _Cuts:
                 f"{type(self).__name__!r} object has no attribute {k!r}")
         return object.__getattribute__(self, k)
 
+    def __getattr__(self, k: str):
+        # Reached only when no method or slot has the name: a SET read as a
+        # row (``r1.xy``) or a keyword spelled as a method (``r1.nearest``).
+        lib = withheld("library")
+        if k.startswith("_") or (lib and k in _LIBRARY_ATTRS):
+            raise AttributeError(
+                f"{type(self).__name__!r} object has no attribute {k!r}")
+        name = (self._mp.spelling(self) if isinstance(self, Rows) else None) \
+            or "these rows"
+        kw = None if lib else {
+            "nearest": "order", "color": "order", "direction": "order",
+            "near": "filter", "within": "filter", "dwithin": "filter",
+            "facing": "filter"}.get(k, "filter" if k in _CARDINAL_KWARGS else None)
+        if kw:
+            raise AttributeError(
+                f"{k} is a keyword, not a method: {name}.{kw}({k}=...)")
+        raise AttributeError(
+            f"{name} is a set of {len(self)} row(s) and carries no {k!r}; a "
+            f"column is read off one row: {name}[0].{k}")
+
     def _in_hand(self):
         return self
 
