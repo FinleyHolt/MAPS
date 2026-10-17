@@ -1631,5 +1631,6 @@ def run_program(cands, anchors, program, seed_results=None,
                 {k: v for k, v in op["args"].items() if v is not None}, cx))
         except ProgramError as exc:
             exc.op = cx.op  # the caller's repeated-error class
+            exc.ref = op["ref"]   # the handle whose op refused
             raise
     return {"results": cx.results}

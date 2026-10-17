@@ -121,27 +121,32 @@ class Carry:
         # and never re-derives.
         self._events: set = set()
 
+    def _closure(self, ref) -> set:
+        """``ref`` and every handle its ops read that is not fresh under the
+        current version; an event handle, an alias or an unknown re-derives
+        nothing."""
+        out: set = set()
+        todo = [ref]
+        while todo:
+            r = todo.pop()
+            if r in out or r in self._fresh or not self._producers.get(r):
+                continue
+            out.add(r)
+            for i in self._producers[r]:
+                todo.extend(self._reads[i])
+        return out
+
     def ensure_fresh(self, refs) -> None:
         """Re-derive ``refs`` and every op they read against the current
         surface, once per surface version; a refused replay raises
-        :class:`CodeError` naming the handles asked for, and none of them is
-        marked fresh."""
+        :class:`CodeError` naming the handles asked for whose replay reached
+        the refused op, and none of them is marked fresh."""
         if self._armed != self.version:
             self._armed = self.version
             self._fresh.clear()
             self._fresh.update(self._events)
-        need: set = set()
-        todo = [r for r in refs if r not in self._fresh]
-        while todo:
-            r = todo.pop()
-            if r in need or r in self._fresh:
-                continue
-            idxs = self._producers.get(r)
-            if not idxs:
-                continue    # an event handle, an alias, an unknown: nothing to re-derive
-            need.add(r)
-            for i in idxs:
-                todo.extend(self._reads[i])
+        closures = {r: self._closure(r) for r in refs}
+        need: set = set().union(*closures.values())
         if not need:
             return
         ns = self.ns
@@ -154,8 +159,10 @@ class Carry:
                               if h not in need},
                 staged=ns.get("staged"), standing=ns.get("standing"))
         except Exception as exc:  # noqa: BLE001 - served on the read that asked
-            said = ", ".join(self.name(r) for r in dict.fromkeys(refs)
-                             if r in need)
+            bad = getattr(exc, "ref", None)
+            hit = [r for r, c in closures.items() if c and (bad is None or bad in c)]
+            said = ", ".join(self.name(r) for r in
+                             sorted(hit, key=lambda r: self._producers[r][0]))
             raise CodeError(f"{said} cannot be re-derived on the surface as "
                             f"it stands: {exc}") from None
         self.rows.update(

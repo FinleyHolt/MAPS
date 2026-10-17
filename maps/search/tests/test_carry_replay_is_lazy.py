@@ -143,3 +143,15 @@ def test_a_refused_re_derive_fails_the_read_naming_the_handle():
     assert "len(cars) = 402" in last.get("printed", "")
     assert "len(near) = 201" not in last.get("printed", ""), last
     assert "near cannot be re-derived" in str(last.get("error")), last
+
+
+def test_a_refused_re_derive_names_only_the_handles_whose_replay_hit_it():
+    """A program that reads two handles, one of which re-derives fine, is
+    refused naming only the one whose replay the executor refused."""
+    res, _g, _a = grow_drive([[run('go_to("prior_7")\n')],
+                              [run('cars = find("car")\nnear = cars.order(nearest=cars)\n')],
+                              [run('go_to("prior_1")\n')],
+                              [run('near.filter(near=cars, dwithin=5)\n')], "done"],
+                             per_flight=201)
+    err = str(res[-1].get("error"))
+    assert err.startswith("near cannot be re-derived"), err
