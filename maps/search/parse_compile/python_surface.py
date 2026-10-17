@@ -388,9 +388,14 @@ def _refuse_reversed_direction(direction, reverse) -> None:
         f'order(direction="{flip}") -- say the direction you mean.')
 
 
-def _diagonal_remedy(names) -> str:
-    """The extra sentence a ``<diag>_of=`` mistake earns: the conjunction
-    of its two cardinal cuts against the same place."""
+def _kwarg_remedy(names) -> str:
+    """The extra sentence a refused filter keyword earns: ``nearest=`` is
+    the order it names; a ``<diag>_of=`` is the conjunction of its two
+    cardinal cuts against the same place."""
+    if "nearest" in names:
+        return (" nearest= ORDERS and drops nothing: rows.order(nearest=<place>);"
+                " to keep only what is close, rows.filter(near=<place>,"
+                " dwithin=<metres>).")
     for n in names:
         n = str(n)
         pair = split_diagonal(n[:-3]) if n.endswith("_of") else None
@@ -464,7 +469,7 @@ class _Cuts:
             raise CodeError(
                 f"filter takes {_FILTER_SAY} or a predicate; "
                 f"{'=, '.join(bad)}= is none of them."
-                + _diagonal_remedy(bad))
+                + _kwarg_remedy(bad))
         refuse_metres_in_within(kw.get("within"))
         if pred is None:
             mp, src = self._target()

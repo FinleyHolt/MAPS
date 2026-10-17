@@ -423,3 +423,8 @@ def test_a_set_read_as_a_row_names_the_row_to_read_it_off():
 def test_a_keyword_spelled_as_a_method_names_the_call():
     err = _served_error('cars = find("car")\ncars.nearest("prior_7")\n')
     assert "cars.order(nearest=...)" in err, err
+
+
+def test_filter_nearest_names_the_order_it_is():
+    err = _served_error('find("car").filter(nearest="prior_7")\n')
+    assert "nearest= ORDERS and drops nothing: rows.order(nearest=<place>)" in err, err
