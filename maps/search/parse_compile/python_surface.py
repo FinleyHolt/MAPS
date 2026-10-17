@@ -1790,7 +1790,12 @@ class MissionPython:
                 line = _block_line(self._block_codes)
                 what = (str(e) if isinstance(e, CodeError)
                         else f"{type(e).__name__}: {e}")
-                if isinstance(e, TypeError) and str(e).endswith("is not callable"):
+                if isinstance(e, NameError) and e.name in served_calls():
+                    # a call name resolves through the builtins, so only a
+                    # del of it misses
+                    what = (f"nothing is bound over {e.name} to del; "
+                            f"{e.name}() is the mission call itself and stays.")
+                elif isinstance(e, TypeError) and str(e).endswith("is not callable"):
                     shadowed = next((n.func.id for n in ast.walk(tree)
                                      if isinstance(n, ast.Call)
                                      and isinstance(n.func, ast.Name)

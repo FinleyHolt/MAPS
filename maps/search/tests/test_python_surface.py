@@ -277,6 +277,12 @@ def test_calling_any_value_bound_over_a_mission_call_says_how_to_get_it_back(cod
     assert not flights
 
 
+def test_del_of_a_mission_call_nothing_is_bound_over_says_the_call_stays():
+    err, _ = _refusal('del find\n')
+    assert err == ("line 1: nothing is bound over find to del; find() is the "
+                   "mission call itself and stays."), err
+
+
 def test_math_is_loaded_and_import_math_works():
     reply, fr, _f, _d = drive([
         [run('import math\n'
