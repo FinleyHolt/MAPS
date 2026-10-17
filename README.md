@@ -187,7 +187,7 @@ these places, the served-text changes among them:
 | A bare line or a no-op cut of one name's tied ways serves its shape (`name`, `length_m`), as the find does; `more_of` on a tied view is refused with the tied-view text. | The bare line served an arbitrary 24-row head with "more_of on it", and `more_of` paged the tied rows in an arbitrary order. |
 | A set indexed by a non-int says it takes an int position, and for a str names the column read `s[0]['col']`; a bare `prior_N`/`detected_N` the surface does not hold is refused at the name. | The flown text said "Show it first, then index it" with the key unquoted; an absent fid ran on as a bare string, which each call refused in its own words or indexed by character (`look(prior_9[0])` read 'nothing named "p"'). |
 | A list item that names nothing is refused as "each item must be a fid on this surface, an [x, y], or a set."; a deduped program's bare line serves only its "not re-rendered" note. | The flown refusal offered a `{'fid':...}` dict form the executor does not take; the deduped bare line rendered the table the note said was not re-rendered. |
-| The Gemma 4 26B-A4B NVFP4 bench serve's requests carry `presence_penalty` 0.5, the setting its CityNav numbers were measured at. | The port's card sent no penalty, so the bench Gemma looped in its thinking (a preflight turn ran to the 40,000-token cap). |
+| The Gemma 4 26B-A4B NVFP4 bench serve's requests carry `presence_penalty` 0.5, the setting its CityNav numbers were measured at. | The flown card sent no penalty, so the bench Gemma looped in its thinking (a preflight turn ran to the 40,000-token cap). |
 | A turn the output cap cut off empty (`finish_reason` length) gets its own nudge ("Your last turn ran out of output tokens while thinking ...") and spends no repair, up to 3 in a row. | Such a turn spent the one shared repair, so the next code-shaped reply ended the mission (42 forced endings in 200 Gemma episodes). |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
@@ -260,8 +260,11 @@ python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 The commands below run in the activated environment (`source .venv/bin/activate`).
 
 Every run records the commit it ran from. A tree without git, such as a
-`git archive` export, reads that commit from a `.commit` file at the repository
-root (`git rev-parse HEAD > .commit` before exporting).
+`git archive` export, reads that commit from a `.commit` file at its root:
+
+```sh
+git archive HEAD | tar -x -C <dest> && git rev-parse HEAD > <dest>/.commit
+```
 
 Extras:
 

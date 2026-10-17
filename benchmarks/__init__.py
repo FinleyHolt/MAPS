@@ -13,7 +13,7 @@ import subprocess
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
-#: A copy deployed without git (an rsync of the tree) names its commit here.
+#: A copy deployed without git (an rsync or a git archive export) names its commit here.
 COMMIT_STAMP = REPO_ROOT / ".commit"
 
 
