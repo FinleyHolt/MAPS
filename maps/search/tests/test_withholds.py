@@ -161,7 +161,8 @@ def test_withheld_verbs_are_unbound(monkeypatch):
     monkeypatch.setenv(W.ENV, "look_for,look")
     assert "look_for" not in ps.served_calls() and "look" not in ps.served_calls()
     mp = ps.MissionPython(quiet_env())
-    assert "look_for" not in mp.ns and "look" not in mp.ns and "go_to" in mp.ns
+    b = mp.ns["__builtins__"]
+    assert "look_for" not in b and "look" not in b and "go_to" in b
     out = json.dumps(mp.run_block('look_for("pool")'))
     assert "did you mean look_for" not in out
 

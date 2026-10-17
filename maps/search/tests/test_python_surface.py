@@ -227,11 +227,18 @@ def test_a_move_returns_the_rows_it_arrived_over():
     assert (results[1].get("printed") or "").strip() != "none", results[1]
 
 
-def test_binding_over_a_mission_call_is_refused():
-    import pytest
-
-    with pytest.raises(CodeError, match="intersection is a mission call"):
-        scan_block('intersection = intersection("A", "B")\n')
+def test_a_mission_call_name_binds_like_a_builtin_name():
+    # A binding shadows the call for the rest of the mission, as `len = 3`
+    # shadows len; `del` gives the call back.
+    _r, fr, flights, _d = drive([
+        [run('intersection = find("gate")\nintersection\n')],
+        [run('go_to(intersection[0])\n')],
+        [run('del intersection\nprint(type(intersection) is type(lambda: 0))\n')],
+        "done"])
+    out = tool_results(fr)
+    assert "error" not in out[0] and "intersection" in out[0]["result"]["results"], out[0]
+    assert "error" not in out[1] and flights[0]["target_fid"] == "prior_1", out[1]
+    assert out[2].get("printed") == "True", out[2]
 
 
 def test_a_tool_result_does_not_echo_the_block():

@@ -282,12 +282,6 @@ def scan_block(code: str) -> ast.Module:
             if node.id in _FORBIDDEN_NAMES:
                 raise CodeError(f"there is no {node.id}()")
             if isinstance(node.ctx, ast.Store) \
-                    and node.id in served_calls():
-                raise CodeError(
-                    f"{node.id} is a mission call -- binding over it "
-                    f"would make {node.id}() uncallable for the rest of "
-                    "the mission. Pick another name.")
-            if isinstance(node.ctx, ast.Store) \
                     and node.id in _SAFE_MODULES:
                 # one bad bind would break the module for the rest of the
                 # mission
@@ -969,8 +963,10 @@ class MissionPython:
         self.ns["__builtins__"]["__import__"] = _safe_import
         self.ns["__show__"] = self._show
         self.ns.update(_SAFE_MODULES)
+        # The mission calls are builtins, as len is: a name the model binds
+        # over one shadows it until ``del`` gives the call back.
         for name in served_calls():
-            self.ns[name] = self._wrap_call(name)
+            self.ns["__builtins__"][name] = self._wrap_call(name)
         # Model spelling for every ref it was shown rows under, so the
         # served envelope is keyed by the model's own name.
         self._shown: dict = {}
