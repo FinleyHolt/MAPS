@@ -62,7 +62,8 @@ def test_the_dump_surface_section_names_every_call_the_namespace_serves():
         assert line, call
         sig = inspect.signature(getattr(MissionPython, f"_call_{call}"))
         for n, p in sig.parameters.items():
-            if n == "self":
+            # A parameter that only refuses is not served (find's *more).
+            if n == "self" or p.kind is p.VAR_POSITIONAL:
                 continue
             # every argument the call accepts is named on its own row
             assert n in line, (call, n)

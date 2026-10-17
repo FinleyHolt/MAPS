@@ -56,10 +56,14 @@ def surface_lines() -> list[str]:
         MissionPython, Rows, served_calls)
 
     def _params(fn) -> str:
+        # A parameter that exists only to refuse (find's extra queries, a
+        # cut's unknown keywords, show_map's missing centre) is not served.
         sig = inspect.signature(fn)
-        return str(sig.replace(parameters=[p for n, p in sig.parameters.items()
-                                           if n != "self"],
-                               return_annotation=sig.empty))[1:-1]
+        ps = [p.replace(default=p.empty) if p.default is None and p.name == "around" else p
+              for n, p in sig.parameters.items()
+              if n != "self" and p.kind is not p.VAR_KEYWORD
+              and not (p.kind is p.VAR_POSITIONAL and p.name == "more")]
+        return str(sig.replace(parameters=ps, return_annotation=sig.empty))[1:-1]
 
     out = [f"  {call}({_params(getattr(MissionPython, f'_call_{call}'))})"
            for call in served_calls()]

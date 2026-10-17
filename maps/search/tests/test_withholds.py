@@ -32,9 +32,9 @@ from maps.search.tests.fakes import (
 #: The default arm's dump: the flown system turn and tools, plus the surface's
 #: signature lines.
 DEFAULT_SHA256 = {
-    "oryx_orx32_25mm_nadir": "c7f106d54a07e16291830bc8f95e7031aa48f733efa53d670634887d7f31ca71",
-    "nadir_1008_90": "8c624247e7d22cbd157871c62eea976a50cb7677cb5a0c642051aab2b5833b0d",
-    None: "ea5da6466ec824d3cbac51fb5efd90d7c1b37941f051784e2c20bead3c7f8605",
+    "oryx_orx32_25mm_nadir": "a4ab414c6fe86045f13b3ec06ddcb78eb5fe1d95522be58f46422d0eb693dd1f",
+    "nadir_1008_90": "4e7405a08e92558626f443de7935ff04a8c26f48c964758e9f81431d88f0f855",
+    None: "e8e73c0a847c320e00713014b7c6bb2ba827480c2f6e8667de59fd083ceef836",
 }
 
 
@@ -60,7 +60,7 @@ def _diff(a: str, b: str) -> tuple[int, int]:
 
 
 @pytest.mark.parametrize("sensor", list(DEFAULT_SHA256))
-def test_no_withhold_serves_the_flown_contract(monkeypatch, sensor):
+def test_no_withhold_serves_the_default_contract(monkeypatch, sensor):
     text = _dump(monkeypatch, "", sensor)
     assert hashlib.sha256(text.encode()).hexdigest() == DEFAULT_SHA256[sensor]
     assert prompts.served_doc() == prompts.CODE_DOC
