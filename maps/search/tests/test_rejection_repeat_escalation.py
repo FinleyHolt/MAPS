@@ -123,3 +123,9 @@ def test_a_look_whose_program_succeeded_restarts_the_consecutive_streak():
                           + [f"look(a[{w}])\n" for w in ("0:1", "1:2", "0:2")])
     assert all("crop" in p["error"] for p in served[1:]), served
     assert "rejected again" not in served[3]["error"], served[3]
+
+
+def test_a_repeated_question_is_not_punctuated_twice():
+    served = drive_blocks(['cars = find("car")\n'] + ['carz[0]\n'] * 3)
+    err = served[3]["error"]
+    assert "did you mean cars? The full rejection text" in err, err

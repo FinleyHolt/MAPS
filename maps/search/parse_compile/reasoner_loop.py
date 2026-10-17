@@ -662,10 +662,12 @@ class _Mission:
         and census again: the counts, the rejection's first clause and the
         live state."""
         first = str(err).split(". ", 1)[0].strip().rstrip(".")
+        if not first.endswith(("?", "!")):
+            first += "."
         c_n, a_n, cols, more = self._census(12)
         return (
             f"rejected again -- the same error class, {consec}x "
-            f"consecutively ({n}x): {first}. The full "
+            f"consecutively ({n}x): {first} The full "
             f"rejection text was served at its 1st occurrence and the "
             f"live-surface census at its 2nd (both above in this "
             f"conversation, unchanged). The executor is deterministic on "
