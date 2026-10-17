@@ -1306,6 +1306,14 @@ class MissionPython:
                     del out["result"]["results"]
             elif k == "note" and out.get("note"):
                 out["note"] = f"{out['note']}\n{v}"
+            elif k == "flown" and k in out:
+                # A second call of one kind keeps the first's part: flights
+                # run on in one list, any other kind lists each call's part.
+                out[k] = {f: out[k].get(f, []) + v.get(f, [])
+                          for f in {**out[k], **v}}
+            elif isinstance(v, dict) and k in out:
+                prev = out[k]
+                out[k] = [*prev, v] if isinstance(prev, list) else [prev, v]
             else:
                 out[k] = v
 
@@ -1610,7 +1618,8 @@ class MissionPython:
         at_site = self._site(at, "stage")
         f_site = word if word in COMPASS_UNIT else self._site(facing, "facing")
         self._act(self.env.stand, [(at_site, "stage"), (f_site, "facing")])
-        h = self._out["stance"]["staged"][-1]["handle"]
+        st = self._out["stance"]
+        h = (st[-1] if isinstance(st, list) else st)["staged"][-1]["handle"]
         self.ns[h] = h
         return h
 

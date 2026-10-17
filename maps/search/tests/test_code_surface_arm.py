@@ -1394,3 +1394,17 @@ def test_more_of_on_a_one_block_handle_says_to_show_it():
     ])
     err = tool_results(fr)[1]["error"]
     assert err == "cars holds 2 row(s), one block: show it with a bare `cars` line.", err
+
+
+def test_a_block_that_calls_one_kind_twice_serves_both_parts():
+    """Two flights and two stances in one block: the receipt keeps the
+    first call's part beside the second's."""
+    _r, fr, flights, _d = drive([[run('go_to("prior_7")\ngo_to("prior_1")\n')], "done"])
+    assert [f["target_fid"] for f in flights] == ["prior_7", "prior_1"]
+    out = tool_results(fr)[0]
+    assert [s["target"] for s in out["flown"]["flown"]] == ["prior_7", "prior_1"], out
+    _r, fr, _f, _d = drive([[run('a = stand(at="prior_7")\nb = stand(at="prior_1")\n'
+                                 'print(a, b)\n')], "done"])
+    out = tool_results(fr)[0]
+    assert [p["staged"][0]["handle"] for p in out["stance"]] == ["v1", "v2"], out
+    assert out["printed"] == "v1 v2", out
