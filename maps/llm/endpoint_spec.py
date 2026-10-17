@@ -114,6 +114,30 @@ def reasoner_api_key() -> str | None:
     return os.environ.get("SEARCH_REASONER_API_KEY") or None
 
 
+#: One full turn at the 40,000-token output pin, decoded at ~20 tok/s under a
+#: saturated batch: the output cap, not the serve's load, bounds a turn. A
+#: shorter wait cuts long thinking at a point that moves with load and
+#: re-sends the request behind the one the serve is still decoding.
+REASONER_TIMEOUT_DEFAULT_S = 2400.0
+
+
+def reasoner_timeout_s() -> float:
+    """Per-call transport timeout from ``SEARCH_REASONER_TIMEOUT_S`` (unset:
+    the default); anything but a positive number of seconds up to
+    ``threading.TIMEOUT_MAX`` raises."""
+    raw = os.environ.get("SEARCH_REASONER_TIMEOUT_S", "").strip()
+    if not raw:
+        return REASONER_TIMEOUT_DEFAULT_S
+    value = float(raw)   # loud on garbage, deliberately
+    if not 0 < value <= threading.TIMEOUT_MAX:
+        raise ValueError(
+            f"SEARCH_REASONER_TIMEOUT_S={raw!r} is not a positive number of "
+            f"seconds at most threading.TIMEOUT_MAX; httpx reads 0 as 'time out "
+            f"immediately', never 'no limit', and a socket refuses a longer wait"
+        )
+    return value
+
+
 def _get_json(url: str, *, bearer: str | None = None) -> object:
     """GET ``url`` (``bearer`` as an Authorization header) and parse the JSON
     body; raise EndpointUnreachable when nothing answers (no connection, a

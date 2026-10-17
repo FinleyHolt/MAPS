@@ -497,6 +497,27 @@ def test_no_schema_answer_after_every_attempt_raises_no_schema_answer(monkeypatc
     assert h.llm_calls == 2 * LLM_ATTEMPTS and h.calls == []
 
 
+def test_a_baseline_call_waits_the_reasoner_timeout_the_env_sets(monkeypatch):
+    import maps.llm.http as http
+    from maps.llm import endpoint_spec
+
+    seen = []
+    monkeypatch.setattr(http, "chat_completions_raw", lambda base_url, api_key, **kw: seen.append(
+        kw["timeout"]) or {"choices": [{"message": {"content": '{"pick": 1}'},
+                                        "finish_reason": "stop"}], "usage": {}})
+    monkeypatch.setattr(endpoint_spec, "_SPEC", endpoint_spec.EndpointSpec(
+        base_url="http://serve.example:8001/v1", model_id="inkling-small", max_model_len=262144,
+        tokenizer_name="qwen", max_output_tokens=40000))
+    monkeypatch.setenv("SEARCH_REASONER_TIMEOUT_S", "900")
+    h = BaselineHarness.__new__(BaselineHarness)
+    h.policy, h.cfg = "geonav", SimpleNamespace()
+    h.llm_calls = h.extraction_calls = h.reasoning_truncated = 0
+    h.calls, h.phase_s = [], {"examine": 0.0}
+    schema = {"type": "object", "properties": {"pick": {"type": "integer"}}, "required": ["pick"]}
+    h.llm_json([{"role": "user", "content": "which?"}], schema, "pick")
+    assert seen == [900.0], seen
+
+
 def test_a_bare_runner_refuses_a_baseline_arm_whose_model_has_no_dial_off(tmp_path, monkeypatch):
     """The runner CLI, like the bench driver, refuses the arm before any
     request or episode directory."""

@@ -332,7 +332,7 @@ class BaselineHarness:
             kw["response_format"] = response_format
         cap_key = OUTPUT_CAP_KEY if speaks_openai(model) else "max_tokens"
         resp = chat_completions_raw(
-            spec.base_url, endpoint_spec.reasoner_api_key(), timeout=LLM_TIMEOUT_S,
+            spec.base_url, endpoint_spec.reasoner_api_key(), timeout=endpoint_spec.reasoner_timeout_s(),
             model=model, messages=msgs, **{cap_key: cap}, **kw,
         )
         choice = resp["choices"][0]
@@ -484,8 +484,7 @@ WINDOW_MARGIN_M = 200.0
 #: The reshaping call only restates an answer; it never reasons.
 EXTRACTION_MAX_TOKENS = 4096
 
-#: Each model call's HTTP timeout, and the tries ``llm_json`` makes at an answer.
-LLM_TIMEOUT_S = 1800.0
+#: The tries ``llm_json`` makes at an answer.
 LLM_ATTEMPTS = 2
 
 EXTRACTION_PROMPT = (

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from maps.llm import openai_wire
-from maps.llm.endpoint_spec import EndpointSpec, reasoner_api_key
+from maps.llm.endpoint_spec import EndpointSpec, reasoner_api_key, reasoner_timeout_s
 from maps.llm.http import CallCanceled, chat_completions_raw
 from maps.llm.model_cards import card_for, sampling_kwargs, speaks_openai
 from maps.llm.vision_content import build_vision_user_content
@@ -21,13 +21,6 @@ from maps.search.parse_compile.prompts import served_system_prompt
 from maps.search.withhold import withheld
 
 log = logging.getLogger(__name__)
-
-
-#: One full turn at the 40,000-token output pin, decoded at ~20 tok/s under a
-#: saturated batch: the output cap, not the serve's load, bounds a turn. A
-#: shorter wait cuts long thinking at a point that moves with load and
-#: re-sends the request behind the one the serve is still decoding.
-_REASONER_TIMEOUT_DEFAULT_S = 2400.0
 
 
 class DegenerateCompletion(ValueError):
@@ -56,23 +49,6 @@ def _degenerate_reason(*, text: str, reasoning: str, calls: list) -> str:
     if _COLLAPSE_RUN.search(reasoning):
         return "repeated-token collapse in the reasoning channel"
     return ""
-
-
-def _reasoner_timeout_s() -> float:
-    """Per-call transport timeout from ``SEARCH_REASONER_TIMEOUT_S`` (unset:
-    the default); anything but a positive number of seconds up to
-    ``threading.TIMEOUT_MAX`` raises."""
-    raw = os.environ.get("SEARCH_REASONER_TIMEOUT_S", "").strip()
-    if not raw:
-        return _REASONER_TIMEOUT_DEFAULT_S
-    value = float(raw)   # loud on garbage, deliberately
-    if not 0 < value <= threading.TIMEOUT_MAX:
-        raise ValueError(
-            f"SEARCH_REASONER_TIMEOUT_S={raw!r} is not a positive number of "
-            f"seconds at most threading.TIMEOUT_MAX; httpx reads 0 as 'time out "
-            f"immediately', never 'no limit', and a socket refuses a longer wait"
-        )
-    return value
 
 
 def _normalize_tool_call_arguments(tc: dict) -> dict:
@@ -157,7 +133,7 @@ class Reasoner:
 
     endpoint_spec: EndpointSpec
     api_key: str | None = field(default_factory=reasoner_api_key)
-    timeout: float = field(default_factory=_reasoner_timeout_s)
+    timeout: float = field(default_factory=reasoner_timeout_s)
     seed: int | None = None
     messages: list[dict] = field(default_factory=list)
     sensor_description: str = ""
