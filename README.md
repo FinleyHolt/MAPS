@@ -189,7 +189,7 @@ these places, the served-text changes among them:
 | A list item that names nothing is refused as "each item must be a fid on this surface, an [x, y], or a set."; a deduped program's bare line serves only its "not re-rendered" note. | The flown refusal offered a `{'fid':...}` dict form the executor does not take; the deduped bare line rendered the table the note said was not re-rendered. |
 | The Gemma 4 26B-A4B NVFP4 bench serve's requests carry `presence_penalty` 0.5, the setting its CityNav numbers were measured at. | The flown card sent no penalty, so the bench Gemma looped in its thinking (a preflight turn ran to the 40,000-token cap). |
 | A turn the output cap cut off empty (`finish_reason` length) gets its own nudge ("Your last turn ran out of output tokens while thinking ...") and spends no repair, up to 3 in a row. | Such a turn spent the one shared repair, so the next code-shaped reply ended the mission (42 forced endings in 200 Gemma episodes). |
-| Bench withholds `end_commit`, `loop` (every loop behaviour but compaction), `doc`, `map` and `library` (every call but go_to, look_for, look and show_map); the `seeing` and `text` families ship as one config each. | The research harness withheld these through its parts registry; a flight serves every part. |
+| Bench withholds `end_commit` (every sentence on how the mission ends and what the answer is: the system turn's two bullets, the run description's, the repair nudges', the loop-move refusal's, and the receipts' `answer_if_you_reply_now`; the cue-word standard stays as one bullet), `loop` (every loop behaviour but compaction), `doc`, `map` and `library` (every call but go_to, look_for, look and show_map); the `seeing` and `text` families ship as one config each. | The research harness withheld these through its parts registry; a flight serves every part. |
 | A mission call's name binds as an ordinary Python name (the calls are the namespace's builtins): `intersection = find(...)` shadows the call for the rest of the mission, `del intersection` gives it back, and calling whatever the name holds says so. | Binding over a mission call's name was refused before any line of the block ran. |
 | A run result carries no `said` echo of the model's block. | Every run result opened with `said`, the block verbatim. |
 | A block the pre-scan or compiler refuses reads "nothing in this block ran -- line N: ...". | A scan refusal named no line and read like a runtime error. |
@@ -508,6 +508,8 @@ python -m benchmarks.calcity.bench_fullset \
 E4, the control and one root per ablation arm, per model. `configs/withhold/`
 holds one config per withhold (`maps/search/withhold.py`) and one per
 family: `seeing` (look_for, look, images, map) and `text` (doc, system_turn).
+Under `end_commit` the mission still ends on a plain reply and scores the last
+flight; only what the model is told about it is withheld.
 
 ```sh
 # inkling-small:     arms="mission_map system_turn look_for end_commit"
