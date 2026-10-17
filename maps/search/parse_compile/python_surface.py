@@ -730,7 +730,7 @@ class Rows(_Cuts):
         return rows
 
     def _lo(self) -> int:
-        """Where this window starts in the whole ref: a row's ``src`` index
+        """Where this window starts in the whole ref: a row's ``_src`` index
         is into the ref, not the window."""
         return window_span(self._spec)[0] if self._spec else 0
 
