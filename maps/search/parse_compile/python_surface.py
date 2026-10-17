@@ -769,7 +769,7 @@ class RowList(_Cuts, list):
         a predicate filter is no dead end: the served cut works on the
         materialised subset as it does on a handle."""
         for r in self:
-            mp = object.__getattribute__(r, "_mp")
+            mp = object.__getattribute__(r, "_mp") if isinstance(r, Row) else None
             if mp is not None:
                 return mp, list(self)
         return None, None

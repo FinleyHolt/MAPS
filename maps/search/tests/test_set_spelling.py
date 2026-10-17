@@ -319,3 +319,8 @@ def test_a_list_or_a_row_called_says_what_it_is(held, what):
         "gives the call back.")
     assert _first_error(f'x = {held}\nsorted([1, 2], key=x)') == (
         f"line 2: TypeError: x is {what}, not a call.")
+
+
+def test_a_list_holding_a_non_row_finds_its_mission_on_its_rows():
+    err = _first_error('x = ["a"] + find("car")\nx.filter(near="prior_7", dwithin=5)')
+    assert "_mp" not in err, err
