@@ -246,8 +246,7 @@ def _put_image(url: str, raw: bytes, media_type: str,
     cancel event aborts it as it does the chat call."""
     watch = _CancelWatch(cancel_event) if cancel_event is not None else None
     try:
-        with httpx.Client(timeout=httpx.Timeout(
-                30.0, connect=_CONNECT_TIMEOUT_S, read=180.0, write=180.0)) as client:
+        with httpx.Client(timeout=httpx.Timeout(180.0, connect=_CONNECT_TIMEOUT_S)) as client:
             client.put(url, content=raw,
                        headers={"Content-Type": media_type},
                        extensions={"trace": watch.trace} if watch is not None else None,
