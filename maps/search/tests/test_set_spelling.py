@@ -285,3 +285,9 @@ def test_an_empty_list_of_rows_in_a_one_place_slot_holds_0_rows(slot):
                                   'cars = find("car")\nmax([1, 2], key=cars)'])
 def test_a_set_called_by_a_builtin_is_named_by_its_own_name(code):
     assert _first_error(code).startswith("line 2: TypeError: cars is a set of 2 row(s)")
+
+
+def test_a_comprehension_variable_named_after_a_move_is_the_models_variable():
+    _, fr, _, _ = drive([[run('xs = ["prior_7"]\nprint([go_to for go_to in xs])')], "done"],
+                        cands=_TIED)
+    assert [o.get("error") for o in tool_results(fr)] == [None]

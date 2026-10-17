@@ -266,12 +266,20 @@ def scan_block(code: str, bound=()) -> ast.Module:
     at = 1                    # the line of the node being vetted
     called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
     # A move's name is the model's variable where a store of it comes first
-    # (earlier in this block, or in an earlier block).
+    # (earlier in this block, or in an earlier block). A comprehension binds
+    # its targets before its element, which is written first.
     first_store: dict = {}
     for n in ast.walk(tree):
-        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
-            first_store[n.id] = min(first_store.get(n.id, (n.lineno, n.col_offset)),
-                                    (n.lineno, n.col_offset))
+        if isinstance(n, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+            stores = [(t, n) for g in n.generators for t in ast.walk(g.target)]
+        elif isinstance(n, ast.Name):
+            stores = [(n, n)]
+        else:
+            continue
+        for t, at_node in stores:
+            if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store):
+                pos = (at_node.lineno, at_node.col_offset)
+                first_store[t.id] = min(first_store.get(t.id, pos), pos)
 
     def _stored_before(n) -> bool:
         return n.id in bound or first_store.get(n.id, (1 << 30, 0)) < (n.lineno, n.col_offset)
