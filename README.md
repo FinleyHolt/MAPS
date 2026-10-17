@@ -252,9 +252,12 @@ lists the exact commands.
 | Experiment | Split and episodes | Arms | Config and flags | Reader |
 |---|---|---|---|---|
 | E1 | CityNav `train_seen`, 1,000 per arm (`--limit 1000`, seed 1234) | Inkling Small at effort 0.99; Qwen 3.8 Flash Next at `xhigh`; Gemma 4 26B-A4B | `configs/citynav.yaml`, `SEARCH_SAMPLING_REASONING_EFFORT` | `arm_table`, `run_report` |
-| E2 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `low`, `medium`, `xhigh`; Inkling Small at 0.99; Gemma 4 E2B; Gemma 4 E4B | `configs/citynav.yaml`, `--split test_unseen` | `arm_table`, `run_report` |
+| E2 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `low`, `medium`, `xhigh`; Inkling Small at 0.99; Gemma 4 26B-A4B; Gemma 4 E2B; Gemma 4 E4B | `configs/citynav.yaml`, `--split test_unseen` | `arm_table`, `run_report` |
 | E3 | Cal City, the 1,100 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table`, `figures.plot_effort_ladder` |
 | E4 | CityNav `train_seen`, 1,000 per arm | Per model: the control and its ablation arms (below) | `configs/withhold/<arm>.yaml` | `arm_table`, `ab_report` |
+| E7 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | Inkling Small at 0.0, 0.1 ... 0.9 (10 rungs), each for MAPS, ViSA and GeoNav | `configs/citynav.yaml`, `configs/baselines/{visa,geonav}.yaml` | `arm_table`, `figures.plot_effort_ladder` |
+| E8 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | ViSA and GeoNav at each Qwen 3.8 Flash Next effort (`low`, `medium`, `xhigh`), paired with the E2 roots on shared ids | `configs/baselines/{visa,geonav}.yaml` | `arm_table`, `ab_report` |
+| E9 | CityNav `test_unseen`, all 5,311 | One model under the released baselines' protocol (100 actions, a 50 m start) | `configs/baselines/released_protocol.yaml` | `arm_table`, `outcome_rows pair` |
 | E5 | E2 and E3 roots | Every arm | none beyond E2 and E3 | `figures.capability_effort_arms`, `figures.plot_capability_effort` |
 
 ## Install
@@ -490,7 +493,7 @@ SEARCH_SAMPLING_REASONING_EFFORT=xhigh \
 ```
 
 The other arms change the effort (`low`, `medium`, or `0.99` with Inkling
-Small served), or serve Gemma 4 E2B or E4B with no effort set.
+Small served), or serve Gemma 4 26B-A4B, E2B or E4B with no effort set.
 
 E3, the reviewed Cal City episodes per effort rung:
 
@@ -525,12 +528,41 @@ done
 The control is the model's E1 root, so each arm runs at the model's E1 effort
 (blank for a model run with none); `ab_report` refuses a pair whose efforts differ.
 
+E7, the Inkling Small CityNav ladder for MAPS and the two baselines, and E8,
+the baselines at each Qwen effort (the MAPS side of E8 is E2):
+
+```sh
+for e in 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9; do
+  SEARCH_SAMPLING_REASONING_EFFORT=$e python -m benchmarks.citynav.bench_fullset --split test_unseen \
+    --limit 1000 --sample-seed 1234 --out-root output/e7/inkling-small-maps-e$e
+  for policy in visa geonav; do
+    SEARCH_SAMPLING_REASONING_EFFORT=$e CITYNAV_BENCH_CONFIG=configs/baselines/$policy.yaml \
+      python -m benchmarks.citynav.bench_fullset --split test_unseen --limit 1000 --sample-seed 1234 \
+      --out-root output/e7/inkling-small-$policy-e$e
+  done
+done
+for e in low medium xhigh; do
+  for policy in visa geonav; do
+    SEARCH_SAMPLING_REASONING_EFFORT=$e CITYNAV_BENCH_CONFIG=configs/baselines/$policy.yaml \
+      python -m benchmarks.citynav.bench_fullset --split test_unseen --limit 1000 --sample-seed 1234 \
+      --out-root output/e8/qwen38-flash-next-$policy-$e
+  done
+done
+```
+
+E9, one model under the released baselines' protocol:
+
+```sh
+CITYNAV_BENCH_CONFIG=configs/baselines/released_protocol.yaml \
+  python -m benchmarks.citynav.bench_fullset --split test_unseen --out-root output/e9/<model>
+```
+
 Read the results:
 
 ```sh
 python -m benchmarks.citynav.analysis.arm_table output/e2/*            # SR, OSR, NE per arm
 python -m benchmarks.citynav.analysis.run_report output/e1/inkling-small   # one root in full
-python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/e4/<model>/look
+python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/e4/<model>/<arm>
 python -m figures.plot_effort_ladder output/e3/inkling-small-e*
 python -m figures.plot_capability_effort --split test_unseen output/e2/*
 python -m figures.plot_capability_effort --split calcity --cost total output/e3/*
