@@ -15,6 +15,7 @@ scored by their max.
 
 from __future__ import annotations
 
+import functools
 import math
 import re
 
@@ -110,6 +111,7 @@ def token_idf(rows) -> dict[str, float]:
     return {t: math.log(1 + n / (1 + d)) for t, d in df.items()}
 
 
+@functools.lru_cache(maxsize=1 << 18)
 def fuzzy_normalize(text: str) -> str:
     """Lowercase, punctuation out, ``_-/=`` as spaces, abbreviations expanded."""
     text = text.lower()
@@ -251,6 +253,12 @@ def fuzzy_prepare_query(query: str) -> tuple:
     return tuple(out)
 
 
+@functools.lru_cache(maxsize=1 << 18)
+def _candidate_forms(c: str) -> frozenset:
+    """Every singular spelling of a normalized candidate's words."""
+    return frozenset(f for t in c.split() for f in _singular_forms(t))
+
+
 def fuzzy_match_score(clause: tuple, candidate: str, idf: dict) -> float:
     """1.0 when the clause equals ``candidate``; else the share of the
     clause's idf mass the candidate covers, capped at ``TOKEN_BAG_CEIL``. A
@@ -262,7 +270,7 @@ def fuzzy_match_score(clause: tuple, candidate: str, idf: dict) -> float:
         return 0.0
     if q_norm == c:
         return 1.0
-    ct = {f for t in c.split() for f in _singular_forms(t)}
+    ct = _candidate_forms(c)
     num = den = 0.0
     for forms in qw:
         w = min((idf[f] for f in forms if f in idf), default=0.0)

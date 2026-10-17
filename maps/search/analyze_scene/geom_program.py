@@ -248,6 +248,8 @@ def _query_matched_census(counts: dict, query: str) -> dict:
         toks |= {T.singularize(t) for t in toks}
         if toks & q_tokens or any(
                 len(ct) >= 4
+                # the length gap bounds the edit distance from below
+                and abs(len(qt) - len(ct)) <= 0.3 * max(len(qt), len(ct))
                 and 1.0 - T.edit_distance(qt, ct) / max(len(qt), len(ct)) >= 0.7
                 for qt in q_long for ct in toks):
             matched[key] = n
