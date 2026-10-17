@@ -527,12 +527,13 @@ class _Cuts:
 
     def __call__(self, *args, **kwargs):
         # A set or a row is no call; a name bound over a mission call says
-        # so. A builtin that calls it (sorted(key=s)) is not its name.
+        # so. A builtin that calls it (sorted(key=s)) is not its name; a
+        # subscript called (cars[0]()) is.
         mp = self._mission()
         node = mp and mp.running_node()
-        name = (node.func.id if isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and dict.get(mp.ns, node.func.id) is self else
+        f = node.func if isinstance(node, ast.Call) else None
+        name = (ast.unparse(f) if isinstance(f, ast.Subscript)
+                or (isinstance(f, ast.Name) and dict.get(mp.ns, f.id) is self) else
                 (mp.spelling(self) if isinstance(self, Rows)
                  else mp and mp.name_of(self)) or UNNAMED)
         what = "a row" if isinstance(self, Row) else f"a set of {len(self)} row(s)"

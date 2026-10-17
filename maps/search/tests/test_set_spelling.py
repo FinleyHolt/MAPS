@@ -333,6 +333,11 @@ def test_a_slice_of_a_list_of_rows_still_cuts_and_orders():
     assert [o.get("printed") for o in tool_results(fr)] == ["1"]
 
 
+def test_a_row_called_is_named_as_the_model_wrote_it():
+    assert _first_error('cars = find("car")\ncars[0]()') == (
+        "line 2: TypeError: cars[0] is a row, not a call.")
+
+
 def test_a_list_holding_a_non_row_finds_its_mission_on_its_rows():
     err = _first_error('x = ["a"] + find("car")\nx.filter(near="prior_7", dwithin=5)')
     assert "_mp" not in err, err
