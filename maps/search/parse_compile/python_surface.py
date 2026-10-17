@@ -226,8 +226,9 @@ class MissionNamespace(dict):
 
 
 def scan_block(code: str) -> ast.Module:
-    """Parse and vet one block, or raise :class:`CodeError` with the reason
-    (a syntax error echoes the offending source line with a caret)."""
+    """Parse and vet one block, or raise :class:`CodeError` with the line
+    and the reason (a syntax error echoes the offending source line with a
+    caret)."""
     try:
         tree = ast.parse(code)
         # Some syntax errors (a repeated keyword argument) are raised by the
@@ -251,10 +252,12 @@ def scan_block(code: str) -> ast.Module:
         raise CodeError(
             f"line {e.lineno}: syntax error: {e.msg}{where}") from None
     loop_depth = 0
+    at = 1                    # the line of the node being vetted
     called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
 
     def _walk(node):
-        nonlocal loop_depth
+        nonlocal loop_depth, at
+        at = getattr(node, "lineno", at)
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             mods = ([node.module] if isinstance(node, ast.ImportFrom)
                     else [a.name for a in node.names])
@@ -308,7 +311,10 @@ def scan_block(code: str) -> ast.Module:
         if in_loop:
             loop_depth -= 1
 
-    _walk(tree)
+    try:
+        _walk(tree)
+    except CodeError as e:
+        raise CodeError(f"line {at}: {e}") from None
     return tree
 
 
@@ -1672,7 +1678,7 @@ class MissionPython:
             tree = _instrument(scan_block(code))
             compiled = compile(tree, BLOCK_FILENAME, "exec")
         except CodeError as e:
-            return self.env.say_err(out, str(e))
+            return self.env.say_err(out, f"nothing in this block ran -- {e}")
         codes = _code_objects(compiled)
         self._block_codes = set(codes)     # the block the model just sent
         self._codes.extend(codes)

@@ -185,6 +185,13 @@ def test_the_prescan_refusals():
                "    print(x)\n")
 
 
+def test_a_scan_refusal_says_nothing_ran_and_names_its_line():
+    _r, fr, _f, declared = drive([[run('look_for("car")\nimport os\n')], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert err.startswith("nothing in this block ran -- line 2: cannot import os"), err
+    assert not declared
+
+
 def test_a_runaway_loop_dies_on_the_line_ceiling():
     reply, fr, _f, _d = drive([
         [run("n = 0\nwhile True:\n    n = n + 1\n")],
