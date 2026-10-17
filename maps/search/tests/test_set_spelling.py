@@ -321,6 +321,12 @@ def test_a_list_or_a_row_called_says_what_it_is(held, what):
         f"line 2: TypeError: x is {what}, not a call.")
 
 
+def test_a_slice_of_a_list_of_rows_still_cuts_and_orders():
+    _, fr, _, _ = drive([[run('x = find("car").filter(lambda r: True)[0:1]\n'
+                              'print(len(x.order(lambda r: r.fid)))')], "done"], cands=_TIED)
+    assert [o.get("printed") for o in tool_results(fr)] == ["1"]
+
+
 def test_a_list_holding_a_non_row_finds_its_mission_on_its_rows():
     err = _first_error('x = ["a"] + find("car")\nx.filter(near="prior_7", dwithin=5)')
     assert "_mp" not in err, err

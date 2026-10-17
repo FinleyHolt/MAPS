@@ -816,7 +816,8 @@ class RowList(_Cuts, list):
 
     def __getitem__(self, i):
         try:
-            return list.__getitem__(self, i)
+            v = list.__getitem__(self, i)
+            return RowList(v) if isinstance(i, slice) else v
         except (IndexError, TypeError) as e:
             past_end = isinstance(e, IndexError)
         mp = self._mission()
