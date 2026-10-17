@@ -229,9 +229,6 @@ def _image_ref(part: dict, media_type: str, raw: bytes | None) -> dict:
 IMAGE_STORE_ENV = "MAPS_IMAGE_STORE_URL"
 # shas the store holds; a 409 from it drops the ones it names.
 _IMAGE_STORE_HELD: set[str] = set()
-# Connect outlasts a radio dropout: a PUT that gives up inside one loses the
-# turn's images to a link that was about to come back.
-_IMAGE_STORE_TIMEOUT = httpx.Timeout(30.0, read=180.0, write=180.0)
 
 
 class ImageStoreError(ValueError):
@@ -246,7 +243,8 @@ def _put_image(url: str, raw: bytes, media_type: str,
     cancel event aborts it as it does the chat call."""
     watch = _CancelWatch(cancel_event) if cancel_event is not None else None
     try:
-        with httpx.Client(timeout=_IMAGE_STORE_TIMEOUT) as client:
+        with httpx.Client(timeout=httpx.Timeout(
+                30.0, connect=_CONNECT_TIMEOUT_S, read=180.0, write=180.0)) as client:
             client.put(url, content=raw,
                        headers={"Content-Type": media_type},
                        extensions={"trace": watch.trace} if watch is not None else None,

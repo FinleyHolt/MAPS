@@ -58,14 +58,25 @@ def test_a_cancel_during_a_retry_backoff_ends_the_wait(monkeypatch):
     assert time.monotonic() - t0 < 2.0
 
 
-def test_a_cancel_during_a_connect_that_never_completes_ends_the_call(monkeypatch):
+def _chat(port, cancel):
+    http.chat_completions_raw(f"http://127.0.0.1:{port}/v1", None, timeout=60.0,
+                               cancel_event=cancel, model="m",
+                               messages=[{"role": "user", "content": "x"}])
+
+
+def _put(port, cancel):
+    http._put_image(f"http://127.0.0.1:{port}/images/x", b"x", "image/jpeg", cancel)
+
+
+@pytest.mark.parametrize("send", [_chat, _put])
+def test_a_cancel_during_a_connect_that_never_completes_ends_the_call(monkeypatch, send):
     """A listener whose accept queue is full drops every further SYN, so the
     connect hangs as on a blackholed route; the connect bound ends it and the
     cancel lands before any retry."""
     import socket
 
     monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
-    monkeypatch.setattr(http, "_CONNECT_TIMEOUT_S", 0.5, raising=False)
+    monkeypatch.setattr(http, "_CONNECT_TIMEOUT_S", 0.5)
     lis = socket.socket()
     lis.bind(("127.0.0.1", 0))
     lis.listen(0)
@@ -84,9 +95,7 @@ def test_a_cancel_during_a_connect_that_never_completes_ends_the_call(monkeypatc
 
     def call():
         try:
-            http.chat_completions_raw(f"http://127.0.0.1:{lis.getsockname()[1]}/v1", None,
-                                       timeout=60.0, cancel_event=cancel, model="m",
-                                       messages=[{"role": "user", "content": "x"}])
+            send(lis.getsockname()[1], cancel)
         except Exception as e:  # noqa: BLE001
             got.append(e)
 
@@ -97,4 +106,3 @@ def test_a_cancel_during_a_connect_that_never_completes_ends_the_call(monkeypatc
         s.close()
     assert not t.is_alive(), "the connect outlived its bound"
     assert len(got) == 1 and isinstance(got[0], http.CallCanceled), got
-    assert http._CONNECT_TIMEOUT_S <= 15.0
