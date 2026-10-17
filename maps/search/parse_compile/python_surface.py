@@ -970,8 +970,9 @@ class MissionEnv:
     refusing ack part carries ``"error"``. ``plan_rn`` is the shared ref
     counter, ``widened`` the paging ledger, ``minted`` the handles the call's
     flights minted, ``say_err(ack, msg)`` the refusal format,
-    ``row_of_fid(fid)`` a live-row reader (None when absent) and
-    ``tied_of_ref(ref)`` whether a ref holds a tied view."""
+    ``row_of_fid(fid)`` a live-row reader (None when absent),
+    ``tied_of_ref(ref)`` whether a ref holds a tied view and ``version()``
+    the surface version."""
 
     rows_of_ref: Callable
     plan_rn: list
@@ -990,6 +991,7 @@ class MissionEnv:
     finish: Callable
     row_of_fid: Callable
     tied_of_ref: Callable
+    version: Callable
 
 
 class MissionPython:
@@ -1031,6 +1033,7 @@ class MissionPython:
         self._lines = 0
         self._deadline = 0.0
         self._block_shown: set = set()
+        self._unrendered: dict = {}     # deduped this block -> surface version
 
     def _wrap_call(self, name: str):
         """The library callable the namespace serves: the real
@@ -1262,7 +1265,8 @@ class MissionPython:
         p.ground(ties)
         ack = self.env.analyze(p.ops, p.rn, ref, page)
         if "results" not in ack.get("result", {"results": None}):
-            self._unrendered.add(ref)    # deduped: its note says so
+            # deduped: its note says so, while the surface stands
+            self._unrendered[ref] = self.env.version()
         self._end(ack)
         return ref
 
@@ -1684,7 +1688,7 @@ class MissionPython:
         if value is None:
             return
         if isinstance(value, Rows) and not value._spec \
-                and value._ref in self._unrendered:
+                and self._unrendered.get(value._ref) == self.env.version():
             return
         if isinstance(value, Rows):
             # Key the envelope by the MODEL's spelling ("r1[0:5]"), not the
@@ -1714,7 +1718,7 @@ class MissionPython:
         self._printed = ""
         self._lines = 0
         self._block_shown = set()
-        self._unrendered: set = set()     # deduped this block: never shown
+        self._unrendered.clear()
         self._get_noted.clear()
         self._geom.clear()
         self._measure_calls = 0

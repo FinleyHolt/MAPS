@@ -509,6 +509,7 @@ class _Mission:
             rows_of_ref=lambda ref: list(self.carry.read(ref) or []),
             tied_of_ref=lambda ref: bool(
                 getattr(self.carry.read(ref), "name_set", False)),
+            version=lambda: self.carry.version,
             plan_rn=self.plan_rn, widened=self._widened, minted=self._code_minted,
             say_err=self._plan_err, row_of_fid=self._ns_rows.get,
             ground=self._ground_names, analyze=self._analyze, stand=self._stand,

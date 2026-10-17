@@ -84,3 +84,12 @@ def test_a_deduped_bare_line_serves_the_note_and_no_table():
     again = tool_results(fr)[1]["result"]
     assert "not re-rendered" in again["note"], again
     assert "results" not in again, again
+
+
+def test_a_deduped_handle_shown_after_a_flight_in_its_block_renders():
+    """The note covers the surface it was served on: once a flight in the
+    same block moves the world, a bare line of the handle shows its table."""
+    _, fr, _, _ = drive([[run('cars = find("car")\n')],
+                         [run('cars = find("car")\ngo_to(cars[0])\ncars\n')], "done"])
+    again = tool_results(fr)[1]
+    assert "cars" in again["result"].get("results", {}), again

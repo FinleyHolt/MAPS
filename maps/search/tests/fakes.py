@@ -462,7 +462,8 @@ def quiet_env(**kw):
         ground=lambda names: {"ties": {n: [n] for n in names}},
         analyze=nop, stand=nop, move=nop, cover=nop, crops=nop, map=nop,
         watch=nop, boost=nop, finish=lambda ack: ack,
-        row_of_fid=lambda fid: None, tied_of_ref=lambda ref: False)
+        row_of_fid=lambda fid: None, tied_of_ref=lambda ref: False,
+        version=lambda: 0)
     fields.update(kw)
     return ps.MissionEnv(**fields)
 
