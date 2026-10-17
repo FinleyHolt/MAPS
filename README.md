@@ -373,14 +373,12 @@ bills; size the limit to the bench's concurrency on that count.
 export SEARCH_REASONER_URL=https://<resource>.openai.azure.com/openai/v1
 export SEARCH_REASONER_API_KEY=<deployment key>
 export SEARCH_ENDPOINT_SPEC_OVERRIDE=gpt-5.6-sol:262144
-export SEARCH_REASONER_TIMEOUT_S=1200
 python -m maps.llm.endpoint_preflight --effort none --effort medium --effort xhigh
 ```
 
 The override pins the window Inkling Small is served with, so the compactor
 holds GPT-5.6 Sol to the same context budget as the other arms; the model's
-own window is 1,050,000 tokens. The timeout outlasts a turn at a high effort
-that spends the whole output reserve. The card takes the efforts `none`, `low`,
+own window is 1,050,000 tokens. The card takes the efforts `none`, `low`,
 `medium`, `high`, `xhigh` and `max`. The preflight flies two turns per effort
 through the reasoner's request path, the second streaming and carrying the
 tool call and its result, and prints either the endpoint's refusal or each
