@@ -159,6 +159,12 @@ def rn_spelled(vals) -> set:
     return out
 
 
+def _ref_label(r) -> str:
+    """The label an executor ref's columns carry, through the executor's OWN
+    sanitizer."""
+    return sanitize_token(r["as"] if isinstance(r, dict) and "as" in r else r)
+
+
 class Program:
     """One call's ops over the mission-global rN chain. The executor's refs and
     the model's handles are both rN, so a program never mints an rN a name in
@@ -254,9 +260,7 @@ class Program:
         """The label a compare's columns carry for this anchor, through the
         executor's OWN sanitizer ("the depot" -> "the_depot"), so a key
         built here never names a column that does not exist."""
-        r = self.ref_of(anchor)
-        return sanitize_token(r["as"] if isinstance(r, dict) and "as" in r
-                               else r)
+        return _ref_label(self.ref_of(anchor))
 
     def cut_le(self, items, anchor, value) -> str:
         """Keep the rows within ``value`` metres of ``anchor``: one compare
@@ -283,11 +287,12 @@ class Program:
         emphasis as the distances."""
         refs, emphasis, seen = [], [], set()
         for a in [*near, *(a for _d, a in cards)]:
-            lab = self.label(a)
+            r = self.ref_of(a)
+            lab = _ref_label(r)
             if lab in seen:
                 continue
             seen.add(lab)
-            refs.append(self.ref_of(a))
+            refs.append(r)
             emphasis.append({"key": f"distance to {lab}", "w": -1})
         args = {"items": items, "refs": refs}
         if cards:

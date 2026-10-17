@@ -224,7 +224,7 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, resolve,
         if not f:
             continue
         mark_list: list[dict] = []
-        for mf in dict.fromkeys(marked + _fids_of([f])):
+        for mf in dict.fromkeys(marked + [f]):
             xy = resolve(mf)
             if xy is None:
                 skipped.append(mf)
