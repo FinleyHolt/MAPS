@@ -19,6 +19,8 @@ import math
 import sys
 from pathlib import Path
 
+import yaml
+
 from benchmarks.citynav.analysis import arm_table
 from benchmarks.citynav.analysis import rows as _rows
 from figures import FONT, MONO, bench_label, esc, themes
@@ -191,11 +193,13 @@ def heading(rows: list[dict]) -> tuple[str, str]:
                      for m in mans})
     splits = sorted({str(m.get("split") or "") for m in mans} - {""})
     commits = sorted({str(m.get("git_commit") or "")[:7] for m in mans} - {""})
+    policies = sorted({str((yaml.safe_load(m.get("config_yaml") or "{}") or {}).get("policy") or "")
+                       for m in mans} - {""})
     sizes = sorted({r["n"] for r in rows})
     title = " / ".join(bench_label(s) for s in splits) or "Effort ladder"
     n = f"{sizes[0]:,}" if len(sizes) == 1 else f"{sizes[0]:,} to {sizes[-1]:,}"
-    sub = (f"{', '.join(models)}, {len(rows)} arms, {n} episodes each, "
-           f"commit {', '.join(commits) or 'unrecorded'}")
+    sub = (f"{', '.join(models)}{', policy ' + ', '.join(policies) if policies else ''}, "
+           f"{len(rows)} arms, {n} episodes each, commit {', '.join(commits) or 'unrecorded'}")
     return title, sub
 
 
@@ -203,7 +207,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("roots", nargs="+", type=Path, help="run roots, one per arm")
     ap.add_argument("--out-dir", type=Path, default=Path("output/figures"))
-    ap.add_argument("--stem", default="effort_ladder")
+    ap.add_argument("--stem", default=None, help="file stem (default effort_ladder_<split>)")
     _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)
 
@@ -225,9 +229,11 @@ def main(argv: list[str]) -> int:
             raise SystemExit(f"plot_effort_ladder: {key} absent for {missing}")
 
     title, sub = heading(rows)
+    splits = sorted({str(_rows.read_manifest(Path(r["root"])).get("split") or "") for r in rows} - {""})
+    stem = args.stem or "_".join(["effort_ladder", *splits])
     args.out_dir.mkdir(parents=True, exist_ok=True)
     for theme in ("light", "dark"):
-        path = args.out_dir / f"{args.stem}_{theme}.svg"
+        path = args.out_dir / f"{stem}_{theme}.svg"
         path.write_text(render(rows, theme, title, sub))
         print(f"wrote {path}  ({len(rows)} arms)")
     return 0

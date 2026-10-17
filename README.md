@@ -564,6 +564,7 @@ python -m benchmarks.citynav.analysis.arm_table output/e2/*            # SR, OSR
 python -m benchmarks.citynav.analysis.run_report output/e1/inkling-small   # one root in full
 python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/e4/<model>/<arm>
 python -m figures.plot_effort_ladder output/e3/inkling-small-e*
+for p in maps visa geonav; do python -m figures.plot_effort_ladder --stem effort_ladder_e7_$p output/e7/inkling-small-$p-e*; done
 python -m figures.plot_capability_effort --split test_unseen output/e2/*
 python -m figures.plot_capability_effort --split calcity --cost total output/e3/*
 ```

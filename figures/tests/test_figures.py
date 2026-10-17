@@ -98,7 +98,7 @@ def test_the_effort_ladder_titles_itself_from_the_manifests(tmp_path):
                       split="calcity", criterion="shape"))
     out = tmp_path / "fig"
     assert plot_effort_ladder.main([*map(str, roots), "--out-dir", str(out)]) == 0
-    svg = (out / "effort_ladder_light.svg").read_text()
+    svg = (out / "effort_ladder_calcity_light.svg").read_text()
     assert "Cal City: success and error" in svg
     assert "inkling-small, 4 arms, 3 episodes each, commit abcdef0" in svg
     assert "a second arm at an effort already on the line" in svg
@@ -144,3 +144,17 @@ def test_a_partial_root_is_read_and_reported_once(tmp_path, capsys):
     assert rec["n"] == 2
     assert capsys.readouterr().err.count("PARTIAL") == 1
 
+
+
+def test_ladders_of_two_splits_or_policies_never_share_a_file(tmp_path):
+    (tmp_path / "cn").mkdir()
+    (tmp_path / "cc").mkdir()
+    cn = [_arm(tmp_path / "cn", f"e{e}", "inkling-small", e, [1, 0, 0], split="test_unseen")
+          for e in ("0.0", "0.5", "0.9")]
+    cc = [_arm(tmp_path / "cc", f"e{e}", "inkling-small", e, [1, 0, 0], split="calcity", criterion="shape")
+          for e in ("0.0", "0.5", "0.9")]
+    out = tmp_path / "fig"
+    assert plot_effort_ladder.main([*map(str, cc), "--out-dir", str(out)]) == 0
+    assert plot_effort_ladder.main([*map(str, cn), "--out-dir", str(out)]) == 0
+    assert (out / "effort_ladder_calcity_light.svg").exists()
+    assert (out / "effort_ladder_test_unseen_light.svg").exists()
