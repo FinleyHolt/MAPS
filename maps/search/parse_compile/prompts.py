@@ -360,6 +360,9 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
         ("sub", "is a place to look and relate near", "is a place to relate near"),
         ("sub", "loop to LOOK, then move once", "loop to READ, then move once"),
     ],
+    "end_commit": [
+        ("sub", " Your answer is wherever you flew LAST.", ""),
+    ],
     "loop": [
         ("cut", " go_to and explore cannot go inside a loop", "\n"),
     ],
@@ -497,6 +500,7 @@ _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
                 " nothing, only flying to it does. A reply before any flight"
                 " answers nothing. ", ""),
         ("drop", "- Your answer is the ROW"),
+        ("sub", "Neither moves the drone or ends anything.", "Neither moves the drone."),
     ],
 }
 # ... and to the rig's sensor block.

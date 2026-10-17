@@ -284,7 +284,7 @@ class MissionSession:
             "new_detections": len(step_detections),
             **detected_digest(loop.last_flight_detections()),
             # The commit is the last flight's target, verbatim.
-            "answer_if_you_reply_now": token,
+            **({} if withheld("end_commit") else {"answer_if_you_reply_now": token}),
             # The operator instruction rides every flight report.
             "cue": episode.description,
         }

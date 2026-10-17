@@ -143,7 +143,7 @@ PRINT_CHAR_CAP = 8_000
 
 _LOOP_MOVE_MSG = (
     "{name}() cannot go inside a loop or a def/lambda: it MOVES, and a loop moves to "
-    "every row of the set -- go_to commits to whichever came last{explore}. "
+    "every row of the set{last}{explore}. "
     "{then}, then move once to the place you chose.")
 
 
@@ -317,7 +317,9 @@ def scan_block(code: str, bound=()) -> ast.Module:
                 and isinstance(node.func, ast.Name)
                 and node.func.id in _MOVE_CALLS):
             raise CodeError(_LOOP_MOVE_MSG.format(
-                name=node.func.id, then="Loop to read the rows"
+                name=node.func.id,
+                last="" if withheld("end_commit") else " -- go_to commits to whichever came last",
+                then="Loop to read the rows"
                 if withheld("look") else "Loop to LOOK",
                 explore="" if withheld("library") else
                 ", and explore flies a covering pass over each"))

@@ -331,11 +331,11 @@ TRUNCATED_TURN_NUDGE = (
 #: in a row, after which it reads as an empty turn.
 TRUNCATED_TURN_STREAK = 3
 
-CODE_REPLY_NUDGE = (
+_CODE_REPLY = (
     "Your reply is code, but it arrived as plain text, not through the run "
     "tool, so nothing was executed. Send the block with the tool to run "
-    "it; a plain reply in your own words ends the mission."
-)
+    "it")
+CODE_REPLY_NUDGE = _CODE_REPLY + "; a plain reply in your own words ends the mission."
 
 MALFORMED_ENVELOPE_NUDGE = (
     "Your reply contains tool-call markup that did not parse as a native "
@@ -343,12 +343,11 @@ MALFORMED_ENVELOPE_NUDGE = (
     "the API's tool-call channel executes."
 )
 
+_GO_TO_FIRST = "If you know which one it is, go_to() it first, then reply."
 NO_FLIGHT_REPLY_NUDGE = (
     "Your reply ends the mission, and your answer is the row of your LAST "
     "flight -- but you have flown nowhere, so it answers nothing. Naming "
-    "the object commits nothing; only flying to it does. If you know which "
-    "one it is, go_to() it first, then reply."
-)
+    "the object commits nothing; only flying to it does. " + _GO_TO_FIRST)
 
 # The bench's transient-error budget; a live mission (a reasoner with a
 # cancel_event) waits for the arm until it answers or the operator stops.
@@ -371,7 +370,9 @@ def _not_a_reply(content: str) -> tuple[str, str, str] | None:
     if not content.strip():
         return "empty_turn", "EMPTY turn", EMPTY_TURN_NUDGE
     if _code_reply(content):
-        return "code_shaped_reply", "CODE-SHAPED reply turn", CODE_REPLY_NUDGE
+        # The end_commit withhold says nothing of how the mission ends.
+        return "code_shaped_reply", "CODE-SHAPED reply turn", (
+            _CODE_REPLY + "." if withheld("end_commit") else CODE_REPLY_NUDGE)
     return None
 
 
@@ -1243,9 +1244,9 @@ class _Mission:
         self._covered_fids = covered
         mv: dict = {
             "explored": subject, "stops": len(ok),
-            "answer_if_you_reply_now": (
+            **({} if withheld("end_commit") else {"answer_if_you_reply_now": (
                 f"the last stop of the pass over {subject}; go_to() the row "
-                f"you mean before you reply"),
+                f"you mean before you reply")}),
             "new_detections": sum(int(r.get("new_detections") or 0)
                                   for r in ok)}
         m = self._mint_rows([f for f in self._ns_rows if f not in before], "pass")
@@ -1525,7 +1526,9 @@ class _Mission:
                         log.info("%s reply with ZERO flights at turn %d "
                                  "(streak %d) -> repair", self.rid_tag, turn_idx,
                                  no_flight_streak)
-                        self.reasoner.append_repair(NO_FLIGHT_REPLY_NUDGE)
+                        self.reasoner.append_repair(
+                            "You have flown nowhere. " + _GO_TO_FIRST
+                            if withheld("end_commit") else NO_FLIGHT_REPLY_NUDGE)
                         continue
                     log.info("%s reply with ZERO flights at turn %d, streak "
                              "%d -- abstain", self.rid_tag, turn_idx,

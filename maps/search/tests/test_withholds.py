@@ -22,6 +22,7 @@ from maps.search.tests.fakes import (
     quiet_env,
     cars,
     drive,
+    explore_drive,
     look_drive,
     map_mission,
     run,
@@ -87,9 +88,10 @@ CASES = {
              (13, 6), (8, 5), (1, 0)),
     "mission_map": (("SYSTEM",), ("=== MISSION MAP ===", "You are the reasoner"),
                     (40, 0), (0, 0), (0, 0)),
-    "end_commit": (("SYSTEM",), ("Your mission ends", "commits nothing",
-                                 "A reply before any flight", "Your answer is the ROW"),
-                   (11, 3), (0, 0), (0, 0)),
+    "end_commit": (("SYSTEM", "TOOLS"), ("Your mission ends", "commits nothing",
+                                         "A reply before any flight", "Your answer is",
+                                         "flew LAST", "ends anything"),
+                   (12, 4), (1, 1), (0, 0)),
     "loop": (("TOOLS",), ("cannot go inside a loop", "explore(the set)"),
              (0, 0), (1, 1), (0, 0)),
     "doc": (("TOOLS",), ("Write ordinary Python", "THE MAP -- free", "ARM EVERY CLASS",
@@ -137,6 +139,37 @@ def test_an_end_commit_withhold_keeps_the_cue_word_standard_as_one_bullet(monkey
     assert ("- When you know which object the instruction means -- and a cue word no\n"
             "  column carries is known only from a look, never from rank -- go_to()\n"
             "  its row, then reply.\n") in prompts.served_system_prompt()
+
+
+# A served statement of how the mission ends or how its answer is chosen.
+_END_RULE = re.compile(r"mission ends|ends the mission|ends anything|your answer|answers nothing"
+                       r"|commits? (?:nothing|to)|flew LAST|answer_if_you_reply_now", re.I)
+
+
+def test_an_end_commit_withhold_serves_no_statement_of_the_end_or_the_answer(monkeypatch):
+    """The turn, the description, the nudges for a no-flight and a code-shaped
+    reply, the loop-move refusal and the go_to and explore receipts say
+    nothing of how the mission ends or which flight answers; the mission
+    still ends on the reply."""
+    script = ["It is the depot.", 'go_to("prior_7")',
+              [run('for r in find("car"):\n    go_to(r)\n')],
+              [run('go_to("prior_7")\n')], "done"]
+
+    def served(names):
+        monkeypatch.setenv(W.ENV, names)
+        reply, fr, flights, _d = drive(script)
+        assert reply.ended_by == "reply" and flights == [{"target_fid": "prior_7"}]
+        explored = explore_drive([[run('explore("prior_7")\n')], "done"])[1]
+        return "\n".join([_dump(monkeypatch, names, s) for s in DEFAULT_SHA256]
+                          + [str(m["content"]) for m in fr.messages]
+                          + [json.dumps(explored)])
+
+    flown = {m.lower() for m in _END_RULE.findall(served(""))}
+    assert flown >= {"mission ends", "ends the mission", "ends anything", "your answer",
+                     "answers nothing", "commits nothing", "commits to", "flew last",
+                     "answer_if_you_reply_now"}, flown
+    got = served("end_commit")
+    assert not _END_RULE.search(got), _END_RULE.findall(got)
 
 
 def test_a_look_for_withhold_serves_no_segmenter_in_the_sensor_block(monkeypatch):
@@ -524,7 +557,7 @@ def test_a_library_withhold_serves_no_library_name_on_the_paths_a_block_reaches(
 _COMBO_SPELLED = {"library": _LIBRARY_SPELLED, "map": re.compile(r"show_map|\bmaps\b"),
                   "look": re.compile(r"(?<![\w.])look\("), "look_for": re.compile("look_for"),
                   "loop": re.compile("cannot go inside a loop"),
-                  "end_commit": re.compile("Your mission ends|Your answer is the ROW")}
+                  "end_commit": _END_RULE}
 
 
 @pytest.mark.parametrize("names", [",".join(c) for r in (1, 2)

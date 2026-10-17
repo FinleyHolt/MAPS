@@ -22,9 +22,11 @@ WITHHOLDS: dict[str, str] = {
               " view deliver text only",
     "mission_map": "the system turn's MISSION MAP section",
     "system_turn": "the system turn",
-    "end_commit": "the system turn's two bullets on how the mission ends and"
-                  " what the answer is; the cue-word standard stays as one"
-                  " bullet",
+    "end_commit": "every sentence on how the mission ends and what the"
+                  " answer is -- the system turn's two bullets, the run"
+                  " description's, the nudges', the loop-move refusal's -- and"
+                  " the receipts' answer_if_you_reply_now; the cue-word"
+                  " standard stays as one bullet",
     "loop": "the turn loop's own behaviours but compaction: the repair"
             " nudges (a text turn always ends the mission), the move-in-a-loop"
             " refusal and its sentence, the identical-program note, the"
