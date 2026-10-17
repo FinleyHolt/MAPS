@@ -294,10 +294,13 @@ def test_a_predicate_filter_is_not_a_one_way_door():
     assert len(rows.order(lambda r: r["fid"])) == 2
 
 
-def test_an_empty_predicate_result_says_so_rather_than_indexing_nothing():
-    from maps.search.parse_compile.python_surface import RowList
-    with pytest.raises(CodeError, match="empty"):
-        RowList().order(color="red")
+def test_an_empty_list_cuts_and_orders_to_an_empty_list():
+    _r, fr, _f, _d = drive([[run(
+        'p = find("car").filter(lambda r: r.get("class") == "pool")\n'
+        'x = p.order(nearest="prior_7").filter(near="prior_7", dwithin=5)\n'
+        'print("after", len(x))\n')], "done"])
+    out = tool_results(fr)[0]
+    assert "error" not in out and out["printed"] == "after 0", out
 
 
 def test_ddwithin_cuts_against_whichever_anchor_was_named():

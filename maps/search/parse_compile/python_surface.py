@@ -468,7 +468,7 @@ class _Cuts:
         refuse_metres_in_within(kw.get("within"))
         if pred is None:
             mp, src = self._target()
-            return mp._rows_filter(src, **kw)
+            return RowList() if mp is None else mp._rows_filter(src, **kw)
         if any(v is not None for v in kw.values()):
             raise CodeError(
                 f"filter takes a predicate OR {_FILTER_SAY}, not both")
@@ -493,7 +493,8 @@ class _Cuts:
                     "key sort: rows.order(lambda r: r.distance(<place>), "
                     "reverse=True).")
             mp, src = self._target()
-            return mp._rows_order(src, nearest=nearest, color=color)
+            return (RowList() if mp is None
+                    else mp._rows_order(src, nearest=nearest, color=color))
         if key is not None and direction is not None:
             raise CodeError(
                 'order takes a key OR direction=, not both: '
@@ -684,16 +685,16 @@ class RowList(_Cuts, list):
     __slots__ = ()
 
     def _target(self):
-        """The mission the rows came from, and the rows. A list carries no
-        ref of its own, but every Row in it carries the surface it was minted
-        on, so a predicate filter is no dead end: the served cut works on the
+        """The mission the rows came from, and the rows; ``(None, None)``
+        for no rows, which cut and order to no rows. A list carries no ref of
+        its own, but every Row in it carries the surface it was minted on, so
+        a predicate filter is no dead end: the served cut works on the
         materialised subset as it does on a handle."""
         for r in self:
             mp = object.__getattribute__(r, "_mp")
             if mp is not None:
                 return mp, list(self)
-        raise CodeError(
-            "these rows are empty, so there is nothing to cut or order")
+        return None, None
 
 
 class Rows(_Cuts):
