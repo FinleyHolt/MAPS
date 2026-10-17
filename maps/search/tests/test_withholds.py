@@ -83,6 +83,9 @@ CASES = {
              (13, 6), (8, 5), (1, 0)),
     "mission_map": (("SYSTEM",), ("=== MISSION MAP ===", "You are the reasoner"),
                     (40, 0), (0, 0), (0, 0)),
+    "end_commit": (("SYSTEM",), ("Your mission ends", "commits nothing",
+                                 "A reply before any flight", "Your answer is the ROW"),
+                   (11, 3), (0, 0), (0, 0)),
 }
 
 
@@ -107,6 +110,13 @@ def test_each_withhold_takes_exactly_its_part(monkeypatch, name):
     for m in markers:
         assert m in base["SYSTEM"] + base["TOOLS"] + base_surface, m
         assert m not in served, m
+
+
+def test_an_end_commit_withhold_keeps_the_cue_word_standard_as_one_bullet(monkeypatch):
+    monkeypatch.setenv(W.ENV, "end_commit")
+    assert ("- When you know which object the instruction means -- and a cue word no\n"
+            "  column carries is known only from a look, never from rank -- go_to()\n"
+            "  its row, then reply.\n") in prompts.served_system_prompt()
 
 
 def test_a_look_for_withhold_serves_no_segmenter_in_the_sensor_block(monkeypatch):

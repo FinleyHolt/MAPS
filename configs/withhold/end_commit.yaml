@@ -1,0 +1,3 @@
+# CityNav with the end_commit part withheld (maps/search/withhold.py).
+base: ../citynav.yaml
+withhold: [end_commit]

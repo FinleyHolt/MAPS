@@ -398,6 +398,14 @@ _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
     "mission_map": [
         ("cut", "=== MISSION MAP ===", "=== WORLD CONVENTIONS ==="),
     ],
+    "end_commit": [
+        ("sub", "Your mission ends when you reply in plain text with no tool"
+                " call. The LAST flight's target IS your answer, a scouting"
+                " point included; naming the object in your reply commits"
+                " nothing, only flying to it does. A reply before any flight"
+                " answers nothing. ", ""),
+        ("drop", "- Your answer is the ROW"),
+    ],
 }
 # ... and to the rig's sensor block.
 _SENSOR_EDITS: dict[str, list[tuple[str, ...]]] = {

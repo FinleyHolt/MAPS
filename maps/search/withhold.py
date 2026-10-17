@@ -22,6 +22,9 @@ WITHHOLDS: dict[str, str] = {
               " view deliver text only",
     "mission_map": "the system turn's MISSION MAP section",
     "system_turn": "the system turn",
+    "end_commit": "the system turn's two bullets on how the mission ends and"
+                  " what the answer is; the cue-word standard stays as one"
+                  " bullet",
 }
 
 
