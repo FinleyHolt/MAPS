@@ -338,6 +338,11 @@ def test_a_row_called_is_named_as_the_model_wrote_it():
         "line 2: TypeError: cars[0] is a row, not a call.")
 
 
+def test_a_comprehension_variable_named_after_a_move_ends_with_its_comprehension():
+    err = _first_error('xs = ["prior_7"]\nz = [go_to for go_to in xs]\ny = go_to\n')
+    assert "line 3: go_to is a move; call it once" in err, err
+
+
 def test_a_list_holding_a_non_row_finds_its_mission_on_its_rows():
     err = _first_error('x = ["a"] + find("car")\nx.filter(near="prior_7", dwithin=5)')
     assert "_mp" not in err, err

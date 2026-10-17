@@ -267,22 +267,27 @@ def scan_block(code: str, bound=()) -> ast.Module:
     called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
     # A move's name is the model's variable where a store of it comes first
     # (earlier in this block, or in an earlier block). A comprehension binds
-    # its targets before its element, which is written first.
+    # its targets over its own span, its element (written first) included.
     first_store: dict = {}
-    for n in ast.walk(tree):
+    comp_spans: list = []        # (name, start, end) a comprehension binds
+    comp_targets: set = set()
+    for n in ast.walk(tree):     # breadth first: a comprehension before its targets
         if isinstance(n, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
-            stores = [(t, n) for g in n.generators for t in ast.walk(g.target)]
-        elif isinstance(n, ast.Name):
-            stores = [(n, n)]
-        else:
-            continue
-        for t, at_node in stores:
-            if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store):
-                pos = (at_node.lineno, at_node.col_offset)
-                first_store[t.id] = min(first_store.get(t.id, pos), pos)
+            for g in n.generators:
+                for t in ast.walk(g.target):
+                    if isinstance(t, ast.Name):
+                        comp_targets.add(id(t))
+                        comp_spans.append((t.id, (n.lineno, n.col_offset),
+                                           (n.end_lineno, n.end_col_offset)))
+        elif (isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
+              and id(n) not in comp_targets):
+            pos = (n.lineno, n.col_offset)
+            first_store[n.id] = min(first_store.get(n.id, pos), pos)
 
     def _stored_before(n) -> bool:
-        return n.id in bound or first_store.get(n.id, (1 << 30, 0)) < (n.lineno, n.col_offset)
+        pos = (n.lineno, n.col_offset)
+        return (n.id in bound or first_store.get(n.id, (1 << 30, 0)) < pos
+                or any(k == n.id and lo <= pos <= hi for k, lo, hi in comp_spans))
 
     def _walk(node):
         nonlocal loop_depth, at
