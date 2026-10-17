@@ -1305,8 +1305,8 @@ class _Mission:
             mrows, scope_err = [], f"{exc}; this map badges none of it"
         else:
             scope_err = None
-        mfids = [str(r["fid"]) for r in mrows[:_MAP_MAX_MARKS]]
-        spec, m_skipped = map_spec(around, mrows[:_MAP_MAX_MARKS], rows=self._ns_rows,
+        marks = mrows[:_MAP_MAX_MARKS]
+        spec, m_skipped = map_spec(around, marks, rows=self._ns_rows,
                                    resolve=self._point,
                                    frame=self._standing_frame())
         mp: dict = {"maps": int(spec is not None)}
@@ -1334,14 +1334,14 @@ class _Mission:
                            map_vision_text(maps))
         if scope_err:
             mp.setdefault("ref_notes", []).append(scope_err)
-        if mfids:
+        if marks:
             # The set under the model's own name for it.
             name = self._mission_py.ref_name(h)
             mp["badged_from"] = name or "the set in scope"
-            if len(mrows) > len(mfids):
+            if len(mrows) > len(marks):
                 mp.setdefault("ref_notes", []).append(
                     f"{len(mrows)} rows in {name or 'the set in scope'}; "
-                    f"this map badges the first {len(mfids)}")
+                    f"this map badges the first {len(marks)}")
         return self._acked("map", mp)
 
     def _watch(self, concepts: list) -> dict:

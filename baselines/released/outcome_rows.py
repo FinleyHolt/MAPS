@@ -233,13 +233,10 @@ def pair(released: Path, other: Path, *, allow_partial: bool = False) -> dict:
         # manifest is scored at its configured one, whichever side it is on.
         import inspect
 
-        import yaml
-
         from benchmarks.citynav.eval import score_arrival
         ours = inspect.signature(score_arrival).parameters["success_dist_m"].default
         for root in (released, other):
-            theirs = (yaml.safe_load(run_report.read_manifest(root).get("config_yaml") or "{}")
-                      or {}).get("success_radius_m")
+            theirs = run_report.configured_radius(root)
             if theirs is not None and float(theirs) != ours:
                 raise SystemExit(f"{root.name} scores a {float(theirs):g} m disc; released rows "
                                  f"score a {ours:g} m disc")

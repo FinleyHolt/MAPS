@@ -33,11 +33,16 @@ def _pct(num: int, den: int) -> str:
     return f"{num}/{den} ({100 * num / den:.1f}%)" if den else f"{num}/0 (--)"
 
 
+def configured_radius(root: Path) -> float | None:
+    """The run's configured ``success_radius_m`` (manifest ``config_yaml``), or None."""
+    return (yaml.safe_load(read_manifest(root).get("config_yaml") or "{}") or {}).get("success_radius_m")
+
+
 def criterion_label(criterion: str | None, root: Path) -> str:
     """How a criterion prints; ``None`` is a row without the stamp. The disc's
-    radius is the run's configured ``success_radius_m`` (manifest ``config_yaml``)."""
+    radius is the run's configured one."""
     if criterion == "ring":
-        radius = (yaml.safe_load(read_manifest(root).get("config_yaml") or "{}") or {}).get("success_radius_m")
+        radius = configured_radius(root)
         return "the disc of unrecorded radius" if radius is None else f"the {radius:g} m disc"
     return {"shape": "the target's own shape", None: "UNRECORDED"}.get(criterion, criterion)
 

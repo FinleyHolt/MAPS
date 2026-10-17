@@ -98,7 +98,7 @@ _CANCEL_POLL_S = 0.25
 
 #: The connect phase's own bound: a cancel cannot reach a socket still
 #: connecting, and a SYN nothing answers otherwise waits out the kernel's
-#: retries (~130 s). A connect timeout is retried like any transport fault.
+#: retries (~130 s).
 _CONNECT_TIMEOUT_S = 15.0
 
 
