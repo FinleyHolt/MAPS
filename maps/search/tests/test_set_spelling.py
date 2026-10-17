@@ -170,7 +170,7 @@ def test_stand_at_a_set_is_refused_under_its_spelling():
 
 
 def test_a_set_passed_as_a_predicate_or_key_gets_the_lambda_remedy():
-    # A set is callable since D58 (calling one says so); as filter's or
+    # A set is callable (calling one says so); as filter's or
     # order's first argument it still gets the remedy that names a lambda.
     _, out = _served('cars = find("car")\nroads = find("depot")\ncars.filter(roads)\n')
     assert "rows.filter(lambda r:" in out["error"], out

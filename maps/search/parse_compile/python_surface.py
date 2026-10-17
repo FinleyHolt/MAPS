@@ -265,9 +265,16 @@ def scan_block(code: str, bound=()) -> ast.Module:
     loop_depth = 0
     at = 1                    # the line of the node being vetted
     called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
-    # A move's name the model binds, here or earlier, is its variable (D58).
-    stored = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)
-              and isinstance(n.ctx, ast.Store)} | {m for m in _MOVE_CALLS if m in bound}
+    # A move's name is the model's variable where a store of it comes first
+    # (earlier in this block, or in an earlier block).
+    first_store: dict = {}
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
+            first_store[n.id] = min(first_store.get(n.id, (n.lineno, n.col_offset)),
+                                    (n.lineno, n.col_offset))
+
+    def _stored_before(n) -> bool:
+        return n.id in bound or first_store.get(n.id, (1 << 30, 0)) < (n.lineno, n.col_offset)
 
     def _walk(node):
         nonlocal loop_depth, at
@@ -290,7 +297,7 @@ def scan_block(code: str, bound=()) -> ast.Module:
             raise CodeError(f"no underscore attributes (.{node.attr})")
         if isinstance(node, ast.Name):
             if node.id in _MOVE_CALLS and isinstance(node.ctx, ast.Load) \
-                    and id(node) not in called and node.id not in stored \
+                    and id(node) not in called and not _stored_before(node) \
                     and not withheld("loop"):
                 raise CodeError(
                     f"{node.id} is a move; call it once, {node.id}(<place>), "
@@ -1086,7 +1093,7 @@ class MissionPython:
                 if "_call_" not in str(e):
                     raise               # a real TypeError from inside
                 msg = re.sub(r"\S*_call_(\w+)\(\)", r"\1()", str(e))
-                if re.search(r"positional arguments? but \d+ (?:was|were) given", msg):
+                if re.search(r"takes .*positional arguments? but \d+", msg):
                     msg = takes
                 raise CodeError(
                     f"{msg}. {name} keywords: {kws}") from None

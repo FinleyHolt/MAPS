@@ -1,4 +1,4 @@
-"""r26 regressions: doc-arm signatures, positional counts, five-digit fids, per-thread find memo."""
+"""Doc-arm signatures, positional counts, five-digit fids, per-thread find memo."""
 import inspect
 import threading
 
@@ -83,3 +83,25 @@ def test_a_five_digit_detection_fid_is_a_row_like_a_four_digit_one():
     _r, fr, _f, _d = drive([[run('distance("detected_12345", "prior_7")\n')], "done"],
                            cands=cands)
     assert "error" not in tool_results(fr)[0], tool_results(fr)
+
+
+def test_the_doc_withhold_serves_no_parameter_that_only_refuses(monkeypatch):
+    """find's extra queries, a cut's unknown keywords and show_map's missing
+    centre are refused, so the signatures the doc arm reads do not offer them."""
+    monkeypatch.setenv(W.ENV, "doc")
+    doc = prompts.served_doc()
+    assert "*more" not in doc and "**kw" not in doc, doc
+    assert "around=None" not in doc, doc
+
+
+def test_a_positional_count_with_keywords_counts_the_models_arguments():
+    from maps.search.tests.fakes import drive, run, tool_results
+    _r, fr, _f, _d = drive([[run('stand("prior_7", "north", facing="east")\n')], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert "3 positional" not in err and "takes no positional" in err, err
+
+
+def test_a_move_read_before_the_block_binds_its_name_stays_a_move():
+    from maps.search.tests.fakes import drive, run
+    _r, fr, flights, _d = drive([[run('x = go_to\ngo_to = 3\nfor r in [1, 2]:\n    x("prior_7")\n')], "done"])
+    assert flights == [], flights
