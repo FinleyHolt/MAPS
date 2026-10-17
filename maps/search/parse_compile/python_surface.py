@@ -1276,10 +1276,11 @@ class MissionPython:
         for k, v in part.items():
             if k == "result" and isinstance(out.get("result"), dict) \
                     and isinstance(v, dict):
-                out["result"] = {
-                    **out["result"], **v,
-                    "results": {**(out["result"].get("results") or {}),
-                                **(v.get("results") or {})}}
+                res = {**(out["result"].get("results") or {}),
+                       **(v.get("results") or {})}
+                out["result"] = {**out["result"], **v, "results": res}
+                if not res:
+                    del out["result"]["results"]
             elif k == "note" and out.get("note"):
                 out["note"] = f"{out['note']}\n{v}"
             else:

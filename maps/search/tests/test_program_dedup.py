@@ -93,3 +93,10 @@ def test_a_deduped_handle_shown_after_a_flight_in_its_block_renders():
                          [run('cars = find("car")\ngo_to(cars[0])\ncars\n')], "done"])
     again = tool_results(fr)[1]
     assert "cars" in again["result"].get("results", {}), again
+
+
+def test_two_deduped_calls_in_a_block_serve_no_empty_results():
+    _, fr, _, _ = drive([[run('find("car")\n')],
+                         [run('a = find("car")\nb = find("car")\n')], "done"])
+    again = tool_results(fr)[1]["result"]
+    assert "results" not in again, again
