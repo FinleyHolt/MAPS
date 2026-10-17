@@ -440,8 +440,7 @@ class _Cuts:
 
     def __getattribute__(self, k):
         if k in _LIBRARY_ATTRS and withheld("library"):
-            raise AttributeError(
-                f"{type(self).__name__!r} object has no attribute {k!r}")
+            raise AttributeError    # __getattr__ says why
         return object.__getattribute__(self, k)
 
     def __getattr__(self, k: str):
