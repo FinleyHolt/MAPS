@@ -23,3 +23,8 @@ def test_the_env_sets_the_timeout_and_a_value_that_cannot_apply_is_loud(monkeypa
         monkeypatch.setenv(ENV, bad)
         with pytest.raises(ValueError):
             _reasoner_timeout_s()
+
+
+def test_the_default_wait_outlasts_one_full_turn_on_a_loaded_serve():
+    # 40,000 output tokens at ~20 tok/s per stream under a saturated batch.
+    assert _REASONER_TIMEOUT_DEFAULT_S >= 40_000 / 20

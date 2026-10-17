@@ -190,6 +190,17 @@ these places, the served-text changes among them:
 | The Gemma 4 26B-A4B NVFP4 bench serve's requests carry `presence_penalty` 0.5, the setting its CityNav numbers were measured at. | The flown card sent no penalty, so the bench Gemma looped in its thinking (a preflight turn ran to the 40,000-token cap). |
 | A turn the output cap cut off empty (`finish_reason` length) gets its own nudge ("Your last turn ran out of output tokens while thinking ...") and spends no repair, up to 3 in a row. | Such a turn spent the one shared repair, so the next code-shaped reply ended the mission (42 forced endings in 200 Gemma episodes). |
 | Bench withholds `end_commit`, `loop` (every loop behaviour but compaction), `doc`, `map` and `library` (every call but go_to, look_for, look and show_map); the `seeing` and `text` families ship as one config each. | The research harness withheld these through its parts registry; a flight serves every part. |
+| A mission call's name binds as an ordinary Python name (the calls are the namespace's builtins): `intersection = find(...)` shadows the call for the rest of the mission, `del intersection` gives it back, and calling the set says so. | Binding over a mission call's name was refused before any line of the block ran. |
+| A run result carries no `said` echo of the model's block. | Every run result opened with `said`, the block verbatim. |
+| A block the pre-scan or compiler refuses reads "nothing in this block ran -- line N: ...". | A scan refusal named no line and read like a runtime error. |
+| A rebind refused at plan level unbinds the name. | The name kept its old rows; a later move on it flew the stale pick. |
+| A typed terminus is a place for look, stand and show_map, and maps badge computed rows (termini, crossings). | Only go_to/explore resolved `end_N`; maps dropped computed rows from their badges. |
+| A set read as a row, `filter(nearest=)`, a tied view, an absent fid in a relating slot or in find, a map with no centre, and a handle with no rows in ends_of/intersection each refuse with the call that does the work. | Bare AttributeErrors, "available fids: [...]", a name search for the fid, "no resolvable map center", "names no row". |
+| An empty list of rows cuts and orders to an empty list; a blank name in any relating slot is no place; a blank mark is skipped. | The empty list refused and ended the block; a blank name grounded to every row; a blank mark badged the best match of nothing. |
+| A receipt serves the table legend once and no empty results; a deduped table shows once a flight in its block moves the world; the identical-program note speaks for the moment its call ran; an uncovered look says how far its ground is from the flown stops. | The legend was served per table; a deduped handle showed nothing after a flight in its block; the note said "no flight" beside a flight; the look said frame-corner ground "has never been under the sensor". |
+| A refused re-derive names only the handles whose replay reached it; a map is drawn when the set in scope cannot re-derive. | Every stale handle asked for was named; the map failed. |
+| Provenance trusts git only when its work tree is the checkout itself, so an export inside another repository records its `.commit`. | The enclosing repository's HEAD and dirty flag were recorded. |
+| The reasoner call waits 2,400 s by default, so the 40,000-token output cap bounds a turn on a loaded bench. | The flown default was 240 s: on a bench at ~80 concurrent episodes a turn was cut near 8,000 tokens, at a point that moved with load, and retried. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -322,7 +333,7 @@ terms).
 |---|---|---|
 | `SEARCH_REASONER_URL` | client | The reasoner's base URL, one endpoint. Default `http://127.0.0.1:8001/v1`. |
 | `SEARCH_REASONER_API_KEY` | client | Bearer token for the reasoner. |
-| `SEARCH_REASONER_TIMEOUT_S` | client | Per-call transport timeout, seconds. |
+| `SEARCH_REASONER_TIMEOUT_S` | client | Per-call transport timeout, seconds (default 2400: one 40,000-token turn under a saturated batch). |
 | `SEARCH_ENDPOINT_SPEC_OVERRIDE` | client | `<model_id>:<max_model_len>` for an endpoint whose `/v1/models` reports no window. |
 | `SEARCH_REASONER_MODELS_URL` | client | Where the served models are listed, for an endpoint that lists them somewhere other than `SEARCH_REASONER_URL/models`. |
 | `SEARCH_SAMPLING_REASONING_EFFORT` | client | The arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`); discovery refuses a value the served model's card does not take. Unset sends none. |

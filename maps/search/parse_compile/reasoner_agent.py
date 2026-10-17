@@ -23,7 +23,11 @@ from maps.search.withhold import withheld
 log = logging.getLogger(__name__)
 
 
-_REASONER_TIMEOUT_DEFAULT_S = 240.0
+#: One full turn at the 40,000-token output pin, decoded at ~20 tok/s under a
+#: saturated batch: the output cap, not the serve's load, bounds a turn. A
+#: shorter wait cuts long thinking at a point that moves with load and
+#: re-sends the request behind the one the serve is still decoding.
+_REASONER_TIMEOUT_DEFAULT_S = 2400.0
 
 
 class DegenerateCompletion(ValueError):
