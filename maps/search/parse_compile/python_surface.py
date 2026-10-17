@@ -1825,8 +1825,14 @@ class MissionPython:
                     name = self._unnamed_label(k)
                 said.add(name)
                 keys.append(name)
-            out["result"] = {**res,
-                             "results": dict(zip(keys, results.values()))}
+            # The legend rides the receipt's first table only.
+            envs, legend = list(results.values()), False
+            for i, env in enumerate(envs):
+                if isinstance(env, dict) and "legend" in env:
+                    if legend:
+                        envs[i] = {k: v for k, v in env.items() if k != "legend"}
+                    legend = True
+            out["result"] = {**res, "results": dict(zip(keys, envs))}
         names = sorted(k for k, v in self.ns.items()
                        if isinstance(v, (Rows, Row))
                        and not k.startswith("__"))

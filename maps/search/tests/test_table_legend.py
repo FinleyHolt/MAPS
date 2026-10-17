@@ -76,3 +76,16 @@ def test_legend_quotes_no_line_chart_column():
     # compare attaches no chart of a line, so the legend explains none.
     assert "along" not in _TABLE_LEGEND
     assert "LINE" not in _TABLE_LEGEND
+
+
+def test_the_legend_rides_one_table_per_receipt():
+    import json
+
+    from maps.search.tests.fakes import drive, run, tool_results
+    tiered = [{"fid": f"prior_{i}", "xy": [i * 10.0, 0.0], "class": "car",
+               "search_text": "car" if i < 3 else "car park"} for i in range(6)]
+    _r, fr, _f, _d = drive([[run('a = find("car")\na\nfind("prior_1")\n')], "done"],
+                           cands=tiered)
+    out = tool_results(fr)[0]
+    assert len(out["result"]["results"]) == 2, out
+    assert json.dumps(out).count(_TABLE_LEGEND[:40]) == 1, out
