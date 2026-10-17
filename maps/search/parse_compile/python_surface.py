@@ -1722,17 +1722,13 @@ class MissionPython:
         try:
             with _block_ceilings(self):
                 exec(compiled, self.ns)        # noqa: S102 -- the surface
-        except _Stop:
-            pass                     # the refusal is already in the receipt
-        except CodeError as e:
-            self._unbind_failed_assign(tree, _outer_block_line())
-            out.update(self.env.say_err(
-                {}, f"line {_block_line(self._block_codes)}: {e}"))
         except Exception as e:                          # noqa: BLE001
             self._unbind_failed_assign(tree, _outer_block_line())
-            out.update(self.env.say_err(
-                {}, f"line {_block_line(self._block_codes)}: "
-                f"{type(e).__name__}: {e}"))
+            if not isinstance(e, _Stop):   # a _Stop's refusal is in the receipt
+                what = (str(e) if isinstance(e, CodeError)
+                        else f"{type(e).__name__}: {e}")
+                out.update(self.env.say_err(
+                    {}, f"line {_block_line(self._block_codes)}: {what}"))
         return self._finish(out)
 
     def _tick(self) -> None:

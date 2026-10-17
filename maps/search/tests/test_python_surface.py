@@ -329,6 +329,29 @@ def test_an_unbound_name_says_why_it_is_gone():
     assert "r3 is unbound" in err and "re-derive" in err, out[1]
 
 
+_STOP_CANDS = [
+    {"fid": "prior_7", "xy": [30.0, 30.0], "name": "Depot", "search_text": "depot"},
+    {"fid": "car_1", "xy": [5.0, 7.0], "class": "car", "search_text": "car"},
+    {"fid": "car_2", "xy": [50.0, 7.0], "class": "car", "search_text": "car"}]
+
+
+def test_a_rebind_the_plan_refused_unbinds_the_name():
+    blocks = ['h = find("car")\nh\n', 'h = find("car", nearest="prior_99")\n',
+              'go_to(h[0])\n']
+    _r, fr, flights, _d = drive([[run(b)] for b in blocks] + ["done"], cands=_STOP_CANDS)
+    out = tool_results(fr)
+    assert "error" in out[1] and not flights, out
+    assert "h is unbound" in out[2]["error"], out[2]
+
+
+def test_a_first_bind_the_plan_refused_says_so_not_a_did_you_mean():
+    blocks = ['cars = find("car")\n', 'car2 = find("car", nearest="prior_99")\n',
+              'car2\n']
+    _r, fr, _f, _d = drive([[run(b)] for b in blocks] + ["done"], cands=_STOP_CANDS)
+    err = tool_results(fr)[2]["error"]
+    assert "did you mean" not in err and "car2 is unbound" in err, err
+
+
 def test_kwarg_typeerrors_name_the_call_not_the_internals():
     reply, fr, _f, _d = drive([
         [run('find("car", fid="car_1")\n')],
