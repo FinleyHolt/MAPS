@@ -447,6 +447,35 @@ _FILTER_SAY = ("near=/within=/dwithin=/facing= with direction=, "
 _MISSING = object()
 
 
+def _said(fn, name: str | None = None):
+    """``fn`` as the model calls it, ``name`` (a method: its own name): a
+    TypeError binding its arguments is re-said without the internal or
+    class name and counting no self, with the keywords that do exist; a
+    TypeError raised inside it rides as it is. The signature stays
+    ``fn``'s."""
+    name = name or fn.__name__
+    params = [p for n, p in inspect.signature(fn).parameters.items()
+              if n != "self"]
+    kws = ", ".join(f"{p.name}=" for p in params
+                    if p.kind is p.KEYWORD_ONLY or p.default is not p.empty) or "none"
+    n_pos = sum(p.kind is p.POSITIONAL_OR_KEYWORD for p in params)
+    takes = (f"{name}() takes {n_pos or 'no'} positional "
+             f"argument{'' if n_pos == 1 else 's'}")
+
+    @functools.wraps(fn)
+    def call(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except TypeError as e:
+            if e.__traceback__.tb_next is not None:
+                raise               # raised inside fn, not binding to it
+            msg = str(e).replace(f"{fn.__qualname__}()", f"{name}()")
+            if re.search(r"takes .*positional arguments? but \d+", msg):
+                msg = takes
+            raise CodeError(f"{msg}. {name} keywords: {kws}") from None
+    return call
+
+
 class _Cuts:
     """``filter`` and ``order``, one body and one refusal text for a row, a
     list of rows and a result set. A predicate, a key or a compass word needs
@@ -523,6 +552,7 @@ class _Cuts:
     def _sorted(self, key, reverse: bool) -> "RowList":
         return RowList(sorted(self._in_hand(), key=key, reverse=reverse))
 
+    @_said
     def filter(self, pred=None, **kw):
         # A kwarg outside the set is refused, never ignored, and a colour cut
         # gets its own reason.
@@ -552,6 +582,7 @@ class _Cuts:
                 "is not callable: rows.filter(lambda r: r.distance(x) <= 25)")
         return RowList(r for r in self._in_hand() if pred(r))
 
+    @_said
     def order(self, key=None, *, nearest=None, color=None, direction=None,
               reverse=False, **kw):
         """Put the rows in one order; a table sorts by one column.
@@ -606,6 +637,7 @@ class Row(_Cuts):
         self.name = row.get("name")
         self._src = src                       # (ref, index) or None
 
+    @_said
     def distance(self, other) -> float:
         """Metres from this row's footprint to ``other``."""
         mp = object.__getattribute__(self, "_mp")
@@ -901,6 +933,7 @@ class Rows(_Cuts):
     def _target(self):
         return self._mp, self if not self._spec else self._mp._materialize(self)
 
+    @_said
     def filter(self, pred=None, *, near=None, within=None, dwithin=None,
                north_of=None, south_of=None, east_of=None, west_of=None,
                facing=None, direction=None, **kw):
@@ -911,13 +944,7 @@ class Rows(_Cuts):
             north_of=north_of, south_of=south_of, east_of=east_of,
             west_of=west_of, facing=facing, direction=direction, **kw)
 
-    def order(self, key=None, *, nearest=None, color=None, direction=None,
-              reverse=False, **kw):
-        """Put the rows in one order (``_Cuts.order``), under this class's
-        name in a signature error."""
-        return super().order(key, nearest=nearest, color=color,
-                             direction=direction, reverse=reverse, **kw)
-
+    @_said
     def distance(self, other) -> float:
         """Metres to ``other``, this set counting as ONE place: the free
         ``distance(a, b)`` as a method."""
@@ -1145,32 +1172,9 @@ class MissionPython:
 
     def _wrap_call(self, name: str):
         """The library callable the namespace serves: the real
-        ``_call_*``, with signature TypeErrors re-said without the internal
-        name and with the keywords that DO exist."""
-        fn = getattr(self, f"_call_{name}")
-        params = inspect.signature(fn).parameters.values()
-        kws = ", ".join(
-            f"{p.name}=" for p in params
-            if p.kind is p.KEYWORD_ONLY
-            or p.default is not p.empty) or "none"
-        # CPython counts the bound self in a positional-count error.
-        n_pos = sum(p.kind is p.POSITIONAL_OR_KEYWORD for p in params)
-        takes = (f"{name}() takes {n_pos or 'no'} positional "
-                 f"argument{'' if n_pos == 1 else 's'}")
-
-        def call(*args, **kwargs):
-            try:
-                return fn(*args, **kwargs)
-            except TypeError as e:
-                if "_call_" not in str(e):
-                    raise               # a real TypeError from inside
-                msg = re.sub(r"\S*_call_(\w+)\(\)", r"\1()", str(e))
-                if re.search(r"takes .*positional arguments? but \d+", msg):
-                    msg = takes
-                raise CodeError(
-                    f"{msg}. {name} keywords: {kws}") from None
-
-        call.__name__ = name
+        ``_call_*``, its signature errors said as :func:`_said` says them."""
+        call = _said(getattr(self, f"_call_{name}"), name)
+        call.__name__ = call.__qualname__ = name
         return call
 
     # -- naming ------------------------------------------------------------

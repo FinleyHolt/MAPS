@@ -324,3 +324,17 @@ def test_a_list_or_a_row_called_says_what_it_is(held, what):
 def test_a_list_holding_a_non_row_finds_its_mission_on_its_rows():
     err = _first_error('x = ["a"] + find("car")\nx.filter(near="prior_7", dwithin=5)')
     assert "_mp" not in err, err
+
+
+@pytest.mark.parametrize("code, want", [
+    ('cars.distance("a", "b")', "distance() takes 1 positional argument. distance keywords: none"),
+    ('cars[0].distance("a", "b")', "distance() takes 1 positional argument. distance keywords: none"),
+    ('cars.distance()', "distance() missing 1 required positional argument: 'other'. "
+                        "distance keywords: none"),
+    ('cars.order(1, 2)', "order() takes 1 positional argument. order keywords: key=, "
+                         "nearest=, color=, direction=, reverse="),
+    ('cars.filter(lambda r: True).filter(1, 2)',
+     "filter() takes 1 positional argument. filter keywords: pred="),
+])
+def test_a_set_methods_signature_error_counts_no_self_and_names_no_class(code, want):
+    assert _first_error(f'cars = find("car")\n{code}') == f"line 2: {want}"
