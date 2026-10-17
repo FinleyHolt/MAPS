@@ -448,3 +448,17 @@ def test_dropped_detection_chips_are_not_counted_as_unchipped_buildings():
         tile_origin_xy=(0.0, 0.0), cell_size_m=2.0, grid_shape=(200, 200))
     assert rec["features_painted"] == 12
     assert (rec["priors_chipped"], rec["priors_unchipped"]) == (0, 0)
+
+
+def test_a_map_around_an_absent_fid_names_it():
+    from maps.search.tests.fakes import drive, run, tool_results
+    _r, fr, _f, _d = drive([[run('show_map(around="detected_7")\n')], "done"])
+    assert tool_results(fr)[0]["error"] == "detected_7 is not on the live surface"
+
+
+@pytest.mark.parametrize("code", ['show_map()\n', 'x = None\nshow_map(around=x)\n'])
+def test_a_map_around_none_is_refused_as_no_place(code):
+    from maps.search.tests.fakes import drive, run, tool_results
+    _r, fr, _f, _d = drive([[run(code)], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert "around= got None, which is no place" in err, err

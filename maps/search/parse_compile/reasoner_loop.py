@@ -1294,7 +1294,7 @@ class _Mission:
         if m_skipped:
             mp["skipped"] = m_skipped[:20]
         if spec is None:
-            mp["error"] = "no resolvable map center"
+            mp["error"] = f"{around} is not on the live surface"
         else:
             try:
                 from maps.search.render.map_render import (  # noqa: PLC0415

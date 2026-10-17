@@ -1187,7 +1187,7 @@ class MissionPython:
         """An act's PLACE -> its token, or a :class:`_Name` to ground. A
         point rides as its ``[x, y]`` token; what a binding holds and a fid
         the model typed are never looked up."""
-        if v is None and why not in ("map", "marks"):
+        if v is None and why != "marks":
             raise CodeError(
                 f"{_SITE_SLOT[why]} got None, which is no place: the name it "
                 "came from holds no row. Bind a row first.")
@@ -1514,6 +1514,10 @@ class MissionPython:
                 f"{_index_it(name)} -- {kw}={name or 's'}[0]")
 
     def _call_show_map(self, around=None):
+        if around is None:
+            raise CodeError(
+                "around= got None, which is no place: show_map(around=<place>) "
+                "centres on a row, a fid or an [x, y] point.")
         if isinstance(around, Rows):
             raise CodeError(
                 self._not_one_place("around", around) + " -- or use a "
