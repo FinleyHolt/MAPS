@@ -181,3 +181,49 @@ def test_a_set_passed_as_a_predicate_or_key_gets_the_lambda_remedy():
 def test_a_move_name_the_block_binds_reads_as_its_variable():
     _, out = _served('explore = find("car")\nprint(len(explore))\n')
     assert "error" not in out, out
+
+
+# Ten ways of one street: find serves them as a tied view.
+_TIED = CANDS + [
+    {"fid": f"prior_{900 + i}", "xy": [10.0 * i + 5, 0.0], "name": "Tied Way",
+     "search_text": "tied way", "tags": {"highway": "residential"},
+     "centerline": [[10.0 * i, 0.0], [10.0 * i + 10, 0.0]]}
+    for i in range(10)]
+
+
+def _first_error(code: str) -> str:
+    _, fr, _, _ = drive([[run(code)], "done"], cands=_TIED)
+    return next(str(o["error"]) for o in tool_results(fr) if "error" in o)
+
+
+def test_the_fixture_way_is_a_tied_view():
+    assert "tied view" in _first_error('w = find("Tied Way")\nw[0]')
+
+
+@pytest.mark.parametrize("code", [
+    'pools = find("zzqq pool")\nshow_map(around=pools)',
+    'pools = find("zzqq pool")\nprint(pools.xy)',
+    'pools = find("zzqq pool")\nprint(pools["xy"])',
+    'pools = find("zzqq pool")\nstand(at=pools)',
+    'w = find("Tied Way")\nshow_map(around=w)',
+    'w = find("Tied Way")\nprint(w.xy)',
+    'w = find("Tied Way")\ngo_to(w)',
+    'w = find("Tied Way")\nlook_for("car", at=w)',
+])
+def test_a_set_remedy_never_names_an_index_that_refuses(code):
+    err = _first_error(code)
+    assert f"{code.split(' = ')[0]}[0]" not in err, err
+
+
+def test_a_tied_views_remedy_runs():
+    err = _first_error('w = find("Tied Way")\nprint(w.xy)')
+    assert "w.order(nearest=<place>)[0].xy" in err, err
+    _, fr, _, _ = drive([[run('w = find("Tied Way")\n'
+                              'print(w.order(nearest="prior_7")[0].xy)')],
+                         "done"], cands=_TIED)
+    assert not any("error" in o for o in tool_results(fr))
+
+
+def test_a_set_read_for_a_key_no_row_carries_names_the_columns():
+    err = _first_error('cars = find("car")\nprint(cars.census)')
+    assert "cars[0].census" not in err and "its columns are" in err, err

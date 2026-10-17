@@ -475,13 +475,19 @@ class _Cuts:
         if kw:
             raise AttributeError(
                 f"{k} is a keyword, not a method: {then}{said}.{kw}({k}=...)")
-        whose = (f"{k}() is a row's own: {said}[0].{k}"
-                 f"({'<column>' if k == 'get' else ''})"
-                 if k in ("keys", "get") else
-                 f"a column is read off one row: {said}[0].{k}")
+        one, first = _one_row(self, said), next(iter(self), None)
+        if first is None:
+            whose = "there is no row to read it off."
+        elif k not in ("keys", "get") and first._column(k) is _MISSING:
+            whose = first._miss(k)
+        else:
+            whose = then + (f"{k}() is a row's own: {one}.{k}"
+                            f"({'<column>' if k == 'get' else ''})"
+                            if k in ("keys", "get") else
+                            f"a column is read off one row: {one}.{k}")
         raise AttributeError(
             f"{name or 'that'} is a set of {len(self)} row(s) and carries no "
-            f"{k!r}; {then}{whose}")
+            f"{k!r}; {whose}")
 
     def _in_hand(self):
         return self
@@ -813,7 +819,7 @@ class Rows(_Cuts):
                 f"{name}[{i!r}] did not bind: {name} is a set of rows, "
                 "indexed by an int position"
                 + (f"; a column is read off one row: {name}[0][{i!r}]."
-                   if isinstance(i, str) else "."))
+                   if isinstance(i, str) and len(self) else "."))
         rows = self._rows()
         if not (-len(rows) <= i < len(rows)):
             name = self._mp.said_name(self, None)
@@ -938,6 +944,17 @@ def _index_it(name: str | None) -> str:
     """The remedy's opening for a set refused where one place goes: a set
     the model has no name for is bound first, as ``s``."""
     return "Index it" if name else "Bind it first (s = ...), then index it"
+
+
+def _one_row(x, said: str) -> str | None:
+    """How a remedy spells one row of the set ``x`` the model calls
+    ``said``: its first row, a tied view's nearest way, None when it holds
+    no row."""
+    if not len(x):
+        return None
+    if isinstance(x, Rows) and x._tied():
+        return f"{said}.order(nearest=<place>)[0]"
+    return f"{said}[0]"
 
 
 def _set_as_list(v) -> list:
@@ -1585,8 +1602,12 @@ class MissionPython:
     def _not_one_place(self, kw: str, x: "Rows") -> str:
         """The refusal of a set where ``kw=`` takes one place."""
         name = self.spelling(x)
+        one = _one_row(x, name or "s")
+        if one is None:
+            return (f"{kw}= takes ONE place and {name or 'that set'} holds "
+                    "0 row(s) here")
         return (f"{kw}= takes ONE place and {name or 'that'} is a set. "
-                f"{_index_it(name)} -- {kw}={name or 's'}[0]")
+                f"{_index_it(name)} -- {kw}={one}")
 
     def _call_show_map(self, around=None):
         if around is None:
@@ -1659,7 +1680,7 @@ class MissionPython:
                 s = name or "s"
                 raise CodeError(
                     f"go_to() takes ONE thing and {name or 'that'} is a set "
-                    f"of {len(x)} row(s). {_index_it(name)} -- go_to({s}[0])"
+                    f"of {len(x)} row(s). {_index_it(name)} -- go_to({_one_row(x, s)})"
                     + ("." if withheld("library") else
                        f" -- or explore({s}) to cover the whole set."))
         elif is_xy(x) and withheld("prior"):
