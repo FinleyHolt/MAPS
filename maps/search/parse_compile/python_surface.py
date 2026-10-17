@@ -1616,11 +1616,11 @@ class MissionPython:
                 "centres on a row, a fid or an [x, y] point.")
         if isinstance(around, Rows):
             raise CodeError(
-                self._not_one_place("around", around) + " -- or use a "
+                self._not_one_place("around", around) + (" -- or use a "
                 "name." + ("" if withheld("library") else " (A set IS one "
                 "place in near=, within= and nearest=, where it means "
                 "the gap to its NEAREST member, but there is no one "
-                "point to centre on.)"))
+                "point to centre on.)") if len(around) else "."))
         around = self._slot(around)
         self._act(self.env.map, [(self._site(around, "map"), "map")])
         return None
