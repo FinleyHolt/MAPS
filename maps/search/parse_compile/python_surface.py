@@ -483,16 +483,15 @@ class _Cuts:
         if kw:
             raise AttributeError(
                 f"{k} is a keyword, not a method: {then}{said}.{kw}({k}=...)")
-        one, first = _one_row(self, said), next(iter(self), None)
-        if first is None:
+        one = _one_row(self, said)
+        if one is None:
             whose = "there is no row to read it off."
-        elif k not in ("keys", "get") and first._column(k) is _MISSING:
-            whose = first._miss(k)
+        elif k in ("keys", "get"):
+            whose = (f"{then}{k}() is a row's own: {one}.{k}"
+                     f"({'<column>' if k == 'get' else ''})")
         else:
-            whose = then + (f"{k}() is a row's own: {one}.{k}"
-                            f"({'<column>' if k == 'get' else ''})"
-                            if k in ("keys", "get") else
-                            f"a column is read off one row: {one}.{k}")
+            whose = _column_read(self, k, f"{then}a column is read off one "
+                                          f"row: {one}.{k}")
         raise AttributeError(
             f"{name or 'that'} is a set of {len(self)} row(s) and carries no "
             f"{k!r}; {whose}")
@@ -768,7 +767,7 @@ class RowList(_Cuts, list):
             raise CodeError(f"{name}[{i}] did not bind: {name} holds "
                             f"{len(self)} row(s)."
                             + ("" if self else " There is no row to index."))
-        raise _not_an_int(name, i, len(self))
+        raise _not_an_int(name, i, self)
 
 
 class Rows(_Cuts):
@@ -847,7 +846,7 @@ class Rows(_Cuts):
                 lo, hi = s.start, s.stop
             return Rows(self._ref, self._mp, f"[{lo}:{hi}]")
         if not isinstance(i, int):
-            raise _not_an_int(self._mp.said_name(self, None), i, len(self))
+            raise _not_an_int(self._mp.said_name(self, None), i, self)
         rows = self._rows()
         if not (-len(rows) <= i < len(rows)):
             name = self._mp.said_name(self, None)
@@ -974,13 +973,22 @@ def _index_it(name: str | None) -> str:
     return "Index it" if name else "Bind it first (s = ...), then index it"
 
 
-def _not_an_int(name: str, i, held: int) -> CodeError:
-    """The refusal of a set indexed by a non-int; a str is a column, read
-    off one row."""
+def _column_read(x, k: str, read: str) -> str:
+    """A remedy for column ``k`` asked of the set ``x``, which holds a row:
+    ``read``, the read off one row, when its first row carries ``k``, else
+    that row's columns."""
+    first = next(iter(x))
+    return first._miss(k) if first._column(k) is _MISSING else read
+
+
+def _not_an_int(name: str, i, x) -> CodeError:
+    """The refusal of the set ``x`` indexed by a non-int; a str is a
+    column, read off one row."""
     return CodeError(
         f"{name}[{i!r}] did not bind: {name} is a set of rows, indexed by an "
-        "int position" + (f"; a column is read off one row: {name}[0][{i!r}]."
-                          if isinstance(i, str) and held else "."))
+        "int position" + ("; " + _column_read(
+            x, i, f"a column is read off one row: {name}[0][{i!r}].")
+            if isinstance(i, str) and len(x) else "."))
 
 
 def _one_row(x, said: str) -> str | None:

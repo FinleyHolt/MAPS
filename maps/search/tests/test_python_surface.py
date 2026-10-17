@@ -1028,10 +1028,10 @@ def test_a_set_read_as_a_row_gets_a_remedy_that_runs(code, says):
 
 
 def test_indexing_a_set_by_a_non_int_names_the_int_position():
-    err, _ = _refusal('cars = find("car")\ncars["name"]\n')
-    assert err.endswith("cars['name'] did not bind: cars is a set of rows, "
+    err, _ = _refusal('cars = find("car")\ncars["class"]\n')
+    assert err.endswith("cars['class'] did not bind: cars is a set of rows, "
                         "indexed by an int position; a column is read off "
-                        "one row: cars[0]['name']."), err
+                        "one row: cars[0]['class']."), err
     err, _ = _refusal('cars = find("car")\ncars[1.0]\n')
     assert err.endswith("cars[1.0] did not bind: cars is a set of rows, "
                         "indexed by an int position."), err

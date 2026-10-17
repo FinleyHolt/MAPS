@@ -291,3 +291,10 @@ def test_a_comprehension_variable_named_after_a_move_is_the_models_variable():
     _, fr, _, _ = drive([[run('xs = ["prior_7"]\nprint([go_to for go_to in xs])')], "done"],
                         cands=_TIED)
     assert [o.get("error") for o in tool_results(fr)] == [None]
+
+
+@pytest.mark.parametrize("code", ['cars = find("car")\nprint(cars["census"])',
+                                  'cars = find("car").filter(lambda r: True)\nprint(cars["census"])'])
+def test_a_set_indexed_by_a_key_no_row_carries_names_the_columns(code):
+    err = _first_error(code)
+    assert "cars[0]['census']" not in err and "its columns are" in err, err
