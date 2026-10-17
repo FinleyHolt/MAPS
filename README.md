@@ -189,6 +189,7 @@ these places, the served-text changes among them:
 | A list item that names nothing is refused as "each item must be a fid on this surface, an [x, y], or a set."; a deduped program's bare line serves only its "not re-rendered" note. | The flown refusal offered a `{'fid':...}` dict form the executor does not take; the deduped bare line rendered the table the note said was not re-rendered. |
 | The Gemma 4 26B-A4B NVFP4 bench serve's requests carry `presence_penalty` 0.5, the setting its CityNav numbers were measured at. | The flown card sent no penalty, so the bench Gemma looped in its thinking (a preflight turn ran to the 40,000-token cap). |
 | A turn the output cap cut off empty (`finish_reason` length) gets its own nudge ("Your last turn ran out of output tokens while thinking ...") and spends no repair, up to 3 in a row. | Such a turn spent the one shared repair, so the next code-shaped reply ended the mission (42 forced endings in 200 Gemma episodes). |
+| Bench withholds `end_commit`, `loop` (every loop behaviour but compaction), `doc`, `map` and `library` (every call but go_to, look_for, look and show_map); the `seeing` and `text` families ship as one config each. | The research harness withheld these through its parts registry; a flight serves every part. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -238,7 +239,7 @@ lists the exact commands.
 | E1 | CityNav `train_seen`, 1,000 per arm (`--limit 1000`, seed 1234) | Inkling Small at effort 0.99; Qwen 3.8 Flash Next at `xhigh`; Gemma 4 26B-A4B | `configs/citynav.yaml`, `SEARCH_SAMPLING_REASONING_EFFORT` | `arm_table`, `run_report` |
 | E2 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `low`, `medium`, `xhigh`; Inkling Small at 0.99; Gemma 4 E2B; Gemma 4 E4B | `configs/citynav.yaml`, `--split test_unseen` | `arm_table`, `run_report` |
 | E3 | Cal City, the 1,100 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table`, `figures.plot_effort_ladder` |
-| E4 | CityNav `train_seen`, 1,000 per arm | Per model: the control and one arm per withhold | `configs/withhold/<part>.yaml` | `arm_table`, `ab_report` |
+| E4 | CityNav `train_seen`, 1,000 per arm | Per model: the control and its ablation arms (below) | `configs/withhold/<arm>.yaml` | `arm_table`, `ab_report` |
 | E5 | E2 and E3 roots | Every arm | none beyond E2 and E3 | `figures.capability_effort_arms`, `figures.plot_capability_effort` |
 
 ## Install
@@ -491,13 +492,18 @@ python -m benchmarks.calcity.bench_fullset \
   --episode-allowlist output/reviewed_episodes.txt --out-root output/e3/gemma4-26b-a4b
 ```
 
-E4, the control and one root per withheld part, per model:
+E4, the control and one root per ablation arm, per model. `configs/withhold/`
+holds one config per withhold (`maps/search/withhold.py`) and one per
+family: `seeing` (look_for, look, images, map) and `text` (doc, system_turn).
 
 ```sh
-for part in prior look_for look images mission_map system_turn; do
-  SEARCH_SAMPLING_REASONING_EFFORT=<model's E1 effort> CITYNAV_BENCH_CONFIG=configs/withhold/$part.yaml \
+# inkling-small:     arms="mission_map system_turn look_for end_commit"
+# qwen38-flash-next: arms="prior look_for look images system_turn mission_map"
+# gemma4-26b-a4b:    arms="prior library seeing text loop images"
+for arm in $arms; do
+  SEARCH_SAMPLING_REASONING_EFFORT=<model's E1 effort> CITYNAV_BENCH_CONFIG=configs/withhold/$arm.yaml \
     python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --sample-seed 1234 \
-    --out-root output/e4/<model>/$part
+    --out-root output/e4/<model>/$arm
 done
 ```
 
