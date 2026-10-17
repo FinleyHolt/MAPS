@@ -60,6 +60,10 @@ class FakeReasoner:
             return {"kind": "text", "content": "", "reasoning": "",
                     "finish_reason": "stop"}
         t = self.turns.pop(0)
+        if isinstance(t, dict):  # a text turn with its own finish_reason
+            self.messages.append({"role": "assistant", "content": t["content"]})
+            return {"kind": "text", "content": t["content"], "reasoning": "",
+                    "finish_reason": t["finish_reason"]}
         if isinstance(t, str):
             self.messages.append({"role": "assistant", "content": t})
             return {"kind": "text", "content": t, "reasoning": "",

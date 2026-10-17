@@ -319,6 +319,17 @@ EMPTY_TURN_NUDGE = (
     "reply."
 )
 
+TRUNCATED_TURN_NUDGE = (
+    "Your last turn ran out of output tokens while thinking, so nothing "
+    "arrived and nothing executed. Act on what you have: send the one tool "
+    "call you settled on, or your plain-text reply."
+)
+
+#: A turn the output cap cut off empty is the serve's truncation, not a
+#: dropped reply: it gets its own nudge and spends no repair, up to this many
+#: in a row, after which it reads as an empty turn.
+TRUNCATED_TURN_STREAK = 3
+
 CODE_REPLY_NUDGE = (
     "Your reply is code, but it arrived as plain text, not through the run "
     "tool, so nothing was executed. Send the block with the tool to run "
@@ -1382,7 +1393,7 @@ class _Mission:
         self.reasoner.append_user(user_message)
         # Channel misses, consecutive zero-flight replies
         # (NO_FLIGHT_ABSTAIN_STREAK), transient serve errors.
-        no_call_streak = no_flight_streak = transient_failures = 0
+        no_call_streak = no_flight_streak = transient_failures = truncated_streak = 0
         for turn_idx in itertools.count():
             self.turn_idx = turn_idx
             if self.diag is not None:
@@ -1451,6 +1462,16 @@ class _Mission:
                     self.reasoner.append_repair(MALFORMED_ENVELOPE_NUDGE)
                     continue
                 miss = _not_a_reply(content)
+                cut = (miss is not None and miss[0] == "empty_turn"
+                       and r.get("finish_reason") == "length")
+                if not cut:
+                    truncated_streak = 0
+                elif truncated_streak + 1 < TRUNCATED_TURN_STREAK:
+                    truncated_streak += 1
+                    self._log("truncated_turn", turn_idx=turn_idx, streak=truncated_streak)
+                    log.info("%s TRUNCATED turn %d -> nudge", self.rid_tag, turn_idx)
+                    self.reasoner.append_repair(TRUNCATED_TURN_NUDGE)
+                    continue
                 if miss is None:
                     no_call_streak = 0
                 else:
@@ -1483,7 +1504,7 @@ class _Mission:
                 log.info("%s mission ended by reply at turn %d (%d flights)",
                          self.rid_tag, turn_idx, self.turn_flights)
                 return self._mission_end("reply", turns=turn_idx + 1)
-            no_call_streak = 0
+            no_call_streak = truncated_streak = 0
             no_flight_streak = 0
 
             # Dispatch each call in order, answering every call id.

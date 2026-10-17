@@ -205,3 +205,19 @@ def test_a_pass_that_flew_nothing_leaves_its_segment_uncovered():
     assert "error" in failed, failed
     assert "'Main St' has 1 more segment(s) no pass has covered (road_1)" in \
         flown["explored"]["note"], flown
+
+
+def test_a_turn_the_output_cap_cut_off_spends_no_repair():
+    # A truncated empty turn is the serve's cut, nudged on its own: the one
+    # repair is still there for a real dropped reply after it.
+    cut = {"content": "", "finish_reason": "length"}
+    reply, fr, flights, _ = drive([cut, "", [run('go_to(prior_7)\n')], "done"])
+    assert reply.ended_by == "reply" and reply.turns_used == 4, reply
+    assert len(flights) == 1
+
+
+def test_repeated_cut_off_turns_still_end_the_mission():
+    # A serve that only ever truncates cannot loop the mission on nudges.
+    cut = {"content": "", "finish_reason": "length"}
+    reply, fr, _, _ = drive([cut, cut, cut, cut])
+    assert reply.ended_by == "reply" and reply.turns_used == 4, reply
