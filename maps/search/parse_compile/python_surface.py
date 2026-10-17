@@ -532,12 +532,16 @@ class _Cuts:
         return RowList(r for r in self._in_hand() if pred(r))
 
     def order(self, key=None, *, nearest=None, color=None, direction=None,
-              reverse=False):
+              reverse=False, **kw):
         """Put the rows in one order; a table sorts by one column.
         ``direction=`` and ``key=`` sort the rows in hand (``reverse=`` flips a
         key sort, as ``sorted()`` does); ``nearest=`` and ``color=`` re-rank
         the whole set server-side, and relating to a place stamps ``facing
         <place>`` and ``distance to <place>``."""
+        if kw:
+            raise CodeError(
+                "order takes key=/nearest=/color=/direction=/reverse=; "
+                f"{'=, '.join(sorted(kw))}= is none of them.")
         if key is None and direction is None:
             if reverse and (nearest is not None or color is not None):
                 raise CodeError(
@@ -903,11 +907,11 @@ class Rows(_Cuts):
             west_of=west_of, facing=facing, direction=direction, **kw)
 
     def order(self, key=None, *, nearest=None, color=None, direction=None,
-              reverse=False):
+              reverse=False, **kw):
         """Put the rows in one order (``_Cuts.order``), under this class's
         name in a signature error."""
         return super().order(key, nearest=nearest, color=color,
-                             direction=direction, reverse=reverse)
+                             direction=direction, reverse=reverse, **kw)
 
     def distance(self, other) -> float:
         """Metres to ``other``, this set counting as ONE place: the free

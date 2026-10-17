@@ -298,3 +298,11 @@ def test_a_comprehension_variable_named_after_a_move_is_the_models_variable():
 def test_a_set_indexed_by_a_key_no_row_carries_names_the_columns(code):
     err = _first_error(code)
     assert "cars[0]['census']" not in err and "its columns are" in err, err
+
+
+@pytest.mark.parametrize("held", ['find("car")', 'find("car").filter(lambda r: True)',
+                                  'find("car")[0]'])
+def test_an_unknown_order_keyword_is_refused_naming_orders_keywords(held):
+    assert _first_error(f'cars = {held}\ncars.order(distance="prior_7")') == (
+        "line 2: order takes key=/nearest=/color=/direction=/reverse=; "
+        "distance= is none of them.")
