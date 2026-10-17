@@ -370,3 +370,22 @@ def test_a_type_error_inside_a_predicate_is_served_as_its_own():
     # The model's own TypeError is not a signature error: no keyword tail.
     err = _first_error('s = find("car")\ns.filter(lambda r: r + 1)\n')
     assert "unsupported operand type(s) for +" in err and "keywords" not in err, err
+
+
+def test_a_sliced_tags_column_names_the_reads_it_takes():
+    err = _first_error('r = find("Tied Way").order(nearest="prior_900")[0]\nr.get("tags")[:20]')
+    assert err == ('line 2: tags is a dict of OSM tags, not text: r.tags["building"], '
+                   'r.tags.get("amenity"), or str(r.tags) for its text.'), err
+
+
+def test_a_tags_column_reads_as_the_dict_it_is():
+    _, fr, _, _ = drive([[run(
+        'r = find("Tied Way").order(nearest="prior_900")[0]\n'
+        'print(r.tags, r["tags"]["highway"], r.tags.get("x", 1), list(r.tags), str(r.tags),'
+        ' r.tags == {"highway": "residential"}, isinstance(r.tags, dict), type(r.tags))\n'
+        'r.tags.lower()')], "done"], cands=_TIED)
+    out = tool_results(fr)[0]
+    assert out["printed"] == ("{'highway': 'residential'} residential 1 ['highway'] "
+                              "{'highway': 'residential'} True True <class 'dict'>"), out
+    assert out["error"] == "line 3: AttributeError: 'dict' object has no attribute 'lower'", out
+

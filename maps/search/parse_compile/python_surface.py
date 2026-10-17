@@ -699,7 +699,8 @@ class Row(_Cuts):
         the spelling names, else r.x / r.y; ``_MISSING`` when neither."""
         rk = self._resolve_key(k)
         if rk is not None:
-            return object.__getattribute__(self, "_row")[rk]
+            v = object.__getattribute__(self, "_row")[rk]
+            return _Tags(v) if rk == "tags" and isinstance(v, dict) else v
         d = self._derived(k)
         return _MISSING if d is None else d
 
@@ -799,6 +800,23 @@ class Row(_Cuts):
                 or (isinstance(row[k], (list, tuple)) and len(row[k]) <= 4)}
         body = ", ".join(f"{k}={v!r}" for k, v in list(cols.items())[:10])
         return f"<row {body}>"
+
+
+class _Tags(dict):
+    """A row's tags, served as ``k=v; k=v`` text: a slice
+    of it is refused with the reads it does take."""
+
+    def __getitem__(self, k):
+        if isinstance(k, slice):
+            raise CodeError(
+                "tags is a dict of OSM tags, not text: r.tags[\"building\"], "
+                "r.tags.get(\"amenity\"), or str(r.tags) for its text.")
+        return dict.__getitem__(self, k)
+
+
+# type(r.tags), its repr and every error naming its type read as a dict's
+_Tags.__name__ = _Tags.__qualname__ = "dict"
+_Tags.__module__ = "builtins"
 
 
 class RowList(_Cuts, list):
