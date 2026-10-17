@@ -364,6 +364,41 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
     "loop": [
         ("cut", " go_to and explore cannot go inside a loop", "\n"),
     ],
+    "library": [
+        ("cut", " This is one block:", "\n\nTHE MAP"),
+        ("drop", "  find reads ONE set of rows"),
+        ("cut", '  r1 = find("house")                 rows', "  A row's xy is"),
+        ("drop", "  r1.exact / r1.tagged / r1.fuzzy"),
+        ("drop", "  more_of(r1)"),
+        ("drop", "  stand(at=<place>"),
+        ("sentence", "THE PIXELS ARE THE SENSOR'S COVERAGE"),
+        ("sub", " Then it IS one, and it sorts and cuts like any other:\n"
+                '    look_for("pool")\n'
+                '    houses = find("house", nearest="Glade Avenue")\n'
+                "    explore(houses[0])\n"
+                '    pools = find("pool")\n'
+                '    answer = find("house", nearest=pools)   the house nearest a'
+                " pool ranks first\n", "\n"),
+        ("drop", "  A SET in nearest= / near= / within= is ONE place"),
+        ("sentence", "explore the named place"),
+        ("sub", "MOVING -- the only two calls that move", "MOVING -- the only call that moves"),
+        ("drop", "  explore(r5)"),
+        ("drop", "  explore(r6)"),
+        ("sentence", "To reach a PART of something"),
+        ("sentence", "That is a measured position"),
+        ("sub", "BOTH TAKE A THING ON THE MAP, never a coordinate.",
+         "go_to TAKES A THING ON THE MAP, never a coordinate."),
+        ("sub", "go_to takes ONE THING; explore takes ONE THING or ONE SET -- a set"
+                " is one place to cover. Every RELATING slot -- near= nearest="
+                " within= east_of= west_of= north_of= south_of= -- takes one place,"
+                " a point included, or a set of them, which it relates to as ONE"
+                " place.", "go_to takes ONE THING."),
+        ("sub", "show_map(around=) and stand(at=, facing=) take ONE thing: a"
+                " viewpoint stands somewhere and looks at something.",
+         "show_map(around=) takes ONE thing."),
+        ("sub", "go_to and explore cannot go inside a loop", "go_to cannot go inside a loop"),
+        ("sub", ", or explore(the set) to cover it all in one pass.", "."),
+    ],
     "map": [
         ("sub", "\nTHE MAP -- free, moves nothing\n", "\nTHE ROWS -- free, moves nothing\n"),
         ("sub", " crops and maps face its way.\n", " crops face its way.\n"),
@@ -372,6 +407,23 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
                 " asked", "WHAT YOU SEE BECOMES ROWS -- asked"),
         ("sub", "  show_map(around=) and stand(at=, facing=) take ONE thing:",
          "  stand(at=, facing=) takes ONE thing:"),
+    ],
+    "prior+library": [
+        ("sub", "BOTH TAKE A THING ON THE MAP OR AN [x, y] POINT: this run has no"
+                " prior map, so go_to([3411, 1468]) flies to that point and"
+                " explore([3411, 1468]) is one stop there.",
+         "go_to TAKES A THING ON THE MAP OR AN [x, y] POINT: this run has no"
+         " prior map, so go_to([3411, 1468]) flies to that point."),
+        ("sub", "and go_to/explore fly to them.", "and go_to flies to them."),
+        ("sub", "go_to takes ONE THING or ONE POINT; explore takes ONE THING, ONE"
+                " POINT or ONE SET -- a set is one place to cover. Every RELATING"
+                " slot -- near= nearest= within= east_of= west_of= north_of="
+                " south_of= -- takes one place, a point included, or a set of"
+                " them, which it relates to as ONE place.",
+         "go_to takes ONE THING or ONE POINT."),
+    ],
+    "library+map": [
+        ("drop", "  show_map(around=) takes ONE thing."),
     ],
 }
 _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
@@ -413,6 +465,16 @@ _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
     ],
     "mission_map": [
         ("cut", "=== MISSION MAP ===", "=== WORLD CONVENTIONS ==="),
+    ],
+    "library": [
+        ("drop", "- explore(...) flies a covering PASS"),
+        ("sub", "BOTH MOVING CALLS TAKE A THING ON THE MAP", "go_to() TAKES A THING ON THE MAP"),
+        ("sentence", "Points RELATE"),
+        ("sentence", "stand(at=..., facing=...) adopts"),
+        ("sentence", "Neither moves the drone"),
+        ("sentence", "A SCORED sort is evidence"),
+        ("sentence", "find(..., nearest=[x, y])"),
+        ("drop", "- A SPATIAL relation is what drops rows"),
     ],
     "map": [
         ("sub", "show_map(around=), stand(at=)", "stand(at=)"),

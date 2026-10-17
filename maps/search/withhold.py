@@ -31,6 +31,10 @@ WITHHOLDS: dict[str, str] = {
             " point-to-row snap, and the reasoning replayed in the prefix",
     "doc": "the run tool's description: it is the bound calls' one-line"
            " signatures instead",
+    "library": "every call but go_to and the seeing verbs -- find, explore,"
+               " intersection, ends_of, stand, more_of, distance, the rows'"
+               " .filter/.order/.distance and the match tiers -- and every"
+               " sentence and remedy naming one; go_to is the one move",
     "map": "show_map, the world-state schematic, and every sentence naming"
            " it",
 }

@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import itertools
 import json
+import re
 
 import pytest
 
@@ -95,6 +97,12 @@ CASES = {
             ("show_map", "crops and maps", "the distinction the map cannot make",
              "THE MAP -- free"),
             (5, 4), (5, 4), (1, 0)),
+    "library": (("SYSTEM", "TOOLS", "SURFACE"),
+                ("find(", "explore(", "intersection(", "ends_of(", "stand(", "more_of",
+                 ".filter(", ".order(", "distance(", ".exact", "This is one block",
+                 "only two calls that move", "Points RELATE", "A SCORED sort",
+                 "A SPATIAL relation", "That is a measured position"),
+                (21, 5), (52, 9), (10, 0)),
 }
 
 
@@ -468,3 +476,64 @@ def test_a_map_withhold_unbinds_show_map_and_its_remedies(monkeypatch):
     assert "show_map" not in text and "near=, within=, stand(at=)." in text, text
     served = json.dumps(tool_results(drive(stance)[1]))
     assert "crops render its facing up" in served and "maps" not in served, served
+
+
+# A withheld library name or method as it would be spelled.
+_LIBRARY_SPELLED = re.compile(
+    r"(?<![\w.])(find|explore|intersection|ends_of|stand|more_of|distance)\(|"
+    r"\.(filter|order|distance)\(|\.(exact|tagged|fuzzy)\b|more_of|\bexplore\b")
+
+
+def test_a_library_withhold_unbinds_every_call_but_go_to_and_the_seeing_verbs(monkeypatch):
+    monkeypatch.setenv(W.ENV, "library")
+    assert ps.served_calls() == ("look_for", "go_to", "look", "show_map")
+    row = ps.Row({"fid": "car_1", "xy": [0.0, 0.0], "class": "car"})
+    for attr in ("filter", "order", "distance"):
+        with pytest.raises(AttributeError, match="carries no"):
+            getattr(row, attr)
+        with pytest.raises(AttributeError, match=f"'RowList' object has no attribute '{attr}'"):
+            getattr(ps.RowList([row]), attr)
+    for attr in ("exact", "tagged", "fuzzy", "filter"):
+        with pytest.raises(AttributeError, match=f"'Rows' object has no attribute '{attr}'"):
+            getattr(ps.Rows("r1", None), attr)
+    monkeypatch.setenv(W.ENV, "")
+    assert callable(row.distance) and callable(ps.RowList([row]).filter)
+
+
+def test_a_library_withhold_serves_no_library_name_on_the_paths_a_block_reaches(monkeypatch):
+    script = [[run('a = find("car")\n')], [run("narrow(1)\n")], [run("go_to([1, 2])\n")],
+              [run('go_to(["prior_7", "prior_1"])\n')],
+              [run('for f in ["prior_7"]:\n    go_to(f)\n')],
+              [run('go_to("prior_7")\n')], "done"]
+    def answers(fr):    # every byte served back but the block's own echo
+        return json.dumps([{k: v for k, v in r.items() if k != "said"}
+                           for r in tool_results(fr)])
+
+    assert _LIBRARY_SPELLED.search(answers(drive(script)[1])), "the flown arm names them"
+    monkeypatch.setenv(W.ENV, "library")
+    _reply, fr, flights, _d = drive(script)
+    served = answers(fr)
+    assert flights == [{"target_fid": "prior_7"}], flights
+    assert "Points are for LOOKING -- show_map(around=)." in served, served
+    assert not _LIBRARY_SPELLED.search(served), _LIBRARY_SPELLED.search(served)
+
+
+_COMBO_SPELLED = {"library": _LIBRARY_SPELLED, "map": re.compile(r"show_map|\bmaps\b"),
+                  "look": re.compile(r"(?<![\w.])look\("), "look_for": re.compile("look_for"),
+                  "loop": re.compile("cannot go inside a loop"),
+                  "end_commit": re.compile("Your mission ends|Your answer is the ROW")}
+
+
+@pytest.mark.parametrize("names", [",".join(c) for r in (1, 2)
+                                   for c in itertools.combinations(W.WITHHOLDS, r)
+                                   if set(c) & {"end_commit", "loop", "doc", "library", "map"}]
+                         + ["look_for,look,images,map", "doc,system_turn"])
+def test_no_withheld_name_survives_a_combination(monkeypatch, names):
+    """Each new withhold, alone or beside any other, and the research seeing
+    and text families, serve no spelling of what they withhold."""
+    monkeypatch.setenv(W.ENV, names)
+    served = (_dump(monkeypatch, names, "nadir_1008_90")
+              + act_needs_a_thing(name="go_to/explore", got="1, 2"))
+    for n in names.split(","):
+        if n in _COMBO_SPELLED:
+            assert not _COMBO_SPELLED[n].search(served), (n, _COMBO_SPELLED[n].search(served))

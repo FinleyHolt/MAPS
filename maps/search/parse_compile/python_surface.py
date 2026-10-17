@@ -67,7 +67,12 @@ _LIBRARY_CALLS = ("find", "look_for", "go_to", "explore", "look",
 
 
 # A call a bench withhold (maps.search.withhold) unbinds -> that withhold.
-_WITHHELD_BY = {"look_for": "look_for", "look": "look", "show_map": "map"}
+_WITHHELD_BY = {"look_for": "look_for", "look": "look", "show_map": "map",
+                **dict.fromkeys(("find", "explore", "stand", "more_of",
+                                 "intersection", "ends_of", "distance"), "library")}
+# The rows' methods and tiers the ``library`` withhold hides: an access reads
+# as an attribute the rows never had.
+_LIBRARY_ATTRS = frozenset({"filter", "order", "distance", "exact", "tagged", "fuzzy"})
 
 
 def served_calls() -> tuple[str, ...]:
@@ -138,9 +143,8 @@ PRINT_CHAR_CAP = 8_000
 
 _LOOP_MOVE_MSG = (
     "{name}() cannot go inside a loop or a def/lambda: it MOVES, and a loop moves to "
-    "every row of the set -- go_to commits to whichever came last, and "
-    "explore flies a covering pass over each. {then}, then move "
-    "once to the place you chose.")
+    "every row of the set -- go_to commits to whichever came last{explore}. "
+    "{then}, then move once to the place you chose.")
 
 
 # Each act's place slot as the model spells it, by the act's ``why``.
@@ -197,7 +201,7 @@ class MissionNamespace(dict):
         # refusal names the method.
         _moved = difflib.get_close_matches(k, tuple(_MOVED_TO_METHOD),
                                            n=1, cutoff=0.8)
-        if k in _MOVED_TO_METHOD or _moved:
+        if (k in _MOVED_TO_METHOD or _moved) and not withheld("library"):
             k = k if k in _MOVED_TO_METHOD else _moved[0]
             raise CodeError(
                 f"there is no {k}() here -- did you mean "
@@ -302,7 +306,9 @@ def scan_block(code: str) -> ast.Module:
                 and node.func.id in _MOVE_CALLS):
             raise CodeError(_LOOP_MOVE_MSG.format(
                 name=node.func.id, then="Loop to read the rows"
-                if withheld("look") else "Loop to LOOK"))
+                if withheld("look") else "Loop to LOOK",
+                explore="" if withheld("library") else
+                ", and explore flies a covering pass over each"))
         for child in ast.iter_child_nodes(node):
             _walk(child)
         if in_loop:
@@ -410,6 +416,12 @@ class _Cuts:
     the mission over ``_target()``."""
 
     __slots__ = ()
+
+    def __getattribute__(self, k):
+        if k in _LIBRARY_ATTRS and withheld("library"):
+            raise AttributeError(
+                f"{type(self).__name__!r} object has no attribute {k!r}")
+        return object.__getattribute__(self, k)
 
     def _in_hand(self):
         return self
@@ -556,9 +568,10 @@ class Row(_Cuts):
                     if isinstance(k, str) and k.startswith(p)), None)
         generic = (f"row {row.get('fid')} carries no {k!r}; its columns "
                    f"are {sorted(self.keys())[:12]}")
-        if pre is None or pre == "color_":
+        if pre is None or pre == "color_" or withheld("library"):
             # a colour column is a PALETTE word, not a relate; the
-            # off-palette word has its own loud error at the op layer
+            # off-palette word has its own loud error at the op layer; and
+            # under the ``library`` withhold nothing relates
             return generic
         place = k[len(pre):]
         if pre in STANDING_SIDE_PREFIXES:
@@ -1171,9 +1184,10 @@ class MissionPython:
             if why in ("move", "cover") and not withheld("prior"):
                 raise CodeError(act_needs_a_thing(
                     name="go_to/explore", got=f"{pt[0]:g}, {pt[1]:g}")
-                    + " A crossing you computed is a ROW: index it "
-                      "-- r2 = intersection(\"A Road\", \"B St\") then "
-                      "go_to(r2[0]).")
+                    + ("" if withheld("library") else
+                       " A crossing you computed is a ROW: index it "
+                       "-- r2 = intersection(\"A Road\", \"B St\") then "
+                       "go_to(r2[0])."))
             return format_xy_token(float(pt[0]), float(pt[1]))
         if isinstance(v, str) and not v.strip() and why != "marks":
             raise CodeError(
@@ -1477,10 +1491,10 @@ class MissionPython:
         if isinstance(around, Rows):
             raise CodeError(
                 self._not_one_place("around", around) + " -- or use a "
-                "name. (A set IS one "
+                "name." + ("" if withheld("library") else " (A set IS one "
                 "place in near=, within= and nearest=, where it means "
                 "the gap to its NEAREST member, but there is no one "
-                "point to centre on.)")
+                "point to centre on.)"))
         around = self._slot(around)
         self._act(self.env.map, [(self._site(around, "map"), "map")])
         return None
@@ -1540,7 +1554,8 @@ class MissionPython:
                 raise CodeError(
                     f"go_to() takes ONE thing and {name or 'that'} is a set "
                     f"of {len(x)} row(s). {_index_it(name)} -- go_to({s}[0])"
-                    f" -- or explore({s}) to cover the whole set.")
+                    + ("." if withheld("library") else
+                       f" -- or explore({s}) to cover the whole set."))
         elif is_xy(x) and withheld("prior"):
             pass  # no map to name a thing on: a point is the place to fly
         elif isinstance(x, (list, tuple, set, frozenset)):
@@ -1564,8 +1579,9 @@ class MissionPython:
             if things and not ok_set:
                 raise CodeError(
                     f"{call}() takes ONE thing and that is a set of "
-                    f"{len(x)}. Index the one you mean -- {call}(<set>[0]) "
-                    "-- or explore(<set>) to cover all of it.")
+                    f"{len(x)}. Index the one you mean -- {call}(<set>[0])"
+                    + ("." if withheld("library") else
+                       " -- or explore(<set>) to cover all of it."))
             if not ok_set:
                 raise CodeError(act_needs_a_thing(
                     name="go_to/explore",
@@ -1576,7 +1592,8 @@ class MissionPython:
                 raise CodeError(
                     f"{self.spelling(e) or 'that set'} holds 0 row(s) here; "
                     f"there is nothing to {_MOVE_SAYS[call]}.")
-        if isinstance(x, str) and VIEWPOINT_RE.fullmatch(x):
+        if (isinstance(x, str) and VIEWPOINT_RE.fullmatch(x)
+                and not withheld("library")):
             # A staged viewpoint is a pose, not a thing on the map: the
             # move wire would resolve it to its stand point, a coordinate.
             raise CodeError(
@@ -1693,9 +1710,10 @@ class MissionPython:
         if time.monotonic() > self._deadline:
             raise CodeError(
                 f"the block ran past {TRACE_DEADLINE_S:.0f} s -- a slow or "
-                "large query, most likely a find/near loop over the whole "
-                "map. Scope it tighter (fewer rows, a smaller dwithin) or "
-                "split it across turns.")
+                + ("large query. Scope it tighter" if withheld("library") else
+                   "large query, most likely a find/near loop over the whole "
+                   "map. Scope it tighter (fewer rows, a smaller dwithin)")
+                + " or split it across turns.")
 
     def _unbind_failed_assign(self, tree: ast.Module, line: int) -> None:
         """A rebind that failed UNBINDS the name: Python leaves the target

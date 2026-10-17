@@ -773,8 +773,10 @@ class _Mission:
         self.carry.mint(h, [self._ns_rows[f] for f in new_fids])
         self._those = h
         return (f"{h} — the {len(new_fids)} rows this {what} added; "
-                f"the handle is bound, so {h}, {h}[0] and "
-                f"{h}.order(...) all reach them")
+                + (f"the handle is bound, so {h} and {h}[0] reach them"
+                   if withheld("library") else
+                   f"the handle is bound, so {h}, {h}[0] and "
+                   f"{h}.order(...) all reach them"))
 
     def _pick_next(self, queue: list, cover: str | None) -> int:
         """The queue index to fly next: in a pass, a stop the recording
@@ -1020,7 +1022,8 @@ class _Mission:
             mp = self._mission_py
             name = mp.ref_name(handle) or mp.call_arg("look")
             return {"error": (f"{name or handle} holds no rows to look at; "
-                              "name a handle that has some, or find() one first")}
+                              "name a handle that has some"
+                              + ("" if withheld("library") else ", or find() one first"))}
         fids = [row_token(r) for r in rows]
         return self._crops_of(
             fids, marks=marks,

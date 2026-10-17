@@ -1,0 +1,3 @@
+# CityNav with the library part withheld (maps/search/withhold.py).
+base: ../citynav.yaml
+withhold: [library]

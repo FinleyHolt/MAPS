@@ -22,6 +22,7 @@ import yaml
 
 from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor, served_description
 from maps.search.parse_compile import prompts
+from maps.search.withhold import withheld
 
 _SAMPLE_INSTRUCTION = "<operator cue>"
 _CALCITY = Path(__file__).resolve().parents[3] / "configs" / "calcity.yaml"
@@ -60,9 +61,11 @@ def surface_lines() -> list[str]:
 
     out = [f"  {call}({_params(getattr(MissionPython, f'_call_{call}'))})"
            for call in served_calls()]
-    # A cut, a sort and a distance are methods on a result.
-    out += [f"  <rows>.{name}({_params(getattr(Rows, name))})"
-            for name in ("filter", "order", "distance")]
+    # A cut, a sort and a distance are methods on a result, which the
+    # ``library`` withhold hides.
+    if not withheld("library"):
+        out += [f"  <rows>.{name}({_params(getattr(Rows, name))})"
+                for name in ("filter", "order", "distance")]
     return out
 
 

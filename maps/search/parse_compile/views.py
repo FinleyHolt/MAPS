@@ -256,8 +256,9 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, resolve,
         ref_notes.append(
             f"{len(uncovered)} crop(s) not rendered ({_u}{_um}): that "
             "ground has never been under the sensor. A look shows what "
-            "some flight has covered -- explore the place so a pass "
-            "covers it, then look.")
+            "some flight has covered"
+            + ("." if withheld("library") else
+               " -- explore the place so a pass covers it, then look."))
     return requests, skipped, ref_notes
 
 
