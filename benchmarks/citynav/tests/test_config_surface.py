@@ -106,13 +106,18 @@ def test_a_base_naming_no_file_is_refused_with_the_config(tmp_path, base):
         resolve_config(_write(tmp_path, "a.yaml", f"base: {base}\n"))
 
 
+# The research families flown as one arm each: family -> its withholds.
+FAMILIES = {"seeing": ["look_for", "look", "images", "map"], "text": ["doc", "system_turn"]}
+
+
 def test_each_withhold_config_is_the_control_less_its_own_part():
     control = resolve_config(REPO_ROOT / "configs/citynav.yaml")[0]
     shipped = sorted((REPO_ROOT / "configs/withhold").glob("*.yaml"))
-    assert sorted(p.stem for p in shipped) == sorted(WITHHOLDS)
+    assert sorted(p.stem for p in shipped) == sorted([*WITHHOLDS, *FAMILIES])
     for path in shipped:
         resolved = resolve_config(path)[0]
-        assert resolved == {**control, "withhold": [path.stem]}, path.name
+        want = FAMILIES.get(path.stem, [path.stem])
+        assert resolved == {**control, "withhold": want}, path.name
 
 
 def test_a_blocks_cell_size_is_its_bakes(tmp_path, monkeypatch):

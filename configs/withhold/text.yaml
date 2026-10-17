@@ -1,0 +1,4 @@
+# CityNav with the research text family withheld: the run description and the
+# system turn (maps/search/withhold.py).
+base: ../citynav.yaml
+withhold: [doc, system_turn]
