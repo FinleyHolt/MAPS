@@ -24,11 +24,11 @@ Usage::
     python -m baselines.released.outcome_rows citynav --method mgp \\
         --native mgp_mturk_test_unseen_0.75_gdino.json --split test_unseen \\
         --split-file citynav_test_unseen.json --dataset-version original \\
-        --checkpoint-id "$(cat checkpoint.id)" --out output/released/mgp_test_unseen
+        --checkpoint-id "$(cat checkpoint.id)" --out output/released_baselines/mgp_citynav_test_unseen
     python -m baselines.released.outcome_rows calcity --method hett \\
         --native captures/hett_test_unseen.json --export EXPORT_DIR \\
-        --checkpoint-id "$(cat checkpoint.id)" --out output/released/hett_calcity
-    python -m baselines.released.outcome_rows pair output/released/mgp_test_unseen MAPS_RUN
+        --checkpoint-id "$(cat checkpoint.id)" --out output/released_baselines/hett_calcity
+    python -m baselines.released.outcome_rows pair output/released_baselines/mgp_citynav_test_unseen MAPS_RUN
 """
 
 from __future__ import annotations
