@@ -41,8 +41,7 @@ def _winds_holding(cardinal_word: str) -> list:
 # measured positions. One refusal for every spelling of a point.
 _ACT_NEEDS_A_THING = (
     "{name}() takes a THING on the map, not a coordinate ({got}). Points "
-    "are for {uses} -- near=, within=, show_map(around=), "
-    "stand(at=).")
+    "are for {uses} -- {slots}.")
 _ACT_REACH_A_PART = (
     " To reach a part of something, look_for the class you "
     "want, explore the thing so the segmenter puts rows on it, then "
@@ -51,11 +50,14 @@ _ACT_REACH_A_PART = (
 
 def act_needs_a_thing(*, name: str, got: str) -> str:
     """The refusal of a coordinate where a move takes a thing; its remedy
-    names look_for, so a ``look_for`` withhold serves the refusal alone, and a
-    ``look`` withhold says points are for relating only."""
+    names look_for, so a ``look_for`` withhold serves the refusal alone, a
+    ``look`` withhold says points are for relating only, and a ``map``
+    withhold names no show_map."""
     text = _ACT_NEEDS_A_THING + ("" if withheld("look_for") else _ACT_REACH_A_PART)
     uses = "RELATING" if withheld("look") else "RELATING and LOOKING"
-    return text.format(name=name, got=got, uses=uses)
+    slots = ", ".join(s for s in ("near=, within=", "show_map(around=)", "stand(at=)")
+                      if s != "show_map(around=)" or not withheld("map"))
+    return text.format(name=name, got=got, uses=uses, slots=slots)
 
 
 class CodeError(ValueError):

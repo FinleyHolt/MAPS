@@ -601,8 +601,9 @@ class _Mission:
                         "facing_bearing_deg": brg}],
             "note": (f"standing viewpoint = {h}: 'left of {h}'/'right of "
                      f"{h}'/'ahead of {h}'/'behind {h}' ride every find "
-                     f"row; {h} is a point ref ('distance to {h}'); crops "
-                     f"and maps render its facing up."),
+                     f"row; {h} is a point ref ('distance to {h}'); "
+                     + ("crops" if withheld("map") else "crops and maps")
+                     + " render its facing up."),
         }}
 
     def _standing_frame(self) -> tuple[list | None, str]:

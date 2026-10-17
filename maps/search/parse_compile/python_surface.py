@@ -66,11 +66,15 @@ _LIBRARY_CALLS = ("find", "look_for", "go_to", "explore", "look",
                   "intersection", "ends_of", "distance")
 
 
+# A call a bench withhold (maps.search.withhold) unbinds -> that withhold.
+_WITHHELD_BY = {"look_for": "look_for", "look": "look", "show_map": "map"}
+
+
 def served_calls() -> tuple[str, ...]:
-    """The mission calls this run binds: a ``look_for`` or ``look`` withhold
-    (maps.search.withhold) unbinds the verb of its name."""
+    """The mission calls this run binds: every call less those a withhold
+    unbinds."""
     return tuple(c for c in _LIBRARY_CALLS
-                 if c not in ("look_for", "look") or not withheld(c))
+                 if c not in _WITHHELD_BY or not withheld(_WITHHELD_BY[c]))
 
 
 # Free-call spellings the surface refuses, mapped to the method that performs

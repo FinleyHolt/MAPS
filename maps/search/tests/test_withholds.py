@@ -91,6 +91,10 @@ CASES = {
     "doc": (("TOOLS",), ("Write ordinary Python", "THE MAP -- free", "ARM EVERY CLASS",
                          "WHAT YOU SEE BECOMES ROWS", "ORDINARY PYTHON RUNS HERE"),
             (0, 0), (76, 14), (0, 0)),
+    "map": (("SYSTEM", "TOOLS", "SURFACE"),
+            ("show_map", "crops and maps", "the distinction the map cannot make",
+             "THE MAP -- free"),
+            (5, 4), (5, 4), (1, 0)),
 }
 
 
@@ -445,3 +449,16 @@ def test_the_text_family_serves_no_turn_and_the_calls_signatures(monkeypatch):
     lines = contract.surface_lines()
     assert prompts.served_doc() == "\n".join(lines) + "\n"
     assert lines[0].startswith("  find(") and lines[-1] == "  <rows>.distance(other)"
+
+
+def test_a_map_withhold_unbinds_show_map_and_its_remedies(monkeypatch):
+    stance = [[run('stand(at="prior_7")\n')], "done"]
+    assert "show_map(around=)" in act_needs_a_thing(name="go_to", got="1, 2")
+    assert "crops and maps render" in json.dumps(tool_results(drive(stance)[1]))
+    monkeypatch.setenv(W.ENV, "map")
+    assert "show_map" not in ps.served_calls()
+    assert "show_map" not in ps.MissionPython(quiet_env()).ns
+    text = act_needs_a_thing(name="go_to", got="1, 2")
+    assert "show_map" not in text and "near=, within=, stand(at=)." in text, text
+    served = json.dumps(tool_results(drive(stance)[1]))
+    assert "crops render its facing up" in served and "maps" not in served, served

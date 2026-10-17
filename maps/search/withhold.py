@@ -31,6 +31,8 @@ WITHHOLDS: dict[str, str] = {
             " point-to-row snap, and the reasoning replayed in the prefix",
     "doc": "the run tool's description: it is the bound calls' one-line"
            " signatures instead",
+    "map": "show_map, the world-state schematic, and every sentence naming"
+           " it",
 }
 
 

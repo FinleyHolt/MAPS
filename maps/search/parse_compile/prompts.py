@@ -361,6 +361,15 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
     "loop": [
         ("cut", " go_to and explore cannot go inside a loop", "\n"),
     ],
+    "map": [
+        ("sub", "\nTHE MAP -- free, moves nothing\n", "\nTHE ROWS -- free, moves nothing\n"),
+        ("sub", " crops and maps face its way.\n", " crops face its way.\n"),
+        ("drop", "  show_map(around=<place>)"),
+        ("sub", "WHAT YOU SEE BECOMES ROWS -- the distinction the map cannot make,"
+                " asked", "WHAT YOU SEE BECOMES ROWS -- asked"),
+        ("sub", "  show_map(around=) and stand(at=, facing=) take ONE thing:",
+         "  stand(at=, facing=) takes ONE thing:"),
+    ],
 }
 _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
     "prior": [
@@ -401,6 +410,11 @@ _TURN_EDITS: dict[str, list[tuple[str, ...]]] = {
     ],
     "mission_map": [
         ("cut", "=== MISSION MAP ===", "=== WORLD CONVENTIONS ==="),
+    ],
+    "map": [
+        ("sub", "show_map(around=), stand(at=)", "stand(at=)"),
+        ("sub", "find(..., nearest=[x, y]), show_map(around=[x, y]) --",
+         "find(..., nearest=[x, y]) --"),
     ],
     "end_commit": [
         ("sub", "Your mission ends when you reply in plain text with no tool"

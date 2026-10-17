@@ -1,0 +1,3 @@
+# CityNav with the map part withheld (maps/search/withhold.py).
+base: ../citynav.yaml
+withhold: [map]
