@@ -255,6 +255,16 @@ def test_a_tool_result_does_not_echo_the_block():
         assert "said" not in out, out
 
 
+def test_calling_a_name_bound_over_a_mission_call_says_how_to_get_it_back():
+    _r, fr, _f, _d = drive([
+        [run('intersection = find("gate")\nintersection("A Road", "B Street")\n')],
+        "done"])
+    err = tool_results(fr)[0]["error"]
+    assert err == ("line 2: TypeError: intersection is a set of 1 row(s), not a "
+                   "call: binding intersection shadows the intersection() call; "
+                   "del intersection gives the call back."), err
+
+
 def test_math_is_loaded_and_import_math_works():
     reply, fr, _f, _d = drive([
         [run('import math\n'

@@ -737,6 +737,14 @@ class Rows(_Cuts):
     def __len__(self):
         return len(self._rows())
 
+    def __call__(self, *args, **kwargs):
+        # A set is no call; a name bound over a mission call says so.
+        name = self._mp.spelling(self) or UNNAMED
+        raise TypeError(
+            f"{name} is a set of {len(self)} row(s), not a call"
+            + (f": binding {name} shadows the {name}() call; del {name} gives "
+               "the call back." if name in served_calls() else "."))
+
     def _tied(self) -> bool:
         return bool(not self._spec and self._mp.env.tied_of_ref(self._ref))
 
