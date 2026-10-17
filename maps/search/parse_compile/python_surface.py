@@ -445,18 +445,29 @@ class _Cuts:
         if k.startswith("_") or (lib and k in _LIBRARY_ATTRS):
             raise AttributeError(
                 f"{type(self).__name__!r} object has no attribute {k!r}")
-        name = (self._mp.spelling(self) if isinstance(self, Rows) else None) \
-            or "these rows"
-        kw = None if lib else {
-            "nearest": "order", "color": "order", "direction": "order",
-            "near": "filter", "within": "filter", "dwithin": "filter",
-            "facing": "filter"}.get(k, "filter" if k in _CARDINAL_KWARGS else None)
+        if k in served_calls():
+            raise AttributeError(
+                f"{k}() is a call, not a method: call it on its own, {k}(...)")
+        if isinstance(self, Rows):
+            name = self._mp.spelling(self)
+        else:
+            mp = RowList._target(self)[0]
+            name = mp and mp.name_of(self)
+        # A remedy names the set as the model does, else binds it first.
+        said, then = (name, "") if name else ("s", "bind it first (s = ...); ")
+        kw = None if lib else (
+            "order" if k in ("nearest", "color", "direction")
+            else "filter" if k in _FILTER_KWARGS else None)
         if kw:
             raise AttributeError(
-                f"{k} is a keyword, not a method: {name}.{kw}({k}=...)")
+                f"{k} is a keyword, not a method: {then}{said}.{kw}({k}=...)")
+        whose = (f"{k}() is a row's own: {said}[0].{k}"
+                 f"({'<column>' if k == 'get' else ''})"
+                 if k in ("keys", "get") else
+                 f"a column is read off one row: {said}[0].{k}")
         raise AttributeError(
-            f"{name} is a set of {len(self)} row(s) and carries no {k!r}; a "
-            f"column is read off one row: {name}[0].{k}")
+            f"{name or 'that'} is a set of {len(self)} row(s) and carries no "
+            f"{k!r}; {then}{whose}")
 
     def _in_hand(self):
         return self

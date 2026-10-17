@@ -985,6 +985,25 @@ def test_model_code_cannot_read_a_sets_executor_slots(attr, says):
     assert says in err, err
 
 
+@pytest.mark.parametrize("code, says", [
+    ('m = find("car")\nm.intersection("x")\n',
+     "intersection() is a call, not a method: call it on its own, intersection(...)"),
+    ('m = find("car")\nm.keys()\n', "a row's own: m[0].keys()"),
+    ('m = find("car")\nm.get("class")\n', "a row's own: m[0].get(<column>)"),
+    ('both = find("car") + find("car")\nboth.xy\n',
+     "both is a set of 4 row(s) and carries no 'xy'; a column is read off one "
+     "row: both[0].xy"),
+    ('(find("car") + find("car")).xy\n',
+     "that is a set of 4 row(s) and carries no 'xy'; bind it first (s = ...); "
+     "a column is read off one row: s[0].xy"),
+    ('(find("car") + find("car")).nearest\n',
+     "nearest is a keyword, not a method: bind it first (s = ...); "
+     "s.order(nearest=...)")])
+def test_a_set_read_as_a_row_gets_a_remedy_that_runs(code, says):
+    err, _ = _refusal(code)
+    assert err.endswith(says), err
+
+
 def test_indexing_a_set_by_a_non_int_names_the_int_position():
     err, _ = _refusal('cars = find("car")\ncars["name"]\n')
     assert err.endswith("cars['name'] did not bind: cars is a set of rows, "
