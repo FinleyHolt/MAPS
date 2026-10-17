@@ -70,6 +70,10 @@ class ProgramError(Exception):
     pass
 
 
+# What a refusal of a token that names no surface row says to do.
+_SAY_A_FID = "Say a fid off a served row."
+
+
 class _FindMemo:
     """A find's per-query work and word rarity for the surface lists it was
     built on; ``lists`` pins them so their ids cannot be reused."""
@@ -743,12 +747,6 @@ class _Run:
         self.results: dict = {}
         self.op = None
 
-    def avail(self) -> str:
-        """The surface fids (the first 12) a refusal names."""
-        fids = sorted(self.by_fid)
-        return f"available fids: {fids[:12]}" + (
-            f" (+{len(fids) - 12} more)" if len(fids) > 12 else "")
-
     def is_ref(self, tok) -> bool:
         """A handle: ``rN`` or ``rN[a:b]`` naming a result of this program
         or of an earlier call. A fid never matches."""
@@ -829,7 +827,7 @@ def _as_rows(cx, arg):
             raise ProgramError(
                 f"cannot resolve a point in the list from item {_quote(it)}: each item must "
                 f"be a fid on this surface, an [x, y], or a set. "
-                f"{cx.avail()}")
+                + _SAY_A_FID)
     return out
 
 
@@ -859,6 +857,16 @@ def _named_rows(cx, el, need):
 def _as_said(el):
     """A crossings/ends ref as the model said it: its label, else itself."""
     return el["as"] if isinstance(el, dict) and el.get("as") else el
+
+
+def _refuse_if_empty(cx, el, what: str) -> None:
+    """Refuse a crossings/ends ref whose handles hold no rows, saying so."""
+    ref = el.get("ref") if isinstance(el, dict) else el
+    refs = ref if isinstance(ref, list) else [ref]
+    if refs and all(isinstance(t, str) and cx.is_ref(t) and not cx.resolve(t)
+                    for t in refs):
+        raise ProgramError(f"{_quote(_as_said(el))} holds 0 rows here; there "
+                           f"is nothing to {what}.")
 
 
 def _relate_ran(key, items) -> bool:
@@ -1133,10 +1141,11 @@ def _crossings(cx, a):
         nodes = _named_rows(cx, el, "xy")
         polys = [p for n in nodes for p in chains_of(n)]
         if not polys:
+            _refuse_if_empty(cx, el, "cross")
             raise ProgramError(
                 f"{_quote(_as_said(el))} names no geometry on this surface "
                 f"-- a crossing needs two features that HAVE a shape. "
-                f"{cx.avail()}")
+                + _SAY_A_FID)
         sides.append((_x_label(nodes, el), polys,
                       {str(n.get("fid")) for n in nodes}))
     # A row on both sides would hand back its own corners.
@@ -1193,9 +1202,10 @@ def _ends(cx, a):
     for el in a["refs"]:
         nodes = _named_rows(cx, el, "centerline")
         if not nodes:
+            _refuse_if_empty(cx, el, "take the ends of")
             raise ProgramError(
                 f"{_quote(_as_said(el))} names no row on this surface. "
-                f"{cx.avail()}")
+                + _SAY_A_FID)
         for nd in nodes:
             cl = nd.get("centerline")
             if not (isinstance(cl, list) and len(cl) >= 2):
@@ -1420,7 +1430,7 @@ def _union_members(cx, ref_el, as_label) -> list:
         if node is None:
             raise ProgramError(
                 f"{_quote(x)} is not a fid on this surface. "
-                f"{cx.avail()}")
+                + _SAY_A_FID)
         members.append(node)
     return members
 
@@ -1507,7 +1517,7 @@ def _compare(cx, a):
             if payload is None:
                 raise ProgramError(
                     f"{_quote(ref_el)} is not a fid on this surface. "
-                    f"{cx.avail()}")
+                    + _SAY_A_FID)
             kind = "row"
             lab = _unique_label(as_label or sanitize_token(payload["fid"]),
                                 used_labels, payload["fid"])

@@ -933,8 +933,9 @@ def test_indexing_an_empty_set_says_it_holds_no_rows():
                         "Show it first, then index it."), err
 
 
-def test_a_fid_name_with_no_row_on_the_surface_is_refused():
-    err, _ = _refusal('look(prior_9999[0])\n')
+@pytest.mark.parametrize("code", ['look(prior_9999[0])\n', 'find("prior_9999")\n'])
+def test_a_fid_name_with_no_row_on_the_surface_is_refused(code):
+    err, _ = _refusal(code)
     assert err.endswith("there is no prior_9999 on this surface; say a fid "
                         "off a served row."), err
 

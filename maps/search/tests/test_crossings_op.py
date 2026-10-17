@@ -399,8 +399,11 @@ def test_a_look_list_refuses_a_slice_naming_it_as_spelled(block, name):
 
 
 
-@pytest.mark.parametrize("op, query", [("crossings", "car"), ("ends", "qqq")])
-def test_a_refused_ref_is_quoted_by_the_models_label(op, query):
+@pytest.mark.parametrize("op, query, says", [
+    ("crossings", "car", "'roads' names no geometry"),
+    ("crossings", "qqq", "'roads' holds 0 rows here; there is nothing to cross."),
+    ("ends", "qqq", "'roads' holds 0 rows here; there is nothing to take the ends of.")])
+def test_a_refused_ref_is_quoted_by_the_models_label(op, query, says):
     # A set with no geometry (or no rows) is refused under the label the
     # model knows it by, never as the executor's {ref, as} element.
     roads = {"ref": ["r0"], "as": "roads"}
@@ -409,7 +412,7 @@ def test_a_refused_ref_is_quoted_by_the_models_label(op, query):
     with pytest.raises(ProgramError) as e:
         run_program([{"fid": "c1", "class": "car", "search_text": "car"}],
                     [], prog)
-    assert str(e.value).startswith("'roads' names no"), e.value
+    assert str(e.value).startswith(says), e.value
 
 
 @pytest.mark.parametrize("op", ["crossings", "ends"])
@@ -423,6 +426,7 @@ def test_a_fid_off_the_surface_is_refused_as_naming_no_row(op):
     with pytest.raises(ProgramError) as e:
         run_program([], anchors, prog)
     assert str(e.value).startswith("'prior_999' names no"), e.value
+    assert str(e.value).endswith(". Say a fid off a served row."), e.value
 
 
 def _ends_block(code):

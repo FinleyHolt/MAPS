@@ -158,6 +158,12 @@ class _Stop(Exception):
     """A plan-level refusal already folded into the receipt: end the block."""
 
 
+def _no_such_fid(fid: str) -> CodeError:
+    """The refusal of a prior_/detected_ fid no surface row carries."""
+    return CodeError(f"there is no {fid} on this surface; say a fid off a "
+                     "served row.")
+
+
 class MissionNamespace(dict):
     """The exec globals (CPython honours ``__missing__`` on a dict-subclass
     globals): an undefined name that spells a served fid is a :class:`Row` of
@@ -176,8 +182,7 @@ class MissionNamespace(dict):
             if isinstance(row, dict):
                 return Row(row, mp=mp)
             if k.startswith(("prior_", "detected_")):
-                raise CodeError(f"there is no {k} on this surface; say a "
-                                "fid off a served row.")
+                raise _no_such_fid(k)
             return k
         # A plain KeyError is what lets LOAD_GLOBAL fall through to
         # __builtins__.
@@ -1301,13 +1306,17 @@ class MissionPython:
                 '"Fuchsia Avenue") for where they cross.')
         if name is not None and query == "":
             raise CodeError(f"the name IS the query: find({name!r})")
+        q = str(query)
+        # A fid is no name to search for: one no row carries is refused.
+        if q.startswith(("prior_", "detected_")) and fid_like(q) \
+                and self.env.row_of_fid(q) is None:
+            raise _no_such_fid(q)
         refuse_metres_in_within(within)
         nearest = self._slot(nearest)
         near = self._slot(near)
         within = self._slot(within)
         cards = self._cards(north=north_of, south=south_of, east=east_of,
                             west=west_of)
-        q = str(query)
         p = self._program(q, nearest, near, within, dwithin, color, name,
                           cards)
         ref = compile_find(p, q, name=name, near=near, nearest=nearest,
