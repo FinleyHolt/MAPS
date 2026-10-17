@@ -96,6 +96,11 @@ class CallCanceled(Exception):
 #: How often an in-flight call's watch looks at its cancel event.
 _CANCEL_POLL_S = 0.25
 
+#: The connect phase's own bound: a cancel cannot reach a socket still
+#: connecting, and a SYN nothing answers otherwise waits out the kernel's
+#: retries (~130 s). A connect timeout is retried like any transport fault.
+_CONNECT_TIMEOUT_S = 15.0
+
 
 class _CancelWatch:
     """Aborts one in-flight request the moment its cancel event is set: it
@@ -416,7 +421,7 @@ def stream_chat_completions(
 
     watch = _CancelWatch(cancel_event) if cancel_event is not None else None
     try:
-        with httpx.Client(timeout=timeout) as client, client.stream(
+        with httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client, client.stream(
             "POST", url, headers=headers, json=body,
             extensions={"trace": watch.trace} if watch is not None else None,
         ) as resp:
@@ -580,7 +585,7 @@ def chat_completions_raw(
                 response_json = stream_chat_completions(
                     url, headers, wire, timeout=timeout, cancel_event=cancel_event)
             else:
-                with httpx.Client(timeout=timeout) as client:
+                with httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client:
                     r = client.post(url, headers=headers, json=wire)
                 r.raise_for_status()
                 response_json = r.json()

@@ -56,3 +56,45 @@ def test_a_cancel_during_a_retry_backoff_ends_the_wait(monkeypatch):
                                        model="m", messages=[{"role": "user", "content": "x"}])
         assert len(serve.bodies) == 1
     assert time.monotonic() - t0 < 2.0
+
+
+def test_a_cancel_during_a_connect_that_never_completes_ends_the_call(monkeypatch):
+    """A listener whose accept queue is full drops every further SYN, so the
+    connect hangs as on a blackholed route; the connect bound ends it and the
+    cancel lands before any retry."""
+    import socket
+
+    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
+    monkeypatch.setattr(http, "_CONNECT_TIMEOUT_S", 0.5, raising=False)
+    lis = socket.socket()
+    lis.bind(("127.0.0.1", 0))
+    lis.listen(0)
+    fillers = []
+    while True:      # fill the accept queue until a connect hangs
+        s = socket.socket()
+        s.settimeout(0.3)
+        fillers.append(s)
+        try:
+            s.connect(lis.getsockname())
+        except OSError:
+            break
+    cancel = threading.Event()
+    threading.Timer(0.2, cancel.set).start()
+    got = []
+
+    def call():
+        try:
+            http.chat_completions_raw(f"http://127.0.0.1:{lis.getsockname()[1]}/v1", None,
+                                       timeout=60.0, cancel_event=cancel, model="m",
+                                       messages=[{"role": "user", "content": "x"}])
+        except Exception as e:  # noqa: BLE001
+            got.append(e)
+
+    t = threading.Thread(target=call, daemon=True)
+    t.start()
+    t.join(10.0)
+    for s in fillers + [lis]:
+        s.close()
+    assert not t.is_alive(), "the connect outlived its bound"
+    assert len(got) == 1 and isinstance(got[0], http.CallCanceled), got
+    assert http._CONNECT_TIMEOUT_S <= 15.0
