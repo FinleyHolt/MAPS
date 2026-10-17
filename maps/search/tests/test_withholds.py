@@ -103,8 +103,9 @@ CASES = {
                 ("find(", "explore(", "intersection(", "ends_of(", "stand(", "more_of",
                  ".filter(", ".order(", "distance(", ".exact", "This is one block",
                  "only two calls that move", "Points RELATE", "A SCORED sort",
-                 "A SPATIAL relation", "That is a measured position"),
-                (21, 5), (52, 9), (10, 0)),
+                 "A SPATIAL relation", "That is a measured position", "A bare handle",
+                 "r5 = r3[0]", "look and relate near", "a spaced column goes through"),
+                (21, 5), (57, 14), (10, 0)),
 }
 
 
@@ -552,3 +553,15 @@ def test_a_look_withhold_beside_a_prior_withhold_serves_no_looking_point(monkeyp
     doc = prompts.served_doc()
     assert "points RELATE, and go_to/explore fly to them." in doc, doc
     assert "LOOK," not in doc, doc
+
+
+def test_a_library_withhold_says_how_to_read_a_row_of_a_set_it_cannot_order(monkeypatch):
+    """Under ``library`` nothing orders a flight's rows, so a set shows its
+    census alone; the hint names the one way to read a row."""
+    from maps.search.tests.fakes import grow_drive
+    monkeypatch.setenv(W.ENV, "library")
+    out, _g, _a = grow_drive([[run('look_for("car")\nh = go_to("prior_7")\n')],
+                              [run("h\n")], [run("print(h[0])\n")], "done"])
+    hint = out[1]["result"]["results"]["h"]["hint"]
+    assert hint.endswith("no fids: print(<set>[i]) reads row i's columns."), hint
+    assert out[2]["printed"].startswith("<row fid="), out[2]

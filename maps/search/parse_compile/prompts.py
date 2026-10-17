@@ -364,9 +364,12 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
         ("cut", " go_to and explore cannot go inside a loop", "\n"),
     ],
     "library": [
+        ("sub", " A bare handle on its own line SHOWS the rows, r1[0] one row,"
+                " r1[0:20] a window; print()", " print()"),
         ("cut", " This is one block:", "\n\nTHE MAP"),
         ("drop", "  find reads ONE set of rows"),
         ("cut", '  r1 = find("house")                 rows', "  A row's xy is"),
+        ("sub", "r5 = r3[0]   r6 = r3[0:20]", "r5 = r1[0]   r6 = r1[0:20]"),
         ("drop", "  r1.exact / r1.tagged / r1.fuzzy"),
         ("drop", "  more_of(r1)"),
         ("drop", "  stand(at=<place>"),
@@ -395,6 +398,9 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
         ("sub", "show_map(around=) and stand(at=, facing=) take ONE thing: a"
                 " viewpoint stands somewhere and looks at something.",
          "show_map(around=) takes ONE thing."),
+        ("sub", "points RELATE and LOOK,", "points LOOK,"),
+        ("sub", '; a spaced column goes through r["distance to ..."]', ""),
+        ("sub", "is a place to look and relate near", "is a place to look at"),
         ("sub", "go_to and explore cannot go inside a loop", "go_to cannot go inside a loop"),
         ("sub", ", or explore(the set) to cover it all in one pass.", "."),
     ],
@@ -420,6 +426,10 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
                 " south_of= -- takes one place, a point included, or a set of"
                 " them, which it relates to as ONE place.",
          "go_to takes ONE THING or ONE POINT."),
+    ],
+    "look+library": [
+        ("sub", "points RELATE, they do not move you.", "points do not move you."),
+        ("sub", "is a place to relate near", "is a point"),
     ],
     "library+map": [
         ("drop", "  show_map(around=) takes ONE thing."),

@@ -517,7 +517,8 @@ _NO_ORDER_HINT = (
     "fids: ordering it by an attached column renders the ordered rows of "
     "THIS handle, and a name or color match returns matched rows directly.")
 # ... under the ``library`` withhold, where nothing orders or matches.
-_NO_ORDER_HINT_NO_LIBRARY = _NO_ORDER_HINT.split(":", 1)[0] + "."
+_NO_ORDER_HINT_NO_LIBRARY = (_NO_ORDER_HINT.split(":", 1)[0]
+                             + ": print(<set>[i]) reads row i's columns.")
 
 
 def _table(head, rows, op_cols, legend) -> "str | None":
