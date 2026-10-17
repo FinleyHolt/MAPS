@@ -145,6 +145,22 @@ def test_each_crossing_is_a_row_with_its_own_fid_and_its_own_point():
     assert "at none of them" in " ".join(rows.notes)
 
 
+def test_a_crossing_of_a_mixed_set_is_named_by_the_rows_it_is_on():
+    # A set whose rows carry different names (or none) labels each crossing
+    # by the row it lies on, never by the one name the set happens to hold.
+    unnamed = {**_road("prior_4", [[100, -30], [100, 30]]), "name": None}
+    anchors = [_road("prior_1", [[50, -30], [50, 30]], "Mill Lane"), unnamed,
+               _road("prior_2", [[150, -30], [150, 30]], "Oak Street"),
+               _road("prior_3", [[0, 0], [200, 0]], "Cross Street")]
+    rows = _run(anchors, ["prior_1", "prior_4"], "prior_3")
+    assert [r["name"] for r in rows] == ["Mill Lane x Cross Street",
+                                         "prior_4 x Cross Street"], rows
+    rows = _run(anchors, ["prior_1", "prior_2"], "prior_3")
+    assert [r["name"] for r in rows] == ["Mill Lane x Cross Street",
+                                         "Oak Street x Cross Street"], rows
+    assert "2 distinct crossings of Mill Lane / Oak Street and Cross Street" in rows.notes[0]
+
+
 def test_zero_crossings_refuse_loudly_and_never_bind():
     anchors = [_road("prior_1", [[0, 0], [100, 0]], "Wellington Road"),
                _road("prior_2", [[0, 84], [100, 84]], "Grosvenor Road")]

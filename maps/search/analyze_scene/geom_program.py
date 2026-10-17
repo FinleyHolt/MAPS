@@ -1139,9 +1139,10 @@ def _sibling_crossing(by_fid, la, fa, lb, fb) -> str:
 def _crossings(cx, a):
     """The places two features meet: one row per distinct crossing, its fid
     the [x, y] token of its whole-metre point. None raises."""
-    sides = []
+    sides, members = [], []
     for el in a["refs"]:
         nodes = _named_rows(cx, el, "xy")
+        members.append((nodes, el))
         polys = [p for n in nodes for p in chains_of(n)]
         if not polys:
             _refuse_if_empty(cx, el, "cross")
@@ -1175,18 +1176,30 @@ def _crossings(cx, a):
             f"TOUCH.{sib} A point near one of them is not their "
             f"intersection; relate to ONE of them instead "
             f"('... near <feature>').")
+    def namer(i):
+        """A crossing's name on side ``i``: the side's label when its rows
+        share one name, else the label of the rows the crossing is on."""
+        nodes, el = members[i]
+        if len({n.get("name") for n in nodes}) <= 1:
+            return lambda p: sides[i][0]
+        on = [(n, {tuple(q) for q in G.polyline_crossings(
+            chains_of(n), sides[1 - i][1])[0]}) for n in nodes]
+        return lambda p: (_x_label([n for n, pts in on if tuple(p) in pts], el)
+                          or sides[i][0])
+
+    name_a, name_b = namer(0), namer(1)
     rows = []
     # Whole metres: the fid is the coordinate, and the model spells whole
     # numbers only.
     seen: set = set()
-    for x, y in xpts:
-        x, y = float(round(x)), float(round(y))
+    for p in xpts:
+        x, y = float(round(p[0])), float(round(p[1]))
         tok = format_xy_token(x, y)
         # Rounding can collapse two crossings onto one fid.
         if tok in seen:
             continue
         seen.add(tok)
-        rows.append({"fid": tok, "xy": [x, y], "name": f"{la} x {lb}"})
+        rows.append({"fid": tok, "xy": [x, y], "name": f"{name_a(p)} x {name_b(p)}"})
     notes = [
         f"{len(rows)} distinct crossing{'' if len(rows) == 1 else 's'} "
         f"of {la} and {lb}"
