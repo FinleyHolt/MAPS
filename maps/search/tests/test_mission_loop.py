@@ -216,6 +216,14 @@ def test_a_turn_the_output_cap_cut_off_spends_no_repair():
     assert len(flights) == 1
 
 
+def test_three_cut_off_turns_in_a_row_each_get_their_own_nudge():
+    # Up to 3 in a row are free, so the repair still covers the empty reply.
+    cut = {"content": "", "finish_reason": "length"}
+    reply, fr, flights, _ = drive([cut, cut, cut, "", [run('go_to(prior_7)\n')], "done"])
+    assert reply.ended_by == "reply" and reply.turns_used == 6, reply
+    assert len(flights) == 1
+
+
 def test_repeated_cut_off_turns_still_end_the_mission():
     # A serve that only ever truncates cannot loop the mission on nudges.
     cut = {"content": "", "finish_reason": "length"}
