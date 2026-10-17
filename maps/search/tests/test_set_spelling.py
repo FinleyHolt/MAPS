@@ -321,6 +321,12 @@ def test_a_list_or_a_row_called_says_what_it_is(held, what):
         f"line 2: TypeError: x is {what}, not a call.")
 
 
+@pytest.mark.parametrize("read", ['x["name"]', 'x.name'])
+def test_a_list_led_by_a_non_row_refuses_a_column_read_by_name(read):
+    err = _first_error(f'x = ["a"] + find("car")\nprint({read})')
+    assert err.startswith("line 2: ") and "row car_1 carries no 'name'" in err, err
+
+
 def test_a_slice_of_a_list_of_rows_still_cuts_and_orders():
     _, fr, _, _ = drive([[run('x = find("car").filter(lambda r: True)[0:1]\n'
                               'print(len(x.order(lambda r: r.fid)))')], "done"], cands=_TIED)

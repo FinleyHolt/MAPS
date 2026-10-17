@@ -1008,11 +1008,11 @@ def _index_it(name: str | None) -> str:
 
 
 def _column_read(x, k: str, read: str) -> str:
-    """A remedy for column ``k`` asked of the set ``x``, which holds a row:
-    ``read``, the read off one row, when its first row carries ``k``, else
+    """A remedy for column ``k`` asked of the set ``x``: ``read``, the read
+    off one row, when its first row carries ``k`` (or it holds no row), else
     that row's columns."""
-    first = next(iter(x))
-    return first._miss(k) if first._column(k) is _MISSING else read
+    first = next((r for r in x if isinstance(r, Row)), None)
+    return read if first is None or first._column(k) is not _MISSING else first._miss(k)
 
 
 def _not_an_int(name: str, i, x) -> CodeError:
