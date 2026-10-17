@@ -545,3 +545,10 @@ def test_a_withheld_call_in_a_plain_reply_is_not_code(monkeypatch):
     monkeypatch.setenv(W.ENV, "look_for")
     assert ps.looks_like_code('go_to("prior_7")')
     assert not ps.looks_like_code('look_for("car")')
+
+
+def test_a_look_withhold_beside_a_prior_withhold_serves_no_looking_point(monkeypatch):
+    monkeypatch.setenv(W.ENV, "prior,look")
+    doc = prompts.served_doc()
+    assert "points RELATE, and go_to/explore fly to them." in doc, doc
+    assert "LOOK," not in doc, doc

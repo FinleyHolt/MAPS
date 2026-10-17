@@ -356,8 +356,7 @@ _DOC_EDITS: dict[str, list[tuple[str, ...]]] = {
          " stands on a thing is often the stronger detection -- explore the"
          " named place so the candidates become rows, then choose by what"
          " the pass's catch shows."),
-        ("sub", "points RELATE and LOOK, they do not move you.",
-         "points RELATE, they do not move you."),
+        ("sub", "points RELATE and LOOK,", "points RELATE,"),
         ("sub", "is a place to look and relate near", "is a place to relate near"),
         ("sub", "loop to LOOK, then move once", "loop to READ, then move once"),
     ],
