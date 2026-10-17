@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 
 from maps.search.analyze_scene.geom_compute import cell_centre_xy
-from maps.search.parse_compile.code_surface import HANDLE_RE
+from maps.search.parse_compile.code_surface import HANDLE_RE, row_token
 from maps.search.render.look_render import (
     LOOK_MAX_BADGES,
     look_label,
@@ -200,18 +200,16 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, resolve,
         _r = float(obs_minor_m) / 2.0
         return any(math.dist(_xy, _p) <= _r for _p in stops.values())
 
-    # A handle is a legal mark (a street is its ways).
-    def _fids_of(tokens) -> list[str]:
-        out: list[str] = []
-        for t in tokens:
-            if HANDLE_RE.fullmatch(t):
-                out.extend(str(_r["fid"]) for _r in (carry.read(t) or [])
-                           if _r.get("fid"))
-            else:
-                out.append(t)
-        return out
-
-    marked = _fids_of(marks or [])
+    # A handle is a legal mark (a street is its ways), each row placed by
+    # its own token (a terminus by its xy, its end_N being per call).
+    own: dict = {}
+    for t in marks or []:
+        if HANDLE_RE.fullmatch(t):
+            for _r in carry.read(t) or []:
+                if _r.get("fid"):
+                    own.setdefault(str(_r["fid"]), row_token(_r))
+        else:
+            own.setdefault(t, t)
     for _i, f in enumerate(fids):
         if len(requests) >= LOOK_MAX_CROPS:
             ref_notes.append(
@@ -224,8 +222,8 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, resolve,
         if not f:
             continue
         mark_list: list[dict] = []
-        for mf in dict.fromkeys(marked + [f]):
-            xy = resolve(mf)
+        for mf in dict.fromkeys([*own, f]):
+            xy = resolve(own.get(mf, mf))
             if xy is None:
                 skipped.append(mf)
                 continue
@@ -263,10 +261,11 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, resolve,
     return requests, skipped, ref_notes
 
 
-def map_spec(around: str, mark_fids: list, *, rows: dict, resolve,
+def map_spec(around: str, mark_rows: list, *, rows: dict, resolve,
              frame: tuple) -> tuple[dict | None, list[str]]:
-    """One show_map's render spec centred on ``around``, its marks resolved
-    off ``rows``: ``(spec or None, skipped_fids)``."""
+    """One show_map's render spec centred on ``around``, its marks the rows
+    ``mark_rows``, each placed by its own token: ``(spec or None,
+    skipped_fids)``."""
     cxy = resolve(around)
     if cxy is None:
         return None, [str(around)]
@@ -278,11 +277,14 @@ def map_spec(around: str, mark_fids: list, *, rows: dict, resolve,
                                is_target=False)
                     if center_fid else f"[{cxy[0]}, {cxy[1]}]")
     marks: list[dict] = []
-    for mf in dict.fromkeys(mark_fids):
+    own = {}
+    for r in mark_rows:
+        own.setdefault(str(r["fid"]), row_token(r))
+    for mf, tok in own.items():
         row = rows.get(mf)
         # a computed row (a crossing, a terminus) is no surface row: its
-        # point is what resolve names
-        xy = look_xy(row) if row is not None else resolve(mf)
+        # point is what its token names
+        xy = look_xy(row) if row is not None else resolve(tok)
         if xy is None:
             skipped.append(mf)
             continue

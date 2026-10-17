@@ -259,10 +259,33 @@ def _far_set_map(around):
 
     rows = {"detected_1": {"fid": "detected_1", "xy": [1000.0, 1000.0]},
             "detected_2": {"fid": "detected_2", "xy": [1010.0, 1000.0]}}
-    spec, _ = map_spec(around, list(rows), rows=rows,
+    spec, _ = map_spec(around, list(rows.values()), rows=rows,
                        resolve=lambda t: rows[t]["xy"] if t in rows
                        else rounded_xy(t), frame=(None, ""))
     return spec
+
+
+def test_a_terminus_mark_is_drawn_at_its_own_row_not_the_newest_of_its_fid():
+    """end_N restarts per ends_of call, so a fid lookup finds the newest
+    terminus; a set's marks are drawn at the rows the set holds."""
+    from types import SimpleNamespace
+
+    from maps.search.parse_compile.views import crop_requests, map_spec, rounded_xy
+
+    old_end = {"fid": "end_0", "xy": [10.0, 20.0]}
+    newest = {"end_0": [500.0, 500.0]}
+
+    def resolve(t):
+        return newest.get(t) or rounded_xy(t)
+
+    spec, skipped = map_spec("[0, 0]", [old_end], rows={}, resolve=resolve, frame=(None, ""))
+    assert [(m["fid"], m["xy"]) for m in spec["marks"]] == [("end_0", [10.0, 20.0])], spec
+    reqs, _s, _n = crop_requests(
+        ["[0, 0]"], ["r5"], rows={}, resolve=resolve,
+        carry=SimpleNamespace(read=lambda h: [old_end] if h == "r5" else None),
+        stops={}, obs_minor_m=None, obs_span_m=None, frame=(None, ""))
+    marks = {m["fid"]: m["xy"] for m in reqs[0]["marks"]}
+    assert marks["end_0"] == [10.0, 20.0], marks
 
 
 def test_a_map_window_always_holds_its_around():

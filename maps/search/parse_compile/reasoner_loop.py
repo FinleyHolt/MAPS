@@ -1305,7 +1305,7 @@ class _Mission:
         else:
             scope_err = None
         mfids = [str(r["fid"]) for r in mrows[:_MAP_MAX_MARKS]]
-        spec, m_skipped = map_spec(around, mfids, rows=self._ns_rows,
+        spec, m_skipped = map_spec(around, mrows[:_MAP_MAX_MARKS], rows=self._ns_rows,
                                    resolve=self._point,
                                    frame=self._standing_frame())
         mp: dict = {"maps": int(spec is not None)}
