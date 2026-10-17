@@ -553,7 +553,11 @@ class _Cuts:
         return RowList(sorted(self._in_hand(), key=key, reverse=reverse))
 
     @_said
-    def filter(self, pred=None, **kw):
+    def filter(self, pred=None, *, near=None, within=None, dwithin=None,
+               north_of=None, south_of=None, east_of=None, west_of=None,
+               facing=None, direction=None, **kw):
+        """Keep the rows that hold; filters compose, and every cut is a
+        relation to its anchor (one place or a set)."""
         # A kwarg outside the set is refused, never ignored, and a colour cut
         # gets its own reason.
         if "color" in kw:
@@ -563,17 +567,21 @@ class _Cuts:
                 "so a colour threshold drops the right row on the width of "
                 "its mask. Say rows.order(color=\"red\") and let the "
                 "spatial cuts do the dropping.")
-        bad = sorted(k for k in kw if k not in _FILTER_KWARGS)
-        if bad:
+        if kw:
+            bad = sorted(kw)
             raise CodeError(
                 f"filter takes {_FILTER_SAY} or a predicate; "
                 f"{'=, '.join(bad)}= is none of them."
                 + _kwarg_remedy(bad))
-        refuse_metres_in_within(kw.get("within"))
+        refuse_metres_in_within(within)
+        kw = {k: v for k, v in dict(
+            near=near, within=within, dwithin=dwithin, north_of=north_of,
+            south_of=south_of, east_of=east_of, west_of=west_of,
+            facing=facing, direction=direction).items() if v is not None}
         if pred is None:
             mp, src = self._target()
             return RowList() if mp is None else mp._rows_filter(src, **kw)
-        if any(v is not None for v in kw.values()):
+        if kw:
             raise CodeError(
                 f"filter takes a predicate OR {_FILTER_SAY}, not both")
         if isinstance(pred, _Cuts) or not callable(pred):
@@ -932,17 +940,6 @@ class Rows(_Cuts):
     # -- cut and order: many filters, ONE ordering ------------------------
     def _target(self):
         return self._mp, self if not self._spec else self._mp._materialize(self)
-
-    @_said
-    def filter(self, pred=None, *, near=None, within=None, dwithin=None,
-               north_of=None, south_of=None, east_of=None, west_of=None,
-               facing=None, direction=None, **kw):
-        """Keep the rows that hold; filters compose, and every cut is a
-        relation to its anchor (one place or a set)."""
-        return super().filter(
-            pred, near=near, within=within, dwithin=dwithin,
-            north_of=north_of, south_of=south_of, east_of=east_of,
-            west_of=west_of, facing=facing, direction=direction, **kw)
 
     @_said
     def distance(self, other) -> float:
