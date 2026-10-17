@@ -158,6 +158,11 @@ class _Stop(Exception):
     """A plan-level refusal already folded into the receipt: end the block."""
 
 
+def _shadows(name: str) -> str:
+    """The remedy for a mission call's name the model bound over."""
+    return f"binding {name} shadows the {name}() call; del {name} gives the call back."
+
+
 def _no_such_fid(fid: str) -> CodeError:
     """The refusal of a prior_/detected_ fid no surface row carries."""
     return CodeError(f"there is no {fid} on this surface; say a fid off a "
@@ -756,8 +761,7 @@ class Rows(_Cuts):
         name = self._mp.spelling(self) or UNNAMED
         raise TypeError(
             f"{name} is a set of {len(self)} row(s), not a call"
-            + (f": binding {name} shadows the {name}() call; del {name} gives "
-               "the call back." if name in served_calls() else "."))
+            + (f": {_shadows(name)}" if name in served_calls() else "."))
 
     def _tied(self) -> bool:
         return bool(not self._spec and self._mp.env.tied_of_ref(self._ref))
@@ -1783,10 +1787,19 @@ class MissionPython:
         except Exception as e:                          # noqa: BLE001
             self._unbind_failed_assign(tree, _outer_block_line())
             if not isinstance(e, _Stop):   # a _Stop's refusal is in the receipt
+                line = _block_line(self._block_codes)
                 what = (str(e) if isinstance(e, CodeError)
                         else f"{type(e).__name__}: {e}")
-                out.update(self.env.say_err(
-                    {}, f"line {_block_line(self._block_codes)}: {what}"))
+                if isinstance(e, TypeError) and str(e).endswith("is not callable"):
+                    shadowed = next((n.func.id for n in ast.walk(tree)
+                                     if isinstance(n, ast.Call)
+                                     and isinstance(n.func, ast.Name)
+                                     and n.lineno <= line <= n.end_lineno
+                                     and n.func.id in served_calls()
+                                     and n.func.id in self.ns), None)
+                    if shadowed:
+                        what += f": {_shadows(shadowed)}"
+                out.update(self.env.say_err({}, f"line {line}: {what}"))
         return self._finish(out)
 
     def _tick(self) -> None:
