@@ -29,6 +29,8 @@ WITHHOLDS: dict[str, str] = {
             " nudges (a text turn always ends the mission), the move-in-a-loop"
             " refusal and its sentence, the identical-program note, the"
             " point-to-row snap, and the reasoning replayed in the prefix",
+    "doc": "the run tool's description: it is the bound calls' one-line"
+           " signatures instead",
 }
 
 

@@ -88,6 +88,9 @@ CASES = {
                    (11, 3), (0, 0), (0, 0)),
     "loop": (("TOOLS",), ("cannot go inside a loop", "explore(the set)"),
              (0, 0), (1, 1), (0, 0)),
+    "doc": (("TOOLS",), ("Write ordinary Python", "THE MAP -- free", "ARM EVERY CLASS",
+                         "WHAT YOU SEE BECOMES ROWS", "ORDINARY PYTHON RUNS HERE"),
+            (0, 0), (76, 14), (0, 0)),
 }
 
 
@@ -432,3 +435,13 @@ def test_a_loop_withhold_replays_no_reasoning(monkeypatch):
         out = r.step_tool_call([])
         assert out["reasoning"] == "I weighed two rooftops."
         assert r.messages[-1]["reasoning_content"] == replayed
+
+
+def test_the_text_family_serves_no_turn_and_the_calls_signatures(monkeypatch):
+    """doc + system_turn is the research text family: an empty system turn and
+    a description that is the surface's one-line signatures."""
+    got = _sections(_dump(monkeypatch, "doc,system_turn"))
+    assert got["SYSTEM"] == "=== SYSTEM (0 chars) ===\n\n\n"
+    lines = contract.surface_lines()
+    assert prompts.served_doc() == "\n".join(lines) + "\n"
+    assert lines[0].startswith("  find(") and lines[-1] == "  <rows>.distance(other)"

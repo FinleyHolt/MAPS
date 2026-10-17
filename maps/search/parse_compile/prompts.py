@@ -468,7 +468,11 @@ def _served(text: str, edits: dict, turn: bool) -> str:
 
 
 def served_doc() -> str:
-    """The ``run`` description this run serves."""
+    """The ``run`` description this run serves; under the ``doc`` withhold,
+    the bound calls' one-line signatures."""
+    if withheld("doc"):
+        from maps.search.parse_compile.contract import surface_lines  # noqa: PLC0415
+        return "\n".join(surface_lines()) + "\n"
     return _served(CODE_DOC, _DOC_EDITS, turn=False)
 
 
