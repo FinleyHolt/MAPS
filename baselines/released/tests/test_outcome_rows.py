@@ -127,3 +127,20 @@ def test_calcity_rows_score_on_the_shape(tmp_path):
     assert sets["dropped"] == {"calcity::0#2": "upstream_loader_filter"}
     assert sets["excluded_by_export"] == manifest["excluded"]
     assert [r["description"] for r in out_rows] == ["target 0", "target 1"]
+
+
+def test_a_pair_against_another_disc_radius_is_refused(tmp_path):
+    rows = _split_rows()
+    trajs, _ = orows.read_native(_mgp_native(tmp_path / "mgp.json", rows))
+    ident = orows.stamp("mgp", "ckpt", "original", "test_unseen")
+    out_rows, sets = orows.citynav_rows(trajs, [], rows, rows, ident)
+    orows.write_run(tmp_path / "baseline", out_rows, sets)
+    other = tmp_path / "maps40"
+    other.mkdir()
+    with (other / "episodes.jsonl").open("w") as fh:
+        for eid in sets["evaluated"][:5]:
+            fh.write(json.dumps({"episode_id": eid, "status": "ok", "metrics": {
+                "episode_id": eid, "SR": 1, "success_criterion": "ring"}}) + "\n")
+    (other / "run_manifest.json").write_text(json.dumps({"config_yaml": "success_radius_m: 40\n"}))
+    with pytest.raises(SystemExit, match="40 m disc"):
+        orows.pair(tmp_path / "baseline", other, allow_partial=True)

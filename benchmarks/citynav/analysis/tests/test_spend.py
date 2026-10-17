@@ -74,3 +74,10 @@ def test_a_ledger_whose_workdirs_are_absent_is_refused(tmp_path: Path) -> None:
         json.dumps({"episode_id": "e::1", "workdir": "w0/maps_1_a", "status": "ok", "metrics": {"SR": 1}}) + "\n")
     with pytest.raises(SystemExit, match="none of their workdirs is here"):
         spend.spend(tmp_path)
+
+
+def test_attempts_that_made_no_workdir_cost_nothing(tmp_path: Path) -> None:
+    # An infra row for an attempt that never started names no workdir.
+    (tmp_path / "episodes.jsonl").write_text("".join(
+        json.dumps({"episode_id": f"e::{i}", "workdir": None, "status": "infra"}) + "\n" for i in range(3)))
+    assert spend.spend(tmp_path)["usd_total"] == 0
