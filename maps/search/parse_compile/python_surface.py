@@ -740,7 +740,9 @@ class Rows(_Cuts):
         raise CodeError(
             f"{name} is a tied view of {len(self._rows())} rows and {what}: "
             "they all match equally, so no row is its first and no span is "
-            f"its middle. explore({name}) covers the whole set.")
+            f"its middle. {name}.order(nearest=<place>) ranks them so [0] is "
+            f"the nearest way, a slot like near={name} relates to it as one "
+            f"place, and explore({name}) covers the whole set.")
 
     def __getitem__(self, i):
         # A TIED VIEW IS NOT SUBSCRIPTABLE, the way ``dict.keys()`` is not:

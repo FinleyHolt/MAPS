@@ -622,6 +622,8 @@ def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
     assert out["error"].endswith(
         "roads is a tied view of 12 rows and has no next block: they all "
         "match equally, so no row is its first and no span is its middle. "
+        "roads.order(nearest=<place>) ranks them so [0] is the nearest way, "
+        "a slot like near=roads relates to it as one place, and "
         "explore(roads) covers the whole set."), out
 
 
