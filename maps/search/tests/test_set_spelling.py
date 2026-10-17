@@ -232,3 +232,16 @@ def test_an_empty_set_centres_no_map_and_is_offered_no_set_rule():
 def test_a_set_read_for_a_key_no_row_carries_names_the_columns():
     err = _first_error('cars = find("car")\nprint(cars.census)')
     assert "cars[0].census" not in err and "its columns are" in err, err
+
+
+@pytest.mark.parametrize("read", ["x.foo", "x.keys()", 'x.get("foo")'])
+def test_a_read_off_an_empty_view_never_names_its_first_row(read):
+    err = _first_error(f'r1 = find("Tied")\nx = r1.exact\n{read}')
+    assert "0 row(s)" in err and "x[0]" not in err, err
+
+
+def test_calling_a_set_names_the_call_it_was_bound_over():
+    err = _first_error('b = find("car")\nintersection = b\nintersection("a", "b")')
+    assert err.startswith("line 3: TypeError: intersection is a set"), err
+    assert "del intersection gives the call back" in err, err
+

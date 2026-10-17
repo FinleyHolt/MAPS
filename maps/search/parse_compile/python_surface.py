@@ -773,7 +773,10 @@ class Rows(_Cuts):
 
     def __call__(self, *args, **kwargs):
         # A set is no call; a name bound over a mission call says so.
-        name = self._mp.spelling(self) or UNNAMED
+        node = self._mp.running_node()
+        name = (node.func.id if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name) else
+                self._mp.spelling(self) or UNNAMED)
         raise TypeError(
             f"{name} is a set of {len(self)} row(s), not a call"
             + (f": {_shadows(name)}" if name in served_calls() else "."))
@@ -1155,24 +1158,28 @@ class MissionPython:
     def call_arg(self, fn: str | None) -> str | None:
         """The model's text for the first argument of the ``fn(...)`` call
         its block is running (``fn`` None: for what the subscript it is
-        running indexes), found at the block frame's live position."""
+        running indexes)."""
+        node = self.running_node()
+        if fn is None and isinstance(node, ast.Subscript):
+            return ast.unparse(node.value)
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == fn and node.args):
+            return ast.unparse(node.args[0])
+        return None
+
+    def running_node(self) -> ast.Call | ast.Subscript | None:
+        """The call or subscript the block is running, found at the block
+        frame's live position; None outside one."""
         fr = sys._getframe()
         while fr is not None and fr.f_code not in self._block_codes:
             fr = fr.f_back
         if fr is None:
             return None
         at = inspect.getframeinfo(fr, context=0).positions
-        for node in ast.walk(ast.parse(self._code)):
-            if not isinstance(node, (ast.Call, ast.Subscript)) or (
-                    node.lineno, node.end_lineno, node.col_offset,
-                    node.end_col_offset) != tuple(at):
-                continue
-            if fn is None and isinstance(node, ast.Subscript):
-                return ast.unparse(node.value)
-            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id == fn and node.args):
-                return ast.unparse(node.args[0])
-        return None
+        return next((node for node in ast.walk(ast.parse(self._code))
+                     if isinstance(node, (ast.Call, ast.Subscript))
+                     and (node.lineno, node.end_lineno, node.col_offset,
+                          node.end_col_offset) == tuple(at)), None)
 
     def held_refs(self) -> set:
         """The executor refs the namespace's sets hold (a window holds its
