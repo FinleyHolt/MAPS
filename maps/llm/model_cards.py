@@ -38,9 +38,9 @@ CARDS: dict[str, dict[str, Any]] = {
     # tool-call surface. The GGUF alias is the same weights served by
     # llama.cpp (flown aboard); a serve is not a model, and a run has to be
     # able to name which one it got. The bench NVFP4 serve adds presence
-    # penalty 0.5, which breaks the 26B's thinking loops.
+    # penalty 1.0, which breaks the 26B's thinking loops.
     "gemma4-26b-a4b-nvfp4": {"tokenizer": "nvidia/Gemma-4-26B-A4B-NVFP4", "top_p": 0.95, "top_k": 64,
-                             "presence_penalty": 0.5},
+                             "presence_penalty": 1.0},
     "gemma4-26b-a4b-gguf": {"tokenizer": "google/gemma-4-26B-A4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e4b": {"tokenizer": "google/gemma-4-E4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e2b": {"tokenizer": "google/gemma-4-E2B-it", "top_p": 0.95, "top_k": 64},

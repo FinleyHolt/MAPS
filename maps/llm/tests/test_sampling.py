@@ -14,7 +14,7 @@ def _no_ambient_sampling_env(monkeypatch) -> None:
 
 @pytest.mark.parametrize("model, top_k, extra", [
     ("qwen38-flash-next-nvfp4", 20, {}),
-    ("gemma4-26b-a4b-nvfp4", 64, {"presence_penalty": 0.5}),
+    ("gemma4-26b-a4b-nvfp4", 64, {"presence_penalty": 1.0}),
     ("gemma4-26b-a4b-gguf", 64, {}),
 ])
 def test_the_envelope_is_the_cards_flat_top_level_keys(model, top_k, extra) -> None:
