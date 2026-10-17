@@ -219,5 +219,6 @@ def test_a_turn_the_output_cap_cut_off_spends_no_repair():
 def test_repeated_cut_off_turns_still_end_the_mission():
     # A serve that only ever truncates cannot loop the mission on nudges.
     cut = {"content": "", "finish_reason": "length"}
-    reply, fr, _, _ = drive([cut, cut, cut, cut])
-    assert reply.ended_by == "reply" and reply.turns_used == 4, reply
+    # Three nudges, the fourth cut spends the repair, the fifth ends it.
+    reply, fr, _, _ = drive([cut] * 5)
+    assert reply.ended_by == "reply" and reply.turns_used == 5, reply

@@ -1495,7 +1495,7 @@ class _Mission:
                        and r.get("finish_reason") == "length")
                 if not cut:
                     truncated_streak = 0
-                elif truncated_streak + 1 < TRUNCATED_TURN_STREAK:
+                elif truncated_streak < TRUNCATED_TURN_STREAK:
                     truncated_streak += 1
                     self._log("truncated_turn", turn_idx=turn_idx, streak=truncated_streak)
                     log.info("%s TRUNCATED turn %d -> nudge", self.rid_tag, turn_idx)
