@@ -1,6 +1,7 @@
 """Draw a reasoning-effort ladder as one dual-axis SVG, light and dark.
 
-One arm per run root, one model over a swept effort: success rate on the left
+One arm per run root, one model, policy and withhold set over a swept effort
+(roots that differ in policy or withhold are refused): success rate on the left
 axis, median navigation error on the right, as two static SVGs.
 
 It defines no metric. ``arm_table.table`` is the canonical reader and hands
@@ -227,6 +228,14 @@ def main(argv: list[str]) -> int:
         missing = [r["label"] for r in rows if r.get(key) is None]
         if missing:
             raise SystemExit(f"plot_effort_ladder: {key} absent for {missing}")
+    # One ladder is one arm swept over effort: two policies or withhold sets
+    # would draw as one line.
+    cfgs = [yaml.safe_load(_rows.read_manifest(Path(r["root"])).get("config_yaml") or "{}") or {}
+            for r in rows]
+    arms = {(str(c.get("policy") or ""), tuple(sorted(c.get("withhold") or ()))) for c in cfgs}
+    if len(arms) > 1:
+        raise SystemExit(f"plot_effort_ladder: the roots differ in policy or withhold {sorted(arms)}; "
+                         "plot one arm per ladder")
 
     title, sub = heading(rows)
     splits = sorted({str(_rows.read_manifest(Path(r["root"])).get("split") or "") for r in rows} - {""})

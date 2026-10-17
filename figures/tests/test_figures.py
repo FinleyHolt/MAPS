@@ -11,6 +11,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+import yaml
+
 from figures import capability_effort_arms, plot_capability_effort, plot_effort_ladder
 from figures.plot_capability_effort import LABEL_PITCH, render, spread
 
@@ -158,3 +161,16 @@ def test_ladders_of_two_splits_or_policies_never_share_a_file(tmp_path):
     assert plot_effort_ladder.main([*map(str, cn), "--out-dir", str(out)]) == 0
     assert (out / "effort_ladder_calcity_light.svg").exists()
     assert (out / "effort_ladder_test_unseen_light.svg").exists()
+
+
+def test_a_ladder_refuses_roots_of_two_policies_or_withholds(tmp_path):
+    """Two arms swept over effort would draw as one line."""
+    for i, (key, a, b) in enumerate((("policy", "maps", "visa"), ("withhold", [], ["prior"]))):
+        roots = [_arm(tmp_path, f"{i}e{e}", "inkling-small", e, [1, 0, 0]) for e in ("0.0", "0.5", "0.9")]
+        for root, v in zip(roots, (a, a, b)):
+            man = json.loads((root / "run_manifest.json").read_text())
+            man["config_yaml"] = yaml.safe_dump({key: v})
+            (root / "run_manifest.json").write_text(json.dumps(man))
+        with pytest.raises(SystemExit, match="policy or withhold"):
+            plot_effort_ladder.main([*map(str, roots), "--out-dir", str(tmp_path / f"f{i}")])
+        assert not (tmp_path / f"f{i}").exists()
