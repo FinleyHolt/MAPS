@@ -187,7 +187,7 @@ these places, the served-text changes among them:
 | A bare line or a no-op cut of one name's tied ways serves its shape (`name`, `length_m`), as the find does; `more_of` on a tied view is refused with the tied-view text. | The bare line served an arbitrary 24-row head with "more_of on it", and `more_of` paged the tied rows in an arbitrary order. |
 | A set or a list of rows indexed by a non-int says it takes an int position, and for a str names the column read `s[0]['col']` when its first row carries it, else that row's columns; a bare `prior_N`/`detected_N` the surface does not hold is refused at the name. | The flown text said "Show it first, then index it" with the key unquoted; an absent fid ran on as a bare string, which each call refused in its own words or indexed by character (`look(prior_9[0])` read 'nothing named "p"'). |
 | A list item that names nothing is refused as "each item must be a fid on this surface, an [x, y], or a set."; a deduped program's bare line serves only its "not re-rendered" note. | The flown refusal offered a `{'fid':...}` dict form the executor does not take; the deduped bare line rendered the table the note said was not re-rendered. |
-| The Gemma 4 26B-A4B NVFP4 bench serve's requests carry `presence_penalty` 0.5, the setting its CityNav numbers were measured at. | The flown card sent no penalty, so the bench Gemma looped in its thinking (a preflight turn ran to the 40,000-token cap). |
+| The Gemma 4 26B-A4B NVFP4 bench serve's requests carry `presence_penalty` 1.0, which breaks its thinking loops. | The flown card sent no penalty, so the bench Gemma looped in its thinking (a preflight turn ran to the 40,000-token cap). |
 | A turn the output cap cut off empty (`finish_reason` length) gets its own nudge ("Your last turn ran out of output tokens while thinking ...") and spends no repair, up to 3 in a row. | Such a turn spent the one shared repair, so the next code-shaped reply ended the mission (42 forced endings in 200 Gemma episodes). |
 | Bench withholds `end_commit` (every sentence on how the mission ends and what the answer is: the system turn's two bullets, the run description's, the repair nudges', the loop-move refusal's, and the receipts' `answer_if_you_reply_now`; the cue-word standard stays as one bullet), `loop` (every loop behaviour but compaction), `doc`, `map` and `library` (every call but go_to, look_for, look and show_map); the `seeing` and `text` families ship as one config each. | The research harness withheld these through its parts registry; a flight serves every part. |
 | A mission call's name binds as an ordinary Python name (the calls are the namespace's builtins): `intersection = find(...)` shadows the call for the rest of the mission, `del intersection` gives it back, and calling whatever the name holds says so. | Binding over a mission call's name was refused before any line of the block ran. |
@@ -257,7 +257,7 @@ lists the exact commands.
 | E4 | CityNav `train_seen`, 1,000 per arm | Per model: the control and its ablation arms (below) | `configs/withhold/<arm>.yaml` | `arm_table`, `ab_report` |
 | E7 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | Inkling Small at 0.0, 0.1 ... 0.9 (10 rungs), each for MAPS, ViSA and GeoNav | `configs/citynav.yaml`, `configs/baselines/{visa,geonav}.yaml` | `arm_table`, `figures.plot_effort_ladder` |
 | E8 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | ViSA and GeoNav at each Qwen 3.8 Flash Next effort (`low`, `medium`, `xhigh`), paired with the E2 roots on shared ids | `configs/baselines/{visa,geonav}.yaml` | `arm_table`, `ab_report` |
-| E9 | CityNav `test_unseen`, all 5,311 | One model under the released baselines' protocol (100 actions, a 50 m start) | `configs/baselines/released_protocol.yaml` | `arm_table`, `outcome_rows pair` |
+| E9 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `xhigh` under the released baselines' protocol (100 actions, a 50 m start) | `configs/baselines/released_protocol.yaml` | `arm_table`, `outcome_rows pair` |
 | E5 | E2 and E3 roots | Every arm | none beyond E2 and E3 | `figures.capability_effort_arms`, `figures.plot_capability_effort` |
 
 ## Install
@@ -550,11 +550,11 @@ for e in low medium xhigh; do
 done
 ```
 
-E9, one model under the released baselines' protocol:
+E9, Qwen 3.8 Flash Next under the released baselines' protocol:
 
 ```sh
-CITYNAV_BENCH_CONFIG=configs/baselines/released_protocol.yaml \
-  python -m benchmarks.citynav.bench_fullset --split test_unseen --out-root output/e9/<model>
+SEARCH_SAMPLING_REASONING_EFFORT=xhigh CITYNAV_BENCH_CONFIG=configs/baselines/released_protocol.yaml \
+  python -m benchmarks.citynav.bench_fullset --split test_unseen --out-root output/e9/qwen38-flash-next
 ```
 
 Read the results:
