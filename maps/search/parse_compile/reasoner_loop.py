@@ -1390,9 +1390,7 @@ class _Mission:
             return {"error": "run takes one block of code in code"}
         self._code_names.clear()
         self._code_names.update(HANDLE_WORD_RE.findall(code))
-        self._code_names.update(
-            v._ref for v in self._mission_py.ns.values()
-            if isinstance(v, _py_surface.Rows))
+        self._code_names.update(self._mission_py.held_refs())
         self._code_minted.clear()
         self._script_lines += len(code.strip().splitlines())
         out = self._mission_py.run_block(code)

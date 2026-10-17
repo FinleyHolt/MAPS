@@ -1115,6 +1115,11 @@ class MissionPython:
                 return ast.unparse(node.args[0])
         return None
 
+    def held_refs(self) -> set:
+        """The executor refs the namespace's sets hold (a window holds its
+        whole ref)."""
+        return {v._ref for v in self.ns.values() if isinstance(v, Rows)}
+
     def _held(self, name: str):
         """What a bound name holds, as an argument: a whole result, a row,
         or a staged viewpoint; None for anything else."""
