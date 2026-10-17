@@ -279,10 +279,24 @@ def scan_block(code: str, bound=()) -> ast.Module:
                         comp_targets.add(id(t))
                         comp_spans.append((t.id, (n.lineno, n.col_offset),
                                            (n.end_lineno, n.end_col_offset)))
+        elif isinstance(n, (ast.Lambda, ast.FunctionDef, ast.AsyncFunctionDef)):
+            # Parameters are bound over the function's own span.
+            for arg in ast.walk(n.args):
+                if isinstance(arg, ast.arg):
+                    comp_spans.append((arg.arg, (n.lineno, n.col_offset),
+                                       (n.end_lineno, n.end_col_offset)))
         elif (isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
               and id(n) not in comp_targets):
             pos = (n.lineno, n.col_offset)
             first_store[n.id] = min(first_store.get(n.id, pos), pos)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ExceptHandler)) and n.name:
+            pos = (n.lineno, n.col_offset)
+            first_store[n.name] = min(first_store.get(n.name, pos), pos)
+        elif isinstance(n, (ast.Import, ast.ImportFrom)):
+            for al in n.names:
+                k = al.asname or al.name.split(".")[0]
+                pos = (n.lineno, n.col_offset)
+                first_store[k] = min(first_store.get(k, pos), pos)
 
     def _stored_before(n) -> bool:
         pos = (n.lineno, n.col_offset)
@@ -531,6 +545,13 @@ class _Cuts:
             f"{name or 'that'} is a set of {len(self)} row(s) and carries no "
             f"{k!r}; {whose}")
 
+    def _not_set_algebra(self, other):
+        raise CodeError(
+            "rows are not a python set: a + b adds two sets into a list of rows, and "
+            "a.filter(lambda r: r in b) keeps the rows of a that b holds")
+
+    __or__ = __ror__ = __and__ = __rand__ = __sub__ = __rsub__ = _not_set_algebra
+
     def __call__(self, *args, **kwargs):
         # A set or a row is no call; a name bound over a mission call says
         # so. A builtin that calls it (sorted(key=s)) is not its name; a
@@ -538,8 +559,11 @@ class _Cuts:
         mp = self._mission()
         node = mp and mp.running_node()
         f = node.func if isinstance(node, ast.Call) else None
-        name = (ast.unparse(f) if isinstance(f, ast.Subscript)
-                or (isinstance(f, ast.Name) and dict.get(mp.ns, f.id) is self) else
+        # A subscript is the set's own spelling only when called bare: a
+        # builtin reached through one passes its arguments.
+        name = ((ast.get_source_segment(mp._code, f) or ast.unparse(f))
+                if isinstance(f, ast.Subscript) and not node.args and not node.keywords
+                else f.id if isinstance(f, ast.Name) and dict.get(mp.ns, f.id) is self else
                 (mp.spelling(self) if isinstance(self, Rows)
                  else mp and mp.name_of(self)) or UNNAMED)
         what = "a row" if isinstance(self, Row) else f"a set of {len(self)} row(s)"

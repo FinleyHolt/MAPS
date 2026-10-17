@@ -395,3 +395,25 @@ def test_a_printed_set_method_names_no_internal_class(method):
     _, fr, _, _ = drive([[run(f'cars = find("car")\nprint(cars.{method})')], "done"], cands=_TIED)
     printed = tool_results(fr)[0]["printed"]
     assert printed.startswith(f"<bound method {method} of <cars:"), printed
+
+
+@pytest.mark.parametrize("op", ["|", "&", "-"])
+def test_set_algebra_on_rows_says_how_to_combine_them(op):
+    err = _first_error(f'a = find("car")\nb = find("depot")\nprint(a {op} b)\n')
+    assert "a + b adds two sets" in err and "Rows" not in err, err
+
+
+@pytest.mark.parametrize("code", [
+    "f = lambda go_to: go_to\nprint(f(1))\n",
+    "def f(explore):\n    return explore\nprint(f(1))\n",
+    "try:\n    1 / 0\nexcept ZeroDivisionError as explore:\n    print(type(explore).__name__)\n",
+    "import json as go_to\nprint(go_to.dumps(1))\n",
+])
+def test_a_move_name_bound_any_python_way_is_the_models_variable(code):
+    _, out = _served(code)
+    assert "is a move" not in json.dumps(out), out
+
+
+def test_a_builtin_reached_through_a_subscript_does_not_name_the_set():
+    err = _first_error('cars = find("car")\nfs = [sorted]\nfs[0]([1, 2], key=cars)\n')
+    assert "fs[0]" not in err and "cars is a set" in err, err
