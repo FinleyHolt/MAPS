@@ -67,6 +67,9 @@ def spend(out_root: Path, prices: dict = PRICES) -> dict:
         usd[state] += attempt_cost(llm, prices)
         if state == "scored" and isinstance(row.get("episode_id"), str):
             scored_ids.add(row["episode_id"])
+    if ledger and not any((out_root / str(w)).is_dir() for w in ledger if w):
+        raise SystemExit(f"{out_root}: the ledger names {len(ledger)} attempt(s) but none of their "
+                         f"workdirs is here; spend reads each attempt's transcript")
     try:
         selected = json.loads((out_root / MANIFEST_NAME).read_text())["selection"]["episodes_n"]
     except (OSError, ValueError, KeyError):

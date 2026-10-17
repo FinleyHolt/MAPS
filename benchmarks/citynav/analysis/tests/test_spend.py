@@ -66,3 +66,11 @@ def test_cache_meters_no_attempt_reported_read_none(tmp_path: Path) -> None:
     out = spend.spend(tmp_path)
     assert (out["tokens"]["cached_tokens"], out["tokens"]["cache_write_tokens"], out["cache_hit"]) == (None, None, None)
     assert out["usd"]["flying"] == 5.0
+
+
+def test_a_ledger_whose_workdirs_are_absent_is_refused(tmp_path: Path) -> None:
+    # A copied ledger without its attempts would read as nothing spent.
+    (tmp_path / "episodes.jsonl").write_text(
+        json.dumps({"episode_id": "e::1", "workdir": "w0/maps_1_a", "status": "ok", "metrics": {"SR": 1}}) + "\n")
+    with pytest.raises(SystemExit, match="none of their workdirs is here"):
+        spend.spend(tmp_path)
