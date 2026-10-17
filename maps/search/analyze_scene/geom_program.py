@@ -1178,14 +1178,16 @@ def _crossings(cx, a):
             f"('... near <feature>').")
     def namer(i):
         """A crossing's name on side ``i``: the side's label when its rows
-        share one name, else the label of the rows the crossing is on."""
+        share one name, else the label of the rows the crossing is on. Each
+        row's crossings come from the call above with that side cut to the
+        row, so every crossing is on a row of each side."""
         nodes, el = members[i]
         if len({n.get("name") for n in nodes}) <= 1:
             return lambda p: sides[i][0]
         on = [(n, {tuple(q) for q in G.polyline_crossings(
-            chains_of(n), sides[1 - i][1])[0]}) for n in nodes]
-        return lambda p: (_x_label([n for n, pts in on if tuple(p) in pts], el)
-                          or sides[i][0])
+            *([chains_of(n), sides[1][1]] if i == 0 else
+              [sides[0][1], chains_of(n)]))[0]}) for n in nodes]
+        return lambda p: _x_label([n for n, pts in on if tuple(p) in pts], el)
 
     name_a, name_b = namer(0), namer(1)
     rows = []

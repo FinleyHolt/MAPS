@@ -464,3 +464,16 @@ def test_a_computed_row_is_a_place_a_map_centres_on_and_badges(code):
 def test_a_typed_terminus_is_a_place_to_stand():
     out = _ends_block('stand(at=end_1, facing="north")\n')
     assert "error" not in out and out["stance"]["staged"][0]["at_xy"] == [120.0, 100.0], out
+
+
+def test_a_crossing_is_named_by_its_row_whichever_side_holds_it():
+    # With Bent Lane's row first, this crossing computes to x 25.92, where
+    # the bundle has 25.93; the row it is on still names it.
+    anchors = [
+        _road("prior_1", [[57, 80], [74, 96], [23, 62], [13, 15]], "Long Road"),
+        _road("prior_2", [[49, 32], [10, 86], [75, 1]], "Bent Lane"),
+        _road("prior_3", [[81.8, 95.9], [24.5, 95.2], [46.8, 5.0], [1.5, 9.6]],
+              "Hook Way"),
+        _road("prior_4", [[99.3, 83.1], [96.6, 93.0]], "Stub Court")]
+    rows = _run(anchors, "prior_1", ["prior_2", "prior_3", "prior_4"])
+    assert all(" / " not in r["name"] for r in rows), rows
