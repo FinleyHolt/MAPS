@@ -94,3 +94,19 @@ def test_a_cancel_aborts_a_held_store_put(monkeypatch) -> None:
             _send(serve, cancel_event=cancel)
         assert time.monotonic() - t0 < 2.0
     assert serve.bodies == []
+
+
+@pytest.mark.parametrize("fault", [httpx.ConnectTimeout, httpx.ConnectError])
+def test_a_store_put_that_cannot_connect_takes_the_calls_transport_retries(monkeypatch, fault) -> None:
+    _store(monkeypatch)
+    monkeypatch.setattr(http_mod, "_BACKOFF_S", 0.0)
+    tries = []
+
+    def put(self, url, **kw):
+        tries.append(url)
+        raise fault("blackholed", request=httpx.Request("PUT", url))
+    monkeypatch.setattr(httpx.Client, "put", put)
+    with ChatServe() as serve, pytest.raises(http_mod.ImageStoreError, match="image store"):
+        _send(serve)
+    assert len(tries) == http_mod._MAX_RETRIES + 1
+    assert serve.bodies == []

@@ -20,7 +20,9 @@ the reasoner, for a slow link), each inline image crosses the wire once: its
 bytes are PUT to ``<store>/looks/<sha>`` and the request names it
 ``sha256:<sha>``, which the store expands back to the same data URL beside
 the reasoner. The model reads the same bytes; the transcript keeps the body
-as built. A 409 naming shas the store does not hold sends them again.
+as built. A 409 naming shas the store does not hold sends them again; a
+PUT that cannot connect takes the call's transport retries, and a store
+fault that outlasts them, or any other, raises :class:`ImageStoreError`.
 """
 
 from __future__ import annotations
@@ -232,8 +234,9 @@ _IMAGE_STORE_HELD: set[str] = set()
 
 
 class ImageStoreError(ValueError):
-    """The image store refused or dropped a PUT. Never an LLM status: the
-    call's retries and status handling do not see it. A ``ValueError``, so
+    """The image store refused or dropped a PUT. Never an LLM status: a PUT
+    that could not connect takes the call's transport retries, and no other
+    store fault meets its retries or status handling. A ``ValueError``, so
     the mission loop retries the turn (``reasoner_loop._RETRIABLE_LLM_ERRORS``)."""
 
 
@@ -608,7 +611,10 @@ def chat_completions_raw(
                 timeout,
             )
             raise
-        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+        except (httpx.RequestError, httpx.HTTPStatusError, ImageStoreError) as e:
+            if isinstance(e, ImageStoreError) and not isinstance(
+                    e.__cause__, (httpx.ConnectError, httpx.ConnectTimeout)):
+                raise
             status = (
                 e.response.status_code
                 if isinstance(e, httpx.HTTPStatusError)
