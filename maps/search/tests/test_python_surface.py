@@ -234,6 +234,13 @@ def test_binding_over_a_mission_call_is_refused():
         scan_block('intersection = intersection("A", "B")\n')
 
 
+def test_a_tool_result_does_not_echo_the_block():
+    _r, fr, _f, _d = drive([[run('x = 1\nprint(x)\n')], [run('r1 = find(\n')],
+                            [run('go_to(prior_99)\n')], "done"])
+    for out in tool_results(fr):
+        assert "said" not in out, out
+
+
 def test_math_is_loaded_and_import_math_works():
     reply, fr, _f, _d = drive([
         [run('import math\n'

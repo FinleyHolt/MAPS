@@ -63,7 +63,6 @@ SWEEP = [
 def _served(code: str) -> tuple[str, dict]:
     _, fr, _, _ = drive([[run(code)], "done"], cands=_CANDS)
     out = tool_results(fr)[0]
-    out.pop("said", None)
     return json.dumps(out), out
 
 

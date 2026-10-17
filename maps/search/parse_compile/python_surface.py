@@ -1231,8 +1231,6 @@ class MissionPython:
     def _fold(self, part: dict) -> None:
         out = self._out
         for k, v in part.items():
-            if k == "said":
-                continue          # the receipt's said is the whole block
             if k == "result" and isinstance(out.get("result"), dict) \
                     and isinstance(v, dict):
                 out["result"] = {
@@ -1665,7 +1663,7 @@ class MissionPython:
     # -- the block runner --------------------------------------------------
 
     def run_block(self, code: str) -> dict:
-        self._out = out = {"said": code.strip()}
+        self._out = out = {}
         self._code = code
         self._printed = ""
         self._lines = 0
