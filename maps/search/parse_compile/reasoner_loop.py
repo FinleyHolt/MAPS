@@ -1292,8 +1292,15 @@ class _Mission:
     def _map(self, around: str) -> dict:
         """show_map(): one map around a place, badging the set in scope."""
         h = self._those
-        mrows = [r for r in (self.carry.read(h) or [])
-                  if r.get("fid")] if h else []
+        # The set in scope only badges the map: a refused re-derive is
+        # noted, never the map's own refusal.
+        try:
+            mrows = [r for r in (self.carry.read(h) or [])
+                     if r.get("fid")] if h else []
+        except CodeError as exc:
+            mrows, scope_err = [], f"{exc}; this map badges none of it"
+        else:
+            scope_err = None
         mfids = [str(r["fid"]) for r in mrows[:_MAP_MAX_MARKS]]
         spec, m_skipped = map_spec(around, mfids, rows=self._ns_rows,
                                    resolve=self._point,
@@ -1321,6 +1328,8 @@ class _Mission:
             else:
                 self._ship(mp, "map", [m["jpeg"] for m in maps if m.get("jpeg")],
                            map_vision_text(maps))
+        if scope_err:
+            mp.setdefault("ref_notes", []).append(scope_err)
         if mfids:
             # The set under the model's own name for it.
             name = self._mission_py.ref_name(h)

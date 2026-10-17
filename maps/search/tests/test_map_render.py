@@ -462,3 +462,17 @@ def test_a_map_around_none_is_refused_as_no_place(code):
     _r, fr, _f, _d = drive([[run(code)], "done"])
     err = tool_results(fr)[0]["error"]
     assert "around= got None, which is no place" in err, err
+
+
+def test_a_map_is_drawn_when_the_set_in_scope_cannot_re_derive():
+    """The set in scope only badges the map; its refused re-derive is said
+    in the map's notes, never the map's own refusal."""
+    from maps.search.tests.fakes import ROADS, grow_drive, run
+    res, _g, _a = grow_drive([
+        [run('g = find("Long Road").order(nearest="prior_7")\n')],
+        [run('go_to("prior_1")\n')],          # the flight removes prior_7
+        [run('show_map(around="prior_1")\n')], "done"],
+        flights_add=False, evict_on_flight={0: ["prior_7"]}, extra_priors=ROADS)
+    out = res[2]
+    assert "error" not in out and out["map"]["maps"] == 1, out
+    assert any(n.startswith("g cannot be re-derived") for n in out["map"]["ref_notes"]), out
