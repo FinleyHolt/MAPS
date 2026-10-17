@@ -553,6 +553,9 @@ class _Mission:
             sp = self._stop_xy(tok)
             if sp is not None:
                 return rounded_xy(sp)
+            end = self._terminus(tok)
+            if end is not None:
+                return look_xy(end)
             sv = self.staged_viewpoints.get(tok.strip().lower())
             if sv is not None:
                 return rounded_xy(sv["from_xy"])
@@ -1041,6 +1044,16 @@ class _Mission:
             return self._plan_err({key: ack}, str(ack["error"]))
         return {key: ack}
 
+    def _terminus(self, tok: str) -> dict | None:
+        """The carried row a typed terminus fid (``end_N``) names, or None."""
+        if not END_RE.fullmatch(tok.strip()):
+            return None
+        # ponytail: end_N restarts per ends_of call, so the newest carried
+        # row holding it wins; unique terminus fids if two ends_of sets must
+        # be named by fid.
+        return next((r for rows in reversed(self.carry.rows.values())
+                     for r in rows or () if r.get("fid") == tok.strip()), None)
+
     def _fly_token(self, tok: str) -> tuple[str, str | None]:
         """A typed move token -> the token a flight takes: a flown stop id
         its recorded point, a terminus fid its row's point; an unflown stop
@@ -1048,15 +1061,9 @@ class _Mission:
         sp = self._stop_xy(tok)
         if sp is not None:
             return format_xy_token(sp[0], sp[1]), None
-        if END_RE.fullmatch(tok.strip()):
-            # ponytail: end_N restarts per ends_of call, so the newest
-            # carried row holding it wins; unique terminus fids if two
-            # ends_of sets must be flown by fid.
-            row = next((r for rows in reversed(self.carry.rows.values())
-                        for r in rows or () if r.get("fid") == tok.strip()),
-                       None)
-            if row is not None:
-                return row_token(row), None
+        row = self._terminus(tok)
+        if row is not None:
+            return row_token(row), None
         if STOP_RE.fullmatch(tok.strip().lower()):
             known = ", ".join(sorted(self._plan_stops)) or "none yet"
             return tok, (f"{tok} has not been flown; the flown stops are: "

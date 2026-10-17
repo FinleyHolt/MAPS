@@ -279,7 +279,9 @@ def map_spec(around: str, mark_fids: list, *, rows: dict, resolve,
     marks: list[dict] = []
     for mf in dict.fromkeys(mark_fids):
         row = rows.get(mf)
-        xy = look_xy(row)
+        # a computed row (a crossing, a terminus) is no surface row: its
+        # point is what resolve names
+        xy = look_xy(row) if row is not None else resolve(mf)
         if xy is None:
             skipped.append(mf)
             continue

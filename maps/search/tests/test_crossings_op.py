@@ -423,3 +423,24 @@ def test_a_fid_off_the_surface_is_refused_as_naming_no_row(op):
     with pytest.raises(ProgramError) as e:
         run_program([], anchors, prog)
     assert str(e.value).startswith("'prior_999' names no"), e.value
+
+
+def _ends_block(code):
+    from maps.search.analyze_scene.surface import build_surface_from_graph
+    from maps.search.tests.fakes import ROADS, drive, priors, run, tool_results
+    cands, anchors = build_surface_from_graph({**priors(), **ROADS}.items(),
+                                              (0.0, 0.0), 1.0)
+    _r, fr, _f, _d = drive([[run('e = ends_of("Long Road")\n' + code)], "done"],
+                           cands=cands + anchors)
+    return tool_results(fr)[0]
+
+
+@pytest.mark.parametrize("code", ['show_map(around=e[1])\n', 'show_map(around=end_1)\n'])
+def test_a_computed_row_is_a_place_a_map_centres_on_and_badges(code):
+    out = _ends_block(code)
+    assert out["map"]["maps"] == 1 and "skipped" not in out["map"], out
+
+
+def test_a_typed_terminus_is_a_place_to_stand():
+    out = _ends_block('stand(at=end_1, facing="north")\n')
+    assert "error" not in out and out["stance"]["staged"][0]["at_xy"] == [120.0, 100.0], out
