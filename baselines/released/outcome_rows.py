@@ -229,19 +229,20 @@ def pair(released: Path, other: Path, *, allow_partial: bool = False) -> dict:
     if len(crit) != 1:
         raise SystemExit(f"the two runs are scored on different criteria {sorted(map(str, crit))}")
     if crit == {"ring"}:
-        # Released rows are scored at score_arrival's own disc; the other run's
-        # radius is its configured one.
+        # Released rows are scored at score_arrival's own disc; a run with a
+        # manifest is scored at its configured one, whichever side it is on.
         import inspect
 
         import yaml
 
         from benchmarks.citynav.eval import score_arrival
         ours = inspect.signature(score_arrival).parameters["success_dist_m"].default
-        theirs = (yaml.safe_load(run_report.read_manifest(other).get("config_yaml") or "{}")
-                  or {}).get("success_radius_m")
-        if theirs is not None and float(theirs) != ours:
-            raise SystemExit(f"{other.name} scores a {float(theirs):g} m disc; released rows "
-                             f"score a {ours:g} m disc")
+        for root in (released, other):
+            theirs = (yaml.safe_load(run_report.read_manifest(root).get("config_yaml") or "{}")
+                      or {}).get("success_radius_m")
+            if theirs is not None and float(theirs) != ours:
+                raise SystemExit(f"{root.name} scores a {float(theirs):g} m disc; released rows "
+                                 f"score a {ours:g} m disc")
     pairs = [(int(bool(a[e].get("SR"))), int(bool(b[e].get("SR")))) for e in shared]
     return {**ab_report.ab_stats(pairs, label=f"{released.name} vs {other.name}"),
             "only_a": len(set(a) - set(b)), "only_b": len(set(b) - set(a))}

@@ -144,3 +144,5 @@ def test_a_pair_against_another_disc_radius_is_refused(tmp_path):
     (other / "run_manifest.json").write_text(json.dumps({"config_yaml": "success_radius_m: 40\n"}))
     with pytest.raises(SystemExit, match="40 m disc"):
         orows.pair(tmp_path / "baseline", other, allow_partial=True)
+    with pytest.raises(SystemExit, match="40 m disc"):
+        orows.pair(other, tmp_path / "baseline", allow_partial=True)
