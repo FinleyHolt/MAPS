@@ -457,7 +457,7 @@ def _said(fn, name: str | None = None):
     TypeError binding its arguments is re-said without the internal or
     class name and counting no self, with the keywords that do exist; a
     TypeError raised inside it rides as it is. The signature stays
-    ``fn``'s."""
+    ``fn``'s; it prints as ``name``, with no class."""
     name = name or fn.__name__
     params = [p for n, p in inspect.signature(fn).parameters.items()
               if n != "self"]
@@ -478,6 +478,7 @@ def _said(fn, name: str | None = None):
             if re.search(r"takes .*positional arguments? but \d+", msg):
                 msg = takes
             raise CodeError(f"{msg}. {name} keywords: {kws}") from None
+    call.__name__ = call.__qualname__ = name
     return call
 
 
@@ -1195,9 +1196,7 @@ class MissionPython:
     def _wrap_call(self, name: str):
         """The library callable the namespace serves: the real
         ``_call_*``, its signature errors said as :func:`_said` says them."""
-        call = _said(getattr(self, f"_call_{name}"), name)
-        call.__name__ = call.__qualname__ = name
-        return call
+        return _said(getattr(self, f"_call_{name}"), name)
 
     # -- naming ------------------------------------------------------------
 

@@ -389,3 +389,9 @@ def test_a_tags_column_reads_as_the_dict_it_is():
                               "{'highway': 'residential'} True True <class 'dict'>"), out
     assert out["error"] == "line 3: AttributeError: 'dict' object has no attribute 'lower'", out
 
+
+@pytest.mark.parametrize("method", ["order", "filter", "distance"])
+def test_a_printed_set_method_names_no_internal_class(method):
+    _, fr, _, _ = drive([[run(f'cars = find("car")\nprint(cars.{method})')], "done"], cands=_TIED)
+    printed = tool_results(fr)[0]["printed"]
+    assert printed.startswith(f"<bound method {method} of <cars:"), printed
