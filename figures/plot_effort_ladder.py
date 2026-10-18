@@ -188,19 +188,16 @@ def render(rows: list[dict], theme: str, title: str, subtitle: str) -> str:
     return "".join(p)
 
 
-def heading(rows: list[dict]) -> tuple[str, str]:
+def heading(rows: list[dict], mans: list[dict], policy: str) -> tuple[str, str]:
     """(title, subtitle) off the arms' own run manifests."""
-    mans = [_rows.read_manifest(Path(r["root"])) for r in rows]
     models = sorted({str(m.get("served_model") or "unrecorded model").rstrip("/").rsplit("/", 1)[-1]
                      for m in mans})
     splits = sorted({str(m.get("split") or "") for m in mans} - {""})
     commits = sorted({str(m.get("git_commit") or "")[:7] for m in mans} - {""})
-    policies = sorted({str((yaml.safe_load(m.get("config_yaml") or "{}") or {}).get("policy") or "")
-                       for m in mans} - {""})
     sizes = sorted({r["n"] for r in rows})
     title = " / ".join(bench_label(s) for s in splits) or "Effort ladder"
     n = f"{sizes[0]:,}" if len(sizes) == 1 else f"{sizes[0]:,} to {sizes[-1]:,}"
-    sub = (f"{', '.join(models)}{', policy ' + ', '.join(policies) if policies else ''}, "
+    sub = (f"{', '.join(models)}{', policy ' + policy if policy else ''}, "
            f"{len(rows)} arms, {n} episodes each, commit {', '.join(commits) or 'unrecorded'}")
     return title, sub
 
@@ -239,8 +236,8 @@ def main(argv: list[str]) -> int:
         raise SystemExit(f"plot_effort_ladder: the roots differ in model, policy or withhold "
                          f"{sorted(arms)}; plot one arm per ladder")
 
-    title, sub = heading(rows)
-    splits = sorted({str(_rows.read_manifest(Path(r["root"])).get("split") or "") for r in rows} - {""})
+    title, sub = heading(rows, mans, next(iter(arms))[1])
+    splits = sorted({str(m.get("split") or "") for m in mans} - {""})
     stem = args.stem or "_".join(["effort_ladder", *splits])
     args.out_dir.mkdir(parents=True, exist_ok=True)
     for theme in ("light", "dark"):
