@@ -812,6 +812,13 @@ class _Mission:
             return None
         best, bd = None, 1.0
         for bf, brow in self._ns_rows.items():
+            # look_xy rounds by at most 0.005 m: a raw gap of 1.01 m or more
+            # on either axis cannot snap
+            xy = brow.get("xy")
+            if (not isinstance(xy, (list, tuple)) or len(xy) != 2
+                    or abs(float(xy[0]) - pt[0]) >= 1.01
+                    or abs(float(xy[1]) - pt[1]) >= 1.01):
+                continue
             bxy = look_xy(brow)
             if bxy is None:
                 continue
