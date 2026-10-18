@@ -254,10 +254,9 @@ lists the exact commands.
 
 | Experiment | Split and episodes | Arms | Config and flags | Reader |
 |---|---|---|---|---|
-| E1 | CityNav `train_seen`, 1,000 per arm (`--limit 1000`, seed 1234) | Inkling Small at effort 0.99; Qwen 3.8 Flash Next at `xhigh`; Gemma 4 26B-A4B | `configs/citynav.yaml`, `SEARCH_SAMPLING_REASONING_EFFORT` | `arm_table`, `run_report` |
 | E2 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `low`, `medium`, `xhigh`; Inkling Small at 0.99; Gemma 4 26B-A4B; Gemma 4 E2B; Gemma 4 E4B | `configs/citynav.yaml`, `--split test_unseen` | `arm_table`, `run_report` |
 | E3 | Cal City, the 1,100 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table`, `figures.plot_effort_ladder` |
-| E4 | CityNav `train_seen`, 1,000 per arm | Per model: the control and its ablation arms (below) | `configs/withhold/<arm>.yaml` | `arm_table`, `ab_report` |
+| E4 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | Per model: its ablation arms (below), each paired with the model's E2 root on the shared episodes | `configs/withhold/<arm>.yaml` | `arm_table`, `ab_report` |
 | E7 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | Inkling Small at 0.0, 0.1 ... 0.9 (10 rungs), each for MAPS, ViSA and GeoNav | `configs/citynav.yaml`, `configs/baselines/{visa,geonav}.yaml` | `arm_table`, `figures.plot_effort_ladder` |
 | E8 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | ViSA and GeoNav at each Qwen 3.8 Flash Next effort (`low`, `medium`, `xhigh`), paired with the E2 roots on shared ids | `configs/baselines/{visa,geonav}.yaml` | `arm_table`, `ab_report` |
 | E9 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `xhigh` under the released baselines' protocol (100 actions, a 50 m start) | `configs/baselines/released_protocol.yaml` | `arm_table`, `outcome_rows pair` |
@@ -331,7 +330,7 @@ both). The served model name selects a sampling envelope from
 [`maps/llm/model_cards.py`](maps/llm/model_cards.py) (tokenizer, `top_p`,
 `top_k`, the reasoning efforts it takes), and must be one of that table's
 keys exactly: `inkling-small`, `qwen38-flash-next-nvfp4`,
-`gemma4-26b-a4b-nvfp4` (E1 to E3), `gemma4-e4b`, `gemma4-e2b` (E2),
+`gemma4-26b-a4b-nvfp4` (E2 to E4), `gemma4-e4b`, `gemma4-e2b` (E2),
 `gemma4-26b-a4b-gguf` (the llama.cpp serve flown aboard), and
 `gpt-5.6-sol` ([GPT-5.6 Sol on Azure](#gpt-56-sol-on-azure));
 any other name is refused at startup with the list. Every request runs in
@@ -475,19 +474,6 @@ Each command writes one run root. Name a model by serving it at
 `SEARCH_REASONER_URL`; the run manifest records the served model the
 endpoint reports. A rerun of the same command resumes the root.
 
-E1, one model at a time:
-
-```sh
-SEARCH_SAMPLING_REASONING_EFFORT=0.99 \
-  python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --sample-seed 1234 \
-  --out-root output/e1/inkling-small
-SEARCH_SAMPLING_REASONING_EFFORT=xhigh \
-  python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --sample-seed 1234 \
-  --out-root output/e1/qwen38-flash-next
-python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --sample-seed 1234 \
-  --out-root output/e1/gemma4-26b-a4b
-```
-
 E2, each arm over the whole split:
 
 ```sh
@@ -511,7 +497,7 @@ python -m benchmarks.calcity.bench_fullset \
   --episode-allowlist output/reviewed_episodes.txt --out-root output/e3/gemma4-26b-a4b
 ```
 
-E4, the control and one root per ablation arm, per model. `configs/withhold/`
+E4, one root per ablation arm, per model. `configs/withhold/`
 holds one config per withhold (`maps/search/withhold.py`) and one per
 family: `seeing` (look_for, look, images, map) and `text` (doc, system_turn).
 Under `end_commit` the mission still ends on a plain reply and scores the last
@@ -522,14 +508,15 @@ flight; only what the model is told about it is withheld.
 # qwen38-flash-next: arms="prior look_for look images system_turn mission_map"
 # gemma4-26b-a4b:    arms="prior library seeing text loop images"
 for arm in $arms; do
-  SEARCH_SAMPLING_REASONING_EFFORT=<model's E1 effort> CITYNAV_BENCH_CONFIG=configs/withhold/$arm.yaml \
-    python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --sample-seed 1234 \
+  SEARCH_SAMPLING_REASONING_EFFORT=<model's E2 effort> CITYNAV_BENCH_CONFIG=configs/withhold/$arm.yaml \
+    python -m benchmarks.citynav.bench_fullset --split test_unseen --limit 1000 --sample-seed 1234 \
     --out-root output/e4/<model>/$arm
 done
 ```
 
-The control is the model's E1 root, so each arm runs at the model's E1 effort
-(blank for a model run with none); `ab_report` refuses a pair whose efforts differ.
+The control is the model's E2 root (Inkling Small at 0.99, Qwen 3.8 Flash Next at `xhigh`, Gemma 4
+26B-A4B with none), whose 5,311 episodes hold each arm's 1,000; `ab_report` pairs them on the
+shared episodes and refuses a pair whose efforts differ.
 
 E7, the Inkling Small CityNav ladder for MAPS and the two baselines, and E8,
 the baselines at each Qwen effort (the MAPS side of E8 is E2):
@@ -564,8 +551,8 @@ Read the results:
 
 ```sh
 python -m benchmarks.citynav.analysis.arm_table output/e2/*            # SR, OSR, NE per arm
-python -m benchmarks.citynav.analysis.run_report output/e1/inkling-small   # one root in full
-python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/e4/<model>/<arm>
+python -m benchmarks.citynav.analysis.run_report output/e2/inkling-small-0.99   # one root in full
+python -m benchmarks.citynav.analysis.ab_report output/e2/<model's E2 root> output/e4/<model>/<arm>
 python -m figures.plot_effort_ladder output/e3/inkling-small-e*
 for p in maps visa geonav; do python -m figures.plot_effort_ladder --stem effort_ladder_e7_$p output/e7/inkling-small-$p-e*; done
 python -m figures.plot_capability_effort --split test_unseen output/e2/*
@@ -590,16 +577,18 @@ it too):
 
 ```sh
 for policy in geonav geonav_released visa; do
-  SEARCH_SAMPLING_REASONING_EFFORT=<model's E1 effort> CITYNAV_BENCH_CONFIG=configs/baselines/$policy.yaml \
-    python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --sample-seed 1234 \
+  SEARCH_SAMPLING_REASONING_EFFORT=<model's E2 effort> CITYNAV_BENCH_CONFIG=configs/baselines/$policy.yaml \
+    python -m benchmarks.citynav.bench_fullset --split test_unseen --limit 1000 --sample-seed 1234 \
     --out-root output/baselines/<model>/$policy
   SEARCH_SAMPLING_REASONING_EFFORT=<the E3 root's effort> CITYNAV_BENCH_CONFIG=configs/baselines/calcity_$policy.yaml \
     python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_episodes.txt \
     --out-root output/baselines/<model>/calcity_$policy
 done
 python -m benchmarks.citynav.analysis.run_report output/baselines/<model>/visa
-python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/baselines/<model>/visa
+python -m benchmarks.citynav.analysis.ab_report output/e2/<model's E2 root> output/baselines/<model>/visa
 ```
+
+For Qwen 3.8 Flash Next the `visa` and `geonav` CityNav roots are E8's `xhigh` roots.
 
 The released checkpoints (CityNav MGP, HETT, FlightGPT) run under their
 authors' own evaluators, from pinned clones, through

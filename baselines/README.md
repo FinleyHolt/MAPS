@@ -43,13 +43,13 @@ Fig. 1/2 content for one episode.
 
 Serve the model at `SEARCH_REASONER_URL` as for a MAPS run, and fly each
 baseline with the selection flags and reasoning effort of the MAPS root it is
-read against. `CITYNAV_BENCH_CONFIG` names the config. Against the E1 roots
-(CityNav `train_seen`, 1,000 episodes, seed 1234):
+read against. `CITYNAV_BENCH_CONFIG` names the config. Against the E2 roots
+(CityNav `test_unseen`, the 1,000 episodes of seed 1234 that each E2 root holds):
 
 ```sh
 for policy in geonav geonav_released visa; do
   SEARCH_SAMPLING_REASONING_EFFORT=<the MAPS root's effort> CITYNAV_BENCH_CONFIG=configs/baselines/$policy.yaml \
-    python -m benchmarks.citynav.bench_fullset --split train_seen --limit 1000 --sample-seed 1234 \
+    python -m benchmarks.citynav.bench_fullset --split test_unseen --limit 1000 --sample-seed 1234 \
     --out-root output/baselines/<model>/$policy
 done
 ```
@@ -70,8 +70,8 @@ arms on the shape):
 
 ```sh
 python -m benchmarks.citynav.analysis.run_report output/baselines/<model>/visa
-python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/baselines/<model>/visa --label maps_vs_visa
-python -m benchmarks.citynav.analysis.arm_table output/e1/<model> output/baselines/<model>/{geonav,geonav_released,visa}
+python -m benchmarks.citynav.analysis.ab_report output/e2/<model's E2 root> output/baselines/<model>/visa --label maps_vs_visa
+python -m benchmarks.citynav.analysis.arm_table output/baselines/<model>/{geonav,geonav_released,visa}
 python -m benchmarks.citynav.analysis.arm_table output/e3/<model's E3 root> output/baselines/<model>/calcity_*
 ```
 

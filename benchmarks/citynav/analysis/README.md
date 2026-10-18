@@ -33,14 +33,11 @@ Every command runs from the repository root.
 
 | Claim | Quantity | Reader | Command |
 |---|---|---|---|
-| E1 SR per model, CityNav `train_seen`, 1,000 episodes | `SR_pct`, `SR_n` per arm | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e1/*` |
-| E1 OSR per model | `OSR_pct` per arm | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e1/*` |
-| E1 outcomes per model: reached (OSR), inside (SR 20 m) | `overall OSR` and the `OSRxSR` line | `run_report` | `python -m benchmarks.citynav.analysis.run_report output/e1/<model>` |
 | E2 SR and OSR per arm, CityNav `test_unseen`, 5,311 episodes | `SR_pct`, `OSR_pct`, `n` per arm | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e2/*` |
 | E3 SR per effort rung and Gemma, Cal City reviewed 1,100 | `SR_pct` (shape criterion), `n` per arm | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e3/*` |
 | E3 effort-ladder figure: SR and median NE against effort | `SR_pct`, `NE_med` per arm with a numeric effort | `figures.plot_effort_ladder` over `arm_table` | `python -m figures.plot_effort_ladder output/e3/inkling-small-e*` |
-| E4 SR with parts withheld, per model (each arm's `withhold:` list, names in `maps/search/withhold.py`) | `SR_pct` per arm, labelled `withhold=` and the arm's parts, comma-joined | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e1/<model> output/e4/<model>/*` |
-| E4 change in SR against the full harness | paired delta, its interval, flips | `ab_report` | `python -m benchmarks.citynav.analysis.ab_report output/e1/<model> output/e4/<model>/<arm>` |
+| E4 SR with parts withheld, per model (each arm's `withhold:` list, names in `maps/search/withhold.py`) | `SR_pct` per arm, labelled `withhold=` and the arm's parts, comma-joined | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e4/<model>/*` |
+| E4 change in SR against the full harness, on the arm's 1,000 episodes | paired delta, its interval, flips | `ab_report` | `python -m benchmarks.citynav.analysis.ab_report output/e2/<model's E2 root> output/e4/<model>/<arm>` |
 | E5 Cal City SR against prompt plus completion tokens per episode | `sr`, `total_tok_mean` per arm | `figures.capability_effort_arms`, `figures.plot_capability_effort` | `python -m figures.plot_capability_effort --split calcity --cost total output/e3/*` |
 | E5 CityNav `test_unseen` SR against completion tokens per episode | `sr`, `completion_tok_mean` per arm | `figures.capability_effort_arms`, `figures.plot_capability_effort` | `python -m figures.plot_capability_effort --split test_unseen output/e2/*` |
 | E5 the numbers behind either figure | every arm's record | `figures.capability_effort_arms` | `python -m figures.capability_effort_arms --out output/arms.json output/e2/* output/e3/*` |
