@@ -769,7 +769,7 @@ class Row(_Cuts):
         if isinstance(k, int) and k in (0, -1):
             return self                  # one row indexes as itself
         if isinstance(k, slice):
-            return RowList([self])
+            return RowList([self][k])
         v = self._column(k)
         if v is _MISSING:
             raise KeyError(self._miss(k))
@@ -1050,6 +1050,10 @@ def _tuple_xy(xy):
     return (float(xy[0]), float(xy[1])) if is_xy(xy) else None
 
 
+# type() of a row or a set names the class, not the module serving it
+Row.__module__ = RowList.__module__ = Rows.__module__ = "builtins"
+
+
 def _index_it(name: str | None) -> str:
     """The remedy's opening for a set refused where one place goes: a set
     the model has no name for is bound first, as ``s``."""
@@ -1189,7 +1193,7 @@ class MissionPython:
         # The mission calls are builtins, as len is: a name the model binds
         # over one shadows it until ``del`` gives the call back.
         for name in served_calls():
-            self.ns["__builtins__"][name] = self._wrap_call(name)
+            self.ns["__builtins__"][name] = _said(getattr(self, f"_call_{name}"), name)
         # Model spelling for every ref it was shown rows under, so the
         # served envelope is keyed by the model's own name.
         self._shown: dict = {}
@@ -1216,11 +1220,6 @@ class MissionPython:
         self._deadline = 0.0
         self._block_shown: set = set()
         self._unrendered: dict = {}     # deduped this block -> surface version
-
-    def _wrap_call(self, name: str):
-        """The library callable the namespace serves: the real
-        ``_call_*``, its signature errors said as :func:`_said` says them."""
-        return _said(getattr(self, f"_call_{name}"), name)
 
     # -- naming ------------------------------------------------------------
 

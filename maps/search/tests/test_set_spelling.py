@@ -417,3 +417,15 @@ def test_a_move_name_bound_any_python_way_is_the_models_variable(code):
 def test_a_builtin_reached_through_a_subscript_does_not_name_the_set():
     err = _first_error('cars = find("car")\nfs = [sorted]\nfs[0]([1, 2], key=cars)\n')
     assert "fs[0]" not in err and "cars is a set" in err, err
+
+
+def test_a_slice_of_one_row_holds_what_the_same_slice_of_a_one_item_list_holds():
+    _, fr, _, _ = drive([[run('r = find("car")[0]\nprint(len(r[0:1]), len(r[:]), len(r[1:]), len(r[0:0]), len(r[-1:]))')],
+                         "done"], cands=CANDS)
+    assert tool_results(fr)[0]["printed"] == "1 1 0 0 1"
+
+
+def test_type_of_a_row_or_a_set_names_no_module():
+    _, fr, _, _ = drive([[run('s = find("car")\nprint(type(s), type(s[0]), type(s[0][:]))')], "done"],
+                        cands=CANDS)
+    assert tool_results(fr)[0]["printed"] == "<class 'Rows'> <class 'Row'> <class 'RowList'>"
