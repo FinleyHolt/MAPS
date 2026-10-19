@@ -276,8 +276,7 @@ class BaselineHarness:
         strict = {"type": "json_schema", "json_schema": {"name": schema_name, "schema": schema, "strict": True}}
 
         def shaped(text):
-            parsed = extract_json(text)
-            return parsed if _fits(parsed, schema) else None
+            return extract_json(text, fits=lambda obj: _fits(obj, schema))
 
         t0 = time.perf_counter()
         try:
@@ -547,9 +546,10 @@ def _fits(value: Any, schema: dict) -> bool:
     return True
 
 
-def extract_json(text: str) -> dict | None:
-    """The first JSON object in ``text``: a fenced block, else the first
-    ``{`` that decodes. Prose before or after it is ignored."""
+def extract_json(text: str, fits=lambda obj: True) -> dict | None:
+    """The first JSON object in ``text`` that ``fits``: a fenced block, else
+    each ``{`` that decodes, in order. Prose before or after it is ignored, and
+    so is an object that does not fit (an invalid copy's decodable sub-object)."""
     if not text:
         return None
     m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.S)
@@ -567,7 +567,7 @@ def extract_json(text: str) -> dict | None:
             except json.JSONDecodeError:
                 start = k + 1
                 continue
-            if isinstance(obj, dict):
+            if isinstance(obj, dict) and fits(obj):
                 return obj
             start = k + 1
     return None

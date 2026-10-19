@@ -532,3 +532,13 @@ def test_a_bare_runner_refuses_a_baseline_arm_whose_model_has_no_dial_off(tmp_pa
                                      "--out", str(tmp_path / "r")])
     assert cli.main() == 2
     assert not (tmp_path / "r").exists()
+
+
+def test_an_answer_that_fits_is_found_behind_an_invalid_one():
+    # Inkling's restate: the set-literal copy, then the valid object.
+    from baselines.visa.prompts import ANALYSIS_SCHEMA
+    from baselines.seam import _fits
+    bad = '{"target":{"phrase":"p","class":"building","attributes":["white"]},"landmarks":{"x"},"surroundings":{"y"},"concepts":["c"]}'
+    good = '{"target":{"phrase":"p","class":"building","attributes":["white"]},"landmarks":["x"],"surroundings":["y"],"concepts":["c"]}'
+    got = extract_json(bad + good, fits=lambda o: _fits(o, ANALYSIS_SCHEMA))
+    assert got == json.loads(good)
