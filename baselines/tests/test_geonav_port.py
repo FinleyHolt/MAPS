@@ -216,3 +216,15 @@ def test_a_call_that_raised_for_any_other_reason_ends_the_episode(site):
     the method's decision."""
     with pytest.raises(RuntimeError, match="served-model mismatch"):
         _run_stub(**{site: RuntimeError("served-model mismatch: the server behind the URL changed")})
+
+
+def test_a_chain_written_as_the_prompt_examples_write_it_fits_the_schema():
+    # The released prompt's own examples give each operation only the keys it uses.
+    from baselines.geonav.policy import CHAIN_SCHEMA
+    from baselines.seam import _fits
+    chain = {"operations": [
+        {"method": "get_geonode_by_name", "args": ["park"]},
+        {"method": "get_child_nodes", "kwargs": {"relation_type": "adjacent_to"}},
+        {"method": "filter_by_class", "args": ["car"]},
+    ]}
+    assert _fits(chain, CHAIN_SCHEMA)

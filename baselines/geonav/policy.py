@@ -73,10 +73,12 @@ GRAPH_SCHEMA = obj({
     })},
     "edges": {"type": "array", "items": obj({"source": STR, "target": STR, "relationship": STR})},
 })
+# An operation carries only the keys it uses, as the released prompt's examples write it.
 CHAIN_SCHEMA = obj({
-    "operations": {"type": "array", "items": obj({
-        "method": STR, "args": STRS, "kwargs": obj({"relation_type": STR}),
-    })},
+    "operations": {"type": "array", "items": {
+        "type": "object", "required": ["method"], "additionalProperties": False,
+        "properties": {"method": STR, "args": STRS, "kwargs": obj({"relation_type": STR})},
+    }},
 })
 
 
