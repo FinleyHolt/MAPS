@@ -389,6 +389,12 @@ class Driver:
         worker_root = self.out_root / f"w{worker_id}"
         worker_root.mkdir(parents=True, exist_ok=True)
         env = _runner_env()
+        # A hosted reasoner's prompt cache matches within one key: a worker's
+        # episodes, flown one after another, share theirs, so each episode
+        # after a worker's first reads the common head (system turn and tools)
+        # instead of writing it, at a worker's request rate, under the ~15 a
+        # minute a key holds.
+        env["SEARCH_LLM_CACHE_KEY"] = f"{self.out_root.name}/w{worker_id}"
         # The mission's wall-clock backstop: an absolute epoch from the cap's
         # start, less the reserve for ending.
         env[episodes.DEADLINE_ENV] = repr(

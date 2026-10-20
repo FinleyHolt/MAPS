@@ -117,6 +117,7 @@ def test_the_episode_s_routing_key_is_its_prompt_cache_key(monkeypatch) -> None:
     """Azure matches a GPT-5.6 prefix cache within a ``prompt_cache_key``; the episode's
     routing key carries its turns on one. A self-hosted card's body gains no such key."""
     sent = _serve(monkeypatch)
+    monkeypatch.delenv("SEARCH_LLM_CACHE_KEY", raising=False)
     monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "calcity::ep-7")
     for spec in (GPT_SPEC, TEST_SPEC):
         r = Reasoner(endpoint_spec=spec)
@@ -359,3 +360,15 @@ def test_the_turn_s_encrypted_reasoning_rides_the_next_request(monkeypatch) -> N
     with_items = compactor._estimate_input_tokens(r.messages, model=GPT)
     bare = [{k: v for k, v in m.items() if k not in ("reasoning_items", "reasoning_tokens")} for m in r.messages]
     assert with_items - compactor._estimate_input_tokens(bare, model=GPT) == 2 * 5000
+
+
+def test_a_bench_worker_s_cache_key_outranks_the_episode_s(monkeypatch) -> None:
+    """The bench names one key per worker, shared by the episodes it flies in turn, so each
+    after its first reads the common head from the cache."""
+    sent = _serve(monkeypatch)
+    monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "calcity::ep-7")
+    monkeypatch.setenv("SEARCH_LLM_CACHE_KEY", "gto2_CG-HI_M_89_abc/w3")
+    r = Reasoner(endpoint_spec=GPT_SPEC)
+    r.append_user("find the truck")
+    r.step_tool_call([])
+    assert sent[0]["prompt_cache_key"] == "gto2_CG-HI_M_89_abc/w3"

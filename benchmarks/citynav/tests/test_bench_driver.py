@@ -730,3 +730,27 @@ def test_a_base_config_that_is_not_yaml_is_refused_naming_that_file(tmp_path, mo
     monkeypatch.setattr(bf, "CONFIG", top)
     assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run"]) == 2
     assert capsys.readouterr().err.startswith(f"FATAL: {base.resolve()}: ")
+
+
+def test_each_worker_s_children_share_one_prompt_cache_key(driver, monkeypatch) -> None:
+    """A worker's attempts carry SEARCH_LLM_CACHE_KEY = <out-root name>/w<worker>: one key per
+    worker, so a hosted reasoner's cache serves the head every episode of that worker opens with."""
+    envs: list[dict] = []
+
+    class _Done:
+        pid = 0
+        returncode = 0
+
+        def wait(self, timeout=None):
+            return 0
+
+    def _popen(cmd, **kw):
+        envs.append(kw["env"])
+        return _Done()
+
+    monkeypatch.setattr(bf.subprocess, "Popen", _popen)
+    d = driver()
+    for wid in (0, 3, 3):
+        d._run_attempt(wid, "e::1#1")
+    keys = [e["SEARCH_LLM_CACHE_KEY"] for e in envs]
+    assert keys == [f"{d.out_root.name}/w0", f"{d.out_root.name}/w3", f"{d.out_root.name}/w3"]
