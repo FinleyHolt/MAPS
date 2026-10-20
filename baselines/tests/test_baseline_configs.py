@@ -26,8 +26,8 @@ def _parent(path: Path) -> Path:
 
 
 def test_there_are_baseline_configs_to_pin() -> None:
-    # Vacuity floor: three policies on each of two benches.
-    assert len(_ARMS) == 6, [p.name for p in _ARMS]
+    # Vacuity floor: four policies on each of two benches.
+    assert len(_ARMS) == 8, [p.name for p in _ARMS]
 
 
 @pytest.mark.parametrize("path", _ARMS, ids=[p.stem for p in _ARMS])

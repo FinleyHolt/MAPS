@@ -9,6 +9,7 @@ contract; `geonav/policy.py` and `visa/policy.py` are one method each, and
 `geonav_released/` is GeoNav under its released token caps with thinking
 off. The released checkpoints (CityNav MGP, HETT, FlightGPT) run through
 their own evaluators instead: [`released/`](released/README.md).
+`human/` puts a person at the same seam: [A human operator](#a-human-operator).
 
 ## What is held fixed
 
@@ -103,6 +104,34 @@ window is the block. On the 13 km Cal City block it bounds what a policy
 allocates: GeoNav's map and ViSA's coverage grid sized from the whole block
 need more than 16 GB per episode. A Cal City row that starts more than about
 1.3 km from its target plans over a window that may not hold the target.
+
+## A human operator
+
+`human/policy.py` puts a person behind the seam. Each episode serves a
+console page at `http://$HUMAN_CONSOLE_HOST:$HUMAN_CONSOLE_PORT/` (default
+`127.0.0.1:8077`) and blocks until the operator commits. The page shows the
+instruction, the run's north-up frame at the current pose with every named
+OSM landmark in view outlined, the action budget left, and a search over the
+block's named landmarks with their offsets. A click on the frame, or a
+selected landmark's fly-over, is one stop priced by `seam.Budget`; a stop the
+budget cannot afford is refused. The commit is the clicked point, or the
+current position. No detector runs. Every action and its time land in
+`<attempt>/human/session.json`, with one frame per stop.
+
+The arm calls no model and no segmenter. Pin the endpoint the paired MAPS
+root served, so the manifest and `ab_report`'s config check match, and the
+driver probes nothing:
+
+```sh
+SEARCH_ENDPOINT_OFFLINE=1 SEARCH_ENDPOINT_SPEC_OVERRIDE='<the MAPS root's model>:<max_model_len>' \
+  CITYNAV_BENCH_CONFIG=configs/baselines/human.yaml \
+  python -m benchmarks.citynav.bench_fullset --split test_unseen --episode-allowlist <list> \
+  --workers 1 --episode-timeout-s 1800 --out-root output/baselines/human/<participant label>
+```
+
+On a compute node, forward the port to the operator's machine
+(`ssh -L 8077:127.0.0.1:8077 <node>` through the submit host). Out-roots
+carry a participant label, never a name.
 
 ## How a baseline row can differ from a MAPS row
 

@@ -1,0 +1,3 @@
+# baselines/human.yaml on Cal City: calcity.yaml with policy human.
+base: ../calcity.yaml
+policy: human

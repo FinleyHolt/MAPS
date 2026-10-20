@@ -469,6 +469,19 @@ def test_a_segmenter_that_never_answers_holds_every_launch(driver, monkeypatch) 
     assert not d.episodes_file.exists()
 
 
+def test_an_offline_run_launches_with_nothing_served(driver, monkeypatch) -> None:
+    """``SEARCH_ENDPOINT_OFFLINE=1`` pins a spec and serves nothing (the human arm): the
+    gate launches without asking either server."""
+    d = driver(selection=["ep0"])
+    monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")
+    monkeypatch.setattr(d, "_reasoner_answers", lambda: pytest.fail("probed the reasoner"))
+    monkeypatch.setattr(d, "_sam_answers", lambda: pytest.fail("probed SAM"))
+    flown: list[str] = []
+    monkeypatch.setattr(d, "run_one", lambda wid, eid: (flown.append(eid), d._done_cache.add(eid)))
+    d.worker_loop(0)
+    assert flown == ["ep0"]
+
+
 def test_the_sam_gate_asks_the_replicas_discovery_checked(monkeypatch) -> None:
     """Any replica answering ``/health`` passes (the client steps off a dead one); none checked
     at discovery passes as discovery did; every replica down fails."""
