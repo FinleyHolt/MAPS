@@ -133,6 +133,56 @@ On a compute node, forward the port to the operator's machine
 (`ssh -L 8077:127.0.0.1:8077 <node>` through the submit host). Out-roots
 carry a participant label, never a name.
 
+## The human study
+
+Three arms on the same episodes of one MAPS root: MAPS alone (the root),
+a person alone (`human/policy.py`, above), and the team, where MAPS flies
+alone and a person audits the finished episode (`human/audit_console.py`).
+The auditor sees the instruction, the imagery around MAPS's commit with
+every object MAPS detected outlined and its pick marked, MAPS's reasoning
+for the pick, its full trace and frames, and a search over the named prior.
+The auditor confirms MAPS's target or selects another object or point. The
+console reads the instruction, the commit and the attempt's own records,
+never the row's target or metrics, and shows no score at any point.
+
+1. Deal the episodes. A participant flies one pool of blocks alone and audits
+   the other, never one block in both arms, and meets each target object at
+   most once per arm. Pools and arm order alternate across participants.
+
+   ```sh
+   python -m baselines.human.session_plan --maps-root output/e2/<root> \
+     --participants p01,p02,p03,p04 --per-arm 20 --out output/human_study/<study>
+   ```
+
+2. Fly each participant's `solo.txt` with the human operator (above), and
+   audit their `team.txt`, in the order `plan.json` names:
+
+   ```sh
+   python -m baselines.human.audit_console --maps-root output/e2/<root> \
+     --episode-allowlist output/human_study/<study>/p01/team.txt --out output/human_study/<study>/p01
+   ```
+
+   The console serves `http://127.0.0.1:8078/`, appends each decision to
+   `<out>/decisions.jsonl`, and resumes after the last one when restarted.
+   It reads the block's imagery (`SEARCH_CITYNAV_RGBD_DIR`) and its tile
+   bake (`SEARCH_CITYNAV_TILES`) as the bench does.
+
+3. Score the audits. A confirmed episode is the MAPS row unchanged; a
+   replaced one flies one more leg, from where MAPS ended to the auditor's
+   point, priced against the budget MAPS left (the console refuses a point
+   the budget cannot reach), and is scored there.
+
+   ```sh
+   python -m baselines.human.team_rows --maps-root output/e2/<root> \
+     --decisions output/human_study/<study>/p01/decisions.jsonl --out-root output/baselines/audit/p01
+   python -m benchmarks.citynav.analysis.ab_report output/e2/<root> output/baselines/audit/p01 --label maps_vs_team
+   ```
+
+   Each team row carries `metrics.maps_SR` beside `SR`, and
+   `audit_decision`, `audit_review_s` and `audit_trace_turns_opened`.
+   A Cal City replacement is refused: its shape criterion needs the target
+   footprint, which `team_rows` does not load.
+
 ## How a baseline row can differ from a MAPS row
 
 * A model call that fails past the transport's own retries ends the episode.
