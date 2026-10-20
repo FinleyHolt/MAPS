@@ -2,14 +2,16 @@
 
 A participant who found a target alone must never audit it, or audit
 anything near it: the second look would score memory, not judgement. So the
-blocks of the paired MAPS root are split into two pools, and a participant
-flies one pool solo and audits the other, never the same block in both arms.
+ground of the paired MAPS root is split into two pools, and a participant
+flies one pool solo and audits the other, never the same ground in both arms.
+A pool unit is a block (CityNav), or with ``--region-m`` a square region of
+one block keyed by where the target lies (Cal City's single 13 km block).
 Within an arm a participant sees each target object at most once (CityNav
 writes several descriptions per object, ``<map>::<object>#<description>``).
 Participants alternate which pool is solo and which arm comes first, so pool
 difficulty and practice cancel across pairs of participants.
 
-    python -m baselines.human.session_plan --maps-root output/e2/<root> \\
+    python -m baselines.human.session_plan --maps-root output/e3/<root> --region-m 1000 \\
         --participants p01,p02,p03,p04 --per-arm 20 --out output/human_study/<study>
 
 writes ``<out>/<participant>/{solo,team}.txt`` (the bench's and the audit
@@ -41,26 +43,35 @@ def scored_rows(maps_root: Path) -> dict[str, dict]:
     return rows
 
 
-def split_blocks(rows: dict[str, dict], seed: int) -> tuple[list[str], list[str]]:
-    """The blocks in two pools of near-equal episode count, in a seeded order."""
+def ground_unit(row: dict, region_m: float | None) -> str:
+    """The pool unit an episode belongs to: its block, or its target's region of the block."""
+    if not region_m:
+        return str(row["map_name"])
+    x, y = (float(v) for v in row["target_xy"])
+    return f"{row['map_name']}@{int(x // region_m)},{int(y // region_m)}"
+
+
+def split_ground(rows: dict[str, dict], seed: int, region_m: float | None = None) -> tuple[list[str], list[str]]:
+    """The pool units in two pools of near-equal episode count, in a seeded order."""
     counts: dict[str, int] = {}
     for row in rows.values():
-        counts[row["map_name"]] = counts.get(row["map_name"], 0) + 1
-    order = sorted(counts, key=lambda b: hashlib.sha256(f"{seed}:{b}".encode()).hexdigest())
+        u = ground_unit(row, region_m)
+        counts[u] = counts.get(u, 0) + 1
+    order = sorted(counts, key=lambda u: hashlib.sha256(f"{seed}:{u}".encode()).hexdigest())
     pools: tuple[list[str], list[str]] = ([], [])
     sizes = [0, 0]
-    for block in order:
+    for unit in order:
         i = 0 if sizes[0] <= sizes[1] else 1
-        pools[i].append(block)
-        sizes[i] += counts[block]
+        pools[i].append(unit)
+        sizes[i] += counts[unit]
     return pools
 
 
-def deal(rows: dict[str, dict], blocks: list[str], n: int, rng: random.Random) -> list[str]:
-    """``n`` episodes on ``blocks``, one per target object, in a shuffled order."""
+def deal(rows: dict[str, dict], units: list[str], n: int, rng: random.Random, region_m: float | None = None) -> list[str]:
+    """``n`` episodes on ``units``, one per target object, in a shuffled order."""
     by_target: dict[str, list[str]] = {}
     for eid, row in sorted(rows.items()):
-        if row["map_name"] in blocks:
+        if ground_unit(row, region_m) in units:
             by_target.setdefault(target_key(eid), []).append(eid)
     targets = sorted(by_target)
     if len(targets) < n:
@@ -68,18 +79,19 @@ def deal(rows: dict[str, dict], blocks: list[str], n: int, rng: random.Random) -
     return [rng.choice(by_target[t]) for t in rng.sample(targets, n)]
 
 
-def plan(rows: dict[str, dict], participants: list[str], per_arm: int, seed: int) -> dict:
+def plan(rows: dict[str, dict], participants: list[str], per_arm: int, seed: int, region_m: float | None = None) -> dict:
     """Each participant's arms: which pool is solo, which arm comes first, and the episodes."""
-    pools = split_blocks(rows, seed)
-    out: dict = {"seed": seed, "per_arm": per_arm, "pools": [sorted(p) for p in pools], "participants": {}}
+    pools = split_ground(rows, seed, region_m)
+    out: dict = {"seed": seed, "per_arm": per_arm, "region_m": region_m, "pools": [sorted(p) for p in pools],
+                 "participants": {}}
     for i, p in enumerate(participants):
         rng = random.Random(f"{seed}:{p}")
         solo_pool = i % 2
         out["participants"][p] = {
             "first": "solo" if (i // 2) % 2 == 0 else "team",
             "solo_pool": solo_pool,
-            "solo": deal(rows, pools[solo_pool], per_arm, rng),
-            "team": deal(rows, pools[1 - solo_pool], per_arm, rng),
+            "solo": deal(rows, pools[solo_pool], per_arm, rng, region_m),
+            "team": deal(rows, pools[1 - solo_pool], per_arm, rng, region_m),
         }
     return out
 
@@ -90,10 +102,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--participants", required=True, help="comma-separated labels, never names (p01,p02,...)")
     ap.add_argument("--per-arm", type=int, default=20)
     ap.add_argument("--seed", type=int, default=1234)
+    ap.add_argument("--region-m", type=float, default=None,
+                    help="pool square regions of this side instead of whole blocks (a one-block bench)")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
     labels = [p.strip() for p in args.participants.split(",") if p.strip()]
-    result = plan(scored_rows(args.maps_root), labels, args.per_arm, args.seed)
+    result = plan(scored_rows(args.maps_root), labels, args.per_arm, args.seed, args.region_m)
     result["maps_root"] = str(args.maps_root.resolve())
     for p, arms in result["participants"].items():
         (args.out / p).mkdir(parents=True, exist_ok=True)

@@ -28,6 +28,38 @@ from benchmarks.citynav.analysis.rows import iter_json_rows
 from benchmarks.citynav.eval import score_arrival
 
 
+def select_bench(maps_root: Path) -> None:
+    """Point the shared engine's paths at the bench the root flew, before
+    anything imports them: a Cal City root reads Cal City's split, catalog,
+    bake and imagery."""
+    if json.loads((maps_root / "run_manifest.json").read_text()).get("split") == "calcity":
+        import benchmarks.calcity
+
+        benchmarks.calcity.use()
+
+
+class TargetShapes:
+    """Each episode's success footprint, as the runner resolves it
+    (``episode_runner.success_shape``), off the root's split and catalog."""
+
+    def __init__(self, split: str) -> None:
+        from benchmarks.citynav.adapter import load_objects, load_split
+        from benchmarks.citynav.paths import OBJECTS_JSON, split_path
+
+        self.rows = load_split(split_path(split))
+        self.objects = load_objects(OBJECTS_JSON)
+
+    def __call__(self, episode_id: str):
+        from benchmarks.citynav.adapter import find_row, parse_episode
+        from benchmarks.citynav.run_benchmark.episode_runner import success_shape
+
+        found = find_row(self.rows, episode_id)
+        if found is None:
+            raise ValueError(f"{episode_id}: not in the split the root flew")
+        index, row = found
+        return success_shape(parse_episode(row, row_index=index), self.objects)
+
+
 def root_config(maps_root: Path) -> dict:
     """The resolved config the MAPS root flew, off its manifest."""
     return yaml.safe_load(json.loads((maps_root / "run_manifest.json").read_text())["config_yaml"])
@@ -52,27 +84,27 @@ def affordable(row: dict, xy: tuple[float, float], max_steps: int) -> bool:
     return int(row["metrics"]["steps_taken"]) + correction_leg(row, xy)[0] <= max_steps
 
 
-def team_row(row: dict, decision: dict, cfg: dict) -> dict:
-    """The MAPS row as its auditor left it."""
+def team_row(row: dict, decision: dict, cfg: dict, shape_of=None) -> dict:
+    """The MAPS row as its auditor left it. ``shape_of`` (episode id ->
+    footprint) scores a replacement on a shape bench."""
     out = json.loads(json.dumps(row))
     m = out["metrics"]
     audit = {"audit_decision": decision["decision"], "audit_review_s": decision.get("review_s"),
              "audit_trace_turns_opened": len(decision.get("opened") or []),
              "audit_candidate": decision.get("candidate")}
     if decision["decision"] == "replace":
-        if m.get("success_criterion") != "ring":
-            # ponytail: a shape bench scores the commit inside the target's footprint, which this
-            # writer does not load; Cal City team rows need success_shape's polygon passed in.
-            raise ValueError(f"{row['episode_id']}: a {m.get('success_criterion')!r} row is scored on its "
-                             "target shape, which team_rows does not load")
+        criterion = m.get("success_criterion")
+        if criterion == "shape" and shape_of is None:
+            raise ValueError(f"{row['episode_id']}: a shape row is scored on its target's footprint: pass shape_of")
         xy = (float(decision["xy"][0]), float(decision["xy"][1]))
         n, reached = correction_leg(row, xy)
         steps = int(m["steps_taken"]) + n
         if steps > int(cfg["max_steps"]):
             raise ValueError(f"{row['episode_id']}: the replacement leg needs {n} actions past the budget")
         visited = [tuple(p) for p in out["visited_xy"]] + [reached]
-        m.update(score_arrival(criterion="ring", final_pos_xy=reached, target_xy=tuple(out["target_xy"]),
+        m.update(score_arrival(criterion=criterion, final_pos_xy=reached, target_xy=tuple(out["target_xy"]),
                                pos_trajectory=visited, success_dist_m=float(cfg["success_radius_m"]),
+                               gt_polygon=shape_of(row["episode_id"]) if criterion == "shape" else None,
                                commit_xy=xy))
         m["steps_taken"] = steps
         out["visited_xy"] = [list(p) for p in visited]
@@ -92,7 +124,10 @@ def write_root(maps_root: Path, decisions: list[dict], out_root: Path) -> list[d
     manifest["audit"] = {"maps_root": str(maps_root.resolve()), "decisions": len(decisions)}
     # The team root holds the decided episodes, not the MAPS root's whole selection.
     manifest["selection"] = {**(manifest.get("selection") or {}), "episodes_n": len(decisions), "allowlist": "audit decisions"}
-    out = [team_row(rows[d["episode_id"]], d, cfg) for d in decisions]
+    shapes = TargetShapes(manifest["split"]) if any(
+        rows[d["episode_id"]]["metrics"].get("success_criterion") == "shape" and d["decision"] == "replace"
+        for d in decisions) else None
+    out = [team_row(rows[d["episode_id"]], d, cfg, shapes) for d in decisions]
     out_root.mkdir(parents=True, exist_ok=True)
     (out_root / "run_manifest.json").write_text(json.dumps(manifest, indent=1))
     (out_root / "episodes.jsonl").write_text("".join(json.dumps(r) + "\n" for r in out))
@@ -105,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--decisions", type=Path, required=True)
     ap.add_argument("--out-root", type=Path, required=True)
     args = ap.parse_args(argv)
+    select_bench(args.maps_root)
     # The last decision per episode: a resumed session may have re-judged one.
     decided = {d["episode_id"]: d for d in iter_json_rows(args.decisions)}
     rows = write_root(args.maps_root, list(decided.values()), args.out_root)
