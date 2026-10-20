@@ -50,3 +50,8 @@ def test_a_served_name_with_no_card_is_refused_with_the_names_there_are() -> Non
     for near in ("qwen38-flash-next", "gemma-4-e2b", "qwen"):
         with pytest.raises(ValueError, match="inkling-small"):
             card_for(near)
+
+
+def test_the_deepseek_card_sends_its_recommended_envelope() -> None:
+    assert sampling_kwargs("deepseek-v4.1-flash-1017") == {
+        "temperature": 1.0, "top_p": 1.0, "top_k": -1, "chat_template_kwargs": {"enable_thinking": True}}

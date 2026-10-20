@@ -331,7 +331,7 @@ both). The served model name selects a sampling envelope from
 `top_k`, the reasoning efforts it takes), and must be one of that table's
 keys exactly: `inkling-small`, `qwen38-flash-next-nvfp4`,
 `gemma4-26b-a4b-nvfp4` (E2 to E4), `gemma4-e4b`, `gemma4-e2b` (E2),
-`gemma4-26b-a4b-gguf` (the llama.cpp serve flown aboard), and
+`gemma4-26b-a4b-gguf` (the llama.cpp serve flown aboard), `deepseek-v4.1-flash-1017`, and
 `gpt-5.6-sol` ([GPT-5.6 Sol on Azure](#gpt-56-sol-on-azure));
 any other name is refused at startup with the list. Every request runs in
 thinking mode at temperature 1.0, and `max_tokens` is the output reserve of
