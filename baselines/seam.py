@@ -231,12 +231,7 @@ class BaselineHarness:
         way GeoNav's own loader keeps the largest object per name.
         """
         if self._landmarks is None:
-            # Every OSM row of the block, flat, each carrying its bake category
-            # (``roads``, ``buildings``, ``pois``, ...) under ``category``.
-            rows = [{**r, "category": category}
-                    for category, rs in (self.assets.base_features or {}).items() if isinstance(rs, list)
-                    for r in rs if isinstance(r, dict)]
-            self._landmarks = _landmarks_from_rows(rows)
+            self._landmarks = block_landmarks(self.assets.base_features)
         return list(self._landmarks)
 
     # -- the model ----------------------------------------------------------
@@ -436,6 +431,16 @@ def _row_area(row: dict):
     except (ValueError, TypeError):
         return None
     return None if geom.is_empty else geom
+
+
+def block_landmarks(base_features: dict | None) -> list[Landmark]:
+    """A block's landmark prior from its bake's features: every OSM row, flat,
+    each carrying its bake category (``roads``, ``buildings``, ``pois``, ...)
+    under ``category``."""
+    rows = [{**r, "category": category}
+            for category, rs in (base_features or {}).items() if isinstance(rs, list)
+            for r in rs if isinstance(r, dict)]
+    return _landmarks_from_rows(rows)
 
 
 def _landmarks_from_rows(rows: list[dict]) -> list[Landmark]:
