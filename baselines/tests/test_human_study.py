@@ -48,6 +48,18 @@ def test_a_participant_never_meets_a_block_in_both_arms_or_a_target_twice() -> N
     assert session_plan.plan(rows, list(p), per_arm=8, seed=7) == result
 
 
+def test_on_one_block_the_pools_are_regions_a_participant_never_meets_in_both_arms() -> None:
+    rows = {}
+    for i in range(400):
+        eid = f"calcity::{i}#{i}"
+        rows[eid] = {"episode_id": eid, "map_name": "calcity", "target_xy": [float(i % 20) * 450.0, float(i // 20) * 450.0]}
+    result = session_plan.plan(rows, ["p01", "p02"], per_arm=15, seed=3, region_m=1000.0)
+    assert len(result["pools"][0]) > 3 and len(result["pools"][1]) > 3  # vacuity floor
+    for arms in result["participants"].values():
+        units = {arm: {session_plan.ground_unit(rows[e], 1000.0) for e in arms[arm]} for arm in ("solo", "team")}
+        assert units["solo"] and units["team"] and not units["solo"] & units["team"]
+
+
 def _maps_row(**metrics) -> dict:
     return {"episode_id": "block_0::1#0", "map_name": "block_0", "description": "the red car",
             "start_xy": [0.0, 0.0], "target_xy": [0.0, 100.0], "commit_xy": [0.0, 50.0],
@@ -63,6 +75,12 @@ def test_a_confirmed_audit_is_the_maps_row_and_a_replacement_is_scored_where_it_
     fixed = team_rows.team_row(row, {"decision": "replace", "xy": [0.0, 99.0]}, _CFG)
     assert fixed["metrics"]["SR"] == 1 and fixed["metrics"]["maps_SR"] == 0
     assert fixed["metrics"]["steps_taken"] == 10 + team_rows.correction_leg(row, (0.0, 99.0))[0]
+    shape = _maps_row(success_criterion="shape")
+    square = [(-5.0, 95.0), (5.0, 95.0), (5.0, 105.0), (-5.0, 105.0)]
+    inside = team_rows.team_row(shape, {"decision": "replace", "xy": [0.0, 99.0]}, _CFG, lambda eid: square)
+    assert inside["metrics"]["SR"] == 1 and inside["metrics"]["success_criterion"] == "shape"
+    with pytest.raises(ValueError, match="footprint"):
+        team_rows.team_row(shape, {"decision": "replace", "xy": [0.0, 99.0]}, _CFG)
     with pytest.raises(ValueError, match="budget"):
         team_rows.team_row(_maps_row(steps_taken=199), {"decision": "replace", "xy": [0.0, 99.0]}, _CFG)
 
