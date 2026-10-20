@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from baselines.seam import BaselineHarness, BaselineResult
 
@@ -28,6 +28,8 @@ MIN_AGL_M = 20.0
 #: the one landmark the operator selected from the search.
 PRIOR_RGB = (255, 214, 0)
 SELECTED_RGB = (255, 0, 255)
+#: Labels on the frame: large enough to read at a glance, outlined so they read on any roof.
+LABEL = {"font": ImageFont.load_default(size=16), "stroke_width": 2, "stroke_fill": (0, 0, 0)}
 
 
 def world_to_px(corners, shape, xy) -> tuple[float, float]:
@@ -54,7 +56,7 @@ def prior_frame(h: BaselineHarness, obs, selected: str | None = None) -> bytes:
         rgb, width = (SELECTED_RGB, 5) if lm.name == selected else (PRIOR_RGB, 2)
         draw.line(pts + pts[:1], fill=rgb, width=width)
         c, r = world_to_px(obs.ortho_view_corners_xy, shape, lm.centroid)
-        draw.text((c, r), lm.name, fill=rgb)
+        draw.text((c, r), lm.name, fill=rgb, **LABEL)
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=90)
     return buf.getvalue()
