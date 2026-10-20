@@ -44,11 +44,13 @@ CARDS: dict[str, dict[str, Any]] = {
     "gemma4-26b-a4b-gguf": {"tokenizer": "google/gemma-4-26B-A4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e4b": {"tokenizer": "google/gemma-4-E4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e2b": {"tokenizer": "google/gemma-4-E2B-it", "top_p": 0.95, "top_k": 64},
-    # DeepSeek V4.1 Flash 1017, the official FP8 release. Its README
-    # recommends temperature 1.0 and top_p 1.0 and names no top_k (-1, off).
-    # The V4.1 encoder takes `reasoning_effort` low, high, xhigh or max
-    # (25/50/75/100) and DEFAULTS TO high. It lists no `none`, so a baseline's
-    # dial-off is refused on it.
+    # DeepSeek V4.1 Flash 1017, the official release (FP8 dense, FP4 experts).
+    # Its README recommends temperature 1.0 and top_p 1.0 and names no top_k
+    # (-1, off). Effort is a numeric budget 1-100. The names below are the
+    # serving encoder's (sglang: low/high/xhigh/max = 25/50/75/100), and they
+    # are NOT DeepSeek's: the release's encoding.py maps low/high/max to
+    # 50/75/100 and defaults to high (75). So xhigh here is DeepSeek's default.
+    # It lists no `none`, so a baseline's dial-off is refused on it.
     "deepseek-v4.1-flash-1017": {"tokenizer": "deepseek-ai/DeepSeek-V4.1-Flash-1017", "top_p": 1.0, "top_k": -1,
                                  "efforts": ("low", "high", "xhigh", "max")},
     # GPT-5.6 Sol on an Azure (Microsoft Foundry) deployment, keyed by the
