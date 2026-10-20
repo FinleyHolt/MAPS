@@ -208,6 +208,7 @@ these places, the served-text changes among them:
 | A row's tags read as a dict whose slice is refused with the reads it takes (`r.tags["building"]`, `r.tags.get("amenity")`, `str(r.tags)`). | Slicing tags as the text the table serves raised `KeyError: slice(None, 60, None)` (5 flown Cal City runs). |
 | `|`, `&` and `-` on sets are refused with how to combine them (`a + b` adds two sets into a list of rows; `a.filter(lambda r: r in b)` keeps the rows `b` holds). | Python's own error named the internal class (`unsupported operand type(s) for |: 'Rows' and 'Rows'`). |
 | `type()` of a row or a set prints the bare class (`<class 'Rows'>`), and a slice of one row holds what the same slice of a one-item list holds. | `type()` printed the internal module path (4 flown runs); any slice of one row held the row. |
+| A hosted card whose chat completions refuse tools beside an effort (GPT-5.6 Sol) flies the Responses API, its encrypted reasoning carried to the next turn. | No hosted card flew. |
 | A detection record carries the label, score, mask and the SAM object id and score; it has no coarse class bucket. | Flown records also carried a class bucket and unread pixel and model metadata. |
 
 ## Results
@@ -365,10 +366,17 @@ each message with only the fields its role takes. OpenAI refuses a function
 description over 1,024 characters, so the `run` tool's documentation rides
 the system turn verbatim under its own heading and the tool points at it.
 Azure refuses a GPT-5.x request carrying more than 50 images, so past that
-the reasoner evicts the oldest crops, down to 30. The thinking span never
-comes back, so the reasoning count is the provider's
-`usage.completion_tokens_details` meter. The deployment's key is the bearer
-token.
+the reasoner evicts the oldest crops, down to 30. Its chat completions refuse
+function tools beside any reasoning effort but `none`, so the card
+(`api: "responses"`) flies the Responses API: the engine builds and records
+the chat-shaped request, and `openai_wire.to_responses` /
+`from_responses` translate it at the wire, statelessly (`store: false`). The
+thinking span never comes back in the clear; each assistant turn carries the
+encrypted reasoning items its response returned, and the next request sends
+them back before that turn's calls, as a self-hosted chat template renders an
+earlier turn's `reasoning_content`. The compactor prices those items by the
+reasoning tokens that wrote them. The reasoning count is the provider's
+meter. The deployment's key is the bearer token.
 
 Azure's `/openai/v1/models` lists the resource's base models, not its
 deployments, so for this card discovery takes the listing answering the key

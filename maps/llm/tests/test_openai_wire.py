@@ -280,3 +280,82 @@ def test_a_deployment_name_the_listing_does_not_carry_passes_discovery(monkeypat
     assert seen == [(f"{base}/models", "k")], "the listing is asked, with the key"
     with pytest.raises(E.EndpointDiscoveryError, match="does not match the live endpoint"):
         E.discover(base, override=E.EndpointOverride("inkling-small", 262144))
+
+
+def test_a_chat_body_becomes_the_responses_request_carrying_the_same_conversation() -> None:
+    picture = "data:image/jpeg;base64,AAAA"
+    body = {"model": GPT, "max_completion_tokens": 40000, "reasoning_effort": "xhigh", "prompt_cache_key": "ep",
+            "tool_choice": "auto", "stream": True, "stream_options": {"include_usage": True},
+            "tools": [{"type": "function", "function": {"name": "run", "description": "d",
+                                                        "parameters": {"type": "object"}}}],
+            "messages": [
+                {"role": "system", "content": "s"},
+                {"role": "user", "content": [{"type": "text", "text": "u"},
+                                             {"type": "image_url", "image_url": {"url": picture, "detail": "high"}}]},
+                {"role": "assistant", "content": "thinking aloud", "reasoning_items": [
+                    {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "E1"}],
+                 "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{}"}}]},
+                {"role": "tool", "tool_call_id": "c1", "content": "ok"}]}
+    out = openai_wire.to_responses(body)
+    assert {k for k in out} == {"model", "input", "tools", "tool_choice", "max_output_tokens", "reasoning",
+                                "prompt_cache_key", "store", "include", "stream"}
+    assert (out["max_output_tokens"], out["reasoning"], out["store"]) == (40000, {"effort": "xhigh"}, False)
+    assert out["include"] == ["reasoning.encrypted_content"]
+    assert out["tools"] == [{"type": "function", "name": "run", "description": "d", "parameters": {"type": "object"}}]
+    assert [i.get("type") for i in out["input"]] == [
+        "message", "message", "reasoning", "message", "function_call", "function_call_output"]
+    assert out["input"][1]["content"][1] == {"type": "input_image", "image_url": picture, "detail": "high"}
+    assert out["input"][2]["encrypted_content"] == "E1"
+    assert out["input"][4] == {"type": "function_call", "call_id": "c1", "name": "run", "arguments": "{}"}
+    assert out["input"][5] == {"type": "function_call_output", "call_id": "c1", "output": "ok"}
+    assert "messages" in body and "reasoning_items" in body["messages"][2], "the input was mutated"
+
+
+@pytest.mark.parametrize("status,reason,finish", [("completed", None, "tool_calls"),
+                                                  ("incomplete", "max_output_tokens", "length"),
+                                                  ("incomplete", "content_filter", "content_filter")])
+def test_a_responses_answer_reads_as_the_chat_answer_the_engine_takes(status, reason, finish) -> None:
+    resp = {"id": "r", "model": "gpt-5.6-sol-2026-07-09", "status": status,
+            **({"incomplete_details": {"reason": reason}} if reason else {}),
+            "output": [{"type": "reasoning", "id": "rs", "summary": [], "encrypted_content": "E"},
+                       {"type": "function_call", "call_id": "c9", "name": "run", "arguments": "{\"code\": \"x\"}"}],
+            "usage": {"input_tokens": 100, "output_tokens": 30, "total_tokens": 130,
+                      "input_tokens_details": {"cached_tokens": 64},
+                      "output_tokens_details": {"reasoning_tokens": 20}}}
+    out = openai_wire.from_responses(resp)
+    msg = out["choices"][0]["message"]
+    assert out["choices"][0]["finish_reason"] == finish
+    assert msg["tool_calls"] == [{"id": "c9", "type": "function", "function": {"name": "run", "arguments": "{\"code\": \"x\"}"}}]
+    assert msg["reasoning_items"] == [{"type": "reasoning", "id": "rs", "summary": [], "encrypted_content": "E"}]
+    assert out["usage"] == {"prompt_tokens": 100, "completion_tokens": 30, "total_tokens": 130,
+                            "prompt_tokens_details": {"cached_tokens": 64},
+                            "completion_tokens_details": {"reasoning_tokens": 20}}
+    assert reasoning_tokens_of(out, model=GPT) == 20
+
+
+def test_the_turn_s_encrypted_reasoning_rides_the_next_request(monkeypatch) -> None:
+    """The reasoner keeps a Responses turn's reasoning items on its assistant turn and the
+    wire narrowing passes them on; the compactor prices them by the tokens they took."""
+    from maps.search.parse_compile import compactor
+
+    sent: list[dict] = []
+
+    def _fake(url, api_key, **kwargs):
+        sent.append(json.loads(json.dumps(kwargs)))
+        return {"choices": [{"finish_reason": "tool_calls", "message": {
+            "content": "", "reasoning_items": [{"type": "reasoning", "id": f"rs{len(sent)}", "encrypted_content": "E"}],
+            "tool_calls": [{"id": f"c{len(sent)}", "type": "function", "function": {"name": "run", "arguments": "{}"}}]}}],
+            "usage": {"completion_tokens_details": {"reasoning_tokens": 5000}}}
+
+    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
+    r = Reasoner(endpoint_spec=GPT_SPEC, reasoning_effort="medium")
+    r.append_user("find the truck")
+    r.step_tool_call([])
+    r.append_tool_result("c1", "run", "ok")
+    r.step_tool_call([])
+    turn = sent[1]["messages"][-2]
+    assert turn["reasoning_items"] == [{"type": "reasoning", "id": "rs1", "encrypted_content": "E"}]
+    assert "reasoning_tokens" not in turn, "the price is the compactor's, never sent"
+    with_items = compactor._estimate_input_tokens(r.messages, model=GPT)
+    bare = [{k: v for k, v in m.items() if k not in ("reasoning_items", "reasoning_tokens")} for m in r.messages]
+    assert with_items - compactor._estimate_input_tokens(bare, model=GPT) == 2 * 5000

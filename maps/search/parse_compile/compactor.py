@@ -92,7 +92,7 @@ def _messages_for_tokenization(messages: list[dict]) -> list[dict]:
     arguments parsed to a mapping, multi-part content flattened."""
     out: list[dict] = []
     for m in messages:
-        m2 = dict(m)
+        m2 = {k: v for k, v in m.items() if k not in ("reasoning_items", "reasoning_tokens")}
         if isinstance(m.get("content"), list):
             m2["content"] = _flatten_multimodal_content(m["content"])
         if m.get("tool_calls"):
@@ -337,7 +337,8 @@ def _estimate_input_tokens(
     tools: list[dict] | None = None,
 ) -> int:
     """The chat-templated input tokens the server will see, crops priced by
-    their pixels; a tokenizer or template failure raises."""
+    their pixels and a Responses turn's carried reasoning by the tokens it
+    took to write; a tokenizer or template failure raises."""
     tok = load_tokenizer(model)
     text = tok.apply_chat_template(
         _messages_for_tokenization(messages),
@@ -346,7 +347,8 @@ def _estimate_input_tokens(
         tokenize=False,
     )
     ids = tok.encode(text, add_special_tokens=False)
-    return len(ids) + image_tokens_in(messages)
+    carried = sum(int(m.get("reasoning_tokens") or 0) for m in messages if m.get("reasoning_items"))
+    return len(ids) + image_tokens_in(messages) + carried
 
 
 def _validate_invariants(messages: list[dict]) -> None:

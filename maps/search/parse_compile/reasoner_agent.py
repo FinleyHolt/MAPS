@@ -261,11 +261,16 @@ class Reasoner:
                 f"reasoning_chars={len(reasoning_text)})"
             )
         # Under the ``loop`` withhold the next request carries none of the
-        # model's own thinking; the return value still hands it to the log.
+        # model's own thinking; the return value still hands it to the log. A
+        # Responses card's reasoning comes back encrypted: the turn carries it
+        # to the next request, and its size, for the compactor to price.
+        carried = [] if withheld("loop") else (msg.get("reasoning_items") or [])
+        reasoning_tokens = ((resp.get("usage") or {}).get("completion_tokens_details") or {}).get("reasoning_tokens")
         self.messages.append({
             "role": "assistant", "content": text,
             "reasoning_content": "" if withheld("loop") else reasoning_text,
-            **({"tool_calls": calls} if calls else {})})
+            **({"tool_calls": calls} if calls else {}),
+            **({"reasoning_items": carried, "reasoning_tokens": int(reasoning_tokens or 0)} if carried else {})})
         return {"kind": "tool_call" if calls else "text",
                 **({"tool_calls": calls} if calls else {}),
                 "content": text, "reasoning": reasoning_text,

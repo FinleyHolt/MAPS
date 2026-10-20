@@ -41,7 +41,8 @@ from pathlib import Path
 
 import httpx
 
-from . import endpoint_spec
+from . import endpoint_spec, openai_wire
+from .model_cards import speaks_responses
 
 log = logging.getLogger(__name__)
 
@@ -522,6 +523,57 @@ def stream_chat_completions(
     return response_json
 
 
+#: The stream events that close a Responses stream with its whole response.
+_RESPONSES_TERMINAL = ("response.completed", "response.incomplete")
+
+
+def stream_responses(
+    url: str,
+    headers: dict[str, str],
+    body: dict,
+    *,
+    timeout: float,
+    cancel_event: threading.Event | None = None,
+) -> dict:
+    """POST a Responses body with ``stream: true`` and return the closing
+    event's response in the chat shape. Streaming exists for cancellation; a
+    stream that fails or ends with no closing event is a transport fault."""
+    final: dict | None = None
+    watch = _CancelWatch(cancel_event) if cancel_event is not None else None
+    try:
+        with httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client, client.stream(
+            "POST", url, headers=headers, json=body,
+            extensions={"trace": watch.trace} if watch is not None else None,
+        ) as resp:
+            if resp.status_code >= 400:
+                resp.read()  # the body is legible after the stream closes
+            resp.raise_for_status()
+            for raw_line in resp.iter_lines():
+                if cancel_event is not None and cancel_event.is_set():
+                    raise CallCanceled("canceled mid-stream")
+                if not raw_line or not raw_line.startswith("data:"):
+                    continue
+                try:
+                    event = json.loads(raw_line[len("data:"):].strip())
+                except json.JSONDecodeError:
+                    continue
+                kind = event.get("type")
+                if kind in _RESPONSES_TERMINAL:
+                    final = event.get("response") or {}
+                elif kind in ("response.failed", "error"):
+                    raise httpx.RemoteProtocolError(f"Responses stream {kind}: {json.dumps(event)[:300]}")
+            if final is None:
+                raise httpx.RemoteProtocolError("Responses stream ended without a closing event")
+    except httpx.HTTPError:
+        if cancel_event is not None and cancel_event.is_set():
+            raise CallCanceled("canceled in flight") from None
+        raise
+    finally:
+        if watch is not None:
+            watch.close()
+    return openai_wire.from_responses(final)
+
+
 def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusal: str) -> None:
     """On a 404, re-probe the served ids and raise when the request's model is
     no longer among them (the server behind the URL changed since discovery).
@@ -559,7 +611,10 @@ def chat_completions_raw(
     the module docstring says."""
     body = kwargs
     flight_dir = _resolved_flight_log_dir()
-    url = base_url.rstrip("/") + "/chat/completions"
+    # A Responses card takes the same body translated at the wire, and its
+    # answer comes back in the chat shape (maps.llm.openai_wire).
+    responses = speaks_responses(body.get("model"))
+    url = base_url.rstrip("/") + (openai_wire.RESPONSES_PATH if responses else "/chat/completions")
     headers = _request_headers(api_key)
 
     request_id = uuid.uuid4().hex
@@ -581,14 +636,18 @@ def chat_completions_raw(
             if cancel_event is not None and cancel_event.is_set():
                 raise CallCanceled("canceled before dispatch")
             wire = _wire_body(body, cancel_event)
+            if responses:
+                wire = openai_wire.to_responses(wire)
             if use_stream:
-                response_json = stream_chat_completions(
+                response_json = (stream_responses if responses else stream_chat_completions)(
                     url, headers, wire, timeout=timeout, cancel_event=cancel_event)
             else:
                 with httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client:
                     r = client.post(url, headers=headers, json=wire)
                 r.raise_for_status()
                 response_json = r.json()
+                if responses:
+                    response_json = openai_wire.from_responses(response_json)
             if cancel_event is not None and cancel_event.is_set():
                 # The answer landed as the caller gave up on it: never used.
                 raise CallCanceled("canceled as the answer landed")

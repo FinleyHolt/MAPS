@@ -61,7 +61,9 @@ CARDS: dict[str, dict[str, Any]] = {
     # than 50 images ("Exceeded maximum number of images (50)"), a limit its
     # quota page does not list and no quota request raises; raise this when
     # Azure does.
-    "gpt-5.6-sol": {"tokenizer": "openai/gpt-oss-120b", "wire": "openai",
+    # Its chat completions refuse function tools beside any effort but none,
+    # so it flies the Responses API (``api: "responses"``, ``openai_wire``).
+    "gpt-5.6-sol": {"tokenizer": "openai/gpt-oss-120b", "wire": "openai", "api": "responses",
                     "efforts": ("none", "low", "medium", "high", "xhigh", "max"), "max_images": 50},
 }
 
@@ -122,6 +124,12 @@ def effort(reasoning_effort: str | None = None) -> str | None:
     raw = reasoning_effort if reasoning_effort is not None else os.environ.get(
         "SEARCH_SAMPLING_REASONING_EFFORT", "")
     return raw.strip() or None
+
+
+def speaks_responses(model_id: str | None) -> bool:
+    """Whether the served model takes its requests as the Responses API
+    (``maps.llm.openai_wire.to_responses``). A name with no card reads False."""
+    return CARDS.get((model_id or "").strip().lower(), {}).get("api") == "responses"
 
 
 def sampling_kwargs(model_id: str, reasoning_effort: str | None = None) -> dict[str, Any]:
