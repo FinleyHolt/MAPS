@@ -36,7 +36,7 @@ from PIL import Image, ImageDraw
 from baselines.human.policy import LABEL, world_to_px
 from baselines.human.session_plan import scored_rows
 from baselines.human.team_rows import affordable, root_config, select_bench
-from baselines.seam import Landmark, block_landmarks
+from baselines.seam import Landmark, _row_area, block_landmarks
 from benchmarks.citynav.analysis.rows import iter_json_rows
 
 DEFAULT_PORT = 8078
@@ -77,6 +77,26 @@ class Review:
     maps_pick: int | None
     stops: list[tuple[float, float]]
     landmarks: list[Landmark] = field(default_factory=list)
+    #: The mapped object under MAPS's commit when no detection is: its outline and a label.
+    maps_prior: tuple[list[tuple[float, float]], str] | None = None
+
+
+def prior_under(features: dict | None, xy: tuple[float, float]) -> tuple[list[tuple[float, float]], str] | None:
+    """The smallest OSM object of the block whose area holds ``xy``, named or not:
+    its outline and what it is (``building``, ``road Lime Avenue``, ...)."""
+    from shapely.geometry import Point
+
+    pt, best = Point(xy), None
+    for category, rs in (features or {}).items():
+        for r in rs if isinstance(rs, list) else []:
+            geom = _row_area({**r, "category": category}) if isinstance(r, dict) else None
+            if geom is None or not hasattr(geom, "exterior") or not geom.contains(pt):
+                continue
+            if best is None or geom.area < best[0].area:
+                best = (geom, f"{category.rstrip('s')} {r.get('name') or ''}".strip())
+    if best is None:
+        return None
+    return [(float(x), float(y)) for x, y in best[0].exterior.coords], best[1]
 
 
 def _jsonl(path: Path) -> list[dict]:
@@ -144,6 +164,7 @@ class Session:
         self.queue = [e for e in episode_ids if e not in done]
         self.total, self.done_n = len(episode_ids), len(episode_ids) - len(self.queue)
         self._landmarks: dict[str, list[Landmark]] = {}
+        self._features: dict[str, dict] = {}
         self.review: Review | None = None
         self._next()
 
@@ -155,8 +176,12 @@ class Session:
 
         row = self.rows[self.queue[0]]
         if row["map_name"] not in self._landmarks:
-            self._landmarks[row["map_name"]] = block_landmarks(load_episode_assets(row["map_name"]).base_features)
+            features = load_episode_assets(row["map_name"]).base_features
+            self._features[row["map_name"]] = features
+            self._landmarks[row["map_name"]] = block_landmarks(features)
         self.review = blind_review(self.maps_root, row, self._landmarks[row["map_name"]])
+        if self.review.maps_pick is None:
+            self.review.maps_prior = prior_under(self._features[row["map_name"]], self.review.maps_xy)
         self.centre, self.zoom = self.review.maps_xy, 1
         self.selected: dict | None = None
         self.highlight: str | None = None
@@ -186,6 +211,8 @@ class Session:
                 heavy = lm.name == self.highlight
                 draw.line([px(p) for p in lm.contour + lm.contour[:1]], fill=COLOURS["prior"], width=4 if heavy else 1)
                 draw.text(px(lm.centroid), lm.name, fill=COLOURS["prior"], **LABEL)
+        if r.maps_prior is not None and visible(r.maps_prior[0]):
+            draw.line([px(p) for p in r.maps_prior[0]], fill=COLOURS["maps"], width=4)
         sel = (self.selected or {}).get("candidate")
         for c in r.candidates:
             pts = c.contour or [c.xy]
@@ -217,6 +244,8 @@ class Session:
         return {
             "done": False, "index": self.done_n + 1, "total": self.total, "instruction": r.instruction,
             "ended_by": r.ended_by, "maps_pick": r.maps_pick,
+            "maps_commit": (f"object {r.maps_pick} MAPS detected" if r.maps_pick is not None
+                            else f"a mapped {r.maps_prior[1]}" if r.maps_prior is not None else "a point, no object under it"),
             "maps_reason": r.turns[-1]["reasoning"] if r.turns else "",
             "turns": r.turns, "zoom": self.zoom, "view_m": 2 * ZOOM_HALF_M[self.zoom],
             "candidates": [{"id": c.id, "label": c.label, "color": c.color,
@@ -418,7 +447,7 @@ input{font:inherit;width:100%;padding:5px;border:1px solid var(--line);border-ra
     <button data-a="cmaps">Centre on MAPS<kbd>M</kbd></button><button data-a="csel">Centre on selection<kbd>C</kbd></button>
     <button data-a="clear">Clear selection<kbd>Esc</kbd></button><span class="k" id="view"></span>
   </div>
-  <div class="k">Magenta: MAPS's pick. Cyan: other objects MAPS detected, numbered. Yellow: named places in the map prior. White rings: where MAPS stopped. Click an outline to select that object, or anywhere to select a point. North is up.</div>
+  <div class="k">Magenta: MAPS's pick (a detected object, or the mapped object under its commit). Cyan: other objects MAPS detected, numbered. Yellow: named places in the map prior. White rings: where MAPS stopped. Click an outline to select that object, or anywhere to select a point. North is up.</div>
 </div>
 <aside>
   <section>
@@ -427,7 +456,7 @@ input{font:inherit;width:100%;padding:5px;border:1px solid var(--line);border-ra
     <button class="big replace" id="replace" disabled>Select a different target first<kbd>S</kbd></button>
     <div id="msg"></div>
   </section>
-  <section><h2>Why MAPS chose its target</h2><div id="reason"></div></section>
+  <section><h2>Why MAPS chose its target</h2><div class="maps" id="commit"></div><div id="reason"></div></section>
   <section><h2>Objects MAPS detected</h2><div class="list" id="cands"></div></section>
   <section><h2>Search the map prior</h2><input id="q" type="search" placeholder="a named place"><div class="list" id="lms"></div></section>
   <section><h2>Full MAPS trace</h2><div id="trace"></div></section>
@@ -453,6 +482,7 @@ async function refresh(full){
   $('view').textContent=`view ${st.view_m} m across`;
   if(full){
     $('instr').textContent=st.instruction;$('prog').textContent=`episode ${st.index} of ${st.total}`;
+    $('commit').textContent='MAPS committed to '+st.maps_commit+'.';
     $('reason').textContent=st.maps_reason||'(MAPS gave no reasoning on its last turn)';
     $('trace').innerHTML=st.turns.map((t,i)=>`<details data-i="${i}"><summary>Turn ${i+1}: ${esc(t.reasoning.slice(0,90))}…</summary>
       <div>${esc(t.reasoning)}</div><pre>${esc(t.said)}</pre>${t.printed?`<pre>${esc(t.printed)}</pre>`:''}
