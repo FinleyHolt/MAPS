@@ -112,6 +112,12 @@ def _causes(counts: Counter) -> str:
     return ", ".join(f"{c} ({k})" for c, k in counts.most_common())
 
 
+def _offline() -> bool:
+    """``SEARCH_ENDPOINT_OFFLINE=1``: the run serves nothing (a pinned spec,
+    ``endpoint_spec.discover``), so the driver probes nothing."""
+    return os.environ.get("SEARCH_ENDPOINT_OFFLINE", "").strip() == "1"
+
+
 def _answers(url: str, bearer: str | None = None) -> bool:
     """True when a GET of ``url`` (``bearer`` as an Authorization header)
     gets a 2xx or 3xx within 10 s."""
@@ -342,7 +348,7 @@ class Driver:
     def _wait_for(self, name: str, answers) -> bool:
         """Hold a launch until ``answers()``; False once the wall budget is
         spent or the run aborted while it waited."""
-        if answers():
+        if _offline() or answers():
             return True
         self.log(f"{name} down; pausing launches until it answers")
         while not answers():
@@ -367,6 +373,8 @@ class Driver:
                 pass
             if time.monotonic() >= deadline:
                 break
+            if _offline():
+                continue
             for name, answers in (("reasoner", self._reasoner_answers), ("sam", self._sam_answers)):
                 down[name] = 0 if answers() else down[name] + 1
                 if down[name] >= 2:
