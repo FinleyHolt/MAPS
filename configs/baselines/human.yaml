@@ -1,0 +1,4 @@
+# A human operator on CityNav: citynav.yaml with the stops chosen at the
+# console of baselines/human/. baselines/README.md says how to run a session.
+base: ../citynav.yaml
+policy: human
