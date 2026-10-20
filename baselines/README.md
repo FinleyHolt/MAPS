@@ -145,12 +145,14 @@ The auditor confirms MAPS's target or selects another object or point. The
 console reads the instruction, the commit and the attempt's own records,
 never the row's target or metrics, and shows no score at any point.
 
-1. Deal the episodes. A participant flies one pool of blocks alone and audits
-   the other, never one block in both arms, and meets each target object at
-   most once per arm. Pools and arm order alternate across participants.
+1. Deal the episodes. A participant flies one pool of ground alone and
+   audits the other, never the same ground in both arms, and meets each
+   target object at most once per arm. Pools and arm order alternate across
+   participants. On CityNav a pool unit is a block; Cal City is one block,
+   so `--region-m` pools square regions of it, keyed by where the target lies.
 
    ```sh
-   python -m baselines.human.session_plan --maps-root output/e2/<root> \
+   python -m baselines.human.session_plan --maps-root output/e3/<root> --region-m 1000 \
      --participants p01,p02,p03,p04 --per-arm 20 --out output/human_study/<study>
    ```
 
@@ -158,14 +160,14 @@ never the row's target or metrics, and shows no score at any point.
    audit their `team.txt`, in the order `plan.json` names:
 
    ```sh
-   python -m baselines.human.audit_console --maps-root output/e2/<root> \
+   python -m baselines.human.audit_console --maps-root output/e3/<root> \
      --episode-allowlist output/human_study/<study>/p01/team.txt --out output/human_study/<study>/p01
    ```
 
    The console serves `http://127.0.0.1:8078/`, appends each decision to
    `<out>/decisions.jsonl`, and resumes after the last one when restarted.
-   It reads the block's imagery (`SEARCH_CITYNAV_RGBD_DIR`) and its tile
-   bake (`SEARCH_CITYNAV_TILES`) as the bench does.
+   It reads the imagery and the tile bake of the bench the root flew, as the
+   bench does (`SEARCH_CITYNAV_*`, or `SEARCH_CALCITY_*` for a Cal City root).
 
 3. Score the audits. A confirmed episode is the MAPS row unchanged; a
    replaced one flies one more leg, from where MAPS ended to the auditor's
@@ -173,15 +175,15 @@ never the row's target or metrics, and shows no score at any point.
    the budget cannot reach), and is scored there.
 
    ```sh
-   python -m baselines.human.team_rows --maps-root output/e2/<root> \
+   python -m baselines.human.team_rows --maps-root output/e3/<root> \
      --decisions output/human_study/<study>/p01/decisions.jsonl --out-root output/baselines/audit/p01
-   python -m benchmarks.citynav.analysis.ab_report output/e2/<root> output/baselines/audit/p01 --label maps_vs_team
+   python -m benchmarks.citynav.analysis.ab_report output/e3/<root> output/baselines/audit/p01 --label maps_vs_team
    ```
 
    Each team row carries `metrics.maps_SR` beside `SR`, and
    `audit_decision`, `audit_review_s` and `audit_trace_turns_opened`.
-   A Cal City replacement is refused: its shape criterion needs the target
-   footprint, which `team_rows` does not load.
+   A Cal City replacement is scored inside the target's footprint, resolved
+   as the runner resolves it (`episode_runner.success_shape`).
 
 ## How a baseline row can differ from a MAPS row
 

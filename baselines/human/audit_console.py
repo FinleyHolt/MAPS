@@ -9,9 +9,11 @@ replacement the budget MAPS left cannot fly is refused. Nothing the auditor
 sees carries the target or a score: the trace is built from MAPS's records
 alone (``blind_review``), and no verdict is shown before, during or after.
 
-    SEARCH_CITYNAV_TILES=<bake> python -m baselines.human.audit_console \\
+    python -m baselines.human.audit_console \\
         --maps-root output/e2/<root> --episode-allowlist <study>/p01/team.txt --out <study>/p01
 
+reads the imagery and the tile bake of the bench the root flew (the
+``SEARCH_CITYNAV_*`` roots, or ``SEARCH_CALCITY_*`` for a Cal City root),
 serves ``http://127.0.0.1:8078/`` and appends one line per decision to
 ``<out>/decisions.jsonl``; a restarted session resumes after the last one.
 ``team_rows`` scores the decisions.
@@ -33,7 +35,7 @@ from PIL import Image, ImageDraw
 
 from baselines.human.policy import LABEL, world_to_px
 from baselines.human.session_plan import scored_rows
-from baselines.human.team_rows import affordable, root_config
+from baselines.human.team_rows import affordable, root_config, select_bench
 from baselines.seam import Landmark, block_landmarks
 from benchmarks.citynav.analysis.rows import iter_json_rows
 
@@ -343,8 +345,6 @@ def _handler(session: Session):
 
 
 def main(argv: list[str] | None = None) -> int:
-    from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
-
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--maps-root", type=Path, required=True)
     ap.add_argument("--episode-allowlist", type=Path, required=True)
@@ -352,6 +352,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT)
     args = ap.parse_args(argv)
+    select_bench(args.maps_root)
+    from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
+
     ids = [ln.strip() for ln in args.episode_allowlist.read_text().splitlines() if ln.strip()]
     session = Session(args.maps_root, ids, args.out, ortho_crop(CITYNAV_NATIVE_RGBD_DIR))
     with HTTPServer((args.host, args.port), _handler(session)) as server:
