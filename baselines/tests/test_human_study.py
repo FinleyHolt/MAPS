@@ -104,6 +104,14 @@ def _root(tmp_path):
     return root
 
 
+def test_a_commit_on_a_mapped_object_outlines_that_object() -> None:
+    features = {"buildings": [{"name": "", "world_contour": [[0, 0], [100, 0], [100, 100], [0, 100]]},
+                              {"name": "Shed", "world_contour": [[40, 40], [60, 40], [60, 60], [40, 60]]}]}
+    contour, what = audit_console.prior_under(features, (50.0, 50.0))
+    assert what == "building Shed" and len(contour) >= 4
+    assert audit_console.prior_under(features, (500.0, 500.0)) is None
+
+
 def _crop(map_name, xy, half):
     x, y = xy
     x0, y0, x1, y1 = x - half, y - half, x + half, y + half
@@ -119,6 +127,7 @@ def test_the_audit_console_is_blind_and_resumes_after_its_last_decision(tmp_path
     s = audit_console.Session(root, ["block_0::1#0"], out, _crop)
     state = s.state()
     assert state["maps_pick"] == 0 and len(state["candidates"]) == 2
+    assert state["maps_commit"] == "object 0 MAPS detected"
     blob = json.dumps(state)
     for leak in ("target_xy", "100.0", '"SR"', '"NE"', "metrics"):
         assert leak not in blob, leak
