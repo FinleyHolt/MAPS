@@ -97,7 +97,9 @@ def team_row(row: dict, decision: dict, cfg: dict, shape_of=None) -> dict:
         return _search_row(out, decision, cfg, shape_of)
     audit = {"audit_decision": decision["decision"], "audit_review_s": decision.get("review_s"),
              "audit_trace_turns_opened": len(decision.get("opened") or []),
-             "audit_candidate": decision.get("candidate")}
+             "audit_candidate": decision.get("candidate"),
+             # The session's timeline: when the person opened the review and when they decided.
+             "audit_opened_at": decision.get("opened_at"), "audit_decided_at": decision.get("at")}
     if decision["decision"] == "replace":
         criterion = m.get("success_criterion")
         if criterion == "shape" and shape_of is None:
@@ -132,6 +134,7 @@ def _search_row(out: dict, decision: dict, cfg: dict, shape_of) -> dict:
                            success_dist_m=float(cfg["success_radius_m"]),
                            gt_polygon=shape_of(out["episode_id"]) if criterion == "shape" else None, commit_xy=xy))
     m.update(steps_taken=0, policy="human_map", commit_path="human_map:commit", search_s=decision.get("search_s"),
+             search_opened_at=decision.get("opened_at"), search_committed_at=decision.get("at"),
              maps_SR=maps_sr)
     out.update(visited_xy=[list(xy)], commit_xy=list(xy))
     return out

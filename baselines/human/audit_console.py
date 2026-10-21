@@ -248,6 +248,7 @@ class Session:
         self.selected: dict | None = None
         self.highlight: str | None = None
         self.t0 = time.monotonic()
+        self.opened_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         self.zooms = 0
         self._render()
 
@@ -385,7 +386,7 @@ class Session:
             "candidate": (self.selected or {}).get("candidate") if kind == "replace" else r.maps_pick,
             "maps_xy": list(r.maps_xy), "review_s": round(time.monotonic() - self.t0, 1),
             "zooms": self.zooms, "opened": sorted({int(i) for i in req.get("opened") or []}),
-            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "opened_at": self.opened_at, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
         self.out.mkdir(parents=True, exist_ok=True)
         with self.decisions.open("a") as fh:

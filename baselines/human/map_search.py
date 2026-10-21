@@ -39,6 +39,7 @@ class Search:
         self.out, self.decisions = out, out / "decisions.jsonl"
         self.committed = {d["episode_id"]: d for d in iter_json_rows(self.decisions)} if self.decisions.is_file() else {}
         self._opened: dict[str, float] = {}
+        self._opened_at: dict[str, str] = {}
 
     def state(self) -> dict:
         return {"total": len(self.episodes), "done_n": sum(e["episode_id"] in self.committed for e in self.episodes),
@@ -50,14 +51,16 @@ class Search:
         if episode_id not in {e["episode_id"] for e in self.episodes}:
             return {"ok": False, "error": f"{episode_id} is not on this list"}
         self._opened.setdefault(episode_id, time.monotonic())
+        self._opened_at.setdefault(episode_id, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
         return {"ok": True}
 
     def commit(self, episode_id: str, xy: tuple[float, float]) -> dict:
         if episode_id not in {e["episode_id"] for e in self.episodes}:
             return {"ok": False, "error": f"{episode_id} is not on this list"}
         opened = self._opened.setdefault(episode_id, time.monotonic())
+        opened_at = self._opened_at.setdefault(episode_id, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
         decision = {"episode_id": episode_id, "decision": "commit", "xy": [float(xy[0]), float(xy[1])],
-                    "search_s": round(time.monotonic() - opened, 1), "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+                    "search_s": round(time.monotonic() - opened, 1), "opened_at": opened_at, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         self.out.mkdir(parents=True, exist_ok=True)
         with self.decisions.open("a") as fh:
             fh.write(json.dumps(decision) + "\n")
