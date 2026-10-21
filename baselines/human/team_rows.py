@@ -88,9 +88,35 @@ def affordable(row: dict, xy: tuple[float, float], max_steps: int) -> bool:
     return int(row["metrics"]["steps_taken"]) + correction_leg(row, xy)[0] <= max_steps
 
 
+def capacity_row(row: dict, answer: dict, cfg: dict, shape_of=None) -> dict:
+    """One answer of the capacity study (``baselines.human.capacity``) as a scored row: a
+    confirm or a replace as the audit scores them, a search by hand as a map-search commit,
+    a skip as a miss. Every row carries the answer's source and its timeline."""
+    source = answer["source"]
+    timeline = {"capacity_source": source, "capacity_arm": answer.get("arm"), "capacity_order_index": answer.get("order_index"),
+                "capacity_opened_at": answer.get("opened_at"), "capacity_answered_at": answer.get("answered_at"),
+                "capacity_answer_s": answer.get("answer_s"), "maps_ready_at": answer.get("maps_ready_at"),
+                "maps_ready_at_open": answer.get("maps_ready_at_open")}
+    policy = f"capacity_{answer.get('arm') or 'solo'}"
+    if source == "skip":
+        out = json.loads(json.dumps(row))
+        maps_sr = out["metrics"]["SR"]
+        # Attempted and failed: nobody gains by passing over a hard report.
+        out["metrics"].update(SR=0, steps_taken=0, policy=policy, commit_path="capacity:skip", maps_SR=maps_sr, **timeline)
+        out.update(visited_xy=[], commit_xy=None)
+        return out
+    as_decision = {**{k: v for k, v in answer.items() if k != "source"}, "decision": "commit" if source == "own_search" else source,
+                   "review_s": answer.get("answer_s"), "search_s": answer.get("answer_s"), "at": answer.get("answered_at")}
+    out = team_row(row, as_decision, cfg, shape_of)
+    out["metrics"].update(policy=policy, commit_path=f"capacity:{source}", **timeline)
+    return out
+
+
 def team_row(row: dict, decision: dict, cfg: dict, shape_of=None) -> dict:
     """The MAPS row as its auditor left it. ``shape_of`` (episode id ->
     footprint) scores a replacement on a shape bench."""
+    if "source" in decision:
+        return capacity_row(row, decision, cfg, shape_of)
     out = json.loads(json.dumps(row))
     m = out["metrics"]
     if decision["decision"] == "commit":
@@ -145,16 +171,24 @@ def write_root(maps_root: Path, decisions: list[dict], out_root: Path) -> list[d
     rows = scored_rows(maps_root)
     cfg = root_config(maps_root)
     manifest = json.loads((maps_root / "run_manifest.json").read_text())
-    policy = "human_map" if decisions and all(d["decision"] == "commit" for d in decisions) else "audit"
-    if policy == "audit" and any(d["decision"] == "commit" for d in decisions):
-        raise ValueError("a ledger mixes map-search commits with audit decisions: score each arm on its own")
+    arms = {d.get("arm") for d in decisions if "source" in d}
+    if arms:
+        # A capacity ledger: one participant's session in one condition.
+        if len(arms) > 1 or len(arms) == 1 and any("source" not in d for d in decisions):
+            raise ValueError("a capacity ledger holds one session's answers in one condition")
+        policy = f"capacity_{arms.pop() or 'solo'}"
+    else:
+        policy = "human_map" if decisions and all(d["decision"] == "commit" for d in decisions) else "audit"
+        if policy == "audit" and any(d["decision"] == "commit" for d in decisions):
+            raise ValueError("a ledger mixes map-search commits with audit decisions: score each arm on its own")
     manifest["config_yaml"] = yaml.safe_dump({**cfg, "policy": policy}, sort_keys=False)
     manifest["out_root"] = str(out_root.resolve())
     manifest["audit"] = {"maps_root": str(maps_root.resolve()), "decisions": len(decisions)}
     # The team root holds the decided episodes, not the MAPS root's whole selection.
     manifest["selection"] = {**(manifest.get("selection") or {}), "episodes_n": len(decisions), "allowlist": "audit decisions"}
     shapes = TargetShapes(manifest["split"]) if any(
-        rows[d["episode_id"]]["metrics"].get("success_criterion") == "shape" and d["decision"] in ("replace", "commit")
+        rows[d["episode_id"]]["metrics"].get("success_criterion") == "shape"
+        and d.get("decision", d.get("source")) in ("replace", "commit", "own_search")
         for d in decisions) else None
     out = [team_row(rows[d["episode_id"]], d, cfg, shapes) for d in decisions]
     out_root.mkdir(parents=True, exist_ok=True)
