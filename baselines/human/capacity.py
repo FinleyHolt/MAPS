@@ -1,4 +1,4 @@
-"""The capacity study: how many correct finds an hour a person makes alone, and with MAPS.
+"""The capacity study: how many correct finds a fixed session holds, a person alone and with MAPS.
 
 The backlog is the MAPS root's episodes, split into two halves of equal MAPS SR
 (``plan``), one half per condition, the halves and the order of the conditions
@@ -44,10 +44,11 @@ from baselines.human.session_plan import scored_rows
 
 ARMS = ("solo", "team")
 SOURCES = ("confirm", "replace", "own_search", "skip")
-#: One condition's session, seconds: the same for every participant.
-SESSION_S = 3600.0
-#: MAPS searches running at once in the replay: enough that a participant's half (550
-#: searches) lands within the hour, so the person works with MAPS's whole output in reach,
+#: One condition's session, seconds: the same for every participant. Forty minutes, so a
+#: visit (setup, briefing, practice, both conditions and a break) fits in two hours.
+SESSION_S = 2400.0
+#: MAPS searches running at once in the replay: enough that nearly all of a participant's
+#: half lands within the session, so the person works with MAPS's output in reach,
 #: and the concurrency the replayed batch itself flew at (the E3 Cal City episodes re-flown
 #: 96 at once on two nodes, 48 each, 2026-10-21). ``plan`` records each list's count.
 AGENTS = 96
@@ -88,7 +89,7 @@ def plan(rows: dict[str, dict], participants: list[str], seed: int, agents: int 
             lists[arm] = order
         _starts, ends = release_times([float(rows[e].get("elapsed_s") or 0) for e in lists["team"]], agents)
         out["participants"][p] = {"solo_half": "AB"[solo_half], "team_half": "AB"[1 - solo_half], "first": first,
-                                  # How much of MAPS's output this participant's team hour holds.
+                                  # How much of MAPS's output this participant's team session holds.
                                   "agents": agents, "maps_ready_in_session": sum(t <= SESSION_S for t in ends),
                                   "lists": lists}
     return out

@@ -29,6 +29,8 @@ dependencies = [
 recording = ["mcap"]
 # The baselines (GeoNav's cognitive map, the ViSA figures) draw with matplotlib.
 baselines = ["matplotlib"]
+# The capacity study's operator console (baselines.human.study_server, STUDY.md).
+study = ["fastapi", "uvicorn", "huggingface_hub"]
 dev = ["pytest==9.1.1", "ruff==0.17.0", "mcap", "matplotlib"]
 
 [tool.setuptools.packages.find]

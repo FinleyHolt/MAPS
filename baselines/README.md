@@ -135,6 +135,10 @@ carry a participant label, never a name.
 
 ## The human study
 
+The capacity study the paper reports, a person alone and with MAPS over a fixed session,
+runs on any laptop from a download: [`human/STUDY.md`](human/STUDY.md). The arms below are
+the episode-level study it grew out of.
+
 Three arms on the same episodes of one MAPS root: MAPS alone (the root),
 a person alone, and the team, where MAPS flies alone and a person audits
 the finished episode (`human/audit_console.py`). The person alone either
