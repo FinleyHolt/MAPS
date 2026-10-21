@@ -198,3 +198,25 @@ def test_a_map_search_commit_is_scored_where_it_lies_with_nothing_flown() -> Non
     assert hit["metrics"]["SR"] == 1 and hit["metrics"]["steps_taken"] == 0 and hit["metrics"]["policy"] == "human_map"
     assert hit["metrics"]["maps_SR"] == 0 and hit["commit_xy"] == [0.0, 95.0] and hit["visited_xy"] == [[0.0, 95.0]]
     assert team_rows.team_row(row, {"decision": "commit", "xy": [0.0, 10.0]}, _CFG)["metrics"]["SR"] == 0
+
+
+def test_both_ledgers_and_their_rows_carry_when_each_episode_was_opened_and_decided(tmp_path, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from baselines.human import map_search
+    from benchmarks.citynav.run_benchmark import assets
+
+    monkeypatch.setattr(assets, "load_episode_assets", lambda m: SimpleNamespace(base_features={}))
+    root = _root(tmp_path)
+    s = audit_console.Session(root, ["block_0::1#0"], tmp_path / "team")
+    assert s.act({"action": "confirm"})["ok"]
+    (d,) = [json.loads(ln) for ln in (tmp_path / "team" / "decisions.jsonl").read_text().splitlines()]
+    assert d["opened_at"] <= d["at"] and d["opened_at"].endswith("Z")
+    m = team_rows.team_row(_maps_row(), d, _CFG)["metrics"]
+    assert (m["audit_opened_at"], m["audit_decided_at"]) == (d["opened_at"], d["at"])
+    q = map_search.Search(root, ["block_0::1#0"], tmp_path / "solo")
+    q.open("block_0::1#0")
+    q.commit("block_0::1#0", (0.0, 99.0))
+    (c,) = [json.loads(ln) for ln in (tmp_path / "solo" / "decisions.jsonl").read_text().splitlines()]
+    assert c["opened_at"] <= c["at"]
+    assert team_rows.team_row(_maps_row(), c, _CFG)["metrics"]["search_opened_at"] == c["opened_at"]
