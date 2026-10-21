@@ -4,7 +4,9 @@ MAPS flies alone first (the paired root). The console shows the auditor the
 instruction, the imagery around MAPS's commit with every candidate MAPS
 detected outlined and its pick marked, MAPS's own reasoning for the pick, the
 full trace behind it and a search over the block's named prior. The auditor
-confirms, or selects another candidate or point and commits that; a
+confirms, or selects another candidate or point and commits that (with
+``--labels`` the candidates are the benchmark's own labelled objects near the
+run, not MAPS's detections); a
 replacement the budget MAPS left cannot fly is refused. Nothing the auditor
 sees carries the target or a score: the trace is built from MAPS's records
 alone (``blind_review``), and no verdict is shown before, during or after.
@@ -46,6 +48,9 @@ ZOOM_HALF_M = (30.0, 60.0, 120.0, 240.0)
 CANVAS_PX = 1100
 #: A detection within this of MAPS's commit is the candidate MAPS picked.
 PICK_TOL_M = 2.0
+#: With the benchmark's labels as the candidates, the labelled objects within this of
+#: MAPS's commit or any of its stops are offered.
+LABELS_NEAR_M = 300.0
 COLOURS = {"prior": (255, 214, 0), "candidate": (0, 220, 255), "maps": (255, 0, 255),
            "selected": (60, 255, 60), "stop": (255, 255, 255)}
 _SHA = re.compile(r"^[0-9a-f]{64}$")
@@ -119,6 +124,29 @@ def candidates_of(attempt: Path) -> list[Candidate]:
     return out
 
 
+def labelled_candidates(objects: list, points: list[tuple[float, float]], near_m: float = LABELS_NEAR_M) -> list[Candidate]:
+    """The benchmark's labelled objects (``cityrefer/objects.json``) near ``points``, as
+    candidates: each outline, and a point inside it to commit at. The labels carry no
+    class and no hint of which one an episode targets."""
+    from shapely.geometry import MultiPoint, Polygon
+
+    if not points:
+        return []
+    zone = MultiPoint(points).buffer(near_m)
+    out = []
+    for o in objects:
+        contour = [(float(x), float(y)) for x, y in o.contour or []]
+        if len(contour) < 3:
+            continue
+        poly = Polygon(contour).buffer(0)
+        if poly.is_empty or not zone.intersects(poly):
+            continue
+        at = poly.representative_point()
+        out.append(Candidate(id=len(out), label=f"labelled object {o.id}", color="", xy=(float(at.x), float(at.y)),
+                             contour=contour))
+    return out
+
+
 def blind_review(maps_root: Path, row: dict, landmarks: list[Landmark]) -> Review:
     """The review of one MAPS row. Reads the row's instruction and commit, never its
     target or metrics, and the attempt's own records."""
@@ -141,6 +169,19 @@ def blind_review(maps_root: Path, row: dict, landmarks: list[Landmark]) -> Revie
                   stops=stops, landmarks=landmarks)
 
 
+def _area(contour) -> float:
+    xs, ys = np.asarray(contour, dtype=float).T
+    return 0.5 * float(np.dot(xs, np.roll(ys, 1)) - np.dot(ys, np.roll(xs, 1)))
+
+
+def bench_labels() -> dict:
+    """The selected bench's labelled objects by map. Call after ``select_bench``."""
+    from benchmarks.citynav.adapter import load_objects
+    from benchmarks.citynav.paths import OBJECTS_JSON
+
+    return load_objects(OBJECTS_JSON)
+
+
 def _inside(xy, contour) -> bool:
     if len(contour) < 3:
         return False
@@ -154,8 +195,10 @@ class Session:
     renders nothing: a front end that draws the review itself reads ``review`` and
     selects by world point (``select``)."""
 
-    def __init__(self, maps_root: Path, episode_ids: list[str], out: Path, crop=None) -> None:
-        self.maps_root, self.out, self.crop = maps_root, out, crop
+    def __init__(self, maps_root: Path, episode_ids: list[str], out: Path, crop=None, labels: dict | None = None) -> None:
+        """``labels``, the bench's labelled objects by map (``bench_labels``), puts them in
+        place of MAPS's detections as what the auditor picks among."""
+        self.maps_root, self.out, self.crop, self.labels = maps_root, out, crop, labels
         self.rows = scored_rows(maps_root)
         missing = [e for e in episode_ids if e not in self.rows]
         if missing:
@@ -182,6 +225,11 @@ class Session:
             self._features[row["map_name"]] = features
             self._landmarks[row["map_name"]] = block_landmarks(features)
         self.review = blind_review(self.maps_root, row, self._landmarks[row["map_name"]])
+        if self.labels is not None:
+            r = self.review
+            r.candidates = labelled_candidates(self.labels.get(r.map_name) or [], [r.maps_xy, *r.stops])
+            under = [c for c in r.candidates if _inside(r.maps_xy, c.contour)]
+            r.maps_pick = min(under, key=lambda c: abs(_area(c.contour))).id if under else None
         if self.review.maps_pick is None:
             self.review.maps_prior = prior_under(self._features[row["map_name"]], self.review.maps_xy)
         self.centre, self.zoom = self.review.maps_xy, 1
@@ -248,7 +296,8 @@ class Session:
         return {
             "done": False, "index": self.done_n + 1, "total": self.total, "instruction": r.instruction,
             "ended_by": r.ended_by, "maps_pick": r.maps_pick,
-            "maps_commit": (f"object {r.maps_pick} MAPS detected" if r.maps_pick is not None
+            "maps_commit": (f"object {r.maps_pick} {'of the benchmark labels' if self.labels is not None else 'MAPS detected'}"
+                            if r.maps_pick is not None
                             else f"a mapped {r.maps_prior[1]}" if r.maps_prior is not None else "a point, no object under it"),
             "maps_reason": r.turns[-1]["reasoning"] if r.turns else "",
             "turns": r.turns, "zoom": self.zoom, "view_m": 2 * ZOOM_HALF_M[self.zoom],
@@ -389,12 +438,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True, help="the participant's folder: decisions.jsonl lands here")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT)
+    ap.add_argument("--labels", action="store_true",
+                    help="offer the benchmark's labelled objects as the candidates, in place of MAPS's detections")
     args = ap.parse_args(argv)
     select_bench(args.maps_root)
     from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
 
     ids = [ln.strip() for ln in args.episode_allowlist.read_text().splitlines() if ln.strip()]
-    session = Session(args.maps_root, ids, args.out, ortho_crop(CITYNAV_NATIVE_RGBD_DIR))
+    session = Session(args.maps_root, ids, args.out, ortho_crop(CITYNAV_NATIVE_RGBD_DIR),
+                      labels=bench_labels() if args.labels else None)
     with HTTPServer((args.host, args.port), _handler(session)) as server:
         print(f"audit console: http://{args.host}:{args.port}/  {session.total - session.done_n} of {session.total} to review", flush=True)
         while session.review is not None:

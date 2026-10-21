@@ -145,3 +145,23 @@ def test_a_session_with_no_raster_selects_by_world_point(tmp_path, monkeypatch) 
     s = audit_console.Session(_root(tmp_path), ["block_0::1#0"], tmp_path / "p01")
     assert s.act({"action": "select", "x": 0.5, "y": 97.0})["ok"] and s.selected == {"candidate": 1, "xy": (0.0, 98.0)}
     assert s.act({"action": "select", "x": 30.0, "y": 30.0})["ok"] and s.selected == {"candidate": None, "xy": (30.0, 30.0)}
+
+
+def test_with_the_benchmark_labels_the_candidates_are_the_labelled_objects_near_the_run(tmp_path, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from benchmarks.citynav.run_benchmark import assets
+
+    monkeypatch.setattr(assets, "load_episode_assets", lambda m: SimpleNamespace(base_features={}))
+    square = lambda x, y, h: [(x - h, y - h), (x + h, y - h), (x + h, y + h), (x - h, y + h)]
+    labels = {"block_0": [SimpleNamespace(id=7, contour=square(0.0, 50.0, 3.0)),
+                          SimpleNamespace(id=8, contour=square(0.0, 100.0, 3.0)),
+                          SimpleNamespace(id=9, contour=square(5000.0, 5000.0, 3.0))]}
+    s = audit_console.Session(_root(tmp_path), ["block_0::1#0"], tmp_path / "p01", labels=labels)
+    state = s.state()
+    assert [c["label"] for c in state["candidates"]] == ["labelled object 7", "labelled object 8"]
+    assert state["maps_pick"] == 0 and state["maps_commit"] == "object 0 of the benchmark labels"
+    assert s.act({"action": "select", "x": 1.0, "y": 101.0})["ok"] and s.selected["candidate"] == 1
+    assert s.act({"action": "replace"})["ok"]
+    (d,) = [json.loads(ln) for ln in (tmp_path / "p01" / "decisions.jsonl").read_text().splitlines()]
+    assert d["candidate"] == 1 and audit_console._inside(tuple(d["xy"]), square(0.0, 100.0, 3.0))
