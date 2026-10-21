@@ -23,6 +23,10 @@ never reached: an ``unchecked`` answer, scored as MAPS scored it, since the team
 is every MAPS result plus the person's corrections and searches.
 
     python -m baselines.human.capacity plan --maps-root <root> --participants p01,p02,p03,p04 --out <study>
+    python -m baselines.human.capacity practice --maps-root <root> --n 4 --out <study>/practice
+
+``practice`` writes a root of the bench's rows the MAPS root never flew, for a participant
+to learn the console on, searching by hand; it carries no MAPS result and is never scored.
 """
 
 from __future__ import annotations
@@ -227,6 +231,33 @@ class Capacity:
         }
 
 
+def practice_root(maps_root: Path, n: int, seed: int, out: Path) -> list[str]:
+    """``n`` rows of the bench's own split that ``maps_root`` did not fly, as a root the capacity
+    session opens alone: the instruction and the block, no MAPS result, marked practice."""
+    from baselines.human.team_rows import select_bench
+    # The bench first: its paths are read at import.
+    select_bench(maps_root)
+    from benchmarks.citynav.adapter import load_split, parse_episode
+    from benchmarks.citynav.paths import split_path
+
+    manifest = json.loads((maps_root / "run_manifest.json").read_text())
+    flown = {e.split("#")[0] for e in scored_rows(maps_root)}
+    episodes = [parse_episode(r, row_index=i) for i, r in enumerate(load_split(split_path(manifest["split"])))]
+    # Not a target the root flew under any of its descriptions, so practice teaches nothing of a half.
+    spare = [ep for ep in episodes if ep.episode_id.split("#")[0] not in flown]
+    picked = random.Random(f"practice:{seed}").sample(spare, min(n, len(spare)))
+    out.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for i, ep in enumerate(picked):
+        (out / "practice" / str(i)).mkdir(parents=True, exist_ok=True)
+        rows.append({"episode_id": ep.episode_id, "map_name": ep.map_name, "description": ep.description, "status": "ok",
+                     "workdir": f"practice/{i}", "elapsed_s": 0.0, "metrics": {"SR": 0, "practice": True}})
+    (out / "episodes.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (out / "run_manifest.json").write_text(json.dumps({**manifest, "practice": True, "selection": {"episodes_n": len(rows)}}, indent=1))
+    (out / "practice.txt").write_text("".join(r["episode_id"] + "\n" for r in rows))
+    return [r["episode_id"] for r in rows]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -235,7 +266,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--participants", required=True, help="comma-separated labels, never names: p01,p02,...")
     p.add_argument("--seed", type=int, default=1234)
     p.add_argument("--out", type=Path, required=True)
+    q = sub.add_parser("practice", help="a practice root of rows the MAPS root never flew")
+    q.add_argument("--maps-root", type=Path, required=True)
+    q.add_argument("--n", type=int, default=4)
+    q.add_argument("--seed", type=int, default=1234)
+    q.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
+    if args.cmd == "practice":
+        picked = practice_root(args.maps_root, args.n, args.seed, args.out)
+        print(f"{len(picked)} practice reports -> {args.out}/practice.txt")
+        return 0
     doc = plan(scored_rows(args.maps_root), [x for x in args.participants.split(",") if x], args.seed)
     for name, d in doc["participants"].items():
         (args.out / name).mkdir(parents=True, exist_ok=True)
