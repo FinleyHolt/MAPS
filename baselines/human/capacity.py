@@ -46,8 +46,11 @@ ARMS = ("solo", "team")
 SOURCES = ("confirm", "replace", "own_search", "skip")
 #: One condition's session, seconds: the same for every participant.
 SESSION_S = 3600.0
-#: MAPS searches running at once in the replay.
-AGENTS = 8
+#: MAPS searches running at once in the replay: enough that a half of the E3 batch (550
+#: searches, one taking up to 44 minutes) lands within the hour, so the person works with
+#: MAPS's whole output in reach. 96 does on the pilot's lists (``plan`` records each list's
+#: count); the batch itself flew 64 workers at once.
+AGENTS = 96
 
 
 def _utc(epoch: float) -> str:
@@ -68,7 +71,7 @@ def halves(rows: dict[str, dict], seed: int) -> tuple[list[str], list[str]]:
     return sorted(a), sorted(b)
 
 
-def plan(rows: dict[str, dict], participants: list[str], seed: int) -> dict:
+def plan(rows: dict[str, dict], participants: list[str], seed: int, agents: int = AGENTS) -> dict:
     """Each participant's two lists, in their own fixed shuffled order. In every group of
     four, each half meets each condition twice and each condition goes first twice."""
     half = halves(rows, seed)
@@ -83,8 +86,11 @@ def plan(rows: dict[str, dict], participants: list[str], seed: int) -> dict:
             order = list(h)
             random.Random(int(hashlib.sha256(f"{seed}:{p}:{arm}".encode()).hexdigest()[:12], 16)).shuffle(order)
             lists[arm] = order
-        out["participants"][p] = {"solo_half": "AB"[solo_half], "team_half": "AB"[1 - solo_half],
-                                  "first": first, "lists": lists}
+        _starts, ends = release_times([float(rows[e].get("elapsed_s") or 0) for e in lists["team"]], agents)
+        out["participants"][p] = {"solo_half": "AB"[solo_half], "team_half": "AB"[1 - solo_half], "first": first,
+                                  # How much of MAPS's output this participant's team hour holds.
+                                  "agents": agents, "maps_ready_in_session": sum(t <= SESSION_S for t in ends),
+                                  "lists": lists}
     return out
 
 
