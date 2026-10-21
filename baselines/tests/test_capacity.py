@@ -94,3 +94,18 @@ def test_results_released_within_the_session_and_never_reached_count_as_maps_sco
     m = team_rows.team_row(rows["b"], u, _CFG)["metrics"]
     assert m["SR"] == m["maps_SR"] == 0 and m["capacity_source"] == "unchecked" and m["capacity_opened_at"] is None
     assert team_rows.unchecked_answers({**session, "arm": "solo"}, set(), rows) == []
+
+
+def test_practice_draws_only_rows_the_root_never_flew(tmp_path, monkeypatch) -> None:
+    from benchmarks.citynav import adapter, paths
+
+    root = _root(tmp_path)                      # flies block_0::1
+    monkeypatch.setattr(team_rows, "select_bench", lambda r: None)
+    monkeypatch.setattr(paths, "split_path", lambda s: s)
+    monkeypatch.setattr(adapter, "load_split", lambda p: [{"o": 1}, {"o": 2}, {"o": 3}])
+    monkeypatch.setattr(adapter, "parse_episode", lambda r, row_index: SimpleNamespace(
+        episode_id=f"block_0::{r['o']}#{row_index}", map_name="block_0", description=f"find {r['o']}"))
+    (root / "run_manifest.json").write_text(json.dumps({**json.loads((root / "run_manifest.json").read_text()), "split": "x"}))
+    picked = capacity.practice_root(root, 5, 1, tmp_path / "practice")
+    assert sorted(picked) == ["block_0::2#1", "block_0::3#2"]
+    assert (tmp_path / "practice" / "practice.txt").read_text().split() == picked
