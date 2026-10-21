@@ -165,3 +165,9 @@ def test_with_the_benchmark_labels_the_candidates_are_the_labelled_objects_near_
     assert s.act({"action": "replace"})["ok"]
     (d,) = [json.loads(ln) for ln in (tmp_path / "p01" / "decisions.jsonl").read_text().splitlines()]
     assert d["candidate"] == 1 and audit_console._inside(tuple(d["xy"]), square(0.0, 100.0, 3.0))
+
+
+def test_a_candidate_is_as_near_as_its_outline() -> None:
+    strip = audit_console.Candidate(id=0, label="runway", color="", xy=(500.0, 0.0),
+                                    contour=[(0.0, -5.0), (1000.0, -5.0), (1000.0, 5.0), (0.0, 5.0)])
+    assert audit_console._reach(strip, (10.0, 0.0)) == 0.0 and audit_console._reach(strip, (10.0, 25.0)) == 20.0

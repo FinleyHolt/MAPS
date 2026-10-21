@@ -169,6 +169,16 @@ def blind_review(maps_root: Path, row: dict, landmarks: list[Landmark]) -> Revie
                   stops=stops, landmarks=landmarks)
 
 
+def _reach(c: Candidate, xy: tuple[float, float]) -> float:
+    """Metres from ``xy`` to the candidate's outline, zero inside it (its point, with no outline):
+    a long object, a runway or a road, is as near as its nearest edge."""
+    if len(c.contour) < 3:
+        return float(np.hypot(c.xy[0] - xy[0], c.xy[1] - xy[1]))
+    from shapely.geometry import Point, Polygon
+
+    return float(Polygon(c.contour).buffer(0).distance(Point(xy)))
+
+
 def _area(contour) -> float:
     xs, ys = np.asarray(contour, dtype=float).T
     return 0.5 * float(np.dot(xs, np.roll(ys, 1)) - np.dot(ys, np.roll(xs, 1)))
@@ -301,9 +311,8 @@ class Session:
                             else f"a mapped {r.maps_prior[1]}" if r.maps_prior is not None else "a point, no object under it"),
             "maps_reason": r.turns[-1]["reasoning"] if r.turns else "",
             "turns": r.turns, "zoom": self.zoom, "view_m": 2 * ZOOM_HALF_M[self.zoom],
-            "candidates": [{"id": c.id, "label": c.label, "color": c.color,
-                            "dist_m": round(float(np.hypot(c.xy[0] - r.maps_xy[0], c.xy[1] - r.maps_xy[1])))}
-                           for c in sorted(r.candidates, key=lambda c: np.hypot(c.xy[0] - r.maps_xy[0], c.xy[1] - r.maps_xy[1]))],
+            "candidates": [{"id": c.id, "label": c.label, "color": c.color, "dist_m": round(_reach(c, r.maps_xy))}
+                           for c in sorted(r.candidates, key=lambda c: _reach(c, r.maps_xy))],
             "selected": None if sel is None else {**sel, "affordable": affordable(self.rows[r.episode_id], sel["xy"], self.max_steps)},
             "landmarks": [{"name": lm.name, "kind": str(lm.tags.get("category") or ""),
                            "dist_m": round(float(np.hypot(lm.centroid[0] - r.maps_xy[0], lm.centroid[1] - r.maps_xy[1])))}
