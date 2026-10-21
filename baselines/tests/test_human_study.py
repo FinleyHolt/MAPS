@@ -161,10 +161,10 @@ def test_with_the_benchmark_labels_the_candidates_are_the_labelled_objects_near_
     state = s.state()
     assert [c["label"] for c in state["candidates"]] == ["labelled object 7", "labelled object 8"]
     assert state["maps_pick"] == 0 and state["maps_commit"] == "object 0 of the benchmark labels"
-    assert s.act({"action": "select", "x": 1.0, "y": 101.0})["ok"] and s.selected["candidate"] == 1
+    assert s.act({"action": "select", "x": 1.0, "y": 101.0})["ok"] and s.selected == {"candidate": 1, "xy": (1.0, 101.0)}
     assert s.act({"action": "replace"})["ok"]
     (d,) = [json.loads(ln) for ln in (tmp_path / "p01" / "decisions.jsonl").read_text().splitlines()]
-    assert d["candidate"] == 1 and audit_console._inside(tuple(d["xy"]), square(0.0, 100.0, 3.0))
+    assert d["candidate"] == 1 and d["xy"] == [1.0, 101.0]
 
 
 def test_a_candidate_is_as_near_as_its_outline() -> None:

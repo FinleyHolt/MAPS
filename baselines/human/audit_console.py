@@ -359,9 +359,16 @@ class Session:
         return {"ok": True}
 
     def _select(self, xy: tuple[float, float]) -> None:
-        """The candidate whose outline holds ``xy``, else the point itself."""
-        hit = next((c for c in self.review.candidates if _inside(xy, c.contour)), None)
-        self.selected = {"candidate": hit.id, "xy": hit.xy} if hit else {"candidate": None, "xy": xy}
+        """The candidate whose outline holds ``xy``, else the point itself. A detection
+        commits at its own point; a labelled object at the point clicked inside it, since
+        most episodes score on a mask that is part of an object (a runway's threshold),
+        and a point inside a labelled target scores as the object does."""
+        under = [c for c in self.review.candidates if _inside(xy, c.contour)]
+        hit = min(under, key=lambda c: abs(_area(c.contour))) if under else None
+        if hit is None:
+            self.selected = {"candidate": None, "xy": xy}
+        else:
+            self.selected = {"candidate": hit.id, "xy": xy if self.labels is not None else hit.xy}
 
     def _decide(self, kind: str, req: dict) -> dict:
         r = self.review
