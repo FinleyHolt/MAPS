@@ -82,3 +82,15 @@ def test_every_source_scores_and_a_skip_is_a_miss() -> None:
     assert fixed["SR"] == 1 and fixed["maps_SR"] == 0
     skip = team_rows.team_row(_maps_row(SR=1), {**base, "source": "skip", "xy": None}, _CFG)["metrics"]
     assert skip["SR"] == 0 and skip["maps_SR"] == 1 and skip["capacity_source"] == "skip"
+
+
+def test_results_released_within_the_session_and_never_reached_count_as_maps_scored_them() -> None:
+    rows = {"a": {**_maps_row(SR=1), "episode_id": "a", "elapsed_s": 100.0},
+            "b": {**_maps_row(SR=0), "episode_id": "b", "elapsed_s": 200.0},
+            "c": {**_maps_row(SR=1), "episode_id": "c", "elapsed_s": 5000.0}}
+    session = {"arm": "team", "agents": 1, "session_s": 3600, "started_epoch": 0.0, "order": ["a", "b", "c"]}
+    (u,) = team_rows.unchecked_answers(session, {"a"}, rows)   # c lands at 5300 s, after the hour
+    assert u["episode_id"] == "b" and u["source"] == "unchecked" and u["answered_at"] == u["maps_ready_at"] == "1970-01-01T00:05:00Z"
+    m = team_rows.team_row(rows["b"], u, _CFG)["metrics"]
+    assert m["SR"] == m["maps_SR"] == 0 and m["capacity_source"] == "unchecked" and m["capacity_opened_at"] is None
+    assert team_rows.unchecked_answers({**session, "arm": "solo"}, set(), rows) == []
