@@ -136,8 +136,13 @@ carry a participant label, never a name.
 ## The human study
 
 Three arms on the same episodes of one MAPS root: MAPS alone (the root),
-a person alone (`human/policy.py`, above), and the team, where MAPS flies
-alone and a person audits the finished episode (`human/audit_console.py`).
+a person alone, and the team, where MAPS flies alone and a person audits
+the finished episode (`human/audit_console.py`). The person alone either
+flies the bench as an operator (`human/policy.py`, above: the sensor's
+crops and the action budget) or searches the whole map
+(`human/map_search.py`: every episode on their list at once, in any order,
+the block's imagery with the bench's OSM prior to toggle on and search by
+name, one committed point each, nothing flown).
 The auditor sees the instruction, the imagery around MAPS's commit with
 every object MAPS detected outlined and its pick marked, MAPS's reasoning
 for the pick, its full trace and frames, and a search over the named prior.
@@ -156,8 +161,10 @@ never the row's target or metrics, and shows no score at any point.
      --participants p01,p02,p03,p04 --per-arm 20 --out output/human_study/<study>
    ```
 
-2. Fly each participant's `solo.txt` with the human operator (above), and
-   audit their `team.txt`, in the order `plan.json` names:
+2. Run each participant's `solo.txt` with the human operator (above) or the
+   map search, and audit their `team.txt`, in the order `plan.json` names.
+   The FTE station's study mode in MAPSInternal is the front end for both
+   the map search and the audit; the standalone audit console is:
 
    ```sh
    python -m baselines.human.audit_console --maps-root output/e3/<root> \
@@ -169,7 +176,9 @@ never the row's target or metrics, and shows no score at any point.
    It reads the imagery and the tile bake of the bench the root flew, as the
    bench does (`SEARCH_CITYNAV_*`, or `SEARCH_CALCITY_*` for a Cal City root).
 
-3. Score the audits. A confirmed episode is the MAPS row unchanged; a
+3. Score each ledger with `team_rows` (`--decisions <out>/decisions.jsonl`).
+   A map-search commit is scored where it lies against the same episode
+   (policy `human_map`). A confirmed audit is the MAPS row unchanged; a
    replaced one flies one more leg, from where MAPS ended to the auditor's
    point, priced against the budget MAPS left (the console refuses a point
    the budget cannot reach), and is scored there.
