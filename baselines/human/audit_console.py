@@ -207,21 +207,27 @@ class Session:
     renders nothing: a front end that draws the review itself reads ``review`` and
     selects by world point (``select``)."""
 
-    def __init__(self, maps_root: Path, episode_ids: list[str], out: Path, crop=None, labels: dict | None = None) -> None:
+    def __init__(self, maps_root: Path, episode_ids: list[str], out: Path, crop=None, labels: dict | None = None,
+                 rows: dict | None = None, record=None, cache: dict | None = None) -> None:
         """``labels``, the bench's labelled objects by map (``bench_labels``), puts them in
-        place of MAPS's detections as what the auditor picks among."""
+        place of MAPS's detections as what the auditor picks among. A caller driving one
+        review at a time (``capacity.Capacity``) passes the root's ``rows`` once, a ``cache``
+        the block's prior is kept in across reviews, and ``record``, which receives each
+        decision in place of the ledger."""
         self.maps_root, self.out, self.crop, self.labels = maps_root, out, crop, labels
-        self.rows = scored_rows(maps_root)
+        self.rows = rows if rows is not None else scored_rows(maps_root)
+        self._record = record
         missing = [e for e in episode_ids if e not in self.rows]
         if missing:
             raise SystemExit(f"FATAL: {len(missing)} allowlisted episodes have no scored MAPS row, e.g. {missing[:3]}")
         self.max_steps = int(root_config(maps_root)["max_steps"])
         self.decisions = out / "decisions.jsonl"
-        done = {d["episode_id"] for d in _jsonl(self.decisions)}
+        done = {d["episode_id"] for d in _jsonl(self.decisions)} if record is None else set()
         self.queue = [e for e in episode_ids if e not in done]
         self.total, self.done_n = len(episode_ids), len(episode_ids) - len(self.queue)
-        self._landmarks: dict[str, list[Landmark]] = {}
-        self._features: dict[str, dict] = {}
+        cache = cache if cache is not None else {}
+        self._landmarks: dict[str, list[Landmark]] = cache.setdefault("landmarks", {})
+        self._features: dict[str, dict] = cache.setdefault("features", {})
         self.review: Review | None = None
         self._next()
 
@@ -388,9 +394,12 @@ class Session:
             "zooms": self.zooms, "opened": sorted({int(i) for i in req.get("opened") or []}),
             "opened_at": self.opened_at, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
-        self.out.mkdir(parents=True, exist_ok=True)
-        with self.decisions.open("a") as fh:
-            fh.write(json.dumps(decision) + "\n")
+        if self._record is not None:
+            self._record(decision)
+        else:
+            self.out.mkdir(parents=True, exist_ok=True)
+            with self.decisions.open("a") as fh:
+                fh.write(json.dumps(decision) + "\n")
         self.queue.pop(0)
         self.done_n += 1
         self._next()

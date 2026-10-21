@@ -1,0 +1,84 @@
+"""The capacity study deals equal halves, replays MAPS on its recorded timing, and logs
+every answer with its source and timeline.
+
+The halves differ in MAPS SR by at most one episode's worth, and each group of four
+participants meets each half in each condition with either condition first. A report is
+verified if MAPS's result had landed when it was opened and searched by hand if not, and a
+result landing meanwhile does not change that. A skip is a miss; the session refuses
+answers once its time is up; every source scores through team_rows.
+"""
+
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+
+from baselines.human import capacity, team_rows
+from baselines.tests.test_human_study import _CFG, _maps_row, _root
+
+
+def test_the_halves_match_on_maps_sr_and_the_plan_counterbalances() -> None:
+    rows = {f"block_0::{i}#0": {"metrics": {"SR": int(i % 3 == 0)}} for i in range(101)}
+    a, b = capacity.halves(rows, seed=7)
+    assert not set(a) & set(b) and len(a) + len(b) == 101 and abs(len(a) - len(b)) <= 1
+    assert abs(sum(rows[e]["metrics"]["SR"] for e in a) - sum(rows[e]["metrics"]["SR"] for e in b)) <= 1
+    doc = capacity.plan(rows, ["p01", "p02", "p03", "p04"], seed=7)
+    ps = doc["participants"]
+    assert sorted((ps[p]["solo_half"], ps[p]["first"]) for p in ps) == [("A", "solo"), ("A", "team"), ("B", "solo"), ("B", "team")]
+    assert ps["p01"]["lists"]["solo"] != ps["p03"]["lists"]["solo"] and sorted(ps["p01"]["lists"]["solo"]) == sorted(ps["p03"]["lists"]["solo"])
+
+
+def test_the_replay_runs_the_list_in_order_on_so_many_agents() -> None:
+    starts, ends = capacity.release_times([100, 50, 30, 10], agents=2)
+    assert starts == [0, 0, 50, 80] and ends == [100, 50, 80, 90]
+
+
+def _session(tmp_path, monkeypatch, arm: str, now: list[float]):
+    from benchmarks.citynav.run_benchmark import assets
+
+    monkeypatch.setattr(assets, "load_episode_assets", lambda m: SimpleNamespace(base_features={}))
+    root = _root(tmp_path)
+    rows = (root / "episodes.jsonl").read_text().splitlines()
+    second = {**json.loads(rows[0]), "episode_id": "block_0::2#0", "elapsed_s": 500.0}
+    first = {**json.loads(rows[0]), "elapsed_s": 100.0}
+    (root / "episodes.jsonl").write_text(json.dumps(first) + "\n" + json.dumps(second) + "\n")
+    return capacity.Capacity(root, ["block_0::1#0", "block_0::2#0"], tmp_path / "p01" / arm, arm, agents=1,
+                             session_s=3600, clock=lambda: now[0])
+
+
+def test_a_report_is_verified_only_if_maps_had_landed_when_it_opened(tmp_path, monkeypatch) -> None:
+    now = [1000.0]
+    s = _session(tmp_path, monkeypatch, "team", now)
+    assert s.state()["current"]["mode"] == "search"          # MAPS's first result lands at 100 s
+    now[0] += 150
+    assert s.state()["current"]["mode"] == "search"          # landing meanwhile does not interrupt
+    now[0] += 500                                            # the second lands at 600 s; still searching the first
+    assert s.act({"action": "select", "x": 0.0, "y": 99.0})["ok"] and s.act({"action": "commit"})["ok"]
+    cur = s.state()["current"]                               # opened after its result landed
+    assert cur["mode"] == "verify" and cur["review"]["maps_pick"] == 0 and "target" not in json.dumps(cur)
+    assert s.act({"action": "confirm"})["ok"] and s.state()["over"]
+    a, b = [json.loads(ln) for ln in (tmp_path / "p01" / "team" / "answers.jsonl").read_text().splitlines()]
+    assert (a["source"], a["maps_ready_at_open"], b["source"], b["maps_ready_at_open"]) == ("own_search", False, "confirm", True)
+    assert a["opened_at"] <= a["answered_at"] and b["maps_ready_at"] is not None
+
+
+def test_alone_a_skip_is_logged_and_the_session_refuses_answers_after_its_hour(tmp_path, monkeypatch) -> None:
+    now = [1000.0]
+    s = _session(tmp_path, monkeypatch, "solo", now)
+    assert s.state()["current"]["mode"] == "search" and s.act({"action": "skip"})["ok"]
+    assert s.state()["skipped_n"] == 1 and s.state()["list"][0]["status"] == "skipped"
+    now[0] += 3601
+    assert not s.act({"action": "skip"})["ok"] and s.state()["over"] and s.state()["current"] is None
+
+
+def test_every_source_scores_and_a_skip_is_a_miss() -> None:
+    row = _maps_row()
+    base = {"arm": "team", "opened_at": "2026-10-21T04:00:00Z", "answered_at": "2026-10-21T04:01:00Z", "answer_s": 60.0}
+    hit = team_rows.team_row(row, {**base, "source": "own_search", "xy": [0.0, 95.0]}, _CFG)["metrics"]
+    assert hit["SR"] == 1 and hit["capacity_source"] == "own_search" and hit["policy"] == "capacity_team"
+    kept = team_rows.team_row(row, {**base, "source": "confirm", "xy": [0.0, 50.0]}, _CFG)["metrics"]
+    assert kept["SR"] == 0 and kept["audit_decision"] == "confirm" and kept["capacity_opened_at"] == base["opened_at"]
+    fixed = team_rows.team_row(row, {**base, "source": "replace", "xy": [0.0, 99.0]}, _CFG)["metrics"]
+    assert fixed["SR"] == 1 and fixed["maps_SR"] == 0
+    skip = team_rows.team_row(_maps_row(SR=1), {**base, "source": "skip", "xy": None}, _CFG)["metrics"]
+    assert skip["SR"] == 0 and skip["maps_SR"] == 1 and skip["capacity_source"] == "skip"
