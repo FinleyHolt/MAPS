@@ -70,6 +70,10 @@ SAMPLE_SEED = 1234
 _log_lock = threading.Lock()
 
 
+
+def _utc(epoch: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
 def _enumerate_split(split: str) -> list[str]:
     from benchmarks.citynav.adapter import episode_ids, load_split
 
@@ -386,6 +390,9 @@ class Driver:
         ``episode.json`` plus ``worker_id``, ``workdir`` and the wall measured
         here."""
         t0 = time.monotonic()
+        # The wall clock beside it: when the attempt began and ended, in UTC, so a batch's
+        # searches per hour is read off its rows.
+        started = time.time()
         worker_root = self.out_root / f"w{worker_id}"
         worker_root.mkdir(parents=True, exist_ok=True)
         env = _runner_env()
@@ -449,7 +456,8 @@ class Driver:
         # The child's own verdict decides (dispatch classifies the episode's
         # exception chain); the driver adds only what it alone saw.
         row = {**(landed or {"episode_id": episode_id}), "worker_id": worker_id,
-               "elapsed_s": round(elapsed, 1), **where}
+               "elapsed_s": round(elapsed, 1), **where,
+               "started_at_utc": _utc(started), "finished_at_utc": _utc(started + elapsed)}
         if landed is None and verdict == "exited":
             # A child that exits clean with no record failed, unrecognised.
             row |= {"status": episodes.STATUS_INFRA, "error": "no_prediction_unclassified"}
