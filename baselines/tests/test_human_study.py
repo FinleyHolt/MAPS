@@ -108,7 +108,9 @@ def test_a_commit_on_a_mapped_object_outlines_that_object() -> None:
     features = {"buildings": [{"name": "", "world_contour": [[0, 0], [100, 0], [100, 100], [0, 100]]},
                               {"name": "Shed", "world_contour": [[40, 40], [60, 40], [60, 60], [40, 60]]}]}
     contour, what = audit_console.prior_under(features, (50.0, 50.0))
-    assert what == "building Shed" and len(contour) >= 4
+    assert what == "building, Shed" and len(contour) >= 4
+    road = {"prior": [{"name": "Lime Avenue", "worldkit_layer": "roads", "world_contour": [[0, 0], [100, 0], [100, 9], [0, 9]]}]}
+    assert audit_console.prior_under(road, (50.0, 5.0))[1] == "road, Lime Avenue"
     assert audit_console.prior_under(features, (500.0, 500.0)) is None
 
 

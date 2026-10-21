@@ -88,7 +88,8 @@ class Review:
 
 def prior_under(features: dict | None, xy: tuple[float, float]) -> tuple[list[tuple[float, float]], str] | None:
     """The smallest OSM object of the block whose area holds ``xy``, named or not:
-    its outline and what it is (``building``, ``road Lime Avenue``, ...)."""
+    its outline and what it is (``building``, ``road, Lime Avenue``, ...): its OSM layer where
+    the bake keeps one (Cal City files every row under ``prior``), else its bake category."""
     from shapely.geometry import Point
 
     pt, best = Point(xy), None
@@ -98,7 +99,8 @@ def prior_under(features: dict | None, xy: tuple[float, float]) -> tuple[list[tu
             if geom is None or not hasattr(geom, "exterior") or not geom.contains(pt):
                 continue
             if best is None or geom.area < best[0].area:
-                best = (geom, f"{category.rstrip('s')} {r.get('name') or ''}".strip())
+                kind = str(r.get("worldkit_layer") or category).rstrip("s")
+                best = (geom, f"{kind}, {r['name']}" if r.get("name") else kind)
     if best is None:
         return None
     return [(float(x), float(y)) for x, y in best[0].exterior.coords], best[1]
