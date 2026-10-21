@@ -250,7 +250,7 @@ class Session:
             "turns": r.turns, "zoom": self.zoom, "view_m": 2 * ZOOM_HALF_M[self.zoom],
             "candidates": [{"id": c.id, "label": c.label, "color": c.color,
                             "dist_m": round(float(np.hypot(c.xy[0] - r.maps_xy[0], c.xy[1] - r.maps_xy[1])))}
-                           for c in r.candidates],
+                           for c in sorted(r.candidates, key=lambda c: np.hypot(c.xy[0] - r.maps_xy[0], c.xy[1] - r.maps_xy[1]))],
             "selected": None if sel is None else {**sel, "affordable": affordable(self.rows[r.episode_id], sel["xy"], self.max_steps)},
             "landmarks": [{"name": lm.name, "kind": str(lm.tags.get("category") or ""),
                            "dist_m": round(float(np.hypot(lm.centroid[0] - r.maps_xy[0], lm.centroid[1] - r.maps_xy[1])))}
