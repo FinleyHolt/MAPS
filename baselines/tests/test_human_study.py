@@ -136,3 +136,12 @@ def test_the_audit_console_is_blind_and_resumes_after_its_last_decision(tmp_path
     (d,) = [json.loads(ln) for ln in (out / "decisions.jsonl").read_text().splitlines()]
     assert d["decision"] == "replace" and d["candidate"] == 1 and d["xy"] == [0.0, 98.0] and d["opened"] == [0]
     assert s.state()["done"] and audit_console.Session(root, ["block_0::1#0"], out, _crop).review is None
+
+
+def test_a_session_with_no_raster_selects_by_world_point(tmp_path, monkeypatch) -> None:
+    from benchmarks.citynav.run_benchmark import assets
+
+    monkeypatch.setattr(assets, "load_episode_assets", lambda m: type("A", (), {"base_features": {}})())
+    s = audit_console.Session(_root(tmp_path), ["block_0::1#0"], tmp_path / "p01")
+    assert s.act({"action": "select", "x": 0.5, "y": 97.0})["ok"] and s.selected == {"candidate": 1, "xy": (0.0, 98.0)}
+    assert s.act({"action": "select", "x": 30.0, "y": 30.0})["ok"] and s.selected == {"candidate": None, "xy": (30.0, 30.0)}
