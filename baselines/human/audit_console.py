@@ -150,9 +150,11 @@ def _inside(xy, contour) -> bool:
 
 
 class Session:
-    """An auditor's pass over an allowlist, one review at a time."""
+    """An auditor's pass over an allowlist, one review at a time. With no ``crop`` it
+    renders nothing: a front end that draws the review itself reads ``review`` and
+    selects by world point (``select``)."""
 
-    def __init__(self, maps_root: Path, episode_ids: list[str], out: Path, crop) -> None:
+    def __init__(self, maps_root: Path, episode_ids: list[str], out: Path, crop=None) -> None:
         self.maps_root, self.out, self.crop = maps_root, out, crop
         self.rows = scored_rows(maps_root)
         missing = [e for e in episode_ids if e not in self.rows]
@@ -190,6 +192,8 @@ class Session:
         self._render()
 
     def _render(self) -> None:
+        if self.crop is None:
+            return
         r = self.review
         self.obs = self.crop(r.map_name, self.centre, ZOOM_HALF_M[self.zoom])
         img = Image.fromarray(np.asarray(self.obs.rgb, dtype=np.uint8))
@@ -268,9 +272,9 @@ class Session:
 
             _u, _v, x, y = frame_world_xy(self.obs.ortho_view_corners_xy, np.array([float(req["v"]) * (rows - 1)]),
                                           np.array([float(req["u"]) * (cols - 1)]), self.shape)
-            xy = (float(x[0]), float(y[0]))
-            hit = next((c for c in r.candidates if _inside(xy, c.contour)), None)
-            self.selected = {"candidate": hit.id, "xy": hit.xy} if hit else {"candidate": None, "xy": xy}
+            self._select((float(x[0]), float(y[0])))
+        elif kind == "select":
+            self._select((float(req["x"]), float(req["y"])))
         elif kind == "candidate":
             c = r.candidates[int(req["id"])]
             self.selected = {"candidate": c.id, "xy": c.xy}
@@ -295,6 +299,11 @@ class Session:
             return {"ok": False, "error": f"unknown action {kind!r}"}
         self._render()
         return {"ok": True}
+
+    def _select(self, xy: tuple[float, float]) -> None:
+        """The candidate whose outline holds ``xy``, else the point itself."""
+        hit = next((c for c in self.review.candidates if _inside(xy, c.contour)), None)
+        self.selected = {"candidate": hit.id, "xy": hit.xy} if hit else {"candidate": None, "xy": xy}
 
     def _decide(self, kind: str, req: dict) -> dict:
         r = self.review
