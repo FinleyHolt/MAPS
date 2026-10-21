@@ -1,0 +1,2680 @@
+/* ==========================================================================
+   The flight-test engineer's mission console.
+
+   ONE IDENTITY WITH THE COCKPIT. The tokens below are the same block the
+   cockpit display carries (display/web/app/cockpit.css, "Paper theme"),
+   which took them from dashboard/web/src/app.css rather than re-picking
+   them. Three surfaces, one visual language: a copilot glancing across
+   the cabin should read the FTE's screen as the same system.
+
+   The colours carry the dashboard's meanings and no others:
+     act    (orange) the agent decided
+     cite   (blue)   the agent queried, or you can navigate
+     cream           frames the agent's tool output
+     warn   (red)    a fault the operator has to read
+
+   THE LAYOUT IS THE COCKPIT'S SHAPE, turned sideways. The tablet is an
+   instrument (the map) with a thin data band above it and its controls
+   docked to an edge -- there the bottom (`workspace-nav`, portrait,
+   thumb's reach); here a LEFT SIDEBAR (landscape, a station worked from a
+   seat, not a hand). The sidebar stacks three things, top to bottom: the
+   mission list (pick one, it fills the chat box below), a Live/History
+   toggle over the conversation (Live is the mission in the seat -- the
+   agent's reasoning and tool calls landing as it runs, the operator's own
+   messages threaded in beside them; History is every mission this
+   station has already flown, read-only), and the chat box itself, pinned
+   to the sidebar's foot. One conversation, one input -- no separate
+   "Tasking" widget, because the system prompt already tells the agent how
+   to behave and a second UI layer restating that would be redundant
+   scaffolding. Two-fifths of the body by default, a real drag handle
+   between it and the map rather than a fixed split -- MissionConsole owns
+   the fraction, this file just draws the handle. Uncovered ground reads
+   as the paper no-data tone, never black -- a black map cannot be told
+   apart from a dead display, the cockpit's own rule, carried unchanged.
+
+   Two things carried over because the cabin is the same cabin: tabular
+   figures everywhere (proportional digits read as flicker in turbulence)
+   and opaque surfaces (sunlit desert washed out anything softer).
+   ========================================================================== */
+
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+@theme {
+  /* Straight from the dashboard's @theme block, by way of the cockpit. */
+  --color-paper: #fbfaf5;
+  --color-ink: #141310;
+  --color-soft-ink: #3a372f;
+  --color-faint: #75705f;
+  --color-rule: #d9d4c6;
+  --color-rule-hard: #141310;
+  --color-cream: #f6efdd;
+  --color-cream-border: #d9cba4;
+  --color-act: #c95d1e;
+  --color-cite: #1a4fa0;
+  --color-good: #2e6b34;
+  --color-warn: #9e2f1c;
+  --color-sel: #eef1f7;
+  --font-serif: "Times New Roman", Times, Georgia, serif;
+  /* One page, one typeface -- the mission tasking box sets no font of its
+     own (button/input/textarea inherit body's --font-serif), so every
+     other element that named --font-mono explicitly is repointed here
+     rather than edited at each of its ~25 call sites. */
+  --font-mono: "Times New Roman", Times, Georgia, serif;
+}
+
+:root {
+  --measure: 76ch;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-cite);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Shell: thin station bar, sidebar and map as two grid columns.
+   -------------------------------------------------------------------------- */
+
+.station {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+
+/* The review band takes a row of its own above the station bar, so nothing
+   on the page moves under it: the console is a row taller while a past
+   flight is up, and every instrument below it is that flight's. The band
+   also stands with no review open, whenever the cockpit tablet is on a past
+   moment, so the row follows either fact. */
+.station[data-review="true"],
+.station[data-shared="true"] {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+/* --------------------------------------------------------------------------
+   Reviewing a past flight
+   --------------------------------------------------------------------------
+   Mistaking a replayed run for the live aircraft is the one error a seat
+   cannot afford on a test day, so this is a full-width band in the act
+   colour with a hazard hatch across it -- not a note in a corner of the
+   pane that happens to be replaying. Nothing else on this page is a solid
+   colour band, which is the point: it does not read as chrome.
+   -------------------------------------------------------------------------- */
+
+.review-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 7px 14px;
+  background: var(--color-act);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(20, 19, 16, 0.16) 0 9px,
+    rgba(20, 19, 16, 0) 9px 18px
+  );
+  color: var(--color-paper);
+  border-bottom: 1.5px solid var(--color-rule-hard);
+  z-index: 3;
+}
+
+.review-word {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.review-run {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-when {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* Paper on the band: the way back is the one thing here that reads as a
+   control rather than as a warning. */
+.review-exit {
+  border: 1.5px solid var(--color-rule-hard);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.review-exit:hover {
+  background: var(--color-cream);
+}
+
+/* Sending the review to the copilot's tablet: the one control on this
+   console that changes a screen on a flying aircraft, so it is outlined
+   rather than paper, and it reads back what it is doing while pressed. */
+.review-share {
+  border: 1.5px solid var(--color-paper);
+  background: transparent;
+  color: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.review-share[aria-pressed="true"] {
+  border-color: var(--color-warn);
+  background: var(--color-warn);
+}
+
+/* What the cockpit is showing, read back off the payload. The reddest thing
+   on the band, because it is the only fact here about a screen the FTE is
+   not sitting in front of. */
+.review-tablet {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  padding: 3px 10px;
+  border: 1.5px solid var(--color-rule-hard);
+  background: var(--color-warn);
+  color: var(--color-paper);
+}
+
+.station-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 7px 14px;
+  border-bottom: 1.5px solid var(--color-rule-hard);
+  background: var(--color-paper);
+  z-index: 2;
+}
+
+.station-name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.station-mission {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.station-spacer {
+  flex: 1 1 auto;
+}
+
+/* The aircraft is out at a target with the run behind it. This is the
+   ordinary end of a run, so it reads in ink inside a hairline rather than
+   in an alert hue: a caution colour spent on the routine is a caution
+   colour the crew discount on the day it means something. The copilot's
+   flight-plan strip carries the same words, which is what lets the two
+   seats name one thing over the intercom. */
+.return-loiter {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--color-ink);
+  border: 1px solid var(--color-rule-hard);
+  padding: 3px 6px;
+  white-space: nowrap;
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  min-width: 52px;
+}
+
+.readout-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.readout-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+/* The simulation timescale: a short box to type a number in. */
+.timescale-input {
+  width: 6ch;
+  padding: 1px 4px;
+  border: 1px solid var(--color-rule);
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  text-align: right;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.status-chip::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-chip[data-status="flying"] { color: var(--color-act); }
+.status-chip[data-status="awaiting_tasking"] { color: var(--color-cite); }
+.status-chip[data-status="ended"] { color: var(--color-good); }
+.status-chip[data-status="failed"] { color: var(--color-warn); }
+.status-chip[data-status="recording"] { color: var(--color-good); }
+.status-chip[data-status="not-recording"] { color: var(--color-warn); }
+
+/* The arm is down under a flying mission. Loud on purpose: the cure is the
+ * operator's (vpn login), and the mission is holding its turn for it. */
+.arm-down {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-paper);
+  background: var(--color-warn);
+  padding: 4px 10px;
+  border-radius: 3px;
+  animation: arm-down-blink 1s steps(2, start) infinite;
+}
+
+@keyframes arm-down-blink {
+  to { visibility: hidden; }
+}
+.status-chip[data-status="review"] { color: var(--color-act); }
+
+.station-body {
+  display: grid;
+  /* Two-fifths sidebar, a 6px handle, the map takes the rest, the crew
+     chat a fixed rail on the right -- set inline per-frame from
+     MissionConsole's drag state. This default (before React's first paint
+     sets the real value) matches it. */
+  grid-template-columns: 40% 6px 1fr 20rem;
+  min-height: 0;
+}
+
+/* --------------------------------------------------------------------------
+   The crew's chat, not the model's: a full-height rail on the right. Bubbles, the reader's own
+   on the right in cream, everyone else's on the left in white; the box at
+   the foot is the mission chatbox's own styling. */
+.crew-chat {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  min-height: 0;
+  min-width: 0;
+  background: var(--color-paper);
+  border-left: 1.5px solid var(--color-rule-hard);
+  /* Over the map's chip bar, which is absolute and runs past a narrow
+     map's right edge. */
+  position: relative;
+  z-index: 2;
+}
+
+.crew-chat-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.crew-chat-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-soft-ink);
+}
+
+.crew-chat-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-rule);
+  background: transparent;
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+.crew-chat-name:focus {
+  outline: none;
+  border-bottom-color: var(--color-cite);
+}
+
+.crew-chat-scroll {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 10px 4px;
+}
+
+.crew-chat-empty {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-faint);
+  margin: 4px 2px;
+}
+
+.crew-chat-bubble {
+  align-self: flex-start;
+  max-width: 86%;
+  padding: 6px 10px 7px;
+  border: 1px solid var(--color-rule);
+  border-radius: 14px;
+  border-bottom-left-radius: 4px;
+  background: #fff;
+}
+
+.crew-chat-bubble[data-mine="true"] {
+  align-self: flex-end;
+  border-color: var(--color-cream-border);
+  border-radius: 14px;
+  border-bottom-right-radius: 4px;
+  background: var(--color-cream);
+}
+
+.crew-chat-meta {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--color-faint);
+  margin-bottom: 2px;
+}
+
+.crew-chat-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.crew-chat-box {
+  margin: 6px 8px 8px;
+}
+
+/* The divider: a hairline that is actually a handle. Widens on hover so
+   a 6px hit target does not feel like threading a needle, and the grip
+   marks are the one affordance that says "this drags" without a tooltip. */
+.divider {
+  position: relative;
+  cursor: col-resize;
+  background: var(--color-rule);
+  touch-action: none;
+}
+
+.divider:hover,
+.divider[data-dragging="true"] {
+  background: var(--color-cite);
+}
+
+.divider:focus-visible {
+  outline: 2px solid var(--color-cite);
+  outline-offset: -2px;
+}
+
+.divider-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 28px;
+  border-radius: 2px;
+  background: var(--color-paper);
+  box-shadow:
+    -4px 0 0 var(--color-faint),
+    4px 0 0 var(--color-faint);
+  pointer-events: none;
+}
+
+.divider[data-dragging="true"] .divider-grip {
+  box-shadow:
+    -4px 0 0 var(--color-paper),
+    4px 0 0 var(--color-paper);
+}
+
+/* The same handle laid on its side, between the mission list and the run
+   view. Same element, same drag, axis swapped -- an FTE hunting a tasking
+   wants the list tall, one reading a long transcript wants it short. */
+.divider[data-axis="row"] {
+  cursor: row-resize;
+}
+
+.divider[data-axis="row"] .divider-grip {
+  width: 28px;
+  height: 3px;
+  box-shadow:
+    0 -4px 0 var(--color-faint),
+    0 4px 0 var(--color-faint);
+}
+
+.divider[data-axis="row"][data-dragging="true"] .divider-grip {
+  box-shadow:
+    0 -4px 0 var(--color-paper),
+    0 4px 0 var(--color-paper);
+}
+
+/* --------------------------------------------------------------------------
+   The map: the instrument. A plain grid cell now (not an overlay -- the
+   sidebar is a real column beside it, not a sheet docked over its edge),
+   stretched to the row's full height by the grid's own default.
+   -------------------------------------------------------------------------- */
+
+.map-pane {
+  position: relative;
+  min-height: 0;
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.map-caption {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 4px 8px;
+  background: var(--instrument-bg, rgba(251, 250, 245, 0.94));
+  border: 1px solid var(--color-rule);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--color-faint);
+  max-width: min(70vw, 520px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Layer chips: the same read live or in a replay, mirroring the
+   dashboard's own review-mode CanvasLayerBar. */
+.layer-bar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+}
+
+.layer-chip {
+  padding: 3px 8px;
+  background: var(--instrument-bg, rgba(251, 250, 245, 0.94));
+  border: 1px solid var(--color-rule);
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.layer-chip.on {
+  color: var(--color-ink);
+  border-color: var(--color-rule-hard);
+  background: var(--color-cream);
+}
+
+.layer-chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The mode toggle rides at the end of the chip row rather than among the
+   layer chips -- it isn't a layer, it's what a click on the map DOES. */
+.mode-toggle {
+  margin-left: 4px;
+  border-left: 1px solid var(--color-rule);
+  padding-left: 10px;
+}
+
+.mode-toggle.on {
+  color: var(--color-ink);
+}
+
+/* Standing OSM feature-name labels -- verbatim the tablet's own
+   (cockpit.css .osm-label): a halo of the paper color stands in for a
+   background plate without one, readable over any imagery underneath. */
+.osm-label {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-shadow:
+    0 0 3px var(--color-paper), 0 0 3px var(--color-paper),
+    0 0 3px var(--color-paper), 0 0 6px var(--color-paper);
+  pointer-events: none;
+}
+
+/* The inspect-mode readout -- anchored bottom-left, capped in height so a
+   feature with many tags cannot push the map caption off the pane. */
+.osm-readout {
+  position: absolute;
+  z-index: 2;
+  left: 10px;
+  bottom: 34px;
+  right: 10px;
+  max-height: 40%;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--color-rule-hard);
+  border-radius: 3px;
+  background: var(--instrument-bg, rgba(251, 250, 245, 0.96));
+}
+
+.osm-readout-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.osm-readout-name {
+  color: var(--color-ink);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.osm-readout-kind {
+  color: var(--color-faint);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.osm-readout-close {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--color-faint);
+  cursor: pointer;
+}
+
+.osm-readout-tags {
+  display: grid;
+  margin-top: 8px;
+  border-top: 1px solid var(--color-rule);
+  gap: 0;
+}
+
+.osm-readout-tags > div {
+  display: grid;
+  grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.osm-readout-tags dt {
+  overflow: hidden;
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.osm-readout-tags dd {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------------------
+   Sidebar: mission list (capped), a Live/History run view (fills what's
+   left, scrolls on its own), chat box pinned to the foot.
+   -------------------------------------------------------------------------- */
+
+.sidebar {
+  display: grid;
+  /* List, a 6px handle, run view, chat box, hint -- set inline per-frame
+     from MissionConsole's drag state. This default (before React's first
+     paint sets the real value) matches it. */
+  grid-template-rows: 30% 6px minmax(0, 1fr) auto auto;
+  min-height: 0;
+  background: var(--color-paper);
+  border-right: 1.5px solid var(--color-rule-hard);
+}
+
+/* --------------------------------------------------------------------------
+   The mission list: Fly next, then search, then a scrollable list. One row
+   per authored tasking, the instruction leading as the headline and Go
+   beside it. A row is not a control of its own -- the words are the
+   mission's, fixed when it was derisked -- and the chat box speaks only to
+   the mission in flight.
+   -------------------------------------------------------------------------- */
+
+.missions {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-height: 0;
+  padding: 10px 12px 0;
+}
+
+/* Fly next is the one button of the day: it starts the next mission's
+   compile the moment the crew turn back from their last waypoint, and it
+   is sized against the small quiet controls beside it (New mission, Stop
+   mission, Record) so there is no mistaking which one that is. */
+
+
+
+
+/* How far the aircraft is from the loiter, or why the press is refused.
+   A reading, never a gate: Fly next is pressed on the way back. */
+
+.missions-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.missions-title {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-style: italic;
+  color: var(--color-ink);
+}
+
+.missions-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-faint);
+}
+
+/* Which flight block the list shows: the week's sorties, the set's order.
+   Styled with the rig select it sits beside (.mode-select). */
+
+/* A row's place in its block: the order it flies. */
+.mission-no {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-cite);
+  margin-right: 6px;
+}
+
+/* The tags a row carries, its flight blocks among them. */
+.mission-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  line-height: 1.4;
+  padding: 0 4px;
+  margin-right: 4px;
+  border: 1px solid var(--color-rule);
+  color: var(--color-faint);
+  vertical-align: baseline;
+}
+
+.mission-tag-vehicle {
+  color: var(--color-act);
+  border-color: var(--color-act);
+}
+
+/* A previous run's route, chosen under the transcript to be drawn on the map. */
+.expected-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--color-rule);
+}
+
+.expected-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-faint);
+  white-space: nowrap;
+}
+
+.expected-select {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-rule);
+  background: #fff;
+  color: var(--color-ink);
+}
+
+.missions-search {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--color-rule);
+  background: #fff;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.missions-list {
+  overflow-y: auto;
+  min-height: 0;
+  border-top: 1px solid var(--color-rule);
+  padding-bottom: 6px;
+}
+
+.mission-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--color-rule);
+  border-left: 3px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mission-row:hover {
+  background: var(--color-sel);
+}
+
+/* The row whose words are in the box and whose target is on the map. */
+.mission-row[aria-selected="true"] {
+  border-left-color: var(--color-act);
+  background: var(--color-cream);
+}
+
+.mission-row[aria-current="true"] {
+  border-left-color: var(--color-act);
+  background: var(--color-sel);
+}
+
+
+.mission-flown {
+  margin-left: 6px;
+  color: var(--color-faint);
+}
+
+/* The row and its run-count toggle sit side by side, each keeping its own
+   bottom border so the two read as one continuous line. */
+.mission-row-line {
+  display: flex;
+  align-items: stretch;
+}
+
+.mission-row-line .mission-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mission-runs-toggle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--color-rule);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--color-cite);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mission-runs-toggle:hover {
+  background: var(--color-sel);
+}
+
+.mission-runs-caret {
+  font-size: 8px;
+}
+
+/* A mission's own past attempts, expanded in place. Cream, like the
+   agent's own tool output elsewhere -- this is a record, not a live row. */
+.past-row-nested {
+  padding-left: 22px;
+  background: var(--color-cream);
+}
+
+.mission-text {
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--color-soft-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.mission-id {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-cite);
+  white-space: nowrap;
+}
+
+.rail-empty {
+  padding: 10px 8px;
+  font-size: 14px;
+  color: var(--color-faint);
+}
+
+/* --------------------------------------------------------------------------
+   Run view: the conversation (the seat's, or the replay opened from the
+   mission list) vs the sortie's files. Both missions render through the
+   same .run-scroll container and the same Transcript component -- an
+   archived run is read the same way a live one is, just with no composer
+   underneath it doing anything.
+   -------------------------------------------------------------------------- */
+
+.run-view {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  border-top: 1px solid var(--color-rule);
+}
+
+.run-tabs {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.run-tab {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-right: 1px solid var(--color-rule);
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.run-tab:last-child {
+  border-right: 0;
+}
+
+.run-tab[aria-selected="true"] {
+  background: var(--color-sel);
+  color: var(--color-cite);
+}
+
+.run-tab-badge {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-act);
+}
+
+/* The conversation, plain -- the agent's reasoning and tool calls as they
+   land, the operator's own messages threaded in beside them at the point
+   they were sent, nothing rendered in a separate log. */
+.run-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 12px 16px 16px;
+}
+
+.past-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--color-rule);
+  border-left: 3px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.past-row:hover {
+  background: var(--color-sel);
+}
+
+.past-row[data-status="ended"] { border-left-color: var(--color-good); }
+.past-row[data-status="failed"] { border-left-color: var(--color-warn); }
+
+.past-row-text {
+  flex: 1 1 auto;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--color-soft-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.past-row-meta {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-faint);
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* SR/OSR/NE/SPL -- its own full-width line so it never squeezes the
+   instruction text or the turns/flights readout it sits beside. */
+.past-row-score,
+.past-detail-score {
+  flex: 1 0 100%;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--color-soft-ink);
+}
+
+.past-detail-score {
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.transcript-inner {
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+.entry-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  margin-bottom: 3px;
+}
+
+.entry {
+  border-left: 3px solid var(--color-rule);
+  padding: 2px 0 2px 14px;
+  margin-bottom: 12px;
+}
+
+.entry[data-who="operator"] { border-left-color: var(--color-rule-hard); }
+.entry[data-who="model"] { border-left-color: var(--color-act); }
+.entry[data-who="fault"] { border-left-color: var(--color-warn); }
+
+.entry-turn {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-faint);
+}
+
+.entry-prose {
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.entry-code {
+  margin: 4px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--color-cream-border);
+  background: var(--color-cream);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.entry[data-errored="true"] .entry-code {
+  border-color: var(--color-warn);
+}
+
+/* The reasoning-channel text ahead of the code -- deliberative, not a
+   result, so it reads as prose rather than framed like a tool plate. */
+.entry-reasoning {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  font-style: italic;
+  color: var(--color-faint);
+  white-space: pre-wrap;
+}
+
+/* print()'d output -- the same cream frame as the code it came from,
+   since it is a tool's own result, not the model deciding anything. */
+/* What the model saw this turn: each delivered image at reading size, in
+   delivery order; a click opens the bytes themselves in a new tab. */
+.entry-frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+
+.entry-frames img {
+  display: block;
+  max-width: 260px;
+  max-height: 260px;
+  border: 1px solid var(--color-rule-hard);
+  background: var(--color-cream);
+}
+
+.entry-output {
+  margin: 4px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--color-rule);
+  background: var(--color-cream);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  color: var(--color-soft-ink);
+}
+
+.entry-note {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-warn);
+}
+/* The share of a waypoint's area the passes hold: the gap's red while the
+   leg is short, the pass's teal (the sensor frame's own) once the station
+   would call it arrived. The map's coverage mask reads in the same two inks. */
+.entry-coverage {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-warn);
+}
+.entry-coverage[data-state="held"] {
+  color: #0b7d8e;
+}
+
+.entry-truncated {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.report {
+  border: 1px solid var(--color-rule-hard);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+
+.report-text {
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.flight-line {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-faint);
+  border-top: 1px solid var(--color-rule);
+  padding-top: 6px;
+  margin-top: 8px;
+}
+
+.run-empty {
+  padding: 14px 16px;
+  color: var(--color-faint);
+  font-size: 14px;
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+/* --------------------------------------------------------------------------
+   The chat box. Deliberately NOT the paper system's hairline/square-corner
+   furniture -- a rounded, floating input is the one place this console
+   borrows a different visual language on purpose, because "a claude.ai
+   looking chat box" was the ask and a chat box that looks like a form
+   field does not read as one. Still the same ink-on-paper palette, so it
+   reads as this system's chat box rather than a pasted-in component.
+   -------------------------------------------------------------------------- */
+
+.chatbox {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 8px 12px 4px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--color-rule);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(20, 19, 16, 0.08);
+}
+
+.chatbox:focus-within {
+  border-color: var(--color-cite);
+}
+
+.chatbox-input {
+  flex: 1 1 auto;
+  border: 0;
+  background: transparent;
+  resize: none;
+  font-size: 14.5px;
+  line-height: 1.45;
+  padding: 4px 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.chatbox-input:disabled {
+  color: var(--color-faint);
+}
+
+.chatbox-input:focus {
+  outline: none;
+}
+
+/* The reasoning-effort dial: the serve's rungs, mono like every other
+   select, sat with the buttons so a send reads left to right. */
+.chatbox-effort {
+  flex: 0 0 auto;
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 4px;
+  border: 1px solid var(--color-rule);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--color-ink);
+}
+
+.chatbox-send {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chatbox-send:disabled {
+  background: var(--color-rule);
+  color: var(--color-faint);
+  cursor: not-allowed;
+}
+
+/* New mission, beside send: the same circle, outlined rather than filled,
+   so the eye reads one primary press and one that clears. */
+.chatbox-send[data-new] {
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-ink);
+  font-size: 18px;
+}
+
+.chatbox-send[data-new]:disabled {
+  border-color: var(--color-rule);
+  color: var(--color-faint);
+}
+
+.chatbox-hint {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--color-faint);
+  margin: 0 12px 10px;
+}
+
+.chatbox-hint[data-fault="true"] {
+  color: var(--color-warn);
+}
+
+.btn {
+  padding: 7px 12px;
+  border: 1px solid var(--color-rule-hard);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  background: var(--color-paper);
+  border-color: var(--color-rule);
+  color: var(--color-faint);
+  cursor: not-allowed;
+}
+
+.btn-quiet {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: var(--color-sel);
+}
+
+.fault {
+  border: 1px solid var(--color-warn);
+  border-left-width: 3px;
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  color: var(--color-warn);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+
+/* Which code flew a run. The tenet is that every number carries
+   (git-sha, run-id, definition), and a score row is a number -- an SR
+   quoted without the build it came from is the shape of mistake that
+   validated a 5,311-episode run against a retired tile bake. Faint and
+   monospace: it is a fact you go looking for, not one competing with the
+   instruction for the eye. */
+.past-row-commit {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--color-faint);
+}
+
+.past-detail-commit {
+  /* inline-block so the rule and its padding actually open a gap: as a
+     bare inline the two runs of text abut and read as one token
+     ("SPL -1c309ab4+"). */
+  display: inline-block;
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--color-rule);
+  color: var(--color-faint);
+}
+
+/* --------------------------------------------------------------------------
+   The instrument column: a wide map over the band
+   --------------------------------------------------------------------------
+   Three rows: the map, the band, the transport. The band is the two things an
+   FTE reads recording off -- the sortie on disk to the left, the viewer to the
+   right -- in fixed proportion to the map (3:2), so the map is a wide
+   rectangle and the sensor frame under it is always the same size in the same
+   place. Opaque paper throughout, the cockpit's rule.
+   -------------------------------------------------------------------------- */
+
+/* The run being replayed, marked in the list it was opened from. */
+.past-row[aria-current="true"] {
+  background: var(--color-sel);
+}
+
+.instrument {
+  display: grid;
+  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr) auto;
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+}
+
+.band {
+  display: grid;
+  /* Three: what the sortie holds, what the camera sees, what the aircraft is
+     doing. The telemetry reads narrower than the other two -- it is columns
+     of numbers, not a picture or a tree. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr);
+  min-height: 0;
+  border-top: 1.5px solid var(--color-rule-hard);
+  background: var(--color-paper);
+}
+
+/* The sortie panel: the recorder's state, its counters, and the tree. */
+.sortie-panel {
+  display: grid;
+  /* One column pinned to the band's: an auto track would size itself to
+     the head's non-wrapping items and carry the whole panel under the
+     viewer beside it. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--color-rule);
+}
+
+.sortie-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.sortie-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.sortie-stamp {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.sortie-spacer {
+  flex: 1;
+}
+
+.sortie-disk {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-faint);
+  white-space: nowrap;
+}
+
+.sortie-head .btn {
+  padding: 3px 8px;
+}
+
+/* The counters the recorder reports off the flying file. Red whenever an open
+   sortie is not being written on the receiver's clock. */
+.sortie-recorder {
+  margin: 0;
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--color-rule);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--color-soft-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sortie-recorder[data-warn="true"] {
+  color: var(--color-warn);
+}
+
+.sortie-tree {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 3px 0;
+}
+
+.sortie-row,
+.sortie-dir {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 10px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: transparent;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.sortie-row:hover,
+.sortie-dir:hover {
+  background: var(--color-sel);
+}
+
+/* The run in the seat: its directory and every file under it stand tinted
+   the way a hovered row is, so the FTE finds the run being flown without
+   looking for it. */
+.sortie-dir[data-current="true"],
+.sortie-row[data-current="true"] {
+  background: var(--color-sel);
+}
+
+.sortie-row[aria-current="true"] {
+  border-left-color: var(--color-act);
+  background: var(--color-cream);
+}
+
+.sortie-row[data-nested="true"] {
+  padding-left: 28px;
+}
+
+/* The file the recorder is writing: the same red as the head's RECORDING. */
+.sortie-row[data-writing="true"] {
+  border-left-color: var(--color-warn);
+}
+
+.sortie-writing {
+  margin-right: 8px;
+  color: var(--color-warn);
+  letter-spacing: 0.1em;
+}
+
+/* The run under review, marked in the tree it was opened from -- the same
+   act stripe a selected file carries, so "this is the one" reads the same
+   whichever row the FTE clicked. */
+.sortie-dir[aria-current="true"] {
+  border-left-color: var(--color-act);
+  background: var(--color-cream);
+}
+
+/* A run's directory inside a sortie's: the files panel nests one level
+   deeper than the sortie panel, which lists the open sortie's runs flat. */
+.sortie-dir[data-nested] {
+  padding-left: 22px;
+}
+
+.sortie-caret {
+  width: 10px;
+  color: var(--color-faint);
+}
+
+.sortie-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sortie-meta {
+  font-size: 10.5px;
+  color: var(--color-faint);
+  white-space: nowrap;
+}
+
+/* The viewer: the camera, or one file. */
+.viewer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 10px;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.viewer-tab {
+  padding: 1px 8px;
+  border: 1px solid var(--color-rule);
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  cursor: pointer;
+}
+
+.viewer-tab[aria-selected="true"] {
+  color: var(--color-ink);
+  border-color: var(--color-rule-hard);
+  background: var(--color-cream);
+}
+
+.viewer-tab-file {
+  text-transform: none;
+  letter-spacing: 0.02em;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer-close {
+  padding: 0 6px;
+  border: 1px solid var(--color-rule);
+  background: var(--color-paper);
+  color: var(--color-soft-ink);
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.viewer-close:hover {
+  background: var(--color-sel);
+}
+
+/* The dark body the frame sits in. object-fit keeps the sensor's own 4:3 so
+   the footprint an FTE reads ground distance off is never quietly cropped. */
+.viewer-body {
+  position: relative;
+  min-height: 0;
+  background: var(--color-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.camera-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* The map's features the page draws on a downlinked observation: the
+   image's own box, letterboxed the same way (the SVG's meet is contain). */
+.camera-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.viewer-title {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  margin: 0;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-paper);
+  background: rgba(20, 19, 16, 0.6);
+}
+
+/* LOADING / NO RECORDER / OFF BLOCK. Said in words over the dark body, for the
+   same reason the map draws no-data as paper: a black rectangle cannot be told
+   apart from a dead feed. */
+/* The recorder's own word on the picture: red while the file is being
+   written, amber while the camera is served and nothing is written. */
+.camera-rec {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  margin: 0;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-left: 3px solid var(--color-warn);
+}
+
+.camera-rec[data-recording="true"] {
+  border-left-color: #e0242e;
+  color: #ffd5d7;
+}
+
+.camera-controls {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.camera-toggle {
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border: 0;
+  border-left: 3px solid #888;
+  cursor: pointer;
+}
+
+.camera-toggle[aria-pressed="true"] {
+  border-left-color: #00c8ff;
+  color: #c8f0ff;
+}
+
+/* PULL is a press and not a state, so it carries no pressed tone. It is
+   disabled while LIVE is on, where the pane is already asking. */
+
+
+.camera-annunciator {
+  position: absolute;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-paper);
+  background: rgba(20, 19, 16, 0.72);
+  padding: 5px 10px;
+  border: 1px solid rgba(251, 250, 245, 0.35);
+  text-align: center;
+  max-width: 90%;
+}
+
+.viewer-caption {
+  margin: 0;
+  padding: 3px 10px;
+  border-top: 1px solid var(--color-rule);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--color-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer-caption[data-warn="true"] {
+  color: var(--color-warn);
+}
+
+/* A followed text file, and a note about a file that is not a page. */
+.viewer-text {
+  margin: 0;
+  padding: 6px 10px;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  white-space: pre;
+}
+
+.viewer-note {
+  padding: 8px 12px;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-soft-ink);
+  background: var(--color-paper);
+}
+
+.viewer-note p {
+  margin: 0 0 6px;
+}
+
+/* The C-12. A paper-toned chevron, pointed the way the aircraft is going
+   (MapLibre rotates the element to the track). Not the cockpit's own plane
+   glyph: that display is dark-chromed and this one is paper, and the ink
+   that matters here is the outline, which reads over imagery either way. */
+.ownship {
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 20px solid var(--color-act);
+  filter: drop-shadow(0 0 1.5px var(--color-paper))
+          drop-shadow(0 0 1.5px var(--color-paper));
+}
+
+/* The briefed loiter: the ADMIN waypoint, told from a mission waypoint by
+   category rather than by emphasis. A hollow diamond, which is what a chart
+   uses for a named fix, where every mission waypoint is a circle; and the
+   word LOITER, where every mission waypoint is a number. Ink-on-paper and no
+   ring -- a ring is the frame's margin on a point the mission flies to, and
+   this is not one.
+
+   Neither channel is colour, so the category reads on a washed-out screen
+   and to a crew member who sees none. The copilot's tablet draws the same
+   three elements under the same class names, mirrored by value the way the
+   palette is (payload/display/web/app/cockpit.css).
+
+   The rotation lives on the inner mark, never on .loiter-pin -- MapLibre owns
+   the marker element's own transform to position it, and a rotate set there
+   is overwritten without a word. */
+.loiter-pin {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.loiter-pin-mark {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--color-ink);
+  background: var(--color-paper);
+  transform: rotate(45deg);
+  flex: none;
+}
+
+/* The waiting leg's word on its area, stood on the mask's north edge: the
+   same two inks as the transcript's line, on paper so it reads over the
+   wash and over imagery alike. */
+.coverage-pin {
+  padding: 1px 5px;
+  border: 1.5px solid var(--color-warn);
+  border-radius: 3px;
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-warn);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.coverage-pin[data-state="held"] {
+  border-color: #0b7d8e;
+  color: #0b7d8e;
+}
+.loiter-pin-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-ink);
+  text-shadow:
+     1px  1px 0 var(--color-paper), -1px  1px 0 var(--color-paper),
+     1px -1px 0 var(--color-paper), -1px -1px 0 var(--color-paper);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   The transport: a sortie is a recording
+   --------------------------------------------------------------------------
+   A real sortie arrives as a recording, so the console plays one -- scrub to a
+   point, pause on it, read the clock. It drives the SIM CLOCK, which is the
+   one thing both instruments derive from, so the map and the sensor feed seek
+   together by construction rather than by being kept in step.
+
+   A row of the instrument grid rather than an overlay on the map: it belongs
+   to the whole view, not to the map.
+   -------------------------------------------------------------------------- */
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-top: 1.5px solid var(--color-rule-hard);
+  background: var(--color-paper);
+}
+
+.transport-play {
+  width: 26px;
+  padding: 1px 0;
+  border: 1px solid var(--color-rule);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.transport-play:hover {
+  background: var(--color-sel);
+}
+
+.transport-scrub {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--color-act);
+  cursor: pointer;
+}
+
+.transport-clock {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--color-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A route waypoint, the tablet's own geometry (display/web/app/cockpit.css
+   .waypoint-marker): a dot ON the coordinate, a leader up and to the right,
+   and the number hung off its far end. A badge centred on the point covers
+   the waypoint's own bounds ring at every zoom a leg is flown at, and the
+   ring is what the crew fly to.
+
+   The root is the marker element MapLibre positions, so it takes no
+   position of its own -- `position: relative` here would take it out of
+   MapLibre's hands and pile every pin at the map's corner. It draws
+   nothing but the dot and the leader; the span is the badge. */
+/* A posted waypoint: its number, centred inside the waypoint's bounds ring
+   (the map's own `route-rings-line` layer). Nothing else -- no disc, no
+   leader, no anchor dot. The halo is what lifts ink off imagery. Same
+   geometry the tablet's waypoints carry (payload cockpit.css). */
+.route-pin {
+  display: block;
+  width: 0;
+  height: 0;
+  color: var(--color-ink);
+  cursor: default;
+}
+
+.route-pin span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 900;
+  color: inherit;
+  text-shadow:
+    0 0 3px var(--color-paper),
+    0 0 3px var(--color-paper),
+    0 0 3px var(--color-paper);
+}
+
+/* The first the crew have not flown over. */
+.route-pin-current {
+  color: var(--color-act);
+}
+
+/* A stop the crew have flown over: the feed's stamp, or its area held at the
+   floor. The held teal of every other coverage word, whether or not the
+   station has looked at it yet. */
+.route-pin-held {
+  color: #0b7d8e;
+}
+
+/* Zoomed out past where the ring reads: the ring is gone, so the waypoint is
+   a small numbered disc on its coordinate instead of a number floating in
+   open map. */
+.route-pin-compact span {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 3px;
+  border: 1.5px solid var(--color-paper);
+  border-radius: 50%;
+  background: #62d2ff;
+  box-shadow: 0 1px 3px rgba(20, 19, 16, 0.4);
+  font-size: 10px;
+  color: var(--color-ink);
+  text-shadow: none;
+}
+
+.route-pin-compact.route-pin-current span {
+  border: 2px solid var(--color-act);
+}
+
+/* Every seated mission's legs and pending stops: a small disc on the
+   coordinate labelled "mission.leg", filled in the mission's ink for a flown
+   leg and hollow for a stop the tour still holds. */
+.seat-pin {
+  display: block;
+  width: 0;
+  height: 0;
+  cursor: default;
+}
+
+.seat-pin span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 4px;
+  border: 2px solid;
+  border-radius: 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  box-shadow: 0 1px 3px rgba(20, 19, 16, 0.4);
+  white-space: nowrap;
+}
+
+.seat-pin-stop span {
+  border-style: dashed;
+}
+
+/* Which receiver the station is on: the aircraft's recorder or a
+   simulator's. A segmented control in the masthead, since it changes what
+   every other instrument on the page is reading. HITL is the aircraft's own
+   word, off its heartbeat, never a button. */
+.link-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  margin-left: 10px;
+}
+
+.link-btn {
+  border: 1px solid var(--color-rule);
+  border-right-width: 0;
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.link-btn:last-of-type {
+  border-right-width: 1px;
+}
+
+.link-btn[aria-selected="true"] {
+  background: var(--color-sel);
+  color: var(--color-cite);
+  border-color: var(--color-rule-hard);
+}
+
+.link-badge {
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--color-act);
+  border: 1px solid var(--color-act);
+  padding: 3px 6px;
+}
+
+/* Which side the payload is on, in the same words and tones as the tablet's
+   header: cite for the simulation, good for the aircraft delivering, warn
+   for a part missing, faint when the feed does not answer. */
+.link-badge[data-tone="sim"] { color: var(--color-cite); border-color: var(--color-cite); }
+.link-badge[data-tone="ok"] { color: var(--color-good); border-color: var(--color-good); }
+.link-badge[data-tone="warn"] { color: var(--color-warn); border-color: var(--color-warn); }
+.link-badge[data-tone="unknown"] { color: var(--color-faint); border-color: var(--color-faint); }
+
+/* A phase the v1.1 harness reports in several lines (a stop's segmentation
+   and its verdicts): kept as lines. */
+.entry-lines {
+  white-space: pre-wrap;
+}
+
+/* A mission compiled ahead of its flight: what its child holds. */
+.mission-prepared {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+.mission-prepared[data-state="ready"] {
+  color: #2f6b3a;
+}
+.mission-prepared[data-state="failed"] {
+  color: #a13a2d;
+}
+
+.mission-prepared-drop {
+  margin-left: 0.4em;
+  padding: 0 0.3em;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.mission-prepared-drop:hover {
+  opacity: 1;
+}
+
+/* The Files tab: the tree the sortie panel draws, over every sortie. */
+.files {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+.files-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+}
+
+/* A recording playing in the camera's place. */
+.player-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+}
+.player-bar input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+.player-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+/* Which site the station is on, beside the link buttons. */
+.site-select {
+  margin-left: 0.5rem;
+  max-width: 14rem;
+}
+
+.mission-runner {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+.mission-runner[data-state="failed"] {
+  color: #a13a2d;
+}
+
+/* The telemetry panel: the aircraft's own state, beside what its camera sees.
+   Two columns of labelled readings, tabular figures like every other
+   instrument here. Amber is a reading older than the aircraft's state -- it
+   stays on screen and says so, because a blanked field reads as a field that
+   was never there. */
+.telemetry {
+  display: grid;
+  /* Head, the readings, and the link strip under them: the strip keeps its
+     own row rather than scrolling with the grid, since the one thing that
+     must stay on screen while the panel is still is the row that says
+     whether it is still because the link is quiet or because it is gone. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  min-width: 0;
+  border-left: 1px solid var(--color-rule);
+}
+
+.telemetry-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.telemetry-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.telemetry-state {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-left: auto;
+  color: var(--color-good);
+  white-space: nowrap;
+}
+
+.telemetry-state[data-warn="true"] {
+  color: var(--color-act);
+}
+
+/* The datalink, under the readings it carried. */
+.link-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  border-top: 1px solid var(--color-rule);
+  color: var(--color-good);
+  min-width: 0;
+}
+
+.link-strip[data-tone="warn"] { color: var(--color-act); }
+.link-strip[data-tone="bad"] { color: var(--color-warn); }
+
+.link-trips {
+  flex: 0 0 auto;
+  display: block;
+  opacity: 0.8;
+}
+
+.link-figure {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The last figure takes what is left, so the two ahead of it keep their
+   numbers whole on a narrow band rather than every one of them truncating. */
+.link-figure:last-child { margin-left: auto; }
+
+.link-figure[data-warn="true"] { color: var(--color-act); }
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+
+/* Ten rows of two, which is every reading, inside the band at the seat's own
+   1080p without scrolling. It scrolls on a shorter panel rather than dropping
+   the rows at the bottom. */
+.telemetry-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 2px 10px;
+  min-width: 0;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.telemetry-cell:nth-child(odd) {
+  border-right: 1px solid var(--color-rule);
+}
+
+.telemetry-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.telemetry-value {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.telemetry-value[data-warn="true"] {
+  color: var(--color-act);
+}
+
+.telemetry-value[data-quiet="true"] {
+  color: var(--color-faint);
+}
+
+/* The rig: the select above Fly next, Setup and Stop, the job's last line. */
+.fly-block {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+
+.mode-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-select,
+.missions-flight {
+  flex: 1 1 10rem;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--color-rule-hard);
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mode-job,
+.mode-note {
+  flex: 1 1 100%;
+  min-width: 0;
+  /* One unbreakable job line (an ssh -L … the tail prints) must not set the
+     sidebar's minimum width: without this the whole left column grows to the
+     line and the Files tab lands under the map pane. */
+  contain: inline-size;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--color-faint);
+}
+
+.mode-job[data-state="running"] { color: var(--color-act); }
+.mode-job[data-state="failed"],
+.mode-note { color: var(--color-warn); }
+
+/* The band's third column: the telemetry over the links. */
+.band-right {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  min-width: 0;
+  border-left: 1px solid var(--color-rule);
+}
+
+.band-right .telemetry {
+  border-left: 0;
+}
+
+.links {
+  display: grid;
+  grid-template-rows: auto auto auto;
+  min-width: 0;
+  border-top: 1.5px solid var(--color-rule-hard);
+}
+
+.links-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.links-title,
+.links-mode {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.links-mode { color: var(--color-soft-ink); }
+
+.links-state {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-good);
+}
+
+.links-state[data-warn="true"] { color: var(--color-warn); }
+
+.links-rows {
+  list-style: none;
+  margin: 0;
+  padding: 3px 0;
+  max-height: 11.5rem;
+  overflow-y: auto;
+}
+
+.links-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 1px 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  min-width: 0;
+}
+
+.links-light {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  align-self: center;
+  border-radius: 50%;
+  background: var(--color-warn);
+}
+
+.links-light[data-ok="true"] { background: var(--color-good); }
+
+/* A row a running job has not reached yet: amber, and it pulses. */
+.links-light[data-state="starting"],
+.links-light[data-state="stopping"] {
+  background: var(--color-act);
+  animation: links-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes links-pulse {
+  50% { opacity: 0.35; }
+}
+
+.links-state[data-moving="true"] { color: var(--color-act); }
+
+/* A row that answered slowly, or stopped answering a moment ago: the
+   process stands and the link to it is what is slow, so amber, steady. */
+.links-light[data-state="slow"] { background: var(--color-act); }
+.links-state[data-slow="true"] { color: var(--color-act); }
+
+.links-name {
+  flex: 0 0 8.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink);
+}
+
+.links-where {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: 1px solid var(--color-rule);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.links-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-faint);
+}
+
+.links-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 0;
+  padding: 4px 10px 6px 0;
+  border-top: 1px solid var(--color-rule);
+}
+
+.links-controls:empty { display: none; }
+
+
+/* A multi-prompt tasking: its prompts numbered, each follow-on with the
+   time it is spoken into the first leg. */
+.mission-prompt-no {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--color-rule-hard);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--color-soft-ink);
+  vertical-align: middle;
+}
+
+.mission-followup {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-soft-ink);
+}
+
+/* --------------------------------------------------------------------------
+   Judge mode (JudgeConsole.tsx): the station reviewing finished MAPS runs.
+   The same shell; the sidebar holds the task and the verdict, the map the
+   review, the right rail MAPS's own account of its pick. */
+.judge-body { grid-template-columns: 23rem minmax(0, 1fr) 27rem; }
+.judge-side {
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.judge-block { padding: 12px 14px; border-bottom: 1px solid var(--color-rule); }
+.judge-list { display: flex; flex-direction: column; min-height: 0; flex: 1 1 0; }
+.judge-kicker {
+  margin: 0 0 6px; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-faint);
+}
+.judge-task { margin: 0; font-size: 19px; line-height: 1.3; color: var(--color-ink); }
+.judge-commit { margin: 0 0 10px; font-size: 15px; color: var(--color-act); font-weight: 700; }
+.judge-actions { display: grid; gap: 6px; }
+.judge-actions .btn { padding: 10px 12px; font-size: 12px; }
+.judge-confirm { background: var(--color-act); border-color: var(--color-act); }
+.judge-replace { background: var(--color-good); border-color: var(--color-good); }
+.btn kbd, .judge-hint kbd {
+  font-family: inherit; font-size: 9.5px; border: 1px solid currentColor; padding: 0 3px; margin-left: 6px; opacity: 0.8;
+}
+.judge-fault { margin: 6px 0 0; color: var(--color-warn); font-size: 13px; }
+.judge-hint { margin: 6px 0 0; color: var(--color-faint); font-size: 13px; }
+.linkish { background: none; border: 0; padding: 0; color: var(--color-cite); font: inherit; cursor: pointer; }
+.judge-rows { overflow-y: auto; min-height: 0; flex: 1 1 0; }
+.judge-row {
+  display: flex; justify-content: space-between; gap: 8px; width: 100%; padding: 3px 4px; border: 0;
+  background: none; font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+.judge-row:hover { background: var(--color-sel); }
+.judge-row[data-on="true"] { background: #e3efe4; outline: 1px solid var(--color-good); }
+.judge-row[data-maps="true"] { color: var(--color-act); font-weight: 700; }
+.judge-dim { color: var(--color-faint); }
+.judge-search {
+  width: 100%; margin-bottom: 6px; padding: 5px 7px; border: 1px solid var(--color-rule); background: var(--color-paper); font: inherit;
+}
+.judge-map { grid-template-rows: minmax(0, 1fr) auto; }
+.judge-canvas { min-height: 0; cursor: crosshair; }
+.judge-canvas .maplibregl-canvas { cursor: crosshair; }
+.judge-legend {
+  margin: 0; padding: 6px 12px; font-size: 12.5px; color: var(--color-soft-ink); border-top: 1px solid var(--color-rule);
+}
+.judge-legend .sw { display: inline-block; width: 11px; height: 11px; margin: 0 4px 0 12px; vertical-align: -1px; border: 2px solid; }
+.sw.is-maps { border-color: var(--color-act); }
+.sw.is-cand { border-color: #5fb4ff; }
+.sw.is-sel { border-color: #3cff3c; background: var(--color-good); }
+.sw.is-prior { border-color: #ffd600; }
+.sw.is-stop { border-color: var(--color-paper); background: var(--color-ink); border-radius: 50%; }
+.judge-label {
+  font-size: 11.5px; font-weight: 700; white-space: nowrap; pointer-events: none;
+  text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 5px #000;
+}
+.judge-label.is-cand { color: #9fd3ff; }
+.judge-label.is-maps { color: #ffb489; }
+.judge-label.is-prior { color: #ffd600; }
+.judge-trace {
+  overflow-y: auto; min-height: 0; padding: 12px 14px; border-left: 1.5px solid var(--color-rule-hard); background: var(--color-paper);
+}
+.judge-reason { margin: 0 0 12px; font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; }
+.judge-full summary { cursor: pointer; font-size: 13px; color: var(--color-cite); margin-bottom: 8px; }
+.judge-clock { font-variant-numeric: tabular-nums; font-size: 14px; }
+.judge-done { padding: 48px; }
+.judge-canvas.is-far .judge-label:not(.is-maps) { display: none; }
+.judge-canvas-wrap { position: relative; min-height: 0; }
+.judge-canvas-wrap .judge-canvas { position: absolute; inset: 0; }
+.study-layers { position: absolute; top: 10px; left: 10px; z-index: 2; display: flex; gap: 6px; }
+.study-layers .study-chip {
+  padding: 5px 10px; border: 1px solid var(--color-rule-hard); background: var(--color-paper); font: inherit;
+  font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; cursor: pointer;
+}
+.study-layers .study-chip[data-on="true"] { background: var(--color-ink); color: var(--color-paper); }
+.search-body { grid-template-columns: 27rem minmax(0, 1fr); }
+.search-row { align-items: baseline; padding: 5px 4px; }
+.search-n { flex: 0 0 1.8em; color: var(--color-faint); font-variant-numeric: tabular-nums; }
+.search-text { flex: 1 1 auto; line-height: 1.3; }
+.study-hover {
+  padding: 5px 9px; background: var(--color-paper); border: 1px solid var(--color-rule); font-size: 12.5px; white-space: nowrap;
+}
+.study-north {
+  position: absolute; top: 10px; right: 12px; z-index: 2; padding: 3px 7px; background: var(--color-paper);
+  border: 1px solid var(--color-rule-hard); font-size: 12px; letter-spacing: 0.08em;
+}
+.study-search {
+  position: absolute; top: 46px; left: 10px; z-index: 3; width: 23rem; max-height: calc(100% - 90px);
+  display: flex; flex-direction: column; padding: 8px; background: var(--color-paper); border: 1px solid var(--color-rule-hard);
+}
+.study-search .judge-search { margin-bottom: 4px; }
+.study-search .judge-hint { margin: 0 0 4px; font-size: 12px; }
+/* The rows size to their content here: the sidebar's flex-basis-0 list would collapse to nothing. */
+.study-search .judge-rows { flex: none; min-height: auto; max-height: 18rem; }
+.sw.is-nodata { border-color: #d9d4c6; background: #d9d4c6; }
+.study-loading { color: var(--color-faint); font-style: italic; }
+/* The instruction and MAPS's commit hold a fixed height, so the buttons under them never move. */
+.judge-task { height: 5.3em; overflow-y: auto; }
+.judge-commit { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* --------------------------------------------------------------------------
+   The capacity study's operator console (CapacityConsole.tsx). Its screenshot is a
+   panel of the paper's capacity figure, so it wears the figure's look, not the
+   station's: one sans face, the figure palette (MAPS-SciRob figures/style.py),
+   no orange (MAPS's commit is white over a dark halo on the imagery), text sized to survive
+   reduction to 9 cm. */
+.capacity {
+  --cap-navy: #1F3A5F; --cap-teal: #2F6870; --cap-sky: #8FB0D3;
+  --cap-sand: #E9DCC3; --cap-grey: #6B6259; --cap-ink: #1E1B18;
+  font-family: Arimo, "Liberation Sans", Arial, Helvetica, sans-serif; color: var(--cap-ink); background: #fff;
+}
+.capacity * { font-family: inherit; }
+.cap-bar { display: flex; align-items: baseline; gap: 18px; padding: 10px 18px; border-bottom: 2px solid var(--cap-navy); background: #fff; }
+.cap-title { font-size: 20px; font-weight: 700; color: var(--cap-navy); }
+.cap-mission, .cap-arm, .cap-count { font-size: 16px; color: var(--cap-grey); }
+.cap-arm { color: var(--cap-teal); font-weight: 700; }
+.cap-clock { font-size: 22px; font-weight: 700; color: var(--cap-navy); font-variant-numeric: tabular-nums; }
+.cap-body { grid-template-columns: 27rem minmax(0, 1fr); }
+.cap-side { display: flex; flex-direction: column; overflow: hidden; background: #fff; border-right: 1px solid var(--cap-sand); }
+.cap-block { padding: 12px 16px; border-bottom: 1px solid var(--cap-sand); }
+.cap-kicker { margin: 0 0 6px; font-size: 14px; font-weight: 700; color: var(--cap-grey); text-transform: uppercase; letter-spacing: 0.06em; }
+.cap-report-text { margin: 0; font-size: 21px; line-height: 1.3; height: 5.3em; overflow-y: auto; }
+.cap-status { margin: 0 0 10px; font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cap-actions { display: grid; gap: 8px; }
+.cap-btn { padding: 11px 14px; font-size: 16px; font-weight: 700; border: 2px solid var(--cap-navy); cursor: pointer; border-radius: 3px; }
+.cap-confirm { background: var(--cap-navy); color: #fff; }
+.cap-outline { background: #fff; color: var(--cap-navy); }
+.cap-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.cap-btn kbd, .cap-link kbd { font-size: 12px; border: 1px solid currentColor; padding: 0 4px; margin-left: 6px; border-radius: 2px; }
+.cap-hint { margin: 8px 0 0; font-size: 14px; color: var(--cap-grey); }
+.cap-link { background: none; border: 0; padding: 0; color: var(--cap-teal); font-size: 14px; cursor: pointer; text-decoration: underline; }
+.cap-right { float: right; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.cap-reason { margin: 0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+.cap-reason.is-clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cap-row { display: flex; justify-content: space-between; width: 100%; padding: 3px 4px; border: 0; background: none; font-size: 15px; cursor: pointer; text-align: left; }
+.cap-row[data-on="true"] { outline: 2px solid var(--cap-navy); }
+.cap-row[data-maps="true"] { color: var(--cap-navy); font-weight: 700; }
+.cap-dim { color: var(--cap-grey); }
+.cap-list { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.cap-rows { overflow-y: auto; min-height: 0; flex: 1 1 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 10px; align-content: start; }
+.cap-listrow { display: flex; align-items: center; gap: 8px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.cap-listrow[data-current="true"] { font-weight: 700; }
+.cap-n { width: 2.2em; text-align: right; color: var(--cap-grey); }
+.cap-chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 10px; font-size: 13px; white-space: nowrap; }
+.cap-chip.is-not_started, .cap-chip.is-waiting { background: #ecebe8; color: var(--cap-grey); }
+.cap-chip.is-searching { background: #dce7f2; color: var(--cap-navy); }
+.cap-chip.is-ready { background: var(--cap-navy); color: #fff; }
+.cap-chip.is-open { background: #fff; color: var(--cap-navy); border: 2px solid var(--cap-navy); }
+.cap-chip.is-answered { background: #e2ecec; color: var(--cap-teal); }
+.cap-chip.is-skipped { background: #f3ede2; color: var(--cap-grey); text-decoration: line-through; }
+.cap-spin { width: 9px; height: 9px; border: 2px solid var(--cap-sky); border-top-color: var(--cap-navy); border-radius: 50%; animation: cap-spin 1s linear infinite; }
+@keyframes cap-spin { to { transform: rotate(360deg); } }
+.cap-legend { margin: 0; padding: 7px 14px; font-size: 14px; color: var(--cap-grey); border-top: 1px solid var(--cap-sand); background: #fff; }
+.cap-sw-maps { border-color: #fff; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(30,27,24,0.55); }
+.cap-sw-cand { border-color: var(--cap-sky); }
+.cap-sw-pick { border-color: var(--cap-navy); border-radius: 50%; }
+.capacity .study-chip, .capacity .study-hover, .capacity .study-search, .capacity .study-north { font-size: 14px; }
+.capacity .study-chip[data-on="true"] { background: var(--cap-navy); border-color: var(--cap-navy); }
+.capacity .study-search .judge-row { font-size: 15px; }
+/* Street names and ids on the imagery: white text, a dark halo. */
+.judge-label.paper-name { color: #fff; font-size: 13px; text-shadow: 0 0 3px #1E1B18, 0 0 3px #1E1B18, 0 0 6px #1E1B18; }
+/* Capture mode: no cursor, no hover state, nothing transient. */
+.is-capture, .is-capture * { cursor: none !important; }
+.is-capture .study-hover.study-tip, .is-capture .study-loading { display: none; }
+.cap-legend .sw { display: inline-block; width: 12px; height: 12px; margin: 0 5px 0 14px; vertical-align: -1px; border: 2.5px solid; }
+.cap-legend .sw.cap-sw-maps { border-color: #fff; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(30,27,24,0.55); }
+.cap-legend .sw.cap-sw-cand { border-color: var(--cap-sky); }
+.cap-legend .sw.cap-sw-pick { border-color: var(--cap-navy); border-radius: 50%; }
+/* The report reads whole; the controls sit at the foot of the column, where no report's length moves them. */
+.cap-report-text { height: auto; max-height: none; overflow: visible; }
+.cap-side { justify-content: flex-start; }
+.cap-dock { margin-top: auto; border-top: 2px solid var(--cap-navy); border-bottom: 0; background: #fff; }
+.cap-list { flex: 1 1 0; }
+.cap-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.cap-scroll .cap-list { flex: 1 0 auto; min-height: 10rem; }

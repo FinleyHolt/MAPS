@@ -13,3 +13,4 @@ dist/
 /benchmarks/calcity/tiles
 /data/
 /.commit
+node_modules/
