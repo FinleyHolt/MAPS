@@ -46,10 +46,10 @@ ARMS = ("solo", "team")
 SOURCES = ("confirm", "replace", "own_search", "skip")
 #: One condition's session, seconds: the same for every participant.
 SESSION_S = 3600.0
-#: MAPS searches running at once in the replay: enough that a half of the E3 batch (550
-#: searches, one taking up to 44 minutes) lands within the hour, so the person works with
-#: MAPS's whole output in reach. 96 does on the pilot's lists (``plan`` records each list's
-#: count); the batch itself flew 64 workers at once.
+#: MAPS searches running at once in the replay: enough that a participant's half (550
+#: searches) lands within the hour, so the person works with MAPS's whole output in reach,
+#: and the concurrency the replayed batch itself flew at (the E3 Cal City episodes re-flown
+#: 96 at once on two nodes, 48 each, 2026-10-21). ``plan`` records each list's count.
 AGENTS = 96
 
 
