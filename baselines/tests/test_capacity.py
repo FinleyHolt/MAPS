@@ -18,13 +18,14 @@ from baselines.tests.test_human_study import _CFG, _maps_row, _root
 
 
 def test_the_halves_match_on_maps_sr_and_the_plan_counterbalances() -> None:
-    rows = {f"block_0::{i}#0": {"metrics": {"SR": int(i % 3 == 0)}} for i in range(101)}
+    rows = {f"block_0::{i}#0": {"metrics": {"SR": int(i % 3 == 0)}, "elapsed_s": 60.0} for i in range(101)}
     a, b = capacity.halves(rows, seed=7)
     assert not set(a) & set(b) and len(a) + len(b) == 101 and abs(len(a) - len(b)) <= 1
     assert abs(sum(rows[e]["metrics"]["SR"] for e in a) - sum(rows[e]["metrics"]["SR"] for e in b)) <= 1
     doc = capacity.plan(rows, ["p01", "p02", "p03", "p04"], seed=7)
     ps = doc["participants"]
     assert sorted((ps[p]["solo_half"], ps[p]["first"]) for p in ps) == [("A", "solo"), ("A", "team"), ("B", "solo"), ("B", "team")]
+    assert ps["p01"]["maps_ready_in_session"] == len(ps["p01"]["lists"]["team"])
     assert ps["p01"]["lists"]["solo"] != ps["p03"]["lists"]["solo"] and sorted(ps["p01"]["lists"]["solo"]) == sorted(ps["p03"]["lists"]["solo"])
 
 
