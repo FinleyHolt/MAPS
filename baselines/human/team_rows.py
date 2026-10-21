@@ -9,6 +9,10 @@ this writes reads like any bench root: ``run_report`` tables it, and
 ``ab_report`` pairs it with the MAPS root (policy ``audit``) or with a solo
 human root.
 
+The map-search arm's ledger (``baselines.human.map_search``) scores here too:
+each ``commit`` decision is the person's point on the whole map, nothing flown,
+scored where it lies against the same episode (policy ``human_map``).
+
     python -m baselines.human.team_rows --maps-root output/e2/<root> \\
         --decisions output/human_study/<study>/p01/decisions.jsonl --out-root output/baselines/audit/p01
 """
@@ -89,6 +93,8 @@ def team_row(row: dict, decision: dict, cfg: dict, shape_of=None) -> dict:
     footprint) scores a replacement on a shape bench."""
     out = json.loads(json.dumps(row))
     m = out["metrics"]
+    if decision["decision"] == "commit":
+        return _search_row(out, decision, cfg, shape_of)
     audit = {"audit_decision": decision["decision"], "audit_review_s": decision.get("review_s"),
              "audit_trace_turns_opened": len(decision.get("opened") or []),
              "audit_candidate": decision.get("candidate")}
@@ -114,18 +120,38 @@ def team_row(row: dict, decision: dict, cfg: dict, shape_of=None) -> dict:
     return out
 
 
+def _search_row(out: dict, decision: dict, cfg: dict, shape_of) -> dict:
+    """The episode as the map-search arm left it: the person's point, nothing flown."""
+    m = out["metrics"]
+    criterion = m.get("success_criterion")
+    if criterion == "shape" and shape_of is None:
+        raise ValueError(f"{out['episode_id']}: a shape row is scored on its target's footprint: pass shape_of")
+    maps_sr = m["SR"]
+    xy = (float(decision["xy"][0]), float(decision["xy"][1]))
+    m.update(score_arrival(criterion=criterion, final_pos_xy=xy, target_xy=tuple(out["target_xy"]), pos_trajectory=[xy],
+                           success_dist_m=float(cfg["success_radius_m"]),
+                           gt_polygon=shape_of(out["episode_id"]) if criterion == "shape" else None, commit_xy=xy))
+    m.update(steps_taken=0, policy="human_map", commit_path="human_map:commit", search_s=decision.get("search_s"),
+             maps_SR=maps_sr)
+    out.update(visited_xy=[list(xy)], commit_xy=list(xy))
+    return out
+
+
 def write_root(maps_root: Path, decisions: list[dict], out_root: Path) -> list[dict]:
     """The team root: one row per decided episode, and the MAPS manifest with policy ``audit``."""
     rows = scored_rows(maps_root)
     cfg = root_config(maps_root)
     manifest = json.loads((maps_root / "run_manifest.json").read_text())
-    manifest["config_yaml"] = yaml.safe_dump({**cfg, "policy": "audit"}, sort_keys=False)
+    policy = "human_map" if decisions and all(d["decision"] == "commit" for d in decisions) else "audit"
+    if policy == "audit" and any(d["decision"] == "commit" for d in decisions):
+        raise ValueError("a ledger mixes map-search commits with audit decisions: score each arm on its own")
+    manifest["config_yaml"] = yaml.safe_dump({**cfg, "policy": policy}, sort_keys=False)
     manifest["out_root"] = str(out_root.resolve())
     manifest["audit"] = {"maps_root": str(maps_root.resolve()), "decisions": len(decisions)}
     # The team root holds the decided episodes, not the MAPS root's whole selection.
     manifest["selection"] = {**(manifest.get("selection") or {}), "episodes_n": len(decisions), "allowlist": "audit decisions"}
     shapes = TargetShapes(manifest["split"]) if any(
-        rows[d["episode_id"]]["metrics"].get("success_criterion") == "shape" and d["decision"] == "replace"
+        rows[d["episode_id"]]["metrics"].get("success_criterion") == "shape" and d["decision"] in ("replace", "commit")
         for d in decisions) else None
     out = [team_row(rows[d["episode_id"]], d, cfg, shapes) for d in decisions]
     out_root.mkdir(parents=True, exist_ok=True)
@@ -144,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     # The last decision per episode: a resumed session may have re-judged one.
     decided = {d["episode_id"]: d for d in iter_json_rows(args.decisions)}
     rows = write_root(args.maps_root, list(decided.values()), args.out_root)
-    print(f"{len(rows)} team rows -> {args.out_root / 'episodes.jsonl'}")
+    print(f"{len(rows)} rows -> {args.out_root / 'episodes.jsonl'}")
     return 0
 
 

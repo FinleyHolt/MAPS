@@ -171,3 +171,28 @@ def test_a_candidate_is_as_near_as_its_outline() -> None:
     strip = audit_console.Candidate(id=0, label="runway", color="", xy=(500.0, 0.0),
                                     contour=[(0.0, -5.0), (1000.0, -5.0), (1000.0, 5.0), (0.0, 5.0)])
     assert audit_console._reach(strip, (10.0, 0.0)) == 0.0 and audit_console._reach(strip, (10.0, 25.0)) == 20.0
+
+
+def test_the_map_search_lists_every_episode_blind_and_keeps_the_last_commit(tmp_path) -> None:
+    from baselines.human import map_search
+
+    root, out = _root(tmp_path), tmp_path / "p01"
+    s = map_search.Search(root, ["block_0::1#0"], out)
+    state = s.state()
+    assert [e["instruction"] for e in state["episodes"]] == ["the red car"] and state["done_n"] == 0
+    blob = json.dumps(state)
+    for leak in ("target", "100.0", '"SR"', "metrics", "commit_xy"):
+        assert leak not in blob, leak
+    assert not s.open("block_9::0#0")["ok"]
+    assert s.open("block_0::1#0")["ok"] and s.commit("block_0::1#0", (3.0, 40.0))["ok"]
+    assert s.commit("block_0::1#0", (0.0, 99.0))["ok"]
+    resumed = map_search.Search(root, ["block_0::1#0"], out).state()
+    assert resumed["done_n"] == 1 and resumed["episodes"][0]["committed"] == [0.0, 99.0]
+
+
+def test_a_map_search_commit_is_scored_where_it_lies_with_nothing_flown() -> None:
+    row = _maps_row()
+    hit = team_rows.team_row(row, {"decision": "commit", "xy": [0.0, 95.0], "search_s": 12.0}, _CFG)
+    assert hit["metrics"]["SR"] == 1 and hit["metrics"]["steps_taken"] == 0 and hit["metrics"]["policy"] == "human_map"
+    assert hit["metrics"]["maps_SR"] == 0 and hit["commit_xy"] == [0.0, 95.0] and hit["visited_xy"] == [[0.0, 95.0]]
+    assert team_rows.team_row(row, {"decision": "commit", "xy": [0.0, 10.0]}, _CFG)["metrics"]["SR"] == 0
