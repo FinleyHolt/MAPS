@@ -17,7 +17,10 @@ is searched by hand, and a result landing meanwhile does not interrupt it. Alone
 Each answer lands in ``<out>/answers.jsonl`` with its source (``confirm``,
 ``replace``, ``own_search``, ``skip``), when the report was opened and answered
 and when MAPS's result was ready, in UTC; ``<out>/session.json`` holds the
-session's start, so a restart keeps the clock. ``team_rows`` scores the ledger.
+session's start and its list, so a restart keeps the clock. ``team_rows`` scores the
+ledger, and with MAPS also every result that landed within the session that the person
+never reached: an ``unchecked`` answer, scored as MAPS scored it, since the team's output
+is every MAPS result plus the person's corrections and searches.
 
     python -m baselines.human.capacity plan --maps-root <root> --participants p01,p02,p03,p04 --out <study>
 """
@@ -118,7 +121,7 @@ class Capacity:
             self.started = clock()
             meta.write_text(json.dumps({"arm": arm, "agents": agents if arm == "team" else 0, "session_s": self.session_s,
                                         "started_epoch": self.started, "started_at": _utc(self.started),
-                                        "episodes_n": len(order)}, indent=1))
+                                        "episodes_n": len(order), "order": order}, indent=1))
         self.answered = {a["episode_id"]: a for a in _jsonl(self.ledger)}
         self._cache: dict = {}
         self._open()

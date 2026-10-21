@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import time
 from pathlib import Path
 
 import yaml
@@ -98,6 +99,11 @@ def capacity_row(row: dict, answer: dict, cfg: dict, shape_of=None) -> dict:
                 "capacity_answer_s": answer.get("answer_s"), "maps_ready_at": answer.get("maps_ready_at"),
                 "maps_ready_at_open": answer.get("maps_ready_at_open")}
     policy = f"capacity_{answer.get('arm') or 'solo'}"
+    if source == "unchecked":
+        # MAPS's own result, released within the session and never reached: it stands as MAPS left it.
+        out = json.loads(json.dumps(row))
+        out["metrics"].update(policy=policy, commit_path="capacity:unchecked", maps_SR=out["metrics"]["SR"], **timeline)
+        return out
     if source == "skip":
         out = json.loads(json.dumps(row))
         maps_sr = out["metrics"]["SR"]
@@ -110,6 +116,23 @@ def capacity_row(row: dict, answer: dict, cfg: dict, shape_of=None) -> dict:
     out = team_row(row, as_decision, cfg, shape_of)
     out["metrics"].update(policy=policy, commit_path=f"capacity:{source}", **timeline)
     return out
+
+
+def unchecked_answers(session: dict, answered: set[str], rows: dict[str, dict]) -> list[dict]:
+    """A team session's MAPS results that landed before its end and that the person never
+    reached: each an ``unchecked`` answer at its release, which counts as MAPS scored it."""
+    from baselines.human.capacity import release_times
+
+    order = session.get("order") or []
+    if session.get("arm") != "team" or not order:
+        return []
+    _starts, ends = release_times([float(rows[e]["elapsed_s"]) for e in order], int(session.get("agents") or 8))
+    started, span = float(session["started_epoch"]), float(session["session_s"])
+    stamp = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started + t))
+    return [{"episode_id": e, "order_index": i, "arm": "team", "source": "unchecked", "xy": rows[e].get("commit_xy"),
+             "opened_at": None, "answered_at": stamp(end), "answer_s": None, "maps_ready_at": stamp(end),
+             "maps_ready_at_open": None}
+            for i, (e, end) in enumerate(zip(order, ends)) if end <= span and e not in answered]
 
 
 def team_row(row: dict, decision: dict, cfg: dict, shape_of=None) -> dict:
@@ -206,6 +229,11 @@ def main(argv: list[str] | None = None) -> int:
     select_bench(args.maps_root)
     # The last decision per episode: a resumed session may have re-judged one.
     decided = {d["episode_id"]: d for d in iter_json_rows(args.decisions)}
+    session_file = args.decisions.parent / "session.json"
+    if session_file.is_file() and any("source" in d for d in decided.values()):
+        # A capacity session with MAPS: the results it released that the person never reached.
+        for d in unchecked_answers(json.loads(session_file.read_text()), set(decided), scored_rows(args.maps_root)):
+            decided[d["episode_id"]] = d
     rows = write_root(args.maps_root, list(decided.values()), args.out_root)
     print(f"{len(rows)} rows -> {args.out_root / 'episodes.jsonl'}")
     return 0
