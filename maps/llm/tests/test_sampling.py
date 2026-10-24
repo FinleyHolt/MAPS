@@ -38,6 +38,17 @@ def test_reasoning_effort_rides_as_the_string_given(monkeypatch) -> None:
     assert "reasoning_effort" not in sampling_kwargs("inkling-small", "")
 
 
+def test_none_on_the_gemma_26b_card_sends_its_template_switch_off(monkeypatch) -> None:
+    """Gemma's template reads enable_thinking and never reasoning_effort: none
+    turns the switch off and sends no effort key; another rung still rides."""
+    kw = sampling_kwargs("gemma4-26b-a4b-nvfp4", "none")
+    assert kw["chat_template_kwargs"] == {"enable_thinking": False}
+    assert "reasoning_effort" not in kw and kw["presence_penalty"] == 1.0
+    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "none")
+    assert sampling_kwargs("gemma4-26b-a4b-nvfp4")["chat_template_kwargs"] == {"enable_thinking": False}
+    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", "high")["chat_template_kwargs"] == {"enable_thinking": True}
+
+
 def test_vision_content_helpers_build_openai_parts() -> None:
     image = build_image_part(b"jpeg")
     assert image["type"] == "image_url"

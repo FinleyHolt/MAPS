@@ -361,9 +361,10 @@ class NoDialOff(RuntimeError):
 
 
 def dial_off(model: str) -> dict[str, Any]:
-    """The request keys that switch ``model``'s thinking off: ``reasoning_effort``
-    ``"none"`` where its card lists that rung, else the template's
-    ``enable_thinking`` switch, else :class:`NoDialOff`.
+    """The request keys that switch ``model``'s thinking off: the card's own
+    ``thinking_off`` where it names one, else ``reasoning_effort`` ``"none"``
+    where its card lists that rung, else the template's ``enable_thinking``
+    switch, else :class:`NoDialOff`.
 
     ponytail: a chat-template card that declares its effort rungs stands for a
     template that reads ``enable_thinking`` (the Qwen card); the Gemma cards
@@ -371,6 +372,8 @@ def dial_off(model: str) -> dict[str, Any]:
     from maps.llm.model_cards import card_for
 
     card = card_for(model)
+    if "thinking_off" in card:
+        return dict(card["thinking_off"])
     if "none" in card.get("efforts", ()):
         return {"reasoning_effort": "none"}
     if "efforts" in card and card.get("wire") != "openai":
