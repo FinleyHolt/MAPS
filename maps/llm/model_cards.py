@@ -38,9 +38,14 @@ CARDS: dict[str, dict[str, Any]] = {
     # tool-call surface. The GGUF alias is the same weights served by
     # llama.cpp (flown aboard); a serve is not a model, and a run has to be
     # able to name which one it got. The bench NVFP4 serve adds presence
-    # penalty 1.0, which breaks the 26B's thinking loops.
+    # penalty 1.0, which breaks the 26B's thinking loops. Its template
+    # (chat_template.jinja of the NVFP4 build) reads `enable_thinking` and
+    # never `reasoning_effort`: false leaves `<|think|>` out of the system turn
+    # and prefills an empty thought channel, so `none` is that switch. The
+    # other Gemma templates are unchecked and keep no switch.
     "gemma4-26b-a4b-nvfp4": {"tokenizer": "nvidia/Gemma-4-26B-A4B-NVFP4", "top_p": 0.95, "top_k": 64,
-                             "presence_penalty": 1.0},
+                             "presence_penalty": 1.0,
+                             "thinking_off": {"chat_template_kwargs": {"enable_thinking": False}}},
     "gemma4-26b-a4b-gguf": {"tokenizer": "google/gemma-4-26B-A4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e4b": {"tokenizer": "google/gemma-4-E4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e2b": {"tokenizer": "google/gemma-4-E2B-it", "top_p": 0.95, "top_k": 64},
@@ -154,7 +159,11 @@ def sampling_kwargs(model_id: str, reasoning_effort: str | None = None) -> dict[
         if "presence_penalty" in card:
             kwargs["presence_penalty"] = card["presence_penalty"]
     chosen = effort(reasoning_effort)
-    if chosen:
+    if chosen == "none" and "thinking_off" in card:
+        # the card names its own off switch (the Gemma 26B template): send it
+        # in place of a `reasoning_effort` the template never reads
+        kwargs.update(card["thinking_off"])
+    elif chosen:
         # ponytail: the request key is spelled `reasoning_effort` for every
         # card; a card that names no effort values (the gemma rows) takes any
         # well-formed value at discovery, and a template without the field

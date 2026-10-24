@@ -585,12 +585,12 @@ def test_a_baseline_arm_whose_model_has_no_dial_off_is_refused_at_start(tmp_path
 
     monkeypatch.setattr(bf, "CONFIG", REPO / "configs/baselines/geonav.yaml")
     monkeypatch.setattr(bf, "_missing_block_assets", lambda eps: [])
-    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: SimpleNamespace(model_id="gemma4-26b-a4b-nvfp4"))
+    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: SimpleNamespace(model_id="gemma4-e2b"))
     monkeypatch.setattr(endpoint_spec, "install_spec", lambda spec: None)
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused arm flew"))
     assert bf.main(["--out-root", str(tmp_path / "r")]) == 2
     assert not (tmp_path / "r" / episodes.EPISODES_JSONL).exists()
-    assert "gemma4-26b-a4b-nvfp4" in capsys.readouterr().err
+    assert "gemma4-e2b" in capsys.readouterr().err
 
 
 def test_a_session_with_no_reports_reads_as_offered_nothing(driver, tmp_path, monkeypatch, no_flight) -> None:

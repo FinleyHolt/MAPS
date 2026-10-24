@@ -342,6 +342,12 @@ def test_a_dial_off_call_turns_the_template_s_thinking_off_where_none_is_not_a_r
         assert body["chat_template_kwargs"] == {"enable_thinking": False}
 
 
+def test_a_dial_off_call_sends_the_gemma_26b_card_s_own_switch(monkeypatch):
+    for body in _dial_off_bodies(monkeypatch, "gemma4-26b-a4b-nvfp4"):
+        assert "reasoning_effort" not in body
+        assert body["chat_template_kwargs"] == {"enable_thinking": False}
+
+
 def _window_harness(bounds):
     h = BaselineHarness.__new__(BaselineHarness)
     h.episode = SimpleNamespace(start_xy=(100.0, 100.0))
@@ -525,7 +531,7 @@ def test_a_bare_runner_refuses_a_baseline_arm_whose_model_has_no_dial_off(tmp_pa
     from maps.llm import endpoint_spec
 
     monkeypatch.setattr(cli, "assert_available", lambda: None)
-    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: SimpleNamespace(model_id="gemma4-26b-a4b-nvfp4"))
+    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: SimpleNamespace(model_id="gemma4-e2b"))
     monkeypatch.setattr(endpoint_spec, "install_spec", lambda spec: None)
     monkeypatch.setattr(cli, "load_split", lambda path: pytest.fail("a refused arm loaded its split"))
     monkeypatch.setattr("sys.argv", ["run_benchmark", "--config", "configs/baselines/geonav.yaml",

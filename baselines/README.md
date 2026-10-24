@@ -207,11 +207,14 @@ never the row's target or metrics, and shows no score at any point.
 * A baseline row carries no `metrics.mission` block: no mission conversation
   ran. `committed_provenance` reads `point`, the commit being a world point.
 * The reshaping call and every `geonav_released` call run with the dial off
-  (`seam.dial_off`): `reasoning_effort: none` where the model card lists that
-  rung (Inkling Small, GPT-5.6 Sol), else `chat_template_kwargs:
+  (`seam.dial_off`): the card's own `thinking_off` where it names one (Gemma 4
+  26B-A4B NVFP4, whose template reads `enable_thinking` and never
+  `reasoning_effort`), else `reasoning_effort: none` where the model card lists
+  that rung (Inkling Small, GPT-5.6 Sol), else `chat_template_kwargs:
   {enable_thinking: false}` where the template reads that switch (Qwen 3.8
-  Flash Next). A baseline arm on a model with neither (the Gemma 4 cards) is
-  refused when the driver starts, before any episode (`seam.NoDialOff`).
+  Flash Next). A baseline arm on a model with none of these (the other, unchecked
+  Gemma 4 cards) is refused when the driver starts, before any episode
+  (`seam.NoDialOff`).
 
 ## The serve fact every baseline call answers to
 
