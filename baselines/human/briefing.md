@@ -36,13 +36,15 @@ accuracy both count.
   imagery.
 - **Search box** (top left of the map):
   - Type a street or place name, then pick a result. Every piece of that street lights up.
-  - The arrows step along a long street piece by piece.
+  - A street in several pieces shows ‹ › beside the Street map chip: they step along it piece
+    by piece.
   - Type two names joined by `&` (for example `Lime Avenue & 88th Street`) to find where
     they cross.
   - Type a kind of place (`parking`, `park`, `pool`) to list the nearest ones.
 - **Street map** (the chip, or the O key) shows the map's streets, buildings and their names.
   Hovering over a street shows its name and which way it runs.
-- **Measure:** hold Shift and click two points to measure a distance. Esc clears it.
+- **Shift-click measures:** hold Shift and click two points; the chip over the map reads the
+  ruler's length. Click that chip to clear it; Esc clears it and your point.
 - **Your answer:** click the map where the place is, then press **Commit** (or the S key).
 - **Skip this report** is under the answer buttons.
 
@@ -58,5 +60,6 @@ chose it:
   nearer MAPS's answer, or press Confirm.
 
 The four practice reports before the first session do not count. You search them alone, with
-no MAPS answers: use them to try the search box, the street map and Measure. Practice ends by
-itself after the fourth report; **Done practicing** at the top of the console ends it early.
+no MAPS answers: use them to try the search box, the street map and shift-click measuring.
+Practice ends by itself after the fourth report; **Done practicing** at the top of the console
+ends it early.
