@@ -242,7 +242,6 @@ class Capacity:
             "over": self.over(), "total": len(self.order),
             "answered_n": sum(1 for a in self.answered.values() if a["source"] != "skip"),
             "skipped_n": sum(1 for a in self.answered.values() if a["source"] == "skip"),
-            "ready_n": sum(1 for i in range(len(self.order)) if self.status(i) == "ready") if self.arm == "team" else 0,
             "list": [{"n": i + 1, "episode_id": self.order[i], "status": self.status(i), "current": i == self.index}
                      for i in range(lo, hi)],
             "current": None if self.current is None or self.over() else {
