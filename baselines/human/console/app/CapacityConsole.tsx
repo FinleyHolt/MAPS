@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { OsmSearch, OsmToggle, pointFeature, ringFeature, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
-import { actBody, header, keyCommand, overLines, pollState } from "@/app/capacityView";
+import { actBody, header, keyCommand, mapTakesClicks, overLines, pollState } from "@/app/capacityView";
 
 interface Candidate { id: number; label: string; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
@@ -61,6 +61,8 @@ export function CapacityConsole() {
   const [moreObjects, setMoreObjects] = useState(false);
   const [moreReason, setMoreReason] = useState(false);
   const [showIds, setShowIds] = useState(false);
+  const [askSkip, setAskSkip] = useState(false);
+  const readyAt = useRef(0);
   const stRef = useRef<State | null>(null);
   stRef.current = st;
 
@@ -79,8 +81,9 @@ export function CapacityConsole() {
 
   const m = useStudyMap((at) => {
     const s = stRef.current;
-    if (s && !s.over && s.current) void act({ action: "select", lon: at[0], lat: at[1] });
+    if (s && !s.over && s.current && mapTakesClicks(readyAt.current, performance.now())) void act({ action: "select", lon: at[0], lat: at[1] });
   }, "paper");
+  useEffect(() => { if (m.ready) readyAt.current = performance.now(); }, [m.ready]);
 
   // The list's statuses move on the replay's clock, so the state is asked for every few seconds;
   // a poll the study does not answer says so until one it does.
@@ -106,6 +109,7 @@ export function CapacityConsole() {
     m.clearFound();
     setMoreObjects(false);
     setMoreReason(false);
+    setAskSkip(false);
     m.frameAo(review?.maps_lonlat, 18.5);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur?.episode_id, m.ready]);
@@ -311,8 +315,13 @@ export function CapacityConsole() {
                 </>
               )}
               <p className="cap-hint">
-                <button type="button" className="cap-link" disabled={busy} onClick={() => void act({ action: "skip" })}>skip this report</button>
-                {" "}(counts as a miss)
+                {askSkip ? (
+                  <>Skip this report? It counts as a miss.{" "}
+                    <button type="button" className="cap-link" disabled={busy} onClick={() => { setAskSkip(false); void act({ action: "skip" }); }}>Yes, skip</button>
+                    {" / "}<button type="button" className="cap-link" onClick={() => setAskSkip(false)}>No</button></>
+                ) : (
+                  <><button type="button" className="cap-link" disabled={busy} onClick={() => setAskSkip(true)}>skip this report</button>{" "}(counts as a miss)</>
+                )}
                 {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, 18.5)}>go to MAPS's answer <kbd>M</kbd></button></> : null}
               </p>
               {fault ? <p className="judge-fault">{fault}</p> : null}

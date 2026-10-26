@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { actBody, header, keyCommand, overLines, pollState } from "./capacityView.ts";
+import { actBody, header, keyCommand, mapTakesClicks, overLines, pollState } from "./capacityView.ts";
 
 const team = { arm: "team", practice: false, remaining_s: 723, over: false, current: { episode_id: "calcity::7#6", mode: "verify" } };
 const practice = { ...team, arm: "solo", practice: true, current: { episode_id: "calcity::1#0", mode: "search" } };
@@ -42,4 +42,10 @@ test("practice ends without a time-ran-out sentence", () => {
   const real = overLines({ ...team, over: true, answered_n: 3, skipped_n: 1 }).join(" ");
   assert.match(real, /3 answered, 1 skipped/);
   assert.match(real, /time ran out/);
+});
+
+test("the map takes no click in its first second, where a double-clicked start button lands", () => {
+  assert.equal(mapTakesClicks(0, 5000), false);
+  assert.equal(mapTakesClicks(4000, 4600), false);
+  assert.equal(mapTakesClicks(4000, 5000), true);
 });
