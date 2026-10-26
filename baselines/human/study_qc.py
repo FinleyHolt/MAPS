@@ -5,7 +5,7 @@ Each condition in ``<kit>/results/<p>/`` is scored by ``team_rows`` into ``<kit>
 source, success, correct finds per session hour, how the person met MAPS's answers, and the
 ledger's own checks (a duplicate answer, an answer after the session's end or before the one ahead
 of it, an unreadable line, a missing clock, a session not of the study's length). It fails when a
-check does, or when the participant has no session.
+check does, or when the participant lacks either session.
 
     python -m baselines.human.study_qc p01 [--kit ~/maps-study] [--misses]
 """
@@ -97,7 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     for arm in ("solo", "team"):
         results = kit / "results" / label / arm
         if not results.is_dir():
-            print(f"{arm}: no session yet")
+            print(f"{arm}: CHECK FAILED: no session yet")
+            bad += 1
             continue
         problems = checks(results)
         for p in problems:

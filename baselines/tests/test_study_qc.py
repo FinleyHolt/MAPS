@@ -1,6 +1,6 @@
 """The QC's ledger checks: a clean ledger passes; a duplicate, a late answer, an off-list report,
 a torn line, a clock set back and a rehearsal's length each fail, and so does a participant with
-no session. The QC scores what a kit's results hold and refuses a label the kit's plan does not
+no session or with one. The QC scores what a kit's results hold and refuses a label the kit's plan does not
 know."""
 
 import json
@@ -79,6 +79,16 @@ def test_a_participant_with_no_session_fails(tmp_path, monkeypatch, capsys) -> N
     shutil.rmtree(kit / "results" / "p04")
     assert study_qc.main(["p04", "--kit", str(kit)]) == 1
     assert "p04 has no session to score" in capsys.readouterr().out
+
+
+def test_a_participant_with_one_session_fails(tmp_path, monkeypatch, capsys) -> None:
+    kit = _kit(tmp_path, monkeypatch)
+    shutil.rmtree(kit / "results" / "p04" / "solo")
+    meta = kit / "results" / "p04" / "team" / "session.json"
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 2400.0}))
+    assert study_qc.main(["p04", "--kit", str(kit)]) == 1
+    out = capsys.readouterr().out
+    assert "solo: CHECK FAILED: no session yet" in out and "team: 1/1 correct" in out
 
 
 def test_a_label_off_the_plan_is_refused(tmp_path, monkeypatch) -> None:

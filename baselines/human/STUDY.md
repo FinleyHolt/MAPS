@@ -127,7 +127,7 @@ answers (wrong and confirmed, wrong and fixed, right and replaced with a miss), 
 non-zero when a ledger fails a check: a report answered twice, an answer after the session's
 end, an answer to a report not on the list, an unreadable line, a clock moved back (an answer
 before the session's start or before the previous answer), a lost clock, a session not 40
-minutes long (a rehearsal?). It also exits non-zero when the label has no session at all. It
+minutes long (a rehearsal?). It also exits non-zero when the label lacks either session. It
 refuses a label that is not on the kit's plan (`P07` is `p07`).
 
 The scored root reads like any bench root (`benchmarks.citynav.analysis.run_report`). With
