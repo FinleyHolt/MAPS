@@ -48,10 +48,8 @@ SOURCES = ("confirm", "replace", "own_search", "skip")
 #: One condition's session, seconds: the same for every participant. Forty minutes, so a
 #: visit (setup, briefing, practice, both conditions and a break) fits in two hours.
 SESSION_S = 2400.0
-#: MAPS searches running at once in the replay: enough that nearly all of a participant's
-#: half lands within the session, so the person works with MAPS's output in reach,
-#: and the concurrency the replayed batch itself flew at (the E3 Cal City episodes re-flown
-#: 96 at once on two nodes, 48 each, 2026-10-21). ``plan`` records each list's count.
+#: MAPS searches running at once in the replay, the concurrency the replayed batch flew at:
+#: nearly all of a participant's half lands within the session. ``plan`` records each list's count.
 AGENTS = 96
 
 
@@ -215,8 +213,7 @@ class Capacity:
             return self._answer("skip", None)
         if self.review is not None:
             # Verifying MAPS's result: the audit session's own verbs; its decision is the answer.
-            out = self.review.act(req)
-            return out
+            return self.review.act(req)
         if kind == "select":
             self.point = (float(req["x"]), float(req["y"]))
             return {"ok": True}
@@ -229,10 +226,11 @@ class Capacity:
             return self._answer("own_search", self.point)
         return {"ok": False, "error": f"unknown action {kind!r}"}
 
-    def state(self, window: int = 40) -> dict:
+    def state(self) -> dict:
         t = self.elapsed()
+        # The list near the open report: five back, forty in all.
         lo = max(0, (self.index or 0) - 5)
-        hi = min(len(self.order), lo + window)
+        hi = min(len(self.order), lo + 40)
         return {
             "arm": self.arm, "elapsed_s": round(t), "remaining_s": max(0, round(self.session_s - t)),
             "over": self.over(), "total": len(self.order),
