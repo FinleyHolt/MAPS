@@ -22,7 +22,7 @@ import { actBody, header, keyCommand, overLines, pollState } from "@/app/capacit
 
 interface Candidate { id: number; label: string; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
-  instruction: string; ended_by?: string; maps_pick?: number | null; maps_commit?: string; maps_reason?: string;
+  instruction: string; ended_by?: string; maps_pick?: number | null; maps_reason?: string;
   turns?: Turn[]; candidates?: Candidate[]; maps_lonlat?: LonLat; maps_prior_ring?: Ring; stops?: LonLat[];
   selected?: { candidate: number | null; lonlat: LonLat; affordable: boolean } | null;
 }
@@ -37,7 +37,7 @@ const STATUS: Record<string, string> = {
   not_started: "not started", searching: "MAPS searching", ready: "result ready",
   answered: "answered", skipped: "skipped", open: "open", waiting: "waiting",
 };
-/** Labelled objects listed before "show more". */
+/** Mapped objects listed before "show more". */
 const NEAREST = 5;
 const CAPTURE = new URLSearchParams(window.location.search).has("capture");
 
@@ -46,6 +46,10 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? `${path} failed (${r.status})`);
   return (await r.json()) as T;
 }
+
+/** An answer MAPS's remaining flight could not reach: the hint, and the audit session's refusal, read so. */
+const BUDGET = "MAPS could not have reached that spot. Choose a place nearer MAPS's answer, or press Confirm.";
+const BUDGET_REFUSAL = "MAPS's remaining budget cannot fly to that point";
 
 const objectNo = (c: Candidate | undefined) => (c ? (/(\d+)$/.exec(c.label)?.[1] ?? String(c.id)) : "");
 
@@ -65,7 +69,7 @@ export function CapacityConsole() {
     try {
       const out = await postJson<{ ok: boolean; error?: string; state: State }>("capacity/act", actBody(stRef.current, body));
       setSt(out.state);
-      setFault(out.ok ? null : out.error ?? "refused");
+      setFault(out.ok ? null : out.error === BUDGET_REFUSAL ? BUDGET : out.error ?? "refused");
     } catch (e) {
       setFault(String((e as Error).message ?? e));
     } finally {
@@ -130,7 +134,7 @@ export function CapacityConsole() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [st, m.ready, verifying]);
 
-  // Candidate ids are off the imagery unless asked for.
+  // Object numbers are off the imagery unless asked for.
   const idMarkers = useRef<import("maplibre-gl").Marker[]>([]);
   useEffect(() => {
     idMarkers.current.forEach((mk) => mk.remove());
@@ -238,15 +242,15 @@ export function CapacityConsole() {
                   <button type="button" className="cap-link" onClick={() => setMoreReason((v) => !v)}>{moreReason ? "less" : "more"}</button>
                 </p>
                 {moreReason && review ? (
-                  <details className="judge-full"><summary>The full run, {review.turns?.length ?? 0} turns</summary><Trace instruction={review.instruction} turns={review.turns ?? []} /></details>
+                  <details className="judge-full"><summary>MAPS's whole search, {review.turns?.length ?? 0} steps</summary><Trace instruction={review.instruction} turns={review.turns ?? []} /></details>
                 ) : null}
               </section>
             ) : null}
 
             {verifying ? (
               <section className="cap-block">
-                <p className="cap-kicker">Labelled objects nearest MAPS's commit
-                  <button type="button" className="cap-link cap-right" onClick={() => setShowIds((v) => !v)}>{showIds ? "hide ids" : "show ids"}</button></p>
+                <p className="cap-kicker">Mapped objects near MAPS's answer
+                  <button type="button" className="cap-link cap-right" onClick={() => setShowIds((v) => !v)}>{showIds ? "hide numbers" : "number them on the map"}</button></p>
                 {(moreObjects ? objects : objects.slice(0, NEAREST)).map((c) => (
                   <button type="button" key={c.id} className="cap-row" data-on={sel?.candidate === c.id} data-maps={c.id === review?.maps_pick}
                           onClick={() => { void act({ action: "candidate", id: c.id }); m.flyTo(c.lonlat); }}>
@@ -261,7 +265,8 @@ export function CapacityConsole() {
             ) : null}
 
             <section className="cap-block cap-list">
-              <p className="cap-kicker">Your reports{st?.arm === "team" ? `, ${st.ready_n} results ready` : ""}</p>
+              <p className="cap-kicker">Your reports</p>
+              {st?.arm === "team" ? <p className="cap-hint cap-ready">MAPS answers ready: {st.ready_n} in total</p> : null}
               <div className="cap-rows">
                 {(st?.list ?? []).map((r) => (
                   <div key={r.episode_id} className="cap-listrow" data-current={r.current}>
@@ -279,7 +284,7 @@ export function CapacityConsole() {
               {verifying ? (
                 <>
                   <p className="cap-status"><span className="cap-chip is-ready">result ready</span>
-                    MAPS committed to {pick ? `object ${objectNo(pick)}` : review?.maps_commit ?? "a point"}</p>
+                    MAPS's answer: {pick ? `object ${objectNo(pick)}` : "the point marked on the map"}</p>
                   <div className="cap-actions">
                     <button type="button" className="cap-btn cap-confirm" disabled={busy} onClick={() => void act({ action: "confirm" })}>
                       Confirm <kbd>Enter</kbd>
@@ -288,8 +293,8 @@ export function CapacityConsole() {
                       Pick another <kbd>S</kbd>
                     </button>
                   </div>
-                  <p className="cap-hint">{sel ? (sel.affordable ? "Your pick is on the map. Pick another commits it." : "MAPS's remaining budget cannot fly there.")
-                    : "Confirm MAPS's commit, or click the map where the target is and pick another."}</p>
+                  <p className="cap-hint">{sel ? (sel.affordable ? "Your point is on the map. Press Pick another to answer with it." : BUDGET)
+                    : "Press Confirm if MAPS's answer is right. If not, click the right place, then press Pick another."}</p>
                 </>
               ) : (
                 <>
@@ -302,13 +307,13 @@ export function CapacityConsole() {
                       Commit <kbd>S</kbd>
                     </button>
                   </div>
-                  <p className="cap-hint">{cur?.point ? "Your point is on the map. Commit it, or click again to move it." : "Click the map where the target is, then commit."}</p>
+                  <p className="cap-hint">{cur?.point ? "Your point is on the map. Press Commit, or click again to move it." : "Click the map on the place, then press Commit."}</p>
                 </>
               )}
               <p className="cap-hint">
                 <button type="button" className="cap-link" disabled={busy} onClick={() => void act({ action: "skip" })}>skip this report</button>
                 {" "}(counts as a miss)
-                {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, 18.5)}>fly to MAPS's commit <kbd>M</kbd></button></> : null}
+                {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, 18.5)}>go to MAPS's answer <kbd>M</kbd></button></> : null}
               </p>
               {fault ? <p className="judge-fault">{fault}</p> : null}
             </section>
@@ -324,8 +329,8 @@ export function CapacityConsole() {
                          crossingsOf={m.crossingsOf} approachOf={m.approachOf} kindsNear={m.kindsNear} piecesOf={m.piecesOf} nearOf={m.nearOf} />
             </div>
             <p className="cap-legend">
-              <span className="sw cap-sw-maps" /> MAPS's commit <span className="sw cap-sw-cand" /> labelled objects
-              <span className="sw cap-sw-pick" /> your pick · north up · O toggles OSM · shift-click measures
+              {st?.arm === "team" ? <><span className="sw cap-sw-maps" /> MAPS's answer <span className="sw cap-sw-cand" /> mapped objects</> : null}
+              <span className="sw cap-sw-pick" /> your point · north up · O shows the street map · shift-click measures
             </p>
           </div>
         </div>

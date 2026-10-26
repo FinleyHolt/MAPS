@@ -1,4 +1,4 @@
-/** MAPS's run on a verified report, turn by turn: its reasoning, the block it ran, what
+/** MAPS's search on a verified report, step by step: its reasoning, the block it ran, what
  * came back, and the frames it looked at (`judge/frames/<sha>.jpg`, as the run saved them). */
 
 export interface Turn { reasoning?: string; said?: string; printed?: string; frames?: string[] }
@@ -12,7 +12,7 @@ export function Trace({ instruction, turns }: { instruction: string; turns: Turn
       </div>
       {turns.map((t, i) => (
         <div className="entry" data-who="model" key={i}>
-          <p className="entry-label">MAPS <span className="entry-turn">turn {i + 1}</span></p>
+          <p className="entry-label">MAPS <span className="entry-turn">step {i + 1}</span></p>
           {t.reasoning ? <p className="entry-reasoning">{t.reasoning}</p> : null}
           {t.said ? <pre className="entry-code">{t.said}</pre> : null}
           {t.frames?.length ? (

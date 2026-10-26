@@ -462,8 +462,8 @@ export function OsmToggle({ on, onChange, hover, rulerM, onClearRuler, lit, piec
     <>
       <div className="study-layers">
         <button type="button" className="study-chip" data-on={on} aria-pressed={on} onClick={() => onChange(!on)}
-                title="the bench's OSM prior, the map MAPS reads">
-          OSM {on ? "on" : "off"} <kbd>O</kbd>
+                title="street and building outlines with names">
+          Street map {on ? "on" : "off"} <kbd>O</kbd>
         </button>
         {lit && onStep ? (
           <span className="study-hover">
@@ -558,7 +558,7 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
               <span>{pa.name} &amp; {pb.name} never meet</span>
               <span className="judge-dim">closest {approach.m.toFixed(0)} m apart</span>
             </button>
-          ) : <p className="judge-hint">no two such names in the map's prior</p>
+          ) : <p className="judge-hint">No two streets match those names.</p>
         ) : null}
         {hits.map((n) => (
           <button type="button" key={`${n.name}-${n.lonlat.join(",")}`} className="judge-row" data-on={lit === n.name}
