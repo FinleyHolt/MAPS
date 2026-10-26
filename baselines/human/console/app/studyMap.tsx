@@ -34,6 +34,8 @@ export const LABEL_MIN_ZOOM = 16;
 const OSM_LABEL_CAP = 80;
 const OSM_LABEL_MIN_ZOOM = 15;
 const OSM_LABEL_REPEAT_PX = 260;
+/** Where the browser keeps the street map's on or off. */
+const OSM_KEY = "maps-study-street-map";
 /** Where a found name or crossing opens: houses and the streets between them both read. */
 const FIND_ZOOM = 17.5;
 /** A wheel notch's zoom: MapLibre's default (1/450) takes forty notches from a house to a street grid. */
@@ -83,7 +85,8 @@ function paperLayers(layers: object[]): object[] {
     if (id === "stops-dot") return [{ ...l, paint: { "circle-radius": 3.5, "circle-color": PAPER.navy, "circle-stroke-color": PAPER.white, "circle-stroke-width": 1.5 } }];
     if (id === "stops-line") return [{ ...l, paint: { "line-color": PAPER.white, "line-width": 1.2, "line-dasharray": [2, 2], "line-opacity": 0.8 } }];
     if (id === "osm-lit") return [{ ...l, paint: { "line-color": PAPER.teal, "line-width": 4, "line-opacity": 0.95 } }];
-    if (id === "mark-ring") return [{ ...l, paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": PAPER.teal, "circle-stroke-width": 3 } }];
+    // A search's result, a filled teal disc: never the person's point, a hollow navy ring.
+    if (id === "mark-ring") return [{ ...l, paint: { "circle-radius": 13, "circle-color": "rgba(47,104,112,0.6)", "circle-stroke-color": PAPER.white, "circle-stroke-width": 2 } }];
     if (id === "osm-line") return [{ ...l, paint: { ...(l as { paint: object }).paint, "line-color": ["case", ["==", ["get", "layer"], "road"], PAPER.sand, "#f4eee1"] } }];
     return [l];
   });
@@ -178,7 +181,9 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
   const osmData = useRef<GeoJSON.FeatureCollection | null>(null);
   const [ready, setReady] = useState(false);
   const [names, setNames] = useState<PriorName[]>([]);
-  const [osmOn, setOsmOn] = useState(false);
+  // The street map stays as the person left it, from one session to the next.
+  const [osmOn, setOsmOn] = useState(() => { try { return localStorage.getItem(OSM_KEY) === "on"; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem(OSM_KEY, osmOn ? "on" : "off"); } catch { /* storage blocked: the default next time */ } }, [osmOn]);
   const osmOnRef = useRef(osmOn);
   osmOnRef.current = osmOn;
   const [lit, setLit] = useState<string | null>(null);
@@ -350,11 +355,14 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
   }, [ruler, ready]);
   const rulerM = ruler.slice(1).reduce((sum, p, i) => sum + metres(ruler[i], p), 0);
 
-  /** Ring every crossing a search found, numbered as the list numbers them, and fly to one. */
+  /** Ring every crossing a search found, numbered as the list numbers them, and fly to one; the
+   * last search's street goes dark. */
   const markMarkers = useRef<MapLibreMarker[]>([]);
   const markSpots = useCallback((all: LonLat[], focus: number) => {
     const map = mapRef.current;
     const maplibre = maplibreRef.current;
+    setLit(null);
+    setLitPiece(null);
     (map?.getSource("mark") as GeoJSONSource | undefined)?.setData(fc(all.map((at) => pointFeature(at, {}))));
     markMarkers.current.forEach((mk) => mk.remove());
     markMarkers.current = [];
@@ -435,8 +443,8 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
   }, []);
   const showName = useCallback((name: string) => {
     const map = mapRef.current;
+    clearFound();
     setLit(name);
-    setLitPiece(null);
     // The pieces with buildings along them, where a house or a pool can be; every piece if none has.
     const pieces = (osmData.current?.features ?? []).filter((f) => f.properties?.name === name)
       .map((f) => (f.geometry as GeoJSON.LineString).coordinates as LonLat[]);
@@ -445,7 +453,7 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
     const pts = (built.length ? built : pieces).flat();
     if (!map || !pts.length) return;
     frame(map, pts);
-  }, []);
+  }, [clearFound]);
 
   const set = useCallback((id: string, features: GeoJSON.Feature[]) =>
     (mapRef.current?.getSource(id) as GeoJSONSource | undefined)?.setData(fc(features)), []);

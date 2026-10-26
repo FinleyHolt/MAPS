@@ -309,6 +309,7 @@ textarea {
 .cap-legend .sw.cap-sw-maps { border-color: #fff; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(30,27,24,0.55); }
 .cap-legend .sw.cap-sw-cand { border-color: var(--cap-sky); }
 .cap-legend .sw.cap-sw-pick { border-color: var(--cap-navy); border-radius: 50%; }
+.cap-legend .sw.cap-sw-found { border-color: #fff; border-width: 2px; border-radius: 50%; background: rgba(47,104,112,0.6); box-shadow: 0 0 0 1px var(--cap-teal); }
 /* The report reads whole; the controls sit at the foot of the column, where no report's length moves them. */
 .cap-dock { margin-top: auto; border-top: 2px solid var(--cap-navy); border-bottom: 0; background: #fff; }
 .cap-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }

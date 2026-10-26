@@ -374,7 +374,7 @@ export function CapacityConsole() {
             </div>
             <p className="cap-legend">
               {st?.arm === "team" ? <><span className="sw cap-sw-maps" /> MAPS's answer <span className="sw cap-sw-cand" /> mapped objects</> : null}
-              <span className="sw cap-sw-pick" /> your point · north up · O shows the street map · shift-click measures
+              <span className="sw cap-sw-pick" /> your point <span className="sw cap-sw-found" /> search result · north up · O shows the street map · shift-click measures
             </p>
           </div>
         </div>
