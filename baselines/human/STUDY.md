@@ -92,13 +92,16 @@ Each session writes `results/<p>/<condition>/answers.jsonl` (one line per answer
 source, `own_search`, `confirm`, `replace` or `skip`, the point, and when the report was
 opened and answered, UTC) and `session.json` (the session's start, length and list).
 
-Score a participant's condition against the download's MAPS run:
+Score and check a participant's two conditions against the download's MAPS run:
 
 ```sh
-SEARCH_CALCITY_DATA=~/maps-study SEARCH_CALCITY_TILES=~/maps-study/tiles \
-python -m baselines.human.team_rows --maps-root ~/maps-study/maps_root \
-    --decisions ~/maps-study/results/p07/team/answers.jsonl --out-root ~/maps-study/scored/p07-team
+python -m baselines.human.study_qc p07            # --misses lists every report they got wrong
 ```
+
+It scores each condition with `team_rows` into `~/maps-study/scored/p07-solo` and `p07-team`,
+prints correct finds per session hour, answers by source and how the person met MAPS's answers
+(wrong and confirmed, wrong and fixed, right and replaced with a miss), and exits non-zero when a
+ledger fails a check: a report answered twice, an answer after the session's end, a lost clock.
 
 The scored root reads like any bench root (`benchmarks.citynav.analysis.run_report`). With
 MAPS it also holds every MAPS answer released within the session that the person never
