@@ -1,6 +1,6 @@
 #!/bin/sh
-# Starts the study on macOS and Linux. The first start fetches uv (which brings its own Python)
-# and the console's packages into app/uv; later starts reuse them offline.
+# Starts the study on macOS and Linux. The first start fetches uv and the console's packages into
+# app/uv (uv keeps the Python it fetches in the user's own folder); later starts reuse them offline.
 cd "$(dirname "$0")/.." || exit 1
 HERE="$(pwd)"
 UV="$HERE/app/uv/uv"

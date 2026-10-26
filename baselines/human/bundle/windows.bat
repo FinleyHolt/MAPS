@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
-rem Starts the study on Windows. The first start fetches uv (which brings its own Python)
-rem and the console's packages into app\uv; later starts reuse them offline.
+rem Starts the study on Windows. The first start fetches uv and the console's packages into app\uv
+rem (uv keeps the Python it fetches in the user's own folder); later starts reuse them offline.
 rem No parenthesised blocks: a folder name with brackets or an apostrophe cannot break the parse.
 cd /d "%~dp0"
 if not exist "kit\console\index.html" goto inzip
