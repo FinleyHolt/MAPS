@@ -7,7 +7,8 @@ import { test } from "node:test";
 
 import { placeSplitter } from "./placeNames.ts";
 
-const split = placeSplitter(["Lime", "Lime Avenue", "Charlene Place", "North Charlene Place", "Ace", "Yerba Boulevard"]);
+const split = placeSplitter(["Lime", "Lime Avenue", "Charlene Place", "North Charlene Place", "Ace", "Yerba Boulevard",
+                             "A Street", "98th Street"]);
 const names = (text) => split(text).filter((p) => typeof p !== "string").map((p) => p.name);
 
 test("the text reads back whole, each name its own piece", () => {
@@ -30,4 +31,15 @@ test("whole words in any case, carrying the prior's spelling", () => {
 test("a name shorter than four letters is a word, not a place", () => {
   assert.deepEqual(names("Ace Hardware's ace"), []);
   assert.deepEqual(placeSplitter([])("no names"), ["no names"]);
+});
+
+test("a name led by a single letter matches only as the prior capitalises it; any other in any case", () => {
+  assert.deepEqual(names("the house on a street corner"), []);
+  assert.deepEqual(names("A street runs north"), []);
+  assert.deepEqual(names("east of A Street"), ["A Street"]);
+  assert.deepEqual(names("along 98th street"), ["98th Street"]);
+});
+
+test("a name inside a longer word is not the name", () => {
+  assert.deepEqual(names("Sublime views"), []);
 });
