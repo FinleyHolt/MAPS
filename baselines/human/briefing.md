@@ -1,7 +1,6 @@
 # Briefing: the search study
 
-DRAFT for approval. Read before your first session. The study leads answer questions about
-the console, not about any report.
+Read before your first session.
 
 ## What you will do
 
@@ -32,7 +31,7 @@ accuracy both count.
 
 ## The console
 
-- **The report** is at the top left, with the controls under it.
+- **The report** is at the top left. The answer buttons are at the bottom of that column.
 - **The map** is the collected aerial imagery of the area, north up. Tan areas have no
   imagery.
 - **Search box** (top left of the map):
@@ -41,14 +40,21 @@ accuracy both count.
   - Type two names joined by `&` (for example `Lime Avenue & 88th Street`) to find where
     they cross.
   - Type a kind of place (`parking`, `park`, `pool`) to list the nearest ones.
-- **OSM** (the chip, or the O key) shows the map's streets, buildings and their names.
+- **Street map** (the chip, or the O key) shows the map's streets, buildings and their names.
   Hovering over a street shows its name and which way it runs.
 - **Measure:** hold Shift and click two points to measure a distance. Esc clears it.
-- **Your answer:**
-  - Click the map where the place is, then press **Commit** (or the S key).
-  - With MAPS's answer on screen, press **Confirm** (or Enter) to accept it.
-  - Or click the right place and press **Pick another** (or S).
-- **Skip this report** is under the controls.
+- **Your answer:** click the map where the place is, then press **Commit** (or the S key).
+- **Skip this report** is under the answer buttons.
 
-The four practice reports before the first session do not count. Use them to try every
-tool above.
+With MAPS, a report MAPS has already answered opens with that answer on the map and why MAPS
+chose it:
+
+- **Go to MAPS's answer** (or the M key) brings the map back to MAPS's answer.
+- Press **Confirm** (or Enter) to accept MAPS's answer.
+- Or click the right place and press **Pick another** (or S). The place you pick must be one
+  MAPS could still have reached; when it is too far, the console says so. Choose a place
+  nearer MAPS's answer, or press Confirm.
+
+The four practice reports before the first session do not count. You search them alone, with
+no MAPS answers: use them to try the search box, the street map and Measure. Practice ends by
+itself after the fourth report; **Done practicing** at the top of the console ends it early.
