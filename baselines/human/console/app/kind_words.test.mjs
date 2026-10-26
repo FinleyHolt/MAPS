@@ -8,12 +8,13 @@ import { test } from "node:test";
 
 import { KIND_WORDS, kindMatches } from "./kindWords.ts";
 
-// The kinds the server names (study_server.PLAIN's words), and the OSM tags it passes through
-// that the aliases rely on.
+// The kinds the server names (study_server.PLAIN's and WORDS's words), and the OSM tags it passes
+// through that the aliases rely on.
 const server = readFileSync(new URL("../../study_server.py", import.meta.url), "utf8");
-const plain = [...server.slice(server.indexOf("PLAIN = {"), server.indexOf("}\n", server.indexOf("PLAIN = {")))
-  .matchAll(/\): "([^"]+)"/g)].map((m) => m[1]);
-const tags = ["water", "swimming pool", "parking", "place of worship", "church", "school", "grass"];
+const words = (dict) => [...server.slice(server.indexOf(`${dict} = {`), server.indexOf("}\n", server.indexOf(`${dict} = {`)))
+  .matchAll(/: "([^"]+)"/g)].map((m) => m[1]);
+const plain = [...words("PLAIN"), ...words("WORDS")];
+const tags = ["water", "swimming pool", "place of worship", "church", "school", "grass"];
 
 test("a court is a sports field", () => {
   assert.equal(kindMatches("sports field", "court"), true);
