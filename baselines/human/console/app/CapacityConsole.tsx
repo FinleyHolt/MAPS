@@ -295,7 +295,7 @@ export function CapacityConsole() {
                 {(moreObjects ? objects : objects.slice(0, NEAREST)).map((c) => (
                   <button type="button" key={c.id} className="cap-row" data-on={sel?.candidate === c.id} data-maps={c.id === review?.maps_pick}
                           onClick={() => { void act({ action: "candidate", id: c.id }); m.flyTo(c.lonlat); }}>
-                    <span>{objectName(c)}{c.kind ? ` ${objectNo(c)}` : ""}{c.id === review?.maps_pick ? " · MAPS" : ""}</span><span className="cap-dim">{c.dist_m} m</span>
+                    <span>{objectName(c)}{c.id === review?.maps_pick ? " · MAPS" : ""}</span><span className="cap-dim">{c.dist_m} m</span>
                   </button>
                 ))}
                 {objects.length > NEAREST ? (
@@ -324,7 +324,7 @@ export function CapacityConsole() {
               {verifying ? (
                 <>
                   <p className="cap-status"><span className="cap-chip is-ready">result ready</span>
-                    MAPS's answer: {pick ? objectName(pick, true) : "the point marked on the map"}</p>
+                    MAPS's answer: {pick ? objectName(pick) : "the point marked on the map"}</p>
                   <div className="cap-actions">
                     <button type="button" className="cap-btn cap-confirm" disabled={busy} onClick={() => void act({ action: "confirm" })}>
                       Confirm <kbd>Enter</kbd>

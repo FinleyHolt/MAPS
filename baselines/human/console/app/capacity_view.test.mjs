@@ -64,12 +64,10 @@ test("the clock counts down from the last state the study sent, and stops at zer
   assert.deepEqual(header(team, 5000).clock, "0:00 left");
 });
 
-test("a mapped object reads as its kind where the study names one, else as its number", () => {
+test("a mapped object reads as its kind and number where the study names a kind, else as its number", () => {
   const house = { id: 9, label: "building 568", kind: "house" };
-  assert.equal(objectName(house), "house");
-  assert.equal(objectName(house, true), "a house");
-  assert.equal(objectName({ ...house, kind: "apartments" }, true), "an apartments");
+  assert.equal(objectName(house), "house 568");
+  assert.equal(objectName({ ...house, kind: "apartments" }), "apartments 568");
   assert.equal(objectName({ id: 9, label: "building 568" }), "object 568");
-  assert.equal(objectName({ id: 9, label: "building 568" }, true), "object 568");
   assert.equal(objectName({ id: 9, label: "x" }), "object 9");
 });
