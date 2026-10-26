@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MapLibreMap, Marker as MapLibreMarker, StyleSpecification } from "maplibre-gl";
 
+import { kindMatches } from "@/app/kindWords";
 import { alongStreet, axisAt, buildingsAlong, closestApproach, crossings, metres, nearestOther, type LonLat } from "@/app/studyGeometry";
 
 export { crossings, metres };
@@ -35,12 +36,6 @@ const OSM_LABEL_MIN_ZOOM = 15;
 const OSM_LABEL_REPEAT_PX = 260;
 /** Where a found name or crossing opens: houses and the streets between them both read. */
 const FIND_ZOOM = 17.5;
-/** Everyday words for what OSM tags otherwise: a lake is water, a ball field a pitch. */
-const KIND_WORDS: Record<string, string[]> = {
-  lake: ["water", "pond", "reservoir"], pond: ["water", "pond", "reservoir"], water: ["water"],
-  baseball: ["pitch", "sports"], field: ["pitch", "sports", "farmland", "meadow", "grass"], court: ["pitch"],
-  pool: ["pool"], parking: ["parking"], church: ["worship", "church"], school: ["school"],
-};
 /** A wheel notch's zoom: MapLibre's default (1/450) takes forty notches from a house to a street grid. */
 const WHEEL_ZOOM_RATE = 1 / 180;
 
@@ -385,14 +380,13 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
   const kindsNear = useCallback((q: string, street?: string) => {
     const map = mapRef.current;
     if (!map || q.length < 3) return [];
-    const words = KIND_WORDS[q] ?? [q];
     const feats = osmData.current?.features ?? [];
     const along = street ? feats.filter((f) => f.properties?.name === street).flatMap((f) => (f.geometry as GeoJSON.LineString).coordinates as LonLat[]) : [];
     const c = map.getCenter();
     const here: LonLat = [c.lng, c.lat];
     const away = (at: LonLat) => (along.length ? Math.min(...along.map((p) => metres(p, at))) : metres(here, at));
     return feats
-      .filter((f) => words.some((w) => String(f.properties?.kind ?? "").toLowerCase().includes(w)))
+      .filter((f) => kindMatches(String(f.properties?.kind ?? ""), q))
       .map((f) => {
         const pts = (f.geometry as GeoJSON.LineString).coordinates as LonLat[];
         const at: LonLat = [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
