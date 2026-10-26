@@ -1,21 +1,22 @@
-"""The capacity study's operator console, served from the study download alone (``STUDY.md``).
+"""The capacity study's visit, served from the study download alone (``STUDY.md``).
 
-One participant, one condition, one browser tab: no reasoner, no segmenter, no network. The
-session is :class:`baselines.human.capacity.Capacity` over the plan's list; the map is the
-bench's ortho as tiles (``study_package tiles``), the briefed AO and the bench's OSM prior;
-a verified report reads MAPS's own records from the download's MAPS root. Nothing served
-carries an episode's target or a score.
+    python -m baselines.human.study_server [--kit ~/maps-study]
 
-    python -m baselines.human.study_server [p01 [practice|first|second|solo|team]] [--kit ~/maps-study]
+The download's launchers run this, and the browser opens the visit page. It asks for the
+participant's label, walks the briefing, practice, the first condition, a break and the second,
+and offers the results file at the end; ``first`` and ``second`` are the participant's two
+conditions in the order the plan counterbalanced (``plan/plan.json``). Where the visit is, is
+read off the results on disk, so a relaunch picks up where it left off.
 
-With a label alone (or none, and the page asks for it), the browser opens the visit page,
-which walks the briefing, practice, the first condition, a break and the second, and offers the
-results file at the end. ``first`` and ``second`` are the participant's two conditions in the
-order the plan counterbalanced (``plan/plan.json``); naming a condition opens it at once.
+The console (``console/``) is one browser tab over the session the visit page opened last:
+:class:`baselines.human.capacity.Capacity` over the plan's list, the bench's ortho as tiles
+(``study_package tiles``), the briefed AO and the bench's OSM prior; a verified report reads
+MAPS's own records from the download's MAPS root. No reasoner, no segmenter, no network, and
+nothing served carries an episode's target or a score.
 
 The answers land in ``<kit>/results/<participant>/<condition>/`` (``answers.jsonl`` and the
-session's clock, ``session.json``). Starting a condition again resumes its clock; it never
-starts a new session. Practice starts empty each time.
+session's clock, ``session.json``). Starting a condition again resumes its clock; practice
+starts empty each time.
 """
 
 from __future__ import annotations
@@ -25,9 +26,11 @@ import html
 import io
 import json
 import logging
+import math
 import os
 import re
 import shutil
+import socket
 import sqlite3
 import tarfile
 import threading
@@ -39,7 +42,7 @@ from typing import Any
 log = logging.getLogger("study_server")
 
 #: The download's folder, unless ``--kit`` names another.
-KIT = Path(os.environ.get("MAPS_STUDY_KIT", Path.home() / "maps-study"))
+KIT = Path.home() / "maps-study"
 #: The OSM prior's outlines are drawn simplified to this, metres: a pixel at the closest zoom.
 PRIOR_SIMPLIFY_M = 0.3
 #: The map's zoom-out floor: the whole block in a laptop's window.
@@ -116,10 +119,9 @@ def review_doc(cap: Any, ll) -> dict[str, Any]:
     return state
 
 
-def build_app(cap: Any, kit: Path, console: Path, visit: Visit | None = None):
-    """The console's routes over one capacity session. One request at a time: a session
-    is a ledger, and a double click must not answer twice. With a ``visit``, the visit page
-    opens each session in turn, and the console's session is whichever it opened last."""
+def build_app(kit: Path, console: Path, visit: Visit):
+    """The visit page's routes, and the console's over the session the visit page opened last.
+    One request at a time: a session is a ledger, and a double click must not answer twice."""
     from fastapi import FastAPI, HTTPException
     from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
     from fastapi.staticfiles import StaticFiles
@@ -135,11 +137,16 @@ def build_app(cap: Any, kit: Path, console: Path, visit: Visit | None = None):
     def ll(pts) -> list[list[float]]:
         return [list(local_to_lonlat(tiles_dir, map_name, float(x), float(y))) for x, y in pts]
 
-    box = {"cap": cap, "practice": False}
+    box: dict[str, Any] = {"cap": None, "practice": False}
+
+    def session() -> Any:
+        if box["cap"] is None:
+            # A console tab left open across a relaunch: the visit page opens the session again.
+            raise HTTPException(409, "No session is open. Start it again from the study page.")
+        return box["cap"]
 
     def doc() -> dict[str, Any]:
-        cap = box["cap"]
-        state = cap.state()
+        state = session().state()
         state["practice"] = box["practice"]
         cur = state.get("current")
         if cur:
@@ -159,7 +166,8 @@ def build_app(cap: Any, kit: Path, console: Path, visit: Visit | None = None):
             log.exception("the OSM prior for %s did not build", map_name)
 
     threading.Thread(target=build_prior, daemon=True).start()
-    ortho = sqlite3.connect(f"file:{kit / 'calcity_ortho.mbtiles'}?mode=ro", uri=True, check_same_thread=False)
+    ortho = sqlite3.connect((kit / "calcity_ortho.mbtiles").resolve().as_uri() + "?mode=ro", uri=True,
+                            check_same_thread=False)
 
     @app.get("/capacity/state")
     def capacity_state() -> dict[str, Any]:
@@ -169,12 +177,13 @@ def build_app(cap: Any, kit: Path, console: Path, visit: Visit | None = None):
     @app.post("/capacity/act")
     def capacity_act(req: dict[str, Any]) -> dict[str, Any]:
         with lock:
+            cap = session()
             if req.get("action") == "select" and "lon" in req:
                 xy = lonlat_to_local(tiles_dir, map_name, float(req["lon"]), float(req["lat"]))
                 if xy is None:
                     raise HTTPException(400, "that point is off the map")
                 req = {"action": "select", "x": xy[0], "y": xy[1]}
-            out = box["cap"].act(req)
+            out = cap.act(req)
             return {**out, "state": doc()}
 
     @app.get("/judge/frames/{sha}.jpg")
@@ -210,33 +219,38 @@ def build_app(cap: Any, kit: Path, console: Path, visit: Visit | None = None):
         w, s, e, n = AO_BBOX_WGS84
         return {"center": {"lon": (w + e) / 2, "lat": (s + n) / 2}, "minzoom": MIN_ZOOM}
 
-    if visit is not None:
-        @app.get("/visit")
-        def visit_page() -> HTMLResponse:
-            return HTMLResponse(visit.page(), headers={"Cache-Control": "no-store"})
+    @app.get("/visit")
+    def visit_page() -> HTMLResponse:
+        return HTMLResponse(visit.page(), headers={"Cache-Control": "no-store"})
 
-        @app.get("/visit/label")
-        def visit_label(label: str = "") -> Response:
-            visit.set_label(label.strip().lower())
-            return RedirectResponse("/visit", status_code=303)
+    @app.get("/visit/label")
+    def visit_label(label: str = "") -> Response:
+        visit.set_label(label)
+        return RedirectResponse("/visit", status_code=303)
 
-        @app.post("/visit/start/{step}")
-        def visit_start(step: str) -> Response:
-            with lock:
-                cap = visit.start(step)
-                if cap is None:
-                    return RedirectResponse("/visit", status_code=303)
-                box["cap"], box["practice"] = cap, step == "practice"
-            return RedirectResponse("/", status_code=303)
+    @app.post("/visit/start/{step}")
+    def visit_start(step: str) -> Response:
+        with lock:
+            cap = visit.start(step)
+            if cap is None:
+                return RedirectResponse("/visit", status_code=303)
+            box["cap"], box["practice"] = cap, step == "practice"
+        return RedirectResponse("/", status_code=303)
 
-        @app.get("/visit/results.tgz")
-        def visit_results() -> Response:
-            return Response(visit.results_tgz(), media_type="application/gzip", headers={
-                "Content-Disposition": f'attachment; filename="maps-study-{visit.participant}.tgz"'})
+    @app.get("/visit/results.tgz")
+    def visit_results() -> Response:
+        data = visit.results_tgz()
+        if data is None:
+            return HTMLResponse(PAGE.format(body="<h1>No results yet</h1><p>Nothing is saved yet. "
+                                                 "<a href='/visit'>Back to the study page</a></p>"), status_code=404)
+        return Response(data, media_type="application/gzip", headers={
+            "Content-Disposition": f'attachment; filename="maps-study-{visit.participant}.tgz"'})
 
+    # The static mount below would serve index.html by name too, around the redirect.
     @app.get("/")
+    @app.get("/index.html")
     def index() -> Response:
-        if box["cap"] is None and visit is not None:
+        if box["cap"] is None:
             return RedirectResponse("/visit")
         return FileResponse(console / "index.html", headers={"Cache-Control": "no-store"})
 
@@ -244,10 +258,17 @@ def build_app(cap: Any, kit: Path, console: Path, visit: Visit | None = None):
     return app
 
 
-def open_session(kit: Path, participant: str, condition: str, out: Path | None = None) -> Any:
+def session_s() -> float:
+    """A session's length, seconds. A rehearsal of the visit shortens it; a real visit never sets it."""
+    from baselines.human.capacity import SESSION_S
+
+    return float(os.environ.get("MAPS_STUDY_SESSION_S") or SESSION_S)
+
+
+def open_session(kit: Path, participant: str, condition: str) -> Any:
     """The participant's capacity session in one condition, off the download's plan."""
     from baselines.human.audit_console import bench_labels
-    from baselines.human.capacity import SESSION_S, Capacity
+    from baselines.human.capacity import Capacity
 
     if condition == "practice":
         root, order_file, arm = kit / "plan" / "practice", kit / "plan" / "practice" / "practice.txt", "solo"
@@ -255,19 +276,19 @@ def open_session(kit: Path, participant: str, condition: str, out: Path | None =
         root, order_file, arm = kit / "maps_root", kit / "plan" / participant / f"{condition}.txt", condition
     if not order_file.is_file():
         raise SystemExit(f"no list for {participant} {condition} at {order_file}: is {participant} on the plan?")
-    out = out or kit / "results" / participant / condition
+    out = kit / "results" / participant / condition
     if condition == "practice":
         shutil.rmtree(out, ignore_errors=True)
     elif (out / "session.json").is_file():
         print(f"{participant} {condition} has a session already: resuming its clock")
     order = [ln.strip() for ln in order_file.read_text().splitlines() if ln.strip()]
-    # A rehearsal of the visit shortens the sessions; a real visit never sets it.
-    session_s = float(os.environ.get("MAPS_STUDY_SESSION_S") or SESSION_S)
-    return Capacity(root, order, out, arm, labels=bench_labels(), session_s=session_s)
+    return Capacity(root, order, out, arm, labels=bench_labels(), session_s=session_s())
 
 
 BRIEFING = Path(__file__).with_name("briefing.md")
 STEPS = ("practice", "first", "second")
+#: Each condition as the visit page names it.
+CONDITIONS = {"solo": "alone", "team": "with MAPS"}
 
 
 def md_html(text: str) -> str:
@@ -306,19 +327,23 @@ def md_html(text: str) -> str:
 class Visit:
     """One participant's visit, as the visit page walks it: the briefing, practice, the first
     condition, a break, the second, done. Where they are is read off the results on disk, so a
-    restarted console picks up where the visit left off."""
+    relaunch picks up where the visit left off, under the one label it finds there."""
 
-    def __init__(self, kit: Path, participant: str | None) -> None:
+    def __init__(self, kit: Path) -> None:
         self.kit = kit
         self.plan = json.loads((kit / "plan" / "plan.json").read_text())["participants"]
-        self.participant, self.error = None, ""
-        if participant:
-            self.set_label(participant)
-            if self.error:
-                raise SystemExit(self.error)
+        contact = kit / "contact.txt"
+        self.contact = contact.read_text().strip() if contact.is_file() else "the study lead"
+        results = kit / "results"
+        found = [p.name for p in results.iterdir() if p.is_dir() and p.name in self.plan] if results.is_dir() else []
+        self.participant, self.error = (found[0] if len(found) == 1 else None), ""
 
     def set_label(self, label: str) -> None:
-        if label in self.plan:
+        label = label.strip().lower()
+        if self.participant is not None and label != self.participant:
+            self.error = (f"This copy of the study is set up for {self.participant}. "
+                          "Another label needs its own copy: ask the study lead.")
+        elif label in self.plan:
             self.participant, self.error = label, ""
         else:
             self.error = f"{label or 'That'} is not a participant label on this study. Check it with the study lead."
@@ -327,69 +352,104 @@ class Visit:
         first = self.plan[self.participant]["first"]
         return {"practice": "practice", "first": first, "second": ({"solo", "team"} - {first}).pop()}[step]
 
+    def session(self, step: str) -> dict | None:
+        """The step's ``session.json``, once its session has started."""
+        meta = self.kit / "results" / self.participant / self.condition(step) / "session.json"
+        return json.loads(meta.read_text()) if meta.is_file() else None
+
     def status(self, step: str) -> str:
-        """``todo``, ``running`` or ``done``."""
+        """``todo``, ``running`` or ``done``: a session is over when its clock runs out or
+        every listed report has an answer."""
+        from baselines.human.audit_console import _jsonl
+
         out = self.kit / "results" / self.participant / self.condition(step)
         if step == "practice":
             return "done" if out.is_dir() else "todo"
-        meta = out / "session.json"
-        if not meta.is_file():
+        session = self.session(step)
+        if session is None:
             return "todo"
-        session = json.loads(meta.read_text())
-        answered = sum(1 for _ in (out / "answers.jsonl").open()) if (out / "answers.jsonl").is_file() else 0
-        over = time.time() - float(session["started_epoch"]) >= float(session["session_s"]) or answered >= session["episodes_n"]
+        answered = {a.get("episode_id") for a in _jsonl(out / "answers.jsonl")}
+        over = (time.time() - float(session["started_epoch"]) >= float(session["session_s"])
+                or len(answered) >= session["episodes_n"])
         return "done" if over else "running"
 
     def start(self, step: str) -> Any:
-        """The step's session, or None when it cannot open now: no label yet, the second
-        before the first is done, or a timed session that is over."""
-        if self.participant is None or step not in STEPS or (step == "second" and self.status("first") != "done"):
+        """The step's session, or None when it cannot open now: no label yet, a step out of
+        turn (practice once session 1 has started, a session before the one ahead of it), or a
+        timed session that is over."""
+        if self.participant is None or step not in STEPS:
             return None
-        if step != "practice" and self.status(step) == "done":
+        ahead = {"practice": self.status("first") == "todo", "first": self.status("practice") == "done",
+                 "second": self.status("first") == "done"}[step]
+        if not ahead or (step != "practice" and self.status(step) == "done"):
             return None
         return open_session(self.kit, self.participant, self.condition(step))
 
-    def results_tgz(self) -> bytes:
+    def results_tgz(self) -> bytes | None:
+        """The participant's results folder, with the computer's account names left out."""
+        folder = self.kit / "results" / self.participant if self.participant else None
+        if folder is None or not folder.is_dir():
+            return None
+
+        def anonymous(info: tarfile.TarInfo) -> tarfile.TarInfo:
+            info.uid = info.gid = 0
+            info.uname = info.gname = ""
+            return info
+
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-            tar.add(self.kit / "results" / self.participant, arcname=f"results/{self.participant}")
+            tar.add(folder, arcname=f"results/{self.participant}", filter=anonymous)
         return buf.getvalue()
 
     def page(self) -> str:
+        err = f"<p class=err>{html.escape(self.error)}</p>" if self.error else ""
         if self.participant is None:
-            body = (f"<h1>The search study</h1><p class=err>{html.escape(self.error)}</p>"
+            body = (f"<h1>The search study</h1>{err}"
                     "<form action='/visit/label'><p>Your participant label, from the study lead:</p>"
                     "<input name=label placeholder='p01' autofocus> <button>Continue</button></form>")
             return PAGE.format(body=body)
         st = {s: self.status(s) for s in STEPS}
+        minutes = round(session_s() / 60)
+
+        def name(step: str) -> str:
+            return f"Session {STEPS.index(step)}: {CONDITIONS[self.condition(step)]}, {minutes} minutes"
 
         def button(step: str, label: str, note: str = "") -> str:
             return (f"<form method=post action='/visit/start/{step}'><button>{label}</button></form>"
                     + (f"<p class=note>{note}</p>" if note else ""))
 
-        clock = "The 40 minutes start when you press the button, so be seated and ready."
+        def running(step: str) -> str:
+            session = self.session(step)
+            left = float(session["session_s"]) - (time.time() - float(session["started_epoch"]))
+            n = STEPS.index(step)
+            return (f"<h2>{name(step)}, under way</h2><p>About {math.ceil(left / 60)} minutes left. "
+                    f"Its clock kept running while you were away.</p>" + button(step, f"Return to session {n}"))
+
+        clock = f"The {minutes} minutes start when you press the button, so be seated and ready."
         if st["second"] == "done":
-            now = ("<h2>Done. Thank you!</h2><p>Your answers are saved. Let the study lead know you have finished.</p>"
-                   "<p class=note>Taking part from your own computer? <a href='/visit/results.tgz'>Save your results "
-                   "file</a> and email it to the study lead.</p>")
+            now = ("<h2>Done. One last step: send your results</h2>"
+                   "<form action='/visit/results.tgz'><button>Save my results file</button></form>"
+                   f"<p>Your browser saves maps-study-{self.participant}.tgz, usually in your Downloads folder. "
+                   f"Attach it to an email to {html.escape(self.contact)}. Then you can close this page and the "
+                   "text window.</p>")
         elif st["second"] == "running":
-            now = "<h2>Session 2 is under way</h2>" + button("second", "Return to session 2")
+            now = running("second")
         elif st["first"] == "done":
-            now = ("<h2>Session 1 is done. Take a five-minute break.</h2>"
-                   "<p>Then start session 2. Read the console's top bar: it says whether you work alone or with MAPS.</p>"
+            now = (f"<h2>Session 1 is done. Take a five-minute break.</h2><p>Then start {name('second')}.</p>"
                    + button("second", "Start session 2", clock))
         elif st["first"] == "running":
-            now = "<h2>Session 1 is under way</h2>" + button("first", "Return to session 1")
+            now = running("first")
         else:
             practiced = st["practice"] == "done"
             now = ("<h2>Step 1: read the briefing below</h2><h2>Step 2: practice</h2>"
-                   "<p>Four reports that never count. Try every tool the briefing lists, then press "
-                   "<b>Done practicing</b> at the top of the console.</p>"
+                   "<p>Four reports that never count. You work them alone. Try the search box, the street map "
+                   "and Measure, then press <b>Done practicing</b> at the top of the console.</p>"
                    + button("practice", "Practice again" if practiced else "Start practice")
-                   + "<h2>Step 3: session 1</h2>" + (button("first", "Start session 1", clock) if practiced
-                                                      else "<p class=note>Opens after practice.</p>"))
+                   + f"<h2>Step 3: {name('first')}</h2>" + (button("first", "Start session 1", clock) if practiced
+                                                           else "<p class=note>Opens after practice.</p>"))
         brief = md_html(BRIEFING.read_text()) if BRIEFING.is_file() else ""
-        return PAGE.format(body=f"<p class=who>Participant {self.participant}</p>{now}<hr><div class=brief>{brief}</div>")
+        return PAGE.format(body=f"<p class=who>Participant {self.participant}</p>{err}{now}<hr>"
+                                f"<div class=brief>{brief}</div>")
 
 
 PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8><title>The search study</title><style>
@@ -405,38 +465,45 @@ hr {{ margin: 36px 0; border: 0; border-top: 1px solid #d9d4c6; }}
 </style></head><body>{body}</body></html>"""
 
 
+def _answers(host: str, port: int) -> bool:
+    """Whether a server answers at the address."""
+    try:
+        socket.create_connection((host, port), timeout=1).close()
+        return True
+    except OSError:
+        return False
+
+
+def _open_when_ready(host: str, port: int, url: str) -> None:
+    while not _answers(host, port):
+        time.sleep(0.5)
+    webbrowser.open(url)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("participant", nargs="?", help="the participant's label, p01 and on, never a name; "
-                                                   "without it the visit page asks for it")
-    ap.add_argument("condition", nargs="?", choices=("practice", "first", "second", "solo", "team"),
-                    help="open this session at once instead of at the visit page")
     ap.add_argument("--kit", type=Path, default=KIT, help="the study download's folder (default %(default)s)")
     ap.add_argument("--port", type=int, default=8788)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--no-browser", action="store_true", help="do not open the browser")
     args = ap.parse_args(argv)
-    if args.participant and not re.fullmatch(r"p\d{2,}", args.participant):
-        ap.error("a participant is a label like p01, never a name")
+    url = f"http://{args.host}:{args.port}/"
+    if _answers(args.host, args.port):
+        print("The study is already running in another window. Your browser will show it.")
+        if not args.no_browser:
+            webbrowser.open(url)
+        return 0
     kit = args.kit.expanduser()
     console = kit / "console"
     if not (console / "index.html").is_file():
         raise SystemExit(f"no console at {console}: is {kit} the study download?")
     use_kit(kit)
-    visit = Visit(kit, args.participant)
-    cap = None
-    if args.condition:
-        if not args.participant:
-            ap.error("a condition needs a participant")
-        condition = args.condition if args.condition in ("practice", "solo", "team") else visit.condition(args.condition)
-        cap = open_session(kit, args.participant, condition)
     import uvicorn
 
-    url = f"http://{args.host}:{args.port}/"
-    print(f"The study is at {url} in a browser. Keep this window open; Ctrl-C stops the console.")
+    print(f"The study is running at {url}. Keep this window open until you have saved your results file.")
     if not args.no_browser:
-        threading.Timer(1.5, webbrowser.open, (url,)).start()
-    uvicorn.run(build_app(cap, kit, console, visit), host=args.host, port=args.port, log_level="warning")
+        threading.Thread(target=_open_when_ready, args=(args.host, args.port, url), daemon=True).start()
+    uvicorn.run(build_app(kit, console, Visit(kit)), host=args.host, port=args.port, log_level="warning")
     return 0
 
 
