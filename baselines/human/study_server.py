@@ -97,10 +97,10 @@ def _kind(row: dict) -> str:
 def prior_doc(map_name: str, ll) -> dict[str, Any]:
     """The bench's OSM prior in WGS84: every row's outline (a road its centreline), and the
     named places, for the toggle and the search."""
-    from baselines.seam import _row_area, block_landmarks
-    from benchmarks.citynav.run_benchmark.assets import load_episode_assets
+    from baselines.human.audit_console import block_prior
+    from baselines.seam import _row_area
 
-    features = load_episode_assets(map_name).base_features or {}
+    features, landmarks = block_prior(map_name)
     shapes = []
     for category, rs in features.items():
         for r in rs if isinstance(rs, list) else []:
@@ -119,7 +119,7 @@ def prior_doc(map_name: str, ll) -> dict[str, Any]:
                                                           "layer": _layer(r)},
                            "geometry": {"type": "LineString", "coordinates": ll(line)}})
     names = sorted(({"name": lm.name, "kind": _kind(lm.tags), "lonlat": ll([lm.centroid])[0]}
-                    for lm in block_landmarks(features)), key=lambda d: d["name"])
+                    for lm in landmarks), key=lambda d: d["name"])
     return {"type": "FeatureCollection", "features": shapes, "names": names}
 
 

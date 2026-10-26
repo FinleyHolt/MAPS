@@ -24,6 +24,7 @@ serves ``http://127.0.0.1:8078/`` and appends one line per decision to
 from __future__ import annotations
 
 import argparse
+import functools
 import io
 import json
 import re
@@ -104,6 +105,16 @@ def prior_under(features: dict | None, xy: tuple[float, float]) -> tuple[list[tu
     if best is None:
         return None
     return [(float(x), float(y)) for x, y in best[0].exterior.coords], best[1]
+
+
+@functools.lru_cache(maxsize=None)
+def block_prior(map_name: str) -> tuple[dict, list[Landmark]]:
+    """A block's OSM features and its named places: they hold still while a process runs and
+    take seconds to build, so every review and the study's map share one build."""
+    from benchmarks.citynav.run_benchmark.assets import load_episode_assets
+
+    features = load_episode_assets(map_name).base_features or {}
+    return features, block_landmarks(features)
 
 
 def _jsonl(path: Path) -> list[dict]:
@@ -208,12 +219,11 @@ class Session:
     selects by world point (``select``)."""
 
     def __init__(self, maps_root: Path, episode_ids: list[str], out: Path, crop=None, labels: dict | None = None,
-                 rows: dict | None = None, record=None, cache: dict | None = None) -> None:
+                 rows: dict | None = None, record=None) -> None:
         """``labels``, the bench's labelled objects by map (``bench_labels``), puts them in
         place of MAPS's detections as what the auditor picks among. A caller driving one
-        review at a time (``capacity.Capacity``) passes the root's ``rows`` once, a ``cache``
-        the block's prior is kept in across reviews, and ``record``, which receives each
-        decision in place of the ledger."""
+        review at a time (``capacity.Capacity``) passes the root's ``rows`` once, and
+        ``record``, which receives each decision in place of the ledger."""
         self.maps_root, self.out, self.crop, self.labels = maps_root, out, crop, labels
         self.rows = rows if rows is not None else scored_rows(maps_root)
         self._record = record
@@ -225,9 +235,6 @@ class Session:
         done = {d["episode_id"] for d in _jsonl(self.decisions)} if record is None else set()
         self.queue = [e for e in episode_ids if e not in done]
         self.total, self.done_n = len(episode_ids), len(episode_ids) - len(self.queue)
-        cache = cache if cache is not None else {}
-        self._landmarks: dict[str, list[Landmark]] = cache.setdefault("landmarks", {})
-        self._features: dict[str, dict] = cache.setdefault("features", {})
         self.review: Review | None = None
         self._next()
 
@@ -235,21 +242,16 @@ class Session:
         self.review = None
         if not self.queue:
             return
-        from benchmarks.citynav.run_benchmark.assets import load_episode_assets
-
         row = self.rows[self.queue[0]]
-        if row["map_name"] not in self._landmarks:
-            features = load_episode_assets(row["map_name"]).base_features
-            self._features[row["map_name"]] = features
-            self._landmarks[row["map_name"]] = block_landmarks(features)
-        self.review = blind_review(self.maps_root, row, self._landmarks[row["map_name"]])
+        features, landmarks = block_prior(row["map_name"])
+        self.review = blind_review(self.maps_root, row, landmarks)
         if self.labels is not None:
             r = self.review
             r.candidates = labelled_candidates(self.labels.get(r.map_name) or [], [r.maps_xy, *r.stops])
             under = [c for c in r.candidates if _inside(r.maps_xy, c.contour)]
             r.maps_pick = min(under, key=lambda c: abs(_area(c.contour))).id if under else None
         if self.review.maps_pick is None:
-            self.review.maps_prior = prior_under(self._features[row["map_name"]], self.review.maps_xy)
+            self.review.maps_prior = prior_under(features, self.review.maps_xy)
         self.centre, self.zoom = self.review.maps_xy, 1
         self.selected: dict | None = None
         self.highlight: str | None = None

@@ -8,7 +8,6 @@ import json
 import socket
 import sqlite3
 import threading
-from types import SimpleNamespace
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
@@ -93,14 +92,15 @@ def test_osm_kinds_in_plain_words() -> None:
 
 
 def test_every_prior_feature_carries_its_layer(monkeypatch) -> None:
-    from benchmarks.citynav.run_benchmark import assets
+    from baselines.human import audit_console
+    from baselines.seam import block_landmarks
 
     square = [[0, 0], [0, 10], [10, 10], [10, 0]]
     features = {"roads": [{"highway": "residential", "name": "Lime Avenue", "world_contour": [[0, 0], [50, 0]]}],
                 "buildings": [{"building": "yes", "world_contour": square}],
                 "landuse": [{"landuse": "greenfield", "world_contour": square}],
                 "pois": [{"amenity": "cafe", "name": "Cafe", "world_contour": square}]}
-    monkeypatch.setattr(assets, "load_episode_assets", lambda m: SimpleNamespace(base_features=features))
+    monkeypatch.setattr(audit_console, "block_prior", lambda m: (features, block_landmarks(features)))
     doc = study_server.prior_doc("calcity", lambda pts: [list(p) for p in pts])
     assert sorted(f["properties"]["layer"] for f in doc["features"]) == ["building", "landuse", "poi", "road"]
 

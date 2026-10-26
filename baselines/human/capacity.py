@@ -116,11 +116,6 @@ def release_times(elapsed_s: list[float], agents: int = AGENTS) -> tuple[list[fl
     return starts, ends
 
 
-#: Each root's block prior, as ``audit_console.Session`` caches it across reviews: it holds still
-#: while the server runs and takes seconds to build, so a session opened again reuses it.
-_PRIORS: dict[Path, dict] = {}
-
-
 class Capacity:
     """One participant's session in one condition."""
 
@@ -152,7 +147,6 @@ class Capacity:
             with self.ledger.open("a") as fh:
                 fh.write("\n")
         self.answered = {a["episode_id"]: a for a in _jsonl(self.ledger)}
-        self._cache = _PRIORS.setdefault(maps_root.resolve(), {})
         # The open report opened at the last answer, or at the start: a relaunch keeps it so.
         self._open(max([self.started, *(_answered_epoch(a) for a in self.answered.values())]))
 
@@ -187,7 +181,7 @@ class Capacity:
         self.verify = self.arm == "team" and self.opened - self.started >= self.ends[self.index]
         if self.verify:
             self.review = Session(self.maps_root, [self.current], self.out, labels=self.labels, rows=self.rows,
-                                  record=self._reviewed, cache=self._cache)
+                                  record=self._reviewed)
 
     def ready_at(self, i: int) -> str | None:
         return _utc(self.started + self.ends[i]) if self.arm == "team" else None

@@ -148,17 +148,19 @@ def test_a_second_session_on_the_same_root_reads_its_ledger_once_until_it_change
     assert list(session_plan.scored_rows(root)) == ["block_0::1#0"] and len(reads) == 2
 
 
-def test_a_session_opened_again_on_the_same_root_does_not_build_the_block_prior_again(tmp_path, monkeypatch) -> None:
-    from baselines.human import audit_console
+def test_the_servers_prior_and_every_session_share_one_build_of_the_block(tmp_path, monkeypatch) -> None:
+    from baselines.human import audit_console, study_server
+    from benchmarks.citynav.run_benchmark import assets
 
-    builds = []
-    real = audit_console.block_landmarks
-    monkeypatch.setattr(audit_console, "block_landmarks", lambda features: builds.append(1) or real(features))
+    audit_console.block_prior.cache_clear()
     now = [1000.0]
     s = _session(tmp_path, monkeypatch, "team", now)
+    loads = []
+    monkeypatch.setattr(assets, "load_episode_assets", lambda m: loads.append(m) or SimpleNamespace(base_features={}))
+    study_server.prior_doc("block_0", lambda pts: [list(p) for p in pts])
     now[0] += 650
     assert _act(s, "select", x=0.0, y=99.0)["ok"] and _act(s, "commit")["ok"]
-    assert s.state()["current"]["mode"] == "verify" and len(builds) == 1
+    assert s.state()["current"]["mode"] == "verify" and loads == ["block_0"]
     again = capacity.Capacity(tmp_path / "root", ["block_0::1#0", "block_0::2#0"], tmp_path / "p01" / "team", "team",
                               agents=1, session_s=3600, clock=lambda: now[0])
-    assert again.state()["current"]["mode"] == "verify" and len(builds) == 1
+    assert again.state()["current"]["mode"] == "verify" and loads == ["block_0"]
