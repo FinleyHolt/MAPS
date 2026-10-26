@@ -20,6 +20,8 @@ export type { LonLat };
 export type Ring = LonLat[] | null;
 type Bbox = [number, number, number, number];
 export interface PriorName { name: string; kind: string; lonlat: LonLat }
+/** What the outline under the pointer is, and where the pointer is on the map. */
+export interface Hover { text: string; x: number; y: number; left: boolean }
 
 export const INK = { act: "#c95d1e", cite: "#1a4fa0", good: "#2e6b34", ink: "#141310", paper: "#fbfaf5" };
 /** The zoom-out floor, when the server names none. */
@@ -179,7 +181,7 @@ export function useStudyMap(onClick: (at: LonLat) => void, theme: MapTheme = "st
   const [lit, setLit] = useState<string | null>(null);
   const litRef = useRef(lit);
   litRef.current = lit;
-  const [hover, setHover] = useState<string | null>(null);
+  const [hover, setHover] = useState<Hover | null>(null);
   const [ruler, setRuler] = useState<LonLat[]>([]);
 
   // The OSM prior's names in view, the lit one always, while the layer is on.
@@ -273,7 +275,8 @@ export function useStudyMap(onClick: (at: LonLat) => void, theme: MapTheme = "st
         const coords = hit.geometry.type === "LineString" ? (hit.geometry.coordinates as LonLat[]) : null;
         const road = String(hit.properties?.kind ?? "").startsWith("road");
         const axis = road && coords && coords.length > 1 ? `runs ${axisAt(coords, [e.lngLat.lng, e.lngLat.lat])}` : "";
-        setHover([hit.properties?.name, hit.properties?.kind, axis].filter(Boolean).join(" · ") || null);
+        const text = [hit.properties?.name, hit.properties?.kind, axis].filter(Boolean).join(" · ");
+        setHover(text ? { text, x: e.point.x, y: e.point.y, left: e.point.x > map.getCanvas().clientWidth / 2 } : null);
       });
       map.getCanvas().addEventListener("mouseleave", () => setHover(null));
       // Shift-click lays a ruler; a plain click is the mode's own.
@@ -451,10 +454,10 @@ export function useStudyMap(onClick: (at: LonLat) => void, theme: MapTheme = "st
            ruler, rulerM, setRuler, markSpots, clearFound, nearOf, crossingsOf, approachOf, kindsNear, piecesOf, litPiece, stepPiece };
 }
 
-/** The OSM toggle, a chip over the map in the station's layer-bar style, with what the line
- * under the pointer is; and north, which the map always is up. */
+/** The street map's toggle, a chip over the map; what the line under the pointer is, beside
+ * the pointer; and north, which the map always is up. */
 export function OsmToggle({ on, onChange, hover, rulerM, onClearRuler, lit, pieces, litPiece, onStep }: {
-  on: boolean; onChange: (on: boolean) => void; hover?: string | null; rulerM?: number; onClearRuler?: () => void;
+  on: boolean; onChange: (on: boolean) => void; hover?: Hover | null; rulerM?: number; onClearRuler?: () => void;
   lit?: string | null; pieces?: number; litPiece?: { n: number; of: number; buildings: number } | null;
   onStep?: (by: number, skipEmpty?: boolean) => void;
 }) {
@@ -467,8 +470,8 @@ export function OsmToggle({ on, onChange, hover, rulerM, onClearRuler, lit, piec
         </button>
         {lit && onStep ? (
           <span className="study-hover">
-            {lit} · {litPiece ? `piece ${litPiece.n} of ${litPiece.of} · ${litPiece.buildings} building${litPiece.buildings === 1 ? "" : "s"} along it`
-              : `${pieces ?? 1} piece${(pieces ?? 1) > 1 ? "s" : ""}`}
+            {lit} · <span className="study-piece">{litPiece ? `piece ${litPiece.n} of ${litPiece.of} · ${litPiece.buildings} building${litPiece.buildings === 1 ? "" : "s"} along it`
+              : `${pieces ?? 1} piece${(pieces ?? 1) > 1 ? "s" : ""}`}</span>
             {(pieces ?? 1) > 1 ? (
               <> <button type="button" className="linkish" onClick={() => onStep(-1)}>‹</button>{" "}
                 <button type="button" className="linkish" onClick={() => onStep(1)}>›</button>{" "}
@@ -477,13 +480,17 @@ export function OsmToggle({ on, onChange, hover, rulerM, onClearRuler, lit, piec
             ) : null}
           </span>
         ) : null}
-        {on && hover ? <span className="study-hover">{hover}</span> : null}
         {rulerM ? (
           <button type="button" className="study-hover" onClick={onClearRuler} title="shift-click the map to lay the ruler; click here to clear it">
             ruler {rulerM < 1000 ? `${rulerM.toFixed(0)} m` : `${(rulerM / 1000).toFixed(2)} km`} ✕
           </button>
         ) : <span className="study-hover study-tip">shift-click measures</span>}
       </div>
+      {on && hover ? (
+        <span className="study-pointer" style={{ left: hover.x, top: hover.y, transform: hover.left ? "translate(calc(-100% - 14px), 14px)" : "translate(14px, 14px)" }}>
+          {hover.text}
+        </span>
+      ) : null}
       <span className="study-north" title="the map is north-up, always">N ↑</span>
     </>
   );
